@@ -1,0 +1,170 @@
+<Window x:Class="ShouTech.App.Views.DatWin"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="Data Import &amp; Export"
+        Width="820"
+        Height="680"
+        MinWidth="720"
+        MinHeight="560"
+        ResizeMode="CanResize"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="{DynamicResource ShellChromeFontFamily}"
+        FontSize="{DynamicResource FontSize13}"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource TextBrush}"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Padding="0,0,0,10" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <TextBlock x:Name="TitleText" Style="{DynamicResource VisuTitleStyle}" Text="Data Import &amp; Export"/>
+        </Border>
+
+        <TabControl x:Name="ModeTabs" Grid.Row="1" Style="{DynamicResource VisuTabControlStyle}" Margin="0,8,0,10" SelectionChanged="ModeTabs_SelectionChanged">
+            <TabItem x:Name="ImportTab" Header="Import Data">
+                <StackPanel>
+                <Grid Margin="8,10,8,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="ImportPathBox" Grid.Column="0" Style="{DynamicResource VisuTextBoxStyle}" Height="30" Padding="8,5" IsReadOnly="True" VerticalContentAlignment="Center"/>
+                    <Button Grid.Column="1" x:Name="ImportBrowseButton" Style="{DynamicResource VisuSecondaryButtonStyle}" Content="..." Width="34" Height="30" Margin="7,0,0,0" Padding="4,0" ToolTip="Choose file" Click="ImportBrowse_Click"/>
+                </Grid>
+                <Grid Margin="8,7,8,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock x:Name="ImportDatasetLabel" Grid.Column="0" Text="Dataset type" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox x:Name="ImportDatasetBox" Grid.Column="1" Style="{DynamicResource VisuComboBoxStyle}" Height="30" DisplayMemberPath="DisplayName" SelectionChanged="ImportDatasetBox_SelectionChanged"/>
+                </Grid>
+                <TextBlock x:Name="ImportHintText" Margin="8,6,8,0" TextWrapping="Wrap" Opacity="0.78" Text="Editable Excel data can be imported only with its original encrypted type marker and unchanged column headers."/>
+                <StackPanel x:Name="ImportModePanel" Margin="8,8,8,0">
+                    <TextBlock x:Name="ImportModeLabel" FontWeight="SemiBold" Text="Import mode for master data (e.g. material cards)"/>
+                    <RadioButton x:Name="ImportUpsertRadio" GroupName="ImportMode" IsChecked="True" Margin="0,6,0,0"
+                                 Content="Update / insert only — rows deleted from Excel stay in the database"/>
+                    <RadioButton x:Name="ImportReplaceRadio" GroupName="ImportMode" Margin="0,4,0,0"
+                                 Content="Wipe missing rows to recycle bin (soft-delete) — can restore from Bin on main window"/>
+                    <TextBlock x:Name="ImportReplaceHintText" Margin="0,4,0,0" TextWrapping="Wrap" Opacity="0.72"
+                               Text="Example: export materials, delete some cards in Excel, then import. Upsert keeps them in DB; wipe-to-bin moves missing cards to the recycle bin so you can restore them later."/>
+                </StackPanel>
+                <Grid x:Name="ImportPasswordGrid" Margin="8,7,8,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock x:Name="ImportPasswordLabel" Grid.Column="0" Text="Package password" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <PasswordBox x:Name="ImportPasswordBox" Grid.Column="1" Style="{DynamicResource VisuPasswordBoxStyle}" Height="28" Padding="7,4"/>
+                </Grid>
+                </StackPanel>
+            </TabItem>
+            <TabItem x:Name="ExportTab" Header="Export Data">
+                <StackPanel>
+                <Grid Margin="8,10,8,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="ExportPathBox" Grid.Column="0" Style="{DynamicResource VisuTextBoxStyle}" Height="30" Padding="8,5" VerticalContentAlignment="Center"/>
+                    <Button Grid.Column="1" x:Name="ExportBrowseButton" Style="{DynamicResource VisuSecondaryButtonStyle}" Content="..." Width="34" Height="30" Margin="7,0,0,0" Padding="4,0" ToolTip="Choose destination" Click="ExportBrowse_Click"/>
+                </Grid>
+                <Grid Margin="8,7,8,0">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock x:Name="ExportPasswordLabel" Grid.Row="0" Grid.Column="0" Text="Package password" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                    <PasswordBox x:Name="ExportPasswordBox" Grid.Row="0" Grid.Column="1" Style="{DynamicResource VisuPasswordBoxStyle}" Height="28" Padding="7,4" Margin="0,0,0,6"/>
+                    <TextBlock x:Name="ExportPasswordConfirmLabel" Grid.Row="1" Grid.Column="0" Text="Confirm password" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <PasswordBox x:Name="ExportPasswordConfirmBox" Grid.Row="1" Grid.Column="1" Style="{DynamicResource VisuPasswordBoxStyle}" Height="28" Padding="7,4"/>
+                </Grid>
+                </StackPanel>
+            </TabItem>
+            <TabItem x:Name="StructuredExportTab" Header="Excel / PDF">
+                <Grid Margin="8,10,8,6">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock x:Name="StructuredExportHintText"
+                               Text="Choose a dataset and export it as Excel or PDF."
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,8"/>
+                    <TextBox x:Name="ExportSearchBox"
+                             Grid.Row="1"
+                             Margin="0,0,0,8"
+                             Height="30"
+                             Padding="8,5"
+                             Style="{DynamicResource VisuTextBoxStyle}"
+                             TextChanged="ExportSearchBox_TextChanged"/>
+                    <ListBox x:Name="ExportItemsList"
+                             Grid.Row="2"
+                             DisplayMemberPath="DisplayName"
+                             SelectionMode="Single"
+                             MinHeight="150"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+                    <Grid x:Name="DatasetPasswordGrid" Grid.Row="3" Margin="0,8,0,0" Visibility="Collapsed">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <TextBlock x:Name="DatasetPasswordLabel" Grid.Row="0" Grid.Column="0" Text="Package password" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                        <PasswordBox x:Name="DatasetPasswordBox" Grid.Row="0" Grid.Column="1" Style="{DynamicResource VisuPasswordBoxStyle}" Height="28" Padding="7,4" Margin="0,0,0,6"/>
+                        <TextBlock x:Name="DatasetPasswordConfirmLabel" Grid.Row="1" Grid.Column="0" Text="Confirm password" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <PasswordBox x:Name="DatasetPasswordConfirmBox" Grid.Row="1" Grid.Column="1" Style="{DynamicResource VisuPasswordBoxStyle}" Height="28" Padding="7,4"/>
+                    </Grid>
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <Grid Grid.Row="2" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="170"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Button x:Name="StartButton" Grid.Column="0" Style="{DynamicResource VisuAccentButtonStyle}" Content="Start" Padding="18,6" MinWidth="140" Click="StartButton_Click"/>
+            <TextBlock x:Name="ExportFormatLabel" Grid.Column="1" Text="Format" VerticalAlignment="Center" Margin="16,0,8,0"/>
+            <ComboBox x:Name="ExportFormatBox"
+                      Grid.Column="2"
+                      Style="{DynamicResource VisuComboBoxStyle}"
+                      Height="32"
+                      SelectedIndex="0"
+                      SelectionChanged="ExportFormatBox_SelectionChanged">
+                <ComboBoxItem Content="Excel (.xlsx)" Tag="xlsx"/>
+                <ComboBoxItem Content="PDF (.pdf)" Tag="pdf"/>
+                <ComboBoxItem Content="Encrypted dataset package (.stei)" Tag="stei"/>
+            </ComboBox>
+            <TextBlock x:Name="PathHintText" Grid.Column="3" VerticalAlignment="Center" TextWrapping="Wrap" Opacity="0.78" Margin="12,0,0,0"/>
+        </Grid>
+
+        <Border Grid.Row="3" Style="{DynamicResource VisuCardStyle}" Padding="12">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <TextBlock x:Name="ResultTitleText" FontWeight="SemiBold" Text="Operation result"/>
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,8,0,8">
+                    <TextBlock x:Name="ResultStatusText" FontWeight="SemiBold" Text="Ready"/>
+                    <ProgressBar x:Name="OperationProgress" Width="150" Height="8" Margin="14,0,0,0" VerticalAlignment="Center" Minimum="0" Maximum="100" Visibility="Collapsed"/>
+                </StackPanel>
+                <TextBox x:Name="ResultTextBox" Grid.Row="2" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" BorderThickness="0" Background="Transparent" Padding="0"/>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="4" Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="MetadataText" VerticalAlignment="Center" Opacity="0.78" TextWrapping="Wrap"/>
+            <Button x:Name="DetailsButton" Grid.Column="1" Style="{DynamicResource VisuSecondaryButtonStyle}" Content="View details" Margin="8,0,0,0" Padding="10,5" IsEnabled="False" Click="DetailsButton_Click"/>
+            <Button x:Name="CloseButton" Grid.Column="2" Style="{DynamicResource VisuSecondaryButtonStyle}" Content="Close" Margin="8,0,0,0" Padding="14,5" Click="CloseButton_Click"/>
+        </Grid>
+    </Grid>
+</Window>

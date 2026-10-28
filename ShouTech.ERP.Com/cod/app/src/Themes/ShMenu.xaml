@@ -1,0 +1,18 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <FontFamily x:Key="ShellChromeFontFamily">Tahoma</FontFamily>
+
+    <Style TargetType="{x:Type Menu}">
+        <Setter Property="Foreground" Value="{DynamicResource ShellMenuForegroundBrush}"/>
+        <Setter Property="FontFamily" Value="{StaticResource ShellChromeFontFamily}"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+    </Style>
+
+    <Style TargetType="{x:Type MenuItem}">
+        <Setter Property="Foreground" Value="{DynamicResource ShellMenuForegroundBrush}"/>
+        <Setter Property="FontFamily" Value="{StaticResource ShellChromeFontFamily}"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+    </Style>
+
+</ResourceDictionary>

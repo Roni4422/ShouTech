@@ -1,0 +1,41 @@
+name: Windows CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore tests and application
+        run: dotnet restore tests/Kern.Tests/Kern.Tests.csproj
+
+      - name: Build application and tests
+        run: dotnet build tests/Kern.Tests/Kern.Tests.csproj --configuration Release --no-restore
+
+      - name: Run tests
+        run: dotnet test tests/Kern.Tests/Kern.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=tests.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-test-results
+          path: '**/TestResults/*.trx'
+          if-no-files-found: warn

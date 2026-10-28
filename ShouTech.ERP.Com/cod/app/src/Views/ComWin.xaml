@@ -1,0 +1,730 @@
+﻿<Window x:Class="ShouTech.App.Views.ComWin"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="clr-namespace:ShouTech.App.Localization"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="Select Company"
+        loc:LocProps.WindowKey="CompanySelection.WindowTitle"
+        Width="560"
+        Height="330"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        AllowsTransparency="False"
+        ShowInTaskbar="False"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource TextBrush}"
+        FontFamily="{DynamicResource ApplicationFontFamily}"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
+
+    <Window.Style>
+        <Style TargetType="Window">
+            <Setter Property="Height" Value="330"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HideUsernameField}" Value="True">
+                    <Setter Property="Height" Value="330"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Style>
+
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="0"
+                            ResizeBorderThickness="0"
+                            GlassFrameThickness="0"
+                            CornerRadius="0"
+                            UseAeroCaptionButtons="False"
+                            NonClientFrameEdges="None"/>
+    </shell:WindowChrome.WindowChrome>
+
+    <Window.Resources>
+
+        <Style x:Key="CompanyListItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Padding" Value="8,0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource SurfaceLightBrush}"/>
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource PrimaryTransparentBrush}"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="CompanyNameStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{DynamicResource FontSize12_5}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="TextWrapping" Value="NoWrap"/>
+        </Style>
+
+        <Style x:Key="CompanyEditInputStyle" TargetType="TextBox">
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Padding" Value="6,2"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+    </Window.Resources>
+
+    <Grid x:Name="rootSurfaceGrid"
+          Background="{DynamicResource BackgroundBrush}"
+          Margin="24,18,24,18">
+
+        <DockPanel x:Name="rootDock" LastChildFill="True">
+
+            <!-- Management side panel -->
+            <Border x:Name="mgmtPanel"
+                    DockPanel.Dock="Right"
+                    Visibility="Collapsed"
+                    Width="150"
+                    Margin="16,0,0,0"
+                    Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="10"
+                    VerticalAlignment="Stretch">
+
+                <DockPanel LastChildFill="False">
+
+                    <TextBlock x:Name="txtMgmtTitle"
+                               DockPanel.Dock="Top"
+                               Text="Text"
+                               FontWeight="SemiBold"
+                               FontSize="{DynamicResource FontSize13}"
+                               TextAlignment="Center"
+                               Margin="0,0,0,12"/>
+
+                    <StackPanel DockPanel.Dock="Top">
+
+                        <Button x:Name="btnMgmtOpen"
+                                Content="Open"
+                                Height="32"
+                                Margin="0,0,0,6"
+                                Padding="8,3"
+                                HorizontalAlignment="Stretch"
+                                Click="BtnMgmtOpen_Click"
+                                Style="{DynamicResource PrimaryButtonStyle}"/>
+
+                        <Button x:Name="btnMgmtEdit"
+                                Content="Edit"
+                                Height="32"
+                                Margin="0,0,0,6"
+                                Padding="8,3"
+                                HorizontalAlignment="Stretch"
+                                Click="BtnMgmtEdit_Click"
+                                Style="{DynamicResource SecondaryButtonStyle}"/>
+
+                        <Button x:Name="btnMgmtDelete"
+                                Height="32"
+                                Margin="0,0,0,6"
+                                Padding="8,3"
+                                HorizontalAlignment="Stretch"
+                                Click="BtnMgmtDeleteMenu_Click"
+                                Style="{DynamicResource SecondaryButtonStyle}"
+                                ToolTip="ToolTip">
+                            <Button.Content>
+                                <Grid Width="120">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="18"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="txtDeleteLabel"
+                                               Grid.Column="0"
+                                               Text="Delete"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="▾"
+                                               FontSize="{DynamicResource FontSize11}"
+                                               Opacity="0.85"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Grid>
+                            </Button.Content>
+                            <Button.ContextMenu>
+                                <ContextMenu x:Name="deleteContextMenu" Placement="Bottom">
+                                    <MenuItem x:Name="miDeleteFromIndex"
+                                              Header="Header"
+                                              Click="BtnDeleteFromIndex_Click"/>
+                                    <Separator/>
+                                    <MenuItem x:Name="miDeleteFully"
+                                              Header="Header"
+                                              Click="BtnDeleteFully_Click"/>
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                        </Button>
+
+                        <Button x:Name="btnMgmtReindex"
+                                Content="Content"
+                                Height="32"
+                                Margin="0,0,0,6"
+                                Padding="8,3"
+                                HorizontalAlignment="Stretch"
+                                Click="BtnMgmtReindex_Click"
+                                Style="{DynamicResource SecondaryButtonStyle}"/>
+
+                    </StackPanel>
+
+                    <Button x:Name="btnMgmtClose"
+                            Content="Close"
+                            DockPanel.Dock="Bottom"
+                            Height="32"
+                            Margin="0,14,0,0"
+                            Padding="8,3"
+                            HorizontalAlignment="Stretch"
+                            VerticalAlignment="Bottom"
+                            Click="BtnMgmtClose_Click"
+                            Style="{DynamicResource SecondaryButtonStyle}"/>
+
+                </DockPanel>
+
+            </Border>
+
+            <!-- Main content -->
+            <Grid x:Name="contentGrid">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Header -->
+                <Grid Grid.Row="0" Margin="0,0,0,10">
+                    <StackPanel>
+                        <TextBlock x:Name="txtTitle"
+                                   Text="Select Company"
+                                   loc:LocProps.Key="CompanySelection.Title"
+                                   FontSize="{DynamicResource FontSize19}"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextBrush}"/>
+                        <TextBlock x:Name="txtHint"
+                                   Text="Text"
+                                   loc:LocProps.Key="CompanySelection.Hint"
+                                   FontSize="{DynamicResource FontSize11}"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   Margin="0,3,0,0"
+                                   TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- List -->
+                <Grid x:Name="listPanel" Grid.Row="1">
+                    <Border Background="{DynamicResource SurfaceBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="5"
+                            Padding="4">
+                        <ListBox x:Name="lstCompanies"
+                                 ItemsSource="{Binding Companies}"
+                                 SelectedItem="{Binding SelectedCompany, Mode=TwoWay}"
+                                 ItemContainerStyle="{StaticResource CompanyListItemStyle}"
+                                 MouseDoubleClick="LstCompanies_MouseDoubleClick"
+                                 BorderThickness="0"
+                                 Background="Transparent"
+                                 Padding="0"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 ScrollViewer.CanContentScroll="True">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding DisplayName}"
+                                               Style="{StaticResource CompanyNameStyle}"
+                                               HorizontalAlignment="Stretch"/>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
+                </Grid>
+
+                <!-- Edit panel -->
+                <Border x:Name="editPanel"
+                        Grid.Row="1"
+                        Visibility="Collapsed"
+                        Background="{DynamicResource SurfaceBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="12">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="145"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="145"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock x:Name="lblEditName"
+                                       Grid.Row="0"
+                                       Grid.Column="0"
+                                       Text="Text"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"
+                                       TextWrapping="Wrap"/>
+                            <TextBox x:Name="txtEditName"
+                                     Grid.Row="0"
+                                     Grid.Column="1"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditNameEn"
+                                       Grid.Row="0"
+                                       Grid.Column="2"
+                                       Text="Text"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"
+                                       TextWrapping="Wrap"/>
+                            <TextBox x:Name="txtEditNameEn"
+                                     Grid.Row="0"
+                                     Grid.Column="3"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditTax"
+                                       Grid.Row="1"
+                                       Grid.Column="0"
+                                       Text="Text"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"/>
+                            <TextBox x:Name="txtEditTax"
+                                     Grid.Row="1"
+                                     Grid.Column="1"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditLicense"
+                                       Grid.Row="1"
+                                       Grid.Column="2"
+                                       Text="License"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"
+                                       TextWrapping="Wrap"/>
+                            <TextBox x:Name="txtEditLicense"
+                                     Grid.Row="1"
+                                     Grid.Column="3"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditEmail"
+                                       Grid.Row="2"
+                                       Grid.Column="0"
+                                       Text="Text"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"/>
+                            <TextBox x:Name="txtEditEmail"
+                                     Grid.Row="2"
+                                     Grid.Column="1"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditWebsite"
+                                       Grid.Row="2"
+                                       Grid.Column="2"
+                                       Text="Website"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"
+                                       TextWrapping="Wrap"/>
+                            <TextBox x:Name="txtEditWebsite"
+                                     Grid.Row="2"
+                                     Grid.Column="3"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditPhone"
+                                       Grid.Row="3"
+                                       Grid.Column="0"
+                                       Text="Text"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"/>
+                            <TextBox x:Name="txtEditPhone"
+                                     Grid.Row="3"
+                                     Grid.Column="1"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditMobile"
+                                       Grid.Row="3"
+                                       Grid.Column="2"
+                                       Text="Text"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"/>
+                            <TextBox x:Name="txtEditMobile"
+                                     Grid.Row="3"
+                                     Grid.Column="3"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditAddress"
+                                       Grid.Row="4"
+                                       Grid.Column="0"
+                                       Text="Text"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"/>
+                            <TextBox x:Name="txtEditAddress"
+                                     Grid.Row="4"
+                                     Grid.Column="1"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditAddress2"
+                                       Grid.Row="4"
+                                       Grid.Column="2"
+                                       Text="Address line 2"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"
+                                       TextWrapping="Wrap"/>
+                            <TextBox x:Name="txtEditAddress2"
+                                     Grid.Row="4"
+                                     Grid.Column="3"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditCity"
+                                       Grid.Row="5"
+                                       Grid.Column="0"
+                                       Text="Text"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"/>
+                            <TextBox x:Name="txtEditCity"
+                                     Grid.Row="5"
+                                     Grid.Column="1"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditCountry"
+                                       Grid.Row="5"
+                                       Grid.Column="2"
+                                       Text="Text"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"/>
+                            <TextBox x:Name="txtEditCountry"
+                                     Grid.Row="5"
+                                     Grid.Column="3"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditCurrency"
+                                       Grid.Row="6"
+                                       Grid.Column="0"
+                                       Text="Text"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"/>
+                            <TextBox x:Name="txtEditCurrency"
+                                     Grid.Row="6"
+                                     Grid.Column="1"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditDecimalPlaces"
+                                       Grid.Row="6"
+                                       Grid.Column="2"
+                                       Text="Decimal places"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"
+                                       TextWrapping="Wrap"/>
+                            <TextBox x:Name="txtEditDecimalPlaces"
+                                     Grid.Row="6"
+                                     Grid.Column="3"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditCalendar"
+                                       Grid.Row="7"
+                                       Grid.Column="0"
+                                       Text="Calendar"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"/>
+                            <TextBox x:Name="txtEditCalendar"
+                                     Grid.Row="7"
+                                     Grid.Column="1"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditGrouping"
+                                       Grid.Row="8"
+                                       Grid.Column="0"
+                                       Text="Number grouping"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"
+                                       TextWrapping="Wrap"/>
+                            <TextBox x:Name="txtEditGrouping"
+                                     Grid.Row="8"
+                                     Grid.Column="1"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditLanguage"
+                                       Grid.Row="8"
+                                       Grid.Column="2"
+                                       Text="Company language"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"
+                                       TextWrapping="Wrap"/>
+                            <TextBox x:Name="txtEditLanguage"
+                                     Grid.Row="8"
+                                     Grid.Column="3"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditCoa"
+                                       Grid.Row="9"
+                                       Grid.Column="0"
+                                       Text="Chart of accounts"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"
+                                       TextWrapping="Wrap"/>
+                            <TextBox x:Name="txtEditCoa"
+                                     Grid.Row="9"
+                                     Grid.Column="1"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditWarehouse"
+                                       Grid.Row="9"
+                                       Grid.Column="2"
+                                       Text="Default warehouse"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"
+                                       TextWrapping="Wrap"/>
+                            <TextBox x:Name="txtEditWarehouse"
+                                     Grid.Row="9"
+                                     Grid.Column="3"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditFiscalStart"
+                                       Grid.Row="11"
+                                       Grid.Column="0"
+                                       Text="Fiscal year start"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"
+                                       TextWrapping="Wrap"/>
+                            <DatePicker x:Name="dpEditFiscalStart"
+                                        Grid.Row="11"
+                                        Grid.Column="1"
+                                        Margin="0,0,0,6"/>
+
+                            <TextBlock x:Name="lblEditFiscalEnd"
+                                       Grid.Row="11"
+                                       Grid.Column="2"
+                                       Text="Fiscal year end"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"
+                                       TextWrapping="Wrap"/>
+                            <DatePicker x:Name="dpEditFiscalEnd"
+                                        Grid.Row="11"
+                                        Grid.Column="3"
+                                        Margin="0,0,0,6"/>
+
+                            <TextBlock x:Name="lblEditNotes"
+                                       Grid.Row="10"
+                                       Grid.Column="0"
+                                       Text="Notes"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"/>
+                            <TextBox x:Name="txtEditNotes"
+                                     Grid.Row="10"
+                                     Grid.Column="1"
+                                     Grid.ColumnSpan="3"
+                                     MinHeight="48"
+                                     AcceptsReturn="True"
+                                     TextWrapping="Wrap"
+                                     VerticalScrollBarVisibility="Auto"
+                                     Margin="0,0,0,6"/>
+
+                            <TextBlock x:Name="lblEditAdminUser"
+                                       Grid.Row="12"
+                                       Grid.Column="0"
+                                       Text="Administrator username"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"
+                                       TextWrapping="Wrap"/>
+                            <TextBox x:Name="txtEditAdminUser"
+                                     Grid.Row="12"
+                                     Grid.Column="1"
+                                     Style="{StaticResource CompanyEditInputStyle}"
+                                     IsReadOnly="True"/>
+
+                            <TextBlock x:Name="lblEditAdminName"
+                                       Grid.Row="12"
+                                       Grid.Column="2"
+                                       Text="Administrator name"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"
+                                       TextWrapping="Wrap"/>
+                            <TextBox x:Name="txtEditAdminName"
+                                     Grid.Row="12"
+                                     Grid.Column="3"
+                                     Style="{StaticResource CompanyEditInputStyle}"
+                                     IsReadOnly="True"/>
+
+                            <TextBlock x:Name="lblEditDbProvider"
+                                       Grid.Row="13"
+                                       Grid.Column="0"
+                                       Text="Database provider"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"
+                                       TextWrapping="Wrap"/>
+                            <TextBox x:Name="txtEditDbProvider"
+                                     Grid.Row="13"
+                                     Grid.Column="1"
+                                     Style="{StaticResource CompanyEditInputStyle}"
+                                     IsReadOnly="True"/>
+
+                            <TextBlock x:Name="lblEditDbPath"
+                                       Grid.Row="13"
+                                       Grid.Column="2"
+                                       Text="Database path"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"
+                                       TextWrapping="Wrap"/>
+                            <TextBox x:Name="txtEditDbPath"
+                                     Grid.Row="13"
+                                     Grid.Column="3"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditAltDbPath"
+                                       Grid.Row="14"
+                                       Grid.Column="0"
+                                       Text="Alternate database path"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"
+                                       TextWrapping="Wrap"/>
+                            <TextBox x:Name="txtEditAltDbPath"
+                                     Grid.Row="14"
+                                     Grid.Column="1"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditBackupPath"
+                                       Grid.Row="14"
+                                       Grid.Column="2"
+                                       Text="Backup path"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"
+                                       TextWrapping="Wrap"/>
+                            <TextBox x:Name="txtEditBackupPath"
+                                     Grid.Row="14"
+                                     Grid.Column="3"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditAltBackupPath"
+                                       Grid.Row="15"
+                                       Grid.Column="0"
+                                       Text="Alternate backup path"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"
+                                       TextWrapping="Wrap"/>
+                            <TextBox x:Name="txtEditAltBackupPath"
+                                     Grid.Row="15"
+                                     Grid.Column="1"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditBackupSchedule"
+                                       Grid.Row="15"
+                                       Grid.Column="2"
+                                       Text="Backup schedule and time"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"
+                                       TextWrapping="Wrap"/>
+                            <TextBox x:Name="txtEditBackupSchedule"
+                                     Grid.Row="15"
+                                     Grid.Column="3"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <TextBlock x:Name="lblEditBackupTime"
+                                       Grid.Row="16"
+                                       Grid.Column="0"
+                                       Text="Backup time"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,6"
+                                       TextWrapping="Wrap"/>
+                            <TextBox x:Name="txtEditBackupTime"
+                                     Grid.Row="16"
+                                     Grid.Column="1"
+                                     Style="{StaticResource CompanyEditInputStyle}"/>
+
+                            <CheckBox x:Name="chkEditAutoBackup"
+                                      Grid.Row="16"
+                                      Grid.Column="2"
+                                      Grid.ColumnSpan="2"
+                                      Content="Enable automatic backup"
+                                      Margin="0,0,0,6"/>
+                        </Grid>
+                    </ScrollViewer>
+                </Border>
+
+                <!-- Footer -->
+                <Grid x:Name="btnBar"
+                      Grid.Row="2"
+                      Margin="0,10,0,0"
+                      HorizontalAlignment="Stretch">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="100"/>
+                        <ColumnDefinition Width="10"/>
+                        <ColumnDefinition Width="100"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Button x:Name="btnSetupWizard"
+                            Grid.Column="0"
+                            Content="Content"
+                            Height="36"
+                            Padding="10,0"
+                            FontWeight="SemiBold"
+                            Click="BtnSetupWizard_Click"
+                            Style="{DynamicResource SecondaryButtonStyle}"/>
+
+                    <Button x:Name="btnOk"
+                            Grid.Column="2"
+                            Content="OK"
+                            loc:LocProps.Key="CompanySelection.Ok"
+                            Height="36"
+                            FontWeight="SemiBold"
+                            Click="BtnContinue_Click"
+                            IsDefault="True"
+                            Style="{DynamicResource PrimaryButtonStyle}"/>
+
+                    <Button x:Name="btnCancel"
+                            Grid.Column="4"
+                            Content="Cancel"
+                            loc:LocProps.Key="Buttons.Cancel"
+                            Height="36"
+                            Click="BtnCancel_Click"
+                            IsCancel="True"
+                            Style="{DynamicResource SecondaryButtonStyle}"/>
+                </Grid>
+
+                <Grid x:Name="editBtnBar"
+                      Grid.Row="2"
+                      Margin="0,10,0,0"
+                      HorizontalAlignment="Stretch"
+                      Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Right">
+                        <Button x:Name="btnEditSave"
+                                Content="Save"
+                                Width="100"
+                                Height="36"
+                                Margin="0,0,8,0"
+                                Click="BtnEditSave_Click"
+                                Style="{DynamicResource PrimaryButtonStyle}"/>
+                        <Button x:Name="btnEditCancel"
+                                Content="Cancel"
+                                Width="100"
+                                Height="36"
+                                Click="BtnEditCancel_Click"
+                                Style="{DynamicResource SecondaryButtonStyle}"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </DockPanel>
+    </Grid>
+</Window>

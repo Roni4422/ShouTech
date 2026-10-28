@@ -1,0 +1,267 @@
+{
+  "$schema": "https://shoutech.app/schemas/coa-v5.json",
+  "format": "shc",
+  "formatName": "ShouTech Coa",
+  "schemaVersion": 5,
+  "templateCode": "EMPTY",
+  "templateKind": "minimal",
+  "scope": "empty",
+  "country": null,
+  "sourceEncoding": "utf-8",
+  "languages": [
+    "ar",
+    "en"
+  ],
+  "metadata": {
+    "nameKey": "COA.Template.EMPTY",
+    "nameAr": "دليل حسابات فارغ - الحسابات الرئيسية فقط",
+    "nameEn": "Blank Chart of Accounts - Main Accounts Only",
+    "latinName": "Empty Chart of Accounts",
+    "framework": "Proposed commercial chart aligned to applicable financial reporting principles; not a statutory unified chart of accounts.",
+    "author": "ShouTech",
+    "version": "2.0.0",
+    "releasedAt": "2026-10-14",
+    "basisNote": "Country-specific tax and statutory accounts are configurable placeholders; confirm local filing requirements before production use."
+  },
+  "features": {
+    "isMinimal": true,
+    "hasArabicCodes": false,
+    "usesFlatStructure": false,
+    "hasBills": false,
+    "hasBalSheets": false,
+    "hasPayments": false,
+    "hasTransfers": false,
+    "hasManufacturing": false
+  },
+  "accounts": [
+    {
+      "id": 1,
+      "number": 1,
+      "code": "1",
+      "parentId": null,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "الأصول",
+        "en": "Assets"
+      }
+    },
+    {
+      "id": 2,
+      "number": 11,
+      "code": "11",
+      "parentId": 1,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "الأصول الثابتة",
+        "en": "Fixed Assets"
+      }
+    },
+    {
+      "id": 3,
+      "number": 12,
+      "code": "12",
+      "parentId": 1,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "الأصول المتداولة",
+        "en": "Current Assets"
+      }
+    },
+    {
+      "id": 4,
+      "number": 13,
+      "code": "13",
+      "parentId": 1,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "النقدية وما في حكمها",
+        "en": "Cash and Cash Equivalents"
+      }
+    },
+    {
+      "id": 5,
+      "number": 2,
+      "code": "2",
+      "parentId": null,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "الالتزامات وحقوق الملكية",
+        "en": "Liabilities and Equity"
+      }
+    },
+    {
+      "id": 6,
+      "number": 21,
+      "code": "21",
+      "parentId": 5,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Equity",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "حقوق الملكية",
+        "en": "Equity"
+      }
+    },
+    {
+      "id": 7,
+      "number": 22,
+      "code": "22",
+      "parentId": 5,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "الالتزامات المتداولة",
+        "en": "Current Liabilities"
+      }
+    },
+    {
+      "id": 8,
+      "number": 23,
+      "code": "23",
+      "parentId": 5,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "الالتزامات طويلة الأجل",
+        "en": "Non-current Liabilities"
+      }
+    },
+    {
+      "id": 9,
+      "number": 3,
+      "code": "3",
+      "parentId": null,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Purchase",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "صافي المشتريات",
+        "en": "Net Purchases"
+      }
+    },
+    {
+      "id": 10,
+      "number": 4,
+      "code": "4",
+      "parentId": null,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Revenue",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "صافي المبيعات",
+        "en": "Net Sales"
+      }
+    },
+    {
+      "id": 11,
+      "number": 5,
+      "code": "5",
+      "parentId": null,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "المصروفات",
+        "en": "Expenses"
+      }
+    },
+    {
+      "id": 12,
+      "number": 6,
+      "code": "6",
+      "parentId": null,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Equity",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "الحسابات الختامية",
+        "en": "Closing Accounts"
+      }
+    }
+  ],
+  "closingAccounts": [],
+  "defaultAccounts": {
+    "cash": null,
+    "customer": null,
+    "balance": null,
+    "profitAndLoss": null,
+    "trading": null
+  },
+  "balSheets": [],
+  "bills": [],
+  "standardBills": [],
+  "standardPayments": [],
+  "transfers": []
+}

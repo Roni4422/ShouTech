@@ -1,0 +1,130 @@
+<Window x:Class="ShouTech.App.Views.BkpWin"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Backup"
+        Width="720" Height="520"
+        MinWidth="680" MinHeight="480"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource TextBrush}"
+        FontFamily="{DynamicResource ApplicationFontFamily}"
+>
+    <Border Margin="12" Padding="14"
+            Background="{DynamicResource SurfaceBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="1"
+            CornerRadius="6">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <Grid Grid.Row="0" Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock x:Name="txtTitle" Text="Backup"
+                               FontSize="{DynamicResource FontSize20}" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="txtCompany" Margin="0,4,0,0"
+                               Opacity="0.78" FontSize="{DynamicResource FontSize12}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button x:Name="btnOpenFolder" Content="Open folder"
+                            Width="112" Height="34" Margin="0,0,8,0"
+                            Click="OpenFolder_Click"
+                            Style="{DynamicResource SecondaryButtonStyle}"/>
+                    <Button x:Name="btnRefresh" Content="Refresh"
+                            Width="90" Height="34"
+                            Click="Refresh_Click"
+                            Style="{DynamicResource SecondaryButtonStyle}"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- Create panel: notes + create button -->
+            <Border Grid.Row="1" Padding="12" Margin="0,0,0,10"
+                    Background="{DynamicResource BackgroundBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="5">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock x:Name="txtInfo"
+                               Text="Encrypted STBK2 mirror of the current company data."
+                               FontWeight="SemiBold" TextWrapping="Wrap"/>
+                    <Grid Grid.Row="1" Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="txtNotesLabel" Text="Backup note:"
+                                   VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <TextBox x:Name="txtNotes"
+                                 Grid.Column="1"
+                                 Height="32"
+                                 Padding="8,4"
+                                 VerticalContentAlignment="Center"
+                                 MaxLength="80"
+                                 ToolTip="Example: before delete the app"/>
+                        <Button x:Name="btnCreate" Grid.Column="2"
+                                Content="Create backup now"
+                                Width="150" Height="34"
+                                Margin="12,0,0,0"
+                                Click="Create_Click"
+                                Style="{DynamicResource PrimaryButtonStyle}"/>
+                    </Grid>
+                    <TextBlock x:Name="txtProvider" Grid.Row="2" Margin="0,8,0,0" Opacity="0.65" FontSize="{DynamicResource FontSize11}"/>
+                </Grid>
+            </Border>
+
+            <!-- List -->
+            <ListView x:Name="lstBackups" Grid.Row="2"
+                      BorderBrush="{DynamicResource BorderBrush}"
+                      BorderThickness="1">
+                <ListView.View>
+                    <GridView>
+                        <GridViewColumn x:Name="colName" Header="Backup name" Width="420"
+                                        DisplayMemberBinding="{Binding FileName}"/>
+                        <GridViewColumn x:Name="colDate" Header="Created" Width="160"
+                                        DisplayMemberBinding="{Binding LocalDateText}"/>
+                        <GridViewColumn x:Name="colSize" Header="Size" Width="100"
+                                        DisplayMemberBinding="{Binding SizeText}"/>
+                        <GridViewColumn x:Name="colStatus" Header="Status" Width="110"
+                                        DisplayMemberBinding="{Binding Status}"/>
+                    </GridView>
+                </ListView.View>
+            </ListView>
+
+            <!-- Footer -->
+            <Grid Grid.Row="3" Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="txtStatus" VerticalAlignment="Center" Opacity="0.78"/>
+                    <ProgressBar x:Name="progress" Width="160" Height="7"
+                                 Margin="12,0,0,0" Visibility="Collapsed" IsIndeterminate="True"/>
+                </StackPanel>
+                <Button x:Name="btnRestore" Grid.Column="1" Content="Restore selected"
+                        Width="150" Height="32" Click="Restore_Click"
+                        Style="{DynamicResource PrimaryButtonStyle}"/>
+                <Button x:Name="btnClose" Grid.Column="3" Content="Close"
+                        Width="90" Height="32" IsCancel="True"
+                        Click="Close_Click"
+                        Style="{DynamicResource SecondaryButtonStyle}"/>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

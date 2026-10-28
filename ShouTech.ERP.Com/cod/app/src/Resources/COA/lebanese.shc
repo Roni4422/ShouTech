@@ -1,0 +1,1635 @@
+{
+  "$schema": "https://shoutech.app/schemas/coa-v5.json",
+  "format": "shc",
+  "formatName": "ShouTech Coa",
+  "schemaVersion": 5,
+  "templateCode": "LB",
+  "templateKind": "commercial",
+  "scope": "country",
+  "country": "LB",
+  "sourceEncoding": "utf-8",
+  "languages": [
+    "ar",
+    "en"
+  ],
+  "metadata": {
+    "nameKey": "COA.Template.LB",
+    "nameAr": "دليل الحسابات اللبناني",
+    "nameEn": "Lebanese Chart of Accounts",
+    "latinName": "Lebanese Chart of Accounts",
+    "framework": "Proposed commercial chart aligned to applicable financial reporting principles; not a statutory unified chart of accounts.",
+    "author": "ShouTech",
+    "version": "2.0.0",
+    "releasedAt": "2026-10-14",
+    "basisNote": "Country-specific tax and statutory accounts are configurable placeholders; confirm local filing requirements before production use."
+  },
+  "features": {
+    "isMinimal": false,
+    "hasArabicCodes": false,
+    "usesFlatStructure": false,
+    "hasBills": false,
+    "hasBalSheets": false,
+    "hasPayments": false,
+    "hasTransfers": false,
+    "hasManufacturing": false
+  },
+  "accounts": [
+    {
+      "id": 1,
+      "number": 1,
+      "code": "1",
+      "parentId": null,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "الأصول",
+        "en": "Assets"
+      }
+    },
+    {
+      "id": 2,
+      "number": 11,
+      "code": "11",
+      "parentId": 1,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "الأصول غير المتداولة",
+        "en": "Non-current Assets"
+      }
+    },
+    {
+      "id": 3,
+      "number": 1101,
+      "code": "1101",
+      "parentId": 2,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "الأراضي",
+        "en": "Land"
+      }
+    },
+    {
+      "id": 4,
+      "number": 1102,
+      "code": "1102",
+      "parentId": 2,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "المباني والمنشآت",
+        "en": "Buildings and Structures"
+      }
+    },
+    {
+      "id": 5,
+      "number": 1103,
+      "code": "1103",
+      "parentId": 2,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "الآلات والمعدات",
+        "en": "Machinery and Equipment"
+      }
+    },
+    {
+      "id": 6,
+      "number": 1104,
+      "code": "1104",
+      "parentId": 2,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "المركبات",
+        "en": "Vehicles"
+      }
+    },
+    {
+      "id": 7,
+      "number": 1105,
+      "code": "1105",
+      "parentId": 2,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "الأثاث والتجهيزات",
+        "en": "Furniture and Fixtures"
+      }
+    },
+    {
+      "id": 8,
+      "number": 1106,
+      "code": "1106",
+      "parentId": 2,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "أجهزة الحاسوب والبرمجيات",
+        "en": "Computer Equipment and Software"
+      }
+    },
+    {
+      "id": 9,
+      "number": 1107,
+      "code": "1107",
+      "parentId": 2,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "تحسينات على مبانٍ مستأجرة",
+        "en": "Leasehold Improvements"
+      }
+    },
+    {
+      "id": 10,
+      "number": 1108,
+      "code": "1108",
+      "parentId": 2,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "أصول حق الاستخدام",
+        "en": "Right-of-use Assets"
+      }
+    },
+    {
+      "id": 11,
+      "number": 1190,
+      "code": "1190",
+      "parentId": 2,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "ContraAsset",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "مجمع الإهلاك والإطفاء",
+        "en": "Accumulated Depreciation and Amortization"
+      }
+    },
+    {
+      "id": 12,
+      "number": 12,
+      "code": "12",
+      "parentId": 1,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "الأصول المتداولة",
+        "en": "Current Assets"
+      }
+    },
+    {
+      "id": 13,
+      "number": 1201,
+      "code": "1201",
+      "parentId": 12,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Customer",
+      "names": {
+        "ar": "العملاء والذمم المدينة التجارية",
+        "en": "Trade Accounts Receivable"
+      }
+    },
+    {
+      "id": 14,
+      "number": 1202,
+      "code": "1202",
+      "parentId": 12,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "أوراق القبض",
+        "en": "Notes Receivable"
+      }
+    },
+    {
+      "id": 15,
+      "number": 1203,
+      "code": "1203",
+      "parentId": 12,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Inventory",
+      "names": {
+        "ar": "المخزون التجاري",
+        "en": "Merchandise Inventory"
+      }
+    },
+    {
+      "id": 16,
+      "number": 1204,
+      "code": "1204",
+      "parentId": 12,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "المصروفات المدفوعة مقدماً",
+        "en": "Prepaid Expenses"
+      }
+    },
+    {
+      "id": 17,
+      "number": 1205,
+      "code": "1205",
+      "parentId": 12,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "ضريبة قيمة مضافة مدخلات قابلة للاسترداد",
+        "en": "Recoverable Input VAT"
+      }
+    },
+    {
+      "id": 18,
+      "number": 1206,
+      "code": "1206",
+      "parentId": 12,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "السلف والعهد",
+        "en": "Advances and Imprests"
+      }
+    },
+    {
+      "id": 19,
+      "number": 1207,
+      "code": "1207",
+      "parentId": 12,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "ذمم مدينة أخرى",
+        "en": "Other Receivables"
+      }
+    },
+    {
+      "id": 20,
+      "number": 1208,
+      "code": "1208",
+      "parentId": 12,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "استثمارات قصيرة الأجل",
+        "en": "Short-term Investments"
+      }
+    },
+    {
+      "id": 21,
+      "number": 1209,
+      "code": "1209",
+      "parentId": 12,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "ContraAsset",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "مخصص خسائر ائتمانية متوقعة (حساب مقابل)",
+        "en": "Allowance for Expected Credit Losses"
+      }
+    },
+    {
+      "id": 22,
+      "number": 13,
+      "code": "13",
+      "parentId": 1,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "النقدية وما في حكمها",
+        "en": "Cash and Cash Equivalents"
+      }
+    },
+    {
+      "id": 23,
+      "number": 131,
+      "code": "131",
+      "parentId": 22,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Cash",
+      "names": {
+        "ar": "الصندوق",
+        "en": "Cash on Hand"
+      }
+    },
+    {
+      "id": 24,
+      "number": 132,
+      "code": "132",
+      "parentId": 22,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Bank",
+      "names": {
+        "ar": "الحسابات المصرفية",
+        "en": "Bank Accounts"
+      }
+    },
+    {
+      "id": 25,
+      "number": 133,
+      "code": "133",
+      "parentId": 22,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "تحويلات نقدية بالطريق",
+        "en": "Cash in Transit"
+      }
+    },
+    {
+      "id": 26,
+      "number": 134,
+      "code": "134",
+      "parentId": 22,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Bank",
+      "names": {
+        "ar": "أرصدة لدى بوابات الدفع",
+        "en": "Payment Service Provider Balances"
+      }
+    },
+    {
+      "id": 27,
+      "number": 2,
+      "code": "2",
+      "parentId": null,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "الالتزامات وحقوق الملكية",
+        "en": "Liabilities and Equity"
+      }
+    },
+    {
+      "id": 28,
+      "number": 21,
+      "code": "21",
+      "parentId": 27,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Equity",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "حقوق الملكية",
+        "en": "Equity"
+      }
+    },
+    {
+      "id": 29,
+      "number": 2101,
+      "code": "2101",
+      "parentId": 28,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Equity",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Equity",
+      "names": {
+        "ar": "رأس المال",
+        "en": "Share Capital"
+      }
+    },
+    {
+      "id": 30,
+      "number": 2102,
+      "code": "2102",
+      "parentId": 28,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Equity",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Equity",
+      "names": {
+        "ar": "جاري المالك أو الشركاء",
+        "en": "Owner or Partners Current Account"
+      }
+    },
+    {
+      "id": 31,
+      "number": 2103,
+      "code": "2103",
+      "parentId": 28,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Equity",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Equity",
+      "names": {
+        "ar": "الاحتياطيات",
+        "en": "Reserves"
+      }
+    },
+    {
+      "id": 32,
+      "number": 2104,
+      "code": "2104",
+      "parentId": 28,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Equity",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Equity",
+      "names": {
+        "ar": "الأرباح المحتجزة",
+        "en": "Retained Earnings"
+      }
+    },
+    {
+      "id": 33,
+      "number": 2105,
+      "code": "2105",
+      "parentId": 28,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Equity",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Equity",
+      "names": {
+        "ar": "نتيجة السنة الحالية",
+        "en": "Current Year Profit or Loss"
+      }
+    },
+    {
+      "id": 34,
+      "number": 2106,
+      "code": "2106",
+      "parentId": 28,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Equity",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Equity",
+      "names": {
+        "ar": "توزيعات أرباح مستحقة",
+        "en": "Dividends Payable"
+      }
+    },
+    {
+      "id": 35,
+      "number": 22,
+      "code": "22",
+      "parentId": 27,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "الالتزامات المتداولة",
+        "en": "Current Liabilities"
+      }
+    },
+    {
+      "id": 36,
+      "number": 2201,
+      "code": "2201",
+      "parentId": 35,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Supplier",
+      "names": {
+        "ar": "الموردون والذمم الدائنة التجارية",
+        "en": "Trade Accounts Payable"
+      }
+    },
+    {
+      "id": 37,
+      "number": 2202,
+      "code": "2202",
+      "parentId": 35,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "أوراق الدفع",
+        "en": "Notes Payable"
+      }
+    },
+    {
+      "id": 38,
+      "number": 2203,
+      "code": "2203",
+      "parentId": 35,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "المصروفات المستحقة",
+        "en": "Accrued Expenses"
+      }
+    },
+    {
+      "id": 39,
+      "number": 2204,
+      "code": "2204",
+      "parentId": 35,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "الرواتب والأجور المستحقة",
+        "en": "Salaries and Wages Payable"
+      }
+    },
+    {
+      "id": 40,
+      "number": 2205,
+      "code": "2205",
+      "parentId": 35,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "ضريبة قيمة مضافة مستحقة",
+        "en": "VAT Payable"
+      }
+    },
+    {
+      "id": 41,
+      "number": 2206,
+      "code": "2206",
+      "parentId": 35,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "دفعات مقدمة من العملاء",
+        "en": "Customer Advances"
+      }
+    },
+    {
+      "id": 42,
+      "number": 2207,
+      "code": "2207",
+      "parentId": 35,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "قروض قصيرة الأجل",
+        "en": "Short-term Loans"
+      }
+    },
+    {
+      "id": 43,
+      "number": 2208,
+      "code": "2208",
+      "parentId": 35,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "استقطاعات وضريبة مستقطعة مستحقة",
+        "en": "Withholding Taxes Payable"
+      }
+    },
+    {
+      "id": 44,
+      "number": 2209,
+      "code": "2209",
+      "parentId": 35,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "مخصصات والتزامات قصيرة الأجل أخرى",
+        "en": "Other Current Provisions and Liabilities"
+      }
+    },
+    {
+      "id": 45,
+      "number": 23,
+      "code": "23",
+      "parentId": 27,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "الالتزامات طويلة الأجل",
+        "en": "Non-current Liabilities"
+      }
+    },
+    {
+      "id": 46,
+      "number": 2301,
+      "code": "2301",
+      "parentId": 45,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "قروض طويلة الأجل",
+        "en": "Long-term Loans"
+      }
+    },
+    {
+      "id": 47,
+      "number": 2302,
+      "code": "2302",
+      "parentId": 45,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "التزامات عقود الإيجار",
+        "en": "Lease Liabilities"
+      }
+    },
+    {
+      "id": 48,
+      "number": 2303,
+      "code": "2303",
+      "parentId": 45,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "مخصصات طويلة الأجل",
+        "en": "Long-term Provisions"
+      }
+    },
+    {
+      "id": 49,
+      "number": 3,
+      "code": "3",
+      "parentId": null,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Revenue",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "الإيرادات",
+        "en": "Revenue"
+      }
+    },
+    {
+      "id": 50,
+      "number": 301,
+      "code": "301",
+      "parentId": 49,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Revenue",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Revenue",
+      "names": {
+        "ar": "مبيعات البضائع",
+        "en": "Goods Sales"
+      }
+    },
+    {
+      "id": 51,
+      "number": 302,
+      "code": "302",
+      "parentId": 49,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Revenue",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Revenue",
+      "names": {
+        "ar": "مردودات ومسموحات المبيعات",
+        "en": "Sales Returns and Allowances"
+      }
+    },
+    {
+      "id": 52,
+      "number": 303,
+      "code": "303",
+      "parentId": 49,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Revenue",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Revenue",
+      "names": {
+        "ar": "إيرادات الخدمات",
+        "en": "Service Revenue"
+      }
+    },
+    {
+      "id": 53,
+      "number": 304,
+      "code": "304",
+      "parentId": 49,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Revenue",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Revenue",
+      "names": {
+        "ar": "إيرادات عقود ومشروعات",
+        "en": "Contract and Project Revenue"
+      }
+    },
+    {
+      "id": 54,
+      "number": 305,
+      "code": "305",
+      "parentId": 49,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Revenue",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Revenue",
+      "names": {
+        "ar": "خصومات المبيعات",
+        "en": "Sales Discounts"
+      }
+    },
+    {
+      "id": 55,
+      "number": 306,
+      "code": "306",
+      "parentId": 49,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Revenue",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Revenue",
+      "names": {
+        "ar": "إيرادات أخرى",
+        "en": "Other Income"
+      }
+    },
+    {
+      "id": 56,
+      "number": 307,
+      "code": "307",
+      "parentId": 49,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Revenue",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Revenue",
+      "names": {
+        "ar": "أرباح بيع أصول",
+        "en": "Gain on Disposal of Assets"
+      }
+    },
+    {
+      "id": 57,
+      "number": 4,
+      "code": "4",
+      "parentId": null,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Purchase",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "المشتريات وتكلفة المبيعات",
+        "en": "Purchases and Cost of Sales"
+      }
+    },
+    {
+      "id": 58,
+      "number": 401,
+      "code": "401",
+      "parentId": 57,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "تكلفة البضاعة المباعة",
+        "en": "Cost of Goods Sold"
+      }
+    },
+    {
+      "id": 59,
+      "number": 402,
+      "code": "402",
+      "parentId": 57,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "مشتريات البضائع",
+        "en": "Merchandise Purchases"
+      }
+    },
+    {
+      "id": 60,
+      "number": 403,
+      "code": "403",
+      "parentId": 57,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "مردودات المشتريات",
+        "en": "Purchase Returns"
+      }
+    },
+    {
+      "id": 61,
+      "number": 404,
+      "code": "404",
+      "parentId": 57,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "مصاريف نقل المشتريات",
+        "en": "Freight-in"
+      }
+    },
+    {
+      "id": 62,
+      "number": 405,
+      "code": "405",
+      "parentId": 57,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "خصومات المشتريات",
+        "en": "Purchase Discounts"
+      }
+    },
+    {
+      "id": 63,
+      "number": 406,
+      "code": "406",
+      "parentId": 57,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "فروقات وتسويات المخزون",
+        "en": "Inventory Variances and Adjustments"
+      }
+    },
+    {
+      "id": 64,
+      "number": 5,
+      "code": "5",
+      "parentId": null,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "المصروفات التشغيلية والإدارية",
+        "en": "Operating and Administrative Expenses"
+      }
+    },
+    {
+      "id": 65,
+      "number": 501,
+      "code": "501",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "الرواتب والأجور",
+        "en": "Salaries and Wages"
+      }
+    },
+    {
+      "id": 66,
+      "number": 502,
+      "code": "502",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "الإيجارات",
+        "en": "Rent Expense"
+      }
+    },
+    {
+      "id": 67,
+      "number": 503,
+      "code": "503",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "الكهرباء والمياه والطاقة",
+        "en": "Utilities and Energy"
+      }
+    },
+    {
+      "id": 68,
+      "number": 504,
+      "code": "504",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "الاتصالات والإنترنت",
+        "en": "Telecommunications and Internet"
+      }
+    },
+    {
+      "id": 69,
+      "number": 505,
+      "code": "505",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "الإهلاك والإطفاء",
+        "en": "Depreciation and Amortization"
+      }
+    },
+    {
+      "id": 70,
+      "number": 506,
+      "code": "506",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "المصروفات الإدارية والعمومية",
+        "en": "General and Administrative Expenses"
+      }
+    },
+    {
+      "id": 71,
+      "number": 507,
+      "code": "507",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "التسويق والإعلان",
+        "en": "Marketing and Advertising"
+      }
+    },
+    {
+      "id": 72,
+      "number": 508,
+      "code": "508",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "الرسوم المصرفية",
+        "en": "Bank Charges"
+      }
+    },
+    {
+      "id": 73,
+      "number": 509,
+      "code": "509",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "خسائر فروقات العملة",
+        "en": "Foreign Exchange Losses"
+      }
+    },
+    {
+      "id": 74,
+      "number": 510,
+      "code": "510",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "الصيانة والإصلاح",
+        "en": "Repairs and Maintenance"
+      }
+    },
+    {
+      "id": 75,
+      "number": 511,
+      "code": "511",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "الأتعاب المهنية والاستشارية",
+        "en": "Professional and Consulting Fees"
+      }
+    },
+    {
+      "id": 76,
+      "number": 512,
+      "code": "512",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "السفر والانتقالات",
+        "en": "Travel and Transportation"
+      }
+    },
+    {
+      "id": 77,
+      "number": 513,
+      "code": "513",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "التأمين",
+        "en": "Insurance Expense"
+      }
+    },
+    {
+      "id": 78,
+      "number": 514,
+      "code": "514",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "خسائر ائتمانية وديون معدومة",
+        "en": "Credit Losses and Bad Debts"
+      }
+    },
+    {
+      "id": 79,
+      "number": 515,
+      "code": "515",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "تكاليف التمويل والفوائد",
+        "en": "Finance Costs and Interest"
+      }
+    },
+    {
+      "id": 80,
+      "number": 516,
+      "code": "516",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "مصروف ضريبة الدخل",
+        "en": "Income Tax Expense"
+      }
+    },
+    {
+      "id": 81,
+      "number": 518,
+      "code": "518",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "مصاريف متنوعة",
+        "en": "Miscellaneous Expenses"
+      }
+    },
+    {
+      "id": 82,
+      "number": 2211,
+      "code": "2211",
+      "parentId": 35,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "اشتراكات الضمان الاجتماعي المستحقة",
+        "en": "Social Security Contributions Payable"
+      }
+    },
+    {
+      "id": 83,
+      "number": 517,
+      "code": "517",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "مصروف ضرائب ورسوم",
+        "en": "Taxes and Duties Expense"
+      }
+    },
+    {
+      "id": 84,
+      "number": 12051,
+      "code": "12051",
+      "parentId": 17,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "ضريبة مدخلات محلية",
+        "en": "Domestic Recoverable Input Tax"
+      }
+    },
+    {
+      "id": 85,
+      "number": 12052,
+      "code": "12052",
+      "parentId": 17,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "ضريبة مدخلات على الاستيراد",
+        "en": "Import Recoverable Input Tax"
+      }
+    },
+    {
+      "id": 86,
+      "number": 22051,
+      "code": "22051",
+      "parentId": 40,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "ضريبة مستحقة على المبيعات المحلية",
+        "en": "Tax Payable on Domestic Sales"
+      }
+    },
+    {
+      "id": 87,
+      "number": 22052,
+      "code": "22052",
+      "parentId": 40,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "ضريبة مستحقة على الاستيراد أو التسويات",
+        "en": "Tax Payable on Imports or Adjustments"
+      }
+    },
+    {
+      "id": 88,
+      "number": 6,
+      "code": "6",
+      "parentId": null,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Equity",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "الحسابات الختامية",
+        "en": "Closing Accounts"
+      }
+    }
+  ],
+  "closingAccounts": [],
+  "defaultAccounts": {
+    "cash": "131",
+    "customer": "123",
+    "balance": null,
+    "profitAndLoss": "214",
+    "trading": "41"
+  },
+  "balSheets": [],
+  "bills": [],
+  "standardBills": [],
+  "standardPayments": [],
+  "transfers": []
+}

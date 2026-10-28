@@ -1,0 +1,209 @@
+<UserControl x:Class="ShouTech.App.Views.Modules.ReportGridVw"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:conv="clr-namespace:ShouTech.App.Converters"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="1100">
+
+    <UserControl.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>   
+            <RowDefinition Height="*"/>       
+            <RowDefinition Height="Auto"/>   
+        </Grid.RowDefinitions>
+
+        
+        <Border Grid.Row="0"
+                Background="{DynamicResource ModuleHeaderBackgroundBrush}"
+                CornerRadius="8" Padding="12,8" Margin="0,0,0,8">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="{Binding ReportName}"
+                           FontSize="{DynamicResource FontSize16}" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextOnDarkBrush}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,16,0"/>
+
+                
+                <ToggleButton x:Name="EditModeToggle"
+                              Content="✏ تعديل التقرير"
+                              IsChecked="{Binding IsEditMode, Mode=OneWay}"
+                              Click="EditModeToggle_Click"
+                              Padding="12,6" Margin="0,0,8,0"
+                              Cursor="Hand"/>
+
+                <Button Content="💾 حفظ"
+                        Command="{Binding SaveCommand}"
+                        Padding="12,6" Margin="0,0,8,0"
+                        Cursor="Hand"/>
+
+                <Button Content="📄 حفظ باسم…"
+                        Click="SaveAsButton_Click"
+                        Padding="12,6" Margin="0,0,8,0"
+                        Cursor="Hand"/>
+
+                <ProgressBar IsIndeterminate="{Binding IsBusy}"
+                             Width="80" Height="4"
+                             VerticalAlignment="Center"
+                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}"/>
+            </StackPanel>
+        </Border>
+
+        
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition x:Name="DesignerColumn" Width="0"/>
+            </Grid.ColumnDefinitions>
+
+            
+            <DataGrid x:Name="ReportGrid"
+                      Grid.Column="0"
+                      ItemsSource="{Binding Rows}"
+                      AutoGenerateColumns="False"
+                      CanUserResizeColumns="True"
+                      CanUserReorderColumns="True"
+                      CanUserSortColumns="True"
+                      IsReadOnly="True"
+                      HeadersVisibility="Column">
+            </DataGrid>
+
+            
+            <Border x:Name="DesignerPanel"
+                    Grid.Column="1"
+                    Background="{DynamicResource ModuleCardBackgroundBrush}"
+                    BorderBrush="{DynamicResource ModuleCardBorderBrush}"
+                    BorderThickness="1,0,0,0"
+                    Visibility="Collapsed"
+                    Padding="12">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Margin="0,0,0,10">
+                        <TextBlock Text="مصمم التقرير"
+                                   FontSize="{DynamicResource FontSize15}" FontWeight="Bold"/>
+                        <TextBlock Text="رتّب الأعمدة، عدّل العناوين والعروض، وأضف أعمدة محسوبة"
+                                   FontSize="{DynamicResource FontSize11}" Foreground="{DynamicResource TextSecondary}"
+                                   TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    </StackPanel>
+
+                    
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding EditableColumns}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
+                                            Padding="0,6">
+                                        <StackPanel>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <CheckBox IsChecked="{Binding IsVisible}"
+                                                          VerticalAlignment="Center"
+                                                          ToolTip="إظهار/إخفاء العمود"/>
+
+                                                <TextBox Grid.Column="1"
+                                                         Text="{Binding Caption, UpdateSourceTrigger=PropertyChanged}"
+                                                         Margin="6,0"
+                                                         ToolTip="عنوان العمود"/>
+
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                                    <Button Content="▲" Width="24" Padding="0,2"
+                                                            Command="{Binding DataContext.MoveColumnUpCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            ToolTip="أعلى"/>
+                                                    <Button Content="▼" Width="24" Padding="0,2"
+                                                            Command="{Binding DataContext.MoveColumnDownCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            ToolTip="أسفل"/>
+                                                    <Button Content="🗑" Width="24" Padding="0,2"
+                                                            Command="{Binding DataContext.RemoveColumnCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            ToolTip="حذف العمود"/>
+                                                </StackPanel>
+                                            </Grid>
+
+                                            <StackPanel Orientation="Horizontal" Margin="24,4,0,0">
+                                                <TextBlock Text="العرض:" FontSize="{DynamicResource FontSize11}"
+                                                           VerticalAlignment="Center"/>
+                                                <TextBox Text="{Binding Width, UpdateSourceTrigger=PropertyChanged}"
+                                                         Width="56" Margin="4,0" FontSize="{DynamicResource FontSize11}"/>
+                                                <TextBlock Text="px" FontSize="{DynamicResource FontSize11}"
+                                                           VerticalAlignment="Center"/>
+                                            </StackPanel>
+
+                                            
+                                            <StackPanel Margin="24,4,0,0"
+                                                        Visibility="{Binding IsFormula, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBox Text="{Binding FormulaText, UpdateSourceTrigger=PropertyChanged}"
+                                                         FontFamily="{DynamicResource MonospaceFontFamily}"
+                                                         FontSize="{DynamicResource FontSize12}"
+                                                         ToolTip="معادلة: =[Qty]*[Price] — الدوال: ROUND, ABS, MIN, MAX, IF, COALESCE"/>
+                                                <TextBlock Text="{Binding FormulaError}"
+                                                           Foreground="{DynamicResource ErrorBrush}" FontSize="{DynamicResource FontSize11}"
+                                                           TextWrapping="Wrap"
+                                                           Visibility="{Binding HasFormulaError, Converter={StaticResource BoolToVisibility}}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <Button Grid.Row="2"
+                            Content="➕ إضافة عمود محسوب"
+                            Command="{Binding AddFormulaColumnCommand}"
+                            Margin="0,10,0,0" Padding="0,8"
+                            Cursor="Hand"/>
+                </Grid>
+            </Border>
+        </Grid>
+
+        
+        <Border Grid.Row="2"
+                Background="{DynamicResource SurfaceSecondaryBrush}" CornerRadius="4"
+                Padding="10,5" Margin="0,8,0,0">
+            <TextBlock Text="{Binding StatusMessage}"
+                       FontSize="{DynamicResource FontSize12}" Foreground="{DynamicResource TextPrimary}"/>
+        </Border>
+
+        
+        <Border x:Name="SaveAsOverlay"
+                Grid.RowSpan="3"
+                Background="{DynamicResource OverlayBrush}"
+                Visibility="Collapsed">
+            <Border Background="White" CornerRadius="10"
+                    Padding="24" Width="420"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel>
+                    <TextBlock Text="حفظ التقرير باسم"
+                               FontSize="{DynamicResource FontSize18}" FontWeight="Bold" Margin="0,0,0,12"/>
+                    <TextBlock Text="اسم التقرير الجديد:" FontSize="{DynamicResource FontSize12}" Margin="0,0,0,4"/>
+                    <TextBox x:Name="SaveAsNameBox"
+                             FontSize="{DynamicResource FontSize14}" Padding="6,4"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+                        <Button Content="إلغاء" Padding="16,6" Margin="0,0,8,0"
+                                Click="SaveAsCancel_Click"/>
+                        <Button Content="حفظ" Padding="16,6"
+                                Background="{DynamicResource ReportDesignerButtonBrush}" Foreground="{DynamicResource TextOnDarkBrush}"
+                                Click="SaveAsConfirm_Click"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Border>
+    </Grid>
+</UserControl>

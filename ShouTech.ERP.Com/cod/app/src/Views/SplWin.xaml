@@ -1,0 +1,68 @@
+<Window x:Class="ShouTech.App.Views.SplWin"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ShouTech ERP"
+        Width="620"
+        Height="360"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Topmost="True"
+        FontFamily="{DynamicResource ApplicationFontFamily}"
+        FlowDirection="LeftToRight"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
+
+    <Border CornerRadius="8"
+            ClipToBounds="True"
+            FlowDirection="LeftToRight">
+        <Border.Background>
+            <ImageBrush ImageSource="pack://application:,,,/Resources/Ico/spl.png"
+                        Stretch="UniformToFill"/>
+        </Border.Background>
+
+        <Grid FlowDirection="LeftToRight">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+        <!-- Main Text Content -->
+        <StackPanel Grid.Row="0" VerticalAlignment="Center" HorizontalAlignment="Center" Width="450">
+            
+            <TextBlock x:Name="txtAppName" Text="ShouTech ERP" FontSize="{DynamicResource FontSize34}" FontWeight="Bold" 
+                       Foreground="{DynamicResource PrimaryBrush}" HorizontalAlignment="Center" 
+                       TextAlignment="Center" Typography.Capitals="AllSmallCaps"/>
+            
+            <TextBlock x:Name="txtAppNameEn" Text="Enterprise Management Platform" FontSize="{DynamicResource FontSize14}" 
+                       FontWeight="Normal" Foreground="{DynamicResource TextSecondaryBrush}" 
+                       HorizontalAlignment="Center" TextAlignment="Center" Margin="0,12,0,0"/>
+            
+            <TextBlock x:Name="txtVersion" Text="Version 10.6.0" FontSize="{DynamicResource FontSize11}" 
+                       Foreground="{DynamicResource TextDisabledBrush}" HorizontalAlignment="Center" 
+                       TextAlignment="Center" Margin="0,24,0,0"/>
+        </StackPanel>
+
+        <!-- Progress Bar -->
+        <Grid x:Name="progressBarContainer" Grid.Row="1" Height="3" Margin="40,20,40,20" 
+              HorizontalAlignment="Stretch" FlowDirection="LeftToRight" 
+              SizeChanged="OnProgressBarContainerSizeChanged">
+            <Border Background="{DynamicResource BorderLightBrush}" CornerRadius="1.5"/>
+            <Border x:Name="progressBarIndicator" Background="{DynamicResource PrimaryBrush}" 
+                    CornerRadius="1.5" HorizontalAlignment="Left" Width="0"/>
+        </Grid>
+
+        <!-- Bottom Status Texts -->
+        <Grid Grid.Row="2" Margin="40,0,40,25" FlowDirection="LeftToRight">
+            <TextBlock x:Name="txtStatus" Text="Loading..." FontSize="{DynamicResource FontSize11}" FontWeight="Normal" 
+                       Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+            <TextBlock x:Name="txtCopyright" Text="© 2026 ShouTech. All rights reserved." FontSize="{DynamicResource FontSize11}" 
+                       Foreground="{DynamicResource TextDisabledBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+        </Grid>
+    </Grid>
+    </Border>
+</Window>

@@ -1,0 +1,1430 @@
+{
+  "Application": {
+    "Name": "ShouTech Enterprise Management System",
+    "NameEn": "ShouTech Enterprise Management System",
+    "ShortName": "ShouTech ERP",
+    "ShortNameEn": "ShouTech ERP",
+    "Version": "0.6.0",
+    "Build": "20260801",
+    "BuildDate": "2026-08-01T00:00:00",
+    "Company": "ShouTech Software",
+    "CompanyEn": "ShouTech Software",
+    "Copyright": "© 2026 ShouTech. All rights reserved.",
+    "Website": "https://www.shoutech.com",
+    "SupportEmail": "support@shoutech.com",
+    "Environment": "Development",
+    "EnvironmentType": "Development",
+    "InstanceId": "ST-ERP-001",
+    "ClusterId": "ST-CLUSTER-001",
+    "AllowMultipleInstances": false,
+    "RequireDongle": false,
+    "RequireLicense": false,
+    "CheckFileIntegrity": true,
+    "EnableAutoUpdate": true,
+    "AutoUpdateCheckIntervalHours": 24,
+    "MinSplashSeconds": 4.5,
+    "StartupDelaySeconds": 2,
+    "EnableTelemetry": false,
+    "TelemetryEndpoint": "https://telemetry.shoutech.com/api/v1/telemetry"
+  },
+  "Company": {
+    "Id": "ST-COMP-001",
+    "Name": "ShouTech Software",
+    "NameEn": "ShouTech Software",
+    "CommercialName": "ShouTech",
+    "CommercialNameEn": "ShouTech",
+    "TaxId": "123456789",
+    "CommercialRegister": "CR-2024-001",
+    "VATNumber": "VAT-123456789",
+    "Address": "ِAmman - Jordan",
+    "AddressEn": "Amman - Jordan",
+    "Phone": "+962 11 1234567",
+    "Mobile": "+962 944 123456",
+    "Email": "info@shoutech.com",
+    "Website": "https://www.shoutech.com",
+    "LogoPath": "Assets/company-logo.png",
+    "FaviconPath": "Assets/favicon.ico",
+    "DefaultCurrencyCode": "SYP",
+    "DefaultLanguage": "ar",
+    "TimeZone": "Asia/Damascus",
+    "DateFormat": "dd/MM/yyyy",
+    "TimeFormat": "HH:mm:ss",
+    "NumberFormat": {
+      "DecimalSeparator": ".",
+      "GroupSeparator": ",",
+      "DecimalPlaces": 2
+    }
+  },
+  "ConnectionStrings": {
+    "Default": {
+      "Provider": "SQLite",
+      "ConnectionString": "",
+      "Encrypted": false,
+      "ReadOnly": false,
+      "CommandTimeout": 60,
+      "ConnectionTimeout": 30,
+      "MaxPoolSize": 100,
+      "MinPoolSize": 5,
+      "EnablePooling": true
+    },
+    "ReadOnly": {
+      "Provider": "SQLite",
+      "ConnectionString": "",
+      "Encrypted": false,
+      "ReadOnly": true,
+      "CommandTimeout": 120,
+      "ConnectionTimeout": 30,
+      "MaxPoolSize": 50,
+      "MinPoolSize": 2,
+      "EnablePooling": true
+    },
+    "Reporting": {
+      "Provider": "SQLite",
+      "ConnectionString": "",
+      "Encrypted": false,
+      "ReadOnly": true,
+      "CommandTimeout": 300,
+      "ConnectionTimeout": 30,
+      "MaxPoolSize": 20,
+      "MinPoolSize": 2,
+      "EnablePooling": true
+    },
+    "Audit": {
+      "Provider": "SQLite",
+      "ConnectionString": "",
+      "Encrypted": false,
+      "ReadOnly": false,
+      "CommandTimeout": 60,
+      "ConnectionTimeout": 30,
+      "MaxPoolSize": 20,
+      "MinPoolSize": 2,
+      "EnablePooling": true
+    },
+    "Tenant": {
+      "Provider": "SQLite",
+      "ConnectionString": "",
+      "Encrypted": false,
+      "ReadOnly": false,
+      "CommandTimeout": 60,
+      "ConnectionTimeout": 30,
+      "MaxPoolSize": 50,
+      "MinPoolSize": 2,
+      "EnablePooling": true
+    }
+  },
+  "Database": {
+    "DefaultProvider": "SQLite",
+    "SupportedProviders": [
+      {
+        "Name": "SQLite",
+        "Assembly": "Microsoft.Data.Sqlite",
+        "ProviderFactory": "Microsoft.Data.Sqlite.SqliteFactory"
+      },
+      {
+        "Name": "PostgreSQL",
+        "Assembly": "Npgsql",
+        "ProviderFactory": "Npgsql.NpgsqlFactory"
+      }
+    ],
+    "Migration": {
+      "Enabled": true,
+      "AutoMigrate": true,
+      "MigrationsPath": "./dba/mig",
+      "SeedDataPath": "./dba/seed",
+      "BackupBeforeMigration": true
+    },
+    "Backup": {
+      "Enabled": true,
+      "AutoBackup": true,
+      "BackupIntervalHours": 24,
+      "MaxBackups": 3,
+      "BackupPath": "./bkp",
+      "CompressBackup": true,
+      "EncryptBackup": true,
+      "BackupEncryptionKey": "YourEncryptionKeyHere"
+    },
+    "Retry": {
+      "MaxRetryCount": 3,
+      "RetryDelaySeconds": 5,
+      "MaxRetryDelaySeconds": 30,
+      "EnableExponentialBackoff": true,
+      "EnableCircuitBreaker": true,
+      "CircuitBreakerThreshold": 5,
+      "CircuitBreakerDurationSeconds": 60
+    }
+  },
+  "Paths": {
+    "Root": "./",
+    "Data": {
+      "Folder": "./data",
+      "Documents": "./data/documents",
+      "Images": "./data/images",
+      "Attachments": "./data/attachments",
+      "Templates": "./data/templates",
+      "Archives": "./data/archives"
+    },
+    "Backup": {
+      "Folder": "./bkp",
+      "Database": "./bkp/db",
+      "Files": "./bkp/files",
+      "System": "./bkp/system"
+    },
+    "Logs": {
+      "Folder": "./log",
+      "Application": "./log/app",
+      "Security": "./log/security",
+      "Audit": "./log/audit",
+      "Performance": "./log/performance",
+      "Error": "./log/error"
+    },
+    "Reports": {
+      "Folder": "./rpt",
+      "Generated": "./rpt/generated",
+      "Templates": "./rpt/templates",
+      "Cache": "./rpt/cache",
+      "Exports": "./rpt/exports"
+    },
+    "Temp": {
+      "Folder": "./tmp",
+      "Cache": "./tmp/cache",
+      "Uploads": "./tmp/uploads",
+      "Downloads": "./tmp/downloads",
+      "Process": "./tmp/process"
+    },
+    "Config": {
+      "Folder": "./cfg",
+      "License": "./cfg/license.dat",
+      "Settings": "./cfg/settings.json",
+      "Security": "./cfg/security.json",
+      "Modules": "./cfg/modules.json"
+    },
+    "Modules": {
+      "Folder": "./modules",
+      "Plugins": "./plugins",
+      "Extensions": "./extensions",
+      "Integrations": "./integrations"
+    },
+    "Assets": {
+      "Folder": "./Assets",
+      "Images": "./Assets/images",
+      "Icons": "./Assets/icons",
+      "Fonts": "./Assets/fonts",
+      "Themes": "./Assets/themes",
+      "Styles": "./Assets/styles",
+      "Sounds": "./Assets/sounds"
+    },
+    "Resources": {
+      "Folder": "./Resources",
+      "Localization": "./Resources/localization",
+      "Templates": "./Resources/templates",
+      "Help": "./Resources/help",
+      "Docs": "./Resources/docs"
+    },
+    "Cache": {
+      "Folder": "./cache",
+      "Images": "./cache/images",
+      "Data": "./cache/data",
+      "Reports": "./cache/reports",
+      "Sessions": "./cache/sessions"
+    }
+  },
+  "Languages": {
+    "Default": "ar",
+    "Fallback": "en",
+    "Available": [
+      {
+        "Code": "ar",
+        "Name": "العربية",
+        "NameEn": "Arabic",
+        "Culture": "ar-SY",
+        "IsRTL": true,
+        "Icon": "🇸🇦",
+        "Default": true,
+        "Enabled": true,
+        "ResourceFile": "Resources/localization/ar.json",
+        "DateFormat": "dd/MM/yyyy",
+        "TimeFormat": "HH:mm:ss",
+        "FirstDayOfWeek": "Saturday"
+      },
+      {
+        "Code": "en",
+        "Name": "English",
+        "NameEn": "English",
+        "Culture": "en-US",
+        "IsRTL": false,
+        "Icon": "🇬🇧",
+        "Default": false,
+        "Enabled": true,
+        "ResourceFile": "Resources/localization/en.json",
+        "DateFormat": "MM/dd/yyyy",
+        "TimeFormat": "hh:mm:ss tt",
+        "FirstDayOfWeek": "Sunday"
+      },
+      {
+        "Code": "fr",
+        "Name": "Français",
+        "NameEn": "French",
+        "Culture": "fr-FR",
+        "IsRTL": false,
+        "Icon": "🇫🇷",
+        "Default": false,
+        "Enabled": true,
+        "ResourceFile": "Resources/localization/fr.json",
+        "DateFormat": "dd/MM/yyyy",
+        "TimeFormat": "HH:mm:ss",
+        "FirstDayOfWeek": "Monday"
+      },
+      {
+        "Code": "ku",
+        "Name": "کوردی",
+        "NameEn": "Kurdish",
+        "Culture": "ku-Arab",
+        "IsRTL": true,
+        "Icon": "🏴",
+        "Default": false,
+        "Enabled": false,
+        "ResourceFile": "Resources/localization/ku.json",
+        "DateFormat": "dd/MM/yyyy",
+        "TimeFormat": "HH:mm:ss",
+        "FirstDayOfWeek": "Saturday"
+      },
+      {
+        "Code": "tr",
+        "Name": "Türkçe",
+        "NameEn": "Turkish",
+        "Culture": "tr-TR",
+        "IsRTL": false,
+        "Icon": "🇹🇷",
+        "Default": false,
+        "Enabled": false,
+        "ResourceFile": "Resources/localization/tr.json",
+        "DateFormat": "dd.MM.yyyy",
+        "TimeFormat": "HH:mm:ss",
+        "FirstDayOfWeek": "Monday"
+      }
+    ],
+    "TranslationService": {
+      "Enabled": false,
+      "Provider": "GoogleTranslate",
+      "ApiKey": "YourApiKeyHere",
+      "Endpoint": "https://translate.googleapis.com/v2"
+    }
+  },
+  "Currency": {
+    "DefaultCode": "SYP",
+    "DefaultSymbol": "ل.س",
+    "SystemCurrency": {
+      "Code": "SYP",
+      "Name": "ليرة سورية",
+      "NameEn": "Syrian Pound",
+      "Symbol": "ل.س",
+      "DecimalPlaces": 2,
+      "SubUnitName": "قرش",
+      "SubUnitRatio": 100,
+      "Format": "{0:N2} {1}",
+      "ExchangeRate": 1.0,
+      "IsActive": true,
+      "IsDefault": true,
+      "Position": "Before",
+      "ThousandsSeparator": ",",
+      "DecimalSeparator": "."
+    },
+    "Available": [
+      {
+        "Code": "SYP",
+        "Name": "ليرة سورية",
+        "NameEn": "Syrian Pound",
+        "Symbol": "ل.س",
+        "DecimalPlaces": 2,
+        "SubUnitName": "قرش",
+        "SubUnitRatio": 100,
+        "Format": "{0:N2} {1}",
+        "ExchangeRate": 1.0,
+        "IsActive": true,
+        "IsDefault": true,
+        "Position": "Before",
+        "ThousandsSeparator": ",",
+        "DecimalSeparator": "."
+      },
+      {
+        "Code": "USD",
+        "Name": "دولار أمريكي",
+        "NameEn": "US Dollar",
+        "Symbol": "$",
+        "DecimalPlaces": 2,
+        "SubUnitName": "سنت",
+        "SubUnitRatio": 100,
+        "Format": "${0:N2}",
+        "ExchangeRate": 12500.0,
+        "IsActive": true,
+        "IsDefault": false,
+        "Position": "Before",
+        "ThousandsSeparator": ",",
+        "DecimalSeparator": "."
+      },
+      {
+        "Code": "EUR",
+        "Name": "يورو",
+        "NameEn": "Euro",
+        "Symbol": "€",
+        "DecimalPlaces": 2,
+        "SubUnitName": "سنت",
+        "SubUnitRatio": 100,
+        "Format": "€{0:N2}",
+        "ExchangeRate": 13500.0,
+        "IsActive": true,
+        "IsDefault": false,
+        "Position": "Before",
+        "ThousandsSeparator": ",",
+        "DecimalSeparator": "."
+      },
+      {
+        "Code": "GBP",
+        "Name": "جنيه إسترليني",
+        "NameEn": "British Pound",
+        "Symbol": "£",
+        "DecimalPlaces": 2,
+        "SubUnitName": "بنس",
+        "SubUnitRatio": 100,
+        "Format": "£{0:N2}",
+        "ExchangeRate": 15800.0,
+        "IsActive": true,
+        "IsDefault": false,
+        "Position": "Before",
+        "ThousandsSeparator": ",",
+        "DecimalSeparator": "."
+      },
+      {
+        "Code": "TRY",
+        "Name": "ليرة تركية",
+        "NameEn": "Turkish Lira",
+        "Symbol": "₺",
+        "DecimalPlaces": 2,
+        "SubUnitName": "كوروش",
+        "SubUnitRatio": 100,
+        "Format": "₺{0:N2}",
+        "ExchangeRate": 1500.0,
+        "IsActive": true,
+        "IsDefault": false,
+        "Position": "Before",
+        "ThousandsSeparator": ".",
+        "DecimalSeparator": ","
+      }
+    ],
+    "ExchangeRates": {
+      "Provider": "CentralBank",
+      "UpdateIntervalHours": 6,
+      "AutoUpdate": true,
+      "BaseCurrency": "SYP",
+      "UseManualRates": true,
+      "ManualRates": {
+        "USD": 12500.0,
+        "EUR": 13500.0,
+        "GBP": 15800.0,
+        "TRY": 1500.0
+      }
+    },
+    "Rounding": {
+      "Enabled": true,
+      "Step": 0.01,
+      "Method": "MidPointRounding"
+    }
+  },
+  "Modules": {
+    "Enabled": [
+      "Core",
+      "Inventory",
+      "Sales",
+      "Purchases",
+      "POS",
+      "Accounting",
+      "Customers",
+      "Suppliers",
+      "Manufacturing",
+      "HumanResources",
+      "CRM",
+      "Reports",
+      "Banks",
+      "Tools",
+      "Settings",
+      "Security",
+      "Audit",
+      "Notifications",
+      "Workflow",
+      "AI",
+      "MultiCompany"
+    ],
+    "DefaultStartupModule": "Dashboard",
+    "AllModules": [
+      {
+        "Id": "Core",
+        "Name": "النواة الأساسية",
+        "NameEn": "Core",
+        "Description": "الوحدة الأساسية للتطبيق",
+        "DescriptionEn": "Core module",
+        "Version": "10.6.0",
+        "Order": 0,
+        "Enabled": true,
+        "Required": true,
+        "Icon": "⚙️",
+        "Dependencies": []
+      },
+      {
+        "Id": "Inventory",
+        "Name": "المخزون",
+        "NameEn": "Inventory",
+        "Description": "إدارة المخزون والمنتجات والمستودعات",
+        "DescriptionEn": "Manage inventory, products and warehouses",
+        "Version": "10.6.0",
+        "Order": 10,
+        "Enabled": true,
+        "Required": false,
+        "Icon": "📦",
+        "Dependencies": [
+          "Core"
+        ]
+      },
+      {
+        "Id": "Sales",
+        "Name": "المبيعات",
+        "NameEn": "Sales",
+        "Description": "إدارة فواتير المبيعات والعملاء",
+        "DescriptionEn": "Manage sales invoices and customers",
+        "Version": "10.6.0",
+        "Order": 20,
+        "Enabled": true,
+        "Required": false,
+        "Icon": "💰",
+        "Dependencies": [
+          "Core",
+          "Inventory"
+        ]
+      },
+      {
+        "Id": "Purchases",
+        "Name": "المشتريات",
+        "NameEn": "Purchases",
+        "Description": "إدارة أوامر الشراء والموردين",
+        "DescriptionEn": "Manage purchase orders and suppliers",
+        "Version": "10.6.0",
+        "Order": 30,
+        "Enabled": true,
+        "Required": false,
+        "Icon": "🛒",
+        "Dependencies": [
+          "Core",
+          "Inventory"
+        ]
+      },
+      {
+        "Id": "POS",
+        "Name": "نقاط البيع",
+        "NameEn": "Point of Sale",
+        "Description": "نظام نقاط البيع المتكامل",
+        "DescriptionEn": "Integrated Point of Sale system",
+        "Version": "10.6.0",
+        "Order": 40,
+        "Enabled": true,
+        "Required": false,
+        "Icon": "🛍️",
+        "Dependencies": [
+          "Core",
+          "Sales",
+          "Inventory"
+        ]
+      },
+      {
+        "Id": "Accounting",
+        "Name": "المحاسبة",
+        "NameEn": "Accounting",
+        "Description": "نظام المحاسبة المالي المتكامل",
+        "DescriptionEn": "Integrated financial accounting system",
+        "Version": "10.6.0",
+        "Order": 50,
+        "Enabled": true,
+        "Required": false,
+        "Icon": "📊",
+        "Dependencies": [
+          "Core"
+        ]
+      },
+      {
+        "Id": "Customers",
+        "Name": "إدارة العملاء",
+        "NameEn": "Customers Management",
+        "Description": "إدارة بيانات العملاء والحسابات",
+        "DescriptionEn": "Manage customer data and accounts",
+        "Version": "10.6.0",
+        "Order": 60,
+        "Enabled": true,
+        "Required": false,
+        "Icon": "👤",
+        "Dependencies": [
+          "Core",
+          "Sales"
+        ]
+      },
+      {
+        "Id": "Suppliers",
+        "Name": "إدارة الموردين",
+        "NameEn": "Suppliers Management",
+        "Description": "إدارة بيانات الموردين والحسابات",
+        "DescriptionEn": "Manage supplier data and accounts",
+        "Version": "10.6.0",
+        "Order": 70,
+        "Enabled": true,
+        "Required": false,
+        "Icon": "🏭",
+        "Dependencies": [
+          "Core",
+          "Purchases"
+        ]
+      },
+      {
+        "Id": "Manufacturing",
+        "Name": "التصنيع والإنتاج",
+        "NameEn": "Manufacturing",
+        "Description": "إدارة عمليات التصنيع والإنتاج",
+        "DescriptionEn": "Manage manufacturing and production",
+        "Version": "10.6.0",
+        "Order": 80,
+        "Enabled": true,
+        "Required": false,
+        "Icon": "🏗️",
+        "Dependencies": [
+          "Core",
+          "Inventory"
+        ]
+      },
+      {
+        "Id": "HumanResources",
+        "Name": "الموارد البشرية",
+        "NameEn": "Human Resources",
+        "Description": "إدارة الموظفين والرواتب والحضور",
+        "DescriptionEn": "Manage employees, payroll and attendance",
+        "Version": "10.6.0",
+        "Order": 90,
+        "Enabled": true,
+        "Required": false,
+        "Icon": "👥",
+        "Dependencies": [
+          "Core"
+        ]
+      },
+      {
+        "Id": "CRM",
+        "Name": "إدارة علاقات العملاء",
+        "NameEn": "CRM",
+        "Description": "إدارة العملاء المحتملين والفرص والمتابعات",
+        "DescriptionEn": "Manage leads, opportunities and follow-ups",
+        "Version": "10.6.0",
+        "Order": 100,
+        "Enabled": true,
+        "Required": false,
+        "Icon": "🤝",
+        "Dependencies": [
+          "Core",
+          "Customers"
+        ]
+      },
+      {
+        "Id": "Reports",
+        "Name": "التقارير",
+        "NameEn": "Reports",
+        "Description": "نظام التقارير المتكامل ولوحات القيادة",
+        "DescriptionEn": "Integrated reporting and dashboards",
+        "Version": "10.6.0",
+        "Order": 110,
+        "Enabled": true,
+        "Required": false,
+        "Icon": "📈",
+        "Dependencies": [
+          "Core"
+        ]
+      },
+      {
+        "Id": "Banks",
+        "Name": "البنوك",
+        "NameEn": "Banks",
+        "Description": "إدارة الحسابات البنكية والتسويات",
+        "DescriptionEn": "Manage bank accounts and reconciliations",
+        "Version": "10.6.0",
+        "Order": 120,
+        "Enabled": true,
+        "Required": false,
+        "Icon": "🏦",
+        "Dependencies": [
+          "Core",
+          "Accounting"
+        ]
+      },
+      {
+        "Id": "Tools",
+        "Name": "الأدوات",
+        "NameEn": "Tools",
+        "Description": "أدوات مساعدة وإضافات",
+        "DescriptionEn": "Helper tools and add-ons",
+        "Version": "10.6.0",
+        "Order": 130,
+        "Enabled": true,
+        "Required": false,
+        "Icon": "🔧",
+        "Dependencies": [
+          "Core"
+        ]
+      },
+      {
+        "Id": "Settings",
+        "Name": "الإعدادات",
+        "NameEn": "Settings",
+        "Description": "إعدادات النظام العامة",
+        "DescriptionEn": "General system settings",
+        "Version": "10.6.0",
+        "Order": 140,
+        "Enabled": true,
+        "Required": false,
+        "Icon": "⚙️",
+        "Dependencies": [
+          "Core"
+        ]
+      },
+      {
+        "Id": "Security",
+        "Name": "الأمان",
+        "NameEn": "Security",
+        "Description": "إدارة الأمان والصلاحيات",
+        "DescriptionEn": "Manage security and permissions",
+        "Version": "10.6.0",
+        "Order": 150,
+        "Enabled": true,
+        "Required": false,
+        "Icon": "🔒",
+        "Dependencies": [
+          "Core"
+        ]
+      },
+      {
+        "Id": "Audit",
+        "Name": "التدقيق",
+        "NameEn": "Audit",
+        "Description": "سجل التدقيق والمتابعة",
+        "DescriptionEn": "Audit trail and monitoring",
+        "Version": "10.6.0",
+        "Order": 160,
+        "Enabled": true,
+        "Required": false,
+        "Icon": "📋",
+        "Dependencies": [
+          "Core"
+        ]
+      },
+      {
+        "Id": "Notifications",
+        "Name": "الإشعارات",
+        "NameEn": "Notifications",
+        "Description": "نظام الإشعارات والتنبيهات",
+        "DescriptionEn": "Notifications and alerts system",
+        "Version": "10.6.0",
+        "Order": 170,
+        "Enabled": true,
+        "Required": false,
+        "Icon": "🔔",
+        "Dependencies": [
+          "Core"
+        ]
+      },
+      {
+        "Id": "Workflow",
+        "Name": "سير العمل",
+        "NameEn": "Workflow",
+        "Description": "إدارة مسارات العمل والموافقات",
+        "DescriptionEn": "Manage workflows and approvals",
+        "Version": "10.6.0",
+        "Order": 180,
+        "Enabled": true,
+        "Required": false,
+        "Icon": "🔄",
+        "Dependencies": [
+          "Core"
+        ]
+      },
+      {
+        "Id": "AI",
+        "Name": "الذكاء الاصطناعي",
+        "NameEn": "AI",
+        "Description": "خدمات الذكاء الاصطناعي والتحليل التنبؤي",
+        "DescriptionEn": "AI services and predictive analytics",
+        "Version": "10.6.0",
+        "Order": 190,
+        "Enabled": false,
+        "Required": false,
+        "Icon": "🧠",
+        "Dependencies": [
+          "Core"
+        ]
+      },
+      {
+        "Id": "MultiCompany",
+        "Name": "الشركات المتعددة",
+        "NameEn": "Multi-Company",
+        "Description": "دعم الشركات المتعددة",
+        "DescriptionEn": "Multi-company support",
+        "Version": "10.6.0",
+        "Order": 200,
+        "Enabled": true,
+        "Required": false,
+        "Icon": "🏢",
+        "Dependencies": [
+          "Core"
+        ]
+      }
+    ]
+  },
+  "Branding": {
+    "Theme": {
+      "Mode": "Dark",
+      "PrimaryColor": "#0078D4",
+      "PrimaryDark": "#005A9E",
+      "PrimaryLight": "#2B88D8",
+      "SecondaryColor": "#00B7C3",
+      "SecondaryDark": "#008A94",
+      "SecondaryLight": "#33C8D2",
+      "AccentColor": "#FF6B35",
+      "AccentDark": "#CC552A",
+      "Background": "#1E1E1E",
+      "Surface": "#2D2D2D",
+      "SurfaceLight": "#3D3D3D",
+      "SurfaceDark": "#1A1A1A",
+      "Text": "#FFFFFF",
+      "TextSecondary": "#AAAAAA",
+      "TextDisabled": "#666666",
+      "Success": "#107C10",
+      "SuccessLight": "#2D9C2D",
+      "Warning": "#FFB900",
+      "WarningLight": "#FFC633",
+      "Error": "#D13438",
+      "ErrorLight": "#D65A5E",
+      "Info": "#0078D4",
+      "InfoLight": "#3393D9"
+    },
+    "Fonts": {
+      "PrimaryFont": "Segoe UI",
+      "SecondaryFont": "Tahoma",
+      "ArabicFont": "Tahoma",
+      "TitleFont": "Segoe UI",
+      "MonospaceFont": "Consolas",
+      "FontSizes": {
+        "Tiny": 8,
+        "Small": 10,
+        "Normal": 12,
+        "Medium": 14,
+        "Large": 16,
+        "XLarge": 20,
+        "XXLarge": 24,
+        "Title": 32,
+        "Header": 48
+      }
+    },
+    "Images": {
+      "LogoPath": "Assets/images/logo.png",
+      "LogoDarkPath": "Assets/images/logo-dark.png",
+      "SplashScreenPath": "Assets/images/splash.png",
+      "FaviconPath": "Assets/images/favicon.ico",
+      "AppIconPath": "Assets/images/app-icon.ico",
+      "LoginBackgroundPath": "Assets/images/login-bg.jpg",
+      "DashboardBackgroundPath": "Assets/images/dashboard-bg.jpg",
+      "EmptyStatePath": "Assets/images/empty-state.png"
+    },
+    "SplashScreen": {
+      "ShowSplash": true,
+      "MinDisplaySeconds": 4.5,
+      "MaxDisplaySeconds": 10,
+      "ShowVersion": true,
+      "ShowProgress": true,
+      "BackgroundColor": "#1A1A1A",
+      "TextColor": "#FFFFFF"
+    },
+    "LoginScreen": {
+      "BackgroundColor": "#1E1E1E",
+      "CardBackground": "#2D2D2D",
+      "TextColor": "#FFFFFF",
+      "AccentColor": "#0078D4",
+      "ShowLogo": true,
+      "ShowVersion": true,
+      "ShowLanguageSelector": true
+    },
+    "Animations": {
+      "Enabled": true,
+      "Duration": 200,
+      "Easing": "EaseInOut",
+      "EnableTransitions": true,
+      "EnableFadeEffects": true,
+      "EnableSlideEffects": true
+    }
+  },
+  "Security": {
+    "RequireDongle": false,
+    "RequireLicense": false,
+    "LicenseFile": "./cfg/license.dat",
+    "SessionTimeoutMinutes": 30,
+    "SessionExtensionMinutes": 5,
+    "MaxLoginAttempts": 5,
+    "LockoutDurationMinutes": 15,
+    "PasswordPolicy": {
+      "MinLength": 6,
+      "MaxLength": 32,
+      "RequireUpperCase": true,
+      "RequireLowerCase": true,
+      "RequireNumbers": true,
+      "RequireSpecialChars": false,
+      "ExpirationDays": 90,
+      "PreventReuseCount": 5,
+      "AllowCommonPasswords": false
+    },
+    "TwoFactorAuth": {
+      "Enabled": false,
+      "Type": "SMS",
+      "SMSProvider": "Twilio",
+      "SMSApiKey": "",
+      "SMSPhoneNumber": "",
+      "EmailProvider": "Smtp",
+      "EmailAddress": ""
+    },
+    "Audit": {
+      "Enabled": true,
+      "LogLevel": "All",
+      "MaxLogEntries": 1000000,
+      "RetentionDays": 365,
+      "ExcludeSensitiveData": true
+    },
+    "Encryption": {
+      "Enabled": true,
+      "Algorithm": "AES-256",
+      "KeySize": 256,
+      "Mode": "CBC",
+      "KeyFile": "./cfg/encryption.key",
+      "SaltFile": "./cfg/encryption.salt"
+    },
+    "Permissions": {
+      "DefaultRole": "User",
+      "AllowCustomRoles": true,
+      "AllowPermissionOverride": true
+    }
+  },
+  "AI": {
+    "Enabled": false,
+    "Provider": "Ollama",
+    "Model": "deepseek-coder-v2",
+    "Host": "http://localhost:11434",
+    "ApiKey": "",
+    "TimeoutSeconds": 30,
+    "MaxTokens": 4096,
+    "Temperature": 0.7,
+    "TopP": 0.9,
+    "UseCache": true,
+    "CacheSize": 1000,
+    "EnableLogging": true,
+    "Features": {
+      "InventoryPrediction": true,
+      "SalesForecasting": true,
+      "CustomerSegmentation": true,
+      "AnomalyDetection": true,
+      "SmartRecommendations": true,
+      "NaturalLanguageQueries": true,
+      "AutomatedReporting": true
+    },
+    "LLM": {
+      "Provider": "Ollama",
+      "Model": "deepseek-coder-v2",
+      "Endpoint": "http://localhost:11434/api/chat",
+      "Temperature": 0.7,
+      "MaxTokens": 4096,
+      "Timeout": 60
+    }
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft": "Warning",
+      "Microsoft.Hosting.Lifetime": "Information",
+      "System": "Warning",
+      "ShouTech": "Debug"
+    },
+    "Providers": [
+      {
+        "Name": "Console",
+        "Enabled": true,
+        "Level": "Information",
+        "Format": "Default"
+      },
+      {
+        "Name": "File",
+        "Enabled": true,
+        "Level": "Information",
+        "Path": "./log/app/log-{Date}.log",
+        "Format": "Json",
+        "MaxFileSizeMB": 100,
+        "MaxFiles": 30,
+        "RollOnSize": true
+      },
+      {
+        "Name": "Database",
+        "Enabled": true,
+        "Level": "Warning",
+        "Table": "SystemLogs",
+        "BatchSize": 100
+      },
+      {
+        "Name": "SecurityFile",
+        "Enabled": true,
+        "Level": "Information",
+        "Path": "./log/security/security-{Date}.log",
+        "Format": "Json",
+        "MaxFileSizeMB": 50,
+        "MaxFiles": 90
+      },
+      {
+        "Name": "AuditFile",
+        "Enabled": true,
+        "Level": "Information",
+        "Path": "./log/audit/audit-{Date}.log",
+        "Format": "Json",
+        "MaxFileSizeMB": 200,
+        "MaxFiles": 365
+      },
+      {
+        "Name": "PerformanceFile",
+        "Enabled": true,
+        "Level": "Debug",
+        "Path": "./log/performance/perf-{Date}.log",
+        "Format": "Json",
+        "MaxFileSizeMB": 50,
+        "MaxFiles": 30
+      },
+      {
+        "Name": "ErrorFile",
+        "Enabled": true,
+        "Level": "Error",
+        "Path": "./log/error/error-{Date}.log",
+        "Format": "Json",
+        "MaxFileSizeMB": 50,
+        "MaxFiles": 90
+      }
+    ],
+    "Performance": {
+      "EnablePerformanceLogging": true,
+      "LogSlowQueries": true,
+      "SlowQueryThresholdMs": 500,
+      "LogMemoryUsage": true,
+      "MemoryCheckIntervalMinutes": 5,
+      "LogCpuUsage": true,
+      "CpuCheckIntervalMinutes": 5
+    },
+    "Metrics": {
+      "Enabled": true,
+      "Providers": [
+        {
+          "Name": "Prometheus",
+          "Enabled": true,
+          "Endpoint": "/metrics",
+          "Port": 9090
+        }
+      ]
+    }
+  },
+  "Licensing": {
+    "Type": "PerUser",
+    "MaxUsers": 10,
+    "MaxCompanies": 1,
+    "MaxWarehouses": 5,
+    "MaxProducts": 10000,
+    "ExpiryDate": "2027-01-01",
+    "Features": [
+      "Core",
+      "Inventory",
+      "Sales",
+      "Purchases",
+      "POS",
+      "Accounting",
+      "Customers",
+      "Suppliers",
+      "Manufacturing",
+      "HumanResources",
+      "CRM",
+      "Reports",
+      "Banks",
+      "Tools",
+      "Settings",
+      "Security",
+      "Audit",
+      "Notifications",
+      "Workflow"
+    ],
+    "DongleInfo": {
+      "VendorId": 4660,
+      "ProductId": 22136,
+      "SerialNumber": ""
+    },
+    "Activation": {
+      "RequireOnlineActivation": false,
+      "ActivationServer": "",
+      "OfflineActivationAllowed": true,
+      "HardwareIdBased": true
+    }
+  },
+  "Notifications": {
+    "Email": {
+      "Enabled": false,
+      "SmtpServer": "",
+      "SmtpPort": 587,
+      "SmtpUsername": "",
+      "SmtpPassword": "",
+      "EnableSsl": true,
+      "FromEmail": "",
+      "FromName": "شو تيك إي آر بي",
+      "FromNameEn": "ShouTech ERP"
+    },
+    "SMS": {
+      "Enabled": false,
+      "Provider": "Twilio",
+      "ApiKey": "YourTwilioApiKey",
+      "ApiSecret": "YourTwilioApiSecret",
+      "PhoneNumber": "+1234567890"
+    },
+    "PushNotifications": {
+      "Enabled": false,
+      "Provider": "Firebase",
+      "ServerKey": "YourFirebaseServerKey",
+      "SenderId": "YourFirebaseSenderId"
+    },
+    "DesktopNotifications": {
+      "Enabled": true,
+      "ShowPopups": true,
+      "Sound": true,
+      "SoundPath": "Assets/sounds/notification.wav"
+    },
+    "InAppNotifications": {
+      "Enabled": true,
+      "MaxStored": 1000,
+      "AutoDeleteDays": 30
+    }
+  },
+  "Performance": {
+    "Cache": {
+      "Enabled": true,
+      "Provider": "Memory",
+      "DefaultExpiryMinutes": 10,
+      "MaxCacheSize": 1000,
+      "EnableCompression": true
+    },
+    "ImageCache": {
+      "Enabled": true,
+      "Provider": "Disk",
+      "Path": "./cache/images",
+      "DefaultExpiryDays": 30,
+      "MaxSizeMB": 1000
+    },
+    "QueryCache": {
+      "Enabled": true,
+      "DefaultExpiryMinutes": 5,
+      "MaxQueries": 1000
+    },
+    "Session": {
+      "Provider": "Memory",
+      "TimeoutMinutes": 30,
+      "SlidingExpiration": true
+    },
+    "Compression": {
+      "Enabled": true,
+      "Level": "Optimal"
+    },
+    "Prefetch": {
+      "Enabled": true,
+      "PrefetchCount": 50
+    }
+  },
+  "Integrations": {
+    "RestApi": {
+      "Enabled": true,
+      "Endpoint": "http://localhost:5000/api",
+      "SwaggerEndpoint": "http://localhost:5000/swagger",
+      "EnableDocs": true,
+      "EnableMonitoring": true
+    },
+    "Webhooks": {
+      "Enabled": true,
+      "MaxRetries": 3,
+      "RetryDelaySeconds": 5,
+      "TimeoutSeconds": 30
+    },
+    "External": {
+      "AccountingExport": {
+        "Enabled": false,
+        "Provider": "QuickBooks",
+        "Endpoint": "https://quickbooks.api.intuit.com"
+      },
+      "PaymentGateway": {
+        "Enabled": false,
+        "Provider": "Stripe",
+        "ApiKey": "YourStripeApiKey",
+        "WebhookSecret": "YourStripeWebhookSecret"
+      },
+      "SmsGateway": {
+        "Enabled": false,
+        "Provider": "Twilio",
+        "ApiKey": "YourTwilioApiKey",
+        "ApiSecret": "YourTwilioApiSecret"
+      },
+      "EmailProvider": {
+        "Enabled": false,
+        "Provider": "SendGrid",
+        "ApiKey": "YourSendGridApiKey"
+      }
+    }
+  },
+  "Maintenance": {
+    "AutoCleanup": {
+      "Enabled": true,
+      "TempFilesDays": 7,
+      "LogsDays": 30,
+      "BackupDays": 90,
+      "CacheDays": 14
+    },
+    "ScheduledTasks": [
+      {
+        "Name": "DatabaseBackup",
+        "Enabled": true,
+        "Schedule": "0 2 * * *",
+        "Description": "النسخ الاحتياطي اليومي لقاعدة البيانات"
+      },
+      {
+        "Name": "LogCleanup",
+        "Enabled": true,
+        "Schedule": "0 3 * * 0",
+        "Description": "تنظيف ملفات السجل الأسبوعي"
+      },
+      {
+        "Name": "CacheCleanup",
+        "Enabled": true,
+        "Schedule": "0 4 * * *",
+        "Description": "تنظيف ملفات الكاش اليومي"
+      },
+      {
+        "Name": "DatabaseOptimization",
+        "Enabled": true,
+        "Schedule": "0 5 * * 0",
+        "Description": "تحسين قاعدة البيانات الأسبوعي"
+      },
+      {
+        "Name": "ReportGeneration",
+        "Enabled": true,
+        "Schedule": "0 6 * * *",
+        "Description": "توليد التقارير المجدولة اليومي"
+      }
+    ]
+  },
+  "Advanced": {
+    "EnableDiagnostics": true,
+    "EnableTracing": false,
+    "EnableDetailedErrors": true,
+    "EnableSensitiveDataLogging": false,
+    "EnableDetailedPerformanceLogging": false,
+    "MaxRequestSizeMB": 100,
+    "MaxUploadSizeMB": 50,
+    "EnableFileWatcher": true,
+    "FileWatcherDelayMs": 500,
+    "EnableHotReload": false,
+    "EnableDevTools": true,
+    "DevToolsPort": 9222,
+    "EnableRemoteDebugging": false,
+    "RemoteDebuggingPort": 9223
+  },
+  "Developer": {
+    "EnableConsole": true,
+    "EnableDebugTools": true,
+    "EnableXamlDebugging": true,
+    "EnableTestMode": false,
+    "MockData": false,
+    "UseLocalhost": true,
+    "EnableHotReload": false
+  },
+  "ExternalData": {
+    "ExchangeRates": {
+      "Provider": "CentralBank",
+      "Endpoint": "https://api.exchangeratesapi.io",
+      "ApiKey": "",
+      "UpdateIntervalHours": 6,
+      "BaseCurrency": "SYP"
+    },
+    "Weather": {
+      "Provider": "OpenWeatherMap",
+      "Endpoint": "https://api.openweathermap.org",
+      "ApiKey": "",
+      "UpdateIntervalMinutes": 30
+    },
+    "Maps": {
+      "Provider": "GoogleMaps",
+      "ApiKey": "",
+      "Endpoint": "https://maps.googleapis.com/maps/api"
+    }
+  },
+  "Productivity": {
+    "AutoSave": {
+      "Enabled": true,
+      "IntervalSeconds": 60
+    },
+    "AutoComplete": {
+      "Enabled": true,
+      "MinChars": 2,
+      "MaxSuggestions": 10
+    },
+    "AutoCorrect": {
+      "Enabled": true,
+      "Language": "ar"
+    },
+    "RecentDocuments": {
+      "MaxCount": 20,
+      "ClearOnExit": false
+    },
+    "UserPreferences": {
+      "DefaultView": "Grid",
+      "DefaultPageSize": 25,
+      "EnableConfirmations": true,
+      "EnableAnimations": true,
+      "EnableSounds": true,
+      "EnableTooltips": true
+    }
+  },
+  "Printing": {
+    "DefaultPrinter": "",
+    "DefaultPaperSize": "A4",
+    "DefaultOrientation": "Portrait",
+    "DefaultMargins": {
+      "Top": 25,
+      "Bottom": 25,
+      "Left": 25,
+      "Right": 25
+    },
+    "HeaderFooter": {
+      "ShowHeader": true,
+      "ShowFooter": true,
+      "HeaderTemplate": "{CompanyName} - {ReportName}",
+      "FooterTemplate": "الصفحة {PageNumber} من {TotalPages} - {Date}"
+    },
+    "PrintPreview": {
+      "Zoom": 100,
+      "ShowRulers": true,
+      "ShowGrid": false
+    }
+  },
+  "Reporting": {
+    "DefaultFormat": "PDF",
+    "SupportedFormats": [
+      "PDF",
+      "Excel",
+      "Word",
+      "HTML",
+      "CSV",
+      "XML"
+    ],
+    "MaxRows": 100000,
+    "TimeoutSeconds": 300,
+    "EnableCache": true,
+    "CacheExpiryMinutes": 60,
+    "EnableScheduling": true,
+    "SchedulePath": "./rpt/schedules",
+    "TemplatePath": "./rpt/templates",
+    "OutputPath": "./rpt/generated",
+    "LogoPath": "Assets/logo.png",
+    "EnableWatermark": false,
+    "WatermarkText": "عينة",
+    "EnableDigitalSignature": false
+  },
+  "MultiCompany": {
+    "Enabled": true,
+    "DefaultCompanyCode": "001",
+    "Companies": [
+      {
+        "Code": "001",
+        "Name": "الشركة الرئيسية",
+        "NameEn": "Main Company",
+        "Database": "SHOUTECH_MST",
+        "IsDefault": true,
+        "Enabled": true
+      }
+    ],
+    "Branches": {
+      "Enabled": true,
+      "DefaultBranchCode": "001",
+      "Branches": [
+        {
+          "Code": "001",
+          "Name": "الفرع الرئيسي",
+          "NameEn": "Main Branch",
+          "Address": "دمشق",
+          "Phone": "+963 11 1234567",
+          "IsDefault": true,
+          "Enabled": true
+        }
+      ]
+    }
+  },
+  "Barcode": {
+    "DefaultType": "QRCode",
+    "SupportedTypes": [
+      "QRCode",
+      "Code128",
+      "Code39",
+      "EAN13",
+      "UPC"
+    ],
+    "DefaultWidth": 200,
+    "DefaultHeight": 200,
+    "IncludeText": true,
+    "TextPosition": "Below",
+    "FontSize": 10
+  },
+  "Tax": {
+    "DefaultTaxCode": "VAT",
+    "Taxes": [
+      {
+        "Code": "VAT",
+        "Name": "ضريبة القيمة المضافة",
+        "NameEn": "Value Added Tax",
+        "Rate": 0.1,
+        "IsDefault": true,
+        "Enabled": true,
+        "Type": "Percentage"
+      },
+      {
+        "Code": "EXEMPT",
+        "Name": "معفى من الضريبة",
+        "NameEn": "Tax Exempt",
+        "Rate": 0,
+        "IsDefault": false,
+        "Enabled": true,
+        "Type": "Percentage"
+      }
+    ]
+  },
+  "Digitization": {
+    "OCR": {
+      "Enabled": false,
+      "Provider": "Tesseract",
+      "Language": "ara",
+      "EngineMode": "LSTM_ONLY"
+    },
+    "DocumentScanning": {
+      "Enabled": false,
+      "DefaultFormat": "PDF",
+      "Compression": "High",
+      "MaxSizeMB": 50
+    },
+    "ElectronicSignatures": {
+      "Enabled": false,
+      "Provider": "Self",
+      "CertificatePath": "./cfg/certificate.pfx",
+      "CertificatePassword": ""
+    }
+  }
+}

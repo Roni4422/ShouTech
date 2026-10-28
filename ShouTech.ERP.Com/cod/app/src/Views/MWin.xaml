@@ -1,0 +1,790 @@
+<ribbon:RibbonWindow x:Class="ShouTech.App.Views.MWin"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ribbon="clr-namespace:System.Windows.Controls.Ribbon;assembly=System.Windows.Controls.Ribbon"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        xmlns:loc="clr-namespace:ShouTech.App.Localization"
+        Title="ShouTech"
+        WindowStyle="None"
+        ResizeMode="CanResize"
+        Height="700"
+        Width="1200"
+        MinWidth="600"
+        MinHeight="120"
+        WindowStartupLocation="CenterScreen"
+        WindowState="Maximized"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        FontFamily="{DynamicResource ShellChromeFontFamily}"
+        FontSize="{DynamicResource FontSize14}"
+        Background="{DynamicResource ShellUnifiedLightBrush}"
+        Foreground="{DynamicResource TextBrush}"
+        StateChanged="OnWindowStateChanged">
+
+
+
+    <ribbon:RibbonWindow.Resources>
+
+        <!-- Transparent hit-target for archive-bin image (no square chrome) -->
+        <Style x:Key="RecycleBinIconButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="Transparent"
+                                BorderThickness="0"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Opacity" Value="0.92"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Opacity" Value="0.85"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="RadioPanelVisibility" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Minimized">
+                    <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </ribbon:RibbonWindow.Resources>
+
+    <Border x:Name="RootBorder"
+            CornerRadius="14"
+            ClipToBounds="True"
+            Background="{DynamicResource ShellUnifiedLightBrush}"
+            SnapsToDevicePixels="True">
+        <Grid Background="{DynamicResource ShellUnifiedLightBrush}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="28"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            
+            <Border Grid.Row="0"
+                    Background="{DynamicResource ShellUnifiedLightBrush}"
+                    HorizontalAlignment="Stretch"
+                    Margin="0"
+                    Padding="0">
+                <Grid x:Name="WindowChromeBar"
+                      Height="28"
+                      HorizontalAlignment="Stretch"
+                      Background="{DynamicResource ChromeBackgroundBrush}"
+                      FlowDirection="LeftToRight"
+                      shell:WindowChrome.IsHitTestVisibleInChrome="True"
+                      MouseLeftButtonDown="OnTitleBarMouseLeftButtonDown">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0" Background="Transparent"/>
+
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Stretch"
+                                Margin="0">
+                        <Button x:Name="MinimizeButton"
+								shell:WindowChrome.IsHitTestVisibleInChrome="True"
+								Style="{StaticResource WindowChromeButtonStyle}"
+								Content="─"
+								ToolTip="Minimize"
+								Background="{DynamicResource ChromeBackgroundBrush}"
+								Foreground="{DynamicResource ChromeForegroundBrush}"
+								Click="OnMinimizeClick"/>
+						<Button x:Name="MaximizeButton"
+								shell:WindowChrome.IsHitTestVisibleInChrome="True"
+								Style="{StaticResource WindowChromeButtonStyle}"
+								Content="□"
+								ToolTip="Maximize"
+								Background="{DynamicResource ChromeBackgroundBrush}"
+								Foreground="{DynamicResource ChromeForegroundBrush}"
+								Click="OnMaximizeClick"/>
+						<!-- Radio panel shown only when window is minimized -->
+						<StackPanel x:Name="RadioPanel" Orientation="Horizontal" Margin="5"
+									Style="{StaticResource RadioPanelVisibility}">
+							<RadioButton Content="Option 1"/>
+							<RadioButton Content="Option 2"/>
+							<RadioButton Content="Option 3"/>
+						</StackPanel>
+						<Button x:Name="CloseButton"
+								shell:WindowChrome.IsHitTestVisibleInChrome="True"
+								Style="{StaticResource WindowChromeCloseButtonStyle}"
+								Content="×"
+								ToolTip="Close"
+								Background="{DynamicResource ChromeBackgroundBrush}"
+								Foreground="{DynamicResource ChromeForegroundBrush}"
+								Click="OnCloseClick"/>
+						</StackPanel>
+					</Grid>
+				</Border>
+
+            
+            <Menu x:Name="MainMenu" Grid.Row="1"
+                  Background="Transparent"
+                  Foreground="{DynamicResource ShellMenuForegroundBrush}"
+                  Height="34"
+                  Padding="4,0"
+                  ClipToBounds="True">
+                <Menu.Resources>
+                    <Style TargetType="{x:Type MenuItem}">
+                        <Setter Property="FontFamily" Value="Tahoma"/>
+                        <Setter Property="FontWeight" Value="SemiBold"/>
+                        <Setter Property="FontSize" Value="{DynamicResource FontSize12}"/>
+                        <Setter Property="Padding" Value="6,4"/>
+                        <Setter Property="Margin" Value="1,0"/>
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="Foreground" Value="{DynamicResource ShellMenuForegroundBrush}"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                        <Style.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource ShellRibbonHoverBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{DynamicResource TextDisabledBrush}"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Menu.Resources>
+                <Menu.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                </Menu.ItemsPanel>
+                <MenuItem x:Name="MenuFile" Header="File" Click="OnMenuFileClick"/>
+                <MenuItem x:Name="MenuInventory" Header="Inventory" Click="OnMenuInventoryClick"/>
+                <MenuItem x:Name="MenuAccounts" Header="Accounts" Click="OnMenuAccountsClick"/>
+                <MenuItem x:Name="MenuBonds" Header="Bonds" Click="OnMenuBondsClick"/>
+                <MenuItem x:Name="MenuInvoices" Header="Invoices" Click="OnMenuInvoicesClick"/>
+                <MenuItem x:Name="MenuPOS" Header="Point of Sale" Click="OnMenuPOSClick"/>
+                <MenuItem x:Name="MenuOrders" Header="Orders" Click="OnMenuOrdersClick"/>
+                <MenuItem x:Name="MenuCustomers" Header="Customers" Click="OnMenuCustomersClick"/>
+                <MenuItem x:Name="MenuSalesRep" Header="Sales Representative" Click="OnMenuSalesRepClick"/>
+                <MenuItem x:Name="MenuManufacturing" Header="Manufacturing" Click="OnMenuManufacturingClick"/>
+                <MenuItem x:Name="MenuBanks" Header="Banks" Click="OnMenuBanksClick"/>
+                <MenuItem x:Name="MenuReports" Header="Reports" Click="OnMenuReportsClick"/>
+                <MenuItem x:Name="MenuTools" Header="Tools" Click="OnMenuToolsClick"/>
+                <MenuItem x:Name="MenuOtherTools" Header="Other Tools" Click="OnMenuOtherToolsClick"/>
+                <MenuItem x:Name="MenuView" Header="View" Click="OnMenuViewClick"/>
+                <MenuItem x:Name="MenuExit" Header="Exit" Click="OnMenuExitClick"/>
+                <MenuItem x:Name="MenuHelp" Header="Help" Click="OnMenuHelpClick"/>
+            </Menu>
+
+            
+            <ToolBar x:Name="MainToolBar" Grid.Row="2"
+                     Background="Transparent"
+                     Height="32"
+                     ToolBarTray.IsLocked="True">
+                <ToolBar.Resources>
+                    <Style TargetType="Button">
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                        <Setter Property="Padding" Value="4"/>
+                        <Setter Property="Margin" Value="1"/>
+                        <Setter Property="Cursor" Value="Hand"/>
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource ShellRibbonHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource BorderDarkBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{DynamicResource TextDisabledBrush}"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </ToolBar.Resources>
+                <Button Content="💾" Margin="2" ToolTip="Save" Background="Transparent" Foreground="{DynamicResource TextBrush}" FontSize="{DynamicResource FontSize16}" Command="{Binding SaveCommand}"/>
+                <Button Content="↩️" Margin="2" ToolTip="Undo" Background="Transparent" Foreground="{DynamicResource TextBrush}" FontSize="{DynamicResource FontSize16}" Command="{Binding UndoCommand}"/>
+                <Button Content="↪️" Margin="2" ToolTip="Redo" Background="Transparent" Foreground="{DynamicResource TextBrush}" FontSize="{DynamicResource FontSize16}" Command="{Binding RedoCommand}"/>
+                <Button Content="🖨️" Margin="2" ToolTip="Print" Background="Transparent" Foreground="{DynamicResource TextBrush}" FontSize="{DynamicResource FontSize16}" Command="{Binding PrintCommand}"/>
+                <Button Content="🔍" Margin="2" ToolTip="Search" Background="Transparent" Foreground="{DynamicResource TextBrush}" FontSize="{DynamicResource FontSize16}" Command="{Binding FindCommand}"/>
+                <Button Content="⚙️" Margin="2" ToolTip="Settings" Background="Transparent" Foreground="{DynamicResource TextBrush}" FontSize="{DynamicResource FontSize16}" Command="{Binding SettingsCommand}"/>
+                <Button Content="📊" Margin="2" ToolTip="Reports" Background="Transparent" Foreground="{DynamicResource TextBrush}" FontSize="{DynamicResource FontSize16}" Command="{Binding ReportsCommand}"/>
+                <Button Content="📥" Margin="2" ToolTip="Import" Background="Transparent" Foreground="{DynamicResource TextBrush}" FontSize="{DynamicResource FontSize16}" Command="{Binding ImportCommand}"/>
+                <Button Content="📤" Margin="2" ToolTip="Export" Background="Transparent" Foreground="{DynamicResource TextBrush}" FontSize="{DynamicResource FontSize16}" Command="{Binding ExportCommand}"/>
+                <Button x:Name="AccentPickerButton"
+                        Margin="2"
+                        Width="32"
+                        Height="28"
+                        ToolTip="Accent color"
+                        Background="Transparent"
+                        Foreground="{DynamicResource TextBrush}"
+                        Cursor="Hand"
+                        Click="OnAccentPickerClick">
+                    <Button.Content>
+                        <Border Width="18" Height="18"
+                                CornerRadius="3"
+                                BorderBrush="{DynamicResource BorderDarkBrush}"
+                                BorderThickness="1"
+                                Background="{DynamicResource AccentPrimary}"/>
+                    </Button.Content>
+                </Button>
+                
+                <Button Content="🚪" Margin="2" ToolTip="Exit" Background="Transparent" Foreground="{DynamicResource TextBrush}" FontSize="{DynamicResource FontSize16}" Command="{Binding ExitCommand}"/>
+            </ToolBar>
+
+            
+            <ribbon:Ribbon Grid.Row="3" x:Name="RibbonControl"
+                           Background="Transparent"
+                           Foreground="{DynamicResource ShellRibbonForegroundBrush}"
+                           Visibility="Collapsed"
+                           IsMinimized="False">
+
+                <ribbon:RibbonTab x:Name="TabFile" Header="File" Visibility="Collapsed">
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.FileOperations" Header="Operations">
+                        <ribbon:RibbonButton loc:LocProps.Key="Menu.New" Label="New" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton x:Name="RibbonOpenCompanyButton" loc:LocProps.Key="Menu.Open" Label="Open" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton x:Name="RibbonImportDataButton" loc:LocProps.Key="Menu.Import" Label="Import data" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton x:Name="RibbonExportDataButton" loc:LocProps.Key="Menu.Export" Label="Export data" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.FileBackup" Header="Backup">
+                        <ribbon:RibbonButton x:Name="RibbonBackupButton" loc:LocProps.Key="Tools.Backup" Label="Backup" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton x:Name="RibbonRestoreBackupButton" loc:LocProps.Key="RestoreCompany.Restore" Label="Restore backup" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.FileExit" Header="Exit">
+                        <ribbon:RibbonButton x:Name="RibbonExitButton" loc:LocProps.Key="Menu.Exit" Label="Exit" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                </ribbon:RibbonTab>
+
+                <ribbon:RibbonTab x:Name="TabInventory" Header="Inventory" Visibility="Collapsed">
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.InventoryCards" Header="Cards">
+                        <ribbon:RibbonButton x:Name="RibbonMaterialCardButton" loc:LocProps.Key="Inventory.MaterialCard" Label="Material card" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton x:Name="RibbonCategoryCardButton" loc:LocProps.Key="Inventory.CategoryCard" Label="Category card" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton x:Name="RibbonWarehouseCardButton" loc:LocProps.Key="Inventory.WarehouseCard" Label="Warehouse card" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton x:Name="RibbonMaterialGroupsButton" loc:LocProps.Key="Inventory.MaterialGroups" Label="مجموعات المواد" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.InventoryBarcode" Header="Barcode">
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.GenerateBarcode" Label="Generate barcode" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.DesignBarcode" Label="Design and print barcode" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.CreateBarcode" Label="Create barcode" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.InventoryMovements" Header="Movements">
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.PriceList" Label="Price list" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.EndOfPeriod" Label="End of period stock" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.ShortageList" Label="Shortage list" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.TransferMaterial" Label="Transfer material movement" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.InventoryAdjustment" Label="Inventory adjustment" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.InventoryMaterialReports" Header="Material reports">
+                        <ribbon:RibbonButton x:Name="RibbonMaterialTreeButton" loc:LocProps.Key="Inventory.MaterialTree" Label="دليل المواد" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.SearchMaterial" Label="Search materials" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.WarehouseInventory" Label="Warehouse inventory" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.MaterialMovement" Label="Material movement" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.MaterialMovementChart" Label="Material movement chart" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.ExpiredMaterials" Label="Expired materials" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.InvoiceAge" Label="Invoice aging" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.MaterialProfits" Label="Material profits" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.MaterialPriceHistory" Label="Material price history" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.ServiceMaterials" Label="Service materials reports" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.MaterialStatistics" Label="Material statistics" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.StagnantMaterials" Label="Stagnant materials" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.MostActiveMaterials" Label="Most active materials" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.MaterialComparison" Label="Material comparison" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.MaterialList" Label="Material list" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.MaterialGroupMovementReport" Label="Material and group movement report" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.NegativeOutput" Label="Negative output" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.InventoryOther" Header="Other">
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.Customers" Label="Customers and material intersection" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.SerialNumbersReport" Label="Serial numbers report" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.EditSerialNumber" Label="Edit serial number" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.BranchMaterials" Label="Branch materials" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.SalesReport" Label="Sales report" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.EditMaterialSpecs" Label="Edit material specs" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Inventory.MaterialDiscounts" Label="Material discounts" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                </ribbon:RibbonTab>
+
+                <ribbon:RibbonTab x:Name="TabAccounts" Header="Accounts" Visibility="Collapsed">
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.AccountsGeneral" Header="General">
+                        <ribbon:RibbonButton x:Name="RibbonChartOfAccountsButton" loc:LocProps.Key="Accounts.ChartOfAccounts" Label="Chart of accounts" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton x:Name="RibbonAccountCardButton" loc:LocProps.Key="AccountCard" Label="Account card" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.CostCenter" Label="Cost center" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.CostCenterCard" Label="Cost center card" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.LinkWithAccounts" Label="Link to accounts" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.CostCenterReport" Label="Cost center report" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.CostCenterMaterialMovement" Label="Cost center material movement" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.CostCenterBalance" Label="Cost center trial balance" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.AccountsCurrencies" Header="Currencies">
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.DefineCurrency" Label="Define currency" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.CurrencyRates" Label="Currency rates bulletin" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.AverageCurrencyRate" Label="Average currency rates" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.ExchangeRateDifferences" Label="Exchange rate differences" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.AccountsReports" Header="Reports">
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.Ledger" Label="General ledger" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.CustomerStatement" Label="Customer statement" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.GeneralJournal" Label="General journal" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.DailyReport" Label="Daily report" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.AccountMovementChart" Label="Account movement chart" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.AccountBalance" Label="Account balance" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.BranchAccountMovement" Label="Branch account movement" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.TrialBalance" Label="Trial balance" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.AccountsClosingAccounts" Header="Closing accounts">
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.Operations" Label="Operations" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.Trading" Label="Trading" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.ProfitLoss" Label="Profit and loss" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.AccountsFinancialStatements" Header="Financial statements">
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.BalanceSheet" Label="Balance sheet" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.IncomeStatement" Label="Income statement" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.CashFlowStatement" Label="Cash flow statement" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.AccountsAnalysis" Header="Analysis">
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.DormantAccounts" Label="Inactive accounts" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.AgingReceivables" Label="Receivables aging" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.CollectionRates" Label="Collection ratios" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.AccountComparison" Label="Account comparison" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.FinancialAnalysis" Label="Local financial analysis" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.FinancialAnalysis" Label="AI financial analysis" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                </ribbon:RibbonTab>
+
+                <ribbon:RibbonTab x:Name="TabBonds" Header="Bonds" Visibility="Collapsed">
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.BondsVouchers" Header="Vouchers">
+                        <ribbon:RibbonButton loc:LocProps.Key="Bonds.JournalVoucher" Label="Journal voucher" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Bonds.ReceiptVoucher" Label="Receipt voucher" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Bonds.PaymentVoucher" Label="Payment voucher" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Bonds.JournalVoucher" Label="Daily voucher" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Bonds.CashJournal" Label="Cash journal" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Bonds.DefineVoucherTypes" Label="Define voucher patterns" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.BondsInstallments" Header="Installments">
+                        <ribbon:RibbonButton loc:LocProps.Key="Bonds.Installment" Label="Installments" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Bonds.SearchInstallment" Label="Search installments" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.BondsNegotiableInstruments" Header="Negotiable instruments">
+                        <ribbon:RibbonButton loc:LocProps.Key="Bonds.ReceiptCheque" Label="Incoming check" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Bonds.PaymentCheque" Label="Outgoing check" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Bonds.DefineSecurities" Label="Define negotiable instruments" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Bonds.SearchSecurities" Label="Search negotiable instruments" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.BondsPayments" Header="Payments">
+                        <ribbon:RibbonButton loc:LocProps.Key="Bonds.PaymentTypes" Label="Payment patterns" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Bonds.DefinePaymentTypes" Label="Define payment patterns" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.BondsMonitoring" Header="Monitoring">
+                        <ribbon:RibbonButton loc:LocProps.Key="Bonds.MonitorVouchers" Label="Monitor and edit vouchers" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                </ribbon:RibbonTab>
+
+                <ribbon:RibbonTab x:Name="TabInvoices" Header="Invoices" Visibility="Collapsed">
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.InvoicesInvoices" Header="Invoices">
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.Transfer" Label="Transfer" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.OpeningStock" Label="Opening stock invoice" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.MaterialEntry" Label="Material in invoice" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.MaterialExit" Label="Material out invoice" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.InvoicesPurchasing" Header="Purchasing">
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.PurchaseInvoice" Label="Purchase invoice" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.PurchaseReturn" Label="Purchase return invoice" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.InvoicesSales" Header="Sales">
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.SalesInvoice" Label="Sales invoice" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.SalesReturn" Label="Sales return invoice" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.InventoryCount" Label="Inventory count invoice" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.PrintBarcode" Label="Print Barcode" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.InvoicesGeneral" Header="General">
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.DefineInvoices" Label="Define invoices" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.SearchInvoices" Label="Search invoices" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.CashSales" Label="Cash sales invoices" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.CloseCash" Label="Close cash register" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.Quotation" Label="Quotation" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.SearchQuotations" Label="Search quotations" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.InvoiceProfits" Label="Invoice profits" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.PackingList" Label="Packing list" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.InvoicesOtherTools" Header="Other Tools">
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.CompressInvoices" Label="Compress invoices" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.RepostInvoices" Label="Repost invoices" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                </ribbon:RibbonTab>
+
+                <ribbon:RibbonTab x:Name="TabPOS" Header="Point of Sale" Visibility="Collapsed">
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.POSSales" Header="Sales">
+                        <ribbon:RibbonButton loc:LocProps.Key="POS.OpenCashier" Label="Open POS Cashier" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.POSAdministration" Header="Administration">
+                        <ribbon:RibbonButton loc:LocProps.Key="POS.Points" Label="Points" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="POS.DefinePOS" Label="Define POS" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="POS.POSCashReport" Label="POS cash report" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="POS.POSDiscounts" Label="POS discounts" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="POS.SyncPOS" Label="POS sync" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.POSReports" Header="Reports">
+                        <ribbon:RibbonButton loc:LocProps.Key="POS.AdjustPrice" Label="Edit material price" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="POS.AdjustQuantity" Label="Edit material quantity" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="POS.DeleteMaterial" Label="Delete material" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                </ribbon:RibbonTab>
+
+                <ribbon:RibbonTab x:Name="TabOrders" Header="Orders" Visibility="Collapsed">
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.OrdersOrders" Header="Orders">
+                        <ribbon:RibbonButton loc:LocProps.Key="Orders.PurchaseOrder" Label="Purchase order" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Orders.SalesOrder" Label="Sales order" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.OrdersGeneral" Header="General">
+                        <ribbon:RibbonButton loc:LocProps.Key="Orders.DefineOrders" Label="Define orders" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Orders.OrderReceiptDelivery" Label="Order receive/deliver invoices" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Orders.TrackOrders" Label="Order tracking" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Orders.OrderPayments" Label="Order payments" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Orders.SearchOrders" Label="Search orders" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                </ribbon:RibbonTab>
+
+                <ribbon:RibbonTab x:Name="TabCustomers" Header="Customers" Visibility="Collapsed">
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.CustomersCards" Header="Cards">
+                        <ribbon:RibbonButton loc:LocProps.Key="Customers.CustomerCard" Label="Customer card" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Customers.CustomerPrices" Label="Customer prices" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Customers.CustomerDiscounts" Label="Customer discounts" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Customers.Areas" Label="Regions" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.CustomersTargets" Header="Targets">
+                        <ribbon:RibbonButton loc:LocProps.Key="Customers.AssignTargets" Label="Assign customer targets" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Customers.TargetsReport" Label="Customer targets report" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.CustomersFollowUp" Header="Follow-up">
+                        <ribbon:RibbonButton loc:LocProps.Key="Customers.SearchCustomers" Label="Search customers" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Customers.CustomerDue" Label="Customer due" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Customers.LinkPayments" Label="Link customer payments" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Customers.SearchDues" Label="Search dues" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.CustomersReports" Header="Reports">
+                        <ribbon:RibbonButton loc:LocProps.Key="Customers.CustomerBalance" Label="Customer balances" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Customers.BalanceAccounts" Label="Settle customer accounts" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Customers.EditCustomers" Label="Edit customers" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Customers.CustomerGroups" Label="Customer groups" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Customers.CustomerReports" Label="Customer reports" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                </ribbon:RibbonTab>
+
+                <ribbon:RibbonTab x:Name="TabSalesRep" Header="Sales Representative" Visibility="Collapsed">
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.SalesRepCards" Header="Cards">
+                        <ribbon:RibbonButton loc:LocProps.Key="SalesRep.SalesRepCard" Label="Sales rep card" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="SalesRep.SalesRepGroups" Label="Sales rep groups" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.SalesRepTargets" Header="Targets">
+                        <ribbon:RibbonButton loc:LocProps.Key="SalesRep.AssignSalesRepTargets" Label="Assign sales rep targets" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="SalesRep.SalesRepTargetsReport" Label="Sales rep targets report" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.SalesRepFollowUp" Header="Follow-up">
+                        <ribbon:RibbonButton loc:LocProps.Key="SalesRep.SearchCustomers" Label="Search customers" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="SalesRep.SalesRepMovement" Label="Sales rep movement" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="SalesRep.SalesRepCollections" Label="Sales rep collections" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.SalesRepHandheldDevices" Header="Handheld devices">
+                        <ribbon:RibbonButton loc:LocProps.Key="SalesRep.HandheldDevices" Label="Handheld device cards" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="SalesRep.DeviceRoutes" Label="Handheld device routes" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                </ribbon:RibbonTab>
+
+                <ribbon:RibbonTab x:Name="TabManufacturing" Header="Manufacturing" Visibility="Collapsed">
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.ManufacturingAdministration" Header="Administration">
+                        <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.ManufacturingModels" Label="Manufacturing templates" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.ManufacturingProcess" Label="Manufacturing operation" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.ManufacturingFeasibility" Label="Manufacturing capability" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.SearchManufacturing" Label="Search manufacturing" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.ManufacturingCostVariances" Header="Cost variances">
+                        <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.ManufacturingCostVariance" Label="Finished goods cost variance" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.RawMaterialCostVariance" Label="Raw material cost variance" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.AdditionalCostVariance" Label="Overhead cost variance" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.ManufacturedMaterialCostVariance" Label="Finished goods overhead variance" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.ManufacturingReports" Header="Reports">
+                        <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.ManufacturedMaterialCosts" Label="Manufactured materials costs" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.RepostManufacturing" Label="Repost manufacturing operations" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                </ribbon:RibbonTab>
+
+                <ribbon:RibbonTab x:Name="TabBanks" Header="Banks" Visibility="Collapsed">
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.BanksAdministration" Header="Administration">
+                        <ribbon:RibbonButton loc:LocProps.Key="Banks.DefineBanks" Label="Define banks" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Banks.BankEstimate" Label="Estimated bank statement" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Banks.BankReconciliation" Label="Bank reconciliation" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Banks.BankBalances" Label="Bank balances" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                </ribbon:RibbonTab>
+
+                <ribbon:RibbonTab x:Name="TabReports" Header="Reports" Visibility="Collapsed">
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.ReportsFinancial" Header="Financial">
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.TrialBalance" Label="Trial balance" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Reports.AccountStatement" Label="Account statement" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.GeneralJournal" Label="General journal" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Reports.CustomerAging" Label="Customer aging" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Reports.SupplierAging" Label="Supplier aging" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.ReportsInventory" Header="Inventory">
+                        <ribbon:RibbonButton loc:LocProps.Key="Reports.StockBalances" Label="Stock balances" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Reports.MaterialMoves" Label="Material movements" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Reports.StockAdjustment" Label="Stock movements" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Reports.ItemProfitability" Label="Item profitability" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.ReportsParties" Header="Parties">
+                        <ribbon:RibbonButton loc:LocProps.Key="Customers.CustomerBalance" Label="Customer balances" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Reports.SupplierBalances" Label="Supplier balances" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Reports.SalesInvoiceList" Label="Sales invoices" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Reports.PurchaseInvoiceList" Label="Purchase invoices" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.ReportsReports" Header="Other">
+                        <ribbon:RibbonButton loc:LocProps.Key="Reports.Statistics" Label="Statistics" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Reports.CustomReports" Label="Custom reports" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Reports.CustomizeReports" Label="Customize reports" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                </ribbon:RibbonTab>
+
+                <ribbon:RibbonTab x:Name="TabTools" Header="Tools" Visibility="Collapsed">
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.ToolsTools" Header="Tools">
+                        <ribbon:RibbonButton loc:LocProps.Key="Tools.Calculator" Label="Calculator" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Tools.Keyboard" Label="Keyboard" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Tools.Options" Label="Options" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Tools.MaintenanceWizard" Label="Maintenance wizard" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Tools.Backup" Label="Backup" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.ToolsLanguage" Header="Language">
+                        <ribbon:RibbonButton loc:LocProps.Key="Tools.Arabic" Label="Arabic" Click="OnLanguageArabicClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Tools.English" Label="English" Click="OnLanguageEnglishClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Tools.French" Label="Français" Click="OnLanguageFrenchClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Tools.Turkish" Label="Türkçe" Click="OnLanguageTurkishClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.ToolsSecurity" Header="Security">
+                        <ribbon:RibbonButton loc:LocProps.Key="Tools.ChangePassword" Label="Change password" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Tools.ActivityLog" Label="Activity log" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.ToolsAdvanced" Header="Advanced">
+                        <ribbon:RibbonButton loc:LocProps.Key="Tools.Addons" Label="Program add-ons" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Tools.AI" Label="Artificial intelligence" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                </ribbon:RibbonTab>
+
+                <ribbon:RibbonTab x:Name="TabOtherTools" Header="Other Tools" Visibility="Collapsed">
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.OtherToolsAdministration" Header="Administration">
+                        <ribbon:RibbonButton loc:LocProps.Key="OtherTools.Rotation" Label="Rollover" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="OtherTools.Permissions" Label="Permissions" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="OtherTools.PermissionTemplates" Label="Permission templates" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="OtherTools.CustomFields" Label="Custom fields" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="RestoreCompany.Restore" Label="Restore company" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.OtherToolsDefinitions" Header="Definitions">
+                        <ribbon:RibbonButton loc:LocProps.Key="OtherTools.UnitsOfMeasure" Label="Define units of measure" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="OtherTools.PaymentMethods" Label="Define payment methods" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="OtherTools.MaterialSpecs" Label="Define material specs" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.OtherToolsDelivery" Header="Delivery">
+                        <ribbon:RibbonButton loc:LocProps.Key="OtherTools.DriverCard" Label="Driver card" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="OtherTools.DeliveryPrices" Label="Delivery prices" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="OtherTools.PickupRequests" Label="Receipt requests" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="OtherTools.SearchDelivery" Label="Search delivery" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="OtherTools.CloseDriverCash" Label="Close driver cash" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                </ribbon:RibbonTab>
+
+                <ribbon:RibbonTab x:Name="TabView" Header="View" Visibility="Collapsed">
+                   
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.ViewTrees" Header="Trees">
+                        <ribbon:RibbonButton loc:LocProps.Key="View.ChartOfAccounts" Label="Account tree" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="View.MaterialTree" Label="Material tree" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="View.ManufacturingTree" Label="Manufacturing tree" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="View.CostCenterTree" Label="Cost center tree" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.ViewInformation" Header="Information">
+                        <ribbon:RibbonButton loc:LocProps.Key="View.InfoWindow" Label="Info window" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="View.PaymentMethods" Label="Define payment methods" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="View.CompanyInfo" Label="Company info" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="View.ExportData" Label="Export data" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                </ribbon:RibbonTab>
+
+                <ribbon:RibbonTab x:Name="TabExit" Header="Exit" Visibility="Collapsed">
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.ExitExit" Header="Exit">
+                        <ribbon:RibbonButton loc:LocProps.Key="Exit.ScreenSaver" Label="Lock screen" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Exit.SwitchCompany" Label="Switch company" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Exit.Title" Label="Exit" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Exit.ExitAndShutdown" Label="Exit and shutdown" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                </ribbon:RibbonTab>
+
+                <ribbon:RibbonTab x:Name="TabHelp" Header="Help" Visibility="Collapsed">
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.HelpUpdates" Header="Updates">
+                        <ribbon:RibbonButton loc:LocProps.Key="Help.CheckUpdates" Label="Check for updates" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Help.UpdateFromFile" Label="Update from file" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.HelpSupport" Header="Support">
+                        <ribbon:RibbonButton loc:LocProps.Key="Help.Instructions" Label="Help documentation" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Help.TechnicalSupport" Label="Technical support" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Help.Suggestions" Label="Feedback" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.HelpLicense" Header="License">
+                        <ribbon:RibbonButton loc:LocProps.Key="Help.RenewLicense" Label="Renew license" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Help.About" Label="About" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                </ribbon:RibbonTab>
+
+            </ribbon:Ribbon>
+
+            
+            <Border Grid.Row="4"
+                    Background="{DynamicResource ShellContentBackgroundBrush}"
+                    BorderBrush="{DynamicResource ShellContentBorderBrush}"
+                    BorderThickness="0"
+                    CornerRadius="0"
+                    Margin="0">
+                <ContentControl Content="{Binding CurrentContent}"/>
+            </Border>
+
+            
+            <Border x:Name="InternalWindowDock"
+                    Grid.Row="5"
+                    Margin="8,2,8,4"
+                    Height="58"
+                    Background="Transparent"
+                    BorderBrush="{DynamicResource ShellContentBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="5"
+                    Visibility="Collapsed"
+                    ClipToBounds="True">
+                <ItemsControl ItemsSource="{Binding DockedWindows}"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Stretch">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Canvas ClipToBounds="True"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemContainerStyle>
+                        <Style TargetType="ContentPresenter">
+                            <Setter Property="Canvas.Left" Value="{Binding Left}"/>
+                            <Setter Property="Canvas.Top" Value="4"/>
+                            <Setter Property="Panel.ZIndex" Value="{Binding ZIndex}"/>
+                        </Style>
+                    </ItemsControl.ItemContainerStyle>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Command="{Binding DataContext.RestoreDockedWindowCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                    CommandParameter="{Binding}"
+                                    Width="{Binding ItemWidth}"
+                                    Height="48"
+                                    Padding="10,4"
+                                    HorizontalContentAlignment="Stretch"
+                                    VerticalContentAlignment="Center"
+                                    Background="{DynamicResource ShellBackgroundBrush}"
+                                    Foreground="{DynamicResource TextBrush}"
+                                    BorderBrush="{DynamicResource ShellContentBorderBrush}"
+                                    BorderThickness="1"
+                                    ToolTip="Restore window">
+                                <TextBlock Text="{Binding Title}"
+                                           TextTrimming="CharacterEllipsis"
+                                           FontWeight="SemiBold"
+                                           TextAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+
+            
+            <StatusBar x:Name="MainStatusBar" Grid.Row="6"
+                       Background="{DynamicResource ShellStatusBarBackgroundBrush}"
+                       Foreground="{DynamicResource ShellStatusBarForegroundBrush}"
+                       Height="26"
+					   FlowDirection="LeftToRight">
+                <StatusBarItem>
+                    <StackPanel Orientation="Horizontal"
+								FlowDirection="LeftToRight">
+                        <TextBlock Text="Company: " Opacity="0.78" Margin="0,0,3,0"/>
+                        <TextBlock Text="{Binding CompanyName}" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </StatusBarItem>
+                <StatusBarItem>
+                    <StackPanel Orientation="Horizontal"
+								FlowDirection="LeftToRight">
+                        <TextBlock Text="User: " Opacity="0.78" Margin="0,0,3,0"/>
+                        <TextBlock Text="{Binding CurrentUser}" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </StatusBarItem>
+                <StatusBarItem>
+                    <StackPanel Orientation="Horizontal"
+								FlowDirection="LeftToRight">
+                        <TextBlock Text="Database: " Opacity="0.78" Margin="0,0,3,0"/>
+                        <TextBlock Text="{Binding CurrentDatabase}" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </StatusBarItem>
+                <StatusBarItem x:Name="BinStatusItem"
+                               HorizontalAlignment="Left"
+                               HorizontalContentAlignment="Left">
+                    <Button x:Name="RecycleBinButton"
+                            Style="{StaticResource RecycleBinIconButtonStyle}"
+                            ToolTip="Archive bin"
+                            Width="36"
+                            Height="30"
+                            Margin="6,0,8,0"
+                            Click="OnRecycleBinClick">
+                        <Image Width="24" Height="24"
+                               Stretch="Uniform"
+                               RenderOptions.BitmapScalingMode="HighQuality"
+                               Source="pack://application:,,,/Resources/Ico/ArchiveBin.png"/>
+                    </Button>
+                </StatusBarItem>
+            </StatusBar>
+
+            <!-- Archive bin: LTR Canvas so RTL shell does not mirror screen sides -->
+            <Canvas x:Name="RecycleBinLayer"
+                    Grid.Row="4"
+                    Grid.RowSpan="3"
+                    FlowDirection="LeftToRight"
+                    
+                    IsHitTestVisible="True"
+                    Panel.ZIndex="50"
+                    SizeChanged="RecycleBinLayer_SizeChanged">
+                <Button x:Name="RecycleBinCornerButton"
+                        Style="{StaticResource RecycleBinIconButtonStyle}"
+                        ToolTip="Archive bin"
+                        Width="120"
+                        Height="130"
+                        Canvas.Left="24"
+                        Canvas.Bottom="24"
+                        Click="OnRecycleBinClick">
+                    <Grid Width="120" Height="130">
+                        <Image Width="130"
+                               Height="130"
+                               VerticalAlignment="Top"
+                               HorizontalAlignment="Center"
+                               Stretch="Uniform"
+                               RenderOptions.BitmapScalingMode="HighQuality"
+                               Source="pack://application:,,,/Resources/Ico/ArchiveBin.png"/>
+                    </Grid>
+                </Button>
+            </Canvas>
+        </Grid>
+    </Border>
+</ribbon:RibbonWindow>

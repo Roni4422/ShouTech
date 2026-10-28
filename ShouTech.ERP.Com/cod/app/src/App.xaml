@@ -1,0 +1,425 @@
+<Application x:Class="ShouTech.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+             xmlns:interaction="clr-namespace:ShouTech.App.Interaction"
+             ShutdownMode="OnMainWindowClose">
+
+    <Application.Resources>
+        <ResourceDictionary>
+
+            <!-- ============================================================
+                 ShouTech Visual Identity — Single Source of Truth
+                 ============================================================ -->
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Themes/VisuId.xaml"/>
+                <ResourceDictionary Source="/Themes/ShRibn.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+
+            <!-- ============================================================
+                 WINDOW CHROME
+                 ============================================================ -->
+            <shell:WindowChrome x:Key="ShouTechWindowChrome"
+                                CaptionHeight="0"
+                                ResizeBorderThickness="0"
+                                GlassFrameThickness="0"
+                                CornerRadius="0"
+                                UseAeroCaptionButtons="False"/>
+
+            <!-- Window chrome buttons: minimize / maximize -->
+            <Style x:Key="WindowChromeButtonStyle" TargetType="Button">
+                <Setter Property="Width" Value="{DynamicResource ChromeButtonWidth}"/>
+                <Setter Property="Height" Value="{DynamicResource WindowChromeButtonHeight}"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                <Setter Property="FontFamily" Value="{DynamicResource WindowChromeSymbolFontFamily}"/>
+                <Setter Property="FontSize" Value="{DynamicResource WindowChromeButtonFontSize}"/>
+                <Setter Property="Cursor" Value="Hand"/>
+
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="ChromeButtonBorder"
+                                    Background="{TemplateBinding Background}">
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center"
+                                                  TextElement.Foreground="{TemplateBinding Foreground}"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="ChromeButtonBorder" Property="Background"
+                                            Value="{DynamicResource ShellRibbonHoverBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="ChromeButtonBorder" Property="Background"
+                                            Value="{DynamicResource BorderDarkBrush}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Window chrome close button (red hover) -->
+            <Style x:Key="WindowChromeCloseButtonStyle"
+                   TargetType="Button"
+                   BasedOn="{StaticResource WindowChromeButtonStyle}">
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="ChromeCloseBorder"
+                                    Background="{TemplateBinding Background}">
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center"
+                                                  TextElement.Foreground="{TemplateBinding Foreground}"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="ChromeCloseBorder" Property="Background"
+                                            Value="{DynamicResource ChromeCloseHoverBrush}"/>
+                                    <Setter Property="Foreground"
+                                            Value="{DynamicResource ChromeCloseForegroundBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="ChromeCloseBorder" Property="Background"
+                                            Value="{DynamicResource ChromeClosePressedBrush}"/>
+                                    <Setter Property="Foreground"
+                                            Value="{DynamicResource ChromeCloseForegroundBrush}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+
+            <!-- ============================================================
+                 BUTTONS — Primary / Secondary / Danger / Success / Icon
+                 ============================================================ -->
+            <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource VisuAccentButtonStyle}">
+                <Setter Property="Padding" Value="18,8"/>
+                <Setter Property="Height" Value="{DynamicResource PrimaryButtonHeight}"/>
+                <Setter Property="MinWidth" Value="{DynamicResource PrimaryButtonMinWidth}"/>
+            </Style>
+
+            <Style x:Key="SecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource VisuSecondaryButtonStyle}">
+                <Setter Property="Height" Value="{DynamicResource SecondaryButtonHeight}"/>
+                <Setter Property="MinWidth" Value="{DynamicResource SecondaryButtonMinWidth}"/>
+            </Style>
+
+            <Style x:Key="DangerButtonStyle" TargetType="Button" BasedOn="{StaticResource VisuDangerButtonStyle}"/>
+
+            <Style x:Key="SuccessButtonStyle" TargetType="Button" BasedOn="{StaticResource VisuSuccessButtonStyle}"/>
+
+            <!-- Icon button (small, transparent) -->
+            <Style x:Key="IconButtonStyle" TargetType="Button" BasedOn="{StaticResource VisuButtonStyle}">
+                <Setter Property="Width" Value="{DynamicResource IconButtonSize}"/>
+                <Setter Property="Height" Value="{DynamicResource IconButtonSize}"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="FontSize" Value="{DynamicResource IconButtonFontSize}"/>
+            </Style>
+
+
+            <!-- ============================================================
+                 TEXT INPUTS — TextBox / PasswordBox / ComboBox
+                 ============================================================ -->
+            <Style x:Key="AppTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource VisuTextBoxStyle}">
+                <Setter Property="Padding" Value="10,0"/>
+                <Setter Property="CaretBrush" Value="{DynamicResource TextPrimary}"/>
+                <Setter Property="Height" Value="{DynamicResource AppTextInputHeight}"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+            </Style>
+
+            <Style x:Key="AppPasswordBoxStyle" TargetType="PasswordBox" BasedOn="{StaticResource VisuPasswordBoxStyle}">
+                <Setter Property="Padding" Value="10,0"/>
+                <Setter Property="CaretBrush" Value="{DynamicResource TextPrimary}"/>
+                <Setter Property="Height" Value="{DynamicResource AppTextInputHeight}"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+            </Style>
+
+            
+            <Style x:Key="AppComboBoxStyle" TargetType="ComboBox" BasedOn="{StaticResource VisuComboBoxStyle}">
+                <Setter Property="Padding" Value="8,0"/>
+                <Setter Property="Height" Value="{DynamicResource AppComboBoxHeight}"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+            </Style>
+
+
+            <!-- ============================================================
+                 CHECKBOX / RADIOBUTTON
+                 ============================================================ -->
+            <Style TargetType="CheckBox">
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                <Setter Property="FontSize" Value="{DynamicResource ApplicationFontSize}"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Padding" Value="6,0,0,0"/>
+            </Style>
+
+            <Style TargetType="RadioButton">
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                <Setter Property="FontSize" Value="{DynamicResource ApplicationFontSize}"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Padding" Value="6,0,0,0"/>
+            </Style>
+
+
+            <!-- ============================================================
+                 LISTS
+                 ============================================================ -->
+            <Style TargetType="ListBox">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                <Setter Property="FontSize" Value="{DynamicResource ApplicationFontSize}"/>
+                <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+            </Style>
+
+            <Style TargetType="ListBoxItem">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                <Setter Property="Padding" Value="12,8"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Margin" Value="2"/>
+                <Style.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="Background" Value="{DynamicResource SurfaceLightBrush}"/>
+                    </Trigger>
+                    <Trigger Property="IsSelected" Value="True">
+                        <Setter Property="Background" Value="{DynamicResource PrimaryTransparentBrush}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+
+            <!-- ============================================================
+                 TREES
+                 ============================================================ -->
+            <Style TargetType="TreeView">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                <Setter Property="FontSize" Value="{DynamicResource ApplicationFontSize}"/>
+            </Style>
+
+            <Style TargetType="TreeViewItem">
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                <Setter Property="Padding" Value="4,2"/>
+                <Setter Property="FontSize" Value="{DynamicResource ApplicationFontSize}"/>
+            </Style>
+
+
+            <!-- ============================================================
+                 DATAGRID — Enterprise styling
+                 ============================================================ -->
+            <Style TargetType="DataGrid" BasedOn="{StaticResource VisuDataGridStyle}">
+                <Setter Property="RowBackground" Value="{DynamicResource TableSurfaceBrush}"/>
+                <Setter Property="AlternatingRowBackground"
+                        Value="{DynamicResource TableAlternateRowBrush}"/>
+                <Setter Property="HorizontalGridLinesBrush"
+                        Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="VerticalGridLinesBrush"
+                        Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="AutoGenerateColumns" Value="False"/>
+                <Setter Property="CanUserAddRows" Value="False"/>
+                <Setter Property="CanUserDeleteRows" Value="False"/>
+                <Setter Property="CanUserResizeRows" Value="False"/>
+                <Setter Property="SelectionMode" Value="Single"/>
+                <Setter Property="SelectionUnit" Value="FullRow"/>
+                <Setter Property="HeadersVisibility" Value="Column"/>
+                <Setter Property="RowHeight" Value="{DynamicResource TableRowHeight}"/>
+                <Setter Property="ColumnHeaderHeight" Value="{DynamicResource TableHeaderHeight}"/>
+                <Setter Property="FontSize" Value="{DynamicResource TableFontSize}"/>
+                <Setter Property="interaction:DataGridTableBehavior.EnableStandardContextMenu" Value="True"/>
+            </Style>
+
+            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource VisuDataGridHeaderStyle}"/>
+            <Style TargetType="DataGridCell" BasedOn="{StaticResource VisuDataGridCellStyle}"/>
+            <Style TargetType="DataGridRow" BasedOn="{StaticResource VisuDataGridRowStyle}"/>
+
+
+            <!-- ============================================================
+                 TABS
+                 ============================================================ -->
+            <Style TargetType="TabControl" BasedOn="{StaticResource VisuTabControlStyle}">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="0"/>
+            </Style>
+
+            <Style TargetType="TabItem">
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="FontSize" Value="{DynamicResource ApplicationFontSize}"/>
+                <Setter Property="Padding" Value="14,8"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Style.Triggers>
+                    <Trigger Property="IsSelected" Value="True">
+                        <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}"/>
+                        <Setter Property="FontWeight" Value="SemiBold"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+
+            <!-- ============================================================
+                 TOOLTIP
+                 ============================================================ -->
+            <Style TargetType="ToolTip">
+                <Setter Property="Background" Value="{DynamicResource SurfaceDarkBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextOnDarkBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding" Value="8,4"/>
+                <Setter Property="FontSize" Value="{DynamicResource CompactFontSize}"/>
+                <Setter Property="HasDropShadow" Value="True"/>
+            </Style>
+
+
+            <!-- ============================================================
+                 MENU / CONTEXTMENU
+                 ============================================================ -->
+            <Style TargetType="Menu">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            </Style>
+
+            <Style TargetType="MenuItem">
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Padding" Value="10,6"/>
+                <Setter Property="FontSize" Value="{DynamicResource ApplicationFontSize}"/>
+                <Style.Triggers>
+                    <Trigger Property="IsHighlighted" Value="True">
+                        <Setter Property="Background"
+                                Value="{DynamicResource PrimaryTransparentBrush}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style TargetType="ContextMenu">
+                <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+            </Style>
+
+
+            <!-- ============================================================
+                 SCROLLBAR
+                 ============================================================ -->
+            <Style TargetType="ScrollBar">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Width" Value="10"/>
+                <Setter Property="MinWidth" Value="10"/>
+            </Style>
+
+
+            <!-- ============================================================
+                 PROGRESSBAR
+                 ============================================================ -->
+            <Style TargetType="ProgressBar">
+                <Setter Property="Height" Value="6"/>
+                <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}"/>
+                <Setter Property="BorderThickness" Value="0"/>
+            </Style>
+
+
+            <!-- ============================================================
+                 SEPARATORS
+                 ============================================================ -->
+            <Style x:Key="StatusSeparator" TargetType="Separator">
+                <Setter Property="Width" Value="1"/>
+                <Setter Property="Background" Value="{DynamicResource BorderLightBrush}"/>
+                <Setter Property="Margin" Value="6,4"/>
+                <Setter Property="Opacity" Value="0.5"/>
+            </Style>
+
+
+            <!-- ============================================================
+                 WINDOW / PAGE
+                 ============================================================ -->
+            <Style x:Key="MainWindowStyle" TargetType="Window">
+                <Setter Property="Background" Value="{DynamicResource BackgroundBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                <Setter Property="FontFamily" Value="{DynamicResource ApplicationFontFamily}"/>
+                <Setter Property="FontSize" Value="{DynamicResource CompactFontSize}"/>
+                <Setter Property="WindowStyle" Value="None"/>
+                <Setter Property="ResizeMode" Value="CanResizeWithGrip"/>
+                <Setter Property="AllowsTransparency" Value="False"/>
+                <Setter Property="WindowStartupLocation" Value="CenterScreen"/>
+                <Setter Property="UseLayoutRounding" Value="True"/>
+                <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+                <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+            </Style>
+
+
+            <!-- ============================================================
+                 TYPOGRAPHY
+                 ============================================================ -->
+            <Style x:Key="PageTitleStyle" TargetType="TextBlock" BasedOn="{StaticResource VisuTitleStyle}"/>
+
+            <Style x:Key="SectionTitleStyle" TargetType="TextBlock" BasedOn="{StaticResource VisuSectionTitleStyle}"/>
+
+            <Style x:Key="SubtitleStyle" TargetType="TextBlock" BasedOn="{StaticResource VisuTextSecondaryStyle}"/>
+
+
+            <!-- ============================================================
+                 CARDS
+                 ============================================================ -->
+            <Style x:Key="CardStyle" TargetType="Border" BasedOn="{StaticResource VisuCardStyle}">
+                <Setter Property="Padding" Value="16"/>
+            </Style>
+
+
+            <!-- ============================================================
+                 ARABIC / RTL
+                 ============================================================ -->
+            <Style x:Key="ArabicTextStyle" TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="{DynamicResource ShellChromeFontFamily}"/>
+                <Setter Property="FontSize" Value="{DynamicResource ApplicationFontSize}"/>
+                <Setter Property="FlowDirection" Value="RightToLeft"/>
+            </Style>
+
+            <Style x:Key="ArabicTextBoxStyle" TargetType="TextBox"
+                   BasedOn="{StaticResource AppTextBoxStyle}">
+                <Setter Property="FlowDirection" Value="RightToLeft"/>
+                <Setter Property="FontFamily" Value="{DynamicResource ShellChromeFontFamily}"/>
+            </Style>
+
+
+            <!-- ============================================================
+                 ANIMATIONS
+                 ============================================================ -->
+            <Storyboard x:Key="FadeInAnimation">
+                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                 From="0" To="1"
+                                 Duration="0:0:0.3">
+                    <DoubleAnimation.EasingFunction>
+                        <QuadraticEase EasingMode="EaseOut"/>
+                    </DoubleAnimation.EasingFunction>
+                </DoubleAnimation>
+            </Storyboard>
+
+            <Storyboard x:Key="FadeOutAnimation">
+                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                 From="1" To="0"
+                                 Duration="0:0:0.2">
+                    <DoubleAnimation.EasingFunction>
+                        <QuadraticEase EasingMode="EaseIn"/>
+                    </DoubleAnimation.EasingFunction>
+                </DoubleAnimation>
+            </Storyboard>
+
+        </ResourceDictionary>
+    </Application.Resources>
+
+</Application>

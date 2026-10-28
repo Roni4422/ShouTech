@@ -1,0 +1,1684 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:System="clr-namespace:System;assembly=mscorlib"
+    xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+    xmlns:wpf="clr-namespace:System.Windows;assembly=PresentationFramework">
+
+    <!-- =========================================================
+         SHOUTECH ERP - CENTRAL VISUAL IDENTITY
+         Single source of truth for application appearance.
+         ========================================================= -->
+
+    <!-- Identity metadata -->
+    <System:String x:Key="ThemeName">Light</System:String>
+    <System:String x:Key="VisualIdentityVersion">2026.3</System:String>
+
+
+    <!-- =========================================================
+         TYPOGRAPHY
+         ========================================================= -->
+
+    <FontFamily x:Key="ApplicationFontFamily">Segoe UI</FontFamily>
+    <FontFamily x:Key="ApplicationFontFamilyStrong">Segoe UI Semibold</FontFamily>
+    <System:Double x:Key="ApplicationFontSize">13</System:Double>
+    <System:Double x:Key="FontSize9">9</System:Double>
+    <System:Double x:Key="FontSize10">10</System:Double>
+    <System:Double x:Key="FontSize10_5">10.5</System:Double>
+    <System:Double x:Key="FontSize11">11</System:Double>
+    <System:Double x:Key="FontSize12">12</System:Double>
+    <System:Double x:Key="FontSize12_5">12.5</System:Double>
+    <System:Double x:Key="FontSize13">13</System:Double>
+    <System:Double x:Key="FontSize14">14</System:Double>
+    <System:Double x:Key="FontSize15">15</System:Double>
+    <System:Double x:Key="FontSize16">16</System:Double>
+    <System:Double x:Key="FontSize17">17</System:Double>
+    <System:Double x:Key="FontSize18">18</System:Double>
+    <System:Double x:Key="FontSize19">19</System:Double>
+    <System:Double x:Key="FontSize20">20</System:Double>
+    <System:Double x:Key="FontSize21">21</System:Double>
+    <System:Double x:Key="FontSize22">22</System:Double>
+    <System:Double x:Key="FontSize23">23</System:Double>
+    <System:Double x:Key="FontSize24">24</System:Double>
+    <System:Double x:Key="FontSize26">26</System:Double>
+    <System:Double x:Key="FontSize28">28</System:Double>
+    <System:Double x:Key="FontSize30">30</System:Double>
+    <System:Double x:Key="FontSize34">34</System:Double>
+    <System:Double x:Key="FontSize48">48</System:Double>
+    <System:Double x:Key="FontSize56">56</System:Double>
+
+
+    <!-- =========================================================
+         DIMENSIONS
+         Keep numeric values typed according to the target property.
+         ========================================================= -->
+
+    <!-- Double values -->
+    <System:Double x:Key="ControlHeight">28</System:Double>
+    <System:Double x:Key="SmallControlHeight">24</System:Double>
+    <System:Double x:Key="LargeControlHeight">32</System:Double>
+
+    <System:Double x:Key="StandardSpacing">8</System:Double>
+    <System:Double x:Key="LargeSpacing">16</System:Double>
+    <System:Double x:Key="SectionSpacing">24</System:Double>
+
+    <!-- CornerRadius values -->
+    <CornerRadius x:Key="ControlCornerRadius">6</CornerRadius>
+    <CornerRadius x:Key="ButtonCornerRadius">7</CornerRadius>
+    <CornerRadius x:Key="CardCornerRadius">8</CornerRadius>
+
+    <!-- Shared control metrics. Keep control sizing here, not duplicated in App.xaml. -->
+    <System:Double x:Key="PrimaryButtonHeight">38</System:Double>
+    <System:Double x:Key="PrimaryButtonMinWidth">100</System:Double>
+    <System:Double x:Key="SecondaryButtonHeight">34</System:Double>
+    <System:Double x:Key="SecondaryButtonMinWidth">80</System:Double>
+    <System:Double x:Key="IconButtonSize">32</System:Double>
+    <System:Double x:Key="AppTextInputHeight">36</System:Double>
+    <System:Double x:Key="AppComboBoxHeight">32</System:Double>
+    <System:Double x:Key="WindowChromeButtonHeight">34</System:Double>
+    <System:Double x:Key="WindowChromeButtonFontSize">14</System:Double>
+    <System:Double x:Key="IconButtonFontSize">14</System:Double>
+    <System:Double x:Key="TableHeaderHeight">34</System:Double>
+    <System:Double x:Key="TableRowHeight">30</System:Double>
+    <System:Double x:Key="TableFontSize">12</System:Double>
+    <System:Double x:Key="CompactFontSize">12</System:Double>
+    <System:Double x:Key="WindowChromeFontSize">12</System:Double>
+    <FontFamily x:Key="ShellChromeFontFamily">Tahoma</FontFamily>
+    <FontFamily x:Key="WindowChromeSymbolFontFamily">Segoe UI Symbol</FontFamily>
+    <FontFamily x:Key="MonospaceFontFamily">Consolas</FontFamily>
+
+    <!-- Shared, deliberately restrained elevation effects. -->
+    <DropShadowEffect
+        x:Key="VisuSoftShadow"
+        Color="#000000"
+        BlurRadius="8"
+        ShadowDepth="2"
+        Opacity="0.12"/>
+
+    <DropShadowEffect
+        x:Key="VisuTextShadow"
+        Color="#000000"
+        BlurRadius="1.5"
+        ShadowDepth="0.5"
+        Opacity="0.10"/>
+
+
+    <!-- =========================================================
+         WINDOW CHROME DIMENSIONS
+         ========================================================= -->
+
+    <!-- These are Double because the target properties require Double. -->
+    <System:Double x:Key="ChromeHeight">32</System:Double>
+    <System:Double x:Key="ChromeButtonWidth">46</System:Double>
+
+    <!-- These are GridLength because Grid definitions require GridLength. -->
+    <GridLength x:Key="ChromeRowHeight">32</GridLength>
+    <GridLength x:Key="ChromeButtonColumnWidth">46</GridLength>
+
+    <Thickness x:Key="ChromeResizeBorderThickness">6</Thickness>
+    <CornerRadius x:Key="ChromeCornerRadius">0</CornerRadius>
+
+
+    <!-- =========================================================
+         WINDOW CHROME COLORS
+         ========================================================= -->
+
+    <SolidColorBrush
+        x:Key="ChromeBackgroundBrush"
+        Color="#607D8B"/>
+
+    <SolidColorBrush
+        x:Key="ChromeForegroundBrush"
+        Color="#FFFFFF"/>
+
+    <SolidColorBrush
+        x:Key="ChromeBorderBrush"
+        Color="#455A64"/>
+
+    <SolidColorBrush
+        x:Key="ChromeButtonHoverBrush"
+        Color="#78909C"/>
+
+    <SolidColorBrush
+        x:Key="ChromeButtonPressedBrush"
+        Color="#455A64"/>
+
+    <SolidColorBrush
+        x:Key="ChromeCloseHoverBrush"
+        Color="#C42B1C"/>
+
+    <SolidColorBrush
+        x:Key="ChromeClosePressedBrush"
+        Color="#8F1F16"/>
+
+    <SolidColorBrush
+        x:Key="ChromeCloseForegroundBrush"
+        Color="#FFFFFF"/>
+
+
+    <!-- =========================================================
+         APPLICATION SURFACES
+         ========================================================= -->
+
+    <SolidColorBrush
+        x:Key="BackgroundBrush"
+        Color="#F5F6F8"/>
+
+    <SolidColorBrush
+        x:Key="SurfaceBrush"
+        Color="#FFFFFF"/>
+
+    <SolidColorBrush
+        x:Key="SurfaceSecondaryBrush"
+        Color="#F0F2F5"/>
+
+    <SolidColorBrush
+        x:Key="SurfaceDarkBrush"
+        Color="#263238"/>
+
+    <SolidColorBrush
+        x:Key="TextOnDarkBrush"
+        Color="#FFFFFF"/>
+
+    <SolidColorBrush
+        x:Key="FieldBackgroundBrush"
+        Color="#FFFFFF"/>
+
+    <SolidColorBrush
+        x:Key="FieldReadOnlyBrush"
+        Color="#F1F3F5"/>
+
+
+    <!-- =========================================================
+         TEXT AND BORDERS
+         ========================================================= -->
+
+    <SolidColorBrush
+        x:Key="TextPrimary"
+        Color="#202124"/>
+
+    <SolidColorBrush
+        x:Key="TextSecondary"
+        Color="#5F6368"/>
+
+    <SolidColorBrush
+        x:Key="TextDisabled"
+        Color="#9AA0A6"/>
+
+    <SolidColorBrush
+        x:Key="BorderBrush"
+        Color="#D5D9DE"/>
+
+    <SolidColorBrush
+        x:Key="BorderStrongBrush"
+        Color="#B8BEC6"/>
+
+    <SolidColorBrush
+        x:Key="DividerBrush"
+        Color="#E2E5E9"/>
+
+
+    <!-- =========================================================
+         ACCENT COLORS
+         ========================================================= -->
+
+    <SolidColorBrush
+        x:Key="AccentPrimary"
+        Color="#607D8B"/>
+
+    <SolidColorBrush
+        x:Key="AccentDark"
+        Color="#455A64"/>
+
+    <SolidColorBrush
+        x:Key="AccentLight"
+        Color="#ECEFF1"/>
+
+    <SolidColorBrush
+        x:Key="AccentHover"
+        Color="#CFD8DC"/>
+
+    <SolidColorBrush
+        x:Key="AccentOnPrimaryBrush"
+        Color="#FFFFFF"/>
+
+
+    <!-- =========================================================
+         SEMANTIC COLORS
+         ========================================================= -->
+
+    <SolidColorBrush
+        x:Key="SuccessBrush"
+        Color="#198754"/>
+
+    <SolidColorBrush
+        x:Key="WarningBrush"
+        Color="#D99100"/>
+
+    <SolidColorBrush
+        x:Key="ErrorBrush"
+        Color="#C0392B"/>
+
+    <SolidColorBrush
+        x:Key="InfoBrush"
+        Color="#2878B5"/>
+
+    <SolidColorBrush
+        x:Key="SuccessDarkBrush"
+        Color="#146C43"/>
+
+    <SolidColorBrush
+        x:Key="ErrorDarkBrush"
+        Color="#922B21"/>
+    <SolidColorBrush x:Key="TextOnErrorBrush" Color="#FFD0D0"/>
+    <SolidColorBrush x:Key="TextMutedOnDarkBrush" Color="#F0F0F0"/>
+    <SolidColorBrush x:Key="TextOnDarkMutedBrush" Color="#CCFFFFFF"/>
+    <SolidColorBrush x:Key="TextOnDarkSecondaryBrush" Color="#E6FFFFFF"/>
+    <SolidColorBrush x:Key="OverlayBrush" Color="#80000000"/>
+    <SolidColorBrush x:Key="ReportDesignerButtonBrush" Color="#2D4A6B"/>
+
+    <SolidColorBrush x:Key="PosInkBrush" Color="#172B3A"/>
+    <SolidColorBrush x:Key="PosMutedBrush" Color="#687985"/>
+    <SolidColorBrush x:Key="PosTealBrush" Color="#087F8C"/>
+    <SolidColorBrush x:Key="PosCanvasBrush" Color="#F3F6F8"/>
+    <SolidColorBrush x:Key="PosBorderBrush" Color="#DCE5EA"/>
+    <SolidColorBrush x:Key="PosRemoveBackgroundBrush" Color="#EEF3F5"/>
+    <SolidColorBrush x:Key="PosTotalLabelBrush" Color="#B9D4DC"/>
+    <SolidColorBrush x:Key="PosClearBackgroundBrush" Color="#FFF0F0"/>
+    <SolidColorBrush x:Key="PosClearForegroundBrush" Color="#A33232"/>
+    <SolidColorBrush x:Key="PosButtonBackgroundBrush" Color="#F4F7F8"/>
+    <SolidColorBrush x:Key="PosTealDarkBrush" Color="#075E66"/>
+
+
+    <!-- =========================================================
+         DOCUMENT AND TABLE TINT BRUSHES
+         Alternating zebra rows and custom header tints.
+         ========================================================= -->
+
+    <SolidColorBrush
+        x:Key="TableAlternateRowBrush"
+        Color="#F1F5F7"/>
+
+    <SolidColorBrush
+        x:Key="TableSurfaceBrush"
+        Color="#FAFBFC"/>
+
+    <SolidColorBrush
+        x:Key="TableHeaderBrush"
+        Color="#556F7A"/>
+
+    <SolidColorBrush
+        x:Key="TableHeaderBorderBrush"
+        Color="#78909C"/>
+
+    <SolidColorBrush
+        x:Key="TableHoverBrush"
+        Color="#E7EEF1"/>
+
+    <SolidColorBrush
+        x:Key="TableSelectedBrush"
+        Color="#26F39A16"/>
+
+    <SolidColorBrush
+        x:Key="TableSelectedBorderBrush"
+        Color="#F39A16"/>
+
+    <SolidColorBrush
+        x:Key="TableHeaderSalesBrush"
+        Color="#1976D2"/>
+
+    <SolidColorBrush
+        x:Key="TableHeaderPurchaseBrush"
+        Color="#00796B"/>
+
+    <SolidColorBrush
+        x:Key="TableHeaderSalesReturnBrush"
+        Color="#C62828"/>
+
+    <SolidColorBrush
+        x:Key="TableHeaderPurchaseReturnBrush"
+        Color="#6A1B9A"/>
+
+    <SolidColorBrush
+        x:Key="TableHeaderStockInBrush"
+        Color="#00838F"/>
+
+    <SolidColorBrush
+        x:Key="TableHeaderStockOutBrush"
+        Color="#D84315"/>
+
+    <SolidColorBrush
+        x:Key="TableHeaderTransferBrush"
+        Color="#283593"/>
+
+    <SolidColorBrush
+        x:Key="TableHeaderOpeningStockBrush"
+        Color="#455A64"/>
+
+    <SolidColorBrush
+        x:Key="TableHeaderStockCountBrush"
+        Color="#2E7D32"/>
+
+    <SolidColorBrush
+        x:Key="TableHeaderQuotationBrush"
+        Color="#B78103"/>
+
+
+    <!-- =========================================================
+         COMPATIBILITY ALIASES
+         Legacy windows may still use these names.
+         New windows should use the canonical resources above.
+         ========================================================= -->
+
+    <SolidColorBrush
+        x:Key="PrimaryBrush"
+        Color="#607D8B"/>
+
+    <SolidColorBrush
+        x:Key="PrimaryDarkBrush"
+        Color="#455A64"/>
+
+    <SolidColorBrush
+        x:Key="PrimaryLightBrush"
+        Color="#ECEFF1"/>
+
+    <SolidColorBrush
+        x:Key="AccentBrush"
+        Color="#607D8B"/>
+
+    <SolidColorBrush
+        x:Key="AccentDarkBrush"
+        Color="#455A64"/>
+
+    <SolidColorBrush
+        x:Key="AccentLightBrush"
+        Color="#ECEFF1"/>
+
+    <SolidColorBrush
+        x:Key="ShellBackgroundBrush"
+        Color="#F5F6F8"/>
+
+    <SolidColorBrush
+        x:Key="ShellUnifiedLightBrush"
+        Color="#F5F6F8"/>
+
+    <SolidColorBrush
+        x:Key="ShellContentBackgroundBrush"
+        Color="#F5F6F8"/>
+
+    <SolidColorBrush
+        x:Key="SurfaceLightBrush"
+        Color="#F0F2F5"/>
+
+    <SolidColorBrush
+        x:Key="TextBrush"
+        Color="#202124"/>
+
+    <SolidColorBrush
+        x:Key="TextSecondaryBrush"
+        Color="#5F6368"/>
+
+    <SolidColorBrush
+        x:Key="TextDisabledBrush"
+        Color="#9AA0A6"/>
+
+    <SolidColorBrush
+        x:Key="BorderLightBrush"
+        Color="#E2E5E9"/>
+
+    <SolidColorBrush
+        x:Key="BorderDarkBrush"
+        Color="#B8BEC6"/>
+
+    <SolidColorBrush
+        x:Key="ShellContentBorderBrush"
+        Color="#D5D9DE"/>
+
+    <SolidColorBrush
+        x:Key="FieldBorder"
+        Color="#D5D9DE"/>
+
+    <SolidColorBrush
+        x:Key="PrimaryTransparentBrush"
+        Color="#33607D8B"/>
+
+    <SolidColorBrush
+        x:Key="ShellMenuForegroundBrush"
+        Color="#202124"/>
+
+    <SolidColorBrush
+        x:Key="ShellRibbonBackgroundBrush"
+        Color="#E7E7E7"/>
+
+    <SolidColorBrush
+        x:Key="ShellRibbonBorderBrush"
+        Color="#CFCFCF"/>
+
+    <SolidColorBrush
+        x:Key="ShellRibbonForegroundBrush"
+        Color="#252525"/>
+
+    <SolidColorBrush
+        x:Key="ShellRibbonHoverBrush"
+        Color="#E7EAEC"/>
+
+    <SolidColorBrush
+        x:Key="ChromeHoverBrush"
+        Color="#D8D8D8"/>
+
+    <SolidColorBrush
+        x:Key="ChromePressedBrush"
+        Color="#C8C8C8"/>
+
+    <SolidColorBrush
+        x:Key="ShellStatusBarBackgroundBrush"
+        Color="#E7E7E7"/>
+
+    <SolidColorBrush
+        x:Key="ShellStatusBarForegroundBrush"
+        Color="#252525"/>
+
+
+    <!-- =========================================================
+         TEXT STYLES
+         ========================================================= -->
+
+    <Style
+        x:Key="VisuTextStyle"
+        TargetType="{x:Type TextBlock}">
+
+        <Setter
+            Property="FontFamily"
+            Value="{DynamicResource ApplicationFontFamily}"/>
+
+        <Setter
+            Property="FontSize"
+            Value="{DynamicResource ApplicationFontSize}"/>
+
+        <Setter
+            Property="Foreground"
+            Value="{DynamicResource TextPrimary}"/>
+
+        <Setter
+            Property="VerticalAlignment"
+            Value="Center"/>
+
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="RightToLeft">
+                <Setter Property="TextAlignment" Value="Right"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="LeftToRight">
+                <Setter Property="TextAlignment" Value="Left"/>
+            </DataTrigger>
+        </Style.Triggers>
+
+    </Style>
+
+
+    <Style
+        x:Key="VisuTextSecondaryStyle"
+        TargetType="{x:Type TextBlock}"
+        BasedOn="{StaticResource VisuTextStyle}">
+
+        <Setter
+            Property="Foreground"
+            Value="{DynamicResource TextSecondary}"/>
+
+        <Setter
+            Property="Effect"
+            Value="{x:Null}"/>
+
+    </Style>
+
+
+    <Style
+        x:Key="VisuCaptionStyle"
+        TargetType="{x:Type TextBlock}"
+        BasedOn="{StaticResource VisuTextStyle}">
+
+        <Setter
+            Property="FontSize"
+            Value="{DynamicResource FontSize12}"/>
+
+        <Setter
+            Property="Foreground"
+            Value="{DynamicResource TextSecondary}"/>
+
+    </Style>
+
+
+    <Style
+        x:Key="VisuTitleStyle"
+        TargetType="{x:Type TextBlock}"
+        BasedOn="{StaticResource VisuTextStyle}">
+
+        <Setter
+            Property="FontFamily"
+            Value="{DynamicResource ApplicationFontFamilyStrong}"/>
+
+        <Setter
+            Property="FontSize"
+            Value="{DynamicResource FontSize20}"/>
+
+        <Setter
+            Property="FontWeight"
+            Value="SemiBold"/>
+
+        <Setter
+            Property="Effect"
+            Value="{StaticResource VisuTextShadow}"/>
+
+    </Style>
+
+
+    <Style
+        x:Key="VisuSectionTitleStyle"
+        TargetType="{x:Type TextBlock}"
+        BasedOn="{StaticResource VisuTextStyle}">
+
+        <Setter
+            Property="FontFamily"
+            Value="{DynamicResource ApplicationFontFamilyStrong}"/>
+
+        <Setter
+            Property="FontSize"
+            Value="{DynamicResource FontSize15}"/>
+
+        <Setter
+            Property="FontWeight"
+            Value="SemiBold"/>
+
+        <Setter
+            Property="Margin"
+            Value="0,8,0,8"/>
+
+        <Setter
+            Property="Effect"
+            Value="{StaticResource VisuTextShadow}"/>
+
+    </Style>
+
+
+    <!-- =========================================================
+         LABEL STYLES
+         Label and TextBlock are intentionally separate controls.
+         ========================================================= -->
+
+    <Style
+        x:Key="VisuLabelStyle"
+        TargetType="{x:Type Label}">
+
+        <Setter
+            Property="FontFamily"
+            Value="{DynamicResource ApplicationFontFamily}"/>
+
+        <Setter
+            Property="FontSize"
+            Value="{DynamicResource ApplicationFontSize}"/>
+
+        <Setter
+            Property="Foreground"
+            Value="{DynamicResource TextPrimary}"/>
+
+        <Setter
+            Property="VerticalContentAlignment"
+            Value="Center"/>
+
+        <Setter
+            Property="Padding"
+            Value="0,0,4,0"/>
+
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="RightToLeft">
+                <Setter Property="HorizontalContentAlignment" Value="Right"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="LeftToRight">
+                <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            </DataTrigger>
+        </Style.Triggers>
+
+    </Style>
+
+
+    <Style
+        x:Key="VisuTextBlockLabelStyle"
+        TargetType="{x:Type TextBlock}">
+
+        <Setter
+            Property="FontFamily"
+            Value="{DynamicResource ApplicationFontFamily}"/>
+
+        <Setter
+            Property="FontSize"
+            Value="{DynamicResource ApplicationFontSize}"/>
+
+        <Setter
+            Property="Foreground"
+            Value="{DynamicResource TextPrimary}"/>
+
+        <Setter
+            Property="VerticalAlignment"
+            Value="Center"/>
+
+    </Style>
+
+
+    <!-- =========================================================
+         TEXTBOX
+         ========================================================= -->
+
+    <Style
+        x:Key="VisuTextBoxStyle"
+        TargetType="{x:Type TextBox}">
+
+        <Setter
+            Property="Height"
+            Value="{DynamicResource ControlHeight}"/>
+
+        <Setter
+            Property="Padding"
+            Value="9,0"/>
+
+        <Setter
+            Property="TextAlignment"
+            Value="Left"/>
+
+        <Setter
+            Property="FontFamily"
+            Value="{DynamicResource ApplicationFontFamily}"/>
+
+        <Setter
+            Property="FontSize"
+            Value="{DynamicResource ApplicationFontSize}"/>
+
+        <Setter
+            Property="Foreground"
+            Value="{DynamicResource TextPrimary}"/>
+
+        <Setter
+            Property="Background"
+            Value="{DynamicResource FieldBackgroundBrush}"/>
+
+        <Setter
+            Property="Effect"
+            Value="{StaticResource VisuSoftShadow}"/>
+
+        <Setter
+            Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type TextBox}">
+                    <Border
+                        x:Name="FieldBorder"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="{DynamicResource ControlCornerRadius}"
+                        SnapsToDevicePixels="True">
+                        <ScrollViewer
+                            x:Name="PART_ContentHost"
+                            Margin="{TemplateBinding Padding}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                            Focusable="False"
+                            HorizontalScrollBarVisibility="Hidden"
+                            VerticalScrollBarVisibility="Hidden"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                            <Setter TargetName="FieldBorder" Property="BorderBrush" Value="{DynamicResource AccentPrimary}"/>
+                            <Setter TargetName="FieldBorder" Property="BorderThickness" Value="1.5"/>
+                        </Trigger>
+                        <Trigger Property="IsReadOnly" Value="True">
+                            <Setter TargetName="FieldBorder" Property="Background" Value="{DynamicResource FieldReadOnlyBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="FieldBorder" Property="Opacity" Value="0.65"/>
+                        </Trigger>
+                        <Trigger Property="Validation.HasError" Value="True">
+                            <Setter TargetName="FieldBorder" Property="BorderBrush" Value="{DynamicResource ErrorBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+
+        <Setter
+            Property="BorderBrush"
+            Value="{DynamicResource BorderBrush}"/>
+
+        <Setter
+            Property="BorderThickness"
+            Value="1"/>
+
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="RightToLeft">
+                <Setter Property="TextAlignment" Value="Right"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="LeftToRight">
+                <Setter Property="TextAlignment" Value="Left"/>
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+
+    <!-- =========================================================
+         PASSWORD BOX
+         ========================================================= -->
+
+    <Style
+        x:Key="VisuPasswordBoxStyle"
+        TargetType="{x:Type PasswordBox}">
+
+        <Setter
+            Property="Height"
+            Value="{DynamicResource ControlHeight}"/>
+
+        <Setter
+            Property="Padding"
+            Value="9,4"/>
+
+        <Setter
+            Property="FontFamily"
+            Value="{DynamicResource ApplicationFontFamily}"/>
+
+        <Setter
+            Property="FontSize"
+            Value="{DynamicResource ApplicationFontSize}"/>
+
+        <Setter
+            Property="Foreground"
+            Value="{DynamicResource TextPrimary}"/>
+
+        <Setter
+            Property="Background"
+            Value="{DynamicResource FieldBackgroundBrush}"/>
+
+        <Setter
+            Property="Effect"
+            Value="{StaticResource VisuSoftShadow}"/>
+
+        <Setter
+            Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type PasswordBox}">
+                    <Border
+                        x:Name="FieldBorder"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="{DynamicResource ControlCornerRadius}"
+                        SnapsToDevicePixels="True">
+                        <ScrollViewer
+                            x:Name="PART_ContentHost"
+                            Margin="{TemplateBinding Padding}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                            Focusable="False"
+                            HorizontalScrollBarVisibility="Hidden"
+                            VerticalScrollBarVisibility="Hidden"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                            <Setter TargetName="FieldBorder" Property="BorderBrush" Value="{DynamicResource AccentPrimary}"/>
+                            <Setter TargetName="FieldBorder" Property="BorderThickness" Value="1.5"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="FieldBorder" Property="Opacity" Value="0.65"/>
+                        </Trigger>
+                        <Trigger Property="Validation.HasError" Value="True">
+                            <Setter TargetName="FieldBorder" Property="BorderBrush" Value="{DynamicResource ErrorBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+
+        <Setter
+            Property="BorderBrush"
+            Value="{DynamicResource BorderBrush}"/>
+
+        <Setter
+            Property="BorderThickness"
+            Value="1"/>
+
+    </Style>
+
+
+    <!-- =========================================================
+         COMBOBOX
+         ========================================================= -->
+
+    <Style
+        x:Key="VisuComboBoxStyle"
+        TargetType="{x:Type ComboBox}">
+
+        <Setter
+            Property="Height"
+            Value="{DynamicResource ControlHeight}"/>
+
+        <Setter
+            Property="FontFamily"
+            Value="{DynamicResource ApplicationFontFamily}"/>
+
+        <Setter
+            Property="FontSize"
+            Value="{DynamicResource ApplicationFontSize}"/>
+
+        <Setter
+            Property="Foreground"
+            Value="{DynamicResource TextPrimary}"/>
+
+        <Setter
+            Property="Background"
+            Value="{DynamicResource FieldBackgroundBrush}"/>
+
+        <Setter
+            Property="Effect"
+            Value="{StaticResource VisuSoftShadow}"/>
+
+        <Setter
+            Property="BorderBrush"
+            Value="{DynamicResource BorderBrush}"/>
+
+        <Setter
+            Property="BorderThickness"
+            Value="1"/>
+
+    </Style>
+
+
+    <!-- =========================================================
+         BUTTONS
+         ========================================================= -->
+
+    <Style
+        x:Key="VisuButtonStyle"
+        TargetType="{x:Type Button}">
+
+        <Setter
+            Property="Height"
+            Value="{DynamicResource ControlHeight}"/>
+
+        <Setter
+            Property="Padding"
+            Value="14,0"/>
+
+        <Setter
+            Property="FontFamily"
+            Value="{DynamicResource ApplicationFontFamilyStrong}"/>
+
+        <Setter
+            Property="FontSize"
+            Value="{DynamicResource ApplicationFontSize}"/>
+
+        <Setter
+            Property="Foreground"
+            Value="{DynamicResource TextPrimary}"/>
+
+        <Setter
+            Property="Background"
+            Value="{DynamicResource SurfaceBrush}"/>
+
+        <Setter
+            Property="Effect"
+            Value="{StaticResource VisuSoftShadow}"/>
+
+        <Setter
+            Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Button}">
+                    <Border
+                        x:Name="ButtonBorder"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="{DynamicResource ButtonCornerRadius}"
+                        SnapsToDevicePixels="True">
+                        <ContentPresenter
+                            Margin="{TemplateBinding Padding}"
+                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                            TextElement.Foreground="{TemplateBinding Foreground}"
+                            RecognizesAccessKey="True"
+                            SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{DynamicResource AccentPrimary}"/>
+                            <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.92"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.82"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{DynamicResource AccentDark}"/>
+                            <Setter TargetName="ButtonBorder" Property="BorderThickness" Value="2"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.55"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+
+        <Setter
+            Property="BorderBrush"
+            Value="{DynamicResource BorderBrush}"/>
+
+        <Setter
+            Property="BorderThickness"
+            Value="1"/>
+
+        <Setter
+            Property="Cursor"
+            Value="Hand"/>
+
+        <Setter
+            Property="HorizontalContentAlignment"
+            Value="Center"/>
+
+        <Setter
+            Property="VerticalContentAlignment"
+            Value="Center"/>
+
+    </Style>
+
+
+    <Style
+        x:Key="VisuSecondaryButtonStyle"
+        TargetType="{x:Type Button}"
+        BasedOn="{StaticResource VisuButtonStyle}">
+
+        <Setter
+            Property="Background"
+            Value="{DynamicResource SurfaceSecondaryBrush}"/>
+
+    </Style>
+
+
+    <Style
+        x:Key="VisuAccentButtonStyle"
+        TargetType="{x:Type Button}"
+        BasedOn="{StaticResource VisuButtonStyle}">
+
+        <Setter
+            Property="Foreground"
+            Value="{DynamicResource AccentOnPrimaryBrush}"/>
+
+        <Setter
+            Property="Background"
+            Value="{DynamicResource AccentPrimary}"/>
+
+        <Setter
+            Property="BorderBrush"
+            Value="{DynamicResource AccentPrimary}"/>
+
+    </Style>
+
+
+    <Style
+        x:Key="VisuDangerButtonStyle"
+        TargetType="{x:Type Button}"
+        BasedOn="{StaticResource VisuButtonStyle}">
+
+        <Setter
+            Property="Foreground"
+            Value="#FFFFFF"/>
+
+        <Setter
+            Property="Background"
+            Value="{DynamicResource ErrorBrush}"/>
+
+        <Setter
+            Property="BorderBrush"
+            Value="{DynamicResource ErrorBrush}"/>
+
+    </Style>
+
+
+    <Style
+        x:Key="VisuSuccessButtonStyle"
+        TargetType="{x:Type Button}"
+        BasedOn="{StaticResource VisuButtonStyle}">
+
+        <Setter
+            Property="Foreground"
+            Value="#FFFFFF"/>
+
+        <Setter
+            Property="Background"
+            Value="{DynamicResource SuccessBrush}"/>
+
+        <Setter
+            Property="BorderBrush"
+            Value="{DynamicResource SuccessBrush}"/>
+
+    </Style>
+
+
+    <!-- =========================================================
+         CARD
+         ========================================================= -->
+
+    <Style
+        x:Key="VisuCardStyle"
+        TargetType="{x:Type Border}">
+
+        <Setter
+            Property="Background"
+            Value="{DynamicResource SurfaceBrush}"/>
+
+        <Setter
+            Property="BorderBrush"
+            Value="{DynamicResource BorderBrush}"/>
+
+        <Setter
+            Property="BorderThickness"
+            Value="1"/>
+
+        <Setter
+            Property="CornerRadius"
+            Value="{DynamicResource CardCornerRadius}"/>
+
+        <Setter
+            Property="Effect"
+            Value="{StaticResource VisuSoftShadow}"/>
+
+        <Setter
+            Property="Padding"
+            Value="12"/>
+
+    </Style>
+
+
+    <!-- =========================================================
+         TAB CONTROL
+         ========================================================= -->
+
+    <Style
+        x:Key="VisuTabControlStyle"
+        TargetType="{x:Type TabControl}">
+
+        <Setter
+            Property="FontFamily"
+            Value="{DynamicResource ApplicationFontFamily}"/>
+
+        <Setter
+            Property="FontSize"
+            Value="{DynamicResource ApplicationFontSize}"/>
+
+    </Style>
+
+
+    <!-- =========================================================
+         DATAGRID
+         ========================================================= -->
+
+    <Style
+        x:Key="VisuDataGridStyle"
+        TargetType="{x:Type DataGrid}">
+
+        <Setter
+            Property="Background"
+            Value="{DynamicResource TableSurfaceBrush}"/>
+
+        <Setter
+            Property="Foreground"
+            Value="{DynamicResource TextPrimary}"/>
+
+        <Setter
+            Property="BorderBrush"
+            Value="{DynamicResource BorderBrush}"/>
+
+        <Setter
+            Property="BorderThickness"
+            Value="1"/>
+
+        <Setter
+            Property="FontFamily"
+            Value="{DynamicResource ApplicationFontFamily}"/>
+
+        <Setter
+            Property="FontSize"
+            Value="{DynamicResource TableFontSize}"/>
+
+        <Setter
+            Property="RowHeaderWidth"
+            Value="0"/>
+
+        <Setter
+            Property="GridLinesVisibility"
+            Value="All"/>
+
+        <Setter Property="RowBackground" Value="{DynamicResource TableSurfaceBrush}"/>
+        <Setter Property="AlternatingRowBackground" Value="{DynamicResource TableAlternateRowBrush}"/>
+        <Setter Property="AlternationCount" Value="2"/>
+        <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource DividerBrush}"/>
+        <Setter Property="VerticalGridLinesBrush" Value="{DynamicResource DividerBrush}"/>
+        <Setter Property="CanUserResizeRows" Value="False"/>
+        <Setter Property="CanUserAddRows" Value="False"/>
+        <Setter Property="CanUserDeleteRows" Value="False"/>
+        <Setter Property="CanUserReorderColumns" Value="True"/>
+        <Setter Property="RowHeight" Value="{DynamicResource TableRowHeight}"/>
+        <Setter Property="ColumnHeaderHeight" Value="{DynamicResource TableHeaderHeight}"/>
+        <Setter Property="SelectionMode" Value="Single"/>
+        <Setter Property="SelectionUnit" Value="FullRow"/>
+        <Setter Property="HeadersVisibility" Value="Column"/>
+        <Setter Property="AutoGenerateColumns" Value="False"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+
+    </Style>
+
+    <Style x:Key="VisuDataGridHeaderStyle" TargetType="{x:Type DataGridColumnHeader}">
+        <Setter Property="Background" Value="{DynamicResource TableHeaderBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextOnDarkBrush}"/>
+        <Setter Property="FontFamily" Value="{DynamicResource ApplicationFontFamilyStrong}"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSize12}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Padding" Value="6,1"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource TableHeaderBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="0,0,1,1"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="TextBlock.TextAlignment" Value="Left"/>
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="RightToLeft">
+                <Setter Property="HorizontalContentAlignment" Value="Right"/>
+                <Setter Property="TextBlock.TextAlignment" Value="Right"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="LeftToRight">
+                <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                <Setter Property="TextBlock.TextAlignment" Value="Left"/>
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="VisuDataGridRowStyle" TargetType="{x:Type DataGridRow}">
+        <Setter Property="Background" Value="{DynamicResource TableSurfaceBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Style.Triggers>
+            <Trigger Property="AlternationIndex" Value="1">
+                <Setter Property="Background" Value="{DynamicResource TableAlternateRowBrush}"/>
+            </Trigger>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource TableHoverBrush}"/>
+            </Trigger>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Background" Value="{DynamicResource TableSelectedBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource TableSelectedBorderBrush}"/>
+                <Setter Property="BorderThickness" Value="3,0,0,0"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="VisuDataGridCellStyle" TargetType="{x:Type DataGridCell}">
+        <Setter Property="Padding" Value="5,1"/>
+        <Setter Property="BorderThickness" Value="0,0,1,0"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="TextBlock.TextAlignment" Value="Left"/>
+        <Style.Triggers>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Background" Value="Transparent"/>
+            </Trigger>
+            <Trigger Property="IsEditing" Value="True">
+                <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource TableSelectedBorderBrush}"/>
+                <Setter Property="BorderThickness" Value="2"/>
+            </Trigger>
+            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource TableSelectedBorderBrush}"/>
+                <Setter Property="BorderThickness" Value="2"/>
+            </Trigger>
+            <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="RightToLeft">
+                <Setter Property="TextBlock.TextAlignment" Value="Right"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="LeftToRight">
+                <Setter Property="TextBlock.TextAlignment" Value="Left"/>
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+
+    <!-- =========================================================
+         STATUS PANEL
+         ========================================================= -->
+
+    <Style
+        x:Key="VisuStatusPanelStyle"
+        TargetType="{x:Type Border}">
+
+        <Setter
+            Property="Background"
+            Value="{DynamicResource SurfaceSecondaryBrush}"/>
+
+        <Setter
+            Property="BorderBrush"
+            Value="{DynamicResource DividerBrush}"/>
+
+        <Setter
+            Property="BorderThickness"
+            Value="0,1,0,0"/>
+
+    </Style>
+
+
+    <!-- =========================================================
+         WINDOW TITLE
+         ========================================================= -->
+
+    <Style
+        x:Key="VisuChromeTitleStyle"
+        TargetType="{x:Type TextBlock}">
+
+        <Setter
+            Property="FontFamily"
+            Value="{DynamicResource ApplicationFontFamilyStrong}"/>
+
+        <Setter
+            Property="FontSize"
+            Value="{DynamicResource FontSize13}"/>
+
+        <Setter
+            Property="FontWeight"
+            Value="SemiBold"/>
+
+        <Setter
+            Property="Foreground"
+            Value="{DynamicResource ChromeForegroundBrush}"/>
+
+        <Setter
+            Property="VerticalAlignment"
+            Value="Center"/>
+
+        <Setter
+            Property="TextTrimming"
+            Value="CharacterEllipsis"/>
+
+    </Style>
+
+
+    <!-- =========================================================
+         WINDOW CHROME BUTTON
+         ========================================================= -->
+
+    <Style
+        x:Key="VisuChromeButtonStyle"
+        TargetType="{x:Type Button}">
+
+        <Setter
+            Property="Width"
+            Value="{DynamicResource ChromeButtonWidth}"/>
+
+        <Setter
+            Property="Height"
+            Value="{DynamicResource ChromeHeight}"/>
+
+        <Setter
+            Property="Background"
+            Value="Transparent"/>
+
+        <Setter
+            Property="Foreground"
+            Value="{DynamicResource ChromeForegroundBrush}"/>
+
+        <Setter
+            Property="BorderThickness"
+            Value="0"/>
+
+        <Setter
+            Property="Padding"
+            Value="0"/>
+
+        <Setter
+            Property="FocusVisualStyle"
+            Value="{x:Null}"/>
+
+        <Setter
+            Property="Cursor"
+            Value="Hand"/>
+
+        <Setter
+            Property="HorizontalContentAlignment"
+            Value="Center"/>
+
+        <Setter
+            Property="VerticalContentAlignment"
+            Value="Center"/>
+
+        <Style.Triggers>
+
+            <Trigger
+                Property="IsMouseOver"
+                Value="True">
+
+                <Setter
+                    Property="Background"
+                    Value="{DynamicResource ChromeButtonHoverBrush}"/>
+
+            </Trigger>
+
+            <Trigger
+                Property="IsPressed"
+                Value="True">
+
+                <Setter
+                    Property="Background"
+                    Value="{DynamicResource ChromeButtonPressedBrush}"/>
+
+            </Trigger>
+
+        </Style.Triggers>
+
+    </Style>
+
+
+    <!-- =========================================================
+         WINDOW CLOSE BUTTON
+         ========================================================= -->
+
+    <Style
+		x:Key="VisuChromeCloseButtonStyle"
+		TargetType="{x:Type Button}"
+		BasedOn="{StaticResource VisuChromeButtonStyle}">
+
+		<Setter Property="Template">
+			<Setter.Value>
+				<ControlTemplate TargetType="{x:Type Button}">
+					<Border x:Name="ChromeCloseBorder"
+							Background="{TemplateBinding Background}"
+							BorderThickness="0"
+							SnapsToDevicePixels="True">
+						<ContentPresenter HorizontalAlignment="Center"
+										  VerticalAlignment="Center"
+										  TextElement.Foreground="{TemplateBinding Foreground}"/>
+					</Border>
+					<ControlTemplate.Triggers>
+						
+						<Trigger Property="IsMouseOver" Value="True">
+							<Setter TargetName="ChromeCloseBorder" Property="Background" Value="{DynamicResource ChromeCloseHoverBrush}"/>
+							<Setter Property="Foreground" Value="{DynamicResource ChromeCloseForegroundBrush}"/>
+						</Trigger>
+						
+						<Trigger Property="IsPressed" Value="True">
+							<Setter TargetName="ChromeCloseBorder" Property="Background" Value="{DynamicResource ChromeClosePressedBrush}"/>
+							<Setter Property="Foreground" Value="{DynamicResource ChromeCloseForegroundBrush}"/>
+						</Trigger>
+					</ControlTemplate.Triggers>
+				</ControlTemplate>
+			</Setter.Value>
+		</Setter>
+	</Style>
+
+
+    <!-- =========================================================
+         CENTRAL WINDOW
+         ========================================================= -->
+
+    <Style
+        x:Key="VisuWindowStyle"
+        TargetType="{x:Type Window}">
+
+        <Setter
+            Property="WindowStyle"
+            Value="None"/>
+
+        <Setter
+            Property="ResizeMode"
+            Value="CanResize"/>
+
+        <Setter
+            Property="Background"
+            Value="{DynamicResource BackgroundBrush}"/>
+
+        <Setter
+            Property="Foreground"
+            Value="{DynamicResource TextPrimary}"/>
+
+        <Setter
+            Property="FontFamily"
+            Value="{DynamicResource ApplicationFontFamily}"/>
+
+        <Setter
+            Property="FontSize"
+            Value="{DynamicResource ApplicationFontSize}"/>
+
+        <Setter
+            Property="UseLayoutRounding"
+            Value="True"/>
+
+        <Setter
+            Property="SnapsToDevicePixels"
+            Value="True"/>
+
+
+        <!-- Window chrome configuration -->
+        <Setter
+            Property="shell:WindowChrome.WindowChrome">
+
+            <Setter.Value>
+
+                <shell:WindowChrome
+                    CaptionHeight="{DynamicResource ChromeHeight}"
+                    ResizeBorderThickness="{DynamicResource ChromeResizeBorderThickness}"
+                    CornerRadius="{DynamicResource ChromeCornerRadius}"
+                    GlassFrameThickness="0"
+                    UseAeroCaptionButtons="False"/>
+
+            </Setter.Value>
+
+        </Setter>
+
+
+        <!-- Central window template -->
+        <Setter
+            Property="Template">
+
+            <Setter.Value>
+
+                <ControlTemplate
+                    TargetType="{x:Type Window}">
+
+                    <Border
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{DynamicResource ChromeBorderBrush}"
+                        BorderThickness="1">
+
+                        <Grid>
+
+                            <Grid.RowDefinitions>
+
+                                <!-- GridLength resource, not Double -->
+                                <RowDefinition
+                                    Height="{DynamicResource ChromeRowHeight}"/>
+
+                                <RowDefinition
+                                    Height="*"/>
+
+                            </Grid.RowDefinitions>
+
+
+                            <!-- Title bar -->
+
+                            <Border
+                                Grid.Row="0"
+                                Background="{DynamicResource ChromeBackgroundBrush}"
+                                BorderBrush="{DynamicResource ChromeBorderBrush}"
+                                BorderThickness="0,0,0,1">
+
+                                <Grid
+                                    FlowDirection="{Binding FlowDirection, RelativeSource={RelativeSource TemplatedParent}}">
+
+                                    <Grid.ColumnDefinitions>
+
+                                        <ColumnDefinition
+                                            Width="*"/>
+
+                                        <!-- GridLength resources -->
+                                        <ColumnDefinition
+                                            Width="{DynamicResource ChromeButtonColumnWidth}"/>
+
+                                        <ColumnDefinition
+                                            Width="{DynamicResource ChromeButtonColumnWidth}"/>
+
+                                        <ColumnDefinition
+                                            Width="{DynamicResource ChromeButtonColumnWidth}"/>
+
+                                    </Grid.ColumnDefinitions>
+
+
+                                    <!-- Window title -->
+
+                                    <TextBlock
+                                        Grid.Column="0"
+                                        Margin="14,0,8,0"
+                                        VerticalAlignment="Center"
+                                        Text="{TemplateBinding Title}"
+                                        Style="{DynamicResource VisuChromeTitleStyle}"/>
+
+
+                                    <!-- Minimize -->
+
+                                    <Button
+                                        Grid.Column="1"
+                                        shell:WindowChrome.IsHitTestVisibleInChrome="True"
+                                        Command="{x:Static wpf:SystemCommands.MinimizeWindowCommand}"
+                                        CommandParameter="{Binding RelativeSource={RelativeSource TemplatedParent}}"
+                                        Style="{DynamicResource VisuChromeButtonStyle}"
+                                        ToolTip="Minimize">
+
+                                        <TextBlock
+                                            Text="&#x2500;"
+                                            FontFamily="{DynamicResource WindowChromeSymbolFontFamily}"
+                                            FontSize="{DynamicResource FontSize15}"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"/>
+
+                                    </Button>
+
+
+                                    <!-- Maximize -->
+
+                                    <Grid
+                                        Grid.Column="2">
+
+                                        <Button
+                                            x:Name="MaximizeButton"
+                                            shell:WindowChrome.IsHitTestVisibleInChrome="True"
+                                            Command="{x:Static wpf:SystemCommands.MaximizeWindowCommand}"
+                                            CommandParameter="{Binding RelativeSource={RelativeSource TemplatedParent}}"
+                                            Style="{DynamicResource VisuChromeButtonStyle}"
+                                            ToolTip="Maximize">
+
+                                            <TextBlock
+                                                Text="&#x25A1;"
+                                                FontFamily="{DynamicResource WindowChromeSymbolFontFamily}"
+                                                FontSize="{DynamicResource FontSize13}"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"/>
+
+                                        </Button>
+
+
+                                        <!-- Restore -->
+
+                                        <Button
+                                            x:Name="RestoreButton"
+                                            shell:WindowChrome.IsHitTestVisibleInChrome="True"
+                                            Command="{x:Static wpf:SystemCommands.RestoreWindowCommand}"
+                                            CommandParameter="{Binding RelativeSource={RelativeSource TemplatedParent}}"
+                                            Style="{DynamicResource VisuChromeButtonStyle}"
+                                            ToolTip="Restore"
+                                            Visibility="Collapsed">
+
+                                            <TextBlock
+                                                Text="&#x2750;"
+                                                FontFamily="{DynamicResource WindowChromeSymbolFontFamily}"
+                                                FontSize="{DynamicResource FontSize13}"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"/>
+
+                                        </Button>
+
+                                    </Grid>
+
+
+                                    <!-- Close -->
+
+                                    <Button
+                                        Grid.Column="3"
+                                        shell:WindowChrome.IsHitTestVisibleInChrome="True"
+                                        Command="{x:Static wpf:SystemCommands.CloseWindowCommand}"
+                                        CommandParameter="{Binding RelativeSource={RelativeSource TemplatedParent}}"
+                                        Style="{DynamicResource VisuChromeCloseButtonStyle}"
+                                        ToolTip="Close">
+
+                                        <TextBlock
+                                            Text="&#x00D7;"
+                                            FontFamily="{DynamicResource WindowChromeSymbolFontFamily}"
+                                            FontSize="{DynamicResource FontSize18}"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"/>
+
+                                    </Button>
+
+                                </Grid>
+
+                            </Border>
+
+
+                            <!-- Window content -->
+
+                            <AdornerDecorator
+                                Grid.Row="1">
+
+                                <ContentPresenter
+                                    Content="{TemplateBinding Content}"
+                                    ContentTemplate="{TemplateBinding ContentTemplate}"
+                                    ContentStringFormat="{TemplateBinding ContentStringFormat}"
+                                    Margin="0"/>
+
+                            </AdornerDecorator>
+
+                        </Grid>
+
+                    </Border>
+
+
+                    <!-- Window state -->
+
+                    <ControlTemplate.Triggers>
+
+                        <Trigger
+                            Property="WindowState"
+                            Value="Maximized">
+
+                            <Setter
+                                TargetName="MaximizeButton"
+                                Property="Visibility"
+                                Value="Collapsed"/>
+
+                            <Setter
+                                TargetName="RestoreButton"
+                                Property="Visibility"
+                                Value="Visible"/>
+
+                        </Trigger>
+
+                    </ControlTemplate.Triggers>
+
+                </ControlTemplate>
+
+            </Setter.Value>
+
+        </Setter>
+
+    </Style>
+
+</ResourceDictionary>

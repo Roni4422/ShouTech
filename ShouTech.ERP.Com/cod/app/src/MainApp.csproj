@@ -1,0 +1,174 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ================================================================
+       ShouTech ERP
+       Main WPF Application Project
+       Target: .NET 8 / Windows / x64
+       ================================================================ -->
+
+  <PropertyGroup>
+
+    <!-- Application -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+
+    <!-- WPF -->
+    <UseWPF>true</UseWPF>
+
+    <!-- Language / Code Quality -->
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Assembly Identity -->
+    <RootNamespace>ShouTech.App</RootNamespace>
+    <AssemblyName>ShouTech.ERP</AssemblyName>
+
+    <Version>10.6.0</Version>
+    <AssemblyVersion>10.6.0.0</AssemblyVersion>
+    <FileVersion>10.6.0.0</FileVersion>
+    <InformationalVersion>10.6.0</InformationalVersion>
+
+    <!-- Platform -->
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+
+    <!-- WPF Application Entry Point / Manual File Control -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultPageItems>false</EnableDefaultPageItems>
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+
+    <!-- Build Configuration -->
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <!-- Deterministic Builds -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>false</ContinuousIntegrationBuild>
+
+    <!-- Runtime / Deployment -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <Prefer32Bit>false</Prefer32Bit>
+
+    <!-- Modern SDK Behavior -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+
+  </PropertyGroup>
+
+
+  <!-- ================================================================
+       NuGet Packages 
+       ================================================================ -->
+  <ItemGroup>
+
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+    <PackageReference Include="Serilog" Version="4.2.0" />
+    <PackageReference Include="Serilog.Extensions.Hosting" Version="8.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
+    <PackageReference Include="Npgsql" Version="9.0.2" />
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.12" />
+    <PackageReference Include="Dapper" Version="2.1.44" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+
+  </ItemGroup>
+
+
+  <!-- ================================================================
+       Internal Project References
+       ================================================================ -->
+  <ItemGroup>
+
+    <ProjectReference Include="..\..\cor\inv.csproj" Condition="Exists('..\..\cor\inv.csproj')" />
+    <ProjectReference Include="..\..\..\src\ShouTech.Domain\ShouTech.Domain.csproj" Condition="Exists('..\..\..\src\ShouTech.Domain\ShouTech.Domain.csproj')" />
+    <ProjectReference Include="..\..\..\src\ShouTech.Application\ShouTech.Application.csproj" Condition="Exists('..\..\..\src\ShouTech.Application\ShouTech.Application.csproj')" />
+    <ProjectReference Include="..\..\..\src\ShouTech.Infrastructure\ShouTech.Infrastructure.csproj" Condition="Exists('..\..\..\src\ShouTech.Infrastructure\ShouTech.Infrastructure.csproj')" />
+
+  </ItemGroup>
+
+
+  <!-- ================================================================
+       Application Definition
+       ================================================================ -->
+  <ItemGroup>
+
+    <ApplicationDefinition Include="App.xaml" />
+
+  </ItemGroup>
+
+
+  <!-- ================================================================
+       WPF XAML Pages
+       ================================================================ -->
+  <ItemGroup>
+
+    <Page Include="**\*.xaml" Exclude="App.xaml;obj\**\*;bin\**\*" />
+
+  </ItemGroup>
+
+
+  <!-- ================================================================
+       C# Source Files
+       ================================================================ -->
+  <ItemGroup>
+
+    <!-- Application Source -->
+    <Compile Include="**\*.cs" Exclude="obj\**\*;bin\**\*;ViewModels\MainWnVM.cs" />
+	<Compile Include="../../../cfg/AppSettings.cs" Condition="Exists('../../../cfg/AppSettings.cs')" />
+    <Compile Include="../../../cfg/CompanyInfo.cs" Condition="Exists('../../../cfg/CompanyInfo.cs')" />
+
+  </ItemGroup>
+
+
+  <!-- ================================================================
+       Optional Configuration Files
+       ================================================================ -->
+  <ItemGroup>
+
+    <None Include="../../../cfg/appset.json" Condition="Exists('../../../cfg/appset.json')" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="Resources\Errors\Errors.json" Condition="Exists('Resources\Errors\Errors.json')" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="Resources\Lang\*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+	
+
+  </ItemGroup>
+  
+  <ItemGroup>
+	<Resource Include="Resources\Ico\**\*.png" />
+    <Resource Include="Resources\Ico\**\*.jpg" />
+    <Resource Include="Resources\Ico\**\*.svg" />
+	<Resource Include="Resources\Ico\**\*.ico" />
+  </ItemGroup>
+
+
+  <!-- ================================================================
+       Build Output Organization
+       ================================================================ -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <Optimize>true</Optimize>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
+  <!-- ================================================================
+       Publish Defaults
+       ================================================================ -->
+  <PropertyGroup>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <PublishSingleFile>false</PublishSingleFile>
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+
+
+  <ItemGroup>
+    <None Include="../../../dba/mig/sqlite/*.sql" Link="dba/mig/sqlite/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Condition="Exists('../../../dba/mig/sqlite')" />
+    <None Include="../../../dba/mig/postgresql/*.sql" Link="dba/mig/postgresql/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Condition="Exists('../../../dba/mig/postgresql')" />
+  </ItemGroup>
+</Project>

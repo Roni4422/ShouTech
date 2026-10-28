@@ -1,0 +1,284 @@
+<local:BaseWin x:Class="ShouTech.App.Views.MatDirWin"
+     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:ShouTech.App.Views"
+     xmlns:loc="clr-namespace:ShouTech.App.Localization"
+     loc:LocProps.WindowKey="Inventory.MaterialTree"
+     Title="Material Directory"
+     Width="400" Height="590"
+     MinWidth="380" MinHeight="520"
+     WindowStartupLocation="CenterOwner"
+     Background="{DynamicResource BackgroundBrush}"
+     Foreground="{DynamicResource TextBrush}"
+     FontFamily="{DynamicResource ApplicationFontFamily}"
+     FontSize="{DynamicResource FontSize12}"
+     ResizeMode="CanResizeWithGrip">
+
+
+<Window.Resources>
+
+    <Style x:Key="ToolbarButton"
+           TargetType="Button">
+
+        <Setter Property="MinWidth"
+                Value="58"/>
+
+        <Setter Property="Height"
+                Value="28"/>
+
+        <Setter Property="Margin"
+                Value="2,0"/>
+
+        <Setter Property="Padding"
+                Value="8,0"/>
+
+        <Setter Property="FontSize"
+                Value="{DynamicResource FontSize12}"/>
+
+        <Setter Property="VerticalContentAlignment"
+                Value="Center"/>
+
+        <Setter Property="HorizontalContentAlignment"
+                Value="Center"/>
+
+        <Setter Property="Background"
+                Value="{DynamicResource SurfaceBrush}"/>
+
+        <Setter Property="Foreground"
+                Value="{DynamicResource TextBrush}"/>
+
+        <Setter Property="BorderBrush"
+                Value="{DynamicResource BorderBrush}"/>
+
+        <Setter Property="BorderThickness"
+                Value="1"/>
+
+    </Style>
+
+    <Style x:Key="SearchButton"
+           TargetType="Button"
+           BasedOn="{StaticResource ToolbarButton}">
+
+        <Setter Property="MinWidth"
+                Value="58"/>
+
+        <Setter Property="Width"
+                Value="58"/>
+
+    </Style>
+
+    <Style TargetType="ListViewItem">
+
+        <Setter Property="Padding"
+                Value="4,6"/>
+
+        <Setter Property="HorizontalContentAlignment"
+                Value="Stretch"/>
+
+    </Style>
+
+</Window.Resources>
+
+<Grid>
+
+    <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+    </Grid.RowDefinitions>
+
+    <!-- Mode and search -->
+    <Border Grid.Row="0"
+            Padding="8,7"
+            Background="{DynamicResource SurfaceBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,0,0,1">
+
+        <Grid>
+
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Center"
+                        Margin="0,0,8,0">
+
+                <RadioButton x:Name="RbItem"
+                             Content="Material"
+                             IsChecked="True"
+                             GroupName="Mode"
+                             Margin="0,0,12,0"
+                             VerticalAlignment="Center"
+                             Checked="Mode_Changed"/>
+
+                <RadioButton x:Name="RbClass"
+                             Content="Group"
+                             GroupName="Mode"
+                             VerticalAlignment="Center"
+                             Checked="Mode_Changed"/>
+
+            </StackPanel>
+
+            <TextBox x:Name="TxtSearch"
+                     Grid.Column="1"
+                     Height="28"
+                     VerticalContentAlignment="Center"
+                     Padding="7,0"
+                     Margin="0,0,5,0"
+                     Background="{DynamicResource BackgroundBrush}"
+                     BorderBrush="{DynamicResource BorderBrush}"
+                     Foreground="{DynamicResource TextBrush}"
+                     TextChanged="TxtSearch_TextChanged"/>
+
+            <Button x:Name="BtnSearch"
+                    Grid.Column="2"
+                    Style="{StaticResource SearchButton}"
+                    Content="Search"
+                    loc:LocProps.Key="Buttons.Search"
+                    Click="Search_Click"/>
+
+        </Grid>
+
+    </Border>
+
+    <!-- Toolbar -->
+    <Border Grid.Row="1"
+            Padding="6,5"
+            Background="{DynamicResource SurfaceBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,0,0,1">
+
+        <StackPanel Orientation="Horizontal">
+
+            <Button x:Name="BtnAdd"
+                    Style="{StaticResource ToolbarButton}"
+                    Content="New"
+                    loc:LocProps.Key="Common.New"
+                    Click="Add_Click"/>
+
+            <Button x:Name="BtnRemove"
+                    Style="{StaticResource ToolbarButton}"
+                    Content="Delete"
+                    loc:LocProps.Key="Buttons.Delete"
+                    Click="Remove_Click"/>
+
+            <Button x:Name="BtnRefresh"
+                    Style="{StaticResource ToolbarButton}"
+                    Content="Refresh"
+                    loc:LocProps.Key="Buttons.Refresh"
+                    Click="Refresh_Click"/>
+
+            <Button x:Name="BtnPrint"
+                    Style="{StaticResource ToolbarButton}"
+                    Content="Print"
+                    loc:LocProps.Key="Buttons.Print"
+                    Click="Print_Click"/>
+
+            
+
+        </StackPanel>
+
+    </Border>
+
+    <!-- Material and group list -->
+    <ListView x:Name="LvItems"
+              Grid.Row="2"
+              BorderThickness="0"
+              Background="{DynamicResource BackgroundBrush}"
+              Foreground="{DynamicResource TextBrush}"
+              SelectionMode="Single"
+              MouseDoubleClick="Lv_DoubleClick"
+              KeyDown="Lv_KeyDown">
+
+        <ListView.View>
+
+            <GridView>
+
+                <GridViewColumn x:Name="ColCode"
+                                Header="Code"
+                                Width="90"
+                                DisplayMemberBinding="{Binding Code}"/>
+
+                <GridViewColumn x:Name="ColName"
+                                Header="Name"
+                                Width="200"
+                                DisplayMemberBinding="{Binding DisplayName}"/>
+
+                <GridViewColumn x:Name="ColStatus"
+                                Header="Status"
+                                Width="70"
+                                DisplayMemberBinding="{Binding StatusLabel}"/>
+
+            </GridView>
+
+        </ListView.View>
+
+        <ListView.ContextMenu>
+
+            <ContextMenu x:Name="ItemsContextMenu"
+                         Opened="Ctx_Opened">
+
+                <MenuItem x:Name="CtxOpen"
+                          Header="Open Card"
+                          loc:LocProps.Key="Inventory.MaterialTreeTexts.OpenCard"
+                          Click="Open_Click"
+                          InputGestureText="Enter"/>
+
+                <MenuItem x:Name="CtxNew"
+                          Header="New"
+                          loc:LocProps.Key="Common.New"
+                          Click="Add_Click"
+                          InputGestureText="Ins"/>
+
+                <MenuItem x:Name="CtxEdit"
+                          Header="Edit"
+                          loc:LocProps.Key="Buttons.Edit"
+                          Click="Edit_Click"/>
+
+                <Separator/>
+
+                <MenuItem x:Name="CtxDelete"
+                          Header="Delete"
+                          loc:LocProps.Key="Buttons.Delete"
+                          Click="Remove_Click"
+                          InputGestureText="Del"/>
+
+                <Separator/>
+
+                <MenuItem x:Name="CtxCopyCode"
+                          Header="Copy Code"
+                          loc:LocProps.Key="Inventory.MaterialTreeTexts.CopyCode"
+                          Click="CopyCode_Click"/>
+
+                <MenuItem x:Name="CtxCopyName"
+                          Header="Copy Name"
+                          loc:LocProps.Key="Inventory.MaterialTreeTexts.CopyName"
+                          Click="CopyName_Click"/>
+
+                <Separator/>
+
+                <MenuItem x:Name="CtxRefresh"
+                          Header="Refresh"
+                          loc:LocProps.Key="Buttons.Refresh"
+                          Click="Refresh_Click"
+                          InputGestureText="F5"/>
+
+                <MenuItem x:Name="CtxPrint"
+                          Header="Print"
+                          loc:LocProps.Key="Buttons.Print"
+                          Click="Print_Click"/>
+
+            </ContextMenu>
+
+        </ListView.ContextMenu>
+
+    </ListView>
+
+</Grid>
+
+
+</local:BaseWin>

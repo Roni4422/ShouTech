@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <!-- ================================================================
+       ShouTech ERP — Background Windows Service (svc.exe)
+       المزامنة الخلفية + مراقبة الترخيص + طابور الرسائل الصادرة
+       Target: .NET 8 / Windows Service
+       ================================================================ -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <RootNamespace>ShouTech.Svc</RootNamespace>
+    <AssemblyName>svc</AssemblyName>
+    <Version>10.6.0</Version>
+
+    <!-- Windows Service integration -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <Deterministic>true</Deterministic>
+    <InvariantGlobalization>false</InvariantGlobalization>
+
+    <!-- Secrets: NEVER in source. Connection string via
+         SHOUTECH_DB_CONNECTION environment variable only. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
+    <PackageReference Include="Npgsql" Version="9.0.2" />
+  </ItemGroup>
+
+</Project>

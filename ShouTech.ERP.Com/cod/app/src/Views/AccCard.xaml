@@ -1,0 +1,204 @@
+<local:BaseWin x:Class="ShouTech.App.Views.AccCard"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:ShouTech.App.Views"
+        Title="Account card"
+        Width="450" Height="560"
+        MinWidth="400" MinHeight="500"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource TextBrush}"
+        FontFamily="{DynamicResource ApplicationFontFamily}"
+        FontSize="{DynamicResource FontSize12}"
+>
+    <Window.Resources>
+        <Style x:Key="NavArrowStyle" TargetType="{x:Type Button}">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Width" Value="34"/>
+            <Setter Property="Height" Value="44"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border Background="Transparent" Padding="0">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Opacity" Value="0.78"/>
+                    <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+                    <Setter Property="RenderTransform">
+                        <Setter.Value>
+                            <ScaleTransform ScaleX="1.12" ScaleY="1.12"/>
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Opacity" Value="0.52"/>
+                    <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+                    <Setter Property="RenderTransform">
+                        <Setter.Value>
+                            <ScaleTransform ScaleX="1.04" ScaleY="1.04"/>
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="0,0,0,7">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Row="0" Grid.Column="1" Text="Account card" FontSize="{DynamicResource FontSize18}" FontWeight="SemiBold"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+
+            <!-- -->
+            <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal"
+                        HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,5,0,0"
+                        FlowDirection="LeftToRight">
+                <Button x:Name="BtnFirst" Click="First_Click" Style="{StaticResource NavArrowStyle}" ToolTip="ToolTip" Margin="0,0,10,0">
+                    <Path Width="30" Height="28" Stretch="Uniform" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                          StrokeThickness="3.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                          Data="M 18,3 L 10,14 L 18,25 M 11,3 L 3,14 L 11,25"/>
+                </Button>
+
+                <Button x:Name="BtnPrevious" Click="Previous_Click" Style="{StaticResource NavArrowStyle}" ToolTip="ToolTip" Margin="0,0,10,0">
+                    <Path Width="25" Height="25" Stretch="Uniform" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                          StrokeThickness="3.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                          Data="M 21,3 L 11,13 L 21,23"/>
+                </Button>
+
+                <TextBox x:Name="TxtSerial" Width="112" Height="38" Padding="7,2"
+                         FontSize="{DynamicResource FontSize16}" FontWeight="SemiBold" TextAlignment="Center"
+                         VerticalContentAlignment="Center" IsReadOnly="True"
+                         Background="{DynamicResource BackgroundBrush}" ToolTip="ToolTip"/>
+
+                <Button x:Name="BtnNext" Click="Next_Click" Style="{StaticResource NavArrowStyle}" ToolTip="ToolTip" Margin="10,0,0,0">
+                    <Path Width="25" Height="25" Stretch="Uniform" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                          StrokeThickness="3.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                          Data="M 11,3 L 21,13 L 11,23"/>
+                </Button>
+
+                <Button x:Name="BtnLast" Click="Last_Click" Style="{StaticResource NavArrowStyle}" ToolTip="ToolTip" Margin="10,0,0,0">
+                    <Path Width="30" Height="28" Stretch="Uniform" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                          StrokeThickness="3.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                          Data="M 12,3 L 20,14 L 12,25 M 19,3 L 27,14 L 19,25"/>
+                </Button>
+            </StackPanel>
+        </Grid>
+        <Border Grid.Row="1" Padding="8" CornerRadius="6"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Margin="0,0,0,7">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="78"/><ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="55"/><ColumnDefinition Width="100"/>
+                    <ColumnDefinition Width="55"/><ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Text" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                <TextBox x:Name="TxtCode" Grid.Column="1" Height="28" Padding="6,2" Margin="6,0,10,0"/>
+                <TextBlock Grid.Column="2" Text="Status" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                <ComboBox x:Name="CmbStatus" Grid.Column="3" Height="28" Margin="6,0,10,0"/>
+                <TextBlock Grid.Column="4" Text="Text" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                <Grid Grid.Column="5" Margin="5,0,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Ellipse x:Name="RiskIndicator" Width="9" Height="9" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="CmbRisk" Grid.Column="1" Height="28" SelectionChanged="CmbRisk_SelectionChanged"/>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="2" Padding="10" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" CornerRadius="5">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="105"/><ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="105"/><ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Text" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBox x:Name="TxtNameAr" Grid.Row="0" Grid.Column="1" Height="29" Padding="6,3" Margin="6,0,12,5"/>
+                    <TextBlock Grid.Row="0" Grid.Column="2" Text="English Name" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBox x:Name="TxtNameEn" Grid.Row="0" Grid.Column="3" Height="29" Padding="6,3" Margin="6,0,0,5" FlowDirection="LeftToRight"/>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Text" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="CmbParent" Grid.Row="1" Grid.Column="1" Height="29" Margin="6,0,12,5" SelectionChanged="CmbParent_SelectionChanged"/>
+                    <TextBlock Grid.Row="1" Grid.Column="2" Text="Text" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="CmbPostingMode" Grid.Row="1" Grid.Column="3" Height="29" Margin="6,0,0,5"/>
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Text" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="CmbCostCenter" Grid.Row="2" Grid.Column="1" Height="29" Margin="6,0,12,5"/>
+                    <CheckBox x:Name="ChkReconcile" Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="2" Content="Content" VerticalAlignment="Center" Margin="0,0,0,5"/>
+
+                    <CheckBox x:Name="ChkTaxable" Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Content="Content" VerticalAlignment="Center" Margin="0,0,12,5"/>
+                    <CheckBox x:Name="ChkForeign" Grid.Row="3" Grid.Column="2" Grid.ColumnSpan="2" Content="Content" VerticalAlignment="Center" Margin="0,0,0,5"/>
+
+                    <CheckBox x:Name="ChkCostRequired" Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2" Content="Content" VerticalAlignment="Center" Margin="0,0,12,5"/>
+                    <CheckBox x:Name="ChkBudget" Grid.Row="4" Grid.Column="2" Grid.ColumnSpan="2" Content="Content" VerticalAlignment="Center" Margin="0,0,0,5"/>
+
+                    <CheckBox x:Name="ChkDefault" Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" Content="Content" VerticalAlignment="Center" Margin="0,0,12,5"/>
+                    <TextBlock Grid.Row="5" Grid.Column="2" Text="Text" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBox x:Name="TxtTaxRate" Grid.Row="5" Grid.Column="3" Height="29" Padding="6,3" Margin="6,0,0,5" Text="0"/>
+
+                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Description" FontWeight="SemiBold" VerticalAlignment="Top" Margin="0,4,0,5"/>
+                    <TextBox x:Name="TxtDescription" Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="3" Height="48" Padding="6,4" Margin="6,0,0,5" AcceptsReturn="True" TextWrapping="Wrap"/>
+
+                    <Grid Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="4" Margin="0,3,0,0">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Margin="0,0,4,0" Padding="7" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="5">
+                            <StackPanel><TextBlock Text="Balance" Foreground="{DynamicResource TextSecondaryBrush}"/><TextBlock x:Name="TxtBalance" Text="0.00" FontSize="{DynamicResource FontSize15}" FontWeight="SemiBold"/></StackPanel>
+                        </Border>
+                        <Border Grid.Column="1" Margin="2,0" Padding="7" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="5">
+                            <StackPanel><TextBlock Text="Text" Foreground="{DynamicResource TextSecondaryBrush}"/><TextBlock x:Name="TxtDebit" Text="0.00" FontSize="{DynamicResource FontSize15}" FontWeight="SemiBold"/></StackPanel>
+                        </Border>
+                        <Border Grid.Column="2" Margin="4,0,0,0" Padding="7" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="5">
+                            <StackPanel><TextBlock Text="Text" Foreground="{DynamicResource TextSecondaryBrush}"/><TextBlock x:Name="TxtCredit" Text="0.00" FontSize="{DynamicResource FontSize15}" FontWeight="SemiBold"/></StackPanel>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </ScrollViewer>
+        </Border>
+
+        <DockPanel Grid.Row="3" Margin="0,7,0,0">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button Content="New" Click="New_Click" MinWidth="66" Padding="8,4" Margin="4,0,0,0"/>
+                <Button Content="Save" Click="Save_Click" MinWidth="66" Padding="8,4" Margin="4,0,0,0" FontWeight="SemiBold"/>
+                <Button Content="Edit" Click="Edit_Click" MinWidth="66" Padding="8,4" Margin="4,0,0,0"/>
+                <Button Content="Content" Click="Disable_Click" MinWidth="66" Padding="8,4" Margin="4,0,0,0"/>
+                <Button Content="Delete" Click="Delete_Click" MinWidth="66" Padding="8,4" Margin="4,0,0,0"/>
+                <Button Content="Content" Click="Statement_Click" MinWidth="88" Padding="8,4" Margin="4,0,0,0"/>
+                <Button Content="Content" Click="Ledger_Click" MinWidth="88" Padding="8,4" Margin="4,0,0,0"/>
+            </StackPanel>
+            <Button DockPanel.Dock="Left" Content="Close" Click="Close_Click" MinWidth="62" Padding="8,4"/>
+        </DockPanel>
+    </Grid>
+</local:BaseWin>

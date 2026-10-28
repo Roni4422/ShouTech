@@ -1,0 +1,375 @@
+{
+  "schemaVersion": 1,
+  "templateCode": "SIMPLE",
+  "scope": "general",
+  "languages": [
+    "ar",
+    "en",
+    "fr",
+    "tr"
+  ],
+  "taxProfile": null,
+  "accounts": [
+    {
+      "code": "1",
+      "parent": null,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null
+    },
+    {
+      "code": "11",
+      "parent": "1",
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null
+    },
+    {
+      "code": "111",
+      "parent": "11",
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset"
+    },
+    {
+      "code": "112",
+      "parent": "11",
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset"
+    },
+    {
+      "code": "113",
+      "parent": "11",
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset"
+    },
+    {
+      "code": "114",
+      "parent": "11",
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset"
+    },
+    {
+      "code": "115",
+      "parent": "11",
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset"
+    },
+    {
+      "code": "116",
+      "parent": "11",
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset"
+    },
+    {
+      "code": "12",
+      "parent": "1",
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null
+    },
+    {
+      "code": "121",
+      "parent": "12",
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": null
+    },
+    {
+      "code": "122",
+      "parent": "12",
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": null
+    },
+    {
+      "code": "123",
+      "parent": "12",
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": null
+    },
+    {
+      "code": "13",
+      "parent": "1",
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null
+    },
+    {
+      "code": "131",
+      "parent": "13",
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Cash"
+    },
+    {
+      "code": "132",
+      "parent": "13",
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Bank"
+    },
+    {
+      "code": "133",
+      "parent": "13",
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": null
+    },
+    {
+      "code": "14",
+      "parent": "1",
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null
+    },
+    {
+      "code": "141",
+      "parent": "14",
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Customer"
+    },
+    {
+      "code": "15",
+      "parent": "1",
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null
+    },
+    {
+      "code": "151",
+      "parent": "15",
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": null
+    },
+    {
+      "code": "2",
+      "parent": null,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null
+    },
+    {
+      "code": "21",
+      "parent": "2",
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null
+    },
+    {
+      "code": "211",
+      "parent": "21",
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Supplier"
+    },
+    {
+      "code": "212",
+      "parent": "21",
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": null
+    },
+    {
+      "code": "213",
+      "parent": "21",
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": null
+    },
+    {
+      "code": "22",
+      "parent": "2",
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null
+    },
+    {
+      "code": "221",
+      "parent": "22",
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": null
+    },
+    {
+      "code": "3",
+      "parent": null,
+      "type": "Equity",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null
+    },
+    {
+      "code": "31",
+      "parent": "3",
+      "type": "Equity",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": null
+    },
+    {
+      "code": "32",
+      "parent": "3",
+      "type": "Equity",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": null
+    },
+    {
+      "code": "33",
+      "parent": "3",
+      "type": "Equity",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": null
+    },
+    {
+      "code": "4",
+      "parent": null,
+      "type": "Purchase",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null
+    },
+    {
+      "code": "41",
+      "parent": "4",
+      "type": "Purchase",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": null
+    },
+    {
+      "code": "42",
+      "parent": "4",
+      "type": "Purchase",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": null
+    },
+    {
+      "code": "5",
+      "parent": null,
+      "type": "Revenue",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null
+    },
+    {
+      "code": "51",
+      "parent": "5",
+      "type": "Revenue",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": null
+    },
+    {
+      "code": "52",
+      "parent": "5",
+      "type": "Revenue",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": null
+    },
+    {
+      "code": "53",
+      "parent": "5",
+      "type": "Revenue",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": null
+    },
+    {
+      "code": "6",
+      "parent": null,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null
+    },
+    {
+      "code": "61",
+      "parent": "6",
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": null
+    },
+    {
+      "code": "62",
+      "parent": "6",
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": null
+    },
+    {
+      "code": "63",
+      "parent": "6",
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": null
+    },
+    {
+      "code": "64",
+      "parent": "6",
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": null
+    },
+    {
+      "code": "65",
+      "parent": "6",
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": null
+    },
+    {
+      "code": "66",
+      "parent": "6",
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": null
+    }
+  ],
+  "nameKey": "COA.S.Title"
+}

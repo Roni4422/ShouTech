@@ -1,0 +1,18 @@
+-- ========================================================================
+-- FILE: install.sys
+-- PROJECT: SHOUTECH ERP V10
+-- DESCRIPTION: MASTER DEPLOYMENT SCRIPT
+-- Execute this file to run all modules in order.
+
+:r mst.sys
+:r sec.sys
+:r aud.sys
+:r fin.sys
+:r inv.sys
+:r crm.sys
+:r hr.sys
+:r mfg.sys
+-- VERSION: 10.0.0
+-- STATUS: TODO - Ready for development
+-- ========================================================================
+

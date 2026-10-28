@@ -1,0 +1,49 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:ribbon="clr-namespace:System.Windows.Controls.Ribbon;assembly=System.Windows.Controls.Ribbon">
+
+    <Style TargetType="{x:Type ribbon:Ribbon}">
+        <Setter Property="Background" Value="{DynamicResource ShellRibbonBackgroundBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource ShellRibbonBorderBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ShellRibbonForegroundBrush}"/>
+        <Setter Property="FontFamily" Value="{StaticResource ShellChromeFontFamily}"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="MouseOverBackground" Value="{DynamicResource ShellRibbonHoverBrush}"/>
+        <Setter Property="PressedBackground" Value="{DynamicResource ShellRibbonHoverBrush}"/>
+        <Setter Property="CheckedBackground" Value="{DynamicResource ShellRibbonBackgroundBrush}"/>
+        <Setter Property="FocusedBackground" Value="{DynamicResource ShellRibbonBackgroundBrush}"/>
+    </Style>
+
+    <Style TargetType="{x:Type ribbon:RibbonTab}">
+        <Setter Property="Background" Value="{DynamicResource ShellRibbonBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ShellRibbonForegroundBrush}"/>
+        <Setter Property="FontFamily" Value="{StaticResource ShellChromeFontFamily}"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+    </Style>
+
+    <Style TargetType="{x:Type ribbon:RibbonGroup}">
+        <Setter Property="Background" Value="{DynamicResource ShellRibbonBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ShellRibbonForegroundBrush}"/>
+        <Setter Property="FontFamily" Value="{StaticResource ShellChromeFontFamily}"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+    </Style>
+
+    <Style TargetType="{x:Type ribbon:RibbonButton}">
+        <Setter Property="Foreground" Value="{DynamicResource ShellRibbonForegroundBrush}"/>
+        <Setter Property="FontFamily" Value="{StaticResource ShellChromeFontFamily}"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Style.Resources>
+            <Style TargetType="{x:Type TextBlock}">
+                <Setter Property="Foreground" Value="{DynamicResource ShellRibbonForegroundBrush}"/>
+                <Setter Property="FontFamily" Value="{StaticResource ShellChromeFontFamily}"/>
+                <Setter Property="FontWeight" Value="Bold"/>
+            </Style>
+            <Style TargetType="{x:Type Label}">
+                <Setter Property="Foreground" Value="{DynamicResource ShellRibbonForegroundBrush}"/>
+                <Setter Property="FontFamily" Value="{StaticResource ShellChromeFontFamily}"/>
+                <Setter Property="FontWeight" Value="Bold"/>
+            </Style>
+        </Style.Resources>
+    </Style>
+
+</ResourceDictionary>

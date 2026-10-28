@@ -1,0 +1,20 @@
+# ========================================================================
+# ShouTech ERP V10 — Local AI Service (brai.py) — Python Dependencies
+# Target: Python 3.12 · FastAPI · localhost:5050 (offline-first)
+# ========================================================================
+# Install:  pip install -r req.txt
+# Run:      python brai.py        (or: uvicorn brai:app --host 127.0.0.1 --port 5050)
+# ========================================================================
+
+# ── Web framework ──
+fastapi>=0.115.0,<1.0.0
+uvicorn[standard]>=0.30.0,<1.0.0
+pydantic>=2.8.0,<3.0.0
+
+# ── Numerical computing (forecasting + anomaly detection) ──
+numpy>=1.26.0,<3.0.0
+
+# ── Optional: ONNX Runtime for the fore.onnx sales-forecast model ──
+# If unavailable, the service falls back automatically to its built-in
+# statistical engine (trend + seasonality decomposition).
+onnxruntime>=1.18.0,<2.0.0
