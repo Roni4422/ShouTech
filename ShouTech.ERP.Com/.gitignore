@@ -69,6 +69,11 @@ appsettings.Local.json
 log.txt
 errors.txt
 
+# Keep the application log directory in source control; runtime log files remain ignored.
+!/log/
+/log/*
+!/log/.gitkeep
+
 # --- Binaries (built artifacts) ---
 *.dll
 *.exe
