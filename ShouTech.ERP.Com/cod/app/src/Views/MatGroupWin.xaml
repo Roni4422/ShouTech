@@ -70,15 +70,15 @@
                       RowStyle="{DynamicResource VisuDataGridRowStyle}"
                       CellStyle="{DynamicResource VisuDataGridCellStyle}">
                 <DataGrid.Columns>
-                    <DataGridCheckBoxColumn x:Name="ColAssigned" Width="92"
+                    <DataGridCheckBoxColumn Width="92"
                         Binding="{Binding IsAssigned, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                    <DataGridTextColumn x:Name="ColCode" Width="150"
+                    <DataGridTextColumn Width="150"
                         Binding="{Binding Code}" IsReadOnly="True"/>
-                    <DataGridTextColumn x:Name="ColName" Width="2*"
+                    <DataGridTextColumn Width="2*"
                         Binding="{Binding DisplayName}" IsReadOnly="True"/>
-                    <DataGridTextColumn x:Name="ColNameEn" Width="2*"
+                    <DataGridTextColumn Width="2*"
                         Binding="{Binding NameEn}" IsReadOnly="True"/>
-                    <DataGridTextColumn x:Name="ColStatus" Width="110"
+                    <DataGridTextColumn Width="110"
                         Binding="{Binding Status}" IsReadOnly="True"/>
                 </DataGrid.Columns>
             </DataGrid>
