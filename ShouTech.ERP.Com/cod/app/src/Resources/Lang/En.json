@@ -1757,6 +1757,8 @@
     "SelectGroup": "Select a material group first.",
     "Saved": "Material group membership saved.",
     "SaveFailed": "Material group membership could not be saved.",
-    "Count": "{0} assigned / {1} materials"
+    "Count": "{0} assigned / {1} materials",
+    "ConfirmDiscard": "Discard unsaved material group membership changes?",
+    "Unsaved": "You have unsaved membership changes."
   }
 }
