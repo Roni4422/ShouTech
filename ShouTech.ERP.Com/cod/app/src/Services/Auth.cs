@@ -521,6 +521,9 @@ public sealed class AuthServ : IAuthSvc
         var companyCode = AppState.CurrentCompanyCode?.Trim() ?? string.Empty;
 
         AppHost.Permissions.Clear();
+        _currentUser = null;
+        UsrSession.Clear();
+        AppState.CurrentUser = null;
 
         if (string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(companyCode))
             return Failed();
@@ -548,7 +551,10 @@ public sealed class AuthServ : IAuthSvc
                 {
                     user = await TryLoginFromDatabaseAsync(companyCode, normalizedUser, password);
                     if (user != null)
+                    {
                         await AppHost.Permissions.LoadForUserAsync(user.Id);
+                        user.Permissions = AppHost.Permissions.GetCurrentPermissions().ToArray();
+                    }
                 }
             }
             else
