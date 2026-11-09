@@ -19,3 +19,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_materials_id_company
     ON materials(material_id, company_id);
 CREATE INDEX IF NOT EXISTS ix_material_group_items_material
     ON material_group_items(company_id, material_id);
+
+INSERT OR IGNORE INTO material_group_items
+    (company_id, group_id, material_id, created_at, created_by)
+SELECT m.company_id, g.group_id, m.material_id, CURRENT_TIMESTAMP, m.created_by
+FROM materials m
+INNER JOIN material_groups g
+    ON g.company_id = m.company_id
+   AND g.group_code = m.group_code
+WHERE COALESCE(m.group_code, '') <> ''
+  AND COALESCE(m.is_deleted, 0) = 0
+  AND COALESCE(g.is_deleted, 0) = 0;
