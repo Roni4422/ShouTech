@@ -761,6 +761,7 @@ public sealed class PermServ : IPermServ
             CROSS JOIN public.permissions AS p
             LEFT JOIN public.user_roles AS ur ON ur.user_id = u.user_id
             LEFT JOIN public.roles AS r ON r.role_id = ur.role_id
+                AND r.company_id = u.company_id
                 AND r.is_active = TRUE AND r.is_deleted = FALSE
             LEFT JOIN public.role_permissions AS rp ON rp.role_id = r.role_id
                 AND rp.permission_id = p.permission_id
@@ -832,7 +833,7 @@ public sealed class PermServ : IPermServ
             INNER JOIN companies c ON c.company_id = u.company_id
             CROSS JOIN permissions p
             LEFT JOIN user_roles ur ON ur.user_id = u.user_id
-            LEFT JOIN roles r ON r.role_id = ur.role_id AND r.is_active = 1 AND r.is_deleted = 0
+            LEFT JOIN roles r ON r.role_id = ur.role_id AND r.company_id = u.company_id AND r.is_active = 1 AND r.is_deleted = 0
             LEFT JOIN role_permissions rp ON rp.role_id = r.role_id AND rp.permission_id = p.permission_id
             LEFT JOIN user_permissions up ON up.user_id = u.user_id AND up.permission_id = p.permission_id
             WHERE u.user_id = @user_id
