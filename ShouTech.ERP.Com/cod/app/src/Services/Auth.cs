@@ -580,6 +580,7 @@ public sealed class AuthServ : IAuthSvc
                 return Failed();
             }
 
+            user.Permissions ??= AppHost.Permissions.GetCurrentPermissions().ToArray();
             LoginAttempts.TryRemove(attemptKey, out _);
             _currentUser = user;
             SyncSession(user);
