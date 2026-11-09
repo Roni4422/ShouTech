@@ -1734,5 +1734,31 @@
   "JrnWin.AlreadySaved": "This journal is already saved. Open a new voucher to enter another entry.",
   "JrnWin.AlreadySavedTitle": "Already saved",
   "JrnWin.DraftSavedDetail": "Journal draft saved to the database.\nId: {0:D}",
-  "JrnWin.SavedTitle": "Saved"
+  "JrnWin.SavedTitle": "Saved",
+  "MatGroupWin": {
+    "Title": "Material Groups",
+    "Subtitle": "Assign existing materials to reusable groups. A material may belong to more than one group.",
+    "Group": "Material group",
+    "Search": "Search",
+    "SelectVisible": "Select visible",
+    "ClearVisible": "Clear visible",
+    "ManageGroups": "Manage group cards",
+    "Refresh": "Refresh",
+    "Save": "Save membership",
+    "Close": "Close",
+    "Assigned": "Assigned",
+    "Code": "Code",
+    "Material": "Material",
+    "EnglishName": "English name",
+    "Status": "Status",
+    "NoGroups": "No active material groups exist. Create a group card first.",
+    "LoadFailed": "Material groups could not be loaded.",
+    "Loaded": "Material list loaded. Changes are not saved until you select Save membership.",
+    "SelectGroup": "Select a material group first.",
+    "Saved": "Material group membership saved.",
+    "SaveFailed": "Material group membership could not be saved.",
+    "Count": "{0} assigned / {1} materials",
+    "ConfirmDiscard": "Discard unsaved material group membership changes?",
+    "Unsaved": "You have unsaved membership changes."
+  }
 }

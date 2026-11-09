@@ -1,0 +1,115 @@
+<views:BaseWin x:Class="ShouTech.App.Views.MatGroupWin"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:ShouTech.App.Views"
+        Title="Material Groups"
+        Width="1120" Height="720"
+        MinWidth="820" MinHeight="520"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Padding="16" CornerRadius="8"
+                Background="{DynamicResource ModuleHeaderBackgroundBrush}"
+                Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock x:Name="TxtTitle" FontSize="22" FontWeight="Bold"
+                           Foreground="{DynamicResource TextOnDarkBrush}"/>
+                <TextBlock x:Name="TxtSubtitle" Margin="0,5,0,0"
+                           Foreground="{DynamicResource TextOnDarkSecondaryBrush}"
+                           TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="260"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="LblGroup" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <ComboBox x:Name="CmbGroup" Grid.Column="1" Height="32"
+                      DisplayMemberPath="DisplayName"
+                      SelectionChanged="CmbGroup_SelectionChanged"
+                      Style="{DynamicResource VisuComboBoxStyle}"/>
+            <TextBlock x:Name="LblSearch" Grid.Column="2" VerticalAlignment="Center"
+                       Margin="16,0,8,0"/>
+            <TextBox x:Name="TxtSearch" Grid.Column="3" Height="32"
+                     VerticalContentAlignment="Center"
+                     TextChanged="TxtSearch_TextChanged"
+                     Style="{DynamicResource VisuTextBoxStyle}"/>
+            <Button x:Name="BtnSelectVisible" Grid.Column="4" MinWidth="112"
+                    Margin="8,0,0,0" Click="BtnSelectVisible_Click"
+                    Style="{DynamicResource VisuButtonStyle}"/>
+            <Button x:Name="BtnClearVisible" Grid.Column="5" MinWidth="112"
+                    Margin="8,0,0,0" Click="BtnClearVisible_Click"
+                    Style="{DynamicResource VisuButtonStyle}"/>
+        </Grid>
+
+        <Border Grid.Row="2" CornerRadius="8" BorderThickness="1"
+                BorderBrush="{DynamicResource BorderBrush}"
+                Background="{DynamicResource SurfaceBrush}">
+            <DataGrid x:Name="GridMaterials" AutoGenerateColumns="False"
+                      CanUserAddRows="False" CanUserDeleteRows="False"
+                      IsReadOnly="False" SelectionMode="Extended"
+                      SelectionUnit="FullRow"
+                      HeadersVisibility="Column"
+                      GridLinesVisibility="Horizontal"
+                      AlternationCount="2"
+                      Margin="1"
+                      Style="{DynamicResource VisuDataGridStyle}"
+                      ColumnHeaderStyle="{DynamicResource VisuDataGridHeaderStyle}"
+                      RowStyle="{DynamicResource VisuDataGridRowStyle}"
+                      CellStyle="{DynamicResource VisuDataGridCellStyle}">
+                <DataGrid.Columns>
+                    <DataGridCheckBoxColumn Width="92"
+                        Binding="{Binding IsAssigned, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                    <DataGridTextColumn Width="150"
+                        Binding="{Binding Code}" IsReadOnly="True"/>
+                    <DataGridTextColumn Width="2*"
+                        Binding="{Binding DisplayName}" IsReadOnly="True"/>
+                    <DataGridTextColumn Width="2*"
+                        Binding="{Binding NameEn}" IsReadOnly="True"/>
+                    <DataGridTextColumn Width="110"
+                        Binding="{Binding Status}" IsReadOnly="True"/>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+
+        <Grid Grid.Row="3" Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock x:Name="TxtSelectionCount" FontWeight="SemiBold"/>
+                <TextBlock x:Name="TxtStatus" Margin="0,4,0,0"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           TextWrapping="Wrap"/>
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal"
+                        VerticalAlignment="Center">
+                <Button x:Name="BtnManageGroups" MinWidth="150" Margin="4"
+                        Click="BtnManageGroups_Click"
+                        Style="{DynamicResource VisuButtonStyle}"/>
+                <Button x:Name="BtnRefresh" MinWidth="92" Margin="4"
+                        Click="BtnRefresh_Click"
+                        Style="{DynamicResource VisuButtonStyle}"/>
+                <Button x:Name="BtnSave" MinWidth="112" Margin="4"
+                        Click="BtnSave_Click"
+                        Style="{DynamicResource VisuAccentButtonStyle}"/>
+                <Button x:Name="BtnClose" MinWidth="92" Margin="4"
+                        Click="BtnClose_Click"
+                        Style="{DynamicResource VisuButtonStyle}"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</views:BaseWin>

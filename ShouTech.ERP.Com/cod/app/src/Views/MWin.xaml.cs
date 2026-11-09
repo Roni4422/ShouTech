@@ -1565,79 +1565,28 @@ namespace ShouTech.App.Views
 
         private void OpenMaterialGroups()
         {
-            // Requires MatGroupWin + MatGroupRepo.
-            // Copy from Optional_MaterialGroups if not installed.
+            var existing = WpfApp.Current.Windows
+                .OfType<MatGroupWin>()
+                .FirstOrDefault(window => window.IsVisible);
 
-            var existing =
-                System.Windows.Application.Current.Windows
-                    .OfType<Window>()
-                    .FirstOrDefault(
-                        w =>
-                            w.GetType().Name ==
-                            "MatGroupWin" &&
-                            w.IsVisible);
-
-            if (existing != null)
+            if (existing is not null)
             {
+                if (existing.WindowState == WindowState.Minimized)
+                    existing.WindowState = WindowState.Normal;
+
                 existing.Activate();
-
-                if (existing.WindowState ==
-                    WindowState.Minimized)
-                {
-                    existing.WindowState =
-                        WindowState.Normal;
-                }
-
+                existing.Focus();
                 return;
             }
 
-            try
+            var window = new MatGroupWin
             {
-                var t =
-                    Type.GetType(
-                        "ShouTech.App.Views.MatGroupWin")
-                    ??
-                    AppDomain.CurrentDomain
-                        .GetAssemblies()
-                        .Select(
-                            a =>
-                                a.GetType(
-                                    "ShouTech.App.Views.MatGroupWin"))
-                        .FirstOrDefault(
-                            x => x != null);
+                Owner = this,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner
+            };
 
-                if (t == null)
-                {
-                    MessageBox.Show(
-                        this,
-                        "نافذة مجموعات المواد غير مثبتة.\n" +
-                        "انسخ MatGroupWin و MatGroupRepo من الحزمة.",
-                        "ShouTech ERP",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Information);
-
-                    return;
-                }
-
-                var window =
-                    (Window)Activator.CreateInstance(t)!;
-
-                window.Owner = this;
-
-                window.WindowStartupLocation =
-                    WindowStartupLocation.CenterOwner;
-
-                window.Show();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(
-                    this,
-                    ex.Message,
-                    "ShouTech ERP",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
-            }
+            window.Show();
+            window.Activate();
         }
 
         private void OpenDataWindow(
