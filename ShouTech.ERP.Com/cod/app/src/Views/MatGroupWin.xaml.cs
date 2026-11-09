@@ -42,11 +42,11 @@ public partial class MatGroupWin : BaseWin
         BtnRefresh.Content = L("Refresh", "Refresh");
         BtnSave.Content = L("Save", "Save membership");
         BtnClose.Content = L("Close", "Close");
-        ColAssigned.Header = L("Assigned", "Assigned");
-        ColCode.Header = L("Code", "Code");
-        ColName.Header = L("Material", "Material");
-        ColNameEn.Header = L("English name", "English name");
-        ColStatus.Header = L("Status", "Status");
+        GridMaterials.Columns[0].Header = L("Assigned", "Assigned");
+        GridMaterials.Columns[1].Header = L("Code", "Code");
+        GridMaterials.Columns[2].Header = L("Material", "Material");
+        GridMaterials.Columns[3].Header = L("EnglishName", "English name");
+        GridMaterials.Columns[4].Header = L("Status", "Status");
         UpdateSelectionCount();
     }
 
@@ -143,7 +143,13 @@ public partial class MatGroupWin : BaseWin
                     NameEn = material.NameEn,
                     Status = material.Status,
                     IsAssigned = assigned.Contains(material.Id)
-                });
+                };
+                row.PropertyChanged += (_, args) =>
+                {
+                    if (args.PropertyName == nameof(GroupMaterialRow.IsAssigned))
+                        UpdateSelectionCount();
+                };
+                _rows.Add(row);
             }
 
             _view?.Refresh();
