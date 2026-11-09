@@ -135,7 +135,7 @@ public partial class MatGroupWin : BaseWin
                 if (string.IsNullOrWhiteSpace(displayName))
                     displayName = material.Name;
 
-                _rows.Add(new GroupMaterialRow
+                var row = new GroupMaterialRow
                 {
                     Id = material.Id,
                     Code = material.Code,
