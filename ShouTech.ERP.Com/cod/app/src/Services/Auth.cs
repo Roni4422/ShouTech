@@ -737,7 +737,7 @@ public sealed class AuthServ : IAuthSvc
                     SELECT r.role_code, r.role_name
                     FROM public.user_roles ur
                     INNER JOIN public.roles r ON r.role_id = ur.role_id
-                    WHERE ur.user_id = u.user_id AND r.is_active = TRUE AND r.is_deleted = FALSE
+                    WHERE ur.user_id = u.user_id AND r.company_id = u.company_id AND r.is_active = TRUE AND r.is_deleted = FALSE
                     ORDER BY CASE r.role_code
                         WHEN 'ROLE_ADMINISTRATOR' THEN 0
                         WHEN 'ROLE_USER' THEN 1
@@ -799,7 +799,7 @@ public sealed class AuthServ : IAuthSvc
                     SELECT r.role_code, r.role_name
                     FROM public.user_roles ur
                     INNER JOIN public.roles r ON r.role_id = ur.role_id
-                    WHERE ur.user_id = u.user_id AND r.is_active = TRUE AND r.is_deleted = FALSE
+                    WHERE ur.user_id = u.user_id AND r.company_id = u.company_id AND r.is_active = TRUE AND r.is_deleted = FALSE
                     ORDER BY CASE r.role_code
                         WHEN 'ROLE_ADMINISTRATOR' THEN 0
                         WHEN 'ROLE_USER' THEN 1
@@ -860,7 +860,7 @@ public sealed class AuthServ : IAuthSvc
                    c.company_code, c.company_name_ar,
                    COALESCE((SELECT r.role_code FROM user_roles ur
                              INNER JOIN roles r ON r.role_id=ur.role_id
-                             WHERE ur.user_id=u.user_id AND r.is_active=1 AND r.is_deleted=0
+                             WHERE ur.user_id=u.user_id AND r.company_id=u.company_id AND r.is_active=1 AND r.is_deleted=0
                              ORDER BY CASE r.role_code
                                  WHEN 'ROLE_ADMINISTRATOR' THEN 0
                                  WHEN 'ROLE_USER' THEN 1
@@ -868,7 +868,7 @@ public sealed class AuthServ : IAuthSvc
                                  ELSE 9 END LIMIT 1), 'ROLE_USER') AS role_code,
                    COALESCE((SELECT r.role_name FROM user_roles ur
                              INNER JOIN roles r ON r.role_id=ur.role_id
-                             WHERE ur.user_id=u.user_id AND r.is_active=1 AND r.is_deleted=0
+                             WHERE ur.user_id=u.user_id AND r.company_id=u.company_id AND r.is_active=1 AND r.is_deleted=0
                              ORDER BY CASE r.role_code
                                  WHEN 'ROLE_ADMINISTRATOR' THEN 0
                                  WHEN 'ROLE_USER' THEN 1
@@ -900,10 +900,10 @@ public sealed class AuthServ : IAuthSvc
             SELECT u.user_id, u.username, u.password_hash, u.password_salt, u.full_name_ar, u.email,
                    c.company_code, c.company_name_ar,
                    COALESCE((SELECT r.role_code FROM user_roles ur INNER JOIN roles r ON r.role_id=ur.role_id
-                             WHERE ur.user_id=u.user_id AND r.is_active=1 AND r.is_deleted=0
+                             WHERE ur.user_id=u.user_id AND r.company_id=u.company_id AND r.is_active=1 AND r.is_deleted=0
                              ORDER BY CASE r.role_code WHEN 'ROLE_ADMINISTRATOR' THEN 0 WHEN 'ROLE_USER' THEN 1 WHEN 'ROLE_VIEWER' THEN 2 ELSE 9 END LIMIT 1), 'ROLE_USER') AS role_code,
                    COALESCE((SELECT r.role_name FROM user_roles ur INNER JOIN roles r ON r.role_id=ur.role_id
-                             WHERE ur.user_id=u.user_id AND r.is_active=1 AND r.is_deleted=0
+                             WHERE ur.user_id=u.user_id AND r.company_id=u.company_id AND r.is_active=1 AND r.is_deleted=0
                              ORDER BY CASE r.role_code WHEN 'ROLE_ADMINISTRATOR' THEN 0 WHEN 'ROLE_USER' THEN 1 WHEN 'ROLE_VIEWER' THEN 2 ELSE 9 END LIMIT 1), 'User') AS role_name
             FROM users u INNER JOIN companies c ON c.company_id=u.company_id
             WHERE c.company_code=@company AND u.is_active=1 AND u.is_deleted=0
