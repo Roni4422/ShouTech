@@ -15,6 +15,7 @@ using System;
 using Microsoft.Data.Sqlite;
 using Npgsql;
 using ShouTech.App.Common;
+using ShouTech.App.Configuration;
 
 namespace ShouTech.App.Services
 {
@@ -505,9 +506,13 @@ public sealed class AuthServ : IAuthSvc
     private static readonly ConcurrentDictionary<string, LoginAttemptState> LoginAttempts =
         new(StringComparer.OrdinalIgnoreCase);
 
-    private const int MaximumFailedAttempts = 5;
-    private static readonly TimeSpan FailureWindow = TimeSpan.FromMinutes(15);
-    private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
+    private static int MaximumFailedAttempts =>
+        Math.Clamp(AppCfgSvc.Current.Security?.MaxLoginAttempts ?? 5, 1, 20);
+
+    private static TimeSpan FailureWindow => TimeSpan.FromMinutes(15);
+
+    private static TimeSpan LockoutDuration =>
+        TimeSpan.FromMinutes(Math.Clamp(AppCfgSvc.Current.Security?.LockoutDurationMinutes ?? 15, 1, 1440));
 
     public async Task<AuthResult> LoginAsync(string username, string password)
     {
