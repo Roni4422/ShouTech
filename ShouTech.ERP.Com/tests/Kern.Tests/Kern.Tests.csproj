@@ -14,4 +14,14 @@
     <ProjectReference Include="..\..\cod\app\src\MainApp.csproj" />
     <ProjectReference Include="..\..\tools\SqlMigrator\SqlMigrator.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
+
+  <Target Name="CopySqlMigratorForIntegrationTests" AfterTargets="Build">
+    <ItemGroup>
+      <SqlMigratorOutput Include="$(MSBuildProjectDirectory)\..\..\tools\SqlMigrator\bin\$(Configuration)\net8.0\**\*" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(SqlMigratorOutput)"
+      DestinationFiles="@(SqlMigratorOutput->'$(OutDir)tools\SqlMigrator\bin\$(Configuration)\net8.0\%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="true" />
+  </Target>
 </Project>
