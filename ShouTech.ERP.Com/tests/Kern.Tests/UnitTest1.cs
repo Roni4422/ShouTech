@@ -24,6 +24,30 @@ namespace Kern.Tests
     public class UnitTest1
     {
         [Fact]
+        public void PermServ_LocalAdministratorSession_ShouldGrantCatalogAndClearOnLogout()
+        {
+            var permissions = new PermServ();
+            permissions.SetAdministratorSession("LOCAL-COMPANY-ADMIN");
+
+            Assert.Contains(PermCat.System.Admin, permissions.GetCurrentPermissions());
+            Assert.Contains(PermCat.Inventory.ItemCreate, permissions.GetCurrentPermissions());
+
+            permissions.Clear();
+
+            Assert.Empty(permissions.GetCurrentPermissions());
+            Assert.False(permissions.Has(PermCat.System.Admin));
+        }
+
+        [Fact]
+        public void PermServ_UnknownPermission_ShouldFailClosed()
+        {
+            var permissions = new PermServ();
+
+            Assert.False(permissions.Has("UNKNOWN.PERMISSION"));
+            Assert.False(permissions.HasAny("UNKNOWN.PERMISSION"));
+        }
+
+        [Fact]
         public async Task SchemaMigrator_ShouldApplyConditionalJournalColumnsToFreshDatabase()
         {
             var databasePath = Path.Combine(
