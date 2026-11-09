@@ -18,6 +18,8 @@ public partial class MatGroupWin : BaseWin
     private ICollectionView? _view;
     private bool _loading;
     private bool _saving;
+    private bool _isDirty;
+    private long? _loadedGroupId;
 
     public MatGroupWin()
     {
@@ -83,6 +85,8 @@ public partial class MatGroupWin : BaseWin
             if (selected is null)
             {
                 _rows.Clear();
+                _loadedGroupId = null;
+                _isDirty = false;
                 TxtStatus.Text = L("NoGroups", "No active material groups exist. Create a group card first.");
                 UpdateSelectionCount();
             }
@@ -146,13 +150,19 @@ public partial class MatGroupWin : BaseWin
                 };
                 row.PropertyChanged += (_, args) =>
                 {
-                    if (args.PropertyName == nameof(GroupMaterialRow.IsAssigned))
+                    if (args.PropertyName == nameof(GroupMaterialRow.IsAssigned) && !_loading)
+                    {
+                        _isDirty = true;
+                        TxtStatus.Text = L("Unsaved", "You have unsaved membership changes.");
                         UpdateSelectionCount();
+                    }
                 };
                 _rows.Add(row);
             }
 
             _view?.Refresh();
+            _loadedGroupId = groupId;
+            _isDirty = false;
             TxtStatus.Text = L("Loaded", "Material list loaded. Changes are not saved until you select Save membership.");
             UpdateSelectionCount();
         }
@@ -183,8 +193,19 @@ public partial class MatGroupWin : BaseWin
 
     private void CmbGroup_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!_loading && CmbGroup.SelectedItem is GroupOption group)
-            LoadGroupMaterials(group.Id);
+        if (_loading || CmbGroup.SelectedItem is not GroupOption group)
+            return;
+
+        if (_isDirty && !ConfirmDiscard())
+        {
+            _loading = true;
+            CmbGroup.SelectedItem = (CmbGroup.ItemsSource as System.Collections.Generic.IEnumerable<GroupOption>)
+                ?.FirstOrDefault(item => item.Id == _loadedGroupId);
+            _loading = false;
+            return;
+        }
+
+        LoadGroupMaterials(group.Id);
     }
 
     private void TxtSearch_TextChanged(object sender, TextChangedEventArgs e)
@@ -209,6 +230,9 @@ public partial class MatGroupWin : BaseWin
 
     private void BtnManageGroups_Click(object sender, RoutedEventArgs e)
     {
+        if (_isDirty && !ConfirmDiscard())
+            return;
+
         var window = new CatWin
         {
             Owner = this,
@@ -220,6 +244,9 @@ public partial class MatGroupWin : BaseWin
 
     private void BtnRefresh_Click(object sender, RoutedEventArgs e)
     {
+        if (_isDirty && !ConfirmDiscard())
+            return;
+
         TxtSearch.Clear();
         ReloadGroups((CmbGroup.SelectedItem as GroupOption)?.Id);
     }
@@ -240,6 +267,7 @@ public partial class MatGroupWin : BaseWin
         try
         {
             MatGroupRepo.SaveMembers(group.Id, _rows.Where(row => row.IsAssigned).Select(row => row.Id));
+            _isDirty = false;
             TxtStatus.Text = L("Saved", "Material group membership saved.");
             UpdateSelectionCount();
         }
@@ -267,6 +295,25 @@ public partial class MatGroupWin : BaseWin
             L("Count", "{0} assigned / {1} materials"),
             assigned,
             total);
+    }
+
+    private bool ConfirmDiscard()
+        => MessageBox.Show(
+            this,
+            L("ConfirmDiscard", "Discard unsaved material group membership changes?"),
+            Title,
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question) == MessageBoxResult.Yes;
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        if (_isDirty && !ConfirmDiscard())
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        base.OnClosing(e);
     }
 
     private void ReportError(string code, string message, Exception exception)
