@@ -34,7 +34,7 @@ namespace ShouTech.App.ViewModels
 
         [ObservableProperty]
         [NotifyCanExecuteChangedFor(nameof(LoginCommand))]
-        private string _username = "admin";
+        private string _username = string.Empty;
 
         [ObservableProperty]
         private string _password = string.Empty;
@@ -160,8 +160,6 @@ namespace ShouTech.App.ViewModels
 
             try
             {
-                await Task.Delay(600);
-
                 var result = await AppHost.Auth.LoginAsync(user, pass);
 
                 if (result.Success && result.User != null)
@@ -177,8 +175,6 @@ namespace ShouTech.App.ViewModels
 
                     prefs.Save();
 
-                    await Task.Delay(300);
-
                     LoginSucceeded?.Invoke();
                 }
                 else
@@ -190,6 +186,23 @@ namespace ShouTech.App.ViewModels
 
                     RequestFocusPassword?.Invoke();
                 }
+            }
+            catch (Exception ex)
+            {
+                IsStatusError = true;
+                StatusMessage = Loc.Get("Login.InvalidCredentials");
+                Password = string.Empty;
+
+                try
+                {
+                    AppHost.Logging.LogError("LogWinVM", "The login operation failed.", ex);
+                }
+                catch
+                {
+                    // UI recovery must not depend on diagnostic logging.
+                }
+
+                RequestFocusPassword?.Invoke();
             }
             finally
             {
@@ -223,7 +236,7 @@ namespace ShouTech.App.ViewModels
                 HideUsernameOnNextLaunch = false;
             }
 
-            if (string.IsNullOrWhiteSpace(Username))
+            if (!HideUsernameOnNextLaunch && string.IsNullOrWhiteSpace(Username))
             {
                 UsernameError = Loc.Get("Login.UsernameRequired");
                 isValid = false;
