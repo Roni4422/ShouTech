@@ -85,14 +85,17 @@ public static class MatGroupRepo
             {
                 using var insert = connection.CreateCommand();
                 insert.Transaction = transaction;
-                insert.CommandText = """
+                var activeMaterialPredicate = DatabaseRuntime.IsPostgreSql()
+                    ? "is_deleted = FALSE"
+                    : "COALESCE(is_deleted, 0) = 0";
+                insert.CommandText = $"""
                     INSERT INTO material_group_items
                         (company_id, group_id, material_id, created_at, created_by)
                     SELECT @company, @groupId, material_id, @createdAt, @createdBy
                     FROM materials
                     WHERE company_id = @company
                       AND material_id = @materialId
-                      AND COALESCE(is_deleted, 0) = 0;
+                      AND {activeMaterialPredicate};
                     """;
                 Add(insert, "@company", company);
                 Add(insert, "@groupId", groupId);
