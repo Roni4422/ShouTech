@@ -2,6 +2,8 @@
 
 Goal: reach functional parity with [ERPNext](https://github.com/frappe/erpnext) as an **offline-first Windows desktop ERP**, and outperform **Al-Ameen ERP v10** in the SMB market.
 
+**Deployment model (target):** ShouTech ERP is *offline-first, not offline-only*. The desktop client runs fully standalone (SQLite), and — when ready — can additionally connect to a central server (PostgreSQL) for multi-user/multi-branch operation, encrypted cloud backup, and outbox sync. Licensing is enforced by the SecEng native engine: server-side validation for connected deployments, and optional **hardware dongle** activation for offline machines.
+
 > **Reference:** ERPNext is a web ERP (Python/Frappe, ~41k stars, actively updated). Its module list below was taken from the current `develop` branch module folders.
 
 ---
@@ -45,12 +47,12 @@ ERPNext current modules: accounts, assets, buying, crm, edi, maintenance, manufa
 
 Positioning advantages to protect and advertise:
 
-1. **True offline-first** — full operation without internet; Al-Ameen is desktop too, but we add encrypted cloud backup + outbox sync when online.
+1. **Hybrid offline-first** — full standalone operation without internet; when a server is available, the same client connects for multi-user sync, encrypted cloud backup, and outbox webhooks. Al-Ameen v10 has no comparable online↔offline continuity.
 2. **Modern stack** — .NET 8 / WPF / MVVM vs legacy WinForms-era code; dark mode, 4 languages (Ar/En/Fr/Tr) with proper RTL.
 3. **Clean architecture path** — Domain/Application/Infrastructure split (Al-Ameen is monolithic).
-4. **Auditability** — SHA-256-checked migrations, audit trail, RBAC with 209 permission keys, native C++ security engine + optional dongle.
+4. **Auditability** — SHA-256-checked migrations, audit trail, RBAC with 209 permission keys, native C++ security engine.
 5. **Per-fiscal-year database isolation** — superior to flat-file yearly archives.
-6. **Licensing model** — per-user, offline activation, dongle support.
+6. **Licensing model** — per-user activation; server-connected deployments validate licenses server-side, offline machines enforce via **hardware dongle**.
 
 ---
 
@@ -76,6 +78,8 @@ Positioning advantages to protect and advertise:
 - Quality management + subcontracting
 - Payroll & leave (HRMS parity)
 - Install/update framework (clickonce/MSIX) — ERPNext's weakness offline is deployment; ours must be one-click
+- **Server mode (when ready):** central PostgreSQL server + sync service for multi-branch/multi-user; the WPF client must switch transparently between local SQLite and server PostgreSQL (both providers already exist in `ShouTech.Infrastructure`)
+- **Dongle licensing (when ready):** SecEng dongle check at startup with grace period; server deployments validate licenses server-side so thin clients need no dongle
 
 ### Engineering rules for every phase
 - Feature-complete = schema (`dba/mig`) + service + WPF view + RBAC permission key + tests (`Kern.Tests`) + docs entry.
@@ -84,4 +88,4 @@ Positioning advantages to protect and advertise:
 
 ---
 
-*Created from an ERPNext parity review on 2026-11-10.*
+*Created from an ERPNext parity review on 2026-11-10. Updated same day: hybrid server mode + dongle licensing added to the target deployment model.*
