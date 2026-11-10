@@ -207,6 +207,13 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         }
     }
 
+    /// <summary>
+    /// Posts a sales document and writes its accounting side effects atomically:
+    /// - DLV (delivery note): one material_stock_movements row per stock line and a
+    ///   matching decrement (or initialization) of material_stock_balances.
+    /// - SAL (sales invoice): a party_ledger debit for the customer grand total.
+    /// - QUO / SO: no side effects.
+    /// </summary>
     public async Task PostSalesAsync(long docId, string userId, CancellationToken cancellationToken = default)
     {
         if (docId <= 0) throw new ArgumentException("Document is required.", nameof(docId));
@@ -217,6 +224,106 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            string companyId, docKind, docNo, docDate, currencyCode, status;
+            long? partyId;
+            long? warehouseId;
+            decimal grandTotal;
+
+            await using (var header = CreateCommand(connection, transaction, """
+                SELECT company_id, doc_kind, doc_no, doc_date, party_id, warehouse_id, currency_code, grand_total, status
+                FROM sales_documents
+                WHERE doc_id = @doc AND is_deleted = 0
+                """))
+            {
+                Add(header, "@doc", docId);
+                await using var reader = await header.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    throw new InvalidOperationException("Sales document was not found.");
+                companyId = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture)!;
+                docKind = reader.GetString(1);
+                docNo = reader.GetString(2);
+                docDate = Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture)!;
+                partyId = reader.IsDBNull(4) ? null : Convert.ToInt64(reader.GetValue(4), CultureInfo.InvariantCulture);
+                warehouseId = reader.IsDBNull(5) ? null : Convert.ToInt64(reader.GetValue(5), CultureInfo.InvariantCulture);
+                currencyCode = reader.GetString(6);
+                grandTotal = Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture);
+                status = reader.GetString(8);
+            }
+
+            if (status != CommercialDocumentStatus.Draft)
+                throw new InvalidOperationException("Sales document was not found or is not in draft status.");
+
+            if (docKind == CommercialDocKinds.DeliveryNote)
+            {
+                var pending = new List<(long MaterialId, decimal Qty, long WarehouseId)>();
+                await using (var lines = CreateCommand(connection, transaction,
+                    "SELECT material_id, qty, warehouse_id FROM sales_document_lines WHERE doc_id = @doc ORDER BY line_no"))
+                {
+                    Add(lines, "@doc", docId);
+                    await using var reader = await lines.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                    while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    {
+                        if (reader.IsDBNull(0))
+                            continue;
+                        var lineWarehouse = reader.IsDBNull(2)
+                            ? warehouseId ?? 0L
+                            : Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture);
+                        pending.Add((Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+                                     Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture),
+                                     lineWarehouse));
+                    }
+                }
+
+                foreach (var (materialId, qty, lineWarehouse) in pending)
+                {
+                    await using var movement = CreateCommand(connection, transaction, """
+                        INSERT INTO material_stock_movements
+                            (company_id, warehouse_id, material_id, movement_date, movement_type, document_no, qty_in, qty_out, unit_cost, note)
+                        VALUES (@company, @warehouse, @material, @date, @type, @docNo, 0, @qty, 0, @note)
+                        """);
+                    Add(movement, "@company", companyId);
+                    Add(movement, "@warehouse", lineWarehouse);
+                    Add(movement, "@material", materialId);
+                    Add(movement, "@date", docDate);
+                    Add(movement, "@type", "DLV");
+                    Add(movement, "@docNo", docNo);
+                    Add(movement, "@qty", qty);
+                    Add(movement, "@note", $"Delivery note {docNo} posting");
+                    await movement.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+                    await using var balance = CreateCommand(connection, transaction, """
+                        INSERT INTO material_stock_balances (company_id, warehouse_id, material_id, available_qty)
+                        VALUES (@company, @warehouse, @material, -@qty)
+                        ON CONFLICT (company_id, warehouse_id, material_id)
+                        DO UPDATE SET available_qty = material_stock_balances.available_qty - @qty,
+                                      last_updated = CURRENT_TIMESTAMP
+                        """);
+                    Add(balance, "@company", companyId);
+                    Add(balance, "@warehouse", lineWarehouse);
+                    Add(balance, "@material", materialId);
+                    Add(balance, "@qty", qty);
+                    await balance.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                }
+            }
+            else if (docKind == CommercialDocKinds.SalesInvoice && partyId is not null)
+            {
+                await using var ledger = CreateCommand(connection, transaction, """
+                    INSERT INTO party_ledger
+                        (company_id, party_kind, party_id, doc_kind, doc_id, doc_no, entry_date, debit, credit, currency_code, note)
+                    VALUES (@company, 'C', @party, @kind, @doc, @docNo, @date, @debit, 0, @currency, @note)
+                    """);
+                Add(ledger, "@company", companyId);
+                Add(ledger, "@party", partyId.Value);
+                Add(ledger, "@kind", CommercialDocKinds.SalesInvoice);
+                Add(ledger, "@doc", docId);
+                Add(ledger, "@docNo", docNo);
+                Add(ledger, "@date", docDate);
+                Add(ledger, "@debit", grandTotal);
+                Add(ledger, "@currency", currencyCode);
+                Add(ledger, "@note", $"Sales invoice {docNo} posting");
+                await ledger.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
             await using var update = CreateCommand(connection, transaction,
                 "UPDATE sales_documents SET status = @posted, posted_by = @actor, posted_at = CURRENT_TIMESTAMP WHERE doc_id = @doc AND status = @draft AND is_deleted = 0");
             Add(update, "@posted", CommercialDocumentStatus.Posted);
