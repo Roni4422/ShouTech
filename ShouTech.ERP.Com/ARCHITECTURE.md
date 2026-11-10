@@ -145,7 +145,7 @@ The service polls the outbox and dispatches HTTP(S) webhooks. Email/SMS connecto
 - The WPF app combines older service/repository implementations with the newer `Domain` / `Application` / `Infrastructure` projects. Follow the actual feature call path before deciding where a change belongs.
 - The `svc` and `SqlMigrator` projects reference their database providers directly; they do not depend on the infrastructure project.
 - Native security code has its own CMake and Visual Studio project files. Its presence does not, by itself, establish that a managed application build compiles or packages the native library.
-- Journal reversal currently changes a posted entry's state and records an audit event; it does not yet create a compensating journal entry. See [Al-Ameen logic adaptation](docs/ALAMEEN_LOGIC_ADAPTATION.md).
+- Journal reversal creates a posted compensating journal entry (every source line copied with debit and credit swapped) linked through `reversal_of_entry_id`, marks the original entry as reversed, and writes audit events for both entries in one transaction. A unique partial index on `reversal_of_entry_id` prevents a second reversal of the same source entry. The legacy in-memory `AccServ` in `cod/app` does not expose a reversal operation yet; posted corrections must go through the `src/` journal services. See [Accounting reversals](docs/ACCOUNTING_REVERSALS_AND_OUTBOX.md).
 - Product documentation describes a wider ERP feature set than the architecture chart can certify as implemented end-to-end.
 
 ## Further reading
