@@ -75,11 +75,9 @@ namespace Kern.Tests
                 Assert.NotNull(delivery);
                 Assert.Equal(6m, delivery!.Lines[0].Qty);
 
-                var third = await service.CreateFromSourceAsync(
-                    orderId, "DLV-3003", new DateOnly(2026, 10, 23), "chain-test");
-                await service.PostAsync(third, "chain-test");
+                await service.PostAsync(secondDelivery, "chain-test");
                 await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                    service.CreateFromSourceAsync(orderId, "DLV-3004", new DateOnly(2026, 10, 24), "chain-test"));
+                    service.CreateFromSourceAsync(orderId, "DLV-3003", new DateOnly(2026, 10, 23), "chain-test"));
             }
             finally
             {
@@ -90,19 +88,22 @@ namespace Kern.Tests
         [Fact]
         public async Task Chain_RejectsInvalidTransitionsAndDraftSources()
         {
-            var (service, _, companyId, _, cleanup) = await CreateAsync();
+            var (service, repository, companyId, _, cleanup) = await CreateAsync();
             try
             {
                 var quotationId = await service.CreateQuotationAsync(
                     Quotation(companyId, "QT-1003", 5m, 10m), "chain-test");
 
-                // QUO -> SAL is not an allowed transition (must go through SO and DLV).
-                await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                    service.CreateFromSourceAsync(quotationId, "SAL-9999", new DateOnly(2026, 10, 20), "chain-test"));
+                // A quotation can only create a sales order, never an invoice directly.
+                var orderId = await service.CreateFromSourceAsync(
+                    quotationId, "SO-1003", new DateOnly(2026, 10, 20), "chain-test");
+                var order = await repository.FindSalesByIdAsync(orderId);
+                Assert.NotNull(order);
+                Assert.Equal(CommercialDocKinds.SalesOrder, order!.DocKind);
 
                 // Draft sources cannot continue the chain.
-                var repository = new ShouTech.Infrastructure.CommercialDocumentRepository("SQLite", DbPath!);
-                var draftId = await repository.CreateSalesDraftAsync(Quotation(companyId, "QT-1004", 5m, 10m), "chain-test");
+                var draftId = await repository.CreateSalesDraftAsync(
+                    Quotation(companyId, "QT-1004", 5m, 10m), "chain-test");
                 await Assert.ThrowsAsync<InvalidOperationException>(() =>
                     service.CreateFromSourceAsync(draftId, "SO-9999", new DateOnly(2026, 10, 20), "chain-test"));
             }
