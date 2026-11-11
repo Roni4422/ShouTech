@@ -7,6 +7,7 @@
 #nullable enable
 
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
@@ -14,6 +15,7 @@ using System;
 using Microsoft.Data.Sqlite;
 using Npgsql;
 using ShouTech.App.Common;
+using ShouTech.App.Configuration;
 
 namespace ShouTech.App.Services
 {
@@ -494,45 +496,188 @@ public sealed class AuthServ : IAuthSvc
 
     public bool IsAuthenticated => _currentUser?.IsAuthenticated == true;
 
+    private sealed class LoginAttemptState
+    {
+        public int Failures;
+        public DateTimeOffset WindowStarted;
+        public DateTimeOffset LockedUntil;
+    }
+
+    private static readonly ConcurrentDictionary<string, LoginAttemptState> LoginAttempts =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private static int MaximumFailedAttempts =>
+        Math.Clamp(AppCfgSvc.Current.Security?.MaxLoginAttempts ?? 5, 1, 20);
+
+    private static TimeSpan FailureWindow => TimeSpan.FromMinutes(15);
+
+    private static TimeSpan LockoutDuration =>
+        TimeSpan.FromMinutes(Math.Clamp(AppCfgSvc.Current.Security?.LockoutDurationMinutes ?? 15, 1, 1440));
+
     public async Task<AuthResult> LoginAsync(string username, string password)
     {
         var normalizedUser = username?.Trim() ?? string.Empty;
         var hasUsername = !string.IsNullOrWhiteSpace(normalizedUser);
+        var companyCode = AppState.CurrentCompanyCode?.Trim() ?? string.Empty;
 
-        if (string.IsNullOrWhiteSpace(password))
+        AppHost.Permissions.Clear();
+        _currentUser = null;
+        UsrSession.Clear();
+        AppState.CurrentUser = null;
+
+        if (string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(companyCode))
             return Failed();
 
-        var companyCode = AppState.CurrentCompanyCode ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(companyCode))
+        var attemptKey = $"{companyCode.ToUpperInvariant()}:{(hasUsername ? normalizedUser.ToUpperInvariant() : "<PASSCODE>")}";
+        if (IsLockedOut(attemptKey))
+        {
+            TryLogAuthAttempt(normalizedUser, false, "Temporary login lockout");
             return Failed();
-
-        if (hasUsername)
-        {
-            var localCompany = await CoLocalStore.FindUserCompanyAsync(companyCode, normalizedUser, password);
-            if (localCompany != null)
-                return Succeed(BuildCompanyAdminUser(normalizedUser, localCompany));
-
-            var dbUser = await TryLoginFromDatabaseAsync(companyCode, normalizedUser, password);
-            if (dbUser != null)
-                return Succeed(dbUser);
-        }
-        else
-        {
-            var localCompany = await CoLocalStore.FindCompanyAdminByPasswordAsync(companyCode, password);
-            if (localCompany != null && !string.IsNullOrWhiteSpace(localCompany.AdminUsername))
-                return Succeed(BuildCompanyAdminUser(localCompany.AdminUsername.Trim(), localCompany));
-
-            var dbUser = await TryLoginFromDatabaseByPasscodeAsync(companyCode, password);
-            if (dbUser != null)
-                return Succeed(dbUser);
         }
 
-        return Failed();
+        try
+        {
+            UserInfo? user = null;
+
+            if (hasUsername)
+            {
+                var localCompany = await CoLocalStore.FindUserCompanyAsync(companyCode, normalizedUser, password);
+                if (localCompany != null)
+                {
+                    user = BuildCompanyAdminUser(normalizedUser, localCompany);
+                    AppHost.Permissions.SetAdministratorSession(user.Id);
+                }
+                else
+                {
+                    user = await TryLoginFromDatabaseAsync(companyCode, normalizedUser, password);
+                    if (user != null)
+                    {
+                        await AppHost.Permissions.LoadForUserAsync(user.Id);
+                        user.Permissions = AppHost.Permissions.GetCurrentPermissions().ToArray();
+                    }
+                }
+            }
+            else
+            {
+                var localCompany = await CoLocalStore.FindCompanyAdminByPasswordAsync(companyCode, password);
+                if (localCompany != null && !string.IsNullOrWhiteSpace(localCompany.AdminUsername))
+                {
+                    user = BuildCompanyAdminUser(localCompany.AdminUsername.Trim(), localCompany);
+                    AppHost.Permissions.SetAdministratorSession(user.Id);
+                }
+                else
+                {
+                    user = await TryLoginFromDatabaseByPasscodeAsync(companyCode, password);
+                    if (user != null)
+                        await AppHost.Permissions.LoadForUserAsync(user.Id);
+                }
+            }
+
+            if (user == null)
+            {
+                RegisterFailedAttempt(attemptKey);
+                TryLogAuthAttempt(normalizedUser, false, "Invalid credentials");
+                return Failed();
+            }
+
+            user.Permissions ??= AppHost.Permissions.GetCurrentPermissions().ToArray();
+            LoginAttempts.TryRemove(attemptKey, out _);
+            _currentUser = user;
+            SyncSession(user);
+            TryLogAuthAttempt(user.Username, true);
+            return new AuthResult
+            {
+                Success = true,
+                Message = "Sign-in successful.",
+                User = user,
+                Token = null
+            };
+        }
+        catch (Exception ex)
+        {
+            AppHost.Permissions.Clear();
+            _currentUser = null;
+            UsrSession.Clear();
+            AppState.CurrentUser = null;
+            RegisterFailedAttempt(attemptKey);
+            TryLogAuthAttempt(normalizedUser, false, "Authentication service unavailable");
+            try
+            {
+                AppHost.Logging.LogError("AuthServ", "Authentication could not be completed.", ex);
+            }
+            catch
+            {
+                // Authentication failure handling must not depend on logging.
+            }
+
+            return Failed();
+        }
+    }
+
+    private static bool IsLockedOut(string key)
+    {
+        if (!LoginAttempts.TryGetValue(key, out var state))
+            return false;
+
+        lock (state)
+        {
+            var now = DateTimeOffset.UtcNow;
+            if (state.LockedUntil > now)
+                return true;
+
+            if (state.WindowStarted == default || now - state.WindowStarted > FailureWindow)
+            {
+                state.Failures = 0;
+                state.WindowStarted = now;
+                state.LockedUntil = default;
+            }
+
+            return false;
+        }
+    }
+
+    private static void RegisterFailedAttempt(string key)
+    {
+        var state = LoginAttempts.GetOrAdd(key, _ => new LoginAttemptState
+        {
+            WindowStarted = DateTimeOffset.UtcNow
+        });
+
+        lock (state)
+        {
+            var now = DateTimeOffset.UtcNow;
+            if (state.WindowStarted == default || now - state.WindowStarted > FailureWindow)
+            {
+                state.Failures = 0;
+                state.WindowStarted = now;
+                state.LockedUntil = default;
+            }
+
+            state.Failures++;
+            if (state.Failures >= MaximumFailedAttempts)
+                state.LockedUntil = now.Add(LockoutDuration);
+        }
+    }
+
+    private static void TryLogAuthAttempt(string username, bool success, string? reason = null)
+    {
+        try
+        {
+            AppHost.Logging?.LogAuthAttempt(
+                string.IsNullOrWhiteSpace(username) ? "<passcode>" : username,
+                success,
+                reason);
+        }
+        catch
+        {
+            // Authentication must remain available if audit logging is unavailable.
+        }
     }
 
     public Task LogoutAsync()
     {
         _currentUser = null;
+        AppHost.Permissions.Clear();
         UsrSession.Clear();
         AppState.CurrentUser = null;
         return Task.CompletedTask;
@@ -546,16 +691,10 @@ public sealed class AuthServ : IAuthSvc
         SyncSession(user);
     }
 
-    private static AuthResult Succeed(UserInfo user)
-    {
-        SyncSession(user);
-        return new AuthResult { Success = true, Message = "تم تسجيل الدخول بنجاح", User = user };
-    }
-
     private static AuthResult Failed() => new()
     {
         Success = false,
-        Message = "اسم المستخدم أو كلمة المرور غير صحيحة"
+        Message = "The username or password is incorrect."
     };
 
     private static UserInfo BuildCompanyAdminUser(string username, StoredCoRec company) => new()
@@ -599,7 +738,7 @@ public sealed class AuthServ : IAuthSvc
                     SELECT r.role_code, r.role_name
                     FROM public.user_roles ur
                     INNER JOIN public.roles r ON r.role_id = ur.role_id
-                    WHERE ur.user_id = u.user_id AND r.is_active = TRUE AND r.is_deleted = FALSE
+                    WHERE ur.user_id = u.user_id AND r.company_id = u.company_id AND r.is_active = TRUE AND r.is_deleted = FALSE
                     ORDER BY CASE r.role_code
                         WHEN 'ROLE_ADMINISTRATOR' THEN 0
                         WHEN 'ROLE_USER' THEN 1
@@ -661,7 +800,7 @@ public sealed class AuthServ : IAuthSvc
                     SELECT r.role_code, r.role_name
                     FROM public.user_roles ur
                     INNER JOIN public.roles r ON r.role_id = ur.role_id
-                    WHERE ur.user_id = u.user_id AND r.is_active = TRUE AND r.is_deleted = FALSE
+                    WHERE ur.user_id = u.user_id AND r.company_id = u.company_id AND r.is_active = TRUE AND r.is_deleted = FALSE
                     ORDER BY CASE r.role_code
                         WHEN 'ROLE_ADMINISTRATOR' THEN 0
                         WHEN 'ROLE_USER' THEN 1
@@ -722,7 +861,7 @@ public sealed class AuthServ : IAuthSvc
                    c.company_code, c.company_name_ar,
                    COALESCE((SELECT r.role_code FROM user_roles ur
                              INNER JOIN roles r ON r.role_id=ur.role_id
-                             WHERE ur.user_id=u.user_id AND r.is_active=1 AND r.is_deleted=0
+                             WHERE ur.user_id=u.user_id AND r.company_id=u.company_id AND r.is_active=1 AND r.is_deleted=0
                              ORDER BY CASE r.role_code
                                  WHEN 'ROLE_ADMINISTRATOR' THEN 0
                                  WHEN 'ROLE_USER' THEN 1
@@ -730,7 +869,7 @@ public sealed class AuthServ : IAuthSvc
                                  ELSE 9 END LIMIT 1), 'ROLE_USER') AS role_code,
                    COALESCE((SELECT r.role_name FROM user_roles ur
                              INNER JOIN roles r ON r.role_id=ur.role_id
-                             WHERE ur.user_id=u.user_id AND r.is_active=1 AND r.is_deleted=0
+                             WHERE ur.user_id=u.user_id AND r.company_id=u.company_id AND r.is_active=1 AND r.is_deleted=0
                              ORDER BY CASE r.role_code
                                  WHEN 'ROLE_ADMINISTRATOR' THEN 0
                                  WHEN 'ROLE_USER' THEN 1
@@ -762,10 +901,10 @@ public sealed class AuthServ : IAuthSvc
             SELECT u.user_id, u.username, u.password_hash, u.password_salt, u.full_name_ar, u.email,
                    c.company_code, c.company_name_ar,
                    COALESCE((SELECT r.role_code FROM user_roles ur INNER JOIN roles r ON r.role_id=ur.role_id
-                             WHERE ur.user_id=u.user_id AND r.is_active=1 AND r.is_deleted=0
+                             WHERE ur.user_id=u.user_id AND r.company_id=u.company_id AND r.is_active=1 AND r.is_deleted=0
                              ORDER BY CASE r.role_code WHEN 'ROLE_ADMINISTRATOR' THEN 0 WHEN 'ROLE_USER' THEN 1 WHEN 'ROLE_VIEWER' THEN 2 ELSE 9 END LIMIT 1), 'ROLE_USER') AS role_code,
                    COALESCE((SELECT r.role_name FROM user_roles ur INNER JOIN roles r ON r.role_id=ur.role_id
-                             WHERE ur.user_id=u.user_id AND r.is_active=1 AND r.is_deleted=0
+                             WHERE ur.user_id=u.user_id AND r.company_id=u.company_id AND r.is_active=1 AND r.is_deleted=0
                              ORDER BY CASE r.role_code WHEN 'ROLE_ADMINISTRATOR' THEN 0 WHEN 'ROLE_USER' THEN 1 WHEN 'ROLE_VIEWER' THEN 2 ELSE 9 END LIMIT 1), 'User') AS role_name
             FROM users u INNER JOIN companies c ON c.company_id=u.company_id
             WHERE c.company_code=@company AND u.is_active=1 AND u.is_deleted=0
@@ -827,7 +966,7 @@ public sealed class AuthServ : IAuthSvc
             && !string.IsNullOrWhiteSpace(company.Name))
             return company.Name;
 
-        return "الشركة الرئيسية";
+        return "Main Company";
     }
 }
 

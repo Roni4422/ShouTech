@@ -78,6 +78,11 @@ namespace ShouTech.App.Services
         Task LoadForUserAsync(string userId, CancellationToken ct = default);
 
         /// <summary>
+        /// Initializes the local company administrator session with the complete registered permission catalog.
+        /// </summary>
+        void SetAdministratorSession(string userId);
+
+        /// <summary>
         /// Clears loaded permissions (called on logout).
         /// </summary>
         void Clear();
@@ -718,72 +723,88 @@ public sealed class PermServ : IPermServ
 
     public async Task LoadForUserAsync(string userId, CancellationToken ct = default)
     {
+        Clear();
+
         if (string.IsNullOrWhiteSpace(userId))
             throw new ArgumentException("UserId is required.", nameof(userId));
 
+        var companyCode = AppState.CurrentCompanyCode?.Trim();
+        if (string.IsNullOrWhiteSpace(companyCode))
+            throw new InvalidOperationException("A company must be selected before permissions can be loaded.");
+
         var connectionString = DatabaseRuntime.GetConnectionString();
         if (string.IsNullOrWhiteSpace(connectionString))
-            throw new InvalidOperationException("Permission loading requires SHOUTECH_CONNECTION_STRING.");
+            throw new InvalidOperationException("Permission loading requires a configured database connection.");
 
-        _perms.Clear();
-        _roleCode = string.Empty;
         _currentUserId = userId.Trim();
-
         var provider = DatabaseRuntime.GetProvider();
         if (DatabaseRuntime.IsSqlite(provider))
         {
-            await LoadSqliteAsync(connectionString, ct).ConfigureAwait(false);
+            await LoadSqliteAsync(connectionString, companyCode, ct).ConfigureAwait(false);
             return;
         }
+
+        if (!Guid.TryParse(_currentUserId, out var parsedUserId))
+            throw new UnauthorizedAccessException("The authenticated database user identifier is invalid.");
 
         await using var connection = new NpgsqlConnection(connectionString);
         await connection.OpenAsync(ct).ConfigureAwait(false);
         const string sql = """
-            SELECT r.role_code, p.permission_code, up.effect AS user_effect
+            SELECT
+                p.permission_code,
+                CASE
+                    WHEN up.effect IS NOT NULL THEN up.effect
+                    ELSE (COUNT(rp.permission_id) > 0)
+                END AS is_allowed
             FROM public.users AS u
+            INNER JOIN public.companies AS c ON c.company_id = u.company_id
+            CROSS JOIN public.permissions AS p
             LEFT JOIN public.user_roles AS ur ON ur.user_id = u.user_id
             LEFT JOIN public.roles AS r ON r.role_id = ur.role_id
+                AND r.company_id = u.company_id
                 AND r.is_active = TRUE AND r.is_deleted = FALSE
-            CROSS JOIN public.permissions AS p
             LEFT JOIN public.role_permissions AS rp ON rp.role_id = r.role_id
                 AND rp.permission_id = p.permission_id
             LEFT JOIN public.user_permissions AS up ON up.user_id = u.user_id
                 AND up.permission_id = p.permission_id
-            WHERE u.is_active = TRUE AND u.is_deleted = FALSE
+            WHERE u.user_id = @UserId
+              AND c.company_code = @CompanyCode
+              AND u.is_active = TRUE AND u.is_deleted = FALSE
+              AND c.is_active = TRUE AND c.is_deleted = FALSE
               AND p.is_active = TRUE
-              AND (u.username = @UserId OR u.user_id =
-                  CASE WHEN @UserId ~* '^[0-9a-f-]{36}$' THEN CAST(@UserId AS uuid) END);
+            GROUP BY p.permission_code, up.effect;
             """;
 
         await using var command = new NpgsqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@UserId", _currentUserId);
+        command.Parameters.Add("@UserId", NpgsqlTypes.NpgsqlDbType.Uuid).Value = parsedUserId;
+        command.Parameters.Add("@CompanyCode", NpgsqlTypes.NpgsqlDbType.Varchar).Value = companyCode;
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+
         var found = false;
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
             found = true;
-            if (!reader.IsDBNull(0))
-            {
-                var roleCode = reader.GetString(0);
-                if (string.Equals(roleCode, "ROLE_ADMINISTRATOR", StringComparison.OrdinalIgnoreCase)
-                    || string.IsNullOrWhiteSpace(_roleCode))
-                    _roleCode = roleCode;
-            }
-            if (!reader.IsDBNull(1))
-            {
-                var permission = reader.GetString(1);
-                if (reader.IsDBNull(2) || reader.GetBoolean(2))
-                    _perms.Add(permission);
-                else
-                    _perms.Remove(permission);
-            }
+            if (reader.GetBoolean(1))
+                _perms.Add(reader.GetString(0));
         }
 
         if (!found)
         {
-            _currentUserId = null;
-            throw new UnauthorizedAccessException("The user is inactive, deleted, or does not exist.");
+            Clear();
+            throw new UnauthorizedAccessException("The user is inactive, deleted, outside the selected company, or has no permission catalog.");
         }
+    }
+
+    public void SetAdministratorSession(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            throw new ArgumentException("UserId is required.", nameof(userId));
+
+        Clear();
+        _currentUserId = userId.Trim();
+        foreach (var permission in PermCat.All)
+            _perms.Add(permission);
+        _roleCode = "ROLE_ADMINISTRATOR";
     }
 
     public void Clear()
@@ -793,51 +814,53 @@ public sealed class PermServ : IPermServ
         _roleCode = string.Empty;
     }
 
-    public IReadOnlyCollection<string> GetCurrentPermissions() => _perms;
+    public IReadOnlyCollection<string> GetCurrentPermissions() =>
+        Array.AsReadOnly(_perms.ToArray());
 
-    private async Task LoadSqliteAsync(string connectionString, CancellationToken ct)
+    private async Task LoadSqliteAsync(string connectionString, string companyCode, CancellationToken ct)
     {
         SqliteSchemaBootstrapper.EnsureDatabase(connectionString);
         await using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync(ct).ConfigureAwait(false);
         await using var command = new SqliteCommand("""
-            SELECT r.role_code, p.permission_code, up.effect AS user_effect
+            SELECT
+                p.permission_code,
+                CASE
+                    WHEN up.effect IS NOT NULL THEN up.effect
+                    ELSE MAX(CASE WHEN rp.permission_id IS NOT NULL THEN 1 ELSE 0 END)
+                END AS is_allowed
             FROM users u
-            LEFT JOIN user_roles ur ON ur.user_id=u.user_id
-            LEFT JOIN roles r ON r.role_id=ur.role_id AND r.is_active=1 AND r.is_deleted=0
+            INNER JOIN companies c ON c.company_id = u.company_id
             CROSS JOIN permissions p
-            LEFT JOIN role_permissions rp ON rp.role_id=r.role_id AND rp.permission_id=p.permission_id
-            LEFT JOIN user_permissions up ON up.user_id=u.user_id AND up.permission_id=p.permission_id
-            WHERE u.is_active=1 AND u.is_deleted=0 AND p.is_active=1
-              AND (u.username=@user_id OR u.user_id=@user_id)
+            LEFT JOIN user_roles ur ON ur.user_id = u.user_id
+            LEFT JOIN roles r ON r.role_id = ur.role_id AND r.company_id = u.company_id AND r.is_active = 1 AND r.is_deleted = 0
+            LEFT JOIN role_permissions rp ON rp.role_id = r.role_id AND rp.permission_id = p.permission_id
+            LEFT JOIN user_permissions up ON up.user_id = u.user_id AND up.permission_id = p.permission_id
+            WHERE u.user_id = @user_id
+              AND c.company_code = @company_code
+              AND u.is_active = 1 AND u.is_deleted = 0
+              AND c.is_active = 1 AND c.is_deleted = 0
+              AND p.is_active = 1
+            GROUP BY p.permission_code, up.effect
             """, connection);
         command.Parameters.AddWithValue("@user_id", _currentUserId);
+        command.Parameters.AddWithValue("@company_code", companyCode);
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+
         var found = false;
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
             found = true;
-            if (!reader.IsDBNull(0))
-            {
-                var roleCode = reader.GetString(0);
-                if (string.Equals(roleCode, "ROLE_ADMINISTRATOR", StringComparison.OrdinalIgnoreCase)
-                    || string.IsNullOrWhiteSpace(_roleCode))
-                    _roleCode = roleCode;
-            }
-            if (!reader.IsDBNull(1))
-            {
-                var permission = reader.GetString(1);
-                if (reader.IsDBNull(2) || reader.GetBoolean(2)) _perms.Add(permission);
-                else _perms.Remove(permission);
-            }
+            if (reader.GetInt64(1) != 0)
+                _perms.Add(reader.GetString(0));
         }
+
         if (!found)
         {
-            _currentUserId = null;
-            throw new UnauthorizedAccessException("The user is inactive, deleted, or does not exist.");
+            Clear();
+            throw new UnauthorizedAccessException("The user is inactive, deleted, outside the selected company, or has no permission catalog.");
         }
     }
-
 }
 
     // ========== PermAdminSvc.cs ==========
