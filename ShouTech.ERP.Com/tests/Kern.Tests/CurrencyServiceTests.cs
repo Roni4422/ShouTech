@@ -67,7 +67,7 @@ public sealed class CurrencyServiceTests
         var databasePath = Path.Combine(Path.GetTempPath(), $"shoutech-currency-{Guid.NewGuid():N}.db");
         try
         {
-            var connectionString = new SqliteConnectionStringBuilder { DataSource = databasePath }.ToString();
+            var connectionString = new SqliteConnectionStringBuilder { DataSource = databasePath, Pooling = false }.ToString();
             await using (var connection = new SqliteConnection(connectionString))
             {
                 await connection.OpenAsync();
