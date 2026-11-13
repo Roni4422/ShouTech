@@ -15,36 +15,6 @@ namespace ShouTech.App.Views;
 public sealed class CurCard : BaseWin
 {
 
-    /// <summary>
-    /// Prevents a false success message when this screen has no database persistence wired.
-    /// This intentionally does not claim to save any values.
-    /// </summary>
-    private void ShowPersistenceUnavailable()
-    {
-        const string errorCode = "APP-2010";
-        const string context = "This window has no database persistence implementation.";
-        var definition = ShouTech.App.Localization.ErrorCatalog.Resolve(errorCode);
-        var exception = new NotSupportedException(context);
-
-        // Errors are routed to errors.log; the operational trace goes to log.log.
-        ShouTech.App.Services.AppHost.Logging?.LogError(
-            "WindowPersistence",
-            $"[{definition.Code}] {definition.Name} | Window={GetType().Name} | {context}",
-            exception);
-        ShouTech.App.Services.AppHost.Logging?.LogOperation(
-            "WindowPersistence",
-            "PersistenceUnavailable",
-            $"Code={definition.Code} | Window={GetType().Name}");
-
-        MessageBox.Show(
-            this,
-            $"[{definition.Code}] {definition.Message}\n{context}\nلم يتم حفظ أي بيانات.",
-            "العملية غير متاحة",
-            MessageBoxButton.OK,
-            MessageBoxImage.Warning);
-    }
-
-
     private readonly TextBox _txtCode = new() { Width = 90, Height = 26, Text = "USD" };
     private readonly TextBox _txtNameAr = new() { Width = 150, Height = 26 };
     private readonly TextBox _txtNameEn = new() { Width = 150, Height = 26 };
@@ -85,13 +55,9 @@ public sealed class CurCard : BaseWin
         StyleButton(_btnAddRate, "Invoice.AddLine");
 
         _btnNew.Click += (_, _) => ResetCard();
-        _btnSave.Click += (_, _) => ShowPersistenceUnavailable();
-        _btnAddRate.Click += (_, _) =>
-        {
-            var r = new RateHistoryVm { Date = DateTime.Today, Rate = 3.75m };
-            _rates.Insert(0, r);
-            _grid.SelectedItem = r;
-        };
+        _btnSave.Click += async (_, _) => await SaveCurrencyAsync();
+        _btnAddRate.IsEnabled = false;
+        _btnAddRate.ToolTip = T("CurrencyCard.RatesRequireBaseCurrency");
 
         foreach (var b in new[] { _btnNew, _btnSave, _btnAddRate })
             toolbar.Children.Add(b);
@@ -170,7 +136,44 @@ public sealed class CurCard : BaseWin
         _txtMinRate.Text = "3.7400";
         _txtMaxRate.Text = "3.7600";
         _rates.Clear();
-        _rates.Add(new RateHistoryVm { Date = DateTime.Today, Rate = 3.7500m, BuyRate = 3.7450m, SellRate = 3.7550m, Notes = "Daily Bulletin" });
+    }
+
+    private async Task SaveCurrencyAsync()
+    {
+        try
+        {
+            var service = ShouTech.App.Services.AppHost.Currency;
+            if (service is null)
+                throw new InvalidOperationException(T("CurrencyCard.DatabaseUnavailable"));
+
+            var currency = new ShouTech.Domain.Entities.Currency(
+                _txtCode.Text.Trim(),
+                _txtNameEn.Text.Trim(),
+                string.IsNullOrWhiteSpace(_txtNameAr.Text) ? null : _txtNameAr.Text.Trim(),
+                string.IsNullOrWhiteSpace(_txtSymbol.Text) ? null : _txtSymbol.Text.Trim(),
+                string.IsNullOrWhiteSpace(_txtFraction.Text) ? null : _txtFraction.Text.Trim(),
+                null,
+                2,
+                true);
+
+            await service.SaveCurrencyAsync(currency);
+            ShouTech.App.Services.AppHost.Logging?.LogOperation(
+                "CurrencyCard",
+                "CurrencySaved",
+                $"CurrencyCode={currency.Code.Trim().ToUpperInvariant()}");
+
+            MessageBox.Show(this, T("CurrencyCard.SaveSuccess"), T("Application.Success"),
+                MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            ShouTech.App.Services.AppHost.Logging?.LogError(
+                "CurrencyCard",
+                $"Currency save failed | CurrencyCode={_txtCode.Text.Trim()}",
+                ex);
+            MessageBox.Show(this, T("CurrencyCard.SaveFailed") + Environment.NewLine + ex.Message,
+                T("Application.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     protected override void ApplyLocalizedText()
