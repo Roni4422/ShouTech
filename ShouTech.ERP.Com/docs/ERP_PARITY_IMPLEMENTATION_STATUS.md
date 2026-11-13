@@ -13,36 +13,55 @@ ShouTech remains a Windows desktop ERP with its existing visual identity, Ribbon
 - English is the default resource language. All user-facing text must use localization resources; no Arabic literals or Arabic comments in source files.
 - A feature is complete only after database persistence, reload, validation, audit, permissions, UI integration, localization, and provider tests pass.
 
-## Stage 1 — Accounting and master-data persistence
+## Authoritative ERPNext parity priority matrix
 
-Priority order:
+The owner-approved matrix below is the source of truth for scope and sequencing. "Partial" means inspect and complete existing capabilities; do not create duplicate subsystems or tables. "No" under UI changes means preserve the existing ShouTech appearance, Ribbon, navigation, themes, and window layouts. Add only the minimum controls required to expose a missing operation inside an existing window.
 
-1. Currency master and exchange-rate history.
-2. Customer and supplier master records.
-3. Bank and bank-account master records.
-4. Cost centers and sales representatives.
-5. Receipt/payment vouchers and invoice allocation.
-6. Cheque batches and cheque lifecycle.
-7. Journal reopen/load and complete field round-trip.
-8. Sales and purchase order persistence and conversion.
-9. Manufacturing order persistence and posting.
-10. Report data verification and dashboard removal of hard-coded figures.
+| ERPNext area | Current ShouTech status | Missing backend work | Priority | UI changes |
+|---|---|---|---|---|
+| Accounting | None / partial | General ledger, journal lifecycle, AR/AP subledgers, tax calculation and posting, reconciliation | P0 | No |
+| Stock | Partial | Permanent stock ledger, valuation engine, FIFO/Moving Average, batch and serial lifecycle | P0 | No |
+| Sales | Partial | Complete quotation, sales order, delivery, invoice lifecycle and posting | P0 | No |
+| Buying | Partial | Complete purchase order, receipt, purchase invoice, supplier returns, approvals | P1 | No |
+| Manufacturing | None | BOM, work orders, job cards, material consumption and finished-goods posting | P2 | No |
+| HR / Payroll | None | Employee records, attendance, leave, payroll calculations and accounting integration | P2 | No |
+| POS | None | Offline POS transactions, shifts, cash movements, closing and stock/accounting posting | P2 | No |
+| Workflow | None | Document state machine, approval rules, role-based transitions, audit history | P0 | No |
+| Migration | None | Backup/restore, validated import/export, schema migration and recovery tooling | P0 | No |
+| Localization | Partial | Complete resource coverage, culture fallback, formatting, Arabic RTL verification | P1 | No |
 
-### Currency card — current implementation state
+## Delivery order and stage gates
 
-| Layer | Status | Evidence / next action |
-|---|---|---|
-| SQLite schema | Added, not yet runtime-tested | `dba/mig/sqlite/025_currency_master_rates.sql` |
-| PostgreSQL schema | Added, not yet runtime-tested | `dba/mig/postgresql/025_currency_master_rates.sql` |
-| Domain entities and repository contract | Added | `Currency.cs` and `ICurrencyRepository.cs` define currency and rate records and provider-neutral operations |
-| Provider-neutral repository | Added, not yet integration-tested | `CurrencyRepository.cs` implements SQLite/PostgreSQL read, upsert, and rate-history queries with parameterized SQL |
-| Application service | Added, not yet integration-tested | `CurrencyService.cs` validates three-letter codes, precision, positive rates, and min/max bounds |
-| WPF `CurCard` integration | Currency master wired; runtime verification pending | Reuses the existing window and AppHost database configuration; loads saved currencies and persists create/update. Exchange-rate entry remains intentionally unavailable until the company's base-currency context is wired |
-| Localization | Added for the currency master UI | Currency-card labels and load/save feedback are present in En, Ar, Fr and Tr JSON resources; full UI culture/RTL runtime check pending |
-| Integration tests | Pending | SQLite full round-trip and migration re-run; PostgreSQL schema and repository parity. SQLite migration SQL passed an isolated in-memory schema/constraint smoke check; GitHub Actions SQLite and PostgreSQL clean-database migration runs and idempotent re-runs passed; repository-level round-trip tests remain pending |
-| Permissions and audit | Partial | Successful currency saves are written to the existing operational log; permission enforcement and actor-level audit remain pending |
+### P0 — Core financial and operational integrity
+1. **Accounting:** verify existing GL/journal code and schemas; implement missing ledger posting, AR/AP, tax, settlement/allocation, reversal and reconciliation. Do not create parallel ledgers.
+2. **Stock:** complete stock ledger and valuation from actual posted stock documents; add batch/serial tracking with traceable movements.
+3. **Sales:** complete the quotation → sales order → delivery → invoice lifecycle, including status transitions, posting, cancellation/reversal and stock/GL effects.
+4. **Workflow:** implement reusable document states, transition guards, approval policies, authorization and immutable transition audit.
+5. **Migration:** implement verified backup, restore, import/export and upgrade/recovery paths for offline SQLite first, with PostgreSQL parity.
 
-**Do not mark Currency Card complete until every field and every rate-history row survives save → close → reopen → compare, for both providers.**
+### P1 — Procurement and localization
+6. **Buying:** complete purchase order → receipt → purchase invoice, supplier returns, approvals, stock/GL posting and reconciliation.
+7. **Localization:** close missing resource keys, enforce resource-only UI text, culture-aware dates/numbers/currency, and test Arabic RTL without changing the visual design.
+
+### P2 — Extended operations
+8. **Manufacturing:** BOM, work orders, job cards, material issue/consumption, output and costing.
+9. **HR / Payroll:** employee master, attendance/leave, payroll periods, calculations, payslips and GL integration.
+10. **POS:** fully offline checkout, shifts, cash-in/out, closing reconciliation, receipt numbering and stock/GL integration.
+
+## Implementation rules
+
+- Inspect and reuse existing entities, services, repositories, migrations, windows, and resource files before adding anything.
+- Add a new file only when the existing architecture has no suitable extension point; explain why in the implementation notes.
+- All schema definitions stay under `dba`; migrations are additive, versioned and paired for SQLite/PostgreSQL. Never edit an applied migration.
+- Preserve the existing WPF visual identity and Ribbon. Backend completion does not authorize a redesign.
+- New business logic belongs in `src/ShouTech.Domain`, `src/ShouTech.Application`, and `src/ShouTech.Infrastructure`; avoid expanding legacy `cod/` service logic.
+- No Arabic literals or Arabic comments in source code. User-facing translations belong in language resources.
+- Every document posting must be transactional, idempotency-safe, company-scoped, permission-checked, and auditable. Posted documents are corrected by cancellation/reversal, not destructive deletion.
+- A feature is complete only after persistence, reload, validation, failure-path behavior, audit, permissions, localization, SQLite/PostgreSQL parity, and automated tests pass.
+
+## Current active work — Stage 1 currency foundation
+
+The currency master/rate schema, domain contract, service and repository were added in PR #17. The existing Currency Card and AppHost were reused rather than replaced. The PR includes a SQLite repository round-trip test; PostgreSQL repository runtime parity, full application build, UI runtime save/reopen, permissions and actor-level audit still require evidence. Currency rate entry remains unavailable in the UI until the active company's base currency is sourced from the real company context.
 
 ## Completion gates
 
