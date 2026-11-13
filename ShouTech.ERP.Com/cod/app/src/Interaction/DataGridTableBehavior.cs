@@ -569,8 +569,8 @@ public static class DataGridTableBehavior
     }
 
     private static bool LooksLikeHeaderRow(
-        IReadOnlyList<string> row,
-        IReadOnlyList<DataGridColumn> columns,
+        List<string> row,
+        List<DataGridColumn> columns,
         int anchor)
     {
         var matches = 0;
