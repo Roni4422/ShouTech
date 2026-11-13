@@ -38,8 +38,7 @@ public static class MatGroupRepo
 
     public static void SaveMembers(long groupId, IEnumerable<long> materialIds)
     {
-        if (groupId <= 0)
-            throw new ArgumentOutOfRangeException(nameof(groupId));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(groupId);
 
         ArgumentNullException.ThrowIfNull(materialIds);
 
