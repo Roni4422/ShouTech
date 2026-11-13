@@ -512,7 +512,8 @@
     "Info": "معلومات",
     "Warning": "تحذير",
     "Error": "خطأ",
-    "Confirm": "تأكيد"
+    "Confirm": "تأكيد",
+    "Search": "بحث"
   },
   "Shell": {
     "ThemeDark": "الوضع الليلي",
@@ -1387,7 +1388,18 @@
     "PaymentKNet": "كي نت",
     "PaymentVisaMaster": "فيزا / ماستر",
     "CardTenderPending": "تم اختيار الدفع بالبطاقة. يجب تحديد حساب الدفع قبل الترحيل.",
-    "ConfirmRemoveLine": "هل تريد حذف السطر المحدد؟"
+    "ConfirmRemoveLine": "هل تريد حذف السطر المحدد؟",
+    "DocumentTitle": "مستند",
+    "SalesAccount": "حساب المبيعات",
+    "PurchaseAccount": "حساب المشتريات",
+    "SearchNotAvailable": "نافذة البحث غير متاحة حالياً.",
+    "NavigationUnavailable": "التنقل بين المستندات غير متاح حالياً.",
+    "DocumentNotSaved": "لم يتم حفظ المستند.",
+    "ConfirmDelete": "هل تريد نقل الفاتورة إلى سلة المحذوفات؟",
+    "DatabaseUnavailable": "اتصال قاعدة البيانات غير متاح.",
+    "MovedToRecycleBin": "تم نقل الفاتورة إلى سلة المحذوفات.",
+    "DocumentNotFound": "لم يتم العثور على الفاتورة في قاعدة البيانات.",
+    "DeleteFailed": "فشل الحذف: "
   },
   "Vouchers": {
     "JournalTitle": "سند قيد",
