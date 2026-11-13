@@ -1203,7 +1203,17 @@
     "VoucherRequiresPost": "La pièce comptable est disponible après validation de la facture.",
     "NoOriginal": "Aucune facture d'origine liée à ce document.",
     "VoucherOpenFailed": "Impossible d'ouvrir la pièce comptable.",
-    "OriginalOpenFailed": "Impossible d'ouvrir la facture d'origine."
+    "OriginalOpenFailed": "Impossible d'ouvrir la facture d'origine.",
+    "Preview": "Aperçu",
+    "New": "Nouveau",
+    "Edit": "Modifier",
+    "Delete": "Supprimer",
+    "Cancel": "Annuler",
+    "PaymentMethods": "Modes de paiement",
+    "PaymentKNet": "K-Net",
+    "PaymentVisaMaster": "Visa / MasterCard",
+    "CardTenderPending": "Mode carte sélectionné. Configurez le compte de paiement avant validation.",
+    "ConfirmRemoveLine": "Supprimer la ligne sélectionnée ?"
   },
   "CompanyWizard": {
     "Title": {
