@@ -59,9 +59,16 @@ The owner-approved matrix below is the source of truth for scope and sequencing.
 - Every document posting must be transactional, idempotency-safe, company-scoped, permission-checked, and auditable. Posted documents are corrected by cancellation/reversal, not destructive deletion.
 - A feature is complete only after persistence, reload, validation, failure-path behavior, audit, permissions, localization, SQLite/PostgreSQL parity, and automated tests pass.
 
-## Current active work — Stage 1 currency foundation
+## Current active work — Stage 1 master-data persistence
 
-The currency master/rate schema, domain contract, service and repository were added in PR #17. The existing Currency Card and AppHost were reused rather than replaced. The PR includes a SQLite repository round-trip test; PostgreSQL repository runtime parity, full application build, UI runtime save/reopen, permissions and actor-level audit still require evidence. Currency rate entry remains unavailable in the UI until the active company's base currency is sourced from the real company context.
+### Currency master
+The currency master/rate schema, domain contract, service and provider-neutral repository were added in PR #17. The existing Currency Card and AppHost were reused rather than replaced. SQLite repository round-trip coverage is present. Currency rate entry remains unavailable in the UI until the active company's base currency is sourced from the real company context. UI runtime save/reopen, permissions and actor-level audit still require evidence.
+
+### Customer and supplier master — backend foundation in progress
+The current `CstCard` already contains customer/supplier/both classification and the required contact, tax, credit, pricing-tier and GL-link fields, but its save/delete handlers are deliberately blocked because no party persistence path exists. Existing commercial-document tables only store party snapshots/IDs and do not provide a full master record. Therefore PR #17 adds a shared company-scoped `parties` master table with C/S/B kinds, paired SQLite/PostgreSQL migration 026, domain record, repository contract, validation service, provider-neutral repository, AppHost registration and initial SQLite persistence/tenant-isolation tests. These additions are a backend foundation only: CstCard integration, list/reload/edit, safe deactivation, audit/permissions, localized validation and PostgreSQL runtime tests remain pending. The existing card will be reused; no duplicate customer or supplier window is planned.
+
+### Verification
+The GitHub Actions runs associated with the earlier currency commit completed successfully for Windows build/tests, SQLite migrations and PostgreSQL migrations. The new party-master commits have since changed the branch head, so the latest branch revision must complete CI again before this stage is considered validated.
 
 ## Completion gates
 
