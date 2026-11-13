@@ -1235,7 +1235,17 @@
     "VoucherRequiresPost": "The journal voucher is available after the invoice is posted.",
     "NoOriginal": "There is no original invoice linked to this document.",
     "VoucherOpenFailed": "Could not open the journal voucher.",
-    "OriginalOpenFailed": "Could not open the original invoice."
+    "OriginalOpenFailed": "Could not open the original invoice.",
+    "Preview": "Preview",
+    "New": "New",
+    "Edit": "Edit",
+    "Delete": "Delete",
+    "Cancel": "Cancel",
+    "PaymentMethods": "Payment methods",
+    "PaymentKNet": "K-Net",
+    "PaymentVisaMaster": "Visa / MasterCard",
+    "CardTenderPending": "Card tender selected. Configure the payment account before posting.",
+    "ConfirmRemoveLine": "Remove the selected line?"
   },
   "Vouchers": {
     "JournalTitle": "Journal Voucher",
