@@ -55,7 +55,7 @@ namespace Kern.Tests
             await using var connection = new SqliteConnection(context.ConnectionString);
             await connection.OpenAsync();
 
-            Assert.Equal(2L, CountEvents(connection, context.JournalId));
+            Assert.Equal(3L, CountEvents(connection, context.JournalId));
             Assert.Equal(1L, CountEvents(connection, reversalId));
 
             long CountEvents(SqliteConnection c, Guid id)
