@@ -1308,7 +1308,7 @@
     "FindMaterial": "بحث عن مادة",
     "Subtotal": "قبل الضريبة",
     "Tax": "الضريبة",
-    "Total": "الإجمالي",
+    "Total": "المجموع",
     "Status": "الحالة",
     "StatusDraft": "مسودة",
     "StatusPosted": "مرحّلة",
@@ -1377,7 +1377,17 @@
     "VoucherRequiresPost": "سند القيد يتوفر بعد ترحيل الفاتورة.",
     "NoOriginal": "لا توجد فاتورة أصلية مرتبطة بهذا المستند.",
     "VoucherOpenFailed": "تعذر فتح سند القيد.",
-    "OriginalOpenFailed": "تعذر فتح الفاتورة الأصلية."
+    "OriginalOpenFailed": "تعذر فتح الفاتورة الأصلية.",
+    "Preview": "معاينة",
+    "New": "جديد",
+    "Edit": "تعديل",
+    "Delete": "حذف",
+    "Cancel": "إلغاء",
+    "PaymentMethods": "طرق الدفع",
+    "PaymentKNet": "كي نت",
+    "PaymentVisaMaster": "فيزا / ماستر",
+    "CardTenderPending": "تم اختيار الدفع بالبطاقة. يجب تحديد حساب الدفع قبل الترحيل.",
+    "ConfirmRemoveLine": "هل تريد حذف السطر المحدد؟"
   },
   "Vouchers": {
     "JournalTitle": "سند قيد",
