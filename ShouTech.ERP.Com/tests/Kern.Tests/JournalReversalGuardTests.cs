@@ -20,12 +20,12 @@ namespace Kern.Tests
         [Fact]
         public async Task Reverse_ShouldRejectDraftEntries()
         {
-            var (service, companyId, journalId, _, _) = await CreatePostedCandidateAsync(post: false);
+            var context = await CreatePostedCandidateAsync(post: false);
 
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                service.ReverseAsync(journalId, "guard-test", "attempt to reverse a draft"));
+                context.Service.ReverseAsync(context.JournalId, "guard-test", "attempt to reverse a draft"));
 
-            var loaded = await service.FindByDocumentNumberAsync(companyId, GuardDocumentNumber);
+            var loaded = await context.Service.FindByDocumentNumberAsync(context.CompanyId, GuardDocumentNumber);
             Assert.NotNull(loaded);
             Assert.Equal(JournalEntryStatus.Draft, loaded!.Status);
         }
@@ -33,15 +33,15 @@ namespace Kern.Tests
         [Fact]
         public async Task Reverse_ShouldRejectAlreadyReversedEntries()
         {
-            var (service, companyId, journalId, _, _) = await CreatePostedCandidateAsync(post: true);
+            var context = await CreatePostedCandidateAsync(post: true);
 
-            var firstReversal = await service.ReverseAsync(journalId, "guard-test", "first reversal");
+            var firstReversal = await context.Service.ReverseAsync(context.JournalId, "guard-test", "first reversal");
             Assert.NotEqual(Guid.Empty, firstReversal);
 
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                service.ReverseAsync(journalId, "guard-test", "second reversal must be rejected"));
+                context.Service.ReverseAsync(context.JournalId, "guard-test", "second reversal must be rejected"));
 
-            var loaded = await service.FindByDocumentNumberAsync(companyId, GuardDocumentNumber);
+            var loaded = await context.Service.FindByDocumentNumberAsync(context.CompanyId, GuardDocumentNumber);
             Assert.NotNull(loaded);
             Assert.Equal(JournalEntryStatus.Reversed, loaded!.Status);
         }
@@ -49,10 +49,10 @@ namespace Kern.Tests
         [Fact]
         public async Task Reverse_ShouldWriteAuditEventsForOriginalAndCompensatingEntries()
         {
-            var (service, _, journalId, _, connectionString) = await CreatePostedCandidateAsync(post: true);
-            var reversalId = await service.ReverseAsync(journalId, "guard-test", "audit event verification");
+            var context = await CreatePostedCandidateAsync(post: true);
+            var reversalId = await context.Service.ReverseAsync(context.JournalId, "guard-test", "audit event verification");
 
-            await using var connection = new SqliteConnection(connectionString);
+            await using var connection = new SqliteConnection(context.ConnectionString);
             await connection.OpenAsync();
 
             Assert.Equal(2L, CountEvents(connection, journalId));
