@@ -1331,7 +1331,8 @@
     "RatesRequireBaseCurrency": "Select the company's base currency before entering exchange-rate history.",
     "DatabaseUnavailable": "The active database connection is unavailable.",
     "SaveSuccess": "Currency saved successfully.",
-    "SaveFailed": "The currency could not be saved."
+    "SaveFailed": "The currency could not be saved.",
+    "LoadFailed": "Could not load currencies."
   },
   "BankCard": {
     "Title": "Bank Card & Account",
