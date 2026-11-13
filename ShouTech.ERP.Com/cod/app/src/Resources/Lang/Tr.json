@@ -1422,5 +1422,20 @@
   "JrnWin.AlreadySaved": "Bu fiş zaten kayıtlı. Yeni bir fiş açın.",
   "JrnWin.AlreadySavedTitle": "Zaten kayıtlı",
   "JrnWin.DraftSavedDetail": "Yevmiye taslağı kaydedildi.\nId: {0:D}",
-  "JrnWin.SavedTitle": "Kaydedildi"
+  "JrnWin.SavedTitle": "Kaydedildi",
+  "CurrencyCard": {
+    "Title": "Para Birimi Kartı",
+    "Code": "Para Birimi Kodu",
+    "Name": "Para Birimi Adı (Arapça)",
+    "NameEn": "Para Birimi Adı (İngilizce)",
+    "Symbol": "Simge",
+    "Fraction": "Alt Birim Adı (İngilizce)",
+    "Rate": "Döviz Kuru",
+    "MinRate": "En Düşük Kur",
+    "MaxRate": "En Yüksek Kur",
+    "RatesRequireBaseCurrency": "Kur geçmişini girmeden önce şirketin temel para birimini seçin.",
+    "DatabaseUnavailable": "Etkin veritabanı bağlantısı kullanılamıyor.",
+    "SaveSuccess": "Para birimi kaydedildi.",
+    "SaveFailed": "Para birimi kaydedilemedi."
+  }
 }
