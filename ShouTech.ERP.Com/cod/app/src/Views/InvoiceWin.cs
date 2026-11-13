@@ -222,7 +222,6 @@ public sealed class InvoiceWin : BaseWin
                     _lblStatus.Text = Tf("Invoice.CardTenderPending", "Card tender selected; payment-account mapping is required before posting.");
             }
             dialog.DialogResult = true;
-            dialog.Close();
         };
         cancel.Click += (_, _) => dialog.Close();
         buttons.Children.Add(cancel);
@@ -1080,7 +1079,7 @@ public sealed class InvoiceWin : BaseWin
     private static (Color Header, Color Alternate) GetInvoiceGridPalette(InvDocKind kind) => kind switch
     {
         InvDocKind.SalesInvoice => (Color.FromRgb(0x16, 0x70, 0xB8), Color.FromRgb(0xE8, 0xF2, 0xFC)),
-        InvDocKind.SalesReturn => (Color.FromRgb(0xB9, 0x3C, 0x4A), Color.FromRgb(0xFCEB, 0xED)),
+        InvDocKind.SalesReturn => (Color.FromRgb(0xB9, 0x3C, 0x4A), Color.FromRgb(0xFC, 0xEB, 0xED)),
         InvDocKind.PurchaseInvoice => (Color.FromRgb(0x16, 0x80, 0x78), Color.FromRgb(0xE7, 0xF5, 0xF2)),
         InvDocKind.PurchaseReturn => (Color.FromRgb(0xB6, 0x69, 0x25), Color.FromRgb(0xFC, 0xF1, 0xE5)),
         InvDocKind.Quotation => (Color.FromRgb(0x3D, 0x8B, 0x52), Color.FromRgb(0xEA, 0xF5, 0xEC)),
