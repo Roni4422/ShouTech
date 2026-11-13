@@ -1419,6 +1419,7 @@
     "RatesRequireBaseCurrency": "Définissez la devise de base de l'entreprise avant de saisir l'historique des taux.",
     "DatabaseUnavailable": "La connexion à la base de données active est indisponible.",
     "SaveSuccess": "Devise enregistrée.",
-    "SaveFailed": "Impossible d'enregistrer la devise."
+    "SaveFailed": "Impossible d'enregistrer la devise.",
+    "LoadFailed": "Impossible de charger les devises."
   }
 }
