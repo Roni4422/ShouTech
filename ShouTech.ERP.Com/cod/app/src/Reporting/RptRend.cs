@@ -169,7 +169,7 @@ public static class RptRend
 
     private static Grid BuildRow(
         IReadOnlyList<RptCol> columns,
-        IReadOnlyList<GridLength> widths,
+        List<GridLength> widths,
         IReadOnlyDictionary<string, object?>? values,
         Brush fill,
         Brush foreground,
