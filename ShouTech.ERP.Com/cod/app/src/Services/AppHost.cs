@@ -34,6 +34,16 @@ namespace ShouTech.App.Services
         public static JournalRepository? JournalStore { get; private set; }
         public static AccountingStructureRepository? AccountingStructure { get; private set; }
         public static IDatabaseHealth? DatabaseHealth { get; private set; }
+        public static CurrencyService? Currency
+        {
+            get
+            {
+                var connection = DatabaseRuntime.GetConnectionString();
+                return string.IsNullOrWhiteSpace(connection)
+                    ? null
+                    : new CurrencyService(new CurrencyRepository(DatabaseRuntime.GetProvider(), connection));
+            }
+        }
 
         public static ILocSvc Localization =>
             System.Windows.Application.Current is App app
