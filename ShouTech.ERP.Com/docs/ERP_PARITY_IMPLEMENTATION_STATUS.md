@@ -37,10 +37,10 @@ Priority order:
 | Domain entities and repository contract | Added | `Currency.cs` and `ICurrencyRepository.cs` define currency and rate records and provider-neutral operations |
 | Provider-neutral repository | Added, not yet integration-tested | `CurrencyRepository.cs` implements SQLite/PostgreSQL read, upsert, and rate-history queries with parameterized SQL |
 | Application service | Added, not yet integration-tested | `CurrencyService.cs` validates three-letter codes, precision, positive rates, and min/max bounds |
-| WPF `CurCard` integration | Pending | Preserve existing layout; wire the service and load/save/reopen flow before removing the unavailable-save guard |
-| Localization | Pending | Add/verify all keys in En, Ar, Fr and Tr resource files |
-| Integration tests | Pending | SQLite full round-trip and migration re-run; PostgreSQL schema and repository parity. SQLite migration SQL passed an isolated in-memory schema/constraint smoke check; this is not a repository integration test |
-| Permissions and audit | Pending | Currency read/write permissions and actor/source audit |
+| WPF `CurCard` integration | Currency master wired; runtime verification pending | Reuses the existing window and AppHost database configuration; loads saved currencies and persists create/update. Exchange-rate entry remains intentionally unavailable until the company's base-currency context is wired |
+| Localization | Added for the currency master UI | Currency-card labels and load/save feedback are present in En, Ar, Fr and Tr JSON resources; full UI culture/RTL runtime check pending |
+| Integration tests | Pending | SQLite full round-trip and migration re-run; PostgreSQL schema and repository parity. SQLite migration SQL passed an isolated in-memory schema/constraint smoke check; GitHub Actions validation is running |
+| Permissions and audit | Partial | Successful currency saves are written to the existing operational log; permission enforcement and actor-level audit remain pending |
 
 **Do not mark Currency Card complete until every field and every rate-history row survives save → close → reopen → compare, for both providers.**
 
