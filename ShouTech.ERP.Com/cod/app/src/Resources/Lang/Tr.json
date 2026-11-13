@@ -509,7 +509,8 @@
     "Info": "Bilgi",
     "Warning": "Uyarı",
     "Error": "Hata",
-    "Confirm": "Onay"
+    "Confirm": "Onay",
+    "Search": "Ara"
   },
   "Shell": {
     "ThemeDark": "Karanlık Mod",
@@ -1230,7 +1231,18 @@
     "PaymentKNet": "K-Net",
     "PaymentVisaMaster": "Visa / MasterCard",
     "CardTenderPending": "Kartlı ödeme seçildi. Onaylamadan önce ödeme hesabını yapılandırın.",
-    "ConfirmRemoveLine": "Seçili satır silinsin mi?"
+    "ConfirmRemoveLine": "Seçili satır silinsin mi?",
+    "DocumentTitle": "Belge",
+    "SalesAccount": "Satış hesabı",
+    "PurchaseAccount": "Alış hesabı",
+    "SearchNotAvailable": "Arama penceresi henüz kullanılamıyor.",
+    "NavigationUnavailable": "Belgeler arasında gezinme henüz kullanılamıyor.",
+    "DocumentNotSaved": "Belge kaydedilmedi.",
+    "ConfirmDelete": "Bu fatura geri dönüşüm kutusuna taşınsın mı?",
+    "DatabaseUnavailable": "Veritabanı bağlantısı kullanılamıyor.",
+    "MovedToRecycleBin": "Fatura geri dönüşüm kutusuna taşındı.",
+    "DocumentNotFound": "Fatura veritabanında bulunamadı.",
+    "DeleteFailed": "Silme başarısız: "
   },
   "CompanyWizard": {
     "Title": {
