@@ -1437,6 +1437,8 @@
     "DatabaseUnavailable": "Etkin veritabanı bağlantısı kullanılamıyor.",
     "SaveSuccess": "Para birimi kaydedildi.",
     "SaveFailed": "Para birimi kaydedilemedi.",
-    "LoadFailed": "Para birimleri yüklenemedi."
+    "LoadFailed": "Para birimleri yüklenemedi.",
+    "NameAr": "Yerel Ad",
+    "Saved": "Para birimi verileri kaydedildi"
   }
 }
