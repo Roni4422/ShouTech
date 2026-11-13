@@ -1,0 +1,41 @@
+namespace ShouTech.Domain.Entities;
+
+public sealed record Party(
+    long PartyId,
+    Guid CompanyId,
+    string Code,
+    string Kind,
+    string NameEnglish,
+    string? NameArabic,
+    string? GroupCode,
+    string? TaxNumber,
+    string? CommercialRegistration,
+    decimal CreditLimit,
+    int CreditDays,
+    string? PriceTier,
+    string? GlAccountCode,
+    string? Phone,
+    string? Mobile,
+    string? Email,
+    string? Address,
+    bool IsActive);
+
+public sealed record PartyDraft(
+    Guid CompanyId,
+    string Code,
+    string Kind,
+    string NameEnglish,
+    string? NameArabic,
+    string? GroupCode,
+    string? TaxNumber,
+    string? CommercialRegistration,
+    decimal CreditLimit,
+    int CreditDays,
+    string? PriceTier,
+    string? GlAccountCode,
+    string? Phone,
+    string? Mobile,
+    string? Email,
+    string? Address,
+    bool IsActive,
+    string? Actor);

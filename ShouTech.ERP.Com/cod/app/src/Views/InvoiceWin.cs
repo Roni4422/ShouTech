@@ -74,6 +74,7 @@ public sealed class InvoiceWin : BaseWin
     private readonly TextBlock _lblStatus = new() { Margin = new Thickness(8, 4, 0, 0), VerticalAlignment = VerticalAlignment.Center };
 
     private bool _syncingPayment;
+    private string _selectedTenderType = "Cash";
 
     public InvoiceWin() : this(InvDocKind.SalesInvoice) { }
 
@@ -172,6 +173,64 @@ public sealed class InvoiceWin : BaseWin
         };
     }
 
+    private void ShowTenderMethodDialog()
+    {
+        var dialog = new Window
+        {
+            Title = Tf("Invoice.PaymentMethods", "Payment methods"),
+            Owner = this,
+            Width = 250,
+            SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize,
+            WindowStyle = WindowStyle.ToolWindow,
+            FlowDirection = FlowDirection
+        };
+        var panel = new StackPanel { Margin = new Thickness(14) };
+        var choices = new[]
+        {
+            (Key: "Cash", Label: Tf("Invoice.PaymentCash", "Cash")),
+            (Key: "Credit", Label: Tf("Invoice.PaymentCredit", "Credit")),
+            (Key: "KNet", Label: Tf("Invoice.PaymentKNet", "K-Net")),
+            (Key: "VisaMaster", Label: Tf("Invoice.PaymentVisaMaster", "Visa / MasterCard"))
+        };
+        var radios = new System.Collections.Generic.List<RadioButton>();
+        foreach (var choice in choices)
+        {
+            var radio = new RadioButton
+            {
+                Content = choice.Label,
+                Tag = choice.Key,
+                Margin = new Thickness(4, 5, 4, 5),
+                IsChecked = _selectedTenderType == choice.Key
+            };
+            radios.Add(radio);
+            panel.Children.Add(radio);
+        }
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
+        var ok = new Button { Content = Tf("Common.OK", "OK"), MinWidth = 76, Margin = new Thickness(4), IsDefault = true };
+        var cancel = new Button { Content = Tf("Common.Cancel", "Cancel"), MinWidth = 76, Margin = new Thickness(4), IsCancel = true };
+        ok.Click += (_, _) =>
+        {
+            var selected = radios.FirstOrDefault(x => x.IsChecked == true)?.Tag?.ToString();
+            if (!string.IsNullOrWhiteSpace(selected))
+            {
+                _selectedTenderType = selected;
+                if (selected == "Cash") _doc.PaymentMethod = InvPaymentMethod.Cash;
+                else if (selected == "Credit") _doc.PaymentMethod = InvPaymentMethod.Credit;
+                else
+                    _lblStatus.Text = Tf("Invoice.CardTenderPending", "Card tender selected; payment-account mapping is required before posting.");
+            }
+            dialog.DialogResult = true;
+        };
+        cancel.Click += (_, _) => dialog.Close();
+        buttons.Children.Add(cancel);
+        buttons.Children.Add(ok);
+        panel.Children.Add(buttons);
+        dialog.Content = panel;
+        dialog.ShowDialog();
+    }
+
     private void OnPaymentMethodChanged()
     {
         if (_syncingPayment) return;
@@ -207,148 +266,195 @@ public sealed class InvoiceWin : BaseWin
 
     private void BuildUi()
     {
-        // Root: toolbar (auto) + three proportional bands 30% / 40% / 30%
-        var root = new Grid { Margin = new Thickness(4) };
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(3, GridUnitType.Star) }); // top 30%
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(4, GridUnitType.Star) }); // grid 40%
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(3, GridUnitType.Star) }); // bottom 30%
+        // Main layout: compact document-type navigation on the left and invoice workspace on the right.
+        var root = new Grid { Margin = new Thickness(6) };
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(156) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        // ---- Toolbar ----
-        var toolbar = new StackPanel
+        var navigation = new Border
         {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 0, 0, 2)
+            Margin = new Thickness(0, 0, 6, 0),
+            Padding = new Thickness(6),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(5),
+            Background = Brushes.White
         };
-        StyleButton(_btnSave, "Common.Save");
-        StyleButton(_btnPost, "Invoice.Post");
-        StyleButton(_btnReverse, "Invoice.Reverse");
-        _btnReverse.IsEnabled = false;
-        _btnReverse.Click += (_, _) => ReverseCurrentDocument();
-        StyleButton(_btnPrint, "Invoice.Print");
-        StyleButton(_btnPdf, "Invoice.Pdf");
-        StyleButton(_btnAddLine, "Invoice.AddLine");
-        StyleButton(_btnRemoveLine, "Invoice.RemoveLine");
-        StyleButton(_btnFindMaterial, "Invoice.FindMaterial");
-        _btnSave.Click += (_, _) => SaveDraft();
-        _btnPost.Click += (_, _) => PostDoc();
-        _btnPrint.Click += (_, _) => InvPrn.Print(CaptureDoc(), CurrentCompanyDisplay);
-        _btnPdf.Click += (_, _) => InvPrn.ExportPdf(CaptureDoc(), CurrentCompanyDisplay);
-        _btnAddLine.Click += (_, _) =>
-        {
-            _lines.Add(new LineVm
-            {
-                TaxRate = ParseDec(_txtTaxRate.Text, TaxSvc.GetDefaultRate()),
-                WarehouseName = _txtWarehouse.Text.Trim()
-            });
-            RefreshTotals();
-        };
-        _btnRemoveLine.Click += (_, _) =>
-        {
-            if (_grid.SelectedItem is LineVm line)
-            {
-                _lines.Remove(line);
-                RefreshTotals();
-            }
-        };
-        _btnFindMaterial.Click += (_, _) => PickMaterial();
-        foreach (var b in new[] { _btnSave, _btnPost, _btnReverse, _btnPrint, _btnPdf, _btnAddLine, _btnRemoveLine, _btnFindMaterial })
-            toolbar.Children.Add(b);
-        Grid.SetRow(toolbar, 0);
-        root.Children.Add(toolbar);
+        try { navigation.SetResourceReference(Border.BorderBrushProperty, "BorderBrush"); } catch { navigation.BorderBrush = Brushes.LightGray; }
 
-        // ---- Top 30%: header fields (compact, no large gaps) ----
+        var navStack = new StackPanel { VerticalAlignment = VerticalAlignment.Stretch };
+        navStack.Children.Add(new TextBlock
+        {
+            Text = "ShouTech",
+            FontSize = 21,
+            FontWeight = FontWeights.Bold,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x12, 0x5F, 0xA8)),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 12, 0, 22)
+        });
+        AddDocumentTypeButton(navStack, InvDocKind.SalesInvoice, Tf("Invoice.SalesTitle", "Sales"));
+        AddDocumentTypeButton(navStack, InvDocKind.SalesReturn, Tf("Invoice.SalesReturnTitle", "Sales return"));
+        AddDocumentTypeButton(navStack, InvDocKind.PurchaseInvoice, Tf("Invoice.PurchaseTitle", "Purchase"));
+        AddDocumentTypeButton(navStack, InvDocKind.PurchaseReturn, Tf("Invoice.PurchaseReturnTitle", "Purchase return"));
+        AddDocumentTypeButton(navStack, InvDocKind.Quotation, Tf("Invoice.QuotationTitle", "Quotation"));
+        navigation.Child = navStack;
+        Grid.SetColumn(navigation, 0);
+        root.Children.Add(navigation);
+
+        var workspace = new Grid();
+        workspace.RowDefinitions.Add(new RowDefinition { Height = new GridLength(2, GridUnitType.Star) });
+        workspace.RowDefinitions.Add(new RowDefinition { Height = new GridLength(3, GridUnitType.Star) });
+        workspace.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        workspace.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
         var headerHost = new Border
         {
             Child = BuildHeaderPanel(),
-            Padding = new Thickness(2),
-            Margin = new Thickness(0, 0, 0, 2),
+            Padding = new Thickness(8),
+            Margin = new Thickness(0, 0, 0, 5),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(3)
+            CornerRadius = new CornerRadius(5),
+            Background = Brushes.White
         };
         try { headerHost.SetResourceReference(Border.BorderBrushProperty, "BorderBrush"); } catch { headerHost.BorderBrush = Brushes.LightGray; }
-        try { headerHost.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush"); } catch { }
-        Grid.SetRow(headerHost, 1);
-        root.Children.Add(headerHost);
+        Grid.SetRow(headerHost, 0);
+        workspace.Children.Add(headerHost);
 
-        // ---- Middle 40%: lines grid ----
         ConfigureGrid();
         var gridHost = new Border
         {
             Child = _grid,
             BorderThickness = new Thickness(1),
-            Margin = new Thickness(0, 0, 0, 2),
+            Margin = new Thickness(0, 0, 0, 5),
             Padding = new Thickness(0),
-            CornerRadius = new CornerRadius(2)
+            CornerRadius = new CornerRadius(3),
+            Background = Brushes.White
         };
         try { gridHost.SetResourceReference(Border.BorderBrushProperty, "BorderBrush"); } catch { gridHost.BorderBrush = Brushes.Gray; }
-        try { gridHost.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush"); } catch { }
-        Grid.SetRow(gridHost, 2);
-        root.Children.Add(gridHost);
+        Grid.SetRow(gridHost, 1);
+        workspace.Children.Add(gridHost);
 
-        // ---- Bottom 30%: totals + notes + السند/الأصل ----
-        var bottom = new Grid { Margin = new Thickness(0) };
-        bottom.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        bottom.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        bottom.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-
-        var footer = BuildFooterPanel();
-        Grid.SetRow(footer, 0);
-        bottom.Children.Add(footer);
-
-        var cmdBar = new DockPanel { Margin = new Thickness(0, 4, 0, 0), LastChildFill = true };
-        var cmdRight = new StackPanel
+        var footerHost = new Border
         {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Center
+            Child = BuildFooterPanel(),
+            Padding = new Thickness(8),
+            Margin = new Thickness(0, 0, 0, 5),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(5),
+            Background = Brushes.White
         };
+        try { footerHost.SetResourceReference(Border.BorderBrushProperty, "BorderBrush"); } catch { footerHost.BorderBrush = Brushes.LightGray; }
+        Grid.SetRow(footerHost, 2);
+        workspace.Children.Add(footerHost);
+
+        var actionBar = BuildBottomActionBar();
+        Grid.SetRow(actionBar, 3);
+        workspace.Children.Add(actionBar);
+
+        Grid.SetColumn(workspace, 1);
+        root.Children.Add(workspace);
+        Content = root;
+    }
+
+    private void AddDocumentTypeButton(Panel host, InvDocKind kind, string caption)
+    {
+        var button = new Button
+        {
+            Content = caption,
+            Tag = kind,
+            Height = 42,
+            Margin = new Thickness(0, 3, 0, 3),
+            Padding = new Thickness(8, 4, 8, 4),
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            FontWeight = kind == _doc.Kind ? FontWeights.Bold : FontWeights.SemiBold,
+            Background = kind == _doc.Kind
+                ? new SolidColorBrush(Color.FromRgb(0xD9, 0xEA, 0xFC))
+                : Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xB7, 0xC9, 0xDE)),
+            BorderThickness = new Thickness(1)
+        };
+        button.Click += (_, _) =>
+        {
+            if (kind == _doc.Kind) return;
+            var next = new InvoiceWin(kind) { Owner = Owner };
+            next.Show();
+            Close();
+        };
+        host.Children.Add(button);
+    }
+
+    private Grid BuildBottomActionBar()
+    {
+        var bar = new Grid { Margin = new Thickness(0, 2, 0, 0) };
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var documentLinks = new StackPanel { Orientation = Orientation.Horizontal };
         StyleButton(_btnVoucher, "Invoice.Voucher");
         StyleButton(_btnOriginal, "Invoice.Original");
-        _btnVoucher.Content = Tf("Invoice.Voucher", "السند");
-        _btnOriginal.Content = Tf("Invoice.Original", "الأصل");
         _btnVoucher.IsEnabled = false;
         _btnOriginal.IsEnabled = false;
+        documentLinks.Children.Add(_btnVoucher);
+        documentLinks.Children.Add(_btnOriginal);
         _btnVoucher.Click += (_, _) => OpenVoucher();
         _btnOriginal.Click += (_, _) => OpenOriginal();
-        cmdRight.Children.Add(_btnVoucher);
-        cmdRight.Children.Add(_btnOriginal);
-        DockPanel.SetDock(cmdRight, Dock.Right);
-        cmdBar.Children.Add(cmdRight);
-        _lblStatus.VerticalAlignment = VerticalAlignment.Center;
-        cmdBar.Children.Add(_lblStatus);
-        Grid.SetRow(cmdBar, 1);
-        bottom.Children.Add(cmdBar);
 
-        _txtNotes.Height = 28;
-        _txtNotes.MinHeight = 28;
-        _txtNotes.MaxHeight = 40;
-        _txtNotes.AcceptsReturn = true;
-        _txtNotes.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
-        var notesPanel = new StackPanel { Margin = new Thickness(0, 2, 0, 0) };
-        notesPanel.Children.Add(new TextBlock
+        var actions = new StackPanel
         {
-            Text = Tf("Invoice.Notes", "البيان / ملاحظات"),
-            FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(11),
-            Margin = new Thickness(0, 0, 0, 1)
-        });
-        notesPanel.Children.Add(_txtNotes);
-        Grid.SetRow(notesPanel, 2);
-        bottom.Children.Add(notesPanel);
-
-        var bottomHost = new Border
-        {
-            Child = bottom,
-            Padding = new Thickness(2),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(3)
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right
         };
-        try { bottomHost.SetResourceReference(Border.BorderBrushProperty, "BorderBrush"); } catch { bottomHost.BorderBrush = Brushes.LightGray; }
-        try { bottomHost.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush"); } catch { }
-        Grid.SetRow(bottomHost, 3);
-        root.Children.Add(bottomHost);
+        var btnNew = CreateActionButton("Invoice.New", "New", StartNewDocument);
+        var btnEdit = CreateActionButton("Invoice.Edit", "Edit", SaveDraft);
+        var btnDelete = CreateActionButton("Invoice.Delete", "Delete", DeleteSelectedLine);
+        var btnCancel = CreateActionButton("Invoice.Cancel", "Cancel", Close);
+        var btnPreview = CreateActionButton("Invoice.Preview", "Preview", PreviewDocument);
+        var btnExit = CreateActionButton("Common.Close", "Close", Close);
+        foreach (var button in new[] { btnNew, btnEdit, btnDelete, btnCancel, btnPreview, btnExit })
+            actions.Children.Add(button);
 
-        Content = root;
+        Grid.SetColumn(documentLinks, 0);
+        Grid.SetColumn(actions, 2);
+        bar.Children.Add(documentLinks);
+        bar.Children.Add(actions);
+        return bar;
+    }
+
+    private static Button CreateActionButton(string key, string fallback, Action action)
+    {
+        var button = new Button
+        {
+            Content = Tf(key, fallback),
+            MinWidth = 78,
+            Height = 36,
+            Margin = new Thickness(3, 0, 3, 0),
+            Padding = new Thickness(10, 0, 10, 0),
+            FontWeight = FontWeights.SemiBold
+        };
+        try { button.SetResourceReference(StyleProperty, "VisuButtonStyle"); } catch { }
+        button.Click += (_, _) => action();
+        return button;
+    }
+
+    private void StartNewDocument()
+    {
+        var fresh = new InvoiceWin(_doc.Kind) { Owner = Owner };
+        fresh.Show();
+        Close();
+    }
+
+    private void DeleteSelectedLine()
+    {
+        if (_grid.SelectedItem is not LineVm line) return;
+        if (!AskConfirm("Invoice.ConfirmRemoveLine")) return;
+        _lines.Remove(line);
+        RefreshTotals();
+    }
+
+    private void PreviewDocument()
+    {
+        try { InvPrn.Print(CaptureDoc(), CurrentCompanyDisplay); }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
 
     /// <summary>
@@ -501,7 +607,20 @@ public sealed class InvoiceWin : BaseWin
             colTotals.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         AddLabeledCell(colTotals, 0, Tf("Invoice.LinesTotal", "مجموع الأقلام"), _txtLinesTotal);
         AddLabeledCell(colTotals, 1, Tf("Invoice.InvoiceValue", "قيمة الفاتورة"), _txtInvoiceValue);
-        AddLabeledCell(colTotals, 2, Tf("Invoice.Paid", "إجمالي المدفوع"), _txtPaid);
+        var paidPanel = new DockPanel { LastChildFill = true };
+        var totalButton = new Button
+        {
+            Content = Tf("Invoice.Total", "المجموع"),
+            MinWidth = 72,
+            Height = 24,
+            Margin = new Thickness(0, 0, 4, 0),
+            Padding = new Thickness(6, 0, 6, 0)
+        };
+        totalButton.Click += (_, _) => ShowTenderMethodDialog();
+        DockPanel.SetDock(totalButton, Dock.Left);
+        paidPanel.Children.Add(totalButton);
+        paidPanel.Children.Add(_txtPaid);
+        AddLabeledCell(colTotals, 2, Tf("Invoice.Paid", "المدفوع"), paidPanel);
 
         Grid.SetColumn(colExtra, 0);
         Grid.SetColumn(colDisc, 1);
@@ -521,6 +640,11 @@ public sealed class InvoiceWin : BaseWin
         _grid.SelectionMode = DataGridSelectionMode.Single;
         _grid.SelectionUnit = DataGridSelectionUnit.FullRow;
         _grid.AlternationCount = 2;
+        _grid.RowHeight = 25;
+        _grid.ColumnHeaderHeight = 30;
+        _grid.GridLinesVisibility = DataGridGridLinesVisibility.All;
+        _grid.HorizontalGridLinesBrush = new SolidColorBrush(Color.FromRgb(0xD7, 0xE0, 0xEA));
+        _grid.VerticalGridLinesBrush = new SolidColorBrush(Color.FromRgb(0xD7, 0xE0, 0xEA));
         _grid.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
         _grid.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
         _grid.Margin = new Thickness(0);
@@ -530,10 +654,36 @@ public sealed class InvoiceWin : BaseWin
             _grid.SetResourceReference(DataGrid.ColumnHeaderStyleProperty, "VisuDataGridHeaderStyle");
             _grid.SetResourceReference(DataGrid.RowStyleProperty, "VisuDataGridRowStyle");
             _grid.SetResourceReference(DataGrid.CellStyleProperty, "VisuDataGridCellStyle");
-            _grid.SetResourceReference(DataGrid.RowBackgroundProperty, "TableSurfaceBrush");
-            _grid.SetResourceReference(DataGrid.AlternatingRowBackgroundProperty, "TableAlternateRowBrush");
+            _grid.RowBackground = Brushes.White;
+            _grid.AlternatingRowBackground = new SolidColorBrush(GetInvoiceGridPalette(_doc.Kind).Alternate);
         }
         catch { }
+
+        var palette = GetInvoiceGridPalette(_doc.Kind);
+        var headerStyle = new Style(typeof(DataGridColumnHeader));
+        headerStyle.Setters.Add(new Setter(Control.BackgroundProperty, new SolidColorBrush(palette.Header)));
+        headerStyle.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.White));
+        headerStyle.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.SemiBold));
+        headerStyle.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Center));
+        headerStyle.Setters.Add(new Setter(Control.VerticalContentAlignmentProperty, VerticalAlignment.Center));
+        headerStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(4, 2, 4, 2)));
+        _grid.ColumnHeaderStyle = headerStyle;
+
+        var rowStyle = new Style(typeof(DataGridRow));
+        rowStyle.Setters.Add(new Setter(Control.BackgroundProperty, Brushes.White));
+        var alternate = new Trigger { Property = DataGridRow.AlternationIndexProperty, Value = 1 };
+        alternate.Setters.Add(new Setter(Control.BackgroundProperty, new SolidColorBrush(palette.Alternate)));
+        rowStyle.Triggers.Add(alternate);
+        var selected = new Trigger { Property = DataGridRow.IsSelectedProperty, Value = true };
+        selected.Setters.Add(new Setter(Control.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0xB8, 0xD8, 0xF7))));
+        rowStyle.Triggers.Add(selected);
+        _grid.RowStyle = rowStyle;
+
+        var cellStyle = new Style(typeof(DataGridCell));
+        cellStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(3, 0, 3, 0)));
+        cellStyle.Setters.Add(new Setter(Control.VerticalContentAlignmentProperty, VerticalAlignment.Center));
+        cellStyle.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Center));
+        _grid.CellStyle = cellStyle;
 
         _grid.ItemsSource = _lines;
         _grid.Columns.Clear();
@@ -926,12 +1076,30 @@ public sealed class InvoiceWin : BaseWin
         _ => "AccentPrimary"
     };
 
+    private static (Color Header, Color Alternate) GetInvoiceGridPalette(InvDocKind kind) => kind switch
+    {
+        InvDocKind.SalesInvoice => (Color.FromRgb(0x16, 0x70, 0xB8), Color.FromRgb(0xE8, 0xF2, 0xFC)),
+        InvDocKind.SalesReturn => (Color.FromRgb(0xB9, 0x3C, 0x4A), Color.FromRgb(0xFC, 0xEB, 0xED)),
+        InvDocKind.PurchaseInvoice => (Color.FromRgb(0x16, 0x80, 0x78), Color.FromRgb(0xE7, 0xF5, 0xF2)),
+        InvDocKind.PurchaseReturn => (Color.FromRgb(0xB6, 0x69, 0x25), Color.FromRgb(0xFC, 0xF1, 0xE5)),
+        InvDocKind.Quotation => (Color.FromRgb(0x3D, 0x8B, 0x52), Color.FromRgb(0xEA, 0xF5, 0xEC)),
+        _ => (Color.FromRgb(0x4B, 0x65, 0x82), Color.FromRgb(0xF0, 0xF3, 0xF7))
+    };
+
     private static DataGridTextColumn TextCol(string path, double width, string? headerKey = null)
     {
+        var elementStyle = new Style(typeof(TextBlock));
+        elementStyle.Setters.Add(new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Center));
+        elementStyle.Setters.Add(new Setter(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center));
+        var editingStyle = new Style(typeof(TextBox));
+        editingStyle.Setters.Add(new Setter(Control.TextAlignmentProperty, TextAlignment.Center));
+        editingStyle.Setters.Add(new Setter(Control.VerticalContentAlignmentProperty, VerticalAlignment.Center));
         var col = new DataGridTextColumn
         {
             Binding = new Binding(path) { Mode = BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged },
-            Width = width
+            Width = width,
+            ElementStyle = elementStyle,
+            EditingElementStyle = editingStyle
         };
         if (!string.IsNullOrEmpty(headerKey))
             col.Header = headerKey; // BaseWin localization may rewrite headers when present
