@@ -1436,6 +1436,7 @@
     "RatesRequireBaseCurrency": "Kur geçmişini girmeden önce şirketin temel para birimini seçin.",
     "DatabaseUnavailable": "Etkin veritabanı bağlantısı kullanılamıyor.",
     "SaveSuccess": "Para birimi kaydedildi.",
-    "SaveFailed": "Para birimi kaydedilemedi."
+    "SaveFailed": "Para birimi kaydedilemedi.",
+    "LoadFailed": "Para birimleri yüklenemedi."
   }
 }
