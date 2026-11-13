@@ -1220,7 +1220,17 @@
     "VoucherRequiresPost": "Yevmiye fişi fatura onaylandıktan sonra kullanılabilir.",
     "NoOriginal": "Bu belgeye bağlı orijinal fatura yok.",
     "VoucherOpenFailed": "Yevmiye fişi açılamadı.",
-    "OriginalOpenFailed": "Orijinal fatura açılamadı."
+    "OriginalOpenFailed": "Orijinal fatura açılamadı.",
+    "Preview": "Önizleme",
+    "New": "Yeni",
+    "Edit": "Düzenle",
+    "Delete": "Sil",
+    "Cancel": "İptal",
+    "PaymentMethods": "Ödeme yöntemleri",
+    "PaymentKNet": "K-Net",
+    "PaymentVisaMaster": "Visa / MasterCard",
+    "CardTenderPending": "Kartlı ödeme seçildi. Onaylamadan önce ödeme hesabını yapılandırın.",
+    "ConfirmRemoveLine": "Seçili satır silinsin mi?"
   },
   "CompanyWizard": {
     "Title": {
