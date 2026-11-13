@@ -1332,7 +1332,9 @@
     "DatabaseUnavailable": "The active database connection is unavailable.",
     "SaveSuccess": "Currency saved successfully.",
     "SaveFailed": "The currency could not be saved.",
-    "LoadFailed": "Could not load currencies."
+    "LoadFailed": "Could not load currencies.",
+    "NameAr": "Local Name",
+    "Saved": "Currency data saved successfully"
   },
   "BankCard": {
     "Title": "Bank Card & Account",
