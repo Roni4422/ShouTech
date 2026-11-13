@@ -49,7 +49,8 @@ namespace Kern.Tests
         [Fact]
         public async Task Reverse_ShouldWriteAuditEventsForOriginalAndCompensatingEntries()
         {
-            var (service, _, journalId, reversalId, connectionString) = await CreatePostedCandidateAsync(post: true);
+            var (service, _, journalId, _, connectionString) = await CreatePostedCandidateAsync(post: true);
+            var reversalId = await service.ReverseAsync(journalId, "guard-test", "audit event verification");
 
             await using var connection = new SqliteConnection(connectionString);
             await connection.OpenAsync();
@@ -60,7 +61,7 @@ namespace Kern.Tests
             long CountEvents(SqliteConnection c, Guid id)
             {
                 using var command = c.CreateCommand();
-                command.CommandText = "SELECT COUNT(*) FROM journal_events WHERE journal_entry_id = $id;";
+                command.CommandText = "SELECT COUNT(*) FROM journal_audit_events WHERE journal_entry_id = $id;";
                 command.Parameters.AddWithValue("$id", id.ToString("D"));
                 return (long)command.ExecuteScalar()!;
             }
@@ -73,7 +74,6 @@ namespace Kern.Tests
             JournalService Service,
             Guid CompanyId,
             Guid JournalId,
-            Guid ReversalId,
             string ConnectionString);
 
         private static async Task<GuardContext> CreatePostedCandidateAsync(bool post)
@@ -123,11 +123,7 @@ namespace Kern.Tests
                 if (post)
                     await service.PostAsync(journalId, actor);
 
-                var reversalId = post
-                    ? await service.ReverseAsync(journalId, actor, "reversal guard test")
-                    : Guid.Empty;
-
-                return new GuardContext(service, companyId, journalId, reversalId, connectionString);
+                return new GuardContext(service, companyId, journalId, connectionString);
             }
             catch
             {

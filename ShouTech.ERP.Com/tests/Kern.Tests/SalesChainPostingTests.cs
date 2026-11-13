@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Globalization;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using ShouTech.Application.Services;
@@ -125,7 +126,7 @@ namespace Kern.Tests
         {
             using var command = connection.CreateCommand();
             command.CommandText = sql;
-            return (decimal)command.ExecuteScalar()!;
+            return Convert.ToDecimal(command.ExecuteScalar(), CultureInfo.InvariantCulture);
         }
 
         private static CommercialDocumentDraft Draft(Guid companyId, string docNo) => new(
