@@ -34,12 +34,12 @@ Priority order:
 |---|---|---|
 | SQLite schema | Added, not yet runtime-tested | `dba/mig/sqlite/025_currency_master_rates.sql` |
 | PostgreSQL schema | Added, not yet runtime-tested | `dba/mig/postgresql/025_currency_master_rates.sql` |
-| Domain entities and repository contract | Pending | Define currency and rate records with explicit validation |
-| Provider-neutral repository | Pending | Implement create/update/read/history with parameterized SQL and transactions |
-| Application service | Pending | Validate ISO-like codes, precision, effective dates and rate bounds |
-| WPF `CurCard` integration | Pending | Preserve existing layout; remove the fake/unavailable save handler only after persistence is wired |
+| Domain entities and repository contract | Added | `Currency.cs` and `ICurrencyRepository.cs` define currency and rate records and provider-neutral operations |
+| Provider-neutral repository | Added, not yet integration-tested | `CurrencyRepository.cs` implements SQLite/PostgreSQL read, upsert, and rate-history queries with parameterized SQL |
+| Application service | Added, not yet integration-tested | `CurrencyService.cs` validates three-letter codes, precision, positive rates, and min/max bounds |
+| WPF `CurCard` integration | Pending | Preserve existing layout; wire the service and load/save/reopen flow before removing the unavailable-save guard |
 | Localization | Pending | Add/verify all keys in En, Ar, Fr and Tr resource files |
-| Integration tests | Pending | SQLite full round-trip and migration re-run; PostgreSQL schema and repository parity |
+| Integration tests | Pending | SQLite full round-trip and migration re-run; PostgreSQL schema and repository parity. SQLite migration SQL passed an isolated in-memory schema/constraint smoke check; this is not a repository integration test |
 | Permissions and audit | Pending | Currency read/write permissions and actor/source audit |
 
 **Do not mark Currency Card complete until every field and every rate-history row survives save → close → reopen → compare, for both providers.**
