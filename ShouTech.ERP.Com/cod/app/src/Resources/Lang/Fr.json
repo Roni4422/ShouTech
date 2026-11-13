@@ -1420,6 +1420,8 @@
     "DatabaseUnavailable": "La connexion à la base de données active est indisponible.",
     "SaveSuccess": "Devise enregistrée.",
     "SaveFailed": "Impossible d'enregistrer la devise.",
-    "LoadFailed": "Impossible de charger les devises."
+    "LoadFailed": "Impossible de charger les devises.",
+    "NameAr": "Nom local",
+    "Saved": "Devise enregistrée"
   }
 }
