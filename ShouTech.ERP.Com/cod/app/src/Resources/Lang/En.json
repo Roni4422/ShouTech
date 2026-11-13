@@ -202,7 +202,8 @@
     "Info": "Information",
     "Warning": "Warning",
     "Error": "Error",
-    "Confirm": "Confirmation"
+    "Confirm": "Confirmation",
+    "Search": "Search"
   },
   "CompanySelection": {
     "Hint": "Select a company to continue to sign in",
@@ -1245,7 +1246,18 @@
     "PaymentKNet": "K-Net",
     "PaymentVisaMaster": "Visa / MasterCard",
     "CardTenderPending": "Card tender selected. Configure the payment account before posting.",
-    "ConfirmRemoveLine": "Remove the selected line?"
+    "ConfirmRemoveLine": "Remove the selected line?",
+    "DocumentTitle": "Document",
+    "SalesAccount": "Sales account",
+    "PurchaseAccount": "Purchase account",
+    "SearchNotAvailable": "Search window is not available yet.",
+    "NavigationUnavailable": "Document navigation is not available yet.",
+    "DocumentNotSaved": "The document has not been saved.",
+    "ConfirmDelete": "Move this invoice to the recycle bin?",
+    "DatabaseUnavailable": "Database connection is unavailable.",
+    "MovedToRecycleBin": "Invoice moved to the recycle bin.",
+    "DocumentNotFound": "Invoice was not found in the database.",
+    "DeleteFailed": "Delete failed: "
   },
   "Vouchers": {
     "JournalTitle": "Journal Voucher",
