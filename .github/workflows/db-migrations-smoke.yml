@@ -2,7 +2,7 @@ name: Database migration smoke tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'feature/**']
     paths:
       - 'ShouTech.ERP.Com/dba/mig/**'
       - 'ShouTech.ERP.Com/tools/SqlMigrator/**'
