@@ -1319,16 +1319,19 @@
     "Saved": "Cost center saved successfully"
   },
   "CurrencyCard": {
-    "Title": "Currency Card & Rates",
+    "Title": "Currency Card",
     "Code": "Currency Code",
-    "NameAr": "Local Name",
-    "NameEn": "English Name",
+    "Name": "Currency Name (Arabic)",
+    "NameEn": "Currency Name (English)",
     "Symbol": "Symbol",
-    "Fraction": "Fraction Unit",
+    "Fraction": "Fraction Name (English)",
     "Rate": "Exchange Rate",
-    "MinRate": "Min Rate",
-    "MaxRate": "Max Rate",
-    "Saved": "Currency data saved successfully"
+    "MinRate": "Minimum Rate",
+    "MaxRate": "Maximum Rate",
+    "RatesRequireBaseCurrency": "Select the company's base currency before entering exchange-rate history.",
+    "DatabaseUnavailable": "The active database connection is unavailable.",
+    "SaveSuccess": "Currency saved successfully.",
+    "SaveFailed": "The currency could not be saved."
   },
   "BankCard": {
     "Title": "Bank Card & Account",
