@@ -45,6 +45,17 @@ namespace ShouTech.App.Services
             }
         }
 
+        public static PartyService? Parties
+        {
+            get
+            {
+                var connection = DatabaseRuntime.GetConnectionString();
+                return string.IsNullOrWhiteSpace(connection)
+                    ? null
+                    : new PartyService(new PartyRepository(DatabaseRuntime.GetProvider(), connection));
+            }
+        }
+
         public static ILocSvc Localization =>
             System.Windows.Application.Current is App app
                 ? app.Localization
