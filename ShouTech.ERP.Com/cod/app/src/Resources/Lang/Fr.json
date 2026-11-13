@@ -509,7 +509,8 @@
     "Info": "Information",
     "Warning": "Avertissement",
     "Error": "Erreur",
-    "Confirm": "Confirmation"
+    "Confirm": "Confirmation",
+    "Search": "Rechercher"
   },
   "Shell": {
     "ThemeDark": "Mode Sombre",
@@ -1213,7 +1214,18 @@
     "PaymentKNet": "K-Net",
     "PaymentVisaMaster": "Visa / MasterCard",
     "CardTenderPending": "Mode carte sélectionné. Configurez le compte de paiement avant validation.",
-    "ConfirmRemoveLine": "Supprimer la ligne sélectionnée ?"
+    "ConfirmRemoveLine": "Supprimer la ligne sélectionnée ?",
+    "DocumentTitle": "Document",
+    "SalesAccount": "Compte de vente",
+    "PurchaseAccount": "Compte d'achat",
+    "SearchNotAvailable": "La fenêtre de recherche n'est pas encore disponible.",
+    "NavigationUnavailable": "La navigation entre documents n'est pas disponible.",
+    "DocumentNotSaved": "Le document n'a pas été enregistré.",
+    "ConfirmDelete": "Déplacer cette facture vers la corbeille ?",
+    "DatabaseUnavailable": "Connexion à la base de données indisponible.",
+    "MovedToRecycleBin": "Facture déplacée vers la corbeille.",
+    "DocumentNotFound": "Facture introuvable dans la base de données.",
+    "DeleteFailed": "Échec de la suppression : "
   },
   "CompanyWizard": {
     "Title": {
