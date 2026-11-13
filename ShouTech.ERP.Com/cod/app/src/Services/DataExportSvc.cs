@@ -710,7 +710,7 @@ public static class DataExportSvc
         }
     }
 
-    private static string BuildCompositeKey(Dictionary<string, object?> values, IReadOnlyList<string> keyColumns)
+    private static string BuildCompositeKey(Dictionary<string, object?> values, List<string> keyColumns)
     {
         var parts = new string[keyColumns.Count];
         for (var i = 0; i < keyColumns.Count; i++)
@@ -725,7 +725,7 @@ public static class DataExportSvc
         DbConnection connection,
         DbTransaction transaction,
         string table,
-        IReadOnlyList<string> keyColumns,
+        List<string> keyColumns,
         string? companyColumn,
         object? companyId,
         IReadOnlyList<string> keepKeys,
@@ -1036,7 +1036,7 @@ public static class DataExportSvc
             .ToArray() ?? [];
     }
 
-    private static string? SharedStringValue(string? indexText, IReadOnlyList<string> sharedStrings)
+    private static string? SharedStringValue(string? indexText, string[] sharedStrings)
     {
         if (!int.TryParse(indexText, NumberStyles.None, CultureInfo.InvariantCulture, out var index) ||
             index < 0 || index >= sharedStrings.Count)
@@ -1318,7 +1318,7 @@ public static class DataExportSvc
         DbConnection connection,
         DbTransaction transaction,
         string table,
-        IReadOnlyDictionary<string, object?> row,
+        Dictionary<string, object?> row,
         IReadOnlyList<string> columns,
         IReadOnlyList<string> primaryKeys,
         CancellationToken ct)
