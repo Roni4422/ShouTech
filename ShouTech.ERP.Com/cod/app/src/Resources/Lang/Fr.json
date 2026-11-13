@@ -1405,5 +1405,20 @@
   "JrnWin.AlreadySaved": "Cette écriture est déjà enregistrée. Ouvrez un nouveau document pour une autre saisie.",
   "JrnWin.AlreadySavedTitle": "Déjà enregistré",
   "JrnWin.DraftSavedDetail": "Brouillon d'écriture enregistré.\nId: {0:D}",
-  "JrnWin.SavedTitle": "Enregistré"
+  "JrnWin.SavedTitle": "Enregistré",
+  "CurrencyCard": {
+    "Title": "Fiche de devise",
+    "Code": "Code devise",
+    "Name": "Nom de la devise (arabe)",
+    "NameEn": "Nom de la devise (anglais)",
+    "Symbol": "Symbole",
+    "Fraction": "Nom de la subdivision (anglais)",
+    "Rate": "Taux de change",
+    "MinRate": "Taux minimum",
+    "MaxRate": "Taux maximum",
+    "RatesRequireBaseCurrency": "Définissez la devise de base de l'entreprise avant de saisir l'historique des taux.",
+    "DatabaseUnavailable": "La connexion à la base de données active est indisponible.",
+    "SaveSuccess": "Devise enregistrée.",
+    "SaveFailed": "Impossible d'enregistrer la devise."
+  }
 }
