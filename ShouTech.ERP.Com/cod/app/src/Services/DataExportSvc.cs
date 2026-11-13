@@ -1039,7 +1039,7 @@ public static class DataExportSvc
     private static string? SharedStringValue(string? indexText, string[] sharedStrings)
     {
         if (!int.TryParse(indexText, NumberStyles.None, CultureInfo.InvariantCulture, out var index) ||
-            index < 0 || index >= sharedStrings.Count)
+            index < 0 || index >= sharedStrings.Length)
             throw new InvalidDataException("The workbook contains an invalid shared-string reference.");
         return sharedStrings[index];
     }
