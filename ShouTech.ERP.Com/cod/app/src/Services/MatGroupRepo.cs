@@ -13,8 +13,7 @@ public static class MatGroupRepo
 {
     public static HashSet<long> LoadMemberIds(long groupId)
     {
-        if (groupId <= 0)
-            throw new ArgumentOutOfRangeException(nameof(groupId));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(groupId);
 
         var company = RequireCompany();
         using var connection = OpenConnection();
