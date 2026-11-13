@@ -20,16 +20,13 @@ public sealed class CurCard : BaseWin
     private readonly TextBox _txtNameEn = new() { Width = 150, Height = 26 };
     private readonly TextBox _txtSymbol = new() { Width = 70, Height = 26, Text = "$" };
     private readonly TextBox _txtFraction = new() { Width = 120, Height = 26 };
-    private readonly TextBox _txtRate = new() { Width = 90, Height = 26, Text = "3.7500" };
-    private readonly TextBox _txtMinRate = new() { Width = 90, Height = 26, Text = "3.7400" };
-    private readonly TextBox _txtMaxRate = new() { Width = 90, Height = 26, Text = "3.7600" };
 
     private readonly Button _btnNew = new();
     private readonly Button _btnSave = new();
     private readonly Button _btnAddRate = new();
 
     private readonly DataGrid _grid = new();
-    private readonly ObservableCollection<RateHistoryVm> _rates = new();
+    private readonly ObservableCollection<ShouTech.Domain.Entities.Currency> _currencies = new();
 
     public CurCard()
     {
@@ -42,6 +39,7 @@ public sealed class CurCard : BaseWin
         BuildUi();
         ApplyLocalizedText();
         ResetCard();
+        Loaded += async (_, _) => await LoadCurrenciesAsync();
     }
 
     private void BuildUi()
@@ -56,8 +54,7 @@ public sealed class CurCard : BaseWin
 
         _btnNew.Click += (_, _) => ResetCard();
         _btnSave.Click += async (_, _) => await SaveCurrencyAsync();
-        _btnAddRate.IsEnabled = false;
-        _btnAddRate.ToolTip = T("CurrencyCard.RatesRequireBaseCurrency");
+        _btnAddRate.Visibility = Visibility.Collapsed;
 
         foreach (var b in new[] { _btnNew, _btnSave, _btnAddRate })
             toolbar.Children.Add(b);
@@ -90,12 +87,6 @@ public sealed class CurCard : BaseWin
         cardPanel.Children.Add(Labeled("CurrencyCard.NameEn", _txtNameEn));
         cardPanel.Children.Add(Labeled("CurrencyCard.Fraction", _txtFraction));
 
-        var cr2 = new WrapPanel();
-        cr2.Children.Add(Labeled("CurrencyCard.Rate", _txtRate));
-        cr2.Children.Add(Labeled("CurrencyCard.MinRate", _txtMinRate));
-        cr2.Children.Add(Labeled("CurrencyCard.MaxRate", _txtMaxRate));
-        cardPanel.Children.Add(cr2);
-
         leftCard.Child = cardPanel;
         Grid.SetColumn(leftCard, 0);
         gridRoot.Children.Add(leftCard);
@@ -111,12 +102,11 @@ public sealed class CurCard : BaseWin
         _grid.SetResourceReference(DataGrid.RowBackgroundProperty, "TableSurfaceBrush");
         _grid.SetResourceReference(DataGrid.AlternatingRowBackgroundProperty, "TableAlternateRowBrush");
 
-        _grid.ItemsSource = _rates;
-        _grid.Columns.Add(TextCol(nameof(RateHistoryVm.DateText), 100));
-        _grid.Columns.Add(TextCol(nameof(RateHistoryVm.RateText), 90));
-        _grid.Columns.Add(TextCol(nameof(RateHistoryVm.BuyRateText), 90));
-        _grid.Columns.Add(TextCol(nameof(RateHistoryVm.SellRateText), 90));
-        _grid.Columns.Add(TextCol(nameof(RateHistoryVm.Notes), 120));
+        _grid.ItemsSource = _currencies;
+        _grid.SelectionChanged += (_, _) => PopulateSelectedCurrency();
+        _grid.Columns.Add(TextCol(nameof(ShouTech.Domain.Entities.Currency.Code), 80));
+        _grid.Columns.Add(TextCol(nameof(ShouTech.Domain.Entities.Currency.NameEnglish), 180));
+        _grid.Columns.Add(TextCol(nameof(ShouTech.Domain.Entities.Currency.Symbol), 70));
 
         Grid.SetColumn(_grid, 2);
         gridRoot.Children.Add(_grid);
@@ -132,10 +122,40 @@ public sealed class CurCard : BaseWin
         _txtNameEn.Text = string.Empty;
         _txtSymbol.Text = "$";
         _txtFraction.Text = string.Empty;
-        _txtRate.Text = "3.7500";
-        _txtMinRate.Text = "3.7400";
-        _txtMaxRate.Text = "3.7600";
-        _rates.Clear();
+        _grid.SelectedItem = null;
+    }
+
+    private async Task LoadCurrenciesAsync()
+    {
+        try
+        {
+            var service = ShouTech.App.Services.AppHost.Currency;
+            if (service is null)
+                throw new InvalidOperationException(T("CurrencyCard.DatabaseUnavailable"));
+
+            var currencies = await service.GetCurrenciesAsync(includeInactive: true);
+            _currencies.Clear();
+            foreach (var currency in currencies)
+                _currencies.Add(currency);
+        }
+        catch (Exception ex)
+        {
+            ShouTech.App.Services.AppHost.Logging?.LogError("CurrencyCard", "Currency list load failed.", ex);
+            MessageBox.Show(this, T("CurrencyCard.LoadFailed") + Environment.NewLine + ex.Message,
+                T("Application.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void PopulateSelectedCurrency()
+    {
+        if (_grid.SelectedItem is not ShouTech.Domain.Entities.Currency currency)
+            return;
+
+        _txtCode.Text = currency.Code;
+        _txtNameEn.Text = currency.NameEnglish;
+        _txtNameAr.Text = currency.NameArabic ?? string.Empty;
+        _txtSymbol.Text = currency.Symbol ?? string.Empty;
+        _txtFraction.Text = currency.FractionNameEnglish ?? string.Empty;
     }
 
     private async Task SaveCurrencyAsync()
@@ -157,6 +177,7 @@ public sealed class CurCard : BaseWin
                 true);
 
             await service.SaveCurrencyAsync(currency);
+            await LoadCurrenciesAsync();
             ShouTech.App.Services.AppHost.Logging?.LogOperation(
                 "CurrencyCard",
                 "CurrencySaved",
@@ -179,13 +200,11 @@ public sealed class CurCard : BaseWin
     protected override void ApplyLocalizedText()
     {
         Title = T("CurrencyCard.Title");
-        if (_grid.Columns.Count >= 5)
+        if (_grid.Columns.Count >= 3)
         {
-            _grid.Columns[0].Header = T("Invoice.Date");
-            _grid.Columns[1].Header = T("CurrencyCard.Rate");
-            _grid.Columns[2].Header = T("Invoice.Col.PurchasePrice");
-            _grid.Columns[3].Header = T("Invoice.Col.SalePrice");
-            _grid.Columns[4].Header = T("CostCenter.Notes");
+            _grid.Columns[0].Header = T("CurrencyCard.Code");
+            _grid.Columns[1].Header = T("CurrencyCard.NameEn");
+            _grid.Columns[2].Header = T("CurrencyCard.Symbol");
         }
         RefreshLocalizedContent(Content as DependencyObject);
     }
@@ -229,25 +248,4 @@ public sealed class CurCard : BaseWin
             Width = width
         };
 
-    private sealed class RateHistoryVm : INotifyPropertyChanged
-    {
-        private DateTime _date = DateTime.Today;
-        private decimal _rate, _buyRate, _sellRate;
-        private string _notes = "";
-
-        public DateTime Date { get => _date; set { _date = value; OnChanged(); OnChanged(nameof(DateText)); } }
-        public string DateText { get => _date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture); set { if (DateTime.TryParse(value, out var d)) Date = d; } }
-        public decimal Rate { get => _rate; set { _rate = value; OnChanged(nameof(RateText)); } }
-        public decimal BuyRate { get => _buyRate; set { _buyRate = value; OnChanged(nameof(BuyRateText)); } }
-        public decimal SellRate { get => _sellRate; set { _sellRate = value; OnChanged(nameof(SellRateText)); } }
-        public string Notes { get => _notes; set { _notes = value; OnChanged(); } }
-
-        public string RateText { get => _rate.ToString("0.####", CultureInfo.InvariantCulture); set { if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)) Rate = v; } }
-        public string BuyRateText { get => _buyRate == 0 ? "" : _buyRate.ToString("0.####", CultureInfo.InvariantCulture); set { if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)) BuyRate = v; } }
-        public string SellRateText { get => _sellRate == 0 ? "" : _sellRate.ToString("0.####", CultureInfo.InvariantCulture); set { if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)) SellRate = v; } }
-
-        public event PropertyChangedEventHandler? PropertyChanged;
-        private void OnChanged([CallerMemberName] string? name = null)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
-    }
 }
