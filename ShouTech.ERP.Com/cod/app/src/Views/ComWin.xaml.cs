@@ -453,7 +453,7 @@ namespace ShouTech.App.Views
             }
         }
 
-        private void ApplyRecentCompanyOrder(IReadOnlyList<string> recentCodes)
+        private void ApplyRecentCompanyOrder(List<string> recentCodes)
         {
             if (recentCodes.Count == 0 || Companies.Count < 2)
                 return;

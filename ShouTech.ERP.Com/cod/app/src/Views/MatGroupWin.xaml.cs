@@ -4,6 +4,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
+using System.Text;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Controls;
@@ -290,9 +291,10 @@ public partial class MatGroupWin : BaseWin
 
         var total = _rows.Count;
         var assigned = _rows.Count(row => row.IsAssigned);
+        var format = CompositeFormat.Parse(L("Count", "{0} assigned / {1} materials"));
         TxtSelectionCount.Text = string.Format(
             System.Globalization.CultureInfo.CurrentCulture,
-            L("Count", "{0} assigned / {1} materials"),
+            format,
             assigned,
             total);
     }
@@ -316,7 +318,7 @@ public partial class MatGroupWin : BaseWin
         base.OnClosing(e);
     }
 
-    private void ReportError(string code, string message, Exception exception)
+    private static void ReportError(string code, string message, Exception exception)
         => AppHost.Logging?.LogError("MaterialGroups", $"[{code}] {message}", exception);
 
     private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();
