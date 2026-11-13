@@ -74,7 +74,6 @@ namespace Kern.Tests
             JournalService Service,
             Guid CompanyId,
             Guid JournalId,
-            Guid ReversalId,
             string ConnectionString);
 
         private static async Task<GuardContext> CreatePostedCandidateAsync(bool post)
@@ -124,7 +123,7 @@ namespace Kern.Tests
                 if (post)
                     await service.PostAsync(journalId, actor);
 
-                return new GuardContext(service, companyId, journalId, Guid.Empty, connectionString);
+                return new GuardContext(service, companyId, journalId, connectionString);
             }
             catch
             {
