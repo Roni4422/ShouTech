@@ -166,6 +166,33 @@ namespace ShouTech.App.ViewModels
 
                 if (result.Success && result.User != null)
                 {
+                    try
+                    {
+                        if (result.User.IsAdministrator)
+                        {
+                            AppHost.Permissions.Clear();
+                        }
+                        else
+                        {
+                            await AppHost.Permissions.LoadForUserAsync(result.User.Id);
+                        }
+                    }
+                    catch (Exception permissionException)
+                    {
+                        AppHost.Logging.LogError(
+                            "Authentication",
+                            "Permission loading failed; login was denied.",
+                            permissionException);
+
+                        await AppHost.Auth.LogoutAsync();
+                        AppHost.Permissions.Clear();
+                        StatusMessage = Loc.Get("Application.Error");
+                        IsStatusError = true;
+                        Password = string.Empty;
+                        RequestFocusPassword?.Invoke();
+                        return;
+                    }
+
                     StatusMessage = Loc.Get("Login.Success");
                     IsStatusError = false;
 
