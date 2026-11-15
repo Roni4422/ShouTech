@@ -509,7 +509,8 @@
     "Info": "Bilgi",
     "Warning": "Uyarı",
     "Error": "Hata",
-    "Confirm": "Onay"
+    "Confirm": "Onay",
+    "Search": "Ara"
   },
   "Shell": {
     "ThemeDark": "Karanlık Mod",
@@ -1218,9 +1219,30 @@
     "Voucher": "Fiş",
     "Original": "Orijinal",
     "VoucherRequiresPost": "Yevmiye fişi fatura onaylandıktan sonra kullanılabilir.",
-    "NoOriginal": "Bu belgeye bağlı orijinal fatura yok.",
-    "VoucherOpenFailed": "Yevmiye fişi açılamadı.",
-    "OriginalOpenFailed": "Orijinal fatura açılamadı."
+    "NoOriginal": "Bağlı bir orijinal fatura yok.",
+    "VoucherOpenFailed": "Fiş açılamadı: ",
+    "OriginalOpenFailed": "Orijinal fatura açılamadı: ",
+    "Preview": "Önizleme",
+    "New": "Yeni",
+    "Edit": "Düzenle",
+    "Delete": "Sil",
+    "Cancel": "İptal",
+    "PaymentMethods": "Ödeme yöntemleri",
+    "PaymentKNet": "K-Net",
+    "PaymentVisaMaster": "Visa / MasterCard",
+    "CardTenderPending": "Kartlı ödeme seçildi. Onaylamadan önce ödeme hesabını yapılandırın.",
+    "ConfirmRemoveLine": "Seçili satır silinsin mi?",
+    "DocumentTitle": "Belge",
+    "SalesAccount": "Satış hesabı",
+    "PurchaseAccount": "Alış hesabı",
+    "SearchNotAvailable": "Arama penceresi henüz kullanılamıyor.",
+    "NavigationUnavailable": "Belgeler arasında gezinme henüz kullanılamıyor.",
+    "DocumentNotSaved": "Belge kaydedilmedi.",
+    "ConfirmDelete": "Bu fatura geri dönüşüm kutusuna taşınsın mı?",
+    "DatabaseUnavailable": "Veritabanı bağlantısı kullanılamıyor.",
+    "MovedToRecycleBin": "Fatura geri dönüşüm kutusuna taşındı.",
+    "DocumentNotFound": "Fatura veritabanında bulunamadı.",
+    "DeleteFailed": "Silme başarısız: "
   },
   "CompanyWizard": {
     "Title": {
@@ -1422,5 +1444,23 @@
   "JrnWin.AlreadySaved": "Bu fiş zaten kayıtlı. Yeni bir fiş açın.",
   "JrnWin.AlreadySavedTitle": "Zaten kayıtlı",
   "JrnWin.DraftSavedDetail": "Yevmiye taslağı kaydedildi.\nId: {0:D}",
-  "JrnWin.SavedTitle": "Kaydedildi"
+  "JrnWin.SavedTitle": "Kaydedildi",
+  "CurrencyCard": {
+    "Title": "Para Birimi Kartı",
+    "Code": "Para Birimi Kodu",
+    "Name": "Para Birimi Adı (Arapça)",
+    "NameEn": "Para Birimi Adı (İngilizce)",
+    "Symbol": "Simge",
+    "Fraction": "Alt Birim Adı (İngilizce)",
+    "Rate": "Döviz Kuru",
+    "MinRate": "En Düşük Kur",
+    "MaxRate": "En Yüksek Kur",
+    "RatesRequireBaseCurrency": "Kur geçmişini girmeden önce şirketin temel para birimini seçin.",
+    "DatabaseUnavailable": "Etkin veritabanı bağlantısı kullanılamıyor.",
+    "SaveSuccess": "Para birimi kaydedildi.",
+    "SaveFailed": "Para birimi kaydedilemedi.",
+    "LoadFailed": "Para birimleri yüklenemedi.",
+    "NameAr": "Yerel Ad",
+    "Saved": "Para birimi verileri kaydedildi"
+  }
 }

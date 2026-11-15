@@ -2,7 +2,7 @@
 
 Goal: reach functional parity with [ERPNext](https://github.com/frappe/erpnext) as an **offline-first Windows desktop ERP**, and outperform **Al-Ameen ERP v10** in the SMB market.
 
-**Deployment model (target):** ShouTech ERP is *offline-first, not offline-only*. The desktop client runs fully standalone (SQLite), and — when ready — can additionally connect to a central server (PostgreSQL) for multi-user/multi-branch operation, encrypted cloud backup, and outbox sync. Licensing is enforced by the SecEng native engine: server-side validation for connected deployments, and optional **hardware dongle** activation for offline machines.
+**Deployment model (target):** ShouTech ERP is an **offline desktop application**. The complete business workflow must run locally without internet access. SQLite is the standard standalone database; PostgreSQL may be supported for customer-controlled on-premise installations where explicitly configured. No cloud dependency, mandatory online activation, or web-hosted workflow is required for normal operation. Licensing and backup must remain usable offline.
 
 > **Reference:** ERPNext is a web ERP (Python/Frappe, ~41k stars, actively updated). Its module list below was taken from the current `develop` branch module folders.
 

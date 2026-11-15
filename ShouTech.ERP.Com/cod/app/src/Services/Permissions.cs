@@ -693,6 +693,10 @@ public sealed class PermServ : IPermServ
     {
         if (string.IsNullOrWhiteSpace(permissionKey))
             return false;
+
+        if (UsrSession.IsAuthenticated && UsrSession.IsAdministrator)
+            return true;
+
         return _perms.Contains(permissionKey.Trim());
     }
 
