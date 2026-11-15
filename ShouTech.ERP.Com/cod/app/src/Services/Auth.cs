@@ -535,6 +535,7 @@ public sealed class AuthServ : IAuthSvc
         _currentUser = null;
         UsrSession.Clear();
         AppState.CurrentUser = null;
+        AppHost.Permissions.Clear();
         return Task.CompletedTask;
     }
 
