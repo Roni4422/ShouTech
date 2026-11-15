@@ -6,6 +6,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Media;
 using ShouTech.App.Reporting;
@@ -1092,7 +1093,7 @@ public sealed class InvoiceWin : BaseWin
         elementStyle.Setters.Add(new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Center));
         elementStyle.Setters.Add(new Setter(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center));
         var editingStyle = new Style(typeof(TextBox));
-        editingStyle.Setters.Add(new Setter(Control.TextAlignmentProperty, TextAlignment.Center));
+        editingStyle.Setters.Add(new Setter(TextBox.TextAlignmentProperty, TextAlignment.Center));
         editingStyle.Setters.Add(new Setter(Control.VerticalContentAlignmentProperty, VerticalAlignment.Center));
         var col = new DataGridTextColumn
         {
