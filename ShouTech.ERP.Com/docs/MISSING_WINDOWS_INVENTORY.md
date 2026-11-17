@@ -153,9 +153,131 @@ Legend: ✅ moved in Phase 3 · ⏸ deliberately left (reason) · ✔ already at
 | `ModuleWorkspaceView`, `ReportGridVw`, `DashVw` | Embedded views in the shell, not windows | ⏸ left: header bands belong to the shell workspace layout |
 | New: `PayRecWin`, `ProjWin`, `AssetWin` | — | ✅ built with bottom action bars from the start |
 
-## 6. Phase 3 build results
+## 6. Phase 3 build results (this branch)
 
-*(Filled in as work packages complete — see git history on this branch.)*
+### 6.1 JrnWin Print — BUILT (`6e1f71a`)
+`PrintJournal_Click` now prints a real A4 voucher page (company header, doc no/date,
+narrative, account lines with debit/credit, totals, balance state) through a
+`PrintDialog`, following the `InvPrn` invoice print pattern; labels via existing
+`Vouchers.*` Lang keys. No schema/service needed (prints the loaded journal).
+
+### 6.2 Payment Reconciliation — BUILT (`df1d3b2`, `6ea07bc`, fix `2b15216`)
+- **Schema**: `dba/mig/{sqlite,postgresql}/025_payment_allocations.sql` — new
+  `payment_allocations` table (the only schema needed; documents/ledger already
+  existed). Model: a posted sales document debits the customer in `party_ledger`,
+  a purchase document credits the supplier; money-in is a credit entry (customer)
+  / debit entry (supplier). Allocation links a payment entry to an open document.
+- **Domain**: `OpenDocumentRow`/`UnallocatedPaymentRow` records +
+  `IReconciliationRepository` (`src/ShouTech.Domain`).
+- **Infrastructure**: `ReconciliationRepository` — provider-neutral; lists capped
+  at 500; `AllocateAsync` runs in ONE transaction and re-reads/re-validates the
+  payment balance, document status (Posted), same-party rule, and open amount
+  before inserting the allocation and increasing `paid_amount` (the settlement
+  source of truth). Over-allocation and double submission are rejected inside
+  the transaction (proven by a runtime smoke test against a migrated SQLite DB).
+- **Service**: `ReconciliationService` (input validation) in `src/ShouTech.Application`.
+- **Window**: `Views/PayRecWin.cs` (BaseWin) — two schedule grids (open documents /
+  unallocated payments), party-kind selector + amount in the content area,
+  Allocate/Refresh/Close in the bottom command bar, status bar with counts/totals.
+- **RBAC**: `ACC.PAYREC.VIEW` / `ACC.PAYREC.ALLOCATE` (PermCat.Accounting), seeded
+  by migration 028 with role grants (Admin all, User all, Viewer view-only).
+- **Nav**: ribbon `Accounts.PaymentReconciliation` (TabAccounts → Analysis group)
+  → `RptNav.OpenPaymentReconciliation`. **Lang**: `PaymentReconciliation.*` in all
+  4 files (En complete; Ar/Fr/Tr translated).
+
+### 6.3 Projects — BUILT (`6ea07bc`, `df1d3b2`)
+- **Schema**: `026_projects.sql` (both providers): `projects` + `project_tasks`,
+  partial unique index on (company, code) among live rows, audit columns,
+  soft delete.
+- **Domain/Service**: `Project`, `ProjectTask`, statuses; `IProjectRepository`;
+  `ProjectService` validates code/name required, budget ≥ 0, end ≥ start, known
+  statuses; `ProjectRepository` is transactional with in-transaction uniqueness
+  re-checks and company scoping on every statement.
+- **Window**: `Views/ProjWin.cs` — project list (main content) + editor in the
+  content area + tasks grid/editor below; New/Save/Delete/AddTask/DeleteTask/
+  Refresh/Close in the bottom command bar; status bar with count + total budget.
+- **RBAC**: `PRJ.PROJECT.VIEW/CREATE/UPDATE/DELETE`, `PRJ.TASK.MANAGE` (migration
+  028 grants). **Nav**: ribbon `Projects.Projects` (TabOrders → General group).
+  **Lang**: `Projects.*` ×4.
+
+### 6.4 Fixed Assets — BUILT (`6ea07bc`, `df1d3b2`)
+- **Schema**: `027_fixed_assets.sql` (both providers): register only —
+  depreciation is computed, never stored.
+- **Domain/Service**: `FixedAsset`, `DepreciationMethods`, `AssetStatuses`;
+  `AssetService` validates (cost ≥ 0, 0 ≤ salvage ≤ cost, life ≥ 1, known
+  method/status) and computes schedules: straight-line and double-declining
+  balance, final year lands exactly on salvage, accumulated depreciation
+  pro-rated by whole months and capped at the depreciable base.
+- **Window**: `Views/AssetWin.cs` — register list + editor + computed
+  depreciation schedule grid; read-only accumulated/book-value fields; status
+  bar with total cost + total book value.
+- **RBAC**: `AST.ASSET.VIEW/CREATE/UPDATE/DELETE` (migration 028). **Nav**:
+  ribbon `Assets.Assets` (TabAccounts → General group). **Lang**: `Assets.*` ×4.
+
+### 6.5 Permissions seed — migration 028 (both providers)
+11 new permissions + role grants, insert-or-update / `ON CONFLICT` idempotent.
+Verified on SQLite: fresh migrator run applies, second run SKIPs; with roles
+present the grants resolve to Administrator 11 / User 9 / Viewer 3 and are
+idempotent on re-run.
+
+### 6.6 NOT built in Phase 3 (deliberate)
+- **OrdWin Convert-to-invoice**: blocked on order persistence — OrdWin itself
+  has no storage (Save is `ShowPersistenceUnavailable`), so a solid Convert
+  cannot exist yet. It is backlog #1 (wire card/voucher/order persistence,
+  CcCard first, then Convert via the `document_links` schema).
+- **CRM pipeline / Quality (priority 5)**: not started — priorities 1–4 plus
+  verification consumed the phase, per the task's own stop rule.
+
+## 6b. How the File Explorer reference was applied (per window type)
+- **All swept windows**: the bottom action bar is an Explorer-style command bar
+  moved to the bottom — flat `Border` with transparent background, subtle 1px
+  top divider (`BorderBrush`), commands right-aligned (mirrored in RTL), sitting
+  directly above any totals/status footer. No colored toolbar blocks remain in
+  secondary windows.
+- **List/manager windows (ProjWin, AssetWin, PayRecWin, card windows)**: the
+  list is the main content; details/editing live in the content area; a slim
+  status bar at the very bottom shows counts/totals (Explorer status-bar logic).
+- **Document windows (JrnWin, InvoiceWin, CshWin, ChqWin, MfgWin, OrdWin)**:
+  header fields and line grid keep the content area; the command bar sits above
+  the existing totals/balance footer, which stays the last element.
+- **Report windows (RptBase)**: Refresh/Columns/Export/Print form the bottom
+  command bar under the grid; the totals bar is the footer.
+- Surfaces/padding: windows keep the central Surface brushes; new windows use
+  12px outer padding and the central implicit control styles. MWin/ribbon were
+  NOT redone (separate follow-up, per instructions).
+
+## 6c. The Al-Ameen V10 schedule pattern, as implemented here
+Implemented centrally, not per window:
+- **RptBase (all 19 report windows)**: strong header row (central DataGrid
+  styles), banded rows, sortable + resizable + **reorderable** columns, numeric
+  columns right-aligned, date columns centered, and a **totals footer pinned at
+  the bottom** (bold, `SurfaceSecondaryBrush`). Reports that supply their own
+  Totals dictionary keep them; reports that pass none now get totals computed
+  from the bound rows for numeric columns (`RenderTotals` fallback).
+- **Exceptions (documented)**: `BalSheetWin` and `IncStmtWin` opt out of computed
+  totals (`AllowComputedTotals = false`) — their rows are statement sections and
+  subtotals, so summing every row would double-count. Editable line grids
+  (JrnWin/InvoiceWin) keep sorting/reordering off to preserve document line
+  order; they already carry bottom totals footers.
+- **New windows**: ProjWin/AssetWin/PayRecWin grids use the same pattern
+  (sortable/resizable/reorderable, numeric right-aligned, dates centered,
+  standard context menu via `DataGridTableBehavior`, totals in the status bar).
+- Print/Export stay reachable from the RptBase bottom action bar.
+
+## 6d. Heavy-duty checklist (per shipped item)
+| Item | Transactions | Validation | RBAC | Audit | Migrations (SQLite+PG) | Tests |
+|---|---|---|---|---|---|---|
+| Payment allocations | Single tx; balances re-read + re-validated inside tx; rollback on failure | Service + repository (amount > 0, Posted doc, same party/kind, open & available caps) | `ACC.PAYREC.VIEW/ALLOCATE`, checked in window + Allocate handler | `allocated_by`/`allocated_at` on every allocation row | 025 both providers, idempotent (double-run proven) | Service validation tests; runtime smoke test incl. over-allocation rejection |
+| Projects + tasks | Single tx per save; in-tx uniqueness + parent checks | Service (code/name, budget ≥ 0, dates, statuses) + partial unique index | `PRJ.*` checked on open/save/delete/task actions | created_by/at, updated_by/at columns; soft delete only | 026 both providers | Service validation + round-trip tests; repository smoke test |
+| Fixed assets | Single tx per save; in-tx uniqueness check | Service (cost/salvage/life/method/status) + CHECK constraints | `AST.*` checked on open/save/delete | created_by/at, updated_by/at; soft delete only | 027 both providers | Depreciation math tests (SL, DB, pro-rata, caps) + validation tests |
+| Permissions 028 | Migrator per-file tx | Insert-or-update / ON CONFLICT | — (it IS the RBAC seed) | — | 028 both providers; grants proven 11/9/3, idempotent | Migrator double-run + grant re-run check |
+| JrnWin Print | N/A (read-only print) | Prints only a loaded journal | Existing journal perms apply | N/A | N/A | Build-verified; visual check needs Windows run |
+| Buttons sweep + RptBase schedules | N/A (layout) | N/A | N/A | N/A | N/A | Build + XAML parse verified |
+
+Notes: `dotnet test` cannot execute on this Linux VM (testhost targets
+net8.0-windows) — the test project compiles green and must be run on Windows.
+PostgreSQL migrations are written to the same patterns as the existing PG set
+and parse-checked, but only SQLite was executed here (no live PostgreSQL).
 
 ## 7. Remaining backlog (priority order)
 
