@@ -31,7 +31,10 @@ namespace Kern.Tests;
 ///   * (e) the credit guard evaluates the STORED total (a 1,050 doc
 ///     passes a 1,100 limit that the old 1,150 figure would have hit);
 ///   * stock kinds carry no party ledger; StockTransfer /
-///     InventoryCount are blocked in this path with ACC-5014.
+///     InventoryCount were blocked in this path with ACC-5014 in
+///     Step 5 — Step 9 rewired them to their dedicated engines
+///     (PostTransfer / PostCount), proven by the last two facts here
+///     and in OrderChainStep9Tests.
 /// Execution requires Windows (net8.0-windows testhost); the same
 /// scenarios are verified headlessly by
 /// ~/workspace/research/fix-step5/invpost_harness.py
@@ -223,20 +226,58 @@ public sealed class InvPostCorrectnessTests
         Assert.Equal(stockBefore + 5m, StockQty(db));
     }
 
+    // Step 9 (F-1 closure): TRN/CNT are no longer blocked with
+    // ACC-5014 — they post through their dedicated engines.
     [Fact]
-    public async Task StockTransfer_AndInventoryCount_AreBlockedInInvoicePath()
+    public async Task StockTransfer_PostsTwoSided_AndConservesValue()
     {
         using var db = await SeededAsync();
-        var stockBefore = StockQty(db);
-
-        foreach (var kind in new[] { InvDocKind.StockTransfer, InvDocKind.InventoryCount })
+        using (var connection = new SqliteConnection(db.ConnectionString))
         {
-            var doc = BuildDoc(kind, null, "", qty: 3m, price: 10m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
-            InvRepo.SaveDraft(doc);
-            var error = Assert.Throws<AppError>(() => InvRepo.Post(doc.DocId, kind, Actor));
-            Assert.Equal(ErrorCodes.DocumentKindNotPostable, error.Code);
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = $"INSERT INTO warehouses (warehouse_id, company_id, warehouse_code, name, is_deleted) VALUES (2, '{CompanyCode}', 2, 'Second', 0);";
+            cmd.ExecuteNonQuery();
         }
-        Assert.Equal(stockBefore, StockQty(db)); // nothing fabricated
+        var doc = BuildDoc(InvDocKind.StockTransfer, null, "", qty: 3m, price: 10m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        doc.TargetWarehouseId = 2;
+        doc.TargetWarehouseName = "Second";
+        InvRepo.SaveDraft(doc);
+
+        // The destination persists with the document (migration 064).
+        var saved = InvRepo.Load(doc.DocId, InvDocKind.StockTransfer);
+        Assert.Equal(2, saved!.TargetWarehouseId);
+
+        InvRepo.Post(doc.DocId, doc.Kind, Actor);
+
+        Assert.Equal(997m, StockQty(db));
+        Assert.Equal(3m, Scalar(db, "SELECT COALESCE(available_qty, 0) FROM material_stock_balances WHERE company_id = '" + CompanyCode + "' AND warehouse_id = 2 AND material_id = 42;"));
+        // Value is conserved: 1,000 @ 40 = 40,000 before and after.
+        Assert.Equal(40000m, Scalar(db, "SELECT COALESCE(SUM(stock_value), 0) FROM material_stock_balances WHERE company_id = '" + CompanyCode + "' AND material_id = 42;"));
+        var posted = InvRepo.Load(doc.DocId, InvDocKind.StockTransfer);
+        Assert.Equal(InvDocStatus.Posted, posted!.Status);
+        Assert.StartsWith("TRF-", posted.JournalDocNo);
+        // No party ledger, no GL: a transfer is not a sale or a payment.
+        Assert.Equal(0m, Scalar(db, $"SELECT COUNT(*) FROM party_ledger WHERE doc_id = {doc.DocId};"));
+        Assert.Equal(0m, Scalar(db, $"SELECT COUNT(*) FROM journal_entries WHERE source_doc_id = '{doc.DocId}';"));
+    }
+
+    [Fact]
+    public async Task InventoryCount_PostsDeltaOnly_NotFullCountedQty()
+    {
+        using var db = await SeededAsync();
+        Assert.Equal(1000m, StockQty(db)); // book quantity
+
+        // Counted 1003 against book 1000: the movement must be +3,
+        // not +1003 (the pre-Step-5 fabrication).
+        var doc = BuildDoc(InvDocKind.InventoryCount, null, "", qty: 1003m, price: 10m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        InvRepo.SaveDraft(doc);
+        InvRepo.Post(doc.DocId, doc.Kind, Actor);
+
+        Assert.Equal(1003m, StockQty(db));
+        Assert.Equal(3m, Scalar(db, $"SELECT COALESCE(SUM(qty_in), 0) FROM material_stock_movements WHERE company_id = '{CompanyCode}' AND material_id = 42 AND movement_type = 'COUNT_CLOSE';"));
+        var posted = InvRepo.Load(doc.DocId, InvDocKind.InventoryCount);
+        Assert.Equal(InvDocStatus.Posted, posted!.Status);
     }
 
     [Fact]
@@ -251,11 +292,53 @@ public sealed class InvPostCorrectnessTests
         Assert.False(InvPostingPolicy.For(InvDocKind.StockIn).PartyLedger);
         Assert.True(InvPostingPolicy.For(InvDocKind.StockIn).Stock);
         Assert.False(InvPostingPolicy.For(InvDocKind.OpeningStock).Gl);
-        Assert.True(InvPostingPolicy.For(InvDocKind.StockTransfer).Blocked);
-        Assert.True(InvPostingPolicy.For(InvDocKind.InventoryCount).Blocked);
+        // Step 9: TRN/CNT are routed to their dedicated engines — no
+        // generic effects, and no longer blocked.
+        Assert.False(InvPostingPolicy.For(InvDocKind.StockTransfer).Blocked);
+        Assert.False(InvPostingPolicy.For(InvDocKind.InventoryCount).Blocked);
+        Assert.False(InvPostingPolicy.For(InvDocKind.StockTransfer).Gl);
+        Assert.False(InvPostingPolicy.For(InvDocKind.StockTransfer).PartyLedger);
+        Assert.False(InvPostingPolicy.For(InvDocKind.InventoryCount).Gl);
+        Assert.False(InvPostingPolicy.For(InvDocKind.InventoryCount).PartyLedger);
     }
 
     // ------------------------------------------------------------ fixture
+
+    // Step 9 (DS-02 / I-8): DocSearch opens the document it found.
+    // Order-chain invoices are stored under the company GUID (the
+    // order family's key) while InvRepo's native rows use the company
+    // CODE; Load must find either key, or opening a converted invoice
+    // from search read as "not found" and the window fell back to a
+    // blank document.
+    [Fact]
+    public async Task Load_FindsGuidKeyedDocument_SoDocSearchOpensIt()
+    {
+        using var db = await SeededAsync();
+        long docId;
+        using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = """
+                INSERT INTO sales_documents
+                    (company_id, doc_kind, doc_no, doc_date, party_name, currency_code,
+                     exchange_rate, tax_rate, subtotal, discount_amount, tax_amount,
+                     grand_total, paid_amount, status, is_deleted)
+                VALUES ($guid, 'SAL', 'SAL-CHAIN-1', '2026-11-02', 'Chain Party', 'SAR',
+                        1, 0, 250, 0, 0, 250, 0, 'Posted', 0);
+                SELECT last_insert_rowid();
+                """;
+            cmd.Parameters.AddWithValue("$guid", db.CompanyId.ToString("D"));
+            docId = Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+        }
+
+        var loaded = InvRepo.Load(docId, InvDocKind.SalesInvoice);
+        Assert.NotNull(loaded);
+        Assert.Equal(docId, loaded!.DocId);
+        Assert.Equal("SAL-CHAIN-1", loaded.DocNo);
+        Assert.Equal(250m, loaded.GrandTotal);
+        Assert.Equal(InvDocStatus.Posted, loaded.Status);
+    }
 
     private static InvDoc BuildDoc(InvDocKind kind, long? partyId, string partyCode,
         decimal qty, decimal price, decimal taxRate, decimal discount, decimal extra, decimal paid,

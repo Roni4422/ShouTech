@@ -544,60 +544,6 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
             ComputeTotals(invoiceLines, out var invoiceSubtotal, out var invoiceTax, out var grandTotal);
 
-            // Step 9 (sweep ORD-01 / I-4): the converted invoice is born
-            // Posted, so its STOCK effect must happen HERE, in this same
-            // transaction — before this fix the conversion wrote the
-            // invoice, the party ledger and the GL but never moved
-            // stock, leaving converted goods double-sellable (sales) or
-            // never received (purchase) with no later path able to
-            // repair it. The movement goes through the ONE
-            // StockValuationEngine (Step 6), keyed by the company CODE —
-            // the stock world's key, the same one StkPost uses for
-            // invoice documents — so a converted invoice's stock is
-            // indistinguishable from an InvoiceWin-posted invoice's:
-            // sales issue at the material's cost method (never the
-            // selling price), purchases receive at the line's actual
-            // cost restated per base unit, unit equivalents applied,
-            // service materials skipped, insufficient stock aborts the
-            // whole conversion (engine guard, INV-6002 family).
-            var stockCompanyCode = await PartyLedger.ResolveCompanyCodeAsync(
-                connection, transaction, _provider, order.CompanyId.ToString("D"), cancellationToken).ConfigureAwait(false);
-            var cogsAmount = 0m;
-            foreach (var line in invoiceLines)
-            {
-                if (line.MaterialId is not long materialId)
-                    continue; // no stock identity — same rule as chain delivery notes
-                if (!await IsStockableAsync(connection, transaction, materialId, cancellationToken).ConfigureAwait(false))
-                    continue;
-                var warehouseId = line.WarehouseId ?? order.WarehouseId
-                    ?? await ResolveDefaultWarehouseAsync(connection, transaction, stockCompanyCode, cancellationToken).ConfigureAwait(false);
-                await EnsureWarehouseIsActiveAsync(connection, transaction, stockCompanyCode, warehouseId, cancellationToken).ConfigureAwait(false);
-                var equivalent = await ResolveUnitEquivalentAsync(connection, transaction, materialId, line.Unit, cancellationToken).ConfigureAwait(false);
-                var baseQty = line.Qty * equivalent;
-                var movementDate = invoiceDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-                if (side == CommercialDocSide.Sales)
-                {
-                    var issued = StockValuationEngine.Apply(connection, transaction, _provider,
-                        new StockMovementRequest(stockCompanyCode, warehouseId, materialId,
-                            movementDate, CommercialDocKinds.SalesInvoice, invoiceDocNo.Trim(),
-                            QtyIn: 0m, QtyOut: baseQty,
-                            Note: line.Description));
-                    cogsAmount += -issued.CostAmount;
-                }
-                else
-                {
-                    var unitCost = equivalent == 1m
-                        ? line.UnitPrice
-                        : decimal.Round(line.UnitPrice / equivalent, 6, MidpointRounding.AwayFromZero);
-                    StockValuationEngine.Apply(connection, transaction, _provider,
-                        new StockMovementRequest(stockCompanyCode, warehouseId, materialId,
-                            movementDate, CommercialDocKinds.PurchaseInvoice, invoiceDocNo.Trim(),
-                            QtyIn: baseQty, QtyOut: 0m,
-                            ReceiptUnitCost: unitCost,
-                            Note: line.Description));
-                }
-            }
-
             // Step 7 (J-5): resolve the order's effective rate ONCE
             // through FxRates (document rate, else master, else
             // ACC-5015); guard + ledger consume BASE amounts at it, and
@@ -613,6 +559,21 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 connection, transaction, _provider, order.CompanyId.ToString("D"),
                 side == CommercialDocSide.Sales ? "C" : "S", order.PartyId.Value,
                 order.PartyCode, FxRates.ToBase(grandTotal, fx.Rate), "@", cancellationToken).ConfigureAwait(false);
+
+            // Step 9 (sweep ORD-01 / I-4): the converted invoice is born
+            // Posted, so its STOCK effect must happen HERE, in this same
+            // transaction — before this fix the conversion wrote the
+            // invoice, the party ledger and the GL but never moved
+            // stock, leaving converted goods double-sellable (sales) or
+            // never received (purchase) with no later path able to
+            // repair it. It runs AFTER the credit guard (a validation)
+            // and BEFORE the GL block, whose COGS legs are built from
+            // the engine's cost. All-or-nothing with everything else:
+            // an engine failure (e.g. insufficient stock) rolls the
+            // whole conversion back, invoice included.
+            var (stockCompanyCode, cogsAmount) = await PostConversionStockAsync(
+                connection, transaction, side, order, invoiceLines,
+                invoiceDocNo.Trim(), invoiceDate, cancellationToken).ConfigureAwait(false);
 
             // Step 4 (B-06): party_ledger.company_id is the company
             // CODE, not the Guid this repository keys documents by.
@@ -727,6 +688,66 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
     }
 
     // --------------------------------------------------------------- helpers
+
+    /// <summary>
+    /// Step 9: posts the converted invoice's stock through the ONE
+    /// StockValuationEngine (Step 6), inside the conversion
+    /// transaction. Keyed by the company CODE — the stock world's key,
+    /// the same one StkPost uses for invoice documents — so a converted
+    /// invoice's stock is indistinguishable from an InvoiceWin-posted
+    /// invoice's: sales issue at the material's cost method (never the
+    /// selling price), purchases receive at the line's actual cost
+    /// restated per base unit, unit equivalents applied, service
+    /// materials skipped, lines without a material id carry no stock
+    /// identity (the chain delivery-note rule), and insufficient stock
+    /// aborts the whole conversion (engine guard). Returns the company
+    /// code (reused for the party-ledger write) and the total COGS the
+    /// GL block must carry for a sales conversion.
+    /// </summary>
+    private async Task<(string CompanyCode, decimal CogsAmount)> PostConversionStockAsync(
+        DbConnection connection, DbTransaction transaction, CommercialDocSide side,
+        CommercialDocumentSnapshot order, IReadOnlyList<CommercialLineDraft> invoiceLines,
+        string invoiceDocNo, DateOnly invoiceDate, CancellationToken cancellationToken)
+    {
+        var companyCode = await PartyLedger.ResolveCompanyCodeAsync(
+            connection, transaction, _provider, order.CompanyId.ToString("D"), cancellationToken).ConfigureAwait(false);
+        var cogsAmount = 0m;
+        var movementDate = invoiceDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        foreach (var line in invoiceLines)
+        {
+            if (line.MaterialId is not long materialId)
+                continue; // no stock identity — same rule as chain delivery notes
+            if (!await IsStockableAsync(connection, transaction, materialId, cancellationToken).ConfigureAwait(false))
+                continue;
+            var warehouseId = line.WarehouseId ?? order.WarehouseId
+                ?? await ResolveDefaultWarehouseAsync(connection, transaction, companyCode, cancellationToken).ConfigureAwait(false);
+            await EnsureWarehouseIsActiveAsync(connection, transaction, companyCode, warehouseId, cancellationToken).ConfigureAwait(false);
+            var equivalent = await ResolveUnitEquivalentAsync(connection, transaction, materialId, line.Unit, cancellationToken).ConfigureAwait(false);
+            var baseQty = line.Qty * equivalent;
+            if (side == CommercialDocSide.Sales)
+            {
+                var issued = StockValuationEngine.Apply(connection, transaction, _provider,
+                    new StockMovementRequest(companyCode, warehouseId, materialId,
+                        movementDate, CommercialDocKinds.SalesInvoice, invoiceDocNo,
+                        QtyIn: 0m, QtyOut: baseQty,
+                        Note: line.Description));
+                cogsAmount += -issued.CostAmount;
+            }
+            else
+            {
+                var unitCost = equivalent == 1m
+                    ? line.UnitPrice
+                    : decimal.Round(line.UnitPrice / equivalent, 6, MidpointRounding.AwayFromZero);
+                StockValuationEngine.Apply(connection, transaction, _provider,
+                    new StockMovementRequest(companyCode, warehouseId, materialId,
+                        movementDate, CommercialDocKinds.PurchaseInvoice, invoiceDocNo,
+                        QtyIn: baseQty, QtyOut: 0m,
+                        ReceiptUnitCost: unitCost,
+                        Note: line.Description));
+            }
+        }
+        return (companyCode, cogsAmount);
+    }
 
     /// <summary>The company CODE for a company Guid (the key the stock
     /// world and party_ledger use), or null when the company row cannot
