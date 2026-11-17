@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using ShouTech.App.Services;
+using ShouTech.Domain;
 using ShouTech.Domain.Interfaces;
 
 namespace ShouTech.App.Views;
@@ -15,7 +16,7 @@ namespace ShouTech.App.Views;
 /// Compact ShouTech data exchange window.
 /// The UI deliberately does not claim a successful import/export until the data engine completes it.
 /// </summary>
-public partial class DatWin : Window
+public partial class DatWin : BaseWin
 {
     private enum ExchangeMode { Import, Export, StructuredExport }
     private ExchangeMode _mode = ExchangeMode.Import;
@@ -44,13 +45,15 @@ public partial class DatWin : Window
             RefreshMetadata();
             _ = LoadExportOptionsAsync();
         };
-        AppServiceHost.Localization.LanguageChanged += OnLanguageChanged;
-        Closed += (_, _) => AppServiceHost.Localization.LanguageChanged -= OnLanguageChanged;
     }
 
-    private void OnLanguageChanged(object? sender, EventArgs e)
+    /// <summary>BaseWin localization hook: applies every window string.</summary>
+    protected override void ApplyLocalizedText() => RefreshTexts();
+
+    /// <summary>BaseWin language-change hook: re-applies mode, context and datasets.</summary>
+    protected override void OnLanguageChanged()
     {
-        RefreshTexts();
+        base.OnLanguageChanged();
         ApplyMode();
         RefreshMetadata();
         _ = LoadExportOptionsAsync();
@@ -89,9 +92,18 @@ public partial class DatWin : Window
     {
         Title = L("Title", "Data Import &amp; Export");
         TitleText.Text = L("Title", "Data Import &amp; Export");
-        ImportTab.Header = L("Import", "Import Data");
-        ExportTab.Header = L("FullExport", "Full database package (.stei)");
-        StructuredExportTab.Header = L("ExcelPdf", "Dataset export (Excel / PDF / STEI)");
+        ImportCardTitle.Text = L("Import", "Import Data");
+        ExportCardTitle.Text = L("FullExport", "Full database package (.stei)");
+        DatasetCardTitle.Text = L("ExcelPdf", "Dataset export (Excel / PDF / STEI)");
+        ImportCardDesc.Text = L("ImportCardDesc", "Import a .stei package or an Excel workbook into this company.");
+        ExportCardDesc.Text = L("FullExportCardDesc", "Export the entire company database as one encrypted .stei package.");
+        DatasetCardDesc.Text = L("DatasetCardDesc", "Export a single dataset as Excel, PDF or an encrypted .stei package.");
+        DropZoneTitleText.Text = L("DropFileHere", "Drag & drop the import file here");
+        DropZoneHintText.Text = L("DropFileHint", ".stei package or .xlsx workbook — or use the Browse button");
+        ContextUserLabel.Text = L("User", "User");
+        ContextCompanyLabel.Text = L("Company", "Company");
+        ContextDatabaseLabel.Text = L("Database", "Database");
+        ContextProviderLabel.Text = L("Provider", "Provider");
         StructuredExportHintText.Text = L("ChooseDataset", "Choose a dataset and export it as Excel, PDF or an encrypted STEI package.");
         ExportFormatLabel.Text = L("Format", "Format");
         if (ExportFormatBox.Items.Count >= 3)
@@ -128,12 +140,15 @@ public partial class DatWin : Window
 
     private void ApplyMode()
     {
-        ModeTabs.SelectedItem = _mode switch
-        {
-            ExchangeMode.Import => ImportTab,
-            ExchangeMode.Export => ExportTab,
-            _ => StructuredExportTab
-        };
+        ImportPanel.Visibility = _mode == ExchangeMode.Import ? Visibility.Visible : Visibility.Collapsed;
+        ExportPanel.Visibility = _mode == ExchangeMode.Export ? Visibility.Visible : Visibility.Collapsed;
+        DatasetPanel.Visibility = _mode == ExchangeMode.StructuredExport ? Visibility.Visible : Visibility.Collapsed;
+        var activeStyle = (Style)FindResource("VisuAccentButtonStyle");
+        var idleStyle = (Style)FindResource("VisuSecondaryButtonStyle");
+        ImportCardButton.Style = _mode == ExchangeMode.Import ? activeStyle : idleStyle;
+        ExportCardButton.Style = _mode == ExchangeMode.Export ? activeStyle : idleStyle;
+        DatasetCardButton.Style = _mode == ExchangeMode.StructuredExport ? activeStyle : idleStyle;
+        FormatStrip.Visibility = _mode == ExchangeMode.Import ? Visibility.Collapsed : Visibility.Visible;
         PathHintText.Text = _mode switch
         {
             ExchangeMode.Import => L("ReadyImport", "Choose a .stei file, then start the operation."),
@@ -164,16 +179,21 @@ public partial class DatWin : Window
         UpdateDatasetPasswordVisibility();
     }
 
-    private void ModeTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void ModeCard_Click(object sender, RoutedEventArgs e)
     {
-        if (!IsInitialized || e.Source != ModeTabs)
+        if (sender is not Button { Tag: string tag })
             return;
 
-        _mode = ModeTabs.SelectedItem == ExportTab
-            ? ExchangeMode.Export
-            : ModeTabs.SelectedItem == StructuredExportTab
-                ? ExchangeMode.StructuredExport
-                : ExchangeMode.Import;
+        var mode = tag switch
+        {
+            "Export" => ExchangeMode.Export,
+            "StructuredExport" => ExchangeMode.StructuredExport,
+            _ => ExchangeMode.Import
+        };
+        if (mode == _mode)
+            return;
+
+        _mode = mode;
         ApplyMode();
     }
 
@@ -226,6 +246,7 @@ public partial class DatWin : Window
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.ExportFailed, ex, "DatWin.LoadExportOptionsAsync");
             ResultStatusText.Text = L("Failed", "Operation failed");
             ResultTextBox.Text = ex.Message;
             _lastDetails = ResultTextBox.Text;
@@ -278,15 +299,31 @@ public partial class DatWin : Window
         if (dialog.ShowDialog(this) != true)
             return;
 
-        var extension = Path.GetExtension(dialog.FileName);
-        if (!string.Equals(extension, ".stei", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(extension, ".xlsx", StringComparison.OrdinalIgnoreCase))
+        SetImportFile(dialog.FileName);
+    }
+
+    private static bool IsSupportedImportFile(string path)
+    {
+        var extension = Path.GetExtension(path);
+        return string.Equals(extension, ".stei", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(extension, ".xlsx", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Single entry point for choosing the import file — used by the Browse
+    /// button and by drag-and-drop onto the drop zone, so both paths apply
+    /// identical validation, password handling and preview behavior.
+    /// </summary>
+    private void SetImportFile(string fileName)
+    {
+        var extension = Path.GetExtension(fileName);
+        if (!IsSupportedImportFile(fileName))
         {
             MessageBox.Show(L("InvalidExtension", "Choose a .stei package or an Excel workbook (.xlsx)."), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        ImportPathBox.Text = dialog.FileName;
+        ImportPathBox.Text = fileName;
         var extensionNeedsPassword = string.Equals(extension, ".stei", StringComparison.OrdinalIgnoreCase);
         ImportPasswordGrid.Visibility = extensionNeedsPassword ? Visibility.Visible : Visibility.Collapsed;
         ImportDatasetBox.IsEnabled = true;
@@ -296,7 +333,22 @@ public partial class DatWin : Window
         ResultTextBox.Text = string.Empty;
         DetailsButton.IsEnabled = false;
         if (!extensionNeedsPassword)
-            _ = PreviewImportAsync(dialog.FileName);
+            _ = PreviewImportAsync(fileName);
+    }
+
+    private void ImportDropZone_DragOver(object sender, DragEventArgs e)
+    {
+        var allowed = e.Data.GetDataPresent(DataFormats.FileDrop)
+            && e.Data.GetData(DataFormats.FileDrop) is string[] { Length: > 0 } files
+            && IsSupportedImportFile(files[0]);
+        e.Effects = allowed ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void ImportDropZone_Drop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetData(DataFormats.FileDrop) is string[] { Length: > 0 } files)
+            SetImportFile(files[0]);
     }
 
     private async Task PreviewImportAsync(string path)
@@ -342,6 +394,7 @@ public partial class DatWin : Window
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.ImportFailed, ex, "DatWin.PreviewImportAsync");
             ResultStatusText.Text = L("PreviewFailed", "This workbook cannot be imported yet");
             ResultTextBox.Text = ex.Message;
         }
@@ -715,11 +768,10 @@ public partial class DatWin : Window
 
     private void RefreshMetadata()
     {
-        MetadataText.Text = string.Join("  •  ",
-            $"{L("User", "User")}: {GetCurrentUserName()}",
-            $"{L("Company", "Company")}: {GetCurrentCompanyCode()}",
-            $"{L("Database", "Database")}: {GetCurrentDatabaseName()}",
-            $"{L("Provider", "Provider")}: {GetCurrentProvider()}");
+        ContextUserValue.Text = GetCurrentUserName();
+        ContextCompanyValue.Text = GetCurrentCompanyCode();
+        ContextDatabaseValue.Text = GetCurrentDatabaseName();
+        ContextProviderValue.Text = GetCurrentProvider();
     }
 
     private static string GetCurrentUserName()
