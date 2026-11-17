@@ -22,17 +22,17 @@ or propagates (`throw`). A catch whose body is empty or comment-only is
 | Measure | Before | After |
 |---|---|---|
 | `.cs` files | 130 | 131 (+ `Services/ErrorCatalog.cs`) |
-| Catch blocks | 537 | 541 |
+| Catch blocks | 537 | 542 |
 | Catches with no report and no rethrow | 450 | 14 |
-| Silent catches (empty / comment-only) | 234 | 4 |
+| Silent catches (empty / comment-only) | 234 | 11 |
 | Files using central logging | 33 | all files with catches |
 
 The 14 remaining non-reporting catches are exactly the documented
-exemptions: LogServ's 3 sink guards, the error catalog's 2 terminal
-guards, DatWin's 10 catches minus its pre-existing reporting ones (owned
-by the parallel fixes branch — see §5), and zero anywhere else. The 4
-remaining silent catches are the LogServ/catalog terminal guards, which
-cannot report through the mechanism they implement.
+exemptions, and zero anywhere else: LogServ's 3 sink guards and the
+error catalog's terminal guard inside `Report` (these cannot report
+through the mechanism they implement), plus DatWin's 10 catches (owned
+by the parallel fixes branch — see §5). The 11 remaining silent catches
+are those same 4 terminal guards plus DatWin's 7 silent catches.
 
 ## 1. Startup chain — 100% first (owner's coverage order)
 
