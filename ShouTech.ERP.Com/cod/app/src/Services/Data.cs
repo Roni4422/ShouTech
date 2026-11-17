@@ -305,9 +305,53 @@ internal static class DatabaseRuntime
         if (string.IsNullOrWhiteSpace(connection))
             return null;
 
+        return PrepareConnectionString(connection);
+    }
+
+    /// <summary>
+    /// Central connection-string preparation (Phase 4): every central path that
+    /// hands a connection string to a repository or connection (DatabaseRuntime
+    /// consumers and AppHost.ResolveDatabaseConnection) goes through here so
+    /// transport/integrity settings are applied exactly once:
+    ///   SQLite     — normalized path + Foreign Keys pragma ON per connection.
+    ///   PostgreSQL — SSL mode from SHOUTECH_PG_SSLMODE (default Prefer).
+    /// </summary>
+    public static string? PrepareConnectionString(string? connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+            return null;
+
         return IsSqlite()
-            ? NormalizeSqliteConnectionString(connection)
-            : connection.Trim();
+            ? NormalizeSqliteConnectionString(connectionString)
+            : ApplyPostgresSslMode(connectionString.Trim());
+    }
+
+    /// <summary>
+    /// PostgreSQL transport security (Phase 4): SHOUTECH_PG_SSLMODE accepts
+    /// Disable / Prefer / Require (case-insensitive). Default is Prefer, which
+    /// encrypts when the server offers TLS without breaking local servers that
+    /// do not. Production deployments should set Require (see
+    /// docs/SECURITY_ENTERPRISE.md). Unknown values fall back to Prefer.
+    /// The environment setting is authoritative and overrides any SSL Mode
+    /// already present in the configured connection string.
+    /// </summary>
+    public static string ApplyPostgresSslMode(string connectionString)
+    {
+        var builder = new NpgsqlConnectionStringBuilder(connectionString);
+        builder.SslMode = GetPostgresSslMode();
+        return builder.ToString();
+    }
+
+    public static SslMode GetPostgresSslMode()
+    {
+        var raw = Environment.GetEnvironmentVariable("SHOUTECH_PG_SSLMODE");
+        return raw?.Trim().ToLowerInvariant() switch
+        {
+            "disable" => SslMode.Disable,
+            "require" => SslMode.Require,
+            "prefer" => SslMode.Prefer,
+            _ => SslMode.Prefer
+        };
     }
 
     public static bool IsSqlite(string? provider = null) =>
@@ -331,6 +375,10 @@ internal static class DatabaseRuntime
             return BuildSqliteConnectionStringFromPath(sqlitePathOrConnectionString.Trim());
 
         var builder = new SqliteConnectionStringBuilder(sqlitePathOrConnectionString.Trim());
+        // Phase 4: enforce PRAGMA foreign_keys=ON on every connection opened
+        // from a centrally prepared connection string (SQLite FK enforcement is
+        // per-connection and off by default).
+        builder.ForeignKeys = true;
         if (string.Equals(builder.DataSource, ":memory:", StringComparison.Ordinal)
             || builder.DataSource.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
             return builder.ToString();
@@ -368,7 +416,8 @@ internal static class DatabaseRuntime
         {
             DataSource = fullPath,
             Mode = SqliteOpenMode.ReadWriteCreate,
-            Cache = SqliteCacheMode.Shared
+            Cache = SqliteCacheMode.Shared,
+            ForeignKeys = true
         }.ToString();
     }
 

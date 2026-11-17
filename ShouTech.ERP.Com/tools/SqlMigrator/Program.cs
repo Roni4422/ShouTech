@@ -224,9 +224,25 @@ internal static class Program
     private static DbConnection CreateConnection(string provider, string connectionString) => provider switch
     {
         "sqlite" => new SqliteConnection(connectionString),
-        "postgresql" => new NpgsqlConnection(connectionString),
+        "postgresql" => new NpgsqlConnection(ApplyPostgresSslMode(connectionString)),
         _ => throw new InvalidOperationException($"Unsupported provider '{provider}'.")
     };
+
+    // Phase 4: PostgreSQL transport security, mirroring DatabaseRuntime in the
+    // app (this tool is standalone and cannot reference it). SHOUTECH_PG_SSLMODE
+    // accepts Disable / Prefer / Require; default Prefer; unknown values fall
+    // back to Prefer. The environment setting overrides the connection string.
+    private static string ApplyPostgresSslMode(string connectionString)
+    {
+        var builder = new NpgsqlConnectionStringBuilder(connectionString);
+        builder.SslMode = Environment.GetEnvironmentVariable("SHOUTECH_PG_SSLMODE")?.Trim().ToLowerInvariant() switch
+        {
+            "disable" => SslMode.Disable,
+            "require" => SslMode.Require,
+            _ => SslMode.Prefer
+        };
+        return builder.ToString();
+    }
 
     private static async Task EnsureHistoryTableAsync(DbConnection connection, string migrationDirectory)
     {

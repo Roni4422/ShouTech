@@ -254,6 +254,9 @@ public static class DataExportSvc
 
         await using var connection = CreateConnection();
         await connection.OpenAsync(ct);
+        // Phase 4: defense in depth — beyond the static catalog check above, the
+        // table must exist in the live schema before its name is interpolated.
+        await SqlIdentifier.RequireTableAsync(connection, option.TableName, ct);
         var sql = $"SELECT * FROM {QuoteIdentifier(option.TableName)}{BuildFilter(option)}";
         await using var command = connection.CreateCommand();
         command.CommandText = sql;
@@ -1475,8 +1478,12 @@ public static class DataExportSvc
             ? "(LOWER(CAST(transaction_type AS TEXT)) LIKE '%return%' OR LOWER(CAST(transaction_type AS TEXT)) LIKE '%refund%' OR CAST(transaction_type AS TEXT) LIKE '%مرتجع%')"
             : "(LOWER(CAST(transaction_type AS TEXT)) NOT LIKE '%return%' AND LOWER(CAST(transaction_type AS TEXT)) NOT LIKE '%refund%' AND CAST(transaction_type AS TEXT) NOT LIKE '%مرتجع%')";
 
+    // Phase 4: identifier quoting is centralized in SqlIdentifier, which rejects
+    // any identifier outside [A-Za-z_][A-Za-z0-9_]* instead of merely escaping it.
+    // All callers pass catalog- or schema-derived names (export catalog seeds,
+    // PRAGMA / information_schema column reads), never raw user input.
     private static string QuoteIdentifier(string value)
-        => $"\"{value.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
+        => SqlIdentifier.Quote(value);
 
     private static RptColType GetColumnType(string columnName, Type valueType)
     {

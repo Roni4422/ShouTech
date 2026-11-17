@@ -41,7 +41,6 @@ public static class RecycleBinSvc
 {
     private const string LogCategory = "RecycleBin";
     private const int MaxRowsPerTable = 500;
-    private static readonly Regex SafeIdentifier = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
 
     private sealed record BinTableDefinition(
         string TableName,
@@ -456,7 +455,7 @@ public static class RecycleBinSvc
         string method, string? reason, string? recordSnapshot = null,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(companyCode) || !SafeIdentifier.IsMatch(tableName))
+        if (string.IsNullOrWhiteSpace(companyCode) || !SqlIdentifier.IsSafe(tableName))
             throw new ArgumentException("A company and valid table name are required.");
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
@@ -560,7 +559,7 @@ public static class RecycleBinSvc
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (table.Equals("deletion_audit_log", StringComparison.OrdinalIgnoreCase) ||
-                !SafeIdentifier.IsMatch(table))
+                !SqlIdentifier.IsSafe(table))
                 continue;
 
             try
@@ -618,7 +617,7 @@ public static class RecycleBinSvc
             cancellationToken.ThrowIfCancellationRequested();
             if (table.Equals("deletion_audit_log", StringComparison.OrdinalIgnoreCase) ||
                 table.StartsWith("sqlite_", StringComparison.OrdinalIgnoreCase) ||
-                !SafeIdentifier.IsMatch(table))
+                !SqlIdentifier.IsSafe(table))
                 continue;
 
             IReadOnlyList<string> columns;
@@ -742,7 +741,7 @@ public static class RecycleBinSvc
 
        private static void ValidateCatalogItem(RecycleBinItem item)
 		{
-			if (!SafeIdentifier.IsMatch(item.TableName) || !SafeIdentifier.IsMatch(item.PrimaryKeyColumn))
+			if (!SqlIdentifier.IsSafe(item.TableName) || !SqlIdentifier.IsSafe(item.PrimaryKeyColumn))
 				throw new InvalidOperationException("Invalid identifier in recycle bin item.");
 
 			var definition = Catalog.FirstOrDefault(entry =>
@@ -813,14 +812,9 @@ public static class RecycleBinSvc
 		// ==== التصحيح المطلوب لحل CS8604 ====
 		// كانت: private static string Quote(string identifier)
 		// أصبحت: private static string Quote(string? identifier)  مع فحص null صريح.
+		// Phase 4: quoting/validation centralized in the shared SqlIdentifier helper.
 		private static string Quote(string? identifier)
-		{
-			if (string.IsNullOrWhiteSpace(identifier))
-				throw new ArgumentException("Unsafe SQL identifier: null or empty.", nameof(identifier));
-			if (!SafeIdentifier.IsMatch(identifier))
-				throw new ArgumentException($"Unsafe SQL identifier: '{identifier}'.", nameof(identifier));
-			return $"\"{identifier}\"";
-		}
+			=> SqlIdentifier.Quote(identifier);
 
 		private static DbConnection CreateConnection()
 		{
@@ -850,7 +844,7 @@ public static class RecycleBinSvc
 		private static async Task<bool> IsBooleanColumnAsync(
 			DbConnection connection, string tableName, string columnName, CancellationToken cancellationToken)
 		{
-			if (!SafeIdentifier.IsMatch(tableName) || !SafeIdentifier.IsMatch(columnName))
+			if (!SqlIdentifier.IsSafe(tableName) || !SqlIdentifier.IsSafe(columnName))
 				throw new ArgumentException("Unsafe schema identifier.");
 
 			await using var command = connection.CreateCommand();
@@ -885,7 +879,7 @@ public static class RecycleBinSvc
 			string tableName,
 			CancellationToken cancellationToken)
 		{
-			if (!SafeIdentifier.IsMatch(tableName))
+			if (!SqlIdentifier.IsSafe(tableName))
 				throw new ArgumentException($"Unsafe table name: '{tableName}'.", nameof(tableName));
 
 			var columns = new List<string>();

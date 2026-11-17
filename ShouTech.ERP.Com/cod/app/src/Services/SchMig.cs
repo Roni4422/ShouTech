@@ -355,7 +355,8 @@ public static class SchemaMigrator
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = $"PRAGMA table_info({table})";
+        // Phase 4: identifier validated + quoted via the shared SqlIdentifier helper.
+        command.CommandText = $"PRAGMA table_info({SqlIdentifier.Quote(table)})";
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {

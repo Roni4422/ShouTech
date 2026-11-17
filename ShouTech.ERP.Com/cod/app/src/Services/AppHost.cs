@@ -254,12 +254,17 @@ namespace ShouTech.App.Services
                     .Value?
                     .ConnectionString;
 
-            return string.IsNullOrWhiteSpace(connection)
+            var raw = string.IsNullOrWhiteSpace(connection)
                 ? AppCfgSvc.Current.ConnectionStrings?
                     .Values
                     .FirstOrDefault()?
                     .ConnectionString
                 : connection;
+
+            // Phase 4: repositories receive centrally prepared connection
+            // strings (SQLite foreign-keys pragma; PostgreSQL SSL mode from
+            // SHOUTECH_PG_SSLMODE) — same preparation as DatabaseRuntime.
+            return DatabaseRuntime.PrepareConnectionString(raw);
         }
     }
 

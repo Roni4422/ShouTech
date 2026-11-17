@@ -141,7 +141,7 @@
       "BackupPath": "./bkp",
       "CompressBackup": true,
       "EncryptBackup": true,
-      "BackupEncryptionKey": "YourEncryptionKeyHere"
+      "BackupEncryptionKey": ""
     },
     "Retry": {
       "MaxRetryCount": 3,
@@ -306,7 +306,7 @@
     "TranslationService": {
       "Enabled": false,
       "Provider": "GoogleTranslate",
-      "ApiKey": "YourApiKeyHere",
+      "ApiKey": "",
       "Endpoint": "https://translate.googleapis.com/v2"
     }
   },
@@ -871,12 +871,12 @@
     "MaxLoginAttempts": 5,
     "LockoutDurationMinutes": 15,
     "PasswordPolicy": {
-      "MinLength": 6,
-      "MaxLength": 32,
+      "MinLength": 12,
+      "MaxLength": 128,
       "RequireUpperCase": true,
       "RequireLowerCase": true,
       "RequireNumbers": true,
-      "RequireSpecialChars": false,
+      "RequireSpecialChars": true,
       "ExpirationDays": 90,
       "PreventReuseCount": 5,
       "AllowCommonPasswords": false
@@ -1087,15 +1087,15 @@
     "SMS": {
       "Enabled": false,
       "Provider": "Twilio",
-      "ApiKey": "YourTwilioApiKey",
-      "ApiSecret": "YourTwilioApiSecret",
+      "ApiKey": "",
+      "ApiSecret": "",
       "PhoneNumber": "+1234567890"
     },
     "PushNotifications": {
       "Enabled": false,
       "Provider": "Firebase",
-      "ServerKey": "YourFirebaseServerKey",
-      "SenderId": "YourFirebaseSenderId"
+      "ServerKey": "",
+      "SenderId": ""
     },
     "DesktopNotifications": {
       "Enabled": true,
@@ -1166,19 +1166,19 @@
       "PaymentGateway": {
         "Enabled": false,
         "Provider": "Stripe",
-        "ApiKey": "YourStripeApiKey",
-        "WebhookSecret": "YourStripeWebhookSecret"
+        "ApiKey": "",
+        "WebhookSecret": ""
       },
       "SmsGateway": {
         "Enabled": false,
         "Provider": "Twilio",
-        "ApiKey": "YourTwilioApiKey",
-        "ApiSecret": "YourTwilioApiSecret"
+        "ApiKey": "",
+        "ApiSecret": ""
       },
       "EmailProvider": {
         "Enabled": false,
         "Provider": "SendGrid",
-        "ApiKey": "YourSendGridApiKey"
+        "ApiKey": ""
       }
     }
   },

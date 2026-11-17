@@ -7,10 +7,14 @@
 #nullable enable
 
 using System.Buffers.Binary;
+using System.Data.Common;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 using System;
 
 namespace ShouTech.App.Services
@@ -112,6 +116,97 @@ internal static class SecEngInterop
 
     [DllImport(Dll, CallingConvention = CallingConvention.StdCall, ExactSpelling = true, CharSet = CharSet.Unicode)]
     internal static extern uint ST_GetStatusMessage(uint status, char[] buffer, uint bufferSize, out uint requiredSize);
+}
+
+    // ========== SqlIdentifier.cs (Phase 4) ==========
+/// <summary>
+/// Central SQL identifier safety (Phase 4 enterprise hardening).
+///
+/// SQL values are always parameterized in this codebase, but table/column
+/// identifiers cannot be bound as parameters — they are interpolated. Every
+/// interpolated identifier MUST pass through this helper:
+///   1. Shape: only [A-Za-z_][A-Za-z0-9_]* is ever accepted, then it is
+///      double-quoted. Anything else throws instead of reaching the database.
+///   2. Allow-list: entry points that accept an externally influenced table
+///      or column name additionally verify it against the live schema
+///      (sqlite_master / information_schema) via <see cref="RequireTableAsync"/>
+///      and <see cref="RequireColumnAsync"/> — identifiers must name real
+///      objects from the application's own schema catalog, never raw input.
+/// </summary>
+public static class SqlIdentifier
+{
+    private static readonly Regex SafePattern = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
+
+    public static bool IsSafe(string? identifier)
+        => !string.IsNullOrWhiteSpace(identifier) && SafePattern.IsMatch(identifier);
+
+    public static string Require(string? identifier, string paramName = "identifier")
+    {
+        if (!IsSafe(identifier))
+            throw new ArgumentException($"Unsafe SQL identifier: '{identifier}'.", paramName);
+        return identifier!;
+    }
+
+    /// <summary>Validates and double-quotes an identifier for SQLite/PostgreSQL.</summary>
+    public static string Quote(string? identifier, string paramName = "identifier")
+        => $"\"{Require(identifier, paramName)}\"";
+
+    /// <summary>True when the named table exists in the connected database's schema.</summary>
+    public static async Task<bool> TableExistsAsync(DbConnection connection, string table, CancellationToken cancellationToken = default)
+    {
+        Require(table, nameof(table));
+        await using var command = connection.CreateCommand();
+        command.CommandText = DatabaseRuntime.IsPostgreSql()
+            ? "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = @table"
+            : "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = @table";
+        AddParameter(command, "@table", table);
+        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return Convert.ToInt64(result, System.Globalization.CultureInfo.InvariantCulture) > 0;
+    }
+
+    /// <summary>Throws unless the named table exists in the live schema (allow-list check).</summary>
+    public static async Task RequireTableAsync(DbConnection connection, string table, CancellationToken cancellationToken = default)
+    {
+        if (!await TableExistsAsync(connection, table, cancellationToken).ConfigureAwait(false))
+            throw new InvalidOperationException($"Table '{table}' is not part of the application schema.");
+    }
+
+    /// <summary>Throws unless the named column exists on the named table in the live schema.</summary>
+    public static async Task RequireColumnAsync(DbConnection connection, string table, string column, CancellationToken cancellationToken = default)
+    {
+        Require(column, nameof(column));
+        if (!await TableExistsAsync(connection, table, cancellationToken).ConfigureAwait(false))
+            throw new InvalidOperationException($"Table '{table}' is not part of the application schema.");
+
+        await using var command = connection.CreateCommand();
+        if (DatabaseRuntime.IsPostgreSql())
+        {
+            command.CommandText = "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = @table AND column_name = @column";
+            AddParameter(command, "@table", table);
+            AddParameter(command, "@column", column);
+            var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            if (Convert.ToInt64(result, System.Globalization.CultureInfo.InvariantCulture) == 0)
+                throw new InvalidOperationException($"Column '{column}' does not exist on table '{table}'.");
+            return;
+        }
+
+        command.CommandText = $"PRAGMA table_info({Quote(table)})";
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
+                return;
+        }
+        throw new InvalidOperationException($"Column '{column}' does not exist on table '{table}'.");
+    }
+
+    private static void AddParameter(DbCommand command, string name, object value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.Value = value;
+        command.Parameters.Add(parameter);
+    }
 }
 
     // ========== Stbk2Envelope.cs ==========
