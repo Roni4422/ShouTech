@@ -899,6 +899,23 @@
     <!-- =========================================================
          LABEL STYLES
          Label and TextBlock are intentionally separate controls.
+
+         FORM-LABEL CONTRACT (docs/WINDOW_PROPORTIONS.md §2.3): these two
+         styles ARE the form label of the whole app — VisuLabelStyle for
+         the Label control, VisuTextBlockLabelStyle for TextBlock (the
+         control XAML forms and the BaseWin form helpers use). A window
+         that applies them gets the Phenix geometry by default: the label
+         sits in the shared FormLabelColumnWidth column and its text
+         aligns to the READING-START edge of that column — Left in LTR,
+         Right in RTL — which is the edge adjacent to the field, so the
+         label rests a few pixels from its field in both directions. The
+         alignment follows the WINDOW's FlowDirection through the
+         DataTriggers below; it is never hardcoded per window. Windows
+         must NOT define local form-label styles: the pre-contract state
+         (this TextBlock style an unused shell with no alignment) is
+         exactly why windows invented their own — and MatCard's local
+         copy inverted the RTL trigger and pushed Arabic labels to the
+         far edge of their columns (owner report, 2026-11-17).
          ========================================================= -->
 
     <Style
@@ -956,6 +973,29 @@
         <Setter
             Property="VerticalAlignment"
             Value="Center"/>
+
+        <!-- A long label ellipsizes inside its fixed column instead of
+             bleeding over the field beside it. -->
+        <Setter
+            Property="TextTrimming"
+            Value="CharacterEllipsis"/>
+
+        <!-- Field-adjacent alignment (see the contract above): the base
+             value is the LTR start edge; the triggers re-resolve it from
+             the window's live FlowDirection, so the same style is correct
+             in Arabic (RTL) and English (LTR) with no per-window code. -->
+        <Setter
+            Property="TextAlignment"
+            Value="Left"/>
+
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="RightToLeft">
+                <Setter Property="TextAlignment" Value="Right"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="LeftToRight">
+                <Setter Property="TextAlignment" Value="Left"/>
+            </DataTrigger>
+        </Style.Triggers>
 
     </Style>
 

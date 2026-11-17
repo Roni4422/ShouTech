@@ -121,6 +121,14 @@ public abstract class BaseWin : Window
     // field with AddFormField. Fields carry NO Width/Height of their
     // own: height comes from the central control styles (32) and width
     // from the column they sit in.
+    //
+    // Side labels created here carry the central VisuTextBlockLabelStyle
+    // (Themes/VisuId.xaml), which owns the label contract: text aligns
+    // to the reading-start edge of the label column — the edge adjacent
+    // to the field — resolved from the window's FlowDirection by the
+    // style's triggers, in LTR and RTL alike. Do not re-derive label
+    // alignment in a window; that is how MatCard's local copy inverted
+    // RTL and pushed Arabic labels to the far edge of their columns.
     // ================================================================
 
     /// <summary>Margin of a field inside a form grid (gap to the next pair + row gap).</summary>
@@ -162,6 +170,7 @@ public abstract class BaseWin : Window
             TextWrapping = TextWrapping.Wrap,
             Margin = FormLabelMargin
         };
+        label.SetResourceReference(StyleProperty, "VisuTextBlockLabelStyle");
         label.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
         Grid.SetRow(label, row);
         Grid.SetColumn(label, pair * 2);
@@ -189,6 +198,7 @@ public abstract class BaseWin : Window
             TextWrapping = TextWrapping.Wrap,
             Margin = FormLabelMargin
         };
+        label.SetResourceReference(StyleProperty, "VisuTextBlockLabelStyle");
         label.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
         labels.Add((label, key));
         Grid.SetRow(label, row);
@@ -277,12 +287,33 @@ public abstract class BaseWin : Window
     }
 
     /// <summary>
-    /// Keeps the whole window reachable on the current screen: a window
-    /// taller or wider than the work area (small displays, high scaling,
-    /// geometry restored from a larger monitor) would otherwise hide its
-    /// bottom command bar off-screen with no way to reach it. Shrinks the
-    /// window to fit and pulls it back inside the work area; never grows
-    /// a window and never touches a maximized/minimized one.
+    /// Fraction of the work area a child window may occupy at load, per
+    /// dimension (owner rule, 2026-11-17): a ribbon/child window opens at
+    /// most 50% of the screen — equivalently 50% of the main window when
+    /// the shell is full-screen, because a maximized shell fills the work
+    /// area, so the work-area halves implement both formulations.
+    /// </summary>
+    private const double WorkAreaSizeCapFraction = 0.5;
+
+    /// <summary>
+    /// Window sizing policy (owner rule, 2026-11-17 — supersedes the
+    /// earlier comfort-margin cap): only the main shell window is meant
+    /// to fill the screen; a child window opens at most
+    /// <see cref="WorkAreaSizeCapFraction"/> of the work area in each
+    /// dimension. A window larger than the cap is trimmed to it at load,
+    /// and a window positioned partly off-screen (small displays, high
+    /// scaling, geometry restored from a larger monitor) is pulled back
+    /// inside so its bottom command bar can never sit unreachable
+    /// off-screen. The cap is a load-time trim only: no MaxWidth/MaxHeight
+    /// is set, so the user can resize larger or maximize freely
+    /// afterwards, geometry persistence keeps whatever size they leave
+    /// the window at, and the same trim applies again on the next load
+    /// only if that size still exceeds the cap. Never grows a window and
+    /// never touches a maximized/minimized window. One exception: a
+    /// window is never shrunk below its declared MinWidth/MinHeight, so
+    /// a window whose minimum size exceeds the cap opens at its minimum
+    /// instead (the acceptance sweep catalogues those windows; reducing
+    /// their minimums is a separate layout pass).
     /// </summary>
     private void ClampToWorkArea()
     {
@@ -292,10 +323,12 @@ public abstract class BaseWin : Window
                 return;
 
             var area = SystemParameters.WorkArea;
-            if (Width > area.Width)
-                Width = Math.Max(MinWidth, area.Width);
-            if (Height > area.Height)
-                Height = Math.Max(MinHeight, area.Height);
+            var maxWidth = Math.Max(MinWidth, area.Width * WorkAreaSizeCapFraction);
+            if (Width > maxWidth)
+                Width = maxWidth;
+            var maxHeight = Math.Max(MinHeight, area.Height * WorkAreaSizeCapFraction);
+            if (Height > maxHeight)
+                Height = maxHeight;
             if (Left < area.Left)
                 Left = area.Left;
             if (Top < area.Top)

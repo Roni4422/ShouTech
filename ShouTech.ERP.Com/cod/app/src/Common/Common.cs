@@ -304,7 +304,14 @@ internal static class JsonDefs
             ArgumentNullException.ThrowIfNull(child);
             ArgumentNullException.ThrowIfNull(shellHost);
 
-            child.Owner = null;
+            // Ownership policy (one regime app-wide): a shell child is
+            // OWNED by the shell, never ownerless — an unowned window
+            // sinks independently behind other applications and cannot be
+            // recovered as part of the program's window group. This used
+            // to force Owner = null; the minimize-to-dock behavior below
+            // is unchanged, only the ownership is reconciled with the
+            // router regime (RibbonNav/RptNav: Owner = shell).
+            child.Owner = shellHost;
             child.StateChanged += (_, _) => OnStateChanged(child, shellHost);
             child.Closed += (_, _) => Detach(child, shellHost);
         }
@@ -353,7 +360,7 @@ internal static class JsonDefs
     }
 
     // ========== WinMgr.cs ==========
-/// <summary>Opens top-level windows in standard Windows SDI style (peer windows, taskbar, activate on focus).</summary>
+/// <summary>Opens shell child windows owned by the shell (one ownership policy app-wide), docked on minimize.</summary>
     public static class WinMgr
     {
         private static int _cascadeOffset;
@@ -362,7 +369,15 @@ internal static class JsonDefs
         {
             ArgumentNullException.ThrowIfNull(window);
 
-            window.Owner = null;
+            // Ownership policy: the window is owned by the shell host (or
+            // the application main window when no host is given) — never
+            // forced ownerless. Unowned top-level windows sink behind
+            // other applications independently of the program's window
+            // group, which is the behavior the owner reported and
+            // rejected. (This method's name is historical; it no longer
+            // opens peer windows.)
+            var effectiveOwner = shellHost ?? System.Windows.Application.Current?.MainWindow;
+            window.Owner = effectiveOwner != null && effectiveOwner != window ? effectiveOwner : null;
             window.ShowInTaskbar = true;
             window.ShowActivated = true;
 
