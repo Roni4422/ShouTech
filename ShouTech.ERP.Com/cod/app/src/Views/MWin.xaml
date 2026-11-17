@@ -328,6 +328,7 @@
                         <ribbon:RibbonButton loc:LocProps.Key="Accounts.CostCenter" Label="Cost center" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Accounts.CostCenterCard" Label="Cost center card" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Accounts.LinkWithAccounts" Label="Link to accounts" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Assets.Assets" Label="Fixed assets" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Accounts.CostCenterReport" Label="Cost center report" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Accounts.CostCenterMaterialMovement" Label="Cost center material movement" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Accounts.CostCenterBalance" Label="Cost center trial balance" Click="OnRibbonButtonClick"/>
@@ -361,6 +362,7 @@
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.AccountsAnalysis" Header="Analysis">
                         <ribbon:RibbonButton loc:LocProps.Key="Accounts.DormantAccounts" Label="Inactive accounts" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Accounts.AgingReceivables" Label="Receivables aging" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.PaymentReconciliation" Label="Payment reconciliation" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Accounts.CollectionRates" Label="Collection ratios" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Accounts.AccountComparison" Label="Account comparison" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Accounts.FinancialAnalysis" Label="Local financial analysis" Click="OnRibbonButtonClick"/>
@@ -453,6 +455,7 @@
                         <ribbon:RibbonButton loc:LocProps.Key="Orders.SalesOrder" Label="Sales order" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.OrdersGeneral" Header="General">
+                        <ribbon:RibbonButton loc:LocProps.Key="Projects.Projects" Label="Projects" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Orders.DefineOrders" Label="Define orders" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Orders.OrderReceiptDelivery" Label="Order receive/deliver invoices" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Orders.TrackOrders" Label="Order tracking" Click="OnRibbonButtonClick"/>

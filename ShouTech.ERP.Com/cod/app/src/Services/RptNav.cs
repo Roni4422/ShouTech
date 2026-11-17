@@ -136,6 +136,12 @@ public static class RptNav
             case "SalesRep.SalesRepCard":
             case "SalesRepCard.Title":
                 OpenSalesRepCard(owner); return true;
+            case "Accounts.PaymentReconciliation":
+                OpenPaymentReconciliation(owner); return true;
+            case "Projects.Projects":
+                OpenProjects(owner); return true;
+            case "Assets.Assets":
+                OpenAssets(owner); return true;
             case "Manufacturing.ManufacturingModels":
             case "Manufacturing.ManufacturingProcess":
             case "MfgOrder.Title":
@@ -173,6 +179,9 @@ public static class RptNav
     }
 
     public static void OpenTrialBalance(Window? owner = null) => Show(new TrialBalanceWin(), owner);
+    public static void OpenPaymentReconciliation(Window? owner = null) => Show(new PayRecWin(), owner);
+    public static void OpenProjects(Window? owner = null) => Show(new ProjWin(), owner);
+    public static void OpenAssets(Window? owner = null) => Show(new AssetWin(), owner);
     public static void OpenAccountBalance(Window? owner = null) => Show(new AccBalWin(), owner);
     public static void OpenBalanceSheet(Window? owner = null) => Show(new BalSheetWin(), owner);
     public static void OpenIncomeStatement(Window? owner = null) => Show(new IncStmtWin(), owner);

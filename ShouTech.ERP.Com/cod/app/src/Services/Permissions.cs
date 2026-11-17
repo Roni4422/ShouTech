@@ -1,4 +1,4 @@
-﻿// ========================================================================
+// ========================================================================
 // FILE: Services/Permissions.cs
 // PROJECT: SHOUTECH ERP — Permission catalog, runtime checks, admin
 // Merged: IPermServ, PermCat, PermServ, PermAdminSvc
@@ -242,6 +242,34 @@ namespace ShouTech.App.Services
 
             public const string FinancialAnalysisAi =
                 "ACC.FINANCIAL_ANALYSIS.AI";
+
+            public const string PaymentReconciliationView = "ACC.PAYREC.VIEW";
+            public const string PaymentReconciliationAllocate = "ACC.PAYREC.ALLOCATE";
+        }
+
+        // =====================================================================
+        // PROJECTS
+        // =====================================================================
+
+        public static class Projects
+        {
+            public const string View = "PRJ.PROJECT.VIEW";
+            public const string Create = "PRJ.PROJECT.CREATE";
+            public const string Update = "PRJ.PROJECT.UPDATE";
+            public const string Delete = "PRJ.PROJECT.DELETE";
+            public const string TaskManage = "PRJ.TASK.MANAGE";
+        }
+
+        // =====================================================================
+        // FIXED ASSETS
+        // =====================================================================
+
+        public static class Assets
+        {
+            public const string View = "AST.ASSET.VIEW";
+            public const string Create = "AST.ASSET.CREATE";
+            public const string Update = "AST.ASSET.UPDATE";
+            public const string Delete = "AST.ASSET.DELETE";
         }
 
         // =====================================================================

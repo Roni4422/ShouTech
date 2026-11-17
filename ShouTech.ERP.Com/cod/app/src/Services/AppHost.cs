@@ -32,6 +32,9 @@ namespace ShouTech.App.Services
         public static IAuditService Audit { get; private set; } = null!;
         public static JournalService? Journal { get; private set; }
         public static JournalRepository? JournalStore { get; private set; }
+        public static ProjectService? Projects { get; private set; }
+        public static AssetService? Assets { get; private set; }
+        public static ReconciliationService? Reconciliation { get; private set; }
         public static AccountingStructureRepository? AccountingStructure { get; private set; }
         public static IDatabaseHealth? DatabaseHealth { get; private set; }
 
@@ -76,6 +79,9 @@ namespace ShouTech.App.Services
             Permissions = new PermServ();
 
             Journal = CreateJournalService();
+            Projects = CreatePhase3Service((provider, connection) => new ProjectService(new ProjectRepository(provider, connection)), "Projects");
+            Assets = CreatePhase3Service((provider, connection) => new AssetService(new AssetRepository(provider, connection)), "Fixed Assets");
+            Reconciliation = CreatePhase3Service((provider, connection) => new ReconciliationService(new ReconciliationRepository(provider, connection)), "Payment Reconciliation");
             AccountingStructure = CreateAccountingStructureRepository();
             DatabaseHealth = CreateDatabaseHealth();
 
@@ -174,6 +180,37 @@ namespace ShouTech.App.Services
             }
         }
 
+        /// <summary>
+        /// Shared factory for the Phase 3 module services (Projects, Fixed
+        /// Assets, Payment Reconciliation): resolves the active database
+        /// connection/provider exactly like the journal factory and never
+        /// throws during startup - a missing database leaves the service null
+        /// and the corresponding window reports it honestly.
+        /// </summary>
+        private static TService? CreatePhase3Service<TService>(
+            Func<string, string, TService> factory, string name) where TService : class
+        {
+            var connection = ResolveDatabaseConnection();
+            if (string.IsNullOrWhiteSpace(connection))
+            {
+                Logging.LogWarning("AppHost", $"{name} persistence is unavailable: no database connection configured.");
+                return null;
+            }
+
+            var provider = AppCfgSvc.Current.ConnectionStrings?
+                .FirstOrDefault(item => item.Key.Equals("Default", System.StringComparison.OrdinalIgnoreCase))
+                .Value?.Provider ?? AppCfgSvc.Current.Database?.DefaultProvider ?? "SQLite";
+            try
+            {
+                return factory(provider, connection);
+            }
+            catch (System.Exception ex)
+            {
+                Logging.LogWarning("AppHost", $"{name} persistence could not be initialized: {ex.Message}");
+                return null;
+            }
+        }
+
         private static AccountingStructureRepository? CreateAccountingStructureRepository()
         {
             var connection = ResolveDatabaseConnection();
@@ -244,6 +281,9 @@ namespace ShouTech.App.Services
         public static ISessionManager Session => AppHost.Session;
         public static IAuditService Audit => AppHost.Audit;
         public static JournalService? Journal => AppHost.Journal;
+        public static ProjectService? Projects => AppHost.Projects;
+        public static AssetService? Assets => AppHost.Assets;
+        public static ReconciliationService? Reconciliation => AppHost.Reconciliation;
         public static AccountingStructureRepository? AccountingStructure => AppHost.AccountingStructure;
         public static IDatabaseHealth? DatabaseHealth => AppHost.DatabaseHealth;
         public static ILocSvc Localization => AppHost.Localization;
