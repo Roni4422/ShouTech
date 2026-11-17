@@ -171,6 +171,8 @@ public partial class MatCard : BaseWin
     private readonly ObservableCollection<MatAttrRow> _attrs = new();
     private List<MatRepo.MatRec> _cache = new();
     private List<MatCategoryOption> _categoryOptions = new();
+    private List<string> _unitSuggestions = new();
+    private bool _filteringUnitCombo;
     private int _index = -1;
     private bool _isNew;
     private bool _isEditing;
@@ -304,6 +306,7 @@ public partial class MatCard : BaseWin
             DgUnits.CanUserAddRows = false;
             DgAttributes.CanUserAddRows = true;
             DgUnits.ItemsSource = _units;
+            DgUnits.PreparingCellForEdit += DgUnits_PreparingCellForEdit;
             DgAttributes.ItemsSource = _attrs;
             _units.CollectionChanged += (_, _) => RenumberUnits();
 
@@ -522,44 +525,128 @@ public partial class MatCard : BaseWin
         InitWarehouses();
         RefreshComboDisplays();
         InitCategories();
+        InitUnitSuggestions();
+    }
+
+    // ----------------------------------------------------------------
+    //  Units grid autocomplete (owner directive 2026-11-17): the unit
+    //  cell's editor is an editable ComboBox fed from the saved units
+    //  (units master + names already saved on materials). Typing filters
+    //  by CONTAINS; Enter with the dropdown open accepts the highlighted
+    //  suggestion (the central grid behavior leaves that Enter to the
+    //  ComboBox), Enter with it closed moves horizontally as usual.
+    // ----------------------------------------------------------------
+    private void InitUnitSuggestions()
+    {
+        try
+        {
+            var names = new HashSet<string>(
+                MatRepo.LoadUnitNameSuggestions(), StringComparer.OrdinalIgnoreCase);
+            foreach (var row in _units)
+                if (!string.IsNullOrWhiteSpace(row.UnitName))
+                    names.Add(row.UnitName.Trim());
+            _unitSuggestions = names
+                .OrderBy(x => x, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "MatCard.xaml.InitUnitSuggestions");
+            _unitSuggestions = new List<string>();
+        }
+    }
+
+    private void DgUnits_PreparingCellForEdit(object? sender, DataGridPreparingCellForEditEventArgs e)
+    {
+        try
+        {
+            if (e.EditingElement is not ComboBox combo) return;
+            combo.ItemsSource = _unitSuggestions;
+            combo.ApplyTemplate();
+            if (combo.Template?.FindName("PART_TextBox", combo) is TextBox textBox
+                && textBox.Tag is not ComboBox)
+            {
+                textBox.Tag = combo;
+                textBox.TextChanged += UnitComboTextChanged;
+            }
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "MatCard.xaml.DgUnits_PreparingCellForEdit");
+        }
+    }
+
+    private void UnitComboTextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_filteringUnitCombo) return;
+        if (sender is not TextBox textBox || textBox.Tag is not ComboBox combo) return;
+        try
+        {
+            _filteringUnitCombo = true;
+            var text = textBox.Text ?? string.Empty;
+            if (text.Length == 0)
+            {
+                combo.ItemsSource = _unitSuggestions;
+                combo.IsDropDownOpen = false;
+                return;
+            }
+
+            var filtered = _unitSuggestions
+                .Where(x => x.Contains(text, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            combo.ItemsSource = filtered;
+            if (!string.Equals(combo.Text, text, StringComparison.Ordinal))
+                combo.Text = text;
+            textBox.CaretIndex = text.Length;
+            combo.IsDropDownOpen = filtered.Count > 0;
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "MatCard.xaml.UnitComboTextChanged");
+        }
+        finally
+        {
+            _filteringUnitCombo = false;
+        }
     }
 
     private void InitCategories(string? preferredValue = null)
 	{
 		preferredValue ??= GetComboKey(CmbCategory);
 
-		List<MatRepo.ProductCategoryRec> categories = new();
+		// Owner semantics (2026-11-17): the Category (الصنف) combo lists the
+		// categories managed through the Category Card window (CatWin). The
+		// trace showed CatWin's cards live in material_groups — the
+		// product_categories table behind the old source is orphaned (its
+		// repository has no callers and no window populates it), so the combo
+		// now reads the SAME MatRepo.LoadGroups() source CatWin manages,
+		// presented in CatWin's tree order (parents before their children).
+		// The selection still persists to materials.category, and the
+		// stored-value fallback below keeps a legacy value (e.g. an old
+		// product_categories id) displayed instead of silently cleared.
+		List<MatRepo.MatGroupRec> cards = new();
 		try
 		{
-			categories = MatRepo.LoadProductCategories() ?? new();
-			if (categories.Count == 0)
-			{
-				System.Diagnostics.Debug.WriteLine("[MatCard] Warning: MatRepo.LoadProductCategories() returned empty.");
-			}
-			else
-			{
-				System.Diagnostics.Debug.WriteLine($"[MatCard] Loaded {categories.Count} categories from database.");
-			}
+			cards = MatRepo.LoadGroups() ?? new();
 		}
 		catch (Exception ex)
 		{
 			AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "MatCard.xaml.InitCategories");
-			System.Diagnostics.Debug.WriteLine($"[MatCard] Error loading categories: {ex.Message}");
-			categories = new();
+			cards = new();
 		}
 
 		var isArabic = string.Equals(App.CurrentLanguageCode?.Trim(), "ar", StringComparison.OrdinalIgnoreCase);
-		_categoryOptions = categories
-			.Where(category => !string.IsNullOrWhiteSpace(category.Id))
-			.Select(category =>
+		_categoryOptions = OrderCardsAsTree(cards)
+			.Where(card => !string.IsNullOrWhiteSpace(card.Code))
+			.Select(card =>
 			{
 				var name = isArabic
-					? (string.IsNullOrWhiteSpace(category.Name) ? category.NameEn : category.Name)
-					: (string.IsNullOrWhiteSpace(category.NameEn) ? category.Name : category.NameEn);
+					? (string.IsNullOrWhiteSpace(card.Name) ? card.NameEn : card.Name)
+					: (string.IsNullOrWhiteSpace(card.NameEn) ? card.Name : card.NameEn);
 				var display = string.IsNullOrWhiteSpace(name)
-					? category.Code
-					: string.IsNullOrWhiteSpace(category.Code) ? name : $"{category.Code} - {name}";
-				return new MatCategoryOption(category.Id, display, category.Code, category.Name, category.NameEn);
+					? card.Code
+					: $"{card.Code} - {name}";
+				return new MatCategoryOption(card.Code, display, card.Code, card.Name, card.NameEn);
 			})
 			.ToList();
 
@@ -574,6 +661,40 @@ public partial class MatCard : BaseWin
 
 		CmbCategory.ItemsSource = _categoryOptions;
 		SetCategory(preferredValue);
+	}
+
+	/// <summary>
+	/// Orders group/category cards the way CatWin's tree presents them: each
+	/// root followed by its children (depth-first, siblings in store order).
+	/// Cards whose parent is missing from the set keep their store order at
+	/// the end instead of being dropped.
+	/// </summary>
+	private static List<MatRepo.MatGroupRec> OrderCardsAsTree(List<MatRepo.MatGroupRec> cards)
+	{
+		var alive = cards.Where(c => c != null && !c.IsDeleted).ToList();
+		var codes = new HashSet<string>(
+			alive.Select(c => c.Code).Where(c => !string.IsNullOrWhiteSpace(c)),
+			StringComparer.OrdinalIgnoreCase);
+		var ordered = new List<MatRepo.MatGroupRec>();
+		var placed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+		void Place(MatRepo.MatGroupRec card)
+		{
+			if (!placed.Add(card.Code)) return;
+			ordered.Add(card);
+			foreach (var child in alive.Where(c =>
+					!string.IsNullOrWhiteSpace(c.ParentCode)
+					&& string.Equals(c.ParentCode, card.Code, StringComparison.OrdinalIgnoreCase)))
+				Place(child);
+		}
+
+		foreach (var root in alive.Where(c =>
+				string.IsNullOrWhiteSpace(c.ParentCode) || !codes.Contains(c.ParentCode!)))
+			Place(root);
+		foreach (var rest in alive)
+			Place(rest);
+
+		return ordered;
 	}
 
     private void SetCategory(string? value)
@@ -642,13 +763,22 @@ public partial class MatCard : BaseWin
         CmbDefaultWarehouse.ItemsSource = warehouses;
     }
 
-    private void InitGroups()
+    private void InitGroups(string? preferredValue = null)
     {
+        // Owner semantics (2026-11-17): the Group (المجموعة) combo lists the
+        // operational material groups managed through the Material Groups
+        // window (MatGroupWin) — MatRepo.LoadGroups(). The old wholesale
+        // "[Auto]" fallback (every distinct materials.group_code as a
+        // competing source) is removed; a stored value missing from the
+        // list survives only as a single fallback entry, mirroring
+        // InitCategories, so it displays and re-saves instead of clearing.
+        preferredValue ??= GetComboKey(CmbGroup);
+
         var groups = new List<MatComboOption>();
         try
         {
             var list = MatRepo.LoadGroups();
-            if (list != null && list.Count > 0)
+            if (list != null)
             {
                 var lang = App.CurrentLanguageCode?.Trim().ToLowerInvariant();
                 foreach (var item in list)
@@ -663,41 +793,20 @@ public partial class MatCard : BaseWin
                     groups.Add(new MatComboOption(code, display));
                 }
             }
-
-            if (groups.Count == 0)
-            {
-                System.Diagnostics.Debug.WriteLine("[MatCard] Warning: MatRepo.LoadGroups() returned empty.");
-            }
         }
         catch (Exception ex)
         {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "MatCard.xaml.InitGroups");
-            System.Diagnostics.Debug.WriteLine($"[MatCard] Error loading groups: {ex.Message}");
         }
 
-        if (groups.Count == 0)
+        if (!string.IsNullOrWhiteSpace(preferredValue)
+            && !groups.Any(g => string.Equals(g.Key, preferredValue, StringComparison.OrdinalIgnoreCase)))
         {
-            try
-            {
-                var materialGroups = MatRepo.LoadAll()
-                    .Select(x => x.GroupCode)
-                    .Where(x => !string.IsNullOrWhiteSpace(x))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .OrderBy(x => x)
-                    .Select(x => new MatComboOption(x!, $"[Auto] {x}"))
-                    .ToList();
-
-                if (materialGroups.Count > 0)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[MatCard] Using fallback: found {materialGroups.Count} unique GroupCodes.");
-                    groups = materialGroups;
-                }
-            }
-            catch (Exception exL655) {
-                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL655, "MatCard.xaml.InitGroups"); groups = new(); }
+            groups.Add(new MatComboOption(preferredValue, preferredValue));
         }
 
         CmbGroup.ItemsSource = groups;
+        SetCombo(CmbGroup, preferredValue);
     }
 
     private void RefreshComboDisplays()
@@ -808,14 +917,58 @@ public partial class MatCard : BaseWin
 
     private void UpdateNav()
     {
+        // The navigator now carries the item-number field where the old
+        // "1 / 4" position text used to sit (owner directive 2026-11-17):
+        // keep it showing the current record's number on every navigation.
         try
         {
-            var pos = _cache.Count == 0 ? "0 / 0" : $"{_index + 1} / {_cache.Count}";
-            TxtNavPos.Text = pos;
+            TxtItemNo.Text = _cache.Count == 0 || _index < 0 || _index >= _cache.Count
+                ? string.Empty
+                : _cache[_index].Id.ToString(CultureInfo.InvariantCulture);
         }
         catch (Exception exL769)
         {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL769, "MatCard.xaml.UpdateNav");
+        }
+    }
+
+    /// <summary>
+    /// Enter in the navigator's item-number field jumps straight to the record
+    /// carrying that number inside the same record set the navigator pages
+    /// through. A number with no matching record leaves the current record in
+    /// place and surfaces a catalog-coded warning (no silent failure).
+    /// </summary>
+    private void TxtItemNo_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter && e.Key != Key.Return) return;
+        e.Handled = true;
+        try
+        {
+            var text = TxtItemNo.Text?.Trim();
+            if (string.IsNullOrEmpty(text)
+                || !long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number))
+            {
+                UpdateNav();
+                return;
+            }
+
+            var idx = _cache.FindIndex(x => x.Id == number);
+            if (idx < 0)
+            {
+                AppHost.Errors.Report(ErrorCodes.NavigationFailed,
+                    new InvalidOperationException($"No material record carries number {number}."),
+                    "MatCard.xaml.TxtItemNo_KeyDown");
+                ShowWarn("MatCard.RecordNumberNotFound");
+                UpdateNav();
+                return;
+            }
+
+            _index = idx;
+            LoadCurrent();
+        }
+        catch (Exception exNav)
+        {
+            AppHost.Errors.Report(ErrorCodes.NavigationFailed, exNav, "MatCard.xaml.TxtItemNo_KeyDown");
         }
     }
 
@@ -1313,6 +1466,7 @@ public partial class MatCard : BaseWin
             if (tb.Name == "TxtQtyOnHand") { tb.IsReadOnly = true; continue; }
             if (tb.Name == "TxtCode" && !_isNew) { tb.IsReadOnly = true; continue; }
             if (tb.Name == "TxtGoto") { tb.IsReadOnly = false; continue; }
+            if (tb.Name == "TxtItemNo") { tb.IsReadOnly = false; continue; }
             tb.IsReadOnly = readOnly;
         }
 
@@ -1415,6 +1569,7 @@ public partial class MatCard : BaseWin
             _isNew = false;
             _currentId = saved.Id;
             ReloadCache();
+            InitUnitSuggestions();
             _index = Math.Max(0, _cache.FindIndex(x => x.Id == saved.Id));
             LoadCurrent();
 
@@ -1700,21 +1855,15 @@ public partial class MatCard : BaseWin
     {
         try
         {
-            var t = typeof(AppState);
-            foreach (var name in new[]
+            // AppState.CurrentUser is a UserInfo OBJECT: stringifying it
+            // renders the type name ("...Services.UserInfo") into the
+            // status bar. Read the display name off the object instead —
+            // the same value ShellContext.CurrentUserName exposes.
+            var user = AppState.CurrentUser;
+            if (user != null)
             {
-                "CurrentUsername", "CurrentUser", "Username",
-                "UserName", "LoggedUser", "CurrentUserName"
-            })
-            {
-                var p = t.GetProperty(name,
-                    System.Reflection.BindingFlags.Public |
-                    System.Reflection.BindingFlags.Static);
-                if (p != null)
-                {
-                    var v = p.GetValue(null)?.ToString();
-                    if (!string.IsNullOrWhiteSpace(v)) return v!;
-                }
+                if (!string.IsNullOrWhiteSpace(user.FullName)) return user.FullName;
+                if (!string.IsNullOrWhiteSpace(user.Username)) return user.Username;
             }
         }
         catch (Exception exL1654)

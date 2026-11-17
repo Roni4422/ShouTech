@@ -722,27 +722,17 @@
                                        loc:LocProps.Key="MatCard.Code"
                                        Style="{StaticResource Lbl}"/>
 
+                            <!-- The item number lives in the record navigator
+                                 (owner directive 2026-11-17): it replaces the
+                                 old "1 / 4" position text between the arrows.
+                                 The Code field spans the freed field columns so
+                                 every field edge stays on the shared grid. -->
+
                             <TextBox x:Name="TxtCode"
                                      Grid.Row="0"
                                      Grid.Column="1"
+                                     Grid.ColumnSpan="3"
                                      Style="{StaticResource CodeBox}"
-                                     Margin="0,3,12,3"/>
-
-
-                            <!-- Item number -->
-
-                            <TextBlock Grid.Row="0"
-                                       Grid.Column="2"
-                                       Text="Item #"
-                                       loc:LocProps.Key="MatCard.ItemNo"
-                                       Style="{StaticResource Lbl}"/>
-
-                            <TextBox x:Name="TxtItemNo"
-                                     Grid.Row="0"
-                                     Grid.Column="3"
-                                     Style="{StaticResource CodeBox}"
-                                     IsReadOnly="True"
-                                     Background="{DynamicResource PanelBackground}"
                                      Margin="0,3,12,3"/>
 
 
@@ -857,12 +847,21 @@
                                     Style="{StaticResource FootBtn}"
                                     MinWidth="28"/>
 
-                            <TextBlock x:Name="TxtNavPos"
-                                       MinWidth="44"
-                                       TextAlignment="Center"
-                                       VerticalAlignment="Center"
-                                       Margin="4,0"
-                                       FlowDirection="LeftToRight"/>
+                            <!-- Item number (moved from the header form, owner
+                                 directive 2026-11-17): shows the current record's
+                                 number; type a number and press Enter to jump to
+                                 the record carrying it. -->
+
+                            <TextBox x:Name="TxtItemNo"
+                                     Width="72"
+                                     Height="{StaticResource ControlHeight}"
+                                     Margin="4,0"
+                                     Style="{StaticResource CodeBox}"
+                                     TextAlignment="Center"
+                                     FlowDirection="LeftToRight"
+                                     VerticalContentAlignment="Center"
+                                     KeyDown="TxtItemNo_KeyDown"
+                                     loc:LocProps.ToolTipKey="MatCard.ItemNo"/>
 
                             <Button x:Name="BtnNavNext"
                                     Content="▶"
@@ -1416,18 +1415,38 @@
                                     </DataGridTextColumn>
 
 
-                                    <DataGridTextColumn
-                                        Binding="{Binding UnitName, UpdateSourceTrigger=LostFocus}"
-                                        Width="130"
-                                        ElementStyle="{StaticResource UnitTextCellStyle}"
-                                        EditingElementStyle="{StaticResource UnitTextEditStyle}">
+                                    <!-- Unit name with autocomplete (owner directive
+                                         2026-11-17): the editing cell is an editable
+                                         ComboBox fed from the saved units; typing
+                                         filters by CONTAINS, selecting fills the
+                                         cell, and a genuinely new name still types
+                                         and saves exactly like the old text cell. -->
 
-                                        <DataGridTextColumn.Header>
+                                    <DataGridTemplateColumn
+                                        Width="130">
+
+                                        <DataGridTemplateColumn.Header>
                                             <TextBlock Text="Unit"
                                                        loc:LocProps.Key="MatCard.GridUnit"/>
-                                        </DataGridTextColumn.Header>
+                                        </DataGridTemplateColumn.Header>
 
-                                    </DataGridTextColumn>
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding UnitName}"
+                                                           Style="{StaticResource UnitTextCellStyle}"/>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+
+                                        <DataGridTemplateColumn.CellEditingTemplate>
+                                            <DataTemplate>
+                                                <ComboBox IsEditable="True"
+                                                          IsTextSearchEnabled="False"
+                                                          StaysOpenOnEdit="True"
+                                                          Text="{Binding UnitName, UpdateSourceTrigger=LostFocus}"/>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellEditingTemplate>
+
+                                    </DataGridTemplateColumn>
 
 
                                     <DataGridTextColumn
