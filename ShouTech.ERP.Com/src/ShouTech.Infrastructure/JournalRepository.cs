@@ -419,7 +419,12 @@ public sealed class JournalRepository : IJournalRepository
                     throw new InvalidOperationException("Only a balanced journal entry with at least two lines can be posted.");
             }
 
-            await ApplyCostCenterAllocationsAsync(connection, transaction, companyId, journalEntryId, entryDate, enforceValidation: true, cancellationToken).ConfigureAwait(false);
+            // J-3 (Step 3): cost-center validation is shared with document
+            // postings (GlPosting.ApplyCostCenters): unknown cost centers
+            // fail with ACC-5009 and cost_required accounts without a
+            // center fail with ACC-5010, inside the posting transaction.
+            var postLines = await LoadCostLinesAsync(connection, transaction, companyId, journalEntryId, cancellationToken).ConfigureAwait(false);
+            GlPosting.ApplyCostCenters(connection, transaction, _provider, companyId, journalEntryId, entryDate, postLines, enforceValidation: true);
 
             await using (var update = CreateCommand(connection, transaction,
                 "UPDATE journal_entries SET status = @posted, posted_by = @actor, posted_at = CURRENT_TIMESTAMP WHERE journal_entry_id = @id AND status = @draft"))
@@ -451,131 +456,11 @@ public sealed class JournalRepository : IJournalRepository
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            string companyId;
-            DateOnly entryDate;
-            string description;
-            string periodId;
-            string? referenceNumber;
-            string? documentNumber;
-            string currencyCode;
-            decimal exchangeRate;
-            int status;
-            await using (var header = CreateCommand(connection, transaction,
-                "SELECT company_id, entry_date, description, status, fiscal_period_id, reference_number, currency_code, exchange_rate, document_number FROM journal_entries WHERE journal_entry_id = @id"))
-            {
-                Add(header, "@id", FormatGuid(journalEntryId));
-                await using var reader = await header.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-                    throw new InvalidOperationException("Journal entry was not found.");
-                companyId = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture)!;
-                entryDate = _provider == "PostgreSQL"
-                    ? reader.GetFieldValue<DateOnly>(1)
-                    : DateOnly.Parse(Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture)!, CultureInfo.InvariantCulture);
-                description = reader.GetString(2);
-                status = Convert.ToInt32(reader.GetValue(3), CultureInfo.InvariantCulture);
-                periodId = reader.IsDBNull(4) ? string.Empty : Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture)!;
-                referenceNumber = reader.IsDBNull(5) ? null : reader.GetString(5);
-                currencyCode = reader.GetString(6);
-                exchangeRate = Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture);
-                documentNumber = reader.IsDBNull(8) ? null : reader.GetString(8);
-            }
-            if (status != (int)JournalEntryStatus.Posted)
-                throw new InvalidOperationException("Only an existing posted journal entry can be reversed.");
-            if (string.IsNullOrWhiteSpace(periodId))
-                throw new InvalidOperationException("The source journal has no fiscal period. Assign it to a valid period before reversal.");
-            var openPredicate = _provider == "PostgreSQL" ? "fy.is_closed = false" : "fy.is_closed = 0";
-            await using (var periodCheck = CreateCommand(connection, transaction,
-                "SELECT COUNT(*) FROM fiscal_periods fp JOIN fiscal_years fy ON fy.fiscal_year_id=fp.fiscal_year_id WHERE fp.fiscal_period_id=@period AND fp.company_id=@company AND fp.status='OPEN' AND " + openPredicate))
-            {
-                Add(periodCheck, "@period", _provider == "PostgreSQL" ? (object)Guid.Parse(periodId) : periodId);
-                Add(periodCheck, "@company", _provider == "PostgreSQL" ? (object)Guid.Parse(companyId) : companyId);
-                if (Convert.ToInt64(await periodCheck.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture) != 1)
-                    throw new InvalidOperationException("The original fiscal period is closed. Reversal in a closed period is blocked; use an approved open-period adjustment workflow.");
-            }
-
-            var sourceLines = new List<(string AccountId, decimal Debit, decimal Credit, string? CostCenter, string? Note)>();
-            await using (var lines = CreateCommand(connection, transaction,
-                "SELECT account_id, debit, credit, cost_center, note FROM journal_entry_lines WHERE journal_entry_id = @id ORDER BY line_number"))
-            {
-                Add(lines, "@id", FormatGuid(journalEntryId));
-                await using var reader = await lines.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-                {
-                    sourceLines.Add((Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture)!,
-                        Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture),
-                        Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture),
-                        reader.IsDBNull(3) ? null : reader.GetString(3),
-                        reader.IsDBNull(4) ? null : reader.GetString(4)));
-                }
-            }
-            if (sourceLines.Count < 2 || sourceLines.Sum(x => x.Debit) <= 0 || sourceLines.Sum(x => x.Debit) != sourceLines.Sum(x => x.Credit))
-                throw new InvalidOperationException("The source journal is not balanced and cannot be reversed safely.");
-
-            var reversalId = Guid.NewGuid();
-            var reversalDescription = $"Reversal: {description}";
-            if (reversalDescription.Length > 500) reversalDescription = reversalDescription[..500];
-            await using (var insert = CreateCommand(connection, transaction,
-                "INSERT INTO journal_entries (journal_entry_id, company_id, entry_date, description, status, created_by, reversal_of_entry_id, fiscal_period_id, reference_number, currency_code, exchange_rate, document_number) VALUES (@id, @company, @date, @description, @draft, @actor, @source, @period, @reference, @currency, @rate, @documentNumber)"))
-            {
-                Add(insert, "@id", FormatGuid(reversalId));
-                Add(insert, "@company", _provider == "PostgreSQL" ? (object)Guid.Parse(companyId) : companyId);
-                Add(insert, "@date", _provider == "PostgreSQL" ? (object)entryDate : entryDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-                Add(insert, "@description", reversalDescription);
-                Add(insert, "@draft", (int)JournalEntryStatus.Draft);
-                Add(insert, "@actor", userId.Trim());
-                Add(insert, "@source", FormatGuid(journalEntryId));
-                Add(insert, "@period", _provider == "PostgreSQL" ? (object)Guid.Parse(periodId) : periodId);
-                Add(insert, "@reference", (object?)referenceNumber ?? DBNull.Value);
-                Add(insert, "@currency", currencyCode);
-                Add(insert, "@rate", exchangeRate);
-                Add(insert, "@documentNumber", $"REV-{reversalId.ToString("N")[..12]}");
-                await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            var lineNumber = 0;
-            foreach (var line in sourceLines)
-            {
-                await using var insertLine = CreateCommand(connection, transaction,
-                    "INSERT INTO journal_entry_lines (journal_entry_id, line_number, account_id, debit, credit, cost_center, note) VALUES (@id, @line, @account, @debit, @credit, @costCenter, @note)");
-                Add(insertLine, "@id", FormatGuid(reversalId));
-                Add(insertLine, "@line", ++lineNumber);
-                Add(insertLine, "@account", _provider == "PostgreSQL" ? (object)Guid.Parse(line.AccountId) : line.AccountId);
-                Add(insertLine, "@debit", line.Credit);
-                Add(insertLine, "@credit", line.Debit);
-                Add(insertLine, "@costCenter", (object?)line.CostCenter ?? DBNull.Value);
-                Add(insertLine, "@note", (object?)line.Note ?? DBNull.Value);
-                await insertLine.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            await using (var postReversal = CreateCommand(connection, transaction,
-                "UPDATE journal_entries SET status = @posted, posted_by = @actor, posted_at = CURRENT_TIMESTAMP WHERE journal_entry_id = @id AND status = @draft"))
-            {
-                Add(postReversal, "@posted", (int)JournalEntryStatus.Posted);
-                Add(postReversal, "@draft", (int)JournalEntryStatus.Draft);
-                Add(postReversal, "@actor", userId.Trim());
-                Add(postReversal, "@id", FormatGuid(reversalId));
-                if (await postReversal.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
-                    throw new InvalidOperationException("Reversal journal could not be posted under fiscal-period controls.");
-            }
-
-            await using (var updateOriginal = CreateCommand(connection, transaction,
-                "UPDATE journal_entries SET status = @reversed, reversed_by = @actor, reversed_at = CURRENT_TIMESTAMP WHERE journal_entry_id = @id AND status = @posted"))
-            {
-                Add(updateOriginal, "@reversed", (int)JournalEntryStatus.Reversed);
-                Add(updateOriginal, "@actor", userId.Trim());
-                Add(updateOriginal, "@id", FormatGuid(journalEntryId));
-                Add(updateOriginal, "@posted", (int)JournalEntryStatus.Posted);
-                if (await updateOriginal.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
-                    throw new InvalidOperationException("Journal entry changed while reversal was being created.");
-            }
-
-            // The reversal mirrors an already-posted entry: record its cost
-            // distribution too, but never block a reversal on master-data
-            // changes made after the original posting.
-            await ApplyCostCenterAllocationsAsync(connection, transaction, Guid.Parse(companyId), reversalId, entryDate, enforceValidation: false, cancellationToken).ConfigureAwait(false);
-
-            await AddAuditAsync(connection, transaction, journalEntryId, 3, userId, details ?? $"Reversed by journal {reversalId:D}", cancellationToken).ConfigureAwait(false);
-            await AddAuditAsync(connection, transaction, reversalId, 2, userId, $"Reversal of journal {journalEntryId:D}", cancellationToken).ConfigureAwait(false);
+            // The reversal core is shared with document cancellations
+            // (GlPosting.ReverseInTransaction): identical semantics —
+            // mirrored lines, source-period check, source columns copied,
+            // cost splits recorded without re-validation.
+            var reversalId = GlPosting.ReverseInTransaction(connection, transaction, _provider, journalEntryId, userId, details);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return reversalId;
         }
@@ -587,197 +472,56 @@ public sealed class JournalRepository : IJournalRepository
     }
 
     /// <summary>
-    /// Validates the cost centers of an entry being posted and records the
-    /// applied distribution in journal_line_cost_splits, inside the posting
-    /// transaction. Rules per line whose cost_center code resolves to a
-    /// cost_centers row of the company (cost centers are keyed by company
-    /// CODE in the master tables; the journal world keys by company Guid, so
-    /// the code is resolved through the companies row first):
-    /// - If the center has an active allocation (migration 031) effective on
-    ///   the entry date, the allocation targets must all be active leaf
-    ///   centers and the percentages must total 100; the line's debit and
-    ///   credit are then split across the targets, with rounding residue
-    ///   assigned to the largest target so the splits sum EXACTLY to the
-    ///   line amounts (ACC-5007 when invalid).
-    /// - Without an allocation, the center itself must be an active leaf;
-    ///   the line maps 100% to it (ACC-5008 when it is a group or inactive).
-    /// Lines whose cost-center text matches no master row keep the legacy
-    /// free-text behavior (no validation, no splits). When
-    /// <paramref name="enforceValidation"/> is false (reversal entries,
-    /// which mirror an already-posted entry), nothing is blocked: an
-    /// allocation that no longer validates falls back to a 100% self-split
-    /// so the recorded distribution still sums to the line amounts.
+    /// Posts a source document to the GL inside its own transaction
+    /// (Fix Phase Step 3): balanced entry, source-document link, real
+    /// document number returned. Used by document repositories that own
+    /// no transaction of their own; repositories that DO own one call
+    /// GlPosting.PostInTransaction directly so document + entry commit
+    /// atomically.
     /// </summary>
-    private async Task ApplyCostCenterAllocationsAsync(
-        DbConnection connection,
-        DbTransaction transaction,
-        Guid companyId,
-        Guid journalEntryId,
-        DateOnly entryDate,
-        bool enforceValidation,
-        CancellationToken cancellationToken)
+    public async Task<GlPostingResult> PostDocumentAsync(GlDocumentRequest request, string userId, CancellationToken cancellationToken = default)
     {
-        var boolTrue = _provider == "PostgreSQL" ? "true" : "1";
-        var boolFalse = _provider == "PostgreSQL" ? "false" : "0";
-
-        string? companyCode;
-        await using (var company = CreateCommand(connection, transaction,
-            "SELECT company_code FROM companies WHERE company_id = @company"))
+        ArgumentNullException.ThrowIfNull(request);
+        if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            Add(company, "@company", FormatGuid(companyId));
-            var value = await company.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-            companyCode = value is null or DBNull ? null : Convert.ToString(value, CultureInfo.InvariantCulture);
+            var result = GlPosting.PostInTransaction(connection, transaction, _provider, request, userId);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return result;
         }
-        if (string.IsNullOrWhiteSpace(companyCode))
-            return;
-
-        var lines = new List<(int LineNumber, decimal Debit, decimal Credit, string? CostCenter)>();
-        await using (var load = CreateCommand(connection, transaction,
-            "SELECT line_number, debit, credit, cost_center FROM journal_entry_lines WHERE journal_entry_id = @id ORDER BY line_number"))
+        catch
         {
-            Add(load, "@id", FormatGuid(journalEntryId));
-            await using var reader = await load.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-            {
-                lines.Add((Convert.ToInt32(reader.GetValue(0), CultureInfo.InvariantCulture),
-                    Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture),
-                    Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture),
-                    reader.IsDBNull(3) ? null : reader.GetString(3)));
-            }
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
         }
+    }
 
-        await using (var clear = CreateCommand(connection, transaction,
-            "DELETE FROM journal_line_cost_splits WHERE journal_entry_id = @id"))
+    /// <summary>Loads an entry's lines with account code + cost_required
+    /// for the shared cost-center validation.</summary>
+    private async Task<List<GlPosting.CostLine>> LoadCostLinesAsync(
+        DbConnection connection, DbTransaction transaction, Guid companyId, Guid journalEntryId, CancellationToken cancellationToken)
+    {
+        var lines = new List<GlPosting.CostLine>();
+        await using var load = CreateCommand(connection, transaction,
+            "SELECT l.line_number, l.account_id, a.account_code, l.debit, l.credit, l.cost_center, COALESCE(a.cost_required, 0) FROM journal_entry_lines l LEFT JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = @company WHERE l.journal_entry_id = @id ORDER BY l.line_number");
+        Add(load, "@company", FormatGuid(companyId));
+        Add(load, "@id", FormatGuid(journalEntryId));
+        await using var reader = await load.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            Add(clear, "@id", FormatGuid(journalEntryId));
-            await clear.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            lines.Add(new GlPosting.CostLine(
+                Convert.ToInt32(reader.GetValue(0), CultureInfo.InvariantCulture),
+                Guid.Parse(Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture)!),
+                reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+                Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture),
+                Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture),
+                reader.IsDBNull(5) ? null : reader.GetString(5),
+                Convert.ToBoolean(reader.GetValue(6), CultureInfo.InvariantCulture)));
         }
-
-        async Task InsertSplitAsync(int lineNumber, string centerId, string centerCode, decimal percentage, decimal debitShare, decimal creditShare)
-        {
-            await using var insert = CreateCommand(connection, transaction,
-                "INSERT INTO journal_line_cost_splits (id, company_id, journal_entry_id, line_number, cost_center_id, cost_center_code, percentage, debit_amount, credit_amount) VALUES (@id, @company, @entry, @line, @center, @code, @pct, @debit, @credit)");
-            Add(insert, "@id", FormatGuid(Guid.NewGuid()));
-            Add(insert, "@company", companyCode);
-            Add(insert, "@entry", FormatGuid(journalEntryId));
-            Add(insert, "@line", lineNumber);
-            Add(insert, "@center", _provider == "PostgreSQL" ? (object)Guid.Parse(centerId) : centerId);
-            Add(insert, "@code", centerCode);
-            Add(insert, "@pct", percentage);
-            Add(insert, "@debit", debitShare);
-            Add(insert, "@credit", creditShare);
-            await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-        }
-
-        foreach (var line in lines)
-        {
-            if (string.IsNullOrWhiteSpace(line.CostCenter))
-                continue;
-            var code = line.CostCenter.Trim();
-
-            string centerId;
-            bool isGroup;
-            bool isActive;
-            await using (var center = CreateCommand(connection, transaction,
-                $"SELECT id, is_group, is_active FROM cost_centers WHERE company_id = @company AND code = @code AND is_deleted = {boolFalse}"))
-            {
-                Add(center, "@company", companyCode);
-                Add(center, "@code", code);
-                await using var reader = await center.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-                    continue; // Free-text cost center: no master row, legacy behavior.
-                centerId = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture)!;
-                isGroup = Convert.ToBoolean(reader.GetValue(1), CultureInfo.InvariantCulture);
-                isActive = Convert.ToBoolean(reader.GetValue(2), CultureInfo.InvariantCulture);
-            }
-
-            string? allocationId = null;
-            await using (var allocation = CreateCommand(connection, transaction,
-                $"""
-                SELECT a.id FROM cost_center_allocations a
-                JOIN cost_centers main ON main.id = a.main_cost_center_id
-                WHERE a.company_id = @company AND main.code = @code
-                  AND a.is_active = {boolTrue} AND a.is_deleted = {boolFalse} AND main.is_deleted = {boolFalse}
-                  AND a.valid_from <= @date
-                ORDER BY a.valid_from DESC LIMIT 1
-                """))
-            {
-                Add(allocation, "@company", companyCode);
-                Add(allocation, "@code", code);
-                Add(allocation, "@date", entryDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-                var value = await allocation.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-                allocationId = value is null or DBNull ? null : Convert.ToString(value, CultureInfo.InvariantCulture);
-            }
-
-            var allocationApplied = false;
-            if (allocationId is not null)
-            {
-                var targets = new List<(string Id, string Code, decimal Percentage, bool Valid)>();
-                await using (var loadTargets = CreateCommand(connection, transaction,
-                    $"""
-                    SELECT c.id, c.code, l.percentage, c.is_group, c.is_active, c.is_deleted
-                    FROM cost_center_allocation_lines l
-                    JOIN cost_centers c ON c.id = l.cost_center_id
-                    WHERE l.allocation_id = @allocation
-                    """))
-                {
-                    Add(loadTargets, "@allocation", _provider == "PostgreSQL" ? (object)Guid.Parse(allocationId) : allocationId);
-                    await using var reader = await loadTargets.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-                    while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-                    {
-                        var targetIsGroup = Convert.ToBoolean(reader.GetValue(3), CultureInfo.InvariantCulture);
-                        var targetIsActive = Convert.ToBoolean(reader.GetValue(4), CultureInfo.InvariantCulture);
-                        var targetIsDeleted = Convert.ToBoolean(reader.GetValue(5), CultureInfo.InvariantCulture);
-                        targets.Add((Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture)!,
-                            reader.GetString(1),
-                            Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture),
-                            !targetIsGroup && targetIsActive && !targetIsDeleted));
-                    }
-                }
-
-                var totalPercentage = targets.Sum(t => t.Percentage);
-                var allocationValid = targets.Count > 0
-                    && targets.All(t => t.Valid)
-                    && Math.Abs(totalPercentage - 100m) <= 0.01m;
-                if (!allocationValid)
-                {
-                    if (enforceValidation)
-                        throw new AppError(ErrorCodes.CostCenterAllocationInvalid,
-                            $"The allocation for cost center '{code}' is invalid: its percentages must total 100 and every target must be an active leaf cost center.", code);
-                }
-                else
-                {
-                    // Every target except the largest gets its rounded
-                    // share; the largest absorbs the rounding residue so
-                    // the splits sum exactly to the line amounts.
-                    var ordered = targets.OrderByDescending(t => t.Percentage).ToList();
-                    var debitAssigned = 0m;
-                    var creditAssigned = 0m;
-                    for (var i = 1; i < ordered.Count; i++)
-                    {
-                        var target = ordered[i];
-                        var debitShare = Math.Round(line.Debit * target.Percentage / 100m, 4, MidpointRounding.AwayFromZero);
-                        var creditShare = Math.Round(line.Credit * target.Percentage / 100m, 4, MidpointRounding.AwayFromZero);
-                        debitAssigned += debitShare;
-                        creditAssigned += creditShare;
-                        await InsertSplitAsync(line.LineNumber, target.Id, target.Code, target.Percentage, debitShare, creditShare).ConfigureAwait(false);
-                    }
-                    var largest = ordered[0];
-                    await InsertSplitAsync(line.LineNumber, largest.Id, largest.Code, largest.Percentage,
-                        line.Debit - debitAssigned, line.Credit - creditAssigned).ConfigureAwait(false);
-                    allocationApplied = true;
-                }
-            }
-
-            if (allocationApplied)
-                continue;
-
-            if (enforceValidation && (isGroup || !isActive))
-                throw new AppError(ErrorCodes.CostCenterNotLeaf,
-                    $"Cost center '{code}' is a group or inactive cost center and cannot receive postings.", code);
-
-            await InsertSplitAsync(line.LineNumber, centerId, code, 100m, line.Debit, line.Credit).ConfigureAwait(false);
-        }
+        return lines;
     }
 
     private async Task AddAuditAsync(DbConnection connection, DbTransaction transaction, Guid entryId, int eventType, string actor, string? details, CancellationToken cancellationToken)
