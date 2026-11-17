@@ -6,7 +6,7 @@ namespace ShouTech.Application.Services;
 
 public sealed class UsrSvc
 {
-    private readonly IUsrRepo _repo;   // سنضيف العقد لاحقاً
+    private readonly IUsrRepo _repo;   // The repository contract will be wired up later.
     private readonly ILicProv _lic;
 
     public UsrSvc(IUsrRepo repo, ILicProv lic)
@@ -21,7 +21,7 @@ public sealed class UsrSvc
         Guid createdBy,
         string? email = null,
         string? mobile = null,
-        string lang = "ar",
+        string lang = "en",
         CancellationToken ct = default)
     {
         var lic = await _lic.ValidateAsync(ct);

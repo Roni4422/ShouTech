@@ -10,7 +10,7 @@ public class Usr : EntBase
     public string? Mobile { get; private set; }
     public bool IsActive { get; private set; } = true;
     public bool IsSystem { get; private set; }
-    public string PreferredLanguage { get; private set; } = "ar";
+    public string PreferredLanguage { get; private set; } = "en";
     public string PreferredTheme { get; private set; } = "Light";
     public DateTime? LastLoginAt { get; private set; }
 
@@ -22,7 +22,7 @@ public class Usr : EntBase
         Guid createdBy,
         string? email = null,
         string? mobile = null,
-        string preferredLanguage = "ar",
+        string preferredLanguage = "en",
         bool isSystem = false)
     {
         if (string.IsNullOrWhiteSpace(userName))
@@ -37,7 +37,7 @@ public class Usr : EntBase
             DisplayName = displayName.Trim(),
             Email = email?.Trim(),
             Mobile = mobile?.Trim(),
-            PreferredLanguage = string.IsNullOrWhiteSpace(preferredLanguage) ? "ar" : preferredLanguage.Trim().ToLowerInvariant(),
+            PreferredLanguage = string.IsNullOrWhiteSpace(preferredLanguage) ? "en" : preferredLanguage.Trim().ToLowerInvariant(),
             IsSystem = isSystem,
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
