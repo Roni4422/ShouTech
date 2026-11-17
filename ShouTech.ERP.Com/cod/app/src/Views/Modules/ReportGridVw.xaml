@@ -186,7 +186,7 @@
                 Grid.RowSpan="3"
                 Background="{DynamicResource OverlayBrush}"
                 Visibility="Collapsed">
-            <Border Background="White" CornerRadius="10"
+            <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="10"
                     Padding="24" Width="420"
                     HorizontalAlignment="Center" VerticalAlignment="Center">
                 <StackPanel>
