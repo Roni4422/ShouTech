@@ -1811,7 +1811,7 @@ namespace ShouTech.App.Views
                         line.Children.Add(input);
 
                         lookup.Content = "...";
-                        lookup.Width = 30;
+                        lookup.Width = ShouTech.App.Services.VisuId.ControlHeight;
                         lookup.Margin = new Thickness(4, 0, 0, 0);
                         lookup.SetResourceReference(StyleProperty, "VisuButtonStyle");
                         lookup.Click += pick;
@@ -2045,7 +2045,7 @@ namespace ShouTech.App.Views
                             Orientation = Orientation.Horizontal,
                             HorizontalAlignment = HorizontalAlignment.Right
                         };
-                        _post.MinWidth = 112;
+                        _post.MinWidth = ShouTech.App.Services.VisuId.PrimaryButtonMinWidth;
                         _post.Margin = new Thickness(0, 0, 4, 0);
                         _post.SetResourceReference(StyleProperty, "VisuAccentButtonStyle");
                         _post.IsDefault = true;
