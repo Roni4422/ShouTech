@@ -421,7 +421,7 @@ public class ChequeMfgServiceTests
             connection.Open();
             Exec(connection, """
                 CREATE TABLE companies (company_id TEXT PRIMARY KEY, company_code TEXT NOT NULL, is_active INTEGER NOT NULL DEFAULT 1, is_deleted INTEGER NOT NULL DEFAULT 0);
-                CREATE TABLE chart_of_accounts (account_id TEXT PRIMARY KEY, company_id TEXT NOT NULL, account_code TEXT NOT NULL, account_name TEXT, is_active INTEGER NOT NULL DEFAULT 1, is_deleted INTEGER NOT NULL DEFAULT 0, is_postable INTEGER NOT NULL DEFAULT 1);
+                CREATE TABLE chart_of_accounts (account_id TEXT PRIMARY KEY, company_id TEXT NOT NULL, account_code TEXT NOT NULL, account_name TEXT, account_type TEXT NOT NULL DEFAULT 'ASSET', is_active INTEGER NOT NULL DEFAULT 1, is_deleted INTEGER NOT NULL DEFAULT 0, is_postable INTEGER NOT NULL DEFAULT 1, cost_required INTEGER NOT NULL DEFAULT 0);
                 """);
             using (var cmd = connection.CreateCommand())
             {
@@ -444,9 +444,40 @@ public class ChequeMfgServiceTests
                 Exec(connection, ReadMigration("033_cheques.sql"));
             if (withStock)
             {
+                // Step 3: MFG completion/cancellation post + reverse real
+                // GL entries, so the fixture needs the journal tables, an
+                // open fiscal year, and the canonical inventory account.
+                Exec(connection, """
+                    CREATE TABLE fiscal_years (fiscal_year_id INTEGER PRIMARY KEY AUTOINCREMENT, company_id TEXT NOT NULL, fiscal_year INTEGER NOT NULL, database_name TEXT NOT NULL DEFAULT '', start_date TEXT NOT NULL, end_date TEXT NOT NULL, is_current INTEGER NOT NULL DEFAULT 1, is_closed INTEGER NOT NULL DEFAULT 0);
+                    CREATE TABLE fiscal_periods (fiscal_period_id TEXT PRIMARY KEY, company_id TEXT NOT NULL, fiscal_year_id INTEGER NOT NULL, period_number INTEGER NOT NULL, period_name TEXT NOT NULL, start_date TEXT NOT NULL, end_date TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'OPEN', closed_by TEXT, closed_at TEXT);
+                    CREATE TABLE journal_entries (journal_entry_id TEXT PRIMARY KEY, company_id TEXT NOT NULL, entry_date TEXT NOT NULL, description TEXT NOT NULL, status INTEGER NOT NULL DEFAULT 0, created_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, posted_by TEXT, posted_at TEXT, reversed_by TEXT, reversed_at TEXT, reversal_of_entry_id TEXT, fiscal_period_id TEXT, reference_number TEXT, currency_code TEXT NOT NULL DEFAULT 'SAR', exchange_rate NUMERIC NOT NULL DEFAULT 1, document_number TEXT, source_doc_type TEXT, source_doc_id TEXT, source_doc_no TEXT);
+                    CREATE TABLE journal_entry_lines (journal_entry_line_id INTEGER PRIMARY KEY AUTOINCREMENT, journal_entry_id TEXT NOT NULL, line_number INTEGER NOT NULL, account_id TEXT NOT NULL, debit NUMERIC NOT NULL DEFAULT 0, credit NUMERIC NOT NULL DEFAULT 0, cost_center TEXT, note TEXT);
+                    CREATE TABLE journal_audit_events (journal_audit_event_id INTEGER PRIMARY KEY AUTOINCREMENT, journal_entry_id TEXT NOT NULL, event_type INTEGER NOT NULL, actor TEXT NOT NULL, event_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, details TEXT);
+                    CREATE TABLE cost_centers (id TEXT PRIMARY KEY, company_id TEXT NOT NULL, code TEXT NOT NULL, is_group INTEGER NOT NULL DEFAULT 0, is_active INTEGER NOT NULL DEFAULT 1, is_deleted INTEGER NOT NULL DEFAULT 0);
+                    CREATE TABLE cost_center_allocations (id TEXT PRIMARY KEY, company_id TEXT NOT NULL, main_cost_center_id TEXT NOT NULL, is_active INTEGER NOT NULL DEFAULT 1, is_deleted INTEGER NOT NULL DEFAULT 0, valid_from TEXT NOT NULL);
+                    CREATE TABLE cost_center_allocation_lines (id TEXT PRIMARY KEY, allocation_id TEXT NOT NULL, cost_center_id TEXT NOT NULL, percentage NUMERIC NOT NULL DEFAULT 0);
+                    CREATE TABLE journal_line_cost_splits (id TEXT PRIMARY KEY, company_id TEXT NOT NULL, journal_entry_id TEXT NOT NULL, line_number INTEGER NOT NULL, cost_center_id TEXT NOT NULL, cost_center_code TEXT NOT NULL, percentage REAL NOT NULL, debit_amount NUMERIC NOT NULL DEFAULT 0, credit_amount NUMERIC NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+                    """);
+                using (var cmd = connection.CreateCommand())
+                {
+                    cmd.CommandText = "INSERT INTO fiscal_years (company_id, fiscal_year, start_date, end_date) VALUES ($c, 2026, '2026-01-01', '2026-12-31'); SELECT last_insert_rowid();";
+                    cmd.Parameters.AddWithValue("$c", CompanyGuid.ToString("D"));
+                    var yearId = (long)cmd.ExecuteScalar()!;
+                    cmd.Parameters.Clear();
+                    cmd.CommandText = "INSERT INTO fiscal_periods (fiscal_period_id, company_id, fiscal_year_id, period_number, period_name, start_date, end_date, status) VALUES ($id, $c, $y, 11, '2026-11', '2026-11-01', '2026-11-30', 'OPEN');";
+                    cmd.Parameters.AddWithValue("$id", Guid.NewGuid().ToString("D"));
+                    cmd.Parameters.AddWithValue("$c", CompanyGuid.ToString("D"));
+                    cmd.Parameters.AddWithValue("$y", yearId);
+                    cmd.ExecuteNonQuery();
+                    cmd.Parameters.Clear();
+                    cmd.CommandText = "INSERT INTO chart_of_accounts (account_id, company_id, account_code, account_name) VALUES ($id, $company, '1203', 'Merchandise Inventory');";
+                    cmd.Parameters.AddWithValue("$id", Guid.NewGuid().ToString("D"));
+                    cmd.Parameters.AddWithValue("$company", CompanyGuid.ToString("D"));
+                    cmd.ExecuteNonQuery();
+                }
                 Exec(connection, ReadMigration("034_manufacturing.sql"));
                 Exec(connection, """
-                    CREATE TABLE materials (material_id INTEGER PRIMARY KEY, company_id TEXT NOT NULL DEFAULT '', code TEXT NOT NULL, name_ar TEXT NOT NULL DEFAULT '', is_deleted INTEGER NOT NULL DEFAULT 0);
+                    CREATE TABLE materials (material_id INTEGER PRIMARY KEY, company_id TEXT NOT NULL DEFAULT '', code TEXT NOT NULL, name_ar TEXT NOT NULL DEFAULT '', is_deleted INTEGER NOT NULL DEFAULT 0, acc_inventory TEXT);
                     CREATE TABLE warehouses (warehouse_id INTEGER PRIMARY KEY, company_id TEXT NOT NULL DEFAULT '', warehouse_code INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0);
                     CREATE TABLE material_stock_movements (stock_movement_id INTEGER PRIMARY KEY AUTOINCREMENT, company_id TEXT NOT NULL, warehouse_id INTEGER NOT NULL, material_id INTEGER NOT NULL, movement_date TEXT NOT NULL, movement_type TEXT NOT NULL, document_no TEXT NOT NULL, qty_in NUMERIC NOT NULL DEFAULT 0, qty_out NUMERIC NOT NULL DEFAULT 0, unit_cost NUMERIC NOT NULL DEFAULT 0, note TEXT, is_deleted INTEGER NOT NULL DEFAULT 0);
                     CREATE TABLE material_stock_balances (stock_balance_id INTEGER PRIMARY KEY AUTOINCREMENT, company_id TEXT NOT NULL, warehouse_id INTEGER NOT NULL, material_id INTEGER NOT NULL, available_qty NUMERIC NOT NULL DEFAULT 0, reserved_qty NUMERIC NOT NULL DEFAULT 0, average_cost NUMERIC NOT NULL DEFAULT 0, last_cost NUMERIC NOT NULL DEFAULT 0, last_updated TEXT NOT NULL DEFAULT (datetime('now')), is_deleted INTEGER NOT NULL DEFAULT 0, UNIQUE(company_id, warehouse_id, material_id));
