@@ -102,6 +102,10 @@ public sealed class NewCoReq
         public string AdminUsername { get; set; } = string.Empty;
         public string AdminPasswordHash { get; set; } = string.Empty;
         public string AdminPasswordSalt { get; set; } = string.Empty;
+        // Phase 4: login lockout state for the local company administrator
+        // (same limits as database users; enforced in CoLocalStore).
+        public int AdminFailedLoginCount { get; set; }
+        public DateTime? AdminLockedUntilUtc { get; set; }
         public string AdminFullName { get; set; } = string.Empty;
         public string DatabaseProvider { get; set; } = "SQLite";
         public string DbPath { get; set; } = string.Empty;
@@ -218,8 +222,10 @@ public static class CoLocalStore
 
         public static async Task<StoredCoRec?> FindUserCompanyAsync(string companyCode, string username, string password)
         {
-            var companies = await LoadAsync();
-            var company = companies.FirstOrDefault(c =>
+            // Phase 4: operate on the full index so lockout state can be
+            // persisted for the matching record (LoadAsync filters/reorders).
+            var companies = await LoadAllAsync();
+            var company = companies.FirstOrDefault(c => c.Enabled &&
                 string.Equals(c.Code, companyCode, StringComparison.OrdinalIgnoreCase));
 
             if (company == null)
@@ -228,7 +234,7 @@ public static class CoLocalStore
             if (!string.Equals(company.AdminUsername, username, StringComparison.OrdinalIgnoreCase))
                 return null;
 
-            return PwdHash.Verify(password, company.AdminPasswordHash, company.AdminPasswordSalt)
+            return await VerifyLocalAdminAsync(companies, company, password)
                 ? company
                 : null;
         }
@@ -238,16 +244,56 @@ public static class CoLocalStore
             if (string.IsNullOrWhiteSpace(companyCode) || string.IsNullOrEmpty(password))
                 return null;
 
-            var companies = await LoadAsync();
-            var company = companies.FirstOrDefault(c =>
+            var companies = await LoadAllAsync();
+            var company = companies.FirstOrDefault(c => c.Enabled &&
                 string.Equals(c.Code, companyCode, StringComparison.OrdinalIgnoreCase));
 
             if (company == null)
                 return null;
 
-            return PwdHash.Verify(password, company.AdminPasswordHash, company.AdminPasswordSalt)
+            return await VerifyLocalAdminAsync(companies, company, password)
                 ? company
                 : null;
+        }
+
+        /// <summary>
+        /// Local administrator verification with lockout (Phase 4): a locked
+        /// account is refused before the password is checked; failures are
+        /// counted and lock the account at the configured threshold; success
+        /// resets the counter. State is persisted to the local index on a
+        /// best-effort basis — a persistence failure never changes the
+        /// verification outcome for this attempt.
+        /// </summary>
+        private static async Task<bool> VerifyLocalAdminAsync(
+            List<StoredCoRec> companies, StoredCoRec company, string password)
+        {
+            var state = new LoginLockout.State(company.AdminFailedLoginCount, company.AdminLockedUntilUtc);
+            if (LoginLockout.IsLocked(state, DateTime.UtcNow))
+                return false;
+
+            if (PwdHash.Verify(password, company.AdminPasswordHash, company.AdminPasswordSalt))
+            {
+                if (state.FailedCount > 0 || state.LockedUntilUtc is not null)
+                {
+                    company.AdminFailedLoginCount = 0;
+                    company.AdminLockedUntilUtc = null;
+                    await PersistLocalAdminStateAsync(companies);
+                }
+                return true;
+            }
+
+            var (maxAttempts, lockoutMinutes) = LoginLockout.GetConfiguredLimits();
+            var next = LoginLockout.RegisterFailure(state, DateTime.UtcNow, maxAttempts, lockoutMinutes);
+            company.AdminFailedLoginCount = next.FailedCount;
+            company.AdminLockedUntilUtc = next.LockedUntilUtc;
+            await PersistLocalAdminStateAsync(companies);
+            return false;
+        }
+
+        private static async Task PersistLocalAdminStateAsync(List<StoredCoRec> companies)
+        {
+            try { await ReplaceIndexAsync(companies); }
+            catch { /* lockout persistence must not break sign-in */ }
         }
 
         public static async Task<StoredCoRec?> FindPasswordOwnerAsync(string password)
@@ -1002,6 +1048,22 @@ public sealed class CoCreateSvc : ICoCreateSvc
     {
         public async Task<CoCreateResult> CreateAsync(NewCoReq request)
         {
+            // Phase 4: the administrator password is a credential set-point —
+            // enforce the configured enterprise password policy before hashing.
+            var policyErrors = PwdPolicy.ValidateConfigured(request.AdminPassword, request.AdminUsername);
+            if (policyErrors.Count > 0)
+            {
+                return new CoCreateResult
+                {
+                    Success = false,
+                    Message = "Administrator password does not meet the password policy: " +
+                              string.Join(" ", policyErrors),
+                    CompanyCode = string.Empty,
+                    SavedToDatabase = false,
+                    SavedLocally = false
+                };
+            }
+
             var companyId = Guid.NewGuid();
             var code = await ResolveCompanyCodeAsync();
             var pwdHashResult = PwdHash.Create(request.AdminPassword);

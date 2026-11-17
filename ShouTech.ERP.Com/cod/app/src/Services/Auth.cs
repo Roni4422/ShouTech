@@ -7,13 +7,16 @@
 #nullable enable
 
 using System.Collections.Generic;
+using System.Data.Common;
 using System.Globalization;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using System;
 using Microsoft.Data.Sqlite;
 using Npgsql;
 using ShouTech.App.Common;
+using ShouTech.App.Configuration;
 
 namespace ShouTech.App.Services
 {
@@ -475,6 +478,189 @@ public interface IAuthSvc
         string Version,
         int Iterations);
 
+    // ========== PwdPolicy.cs (Phase 4) ==========
+/// <summary>
+/// Central password policy enforcement (Phase 4). The policy itself lives in
+/// configuration (SecuritySettings.PasswordPolicy, enterprise defaults:
+/// minimum 12 characters, upper + lower + digit + symbol, common-password
+/// denial). Every password set / create path must validate through here —
+/// currently CoCreateSvc (company + admin creation). Validation returns all
+/// violations so callers can show them at once; it never throws for a weak
+/// password.
+/// </summary>
+public static class PwdPolicy
+{
+    private static readonly string[] CommonPasswords =
+    {
+        "password", "password1", "password123", "123456", "1234567", "12345678",
+        "123456789", "1234567890", "qwerty", "qwerty123", "admin", "admin123",
+        "administrator", "letmein", "welcome", "welcome1", "changeme", "default",
+        "shoutech", "shoutech123", "erp12345", "11111111", "00000000", "abc12345",
+        "p@ssw0rd", "passw0rd"
+    };
+
+    public static IReadOnlyList<string> Validate(string? password, PasswordPolicySettings policy, string? username = null)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        var errors = new List<string>();
+
+        if (string.IsNullOrEmpty(password))
+        {
+            errors.Add("Password is required.");
+            return errors;
+        }
+
+        var minLength = Math.Max(1, policy.MinLength);
+        var maxLength = Math.Max(minLength, policy.MaxLength);
+        if (password.Length < minLength)
+            errors.Add($"Password must be at least {minLength} characters long.");
+        if (password.Length > maxLength)
+            errors.Add($"Password must not exceed {maxLength} characters.");
+        if (policy.RequireUpperCase && !password.Any(char.IsUpper))
+            errors.Add("Password must contain an uppercase letter.");
+        if (policy.RequireLowerCase && !password.Any(char.IsLower))
+            errors.Add("Password must contain a lowercase letter.");
+        if (policy.RequireNumbers && !password.Any(char.IsDigit))
+            errors.Add("Password must contain a digit.");
+        if (policy.RequireSpecialChars && password.All(char.IsLetterOrDigit))
+            errors.Add("Password must contain a symbol (non-alphanumeric character).");
+        if (!policy.AllowCommonPasswords &&
+            CommonPasswords.Contains(password, StringComparer.OrdinalIgnoreCase))
+            errors.Add("Password is too common; choose a less predictable password.");
+        if (!string.IsNullOrWhiteSpace(username) &&
+            string.Equals(password, username, StringComparison.OrdinalIgnoreCase))
+            errors.Add("Password must not equal the username.");
+
+        return errors;
+    }
+
+    /// <summary>Validates against the configured policy (AppCfgSvc Security section).</summary>
+    public static IReadOnlyList<string> ValidateConfigured(string? password, string? username = null)
+        => Validate(password, AppCfgSvc.Current?.Security?.PasswordPolicy ?? new PasswordPolicySettings(), username);
+}
+
+    // ========== LoginLockout.cs (Phase 4) ==========
+/// <summary>
+/// Pure lockout state machine (Phase 4). AuthServ persists
+/// <see cref="State"/> on the users row (failed_login_count / locked_until)
+/// and on the local company-admin record; this type owns the transitions so
+/// they are unit-testable without a database:
+///   failure below threshold  → count + 1, no lock
+///   failure at threshold     → locked until now + lockout minutes
+///   success                  → clean state
+///   locked and not expired   → login is refused before password verification
+/// </summary>
+public static class LoginLockout
+{
+    public readonly record struct State(int FailedCount, DateTime? LockedUntilUtc);
+
+    public static readonly State Clean = new(0, null);
+
+    public static bool IsLocked(State state, DateTime nowUtc)
+        => state.LockedUntilUtc is { } until && until > nowUtc;
+
+    public static State RegisterFailure(State state, DateTime nowUtc, int maxAttempts, int lockoutMinutes)
+    {
+        maxAttempts = Math.Max(1, maxAttempts);
+        lockoutMinutes = Math.Max(1, lockoutMinutes);
+        var count = state.FailedCount + 1;
+        return count >= maxAttempts
+            ? new State(count, nowUtc.AddMinutes(lockoutMinutes))
+            : new State(count, null);
+    }
+
+    public static State RegisterSuccess() => Clean;
+
+    /// <summary>Configured limits (SecuritySettings; defaults 5 attempts / 15 minutes).</summary>
+    public static (int MaxAttempts, int LockoutMinutes) GetConfiguredLimits()
+    {
+        var security = AppCfgSvc.Current?.Security;
+        return (Math.Max(1, security?.MaxLoginAttempts ?? 5),
+                Math.Max(1, security?.LockoutDurationMinutes ?? 15));
+    }
+}
+
+    // ========== SecurityAuditLog.cs (Phase 4) ==========
+/// <summary>
+/// Durable security audit writer (Phase 4): inserts into the
+/// security_audit_log table (migration 029) in the active company database.
+/// Best-effort by design — an audit failure must never change an
+/// authentication outcome — but failures are logged. Passwords are never
+/// written. Also used by DatWin for data-export governance events.
+/// </summary>
+public static class SecurityAuditLog
+{
+    public const string LoginSuccess = "LOGIN_SUCCESS";
+    public const string LoginFailure = "LOGIN_FAILURE";
+    public const string AccountLocked = "ACCOUNT_LOCKED";
+    public const string LoginLocked = "LOGIN_LOCKED";
+    public const string DataExport = "DATA_EXPORT";
+    public const string DataExportDenied = "DATA_EXPORT_DENIED";
+
+    public static async Task WriteAsync(string? companyCode, object? userId, string username, string eventType, string? details = null)
+    {
+        try
+        {
+            var connectionString = DatabaseRuntime.GetConnectionString();
+            if (string.IsNullOrWhiteSpace(connectionString))
+                return;
+
+            var isPostgreSql = DatabaseRuntime.IsPostgreSql();
+            await using var connection = isPostgreSql
+                ? (DbConnection)new NpgsqlConnection(connectionString)
+                : new SqliteConnection(connectionString);
+            await connection.OpenAsync();
+
+            if (!await TableExistsAsync(connection, isPostgreSql))
+                return;
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                INSERT INTO security_audit_log (company_id, user_id, username, event_type, details)
+                VALUES ((SELECT company_id FROM companies WHERE company_code = @code), @uid, @user, @event, @details)
+                """;
+            Add(command, "@code", (object?)companyCode ?? DBNull.Value);
+            Add(command, "@uid", ConvertUserId(userId, isPostgreSql));
+            Add(command, "@user", string.IsNullOrWhiteSpace(username) ? "(unknown)" : username.Trim());
+            Add(command, "@event", eventType);
+            Add(command, "@details", (object?)details ?? DBNull.Value);
+            await command.ExecuteNonQueryAsync();
+        }
+        catch (Exception ex)
+        {
+            try { AppHost.Logging.LogWarning("SecurityAudit", $"Security audit write failed ({eventType}): {ex.Message}"); }
+            catch { /* logging must never throw into an auth path */ }
+        }
+    }
+
+    private static object ConvertUserId(object? userId, bool isPostgreSql)
+    {
+        if (userId is null)
+            return DBNull.Value;
+        if (!isPostgreSql)
+            return userId.ToString() ?? (object)DBNull.Value;
+        return Guid.TryParse(userId.ToString(), out var guid) ? guid : DBNull.Value;
+    }
+
+    private static async Task<bool> TableExistsAsync(DbConnection connection, bool isPostgreSql)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = isPostgreSql
+            ? "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'security_audit_log'"
+            : "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'security_audit_log'";
+        var result = await command.ExecuteScalarAsync();
+        return Convert.ToInt64(result, CultureInfo.InvariantCulture) > 0;
+    }
+
+    private static void Add(DbCommand command, string name, object value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.Value = value;
+        command.Parameters.Add(parameter);
+    }
+}
+
     // ========== AuthServ.cs ==========
 public sealed class AuthServ : IAuthSvc
 {
@@ -488,7 +674,27 @@ public sealed class AuthServ : IAuthSvc
         string CompanyCode,
         string CompanyName,
         string RoleCode,
-        string RoleName);
+        string RoleName,
+        int FailedLoginCount,
+        DateTime? LockedUntilUtc);
+
+    /// <summary>Outcome of a database credential check (Phase 4 lockout/audit).</summary>
+    private enum DbLoginKind
+    {
+        Success,
+        BadCredentials,
+        NotFound,
+        /// <summary>Account was already locked; the password was not evaluated.</summary>
+        Locked,
+        /// <summary>This failure reached the threshold and locked the account.</summary>
+        LockedNow
+    }
+
+    private sealed record DbLoginAttempt(UserInfo? User, DbLoginKind Kind, string? UserId)
+    {
+        public static readonly DbLoginAttempt NotFound = new(null, DbLoginKind.NotFound, null);
+        public static DbLoginAttempt BadCredentials(string? userId) => new(null, DbLoginKind.BadCredentials, userId);
+    }
 
     private UserInfo? _currentUser;
 
@@ -510,24 +716,67 @@ public sealed class AuthServ : IAuthSvc
         {
             var localCompany = await CoLocalStore.FindUserCompanyAsync(companyCode, normalizedUser, password);
             if (localCompany != null)
+            {
+                await SecurityAuditLog.WriteAsync(companyCode, null, normalizedUser,
+                    SecurityAuditLog.LoginSuccess, "Local company administrator sign-in.");
                 return Succeed(BuildCompanyAdminUser(normalizedUser, localCompany));
+            }
 
-            var dbUser = await TryLoginFromDatabaseAsync(companyCode, normalizedUser, password);
-            if (dbUser != null)
-                return Succeed(dbUser);
+            var attempt = await TryLoginFromDatabaseAsync(companyCode, normalizedUser, password);
+            switch (attempt.Kind)
+            {
+                case DbLoginKind.Success:
+                    await SecurityAuditLog.WriteAsync(companyCode, attempt.UserId, normalizedUser,
+                        SecurityAuditLog.LoginSuccess, "Database sign-in.");
+                    return Succeed(attempt.User!);
+                case DbLoginKind.Locked:
+                    await SecurityAuditLog.WriteAsync(companyCode, attempt.UserId, normalizedUser,
+                        SecurityAuditLog.LoginLocked, "Sign-in refused: account is locked.");
+                    AuditSecurityViolation("LoginLocked", $"Locked account sign-in attempt | user={normalizedUser} | company={companyCode}", normalizedUser);
+                    return Failed();
+                case DbLoginKind.LockedNow:
+                    await SecurityAuditLog.WriteAsync(companyCode, attempt.UserId, normalizedUser,
+                        SecurityAuditLog.AccountLocked, "Account locked after repeated failed sign-ins.");
+                    AuditSecurityViolation("AccountLocked", $"Account locked after repeated failed sign-ins | user={normalizedUser} | company={companyCode}", normalizedUser);
+                    return Failed();
+                default:
+                    await SecurityAuditLog.WriteAsync(companyCode, attempt.UserId, normalizedUser,
+                        SecurityAuditLog.LoginFailure,
+                        attempt.Kind == DbLoginKind.BadCredentials ? "Invalid password." : "User not found or inactive.");
+                    return Failed();
+            }
         }
         else
         {
             var localCompany = await CoLocalStore.FindCompanyAdminByPasswordAsync(companyCode, password);
             if (localCompany != null && !string.IsNullOrWhiteSpace(localCompany.AdminUsername))
+            {
+                await SecurityAuditLog.WriteAsync(companyCode, null, localCompany.AdminUsername.Trim(),
+                    SecurityAuditLog.LoginSuccess, "Local company administrator passcode sign-in.");
                 return Succeed(BuildCompanyAdminUser(localCompany.AdminUsername.Trim(), localCompany));
+            }
 
-            var dbUser = await TryLoginFromDatabaseByPasscodeAsync(companyCode, password);
-            if (dbUser != null)
-                return Succeed(dbUser);
+            var attempt = await TryLoginFromDatabaseByPasscodeAsync(companyCode, password);
+            switch (attempt.Kind)
+            {
+                case DbLoginKind.Success:
+                    await SecurityAuditLog.WriteAsync(companyCode, attempt.UserId, attempt.User!.Username,
+                        SecurityAuditLog.LoginSuccess, "Database passcode sign-in.");
+                    return Succeed(attempt.User!);
+                case DbLoginKind.Locked:
+                    await SecurityAuditLog.WriteAsync(companyCode, attempt.UserId, "(passcode)",
+                        SecurityAuditLog.LoginLocked, "Passcode sign-in refused: matched account is locked.");
+                    return Failed();
+                default:
+                    // Passcode failures cannot be attributed to one account, so no
+                    // per-account counter is incremented on this path; the event
+                    // is still audited. A matched-but-locked account is refused
+                    // above, so this path cannot be used to bypass a lockout.
+                    await SecurityAuditLog.WriteAsync(companyCode, null, "(passcode)",
+                        SecurityAuditLog.LoginFailure, "Passcode did not match exactly one active account.");
+                    return Failed();
+            }
         }
-
-        return Failed();
     }
 
     public Task LogoutAsync()
@@ -544,6 +793,16 @@ public sealed class AuthServ : IAuthSvc
     {
         _currentUser = user ?? throw new ArgumentNullException(nameof(user));
         SyncSession(user);
+    }
+
+    private static void AuditSecurityViolation(string eventType, string details, string? username)
+    {
+        try
+        {
+            if (AppHost.Audit is { } audit)
+                _ = audit.LogSecurityViolationAsync(eventType, details, username);
+        }
+        catch { /* audit forwarding must never change an auth outcome */ }
     }
 
     private static AuthResult Succeed(UserInfo user)
@@ -573,7 +832,21 @@ public sealed class AuthServ : IAuthSvc
         LastLogin = DateTime.Now
     };
 
-    private static async Task<UserInfo?> TryLoginFromDatabaseAsync(string companyCode, string username, string password)
+    private static DateTime? ParseLockedUntil(object? value) => value switch
+    {
+        null => null,
+        DBNull => null,
+        DateTime dt => dt.ToUniversalTime(),
+        string text when DateTime.TryParse(text, CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed) => parsed,
+        _ => null
+    };
+
+    // ------------------------------------------------------------------
+    // Username + password paths
+    // ------------------------------------------------------------------
+
+    private static async Task<DbLoginAttempt> TryLoginFromDatabaseAsync(string companyCode, string username, string password)
     {
         var provider = DatabaseRuntime.GetProvider();
         if (DatabaseRuntime.IsSqlite(provider))
@@ -582,7 +855,7 @@ public sealed class AuthServ : IAuthSvc
         try
         {
             var connectionString = DatabaseRuntime.GetConnectionString();
-            if (string.IsNullOrWhiteSpace(connectionString)) return null;
+            if (string.IsNullOrWhiteSpace(connectionString)) return DbLoginAttempt.NotFound;
 
             await using var connection = new NpgsqlConnection(connectionString);
             await connection.OpenAsync();
@@ -591,6 +864,7 @@ public sealed class AuthServ : IAuthSvc
                 SELECT
                     u.user_id, u.username, u.password_hash, u.password_salt,
                     u.full_name_ar, u.email, c.company_code, c.company_name_ar,
+                    u.failed_login_count, u.locked_until,
                     COALESCE(r.role_code, 'ROLE_USER') AS role_code,
                     COALESCE(r.role_name, 'User') AS role_name
                 FROM public.users u
@@ -614,28 +888,122 @@ public sealed class AuthServ : IAuthSvc
                 LIMIT 1;
                 """;
 
-            await using var command = new NpgsqlCommand(sql, connection);
-            command.Parameters.AddWithValue("@CompanyCode", companyCode);
-            command.Parameters.AddWithValue("@Username", username);
-            await using var reader = await command.ExecuteReaderAsync();
-            if (!await reader.ReadAsync()) return null;
+            string userId, hash, salt, fullName, email, companyName, roleCode, roleName;
+            int failedCount;
+            DateTime? lockedUntil;
+            await using (var command = new NpgsqlCommand(sql, connection))
+            {
+                command.Parameters.AddWithValue("@CompanyCode", companyCode);
+                command.Parameters.AddWithValue("@Username", username);
+                await using var reader = await command.ExecuteReaderAsync();
+                if (!await reader.ReadAsync()) return DbLoginAttempt.NotFound;
 
-            var hash = reader["password_hash"]?.ToString() ?? string.Empty;
-            var salt = reader["password_salt"]?.ToString() ?? string.Empty;
-            if (!PwdHash.Verify(password, hash, salt)) return null;
+                userId = reader["user_id"]?.ToString() ?? string.Empty;
+                hash = reader["password_hash"]?.ToString() ?? string.Empty;
+                salt = reader["password_salt"]?.ToString() ?? string.Empty;
+                fullName = reader["full_name_ar"]?.ToString() ?? string.Empty;
+                email = reader["email"]?.ToString() ?? string.Empty;
+                companyName = reader["company_name_ar"]?.ToString() ?? string.Empty;
+                roleCode = reader["role_code"]?.ToString() ?? "ROLE_USER";
+                roleName = reader["role_name"]?.ToString() ?? "User";
+                failedCount = Convert.ToInt32(reader["failed_login_count"], CultureInfo.InvariantCulture);
+                lockedUntil = ParseLockedUntil(reader["locked_until"]);
+            }
 
-            return BuildDatabaseUser(
-                reader["user_id"], reader["username"], reader["full_name_ar"], reader["email"],
-                reader["company_code"], reader["company_name_ar"], reader["role_code"], reader["role_name"]);
+            if (LoginLockout.IsLocked(new LoginLockout.State(failedCount, lockedUntil), DateTime.UtcNow))
+                return new DbLoginAttempt(null, DbLoginKind.Locked, userId);
+
+            if (!PwdHash.Verify(password, hash, salt))
+            {
+                var kind = await RegisterPostgresFailureAsync(connection, userId, failedCount);
+                return new DbLoginAttempt(null, kind, userId);
+            }
+
+            await RegisterPostgresSuccessAsync(connection, userId, failedCount, lockedUntil, password, hash);
+            return new DbLoginAttempt(
+                BuildDatabaseUser(userId, username, fullName, email, companyCode, companyName, roleCode, roleName),
+                DbLoginKind.Success, userId);
         }
         catch (Exception ex)
         {
             AppHost.Logging.LogWarning("AuthServ", $"Database authentication failed: {ex.Message}");
-            return null;
+            return DbLoginAttempt.NotFound;
         }
     }
 
-    private static async Task<UserInfo?> TryLoginFromDatabaseByPasscodeAsync(string companyCode, string password)
+    private static async Task<DbLoginAttempt> TryLoginFromSqliteAsync(string companyCode, string username, string password)
+    {
+        var cs = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(cs)) return DbLoginAttempt.NotFound;
+
+        await using var db = new SqliteConnection(cs);
+        await db.OpenAsync();
+
+        string userId, hash, salt, fullName, email, companyName, roleCode, roleName;
+        int failedCount;
+        DateTime? lockedUntil;
+        await using (var cmd = new SqliteCommand("""
+            SELECT u.user_id, u.username, u.password_hash, u.password_salt, u.full_name_ar, u.email,
+                   c.company_code, c.company_name_ar, u.failed_login_count, u.locked_until,
+                   COALESCE((SELECT r.role_code FROM user_roles ur
+                             INNER JOIN roles r ON r.role_id=ur.role_id
+                             WHERE ur.user_id=u.user_id AND r.is_active=1 AND r.is_deleted=0
+                             ORDER BY CASE r.role_code
+                                 WHEN 'ROLE_ADMINISTRATOR' THEN 0
+                                 WHEN 'ROLE_USER' THEN 1
+                                 WHEN 'ROLE_VIEWER' THEN 2
+                                 ELSE 9 END LIMIT 1), 'ROLE_USER') AS role_code,
+                   COALESCE((SELECT r.role_name FROM user_roles ur
+                             INNER JOIN roles r ON r.role_id=ur.role_id
+                             WHERE ur.user_id=u.user_id AND r.is_active=1 AND r.is_deleted=0
+                             ORDER BY CASE r.role_code
+                                 WHEN 'ROLE_ADMINISTRATOR' THEN 0
+                                 WHEN 'ROLE_USER' THEN 1
+                                 WHEN 'ROLE_VIEWER' THEN 2
+                                 ELSE 9 END LIMIT 1), 'User') AS role_name
+            FROM users u INNER JOIN companies c ON c.company_id=u.company_id
+            WHERE c.company_code=@company AND u.username=@username
+              AND u.is_active=1 AND u.is_deleted=0
+              AND c.is_active=1 AND c.is_deleted=0 LIMIT 1
+            """, db))
+        {
+            cmd.Parameters.AddWithValue("@company", companyCode);
+            cmd.Parameters.AddWithValue("@username", username);
+            await using var reader = await cmd.ExecuteReaderAsync();
+            if (!await reader.ReadAsync()) return DbLoginAttempt.NotFound;
+
+            userId = reader["user_id"]?.ToString() ?? string.Empty;
+            hash = reader["password_hash"]?.ToString() ?? string.Empty;
+            salt = reader["password_salt"]?.ToString() ?? string.Empty;
+            fullName = reader["full_name_ar"]?.ToString() ?? string.Empty;
+            email = reader["email"]?.ToString() ?? string.Empty;
+            companyName = reader["company_name_ar"]?.ToString() ?? string.Empty;
+            roleCode = reader["role_code"]?.ToString() ?? "ROLE_USER";
+            roleName = reader["role_name"]?.ToString() ?? "User";
+            failedCount = Convert.ToInt32(reader["failed_login_count"], CultureInfo.InvariantCulture);
+            lockedUntil = ParseLockedUntil(reader["locked_until"]);
+        }
+
+        if (LoginLockout.IsLocked(new LoginLockout.State(failedCount, lockedUntil), DateTime.UtcNow))
+            return new DbLoginAttempt(null, DbLoginKind.Locked, userId);
+
+        if (!PwdHash.Verify(password, hash, salt))
+        {
+            var kind = await RegisterSqliteFailureAsync(db, userId, failedCount);
+            return new DbLoginAttempt(null, kind, userId);
+        }
+
+        await RegisterSqliteSuccessAsync(db, userId, failedCount, lockedUntil, password, hash);
+        return new DbLoginAttempt(
+            BuildDatabaseUser(userId, username, fullName, email, companyCode, companyName, roleCode, roleName),
+            DbLoginKind.Success, userId);
+    }
+
+    // ------------------------------------------------------------------
+    // Passcode-only paths (password identifies the account on its own)
+    // ------------------------------------------------------------------
+
+    private static async Task<DbLoginAttempt> TryLoginFromDatabaseByPasscodeAsync(string companyCode, string password)
     {
         var provider = DatabaseRuntime.GetProvider();
         if (DatabaseRuntime.IsSqlite(provider))
@@ -644,7 +1012,7 @@ public sealed class AuthServ : IAuthSvc
         try
         {
             var connectionString = DatabaseRuntime.GetConnectionString();
-            if (string.IsNullOrWhiteSpace(connectionString)) return null;
+            if (string.IsNullOrWhiteSpace(connectionString)) return DbLoginAttempt.NotFound;
 
             await using var connection = new NpgsqlConnection(connectionString);
             await connection.OpenAsync();
@@ -653,6 +1021,7 @@ public sealed class AuthServ : IAuthSvc
                 SELECT
                     u.user_id, u.username, u.password_hash, u.password_salt,
                     u.full_name_ar, u.email, c.company_code, c.company_name_ar,
+                    u.failed_login_count, u.locked_until,
                     COALESCE(r.role_code, 'ROLE_USER') AS role_code,
                     COALESCE(r.role_name, 'User') AS role_name
                 FROM public.users u
@@ -674,16 +1043,82 @@ public sealed class AuthServ : IAuthSvc
                   AND c.is_active = TRUE AND c.is_deleted = FALSE;
                 """;
 
-            await using var command = new NpgsqlCommand(sql, connection);
-            command.Parameters.AddWithValue("@CompanyCode", companyCode);
-            await using var reader = await command.ExecuteReaderAsync();
             var matches = new List<DbUserCredential>();
+            await using (var command = new NpgsqlCommand(sql, connection))
+            {
+                command.Parameters.AddWithValue("@CompanyCode", companyCode);
+                await using var reader = await command.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    var hash = reader["password_hash"]?.ToString() ?? string.Empty;
+                    var salt = reader["password_salt"]?.ToString() ?? string.Empty;
+                    if (!PwdHash.Verify(password, hash, salt)) continue;
 
+                    matches.Add(new DbUserCredential(
+                        reader["user_id"]?.ToString() ?? string.Empty,
+                        reader["username"]?.ToString() ?? string.Empty,
+                        hash, salt,
+                        reader["full_name_ar"]?.ToString() ?? string.Empty,
+                        reader["email"]?.ToString() ?? string.Empty,
+                        reader["company_code"]?.ToString() ?? companyCode,
+                        reader["company_name_ar"]?.ToString() ?? GetCompanyName(),
+                        reader["role_code"]?.ToString() ?? "ROLE_USER",
+                        reader["role_name"]?.ToString() ?? "User",
+                        Convert.ToInt32(reader["failed_login_count"], CultureInfo.InvariantCulture),
+                        ParseLockedUntil(reader["locked_until"])));
+                }
+            }
+
+            if (matches.Count != 1) return DbLoginAttempt.BadCredentials(null);
+            var matched = matches[0];
+
+            if (LoginLockout.IsLocked(new LoginLockout.State(matched.FailedLoginCount, matched.LockedUntilUtc), DateTime.UtcNow))
+                return new DbLoginAttempt(null, DbLoginKind.Locked, matched.UserId);
+
+            await RegisterPostgresSuccessAsync(connection, matched.UserId, matched.FailedLoginCount, matched.LockedUntilUtc, password, matched.PasswordHash);
+            return new DbLoginAttempt(
+                BuildDatabaseUser(matched.UserId, matched.Username, matched.FullName, matched.Email,
+                    matched.CompanyCode, matched.CompanyName, matched.RoleCode, matched.RoleName),
+                DbLoginKind.Success, matched.UserId);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Logging.LogWarning("AuthServ", $"Database authentication failed: {ex.Message}");
+            return DbLoginAttempt.NotFound;
+        }
+    }
+
+    private static async Task<DbLoginAttempt> TryLoginFromSqliteByPasscodeAsync(string companyCode, string password)
+    {
+        var cs = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(cs)) return DbLoginAttempt.NotFound;
+
+        await using var db = new SqliteConnection(cs);
+        await db.OpenAsync();
+
+        var matches = new List<DbUserCredential>();
+        await using (var cmd = new SqliteCommand("""
+            SELECT u.user_id, u.username, u.password_hash, u.password_salt, u.full_name_ar, u.email,
+                   c.company_code, c.company_name_ar, u.failed_login_count, u.locked_until,
+                   COALESCE((SELECT r.role_code FROM user_roles ur INNER JOIN roles r ON r.role_id=ur.role_id
+                             WHERE ur.user_id=u.user_id AND r.is_active=1 AND r.is_deleted=0
+                             ORDER BY CASE r.role_code WHEN 'ROLE_ADMINISTRATOR' THEN 0 WHEN 'ROLE_USER' THEN 1 WHEN 'ROLE_VIEWER' THEN 2 ELSE 9 END LIMIT 1), 'ROLE_USER') AS role_code,
+                   COALESCE((SELECT r.role_name FROM user_roles ur INNER JOIN roles r ON r.role_id=ur.role_id
+                             WHERE ur.user_id=u.user_id AND r.is_active=1 AND r.is_deleted=0
+                             ORDER BY CASE r.role_code WHEN 'ROLE_ADMINISTRATOR' THEN 0 WHEN 'ROLE_USER' THEN 1 WHEN 'ROLE_VIEWER' THEN 2 ELSE 9 END LIMIT 1), 'User') AS role_name
+            FROM users u INNER JOIN companies c ON c.company_id=u.company_id
+            WHERE c.company_code=@company AND u.is_active=1 AND u.is_deleted=0
+              AND c.is_active=1 AND c.is_deleted=0
+            """, db))
+        {
+            cmd.Parameters.AddWithValue("@company", companyCode);
+            await using var reader = await cmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
                 var hash = reader["password_hash"]?.ToString() ?? string.Empty;
                 var salt = reader["password_salt"]?.ToString() ?? string.Empty;
-                if (!PwdHash.Verify(password, hash, salt)) continue;
+                if (!PwdHash.Verify(password, hash, salt))
+                    continue;
 
                 matches.Add(new DbUserCredential(
                     reader["user_id"]?.ToString() ?? string.Empty,
@@ -694,95 +1129,118 @@ public sealed class AuthServ : IAuthSvc
                     reader["company_code"]?.ToString() ?? companyCode,
                     reader["company_name_ar"]?.ToString() ?? GetCompanyName(),
                     reader["role_code"]?.ToString() ?? "ROLE_USER",
-                    reader["role_name"]?.ToString() ?? "User"));
+                    reader["role_name"]?.ToString() ?? "User",
+                    Convert.ToInt32(reader["failed_login_count"], CultureInfo.InvariantCulture),
+                    ParseLockedUntil(reader["locked_until"])));
             }
+        }
 
-            if (matches.Count != 1) return null;
-            var matched = matches[0];
-            return BuildDatabaseUser(
-                matched.UserId, matched.Username, matched.FullName, matched.Email,
-                matched.CompanyCode, matched.CompanyName, matched.RoleCode, matched.RoleName);
-        }
-        catch (Exception ex)
-        {
-            AppHost.Logging.LogWarning("AuthServ", $"Database authentication failed: {ex.Message}");
-            return null;
-        }
+        if (matches.Count != 1) return DbLoginAttempt.BadCredentials(null);
+        var matched = matches[0];
+
+        if (LoginLockout.IsLocked(new LoginLockout.State(matched.FailedLoginCount, matched.LockedUntilUtc), DateTime.UtcNow))
+            return new DbLoginAttempt(null, DbLoginKind.Locked, matched.UserId);
+
+        await RegisterSqliteSuccessAsync(db, matched.UserId, matched.FailedLoginCount, matched.LockedUntilUtc, password, matched.PasswordHash);
+        return new DbLoginAttempt(
+            BuildDatabaseUser(matched.UserId, matched.Username, matched.FullName, matched.Email,
+                matched.CompanyCode, matched.CompanyName, matched.RoleCode, matched.RoleName),
+            DbLoginKind.Success, matched.UserId);
     }
 
-    private static async Task<UserInfo?> TryLoginFromSqliteAsync(string companyCode, string username, string password)
-    {
-        var cs = DatabaseRuntime.GetConnectionString();
-        if (string.IsNullOrWhiteSpace(cs)) return null;
+    // ------------------------------------------------------------------
+    // Lockout bookkeeping + transparent hash upgrade (Phase 4)
+    // ------------------------------------------------------------------
 
-        await using var db = new SqliteConnection(cs);
-        await db.OpenAsync();
-        await using var cmd = new SqliteCommand("""
-            SELECT u.user_id, u.username, u.password_hash, u.password_salt, u.full_name_ar, u.email,
-                   c.company_code, c.company_name_ar,
-                   COALESCE((SELECT r.role_code FROM user_roles ur
-                             INNER JOIN roles r ON r.role_id=ur.role_id
-                             WHERE ur.user_id=u.user_id AND r.is_active=1 AND r.is_deleted=0
-                             ORDER BY CASE r.role_code
-                                 WHEN 'ROLE_ADMINISTRATOR' THEN 0
-                                 WHEN 'ROLE_USER' THEN 1
-                                 WHEN 'ROLE_VIEWER' THEN 2
-                                 ELSE 9 END LIMIT 1), 'ROLE_USER') AS role_code,
-                   COALESCE((SELECT r.role_name FROM user_roles ur
-                             INNER JOIN roles r ON r.role_id=ur.role_id
-                             WHERE ur.user_id=u.user_id AND r.is_active=1 AND r.is_deleted=0
-                             ORDER BY CASE r.role_code
-                                 WHEN 'ROLE_ADMINISTRATOR' THEN 0
-                                 WHEN 'ROLE_USER' THEN 1
-                                 WHEN 'ROLE_VIEWER' THEN 2
-                                 ELSE 9 END LIMIT 1), 'User') AS role_name
-            FROM users u INNER JOIN companies c ON c.company_id=u.company_id
-            WHERE c.company_code=@company AND u.username=@username
-              AND u.is_active=1 AND u.is_deleted=0
-              AND c.is_active=1 AND c.is_deleted=0 LIMIT 1
-            """, db);
-        cmd.Parameters.AddWithValue("@company", companyCode);
-        cmd.Parameters.AddWithValue("@username", username);
-        await using var reader = await cmd.ExecuteReaderAsync();
-        if (!await reader.ReadAsync()) return null;
-        if (!PwdHash.Verify(password, reader["password_hash"]?.ToString() ?? "", reader["password_salt"]?.ToString() ?? ""))
-            return null;
-        return BuildDatabaseUser(reader["user_id"], reader["username"], reader["full_name_ar"], reader["email"],
-            reader["company_code"], reader["company_name_ar"], reader["role_code"], reader["role_name"]);
+    private static async Task<DbLoginKind> RegisterSqliteFailureAsync(SqliteConnection db, string userId, int currentFailedCount)
+    {
+        var (maxAttempts, lockoutMinutes) = LoginLockout.GetConfiguredLimits();
+        var state = LoginLockout.RegisterFailure(
+            new LoginLockout.State(currentFailedCount, null), DateTime.UtcNow, maxAttempts, lockoutMinutes);
+
+        await using var cmd = new SqliteCommand(
+            "UPDATE users SET failed_login_count = @count, locked_until = @locked WHERE user_id = @id", db);
+        cmd.Parameters.AddWithValue("@count", state.FailedCount);
+        cmd.Parameters.AddWithValue("@locked",
+            state.LockedUntilUtc is { } until ? until.ToString("o", CultureInfo.InvariantCulture) : (object)DBNull.Value);
+        cmd.Parameters.AddWithValue("@id", userId);
+        await cmd.ExecuteNonQueryAsync();
+        return state.LockedUntilUtc is not null ? DbLoginKind.LockedNow : DbLoginKind.BadCredentials;
     }
 
-    private static async Task<UserInfo?> TryLoginFromSqliteByPasscodeAsync(string companyCode, string password)
+    private static async Task RegisterSqliteSuccessAsync(
+        SqliteConnection db, string userId, int failedCount, DateTime? lockedUntil, string password, string storedHash)
     {
-        var cs = DatabaseRuntime.GetConnectionString();
-        if (string.IsNullOrWhiteSpace(cs)) return null;
+        var needsReset = failedCount > 0 || lockedUntil is not null;
+        var needsRehash = PwdHash.NeedsRehash(storedHash);
+        if (!needsReset && !needsRehash)
+            return;
 
-        await using var db = new SqliteConnection(cs);
-        await db.OpenAsync();
-        await using var cmd = new SqliteCommand("""
-            SELECT u.user_id, u.username, u.password_hash, u.password_salt, u.full_name_ar, u.email,
-                   c.company_code, c.company_name_ar,
-                   COALESCE((SELECT r.role_code FROM user_roles ur INNER JOIN roles r ON r.role_id=ur.role_id
-                             WHERE ur.user_id=u.user_id AND r.is_active=1 AND r.is_deleted=0
-                             ORDER BY CASE r.role_code WHEN 'ROLE_ADMINISTRATOR' THEN 0 WHEN 'ROLE_USER' THEN 1 WHEN 'ROLE_VIEWER' THEN 2 ELSE 9 END LIMIT 1), 'ROLE_USER') AS role_code,
-                   COALESCE((SELECT r.role_name FROM user_roles ur INNER JOIN roles r ON r.role_id=ur.role_id
-                             WHERE ur.user_id=u.user_id AND r.is_active=1 AND r.is_deleted=0
-                             ORDER BY CASE r.role_code WHEN 'ROLE_ADMINISTRATOR' THEN 0 WHEN 'ROLE_USER' THEN 1 WHEN 'ROLE_VIEWER' THEN 2 ELSE 9 END LIMIT 1), 'User') AS role_name
-            FROM users u INNER JOIN companies c ON c.company_id=u.company_id
-            WHERE c.company_code=@company AND u.is_active=1 AND u.is_deleted=0
-              AND c.is_active=1 AND c.is_deleted=0
-            """, db);
-        cmd.Parameters.AddWithValue("@company", companyCode);
-        await using var reader = await cmd.ExecuteReaderAsync();
-        UserInfo? match = null;
-        while (await reader.ReadAsync())
+        await using var transaction = await db.BeginTransactionAsync();
+        if (needsReset)
         {
-            if (!PwdHash.Verify(password, reader["password_hash"]?.ToString() ?? "", reader["password_salt"]?.ToString() ?? ""))
-                continue;
-            if (match != null) return null;
-            match = BuildDatabaseUser(reader["user_id"], reader["username"], reader["full_name_ar"], reader["email"],
-                reader["company_code"], reader["company_name_ar"], reader["role_code"], reader["role_name"]);
+            await using var cmd = new SqliteCommand(
+                "UPDATE users SET failed_login_count = 0, locked_until = NULL WHERE user_id = @id", db, (SqliteTransaction)transaction);
+            cmd.Parameters.AddWithValue("@id", userId);
+            await cmd.ExecuteNonQueryAsync();
         }
-        return match;
+        if (needsRehash)
+        {
+            // Transparent upgrade: stored iteration metadata is honored by
+            // Verify; a successful sign-in rehashes at the current work factor.
+            var rehash = PwdHash.Rehash(password);
+            await using var cmd = new SqliteCommand(
+                "UPDATE users SET password_hash = @hash, password_salt = @salt WHERE user_id = @id", db, (SqliteTransaction)transaction);
+            cmd.Parameters.AddWithValue("@hash", rehash.Hash);
+            cmd.Parameters.AddWithValue("@salt", rehash.Salt);
+            cmd.Parameters.AddWithValue("@id", userId);
+            await cmd.ExecuteNonQueryAsync();
+        }
+        await transaction.CommitAsync();
+    }
+
+    private static async Task<DbLoginKind> RegisterPostgresFailureAsync(NpgsqlConnection connection, string userId, int currentFailedCount)
+    {
+        var (maxAttempts, lockoutMinutes) = LoginLockout.GetConfiguredLimits();
+        var state = LoginLockout.RegisterFailure(
+            new LoginLockout.State(currentFailedCount, null), DateTime.UtcNow, maxAttempts, lockoutMinutes);
+
+        await using var cmd = new NpgsqlCommand(
+            "UPDATE public.users SET failed_login_count = @count, locked_until = @locked WHERE user_id = @id", connection);
+        cmd.Parameters.AddWithValue("@count", state.FailedCount);
+        cmd.Parameters.AddWithValue("@locked", state.LockedUntilUtc is { } until ? until : (object)DBNull.Value);
+        cmd.Parameters.AddWithValue("@id", Guid.Parse(userId));
+        await cmd.ExecuteNonQueryAsync();
+        return state.LockedUntilUtc is not null ? DbLoginKind.LockedNow : DbLoginKind.BadCredentials;
+    }
+
+    private static async Task RegisterPostgresSuccessAsync(
+        NpgsqlConnection connection, string userId, int failedCount, DateTime? lockedUntil, string password, string storedHash)
+    {
+        var needsReset = failedCount > 0 || lockedUntil is not null;
+        var needsRehash = PwdHash.NeedsRehash(storedHash);
+        if (!needsReset && !needsRehash)
+            return;
+
+        await using var transaction = await connection.BeginTransactionAsync();
+        if (needsReset)
+        {
+            await using var cmd = new NpgsqlCommand(
+                "UPDATE public.users SET failed_login_count = 0, locked_until = NULL WHERE user_id = @id", connection, transaction);
+            cmd.Parameters.AddWithValue("@id", Guid.Parse(userId));
+            await cmd.ExecuteNonQueryAsync();
+        }
+        if (needsRehash)
+        {
+            var rehash = PwdHash.Rehash(password);
+            await using var cmd = new NpgsqlCommand(
+                "UPDATE public.users SET password_hash = @hash, password_salt = @salt WHERE user_id = @id", connection, transaction);
+            cmd.Parameters.AddWithValue("@hash", rehash.Hash);
+            cmd.Parameters.AddWithValue("@salt", rehash.Salt);
+            cmd.Parameters.AddWithValue("@id", Guid.Parse(userId));
+            await cmd.ExecuteNonQueryAsync();
+        }
+        await transaction.CommitAsync();
     }
 
     private static UserInfo BuildDatabaseUser(object id, object username, object fullName, object email,
