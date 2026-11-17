@@ -12,6 +12,7 @@ using System.Windows.Documents;
 using System.Windows.Media;
 using ShouTech.App.Configuration;
 using ShouTech.App.Services;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
 
@@ -525,8 +526,17 @@ public sealed class OrdWin : BaseWin
             _lblStatus.Text = $"{T("OrderDoc.Converted")}: {invoiceDocNo}";
             await RefreshProgressAsync(_docId.Value);
         }
+        catch (AppError ex)
+        {
+            // Coded business blocks (e.g. ACC-5006 credit limit on the
+            // converted invoice): localized catalog message, not raw text.
+            AppHost.Errors.Report(ex.Code, ex, "OrdWin.Convert");
+            var info = AppHost.Errors.Resolve(ex.Code, ex.Args.ToArray());
+            ShowError($"{info.Message} (Error {info.Code})");
+        }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OrdWin.Convert");
             ShowError(ex.Message);
         }
     }

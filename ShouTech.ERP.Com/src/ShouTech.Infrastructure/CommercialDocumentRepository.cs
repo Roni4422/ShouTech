@@ -248,12 +248,13 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         try
         {
             string companyId, docKind, docNo, docDate, currencyCode, status;
+            string? partyCode;
             long? partyId;
             long? warehouseId;
             decimal grandTotal;
 
             await using (var header = CreateCommand(connection, transaction, """
-                SELECT company_id, doc_kind, doc_no, doc_date, party_id, warehouse_id, currency_code, grand_total, status
+                SELECT company_id, doc_kind, doc_no, doc_date, party_id, warehouse_id, currency_code, grand_total, status, party_code
                 FROM sales_documents
                 WHERE doc_id = @doc AND is_deleted = 0
                 """))
@@ -271,6 +272,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                 currencyCode = reader.GetString(6);
                 grandTotal = Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture);
                 status = reader.GetString(8);
+                partyCode = reader.IsDBNull(9) ? null : reader.GetString(9);
             }
 
             if (status != CommercialDocumentStatus.Draft)
@@ -330,6 +332,12 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             }
             else if (docKind == CommercialDocKinds.SalesInvoice && partyId is not null)
             {
+                // Credit-limit gate (ACC-5006): the ledger debit below must
+                // not push the customer over the limit on their party card.
+                await PartyCreditGuard.EnsureWithinLimitAsync(
+                    connection, transaction, _provider, companyId, "C", partyId.Value, partyCode,
+                    grandTotal, "@", cancellationToken).ConfigureAwait(false);
+
                 await using var ledger = CreateCommand(connection, transaction, """
                     INSERT INTO party_ledger
                         (company_id, party_kind, party_id, doc_kind, doc_id, doc_no, entry_date, debit, credit, currency_code, note)

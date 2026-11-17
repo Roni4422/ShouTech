@@ -1578,6 +1578,7 @@
     "EntryLoaded": "L'écriture a été chargée depuis la base de données.\nStatut : {0}\nID : {1}",
     "EntryAlreadySaved": "Cette écriture est déjà enregistrée. Aucun doublon ne sera créé ; ouvrez une nouvelle écriture pour en saisir une autre.",
     "EntryDraftSaved": "Le brouillon de l'écriture a été enregistré dans la base de données.\nID : {0}",
+    "EntryDraftUpdated": "Le brouillon de l'écriture a été mis à jour dans la base de données.\nID : {0}",
     "EntryPosted": "L'écriture a été comptabilisée dans la base de données.",
     "SaveFailedMsg": "L'opération n'a pas abouti et n'a pas été présentée comme un succès.\n[{0}] {1}",
     "SaveFailedTitle": "Échec de l'enregistrement de l'écriture"

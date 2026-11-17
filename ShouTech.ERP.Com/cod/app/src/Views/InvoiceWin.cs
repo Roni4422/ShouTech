@@ -898,6 +898,18 @@ public sealed class InvoiceWin : BaseWin
             ShowInfo("Invoice.Posted");
             RefreshTotals();
         }
+        catch (AppError ex)
+        {
+            // Coded business blocks (e.g. ACC-5006 credit limit): show the
+            // localized catalog message with its numbers, not raw text.
+            AppHost.Errors.Report(ex.Code, ex, "InvoiceWin.PostDoc");
+            var info = AppHost.Errors.Resolve(ex.Code, ex.Args.ToArray());
+            var body = info.Message;
+            if (!string.IsNullOrWhiteSpace(info.Hint))
+                body += $"{Environment.NewLine}{Environment.NewLine}{info.Hint}";
+            body += $"{Environment.NewLine}{Environment.NewLine}(Error {info.Code})";
+            MessageBox.Show(this, body, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
+        }
         catch (Exception ex)
         {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "InvoiceWin.PostDoc");

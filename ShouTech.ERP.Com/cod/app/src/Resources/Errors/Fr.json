@@ -20,6 +20,30 @@
     "name": "JournalPostingFailed",
     "message": "L'écriture comptable n'a pas pu être comptabilisée."
   },
+  "ACC-5005": {
+    "code": "ACC-5005",
+    "name": "JournalEntryNotEditable",
+    "message": "Seules les écritures comptables au statut brouillon peuvent être modifiées. Les écritures comptabilisées et contre-passées sont immuables.",
+    "hint": "Contre-passez l'écriture et créez-en une corrigée."
+  },
+  "ACC-5006": {
+    "code": "ACC-5006",
+    "name": "CreditLimitExceeded",
+    "message": "La comptabilisation de ce document dépasserait la limite de crédit du tiers. Limite : {0} ; solde actuel : {1} ; total du document : {2}.",
+    "hint": "Encaissez un paiement, relevez la limite de crédit sur la fiche du tiers, ou réduisez le total du document."
+  },
+  "ACC-5007": {
+    "code": "ACC-5007",
+    "name": "CostCenterAllocationInvalid",
+    "message": "La répartition du centre de coûts « {0} » est invalide : ses pourcentages doivent totaliser 100 et chaque cible doit être un centre de coûts feuille actif.",
+    "hint": "Corrigez la répartition sur la fiche du centre de coûts, puis comptabilisez à nouveau."
+  },
+  "ACC-5008": {
+    "code": "ACC-5008",
+    "name": "CostCenterNotLeaf",
+    "message": "Le centre de coûts « {0} » est un groupe ou un centre inactif et ne peut pas recevoir de comptabilisation.",
+    "hint": "Choisissez un centre de coûts feuille actif, ou définissez une répartition pour le centre groupe."
+  },
   "AUTH-2001": {
     "code": "AUTH-2001",
     "name": "InvalidCredentials",

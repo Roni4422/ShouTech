@@ -1455,6 +1455,7 @@
     "EntryLoaded": "The entry was loaded from the database.\nStatus: {0}\nId: {1}",
     "EntryAlreadySaved": "This entry is already saved. No duplicate copy is created; open a new entry to enter another one.",
     "EntryDraftSaved": "The entry draft was saved to the database.\nId: {0}",
+    "EntryDraftUpdated": "The entry draft was updated in the database.\nId: {0}",
     "EntryPosted": "The entry was posted to the database.",
     "SaveFailedMsg": "The operation did not succeed and was not shown as a success.\n[{0}] {1}",
     "SaveFailedTitle": "Failed to Save Entry"

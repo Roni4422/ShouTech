@@ -387,6 +387,12 @@ public class ChequeMfgServiceTests
             return Task.CompletedTask;
         }
 
+        public Task UpdateDraftAsync(Guid companyId, Guid journalEntryId, JournalEntry entry, string userId, CancellationToken cancellationToken = default)
+        {
+            _drafts[journalEntryId] = entry;
+            return Task.CompletedTask;
+        }
+
         public Task PostAsync(Guid journalEntryId, string userId, CancellationToken cancellationToken = default)
         {
             if (_drafts.TryGetValue(journalEntryId, out var entry))

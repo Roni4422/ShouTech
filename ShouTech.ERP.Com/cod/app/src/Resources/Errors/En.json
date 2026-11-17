@@ -20,6 +20,30 @@
     "name": "JournalPostingFailed",
     "message": "The journal entry could not be posted."
   },
+  "ACC-5005": {
+    "code": "ACC-5005",
+    "name": "JournalEntryNotEditable",
+    "message": "Only a draft journal entry can be edited. Posted and reversed entries are immutable.",
+    "hint": "Reverse the entry and create a corrected one instead."
+  },
+  "ACC-5006": {
+    "code": "ACC-5006",
+    "name": "CreditLimitExceeded",
+    "message": "Posting this document would exceed the party credit limit. Limit: {0}; current balance: {1}; document total: {2}.",
+    "hint": "Collect a payment, raise the credit limit on the party card, or reduce the document total."
+  },
+  "ACC-5007": {
+    "code": "ACC-5007",
+    "name": "CostCenterAllocationInvalid",
+    "message": "The allocation for cost center '{0}' is invalid: its percentages must total 100 and every target must be an active leaf cost center.",
+    "hint": "Fix the allocation on the cost center card and post again."
+  },
+  "ACC-5008": {
+    "code": "ACC-5008",
+    "name": "CostCenterNotLeaf",
+    "message": "Cost center '{0}' is a group or inactive cost center and cannot receive postings.",
+    "hint": "Choose an active leaf cost center, or define an allocation for the group center."
+  },
   "AUTH-2001": {
     "code": "AUTH-2001",
     "name": "InvalidCredentials",

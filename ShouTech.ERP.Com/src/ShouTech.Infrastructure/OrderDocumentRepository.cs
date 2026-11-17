@@ -535,6 +535,15 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             var invoiceId = await InsertDocumentAsync(connection, transaction, side, invoiceDraft, CommercialDocumentStatus.Posted, userId, cancellationToken).ConfigureAwait(false);
 
             ComputeTotals(invoiceLines, out _, out _, out var grandTotal);
+
+            // Credit-limit gate (ACC-5006): the converted invoice is created
+            // already posted and its ledger row is written below, so the
+            // party's limit is enforced before that row lands.
+            await PartyCreditGuard.EnsureWithinLimitAsync(
+                connection, transaction, _provider, order.CompanyId.ToString("D"),
+                side == CommercialDocSide.Sales ? "C" : "S", order.PartyId.Value,
+                order.PartyCode, grandTotal, "@", cancellationToken).ConfigureAwait(false);
+
             await using (var ledger = CreateCommand(connection, transaction, """
                 INSERT INTO party_ledger
                     (company_id, party_kind, party_id, doc_kind, doc_id, doc_no, entry_date, debit, credit, currency_code, note)

@@ -66,6 +66,10 @@ public static class ErrorCodes
     public const string JournalTooFewLines = "ACC-5002";
     public const string JournalZeroAmount = "ACC-5003";
     public const string JournalPostingFailed = "ACC-5004";
+    public const string JournalEntryNotEditable = "ACC-5005";
+    public const string CreditLimitExceeded = "ACC-5006";
+    public const string CostCenterAllocationInvalid = "ACC-5007";
+    public const string CostCenterNotLeaf = "ACC-5008";
 
     // ---- INV 6000-6999 -------------------------------------------------
     public const string InventoryOperationFailed = "INV-6001";

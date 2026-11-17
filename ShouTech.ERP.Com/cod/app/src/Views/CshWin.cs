@@ -13,6 +13,7 @@ using System.Windows.Media;
 using ShouTech.App.Configuration;
 using ShouTech.App.Services;
 using ShouTech.Application.Services;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Infrastructure;
 
@@ -486,6 +487,20 @@ public sealed class CshWin : BaseWin
 
     private void ReportFailure(string operation, Exception exception)
     {
+        if (exception is AppError appError)
+        {
+            // Coded business blocks (e.g. ACC-5007/5008 cost-center rules at
+            // posting): localized catalog message, not the raw text.
+            AppHost.Errors.Report(appError.Code, appError, $"CshWin.{operation}");
+            var info = AppHost.Errors.Resolve(appError.Code, appError.Args.ToArray());
+            var body = info.Message;
+            if (!string.IsNullOrWhiteSpace(info.Hint))
+                body += $"{Environment.NewLine}{Environment.NewLine}{info.Hint}";
+            body += $"{Environment.NewLine}{Environment.NewLine}(Error {info.Code})";
+            MessageBox.Show(this, body, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
         const string errorCode = "APP-2010";
         var definition = ShouTech.App.Localization.ErrorCatalog.Resolve(errorCode);
         var context = $"Operation={operation}; Window={GetType().Name}; Company={CurrentCompanyCode}";

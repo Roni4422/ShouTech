@@ -20,6 +20,30 @@
     "name": "JournalPostingFailed",
     "message": "Yevmiye kaydı deftere işlenemedi."
   },
+  "ACC-5005": {
+    "code": "ACC-5005",
+    "name": "JournalEntryNotEditable",
+    "message": "Yalnızca taslak durumundaki yevmiye kayıtları düzenlenebilir. Deftere işlenmiş ve ters çevrilmiş kayıtlar değiştirilemez.",
+    "hint": "Kaydı ters çevirip yerine düzeltilmiş bir kayıt oluşturun."
+  },
+  "ACC-5006": {
+    "code": "ACC-5006",
+    "name": "CreditLimitExceeded",
+    "message": "Bu belgenin deftere işlenmesi taraf kredi limitini aşacaktır. Limit: {0}; güncel bakiye: {1}; belge toplamı: {2}.",
+    "hint": "Bir tahsilat yapın, taraf kartındaki kredi limitini yükseltin veya belge toplamını azaltın."
+  },
+  "ACC-5007": {
+    "code": "ACC-5007",
+    "name": "CostCenterAllocationInvalid",
+    "message": "'{0}' maliyet merkezinin dağıtımı geçersiz: yüzdelerinin toplamı 100 olmalı ve her hedef etkin bir yaprak maliyet merkezi olmalıdır.",
+    "hint": "Maliyet merkezi kartındaki dağıtımı düzeltip yeniden deftere işleyin."
+  },
+  "ACC-5008": {
+    "code": "ACC-5008",
+    "name": "CostCenterNotLeaf",
+    "message": "'{0}' maliyet merkezi bir grup veya pasif bir merkezdir; deftere işleme alamaz.",
+    "hint": "Etkin bir yaprak maliyet merkezi seçin ya da grup merkezi için bir dağıtım tanımlayın."
+  },
   "AUTH-2001": {
     "code": "AUTH-2001",
     "name": "InvalidCredentials",
