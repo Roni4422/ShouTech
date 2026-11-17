@@ -14,7 +14,10 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System;
+using System.Data.Common;
+using System.Globalization;
 using Microsoft.Data.Sqlite;
+using Npgsql;
 using ShouTech.App.Common;
 using ShouTech.App.Configuration;
 using ShouTech.Domain.Interfaces;
@@ -23,26 +26,252 @@ namespace ShouTech.App.Services
 {
 
     // ========== DataServ.cs ==========
+/// <summary>
+/// Dashboard data service. Every figure is queried live from the active
+/// company database (the connection string resolved by
+/// <see cref="DatabaseRuntime"/> already targets the selected company).
+/// Semantics:
+///   customers         = rows in `customers` (soft-deleted rows excluded
+///                       when an is_deleted column exists)
+///   products          = rows in `products` (soft-deleted rows excluded
+///                       the same way)
+///   pending approvals = `journal_entries` still in Draft (status = 0)
+///   recent documents  = newest rows unioned from `sales_documents`,
+///                       `purchase_documents` and `journal_entries`
+/// A missing table/column or an unavailable database yields 0 / an empty
+/// list — never invented numbers and never an exception into the dashboard.
+/// Table/column guards follow the patterns already used in RptQuery.cs and
+/// Accounting.cs.
+/// </summary>
 public sealed class DataServ : IDataServ
     {
-        public Task<int> GetTotalCustomersAsync() => Task.FromResult(1284);
+        public Task<int> GetTotalCustomersAsync()
+            => Task.FromResult(CountRows("customers", excludeSoftDeleted: true));
 
-        public Task<int> GetTotalProductsAsync() => Task.FromResult(3567);
+        public Task<int> GetTotalProductsAsync()
+            => Task.FromResult(CountRows("products", excludeSoftDeleted: true));
 
-        public Task<int> GetTotalPendingApprovalsAsync() => Task.FromResult(12);
+        public Task<int> GetTotalPendingApprovalsAsync()
+            => Task.FromResult(CountRows("journal_entries", extraPredicate: "status = 0"));
 
         public Task<List<RecentDocument>> GetRecentDocumentsAsync(int count)
         {
-            var docs = new List<RecentDocument>
-            {
-                new() { DocumentNumber = "INV-2026-00142", DocumentType = "فاتورة مبيعات", CustomerName = "شركة النور", TotalAmount = 15420.50m, Status = "معتمد", Date = DateTime.Now.AddHours(-2) },
-                new() { DocumentNumber = "PO-2026-00089", DocumentType = "طلب شراء", CustomerName = "مورد الخليج", TotalAmount = 8750.00m, Status = "معلق", Date = DateTime.Now.AddHours(-5) },
-                new() { DocumentNumber = "JV-2026-00301", DocumentType = "سند قيد", CustomerName = "-", TotalAmount = 3200.00m, Status = "مرحّل", Date = DateTime.Now.AddDays(-1) },
-                new() { DocumentNumber = "SO-2026-00256", DocumentType = "طلبية بيع", CustomerName = "متجر الأمل", TotalAmount = 4890.75m, Status = "قيد التنفيذ", Date = DateTime.Now.AddDays(-1) },
-                new() { DocumentNumber = "RC-2026-00017", DocumentType = "سند قبض", CustomerName = "عميل نقدي", TotalAmount = 1200.00m, Status = "مكتمل", Date = DateTime.Now.AddDays(-2) }
-            };
+            var docs = new List<RecentDocument>();
+            if (count <= 0)
+                return Task.FromResult(docs);
 
-            return Task.FromResult(docs.GetRange(0, Math.Min(count, docs.Count)));
+            try
+            {
+                var connectionString = DatabaseRuntime.GetConnectionString();
+                if (string.IsNullOrWhiteSpace(connectionString))
+                    return Task.FromResult(docs);
+
+                using var connection = Open(connectionString);
+                CollectCommercialDocuments(connection, "sales_documents", "Sales", docs);
+                CollectCommercialDocuments(connection, "purchase_documents", "Purchase", docs);
+                CollectJournalDocuments(connection, docs);
+            }
+            catch
+            {
+                // The dashboard must never crash on an unavailable database.
+                docs.Clear();
+            }
+
+            docs.Sort((left, right) => right.Date.CompareTo(left.Date));
+            if (docs.Count > count)
+                docs.RemoveRange(count, docs.Count - count);
+            return Task.FromResult(docs);
+        }
+
+        private static int CountRows(string table, bool excludeSoftDeleted = false, string? extraPredicate = null)
+        {
+            try
+            {
+                var connectionString = DatabaseRuntime.GetConnectionString();
+                if (string.IsNullOrWhiteSpace(connectionString))
+                    return 0;
+
+                using var connection = Open(connectionString);
+                if (!TableExists(connection, table))
+                    return 0;
+
+                var predicates = new List<string>();
+                if (!string.IsNullOrWhiteSpace(extraPredicate))
+                    predicates.Add(extraPredicate);
+                if (excludeSoftDeleted && ColumnExists(connection, table, "is_deleted"))
+                    predicates.Add(NotDeletedPredicate(table));
+
+                using var command = connection.CreateCommand();
+                command.CommandText = $"SELECT COUNT(*) FROM {table}" +
+                    (predicates.Count > 0 ? " WHERE " + string.Join(" AND ", predicates) : string.Empty) + ";";
+                return Convert.ToInt32(command.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private static void CollectCommercialDocuments(
+            DbConnection connection, string table, string kindLabel, List<RecentDocument> docs)
+        {
+            try
+            {
+                if (!TableExists(connection, table))
+                    return;
+
+                // sales_documents / purchase_documents store is_deleted as an
+                // integer flag on both providers (see dba/mig 010/012).
+                var deletedGuard = ColumnExists(connection, table, "is_deleted")
+                    ? " WHERE is_deleted = 0"
+                    : string.Empty;
+                using var command = connection.CreateCommand();
+                command.CommandText =
+                    $"SELECT doc_no, doc_kind, doc_date, party_name, grand_total, status FROM {table}{deletedGuard} ORDER BY doc_date DESC LIMIT 50;";
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    var docKind = TextValue(reader, 1);
+                    docs.Add(new RecentDocument
+                    {
+                        DocumentNumber = TextValue(reader, 0),
+                        DocumentType = string.IsNullOrWhiteSpace(docKind) ? kindLabel : docKind,
+                        Date = DateValue(reader, 2),
+                        CustomerName = TextValue(reader, 3),
+                        TotalAmount = DecimalValue(reader, 4),
+                        Status = TextValue(reader, 5)
+                    });
+                }
+            }
+            catch
+            {
+                // Optional document source; skip it when unavailable.
+            }
+        }
+
+        private static void CollectJournalDocuments(DbConnection connection, List<RecentDocument> docs)
+        {
+            try
+            {
+                if (!TableExists(connection, "journal_entries"))
+                    return;
+
+                var numberColumn = ColumnExists(connection, "journal_entries", "document_number")
+                    ? "COALESCE(document_number, CAST(journal_entry_id AS TEXT))"
+                    : "CAST(journal_entry_id AS TEXT)";
+                var totalExpression = TableExists(connection, "journal_entry_lines")
+                    ? "COALESCE((SELECT SUM(l.debit) FROM journal_entry_lines l WHERE l.journal_entry_id = journal_entries.journal_entry_id), 0)"
+                    : "0";
+                using var command = connection.CreateCommand();
+                command.CommandText =
+                    $"SELECT {numberColumn}, entry_date, status, {totalExpression} FROM journal_entries ORDER BY entry_date DESC LIMIT 50;";
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    var status = reader.IsDBNull(2)
+                        ? 0
+                        : Convert.ToInt32(reader.GetValue(2), CultureInfo.InvariantCulture);
+                    docs.Add(new RecentDocument
+                    {
+                        DocumentNumber = TextValue(reader, 0),
+                        DocumentType = "Journal",
+                        Date = DateValue(reader, 1),
+                        CustomerName = string.Empty,
+                        TotalAmount = DecimalValue(reader, 3),
+                        Status = status switch { 1 => "Posted", 2 => "Reversed", _ => "Draft" }
+                    });
+                }
+            }
+            catch
+            {
+                // Optional document source; skip it when unavailable.
+            }
+        }
+
+        // customers / products store is_deleted as a boolean on PostgreSQL and
+        // as an integer flag on SQLite; the commercial-document tables use an
+        // integer flag on both providers and are handled separately above.
+        private static string NotDeletedPredicate(string table)
+            => DatabaseRuntime.IsPostgreSql() && table is "customers" or "products"
+                ? "is_deleted = FALSE"
+                : "is_deleted = 0";
+
+        private static bool TableExists(DbConnection connection, string table)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = DatabaseRuntime.IsPostgreSql()
+                ? "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = $table;"
+                : "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $table;";
+            AddParameter(command, "$table", table);
+            return Convert.ToInt32(command.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture) == 1;
+        }
+
+        private static bool ColumnExists(DbConnection connection, string table, string column)
+        {
+            if (DatabaseRuntime.IsPostgreSql())
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText =
+                    "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $table AND column_name = $column;";
+                AddParameter(command, "$table", table);
+                AddParameter(command, "$column", column);
+                return Convert.ToInt32(command.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture) == 1;
+            }
+
+            // SQLite column guard via PRAGMA; `table` is always an internal
+            // constant from this class, never user input.
+            using var pragma = connection.CreateCommand();
+            pragma.CommandText = $"PRAGMA table_info({table});";
+            using var reader = pragma.ExecuteReader();
+            while (reader.Read())
+            {
+                if (string.Equals(TextValue(reader, 1), column, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+
+        private static void AddParameter(DbCommand command, string name, object value)
+        {
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = name;
+            parameter.Value = value;
+            command.Parameters.Add(parameter);
+        }
+
+        private static string TextValue(DbDataReader reader, int ordinal)
+            => reader.IsDBNull(ordinal)
+                ? string.Empty
+                : Convert.ToString(reader.GetValue(ordinal), CultureInfo.InvariantCulture) ?? string.Empty;
+
+        private static decimal DecimalValue(DbDataReader reader, int ordinal)
+            => reader.IsDBNull(ordinal)
+                ? 0m
+                : Convert.ToDecimal(reader.GetValue(ordinal), CultureInfo.InvariantCulture);
+
+        private static DateTime DateValue(DbDataReader reader, int ordinal)
+        {
+            if (reader.IsDBNull(ordinal))
+                return DateTime.MinValue;
+            var value = reader.GetValue(ordinal);
+            if (value is DateTime dateTime)
+                return dateTime;
+            return DateTime.TryParse(
+                Convert.ToString(value, CultureInfo.InvariantCulture),
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var parsed)
+                ? parsed
+                : DateTime.MinValue;
+        }
+
+        private static DbConnection Open(string connectionString)
+        {
+            DbConnection connection = DatabaseRuntime.IsPostgreSql()
+                ? new NpgsqlConnection(connectionString)
+                : new SqliteConnection(DatabaseRuntime.NormalizeSqliteConnectionString(connectionString));
+            connection.Open();
+            return connection;
         }
     }
 
