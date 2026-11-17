@@ -76,6 +76,12 @@
     "name": "CompanyOpenFailed",
     "message": "تعذر فتح الشركة"
   },
+  "CO-3007": {
+    "code": "CO-3007",
+    "name": "CompanyCoaTemplateNotFound",
+    "message": "تعذر العثور على قالب دليل الحسابات المحدد.",
+    "hint": "اختر قالب دليل حسابات آخر، أو استعد ملفات القوالب في مجلد Resources/COA."
+  },
   "DATA-4001": {
     "code": "DATA-4001",
     "name": "ExportPermissionDenied",

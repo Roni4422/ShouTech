@@ -55,6 +55,7 @@ public static class ErrorCodes
     public const string PostgresConnectionMissing = "CO-3004";
     public const string CompanyLoadFailed = "CO-3005";
     public const string CompanyOpenFailed = "CO-3006";
+    public const string CompanyCoaTemplateNotFound = "CO-3007";
 
     // ---- DATA 4000-4999 ------------------------------------------------
     public const string ExportPermissionDenied = "DATA-4001";

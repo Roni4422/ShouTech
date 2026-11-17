@@ -811,142 +811,337 @@ public static class CoLocalStore
                     SqliteSchemaBootstrapper.EnsureDatabase(connectionString);
                     await using var connection = new SqliteConnection(connectionString);
                     await connection.OpenAsync();
-                    await using var cmd = new SqliteCommand("""
-                        UPDATE companies SET
-                            company_name_ar = @nameAr,
-                            company_name_en = @nameEn,
-                            email = @email,
-                            phone = @phone,
-                            mobile = @mobile,
-                            address_line1 = @address,
-                            commercial_registration = @tax,
-                            currency_code = @currency,
-                            language_code = @language
-                        WHERE company_code = @code AND is_deleted = 0
-                        """, connection);
-                    cmd.Parameters.AddWithValue("@nameAr", profile.Name ?? "");
-                    cmd.Parameters.AddWithValue("@nameEn", profile.NameEn ?? profile.Name ?? "");
-                    cmd.Parameters.AddWithValue("@email", (object?)profile.Email ?? DBNull.Value);
-                    cmd.Parameters.AddWithValue("@phone", (object?)profile.Phone ?? DBNull.Value);
-                    cmd.Parameters.AddWithValue("@mobile", (object?)profile.Mobile ?? DBNull.Value);
-                    cmd.Parameters.AddWithValue("@address", (object?)profile.AddressLine1 ?? DBNull.Value);
-                    var registration = string.IsNullOrWhiteSpace(profile.TaxNumber)
-                        ? profile.License
-                        : profile.TaxNumber;
-                    cmd.Parameters.AddWithValue("@tax",
-                        string.IsNullOrWhiteSpace(registration) ? DBNull.Value : registration.Trim());
-                    cmd.Parameters.AddWithValue("@currency", profile.CurrencyCode ?? string.Empty);
-                    cmd.Parameters.AddWithValue("@language", profile.LanguageCode ?? string.Empty);
-                    cmd.Parameters.AddWithValue("@code", profile.Code);
-                    if (await cmd.ExecuteNonQueryAsync() > 0)
-                        return true;
-
-                    await using var insert = new SqliteCommand("""
-                        INSERT INTO companies
-                            (company_id, company_code, company_name_ar, company_name_en,
-                             email, phone, mobile, address_line1, commercial_registration,
-                             currency_code, language_code)
-                        VALUES
-                            (@id, @code, @nameAr, @nameEn, @email, @phone, @mobile,
-                             @address, @tax, @currency, @language)
-                        ON CONFLICT(company_code) DO NOTHING
-                        """, connection);
-                    insert.Parameters.AddWithValue("@id", profile.CompanyId.ToString());
-                    insert.Parameters.AddWithValue("@code", profile.Code);
-                    insert.Parameters.AddWithValue("@nameAr", profile.Name ?? string.Empty);
-                    insert.Parameters.AddWithValue("@nameEn", profile.NameEn ?? string.Empty);
-                    insert.Parameters.AddWithValue("@email", (object?)profile.Email ?? DBNull.Value);
-                    insert.Parameters.AddWithValue("@phone", (object?)profile.Phone ?? DBNull.Value);
-                    insert.Parameters.AddWithValue("@mobile", (object?)profile.Mobile ?? DBNull.Value);
-                    insert.Parameters.AddWithValue("@address", (object?)profile.AddressLine1 ?? DBNull.Value);
-                    insert.Parameters.AddWithValue("@tax",
-                        string.IsNullOrWhiteSpace(registration) ? DBNull.Value : registration.Trim());
-                    insert.Parameters.AddWithValue("@currency", profile.CurrencyCode ?? string.Empty);
-                    insert.Parameters.AddWithValue("@language", profile.LanguageCode ?? string.Empty);
-                    var inserted = await insert.ExecuteNonQueryAsync() > 0;
-                    if (!inserted)
-                        AppHost.Logging.LogWarning(
-                            "CoRegSvc",
-                            $"Database update found company {profile.Code}, but it is not active and could not be updated.");
-                    return inserted;
+                    await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync();
+                    try
+                    {
+                        var saved = await UpdateCompanySqliteAsync(connection, transaction, profile);
+                        if (saved)
+                            await UpsertFiscalYearSqliteAsync(connection, transaction, profile);
+                        await transaction.CommitAsync();
+                        return saved;
+                    }
+                    catch
+                    {
+                        await transaction.RollbackAsync();
+                        throw;
+                    }
                 }
 
                 if (provider == "postgresql")
                 {
                     await using var connection = new NpgsqlConnection(connectionString);
                     await connection.OpenAsync();
-                    await using var cmd = new NpgsqlCommand("""
-                        UPDATE public.companies SET
-                            company_name_ar = @nameAr,
-                            company_name_en = @nameEn,
-                            email = @email,
-                            phone = @phone,
-                            mobile = @mobile,
-                            address_line1 = @address,
-                            commercial_registration = @tax,
-                            currency_code = @currency,
-                            language_code = @language
-                        WHERE company_code = @code AND COALESCE(is_deleted, FALSE) = FALSE
-                        """, connection);
-                    cmd.Parameters.AddWithValue("nameAr", profile.Name ?? "");
-                    cmd.Parameters.AddWithValue("nameEn", profile.NameEn ?? profile.Name ?? "");
-                    cmd.Parameters.AddWithValue("email", (object?)profile.Email ?? DBNull.Value);
-                    cmd.Parameters.AddWithValue("phone", (object?)profile.Phone ?? DBNull.Value);
-                    cmd.Parameters.AddWithValue("mobile", (object?)profile.Mobile ?? DBNull.Value);
-                    cmd.Parameters.AddWithValue("address", (object?)profile.AddressLine1 ?? DBNull.Value);
-                    var registration = string.IsNullOrWhiteSpace(profile.TaxNumber)
-                        ? profile.License
-                        : profile.TaxNumber;
-                    cmd.Parameters.AddWithValue("tax",
-                        string.IsNullOrWhiteSpace(registration) ? DBNull.Value : registration.Trim());
-                    cmd.Parameters.AddWithValue("currency", profile.CurrencyCode ?? string.Empty);
-                    cmd.Parameters.AddWithValue("language", profile.LanguageCode ?? string.Empty);
-                    cmd.Parameters.AddWithValue("code", profile.Code);
-                    if (await cmd.ExecuteNonQueryAsync() > 0)
-                        return true;
-
-                    await using var insert = new NpgsqlCommand("""
-                        INSERT INTO public.companies
-                            (company_id, company_code, company_name_ar, company_name_en,
-                             email, phone, mobile, address_line1, commercial_registration,
-                             currency_code, language_code)
-                        VALUES
-                            (@id, @code, @nameAr, @nameEn, @email, @phone, @mobile,
-                             @address, @tax, @currency, @language)
-                        ON CONFLICT(company_code) DO NOTHING
-                        """, connection);
-                    insert.Parameters.AddWithValue("id", profile.CompanyId);
-                    insert.Parameters.AddWithValue("code", profile.Code);
-                    insert.Parameters.AddWithValue("nameAr", profile.Name ?? string.Empty);
-                    insert.Parameters.AddWithValue("nameEn", profile.NameEn ?? string.Empty);
-                    insert.Parameters.AddWithValue("email", (object?)profile.Email ?? DBNull.Value);
-                    insert.Parameters.AddWithValue("phone", (object?)profile.Phone ?? DBNull.Value);
-                    insert.Parameters.AddWithValue("mobile", (object?)profile.Mobile ?? DBNull.Value);
-                    insert.Parameters.AddWithValue("address", (object?)profile.AddressLine1 ?? DBNull.Value);
-                    insert.Parameters.AddWithValue("tax",
-                        string.IsNullOrWhiteSpace(registration) ? DBNull.Value : registration.Trim());
-                    insert.Parameters.AddWithValue("currency", profile.CurrencyCode ?? string.Empty);
-                    insert.Parameters.AddWithValue("language", profile.LanguageCode ?? string.Empty);
-                    var inserted = await insert.ExecuteNonQueryAsync() > 0;
-                    if (!inserted)
-                        AppHost.Logging.LogWarning(
-                            "CoRegSvc",
-                            $"Database update found company {profile.Code}, but it is not active and could not be updated.");
-                    return inserted;
+                    await using var transaction = await connection.BeginTransactionAsync();
+                    try
+                    {
+                        var saved = await UpdateCompanyPostgreSqlAsync(connection, transaction, profile);
+                        if (saved)
+                            await UpsertFiscalYearPostgreSqlAsync(connection, transaction, profile);
+                        await transaction.CommitAsync();
+                        return saved;
+                    }
+                    catch
+                    {
+                        await transaction.RollbackAsync();
+                        throw;
+                    }
                 }
             }
             catch (Exception ex)
             {
-                AppHost.Logging.LogError(
-                    "CoRegSvc",
-                    $"Database update failed for company {profile.Code}.",
-                    ex);
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, ex, "Company.TryUpdateInDatabaseAsync");
                 return false;
             }
 
             return false;
         }
 
+        // ------------------------------------------------------------------
+        // Company profile writes (migration 051): every profile field maps to
+        // its own companies column — License -> commercial_registration,
+        // TaxNumber -> tax_number. The pre-051 edit path wrote Tax-first into
+        // commercial_registration, disagreeing with the create path, and never
+        // wrote the other profile columns or fiscal_years at all.
+        // ------------------------------------------------------------------
+
+        private static async Task<bool> UpdateCompanySqliteAsync(
+            SqliteConnection connection, SqliteTransaction transaction, StoredCoRec profile)
+        {
+            await using var cmd = new SqliteCommand("""
+                UPDATE companies SET
+                    company_name_ar = @nameAr,
+                    company_name_en = @nameEn,
+                    email = @email,
+                    phone = @phone,
+                    mobile = @mobile,
+                    address_line1 = @address,
+                    address_line2 = @address2,
+                    city = @city,
+                    country = @country,
+                    commercial_registration = @license,
+                    tax_number = @tax,
+                    website = @website,
+                    notes = @notes,
+                    currency_code = @currency,
+                    language_code = @language,
+                    decimal_places = @decimals,
+                    calendar_type = @calendar,
+                    number_grouping = @grouping,
+                    coa_template_code = @coa
+                WHERE company_code = @code AND is_deleted = 0
+                """, connection, transaction);
+            BindCompanyProfileSqlite(cmd, profile);
+            if (await cmd.ExecuteNonQueryAsync() > 0)
+                return true;
+
+            await using var insert = new SqliteCommand("""
+                INSERT INTO companies
+                    (company_id, company_code, company_name_ar, company_name_en,
+                     email, phone, mobile, address_line1, address_line2, city, country,
+                     commercial_registration, tax_number, website, notes,
+                     currency_code, language_code, decimal_places, calendar_type,
+                     number_grouping, coa_template_code)
+                VALUES
+                    (@id, @code, @nameAr, @nameEn, @email, @phone, @mobile,
+                     @address, @address2, @city, @country, @license, @tax, @website,
+                     @notes, @currency, @language, @decimals, @calendar, @grouping, @coa)
+                ON CONFLICT(company_code) DO NOTHING
+                """, connection, transaction);
+            insert.Parameters.AddWithValue("@id", profile.CompanyId.ToString());
+            BindCompanyProfileSqlite(insert, profile);
+            var inserted = await insert.ExecuteNonQueryAsync() > 0;
+            if (!inserted)
+                AppHost.Logging.LogWarning(
+                    "CoRegSvc",
+                    $"Database update found company {profile.Code}, but it is not active and could not be updated.");
+            return inserted;
+        }
+
+        private static void BindCompanyProfileSqlite(SqliteCommand cmd, StoredCoRec profile)
+        {
+            cmd.Parameters.AddWithValue("@nameAr", profile.Name ?? "");
+            cmd.Parameters.AddWithValue("@nameEn", profile.NameEn ?? profile.Name ?? "");
+            cmd.Parameters.AddWithValue("@email", (object?)profile.Email ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@phone", (object?)profile.Phone ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@mobile", (object?)profile.Mobile ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@address", (object?)profile.AddressLine1 ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@address2", NullIfEmpty(profile.AddressLine2));
+            cmd.Parameters.AddWithValue("@city", NullIfEmpty(profile.City));
+            cmd.Parameters.AddWithValue("@country", NullIfEmpty(profile.Country));
+            cmd.Parameters.AddWithValue("@license", NullIfEmpty(profile.License));
+            cmd.Parameters.AddWithValue("@tax", NullIfEmpty(profile.TaxNumber));
+            cmd.Parameters.AddWithValue("@website", NullIfEmpty(profile.Website));
+            cmd.Parameters.AddWithValue("@notes", NullIfEmpty(profile.Notes));
+            cmd.Parameters.AddWithValue("@currency", profile.CurrencyCode ?? string.Empty);
+            cmd.Parameters.AddWithValue("@language", profile.LanguageCode ?? string.Empty);
+            cmd.Parameters.AddWithValue("@decimals", profile.DecimalPlaces);
+            cmd.Parameters.AddWithValue("@calendar", OrDefault(profile.CalendarType, "Gregorian"));
+            cmd.Parameters.AddWithValue("@grouping", OrDefault(profile.NumberGrouping, "3-3-3"));
+            cmd.Parameters.AddWithValue("@coa", OrDefault(profile.CoaTemplateCode, "SIMPLE"));
+            cmd.Parameters.AddWithValue("@code", profile.Code);
+        }
+
+        private static async Task<bool> UpdateCompanyPostgreSqlAsync(
+            NpgsqlConnection connection, NpgsqlTransaction transaction, StoredCoRec profile)
+        {
+            await using var cmd = new NpgsqlCommand("""
+                UPDATE public.companies SET
+                    company_name_ar = @nameAr,
+                    company_name_en = @nameEn,
+                    email = @email,
+                    phone = @phone,
+                    mobile = @mobile,
+                    address_line1 = @address,
+                    address_line2 = @address2,
+                    city = @city,
+                    country = @country,
+                    commercial_registration = @license,
+                    tax_number = @tax,
+                    website = @website,
+                    notes = @notes,
+                    currency_code = @currency,
+                    language_code = @language,
+                    decimal_places = @decimals,
+                    calendar_type = @calendar,
+                    number_grouping = @grouping,
+                    coa_template_code = @coa
+                WHERE company_code = @code AND COALESCE(is_deleted, FALSE) = FALSE
+                """, connection, transaction);
+            BindCompanyProfilePostgreSql(cmd, profile);
+            if (await cmd.ExecuteNonQueryAsync() > 0)
+                return true;
+
+            await using var insert = new NpgsqlCommand("""
+                INSERT INTO public.companies
+                    (company_id, company_code, company_name_ar, company_name_en,
+                     email, phone, mobile, address_line1, address_line2, city, country,
+                     commercial_registration, tax_number, website, notes,
+                     currency_code, language_code, decimal_places, calendar_type,
+                     number_grouping, coa_template_code)
+                VALUES
+                    (@id, @code, @nameAr, @nameEn, @email, @phone, @mobile,
+                     @address, @address2, @city, @country, @license, @tax, @website,
+                     @notes, @currency, @language, @decimals, @calendar, @grouping, @coa)
+                ON CONFLICT(company_code) DO NOTHING
+                """, connection, transaction);
+            insert.Parameters.AddWithValue("id", profile.CompanyId);
+            BindCompanyProfilePostgreSql(insert, profile);
+            var inserted = await insert.ExecuteNonQueryAsync() > 0;
+            if (!inserted)
+                AppHost.Logging.LogWarning(
+                    "CoRegSvc",
+                    $"Database update found company {profile.Code}, but it is not active and could not be updated.");
+            return inserted;
+        }
+
+        private static void BindCompanyProfilePostgreSql(NpgsqlCommand cmd, StoredCoRec profile)
+        {
+            cmd.Parameters.AddWithValue("nameAr", profile.Name ?? "");
+            cmd.Parameters.AddWithValue("nameEn", profile.NameEn ?? profile.Name ?? "");
+            cmd.Parameters.AddWithValue("email", (object?)profile.Email ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("phone", (object?)profile.Phone ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("mobile", (object?)profile.Mobile ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("address", (object?)profile.AddressLine1 ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("address2", NullIfEmpty(profile.AddressLine2));
+            cmd.Parameters.AddWithValue("city", NullIfEmpty(profile.City));
+            cmd.Parameters.AddWithValue("country", NullIfEmpty(profile.Country));
+            cmd.Parameters.AddWithValue("license", NullIfEmpty(profile.License));
+            cmd.Parameters.AddWithValue("tax", NullIfEmpty(profile.TaxNumber));
+            cmd.Parameters.AddWithValue("website", NullIfEmpty(profile.Website));
+            cmd.Parameters.AddWithValue("notes", NullIfEmpty(profile.Notes));
+            cmd.Parameters.AddWithValue("currency", profile.CurrencyCode ?? string.Empty);
+            cmd.Parameters.AddWithValue("language", profile.LanguageCode ?? string.Empty);
+            cmd.Parameters.AddWithValue("decimals", profile.DecimalPlaces);
+            cmd.Parameters.AddWithValue("calendar", OrDefault(profile.CalendarType, "Gregorian"));
+            cmd.Parameters.AddWithValue("grouping", OrDefault(profile.NumberGrouping, "3-3-3"));
+            cmd.Parameters.AddWithValue("coa", OrDefault(profile.CoaTemplateCode, "SIMPLE"));
+            cmd.Parameters.AddWithValue("code", profile.Code);
+        }
+
+        // ------------------------------------------------------------------
+        // fiscal_years mirror: fiscal dates edited in ComWin must reach the
+        // database (pre-051 they only ever existed in companies.json). The
+        // edited year becomes the current year; a missing row is inserted.
+        // ------------------------------------------------------------------
+
+        private static async Task UpsertFiscalYearSqliteAsync(
+            SqliteConnection connection, SqliteTransaction transaction, StoredCoRec profile)
+        {
+            if (profile.FiscalYearStart == default || profile.FiscalYearEnd < profile.FiscalYearStart)
+                return;
+
+            var companyId = await ResolveCompanyIdSqliteAsync(connection, transaction, profile);
+            var fiscalYear = profile.FiscalYearStart.Year;
+            var start = profile.FiscalYearStart.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var end = profile.FiscalYearEnd.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+            await using (var update = new SqliteCommand("""
+                UPDATE fiscal_years SET start_date = @start, end_date = @end, is_current = 1
+                WHERE company_id = @companyId AND fiscal_year = @year
+                """, connection, transaction))
+            {
+                update.Parameters.AddWithValue("@start", start);
+                update.Parameters.AddWithValue("@end", end);
+                update.Parameters.AddWithValue("@companyId", companyId);
+                update.Parameters.AddWithValue("@year", fiscalYear);
+                if (await update.ExecuteNonQueryAsync() == 0)
+                {
+                    await using var insert = new SqliteCommand("""
+                        INSERT INTO fiscal_years (company_id, fiscal_year, database_name, start_date, end_date, is_current, is_closed)
+                        VALUES (@companyId, @year, @dbName, @start, @end, 1, 0)
+                        """, connection, transaction);
+                    insert.Parameters.AddWithValue("@companyId", companyId);
+                    insert.Parameters.AddWithValue("@year", fiscalYear);
+                    insert.Parameters.AddWithValue("@dbName", FiscalDatabaseName(profile, fiscalYear));
+                    insert.Parameters.AddWithValue("@start", start);
+                    insert.Parameters.AddWithValue("@end", end);
+                    await insert.ExecuteNonQueryAsync();
+                }
+            }
+
+            await using var clearOthers = new SqliteCommand("""
+                UPDATE fiscal_years SET is_current = 0
+                WHERE company_id = @companyId AND fiscal_year <> @year AND is_current = 1
+                """, connection, transaction);
+            clearOthers.Parameters.AddWithValue("@companyId", companyId);
+            clearOthers.Parameters.AddWithValue("@year", fiscalYear);
+            await clearOthers.ExecuteNonQueryAsync();
+        }
+
+        private static async Task UpsertFiscalYearPostgreSqlAsync(
+            NpgsqlConnection connection, NpgsqlTransaction transaction, StoredCoRec profile)
+        {
+            if (profile.FiscalYearStart == default || profile.FiscalYearEnd < profile.FiscalYearStart)
+                return;
+
+            var companyId = await ResolveCompanyIdPostgreSqlAsync(connection, transaction, profile);
+            var fiscalYear = profile.FiscalYearStart.Year;
+
+            await using (var update = new NpgsqlCommand("""
+                UPDATE public.fiscal_years SET start_date = @start, end_date = @end, is_current = TRUE
+                WHERE company_id = @companyId AND fiscal_year = @year
+                """, connection, transaction))
+            {
+                update.Parameters.Add("@start", NpgsqlDbType.Date).Value = profile.FiscalYearStart.Date;
+                update.Parameters.Add("@end", NpgsqlDbType.Date).Value = profile.FiscalYearEnd.Date;
+                update.Parameters.Add("@companyId", NpgsqlDbType.Uuid).Value = companyId;
+                update.Parameters.Add("@year", NpgsqlDbType.Integer).Value = fiscalYear;
+                if (await update.ExecuteNonQueryAsync() == 0)
+                {
+                    await using var insert = new NpgsqlCommand("""
+                        INSERT INTO public.fiscal_years (company_id, fiscal_year, database_name, start_date, end_date, is_current, is_closed)
+                        VALUES (@companyId, @year, @dbName, @start, @end, TRUE, FALSE)
+                        """, connection, transaction);
+                    insert.Parameters.Add("@companyId", NpgsqlDbType.Uuid).Value = companyId;
+                    insert.Parameters.Add("@year", NpgsqlDbType.Integer).Value = fiscalYear;
+                    insert.Parameters.Add("@dbName", NpgsqlDbType.Varchar).Value = FiscalDatabaseName(profile, fiscalYear);
+                    insert.Parameters.Add("@start", NpgsqlDbType.Date).Value = profile.FiscalYearStart.Date;
+                    insert.Parameters.Add("@end", NpgsqlDbType.Date).Value = profile.FiscalYearEnd.Date;
+                    await insert.ExecuteNonQueryAsync();
+                }
+            }
+
+            await using var clearOthers = new NpgsqlCommand("""
+                UPDATE public.fiscal_years SET is_current = FALSE
+                WHERE company_id = @companyId AND fiscal_year <> @year AND is_current = TRUE
+                """, connection, transaction);
+            clearOthers.Parameters.Add("@companyId", NpgsqlDbType.Uuid).Value = companyId;
+            clearOthers.Parameters.Add("@year", NpgsqlDbType.Integer).Value = fiscalYear;
+            await clearOthers.ExecuteNonQueryAsync();
+        }
+
+        private static async Task<string> ResolveCompanyIdSqliteAsync(
+            SqliteConnection connection, SqliteTransaction transaction, StoredCoRec profile)
+        {
+            await using var cmd = new SqliteCommand(
+                "SELECT company_id FROM companies WHERE company_code = @code", connection, transaction);
+            cmd.Parameters.AddWithValue("@code", profile.Code);
+            var value = await cmd.ExecuteScalarAsync();
+            return value is string s && !string.IsNullOrWhiteSpace(s)
+                ? s
+                : profile.CompanyId.ToString();
+        }
+
+        private static async Task<Guid> ResolveCompanyIdPostgreSqlAsync(
+            NpgsqlConnection connection, NpgsqlTransaction transaction, StoredCoRec profile)
+        {
+            await using var cmd = new NpgsqlCommand(
+                "SELECT company_id FROM public.companies WHERE company_code = @code", connection, transaction);
+            cmd.Parameters.AddWithValue("code", profile.Code);
+            var value = await cmd.ExecuteScalarAsync();
+            return value is Guid g ? g : profile.CompanyId;
+        }
+
+        private static string FiscalDatabaseName(StoredCoRec profile, int fiscalYear)
+            => string.IsNullOrWhiteSpace(profile.DbPath)
+                ? $"SHOUTECH_{profile.Code}_{fiscalYear}"
+                : Path.GetFileName(profile.DbPath.TrimEnd('\\', '/'));
+
+        private static object NullIfEmpty(string? value)
+            => string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();
+
+        private static string OrDefault(string? value, string fallback)
+            => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
 private static string? ResolveConnectionString()
         {
             try
@@ -1209,7 +1404,31 @@ public sealed class CoCreateSvc : ICoCreateSvc
                 DefaultWarehouseName = string.IsNullOrWhiteSpace(request.DefaultWarehouseName) ? "Main" : request.DefaultWarehouseName.Trim()
             };
 
-            var savedToDb = await TrySaveToDatabaseAsync(record, request);
+            // The selected COA template is part of the company profile and must
+            // be consumed by creation (pre-051 it was stored but never read —
+            // a FAKE_SAVE effect). Resolve it before touching the database so
+            // an unresolvable code fails the creation loudly (CO-3007) instead
+            // of silently seeding no chart, or a different chart than chosen.
+            var template = CoaTemplatesSvc.LoadByCode(record.CoaTemplateCode);
+            if (template == null)
+            {
+                AppHost.Errors.Report(
+                    ErrorCodes.CompanyCoaTemplateNotFound,
+                    new InvalidOperationException(
+                        $"COA template '{record.CoaTemplateCode}' could not be resolved to a loadable template."),
+                    "Company.CreateAsync");
+                return new CoCreateResult
+                {
+                    Success = false,
+                    Message = $"Chart of accounts template '{record.CoaTemplateCode}' could not be found. The company was not created.",
+                    ErrorCode = ErrorCodes.CompanyCoaTemplateNotFound,
+                    CompanyCode = string.Empty,
+                    SavedToDatabase = false,
+                    SavedLocally = false
+                };
+            }
+
+            var savedToDb = await TrySaveToDatabaseAsync(record, request, template);
 
             var savedLocally = false;
             try
@@ -1373,7 +1592,7 @@ public sealed class CoCreateSvc : ICoCreateSvc
             }
         }
 
-        private static async Task<bool> TrySaveToDatabaseAsync(StoredCoRec record, NewCoReq request)
+        private static async Task<bool> TrySaveToDatabaseAsync(StoredCoRec record, NewCoReq request, CoaTemplateV5 template)
         {
             try
             {
@@ -1388,7 +1607,7 @@ public sealed class CoCreateSvc : ICoCreateSvc
                 }
 
                 if (provider == "sqlite")
-                    return await TrySaveToSqliteAsync(record, connectionString);
+                    return await TrySaveToSqliteAsync(record, connectionString, template);
 
                 await using var connection = new NpgsqlConnection(connectionString);
                 await connection.OpenAsync();
@@ -1400,14 +1619,18 @@ public sealed class CoCreateSvc : ICoCreateSvc
                         INSERT INTO public.companies
                         (
                             company_id, company_code, company_name_ar, company_name_en,
-                            email, phone, mobile, address_line1, commercial_registration,
-                            currency_code, language_code, is_active, is_deleted
+                            email, phone, mobile, address_line1, address_line2, city, country,
+                            commercial_registration, tax_number, website, notes,
+                            currency_code, language_code, decimal_places, calendar_type,
+                            number_grouping, coa_template_code, is_active, is_deleted
                         )
                         VALUES
                         (
                             @CompanyId, @Code, @Name, @NameEn,
-                            @Email, @Phone, @Mobile, @Address, @License,
-                            @Currency, @Language, TRUE, FALSE
+                            @Email, @Phone, @Mobile, @Address, @Address2, @City, @Country,
+                            @License, @TaxNumber, @Website, @Notes,
+                            @Currency, @Language, @DecimalPlaces, @CalendarType,
+                            @NumberGrouping, @CoaTemplateCode, TRUE, FALSE
                         );
                         """;
 
@@ -1421,10 +1644,23 @@ public sealed class CoCreateSvc : ICoCreateSvc
                         cmd.Parameters.Add("@Phone", NpgsqlDbType.Varchar).Value = NullIfEmpty(record.Phone);
                         cmd.Parameters.Add("@Mobile", NpgsqlDbType.Varchar).Value = NullIfEmpty(record.Mobile);
                         cmd.Parameters.Add("@Address", NpgsqlDbType.Varchar).Value = NullIfEmpty(record.AddressLine1);
+                        cmd.Parameters.Add("@Address2", NpgsqlDbType.Varchar).Value = NullIfEmpty(record.AddressLine2);
+                        cmd.Parameters.Add("@City", NpgsqlDbType.Varchar).Value = NullIfEmpty(record.City);
+                        cmd.Parameters.Add("@Country", NpgsqlDbType.Varchar).Value = NullIfEmpty(record.Country);
                         cmd.Parameters.Add("@License", NpgsqlDbType.Varchar).Value = NullIfEmpty(record.License);
+                        cmd.Parameters.Add("@TaxNumber", NpgsqlDbType.Varchar).Value = NullIfEmpty(record.TaxNumber);
+                        cmd.Parameters.Add("@Website", NpgsqlDbType.Varchar).Value = NullIfEmpty(record.Website);
+                        cmd.Parameters.Add("@Notes", NpgsqlDbType.Text).Value = NullIfEmpty(record.Notes);
                         cmd.Parameters.Add("@Currency", NpgsqlDbType.Char).Value = record.CurrencyCode;
                         cmd.Parameters.Add("@Language", NpgsqlDbType.Varchar).Value =
                             string.IsNullOrWhiteSpace(record.LanguageCode) ? "ar" : record.LanguageCode;
+                        cmd.Parameters.Add("@DecimalPlaces", NpgsqlDbType.Integer).Value = record.DecimalPlaces;
+                        cmd.Parameters.Add("@CalendarType", NpgsqlDbType.Varchar).Value =
+                            string.IsNullOrWhiteSpace(record.CalendarType) ? "Gregorian" : record.CalendarType.Trim();
+                        cmd.Parameters.Add("@NumberGrouping", NpgsqlDbType.Varchar).Value =
+                            string.IsNullOrWhiteSpace(record.NumberGrouping) ? "3-3-3" : record.NumberGrouping.Trim();
+                        cmd.Parameters.Add("@CoaTemplateCode", NpgsqlDbType.Varchar).Value =
+                            string.IsNullOrWhiteSpace(record.CoaTemplateCode) ? "SIMPLE" : record.CoaTemplateCode.Trim();
                         await cmd.ExecuteNonQueryAsync();
                     }
 
@@ -1524,6 +1760,11 @@ public sealed class CoCreateSvc : ICoCreateSvc
                         await cmd.ExecuteNonQueryAsync();
                     }
 
+                    // Consume the selected COA template: seed the new company's
+                    // chart of accounts inside the same transaction, keyed by
+                    // company code — the tenant key every account reader uses.
+                    await SeedCoaAccountsPostgreSqlAsync(connection, transaction, record.Code, template);
+
                     await transaction.CommitAsync();
                     return true;
                 }
@@ -1551,7 +1792,7 @@ public sealed class CoCreateSvc : ICoCreateSvc
             return (max + 1).ToString("000", CultureInfo.InvariantCulture);
         }
 
-        private static async Task<bool> TrySaveToSqliteAsync(StoredCoRec record, string connectionString)
+        private static async Task<bool> TrySaveToSqliteAsync(StoredCoRec record, string connectionString, CoaTemplateV5 template)
         {
             // Schema must already be applied by SchemaMigrator. EnsureDatabase only validates core objects.
             try
@@ -1574,13 +1815,23 @@ public sealed class CoCreateSvc : ICoCreateSvc
                 await ExecuteSqliteAsync(connection, transaction, """
                     INSERT INTO companies
                         (company_id, company_code, company_name_ar, company_name_en, email, phone, mobile, address_line1,
-                         commercial_registration, currency_code, language_code)
-                    VALUES (@id, @code, @name, @nameEn, @email, @phone, @mobile, @address, @license, @currency, @lang)
+                         address_line2, city, country, commercial_registration, tax_number, website, notes,
+                         currency_code, language_code, decimal_places, calendar_type, number_grouping, coa_template_code)
+                    VALUES (@id, @code, @name, @nameEn, @email, @phone, @mobile, @address,
+                            @address2, @city, @country, @license, @tax, @website, @notes,
+                            @currency, @lang, @decimals, @calendar, @grouping, @coa)
                     """, ("id", record.CompanyId.ToString()), ("code", record.Code), ("name", record.Name),
                     ("nameEn", record.NameEn), ("email", NullIfEmpty(record.Email)), ("phone", NullIfEmpty(record.Phone)),
                     ("mobile", NullIfEmpty(record.Mobile)), ("address", NullIfEmpty(record.AddressLine1)),
-                    ("license", NullIfEmpty(record.License)), ("currency", record.CurrencyCode),
-                    ("lang", string.IsNullOrWhiteSpace(record.LanguageCode) ? "ar" : record.LanguageCode));
+                    ("address2", NullIfEmpty(record.AddressLine2)), ("city", NullIfEmpty(record.City)),
+                    ("country", NullIfEmpty(record.Country)), ("license", NullIfEmpty(record.License)),
+                    ("tax", NullIfEmpty(record.TaxNumber)), ("website", NullIfEmpty(record.Website)),
+                    ("notes", NullIfEmpty(record.Notes)), ("currency", record.CurrencyCode),
+                    ("lang", string.IsNullOrWhiteSpace(record.LanguageCode) ? "ar" : record.LanguageCode),
+                    ("decimals", record.DecimalPlaces),
+                    ("calendar", string.IsNullOrWhiteSpace(record.CalendarType) ? "Gregorian" : record.CalendarType.Trim()),
+                    ("grouping", string.IsNullOrWhiteSpace(record.NumberGrouping) ? "3-3-3" : record.NumberGrouping.Trim()),
+                    ("coa", string.IsNullOrWhiteSpace(record.CoaTemplateCode) ? "SIMPLE" : record.CoaTemplateCode.Trim()));
                 var fiscalYear = record.FiscalYearStart.Year;
                 await ExecuteSqliteAsync(connection, transaction, """
                     INSERT INTO fiscal_years (company_id, fiscal_year, database_name, start_date, end_date)
@@ -1613,6 +1864,19 @@ public sealed class CoCreateSvc : ICoCreateSvc
                     SELECT r.role_id, p.permission_id FROM roles r CROSS JOIN permissions p
                     WHERE r.company_id=@companyId AND r.role_code='ROLE_ADMINISTRATOR' AND p.is_active=1
                     """, ("companyId", record.CompanyId.ToString()));
+                // Consume the selected COA template inside the same transaction
+                // (see the PostgreSQL path): accounts are keyed by company code.
+                foreach (var row in BuildCoaSeedRows(template))
+                {
+                    await ExecuteSqliteAsync(connection, transaction, """
+                        INSERT INTO accounts
+                            (company_id, account_code, parent_code, name_ar, name_en, posting_mode, status, risk, cost_center)
+                        VALUES (@company, @code, @parent, @nameAr, @nameEn, @posting, 'Active', 'Low', 'Unspecified')
+                        ON CONFLICT(company_id, account_code) DO NOTHING
+                        """, ("company", record.Code), ("code", row.Code),
+                        ("parent", (object?)row.ParentCode ?? DBNull.Value),
+                        ("nameAr", row.NameAr), ("nameEn", row.NameEn), ("posting", row.PostingMode));
+                }
                 await transaction.CommitAsync();
                 return true;
             }
@@ -1620,6 +1884,87 @@ public sealed class CoCreateSvc : ICoCreateSvc
             {
                 await transaction.RollbackAsync();
                 throw;
+            }
+        }
+
+        /// <summary>
+        /// Flattens a COA template into account seed rows. Parent codes are
+        /// resolved through the template's id map; names fall back across
+        /// languages so the NOT NULL name columns are always satisfied;
+        /// posting_mode uses the canonical English tokens ('Postable' /
+        /// 'Summary') the application reads. Duplicate template codes are
+        /// seeded once.
+        /// </summary>
+        private static List<(string Code, string? ParentCode, string NameAr, string NameEn, string PostingMode)>
+            BuildCoaSeedRows(CoaTemplateV5 template)
+        {
+            var codeById = new Dictionary<int, string>();
+            foreach (var account in template.Accounts)
+            {
+                var code = (account.Code ?? string.Empty).Trim();
+                if (code.Length > 0)
+                    codeById[account.Id] = code;
+            }
+
+            var rows = new List<(string Code, string? ParentCode, string NameAr, string NameEn, string PostingMode)>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var account in template.Accounts)
+            {
+                var code = (account.Code ?? string.Empty).Trim();
+                if (code.Length == 0 || !seen.Add(code))
+                    continue;
+
+                string? parentCode = null;
+                if (account.ParentId.HasValue &&
+                    codeById.TryGetValue(account.ParentId.Value, out var mapped) &&
+                    !string.Equals(mapped, code, StringComparison.OrdinalIgnoreCase))
+                    parentCode = mapped;
+
+                var nameEn = TemplateAccountName(account, "en")
+                             ?? TemplateAccountName(account, "ar") ?? code;
+                var nameAr = TemplateAccountName(account, "ar")
+                             ?? TemplateAccountName(account, "en") ?? code;
+
+                rows.Add((code, parentCode, nameAr, nameEn,
+                    account.Posting ? "Postable" : "Summary"));
+            }
+
+            return rows;
+        }
+
+        private static string? TemplateAccountName(CoaAccount account, string language)
+        {
+            foreach (var pair in account.Names)
+            {
+                if (string.Equals(pair.Key, language, StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(pair.Value))
+                    return pair.Value.Trim();
+            }
+
+            return null;
+        }
+
+        private static async Task SeedCoaAccountsPostgreSqlAsync(
+            NpgsqlConnection connection, NpgsqlTransaction transaction,
+            string companyCode, CoaTemplateV5 template)
+        {
+            const string insertAccount = """
+                INSERT INTO public.accounts
+                    (company_id, account_code, parent_code, name_ar, name_en, posting_mode, status, risk, cost_center)
+                VALUES (@Company, @Code, @Parent, @NameAr, @NameEn, @Posting, 'Active', 'Low', 'Unspecified')
+                ON CONFLICT (company_id, account_code) DO NOTHING;
+                """;
+
+            foreach (var row in BuildCoaSeedRows(template))
+            {
+                await using var cmd = new NpgsqlCommand(insertAccount, connection, transaction);
+                cmd.Parameters.Add("@Company", NpgsqlDbType.Varchar).Value = companyCode;
+                cmd.Parameters.Add("@Code", NpgsqlDbType.Varchar).Value = row.Code;
+                cmd.Parameters.Add("@Parent", NpgsqlDbType.Varchar).Value = (object?)row.ParentCode ?? DBNull.Value;
+                cmd.Parameters.Add("@NameAr", NpgsqlDbType.Varchar).Value = row.NameAr;
+                cmd.Parameters.Add("@NameEn", NpgsqlDbType.Varchar).Value = row.NameEn;
+                cmd.Parameters.Add("@Posting", NpgsqlDbType.Varchar).Value = row.PostingMode;
+                await cmd.ExecuteNonQueryAsync();
             }
         }
 

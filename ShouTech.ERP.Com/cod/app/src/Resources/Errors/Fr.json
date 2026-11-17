@@ -76,6 +76,12 @@
     "name": "CompanyOpenFailed",
     "message": "Impossible d'ouvrir la société"
   },
+  "CO-3007": {
+    "code": "CO-3007",
+    "name": "CompanyCoaTemplateNotFound",
+    "message": "Le modèle de plan comptable sélectionné est introuvable.",
+    "hint": "Choisissez un autre modèle de plan comptable ou restaurez les fichiers de modèles dans le dossier Resources/COA."
+  },
   "DATA-4001": {
     "code": "DATA-4001",
     "name": "ExportPermissionDenied",

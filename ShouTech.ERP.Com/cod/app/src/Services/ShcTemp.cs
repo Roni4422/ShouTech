@@ -493,6 +493,23 @@ public static class CoaTemplatesSvc
         return result.OrderBy(x => x.Code).ToList();
     }
 
+    /// <summary>
+    /// Loads a template by its template code (the value stored on the company
+    /// record, e.g. "SIMPLE" or "GCC"). Returns null when no available
+    /// template carries that code or the file fails to load — callers that
+    /// must not substitute a different chart (company creation) treat null
+    /// as a hard failure and report CO-3007.
+    /// </summary>
+    public static CoaTemplateV5? LoadByCode(string code)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+            return null;
+
+        var info = GetAvailableTemplates()
+            .FirstOrDefault(t => string.Equals(t.Code, code.Trim(), StringComparison.OrdinalIgnoreCase));
+        return info == null ? null : LoadByFileName(info.FileName);
+    }
+
     /// <summary>Loads a template by its file name.</summary>
     public static CoaTemplateV5? LoadByFileName(string fileName)
     {
