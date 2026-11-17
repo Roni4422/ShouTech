@@ -124,6 +124,7 @@ change and not yet converted.
 | CO-3004 | PostgresConnectionMissing | Current PostgreSQL connection is not available. | No PostgreSQL connection string is available for the company (ComWin). |
 | CO-3005 | CompanyLoadFailed | Failed to load companies | Loading the company list failed (ComWin). |
 | CO-3006 | CompanyOpenFailed | Unable to open company | Default code for company open/switch failures reported inside ComWin and the company services. |
+| CO-3007 | CompanyCoaTemplateNotFound | The selected chart of accounts template could not be found. | Company creation refused because the selected COA template code does not resolve to a loadable .shc template (CoCreateSvc); creation never falls back to a different chart silently. |
 | DATA-4001 | ExportPermissionDenied | You do not have permission to export data (DATA.EXPORT). | *Reserved* — DatWin export refused for missing DATA.EXPORT permission. The gate lives in DatWin, which is owned by the parallel fixes branch; conversion lands with that branch. |
 | DATA-4002 | ExportFailed | The export could not be completed. | Export failed (DataExportSvc and export paths). |
 | DATA-4003 | ImportFailed | The import could not be completed. | Import failed (catalogued for the import paths; wired incrementally). |

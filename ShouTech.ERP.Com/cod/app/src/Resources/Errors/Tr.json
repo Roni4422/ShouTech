@@ -76,6 +76,12 @@
     "name": "CompanyOpenFailed",
     "message": "Şirket açılamadı"
   },
+  "CO-3007": {
+    "code": "CO-3007",
+    "name": "CompanyCoaTemplateNotFound",
+    "message": "Seçilen hesap planı şablonu bulunamadı.",
+    "hint": "Başka bir hesap planı şablonu seçin veya Resources/COA klasöründeki şablon dosyalarını geri yükleyin."
+  },
   "DATA-4001": {
     "code": "DATA-4001",
     "name": "ExportPermissionDenied",

@@ -76,6 +76,12 @@
     "name": "CompanyOpenFailed",
     "message": "Unable to open company"
   },
+  "CO-3007": {
+    "code": "CO-3007",
+    "name": "CompanyCoaTemplateNotFound",
+    "message": "The selected chart of accounts template could not be found.",
+    "hint": "Pick another chart of accounts template, or restore the template files in the Resources/COA folder."
+  },
   "DATA-4001": {
     "code": "DATA-4001",
     "name": "ExportPermissionDenied",
