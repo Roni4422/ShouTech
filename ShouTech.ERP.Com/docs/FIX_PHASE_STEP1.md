@@ -282,3 +282,77 @@ New error codes (catalog process followed, not reused codes — no existing code
 - **F-7 — Ribbon buttons are still not permission-filtered** (sweep S-9): users see
   buttons for windows that will deny-close on open. Enforcement is now real at open
   time; shell-level hiding is a separate shell step.
+
+---
+
+## 9. Per-window completeness checklist (owner standard, 2026-11-17 21:59)
+
+Every window has six pillars: **UI / DB / linking / posting / persistence /
+downstream**. Each is marked **PROVEN** (with the evidence this step actually
+produced) or **GAP** (explicitly listed, not hidden). Per the owner's
+instruction, gaps outside this step's RBAC scope are **listed, not closed**.
+"Code-traced" means verified by reading the shipped code paths on this
+branch; all runtime behavior still owes the Windows pass (§6.3).
+
+### 9.1 PrmWin (permissions administration — the window this step repairs)
+
+| Pillar | Verdict | Evidence / gap |
+|---|---|---|
+| UI | PROVEN (code-traced) | Gate moved from ctor-throw to Loaded deny-close; tabbed group/checkbox editor and bottom Save/Cancel bar unchanged and now reachable for `SYS.PERMISSIONS.MANAGE` holders. |
+| DB | PROVEN | No schema change needed: reads `permission_groups`/`permissions`/`user_roles`/`role_permissions`, writes `user_permissions` — all pre-existing tables; loader + admin SQL harness-proven (§6.1) and fact-covered (§6.2). |
+| Linking | PROVEN (code-traced) | RibbonNav `OtherTools.Permissions` reaches it with the session user; shell context arrives via the App-level Loaded handler. |
+| Posting | PROVEN (n/a by design) | No GL/stock/ledger effects exist for this window; its real-world effect is the permission set itself, consumed by the loader at sign-in — that consumption path is exactly what §6 proves. |
+| Persistence | PROVEN | `PermAdminSvc.SaveForUserAsync` writes overrides transactionally (baseline-vs-override diffing), now keyed by the resolved `user_id`; fact `PermAdmin_SaveByUsername_WritesOverridesKeyedByUserId` asserts the row key and that no username-keyed orphan is written. Administrator accounts remain edit-protected. |
+| Downstream | **GAP** | (1) No permission-change audit row is written by `PermAdminSvc` and there is no permission-change history view (sweep §5.2). (2) Saved changes take effect at the target user's **next sign-in** — there is no live-session refresh. (3) No user picker / user management / role CRUD / templates (F-1). (4) Still `Window`-derived, not BaseWin (F-5). None of these are RBAC-loader defects; all are listed for the owner, unclosed. |
+
+### 9.2 BkpWin (backup / restore — gated in this step)
+
+| Pillar | Verdict | Evidence / gap |
+|---|---|---|
+| UI | PROVEN (code-traced) | Create/restore/list flows unchanged; the new gates fire before any confirmation or shell isolation, with a localized denial. |
+| DB | PROVEN | Backup/restore run through the STEI engine (`SteiSvc`) against the company database; round-trip integrity is covered by the pre-existing `SteiRoundTripTests`. The service-layer permission refusal is fact-covered (§6.2). |
+| Linking | PROVEN (code-traced) | File-tab Backup/Restore named buttons reach it; restore hands off to a fresh LogWin, whose sign-in now loads permissions (§3). |
+| Posting | PROVEN (n/a by design) | No GL/stock posting; restore's effect is wholesale company-database replacement via the STEI import, which is the engine proven above. |
+| Persistence | PROVEN (code-traced) | Backups are encrypted `.stb` files on disk; the window rebuilds its index from the folder on every open. |
+| Downstream | **GAP** | (1) No backup-history / last-run / next-run verification surface (comparison §8 CORE gap) — pre-existing, unclosed. (2) Tools-tab Backup performs a rotated backup with no window (sweep S-4) — pre-existing. (3) `Window`-derived: no BaseWin clamp/geometry/tint — pre-existing. |
+
+### 9.3 ComWin (company management — permanent delete gated in this step)
+
+| Pillar | Verdict | Evidence / gap |
+|---|---|---|
+| UI | PROVEN (code-traced) | Management mode (Open/Edit/Delete/Reindex) unchanged; permanent delete now refuses unauthorized users before its confirm dialog. |
+| DB | PROVEN (code-traced, sweep) | Profile save writes the local index **and** the DB profile, honestly reporting partial failure (sweep §4). Company open/switch reconfigures the runtime database via `ConfigureRuntimeDatabase` + `AppHost.RebindDatabaseContext`. |
+| Linking | PROVEN | Switch flow closes secondary windows, logs out (which now also clears permissions, P-7), rebinds services, and forces a fresh sign-in that loads the new company's permissions. |
+| Posting | PROVEN (n/a by design) | No GL/stock posting originates in this window. |
+| Persistence | **GAP** | Sweep C-1 (MAJOR, pre-existing, **not** closed by this step): the edit form loads **administrator username, administrator full name, and database provider** but Save silently discards all three while reporting success. |
+| Downstream | **GAP** | (1) Sweep C-3: company `CurrencyCode`/`LanguageCode` are saved but never consumed by the shell (shell reads `UsrPref`) — decorative fields, pre-existing, unclosed. (2) Management mode as a whole remains ungated (F-4) — only the irreversible delete was in this step's scope. |
+
+### 9.4 BinWin (recycle bin — purge gated in this step)
+
+| Pillar | Verdict | Evidence / gap |
+|---|---|---|
+| UI | PROVEN (code-traced) | List/restore/purge flows unchanged; purge now refuses non-administrators before selection/confirm. Restore deliberately stays ungated (non-destructive direction). |
+| DB | PROVEN (code-traced, sweep) | `RecycleBinSvc` list/restore/purge operate on real soft-deleted rows per company; shell status bar shows live counts. |
+| Linking | PROVEN (code-traced) | Reached from the quick-access bar, status bar, and corner buttons in MWin. |
+| Posting | PROVEN (n/a by design) | No GL/stock posting; purge/restore act directly on the master-data rows themselves. |
+| Persistence | PROVEN (code-traced) | Restore returns rows to the working sets; purge deletes them permanently — both are direct database effects of the service calls, no UI-only state. |
+| Downstream | **GAP** | (1) No dedicated recycle-bin permission exists in the catalog; purge is gated by `SYS.ADMIN` as a documented interim choice (F-2). (2) Root is `<Window>`, not BaseWin, so the central 50% screen-fit cap can never apply (§13 redesign item) — pre-existing, unclosed. |
+
+### 9.5 RestoreCoWin (restore soft-deleted company — gated in this step)
+
+| Pillar | Verdict | Evidence / gap |
+|---|---|---|
+| UI | PROVEN (code-traced) | Deleted-company list + Restore/Refresh/Close unchanged; restore now refuses unauthorized users first. |
+| DB | PROVEN (code-traced, sweep) | `CoRegSvc.GetDeletedCompaniesAsync` / `RestoreCompanyAsync` restore the company into the database **and** the local index. |
+| Linking | **GAP** | Sweep S-1 (MAJOR, pre-existing, **not** closed): the Other Tools tab's "Restore company" button emits key `RestoreCompany.Restore`, which no router handles — it lands on the placeholder workspace. The window *is* reachable via the handled `OtherTools.RestoreCompany.Restore` case from other entry points, but that one ribbon path is broken. |
+| Posting | PROVEN (n/a by design) | No GL/stock posting originates in this window. |
+| Persistence | PROVEN (code-traced) | A successful restore is a database + index effect, verified by the list reload that follows it. |
+| Downstream | **GAP** | (1) English-default residue: `ReloadAsync`/`DisplayName` still fall back to `?? "ar"` for the current language (sweep §4) — the same defect class this step fixed in PrmWinVM, left unclosed here as out of RBAC scope. (2) An informational MessageBox pops on **every** reload when the list is empty, including the automatic reload after a successful restore — pre-existing. (3) `Window`-derived (no clamp/geometry/live re-localization) — pre-existing. |
+
+### 9.6 Note on LogWin / Auth (behavior changed, window not developed)
+
+LogWin's UI was not touched and needs no checklist expansion: its one
+behavioral change is that a successful sign-in now loads the permission set
+before `LoginSucceeded` fires, and sign-out/company-switch clears it (§3).
+Its pre-existing pillar status is unchanged from the sweep (auth core
+"usable", grade 70%).
