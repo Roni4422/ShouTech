@@ -129,11 +129,11 @@ public static class DataExportSvc
         new("ProductSuppliers", "Product suppliers", ["material_suppliers", "product_suppliers", "ProductSuppliers"]),
         new("ProductBarcodes", "Product barcodes", ["material_extra_barcodes", "product_barcodes", "ProductBarcodes"]),
         new("ProductUnits", "Product units and barcodes", ["product_units", "ProductUnits"]),
-        new("Customers", "Customer cards", ["customers", "Customers"]),
+        new("Customers", "Customer cards", ["parties", "Customers"]),
         new("CustomerGroups", "Customer groups", ["customer_groups", "CustomerGroups"]),
         new("CustomerContacts", "Customer contacts", ["customer_contacts", "CustomerContacts"]),
         new("CustomerAddresses", "Customer addresses", ["customer_addresses", "CustomerAddresses"]),
-        new("Suppliers", "Supplier cards", ["suppliers", "Suppliers", "Vendors"]),
+        new("Suppliers", "Supplier cards", ["parties", "Suppliers", "Vendors"]),
         new("SupplierGroups", "Supplier groups", ["supplier_groups", "SupplierGroups", "VendorGroups"]),
         new("SupplierContacts", "Supplier contacts", ["supplier_contacts", "SupplierContacts"]),
         new("SalesRepresentatives", "Sales representatives", ["sales_reps", "SalesReps"]),
@@ -1393,8 +1393,7 @@ public static class DataExportSvc
             || tableName.Equals("purchase_documents", StringComparison.OrdinalIgnoreCase)
             || tableName.Equals("materials", StringComparison.OrdinalIgnoreCase)
             || tableName.Equals("material_groups", StringComparison.OrdinalIgnoreCase)
-            || tableName.Equals("customers", StringComparison.OrdinalIgnoreCase)
-            || tableName.Equals("suppliers", StringComparison.OrdinalIgnoreCase)
+            || tableName.Equals("parties", StringComparison.OrdinalIgnoreCase)
             || tableName.Equals("chart_of_accounts", StringComparison.OrdinalIgnoreCase)
             || tableName.Equals("branches", StringComparison.OrdinalIgnoreCase)
             || tableName.Equals("warehouses", StringComparison.OrdinalIgnoreCase)

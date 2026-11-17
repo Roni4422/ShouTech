@@ -1804,6 +1804,8 @@
     "SavedSummary": "Enregistrés dans les fiches articles : {0}. Échecs : {1}."
   },
   "Vouchers": {
+    "PartyCode": "Code du tiers",
+    "PartyKind": "Type de tiers",
     "JournalTitle": "Bordereau Journalier",
     "Load": "Charger le Journal",
     "ReceiptTitle": "Bordereau de Recette",
@@ -1985,6 +1987,7 @@
     "Unsaved": "Vous avez des modifications d'appartenance non enregistrées."
   },
   "PaymentReconciliation": {
+    "Currency": "Devise",
     "Title": "Rapprochement des paiements",
     "PartyKind": "Tiers",
     "Customer": "Client",
@@ -2089,6 +2092,7 @@
     "NameEn": "Nom (EN)"
   },
   "CashVoucher": {
+    "PartyNotFound": "Aucun tiers actif avec ce code et ce type dans la société actuelle",
     "PermissionDenied": "Vous n'avez pas l'autorisation pour les bons de caisse.",
     "DeleteUnavailable": "Les brouillons ne peuvent pas etre supprimes ; comptabilisez puis contre-passez.",
     "NoCompany": "Aucune societe active dans la session.",

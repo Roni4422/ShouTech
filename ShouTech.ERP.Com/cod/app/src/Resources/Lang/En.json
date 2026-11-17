@@ -1461,6 +1461,8 @@
     "ReverseReason": "User requested reversal from invoice window"
   },
   "Vouchers": {
+    "PartyCode": "Party Code",
+    "PartyKind": "Party Kind",
     "JournalTitle": "Journal Voucher",
     "Load": "Load Journal",
     "ReceiptTitle": "Receipt Voucher",
@@ -2020,6 +2022,7 @@
     "Unsaved": "You have unsaved membership changes."
   },
   "PaymentReconciliation": {
+    "Currency": "Currency",
     "Title": "Payment Reconciliation",
     "PartyKind": "Party",
     "Customer": "Customer",
@@ -2124,6 +2127,7 @@
     "NameEn": "Name (EN)"
   },
   "CashVoucher": {
+    "PartyNotFound": "No active party was found with this code and kind in the current company",
     "PermissionDenied": "You do not have permission for cash vouchers.",
     "DeleteUnavailable": "Drafts cannot be deleted; post and reverse instead.",
     "NoCompany": "No active company in the current session.",

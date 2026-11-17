@@ -1804,6 +1804,8 @@
     "SavedSummary": "Ürün kartlarına kaydedildi: {0}. Hatalı: {1}."
   },
   "Vouchers": {
+    "PartyCode": "Taraf Kodu",
+    "PartyKind": "Taraf Türü",
     "JournalTitle": "Günlük Fiş",
     "Load": "Günlüğü Yükle",
     "ReceiptTitle": "Tahsilat Fişi",
@@ -1985,6 +1987,7 @@
     "Unsaved": "Kaydedilmemiş üyelik değişiklikleriniz var."
   },
   "PaymentReconciliation": {
+    "Currency": "Para Birimi",
     "Title": "Ödeme Mutabakatı",
     "PartyKind": "Taraf",
     "Customer": "Müşteri",
@@ -2089,6 +2092,7 @@
     "NameEn": "Ad (EN)"
   },
   "CashVoucher": {
+    "PartyNotFound": "Geçerli şirkette bu kod ve türde aktif taraf bulunamadı",
     "PermissionDenied": "Nakit makbuzlar icin yetkiniz yok.",
     "DeleteUnavailable": "Taslaklar silinemez; bunun yerine kaydedip ters kayit olusturun.",
     "NoCompany": "Oturumda aktif sirket yok.",

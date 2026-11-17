@@ -14,8 +14,7 @@ namespace ShouTech.App.Views.Reports;
 /// Customers with an outstanding balance, sorted by oldest ledger date, with
 /// the age in days of the oldest open entry. Serves both ribbon keys
 /// Customers.CustomerDue and Customers.SearchDues. The query runs on
-/// party_ledger + customers only, so it works whether or not the parallel
-/// parties table (migration 031) exists.
+/// party_ledger + the canonical parties master (migration 061).
 /// </summary>
 public sealed class CustomerDueWin : RptBase
 {

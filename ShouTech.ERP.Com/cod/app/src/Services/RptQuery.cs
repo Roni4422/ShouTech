@@ -353,21 +353,24 @@ public static class RptQuery
         CancellationToken ct)
     {
         DocSchema.Ensure();
+        // Step 4: parties is the ONE master (migration 061); the ledger
+        // joins on the party's ledger_id in this company + kind. Name is
+        // the English name with the Arabic name as fallback (RP-5).
         const string sql = """
-            SELECT c.customer_code AS Code,
-                   c.customer_name_ar AS Name,
-                   COALESCE(c.customer_name_en, '') AS NameEn,
+            SELECT c.code AS Code,
+                   COALESCE(NULLIF(c.name_en, ''), c.name_ar, '') AS Name,
+                   COALESCE(c.name_en, '') AS NameEn,
                    COALESCE(c.phone, '') AS Phone,
                    COALESCE(bal.balance, 0) AS Balance
-            FROM customers c
+            FROM parties c
             LEFT JOIN (
                 SELECT party_id, SUM(debit - credit) AS balance
                 FROM party_ledger
                 WHERE company_id = $company AND party_kind = 'C'
                 GROUP BY party_id
-            ) bal ON bal.party_id = c.customer_id
-            WHERE c.company_id = $company AND c.is_deleted = 0 AND c.is_active = 1
-            ORDER BY c.customer_code;
+            ) bal ON bal.party_id = c.ledger_id
+            WHERE c.company_id = $company AND c.kind = 'C' AND c.is_deleted = 0 AND c.is_active = 1
+            ORDER BY c.code;
             """;
         return await QueryAsync(sql, ct, ("$company", Company));
     }
@@ -376,21 +379,23 @@ public static class RptQuery
         CancellationToken ct)
     {
         DocSchema.Ensure();
+        // Supplier balances are amounts OWED: credit - debit (RP-2 — the
+        // pre-unification report printed payables negative).
         const string sql = """
-            SELECT s.supplier_code AS Code,
-                   s.supplier_name_ar AS Name,
-                   COALESCE(s.supplier_name_en, '') AS NameEn,
+            SELECT s.code AS Code,
+                   COALESCE(NULLIF(s.name_en, ''), s.name_ar, '') AS Name,
+                   COALESCE(s.name_en, '') AS NameEn,
                    COALESCE(s.phone, '') AS Phone,
                    COALESCE(bal.balance, 0) AS Balance
-            FROM suppliers s
+            FROM parties s
             LEFT JOIN (
-                SELECT party_id, SUM(debit - credit) AS balance
+                SELECT party_id, SUM(credit - debit) AS balance
                 FROM party_ledger
                 WHERE company_id = $company AND party_kind = 'S'
                 GROUP BY party_id
-            ) bal ON bal.party_id = s.supplier_id
-            WHERE s.company_id = $company AND s.is_deleted = 0 AND s.is_active = 1
-            ORDER BY s.supplier_code;
+            ) bal ON bal.party_id = s.ledger_id
+            WHERE s.company_id = $company AND s.kind = 'S' AND s.is_deleted = 0 AND s.is_active = 1
+            ORDER BY s.code;
             """;
         return await QueryAsync(sql, ct, ("$company", Company));
     }
@@ -403,15 +408,15 @@ public static class RptQuery
             SELECT d.doc_date AS DocDate,
                    d.doc_no AS DocNo,
                    d.doc_kind AS Kind,
-                   COALESCE(c.customer_code, '') AS PartyCode,
-                   COALESCE(c.customer_name_ar, d.party_name) AS PartyName,
+                   COALESCE(c.code, '') AS PartyCode,
+                   COALESCE(NULLIF(c.name_en, ''), c.name_ar, d.party_name) AS PartyName,
                    COALESCE(d.subtotal, 0) AS Subtotal,
                    COALESCE(d.tax_amount, 0) AS Tax,
                    COALESCE(d.grand_total, 0) AS Total,
                    COALESCE(d.status, 'Draft') AS Status,
                    COALESCE(d.currency_code, 'SAR') AS Currency
             FROM sales_documents d
-            LEFT JOIN customers c ON c.customer_id = d.party_id
+            LEFT JOIN parties c ON c.ledger_id = d.party_id AND c.company_id = d.company_id AND c.kind = 'C'
             WHERE d.company_id = $company
               AND d.doc_date >= $from
               AND d.doc_date <= $to
@@ -432,15 +437,15 @@ public static class RptQuery
             SELECT d.doc_date AS DocDate,
                    d.doc_no AS DocNo,
                    d.doc_kind AS Kind,
-                   COALESCE(s.supplier_code, '') AS PartyCode,
-                   COALESCE(s.supplier_name_ar, d.party_name) AS PartyName,
+                   COALESCE(s.code, '') AS PartyCode,
+                   COALESCE(NULLIF(s.name_en, ''), s.name_ar, d.party_name) AS PartyName,
                    COALESCE(d.subtotal, 0) AS Subtotal,
                    COALESCE(d.tax_amount, 0) AS Tax,
                    COALESCE(d.grand_total, 0) AS Total,
                    COALESCE(d.status, 'Draft') AS Status,
                    COALESCE(d.currency_code, 'SAR') AS Currency
             FROM purchase_documents d
-            LEFT JOIN suppliers s ON s.supplier_id = d.party_id
+            LEFT JOIN parties s ON s.ledger_id = d.party_id AND s.company_id = d.company_id AND s.kind = 'S'
             WHERE d.company_id = $company
               AND d.doc_date >= $from
               AND d.doc_date <= $to
@@ -459,25 +464,29 @@ public static class RptQuery
     {
         DocSchema.Ensure();
         var partyKind = customers ? "C" : "S";
-        var table = customers ? "customers" : "suppliers";
-        var idCol = customers ? "customer_id" : "supplier_id";
-        var codeCol = customers ? "customer_code" : "supplier_code";
-        var nameCol = customers ? "customer_name_ar" : "supplier_name_ar";
+        // Step 4: canonical parties store, joined on ledger_id; the aged
+        // amount is oriented per kind (suppliers age their payables,
+        // credit - debit — RP-2). Day difference is provider-aware
+        // (julianday is SQLite-only — report-family R-5).
+        var amount = customers ? "l.debit - l.credit" : "l.credit - l.debit";
+        var ageDays = DatabaseRuntime.IsPostgreSql()
+            ? "(CURRENT_DATE - CAST(l.entry_date AS DATE))"
+            : "(julianday('now') - julianday(l.entry_date))";
         var sql = $"""
-            SELECT p.{codeCol} AS Code,
-                   p.{nameCol} AS Name,
-                   COALESCE(SUM(CASE WHEN julianday('now') - julianday(l.entry_date) <= 30 THEN l.debit - l.credit ELSE 0 END), 0) AS Bucket0_30,
-                   COALESCE(SUM(CASE WHEN julianday('now') - julianday(l.entry_date) > 30 AND julianday('now') - julianday(l.entry_date) <= 60 THEN l.debit - l.credit ELSE 0 END), 0) AS Bucket31_60,
-                   COALESCE(SUM(CASE WHEN julianday('now') - julianday(l.entry_date) > 60 AND julianday('now') - julianday(l.entry_date) <= 90 THEN l.debit - l.credit ELSE 0 END), 0) AS Bucket61_90,
-                   COALESCE(SUM(CASE WHEN julianday('now') - julianday(l.entry_date) > 90 THEN l.debit - l.credit ELSE 0 END), 0) AS Bucket90Plus,
-                   COALESCE(SUM(l.debit - l.credit), 0) AS Balance
-            FROM {table} p
+            SELECT p.code AS Code,
+                   COALESCE(NULLIF(p.name_en, ''), p.name_ar, '') AS Name,
+                   COALESCE(SUM(CASE WHEN {ageDays} <= 30 THEN {amount} ELSE 0 END), 0) AS Bucket0_30,
+                   COALESCE(SUM(CASE WHEN {ageDays} > 30 AND {ageDays} <= 60 THEN {amount} ELSE 0 END), 0) AS Bucket31_60,
+                   COALESCE(SUM(CASE WHEN {ageDays} > 60 AND {ageDays} <= 90 THEN {amount} ELSE 0 END), 0) AS Bucket61_90,
+                   COALESCE(SUM(CASE WHEN {ageDays} > 90 THEN {amount} ELSE 0 END), 0) AS Bucket90Plus,
+                   COALESCE(SUM({amount}), 0) AS Balance
+            FROM parties p
             LEFT JOIN party_ledger l
-              ON l.party_id = p.{idCol} AND l.company_id = p.company_id AND l.party_kind = $pk
-            WHERE p.company_id = $company AND p.is_deleted = 0 AND p.is_active = 1
-            GROUP BY p.{codeCol}, p.{nameCol}
-            HAVING ABS(COALESCE(SUM(l.debit - l.credit), 0)) > 0.0001
-            ORDER BY p.{codeCol};
+              ON l.party_id = p.ledger_id AND l.company_id = p.company_id AND l.party_kind = $pk
+            WHERE p.company_id = $company AND p.kind = $pk AND p.is_deleted = 0 AND p.is_active = 1
+            GROUP BY p.code, p.name_en, p.name_ar
+            HAVING ABS(COALESCE(SUM({amount}), 0)) > 0.0001
+            ORDER BY p.code;
             """;
         return await QueryAsync(sql, ct, ("$company", Company), ("$pk", partyKind));
     }
@@ -1208,16 +1217,16 @@ public static class RptQuery
     {
         DocSchema.Ensure();
         const string sql = """
-            SELECT COALESCE(c.customer_code, CAST(pl.party_id AS TEXT)) AS PartyCode,
-                   COALESCE(c.customer_name_ar, '') AS PartyName,
+            SELECT COALESCE(c.code, CAST(pl.party_id AS TEXT)) AS PartyCode,
+                   COALESCE(NULLIF(c.name_en, ''), c.name_ar, '') AS PartyName,
                    COALESCE(SUM(pl.debit), 0) AS Invoiced,
                    COALESCE(SUM(pl.credit), 0) AS Collected,
                    COALESCE(SUM(pl.debit - pl.credit), 0) AS Balance,
                    CASE WHEN SUM(pl.debit) = 0 THEN 0 ELSE SUM(pl.credit) / SUM(pl.debit) END AS CollectionPct
             FROM party_ledger pl
-            LEFT JOIN customers c ON c.customer_id = pl.party_id AND c.company_id = pl.company_id
+            LEFT JOIN parties c ON c.ledger_id = pl.party_id AND c.company_id = pl.company_id AND c.kind = 'C'
             WHERE pl.company_id = $company AND pl.party_kind = 'C'
-            GROUP BY pl.party_id, c.customer_code, c.customer_name_ar
+            GROUP BY pl.party_id, c.code, c.name_en, c.name_ar
             HAVING ABS(COALESCE(SUM(pl.debit), 0)) > 0.0001
             ORDER BY PartyCode;
             """;
@@ -1359,21 +1368,21 @@ public static class RptQuery
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> CustomerDueAsync(
         CancellationToken ct)
     {
-        // Written against party_ledger + customers only, so it keeps working
-        // whether or not the parallel parties table (031) exists.
+        // Written against party_ledger + the canonical parties master
+        // (migration 061) — the only party store that exists now.
         DocSchema.Ensure();
         const string sql = """
-            SELECT COALESCE(c.customer_code, CAST(pl.party_id AS TEXT)) AS PartyCode,
-                   COALESCE(c.customer_name_ar, '') AS PartyName,
+            SELECT COALESCE(c.code, CAST(pl.party_id AS TEXT)) AS PartyCode,
+                   COALESCE(NULLIF(c.name_en, ''), c.name_ar, '') AS PartyName,
                    COALESCE(c.phone, '') AS Phone,
                    COALESCE(SUM(pl.debit), 0) AS Invoiced,
                    COALESCE(SUM(pl.credit), 0) AS Collected,
                    COALESCE(SUM(pl.debit - pl.credit), 0) AS Balance,
                    MIN(pl.entry_date) AS OldestDate
             FROM party_ledger pl
-            LEFT JOIN customers c ON c.customer_id = pl.party_id AND c.company_id = pl.company_id
+            LEFT JOIN parties c ON c.ledger_id = pl.party_id AND c.company_id = pl.company_id AND c.kind = 'C'
             WHERE pl.company_id = $company AND pl.party_kind = 'C'
-            GROUP BY pl.party_id, c.customer_code, c.customer_name_ar, c.phone
+            GROUP BY pl.party_id, c.code, c.name_en, c.name_ar, c.phone
             HAVING COALESCE(SUM(pl.debit - pl.credit), 0) > 0.0001
             ORDER BY OldestDate, Balance DESC;
             """;
@@ -1390,17 +1399,17 @@ public static class RptQuery
         DocSchema.Ensure();
         const string sql = """
             SELECT t.owner_code AS PartyCode,
-                   COALESCE(c.customer_name_ar, t.owner_code) AS PartyName,
+                   COALESCE(NULLIF(c.name_en, ''), c.name_ar, t.owner_code) AS PartyName,
                    COALESCE(SUM(t.target_amount), 0) AS Target,
                    COALESCE((SELECT SUM(d.grand_total) FROM sales_documents d
                      WHERE d.company_id = $company AND d.is_deleted = 0 AND d.status = 'Posted'
                        AND d.doc_kind IN ('SAL', 'POS') AND d.party_code = t.owner_code
                        AND d.doc_date >= $from AND d.doc_date <= $to), 0) AS Actual
             FROM targets t
-            LEFT JOIN customers c ON c.company_id = t.company_id AND c.customer_code = t.owner_code
+            LEFT JOIN parties c ON c.company_id = t.company_id AND c.kind = 'C' AND c.code = t.owner_code
             WHERE t.company_id = $company AND t.owner_kind = 'PARTY'
               AND t.period_start >= $from AND t.period_start <= $to
-            GROUP BY t.owner_code, c.customer_name_ar
+            GROUP BY t.owner_code, c.name_en, c.name_ar
             UNION ALL
             SELECT d.party_code, COALESCE(MAX(d.party_name), d.party_code), 0,
                    COALESCE(SUM(d.grand_total), 0)

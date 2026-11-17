@@ -151,6 +151,11 @@ public sealed class PayRecWin : BaseWin
         ConfigureGrid(_payGrid);
         _payGrid.Columns.Add(TextCol("PaymentReconciliation.Date", nameof(UnallocatedPaymentRow.EntryDate), 90, center: true));
         _payGrid.Columns.Add(TextCol("PaymentReconciliation.DocNo", nameof(UnallocatedPaymentRow.DocNo), 90));
+        // Step 4: the payments grid names its party and currency — rows
+        // mix parties of the kind, and an unnamed payment cannot be
+        // matched to a document responsibly (cash-payments MAJOR).
+        _payGrid.Columns.Add(TextCol("PaymentReconciliation.Party", nameof(UnallocatedPaymentRow.PartyName), 140));
+        _payGrid.Columns.Add(TextCol("PaymentReconciliation.Currency", nameof(UnallocatedPaymentRow.CurrencyCode), 70, center: true));
         _payGrid.Columns.Add(TextCol("PaymentReconciliation.Amount", nameof(UnallocatedPaymentRow.Amount), 110, numeric: true));
         _payGrid.Columns.Add(TextCol("PaymentReconciliation.Allocated", nameof(UnallocatedPaymentRow.Allocated), 90, numeric: true));
         _payGrid.Columns.Add(TextCol("PaymentReconciliation.Available", nameof(UnallocatedPaymentRow.Available), 100, numeric: true));

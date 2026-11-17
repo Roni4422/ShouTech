@@ -403,7 +403,10 @@ public sealed class CstCard : BaseWin
 
     private void UpdateBalances(decimal debit, decimal credit)
     {
-        var balance = debit - credit;
+        // Step 4 (sweep C-3): a supplier's balance is what the company
+        // OWES (credit - debit); customers show debit - credit. The raw
+        // totals below stay as recorded in the ledger.
+        var balance = PartyKind == PartyKinds.Supplier ? credit - debit : debit - credit;
         _lblCurBal.Text = $"{T("CustCard.Balance")}: {balance.ToString("N2", CultureInfo.CurrentCulture)}";
         _lblCurBal.FontWeight = FontWeights.Bold;
         _lblTotDr.Text = $"{T("CustCard.TotalDebit")}: {debit.ToString("N2", CultureInfo.CurrentCulture)}";

@@ -9,11 +9,12 @@ using ShouTech.App.Views;
 namespace ShouTech.App.Services;
 
 /// <summary>
-/// Persistence for the master-data card windows (CstCard, BnkCard, CurCard,
+/// Persistence for the master-data card windows (BnkCard, CurCard,
 /// RepCard) and the manufacturing order window (MfgWin), backed by the
-/// tables created in migration 050 (customers, suppliers, bank_accounts,
+/// tables created in migration 050 (bank_accounts,
 /// currencies, currency_rates, sales_reps, sales_rep_targets,
-/// manufacturing_orders, manufacturing_order_lines).
+/// manufacturing_orders, manufacturing_order_lines). Party cards live in
+/// the canonical parties store (migration 061, MasterCardRepository).
 ///
 /// Every write is parameterized and transactional: a card header and its
 /// child rows (currency rates, rep targets, manufacturing lines) are saved
@@ -27,12 +28,6 @@ public static class CardStore
     // ------------------------------------------------------------------
     // Records (one per window field set — every UI field has a property)
     // ------------------------------------------------------------------
-
-    public sealed record PartyCard(
-        long Id, string Kind, string Code, string NameAr, string NameEn, string Group,
-        string TaxNumber, string CommercialReg, decimal CreditLimit, int CreditDays,
-        string PriceTier, string GlAccountCode, string Phone, string Mobile,
-        string Email, string Address);
 
     public sealed record BankCardRec(
         long Id, string Code, string Name, string Branch, string AccountNo,
@@ -48,166 +43,11 @@ public static class CardStore
         string UnitCode, long? WarehouseId, string WarehouseCode, decimal OverheadCost,
         decimal TotalCost, decimal UnitCost, string Status, IReadOnlyList<MfgLineRec> Lines);
 
-    // ------------------------------------------------------------------
-    // Parties (customers / suppliers) — CstCard
-    // ------------------------------------------------------------------
-
-    /// <summary>
-    /// Loads a party card by code. A code present in both tables yields
-    /// Kind="B" (both); customers win the field values in that case.
-    /// </summary>
-    public static PartyCard? LoadParty(string code)
-    {
-        if (string.IsNullOrWhiteSpace(code)) return null;
-        var cust = LoadPartyFrom("customers", "customer", "C", code.Trim());
-        var supp = LoadPartyFrom("suppliers", "supplier", "S", code.Trim());
-        if (cust is not null && supp is not null)
-            return cust with { Kind = "B" };
-        return cust ?? supp;
-    }
-
-    private static PartyCard? LoadPartyFrom(string table, string prefix, string kind, string code)
-    {
-        var cs = ConnectionString();
-        if (cs is null) return null;
-        using var connection = Open(cs);
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = $"""
-            SELECT {prefix}_id, {prefix}_code, {prefix}_name_ar, {prefix}_name_en,
-                   party_group, tax_number, commercial_reg, credit_limit, credit_days,
-                   price_tier, gl_account_code, phone, mobile, email, address
-            FROM {table}
-            WHERE company_id=$c AND {prefix}_code=$code AND is_deleted=0
-            LIMIT 1;
-            """;
-        Add(cmd, "$c", Company());
-        Add(cmd, "$code", code);
-        using var reader = cmd.ExecuteReader();
-        if (!reader.Read()) return null;
-        return new PartyCard(
-            GetLong(reader, 0), kind, GetText(reader, 1), GetText(reader, 2), GetText(reader, 3),
-            GetText(reader, 4), GetText(reader, 5), GetText(reader, 6), GetDec(reader, 7),
-            (int)GetDec(reader, 8), GetText(reader, 9), GetText(reader, 10), GetText(reader, 11),
-            GetText(reader, 12), GetText(reader, 13), GetText(reader, 14));
-    }
-
-    /// <summary>
-    /// Upserts the party into the table(s) selected by Kind ("C", "S", "B")
-    /// in one transaction. Returns the customers/suppliers id.
-    /// </summary>
-    public static long SaveParty(PartyCard card, string actor)
-    {
-        var cs = ConnectionString() ?? throw new InvalidOperationException("No database connection is configured.");
-        using var connection = Open(cs);
-        using var tx = connection.BeginTransaction();
-        long id = 0;
-        if (card.Kind is "C" or "B")
-            id = UpsertParty(connection, tx, "customers", "customer", card, actor);
-        if (card.Kind is "S" or "B")
-            id = UpsertParty(connection, tx, "suppliers", "supplier", card, actor);
-        tx.Commit();
-        return id;
-    }
-
-    private static long UpsertParty(DbConnection connection, DbTransaction tx,
-        string table, string prefix, PartyCard card, string actor)
-    {
-        long? existing = null;
-        using (var find = connection.CreateCommand())
-        {
-            find.Transaction = tx;
-            find.CommandText = $"SELECT {prefix}_id FROM {table} WHERE company_id=$c AND {prefix}_code=$code AND is_deleted=0 LIMIT 1;";
-            Add(find, "$c", Company());
-            Add(find, "$code", card.Code);
-            var found = find.ExecuteScalar();
-            if (found is not null and not DBNull) existing = Convert.ToInt64(found, CultureInfo.InvariantCulture);
-        }
-
-        using var cmd = connection.CreateCommand();
-        cmd.Transaction = tx;
-        if (existing.HasValue)
-        {
-            cmd.CommandText = $"""
-                UPDATE {table} SET
-                    {prefix}_name_ar=$nameAr, {prefix}_name_en=$nameEn, party_group=$grp,
-                    tax_number=$tax, commercial_reg=$reg, credit_limit=$climit, credit_days=$cdays,
-                    price_tier=$tier, gl_account_code=$gl, phone=$phone, mobile=$mobile,
-                    email=$email, address=$addr, updated_by=$actor, updated_at={Now()}
-                WHERE company_id=$c AND {prefix}_id=$id AND is_deleted=0;
-                """;
-            Add(cmd, "$id", existing.Value);
-        }
-        else
-        {
-            cmd.CommandText = $"""
-                INSERT INTO {table}
-                    (company_id, {prefix}_code, {prefix}_name_ar, {prefix}_name_en, party_group,
-                     tax_number, commercial_reg, credit_limit, credit_days, price_tier,
-                     gl_account_code, phone, mobile, email, address, created_by, updated_by)
-                VALUES
-                    ($c, $code, $nameAr, $nameEn, $grp, $tax, $reg, $climit, $cdays, $tier,
-                     $gl, $phone, $mobile, $email, $addr, $actor, $actor)
-                RETURNING {prefix}_id;
-                """;
-            Add(cmd, "$code", card.Code);
-        }
-        Add(cmd, "$c", Company());
-        Add(cmd, "$nameAr", card.NameAr);
-        Add(cmd, "$nameEn", card.NameEn);
-        Add(cmd, "$grp", card.Group);
-        Add(cmd, "$tax", card.TaxNumber);
-        Add(cmd, "$reg", card.CommercialReg);
-        Add(cmd, "$climit", card.CreditLimit);
-        Add(cmd, "$cdays", card.CreditDays);
-        Add(cmd, "$tier", card.PriceTier);
-        Add(cmd, "$gl", card.GlAccountCode);
-        Add(cmd, "$phone", card.Phone);
-        Add(cmd, "$mobile", card.Mobile);
-        Add(cmd, "$email", card.Email);
-        Add(cmd, "$addr", card.Address);
-        Add(cmd, "$actor", actor);
-
-        if (existing.HasValue)
-        {
-            cmd.ExecuteNonQuery();
-            return existing.Value;
-        }
-        return Convert.ToInt64(cmd.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
-    }
-
-    public static bool SoftDeleteParty(string code, string kind, string actor)
-    {
-        var cs = ConnectionString() ?? throw new InvalidOperationException("No database connection is configured.");
-        using var connection = Open(cs);
-        using var tx = connection.BeginTransaction();
-        var affected = 0;
-        if (kind is "C" or "B")
-            affected += SoftDelete(connection, tx, "customers", "customer_code", code, actor);
-        if (kind is "S" or "B")
-            affected += SoftDelete(connection, tx, "suppliers", "supplier_code", code, actor);
-        tx.Commit();
-        return affected > 0;
-    }
-
-    /// <summary>Total debit/credit for a party from the party ledger (CstCard metrics bar).</summary>
-    public static (decimal Debit, decimal Credit) PartyTotals(long partyId, string kind)
-    {
-        var cs = ConnectionString();
-        if (cs is null || partyId <= 0) return (0, 0);
-        var ledgerKind = kind == "S" ? "S" : "C";
-        using var connection = Open(cs);
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT COALESCE(SUM(debit), 0), COALESCE(SUM(credit), 0)
-            FROM party_ledger
-            WHERE company_id=$c AND party_kind=$k AND party_id=$id;
-            """;
-        Add(cmd, "$c", Company());
-        Add(cmd, "$k", ledgerKind);
-        Add(cmd, "$id", partyId);
-        using var reader = cmd.ExecuteReader();
-        return reader.Read() ? (GetDec(reader, 0), GetDec(reader, 1)) : (0, 0);
-    }
+    // Parties: the canonical party master is `parties` (migration 061),
+    // served by MasterCardRepository / MasterCardService. The pre-unification
+    // CardStore party methods wrote the legacy customers/suppliers tables and
+    // had no callers (sweep R-3); they were removed in Step 4 rather than
+    // dual-written.
 
     // ------------------------------------------------------------------
     // Bank accounts — BnkCard
