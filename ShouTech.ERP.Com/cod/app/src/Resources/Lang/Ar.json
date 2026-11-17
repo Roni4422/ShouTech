@@ -2309,9 +2309,12 @@
   },
   "DocSearch": {
     "ConfirmLost": "تعيين عرض السعر هذا كمفقود؟",
+    "ConvertToOrder": "تحويل إلى طلب مبيعات",
+    "ConvertedToOrder": "تم التحويل إلى طلب مبيعات (مسودة)",
     "From": "من",
     "Kind": "النوع",
     "Open": "فتح",
+    "OpenUnsupported": "لا يمكن فتح هذا النوع من المستندات من البحث",
     "Results": "النتائج",
     "Search": "بحث",
     "SetLost": "تعيين كمفقود",

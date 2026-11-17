@@ -2158,9 +2158,12 @@
   },
   "DocSearch": {
     "ConfirmLost": "Marquer ce devis comme perdu ?",
+    "ConvertToOrder": "Convertir en commande",
+    "ConvertedToOrder": "Converti en commande de vente (brouillon)",
     "From": "De",
     "Kind": "Type",
     "Open": "Ouvrir",
+    "OpenUnsupported": "Ce type de document ne peut pas être ouvert depuis la recherche",
     "Results": "Résultats",
     "Search": "Recherche",
     "SetLost": "Marquer comme perdu",

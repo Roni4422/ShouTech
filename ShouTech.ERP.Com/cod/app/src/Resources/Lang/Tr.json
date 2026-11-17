@@ -2158,9 +2158,12 @@
   },
   "DocSearch": {
     "ConfirmLost": "Bu teklif kayıp olarak işaretlensin mi?",
+    "ConvertToOrder": "Siparişe Dönüştür",
+    "ConvertedToOrder": "Satış siparişine dönüştürüldü (taslak)",
     "From": "Başlangıç",
     "Kind": "Tür",
     "Open": "Aç",
+    "OpenUnsupported": "Bu belge türü aramadan açılamaz",
     "Results": "Sonuçlar",
     "Search": "Ara",
     "SetLost": "Kayıp Olarak İşaretle",

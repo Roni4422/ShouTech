@@ -151,6 +151,27 @@ public static class StkPost
         }
     }
 
+    /// <summary>
+    /// Step 9: restates a document line's quantity and unit price in the
+    /// material's BASE unit — the conversion the dedicated engines
+    /// (PostTransfer / PostCount) require, since they take base-unit
+    /// quantities. Uses the exact rule <see cref="ApplyDocument"/>
+    /// applies to invoice documents: base_qty = qty × equivalent(chosen
+    /// unit), and the unit price (quoted per chosen unit) is restated
+    /// per base unit so qty × cost keeps the line's value.
+    /// </summary>
+    public static (decimal BaseQty, decimal BaseUnitCost) ToBaseUnits(
+        DbConnection connection, DbTransaction tx, long materialId, string? unit, decimal qty, decimal unitPrice)
+    {
+        var company = AppState.CurrentCompanyCode ?? string.Empty;
+        var equivalent = ResolveUnitEquivalent(connection, tx, company, materialId, unit);
+        var baseQty = qty * equivalent;
+        var baseUnitCost = equivalent == 1m
+            ? unitPrice
+            : decimal.Round(unitPrice / equivalent, 6, MidpointRounding.AwayFromZero);
+        return (baseQty, baseUnitCost);
+    }
+
     private static string ProviderName => DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
 
     private static decimal ReadAvailableQty(

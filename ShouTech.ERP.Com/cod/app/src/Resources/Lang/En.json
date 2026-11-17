@@ -2193,9 +2193,12 @@
   },
   "DocSearch": {
     "ConfirmLost": "Mark this quotation as lost?",
+    "ConvertToOrder": "Convert to Order",
+    "ConvertedToOrder": "Converted to sales order (draft)",
     "From": "From",
     "Kind": "Kind",
     "Open": "Open",
+    "OpenUnsupported": "This document kind cannot be opened from search",
     "Results": "Results",
     "Search": "Search",
     "SetLost": "Set as Lost",

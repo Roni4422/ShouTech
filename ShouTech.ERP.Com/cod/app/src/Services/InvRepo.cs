@@ -100,6 +100,7 @@ public static class InvRepo
                      payment_method, receipt_no, reference_no, branch_name, sales_rep_name, cost_center,
                      party_account_name, goods_account_name,
                      original_doc_id, original_doc_kind, original_doc_no, journal_doc_no,
+                     target_warehouse_id, target_warehouse_name,
                      created_by, is_deleted)
                     VALUES
                     ($company, $kind, $no, $date, $party, $pcode, $pname, $wh,
@@ -108,6 +109,7 @@ public static class InvRepo
                      $pay, $receipt, $ref, $branch, $rep, $cc,
                      $pacc, $gacc,
                      $origId, $origKind, $origNo, $jrn,
+                     $twh, $twhname,
                      $user, 0);
                     SELECT last_insert_rowid();
                     """;
@@ -121,6 +123,7 @@ public static class InvRepo
                          payment_method, receipt_no, reference_no, branch_name, sales_rep_name, cost_center,
                          party_account_name, goods_account_name,
                          original_doc_id, original_doc_kind, original_doc_no, journal_doc_no,
+                         target_warehouse_id, target_warehouse_name,
                          created_by, is_deleted)
                         VALUES
                         ($company, $kind, $no, $date, $party, $pcode, $pname, $wh,
@@ -129,6 +132,7 @@ public static class InvRepo
                          $pay, $receipt, $ref, $branch, $rep, $cc,
                          $pacc, $gacc,
                          $origId, $origKind, $origNo, $jrn,
+                         $twh, $twhname,
                          $user, 0)
                         RETURNING doc_id;
                         """;
@@ -151,10 +155,12 @@ public static class InvRepo
                       grand_total=$grand, paid_amount=$paid, tax_code=$tcode, tax_rate=$trate, notes=$notes,
                       payment_method=$pay, receipt_no=$receipt, reference_no=$ref, branch_name=$branch,
                       sales_rep_name=$rep, cost_center=$cc, party_account_name=$pacc, goods_account_name=$gacc,
-                      original_doc_id=$origId, original_doc_kind=$origKind, original_doc_no=$origNo, journal_doc_no=$jrn
-                    WHERE doc_id=$id AND company_id=$company AND status='Draft' AND is_deleted=0;
+                      original_doc_id=$origId, original_doc_kind=$origKind, original_doc_no=$origNo, journal_doc_no=$jrn,
+                      target_warehouse_id=$twh, target_warehouse_name=$twhname
+                    WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND status='Draft' AND is_deleted=0;
                     """;
                 BindHeader(cmd, doc);
+                Add(cmd, "$guid", ResolveCompanyGuidOrNull(connection, tx)?.ToString("D") ?? Company);
                 Add(cmd, "$id", docId);
                 var affected = cmd.ExecuteNonQuery();
                 if (affected == 0)
@@ -210,12 +216,29 @@ public static class InvRepo
     {
         DocSchema.Ensure();
         MatRepo.EnsureSchema();
+
+        // Step 9 (Step 5 flag F-1): StockTransfer / InventoryCount post
+        // through their DEDICATED engines — StkPost.PostTransfer
+        // (two-sided, value-conserving) and StkPost.PostCount
+        // (delta-only) — never through the generic flow below, whose
+        // single-warehouse qty-in fabricated stock for both kinds
+        // (sweep I-6/I-7). Step 5 blocked them here with ACC-5014
+        // rather than let them fabricate; now that InvoiceWin's modes
+        // are wired to the engines, the block is replaced by the route.
+        if (kind is InvDocKind.StockTransfer or InvDocKind.InventoryCount)
+        {
+            PostDedicatedEngineDocument(docId, kind, userId);
+            return;
+        }
+
         var isSales = kind.IsSales();
         var headerTable = isSales ? "sales_documents" : "purchase_documents";
         var cs = DatabaseRuntime.GetConnectionString()
             ?? throw new InvalidOperationException("No database connection.");
         using var connection = Open(cs);
         using var tx = connection.BeginTransaction();
+        // Step 9: dual company key (code or Guid), as in Load.
+        var guidKey = ResolveCompanyGuidOrNull(connection, tx)?.ToString("D") ?? Company;
 
         InvDoc? doc;
         using (var cmd = connection.CreateCommand())
@@ -227,10 +250,11 @@ public static class InvRepo
                        discount_amount, extra_amount,
                        paid_amount, payment_method, cost_center
                 FROM {headerTable}
-                WHERE doc_id=$id AND company_id=$company AND is_deleted=0;
+                WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND is_deleted=0;
                 """;
             Add(cmd, "$id", docId);
             Add(cmd, "$company", Company);
+            Add(cmd, "$guid", guidKey);
             using var reader = cmd.ExecuteReader();
             if (!reader.Read())
                 throw new InvalidOperationException("Document not found.");
@@ -270,12 +294,11 @@ public static class InvRepo
         // Kind guard (Step 5, sweep I-2): the effects a kind may have are
         // defined ONCE in InvPostingPolicy and enforced here, at the
         // repository layer, so every caller (InvoiceWin, PosCheckoutWin,
-        // any future caller) is safe. Kinds whose correct engine is not
-        // this path are blocked outright — a stock transfer or an
-        // inventory count posted through here fabricated stock (the
-        // transfer created qty-in from nothing; the count added the full
-        // counted quantity instead of the delta, sweep I-6/I-7); their
-        // dedicated engines are StkPost.PostTransfer / StkPost.PostCount.
+        // any future caller) is safe. Unknown kinds are blocked outright.
+        // StockTransfer / InventoryCount never reach this point — they
+        // are routed to their dedicated engines at the top of Post
+        // (Step 9); the generic flow's single-warehouse qty-in is what
+        // fabricated stock for them (sweep I-6/I-7).
         var effects = InvPostingPolicy.For(kind);
         if (effects.Blocked)
             throw new AppError(
@@ -389,17 +412,18 @@ public static class InvRepo
             upd.CommandText = $"""
                 UPDATE {headerTable}
                 SET status='Posted', posted_by=$user, posted_at=datetime('now'), journal_doc_no=$jrn
-                WHERE doc_id=$id AND company_id=$company AND status='Draft';
+                WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND status='Draft';
                 """;
             if (DatabaseRuntime.IsPostgreSql())
                 upd.CommandText = $"""
                     UPDATE {headerTable}
                     SET status='Posted', posted_by=$user, posted_at=NOW(), journal_doc_no=$jrn
-                    WHERE doc_id=$id AND company_id=$company AND status='Draft';
+                    WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND status='Draft';
                     """;
             Add(upd, "$user", userId);
             Add(upd, "$id", docId);
             Add(upd, "$company", Company);
+            Add(upd, "$guid", guidKey);
             Add(upd, "$jrn", journalNo);
             if (upd.ExecuteNonQuery() == 0)
                 throw new InvalidOperationException("Post failed — document may already be posted.");
@@ -539,6 +563,254 @@ public static class InvRepo
         tx.Commit();
     }
 
+    // ---------------------------------------------------------------
+    // Step 9: dedicated-engine posting for StockTransfer / InventoryCount
+    // ---------------------------------------------------------------
+
+    /// <summary>
+    /// Posts a StockTransfer or InventoryCount document through its
+    /// dedicated engine (StkPost.PostTransfer / StkPost.PostCount).
+    /// The engines own their connection + transaction and take no
+    /// document id, so the document's status flip cannot share their
+    /// transaction; it follows the claim → post → compensate pattern
+    /// Step 8 established for cheque lifecycle events:
+    ///   1. CLAIM: the draft flips to Posted (guarded on Draft). A
+    ///      second post attempt now fails honestly instead of moving
+    ///      stock twice.
+    ///   2. ENGINE: the transfer/count posts. Its transaction is
+    ///      atomic — a failure moves no stock at all.
+    ///   3. COMPENSATE: if the engine failed, the claim is reverted to
+    ///      Draft so the user can correct and retry; if the revert
+    ///      itself fails, an explicit stranded-state error is thrown
+    ///      rather than swallowing either failure.
+    /// Transfers carry no GL and no party effect (stock value is
+    /// conserved inside the inventory account); counts adjust stock
+    /// only — exactly the effects InvPostingPolicy records for them.
+    /// </summary>
+    private static void PostDedicatedEngineDocument(long docId, InvDocKind kind, string userId)
+    {
+        var doc = Load(docId, kind)
+            ?? throw new InvalidOperationException("Document not found.");
+        if (doc.Status == InvDocStatus.Posted)
+            throw new InvalidOperationException("Document is already posted.");
+        if (doc.Lines.Count == 0)
+            throw new InvalidOperationException("The document has no lines to post.");
+
+        ClaimDedicatedPost(docId, kind, userId);
+        try
+        {
+            string engineDocNo;
+            if (kind == InvDocKind.StockTransfer)
+            {
+                engineDocNo = PostTransferForDocument(doc);
+            }
+            else
+            {
+                PostCountForDocument(doc);
+                engineDocNo = string.Empty;
+            }
+            if (!string.IsNullOrEmpty(engineDocNo))
+                LinkEngineDocumentNo(docId, kind, engineDocNo);
+        }
+        catch (Exception engineFailure)
+        {
+            try
+            {
+                RevertDedicatedClaim(docId, kind);
+            }
+            catch (Exception revertFailure)
+            {
+                throw new InvalidOperationException(
+                    $"Posting document '{doc.DocNo}' failed ({engineFailure.Message}) and its status could not be reverted to Draft; the document may read Posted without stock effects. Reconcile it manually before retrying.",
+                    revertFailure);
+            }
+            throw;
+        }
+    }
+
+    private static string PostTransferForDocument(InvDoc doc)
+    {
+        if (doc.WarehouseId is not int sourceId)
+            throw new StkPost.StockTransferException("INV-TRF-001", "A source warehouse is required for a stock transfer.");
+        if (doc.TargetWarehouseId is not int targetId)
+            throw new StkPost.StockTransferException("INV-TRF-001", "A destination warehouse is required for a stock transfer. Set the destination warehouse on the document and save it before posting.");
+        var reason = string.IsNullOrWhiteSpace(doc.Notes) ? doc.DocNo : doc.Notes.Trim();
+
+        var cs = DatabaseRuntime.GetConnectionString()
+            ?? throw new InvalidOperationException("No database connection.");
+        var lines = new List<StkPost.StockTransferLine>();
+        using (var connection = Open(cs))
+        using (var tx = connection.BeginTransaction())
+        {
+            foreach (var line in doc.Lines)
+            {
+                if (line.Qty == 0) continue;
+                var materialId = ResolveLineMaterialId(connection, tx, line);
+                var (baseQty, _) = StkPost.ToBaseUnits(connection, tx, materialId, line.Unit, line.Qty, line.UnitPrice);
+                if (baseQty <= 0)
+                    throw new StkPost.StockTransferException("INV-TRF-001", $"Enter a valid positive quantity for '{line.MaterialCode}'.");
+                lines.Add(new StkPost.StockTransferLine(materialId, line.MaterialCode, baseQty));
+            }
+        }
+        if (lines.Count == 0)
+            throw new StkPost.StockTransferException("INV-TRF-001", "Add at least one material quantity to transfer.");
+
+        return StkPost.PostTransfer(sourceId, targetId, doc.DocDate, reason, lines);
+    }
+
+    private static void PostCountForDocument(InvDoc doc)
+    {
+        if (doc.WarehouseId is not int warehouseId)
+            throw new InvalidOperationException("A warehouse is required for an inventory count document.");
+        var reason = string.IsNullOrWhiteSpace(doc.Notes) ? doc.DocNo : doc.Notes.Trim();
+
+        var cs = DatabaseRuntime.GetConnectionString()
+            ?? throw new InvalidOperationException("No database connection.");
+        var lines = new List<StkPost.StockCountLine>();
+        using (var connection = Open(cs))
+        using (var tx = connection.BeginTransaction())
+        {
+            foreach (var line in doc.Lines)
+            {
+                // A counted quantity of zero is a real count (the shelf
+                // is empty) — it posts the negative delta through
+                // PostCount like any other line; only lines with no
+                // material identity at all are unusable.
+                var materialId = ResolveLineMaterialId(connection, tx, line);
+                var (baseQty, baseUnitCost) = StkPost.ToBaseUnits(connection, tx, materialId, line.Unit, line.Qty, line.UnitPrice);
+                lines.Add(new StkPost.StockCountLine(materialId, line.MaterialCode, baseQty, baseUnitCost));
+            }
+        }
+        if (lines.Count == 0)
+            throw new InvalidOperationException("The document has no lines to post.");
+
+        StkPost.PostCount(warehouseId, doc.DocDate, reason, lines);
+    }
+
+    /// <summary>The material id for a document line: the stored id when
+    /// present, else resolved from the typed code in the current company
+    /// (the same resolution StkPost.ApplyDocument performs). An
+    /// unresolvable line fails the post honestly instead of moving the
+    /// wrong stock.</summary>
+    private static long ResolveLineMaterialId(DbConnection connection, DbTransaction tx, InvLine line)
+    {
+        if (line.MaterialId is long id && id > 0) return id;
+        if (string.IsNullOrWhiteSpace(line.MaterialCode))
+            throw new InvalidOperationException("A document line does not identify a material.");
+        using var cmd = connection.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = DatabaseRuntime.IsPostgreSql()
+            ? "SELECT material_id FROM materials WHERE company_id=$c AND code=$code AND is_deleted=FALSE LIMIT 1;"
+            : "SELECT material_id FROM materials WHERE company_id=$c AND code=$code AND is_deleted=0 LIMIT 1;";
+        Add(cmd, "$c", Company);
+        Add(cmd, "$code", line.MaterialCode.Trim());
+        var value = cmd.ExecuteScalar();
+        if (value is null or DBNull)
+            throw new InvalidOperationException($"Material '{line.MaterialCode}' does not exist in the current company.");
+        return Convert.ToInt64(value, CultureInfo.InvariantCulture);
+    }
+
+    private static void ClaimDedicatedPost(long docId, InvDocKind kind, string userId)
+        => SetDedicatedStatus(docId, kind, from: "Draft", to: "Posted", userId,
+            "Post failed — document may already be posted.");
+
+    private static void RevertDedicatedClaim(long docId, InvDocKind kind)
+        => SetDedicatedStatus(docId, kind, from: "Posted", to: "Draft", userId: null,
+            "The document status could not be reverted to Draft.");
+
+    private static void SetDedicatedStatus(long docId, InvDocKind kind, string from, string to, string? userId, string failureMessage)
+    {
+        var headerTable = kind.IsSales() ? "sales_documents" : "purchase_documents";
+        var cs = DatabaseRuntime.GetConnectionString()
+            ?? throw new InvalidOperationException("No database connection.");
+        using var connection = Open(cs);
+        using var cmd = connection.CreateCommand();
+        var guidKey = ResolveCompanyGuidOrNull(connection, null)?.ToString("D") ?? Company;
+        cmd.CommandText = DatabaseRuntime.IsPostgreSql()
+            ? $"""
+               UPDATE {headerTable}
+               SET status=$to, posted_by=$user, posted_at=NOW()
+               WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND status=$from;
+               """
+            : $"""
+               UPDATE {headerTable}
+               SET status=$to, posted_by=$user, posted_at=datetime('now')
+               WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND status=$from;
+               """;
+        Add(cmd, "$to", to);
+        Add(cmd, "$user", to == "Posted" ? userId : null);
+        Add(cmd, "$id", docId);
+        Add(cmd, "$company", Company);
+        Add(cmd, "$guid", guidKey);
+        Add(cmd, "$from", from);
+        if (cmd.ExecuteNonQuery() == 0)
+            throw new InvalidOperationException(failureMessage);
+    }
+
+    /// <summary>Records the transfer engine's own document number on the
+    /// posted transfer document (its journal_doc_no slot — the trace
+    /// from the document to its TRANSFER_OUT / TRANSFER_IN movements).
+    /// The stock already committed inside the engine's transaction, so
+    /// a failure here is reported centrally but does not un-post the
+    /// transfer.</summary>
+    private static void LinkEngineDocumentNo(long docId, InvDocKind kind, string engineDocNo)
+    {
+        try
+        {
+            var headerTable = kind.IsSales() ? "sales_documents" : "purchase_documents";
+            var cs = DatabaseRuntime.GetConnectionString()
+                ?? throw new InvalidOperationException("No database connection.");
+            using var connection = Open(cs);
+            using var cmd = connection.CreateCommand();
+            var guidKey = ResolveCompanyGuidOrNull(connection, null)?.ToString("D") ?? Company;
+            cmd.CommandText = $"""
+                UPDATE {headerTable}
+                SET journal_doc_no=$jrn
+                WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND status='Posted';
+                """;
+            Add(cmd, "$jrn", engineDocNo);
+            Add(cmd, "$id", docId);
+            Add(cmd, "$company", Company);
+            Add(cmd, "$guid", guidKey);
+            cmd.ExecuteNonQuery();
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, ex, "InvRepo.LinkEngineDocumentNo");
+        }
+    }
+
+    /// <summary>
+    /// Step 9: the current company's Guid key for the document tables,
+    /// or null when it cannot be resolved. The tables carry two company
+    /// keys — InvRepo's own company CODE and the order/chain family's
+    /// Guid (steps 4–8) — and a document read must accept either of the
+    /// CURRENT company's keys, or DocSearch-opened documents (converted
+    /// invoices, chain quotations: Guid-keyed) load as "not found" and
+    /// the window falls back to a blank new document. Resolution
+    /// failure is reported centrally and degrades to the code key only.
+    /// </summary>
+    private static Guid? ResolveCompanyGuidOrNull(DbConnection connection, DbTransaction? tx)
+    {
+        try
+        {
+            using var cmd = connection.CreateCommand();
+            if (tx is not null) cmd.Transaction = tx;
+            cmd.CommandText = "SELECT company_id FROM companies WHERE company_code=$company;";
+            Add(cmd, "$company", Company);
+            var value = cmd.ExecuteScalar();
+            if (value is null or DBNull) return null;
+            return Guid.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), out var guid) && guid != Guid.Empty
+                ? guid
+                : null;
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, ex, "InvRepo.ResolveCompanyGuidOrNull");
+            return null;
+        }
+    }
+
     public static InvDoc? Load(long docId, InvDocKind kind)
     {
         DocSchema.Ensure();
@@ -549,6 +821,12 @@ public static class InvRepo
         if (string.IsNullOrWhiteSpace(cs)) return null;
 
         using var connection = Open(cs);
+        // Step 9: accept either of the current company's keys (code or
+        // Guid) — see ResolveCompanyGuidOrNull. Without this, a
+        // Guid-keyed document (order-converted invoice, chain
+        // quotation) opened from DocSearch loaded as "not found" and
+        // InvoiceWin silently presented a blank new document instead.
+        var guidKey = ResolveCompanyGuidOrNull(connection, null)?.ToString("D") ?? Company;
         InvDoc doc;
         using (var cmd = connection.CreateCommand())
         {
@@ -558,12 +836,14 @@ public static class InvRepo
                        subtotal, tax_amount, grand_total,
                        discount_amount, extra_amount, paid_amount, payment_method, receipt_no, reference_no,
                        branch_name, sales_rep_name, cost_center, party_account_name, goods_account_name,
-                       original_doc_id, original_doc_kind, original_doc_no, journal_doc_no
+                       original_doc_id, original_doc_kind, original_doc_no, journal_doc_no,
+                       target_warehouse_id, target_warehouse_name
                 FROM {headerTable}
-                WHERE doc_id=$id AND company_id=$company AND is_deleted=0;
+                WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND is_deleted=0;
                 """;
             Add(cmd, "$id", docId);
             Add(cmd, "$company", Company);
+            Add(cmd, "$guid", guidKey);
             using var reader = cmd.ExecuteReader();
             if (!reader.Read()) return null;
             doc = new InvDoc
@@ -602,6 +882,8 @@ public static class InvRepo
                 OriginalDocKind = ParseDocKind(ReadString(reader, "original_doc_kind")),
                 OriginalDocNo = ReadString(reader, "original_doc_no"),
                 JournalDocNo = ReadString(reader, "journal_doc_no"),
+                TargetWarehouseId = (int?)ReadLongNullable(reader, "target_warehouse_id"),
+                TargetWarehouseName = ReadString(reader, "target_warehouse_name"),
             };
         }
 
@@ -1394,6 +1676,8 @@ public static class InvRepo
         Add(cmd, "$origKind", doc.OriginalDocKind?.ToString());
         Add(cmd, "$origNo", doc.OriginalDocNo);
         Add(cmd, "$jrn", doc.JournalDocNo);
+        Add(cmd, "$twh", doc.TargetWarehouseId);
+        Add(cmd, "$twhname", doc.TargetWarehouseName);
         Add(cmd, "$user", AppState.CurrentUser?.Username ?? Environment.UserName);
     }
 
@@ -1507,11 +1791,16 @@ internal static class InvDocKindExt
 ///   of the commercial chain (CommercialDocKinds QUO/SO/PO/…) do not
 ///   flow through InvRepo at all — CommercialDocumentRepository already
 ///   guards them the same way (QUO/SO post with no side effects).
-/// - StockTransfer / InventoryCount: BLOCKED in this path. Their
-///   correct engines exist (StkPost.PostTransfer — two-sided, and
-///   StkPost.PostCount — delta-based) and are what the warehouse
-///   windows use; through InvRepo a transfer fabricated stock from
-///   nothing and a count added the full counted quantity (I-6/I-7).
+/// - StockTransfer / InventoryCount: NO generic effects — Post routes
+///   them to their dedicated engines BEFORE the generic flow (Step 9,
+///   closing Step 5 flag F-1): StkPost.PostTransfer (two-sided,
+///   value-conserving) and StkPost.PostCount (delta-based), the same
+///   engines the warehouse windows use. Step 5 blocked them here with
+///   ACC-5014 because the generic flow fabricated stock for both (a
+///   transfer created qty-in from nothing; a count added the full
+///   counted quantity instead of the delta, I-6/I-7); with the route
+///   in place the block is gone and the kinds simply have no
+///   GL / party-ledger / generic-stock effect of their own.
 /// </summary>
 public static class InvPostingPolicy
 {
@@ -1532,8 +1821,10 @@ public static class InvPostingPolicy
         InvDocKind.StockOut => new Effects(true, false, true, false, false, false),
         InvDocKind.OpeningStock => new Effects(false, false, true, false, false, false),
         InvDocKind.Quotation => None,
-        InvDocKind.StockTransfer => BlockedHere,
-        InvDocKind.InventoryCount => BlockedHere,
+        // Step 9: routed to the dedicated engines at the top of
+        // InvRepo.Post — no generic effects, and NOT blocked.
+        InvDocKind.StockTransfer => None,
+        InvDocKind.InventoryCount => None,
         _ => BlockedHere
     };
 }

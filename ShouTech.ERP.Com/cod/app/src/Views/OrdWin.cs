@@ -29,8 +29,10 @@ public enum OrdKind
 /// the commercial-document engine (sales_documents / purchase_documents):
 /// they post no GL and no stock. Save/Post/Close/Cancel persist through
 /// OrderService; Convert creates a posted invoice with only the remaining
-/// unbilled quantities in a single transaction (invoice + party ledger +
-/// document link). Progress columns show fulfilled/billed quantities from
+/// unbilled quantities in a single transaction (invoice + stock through
+/// the valuation engine + COGS + party ledger + GL + document link —
+/// Step 9 closed the conversion's missing stock effect, sweep ORD-01).
+/// Progress columns show fulfilled/billed quantities from
 /// document_links, ERPNext-style.
 /// </summary>
 public sealed class OrdWin : BaseWin
@@ -102,8 +104,9 @@ public sealed class OrdWin : BaseWin
             {
                 _companyId = await AppHost.JournalStore.ResolveCompanyIdAsync(CurrentCompanyCode);
             }
-            catch
+            catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OrdWin.OnLoaded");
                 _companyId = Guid.Empty;
             }
         }
@@ -131,7 +134,11 @@ public sealed class OrdWin : BaseWin
         _btnSave.Click += async (_, _) => await SaveAsync();
         _btnPost.Click += async (_, _) => await PostAsync();
         _btnConvert.Click += async (_, _) => await ConvertAsync();
-        _btnClose.Click += async (_, _) => await SetStatusAsync(CommercialDocumentStatus.Closed, PermCat.Sales.OrderCancel);
+        // Step 9 (ORD-03): Close checks the permission family of the
+        // window's OWN kind — it previously hardcoded the SALES cancel
+        // permission for purchase orders too, so a purchasing-only user
+        // could not close a PO and a sales-only user could close one.
+        _btnClose.Click += async (_, _) => await SetStatusAsync(CommercialDocumentStatus.Closed, _kind == OrdKind.Sales ? PermCat.Sales.OrderCancel : PermCat.Purchasing.OrderCancel);
         _btnCancel.Click += async (_, _) => await SetStatusAsync(CommercialDocumentStatus.Cancelled, _kind == OrdKind.Sales ? PermCat.Sales.OrderCancel : PermCat.Purchasing.OrderCancel);
         _btnPrint.Click += (_, _) => PrintOrder();
 
@@ -410,9 +417,12 @@ public sealed class OrdWin : BaseWin
             }
             _lblStatus.Text = $"{T("OrderDoc.Status")}: {StatusText(_status)} | {T("OrderDoc.Fulfilled")}: {progress.PerFulfilled:N1}% | {T("OrderDoc.Billed")}: {progress.PerBilled:N1}%";
         }
-        catch
+        catch (Exception ex)
         {
-            // Progress is informational; the order itself already loaded.
+            // Progress is informational; the order itself already
+            // loaded — but the failure is reported centrally (Step 9),
+            // never swallowed silently.
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OrdWin.RefreshProgress");
         }
     }
 
@@ -455,6 +465,12 @@ public sealed class OrdWin : BaseWin
         ResolveParty();
         if (string.IsNullOrWhiteSpace(_txtPartyCode.Text) && string.IsNullOrWhiteSpace(_txtPartyName.Text))
             throw new InvalidOperationException(T("OrderDoc.PartyRequired"));
+        // Step 9 (ORD-10): the warehouse text resolves to a real
+        // warehouse id (the same CardStore resolution InvoiceWin uses),
+        // carried on the header AND every line, so a converted invoice
+        // inherits a stock warehouse identity instead of null — before
+        // this, conversion stock (Step 9) would have had to guess.
+        var warehouseId = CardStore.ResolveWarehouseId(_txtWhs.Text.Trim());
         var lines = _lines
             .Where(l => !string.IsNullOrWhiteSpace(l.ItemCode) || !string.IsNullOrWhiteSpace(l.Description))
             .Select(l => new CommercialLineDraft(
@@ -466,7 +482,7 @@ public sealed class OrdWin : BaseWin
                 l.UnitPrice,
                 l.DiscountPct,
                 l.TaxRate,
-                null))
+                warehouseId))
             .ToList();
         if (lines.Count == 0)
             throw new InvalidOperationException(T("OrderDoc.LinesRequired"));
@@ -478,9 +494,13 @@ public sealed class OrdWin : BaseWin
             DateOnly.FromDateTime(_dtDate.SelectedDate ?? DateTime.Today),
             _partyId,
             string.IsNullOrWhiteSpace(_txtPartyName.Text) ? null : _txtPartyName.Text.Trim(),
-            null,
+            warehouseId,
             UsrPref.Load().CurrencyCode,
-            1m,
+            // Step 7 convention: 0 = no document rate (the currency_rates
+            // master supplies it at posting; a foreign-currency document
+            // with no rate anywhere fails with ACC-5015). The window has
+            // no rate field, so it must not fabricate 1.
+            0m,
             string.IsNullOrWhiteSpace(_txtNotes.Text) ? null : _txtNotes.Text.Trim(),
             lines,
             string.IsNullOrWhiteSpace(_txtPartyCode.Text) ? null : _txtPartyCode.Text.Trim(),

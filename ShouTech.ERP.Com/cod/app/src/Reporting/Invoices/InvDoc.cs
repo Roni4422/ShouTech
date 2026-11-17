@@ -90,6 +90,7 @@ public sealed class InvDoc
     public int? WarehouseId { get; set; }
     public string WarehouseName { get; set; } = string.Empty;
     public int? TargetWarehouseId { get; set; }
+    public string TargetWarehouseName { get; set; } = string.Empty;
     public string CurrencyCode { get; set; } = "SAR";
     public decimal ExchangeRate { get; set; } = 1m;
     public string? TaxCode { get; set; }
