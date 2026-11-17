@@ -16,10 +16,18 @@ namespace ShouTech.App.Views;
 /// Compact ShouTech data exchange window.
 /// The UI deliberately does not claim a successful import/export until the data engine completes it.
 /// </summary>
-public partial class DatWin : BaseWin
+public partial class DatWin : BaseWin, IWindowMode
 {
     private enum ExchangeMode { Import, Export, StructuredExport }
     private ExchangeMode _mode = ExchangeMode.Import;
+
+    /// <summary>Step 11 router identity (IWindowMode): the CURRENT
+    /// exchange mode. DatWin is the one mode-ful window that can switch
+    /// mode live (its mode cards do exactly this), so the key tracks
+    /// the current mode: a request for the mode the user already
+    /// switched to reactivates this window, and a request for another
+    /// mode opens a second instance in that mode (sweep S-3).</summary>
+    public string ModeKey => _mode.ToString();
     private string _lastDetails = string.Empty;
     private string _structuredExportFormat = "xlsx";
     private const string LogCategory = "DataExchange";

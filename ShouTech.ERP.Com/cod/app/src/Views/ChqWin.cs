@@ -34,7 +34,7 @@ public enum ChqKind
 /// selected saved cheque and are also available in the register
 /// (ChqListWin); buttons are gated by kind (CHQ-08).
 /// </summary>
-public sealed class ChqWin : BaseWin
+public sealed class ChqWin : BaseWin, IWindowMode
 {
     protected override string? ScheduleTintName => "Periwinkle";
 
@@ -97,6 +97,11 @@ public sealed class ChqWin : BaseWin
     }
 
     public ChqKind Kind => _kind;
+
+    /// <summary>Step 11 router identity (IWindowMode) — the (type, kind)
+    /// key the Step-8 ShowCheque dedupe applied locally; the central
+    /// WindowActivator now applies it to every mode-ful window.</summary>
+    public string ModeKey => _kind.ToString();
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {

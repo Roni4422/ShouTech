@@ -29,10 +29,15 @@ public enum SupportWinMode
 /// sending needs a configured mail server, which this window does not
 /// pretend to have.
 /// </summary>
-public sealed class SupportWin : BaseWin
+public sealed class SupportWin : BaseWin, IWindowMode
 {
     private readonly OperationsService? _service;
     private readonly SupportWinMode _mode;
+
+    /// <summary>The ticket kind this window files (Step 11 router
+    /// identity: Support vs Suggestion).</summary>
+    public SupportWinMode Mode => _mode;
+    public string ModeKey => _mode.ToString();
     private readonly List<SupportTicket> _tickets = new();
     private readonly List<(TextBlock Label, string Key)> _labels = new();
     private readonly List<(DataGridColumn Column, string Key)> _headers = new();

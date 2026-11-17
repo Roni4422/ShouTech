@@ -22,7 +22,7 @@ namespace ShouTech.App.Views;
 /// right payment & document fields, middle party/rep/warehouse, left cost centre & accounts,
 /// footer totals (lines total, invoice value, paid / discount, payment, remaining / extra, net).
 /// </summary>
-public sealed class InvoiceWin : BaseWin
+public sealed class InvoiceWin : BaseWin, IWindowMode
 {
     protected override string? ScheduleTintName => "Mint";
 
@@ -142,6 +142,14 @@ public sealed class InvoiceWin : BaseWin
     /// loaded, or null for a new-document window. Lets an opener
     /// (DocSearch) prove the requested document is what opened.</summary>
     public long? LoadedDocumentId { get; private set; }
+
+    /// <summary>Step 11 router identity (IWindowMode): the document kind
+    /// plus the loaded document's identity — a window showing saved
+    /// document 5 is not "the SalesInvoice window" for a request to open
+    /// a NEW sales invoice, and a new-document window is not document 5.
+    /// (A save updates LoadedDocumentId, so a saved window stops matching
+    /// new-document requests and the next request opens a fresh form.)</summary>
+    public string ModeKey => $"{_doc.Kind}:{(LoadedDocumentId?.ToString(CultureInfo.InvariantCulture) ?? "new")}";
 
     private void ApplyLanguageDirection()
     {

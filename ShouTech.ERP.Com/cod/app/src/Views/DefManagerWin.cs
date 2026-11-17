@@ -24,7 +24,7 @@ namespace ShouTech.App.Views;
 /// Every save/delete/activate is a real, permission-gated, transactional
 /// write through <see cref="DefinitionService"/>.
 /// </summary>
-public sealed class DefManagerWin : BaseWin
+public sealed class DefManagerWin : BaseWin, IWindowMode
 {
     private readonly DefinitionService? _service;
     private readonly DefSet _set;
@@ -69,6 +69,11 @@ public sealed class DefManagerWin : BaseWin
     public static DefManagerWin For(string setKey) => new(setKey);
 
     public string SetKey => _set.Key;
+
+    /// <summary>Step 11 router identity (IWindowMode): the definition
+    /// set — the mode-aware key RibbonNav's ShowDef always matched on,
+    /// now expressed through the central policy.</summary>
+    public string ModeKey => _set.Key;
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {

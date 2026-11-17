@@ -1677,24 +1677,49 @@ namespace ShouTech.App.Views
         private void OpenDataWindow(
             bool exportMode)
         {
+            // Step 11 (sweep S-3): the cached window is reactivated ONLY
+            // when it is in the REQUESTED mode — DatWin's ModeKey tracks
+            // its current mode, including live switches through its
+            // in-window mode cards. A visible DatWin in a DIFFERENT mode
+            // no longer swallows the request (File → Export used to land
+            // on an Import window); a second instance opens in the
+            // requested mode, per the central WindowActivator policy.
+            var requestedMode = exportMode ? "StructuredExport" : "Import";
             if (_datWindow != null)
             {
                 if (_datWindow.IsVisible)
                 {
-                    if (_datWindow.WindowState ==
-                        WindowState.Minimized)
+                    if (string.Equals(
+                            ((IWindowMode)_datWindow).ModeKey,
+                            requestedMode,
+                            StringComparison.Ordinal))
                     {
-                        _datWindow.WindowState =
-                            WindowState.Normal;
+                        if (_datWindow.WindowState ==
+                            WindowState.Minimized)
+                        {
+                            _datWindow.WindowState =
+                                WindowState.Normal;
+                        }
+
+                        _datWindow.Activate();
+                        _datWindow.Focus();
+
+                        return;
                     }
 
-                    _datWindow.Activate();
-                    _datWindow.Focus();
-
-                    return;
+                    // A same-mode instance may already be open beside
+                    // the cached different-mode one.
+                    if (WindowActivator.TryActivateExisting<DatWin>(requestedMode))
+                        return;
                 }
-
-                _datWindow = null;
+                else
+                {
+                    _datWindow = null;
+                }
+            }
+            else if (WindowActivator.TryActivateExisting<DatWin>(requestedMode))
+            {
+                return;
             }
 
             var window =

@@ -216,41 +216,13 @@ public static class RptNav
     public static void OpenReceiptVoucher(Window? owner = null) => Show(new CshWin(CshKind.Receipt), owner);
     public static void OpenPaymentVoucher(Window? owner = null) => Show(new CshWin(CshKind.Payment), owner);
     public static void OpenChequeVoucher(Window? owner = null) => OpenIncomingChequeVoucher(owner);
-    public static void OpenIncomingChequeVoucher(Window? owner = null) => ShowCheque(ChqKind.Incoming, owner);
-    public static void OpenOutgoingChequeVoucher(Window? owner = null) => ShowCheque(ChqKind.Outgoing, owner);
+    public static void OpenIncomingChequeVoucher(Window? owner = null) => Show(new ChqWin(ChqKind.Incoming), owner);
+    public static void OpenOutgoingChequeVoucher(Window? owner = null) => Show(new ChqWin(ChqKind.Outgoing), owner);
 
-    /// <summary>Cheque windows are parameterised by kind, so the
-    /// type-only dedupe in Show() would activate an INCOMING window
-    /// for an OUTGOING request (the router mode-stickiness defect).
-    /// Dedupe on (type, kind): a visible window of the OTHER kind is
-    /// left alone and a new window of the requested kind opens.</summary>
-    private static void ShowCheque(ChqKind kind, Window? owner)
-    {
-        try
-        {
-            foreach (Window w in System.Windows.Application.Current.Windows)
-            {
-                if (w is ChqWin existing && existing.Kind == kind && existing.IsVisible)
-                {
-                    existing.Activate();
-                    if (existing.WindowState == WindowState.Minimized)
-                        existing.WindowState = WindowState.Normal;
-                    return;
-                }
-            }
-        }
-        catch (Exception exCheque)
-        {
-            AppHost.Errors.Report(ErrorCodes.NavigationFailed, exCheque, "RptNav.ShowCheque");
-        }
-        var win = new ChqWin(kind);
-        try { win.Owner = owner ?? System.Windows.Application.Current?.MainWindow; }
-        catch (Exception exOwner)
-        {
-            AppHost.Errors.Report(ErrorCodes.NavigationFailed, exOwner, "RptNav.ShowCheque.Owner");
-        }
-        win.Show();
-    }
+    // Step 8's kind-aware ShowCheque dedupe is retired: Step 11
+    // generalized its (type, kind) rule into WindowActivator, which
+    // Show() below now applies to EVERY window this router opens —
+    // cheques keep exactly the Step-8 behaviour through ChqWin.ModeKey.
 
     public static void OpenCustCard(Window? owner = null) => Show(new CstCard(), owner);
     public static void OpenCostCenterCard(Window? owner = null) => Show(new CcCard(), owner);
@@ -272,26 +244,10 @@ public static class RptNav
     public static void OpenItemProfitability(Window? owner = null) => Show(new ItemProfitWin(), owner);
     public static void OpenStockAdjustment(Window? owner = null) => Show(new StkAdjRptWin(), owner);
 
-    private static void Show(Window win, Window? owner)
-    {
-        try
-        {
-            foreach (Window w in System.Windows.Application.Current.Windows)
-            {
-                if (w.GetType() == win.GetType() && w.IsVisible)
-                {
-                    w.Activate();
-                    if (w.WindowState == WindowState.Minimized)
-                        w.WindowState = WindowState.Normal;
-                    return;
-                }
-            }
-            win.Owner = owner ?? System.Windows.Application.Current?.MainWindow;
-        }
-        catch (Exception exL248)
-        {
-            AppHost.Errors.Report(ErrorCodes.NavigationFailed, exL248, "RptNav.Show");
-        }
-        win.Show();
-    }
+    /// <summary>Step 11: all activation goes through the ONE central
+    /// policy (WindowActivator — same type AND same mode reactivates;
+    /// a different mode opens a second instance). The type-only dedupe
+    /// that used to live here was the router mode-stickiness defect
+    /// (sweep S-2).</summary>
+    private static void Show(Window win, Window? owner) => WindowActivator.Show(win, owner);
 }

@@ -35,11 +35,17 @@ public enum OrdKind
 /// Progress columns show fulfilled/billed quantities from
 /// document_links, ERPNext-style.
 /// </summary>
-public sealed class OrdWin : BaseWin
+public sealed class OrdWin : BaseWin, IWindowMode
 {
     protected override string? ScheduleTintName => "Sky";
 
     private readonly OrdKind _kind;
+
+    /// <summary>The order kind this window was opened with (Step 11:
+    /// the router's mode identity — Sales and Purchase orders must
+    /// never reactivate each other).</summary>
+    public OrdKind Kind => _kind;
+    public string ModeKey => _kind.ToString();
 
     private readonly TextBox _txtDocNo = new();
     private readonly DatePicker _dtDate = new() { SelectedDate = DateTime.Today };

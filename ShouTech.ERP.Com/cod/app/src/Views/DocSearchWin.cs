@@ -25,7 +25,7 @@ namespace ShouTech.App.Views;
 /// InvoiceWin and discarded the id. Quotations can be marked Lost and
 /// converted to a sales order here (real writes through OrderService).
 /// </summary>
-public sealed class DocSearchWin : BaseWin
+public sealed class DocSearchWin : BaseWin, IWindowMode
 {
     public enum DocSearchMode
     {
@@ -35,6 +35,12 @@ public sealed class DocSearchWin : BaseWin
     }
 
     private readonly DocSearchMode _mode;
+
+    /// <summary>The search mode this window was opened with (Step 11
+    /// router identity: Invoices / Quotations / Orders).</summary>
+    public DocSearchMode Mode => _mode;
+    public string ModeKey => _mode.ToString();
+
     private readonly ComboBox _cmbStatus = new();
     private readonly TextBox _txtSearch = new();
     private readonly DatePicker _dtFrom = new();

@@ -16,7 +16,7 @@ namespace ShouTech.App.Views;
 /// surface: New / Save / Delete (soft, guarded in the service) over real
 /// rows — groups feed the CstCard / RepCard group lookups.
 /// </summary>
-public sealed class GroupManagerWin : BaseWin
+public sealed class GroupManagerWin : BaseWin, IWindowMode
 {
     public enum GroupKind
     {
@@ -25,6 +25,12 @@ public sealed class GroupManagerWin : BaseWin
     }
 
     private readonly GroupKind _kind;
+
+    /// <summary>The group kind this window manages (Step 11 router
+    /// identity: Party groups vs SalesRep groups).</summary>
+    public GroupKind Kind => _kind;
+    public string ModeKey => _kind.ToString();
+
     private readonly DataGrid _grid = new();
     private readonly ObservableCollection<GroupRow> _rows = new();
     private readonly TextBox _txtCode = new();

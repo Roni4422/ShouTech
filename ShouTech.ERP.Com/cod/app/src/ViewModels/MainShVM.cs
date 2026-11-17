@@ -817,11 +817,15 @@ namespace ShouTech.App.ViewModels
         {
             try
             {
+                // Step 11: mode-aware — a Startup-mode ComWin (the
+                // pre-login company picker) must not swallow a request
+                // for the Management window, and vice versa.
                 var existing =
                     System.Windows.Application.Current.Windows
                         .OfType<Views.ComWin>()
                         .FirstOrDefault(
-                            w => w.IsVisible);
+                            w => w.IsVisible
+                                 && w.Mode == Views.ComWinMode.Management);
 
                 if (existing != null)
                 {

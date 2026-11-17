@@ -34,11 +34,17 @@ public enum CshKind
 /// drafts cannot be deleted (the journal engine has no draft delete) — the
 /// Delete button stays disabled with an honest explanation in the status bar.
 /// </summary>
-public sealed class CshWin : BaseWin
+public sealed class CshWin : BaseWin, IWindowMode
 {
     protected override string? ScheduleTintName => "Teal";
 
     private readonly CshKind _kind;
+
+    /// <summary>The voucher kind this window was opened with (Step 11:
+    /// the router's mode identity — Receipt and Payment are different
+    /// documents and must never reactivate each other).</summary>
+    public CshKind Kind => _kind;
+    public string ModeKey => _kind.ToString();
 
     private readonly TextBox _txtDocNo = new();
     private readonly DatePicker _dtDate = new() { SelectedDate = DateTime.Today };

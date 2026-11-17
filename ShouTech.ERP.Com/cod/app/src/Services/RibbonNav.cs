@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Windows;
 using ShouTech.App.Views;
 using ShouTech.App.Views.Reports;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 
 namespace ShouTech.App.Services;
@@ -200,38 +201,18 @@ public static class RibbonNav
 
     private static void ShowDef(string setKey, Window? owner)
     {
-        foreach (Window w in System.Windows.Application.Current.Windows)
-        {
-            if (w is DefManagerWin existing && existing.SetKey == setKey && w.IsVisible)
-            {
-                w.Activate();
-                if (w.WindowState == WindowState.Minimized)
-                    w.WindowState = WindowState.Normal;
-                return;
-            }
-        }
+        // DefManagerWin's ModeKey IS its SetKey, so the central policy
+        // gives this the mode-aware matching ShowDef always did by hand.
         Show(DefManagerWin.For(setKey), owner);
     }
 
-    private static void Show(Window win, Window? owner)
-    {
-        try
-        {
-            foreach (Window w in System.Windows.Application.Current.Windows)
-            {
-                if (w.GetType() == win.GetType() && w.IsVisible)
-                {
-                    w.Activate();
-                    if (w.WindowState == WindowState.Minimized)
-                        w.WindowState = WindowState.Normal;
-                    return;
-                }
-            }
-            win.Owner = owner ?? System.Windows.Application.Current?.MainWindow;
-        }
-        catch { }
-        win.Show();
-    }
+    /// <summary>Step 11: all activation goes through the ONE central
+    /// policy (WindowActivator — same type AND same mode reactivates;
+    /// a different mode opens a second instance). The type-only dedupe
+    /// that used to live here was the router mode-stickiness defect
+    /// (sweep S-2), and its empty catch silently swallowed activation
+    /// failures (sweep S-7) — WindowActivator reports them centrally.</summary>
+    private static void Show(Window win, Window? owner) => WindowActivator.Show(win, owner);
 
     private static void LaunchOnScreenKeyboard(Window? owner)
     {
@@ -251,7 +232,13 @@ public static class RibbonNav
         {
             Process.Start(new ProcessStartInfo("rundll32.exe", "user32.dll,LockWorkStation") { UseShellExecute = true });
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // Step 11 (sweep S-7): was a silent catch — lock failures now
+            // report through the central mechanism like every other
+            // shell operation.
+            AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, ex, "RibbonNav.LockWorkStation");
+        }
     }
 
     private static void ShowAbout(Window? owner)

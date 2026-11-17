@@ -17,9 +17,15 @@ namespace ShouTech.App.Views.Reports;
 /// account codes 5x are revenue, 4x are cost of sales, everything else in the
 /// 4x-6x range is operating expense. Structured statement: no flat totals.
 /// </summary>
-public sealed class ClosingAccountsWin : RptBase
+public sealed class ClosingAccountsWin : RptBase, IWindowMode
 {
     private readonly string _mode;
+
+    /// <summary>The statement this window renders (Step 11 router
+    /// identity: Operations vs Trading).</summary>
+    public string Mode => _mode;
+    public string ModeKey => _mode;
+
     public ClosingAccountsWin() : this("Trading") { }
     public ClosingAccountsWin(string mode) => _mode = string.Equals(mode, "Operations", StringComparison.OrdinalIgnoreCase) ? "Operations" : "Trading";
 
