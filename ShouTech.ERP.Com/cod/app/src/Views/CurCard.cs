@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
@@ -79,7 +79,7 @@ public sealed class CurCard : BaseWin
         var root = new DockPanel { Margin = new Thickness(10) };
 
         // 1. Toolbar
-        var toolbar = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+        var toolbar = new WrapPanel { Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Right };
         StyleButton(_btnNew, "Common.New");
         StyleButton(_btnSave, "Common.Save");
         StyleButton(_btnAddRate, "Invoice.AddLine");
@@ -96,7 +96,7 @@ public sealed class CurCard : BaseWin
         foreach (var b in new[] { _btnNew, _btnSave, _btnAddRate })
             toolbar.Children.Add(b);
 
-        DockPanel.SetDock(toolbar, Dock.Top);
+        DockPanel.SetDock(toolbar, Dock.Bottom);
         root.Children.Add(toolbar);
 
         // 2. Main Body: Split Left and Right

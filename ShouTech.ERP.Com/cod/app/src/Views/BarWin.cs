@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -52,7 +52,7 @@ public sealed class BarWin : BaseWin
         var root = new DockPanel { Margin = new Thickness(12) };
 
         // 1. Toolbar
-        var toolbar = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
+        var toolbar = new WrapPanel { Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Right };
         StyleButton(_btnPick, T("Invoice.FindMaterial"));
         StyleButton(_btnGen, T("Common.New"));
         StyleButton(_btnPrint, T("BarcodeTool.Print"));
@@ -72,7 +72,7 @@ public sealed class BarWin : BaseWin
         toolbar.Children.Add(_btnPick);
         toolbar.Children.Add(_btnGen);
         toolbar.Children.Add(_btnPrint);
-        DockPanel.SetDock(toolbar, Dock.Top);
+        DockPanel.SetDock(toolbar, Dock.Bottom);
         root.Children.Add(toolbar);
 
         // 2. Main split layout

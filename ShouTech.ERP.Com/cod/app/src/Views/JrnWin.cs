@@ -88,7 +88,7 @@ public sealed class JrnWin : BaseWin
         var root = new DockPanel { Margin = new Thickness(10) };
 
         // 1. Toolbar
-        var toolbar = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+        var toolbar = new WrapPanel { Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Right };
         StyleButton(_btnNew, "Common.New");
         StyleButton(_btnLoad, "Vouchers.Load");
         StyleButton(_btnSave, "Common.Save");
@@ -127,8 +127,7 @@ public sealed class JrnWin : BaseWin
         foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnReverse, _btnPrint, _btnAddLine, _btnRemoveLine, _btnAutoBal })
             toolbar.Children.Add(b);
 
-        DockPanel.SetDock(toolbar, Dock.Top);
-        root.Children.Add(toolbar);
+        DockPanel.SetDock(toolbar, Dock.Bottom);
 
         // 2. Footer summary with Live Difference Badge
         var footer = new Border
@@ -160,6 +159,7 @@ public sealed class JrnWin : BaseWin
         footer.Child = footerContent;
         DockPanel.SetDock(footer, Dock.Bottom);
         root.Children.Add(footer);
+        root.Children.Add(toolbar);
 
         // 3. Center Body
         var body = new Grid();

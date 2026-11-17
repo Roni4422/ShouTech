@@ -83,7 +83,7 @@ public sealed class MfgWin : BaseWin
         var root = new DockPanel { Margin = new Thickness(10) };
 
         // 1. Toolbar
-        var toolbar = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+        var toolbar = new WrapPanel { Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Right };
         StyleButton(_btnNew, "Common.New");
         StyleButton(_btnSave, "Common.Save");
         StyleButton(_btnPost, "MfgOrder.Posted");
@@ -118,8 +118,7 @@ public sealed class MfgWin : BaseWin
         foreach (var b in new[] { _btnNew, _btnSave, _btnPost, _btnAddItem, _btnRemItem, _btnPrint })
             toolbar.Children.Add(b);
 
-        DockPanel.SetDock(toolbar, Dock.Top);
-        root.Children.Add(toolbar);
+        DockPanel.SetDock(toolbar, Dock.Bottom);
 
         // 2. Footer
         var footer = new Border
@@ -140,6 +139,7 @@ public sealed class MfgWin : BaseWin
         footer.Child = footerContent;
         DockPanel.SetDock(footer, Dock.Bottom);
         root.Children.Add(footer);
+        root.Children.Add(toolbar);
 
         // 3. Body
         var body = new Grid();

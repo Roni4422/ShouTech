@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -88,6 +88,7 @@ public abstract class RptBase : BaseWin
         _root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // grid
         _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // totals
         _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // status
+        _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // actions (bottom, layout rule)
 
         Grid.SetRow(_title, 0);
         _title.FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(18);
@@ -123,13 +124,11 @@ public abstract class RptBase : BaseWin
         heading.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         heading.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(_title, 0);
-        Grid.SetColumn(toolbar, 1);
         heading.Children.Add(_title);
         toolbar.Children.Add(_refresh);
         toolbar.Children.Add(_columns);
         toolbar.Children.Add(_export);
         toolbar.Children.Add(_print);
-        heading.Children.Add(toolbar);
         Grid.SetRow(heading, 0);
         _root.Children.Add(heading);
 
@@ -157,6 +156,15 @@ public abstract class RptBase : BaseWin
         _status.Opacity = 0.75;
         Grid.SetRow(_status, 4);
         _root.Children.Add(_status);
+
+        // Action bar at the BOTTOM of the window (layout rule): the report
+        // commands (Refresh / Columns / Export / Print) live under the status
+        // line instead of in the title row.
+        var actionBar = new DockPanel { Margin = new Thickness(0, 6, 0, 0), LastChildFill = false };
+        DockPanel.SetDock(toolbar, Dock.Right);
+        actionBar.Children.Add(toolbar);
+        Grid.SetRow(actionBar, 5);
+        _root.Children.Add(actionBar);
 
         Content = _root;
     }

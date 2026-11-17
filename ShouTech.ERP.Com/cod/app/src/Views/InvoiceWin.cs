@@ -207,18 +207,19 @@ public sealed class InvoiceWin : BaseWin
 
     private void BuildUi()
     {
-        // Root: toolbar (auto) + three proportional bands 30% / 40% / 30%
+        // Root: three proportional bands 30% / 40% / 30% + action bar at the BOTTOM (layout rule)
         var root = new Grid { Margin = new Thickness(4) };
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(3, GridUnitType.Star) }); // top 30%
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(4, GridUnitType.Star) }); // grid 40%
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(3, GridUnitType.Star) }); // bottom 30%
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // action bar
 
         // ---- Toolbar ----
         var toolbar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 0, 0, 2)
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 8, 0, 0)
         };
         StyleButton(_btnSave, "Common.Save");
         StyleButton(_btnPost, "Invoice.Post");
@@ -254,7 +255,7 @@ public sealed class InvoiceWin : BaseWin
         _btnFindMaterial.Click += (_, _) => PickMaterial();
         foreach (var b in new[] { _btnSave, _btnPost, _btnReverse, _btnPrint, _btnPdf, _btnAddLine, _btnRemoveLine, _btnFindMaterial })
             toolbar.Children.Add(b);
-        Grid.SetRow(toolbar, 0);
+        Grid.SetRow(toolbar, 3);
         root.Children.Add(toolbar);
 
         // ---- Top 30%: header fields (compact, no large gaps) ----
@@ -268,7 +269,7 @@ public sealed class InvoiceWin : BaseWin
         };
         try { headerHost.SetResourceReference(Border.BorderBrushProperty, "BorderBrush"); } catch { headerHost.BorderBrush = Brushes.LightGray; }
         try { headerHost.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush"); } catch { }
-        Grid.SetRow(headerHost, 1);
+        Grid.SetRow(headerHost, 0);
         root.Children.Add(headerHost);
 
         // ---- Middle 40%: lines grid ----
@@ -283,7 +284,7 @@ public sealed class InvoiceWin : BaseWin
         };
         try { gridHost.SetResourceReference(Border.BorderBrushProperty, "BorderBrush"); } catch { gridHost.BorderBrush = Brushes.Gray; }
         try { gridHost.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush"); } catch { }
-        Grid.SetRow(gridHost, 2);
+        Grid.SetRow(gridHost, 1);
         root.Children.Add(gridHost);
 
         // ---- Bottom 30%: totals + notes + السند/الأصل ----
@@ -345,7 +346,7 @@ public sealed class InvoiceWin : BaseWin
         };
         try { bottomHost.SetResourceReference(Border.BorderBrushProperty, "BorderBrush"); } catch { bottomHost.BorderBrush = Brushes.LightGray; }
         try { bottomHost.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush"); } catch { }
-        Grid.SetRow(bottomHost, 3);
+        Grid.SetRow(bottomHost, 2);
         root.Children.Add(bottomHost);
 
         Content = root;

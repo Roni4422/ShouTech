@@ -105,7 +105,13 @@ public sealed class BcdDesWin : BaseWin
         foreach (var combo in new[] { _cbFont, _cbFontSize, _cbTextColor, _cbBarColor, _cbBackground })
             combo.SetResourceReference(StyleProperty, "VisuComboBoxStyle");
 
-        root.Children.Add(BuildToolbar());
+        // Action bar - docked at the BOTTOM (layout rule). It was previously added
+        // un-docked, which DockPanel treats as Dock.Left.
+        var actionBar = BuildToolbar();
+        actionBar.Margin = new Thickness(0, 10, 0, 0);
+        actionBar.HorizontalAlignment = HorizontalAlignment.Right;
+        DockPanel.SetDock(actionBar, Dock.Bottom);
+        root.Children.Add(actionBar);
 
         // Main split: settings (left) + preview (right).
         var split = new Grid();

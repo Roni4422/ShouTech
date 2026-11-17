@@ -238,14 +238,7 @@
 					</TextBlock>
                 </Grid>
 
-                <!-- Refresh -->
-                <Button x:Name="BtnRefresh"
-                        Grid.Column="2"
-                        Content="Refresh"
-                        loc:LocProps.Key="CatWin.Refresh"
-                        Style="{StaticResource ToolbarButton}"
-                        Click="Refresh_Click"/>
-            </Grid>
+                            </Grid>
         </Border>
 
         <!-- =========================================================
@@ -480,6 +473,11 @@
                             loc:LocProps.Key="Buttons.Save"
                             Style="{StaticResource FooterPrimaryButton}"
                             Click="Save_Click"/>
+                    <Button x:Name="BtnRefresh"
+                            Content="Refresh"
+                            loc:LocProps.Key="CatWin.Refresh"
+                            Style="{StaticResource FooterButton}"
+                            Click="Refresh_Click"/>
                     <Button x:Name="BtnClose"
                             Content="Close"
                             loc:LocProps.Key="Buttons.Close"

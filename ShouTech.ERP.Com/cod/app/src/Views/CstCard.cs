@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -111,7 +111,7 @@ public sealed class CstCard : BaseWin
         var root = new DockPanel { Margin = new Thickness(12) };
 
         // 1. Toolbar
-        var toolbar = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
+        var toolbar = new WrapPanel { Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Right };
         StyleButton(_btnNew, "Common.New");
         StyleButton(_btnSave, "Common.Save");
         StyleButton(_btnDelete, "Common.Delete");
@@ -125,8 +125,7 @@ public sealed class CstCard : BaseWin
         foreach (var b in new[] { _btnNew, _btnSave, _btnDelete, _btnStmt })
             toolbar.Children.Add(b);
 
-        DockPanel.SetDock(toolbar, Dock.Top);
-        root.Children.Add(toolbar);
+        DockPanel.SetDock(toolbar, Dock.Bottom);
 
         // 2. Metrics Bar
         var metricsBorder = new Border
@@ -149,6 +148,7 @@ public sealed class CstCard : BaseWin
 
         DockPanel.SetDock(metricsBorder, Dock.Bottom);
         root.Children.Add(metricsBorder);
+        root.Children.Add(toolbar);
 
         // 3. Tabbed Content
         var tabs = new TabControl();

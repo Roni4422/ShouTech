@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
@@ -68,8 +68,8 @@ public sealed class BcdGenWin : BaseWin
     {
         var root = new DockPanel { Margin = new Thickness(12) };
 
-        // Top toolbar.
-        var toolbar = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
+        // Action bar - docked at the BOTTOM above the status line (layout rule).
+        var toolbar = new WrapPanel { Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Right };
 
         toolbar.Children.Add(MakeLabel(L("BarcodeGen.Prefix", "Prefix:")));
         _txtPrefix.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
@@ -99,8 +99,7 @@ public sealed class BcdGenWin : BaseWin
         _btnSelectNone.Click += (_, _) => SetInclude(false);
         toolbar.Children.Add(_btnSelectNone);
 
-        DockPanel.SetDock(toolbar, Dock.Top);
-        root.Children.Add(toolbar);
+        DockPanel.SetDock(toolbar, Dock.Bottom);
 
         // Search row.
         var searchPanel = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
@@ -131,6 +130,7 @@ public sealed class BcdGenWin : BaseWin
         _status.SetResourceReference(TextBlock.ForegroundProperty, "TextPrimary");
         DockPanel.SetDock(_status, Dock.Bottom);
         root.Children.Add(_status);
+        root.Children.Add(toolbar);
 
         Content = root;
     }
