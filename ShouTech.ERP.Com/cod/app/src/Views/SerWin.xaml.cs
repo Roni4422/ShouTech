@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -15,6 +15,7 @@ using ShouTech.App.Configuration;
 using ShouTech.App.Localization;
 using ShouTech.App.Services;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 // ====================================================================
@@ -69,7 +70,8 @@ public partial class SerWin : BaseWin
         if (_cachedPrefs != null) return _cachedPrefs;
 
         try { _cachedPrefs = UsrPref.Load(); }
-        catch { _cachedPrefs = new UsrPref(); }
+        catch (Exception exL72) {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL72, "SerWin.xaml.GetPrefs"); _cachedPrefs = new UsrPref(); }
 
         return _cachedPrefs;
     }
@@ -92,7 +94,10 @@ public partial class SerWin : BaseWin
                 $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [SerWin] [{context}] " +
                 $"{ex.GetType().Name}: {ex.Message}\r\n{ex.StackTrace}\r\n\r\n");
         }
-        catch { }
+        catch (Exception exL95)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL95, "SerWin.xaml.LogError");
+        }
     }
 
     // ---------- Result ----------
@@ -130,10 +135,16 @@ public partial class SerWin : BaseWin
                 Closed += (_, _) =>
                 {
                     try { AppServiceHost.Localization.LanguageChanged -= OnLanguageChanged; }
-                    catch { }
+                    catch (Exception exL133)
+                    {
+                        AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL133, "SerWin.xaml.OnLoaded");
+                    }
                 };
             }
-            catch { }
+            catch (Exception exL136)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL136, "SerWin.xaml.OnLoaded");
+            }
 
             TxtSearch.Focus();
         }
@@ -149,7 +160,9 @@ public partial class SerWin : BaseWin
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
         try { Dispatcher.Invoke(ApplyDirectionAndLanguage); }
-        catch { try { ApplyDirectionAndLanguage(); } catch { } }
+        catch (Exception exL152) {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL152, "SerWin.xaml.OnLanguageChanged"); try { ApplyDirectionAndLanguage(); } catch (Exception exL152b) {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL152b, "SerWin.xaml.OnLanguageChanged"); } }
     }
 
     // ================================================================
@@ -590,8 +603,9 @@ internal sealed class SerWinPrefs
 
             return JsonSerializer.Deserialize<SerWinPrefs>(json) ?? new SerWinPrefs();
         }
-        catch
+        catch (Exception exL593)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL593, "SerWin.xaml.Load");
             return new SerWinPrefs();
         }
     }
@@ -611,15 +625,17 @@ internal sealed class SerWinPrefs
             File.Move(tmp, FilePath, overwrite: true);
             tmp = null;
         }
-        catch
+        catch (Exception exL614)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL614, "SerWin.xaml.Save");
             // Never allow preference saving to crash the application.
         }
         finally
         {
             if (tmp != null)
             {
-                try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+                try { if (File.Exists(tmp)) File.Delete(tmp); } catch (Exception exL622) {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL622, "SerWin.xaml.Save"); }
             }
         }
     }

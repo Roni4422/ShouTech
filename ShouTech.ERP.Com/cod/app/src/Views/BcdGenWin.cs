@@ -13,6 +13,7 @@ using System.Windows.Media;
 using ShouTech.App.Common;
 using ShouTech.App.Services;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 /// <summary>
@@ -201,6 +202,7 @@ public sealed class BcdGenWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "BcdGenWin.LoadMaterials");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
@@ -455,6 +457,7 @@ public sealed class BcdGenWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "BcdGenWin.PrintGenerated");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -483,8 +486,9 @@ public sealed class BcdGenWin : BaseWin
                 ? fallback
                 : s;
         }
-        catch
+        catch (Exception exL486)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL486, "BcdGenWin.L");
             return fallback;
         }
     }

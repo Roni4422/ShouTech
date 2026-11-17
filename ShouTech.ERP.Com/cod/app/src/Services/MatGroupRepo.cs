@@ -7,6 +7,7 @@ using System.Linq;
 using Microsoft.Data.Sqlite;
 using Npgsql;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services;
 
 public static class MatGroupRepo
@@ -111,7 +112,8 @@ public static class MatGroupRepo
         }
         catch
         {
-            try { transaction.Rollback(); } catch { }
+            try { transaction.Rollback(); } catch (Exception exL114) {
+                AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exL114, "MatGroupRepo.SaveMembers"); }
             throw;
         }
     }

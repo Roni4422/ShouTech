@@ -4,6 +4,7 @@ using ShouTech.Application.Services;
 using ShouTech.Domain.Interfaces;
 using ShouTech.Infrastructure;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services
 {
     /// <summary>
@@ -143,8 +144,9 @@ namespace ShouTech.App.Services
                 // DatabaseRuntime reads the current configuration
                 // when the connection is requested.
             }
-            catch
+            catch (Exception exL146)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL146, "AppHost.RebindDatabaseContext");
                 // Intentionally ignored.
             }
         }

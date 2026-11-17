@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -17,6 +17,7 @@ using System.Xml.Linq;
 using Microsoft.Win32;
 using ShouTech.App.Services;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 /// <summary>
@@ -79,6 +80,7 @@ public partial class CoaWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "CoaWin.xaml.LoadChart");
             MessageBox.Show(this, $"Could not load the chart of accounts from the database.\n{ex.Message}", "Chart of accounts", MessageBoxButton.OK, MessageBoxImage.Error);
             _allRoots.Clear();
             RebindTree(_allRoots);
@@ -480,6 +482,7 @@ public partial class CoaWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "CoaWin.xaml.ExportCsv");
             ShowErrorMsg($"Could not export CSV.\n{ex.Message}");
         }
     }
@@ -509,6 +512,7 @@ public partial class CoaWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "CoaWin.xaml.ExportExcel");
             ShowErrorMsg($"Could not export Excel.\n{ex.Message}");
         }
     }
@@ -639,6 +643,7 @@ public partial class CoaWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "CoaWin.xaml.ExportEncrypted");
             ShowErrorMsg($"Could not create the .sta file.\n{ex.Message}");
         }
     }
@@ -675,6 +680,7 @@ public partial class CoaWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "CoaWin.xaml.ImportFile");
             ShowErrorMsg($"Could not import the file.\n{ex.Message}");
         }
     }
@@ -751,12 +757,14 @@ public partial class CoaWin : BaseWin
             ImportAccounts(payload.Accounts);
             ShowInfoMsg("Chart of accounts was decrypted and restored from ShouTechCrtOfAcc.sta successfully.");
         }
-        catch (CryptographicException)
+        catch (CryptographicException exL754)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL754, "CoaWin.xaml.ImportEncrypted");
             ShowErrorMsg("Could not decrypt the .sta file. Check the password and file integrity.");
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "CoaWin.xaml.ImportEncrypted");
             ShowErrorMsg($"Could not import the .sta file.\n{ex.Message}");
         }
     }

@@ -7,6 +7,7 @@ using Npgsql;
 using ShouTech.App;
 using ShouTech.App.Configuration;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services;
 
 /// <summary>
@@ -938,18 +939,27 @@ public static class RecycleBinSvc
 		private static void LogOperation(string action, string message)
 		{
 			try { AppServiceHost.Logging.LogOperation(LogCategory, action, message); }
-			catch { }
+			catch (Exception exL941)
+			{
+				AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL941, "RecycleBinSvc.LogOperation");
+			}
 		}
 
 		private static void LogWarning(string message)
 		{
 			try { AppServiceHost.Logging.LogWarning(LogCategory, message); }
-			catch { }
+			catch (Exception exL947)
+			{
+				AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL947, "RecycleBinSvc.LogWarning");
+			}
 		}
 
 		private static void LogError(string message, Exception exception)
 		{
 			try { AppServiceHost.Logging.LogError(LogCategory, message, exception); }
-			catch { }
+			catch (Exception exL953)
+			{
+				AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL953, "RecycleBinSvc.LogError");
+			}
 		}
 }

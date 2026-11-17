@@ -4,6 +4,8 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using ShouTech.App.Services;
+using ShouTech.Domain;
 namespace ShouTech.App.Localization
 {
     public static class ErrorCatalog
@@ -110,8 +112,9 @@ namespace ShouTech.App.Localization
                 return JsonSerializer.Deserialize<Dictionary<string, RawEntry>>(json)
                     ?? new Dictionary<string, RawEntry>(StringComparer.OrdinalIgnoreCase);
             }
-            catch
+            catch (Exception exL113)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL113, "ErrorCatalog.Load");
                 return new Dictionary<string, RawEntry>(StringComparer.OrdinalIgnoreCase);
             }
         }

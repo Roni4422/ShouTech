@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Printing;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services;
 
 /// <summary>Per-user cash drawer printer configuration and ESC/POS drawer kick.</summary>
@@ -32,7 +33,8 @@ public static class CashDrawerService
                 .Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase).ToArray();
         }
-        catch { return Array.Empty<string>(); }
+        catch (Exception exL35) {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL35, "CashDrawerService.GetInstalledPrinters"); return Array.Empty<string>(); }
     }
 
     public static void SavePrinter(string? printerName)
@@ -77,14 +79,16 @@ public static class CashDrawerService
             message = $"Cash-drawer open command sent to '{printer}'.";
             return true;
         }
-        catch (Exception ex) { message = $"Unable to open cash drawer: {ex.Message}"; return false; }
+        catch (Exception ex) {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "CashDrawerService.TryOpenDrawer"); message = $"Unable to open cash drawer: {ex.Message}"; return false; }
         finally { if (handle != IntPtr.Zero) ClosePrinter(handle); }
     }
 
     private static Settings Load()
     {
         try { return File.Exists(SettingsPath) ? JsonSerializer.Deserialize<Settings>(File.ReadAllText(SettingsPath)) ?? new Settings() : new Settings(); }
-        catch { return new Settings(); }
+        catch (Exception exL87) {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL87, "CashDrawerService.Load"); return new Settings(); }
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]

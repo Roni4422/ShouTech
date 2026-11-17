@@ -9,6 +9,7 @@ using System.Windows.Controls;
 using Microsoft.Win32;
 using ShouTech.App.Reporting;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services;
 
 /// <summary>
@@ -77,6 +78,7 @@ public static class XptServ
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "XptServ.ExportExcel");
             NotifyFailure(owner, ex);
             return false;
         }
@@ -122,6 +124,7 @@ public static class XptServ
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "XptServ.ExportPdf");
             NotifyFailure(owner, ex);
             return false;
         }
@@ -167,6 +170,7 @@ public static class XptServ
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "XptServ.ExportEncrypted");
             NotifyFailure(owner, ex);
             return false;
         }

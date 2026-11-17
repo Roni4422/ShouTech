@@ -3,6 +3,7 @@ using ShouTech.App.Common;
 using ShouTech.App.Localization;
 using ShouTech.App.Services;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views.Modules
 {
     public partial class DashVw : UserControl
@@ -30,8 +31,9 @@ namespace ShouTech.App.Views.Modules
                 PendingCount.Text =
                     AppFormat.FormatNumber(await data.GetTotalPendingApprovalsAsync());
             }
-            catch
+            catch (Exception exL33)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL33, "DashVw.xaml.OnLoaded");
                 CustomersCount.Text = "—";
                 ProductsCount.Text = "—";
                 PendingCount.Text = "—";

@@ -8,6 +8,7 @@ using System.Linq;
 using Microsoft.Data.Sqlite;
 using Npgsql;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services;
 
 public sealed class ProductCategoryRecord
@@ -198,7 +199,8 @@ public static class ProductCategoryRepo
         }
         catch
         {
-            try { transaction.Rollback(); } catch { }
+            try { transaction.Rollback(); } catch (Exception exL201) {
+                AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exL201, "ProductCategoryRepo.Save"); }
             throw;
         }
     }
@@ -292,7 +294,8 @@ public static class ProductCategoryRepo
         }
         catch
         {
-            try { transaction.Rollback(); } catch { }
+            try { transaction.Rollback(); } catch (Exception exL295) {
+                AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exL295, "ProductCategoryRepo.SoftDelete"); }
             throw;
         }
     }

@@ -1,4 +1,4 @@
-﻿// ========================================================================
+// ========================================================================
 // FILE: cod/app/src/Configuration/AppConfig.cs
 // PROJECT: SHOUTECH ERP V10 - Central Configuration
 // Merged: AppCfgSvc + AppSetng + AppPaths
@@ -13,6 +13,8 @@ using System.Linq;
 using System.Text.Json;
 using ShouTech.App.Common;
 
+using ShouTech.App.Services;
+using ShouTech.Domain;
 namespace ShouTech.App.Configuration
 {
 
@@ -114,8 +116,9 @@ namespace ShouTech.App.Configuration
                     ApplyDevelopmentDefaults(_settings);
                     _loadedPath = path;
                 }
-                catch (Exception)
+                catch (Exception exL117)
                 {
+                    AppHost.Errors.Report(ErrorCodes.ConfigurationLoadFailed, exL117, "AppConfig.Load");
                     _settings = CreateDefaultSettings();
                     _loadedPath = null;
                 }
@@ -250,7 +253,10 @@ namespace ShouTech.App.Configuration
 				var json = System.Text.Json.JsonSerializer.Serialize(Current, JsonOptions);
 				System.IO.File.WriteAllText(path, json);
 			}
-			catch { }
+			catch (Exception exL253)
+			{
+				AppHost.Errors.Report(ErrorCodes.ConfigurationLoadFailed, exL253, "AppConfig.Save");
+			}
 		}
 }
 

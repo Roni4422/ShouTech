@@ -10,6 +10,7 @@ using ShouTech.App;
 using ShouTech.App.Localization;
 using ShouTech.App.Services;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 /// <summary>
@@ -34,8 +35,9 @@ public partial class BinWin : Window
         {
             LangDirSv.ApplyToWindow(this);
         }
-        catch
+        catch (Exception exL37)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL37, "BinWin.xaml.BinWin");
             // Direction helpers must not block the window.
         }
     }
@@ -110,6 +112,7 @@ public partial class BinWin : Window
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "BinWin.xaml.ReloadAsync");
             ItemsGrid.ItemsSource = Array.Empty<RecycleBinItem>();
             StatusText.Text = Loc.Get("RecycleBin.LoadFailed", "Failed to load the recycle bin.");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
@@ -158,6 +161,7 @@ public partial class BinWin : Window
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "BinWin.xaml.Restore_Click");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
@@ -218,6 +222,7 @@ public partial class BinWin : Window
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "BinWin.xaml.Purge_Click");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally

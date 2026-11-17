@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services;
 
 // ====================================================================
@@ -333,7 +334,10 @@ public static class CurrencyParser
                 var rec = ParseCurrencyLine(line[(eq + 1)..]);
                 if (rec != null) result.Add(rec);
             }
-            catch { /* skip malformed */ }
+            catch (Exception exL336)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL336, "ShcTemp.Parse");
+            }
         }
 
         for (var i = 0; i < result.Count; i++)
@@ -480,7 +484,10 @@ public static class CoaTemplatesSvc
                     HasManufacturing = template.Features.HasManufacturing
                 });
             }
-            catch { /* skip broken files */ }
+            catch (Exception exL483)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL483, "ShcTemp.GetAvailableTemplates");
+            }
         }
 
         return result.OrderBy(x => x.Code).ToList();
@@ -493,7 +500,8 @@ public static class CoaTemplatesSvc
         if (!File.Exists(path)) return null;
 
         try { return CoaTemplateLoader.Load(path); }
-        catch { return null; }
+        catch (Exception exL496) {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL496, "ShcTemp.LoadByFileName"); return null; }
     }
 
     /// <summary>Loads the default (fallback) template.</summary>

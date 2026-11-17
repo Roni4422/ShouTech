@@ -4,6 +4,7 @@ using ShouTech.App.Reporting.Invoices;
 using ShouTech.App.Views;
 using ShouTech.App.Views.Reports;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services;
 
 /// <summary>
@@ -245,7 +246,10 @@ public static class RptNav
             }
             win.Owner = owner ?? System.Windows.Application.Current?.MainWindow;
         }
-        catch { }
+        catch (Exception exL248)
+        {
+            AppHost.Errors.Report(ErrorCodes.NavigationFailed, exL248, "RptNav.Show");
+        }
         win.Show();
     }
 }

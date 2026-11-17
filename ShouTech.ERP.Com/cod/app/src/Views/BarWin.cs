@@ -5,6 +5,8 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using ShouTech.App.Common;
 
+using ShouTech.App.Services;
+using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 /// <summary>
@@ -218,8 +220,9 @@ public sealed class BarWin : BaseWin
 
             UpdatePreview();
         }
-        catch
+        catch (Exception exL221)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL221, "BarWin.PickMaterial");
             // The picker is optional; failures must not break the window.
         }
     }
@@ -315,8 +318,9 @@ public sealed class BarWin : BaseWin
                 ? fallback
                 : s;
         }
-        catch
+        catch (Exception exL318)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL318, "BarWin.L");
             return fallback;
         }
     }

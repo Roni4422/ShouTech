@@ -6,6 +6,7 @@ using Microsoft.Data.Sqlite;
 using Npgsql;
 using ShouTech.App.Views;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services;
 
 /// <summary>
@@ -41,8 +42,9 @@ public static class TaxSvc
                 CountryDefaults.TryGetValue(country.Trim(), out var rate))
                 return rate;
         }
-        catch
+        catch (Exception exL44)
         {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL44, "TaxSvc.GetDefaultRate");
             // Fall through to conservative default.
         }
         return 15m;
@@ -74,8 +76,9 @@ public static class TaxSvc
                     Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture) ?? ""));
             }
         }
-        catch
+        catch (Exception exL77)
         {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL77, "TaxSvc.LoadCodes");
             // Optional table.
         }
         return list;
@@ -113,8 +116,9 @@ public static class TaxSvc
             return (Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
                     Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? "");
         }
-        catch
+        catch (Exception exL116)
         {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL116, "TaxSvc.static");
             return null;
         }
     }
@@ -165,8 +169,9 @@ public static class TaxSvc
                 Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture) ?? "",
                 Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture));
         }
-        catch
+        catch (Exception exL168)
         {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL168, "TaxSvc.static");
             return null;
         }
     }
@@ -188,8 +193,9 @@ public static class TaxSvc
             if (v is null or DBNull) return null;
             return Convert.ToDecimal(v, CultureInfo.InvariantCulture);
         }
-        catch
+        catch (Exception exL191)
         {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL191, "TaxSvc.TryLoadActiveRate");
             return null;
         }
     }
@@ -210,8 +216,9 @@ public static class TaxSvc
             var v = cmd.ExecuteScalar();
             return Convert.ToString(v, CultureInfo.InvariantCulture) ?? "SA";
         }
-        catch
+        catch (Exception exL213)
         {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL213, "TaxSvc.GetCompanyCountry");
             return "SA";
         }
     }

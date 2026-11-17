@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Npgsql;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services;
 
 /// <summary>
@@ -171,7 +172,9 @@ public static class SchemaMigrator
                 }
                 catch (Exception ex)
                 {
-                    try { await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false); } catch { /* ignore */ }
+                    AppHost.Errors.Report(ErrorCodes.MigrationFailed, ex, "SchMig.ApplyAllAsync");
+                    try { await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false); } catch (Exception exL174) {
+                        AppHost.Errors.Report(ErrorCodes.MigrationFailed, exL174, "SchMig.ApplyAllAsync"); /* ignore */ }
                     return new MigrationResult
                     {
                         Success = false,
@@ -196,6 +199,7 @@ public static class SchemaMigrator
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.MigrationFailed, ex, "SchMig.ApplyAllAsync");
             return new MigrationResult
             {
                 Success = false,

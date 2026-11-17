@@ -11,6 +11,7 @@ using ShouTech.App.Services;
 using ShouTech.Application.Services;
 using ShouTech.Domain.Entities;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 /// <summary>
@@ -245,6 +246,7 @@ public sealed class ProjWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "ProjWin.RefreshAsync");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -281,6 +283,7 @@ public sealed class ProjWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "ProjWin.LoadTasksAsync");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
         UpdateStatusBar();
@@ -326,6 +329,7 @@ public sealed class ProjWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "ProjWin.SaveAsync");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -348,6 +352,7 @@ public sealed class ProjWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "ProjWin.DeleteAsync");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -375,6 +380,7 @@ public sealed class ProjWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "ProjWin.SaveTaskAsync");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -395,6 +401,7 @@ public sealed class ProjWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "ProjWin.DeleteTaskAsync");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

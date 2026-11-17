@@ -24,6 +24,7 @@ using Npgsql;
 using ShouTech.App.Configuration;
 using System.Globalization;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services
 {
 
@@ -453,6 +454,7 @@ internal static class SteiSvc
                     }
                     catch (Exception ex)
                     {
+                        AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "Backup.ImportCoreAsync");
                         failedRows++;
                         errors.Add($"{pair.Key}: {ex.Message}");
                     }
@@ -554,7 +556,10 @@ internal static class SteiSvc
             if (DatabaseRuntime.IsSqlite(provider)) return Path.GetFileName(DatabaseRuntime.GetSqliteDataSource(cs) ?? "-");
             if (DatabaseRuntime.IsPostgreSql(provider)) return new NpgsqlConnectionStringBuilder(cs).Database ?? "-";
         }
-        catch { }
+        catch (Exception exL557)
+        {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL557, "Backup.GetDatabaseName");
+        }
         return "-";
     }
 
@@ -783,6 +788,9 @@ internal static class SteiSvc
                     }
                     catch (Exception ex) when (ex is CryptographicException or FormatException or InvalidDataException)
                     {
+                        // Stored key material is unreadable/corrupt: report
+                        // it, then recover by generating a fresh key.
+                        AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "Backup.GetPackagePassword");
                         rawKey = GenerateAndStore(path);
                     }
                 }
@@ -807,7 +815,8 @@ internal static class SteiSvc
             File.WriteAllText(tmp, Convert.ToBase64String(protectedBlob));
             File.Move(tmp, path, overwrite: true);
 
-            try { File.SetAttributes(path, FileAttributes.Hidden); } catch { /* effort */ }
+            try { File.SetAttributes(path, FileAttributes.Hidden); } catch (Exception exL810) {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL810, "Backup.GenerateAndStore"); /* effort */ }
             return rawKey;
         }
     }
@@ -890,7 +899,8 @@ internal static class SteiSvc
             finally
             {
                
-                try { if (File.Exists(tmpPath)) File.Delete(tmpPath); } catch { /* best effort */ }
+                try { if (File.Exists(tmpPath)) File.Delete(tmpPath); } catch (Exception exL893) {
+                    AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL893, "Backup.CreateBackupCoreAsync"); /* best effort */ }
             }
         }
 
@@ -1103,7 +1113,10 @@ internal static class SteiSvc
                     });
                 }
             }
-            catch { }
+            catch (Exception exL1106)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL1106, "Backup.ListBackups");
+            }
             return result;
         }
 
@@ -1127,6 +1140,7 @@ internal static class SteiSvc
             }
             catch (System.Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "Backup.ValidateBackupDetailedAsync");
                 detail.IsValid = false;
                 detail.FailureReason = ex.Message;
             }
@@ -1142,8 +1156,9 @@ internal static class SteiSvc
                 System.IO.Directory.CreateDirectory(dir);
                 return dir;
             }
-            catch
+            catch (Exception exL1145)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL1145, "Backup.GetBackupDirectory");
                 return System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "backups");
             }
         }

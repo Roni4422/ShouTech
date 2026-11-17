@@ -1,4 +1,4 @@
-﻿// ========================================================================
+// ========================================================================
 // FILE: Services/Inventory.cs
 // PROJECT: SHOUTECH ERP - Inventory & Material master
 // Merged: InventoryModels, IInvServ, InvServ, InvRepo, InventoryRepositoryFactory, MatRepo
@@ -20,6 +20,7 @@ using ShouTech.App.Common;
 using ShouTech.App.Views;
 using System.IO;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services
 {
 
@@ -1579,8 +1580,9 @@ internal static class MatRepo
 
 			File.AppendAllText(path, text);
 		}
-		catch
+		catch (Exception exL1582)
 		{
+			AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exL1582, "Inventory.LogWarehouseError");
 			// Logging must never break the application.
 		}
 	}
@@ -1763,7 +1765,8 @@ internal static class MatRepo
 			}
 			catch
 			{
-				try { tx.Rollback(); } catch { /* ignored */ }
+				try { tx.Rollback(); } catch (Exception exL1766) {
+					AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exL1766, "Inventory.InsertMainWarehouse"); /* ignored */ }
 				throw;
 			}
 		}
@@ -1866,7 +1869,8 @@ internal static class MatRepo
 			}
 			catch
 			{
-				try { tx.Rollback(); } catch { /* ignored */ }
+				try { tx.Rollback(); } catch (Exception exL1869) {
+					AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exL1869, "Inventory.SaveWarehouse"); /* ignored */ }
 				throw;
 			}
 		}
@@ -2326,8 +2330,9 @@ internal static class MatRepo
 				});
 			}
 		}
-		catch
+		catch (Exception exL2329)
 		{
+			AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exL2329, "Inventory.LoadGroups");
 			// Existing project behavior.
 		}
 
@@ -2656,8 +2661,9 @@ internal static class MatRepo
 			{
 				tx.Rollback();
 			}
-			catch
+			catch (Exception exL2659)
 			{
+				AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exL2659, "Inventory.SaveGroup");
 			}
 
 			throw;
@@ -2705,8 +2711,9 @@ internal static class MatRepo
 
 			return "0001";
 		}
-		catch
+		catch (Exception exL2708)
 		{
+			AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exL2708, "Inventory.NextGroupCode");
 			return "0001";
 		}
 	}

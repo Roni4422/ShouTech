@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -7,6 +7,7 @@ using System.Windows.Media.Effects;
 using System.Globalization;
 using ShouTech.App.Services;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 /// <summary>Persistent account card. Account numbering and storage are database-driven.</summary>
@@ -24,7 +25,8 @@ public partial class AccCard : BaseWin
     private static AccRepo.AccRec? LoadDefaultRecord()
     {
         try { return AccRepo.LoadAll().OrderByDescending(x => x.Id).FirstOrDefault(); }
-        catch { return null; }
+        catch (Exception exL27) {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL27, "AccCard.xaml.LoadDefaultRecord"); return null; }
     }
 
     public AccCard(string parentCode) : this(null, parentCode) { }
@@ -134,7 +136,8 @@ public partial class AccCard : BaseWin
     private void GenerateNextCode(string parentCode)
     {
         try { TxtCode.Text = AccRepo.NextChildCode(parentCode); }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Account Numbering", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        catch (Exception ex) {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "AccCard.xaml.GenerateNextCode"); MessageBox.Show(this, ex.Message, "Account Numbering", MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
 
     private void CmbRisk_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -323,6 +326,7 @@ public partial class AccCard : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "AccCard.xaml.Disable_Click");
             MessageBox.Show(this, $"Could not verify the account status.\n{ex.Message}", "Disable Account", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -353,6 +357,7 @@ public partial class AccCard : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "AccCard.xaml.Delete_Click");
             MessageBox.Show(this, $"Could not delete the account.\n{ex.Message}", "Delete Account", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

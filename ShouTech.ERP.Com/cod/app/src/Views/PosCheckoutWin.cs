@@ -8,6 +8,7 @@ using System.Windows.Media;
 using ShouTech.App.Reporting.Invoices;
 using ShouTech.App.Services;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 /// <summary>POS-specific tender review and document posting.</summary>
@@ -221,6 +222,7 @@ public sealed class PosCheckoutWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PosCheckoutWin.CompleteSale");
             MessageBox.Show(this, ex.Message, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
             _complete.IsEnabled = true;
         }

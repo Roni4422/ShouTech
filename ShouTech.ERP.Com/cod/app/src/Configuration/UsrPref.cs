@@ -15,6 +15,7 @@ using System.Windows;
 using ShouTech.App.Services;
 
 
+using ShouTech.Domain;
 namespace ShouTech.App.Configuration;
 
 /// <summary>
@@ -176,8 +177,9 @@ public sealed class UsrPref
                 }
             }
         }
-        catch
+        catch (Exception exL179)
         {
+            AppHost.Errors.Report(ErrorCodes.SettingsLoadFailed, exL179, "UsrPref.Load");
             // Fallback to defaults silently.
         }
 
@@ -199,8 +201,9 @@ public sealed class UsrPref
             string json = JsonSerializer.Serialize(this, _jsonOptions);
             File.WriteAllText(_path, json);
         }
-        catch
+        catch (Exception exL202)
         {
+            AppHost.Errors.Report(ErrorCodes.SettingsSaveFailed, exL202, "UsrPref.Save");
             // Ignore write errors during unexpected shutdown.
         }
     }

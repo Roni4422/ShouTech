@@ -15,6 +15,7 @@ using ShouTech.App.Reporting.Invoices;
 using ShouTech.App.Services;
 using ShouTech.App.Configuration;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 /// <summary>Retail cashier workspace. Final invoice posting remains in the existing invoice workflow.</summary>
@@ -321,6 +322,7 @@ public sealed class PosWin : BaseWin
         try { material = TaxSvc.ResolveMaterial(code); }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PosWin.AddScannedItem");
             LogPosEvent($"Material lookup exception. Company='{AppState.CurrentCompanyCode ?? ""}', Query='{code}', Error='{ex.GetType().Name}: {ex.Message}'.");
             _scan.Clear(); _scan.Focus(); return;
         }
@@ -439,6 +441,7 @@ public sealed class PosWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PosWin.OpenUnitChooser");
             LogPosEvent($"Unit chooser failed for material '{line.Code}': {ex.GetType().Name}: {ex.Message}");
             SetStatus("Unable to load units for the selected material. See application log.", true);
         }
@@ -463,7 +466,10 @@ public sealed class PosWin : BaseWin
             Directory.CreateDirectory(logDir);
             File.AppendAllText(Path.Combine(logDir, "log.log"), $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [POS] {message}{Environment.NewLine}");
         }
-        catch { /* Logging must never block checkout. */ }
+        catch (Exception exL466)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL466, "PosWin.LogPosEvent");
+        }
     }
 
     protected override void ApplyLocalizedText()
@@ -545,7 +551,8 @@ public sealed class PosWin : BaseWin
                     return Convert.ToString(value, CultureInfo.InvariantCulture) ?? "-";
             return DatabaseRuntime.GetProvider();
         }
-        catch { return DatabaseRuntime.GetProvider(); }
+        catch (Exception exL548) {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL548, "PosWin.GetDatabaseDisplayName"); return DatabaseRuntime.GetProvider(); }
     }
 
     private void ChangeSelectedQty(int delta)

@@ -22,6 +22,7 @@ using System;
 using ShouTech.App.Common;
 using ShouTech.App.Configuration;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services
 {
 
@@ -243,6 +244,7 @@ public sealed class ConnServ : IConnSvc
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "Online.CheckAsync");
                 _logging.LogInfo("Connectivity", $"Check failed: {ex.Message}");
             }
             finally
@@ -271,12 +273,14 @@ public sealed class ConnServ : IConnSvc
                     ? ConnectivityState.ServerReachable
                     : ConnectivityState.Online;
             }
-            catch (HttpRequestException)
+            catch (HttpRequestException exL274)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL274, "Online.ProbeAsync");
                 return ConnectivityState.Online;
             }
-            catch (TaskCanceledException)
+            catch (TaskCanceledException exL278)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL278, "Online.ProbeAsync");
                 return ConnectivityState.Online;
             }
         }
@@ -357,6 +361,7 @@ public sealed class DevInfoSv : IDevInfoSv, IDevInfoSvoSv
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "Online.RegisterWithServerAsync");
                 _logging.LogInfo("DeviceInfo", $"Device registration skipped: {ex.Message}");
             }
         }
@@ -418,8 +423,9 @@ public sealed class DevInfoSv : IDevInfoSv, IDevInfoSvoSv
                 File.WriteAllText(idPath, deviceId);
                 return deviceId;
             }
-            catch
+            catch (Exception exL421)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL421, "Online.LoadOrCreateDeviceId");
                 return $"ST-{Guid.NewGuid():N}"[..16].ToUpperInvariant();
             }
         }
@@ -579,6 +585,7 @@ public sealed class LicenSvc : ILicenSvc
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "Online.TryOnlineValidationAsync");
                 _logging.LogInfo("License", $"Online validation skipped: {ex.Message}");
             }
 
@@ -606,8 +613,9 @@ public sealed class LicenSvc : ILicenSvc
                     Current.SupportGrant = grant.Deserialize<SupportGrant>(JsonDefs.AppSetngRead);
                 }
             }
-            catch
+            catch (Exception exL609)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL609, "Online.ApplyServerResponse");
                 // Keep local license if response is not parseable
             }
         }
@@ -804,8 +812,9 @@ public sealed class SyncServ : ISyncServ, ISyncSvc
                 {
                     result[Path.GetFileName(file)] = File.ReadAllText(file);
                 }
-                catch
+                catch (Exception exL807)
                 {
+                    AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL807, "Online.CollectExistingUserFiles");
                     // Skip unreadable files
                 }
             }

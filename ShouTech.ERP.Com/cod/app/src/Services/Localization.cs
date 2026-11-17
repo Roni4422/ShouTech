@@ -17,6 +17,7 @@ using System.Windows;
 using System.Windows.Media;
 using System;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services
 {
     // ---- Language direction (RTL/LTR) ----
@@ -77,7 +78,10 @@ public static class LangDirSv
 				NumberSubstitution.SetCultureOverride(window, CultureInfo.GetCultureInfo("en-US"));
 				NumberSubstitution.SetSubstitution(window, NumberSubstitutionMethod.European);
 			}
-			catch (CultureNotFoundException) { }
+			catch (CultureNotFoundException exL80)
+			{
+				AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL80, "Localization.ApplyToWindow");
+			}
 		}
 
 		/// <summary>
@@ -256,8 +260,9 @@ public static class LangDirSv
                             _labelToKey[pair.Value] = pair.Key;
                     }
                 }
-                catch (JsonException)
+                catch (JsonException exL259)
                 {
+                    AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL259, "Localization.BuildLabelIndex");
                     // A malformed optional language file must not prevent startup.
                 }
             }
@@ -368,8 +373,9 @@ public static class LangDirSv
                 if (data != null)
                     FlattenToDictionary(data, string.Empty, resources);
             }
-            catch
+            catch (Exception exL371)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL371, "Localization.LoadLanguageResources");
                 // A missing optional language resource falls back to the English source text.
             }
             return resources;
@@ -404,8 +410,9 @@ public static class LangDirSv
                 System.Globalization.CultureInfo.DefaultThreadCurrentCulture = culture;
                 System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = culture;
             }
-            catch (Exception)
+            catch (Exception exL407)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL407, "Localization.SetLanguage");
                 // Keep current culture if the requested code is invalid.
             }
 
@@ -442,8 +449,9 @@ public static class LangDirSv
 
                 _resources = merged;
             }
-            catch (Exception)
+            catch (Exception exL445)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL445, "Localization.LoadLanguage");
                 // Keep previously loaded resources if reload fails.
             }
         }
@@ -618,8 +626,9 @@ public static class LangDirSv
                 
                 File.WriteAllText(filePath, defaultContent);
             }
-            catch (Exception)
+            catch (Exception exL621)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL621, "Localization.CreateDefaultLanguageFile");
                 // Non-fatal: caller will retry with empty resources.
             }
         }

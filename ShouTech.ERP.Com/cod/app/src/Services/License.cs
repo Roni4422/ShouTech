@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using System.Threading;
 using System;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services
 {
 
@@ -207,9 +208,12 @@ public enum LicEd : byte
                 };
                 return true;
             }
-            catch (DllNotFoundException) { _nativeAvailable = false; return false; }
-            catch (EntryPointNotFoundException) { _nativeAvailable = false; return false; }
-            catch (BadImageFormatException) { _nativeAvailable = false; return false; }
+            catch (DllNotFoundException exL210) {
+                AppHost.Errors.Report(ErrorCodes.LicenseCheckFailed, exL210, "License.TryValidateNative"); _nativeAvailable = false; return false; }
+            catch (EntryPointNotFoundException exL211) {
+                AppHost.Errors.Report(ErrorCodes.LicenseCheckFailed, exL211, "License.TryValidateNative"); _nativeAvailable = false; return false; }
+            catch (BadImageFormatException exL212) {
+                AppHost.Errors.Report(ErrorCodes.LicenseCheckFailed, exL212, "License.TryValidateNative"); _nativeAvailable = false; return false; }
         }
 
         public async Task<LicResult> RefreshAsync(CancellationToken ct = default)

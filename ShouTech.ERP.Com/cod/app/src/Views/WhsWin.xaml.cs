@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -12,6 +12,7 @@ using ShouTech.App;
 using ShouTech.App.Common;
 using ShouTech.App.Services;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views
 {
     /// <summary>
@@ -137,6 +138,7 @@ namespace ShouTech.App.Views
                     }
                     catch (Exception ex)
                     {
+                        AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "WhsWin.xaml.WhsWin");
                         ShowToast(false, T("WhsWin.LoadFailed"), ErrLoadFailed, ex.Message);
                     }
                 };
@@ -145,6 +147,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "WhsWin.xaml.WhsWin");
                 MessageBox.Show(
                     T("WhsWin.LoadFailed") + "\n\n" + ex.Message,
                     T("Common.Error"),
@@ -208,8 +211,9 @@ namespace ShouTech.App.Views
                     else SaveExistingWarehouse();
                     ClearDirty();
                 }
-                catch
+                catch (Exception exL211)
                 {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL211, "WhsWin.xaml.OnClosingDirtyCheck");
                     e.Cancel = true;
                 }
             }
@@ -298,6 +302,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "WhsWin.xaml.LoadItems");
                 _repoAvailable = false;
                 ShowToast(false, T("WhsWin.LoadFailed"), ErrLoadFailed, ex.Message);
             }
@@ -552,7 +557,8 @@ namespace ShouTech.App.Views
                 ClearFieldError();
                 ClearDirty();
 
-                try { TxtCardNo?.Focus(); TxtCardNo?.SelectAll(); } catch { }
+                try { TxtCardNo?.Focus(); TxtCardNo?.SelectAll(); } catch (Exception exL555) {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL555, "WhsWin.xaml.PrepareNew"); }
             }
             finally
             {
@@ -602,7 +608,8 @@ namespace ShouTech.App.Views
             if (_current == null || _isBusy) return;
             SetEditable(true);
             RefreshModeBadge();
-            try { TxtName?.Focus(); } catch { }
+            try { TxtName?.Focus(); } catch (Exception exL605) {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL605, "WhsWin.xaml.Edit_Click"); }
         }
 
         private void Advanced_Toggled(object sender, RoutedEventArgs e)
@@ -669,13 +676,15 @@ namespace ShouTech.App.Views
             {
                 box.BorderBrush = TryFindResource("ErrorBrush") as Brush
                                   ?? Brushes.IndianRed;
-                try { box.Focus(); box.SelectAll(); } catch { }
+                try { box.Focus(); box.SelectAll(); } catch (Exception exL672) {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL672, "WhsWin.xaml.ShowFieldError"); }
 
                 var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.5) };
                 timer.Tick += (_, _) =>
                 {
                     timer.Stop();
-                    try { box.ClearValue(Border.BorderBrushProperty); } catch { }
+                    try { box.ClearValue(Border.BorderBrushProperty); } catch (Exception exL678) {
+                        AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL678, "WhsWin.xaml.ShowFieldError"); }
                 };
                 timer.Start();
             }
@@ -721,6 +730,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "WhsWin.xaml.Save_Click");
                 ShowToast(false, T("WhsWin.NotSaved"), ErrSaveFailed, ex.Message);
             }
             finally
@@ -837,6 +847,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "WhsWin.xaml.Delete_Click");
                 ShowToast(false, T("WhsWin.NotDeleted"), ErrDeleteFailed, ex.Message);
             }
             finally
@@ -1549,8 +1560,9 @@ namespace ShouTech.App.Views
                 SafeSet(TxtStatus,
                     FormatLoc(T("WhsWin.StatusUserDb"), user, db));
             }
-            catch
+            catch (Exception exL1552)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL1552, "WhsWin.xaml.RefreshStatusBar");
                 SafeSet(TxtStatus, "");
             }
         }
@@ -1614,17 +1626,22 @@ namespace ShouTech.App.Views
                         toast.Left = Left + (ActualWidth - toast.ActualWidth) / 2;
                         toast.Top  = Top + ActualHeight - toast.ActualHeight - 60;
                     }
-                    catch { }
+                    catch (Exception exL1617)
+                    {
+                        AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL1617, "WhsWin.xaml.ShowToast");
+                    }
                 };
 
                 toast.Show();
 
                 var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(success ? 2.2 : 3.5) };
-                timer.Tick += (_, _) => { timer.Stop(); try { toast.Close(); } catch { } };
+                timer.Tick += (_, _) => { timer.Stop(); try { toast.Close(); } catch (Exception exL1623) {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL1623, "WhsWin.xaml.ShowToast"); } };
                 timer.Start();
             }
-            catch
+            catch (Exception exL1626)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL1626, "WhsWin.xaml.ShowToast");
                 // Toast must never crash the form.
             }
         }
@@ -1642,7 +1659,8 @@ namespace ShouTech.App.Views
         private static string FormatLoc(string format, params object[] args)
         {
             try { return string.Format(CultureInfo.InvariantCulture, format, args); }
-            catch (FormatException) { return format; }
+            catch (FormatException exL1645) {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL1645, "WhsWin.xaml.FormatLoc"); return format; }
         }
 #pragma warning restore CA1863
 
@@ -1842,6 +1860,7 @@ namespace ShouTech.App.Views
                         }
                         catch (Exception ex)
                         {
+                            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "WhsWin.xaml.MoveHistory_Click");
                             ShowFailure("INV-MRG-005", ex, "Loading materials for history transfer failed.");
                             return;
                         }
@@ -1874,10 +1893,12 @@ namespace ShouTech.App.Views
                         }
                         catch (StkPost.MaterialHistoryMoveException ex)
                         {
+                            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "WhsWin.xaml.MoveHistory_Click");
                             ShowFailure(ex.ErrorCode, ex, ex.Message);
                         }
                         catch (Exception ex)
                         {
+                            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "WhsWin.xaml.MoveHistory_Click");
                             ShowFailure("INV-MRG-005", ex, "Moving material history failed.");
                         }
                         finally
@@ -2101,6 +2122,7 @@ namespace ShouTech.App.Views
                         }
                         catch (Exception ex)
                         {
+                            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "WhsWin.xaml.LoadMaterials");
                             _post.IsEnabled = false;
                             ShowFailure(ErrLoad, ex, "Loading material balances for transfer failed.");
                         }
@@ -2171,10 +2193,12 @@ namespace ShouTech.App.Views
                         }
                         catch (StkPost.StockTransferException ex)
                         {
+                            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "WhsWin.xaml.Post_Click");
                             ShowFailure(ex.ErrorCode, ex, ex.Message);
                         }
                         catch (Exception ex)
                         {
+                            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "WhsWin.xaml.Post_Click");
                             ShowFailure(ErrPost, ex, "Posting material transfer failed.");
                         }
                     }

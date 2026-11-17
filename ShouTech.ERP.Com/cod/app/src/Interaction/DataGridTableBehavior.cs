@@ -13,6 +13,7 @@ using System.Windows.Media;
 using ShouTech.App.Localization;
 using ShouTech.App.Services;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Interaction;
 
 /// <summary>
@@ -211,7 +212,10 @@ public static class DataGridTableBehavior
 
             AppHost.Logging.LogLifecycle("DGTB-Enter", details);
         }
-        catch { }
+        catch (Exception exL214)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL214, "DataGridTableBehavior.DiagEnter");
+        }
     }
 
     private static bool IsColumnHeaderFocused() =>
@@ -366,12 +370,18 @@ public static class DataGridTableBehavior
                             grid.CurrentCell = new DataGridCellInfo(item, column);
                             grid.BeginEdit();
                         }
-                        catch { }
+                        catch (Exception exL369)
+                        {
+                            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL369, "DataGridTableBehavior.FocusAndBeginEdit");
+                        }
                     }),
                     System.Windows.Threading.DispatcherPriority.ApplicationIdle);
             }
         }
-        catch { }
+        catch (Exception exL374)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL374, "DataGridTableBehavior.FocusAndBeginEdit");
+        }
     }
 
     private static bool FocusCurrentCell(DataGrid grid, object item, DataGridColumn column)
@@ -406,7 +416,10 @@ public static class DataGridTableBehavior
 
             grid.Focus();
         }
-        catch { }
+        catch (Exception exL409)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL409, "DataGridTableBehavior.FocusCurrentCell");
+        }
 
         return false;
     }
@@ -449,7 +462,10 @@ public static class DataGridTableBehavior
             string.Join("\t", columns.Select(c => GetCellText(c, row))));
 
         try { Clipboard.SetText(string.Join(Environment.NewLine, lines)); }
-        catch { }
+        catch (Exception exL452)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL452, "DataGridTableBehavior.CopySelection");
+        }
     }
 
     private static void PasteClipboard(DataGrid grid)
@@ -656,7 +672,8 @@ public static class DataGridTableBehavior
     private static object? CreateItem(Type itemType)
     {
         try { return Activator.CreateInstance(itemType); }
-        catch { return null; }
+        catch (Exception exL659) {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL659, "DataGridTableBehavior.CreateItem"); return null; }
     }
 
     private static bool TryConvertValue(string text, Type targetType, out object? value)
@@ -851,7 +868,8 @@ public static class DataGridTableBehavior
 
             object? item;
             try { item = Activator.CreateInstance(type); }
-            catch { return; }
+            catch (Exception exL854) {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL854, "DataGridTableBehavior.InsertRow"); return; }
             if (item == null) return;
 
             var index = grid.SelectedIndex >= 0 ? grid.SelectedIndex + 1 : list.Count;
@@ -891,7 +909,10 @@ public static class DataGridTableBehavior
             foreach (var item in selected)
             {
                 try { editable.Remove(item); }
-                catch { /* Some views expose a read-only Remove operation. */ }
+                catch (Exception exL894)
+                {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL894, "DataGridTableBehavior.DeleteSelectedRows");
+                }
             }
         }
     }

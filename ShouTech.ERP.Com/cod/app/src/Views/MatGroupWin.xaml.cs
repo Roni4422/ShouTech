@@ -11,6 +11,7 @@ using System.Windows.Controls;
 using ShouTech.App.Localization;
 using ShouTech.App.Services;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 public partial class MatGroupWin : BaseWin
@@ -94,6 +95,7 @@ public partial class MatGroupWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "MatGroupWin.xaml.ReloadGroups");
             ReportError("MGR-001", "Loading material groups failed.", ex);
             ShowError(L("LoadFailed", "Material groups could not be loaded."));
         }
@@ -169,6 +171,7 @@ public partial class MatGroupWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "MatGroupWin.xaml.LoadGroupMaterials");
             ReportError("MGR-002", "Loading group membership failed.", ex);
             ShowError(L("LoadFailed", "Material group membership could not be loaded."));
         }
@@ -274,6 +277,7 @@ public partial class MatGroupWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "MatGroupWin.xaml.BtnSave_Click");
             ReportError("MGR-003", "Saving group membership failed.", ex);
             ShowError(L("SaveFailed", "Material group membership could not be saved."));
         }

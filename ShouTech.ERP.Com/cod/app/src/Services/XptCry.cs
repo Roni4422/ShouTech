@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Security.Cryptography;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services;
 
 /// <summary>
@@ -185,8 +186,9 @@ public static class XptCry
                 return ProtectedData.Unprotect(protectedBytes, null, DataProtectionScope.CurrentUser);
             }
         }
-        catch
+        catch (Exception exL188)
         {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL188, "XptCry.LoadOrCreateLocalKey");
             // Fall through and regenerate; tampered key files are never trusted.
         }
 

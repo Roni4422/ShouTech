@@ -11,6 +11,7 @@ using ShouTech.App.Services;
 using ShouTech.Application.Services;
 using ShouTech.Domain.Entities;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 /// <summary>
@@ -209,6 +210,7 @@ public sealed class PayRecWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PayRecWin.RefreshAsync");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -244,6 +246,7 @@ public sealed class PayRecWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PayRecWin.AllocateAsync");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

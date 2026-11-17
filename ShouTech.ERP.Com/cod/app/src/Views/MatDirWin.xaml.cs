@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -9,6 +9,7 @@ using System.Windows.Input;
 using ShouTech.App.Localization;
 using ShouTech.App.Services;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 public sealed class MatDirListItem
@@ -229,6 +230,7 @@ private void Reload()
     }
     catch (Exception ex)
     {
+        AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "MatDirWin.xaml.Reload");
         MessageBox.Show(
             this,
             ex.Message,
@@ -309,8 +311,9 @@ private void LoadGroups()
             });
         }
     }
-    catch
+    catch (Exception exL312)
     {
+        AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL312, "MatDirWin.xaml.LoadGroups");
         // Groups are optional.
     }
 }
@@ -494,6 +497,7 @@ private void Remove_Click(
     }
     catch (Exception ex)
     {
+        AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "MatDirWin.xaml.Remove_Click");
         MessageBox.Show(
             this,
             ex.Message,
@@ -617,6 +621,7 @@ x => x != null);
 }
 catch (Exception ex)
 {
+    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "MatDirWin.xaml.OpenGroupsWindow");
     MessageBox.Show(
         this,
         ex.Message,

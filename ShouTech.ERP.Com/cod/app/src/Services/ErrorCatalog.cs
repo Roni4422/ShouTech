@@ -245,6 +245,23 @@ namespace ShouTech.App.Services
             }
         }
 
+        /// <summary>
+        /// Last-resort logging for the catalog's own internal failures:
+        /// writes a coded SYS-0001 line through the logging service
+        /// directly, bypassing catalog resolution. Never throws.
+        /// </summary>
+        private static void SafeLog(string message)
+        {
+            try
+            {
+                AppHost.Logging?.LogError("Errors", ErrorCodes.Unknown, message);
+            }
+            catch
+            {
+                // Terminal fallback: nothing may throw out of error reporting.
+            }
+        }
+
         // ---------------------------------------------------------------
         // Loading
         // ---------------------------------------------------------------
@@ -255,8 +272,9 @@ namespace ShouTech.App.Services
             {
                 return _languageProvider() ?? "en";
             }
-            catch
+            catch (Exception ex)
             {
+                SafeLog($"Error catalog language provider failed: {ex.Message}");
                 return "en";
             }
         }
@@ -317,11 +335,12 @@ namespace ShouTech.App.Services
                     };
                 }
             }
-            catch
+            catch (Exception ex)
             {
                 // A malformed optional catalog file must never prevent
                 // startup or error reporting; resolution falls back to
                 // the English index / SYS-0001.
+                SafeLog($"Failed to load error catalog file '{fileName}': {ex.Message}");
             }
 
             return result;
@@ -355,8 +374,9 @@ namespace ShouTech.App.Services
             {
                 return string.Format(CultureInfo.InvariantCulture, message, args);
             }
-            catch (FormatException)
+            catch (FormatException ex)
             {
+                SafeLog($"Error catalog message format failed: {ex.Message}");
                 return message;
             }
         }

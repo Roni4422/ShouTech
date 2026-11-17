@@ -72,9 +72,11 @@ public sealed class DataServ : IDataServ
                 CollectCommercialDocuments(connection, "purchase_documents", "Purchase", docs);
                 CollectJournalDocuments(connection, docs);
             }
-            catch
+            catch (Exception ex)
             {
-                // The dashboard must never crash on an unavailable database.
+                // The dashboard must never crash on an unavailable database,
+                // but the failure is reported with its catalog code.
+                AppHost.Errors.Report(ErrorCodes.DatabaseQueryFailed, ex, "Data.GetRecentDocumentsAsync");
                 docs.Clear();
             }
 
@@ -107,8 +109,9 @@ public sealed class DataServ : IDataServ
                     (predicates.Count > 0 ? " WHERE " + string.Join(" AND ", predicates) : string.Empty) + ";";
                 return Convert.ToInt32(command.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
             }
-            catch
+            catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.DatabaseQueryFailed, ex, "Data.CountRows");
                 return 0;
             }
         }
@@ -144,9 +147,10 @@ public sealed class DataServ : IDataServ
                     });
                 }
             }
-            catch
+            catch (Exception ex)
             {
                 // Optional document source; skip it when unavailable.
+                AppHost.Errors.Report(ErrorCodes.DatabaseQueryFailed, ex, "Data.CollectCommercialDocuments");
             }
         }
 
@@ -183,9 +187,10 @@ public sealed class DataServ : IDataServ
                     });
                 }
             }
-            catch
+            catch (Exception ex)
             {
                 // Optional document source; skip it when unavailable.
+                AppHost.Errors.Report(ErrorCodes.DatabaseQueryFailed, ex, "Data.CollectJournalDocuments");
             }
         }
 

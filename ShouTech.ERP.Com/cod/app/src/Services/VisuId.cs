@@ -10,6 +10,7 @@ using System.Windows.Media;
 using System.Windows.Shell;
 using ShouTech.App.Configuration;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services
 {
     /// <summary>
@@ -275,7 +276,8 @@ namespace ShouTech.App.Services
 				System.Windows.Threading.DispatcherPriority.Loaded,
 				new Action(() =>
 				{
-					try { LangDirSv.ApplyToWindow(window); } catch { }
+					try { LangDirSv.ApplyToWindow(window); } catch (Exception exL278) {
+						AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL278, "VisuId.ApplyWindow"); }
 				}));
 		}
 
@@ -724,8 +726,9 @@ namespace ShouTech.App.Services
                 window.DragMove();
                 e.Handled = true;
             }
-            catch
+            catch (Exception exL727)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL727, "VisuId.Chrome_MouseLeftButtonDown");
                 /*
                  * DragMove may fail for an invalid mouse state.
                  * Nothing needs to be done.
@@ -761,8 +764,9 @@ namespace ShouTech.App.Services
 
                 pref.Save();
             }
-            catch
+            catch (Exception exL764)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL764, "VisuId.SetAccent");
                 /*
                  * Accent persistence is non-critical.
                  */
@@ -794,8 +798,9 @@ namespace ShouTech.App.Services
 
                 ApplyAccentInternal(key);
             }
-            catch
+            catch (Exception exL797)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL797, "VisuId.ApplySavedAccent");
                 _accentKey = "gray";
 
                 ApplyAccentInternal("gray");
@@ -905,8 +910,9 @@ namespace ShouTech.App.Services
                 if (value is T typed)
                     return typed;
             }
-            catch
+            catch (Exception exL908)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL908, "VisuId.ApplyAccentInternal");
                 /*
                  * Resource lookup failure must never prevent
                  * a window from opening.
