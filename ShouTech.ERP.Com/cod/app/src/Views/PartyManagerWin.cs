@@ -19,7 +19,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class PartyManagerWin : BaseWin
 {
-    private readonly ComboBox _cbKind = new() { Width = 160, Height = 26 };
+    private readonly ComboBox _cbKind = new();
     private readonly DataGrid _grid = new();
     private readonly TextBlock _statusBar = new();
     private readonly Button _newButton = new();

@@ -40,7 +40,10 @@ public abstract class RptBase : BaseWin
 
     private static readonly ConcurrentDictionary<string, CompositeFormat> StatusFormats = new(StringComparer.Ordinal);
     private readonly Grid _root = new();
-    private readonly WrapPanel _filterBar = new() { Margin = new Thickness(0, 0, 0, 3) };
+    // Report filter scheme: ONE 3-pair form grid for every report — side
+    // labels, star field columns, filters flow row by row so edges align
+    // across all reports (Phenix rule; docs/WINDOW_PROPORTIONS.md).
+    private readonly Grid _filterBar = CreateFormGrid(3);
     private readonly DataGrid _grid = new();
     private readonly TextBlock _title = new();
     private readonly TextBlock _status = new();
@@ -101,7 +104,7 @@ public abstract class RptBase : BaseWin
         _title.FontWeight = FontWeights.SemiBold;
         _title.Margin = new Thickness(0);
 
-        _filterHost.Padding = new Thickness(6, 3, 6, 1);
+        _filterHost.Padding = new Thickness(12, 8, 12, 8);
         _filterHost.CornerRadius = new CornerRadius(6);
         _filterHost.BorderThickness = new Thickness(1);
         _filterHost.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush");
@@ -112,16 +115,16 @@ public abstract class RptBase : BaseWin
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right
         };
-        _refresh.MinWidth = 82; _refresh.Padding = new Thickness(8, 2, 8, 2); _refresh.Height = 28;
+        _refresh.MinWidth = ShouTech.App.Services.VisuId.ButtonMinWidth;
         _refresh.Click += async (_, _) => await RefreshAsync();
-        _columns.MinWidth = 82; _columns.Padding = new Thickness(8, 2, 8, 2); _columns.Height = 28;
-        _columns.Margin = new Thickness(4, 0, 0, 0);
+        _columns.MinWidth = ShouTech.App.Services.VisuId.ButtonMinWidth;
+        _columns.Margin = new Thickness(8, 0, 0, 0);
         _columns.Click += OnColumnsClick;
-        _export.MinWidth = 82; _export.Padding = new Thickness(8, 2, 8, 2); _export.Height = 28;
-        _export.Margin = new Thickness(4, 0, 0, 0);
+        _export.MinWidth = ShouTech.App.Services.VisuId.ButtonMinWidth;
+        _export.Margin = new Thickness(8, 0, 0, 0);
         _export.Click += OnExportClick;
-        _print.MinWidth = 82; _print.Padding = new Thickness(8, 2, 8, 2); _print.Height = 28;
-        _print.Margin = new Thickness(4, 0, 0, 0);
+        _print.MinWidth = ShouTech.App.Services.VisuId.ButtonMinWidth;
+        _print.Margin = new Thickness(8, 0, 0, 0);
         _print.Click += OnPrintClick;
         foreach (var button in new[] { _refresh, _columns, _export, _print })
             button.SetResourceReference(StyleProperty, "VisuButtonStyle");
@@ -211,73 +214,43 @@ public abstract class RptBase : BaseWin
         _filterBar.Children.Clear();
         _filterControls.Clear();
 
+        // Filters flow into the shared 3-pair filter grid: index i lands on
+        // row i/3, pair i%3, so every report's filters share one aligned
+        // scheme. Heights come from the central styles (32) via
+        // AddFormField; MinWidth floors use the FieldWidth classes.
+        var index = 0;
         foreach (var flt in _def!.Filters)
         {
-            var host = new StackPanel { Margin = new Thickness(0, 0, 6, 3), MinWidth = 130 };
-            var label = new TextBlock
-            {
-                Text = T(flt.LabelTextKey),
-                FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(11),
-                Opacity = 0.75,
-                Margin = new Thickness(0, 0, 0, 1)
-            };
-            host.Children.Add(label);
-
             Control input = flt.Kind switch
             {
                 RptFltKind.DateFrom or RptFltKind.DateTo => new DatePicker
                 {
-                    MinWidth = 120,
-                    Height = 28,
-                    BorderThickness = new Thickness(0),
-                    Background = Brushes.Transparent
+                    MinWidth = ShouTech.App.Services.VisuId.FieldWidthShort
                 },
                 RptFltKind.Choice => BuildCombo(flt.Choices, localizeItems: true),
                 RptFltKind.Warehouse => BuildCombo(LoadWarehouseChoices()),
                 RptFltKind.MaterialGroup => BuildCombo(LoadMaterialGroupChoices()),
-                RptFltKind.Material => new TextBox { MinWidth = 180, Height = 28, ToolTip = T("Inventory.MaterialFilterHint") },
-                _ => new TextBox { MinWidth = 135, Height = 28 }
+                RptFltKind.Material => new TextBox { MinWidth = ShouTech.App.Services.VisuId.FieldWidthMedium, ToolTip = T("Inventory.MaterialFilterHint") },
+                _ => new TextBox { MinWidth = ShouTech.App.Services.VisuId.FieldWidthShort }
             };
-
-            if (input is TextBox textBox)
-                textBox.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
-            if (input is ComboBox combo)
-            {
-                combo.Height = 28;
-                combo.BorderThickness = new Thickness(0);
-                combo.Background = Brushes.Transparent;
-                combo.SetResourceReference(StyleProperty, "VisuComboBoxStyle");
-            }
-
-            FrameworkElement filterInput = input;
-            if (input is ComboBox or DatePicker)
-            {
-                filterInput = new Border
-                {
-                    BorderBrush = (Brush?)TryFindResource("BorderBrush"),
-                    Background = (Brush?)TryFindResource("FieldBackgroundBrush"),
-                    BorderThickness = new Thickness(1),
-                    CornerRadius = new CornerRadius(5),
-                    Child = input,
-                    MinWidth = input.MinWidth,
-                    Height = 28
-                };
-            }
 
             if (flt.DefaultValue is DateTime dt && input is DatePicker dp)
                 dp.SelectedDate = dt;
             else if (flt.DefaultValue is string s && input is TextBox tb)
                 tb.Text = s;
 
+            UIElement filterCell = input;
             if (flt.Kind == RptFltKind.Material && input is TextBox materialFilter)
             {
+                // The cell content is the picker panel, so style the inner
+                // text box explicitly (AddFormField styles the cell itself).
+                ApplyFieldStyle(materialFilter);
                 materialFilter.TextChanged += (_, _) => materialFilter.Tag = null;
                 var lookup = new Button
                 {
                     Content = "...",
-                    MinWidth = 30,
-                    Height = 28,
-                    Margin = new Thickness(3, 0, 0, 0),
+                    Width = ShouTech.App.Services.VisuId.ControlHeight,
+                    Margin = new Thickness(4, 0, 0, 0),
                     ToolTip = T("Inventory.SearchMaterial")
                 };
                 lookup.SetResourceReference(StyleProperty, "VisuButtonStyle");
@@ -297,14 +270,12 @@ public abstract class RptBase : BaseWin
                 DockPanel.SetDock(lookup, Dock.Right);
                 picker.Children.Add(lookup);
                 picker.Children.Add(materialFilter);
-                host.Children.Add(picker);
+                filterCell = picker;
             }
-            else
-            {
-                host.Children.Add(filterInput);
-            }
+
+            AddFormField(_filterBar, index / 3, index % 3, flt.LabelTextKey, filterCell);
             _filterControls[flt.Key] = input;
-            _filterBar.Children.Add(host);
+            index++;
         }
     }
 
@@ -312,7 +283,7 @@ public abstract class RptBase : BaseWin
         IReadOnlyList<KeyValuePair<string, string>>? choices,
         bool localizeItems = false)
     {
-        var combo = new ComboBox { MinWidth = 160 };
+        var combo = new ComboBox { MinWidth = ShouTech.App.Services.VisuId.FieldWidthMedium };
         if (choices != null)
         {
             foreach (var (value, display) in choices)

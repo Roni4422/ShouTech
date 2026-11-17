@@ -18,8 +18,8 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class PartySearchWin : BaseWin
 {
-    private readonly TextBox _txtQuery = new() { Width = 320, Height = 26 };
-    private readonly ComboBox _cbKind = new() { Width = 150, Height = 26 };
+    private readonly TextBox _txtQuery = new();
+    private readonly ComboBox _cbKind = new();
     private readonly DataGrid _grid = new();
     private readonly TextBlock _statusBar = new();
     private readonly Button _searchButton = new();

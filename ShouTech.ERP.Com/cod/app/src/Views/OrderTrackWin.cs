@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Threading.Tasks;
@@ -19,7 +19,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class OrderTrackWin : BaseWin
 {
-    private readonly ComboBox _cmbKind = new() { Width = 150, Height = 26 };
+    private readonly ComboBox _cmbKind = new();
     private readonly Button _btnRefresh = new();
     private readonly Button _btnOpen = new();
     private readonly Button _btnClose = new();
@@ -82,14 +82,14 @@ public sealed class OrderTrackWin : BaseWin
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        var filters = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+        // Filter on the shared 3-pair scheme (pair 0 used) so its edges
+        // align with the other list windows' filters.
+        var filters = CreateFormGrid(3);
+        filters.Margin = new Thickness(0, 0, 0, 8);
         _cmbKind.ItemsSource = new[] { "SO", "PO" };
         _cmbKind.SelectedIndex = 0;
         _cmbKind.SelectionChanged += async (_, _) => await LoadAsync();
-        var kindPanel = new StackPanel { Margin = new Thickness(0, 0, 8, 4) };
-        kindPanel.Children.Add(new TextBlock { Text = T("DocSearch.Kind"), Tag = "DocSearch.Kind", Margin = new Thickness(0, 0, 0, 2), Opacity = 0.85 });
-        kindPanel.Children.Add(_cmbKind);
-        filters.Children.Add(kindPanel);
+        AddFormField(filters, 0, 0, "DocSearch.Kind", _cmbKind);
         Grid.SetRow(filters, 0);
         body.Children.Add(filters);
 
@@ -214,10 +214,8 @@ public sealed class OrderTrackWin : BaseWin
     private static void StyleButton(Button btn, string key)
     {
         btn.Content = T(key);
-        btn.Margin = new Thickness(0, 0, 5, 0);
-        btn.Padding = new Thickness(9, 3, 9, 3);
-        btn.MinWidth = 76;
-        btn.Height = 28;
+        btn.Margin = new Thickness(0, 0, 8, 0);
+        btn.MinWidth = VisuId.ButtonMinWidth;
         btn.Tag = key;
         btn.SetResourceReference(StyleProperty, "VisuButtonStyle");
     }

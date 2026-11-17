@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -17,8 +17,8 @@ public sealed class PosCheckoutWin : BaseWin
 {
     private readonly InvDoc _doc;
     private readonly string _paymentMethod;
-    private readonly TextBox _customerCode = new() { Width = 150 };
-    private readonly TextBox _customerName = new() { Width = 260, IsReadOnly = true };
+    private readonly TextBox _customerCode = new();
+    private readonly TextBox _customerName = new() { IsReadOnly = true };
     private readonly TextBlock _docNo = new();
     private readonly TextBlock _date = new();
     private readonly TextBlock _total = new() { FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(26), FontWeight = FontWeights.Bold };
@@ -68,7 +68,7 @@ public sealed class PosCheckoutWin : BaseWin
 
     private void BuildUi()
     {
-        var root = new Grid { Margin = new Thickness(14) };
+        var root = new Grid { Margin = new Thickness(16) };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -82,24 +82,25 @@ public sealed class PosCheckoutWin : BaseWin
         };
         title.Tag = "POS.CheckoutTitle";
         header.Children.Add(title);
-        var document = new WrapPanel();
-        document.Children.Add(Labeled("Invoice.DocNo", _docNo));
-        document.Children.Add(Labeled("Invoice.Date", _date));
+        var document = CreateFormGrid(2);
+        AddFormField(document, 0, 0, "Invoice.DocNo", _docNo);
+        AddFormField(document, 0, 1, "Invoice.Date", _date);
         header.Children.Add(document);
         Grid.SetRow(header, 0);
         root.Children.Add(header);
 
         var content = new StackPanel();
-        var customer = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
-        customer.Children.Add(Labeled("Invoice.CustomerCode", _customerCode));
-        customer.Children.Add(Labeled("Invoice.CustomerName", _customerName));
+        var customer = CreateFormGrid(2);
+        customer.Margin = new Thickness(0, 0, 0, 8);
+        AddFormField(customer, 0, 0, "Invoice.CustomerCode", _customerCode);
+        AddFormField(customer, 0, 1, "Invoice.CustomerName", _customerName);
         content.Children.Add(customer);
 
-        var payment = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
-        payment.Children.Add(Label("POS.PaymentMethod"));
+        var payment = CreateFormGrid(1);
+        payment.Margin = new Thickness(0, 0, 0, 8);
         _payment.SetResourceReference(TextBlock.ForegroundProperty, "AccentBrush");
         _payment.FontWeight = FontWeights.SemiBold;
-        payment.Children.Add(_payment);
+        AddFormField(payment, 0, 0, "POS.PaymentMethod", _payment);
         content.Children.Add(payment);
 
         var totalPanel = new Border
@@ -132,6 +133,8 @@ public sealed class PosCheckoutWin : BaseWin
         };
         ConfigureButton(_cancel, "Common.Cancel");
         ConfigureButton(_complete, "POS.CompleteSale");
+        _complete.MinWidth = ShouTech.App.Services.VisuId.PrimaryButtonMinWidth;
+        _complete.SetResourceReference(StyleProperty, "PrimaryButtonStyle");
         _cancel.Click += (_, _) => Close();
         _complete.Click += (_, _) => CompleteSale();
         actions.Children.Add(_cancel);
@@ -147,27 +150,12 @@ public sealed class PosCheckoutWin : BaseWin
         _customerCode.LostFocus += (_, _) => ResolveCustomer();
     }
 
-    private static StackPanel Labeled(string key, UIElement control)
-    {
-        var field = new StackPanel { Margin = new Thickness(0, 0, 8, 3) };
-        field.Children.Add(Label(key));
-        if (control is TextBox textBox)
-            textBox.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
-        field.Children.Add(control);
-        return field;
-    }
-
-    private static TextBlock Label(string key)
-        => new() { Text = T(key), Tag = key, Margin = new Thickness(0, 0, 0, 2), Opacity = 0.85 };
-
     private static void ConfigureButton(Button button, string key)
     {
         button.Content = T(key);
         button.Tag = key;
-        button.Height = 30;
-        button.MinWidth = 90;
-        button.Padding = new Thickness(10, 3, 10, 3);
-        button.Margin = new Thickness(5, 0, 0, 0);
+        button.MinWidth = ShouTech.App.Services.VisuId.ButtonMinWidth;
+        button.Margin = new Thickness(8, 0, 0, 0);
         button.SetResourceReference(StyleProperty, "VisuButtonStyle");
     }
 
