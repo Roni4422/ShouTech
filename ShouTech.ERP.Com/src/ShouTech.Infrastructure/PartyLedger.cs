@@ -97,17 +97,21 @@ public static class PartyLedger
         string companyCode, string partyKind, long partyId,
         string? docKind, long? docId, string? docNo, string entryDate,
         decimal debit, decimal credit, string currencyCode, string? note,
-        string? journalEntryId = null)
+        string? journalEntryId = null,
+        decimal exchangeRate = 0m,
+        decimal? baseDebit = null,
+        decimal? baseCredit = null)
     {
         // journal_entry_id exists from migration 061; hand-built fixtures
         // predating it keep working with the original column list.
         var hasJournal = ColumnExists(connection, transaction, provider, "party_ledger", "journal_entry_id");
-        var columns = hasJournal
-            ? "company_id, party_kind, party_id, doc_kind, doc_id, doc_no, entry_date, debit, credit, currency_code, note, journal_entry_id"
-            : "company_id, party_kind, party_id, doc_kind, doc_id, doc_no, entry_date, debit, credit, currency_code, note";
-        var values = hasJournal
-            ? "@company, @kind, @party, @docKind, @doc, @docNo, @date, @debit, @credit, @currency, @note, @journal"
-            : "@company, @kind, @party, @docKind, @doc, @docNo, @date, @debit, @credit, @currency, @note";
+        // Step 7 (migration 062): base amounts exist from 062; fixtures
+        // predating it keep working with the original column list.
+        var hasBase = ColumnExists(connection, transaction, provider, "party_ledger", "base_debit");
+        var columns = "company_id, party_kind, party_id, doc_kind, doc_id, doc_no, entry_date, debit, credit, currency_code, note";
+        var values = "@company, @kind, @party, @docKind, @doc, @docNo, @date, @debit, @credit, @currency, @note";
+        if (hasJournal) { columns += ", journal_entry_id"; values += ", @journal"; }
+        if (hasBase) { columns += ", base_debit, base_credit, exchange_rate"; values += ", @baseDebit, @baseCredit, @rate"; }
         var sql = IsPostgres(provider)
             ? $"INSERT INTO party_ledger ({columns}) VALUES ({values}) RETURNING ledger_id"
             : $"INSERT INTO party_ledger ({columns}) VALUES ({values}); SELECT last_insert_rowid();";
@@ -123,7 +127,41 @@ public static class PartyLedger
         Add(command, "@credit", credit);
         Add(command, "@currency", string.IsNullOrWhiteSpace(currencyCode) ? "SAR" : currencyCode.Trim());
         Add(command, "@note", (object?)note ?? DBNull.Value);
-        Add(command, "@journal", (object?)journalEntryId ?? DBNull.Value);
+        if (hasJournal)
+            Add(command, "@journal", (object?)journalEntryId ?? DBNull.Value);
+        if (hasBase)
+        {
+            // Base amounts: explicit overrides win (reversal mirrors pass
+            // the original row's stored base, swapped). Otherwise the
+            // effective rate is resolved through the ONE path (FxRates):
+            // caller-supplied document rate first, currency_rates master
+            // where absent, 1 for the base currency — and a foreign
+            // amount with no rate anywhere fails with ACC-5015 instead
+            // of silently landing at face value.
+            decimal rate;
+            decimal bd, bc;
+            if (baseDebit.HasValue && baseCredit.HasValue)
+            {
+                rate = exchangeRate;
+                bd = baseDebit.Value;
+                bc = baseCredit.Value;
+            }
+            else
+            {
+                var date = DateOnly.TryParse(entryDate, CultureInfo.InvariantCulture, out var parsed)
+                    ? parsed
+                    : DateOnly.FromDateTime(DateTime.Today);
+                var fx = FxRates.ResolveByCompanyCode(connection, transaction, provider,
+                    companyCode, string.IsNullOrWhiteSpace(currencyCode) ? "SAR" : currencyCode,
+                    date, exchangeRate);
+                rate = fx.Rate;
+                bd = FxRates.ToBase(debit, rate);
+                bc = FxRates.ToBase(credit, rate);
+            }
+            Add(command, "@baseDebit", bd);
+            Add(command, "@baseCredit", bc);
+            Add(command, "@rate", rate);
+        }
         return Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
@@ -158,9 +196,12 @@ public static class PartyLedger
         var companyCode = TableExists(connection, transaction, provider, "companies")
             ? ResolveCompanyCode(connection, transaction, provider, companyGuid.ToString("D"))
             : companyGuid.ToString("D");
-        var originals = new List<(string Company, string Kind, long Party, string? DocKind, long? DocId, string? DocNo, string Date, decimal Debit, decimal Credit, string Currency, string? Note)>();
+        var hasBase = ColumnExists(connection, transaction, provider, "party_ledger", "base_debit");
+        var originals = new List<(string Company, string Kind, long Party, string? DocKind, long? DocId, string? DocNo, string Date, decimal Debit, decimal Credit, string Currency, string? Note, decimal? BaseDebit, decimal? BaseCredit, decimal Rate)>();
         using (var load = Create(connection, transaction,
-            "SELECT company_id, party_kind, party_id, doc_kind, doc_id, doc_no, entry_date, debit, credit, currency_code, note FROM party_ledger WHERE journal_entry_id = @journal"))
+            "SELECT company_id, party_kind, party_id, doc_kind, doc_id, doc_no, entry_date, debit, credit, currency_code, note"
+            + (hasBase ? ", base_debit, base_credit, exchange_rate" : "")
+            + " FROM party_ledger WHERE journal_entry_id = @journal"))
         {
             Add(load, "@journal", originalEntryId.ToString("D"));
             using var reader = load.ExecuteReader();
@@ -177,7 +218,10 @@ public static class PartyLedger
                     Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture),
                     Convert.ToDecimal(reader.GetValue(8), CultureInfo.InvariantCulture),
                     reader.IsDBNull(9) ? "SAR" : Convert.ToString(reader.GetValue(9), CultureInfo.InvariantCulture)!,
-                    reader.IsDBNull(10) ? null : Convert.ToString(reader.GetValue(10), CultureInfo.InvariantCulture)));
+                    reader.IsDBNull(10) ? null : Convert.ToString(reader.GetValue(10), CultureInfo.InvariantCulture),
+                    hasBase && !reader.IsDBNull(11) ? Convert.ToDecimal(reader.GetValue(11), CultureInfo.InvariantCulture) : null,
+                    hasBase && !reader.IsDBNull(12) ? Convert.ToDecimal(reader.GetValue(12), CultureInfo.InvariantCulture) : null,
+                    hasBase && !reader.IsDBNull(13) ? Convert.ToDecimal(reader.GetValue(13), CultureInfo.InvariantCulture) : 0m));
             }
         }
 
@@ -189,12 +233,19 @@ public static class PartyLedger
             var company = string.Equals(row.Company, companyGuid.ToString("D"), StringComparison.OrdinalIgnoreCase)
                 ? companyCode
                 : row.Company;
+            // Step 7: the mirror swaps the STORED base amounts (never a
+            // recomputation at today's rate), so the pair nets to zero
+            // in base exactly. Rows without stored base fall through to
+            // rate resolution at the original row's rate.
             WriteEntry(connection, transaction, provider, company, row.Kind, row.Party,
                 row.DocKind, row.DocId, row.DocNo,
                 reversalDate,
                 row.Credit, row.Debit, row.Currency,
                 $"Reversal of journal settlement {originalEntryId:D}",
-                reversalEntryId.ToString("D"));
+                reversalEntryId.ToString("D"),
+                exchangeRate: row.Rate,
+                baseDebit: row.BaseCredit,
+                baseCredit: row.BaseDebit);
         }
     }
 

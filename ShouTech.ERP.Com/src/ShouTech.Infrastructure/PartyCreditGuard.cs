@@ -30,6 +30,12 @@ namespace ShouTech.Infrastructure;
 ///   accepts the company's own two keys (code, and the Guid form some
 ///   repositories still pass) — both resolve through the companies
 ///   registry to the same company, never to another one.
+/// - Step 7 (J-5): the balance and the incoming document total are
+///   compared in BASE currency — the guard sums base_debit/base_credit
+///   (migration 062; legacy rows fall back to their transaction amounts
+///   via COALESCE) and every caller passes the document's BASE total
+///   (stored total x effective rate). A foreign-currency document can
+///   no longer slip under a base-currency limit at face value.
 /// - Violation is a HARD BLOCK (ACC-5006). No override is honored: the
 ///   permission seeds contain no credit-override permission
 ///   (SALES.PRICE.OVERRIDE / SALES.DISCOUNT.OVERRIDE govern price and
@@ -156,8 +162,14 @@ public static class PartyCreditGuard
             return; // No limit configured for this party: posting proceeds.
 
         decimal balance;
+        // Base-currency sums where migration 062 has landed; the
+        // COALESCE keeps pre-062 rows (and hand-built fixtures without
+        // the columns are handled by the column probe) honest.
+        var hasBase = PartyLedger.ColumnExists(connection, transaction, provider, "party_ledger", "base_debit");
+        var debitExpr = hasBase ? "COALESCE(base_debit, debit)" : "debit";
+        var creditExpr = hasBase ? "COALESCE(base_credit, credit)" : "credit";
         await using (var ledger = Create(
-            $"SELECT COALESCE(SUM(debit), 0), COALESCE(SUM(credit), 0) FROM party_ledger WHERE company_id IN ({companyIn}) AND party_kind = {p}kind AND party_id = {p}party"))
+            $"SELECT COALESCE(SUM({debitExpr}), 0), COALESCE(SUM({creditExpr}), 0) FROM party_ledger WHERE company_id IN ({companyIn}) AND party_kind = {p}kind AND party_id = {p}party"))
         {
             AddCompanies(ledger);
             Add(ledger, $"{p}kind", kind);
