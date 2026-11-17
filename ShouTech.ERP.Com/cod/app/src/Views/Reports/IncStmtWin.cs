@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -12,6 +12,9 @@ namespace ShouTech.App.Views.Reports;
 /// <summary>Income Statement report.</summary>
 public sealed class IncStmtWin : RptBase
 {
+    // Structured statement: section/subtotal rows must not be flat-summed.
+    protected override bool AllowComputedTotals => false;
+
     protected override RptDef BuildDefinition() => new()
     {
         ReportKey = "Fin.IncomeStatement",

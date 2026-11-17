@@ -142,11 +142,11 @@ public abstract class RptBase : BaseWin
         _totalsBar.Padding = new Thickness(6, 3, 6, 3);
         _totalsBar.Margin = new Thickness(0, 4, 0, 0);
         _totalsBar.CornerRadius = new CornerRadius(6);
-        _totalsBar.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush");
+        _totalsBar.SetResourceReference(Border.BackgroundProperty, "SurfaceSecondaryBrush");
         _totalsBar.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
         _totalsBar.BorderThickness = new Thickness(1);
         _totalsBar.Visibility = Visibility.Collapsed;
-        _totals.FontWeight = FontWeights.SemiBold;
+        _totals.FontWeight = FontWeights.Bold;
         _totalsBar.Child = _totals;
         Grid.SetRow(_totalsBar, 3);
         _root.Children.Add(_totalsBar);
@@ -180,7 +180,8 @@ public abstract class RptBase : BaseWin
         _grid.AutoGenerateColumns = false;
         _grid.IsReadOnly = true;
         _grid.CanUserResizeColumns = true;
-        _grid.CanUserReorderColumns = false;
+        _grid.CanUserReorderColumns = true;
+        _grid.CanUserSortColumns = true;
         _grid.SelectionMode = DataGridSelectionMode.Single;
         _grid.SelectionUnit = DataGridSelectionUnit.FullRow;
         _grid.HeadersVisibility = DataGridHeadersVisibility.Column;
@@ -426,7 +427,9 @@ public abstract class RptBase : BaseWin
 
             var style = new Style(typeof(TextBlock));
             style.Setters.Add(new Setter(TextBlock.TextAlignmentProperty,
-                RptRend.IsNumeric(col.Type) ? TextAlignment.Right : TextAlignment.Left));
+                RptRend.IsNumeric(col.Type) ? TextAlignment.Right
+                : col.Type is RptColType.Date or RptColType.DateTime ? TextAlignment.Center
+                : TextAlignment.Left));
             style.Setters.Add(new Setter(FrameworkElement.MarginProperty, new Thickness(1, 0, 1, 0)));
             style.Setters.Add(new Setter(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center));
             textCol.ElementStyle = style;
@@ -451,21 +454,58 @@ public abstract class RptBase : BaseWin
         UpdateStatus();
     }
 
+    /// <summary>
+    /// Al-Ameen schedule pattern: a totals footer pinned at the bottom of the
+    /// grid. Reports may opt out when their rows are a structured statement
+    /// (sections/subtotals) where a flat column sum would double-count.
+    /// </summary>
+    protected virtual bool AllowComputedTotals => true;
+
     private void RenderTotals()
     {
-        if (_data?.Totals == null || _data.Totals.Count == 0)
+        if (_data == null)
         {
             _totalsBar.Visibility = Visibility.Collapsed;
             return;
         }
 
         var parts = new List<string>();
-        foreach (var col in _orderedAll)
+        if (_data.Totals != null && _data.Totals.Count > 0)
         {
-            if (!_visibility.GetValueOrDefault(col.Key))
-                continue;
-            if (_data.Totals.TryGetValue(col.Key, out var v) && v != null)
-                parts.Add($"{T(col.HeaderTextKey)}: {RptRend.FormatCell(v, col)}");
+            foreach (var col in _orderedAll)
+            {
+                if (!_visibility.GetValueOrDefault(col.Key))
+                    continue;
+                if (_data.Totals.TryGetValue(col.Key, out var v) && v != null)
+                    parts.Add($"{T(col.HeaderTextKey)}: {RptRend.FormatCell(v, col)}");
+            }
+        }
+        else if (AllowComputedTotals && _data.Rows.Count > 0)
+        {
+            // No totals supplied by the report: compute them from the bound
+            // rows for numeric columns only. Non-numeric or heterogeneous
+            // values are skipped cell-by-cell, never guessed.
+            foreach (var col in _orderedAll)
+            {
+                if (!_visibility.GetValueOrDefault(col.Key) || !RptRend.IsNumeric(col.Type))
+                    continue;
+                decimal sum = 0;
+                var any = false;
+                foreach (var row in _data.Rows)
+                {
+                    if (row.TryGetValue(col.Key, out var v) && v != null &&
+                        decimal.TryParse(Convert.ToString(v, CultureInfo.InvariantCulture),
+                            NumberStyles.Any, CultureInfo.InvariantCulture, out var d))
+                    {
+                        sum += d;
+                        any = true;
+                    }
+                }
+                if (any)
+                    parts.Add($"{T(col.HeaderTextKey)}: {RptRend.FormatCell(sum, col)}");
+            }
+            if (parts.Count > 0)
+                parts.Insert(0, T("Reports.Totals"));
         }
 
         _totals.Text = string.Join("    |    ", parts);
