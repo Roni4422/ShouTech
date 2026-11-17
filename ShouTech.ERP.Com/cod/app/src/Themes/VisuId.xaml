@@ -569,6 +569,9 @@
     <SolidColorBrush x:Key="ScheduleTintOnyxBrush" Color="#E7EAED"/>
     <SolidColorBrush x:Key="ScheduleTintEmberBrush" Color="#F8E4D6"/>
     <SolidColorBrush x:Key="ScheduleTintWillowBrush" Color="#E7F0DA"/>
+    <!-- Phase B 055 extension: BudgetWin claims Copper (the 43-token
+         palette was fully claimed after Step 13). -->
+    <SolidColorBrush x:Key="ScheduleTintCopperBrush" Color="#F7E8DC"/>
 
     <SolidColorBrush
         x:Key="TableHeaderSalesBrush"

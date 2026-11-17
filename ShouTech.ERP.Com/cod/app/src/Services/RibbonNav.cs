@@ -47,6 +47,8 @@ public static class RibbonNav
             // ------------------------------------------------ Accounts reports & cards
             case "Accounts.CostCenter":
             case "Accounts.LinkWithAccounts": Show(new CcListWin(), owner); return true;
+            case "Accounts.Budgets": Show(new BudgetWin(), owner); return true;
+            case "Accounts.BudgetVariance": Show(new BudgetVarWin(), owner); return true;
             case "Accounts.CostCenterReport": Show(new CostCenterRptWin(), owner); return true;
             case "Accounts.CostCenterBalance": Show(new CostCenterTrialWin(), owner); return true;
             case "Accounts.AverageCurrencyRate": Show(new AvgRateWin(), owner); return true;

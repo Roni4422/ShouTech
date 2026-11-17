@@ -270,6 +270,11 @@ namespace ShouTech.App.Services
 
             public const string PaymentReconciliationView = "ACC.PAYREC.VIEW";
             public const string PaymentReconciliationAllocate = "ACC.PAYREC.ALLOCATE";
+
+            // Phase B 055 budgets (migration 055 seeds).
+            public const string BudgetView = "ACC.BUDGET.VIEW";
+            public const string BudgetEdit = "ACC.BUDGET.EDIT";
+            public const string BudgetActivate = "ACC.BUDGET.ACTIVATE";
         }
 
         // =====================================================================

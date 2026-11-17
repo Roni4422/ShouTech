@@ -830,6 +830,51 @@ public static class RptQuery
         return await QueryAsync(sql, ct, ("$company", Company));
     }
 
+    /// <summary>Budget vs actual (Phase B 055): one row per budget line
+    /// with the annual and accumulated-monthly budget/actual pairs. The
+    /// computation is delegated to BudgetRepository, whose actuals are
+    /// the BudgetGuard's own — the report can never disagree with the
+    /// posting guard. Budgets live in the journal world, so the shell's
+    /// company CODE is first resolved to the companies Guid.</summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> BudgetVarianceAsync(
+        CancellationToken ct)
+    {
+        var cs = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(cs))
+            throw new AppError(ErrorCodes.DatabaseNotInitialized,
+                "No database connection is configured for reports.");
+        var companyRows = await QueryAsync(
+            "SELECT company_id AS CompanyId FROM companies WHERE company_code = $company", ct,
+            ("$company", Company));
+        if (companyRows.Count == 0 ||
+            !Guid.TryParse(Convert.ToString(companyRows[0]["CompanyId"], CultureInfo.InvariantCulture), out var companyId))
+            return Array.Empty<IReadOnlyDictionary<string, object?>>();
+
+        var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+        var repository = new ShouTech.Infrastructure.BudgetRepository(provider, cs);
+        var variance = await repository.GetVarianceAsync(companyId, ct);
+        var result = new List<IReadOnlyDictionary<string, object?>>();
+        foreach (var row in variance)
+        {
+            result.Add(new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["Budget"] = row.BudgetName,
+                ["FiscalYear"] = row.FiscalYearLabel,
+                ["Account"] = string.IsNullOrWhiteSpace(row.AccountName)
+                    ? row.AccountCode
+                    : $"{row.AccountCode} — {row.AccountName}",
+                ["Dimension"] = row.DimensionCode ?? string.Empty,
+                ["AnnualBudget"] = row.AnnualBudget,
+                ["AnnualActual"] = row.AnnualActual,
+                ["Remaining"] = row.AnnualRemaining,
+                ["Percent"] = row.PercentConsumed,
+                ["MonthlyBudget"] = row.MonthlyBudgetToDate,
+                ["MonthlyActual"] = row.MonthlyActualToDate
+            });
+        }
+        return result;
+    }
+
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> InvoiceAgeInvoicesAsync(
         CancellationToken ct)
     {

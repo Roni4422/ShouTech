@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "cod" / "app" / "src"
 VIEWS = SRC / "Views"
 
-APPHOST_SVC = re.compile(r"AppHost\.(Journal|JournalStore|Projects|Assets|Reconciliation|AccountingStructure|DatabaseHealth)\b")
+APPHOST_SVC = re.compile(r"AppHost\.(Journal|JournalStore|Projects|Assets|Reconciliation|AccountingStructure|DatabaseHealth|Budgets)\b")
 CLASS_RE = re.compile(
     r"public\s+(?:partial\s+)?(?:sealed\s+)?class\s+(\w+)\s*:\s*([\w\.]+)")
 
@@ -66,7 +66,7 @@ def direction_source(name, base):
 
 def company_source(src):
     if APPHOST_SVC.search(src):
-        return ("AppHost service (Journal/Projects/Assets/Reconciliation) — "
+        return ("AppHost service (Journal/Projects/Assets/Reconciliation/Budgets) — "
                 "connection-bound, REBOUND on company switch by "
                 "AppHost.RebindDatabaseContext")
     if "GetConnectionString()" in src:

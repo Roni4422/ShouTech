@@ -554,7 +554,8 @@
     "EndingBalance": "Dönem sonu nakit",
     "AllBanksCheques": "Tüm bankalar — dönemde vadesi dolan çekler (çekler GL hesabına bağlı değildir)",
     "Feasible": "Mümkün",
-    "ShortageStatus": "Eksik"
+    "ShortageStatus": "Eksik",
+    "BudgetVariance": "Bütçe Sapması"
   },
   "Tools": {
     "Title": "Araçlar",
@@ -2865,5 +2866,49 @@
     "SaveToMaterial": "Malzeme Kartına Kaydet",
     "SavedToMaterial": "Barkod ve fiyat malzeme kartına kaydedildi.",
     "MaterialNotFound": "Önce bir malzeme seçin veya mevcut bir malzemenin kodunu girin."
+  },
+  "Budget": {
+    "Title": "Bütçeler",
+    "Name": "Ad",
+    "FiscalYear": "Mali Yıl",
+    "BudgetAgainst": "Bütçe Karşılığı",
+    "Status": "Durum",
+    "ActionAnnual": "Yıllık Eylem",
+    "ActionMonthly": "Aylık Eylem",
+    "Notes": "Notlar",
+    "Lines": "Satırlar",
+    "Account": "Hesap",
+    "Dimension": "Boyut",
+    "AnnualAmount": "Yıllık Tutar",
+    "Distribution": "Aylık Dağılım",
+    "Month": "Ay {0}",
+    "AddLine": "Satır Ekle",
+    "RemoveLine": "Satır Sil",
+    "SpreadEqually": "Eşit Dağıt",
+    "Activate": "Etkinleştir",
+    "CloseBudget": "Bütçeyi Kapat",
+    "Variance": "Sapma",
+    "Saved": "Bütçe kaydedildi.",
+    "Deleted": "Bütçe silindi.",
+    "Activated": "Bütçe etkinleştirildi.",
+    "Closed": "Bütçe kapatıldı.",
+    "PermissionDenied": "Bu bütçe işlemini gerçekleştirme izniniz yok.",
+    "ServiceUnavailable": "Bütçeler hizmeti kullanılamıyor (veritabanı bağlantısı yok).",
+    "CompanyUnavailable": "Bütçeler için geçerli şirket çözümlenemedi.",
+    "SelectBudget": "Önce bir bütçe seçin veya kaydedin.",
+    "SelectLine": "Önce bir hesap ve boyut seçin.",
+    "WarningTitle": "Bütçe uyarısı",
+    "WarningLine": "'{0}' bütçesi ({1}) {2} kadar aşıldı.",
+    "Col": {
+      "Budget": "Bütçe",
+      "Account": "Hesap",
+      "Dimension": "Boyut",
+      "AnnualBudget": "Yıllık Bütçe",
+      "AnnualActual": "Yıllık Gerçekleşen",
+      "Remaining": "Kalan",
+      "Percent": "% Tüketilen",
+      "MonthlyBudget": "Aylık Bütçe (birikimli)",
+      "MonthlyActual": "Aylık Gerçekleşen (birikimli)"
+    }
   }
 }

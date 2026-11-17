@@ -555,7 +555,8 @@
     "EndingBalance": "النقدية في نهاية الفترة",
     "AllBanksCheques": "كل البنوك — شيكات مستحقة في الفترة (الشيكات غير مرتبطة بحساب أستاذ)",
     "Feasible": "ممكن",
-    "ShortageStatus": "عجز"
+    "ShortageStatus": "عجز",
+    "BudgetVariance": "انحراف الموازنة"
   },
   "Tools": {
     "Title": "أدوات",
@@ -2948,5 +2949,49 @@
     "NameRequired": "الاسم مطلوب.",
     "InvalidAmount": "توجد قيمة رقمية غير صالحة.",
     "ConfirmDelete": "حذف هذه البطاقة؟ سيتم نقلها إلى سلة المحذوفات."
+  },
+  "Budget": {
+    "Title": "الموازنات",
+    "Name": "الاسم",
+    "FiscalYear": "السنة المالية",
+    "BudgetAgainst": "الموازنة مقابل",
+    "Status": "الحالة",
+    "ActionAnnual": "إجراء السنوي",
+    "ActionMonthly": "إجراء الشهري",
+    "Notes": "ملاحظات",
+    "Lines": "السطور",
+    "Account": "الحساب",
+    "Dimension": "البعد",
+    "AnnualAmount": "المبلغ السنوي",
+    "Distribution": "التوزيع الشهري",
+    "Month": "الشهر {0}",
+    "AddLine": "إضافة سطر",
+    "RemoveLine": "حذف سطر",
+    "SpreadEqually": "توزيع بالتساوي",
+    "Activate": "تفعيل",
+    "CloseBudget": "إغلاق الموازنة",
+    "Variance": "الانحراف",
+    "Saved": "تم حفظ الموازنة.",
+    "Deleted": "تم حذف الموازنة.",
+    "Activated": "تم تفعيل الموازنة.",
+    "Closed": "تم إغلاق الموازنة.",
+    "PermissionDenied": "ليس لديك صلاحية لتنفيذ إجراء الموازنة هذا.",
+    "ServiceUnavailable": "خدمة الموازنات غير متاحة (لا يوجد اتصال بقاعدة البيانات).",
+    "CompanyUnavailable": "تعذر تحديد الشركة الحالية للموازنات.",
+    "SelectBudget": "اختر موازنة أو احفظها أولاً.",
+    "SelectLine": "اختر حساباً وبعداً أولاً.",
+    "WarningTitle": "تحذير الموازنة",
+    "WarningLine": "تم تجاوز الموازنة '{0}' ({1}) بمقدار {2}.",
+    "Col": {
+      "Budget": "الموازنة",
+      "Account": "الحساب",
+      "Dimension": "البعد",
+      "AnnualBudget": "الموازنة السنوية",
+      "AnnualActual": "الفعلي السنوي",
+      "Remaining": "المتبقي",
+      "Percent": "% المستهلك",
+      "MonthlyBudget": "الموازنة الشهرية (تراكمي)",
+      "MonthlyActual": "الفعلي الشهري (تراكمي)"
+    }
   }
 }

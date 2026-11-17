@@ -40,6 +40,7 @@ namespace ShouTech.App.Services
         public static IAuditService Audit { get; private set; } = null!;
         public static JournalService? Journal { get; private set; }
         public static JournalRepository? JournalStore { get; private set; }
+        public static BudgetService? Budgets { get; private set; }
         public static ProjectService? Projects { get; private set; }
         public static AssetService? Assets { get; private set; }
         public static ReconciliationService? Reconciliation { get; private set; }
@@ -93,6 +94,7 @@ namespace ShouTech.App.Services
             Permissions = new PermServ();
 
             Journal = CreateJournalService();
+            Budgets = CreatePhase3Service((provider, connection) => new BudgetService(new BudgetRepository(provider, connection)), "Budgets");
             Projects = CreatePhase3Service((provider, connection) => new ProjectService(new ProjectRepository(provider, connection)), "Projects");
             Assets = CreatePhase3Service((provider, connection) => new AssetService(new AssetRepository(provider, connection)), "Fixed Assets");
             Reconciliation = CreatePhase3Service((provider, connection) => new ReconciliationService(new ReconciliationRepository(provider, connection)), "Payment Reconciliation");
@@ -168,6 +170,7 @@ namespace ShouTech.App.Services
             try
             {
                 Journal = CreateJournalService();
+                Budgets = CreatePhase3Service((provider, connection) => new BudgetService(new BudgetRepository(provider, connection)), "Budgets");
                 Projects = CreatePhase3Service((provider, connection) => new ProjectService(new ProjectRepository(provider, connection)), "Projects");
                 Assets = CreatePhase3Service((provider, connection) => new AssetService(new AssetRepository(provider, connection)), "Fixed Assets");
                 Reconciliation = CreatePhase3Service((provider, connection) => new ReconciliationService(new ReconciliationRepository(provider, connection)), "Payment Reconciliation");
@@ -330,6 +333,7 @@ namespace ShouTech.App.Services
         public static ISessionManager Session => AppHost.Session;
         public static IAuditService Audit => AppHost.Audit;
         public static JournalService? Journal => AppHost.Journal;
+        public static BudgetService? Budgets => AppHost.Budgets;
         public static ProjectService? Projects => AppHost.Projects;
         public static AssetService? Assets => AppHost.Assets;
         public static ReconciliationService? Reconciliation => AppHost.Reconciliation;

@@ -554,7 +554,8 @@
     "EndingBalance": "Trésorerie en fin de période",
     "AllBanksCheques": "Toutes banques — chèques échéant dans la période (les chèques ne sont pas liés à un compte GL)",
     "Feasible": "Faisable",
-    "ShortageStatus": "Manquant"
+    "ShortageStatus": "Manquant",
+    "BudgetVariance": "Écart budgétaire"
   },
   "Tools": {
     "Title": "Outils",
@@ -2865,5 +2866,49 @@
     "SaveToMaterial": "Enregistrer dans la fiche article",
     "SavedToMaterial": "Code-barres et prix enregistrés dans la fiche article.",
     "MaterialNotFound": "Choisissez un article ou saisissez le code d'un article existant."
+  },
+  "Budget": {
+    "Title": "Budgets",
+    "Name": "Nom",
+    "FiscalYear": "Exercice",
+    "BudgetAgainst": "Budget par rapport à",
+    "Status": "Statut",
+    "ActionAnnual": "Action annuelle",
+    "ActionMonthly": "Action mensuelle",
+    "Notes": "Notes",
+    "Lines": "Lignes",
+    "Account": "Compte",
+    "Dimension": "Dimension",
+    "AnnualAmount": "Montant annuel",
+    "Distribution": "Répartition mensuelle",
+    "Month": "Mois {0}",
+    "AddLine": "Ajouter une ligne",
+    "RemoveLine": "Supprimer la ligne",
+    "SpreadEqually": "Répartir également",
+    "Activate": "Activer",
+    "CloseBudget": "Clore le budget",
+    "Variance": "Écart",
+    "Saved": "Budget enregistré.",
+    "Deleted": "Budget supprimé.",
+    "Activated": "Budget activé.",
+    "Closed": "Budget clos.",
+    "PermissionDenied": "Vous n'avez pas l'autorisation d'effectuer cette action budgétaire.",
+    "ServiceUnavailable": "Le service Budgets est indisponible (aucune connexion à la base de données).",
+    "CompanyUnavailable": "La société actuelle n'a pas pu être résolue pour les budgets.",
+    "SelectBudget": "Sélectionnez ou enregistrez d'abord un budget.",
+    "SelectLine": "Sélectionnez d'abord un compte et une dimension.",
+    "WarningTitle": "Avertissement budgétaire",
+    "WarningLine": "Budget '{0}' ({1}) dépassé de {2}.",
+    "Col": {
+      "Budget": "Budget",
+      "Account": "Compte",
+      "Dimension": "Dimension",
+      "AnnualBudget": "Budget annuel",
+      "AnnualActual": "Réel annuel",
+      "Remaining": "Restant",
+      "Percent": "% consommé",
+      "MonthlyBudget": "Budget mensuel (cumul)",
+      "MonthlyActual": "Réel mensuel (cumul)"
+    }
   }
 }

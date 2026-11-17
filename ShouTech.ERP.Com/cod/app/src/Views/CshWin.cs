@@ -438,13 +438,24 @@ public sealed class CshWin : BaseWin, IWindowMode
             if (string.IsNullOrWhiteSpace(CurrentUserId))
                 throw new InvalidOperationException(T("CashVoucher.NoUser"));
             if (!AskConfirm("Vouchers.ConfirmPost")) return;
-            await journal.PostAsync(_currentJournalId.Value, CurrentUserId);
+            var budgetWarnings = await journal.PostAsync(_currentJournalId.Value, CurrentUserId);
             _isPosted = true;
             _btnPost.IsEnabled = false;
             _btnReverse.IsEnabled = true;
             SetReadOnly(true);
             RefreshCalculations();
-            MessageBox.Show(this, T("Vouchers.Posted"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            if (budgetWarnings.Count > 0)
+            {
+                // Phase B 055: Warn-mode budget overruns (see JrnWin).
+                var warningText = string.Join(Environment.NewLine, budgetWarnings.Select(w =>
+                    Tf("Budget.WarningLine", w.BudgetName, w.Horizon, w.Overage)));
+                MessageBox.Show(this, warningText, T("Budget.WarningTitle"),
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            else
+            {
+                MessageBox.Show(this, T("Vouchers.Posted"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            }
         }
         catch (Exception ex)
         {

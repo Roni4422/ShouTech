@@ -1089,7 +1089,8 @@
     "EndingBalance": "Cash at end of period",
     "AllBanksCheques": "All banks — cheques due in the period (cheques are not linked to a GL account)",
     "Feasible": "Feasible",
-    "ShortageStatus": "Shortage"
+    "ShortageStatus": "Shortage",
+    "BudgetVariance": "Budget Variance"
   },
   "RestoreCompany": {
     "Close": "Close",
@@ -2856,5 +2857,49 @@
     "NameRequired": "The name is required.",
     "InvalidAmount": "A numeric value is invalid.",
     "ConfirmDelete": "Delete this card? It will be moved to the recycle bin."
+  },
+  "Budget": {
+    "Title": "Budgets",
+    "Name": "Name",
+    "FiscalYear": "Fiscal Year",
+    "BudgetAgainst": "Budget Against",
+    "Status": "Status",
+    "ActionAnnual": "Annual Action",
+    "ActionMonthly": "Monthly Action",
+    "Notes": "Notes",
+    "Lines": "Lines",
+    "Account": "Account",
+    "Dimension": "Dimension",
+    "AnnualAmount": "Annual Amount",
+    "Distribution": "Monthly Distribution",
+    "Month": "Month {0}",
+    "AddLine": "Add Line",
+    "RemoveLine": "Remove Line",
+    "SpreadEqually": "Spread Equally",
+    "Activate": "Activate",
+    "CloseBudget": "Close Budget",
+    "Variance": "Variance",
+    "Saved": "Budget saved.",
+    "Deleted": "Budget deleted.",
+    "Activated": "Budget activated.",
+    "Closed": "Budget closed.",
+    "PermissionDenied": "You do not have permission to perform this budget action.",
+    "ServiceUnavailable": "Budgets service is unavailable (no database connection).",
+    "CompanyUnavailable": "The current company could not be resolved for budgets.",
+    "SelectBudget": "Select or save a budget first.",
+    "SelectLine": "Select an account and a dimension first.",
+    "WarningTitle": "Budget warning",
+    "WarningLine": "Budget '{0}' ({1}) exceeded by {2}.",
+    "Col": {
+      "Budget": "Budget",
+      "Account": "Account",
+      "Dimension": "Dimension",
+      "AnnualBudget": "Annual Budget",
+      "AnnualActual": "Annual Actual",
+      "Remaining": "Remaining",
+      "Percent": "% Consumed",
+      "MonthlyBudget": "Monthly Budget (YTD)",
+      "MonthlyActual": "Monthly Actual (YTD)"
+    }
   }
 }

@@ -981,8 +981,8 @@ namespace Kern.Tests
                 return Task.CompletedTask;
             }
 
-            public Task PostAsync(Guid journalEntryId, string userId, CancellationToken cancellationToken = default) =>
-                Task.CompletedTask;
+            public Task<System.Collections.Generic.IReadOnlyList<BudgetWarning>> PostAsync(Guid journalEntryId, string userId, CancellationToken cancellationToken = default) =>
+                Task.FromResult<System.Collections.Generic.IReadOnlyList<BudgetWarning>>(Array.Empty<BudgetWarning>());
 
             public Task<Guid> ReverseAsync(Guid journalEntryId, string userId, string? details = null, CancellationToken cancellationToken 	    = default) =>
     		   Task.FromResult(Guid.NewGuid());

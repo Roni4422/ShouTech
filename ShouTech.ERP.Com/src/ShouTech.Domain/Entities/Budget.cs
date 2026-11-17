@@ -77,6 +77,10 @@ public sealed class BudgetLine
     /// <summary>Monthly distribution amounts keyed by period number
     /// (1-12). Empty = equal split of the annual amount.</summary>
     public Dictionary<int, decimal> PeriodAmounts { get; set; } = new();
+
+    /// <summary>The line's dimension code for display (cost center or
+    /// project, whichever the budget is against).</summary>
+    public string? DimensionCode => CostCenterCode ?? ProjectCode;
 }
 
 /// <summary>One budget-vs-actual row (the BudgetVarWin / service answer
