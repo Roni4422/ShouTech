@@ -375,6 +375,34 @@ public partial class DatWin : Window
 
     private async void StartButton_Click(object sender, RoutedEventArgs e)
     {
+        // Phase 4 export governance: every export mode (full .stei package and
+        // structured dataset export) requires the DATA.EXPORT permission, and
+        // each completed export is written to the durable security audit log.
+        // Imports keep their existing flow (DATA.IMPORT is enforced by the
+        // data-exchange service catalog for dataset imports).
+        if (_mode != ExchangeMode.Import &&
+            !AppHost.Permissions.Has(PermCat.Data.Export))
+        {
+            await SecurityAuditLog.WriteAsync(
+                GetCurrentCompanyCode(), null, GetCurrentUserName(),
+                SecurityAuditLog.DataExportDenied,
+                $"mode={_mode} | user lacks DATA.EXPORT");
+            try
+            {
+                if (AppHost.Audit is { } audit)
+                    _ = audit.LogSecurityViolationAsync(
+                        "DataExportDenied",
+                        $"Export attempted without DATA.EXPORT | mode={_mode} | user={GetCurrentUserName()}",
+                        GetCurrentUserName());
+            }
+            catch { /* audit forwarding must not change the outcome */ }
+
+            MessageBox.Show(
+                L("ExportNotPermitted", "You do not have permission to export data (DATA.EXPORT)."),
+                Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         StartButton.IsEnabled = false;
         DetailsButton.IsEnabled = false;
         OperationProgress.Visibility = Visibility.Visible;
@@ -464,6 +492,10 @@ public partial class DatWin : Window
                     _lastDetails = ResultTextBox.Text;
                     LogOp("Export",
                         $"{format.ToUpperInvariant()} | {option.Key} | rows={model.Rows.Count} | user={GetCurrentUserName()} | company={GetCurrentCompanyCode()} | at={exportAt:yyyy-MM-dd HH:mm:ss}");
+                    await SecurityAuditLog.WriteAsync(
+                        GetCurrentCompanyCode(), null, GetCurrentUserName(),
+                        SecurityAuditLog.DataExport,
+                        $"format={format.ToUpperInvariant()} | dataset={option.Key} | table={option.TableName} | rows={model.Rows.Count}");
                 }
                 else
                 {
@@ -615,6 +647,16 @@ public partial class DatWin : Window
 
     private void ShowResult(SteiResult result, string path, bool export)
     {
+        // Phase 4: durable audit for every completed package export (full
+        // database package and encrypted dataset packages both end here).
+        if (export && (result.Success || result.Partial))
+        {
+            _ = SecurityAuditLog.WriteAsync(
+                GetCurrentCompanyCode(), null, GetCurrentUserName(),
+                SecurityAuditLog.DataExport,
+                $"format=STEI | file={System.IO.Path.GetFileName(path)} | rows={result.Rows} | tables={result.Tables} | partial={result.Partial}");
+        }
+
         ResultStatusText.Text = result.Success
             ? L("Success", "Completed successfully")
             : result.Partial

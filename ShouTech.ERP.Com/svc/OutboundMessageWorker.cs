@@ -28,9 +28,15 @@ public sealed class OutboundMessageWorker : BackgroundService
             LogLevel.Warning,
             new EventId(3, nameof(MessageFailedPermanently)),
             "Outbound message {MessageId} failed permanently after {Attempts} attempts.");
+    private static readonly Action<ILogger, Exception?> UnsignedWebhookWarning =
+        LoggerMessage.Define(
+            LogLevel.Warning,
+            new EventId(4, nameof(UnsignedWebhookWarning)),
+            "SHOUTECH_WEBHOOK_SECRET is not configured: outbound webhooks are being sent UNSIGNED. Set the secret to enable HMAC-SHA256 payload signatures (X-ShouTech-Signature).");
 
     private readonly ILogger<OutboundMessageWorker> _logger;
     private readonly ServiceHealth _health;
+    private bool _unsignedWarningLogged;
 
     public OutboundMessageWorker(ILogger<OutboundMessageWorker> logger, ServiceHealth health)
     {
@@ -131,7 +137,7 @@ public sealed class OutboundMessageWorker : BackgroundService
         }
     }
 
-    private static async Task<(bool Ok, string? Error)> DispatchAsync(OutboundRow row, CancellationToken ct)
+    private async Task<(bool Ok, string? Error)> DispatchAsync(OutboundRow row, CancellationToken ct)
     {
         if (!string.Equals(row.Channel, "WEBHOOK", StringComparison.OrdinalIgnoreCase))
             return (false, $"{row.Channel} connector is not configured.");
@@ -141,9 +147,26 @@ public sealed class OutboundMessageWorker : BackgroundService
         try
         {
             using var client = new HttpClient { Timeout = HttpTimeout };
-            using var content = new StringContent(row.Body, Encoding.UTF8,
-                row.BodyFormat.Equals("JSON", StringComparison.OrdinalIgnoreCase) ? "application/json" : "text/plain");
-            using var response = await client.PostAsync(uri, content, ct).ConfigureAwait(false);
+            // Sign the exact bytes that will be transmitted (Phase 4).
+            var bodyBytes = Encoding.UTF8.GetBytes(row.Body);
+            using var content = new ByteArrayContent(bodyBytes);
+            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
+                row.BodyFormat.Equals("JSON", StringComparison.OrdinalIgnoreCase) ? "application/json" : "text/plain")
+            { CharSet = "utf-8" };
+            using var request = new HttpRequestMessage(HttpMethod.Post, uri) { Content = content };
+            var secret = WebhookSigner.GetConfiguredSecret();
+            if (secret is not null)
+            {
+                request.Headers.TryAddWithoutValidation(
+                    WebhookSigner.SignatureHeaderName,
+                    WebhookSigner.ComputeSignatureHeaderValue(bodyBytes, secret));
+            }
+            else if (!_unsignedWarningLogged)
+            {
+                _unsignedWarningLogged = true;
+                UnsignedWebhookWarning(_logger, null);
+            }
+            using var response = await client.SendAsync(request, ct).ConfigureAwait(false);
             return response.IsSuccessStatusCode ? (true, null) : (false, $"HTTP {(int)response.StatusCode} ({response.StatusCode})");
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return (false, "Webhook request timed out."); }
@@ -151,7 +174,23 @@ public sealed class OutboundMessageWorker : BackgroundService
     }
 
     private static DbConnection CreateConnection(string provider, string cs) => provider == "SQLite"
-        ? new SqliteConnection(cs) : new NpgsqlConnection(cs);
+        ? new SqliteConnection(new SqliteConnectionStringBuilder(cs) { ForeignKeys = true }.ToString())
+        : new NpgsqlConnection(ApplyPostgresSslMode(cs));
+
+    // Phase 4: PostgreSQL transport security, mirroring DatabaseRuntime in the
+    // app (the service is standalone). SHOUTECH_PG_SSLMODE: Disable/Prefer/
+    // Require; default Prefer; the environment setting overrides the string.
+    private static string ApplyPostgresSslMode(string connectionString)
+    {
+        var builder = new NpgsqlConnectionStringBuilder(connectionString);
+        builder.SslMode = Environment.GetEnvironmentVariable("SHOUTECH_PG_SSLMODE")?.Trim().ToLowerInvariant() switch
+        {
+            "disable" => SslMode.Disable,
+            "require" => SslMode.Require,
+            _ => SslMode.Prefer
+        };
+        return builder.ToString();
+    }
     private static string NormalizeProvider(string provider) => provider.Trim().ToLowerInvariant() switch
     {
         "sqlite" or "sqlite3" => "SQLite",
