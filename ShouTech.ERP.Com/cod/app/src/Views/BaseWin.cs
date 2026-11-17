@@ -273,6 +273,42 @@ public abstract class BaseWin : Window
         ApplyLocalizedText();
         HookLanguageChanged();
         WireGeometryPersistence();
+        ClampToWorkArea();
+    }
+
+    /// <summary>
+    /// Keeps the whole window reachable on the current screen: a window
+    /// taller or wider than the work area (small displays, high scaling,
+    /// geometry restored from a larger monitor) would otherwise hide its
+    /// bottom command bar off-screen with no way to reach it. Shrinks the
+    /// window to fit and pulls it back inside the work area; never grows
+    /// a window and never touches a maximized/minimized one.
+    /// </summary>
+    private void ClampToWorkArea()
+    {
+        try
+        {
+            if (WindowState != WindowState.Normal)
+                return;
+
+            var area = SystemParameters.WorkArea;
+            if (Width > area.Width)
+                Width = Math.Max(MinWidth, area.Width);
+            if (Height > area.Height)
+                Height = Math.Max(MinHeight, area.Height);
+            if (Left < area.Left)
+                Left = area.Left;
+            if (Top < area.Top)
+                Top = area.Top;
+            if (Left + Width > area.Right)
+                Left = Math.Max(area.Left, area.Right - Width);
+            if (Top + Height > area.Bottom)
+                Top = Math.Max(area.Top, area.Bottom - Height);
+        }
+        catch (Exception exClamp)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exClamp, "BaseWin.ClampToWorkArea");
+        }
     }
 
     /// <summary>
