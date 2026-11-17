@@ -18,6 +18,11 @@ using ShouTech.Domain.Interfaces;
 using ShouTech.Application.Services;
 using Microsoft.Data.Sqlite;
 using Xunit;
+// MainApp's InternalsVisibleTo (for the STEI tests) also exposes the
+// internal ShouTech.App.Services.JournalEntry; this file means the
+// domain entity wherever it writes JournalEntry.
+using JournalEntry = ShouTech.Domain.Entities.JournalEntry;
+using JournalLine = ShouTech.Domain.Entities.JournalLine;
 
 namespace Kern.Tests
 {

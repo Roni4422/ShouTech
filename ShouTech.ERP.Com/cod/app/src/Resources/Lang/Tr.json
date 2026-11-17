@@ -684,6 +684,7 @@
     "ImportFile": "İçe aktarma dosyası",
     "ExportFile": "Dışa aktarma dosyası",
     "Browse": "Seç",
+    "SkippedDuplicates": "Atlanan yinelenen satırlar",
     "Start": "Başlat",
     "Result": "İşlem sonucu",
     "Ready": "Hazır",
