@@ -130,6 +130,89 @@ public sealed class AssetRepository : IAssetRepository
             throw new InvalidOperationException("Asset was not found or is already deleted.");
     }
 
+    public async Task<string?> PostDepreciationAsync(string companyId, Guid assetId, decimal accumulatedDepreciation, DateOnly asOf, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        if (assetId == Guid.Empty) throw new ArgumentException("Asset is required.", nameof(assetId));
+        if (accumulatedDepreciation <= 0) return null;
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            string assetCode;
+            await using (var load = CreateCommand(connection, transaction,
+                $"SELECT asset_code FROM fixed_assets WHERE company_id = @company AND asset_id = @id AND {NotDeleted}"))
+            {
+                Add(load, "@company", companyId.Trim());
+                Add(load, "@id", FormatGuid(assetId));
+                var value = await load.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                if (value is null or DBNull)
+                    throw new InvalidOperationException("Asset was not found for this company.");
+                assetCode = Convert.ToString(value, CultureInfo.InvariantCulture)!;
+            }
+
+            Guid companyGuid;
+            await using (var company = CreateCommand(connection, transaction,
+                "SELECT company_id FROM companies WHERE company_code = @code"))
+            {
+                Add(company, "@code", companyId.Trim());
+                var value = await company.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                if (value is null or DBNull || !Guid.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), out companyGuid))
+                    throw new InvalidOperationException($"Company '{companyId.Trim()}' could not be resolved for GL posting.");
+            }
+
+            // Depreciation already posted for this asset: credits on the
+            // accumulated-depreciation account across its LIVE AST-DEP
+            // entries (reversed entries no longer count — their reversal
+            // entries carry the same source link and are excluded by the
+            // reversal_of_entry_id filter on the ORIGINAL entry only, so
+            // sum signed: posted entries minus their reversals).
+            decimal alreadyPosted = 0m;
+            await using (var prior = CreateCommand(connection, transaction,
+                """
+                SELECT COALESCE(SUM(l.credit - l.debit), 0)
+                FROM journal_entries e
+                JOIN journal_entry_lines l ON l.journal_entry_id = e.journal_entry_id
+                JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = e.company_id
+                WHERE e.company_id = @company AND e.source_doc_type = 'AST-DEP'
+                  AND e.status IN (1, 2) AND e.source_doc_id LIKE @asset AND a.account_code = @accum
+                """))
+            {
+                Add(prior, "@company", FormatGuid(companyGuid));
+                Add(prior, "@asset", assetId.ToString("D") + "@%");
+                Add(prior, "@accum", GlAccounts.AccumulatedDepreciation);
+                alreadyPosted = Convert.ToDecimal(await prior.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+            }
+
+            var amount = decimal.Round(accumulatedDepreciation - alreadyPosted, 2, MidpointRounding.AwayFromZero);
+            if (amount <= 0)
+            {
+                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                return null;
+            }
+
+            var result = GlPosting.PostInTransaction(connection, transaction, _provider,
+                new GlDocumentRequest(companyGuid, asOf,
+                    $"Depreciation {assetCode} to {asOf:yyyy-MM-dd}",
+                    "AST-DEP", assetId.ToString("D") + "@" + asOf.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), assetCode,
+                    "SAR", 1m,
+                    new List<GlLineRequest>
+                    {
+                        new(GlAccounts.DepreciationExpense, amount, 0m),
+                        new(GlAccounts.AccumulatedDepreciation, 0m, amount)
+                    }),
+                userId);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return result.DocumentNumber;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
     private void Bind(DbCommand command, string companyId, FixedAsset asset, string userId)
     {
         Add(command, "@id", FormatGuid(asset.Id));

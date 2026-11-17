@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -139,7 +139,7 @@ public partial class CoaWin : BaseWin
         };
         foreach (var item in data)
         {
-            var rec = new AccRepo.AccRec(0, item.Code, item.Parent, item.Ar, item.En, item.Mode, "Active", "Low", "Unspecified", false, false, false, false, false, false, 0, string.Empty, 0, 0, 0);
+            var rec = new AccRepo.AccRec(string.Empty, item.Code, item.Parent, item.Ar, item.En, item.Mode, "Active", "Low", "Unspecified", false, false, false, false, false, false, 0, string.Empty, 0, 0, 0);
             AccRepo.Save(null, rec, false);
         }
     }
@@ -917,7 +917,7 @@ public partial class CoaWin : BaseWin
             else
             {
                 var created = new AccRepo.AccRec(
-                    0, row.Code, parentCode,
+                    string.Empty, row.Code, parentCode,
                     row.Name ?? string.Empty, row.NameEn ?? string.Empty,
                     postingMode, "Active", "Low", "Unspecified",
                     false, false, false, false, false, false,
@@ -1104,7 +1104,7 @@ public partial class CoaWin : BaseWin
 
 public sealed class AccountNode
 {
-    public long Id { get; init; }
+    public string Id { get; init; } = string.Empty;
     public string? ParentCode { get; init; }
     public string Code { get; init; } = string.Empty;
     public string Name { get; init; } = string.Empty;

@@ -36,6 +36,23 @@ public sealed class AssetService
         return asset.Id;
     }
 
+    /// <summary>Posts accumulated depreciation up to <paramref name="asOf"/>
+    /// to the GL (AST-01): the repository subtracts what earlier AST-DEP
+    /// entries already posted, so re-running for a later date posts only
+    /// the increment. Returns the journal document number, or null when
+    /// nothing remained to post.</summary>
+    public async Task<string?> PostDepreciationAsync(string companyId, Guid assetId, DateOnly asOf, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        if (assetId == Guid.Empty)
+            throw new ArgumentException("Asset is required.", nameof(assetId));
+        var assets = await _repository.GetAllAsync(companyId, cancellationToken).ConfigureAwait(false);
+        var asset = assets.FirstOrDefault(a => a.Id == assetId)
+            ?? throw new InvalidOperationException("Asset was not found for this company.");
+        var accumulated = AccumulatedDepreciation(asset, asOf);
+        return await _repository.PostDepreciationAsync(companyId, assetId, accumulated, asOf, RequireUser(userId), cancellationToken).ConfigureAwait(false);
+    }
+
     public Task DeleteAsync(string companyId, Guid assetId, string userId, CancellationToken cancellationToken = default)
     {
         if (assetId == Guid.Empty)

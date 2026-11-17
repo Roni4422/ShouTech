@@ -98,6 +98,17 @@ namespace ShouTech.App.Views
 
         private async void BtnRestore_Click(object sender, RoutedEventArgs e)
         {
+            if (!AppHost.Permissions.Has(PermCat.Company.Create))
+            {
+                AppHost.Errors.Report(ErrorCodes.PermissionDenied, null, "RestoreCoWin.xaml.BtnRestore_Click");
+                MessageBox.Show(
+                    ShouTech.App.Localization.Loc.Get("RestoreCompany.PermissionDenied", "You do not have permission to restore a company (ORG.COMPANY.CREATE)."),
+                    Title,
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
             if (lstDeleted.SelectedItem is not DeletedCompanyItem item)
             {
                 MessageBox.Show(

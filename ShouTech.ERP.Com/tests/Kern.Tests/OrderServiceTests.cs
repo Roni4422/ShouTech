@@ -253,6 +253,7 @@ namespace Kern.Tests
             var companyId = Guid.NewGuid();
 
             ApplySqliteMigrations(databasePath);
+            SeedGlCompany(connectionString, companyId, "ORDER-GL");
 
             var orders = new OrderDocumentRepository("SQLite", connectionString);
             var chain = new CommercialDocumentRepository("SQLite", connectionString);
@@ -268,6 +269,47 @@ namespace Kern.Tests
                 }
             };
             return Task.FromResult<(OrderService Service, OrderDocumentRepository Orders, Guid CompanyId, string ConnectionString, Action Cleanup)>((service, orders, companyId, connectionString, cleanup));
+        }
+
+
+        /// <summary>Step 3: document posting now creates real GL entries,
+        /// so the fixture company must exist in companies with an open
+        /// fiscal year/periods and the canonical posting accounts.</summary>
+        private static void SeedGlCompany(string connectionString, Guid companyId, string companyCode)
+        {
+            using var connection = new SqliteConnection(connectionString);
+            connection.Open();
+            void Exec(string sql, params (string Name, object Value)[] ps)
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = sql;
+                foreach (var (n, v) in ps) cmd.Parameters.AddWithValue(n, v);
+                cmd.ExecuteNonQuery();
+            }
+            Exec("INSERT INTO companies (company_id, company_code, company_name_ar, company_name_en) VALUES ($id, $code, 'GL Test Co', 'GL Test Co');",
+                ("$id", companyId.ToString("D")), ("$code", companyCode));
+            Exec("INSERT INTO fiscal_years (company_id, fiscal_year, database_name, start_date, end_date, is_current, is_closed) VALUES ($c, 2026, '', '2026-01-01', '2026-12-31', 1, 0);",
+                ("$c", companyId.ToString("D")));
+            long yearId;
+            using (var q = connection.CreateCommand()) { q.CommandText = "SELECT last_insert_rowid();"; yearId = (long)q.ExecuteScalar()!; }
+            for (var m = 1; m <= 12; m++)
+            {
+                Exec("INSERT INTO fiscal_periods (fiscal_period_id, company_id, fiscal_year_id, period_number, period_name, start_date, end_date, status) VALUES ($id, $c, $y, $n, $name, $s, $e, 'OPEN');",
+                    ("$id", Guid.NewGuid().ToString("D")), ("$c", companyId.ToString("D")), ("$y", yearId), ("$n", m),
+                    ("$name", $"2026-{m:D2}"), ("$s", $"2026-{m:D2}-01"),
+                    ("$e", new DateTime(2026, m, 1).AddMonths(1).AddDays(-1).ToString("yyyy-MM-dd")));
+            }
+            foreach (var (code, name, type) in new[]
+            {
+                ("1201", "Trade Accounts Receivable", "ASSET"), ("1203", "Merchandise Inventory", "ASSET"),
+                ("2201", "Trade Accounts Payable", "LIABILITY"), ("301", "Goods Sales Revenue", "REVENUE"),
+                ("401", "Cost of Goods Sold", "EXPENSE"), ("402", "Merchandise Purchases", "EXPENSE"),
+                ("131", "Cash on Hand", "ASSET")
+            })
+            {
+                Exec("INSERT INTO chart_of_accounts (account_id, company_id, account_code, account_name, account_type, is_postable, is_active, is_deleted) VALUES ($id, $c, $code, $name, $type, 1, 1, 0);",
+                    ("$id", Guid.NewGuid().ToString("D")), ("$c", companyId.ToString("D")), ("$code", code), ("$name", name), ("$type", type));
+            }
         }
 
         private static void ApplySqliteMigrations(string databasePath)

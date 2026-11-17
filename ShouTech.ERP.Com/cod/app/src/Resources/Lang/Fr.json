@@ -942,14 +942,16 @@
     "ConfirmCreate": "Créer une sauvegarde miroir STBK2 ?\n\nLes fenêtres secondaires seront fermées et la fenêtre principale sera gelée.\n\n{0}Continuer ?",
     "ConfirmRestore": "Restaurer la sauvegarde ?\n\n{0}Les fenêtres secondaires seront fermées et la fenêtre principale sera gelée.\n\n{1}Continuer ?",
     "OpenSecondaryCount": "Fenêtres secondaires ouvertes : {0}\n\n",
-    "UnknownError": "Erreur inconnue."
+    "UnknownError": "Erreur inconnue.",
+    "PermissionDenied": "Vous n'avez pas l'autorisation d'effectuer cette opération de sauvegarde."
   },
   "Permissions": {
     "Title": "Autorisations utilisateur",
     "Hint": "Les modifications sont enregistrées comme exceptions utilisateur uniquement.",
     "Cancel": "Annuler",
     "Save": "Enregistrer",
-    "LoadFailed": "Impossible de charger les autorisations."
+    "LoadFailed": "Impossible de charger les autorisations.",
+    "PermissionDenied": "Vous n'avez pas l'autorisation de gérer les autorisations des utilisateurs."
   },
   "RestoreCompany": {
     "Title": "Restaurer une société",
@@ -961,7 +963,8 @@
     "EmptyList": "Aucune société supprimée à restaurer.\nNote : les sociétés entièrement retirées de l'index avant cette mise à jour ne peuvent pas être restaurées ici.",
     "SelectCompany": "Veuillez sélectionner une société.",
     "RestoreDbFailed": "Impossible de restaurer la société depuis la base de données.",
-    "RestoreOk": "«{0}» a été restaurée et réindexée."
+    "RestoreOk": "«{0}» a été restaurée et réindexée.",
+    "PermissionDenied": "Vous n'avez pas l'autorisation de restaurer une société."
   },
   "CompanyManagement": {
     "Title": "Gestion des Sociétés",
@@ -978,7 +981,8 @@
     "RemovedFromList": "Société retirée de la liste.",
     "ConfirmPermanentDelete": "La société sélectionnée sera définitivement supprimée. Cette action est irréversible. Continuer ?",
     "PermanentDeleteTitle": "Suppression Définitive",
-    "PermanentlyDeleted": "Société définitivement supprimée."
+    "PermanentlyDeleted": "Société définitivement supprimée.",
+    "PermissionDenied": "Vous n'avez pas l'autorisation de supprimer définitivement une société."
   },
   "Workspace": {
     "Title": "Espace de travail",
@@ -2048,7 +2052,10 @@
     "Saved": "Immobilisation enregistrée.",
     "Deleted": "Immobilisation supprimée.",
     "PermissionDenied": "Vous n'avez pas l'autorisation d'effectuer cette action sur les immobilisations.",
-    "ServiceUnavailable": "Le service des immobilisations est indisponible (aucune connexion à la base de données)."
+    "ServiceUnavailable": "Le service des immobilisations est indisponible (aucune connexion à la base de données).",
+    "PostDepreciation": "Comptabiliser l'amortissement",
+    "DepreciationPosted": "Amortissement comptabilisé au grand livre : {0}",
+    "DepreciationNone": "Aucun nouvel amortissement à comptabiliser pour cet actif."
   },
   "MasterCards": {
     "Active": "Actif",
@@ -2635,29 +2642,30 @@
     "SelectToPurge": "Sélectionnez une ou plusieurs lignes à supprimer définitivement.",
     "ConfirmPurge": "Les éléments sélectionnés seront supprimés définitivement et ne pourront pas être restaurés.\n\nContinuer ?",
     "Purged": "{0:N0} élément(s) supprimé(s) définitivement.",
-    "PurgedPartial": "{0:N0} élément(s) supprimé(s) définitivement. {1:N0} échec(s).{2}{3}"
+    "PurgedPartial": "{0:N0} élément(s) supprimé(s) définitivement. {1:N0} échec(s).{2}{3}",
+    "PermissionDenied": "Vous n'avez pas l'autorisation de supprimer définitivement des éléments. Cette action requiert un administrateur."
   },
-  "Cards":   {
-      "NotFound": "L'enregistrement est introuvable dans la base de données.",
-      "PermissionDenied": "Vous n'avez pas l'autorisation pour cette opération.",
-      "CodeRequired": "Le code est obligatoire.",
-      "NameRequired": "Le nom est obligatoire.",
-      "InvalidAmount": "Une valeur numérique est invalide.",
-      "ConfirmDelete": "Supprimer cette fiche ? Elle sera placée dans la corbeille."
+  "Cards": {
+    "NotFound": "L'enregistrement est introuvable dans la base de données.",
+    "PermissionDenied": "Vous n'avez pas l'autorisation pour cette opération.",
+    "CodeRequired": "Le code est obligatoire.",
+    "NameRequired": "Le nom est obligatoire.",
+    "InvalidAmount": "Une valeur numérique est invalide.",
+    "ConfirmDelete": "Supprimer cette fiche ? Elle sera placée dans la corbeille."
   },
-  "BarcodeTool":   {
-      "Title": "Générateur et concepteur de codes-barres",
-      "Material": "Article",
-      "Type": "Type de code-barres",
-      "Value": "Valeur du code-barres",
-      "IncludePrice": "Inclure le prix",
-      "IncludeName": "Inclure le nom",
-      "Copies": "Copies d'impression",
-      "Print": "Imprimer l'étiquette",
-      "Preview": "Aperçu",
-      "PrintSuccess": "Tâche d'impression envoyée avec succès",
-      "SaveToMaterial": "Enregistrer dans la fiche article",
-      "SavedToMaterial": "Code-barres et prix enregistrés dans la fiche article.",
-      "MaterialNotFound": "Choisissez un article ou saisissez le code d'un article existant."
+  "BarcodeTool": {
+    "Title": "Générateur et concepteur de codes-barres",
+    "Material": "Article",
+    "Type": "Type de code-barres",
+    "Value": "Valeur du code-barres",
+    "IncludePrice": "Inclure le prix",
+    "IncludeName": "Inclure le nom",
+    "Copies": "Copies d'impression",
+    "Print": "Imprimer l'étiquette",
+    "Preview": "Aperçu",
+    "PrintSuccess": "Tâche d'impression envoyée avec succès",
+    "SaveToMaterial": "Enregistrer dans la fiche article",
+    "SavedToMaterial": "Code-barres et prix enregistrés dans la fiche article.",
+    "MaterialNotFound": "Choisissez un article ou saisissez le code d'un article existant."
   }
 }

@@ -109,7 +109,7 @@ namespace ShouTech.App.Services
             DeviceInfo = new DevInfoSv(Logging);
             License = new LicenSvc(Logging, DeviceInfo);
             Sync = new SyncServ(Logging, DeviceInfo);
-            Backup = new BkpServ(Logging, DeviceInfo, Sync);
+            Backup = new BkpServ(Logging, DeviceInfo, Sync, Permissions);
 
             OnlineCoordinator = new OnlCoord(
                 Connectivity,

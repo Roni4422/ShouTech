@@ -1043,6 +1043,17 @@ namespace ShouTech.App.Views
             if (!EnsureSelection())
                 return;
 
+            if (!AppHost.Permissions.Has(PermCat.Company.Delete))
+            {
+                AppHost.Errors.Report(ErrorCodes.PermissionDenied, null, "ComWin.xaml.BtnDeleteFully_Click");
+                MessageBox.Show(
+                    Loc.Get("CompanyManagement.PermissionDenied", "You do not have permission to permanently delete a company (ORG.COMPANY.DELETE)."),
+                    Loc.Get("CompanyManagement.PermanentDeleteTitle", "Permanent Delete"),
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
             var confirm = MessageBox.Show(
                 Loc.Get("CompanyManagement.ConfirmPermanentDelete",
                     "The selected company will be permanently deleted. This cannot be undone. Continue?"),

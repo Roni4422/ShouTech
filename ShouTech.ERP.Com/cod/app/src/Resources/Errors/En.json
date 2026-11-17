@@ -44,6 +44,30 @@
     "message": "Cost center '{0}' is a group or inactive cost center and cannot receive postings.",
     "hint": "Choose an active leaf cost center, or define an allocation for the group center."
   },
+  "ACC-5009": {
+    "code": "ACC-5009",
+    "name": "CostCenterUnknown",
+    "message": "Cost center '{0}' does not match any active cost center for this company and cannot be posted.",
+    "hint": "Create the cost center or correct the code, then post again."
+  },
+  "ACC-5010": {
+    "code": "ACC-5010",
+    "name": "CostCenterRequired",
+    "message": "Account '{0}' requires a cost center; the journal line has none.",
+    "hint": "Add a cost center to the line, or clear the cost-required flag on the account card."
+  },
+  "ACC-5011": {
+    "code": "ACC-5011",
+    "name": "DocumentPostingAccountMissing",
+    "message": "Document posting account '{0}' is missing, inactive, deleted, or not postable for this company.",
+    "hint": "Create or activate a postable account with that code in the chart of accounts, then post again."
+  },
+  "ACC-5012": {
+    "code": "ACC-5012",
+    "name": "DocumentAlreadyPostedToGl",
+    "message": "Document '{0}' already has a posted general-ledger entry and cannot be posted twice.",
+    "hint": "Reverse the existing journal entry before posting the document again."
+  },
   "AUTH-2001": {
     "code": "AUTH-2001",
     "name": "InvalidCredentials",
@@ -67,6 +91,18 @@
     "name": "PasswordPolicyViolation",
     "message": "Administrator password does not meet the password policy: {0}",
     "hint": "Use at least 12 characters with a mix of letters, digits, and a symbol."
+  },
+  "AUTH-2005": {
+    "code": "AUTH-2005",
+    "name": "PermissionDenied",
+    "message": "You do not have permission to perform this operation.",
+    "hint": "Ask an administrator to grant the required permission."
+  },
+  "AUTH-2006": {
+    "code": "AUTH-2006",
+    "name": "PermissionLoadFailed",
+    "message": "The signed-in user's permissions could not be loaded.",
+    "hint": "Sign in again; if the problem persists, check the company database."
   },
   "CO-3001": {
     "code": "CO-3001",

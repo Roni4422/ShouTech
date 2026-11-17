@@ -14,6 +14,15 @@ namespace ShouTech.App.Services;
 /// Shared, company-scoped query surface for standard report windows.
 /// Failures never crash the UI: empty result sets are returned when schema
 /// or connection is unavailable so reports remain usable during setup.
+///
+/// GL BASIS (Fix Phase Step 2, migration 059): every general-ledger report
+/// below computes from POSTED journal_entry_lines (journal_entries.status
+/// = 1) joined to the ONE canonical chart, chart_of_accounts, on the Guid
+/// account_id the lines actually carry. Company scoping for the journal
+/// family goes through the companies row (the shell carries the company
+/// CODE; journal tables carry the company Guid). No GL report reads stored
+/// account balances — the legacy accounts.balance/debit/credit columns
+/// were never maintained (sweep C-2) and their table no longer exists.
 /// </summary>
 public static class RptQuery
 {
@@ -29,20 +38,35 @@ public static class RptQuery
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> TrialBalanceAsync(
         DateTime from, DateTime to, CancellationToken ct)
     {
+        // Computed from POSTED journal lines in [from, to) — the pre-059
+        // version selected the never-maintained cached accounts columns
+        // and ignored its own date parameters entirely (sweep R-1).
         DocSchema.Ensure();
-        const string sql = """
+        var sql = """
             SELECT a.account_code AS Code,
-                   a.name_ar AS Name,
-                   a.name_en AS NameEn,
-                   COALESCE(a.debit, 0) AS Debit,
-                   COALESCE(a.credit, 0) AS Credit,
-                   COALESCE(a.balance, 0) AS Balance
-            FROM accounts a
-            WHERE a.company_id = $company AND a.is_deleted = 0
+                   COALESCE(a.name_ar, a.account_name) AS Name,
+                   a.account_name AS NameEn,
+                   COALESCE(SUM(m.debit), 0) AS Debit,
+                   COALESCE(SUM(m.credit), 0) AS Credit,
+                   COALESCE(SUM(m.debit), 0) - COALESCE(SUM(m.credit), 0) AS Balance
+            FROM chart_of_accounts a
+            INNER JOIN companies co ON co.company_id = a.company_id
+            LEFT JOIN (
+                SELECT l.account_id AS aid, l.debit AS debit, l.credit AS credit
+                FROM journal_entry_lines l
+                INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
+                WHERE j.status = 1 AND j.entry_date >= $from AND j.entry_date < $to
+            ) m ON m.aid = a.account_id
+            WHERE co.company_code = $company AND a.is_deleted = 0
+            GROUP BY a.account_id, a.account_code, a.name_ar, a.account_name
             ORDER BY a.account_code;
             """;
+        if (DatabaseRuntime.IsPostgreSql())
+            sql = sql.Replace("a.is_deleted = 0", "a.is_deleted = FALSE", StringComparison.Ordinal);
         return await QueryAsync(sql, ct,
-            ("$company", Company));
+            ("$company", Company),
+            ("$from", DateStart(from)),
+            ("$to", DateEndExclusive(to)));
     }
 
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> BalanceSheetAsync(
@@ -51,31 +75,32 @@ public static class RptQuery
         DocSchema.Ensure();
         var sql = """
             SELECT a.account_code AS Code,
-                   a.name_ar AS Name,
-                   a.name_en AS NameEn,
-                   CASE WHEN a.account_code LIKE '2%' OR a.account_code LIKE '3%'
+                   COALESCE(a.name_ar, a.account_name) AS Name,
+                   a.account_name AS NameEn,
+                   CASE WHEN a.account_type IN ('LIABILITY', 'EQUITY')
                         THEN SUM(COALESCE(l.credit, 0) - COALESCE(l.debit, 0))
                         ELSE SUM(COALESCE(l.debit, 0) - COALESCE(l.credit, 0))
                    END AS Amount
-            FROM accounts a
+            FROM chart_of_accounts a
+            INNER JOIN companies co ON co.company_id = a.company_id
             INNER JOIN journal_entry_lines l
-              ON l.account_id = CAST(a.account_id AS TEXT)
+              ON l.account_id = a.account_id
             INNER JOIN journal_entries j
               ON j.journal_entry_id = l.journal_entry_id
              AND j.company_id = a.company_id
-            WHERE a.company_id = $company
+            WHERE co.company_code = $company
               AND a.is_deleted = 0
               AND j.status = 1
               AND j.entry_date < $to
-              AND (a.account_code LIKE '1%' OR a.account_code LIKE '2%' OR a.account_code LIKE '3%')
+              AND a.account_type IN ('ASSET', 'LIABILITY', 'EQUITY')
               AND NOT EXISTS (
                   SELECT 1
-                  FROM accounts child
+                  FROM chart_of_accounts child
                   WHERE child.company_id = a.company_id
-                    AND child.parent_code = a.account_code
+                    AND child.parent_account_id = a.account_id
                     AND child.is_deleted = 0
               )
-            GROUP BY a.account_id, a.account_code, a.name_ar, a.name_en
+            GROUP BY a.account_id, a.account_code, a.name_ar, a.account_name, a.account_type
             HAVING ABS(SUM(COALESCE(l.debit, 0) - COALESCE(l.credit, 0))) > 0.0001
             ORDER BY a.account_code;
             """;
@@ -93,32 +118,33 @@ public static class RptQuery
         DocSchema.Ensure();
         var sql = """
             SELECT a.account_code AS Code,
-                   a.name_ar AS Name,
-                   a.name_en AS NameEn,
-                   CASE WHEN a.account_code LIKE '5%'
+                   COALESCE(a.name_ar, a.account_name) AS Name,
+                   a.account_name AS NameEn,
+                   CASE WHEN a.account_type = 'REVENUE'
                         THEN SUM(COALESCE(l.credit, 0) - COALESCE(l.debit, 0))
                         ELSE SUM(COALESCE(l.debit, 0) - COALESCE(l.credit, 0))
                    END AS Amount
-            FROM accounts a
+            FROM chart_of_accounts a
+            INNER JOIN companies co ON co.company_id = a.company_id
             INNER JOIN journal_entry_lines l
-              ON l.account_id = CAST(a.account_id AS TEXT)
+              ON l.account_id = a.account_id
             INNER JOIN journal_entries j
               ON j.journal_entry_id = l.journal_entry_id
              AND j.company_id = a.company_id
-            WHERE a.company_id = $company
+            WHERE co.company_code = $company
               AND a.is_deleted = 0
               AND j.status = 1
               AND j.entry_date >= $from
               AND j.entry_date < $to
-              AND (a.account_code LIKE '4%' OR a.account_code LIKE '5%' OR a.account_code LIKE '6%')
+              AND a.account_type IN ('REVENUE', 'EXPENSE')
               AND NOT EXISTS (
                   SELECT 1
-                  FROM accounts child
+                  FROM chart_of_accounts child
                   WHERE child.company_id = a.company_id
-                    AND child.parent_code = a.account_code
+                    AND child.parent_account_id = a.account_id
                     AND child.is_deleted = 0
               )
-            GROUP BY a.account_id, a.account_code, a.name_ar, a.name_en
+            GROUP BY a.account_id, a.account_code, a.name_ar, a.account_name, a.account_type
             HAVING ABS(SUM(COALESCE(l.debit, 0) - COALESCE(l.credit, 0))) > 0.0001
             ORDER BY a.account_code;
             """;
@@ -137,25 +163,27 @@ public static class RptQuery
         DocSchema.Ensure();
         const string sql = """
             SELECT j.entry_date AS EntryDate,
-                   j.journal_entry_id AS DocNo,
+                   COALESCE(j.document_number, CAST(j.journal_entry_id AS TEXT)) AS DocNo,
                    COALESCE(j.description, '') AS Description,
                    COALESCE(l.debit, 0) AS Debit,
                    COALESCE(l.credit, 0) AS Credit,
                    COALESCE(l.note, '') AS Note
             FROM journal_entry_lines l
             INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
-            WHERE j.company_id = $company
-              AND l.account_id = $account
+            INNER JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = j.company_id
+            INNER JOIN companies co ON co.company_id = j.company_id
+            WHERE co.company_code = $company
+              AND a.account_code = $account
               AND j.entry_date >= $from
-              AND j.entry_date <= $to
+              AND j.entry_date < $to
               AND j.status = 1
             ORDER BY j.entry_date, j.journal_entry_id, l.line_number;
             """;
         return await QueryAsync(sql, ct,
             ("$company", Company),
             ("$account", accountCode ?? string.Empty),
-            ("$from", from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
-            ("$to", to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+            ("$from", DateStart(from)),
+            ("$to", DateEndExclusive(to)));
     }
 
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> JournalListAsync(
@@ -164,14 +192,15 @@ public static class RptQuery
         DocSchema.Ensure();
         const string sql = """
             SELECT j.entry_date AS EntryDate,
-                   j.journal_entry_id AS DocNo,
+                   COALESCE(j.document_number, CAST(j.journal_entry_id AS TEXT)) AS DocNo,
                    COALESCE(j.description, '') AS Description,
                    CASE j.status WHEN 0 THEN 'Draft' WHEN 1 THEN 'Posted' ELSE 'Reversed' END AS Status,
                    COALESCE((SELECT SUM(debit) FROM journal_entry_lines x WHERE x.journal_entry_id = j.journal_entry_id), 0) AS Debit,
                    COALESCE((SELECT SUM(credit) FROM journal_entry_lines x WHERE x.journal_entry_id = j.journal_entry_id), 0) AS Credit,
                    COALESCE(j.created_by, '') AS CreatedBy
             FROM journal_entries j
-            WHERE j.company_id = $company
+            INNER JOIN companies co ON co.company_id = j.company_id
+            WHERE co.company_code = $company
               AND j.entry_date >= $from
               AND j.entry_date <= $to
             ORDER BY j.entry_date DESC, j.journal_entry_id DESC;
@@ -599,9 +628,9 @@ public static class RptQuery
     // the app identifies them by account name. Same heuristic everywhere in
     // Chunk E: English account name contains cash / bank / box.
     private const string CashAccountSql =
-        "(LOWER(COALESCE(a.name_en, '')) LIKE '%cash%' OR LOWER(COALESCE(a.name_en, '')) LIKE '%bank%' OR LOWER(COALESCE(a.name_en, '')) LIKE '%box%')";
+        "(LOWER(COALESCE(a.account_name, '')) LIKE '%cash%' OR LOWER(COALESCE(a.account_name, '')) LIKE '%bank%' OR LOWER(COALESCE(a.account_name, '')) LIKE '%box%')";
     private const string BankAccountSql =
-        "(LOWER(COALESCE(a.name_en, '')) LIKE '%bank%')";
+        "(LOWER(COALESCE(a.account_name, '')) LIKE '%bank%')";
 
     // ---------------- Inventory ----------------
 
@@ -953,7 +982,8 @@ public static class RptQuery
                    COUNT(*) AS LineCount
             FROM journal_entry_lines l
             INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
-            WHERE j.company_id = $company AND j.status = 1
+            INNER JOIN companies co ON co.company_id = j.company_id
+            WHERE co.company_code = $company AND j.status = 1
               AND j.entry_date >= $from AND j.entry_date <= $to
             GROUP BY COALESCE(NULLIF(l.cost_center, ''), '-')
             ORDER BY CostCenter;
@@ -974,8 +1004,9 @@ public static class RptQuery
                    COALESCE(SUM(l.debit - l.credit), 0) AS Balance
             FROM journal_entry_lines l
             INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
-            INNER JOIN accounts a ON CAST(a.account_id AS TEXT) = l.account_id AND a.company_id = j.company_id
-            WHERE j.company_id = $company AND j.status = 1 AND a.is_deleted = 0
+            INNER JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = j.company_id
+            INNER JOIN companies co ON co.company_id = j.company_id
+            WHERE co.company_code = $company AND j.status = 1 AND a.is_deleted = 0
               AND j.entry_date >= $from AND j.entry_date <= $to
             GROUP BY a.account_code, a.name_ar, COALESCE(NULLIF(l.cost_center, ''), '-')
             ORDER BY CostCenter, AccountCode;
@@ -997,11 +1028,12 @@ public static class RptQuery
                    CASE WHEN SUM(t.TotalDebit) = 0 THEN COALESCE(AVG(j.exchange_rate), 0)
                         ELSE SUM(j.exchange_rate * t.TotalDebit) / SUM(t.TotalDebit) END AS WeightedRate
             FROM journal_entries j
+            INNER JOIN companies co ON co.company_id = j.company_id
             LEFT JOIN (
                 SELECT journal_entry_id, SUM(debit) AS TotalDebit
                 FROM journal_entry_lines GROUP BY journal_entry_id
             ) t ON t.journal_entry_id = j.journal_entry_id
-            WHERE j.company_id = $company AND j.status = 1
+            WHERE co.company_code = $company AND j.status = 1
               AND j.entry_date >= $from AND j.entry_date <= $to
             GROUP BY COALESCE(j.currency_code, 'SAR'), substr(j.entry_date, 1, 7)
             ORDER BY Currency, Month;
@@ -1025,8 +1057,9 @@ public static class RptQuery
                    COALESCE(SUM(l.debit), 0) * COALESCE(j.exchange_rate, 1) AS BaseDebit,
                    COALESCE(SUM(l.debit), 0) * (COALESCE(j.exchange_rate, 1) - 1) AS Difference
             FROM journal_entries j
+            INNER JOIN companies co ON co.company_id = j.company_id
             INNER JOIN journal_entry_lines l ON l.journal_entry_id = j.journal_entry_id
-            WHERE j.company_id = $company AND j.status = 1
+            WHERE co.company_code = $company AND j.status = 1
               AND COALESCE(j.exchange_rate, 1) <> 1
               AND j.entry_date >= $from AND j.entry_date <= $to
             GROUP BY j.journal_entry_id, j.entry_date, j.document_number, j.currency_code, j.exchange_rate
@@ -1048,8 +1081,9 @@ public static class RptQuery
                    COALESCE(SUM(l.debit - l.credit), 0) AS Balance
             FROM journal_entry_lines l
             INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
-            INNER JOIN accounts a ON CAST(a.account_id AS TEXT) = l.account_id AND a.company_id = j.company_id
-            WHERE j.company_id = $company AND j.status = 1 AND a.is_deleted = 0
+            INNER JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = j.company_id
+            INNER JOIN companies co ON co.company_id = j.company_id
+            WHERE co.company_code = $company AND j.status = 1 AND a.is_deleted = 0
               AND j.entry_date >= $from AND j.entry_date <= $to
             GROUP BY a.account_code, a.name_ar, substr(j.entry_date, 1, 7)
             ORDER BY AccountCode, Month;
@@ -1102,17 +1136,19 @@ public static class RptQuery
                    COALESCE(SUM(l.debit - l.credit), 0) AS Amount
             FROM journal_entry_lines l
             INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
-            INNER JOIN accounts a ON CAST(a.account_id AS TEXT) = l.account_id AND a.company_id = j.company_id
+            INNER JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = j.company_id
+            INNER JOIN companies co ON co.company_id = j.company_id
             LEFT JOIN (
                 SELECT l2.journal_entry_id AS EntryId,
                        (SELECT a2.account_code FROM journal_entry_lines lx
-                        INNER JOIN accounts a2 ON CAST(a2.account_id AS TEXT) = lx.account_id AND a2.company_id = $company
+                        INNER JOIN journal_entries jx ON jx.journal_entry_id = lx.journal_entry_id
+                        INNER JOIN chart_of_accounts a2 ON a2.account_id = lx.account_id AND a2.company_id = jx.company_id
                         WHERE lx.journal_entry_id = l2.journal_entry_id
-                          AND NOT (LOWER(COALESCE(a2.name_en, '')) LIKE '%cash%' OR LOWER(COALESCE(a2.name_en, '')) LIKE '%bank%' OR LOWER(COALESCE(a2.name_en, '')) LIKE '%box%')
+                          AND NOT (LOWER(COALESCE(a2.account_name, '')) LIKE '%cash%' OR LOWER(COALESCE(a2.account_name, '')) LIKE '%bank%' OR LOWER(COALESCE(a2.account_name, '')) LIKE '%box%')
                         ORDER BY lx.line_number LIMIT 1) AS Code
                 FROM journal_entry_lines l2 GROUP BY l2.journal_entry_id
             ) cp ON cp.EntryId = j.journal_entry_id
-            WHERE j.company_id = $company AND j.status = 1 AND a.is_deleted = 0
+            WHERE co.company_code = $company AND j.status = 1 AND a.is_deleted = 0
               AND {CashAccountSql}
               AND j.entry_date >= $from AND j.entry_date <= $to
             GROUP BY Section
@@ -1129,8 +1165,9 @@ public static class RptQuery
             SELECT COALESCE(SUM(l.debit - l.credit), 0) AS Balance
             FROM journal_entry_lines l
             INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
-            INNER JOIN accounts a ON CAST(a.account_id AS TEXT) = l.account_id AND a.company_id = j.company_id
-            WHERE j.company_id = $company AND j.status = 1 AND a.is_deleted = 0
+            INNER JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = j.company_id
+            INNER JOIN companies co ON co.company_id = j.company_id
+            WHERE co.company_code = $company AND j.status = 1 AND a.is_deleted = 0
               AND {CashAccountSql}
               AND j.entry_date <= $asof;
             """);
@@ -1144,18 +1181,23 @@ public static class RptQuery
         var cutoff = FmtDate(DateTime.Today.AddDays(-Math.Max(0, days)));
         var sql = PgBoolFix("""
             SELECT a.account_code AS AccountCode,
-                   a.name_ar AS AccountName,
-                   COALESCE(a.debit, 0) AS Debit,
-                   COALESCE(a.credit, 0) AS Credit,
-                   COALESCE(a.balance, 0) AS Balance,
-                   (SELECT MAX(j.entry_date) FROM journal_entry_lines l
-                    INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
-                    WHERE l.account_id = CAST(a.account_id AS TEXT) AND j.company_id = a.company_id AND j.status = 1) AS LastMoveDate
-            FROM accounts a
-            WHERE a.company_id = $company AND a.is_deleted = 0 AND ABS(COALESCE(a.balance, 0)) > 0.0001
-              AND COALESCE((SELECT MAX(j.entry_date) FROM journal_entry_lines l
-                    INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
-                    WHERE l.account_id = CAST(a.account_id AS TEXT) AND j.company_id = a.company_id AND j.status = 1), '0001-01-01') < $cutoff
+                   COALESCE(a.name_ar, a.account_name) AS AccountName,
+                   COALESCE(SUM(m.debit), 0) AS Debit,
+                   COALESCE(SUM(m.credit), 0) AS Credit,
+                   COALESCE(SUM(m.debit - m.credit), 0) AS Balance,
+                   MAX(m.entry_date) AS LastMoveDate
+            FROM chart_of_accounts a
+            INNER JOIN companies co ON co.company_id = a.company_id
+            LEFT JOIN (
+                SELECT l.account_id AS aid, l.debit AS debit, l.credit AS credit, j.entry_date AS entry_date
+                FROM journal_entry_lines l
+                INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
+                WHERE j.status = 1
+            ) m ON m.aid = a.account_id
+            WHERE co.company_code = $company AND a.is_deleted = 0
+            GROUP BY a.account_id, a.account_code, a.name_ar, a.account_name
+            HAVING ABS(COALESCE(SUM(m.debit - m.credit), 0)) > 0.0001
+              AND COALESCE(MAX(m.entry_date), '0001-01-01') < $cutoff
             ORDER BY a.account_code;
             """);
         return await QueryAsync(sql, ct, ("$company", Company), ("$cutoff", cutoff));
@@ -1199,8 +1241,9 @@ public static class RptQuery
                      - COALESCE(SUM(CASE WHEN j.entry_date >= $f1 AND j.entry_date <= $t1 THEN l.debit - l.credit ELSE 0 END), 0) AS Diff
             FROM journal_entry_lines l
             INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
-            INNER JOIN accounts a ON CAST(a.account_id AS TEXT) = l.account_id AND a.company_id = j.company_id
-            WHERE j.company_id = $company AND j.status = 1 AND a.is_deleted = 0
+            INNER JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = j.company_id
+            INNER JOIN companies co ON co.company_id = j.company_id
+            WHERE co.company_code = $company AND j.status = 1 AND a.is_deleted = 0
               AND ((j.entry_date >= $f1 AND j.entry_date <= $t1) OR (j.entry_date >= $f2 AND j.entry_date <= $t2))
             GROUP BY a.account_code, a.name_ar
             ORDER BY AccountCode;
@@ -1225,8 +1268,9 @@ public static class RptQuery
                    CASE j.status WHEN 0 THEN 'Draft' WHEN 1 THEN 'Posted' ELSE 'Reversed' END AS Status
             FROM journal_entries j
             INNER JOIN journal_entry_lines l ON l.journal_entry_id = j.journal_entry_id
-            INNER JOIN accounts a ON CAST(a.account_id AS TEXT) = l.account_id AND a.company_id = j.company_id
-            WHERE j.company_id = $company AND a.is_deleted = 0 AND {CashAccountSql}
+            INNER JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = j.company_id
+            INNER JOIN companies co ON co.company_id = j.company_id
+            WHERE co.company_code = $company AND a.is_deleted = 0 AND {CashAccountSql}
               AND j.entry_date >= $from AND j.entry_date <= $to
             GROUP BY j.journal_entry_id, j.entry_date, j.document_number, j.description, j.reference_number, j.status
             ORDER BY j.entry_date DESC, j.journal_entry_id DESC;
@@ -1521,11 +1565,15 @@ public static class RptQuery
                    COALESCE(SUM(l.credit), 0) AS Credit,
                    COALESCE(SUM(l.debit - l.credit), 0) AS Balance
             FROM banks b
-            INNER JOIN accounts a ON a.company_id = b.company_id AND a.account_code = b.gl_account_code
-            LEFT JOIN journal_entry_lines l ON l.account_id = CAST(a.account_id AS TEXT)
-            LEFT JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
-                AND j.company_id = a.company_id AND j.status = 1
-            WHERE b.company_id = $company AND a.is_deleted = 0
+            INNER JOIN companies co ON co.company_code = b.company_id
+            INNER JOIN chart_of_accounts a ON a.company_id = co.company_id AND a.account_code = b.gl_account_code
+            LEFT JOIN (
+                SELECT l.account_id AS aid, l.debit AS debit, l.credit AS credit
+                FROM journal_entry_lines l
+                INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
+                WHERE j.status = 1
+            ) l ON l.aid = a.account_id
+            WHERE co.company_code = $company AND a.is_deleted = 0
             GROUP BY a.account_code, a.name_ar
             ORDER BY a.account_code;
             """);
@@ -1542,11 +1590,15 @@ public static class RptQuery
                    COALESCE(SUM(l.debit), 0) AS Debit,
                    COALESCE(SUM(l.credit), 0) AS Credit,
                    COALESCE(SUM(l.debit - l.credit), 0) AS Balance
-            FROM accounts a
-            LEFT JOIN journal_entry_lines l ON l.account_id = CAST(a.account_id AS TEXT)
-            LEFT JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
-                AND j.company_id = a.company_id AND j.status = 1
-            WHERE a.company_id = $company AND a.is_deleted = 0 AND {BankAccountSql}
+            FROM chart_of_accounts a
+            INNER JOIN companies co ON co.company_id = a.company_id
+            LEFT JOIN (
+                SELECT l.account_id AS aid, l.debit AS debit, l.credit AS credit
+                FROM journal_entry_lines l
+                INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
+                WHERE j.status = 1
+            ) l ON l.aid = a.account_id
+            WHERE co.company_code = $company AND a.is_deleted = 0 AND {BankAccountSql}
             GROUP BY a.account_code, a.name_ar
             ORDER BY a.account_code;
             """);

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -30,6 +30,13 @@ public partial class AccCard : BaseWin
     }
 
     public AccCard(string parentCode) : this(null, parentCode) { }
+
+    // The account identity is a Guid in the unified chart (migration 059);
+    // the serial field shows its short fragment instead of the legacy
+    // sequential integer (sweep C-10: an internal key shown as a record
+    // number). Identity itself is the account code.
+    private static string SerialText(string id)
+        => string.IsNullOrWhiteSpace(id) ? "000000" : (id.Length >= 8 ? id[..8].ToUpperInvariant() : id.ToUpperInvariant());
 
     internal AccCard(AccRepo.AccRec record) : this(record, record.ParentCode) { }
 
@@ -87,7 +94,7 @@ public partial class AccCard : BaseWin
             return;
         }
 
-        TxtSerial.Text = _current.Id.ToString("D6", CultureInfo.InvariantCulture);
+        TxtSerial.Text = SerialText(_current.Id);
         TxtCode.Text = _current.Code;
         TxtCode.IsReadOnly = true;
         TxtNameAr.Text = _current.Name;
@@ -256,7 +263,7 @@ public partial class AccCard : BaseWin
         }
 
         var value = new AccRepo.AccRec(
-            _current?.Id ?? 0, code, parent, nameAr, TxtNameEn.Text.Trim(),
+            _current?.Id ?? string.Empty, code, parent, nameAr, TxtNameEn.Text.Trim(),
             CmbPostingMode.SelectedItem?.ToString() ?? "Postable",
             CmbStatus.SelectedItem?.ToString() ?? "Active", CmbRisk.SelectedItem?.ToString() ?? "Low",
             CmbCostCenter.SelectedItem?.ToString() ?? "Unspecified", ChkReconcile.IsChecked == true,
@@ -281,7 +288,7 @@ public partial class AccCard : BaseWin
             _isNew = false;
             _isEditing = false;
             TxtCode.IsReadOnly = true;
-            TxtSerial.Text = id.ToString("D6", CultureInfo.InvariantCulture);
+            TxtSerial.Text = SerialText(id);
             Saved?.Invoke(this, EventArgs.Empty);
             MessageBox.Show(this, "The account was saved successfully.", "ShouTech ERP", MessageBoxButton.OK, MessageBoxImage.Information);
         }

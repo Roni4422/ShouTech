@@ -44,6 +44,30 @@
     "message": "'{0}' maliyet merkezi bir grup veya pasif bir merkezdir; deftere işleme alamaz.",
     "hint": "Etkin bir yaprak maliyet merkezi seçin ya da grup merkezi için bir dağıtım tanımlayın."
   },
+  "ACC-5009": {
+    "code": "ACC-5009",
+    "name": "CostCenterUnknown",
+    "message": "'{0}' maliyet merkezi bu şirket için etkin bir maliyet merkeziyle eşleşmiyor; deftere işlenemez.",
+    "hint": "Maliyet merkezini oluşturun veya kodu düzeltip yeniden deftere işleyin."
+  },
+  "ACC-5010": {
+    "code": "ACC-5010",
+    "name": "CostCenterRequired",
+    "message": "'{0}' hesabı bir maliyet merkezi gerektirir; yevmiye satırında maliyet merkezi yok.",
+    "hint": "Satıra bir maliyet merkezi ekleyin ya da hesap kartındaki zorunluluk işaretini kaldırın."
+  },
+  "ACC-5011": {
+    "code": "ACC-5011",
+    "name": "DocumentPostingAccountMissing",
+    "message": "Belge deftere işleme hesabı '{0}' eksik, pasif, silinmiş veya bu şirket için deftere işlenemez durumda.",
+    "hint": "Hesap planında bu kodla deftere işlenebilir bir hesap oluşturun veya etkinleştirin, sonra yeniden işleyin."
+  },
+  "ACC-5012": {
+    "code": "ACC-5012",
+    "name": "DocumentAlreadyPostedToGl",
+    "message": "'{0}' belgesinin zaten deftere işlenmiş bir yevmiye kaydı var; iki kez işlenemez.",
+    "hint": "Belgeyi yeniden işlemeden önce mevcut yevmiye kaydını ters çevirin."
+  },
   "AUTH-2001": {
     "code": "AUTH-2001",
     "name": "InvalidCredentials",
@@ -67,6 +91,18 @@
     "name": "PasswordPolicyViolation",
     "message": "Yönetici parolası parola politikasını karşılamıyor: {0}",
     "hint": "Harf, rakam ve bir sembol karışımıyla en az 12 karakter kullanın."
+  },
+  "AUTH-2005": {
+    "code": "AUTH-2005",
+    "name": "PermissionDenied",
+    "message": "Bu işlemi gerçekleştirme izniniz yok.",
+    "hint": "Gerekli izni vermesi için bir yöneticiye başvurun."
+  },
+  "AUTH-2006": {
+    "code": "AUTH-2006",
+    "name": "PermissionLoadFailed",
+    "message": "Oturum açan kullanıcının izinleri yüklenemedi.",
+    "hint": "Tekrar oturum açın; sorun devam ederse şirket veritabanını denetleyin."
   },
   "CO-3001": {
     "code": "CO-3001",

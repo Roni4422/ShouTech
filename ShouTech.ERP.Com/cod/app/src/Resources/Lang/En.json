@@ -88,7 +88,8 @@
     "Title": "Backup",
     "UnknownError": "Unknown error.",
     "Validating": "Validating identity and integrity...",
-    "ValidationFailed": "Validation failed."
+    "ValidationFailed": "Validation failed.",
+    "PermissionDenied": "You do not have permission to perform this backup operation."
   },
   "Banks": {
     "BankBalances": "Bank Balances",
@@ -886,7 +887,8 @@
     "Hint": "Changes are saved as user exceptions only.",
     "LoadFailed": "Unable to load permissions.",
     "Save": "Save",
-    "Title": "User Permissions"
+    "Title": "User Permissions",
+    "PermissionDenied": "You do not have permission to manage user permissions."
   },
   "Reports": {
     "TrialBalance": "Trial Balance",
@@ -1088,7 +1090,8 @@
     "RestoreOk": "“{0}” was restored and reindexed.",
     "SelectCompany": "Please select a company.",
     "Title": "Restore a Company",
-    "TitleDeleted": "Restore a Deleted Company"
+    "TitleDeleted": "Restore a Deleted Company",
+    "PermissionDenied": "You do not have permission to restore a company."
   },
   "CompanyManagement": {
     "Title": "Company Management",
@@ -1105,7 +1108,8 @@
     "RemovedFromList": "Company removed from list.",
     "ConfirmPermanentDelete": "The selected company will be permanently deleted. This cannot be undone. Continue?",
     "PermanentDeleteTitle": "Permanent Delete",
-    "PermanentlyDeleted": "Company permanently deleted."
+    "PermanentlyDeleted": "Company permanently deleted.",
+    "PermissionDenied": "You do not have permission to permanently delete a company."
   },
   "CompanyEdit": {
     "NameAr": "Name (AR)",
@@ -2083,7 +2087,10 @@
     "Saved": "Asset saved.",
     "Deleted": "Asset deleted.",
     "PermissionDenied": "You do not have permission to perform this asset action.",
-    "ServiceUnavailable": "Fixed assets service is unavailable (no database connection)."
+    "ServiceUnavailable": "Fixed assets service is unavailable (no database connection).",
+    "PostDepreciation": "Post Depreciation",
+    "DepreciationPosted": "Depreciation posted to the general ledger: {0}",
+    "DepreciationNone": "No new depreciation to post for this asset."
   },
   "MasterCards": {
     "Active": "Active",
@@ -2641,14 +2648,15 @@
     "SelectToPurge": "Select one or more rows to delete permanently.",
     "ConfirmPurge": "Selected items will be permanently deleted and cannot be restored.\n\nContinue?",
     "Purged": "Permanently deleted {0:N0} item(s).",
-    "PurgedPartial": "Permanently deleted {0:N0} item(s). {1:N0} failed.{2}{3}"
+    "PurgedPartial": "Permanently deleted {0:N0} item(s). {1:N0} failed.{2}{3}",
+    "PermissionDenied": "You do not have permission to permanently delete items. This action requires an administrator."
   },
-  "Cards":   {
-      "NotFound": "The record was not found in the database.",
-      "PermissionDenied": "You do not have permission for this operation.",
-      "CodeRequired": "The code is required.",
-      "NameRequired": "The name is required.",
-      "InvalidAmount": "A numeric value is invalid.",
-      "ConfirmDelete": "Delete this card? It will be moved to the recycle bin."
+  "Cards": {
+    "NotFound": "The record was not found in the database.",
+    "PermissionDenied": "You do not have permission for this operation.",
+    "CodeRequired": "The code is required.",
+    "NameRequired": "The name is required.",
+    "InvalidAmount": "A numeric value is invalid.",
+    "ConfirmDelete": "Delete this card? It will be moved to the recycle bin."
   }
 }

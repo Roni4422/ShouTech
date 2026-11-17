@@ -191,6 +191,8 @@ public class Phase3ServiceTests
             Items.RemoveAll(a => a.Id == assetId);
             return Task.CompletedTask;
         }
+        public Task<string?> PostDepreciationAsync(string companyId, Guid assetId, decimal accumulatedDepreciation, DateOnly asOf, string userId, CancellationToken cancellationToken = default)
+            => Task.FromResult<string?>(null);
     }
 
     private sealed class FakeProjectRepository : IProjectRepository

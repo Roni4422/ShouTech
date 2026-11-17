@@ -64,7 +64,7 @@ public sealed class PrmWinVM : INotifyPropertyChanged
     };
 
     private static string AppLanguage(string ar, string en)
-        => (App.CurrentLanguageCode ?? "ar").StartsWith("ar", StringComparison.OrdinalIgnoreCase) ? ar : en;
+        => (App.CurrentLanguageCode ?? "en").StartsWith("ar", StringComparison.OrdinalIgnoreCase) ? ar : en;
 
     public event PropertyChangedEventHandler? PropertyChanged;
     private void OnChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));

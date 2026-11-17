@@ -77,10 +77,13 @@ public class SteiRoundTripTests
 
             using (var dst = Open(dstPath))
             {
-                // Arabic text, decimal and NULL survived exactly.
-                Assert.Equal("الحساب الرئيسي", Scalar(dst, "SELECT name_ar FROM accounts WHERE account_id=100"));
-                Assert.Equal("1234.56", Scalar(dst, "SELECT CAST(balance AS TEXT) FROM accounts WHERE account_id=100"));
-                Assert.Equal("", Scalar(dst, "SELECT IFNULL(updated_at,'') FROM accounts WHERE account_id=100"));
+                // Arabic text, decimal and NULL survived exactly. (Step 2:
+                // the sample master row lives in the ONE canonical chart,
+                // chart_of_accounts — the legacy accounts table was merged
+                // into it and dropped by migration 059.)
+                Assert.Equal("الحساب الرئيسي", Scalar(dst, "SELECT name_ar FROM chart_of_accounts WHERE account_id='A110'"));
+                Assert.Equal("15.5", Scalar(dst, "SELECT CAST(tax_rate AS TEXT) FROM chart_of_accounts WHERE account_id='A110'"));
+                Assert.Equal("", Scalar(dst, "SELECT IFNULL(updated_at,'') FROM chart_of_accounts WHERE account_id='A110'"));
 
                 // The posted journal entry landed AS POSTED (status=1) —
                 // impossible before the trigger-suspension fix.
@@ -161,11 +164,9 @@ public class SteiRoundTripTests
                  "VALUES (1,'C1',2026,'src','2026-01-01','2026-12-31',1,0)");
         Exec(db, "INSERT INTO fiscal_periods (fiscal_period_id, company_id, fiscal_year_id, period_number, period_name, start_date, end_date, status) " +
                  "VALUES ('P2026-01','C1',1,1,'January','2026-01-01','2026-01-31','OPEN')");
-        Exec(db, "INSERT INTO chart_of_accounts (account_id, company_id, account_code, account_name, account_type, parent_account_id, is_postable, is_active, is_deleted, created_at) " +
-                 "VALUES ('A110','C1','110','Cash','ASSET',NULL,1,1,0,'2026-01-01T00:00:00')," +
-                 "       ('A400','C1','400','Sales Revenue','REVENUE',NULL,1,1,0,'2026-01-01T00:00:00')");
-        Exec(db, "INSERT INTO accounts (account_id, company_id, account_code, name_ar, name_en, posting_mode, status, risk, cost_center, allow_reconcile, taxable, foreign_currency, cost_required, budget, is_default, tax_rate, description, balance, debit, credit, is_deleted, created_at, updated_at) " +
-                 "VALUES (100,'C1','1100','الحساب الرئيسي','Main Account','Postable','Active','Low','CC1',1,1,0,0,0,0,15.5,'desc',1234.56,2000.00,765.44,0,'2026-01-01T08:00:00',NULL)");
+        Exec(db, "INSERT INTO chart_of_accounts (account_id, company_id, account_code, account_name, name_ar, account_type, parent_account_id, is_postable, is_active, is_deleted, created_at, tax_rate, description, updated_at) " +
+                 "VALUES ('A110','C1','110','Cash','الحساب الرئيسي','ASSET',NULL,1,1,0,'2026-01-01T00:00:00',15.5,'desc',NULL)," +
+                 "       ('A400','C1','400','Sales Revenue','Sales Revenue','REVENUE',NULL,1,1,0,'2026-01-01T00:00:00',0,'',NULL)");
         // A table holding ONLY another company's rows: must not be exported.
         // The C2 company itself is seeded so the brands.company_id foreign key
         // (migration 014) holds with ForeignKeys=true; the scenario under test

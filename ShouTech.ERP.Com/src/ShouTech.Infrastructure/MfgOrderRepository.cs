@@ -247,6 +247,31 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 throw new InvalidOperationException("Manufacturing order changed while posting.");
             order.Status = MfgOrderStatuses.Posted;
 
+            // Real GL posting (Step 3, J-2): completion transfers the raw
+            // materials' value into finished inventory in this same
+            // transaction — Dr Inventory (finished item's acc_inventory)
+            // / Cr Inventory (each raw item's acc_inventory), at the raw
+            // lines' amounts (the stock layer's current cost figures;
+            // overhead stays in the expense accounts where it was
+            // incurred — Step 6 owns costing unification).
+            var rawTotal = decimal.Round(order.Lines.Where(l => l.LineKind == MfgLineKinds.Raw).Sum(l => l.Amount), 2);
+            if (rawTotal > 0)
+            {
+                var companyGuid = ResolveCompanyGuid(connection, transaction, companyId);
+                var glLines = new List<GlLineRequest>
+                {
+                    new(MaterialInventoryAccount(connection, transaction, companyId, order.ItemCode), rawTotal, 0m)
+                };
+                foreach (var raw in order.Lines.Where(l => l.LineKind == MfgLineKinds.Raw && l.Amount > 0))
+                    glLines.Add(new GlLineRequest(
+                        MaterialInventoryAccount(connection, transaction, companyId, raw.ItemCode), 0m, decimal.Round(raw.Amount, 2)));
+                GlPosting.PostInTransaction(connection, transaction, _provider,
+                    new GlDocumentRequest(companyGuid, order.DocDate,
+                        $"MFG {documentNo}", "MFG", order.Id.ToString("D"), documentNo,
+                        "SAR", 1m, glLines),
+                    userId);
+            }
+
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch
@@ -305,6 +330,19 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                         note: $"Manufacturing order {documentNo} cancellation", cancellationToken).ConfigureAwait(false);
                     await AdjustBalanceAsync(connection, transaction, companyId, warehouseId, materialId, delta: line.Qty, unitCost: line.UnitCost, cancellationToken).ConfigureAwait(false);
                 }
+            }
+
+            // GL reversal (Step 3): cancelling a posted order reverses
+            // its completion entry through the shared Reverse path, in
+            // this same transaction. Orders posted before Step 3 have no
+            // GL entry and simply have nothing to reverse.
+            if (order.Status == MfgOrderStatuses.Posted)
+            {
+                var companyGuid = ResolveCompanyGuid(connection, transaction, companyId);
+                var glEntryId = GlPosting.FindEntryBySource(connection, transaction, _provider, companyGuid, "MFG", order.Id.ToString("D"));
+                if (glEntryId is not null)
+                    GlPosting.ReverseInTransaction(connection, transaction, _provider, glEntryId.Value, userId,
+                        $"Manufacturing order {order.DocNo} cancelled");
             }
 
             await using var update = CreateCommand(connection, transaction,
@@ -635,7 +673,33 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
         };
     }
 
-    private static string NormalizeProvider(string provider) => provider.Trim().ToLowerInvariant() switch
+        /// <summary>Resolves the company Guid for GL posting from the
+    /// company CODE this repository is keyed by.</summary>
+    private Guid ResolveCompanyGuid(DbConnection connection, DbTransaction transaction, string companyCode)
+    {
+        using var cmd = CreateCommand(connection, transaction,
+            "SELECT company_id FROM companies WHERE company_code = @code");
+        Add(cmd, "@code", companyCode.Trim());
+        var value = cmd.ExecuteScalar();
+        if (value is null or DBNull || !Guid.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), out var guid) || guid == Guid.Empty)
+            throw new InvalidOperationException($"Company '{companyCode.Trim()}' could not be resolved for GL posting.");
+        return guid;
+    }
+
+    /// <summary>The material's acc_inventory code when it holds a code,
+    /// else the canonical inventory account.</summary>
+    private string MaterialInventoryAccount(DbConnection connection, DbTransaction transaction, string companyCode, string itemCode)
+    {
+        using var cmd = CreateCommand(connection, transaction,
+            $"SELECT acc_inventory FROM materials WHERE company_id = @company AND code = @code AND {NotDeleted} LIMIT 1");
+        Add(cmd, "@company", companyCode.Trim());
+        Add(cmd, "@code", itemCode.Trim());
+        var value = cmd.ExecuteScalar();
+        var configured = value is null or DBNull ? null : Convert.ToString(value, CultureInfo.InvariantCulture);
+        return string.IsNullOrWhiteSpace(configured) ? GlAccounts.Inventory : configured.Trim();
+    }
+
+private static string NormalizeProvider(string provider) => provider.Trim().ToLowerInvariant() switch
     {
         "sqlite" or "sqlite3" => "SQLite",
         "postgres" or "postgresql" or "npgsql" => "PostgreSQL",

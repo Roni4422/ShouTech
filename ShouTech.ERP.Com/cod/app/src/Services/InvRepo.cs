@@ -223,7 +223,8 @@ public static class InvRepo
             cmd.Transaction = tx;
             cmd.CommandText = $"""
                 SELECT doc_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id,
-                       currency_code, exchange_rate, subtotal, tax_amount, grand_total, status, tax_rate, party_code
+                       currency_code, exchange_rate, subtotal, tax_amount, grand_total, status, tax_rate, party_code,
+                       paid_amount, payment_method, cost_center
                 FROM {headerTable}
                 WHERE doc_id=$id AND company_id=$company AND is_deleted=0;
                 """;
@@ -245,6 +246,10 @@ public static class InvRepo
                 PartyName = reader.IsDBNull(reader.GetOrdinal("party_name")) ? "" : reader.GetString(reader.GetOrdinal("party_name")),
                 WarehouseId = reader.IsDBNull(reader.GetOrdinal("warehouse_id")) ? null : Convert.ToInt32(reader.GetValue(reader.GetOrdinal("warehouse_id")), CultureInfo.InvariantCulture),
                 CurrencyCode = reader.GetString(reader.GetOrdinal("currency_code")),
+                ExchangeRate = Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("exchange_rate")), CultureInfo.InvariantCulture),
+                PaidAmount = reader.IsDBNull(reader.GetOrdinal("paid_amount")) ? 0m : Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("paid_amount")), CultureInfo.InvariantCulture),
+                PaymentMethod = ParsePaymentMethod(reader.IsDBNull(reader.GetOrdinal("payment_method")) ? null : reader.GetString(reader.GetOrdinal("payment_method"))),
+                CostCenter = reader.IsDBNull(reader.GetOrdinal("cost_center")) ? "" : reader.GetString(reader.GetOrdinal("cost_center")),
             };
         }
 
@@ -278,12 +283,37 @@ public static class InvRepo
             }
         }
 
+        // Real GL posting (Step 3, J-2): build the document's journal lines
+        // from the totals the document layer hands us today (Step 5 owns
+        // the stored-total / header-discount correctness of those totals)
+        // and post them INSIDE this transaction. The journal number that
+        // used to be fabricated as "JV-" + DocNo is now the REAL entry's
+        // document number, returned by the posting engine.
+        var glLines = BuildGlLines(connection, tx, doc);
+        string journalNo = string.Empty;
+        if (glLines.Count > 0)
+        {
+            var companyGuid = ResolveCompanyGuid(connection, tx);
+            var glResult = GlPosting.PostInTransaction(connection, tx,
+                DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite",
+                new ShouTech.Domain.Entities.GlDocumentRequest(
+                    companyGuid,
+                    DateOnly.FromDateTime(doc.DocDate),
+                    $"{doc.KindCode} {doc.DocNo} - {doc.PartyName}".Trim(),
+                    doc.KindCode,
+                    docId.ToString(CultureInfo.InvariantCulture),
+                    doc.DocNo ?? docId.ToString(CultureInfo.InvariantCulture),
+                    doc.CurrencyCode,
+                    doc.ExchangeRate <= 0 ? 1m : doc.ExchangeRate,
+                    glLines),
+                userId);
+            journalNo = glResult.DocumentNumber;
+        }
+        doc.JournalDocNo = journalNo;
+
         using (var upd = connection.CreateCommand())
         {
             upd.Transaction = tx;
-            // Assign a journal voucher number for Phenix "voucher" (invoice doc no as reference key).
-            var journalNo = "JV-" + (doc.DocNo ?? docId.ToString(CultureInfo.InvariantCulture));
-            doc.JournalDocNo = journalNo;
 
             upd.CommandText = $"""
                 UPDATE {headerTable}
@@ -679,6 +709,233 @@ public static class InvRepo
             : "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'document_reversals';";
         if (Convert.ToInt32(cmd.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture) != 1)
             throw new InvalidOperationException("Reversal schema is missing. Apply the provider migrations under dba/mig.");
+    }
+
+    // ------------------------------------------------------------------
+    // Step 3 GL mapping (J-2). Account codes are the canonical chart
+    // codes of the seeded templates (GlAccounts); a material's acc_*
+    // columns override the revenue / purchases / COGS / inventory legs
+    // when they hold a code. Tax is split to the VAT accounts ONLY when
+    // the company configured them postable (the seeded templates carry
+    // 1205/2205 as non-postable groups); otherwise tax stays inside the
+    // revenue / purchase leg so the entry still balances on the totals
+    // the document layer produced. Full table: docs/FIX_PHASE_STEP3.md.
+    // ------------------------------------------------------------------
+
+    private sealed record MaterialGlInfo(
+        string? AccSales, string? AccSalesReturn, string? AccCogs,
+        string? AccPurchase, string? AccPurchaseReturn, string? AccInventory,
+        string? TaxAccount, bool Stockable, decimal AvgCost);
+
+    private static Guid ResolveCompanyGuid(DbConnection connection, DbTransaction tx)
+    {
+        using var cmd = connection.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "SELECT company_id FROM companies WHERE company_code=$company;";
+        Add(cmd, "$company", Company);
+        var value = cmd.ExecuteScalar();
+        if (value is null or DBNull || !Guid.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), out var guid) || guid == Guid.Empty)
+            throw new InvalidOperationException($"Company '{Company}' could not be resolved for GL posting.");
+        return guid;
+    }
+
+    private static MaterialGlInfo LoadMaterialGl(DbConnection connection, DbTransaction tx, InvLine line, int? docWarehouseId)
+    {
+        var materialId = line.MaterialId;
+        if ((materialId is null or 0) && !string.IsNullOrWhiteSpace(line.MaterialCode))
+        {
+            using var find = connection.CreateCommand();
+            find.Transaction = tx;
+            find.CommandText = "SELECT material_id FROM materials WHERE company_id=$c AND code=$code AND is_deleted=0 LIMIT 1;";
+            if (DatabaseRuntime.IsPostgreSql())
+                find.CommandText = "SELECT material_id FROM materials WHERE company_id=$c AND code=$code AND is_deleted=FALSE LIMIT 1;";
+            Add(find, "$c", Company);
+            Add(find, "$code", line.MaterialCode.Trim());
+            var found = find.ExecuteScalar();
+            materialId = found is null or DBNull ? null : Convert.ToInt64(found, CultureInfo.InvariantCulture);
+        }
+        if (materialId is null or 0)
+            return new MaterialGlInfo(null, null, null, null, null, null, null, false, 0m);
+
+        string? accSales = null, accSalesReturn = null, accCogs = null, accPurchase = null,
+            accPurchaseReturn = null, accInventory = null, taxAccount = null;
+        var stockable = false;
+        decimal avgCost = 0m;
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = """
+                SELECT acc_sales, acc_sales_return, acc_cogs, acc_purchase, acc_purchase_return,
+                       acc_inventory, tax_account, is_stocked, is_service, item_type, avg_cost, cost
+                FROM materials WHERE company_id=$c AND material_id=$m AND is_deleted=0;
+                """;
+            if (DatabaseRuntime.IsPostgreSql())
+                cmd.CommandText = """
+                    SELECT acc_sales, acc_sales_return, acc_cogs, acc_purchase, acc_purchase_return,
+                           acc_inventory, tax_account, is_stocked, is_service, item_type, avg_cost, cost
+                    FROM materials WHERE company_id=$c AND material_id=$m AND is_deleted=FALSE;
+                    """;
+            Add(cmd, "$c", Company);
+            Add(cmd, "$m", materialId.Value);
+            using var reader = cmd.ExecuteReader();
+            if (reader.Read())
+            {
+                string? Text(int i) => reader.IsDBNull(i) ? null : Convert.ToString(reader.GetValue(i), CultureInfo.InvariantCulture);
+                accSales = Text(0); accSalesReturn = Text(1); accCogs = Text(2);
+                accPurchase = Text(3); accPurchaseReturn = Text(4); accInventory = Text(5);
+                taxAccount = Text(6);
+                var itemType = Text(9);
+                stockable = Convert.ToBoolean(reader.GetValue(7), CultureInfo.InvariantCulture)
+                    && !Convert.ToBoolean(reader.GetValue(8), CultureInfo.InvariantCulture)
+                    && !string.Equals(itemType, "Service", StringComparison.OrdinalIgnoreCase);
+                avgCost = reader.IsDBNull(10) ? 0m : Convert.ToDecimal(reader.GetValue(10), CultureInfo.InvariantCulture);
+                if (avgCost == 0 && !reader.IsDBNull(11))
+                    avgCost = Convert.ToDecimal(reader.GetValue(11), CultureInfo.InvariantCulture);
+            }
+        }
+
+        // Prefer the live balance average for the line's warehouse (the
+        // stock layer's current cost figure — Step 6 owns costing method
+        // unification); fall back to the material card average above.
+        var warehouseId = line.WarehouseId ?? docWarehouseId;
+        if (warehouseId is not null && materialId is not null)
+        {
+            using var bal = connection.CreateCommand();
+            bal.Transaction = tx;
+            bal.CommandText = "SELECT average_cost FROM material_stock_balances WHERE company_id=$c AND warehouse_id=$w AND material_id=$m AND is_deleted=0 LIMIT 1;";
+            if (DatabaseRuntime.IsPostgreSql())
+                bal.CommandText = "SELECT average_cost FROM material_stock_balances WHERE company_id=$c AND warehouse_id=$w AND material_id=$m AND is_deleted=FALSE LIMIT 1;";
+            Add(bal, "$c", Company);
+            Add(bal, "$w", warehouseId.Value);
+            Add(bal, "$m", materialId.Value);
+            var value = bal.ExecuteScalar();
+            if (value is not null and not DBNull)
+            {
+                var balanceAvg = Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+                if (balanceAvg > 0) avgCost = balanceAvg;
+            }
+        }
+        return new MaterialGlInfo(accSales, accSalesReturn, accCogs, accPurchase, accPurchaseReturn, accInventory, taxAccount, stockable, avgCost);
+    }
+
+    private static string CodeOr(string? configured, string fallback)
+        => string.IsNullOrWhiteSpace(configured) ? fallback : configured.Trim();
+
+    private static List<ShouTech.Domain.Entities.GlLineRequest> BuildGlLines(DbConnection connection, DbTransaction tx, InvDoc doc)
+    {
+        var lines = new List<ShouTech.Domain.Entities.GlLineRequest>();
+        if (doc.Kind is InvDocKind.Quotation or InvDocKind.StockTransfer or InvDocKind.OpeningStock or InvDocKind.InventoryCount)
+            return lines; // no GL for these kinds (see Step 3 doc)
+
+        var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+        var cc = string.IsNullOrWhiteSpace(doc.CostCenter) ? null : doc.CostCenter.Trim();
+        var grand = doc.GrandTotal;
+        var subtotal = doc.Subtotal;
+        var tax = doc.TaxAmount;
+
+        var infos = doc.Lines.Select(l => LoadMaterialGl(connection, tx, l, doc.WarehouseId)).ToList();
+
+        // Optional tax leg: only when a postable VAT account resolves.
+        var taxAccountCode = doc.Kind.IsSales() || doc.Kind == InvDocKind.PosSale
+            ? GlAccounts.OutputVat : GlAccounts.InputVat;
+        var materialTaxAccount = infos.Select(i => i.TaxAccount).FirstOrDefault(t => !string.IsNullOrWhiteSpace(t));
+        if (!string.IsNullOrWhiteSpace(materialTaxAccount)) taxAccountCode = materialTaxAccount.Trim();
+        var companyGuid = ResolveCompanyGuid(connection, tx);
+        var splitTax = tax > 0 && GlPosting.TryResolveAccount(connection, tx, provider, companyGuid, taxAccountCode) is not null;
+        var taxLeg = splitTax ? tax : 0m;
+        var netLeg = subtotal + (splitTax ? 0m : tax); // tax-inclusive when unsplit
+
+        void Add(string code, decimal debit, decimal credit, string? costCenter = null)
+        {
+            if (debit == 0 && credit == 0) return;
+            lines.Add(new ShouTech.Domain.Entities.GlLineRequest(code, debit, credit, costCenter));
+        }
+
+        // COGS at the stock layer's current cost figures (Step 6 scope).
+        void AddCogs(bool reverse)
+        {
+            for (var i = 0; i < doc.Lines.Count; i++)
+            {
+                var line = doc.Lines[i];
+                var info = infos[i];
+                if (!info.Stockable || line.Qty == 0 || info.AvgCost <= 0) continue;
+                var cost = decimal.Round(line.Qty * info.AvgCost, 4, MidpointRounding.AwayFromZero);
+                if (cost <= 0) continue;
+                var cogs = CodeOr(info.AccCogs, GlAccounts.Cogs);
+                var inventory = CodeOr(info.AccInventory, GlAccounts.Inventory);
+                if (reverse) { Add(inventory, cost, 0); Add(cogs, 0, cost); }
+                else { Add(cogs, cost, 0); Add(inventory, 0, cost); }
+            }
+        }
+
+        // Settlement account for any amount paid at the document: cash
+        // box for cash, bank for checks/card; a credit document is never
+        // paid at posting, so its paid portion is 0 and this is unused.
+        var settleAccount = doc.PaymentMethod switch
+        {
+            InvPaymentMethod.Checks or InvPaymentMethod.Card => GlAccounts.Bank,
+            _ => GlAccounts.Cash
+        };
+
+        switch (doc.Kind)
+        {
+            case InvDocKind.SalesInvoice:
+            case InvDocKind.PosSale:
+            {
+                var paid = Math.Min(Math.Max(doc.PaidAmount, 0m), grand);
+                if (doc.Kind == InvDocKind.PosSale || paid > 0)
+                {
+                    Add(settleAccount, paid, 0);
+                    Add(GlAccounts.Receivable, grand - paid, 0);
+                }
+                else Add(GlAccounts.Receivable, grand, 0);
+                for (var i = 0; i < doc.Lines.Count; i++)
+                    Add(CodeOr(infos[i].AccSales, GlAccounts.SalesRevenue), 0,
+                        decimal.Round(doc.Lines[i].LineSubtotal + (splitTax ? 0m : doc.Lines[i].LineTax), 4, MidpointRounding.AwayFromZero), cc);
+                if (splitTax) Add(taxAccountCode, 0, taxLeg);
+                AddCogs(reverse: false);
+                break;
+            }
+            case InvDocKind.SalesReturn:
+            {
+                for (var i = 0; i < doc.Lines.Count; i++)
+                    Add(CodeOr(infos[i].AccSalesReturn, GlAccounts.SalesReturns),
+                        decimal.Round(doc.Lines[i].LineSubtotal + (splitTax ? 0m : doc.Lines[i].LineTax), 4, MidpointRounding.AwayFromZero), 0, cc);
+                if (splitTax) Add(taxAccountCode, taxLeg, 0);
+                Add(GlAccounts.Receivable, 0, grand);
+                AddCogs(reverse: true);
+                break;
+            }
+            case InvDocKind.PurchaseInvoice:
+            {
+                for (var i = 0; i < doc.Lines.Count; i++)
+                    Add(CodeOr(infos[i].AccPurchase, GlAccounts.Purchases),
+                        decimal.Round(doc.Lines[i].LineSubtotal + (splitTax ? 0m : doc.Lines[i].LineTax), 4, MidpointRounding.AwayFromZero), 0, cc);
+                if (splitTax) Add(taxAccountCode, taxLeg, 0);
+                var paid = Math.Min(Math.Max(doc.PaidAmount, 0m), grand);
+                Add(doc.PaymentMethod == InvPaymentMethod.Cash ? GlAccounts.Cash : GlAccounts.Bank, 0, paid);
+                Add(GlAccounts.Payable, 0, grand - paid);
+                break;
+            }
+            case InvDocKind.PurchaseReturn:
+            {
+                Add(GlAccounts.Payable, grand, 0);
+                for (var i = 0; i < doc.Lines.Count; i++)
+                    Add(CodeOr(infos[i].AccPurchaseReturn, GlAccounts.PurchaseReturns), 0,
+                        decimal.Round(doc.Lines[i].LineSubtotal + (splitTax ? 0m : doc.Lines[i].LineTax), 4, MidpointRounding.AwayFromZero), cc);
+                if (splitTax) Add(taxAccountCode, 0, taxLeg);
+                break;
+            }
+            case InvDocKind.StockIn:
+                Add(GlAccounts.Inventory, netLeg + taxLeg, 0);
+                Add(GlAccounts.Purchases, 0, netLeg + taxLeg);
+                break;
+            case InvDocKind.StockOut:
+                Add(GlAccounts.Cogs, netLeg + taxLeg, 0);
+                Add(GlAccounts.Inventory, 0, netLeg + taxLeg);
+                break;
+        }
+        return lines;
     }
 
     private static void BindHeader(DbCommand cmd, InvDoc doc)

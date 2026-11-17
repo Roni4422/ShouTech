@@ -47,6 +47,8 @@ public static class ErrorCodes
     public const string AccountLocked = "AUTH-2002";
     public const string AccountLockedNow = "AUTH-2003";
     public const string PasswordPolicyViolation = "AUTH-2004";
+    public const string PermissionDenied = "AUTH-2005";
+    public const string PermissionLoadFailed = "AUTH-2006";
 
     // ---- CO 3000-3999 --------------------------------------------------
     public const string CompanyRecordNotFound = "CO-3001";
@@ -71,6 +73,10 @@ public static class ErrorCodes
     public const string CreditLimitExceeded = "ACC-5006";
     public const string CostCenterAllocationInvalid = "ACC-5007";
     public const string CostCenterNotLeaf = "ACC-5008";
+    public const string CostCenterUnknown = "ACC-5009";
+    public const string CostCenterRequired = "ACC-5010";
+    public const string DocumentPostingAccountMissing = "ACC-5011";
+    public const string DocumentAlreadyPostedToGl = "ACC-5012";
 
     // ---- INV 6000-6999 -------------------------------------------------
     public const string InventoryOperationFailed = "INV-6001";

@@ -252,9 +252,11 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             long? partyId;
             long? warehouseId;
             decimal grandTotal;
+            decimal subtotal = 0m, taxAmount = 0m, exchangeRate = 1m;
+            string? costCenter = null;
 
             await using (var header = CreateCommand(connection, transaction, """
-                SELECT company_id, doc_kind, doc_no, doc_date, party_id, warehouse_id, currency_code, grand_total, status, party_code
+                SELECT company_id, doc_kind, doc_no, doc_date, party_id, warehouse_id, currency_code, grand_total, status, party_code, subtotal, tax_amount, cost_center, exchange_rate
                 FROM sales_documents
                 WHERE doc_id = @doc AND is_deleted = 0
                 """))
@@ -273,6 +275,11 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                 grandTotal = Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture);
                 status = reader.GetString(8);
                 partyCode = reader.IsDBNull(9) ? null : reader.GetString(9);
+                subtotal = reader.IsDBNull(10) ? 0m : Convert.ToDecimal(reader.GetValue(10), CultureInfo.InvariantCulture);
+                taxAmount = reader.IsDBNull(11) ? 0m : Convert.ToDecimal(reader.GetValue(11), CultureInfo.InvariantCulture);
+                costCenter = reader.IsDBNull(12) ? null : reader.GetString(12);
+                exchangeRate = reader.IsDBNull(13) || Convert.ToDecimal(reader.GetValue(13), CultureInfo.InvariantCulture) == 0m
+                    ? 1m : Convert.ToDecimal(reader.GetValue(13), CultureInfo.InvariantCulture);
             }
 
             if (status != CommercialDocumentStatus.Draft)
@@ -367,6 +374,33 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                 Add(ledger, "@currency", currencyCode);
                 Add(ledger, "@note", $"Sales invoice {docNo} posting");
                 await ledger.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            // Real GL posting (Step 3, J-2): a posted chain SALES INVOICE
+            // creates its balanced journal entry in this same transaction
+            // (Dr Receivable / Cr Revenue, tax split only when a postable
+            // VAT account is configured). DLV/QUO/SO keep no GL entry —
+            // the delivery note moves stock without amounts, and the
+            // invoice is the chain's accounting document.
+            if (docKind == CommercialDocKinds.SalesInvoice && grandTotal > 0)
+            {
+                var companyGuid = Guid.Parse(companyId);
+                var splitTax = taxAmount > 0
+                    && GlPosting.TryResolveAccount(connection, transaction, _provider, companyGuid, GlAccounts.OutputVat) is not null;
+                var glLines = new List<GlLineRequest>
+                {
+                    new(GlAccounts.Receivable, grandTotal, 0m),
+                    new(GlAccounts.SalesRevenue, 0m, splitTax ? subtotal : grandTotal, costCenter)
+                };
+                if (splitTax)
+                    glLines.Add(new GlLineRequest(GlAccounts.OutputVat, 0m, taxAmount));
+                GlPosting.PostInTransaction(connection, transaction, _provider,
+                    new GlDocumentRequest(companyGuid,
+                        DateOnly.Parse(docDate, CultureInfo.InvariantCulture),
+                        $"SAL {docNo}", CommercialDocKinds.SalesInvoice,
+                        docId.ToString(CultureInfo.InvariantCulture), docNo,
+                        currencyCode, exchangeRate, glLines),
+                    userId);
             }
 
             await using var update = CreateCommand(connection, transaction,

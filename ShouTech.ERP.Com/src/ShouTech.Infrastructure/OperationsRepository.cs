@@ -1,4 +1,4 @@
-using System.Data.Common;
+﻿using System.Data.Common;
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Npgsql;
@@ -39,6 +39,29 @@ public sealed class OperationsRepository : IOperationsRepository
     private string NowExpr => IsPg ? "now()" : "datetime('now')";
     private object Bool(bool value) => IsPg ? value : (value ? 1 : 0);
 
+    /// <summary>
+    /// Callers of this repository pass the company CODE (BankRecWin passes
+    /// the shell's CurrentCompanyCode), but chart_of_accounts and
+    /// journal_entries are keyed by the company Guid (migration 059
+    /// unification). Resolve code -&gt; Guid through the companies row for
+    /// those two families; code-keyed tables (banks, marks, documents)
+    /// keep using the passed value unchanged.
+    /// </summary>
+    private async Task<string> ResolveChartCompanyAsync(DbConnection connection, string companyId, CancellationToken ct)
+    {
+        var value = companyId.Trim();
+        if (Guid.TryParse(value, out _))
+            return value;
+        if (!await TableExistsAsync(connection, "companies").ConfigureAwait(false))
+            return value;
+        await using var cmd = CreateCommand(connection, null,
+            "SELECT CAST(company_id AS TEXT) FROM companies WHERE company_code = @company");
+        Add(cmd, "@company", value);
+        var resolved = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        var text = resolved is null or DBNull ? null : Convert.ToString(resolved, CultureInfo.InvariantCulture);
+        return string.IsNullOrWhiteSpace(text) ? value : text!;
+    }
+
     // ------------------------------------------------------------ Bank rec
 
     public async Task<IReadOnlyList<BankAccountOption>> GetBankAccountsAsync(string companyId, CancellationToken cancellationToken = default)
@@ -56,20 +79,21 @@ public sealed class OperationsRepository : IOperationsRepository
                 return bankRows;
         }
 
-        if (await TableExistsAsync(connection, "accounts").ConfigureAwait(false))
-        {
-            var flagged = await QueryOptionsAsync(connection,
-                $"SELECT account_code, name_en FROM accounts WHERE company_id = @company AND allow_reconcile = {(IsPg ? "true" : "1")} AND {NotDeleted} ORDER BY account_code",
-                companyId, cancellationToken).ConfigureAwait(false);
-            if (flagged.Count > 0)
-                return flagged;
-        }
-
+        // Canonical chart only (migration 059): the legacy accounts table
+        // no longer exists. Reconcile-flagged accounts win; otherwise fall
+        // back to postable asset accounts.
         if (await TableExistsAsync(connection, "chart_of_accounts").ConfigureAwait(false))
         {
+            var chartCompany = await ResolveChartCompanyAsync(connection, companyId, cancellationToken).ConfigureAwait(false);
+            var flagged = await QueryOptionsAsync(connection,
+                $"SELECT account_code, account_name FROM chart_of_accounts WHERE CAST(company_id AS TEXT) = @company AND allow_reconcile = {(IsPg ? "true" : "1")} AND {NotDeleted} ORDER BY account_code",
+                chartCompany, cancellationToken).ConfigureAwait(false);
+            if (flagged.Count > 0)
+                return flagged;
+
             return await QueryOptionsAsync(connection,
-                $"SELECT account_code, account_name FROM chart_of_accounts WHERE company_id = @company AND account_type = 'ASSET' AND is_postable = {(IsPg ? "true" : "1")} AND {NotDeleted} ORDER BY account_code",
-                companyId, cancellationToken).ConfigureAwait(false);
+                $"SELECT account_code, account_name FROM chart_of_accounts WHERE CAST(company_id AS TEXT) = @company AND account_type = 'ASSET' AND is_postable = {(IsPg ? "true" : "1")} AND {NotDeleted} ORDER BY account_code",
+                chartCompany, cancellationToken).ConfigureAwait(false);
         }
 
         return Array.Empty<BankAccountOption>();
@@ -104,34 +128,22 @@ public sealed class OperationsRepository : IOperationsRepository
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
 
-        // Resolve the account code to the line-level account_id values used by
-        // journal_entry_lines: chart_of_accounts.account_id (text/uuid) and/or
-        // CAST(accounts.account_id AS TEXT) (the join RptQuery already uses).
+        // Resolve the account code to the line-level account_id values used
+        // by journal_entry_lines: the canonical chart_of_accounts.account_id
+        // (text/uuid). The legacy integer accounts ids are gone (059).
+        var chartCompany = await ResolveChartCompanyAsync(connection, companyId, cancellationToken).ConfigureAwait(false);
         var accountIds = new List<string>();
         if (await TableExistsAsync(connection, "chart_of_accounts").ConfigureAwait(false))
         {
             await using var cmd = CreateCommand(connection, null,
-                "SELECT CAST(account_id AS TEXT) FROM chart_of_accounts WHERE company_id = @company AND account_code = @code");
-            Add(cmd, "@company", companyId.Trim());
+                "SELECT CAST(account_id AS TEXT) FROM chart_of_accounts WHERE CAST(company_id AS TEXT) = @company AND account_code = @code");
+            Add(cmd, "@company", chartCompany);
             Add(cmd, "@code", accountCode.Trim());
             await using var r = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             while (await r.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
                 var v = ReadString(r, 0);
                 if (!string.IsNullOrWhiteSpace(v)) accountIds.Add(v!);
-            }
-        }
-        if (await TableExistsAsync(connection, "accounts").ConfigureAwait(false))
-        {
-            await using var cmd = CreateCommand(connection, null,
-                "SELECT CAST(account_id AS TEXT) FROM accounts WHERE company_id = @company AND account_code = @code");
-            Add(cmd, "@company", companyId.Trim());
-            Add(cmd, "@code", accountCode.Trim());
-            await using var r = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            while (await r.ReadAsync(cancellationToken).ConfigureAwait(false))
-            {
-                var v = ReadString(r, 0);
-                if (!string.IsNullOrWhiteSpace(v) && !accountIds.Contains(v!)) accountIds.Add(v!);
             }
         }
         // Free-entry fallback: the code itself may be the stored account_id.
@@ -148,12 +160,13 @@ public sealed class OperationsRepository : IOperationsRepository
             INNER JOIN journal_entries j ON CAST(j.journal_entry_id AS TEXT) = CAST(l.journal_entry_id AS TEXT)
             LEFT JOIN bank_reconciliation_marks m
               ON m.company_id = @company AND m.journal_line_key = CAST(l.journal_entry_line_id AS TEXT)
-            WHERE j.company_id = @company AND j.status = 1 AND CAST(l.account_id AS TEXT) IN ({inList})
+            WHERE CAST(j.company_id AS TEXT) = @companyGuid AND j.status = 1 AND CAST(l.account_id AS TEXT) IN ({inList})
             ORDER BY j.entry_date, l.line_number
             LIMIT {ListLimit}
             """;
         await using var command = CreateCommand(connection, null, sql);
         Add(command, "@company", companyId.Trim());
+        Add(command, "@companyGuid", chartCompany);
         for (var i = 0; i < accountIds.Count; i++)
             Add(command, $"@acct{i}", accountIds[i]);
 

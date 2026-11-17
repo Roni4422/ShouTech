@@ -146,6 +146,15 @@ public partial class BkpWin : Window
         if (_busy || string.IsNullOrWhiteSpace(CompanyCode))
             return;
 
+        if (!AppHost.Permissions.Has(PermCat.Backup.Create))
+        {
+            AppHost.Errors.Report(ErrorCodes.PermissionDenied, null, "BkpWin.Create_Click");
+            MessageBox.Show(this,
+                L("PermissionDenied", "You do not have permission to perform this backup operation (BACKUP.CREATE)."),
+                Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         var notes = (txtNotes.Text ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(notes))
         {
@@ -303,6 +312,15 @@ public partial class BkpWin : Window
     {
         if (_busy)
             return;
+
+        if (!AppHost.Permissions.Has(PermCat.Backup.Restore))
+        {
+            AppHost.Errors.Report(ErrorCodes.PermissionDenied, null, "BkpWin.Restore_Click");
+            MessageBox.Show(this,
+                L("PermissionDenied", "You do not have permission to perform this backup operation (BACKUP.RESTORE)."),
+                Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
 
         if (lstBackups.SelectedItem is not BkpRow row)
         {

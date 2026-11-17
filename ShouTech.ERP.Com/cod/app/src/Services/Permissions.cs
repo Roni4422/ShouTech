@@ -74,8 +74,26 @@ namespace ShouTech.App.Services
 
         /// <summary>
         /// Loads permissions for the given user (called after login).
+        /// The identifier may be the user's database id or username.
+        /// Effective permissions are resolved through the user's roles
+        /// (user_roles → role_permissions), then per-user overrides in
+        /// user_permissions are applied (an explicit deny wins over a
+        /// role grant; an explicit allow adds to it). A user holding
+        /// ROLE_ADMINISTRATOR receives every active permission except
+        /// explicit per-user denies.
         /// </summary>
         Task LoadForUserAsync(string userId, CancellationToken ct = default);
+
+        /// <summary>
+        /// Grants the full in-code permission catalog (PermCat.All) for
+        /// the given user without touching the database. Fallback for a
+        /// session that is already authenticated as an administrator
+        /// whose database permission load failed (e.g. a local-store
+        /// company administrator with no mirrored database user row):
+        /// an administrator must never be locked out of the guarded
+        /// windows by a loader failure. Never used for non-administrators.
+        /// </summary>
+        void GrantAllCatalogPermissions(string userId);
 
         /// <summary>
         /// Clears loaded permissions (called on logout).
@@ -767,54 +785,19 @@ public sealed class PermServ : IPermServ
             return;
         }
 
-        await using var connection = new NpgsqlConnection(connectionString);
-        await connection.OpenAsync(ct).ConfigureAwait(false);
-        const string sql = """
-            SELECT r.role_code, p.permission_code, up.effect AS user_effect
-            FROM public.users AS u
-            LEFT JOIN public.user_roles AS ur ON ur.user_id = u.user_id
-            LEFT JOIN public.roles AS r ON r.role_id = ur.role_id
-                AND r.is_active = TRUE AND r.is_deleted = FALSE
-            CROSS JOIN public.permissions AS p
-            LEFT JOIN public.role_permissions AS rp ON rp.role_id = r.role_id
-                AND rp.permission_id = p.permission_id
-            LEFT JOIN public.user_permissions AS up ON up.user_id = u.user_id
-                AND up.permission_id = p.permission_id
-            WHERE u.is_active = TRUE AND u.is_deleted = FALSE
-              AND p.is_active = TRUE
-              AND (u.username = @UserId OR u.user_id =
-                  CASE WHEN @UserId ~* '^[0-9a-f-]{36}$' THEN CAST(@UserId AS uuid) END);
-            """;
+        await LoadPostgresAsync(connectionString, ct).ConfigureAwait(false);
+    }
 
-        await using var command = new NpgsqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@UserId", _currentUserId);
-        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
-        var found = false;
-        while (await reader.ReadAsync(ct).ConfigureAwait(false))
-        {
-            found = true;
-            if (!reader.IsDBNull(0))
-            {
-                var roleCode = reader.GetString(0);
-                if (string.Equals(roleCode, "ROLE_ADMINISTRATOR", StringComparison.OrdinalIgnoreCase)
-                    || string.IsNullOrWhiteSpace(_roleCode))
-                    _roleCode = roleCode;
-            }
-            if (!reader.IsDBNull(1))
-            {
-                var permission = reader.GetString(1);
-                if (reader.IsDBNull(2) || reader.GetBoolean(2))
-                    _perms.Add(permission);
-                else
-                    _perms.Remove(permission);
-            }
-        }
+    public void GrantAllCatalogPermissions(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            throw new ArgumentException("UserId is required.", nameof(userId));
 
-        if (!found)
-        {
-            _currentUserId = null;
-            throw new UnauthorizedAccessException("The user is inactive, deleted, or does not exist.");
-        }
+        _perms.Clear();
+        foreach (var code in PermCat.All)
+            _perms.Add(code);
+        _currentUserId = userId.Trim();
+        _roleCode = "ROLE_ADMINISTRATOR";
     }
 
     public void Clear()
@@ -826,47 +809,185 @@ public sealed class PermServ : IPermServ
 
     public IReadOnlyCollection<string> GetCurrentPermissions() => _perms;
 
+    // ------------------------------------------------------------------
+    // Loader semantics (both providers, identical logic):
+    //   effective(user) =
+    //       (permissions granted to ANY of the user's active roles via
+    //        role_permissions
+    //        ∪ per-user allows in user_permissions)
+    //       − per-user denies in user_permissions.
+    //   A user holding ROLE_ADMINISTRATOR is granted every active
+    //   permission (the role's seeded meaning) minus per-user denies.
+    // The previous implementation CROSS JOINed the permission catalog
+    // and ignored role_permissions, which granted every user every
+    // permission; the queries below resolve strictly through
+    // user_roles → role_permissions and never enumerate the catalog
+    // for non-administrators.
+    // Existence is checked separately from the grant query so a real
+    // user whose roles grant nothing loads successfully with an empty
+    // set instead of being mistaken for a missing user.
+    // ------------------------------------------------------------------
+
+    private async Task LoadPostgresAsync(string connectionString, CancellationToken ct)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(ct).ConfigureAwait(false);
+
+        Guid resolvedId;
+        await using (var resolve = new NpgsqlCommand("""
+            SELECT u.user_id
+            FROM public.users AS u
+            WHERE u.is_active = TRUE AND u.is_deleted = FALSE
+              AND (u.username = @UserId OR u.user_id =
+                  CASE WHEN @UserId ~* '^[0-9a-f-]{36}$' THEN CAST(@UserId AS uuid) END)
+            LIMIT 1;
+            """, connection))
+        {
+            resolve.Parameters.AddWithValue("@UserId", _currentUserId!);
+            var scalar = await resolve.ExecuteScalarAsync(ct).ConfigureAwait(false);
+            if (scalar is not Guid guid)
+            {
+                _currentUserId = null;
+                throw new UnauthorizedAccessException("The user is inactive, deleted, or does not exist.");
+            }
+            resolvedId = guid;
+        }
+
+        var isAdministrator = false;
+        await using (var roles = new NpgsqlCommand("""
+            SELECT r.role_code
+            FROM public.user_roles AS ur
+            INNER JOIN public.roles AS r ON r.role_id = ur.role_id
+                AND r.is_active = TRUE AND r.is_deleted = FALSE
+            WHERE ur.user_id = @Uid;
+            """, connection))
+        {
+            roles.Parameters.AddWithValue("@Uid", resolvedId);
+            await using var roleReader = await roles.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            while (await roleReader.ReadAsync(ct).ConfigureAwait(false))
+            {
+                var roleCode = roleReader.GetString(0);
+                if (string.Equals(roleCode, "ROLE_ADMINISTRATOR", StringComparison.OrdinalIgnoreCase))
+                {
+                    isAdministrator = true;
+                    _roleCode = roleCode;
+                }
+                else if (string.IsNullOrWhiteSpace(_roleCode))
+                {
+                    _roleCode = roleCode;
+                }
+            }
+        }
+
+        await using var command = new NpgsqlCommand("""
+            SELECT p.permission_code
+            FROM public.permissions AS p
+            WHERE p.is_active = TRUE
+              AND (
+                    @IsAdmin
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public.role_permissions AS rp
+                        INNER JOIN public.user_roles AS ur ON ur.role_id = rp.role_id
+                        INNER JOIN public.roles AS r ON r.role_id = ur.role_id
+                            AND r.is_active = TRUE AND r.is_deleted = FALSE
+                        WHERE ur.user_id = @Uid AND rp.permission_id = p.permission_id)
+                    OR EXISTS (
+                        SELECT 1 FROM public.user_permissions AS up
+                        WHERE up.user_id = @Uid AND up.permission_id = p.permission_id
+                          AND up.effect = TRUE)
+                  )
+              AND NOT EXISTS (
+                    SELECT 1 FROM public.user_permissions AS up
+                    WHERE up.user_id = @Uid AND up.permission_id = p.permission_id
+                      AND up.effect = FALSE);
+            """, connection);
+        command.Parameters.AddWithValue("@Uid", resolvedId);
+        command.Parameters.AddWithValue("@IsAdmin", isAdministrator);
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            _perms.Add(reader.GetString(0));
+    }
+
     private async Task LoadSqliteAsync(string connectionString, CancellationToken ct)
     {
         SqliteSchemaBootstrapper.EnsureDatabase(connectionString);
         await using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync(ct).ConfigureAwait(false);
-        await using var command = new SqliteCommand("""
-            SELECT r.role_code, p.permission_code, up.effect AS user_effect
-            FROM users u
-            LEFT JOIN user_roles ur ON ur.user_id=u.user_id
-            LEFT JOIN roles r ON r.role_id=ur.role_id AND r.is_active=1 AND r.is_deleted=0
-            CROSS JOIN permissions p
-            LEFT JOIN role_permissions rp ON rp.role_id=r.role_id AND rp.permission_id=p.permission_id
-            LEFT JOIN user_permissions up ON up.user_id=u.user_id AND up.permission_id=p.permission_id
-            WHERE u.is_active=1 AND u.is_deleted=0 AND p.is_active=1
-              AND (u.username=@user_id OR u.user_id=@user_id)
-            """, connection);
-        command.Parameters.AddWithValue("@user_id", _currentUserId);
-        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
-        var found = false;
-        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+
+        string resolvedId;
+        await using (var resolve = new SqliteCommand("""
+            SELECT u.user_id
+            FROM users AS u
+            WHERE u.is_active = 1 AND u.is_deleted = 0
+              AND (u.username = @user_id OR u.user_id = @user_id)
+            LIMIT 1
+            """, connection))
         {
-            found = true;
-            if (!reader.IsDBNull(0))
+            resolve.Parameters.AddWithValue("@user_id", _currentUserId);
+            var scalar = await resolve.ExecuteScalarAsync(ct).ConfigureAwait(false);
+            if (scalar is not string id || string.IsNullOrWhiteSpace(id))
             {
-                var roleCode = reader.GetString(0);
-                if (string.Equals(roleCode, "ROLE_ADMINISTRATOR", StringComparison.OrdinalIgnoreCase)
-                    || string.IsNullOrWhiteSpace(_roleCode))
+                _currentUserId = null;
+                throw new UnauthorizedAccessException("The user is inactive, deleted, or does not exist.");
+            }
+            resolvedId = id;
+        }
+
+        var isAdministrator = false;
+        await using (var roles = new SqliteCommand("""
+            SELECT r.role_code
+            FROM user_roles AS ur
+            INNER JOIN roles AS r ON r.role_id = ur.role_id
+                AND r.is_active = 1 AND r.is_deleted = 0
+            WHERE ur.user_id = @uid
+            """, connection))
+        {
+            roles.Parameters.AddWithValue("@uid", resolvedId);
+            await using var roleReader = await roles.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            while (await roleReader.ReadAsync(ct).ConfigureAwait(false))
+            {
+                var roleCode = roleReader.GetString(0);
+                if (string.Equals(roleCode, "ROLE_ADMINISTRATOR", StringComparison.OrdinalIgnoreCase))
+                {
+                    isAdministrator = true;
                     _roleCode = roleCode;
-            }
-            if (!reader.IsDBNull(1))
-            {
-                var permission = reader.GetString(1);
-                if (reader.IsDBNull(2) || reader.GetBoolean(2)) _perms.Add(permission);
-                else _perms.Remove(permission);
+                }
+                else if (string.IsNullOrWhiteSpace(_roleCode))
+                {
+                    _roleCode = roleCode;
+                }
             }
         }
-        if (!found)
-        {
-            _currentUserId = null;
-            throw new UnauthorizedAccessException("The user is inactive, deleted, or does not exist.");
-        }
+
+        await using var command = new SqliteCommand("""
+            SELECT p.permission_code
+            FROM permissions AS p
+            WHERE p.is_active = 1
+              AND (
+                    @is_admin = 1
+                    OR EXISTS (
+                        SELECT 1
+                        FROM role_permissions AS rp
+                        INNER JOIN user_roles AS ur ON ur.role_id = rp.role_id
+                        INNER JOIN roles AS r ON r.role_id = ur.role_id
+                            AND r.is_active = 1 AND r.is_deleted = 0
+                        WHERE ur.user_id = @uid AND rp.permission_id = p.permission_id)
+                    OR EXISTS (
+                        SELECT 1 FROM user_permissions AS up
+                        WHERE up.user_id = @uid AND up.permission_id = p.permission_id
+                          AND up.effect = 1)
+                  )
+              AND NOT EXISTS (
+                    SELECT 1 FROM user_permissions AS up
+                    WHERE up.user_id = @uid AND up.permission_id = p.permission_id
+                      AND up.effect = 0)
+            """, connection);
+        command.Parameters.AddWithValue("@uid", resolvedId);
+        command.Parameters.AddWithValue("@is_admin", isAdministrator ? 1 : 0);
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            _perms.Add(reader.GetString(0));
     }
 
 }
@@ -943,9 +1064,43 @@ public sealed class PermAdminSvc
         return result;
     }
 
+    // The administration entry points historically received a USERNAME
+    // (RibbonNav opens PrmWin with AppState.CurrentUser.Username) while
+    // user_roles / user_permissions are keyed by the database user_id.
+    // Every load/save therefore resolves the supplied identifier —
+    // username or user_id — to the canonical user_id first; matching a
+    // username against user_id directly loaded an all-denied baseline
+    // and wrote orphaned override rows.
+    private static async Task<string> ResolveSqliteUserIdAsync(SqliteConnection c, string identifier, CancellationToken ct)
+    {
+        await using var cmd = new SqliteCommand(
+            "SELECT user_id FROM users WHERE username=@id OR user_id=@id LIMIT 1", c);
+        cmd.Parameters.AddWithValue("@id", identifier);
+        var scalar = await cmd.ExecuteScalarAsync(ct);
+        if (scalar is not string id || string.IsNullOrWhiteSpace(id))
+            throw new ArgumentException($"User '{identifier}' was not found.", nameof(identifier));
+        return id;
+    }
+
+    private static async Task<Guid> ResolvePostgresUserIdAsync(NpgsqlConnection c, string identifier, CancellationToken ct)
+    {
+        await using var cmd = new NpgsqlCommand("""
+            SELECT user_id FROM public.users
+            WHERE username = @id OR user_id =
+                CASE WHEN @id ~* '^[0-9a-f-]{36}$' THEN CAST(@id AS uuid) END
+            LIMIT 1
+            """, c);
+        cmd.Parameters.AddWithValue("@id", identifier);
+        var scalar = await cmd.ExecuteScalarAsync(ct);
+        if (scalar is not Guid id)
+            throw new ArgumentException($"User '{identifier}' was not found.", nameof(identifier));
+        return id;
+    }
+
     private static async Task<IReadOnlyList<PermissionItem>> LoadSqliteAsync(string cs, string userId, CancellationToken ct)
     {
         await using var c = new SqliteConnection(cs); await c.OpenAsync(ct);
+        var uid = await ResolveSqliteUserIdAsync(c, userId, ct);
         const string sql = @"
 SELECT p.permission_id,p.permission_code,p.feature_code,p.operation_code,p.name_ar,p.name_en,p.is_sensitive,
        CASE WHEN rp.permission_id IS NULL THEN 0 ELSE 1 END AS baseline_allowed,
@@ -958,7 +1113,7 @@ LEFT JOIN user_permissions up ON up.user_id=@uid AND up.permission_id=p.permissi
 WHERE p.is_active=1
 ORDER BY p.display_order,p.permission_code;
 ";
-        await using var cmd = new SqliteCommand(sql, c); cmd.Parameters.AddWithValue("@uid", userId);
+        await using var cmd = new SqliteCommand(sql, c); cmd.Parameters.AddWithValue("@uid", uid);
         await using var r = await cmd.ExecuteReaderAsync(ct);
         var result = new List<PermissionItem>();
         while (await r.ReadAsync(ct)) result.Add(new(r.GetInt64(0),r.GetString(1),r.GetString(2),r.GetString(3),r.GetString(4),r.GetString(5),r.GetInt64(6)!=0,r.GetInt64(7)!=0,r.GetInt64(8)!=0));
@@ -967,8 +1122,8 @@ ORDER BY p.display_order,p.permission_code;
 
     private static async Task<IReadOnlyList<PermissionItem>> LoadPostgresAsync(string cs, string userId, CancellationToken ct)
     {
-        if (!Guid.TryParse(userId, out var uid)) throw new ArgumentException("PostgreSQL UserId must be a GUID.", nameof(userId));
         await using var c = new NpgsqlConnection(cs); await c.OpenAsync(ct);
+        var uid = await ResolvePostgresUserIdAsync(c, userId, ct);
         const string sql = @"
 SELECT p.permission_id,p.permission_code,p.feature_code,p.operation_code,p.name_ar,p.name_en,p.is_sensitive,
        CASE WHEN rp.permission_id IS NULL THEN FALSE ELSE TRUE END AS baseline_allowed,
@@ -990,7 +1145,9 @@ ORDER BY p.display_order,p.permission_code;
 
     private static async Task SaveSqliteAsync(string cs, string userId, IReadOnlyDictionary<long, bool> effective, CancellationToken ct)
     {
-        await using var c = new SqliteConnection(cs); await c.OpenAsync(ct); await using var tx = c.BeginTransaction();
+        await using var c = new SqliteConnection(cs); await c.OpenAsync(ct);
+        userId = await ResolveSqliteUserIdAsync(c, userId, ct);
+        await using var tx = c.BeginTransaction();
         await EnsureNotAdministratorSqlite(c, tx, userId, ct);
         const string baselineSql = "SELECT COUNT(*) FROM role_permissions rp INNER JOIN user_roles ur ON ur.role_id=rp.role_id WHERE ur.user_id=@uid AND rp.permission_id=@pid";
         foreach (var pair in effective)
@@ -1012,8 +1169,9 @@ ORDER BY p.display_order,p.permission_code;
 
     private static async Task SavePostgresAsync(string cs, string userId, IReadOnlyDictionary<long, bool> effective, CancellationToken ct)
     {
-        if (!Guid.TryParse(userId, out var uid)) throw new ArgumentException("PostgreSQL UserId must be a GUID.", nameof(userId));
-        await using var c = new NpgsqlConnection(cs); await c.OpenAsync(ct); await using var tx = c.BeginTransaction();
+        await using var c = new NpgsqlConnection(cs); await c.OpenAsync(ct);
+        var uid = await ResolvePostgresUserIdAsync(c, userId, ct);
+        await using var tx = c.BeginTransaction();
         await EnsureNotAdministratorPostgres(c, tx, uid, ct);
         const string baselineSql = "SELECT COUNT(*) FROM role_permissions rp INNER JOIN user_roles ur ON ur.role_id=rp.role_id WHERE ur.user_id=@uid AND rp.permission_id=@pid";
         foreach (var pair in effective)

@@ -173,6 +173,19 @@ public partial class BinWin : Window
 
     private async void Purge_Click(object sender, RoutedEventArgs e)
     {
+        // Permanent purge is irreversible destruction of master data:
+        // administrator-only (SYS.ADMIN is outside every non-admin
+        // role baseline). Restore above stays ungated — it is the
+        // non-destructive direction.
+        if (!AppHost.Permissions.Has(PermCat.System.Admin))
+        {
+            AppHost.Errors.Report(ErrorCodes.PermissionDenied, null, "BinWin.xaml.Purge_Click");
+            MessageBox.Show(this,
+                Loc.Get("RecycleBin.PermissionDenied", "You do not have permission to permanently delete items. This action requires an administrator (SYS.ADMIN)."),
+                Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         var selected = GetSelectedItems();
         if (selected.Count == 0)
         {

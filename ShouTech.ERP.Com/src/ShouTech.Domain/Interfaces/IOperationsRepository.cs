@@ -1,4 +1,4 @@
-using ShouTech.Domain.Entities;
+﻿using ShouTech.Domain.Entities;
 
 namespace ShouTech.Domain.Interfaces;
 
@@ -12,8 +12,9 @@ public interface IOperationsRepository
 {
     // ------------------------------------------------------------ Bank rec
     /// <summary>Bank GL accounts: banks.gl_account_code when the banks table
-    /// exists (migration 031), otherwise accounts flagged allow_reconcile,
-    /// otherwise postable asset accounts from chart_of_accounts.</summary>
+    /// exists (migration 031), otherwise canonical chart_of_accounts rows
+    /// flagged allow_reconcile, otherwise postable asset accounts from
+    /// chart_of_accounts (migration 059 unification).</summary>
     Task<IReadOnlyList<BankAccountOption>> GetBankAccountsAsync(string companyId, CancellationToken cancellationToken = default);
 
     /// <summary>Posted journal lines for one account code, with cleared state.</summary>
