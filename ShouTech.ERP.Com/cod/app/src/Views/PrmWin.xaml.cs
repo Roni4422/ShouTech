@@ -3,6 +3,7 @@ using System.Windows;
 using ShouTech.App.Services;
 using ShouTech.App.Localization;
 using ShouTech.App.ViewModels;
+using ShouTech.Domain;
 
 namespace ShouTech.App.Views;
 
@@ -12,9 +13,10 @@ public partial class PrmWin : Window
 
     public PrmWin(string userId)
     {
-        if (!AppHost.Permissions.Has("SYS.PERMISSIONS.MANAGE"))
-            throw new UnauthorizedAccessException("You are not authorized to manage user permissions.");
-
+        // No authorization throw in the constructor: a throwing ctor
+        // surfaced as the global dispatcher dialog (sweep S-7/P-3).
+        // The permission gate runs on Loaded below, with the same
+        // deny-close pattern as the other guarded windows.
         InitializeComponent();
         VisuId.ApplyWindow(this);
         _vm = new PrmWinVM(userId);
@@ -24,6 +26,16 @@ public partial class PrmWin : Window
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
+        if (!AppHost.Permissions.Has(PermCat.System.PermissionsManage))
+        {
+            AppHost.Errors.Report(ErrorCodes.PermissionDenied, null, "PrmWin.OnLoaded");
+            MessageBox.Show(this,
+                Loc.Get("Permissions.PermissionDenied", "You do not have permission to manage user permissions."),
+                Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            Close();
+            return;
+        }
+
         try
         {
             UiLoczr.ApplyToWindow(this);
@@ -32,8 +44,10 @@ public partial class PrmWin : Window
         }
         catch (Exception ex)
         {
-            AppHost.Logging.LogWarning("PrmWin", ex.Message);
-            MessageBox.Show(this, "Could not load permissions.", "ShouTech ERP", MessageBoxButton.OK, MessageBoxImage.Error);
+            AppHost.Errors.Report(ErrorCodes.WindowLoadFailed, ex, "PrmWin.OnLoaded");
+            MessageBox.Show(this,
+                Loc.Get("Permissions.LoadFailed", "Could not load permissions."),
+                "ShouTech ERP", MessageBoxButton.OK, MessageBoxImage.Error);
             DialogResult = false;
             Close();
         }
@@ -50,7 +64,7 @@ public partial class PrmWin : Window
         }
         catch (Exception ex)
         {
-            AppHost.Logging.LogWarning("PrmWin", ex.Message);
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PrmWin.Save_Click");
             MessageBox.Show(this, ex.Message, "ShouTech ERP", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         finally { BtnSave.IsEnabled = true; }
