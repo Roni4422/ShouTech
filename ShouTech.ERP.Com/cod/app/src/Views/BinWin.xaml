@@ -1,6 +1,7 @@
-﻿<Window x:Class="ShouTech.App.Views.BinWin"
+﻿<local:BaseWin x:Class="ShouTech.App.Views.BinWin"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:ShouTech.App.Views"
         Title="Recycle Bin"
         Height="520"
         Width="780"
@@ -10,8 +11,7 @@
         FontFamily="{DynamicResource ShellChromeFontFamily}"
         FontSize="{DynamicResource FontSize13}"
         Background="{DynamicResource ShellUnifiedLightBrush}"
-        Foreground="{DynamicResource TextBrush}"
-        ShowInTaskbar="False">
+        Foreground="{DynamicResource TextBrush}">
     <Grid Margin="14">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -69,4 +69,4 @@
             </StackPanel>
         </DockPanel>
     </Grid>
-</Window>
+</local:BaseWin>
