@@ -842,6 +842,10 @@ namespace ShouTech.App.Views
 
             {
                 var reportKey = LocProps.GetKey(button);
+                if (RibbonReportRouter.TryHandle(reportKey, this))
+                    return;
+                if (RibbonNav.TryHandle(reportKey, this))
+                    return;
                 if (RptNav.TryHandle(reportKey, this))
                     return;
             }

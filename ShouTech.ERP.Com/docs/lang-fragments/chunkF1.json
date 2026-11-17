@@ -1,0 +1,826 @@
+{
+  "Definitions": {
+    "Title": {
+      "en": "Definitions",
+      "ar": "التعريفات",
+      "fr": "Définitions",
+      "tr": "Tanımlar"
+    },
+    "PermissionDenied": {
+      "en": "You do not have permission to manage these definitions.",
+      "ar": "ليس لديك صلاحية لإدارة هذه التعريفات.",
+      "fr": "Vous n'avez pas l'autorisation de gérer ces définitions.",
+      "tr": "Bu tanımları yönetme izniniz yok."
+    },
+    "ServiceUnavailable": {
+      "en": "The definitions service is unavailable.",
+      "ar": "خدمة التعريفات غير متاحة.",
+      "fr": "Le service de définitions est indisponible.",
+      "tr": "Tanımlar hizmeti kullanılamıyor."
+    },
+    "Saved": {
+      "en": "Definition saved.",
+      "ar": "تم حفظ التعريف.",
+      "fr": "Définition enregistrée.",
+      "tr": "Tanım kaydedildi."
+    },
+    "Deleted": {
+      "en": "Definition deleted.",
+      "ar": "تم حذف التعريف.",
+      "fr": "Définition supprimée.",
+      "tr": "Tanım silindi."
+    },
+    "ToggleActive": {
+      "en": "Activate / Deactivate",
+      "ar": "تفعيل / تعطيل",
+      "fr": "Activer / Désactiver",
+      "tr": "Etkinleştir / Devre Dışı Bırak"
+    },
+    "IsActive": {
+      "en": "Active",
+      "ar": "نشط",
+      "fr": "Actif",
+      "tr": "Aktif"
+    },
+    "GlobalRowProtected": {
+      "en": "Shared global rows cannot be deleted; save an edit to create a company-specific copy instead.",
+      "ar": "لا يمكن حذف الصفوف العامة المشتركة؛ احفظ تعديلاً لإنشاء نسخة خاصة بالشركة بدلاً من ذلك.",
+      "fr": "Les lignes globales partagées ne peuvent pas être supprimées ; enregistrez une modification pour créer une copie propre à l'entreprise.",
+      "tr": "Paylaşılan genel satırlar silinemez; bunun yerine düzenleyip kaydederek şirkete özel bir kopya oluşturun."
+    },
+    "Set.VoucherTypes": {
+      "en": "Voucher Types",
+      "ar": "أنواع السندات",
+      "fr": "Types de pièces",
+      "tr": "Belge Türleri"
+    },
+    "Set.SecurityTypes": {
+      "en": "Securities Types",
+      "ar": "أنواع الأوراق المالية",
+      "fr": "Types de titres",
+      "tr": "Kıymet Türleri"
+    },
+    "Set.PaymentTypes": {
+      "en": "Payment Types",
+      "ar": "أنواع الدفعات",
+      "fr": "Types de paiements",
+      "tr": "Ödeme Türleri"
+    },
+    "Set.InvoiceDefinitions": {
+      "en": "Invoice Definitions",
+      "ar": "تعريفات الفواتير",
+      "fr": "Définitions de factures",
+      "tr": "Fatura Tanımları"
+    },
+    "Set.OrderDefinitions": {
+      "en": "Order Definitions",
+      "ar": "تعريفات الطلبات",
+      "fr": "Définitions de commandes",
+      "tr": "Sipariş Tanımları"
+    },
+    "Set.PaymentMethods": {
+      "en": "Payment Methods",
+      "ar": "طرق الدفع",
+      "fr": "Modes de paiement",
+      "tr": "Ödeme Yöntemleri"
+    },
+    "Set.PosTerminals": {
+      "en": "POS Terminals",
+      "ar": "أجهزة نقاط البيع",
+      "fr": "Terminaux de point de vente",
+      "tr": "POS Terminalleri"
+    },
+    "Set.Areas": {
+      "en": "Areas",
+      "ar": "المناطق",
+      "fr": "Zones",
+      "tr": "Bölgeler"
+    },
+    "Set.PartyTargets": {
+      "en": "Customer Targets",
+      "ar": "أهداف العملاء",
+      "fr": "Objectifs clients",
+      "tr": "Müşteri Hedefleri"
+    },
+    "Set.RepTargets": {
+      "en": "Representative Targets",
+      "ar": "أهداف المندوبين",
+      "fr": "Objectifs des représentants",
+      "tr": "Temsilci Hedefleri"
+    },
+    "Set.MaterialDiscounts": {
+      "en": "Material Discounts",
+      "ar": "خصومات المواد",
+      "fr": "Remises sur articles",
+      "tr": "Malzeme İndirimleri"
+    },
+    "Set.CustomerDiscounts": {
+      "en": "Customer Discounts",
+      "ar": "خصومات العملاء",
+      "fr": "Remises clients",
+      "tr": "Müşteri İndirimleri"
+    },
+    "Set.PosDiscounts": {
+      "en": "POS Discounts",
+      "ar": "خصومات نقاط البيع",
+      "fr": "Remises de point de vente",
+      "tr": "POS İndirimleri"
+    },
+    "Set.CustomerPrices": {
+      "en": "Customer Prices",
+      "ar": "أسعار العملاء",
+      "fr": "Prix clients",
+      "tr": "Müşteri Fiyatları"
+    },
+    "Set.Devices": {
+      "en": "Handheld Devices",
+      "ar": "الأجهزة المحمولة",
+      "fr": "Appareils mobiles",
+      "tr": "El Cihazları"
+    },
+    "Set.DeviceRoutes": {
+      "en": "Device Routes",
+      "ar": "مسارات الأجهزة",
+      "fr": "Itinéraires des appareils",
+      "tr": "Cihaz Rotaları"
+    },
+    "Set.Drivers": {
+      "en": "Drivers",
+      "ar": "السائقون",
+      "fr": "Chauffeurs",
+      "tr": "Sürücüler"
+    },
+    "Set.DeliveryPrices": {
+      "en": "Delivery Prices",
+      "ar": "أسعار التوصيل",
+      "fr": "Tarifs de livraison",
+      "tr": "Teslimat Fiyatları"
+    },
+    "Set.CustomFields": {
+      "en": "Custom Fields",
+      "ar": "الحقول المخصصة",
+      "fr": "Champs personnalisés",
+      "tr": "Özel Alanlar"
+    },
+    "Set.UnitsOfMeasure": {
+      "en": "Units of Measure",
+      "ar": "وحدات القياس",
+      "fr": "Unités de mesure",
+      "tr": "Ölçü Birimleri"
+    },
+    "Set.MaterialSpecs": {
+      "en": "Material Specifications",
+      "ar": "مواصفات المواد",
+      "fr": "Spécifications des articles",
+      "tr": "Malzeme Özellikleri"
+    },
+    "Field.code": {
+      "en": "Code",
+      "ar": "الرمز",
+      "fr": "Code",
+      "tr": "Kod"
+    },
+    "Field.name_en": {
+      "en": "Name (English)",
+      "ar": "الاسم (إنجليزي)",
+      "fr": "Nom (anglais)",
+      "tr": "Ad (İngilizce)"
+    },
+    "Field.name_ar": {
+      "en": "Name (Arabic)",
+      "ar": "الاسم (عربي)",
+      "fr": "Nom (arabe)",
+      "tr": "Ad (Arapça)"
+    },
+    "Field.gl_account_code": {
+      "en": "GL Account",
+      "ar": "حساب الأستاذ العام",
+      "fr": "Compte comptable",
+      "tr": "Genel Muhasebe Hesabı"
+    },
+    "Field.kind": {
+      "en": "Kind",
+      "ar": "النوع",
+      "fr": "Type",
+      "tr": "Tür"
+    },
+    "Field.settlement_bank_code": {
+      "en": "Settlement Bank",
+      "ar": "بنك التسوية",
+      "fr": "Banque de règlement",
+      "tr": "Takas Bankası"
+    },
+    "Field.commission_pct": {
+      "en": "Commission %",
+      "ar": "نسبة العمولة %",
+      "fr": "Commission %",
+      "tr": "Komisyon %"
+    },
+    "Field.commission_account_code": {
+      "en": "Commission Account",
+      "ar": "حساب العمولة",
+      "fr": "Compte de commission",
+      "tr": "Komisyon Hesabı"
+    },
+    "Field.requires_reference": {
+      "en": "Requires Reference",
+      "ar": "يتطلب مرجعاً",
+      "fr": "Référence requise",
+      "tr": "Referans Gerekli"
+    },
+    "Field.is_pos_enabled": {
+      "en": "Enabled at POS",
+      "ar": "مفعّل في نقاط البيع",
+      "fr": "Activé au point de vente",
+      "tr": "POS'ta Etkin"
+    },
+    "Field.pos_sort_order": {
+      "en": "POS Sort Order",
+      "ar": "ترتيب نقاط البيع",
+      "fr": "Ordre au point de vente",
+      "tr": "POS Sırası"
+    },
+    "Field.warehouse_code": {
+      "en": "Warehouse",
+      "ar": "المستودع",
+      "fr": "Entrepôt",
+      "tr": "Depo"
+    },
+    "Field.cash_account_code": {
+      "en": "Cash Account",
+      "ar": "حساب النقدية",
+      "fr": "Compte de caisse",
+      "tr": "Kasa Hesabı"
+    },
+    "Field.parent_id": {
+      "en": "Parent Area",
+      "ar": "المنطقة الأم",
+      "fr": "Zone parente",
+      "tr": "Üst Bölge"
+    },
+    "Field.owner_code": {
+      "en": "Owner Code",
+      "ar": "رمز المالك",
+      "fr": "Code du titulaire",
+      "tr": "Sahip Kodu"
+    },
+    "Field.period_kind": {
+      "en": "Period (M/Q/Y)",
+      "ar": "الفترة (شهر/ربع/سنة)",
+      "fr": "Période (M/T/A)",
+      "tr": "Dönem (A/Ç/Y)"
+    },
+    "Field.period_start": {
+      "en": "Period Start",
+      "ar": "بداية الفترة",
+      "fr": "Début de période",
+      "tr": "Dönem Başlangıcı"
+    },
+    "Field.target_amount": {
+      "en": "Target Amount",
+      "ar": "المبلغ المستهدف",
+      "fr": "Montant cible",
+      "tr": "Hedef Tutar"
+    },
+    "Field.target_code": {
+      "en": "Target Code",
+      "ar": "رمز الهدف",
+      "fr": "Code cible",
+      "tr": "Hedef Kodu"
+    },
+    "Field.discount_pct": {
+      "en": "Discount %",
+      "ar": "نسبة الخصم %",
+      "fr": "Remise %",
+      "tr": "İndirim %"
+    },
+    "Field.min_qty": {
+      "en": "Minimum Quantity",
+      "ar": "الحد الأدنى للكمية",
+      "fr": "Quantité minimale",
+      "tr": "Minimum Miktar"
+    },
+    "Field.party_code": {
+      "en": "Party Code",
+      "ar": "رمز الطرف",
+      "fr": "Code du tiers",
+      "tr": "Taraf Kodu"
+    },
+    "Field.material_code": {
+      "en": "Material Code",
+      "ar": "رمز المادة",
+      "fr": "Code article",
+      "tr": "Malzeme Kodu"
+    },
+    "Field.price": {
+      "en": "Price",
+      "ar": "السعر",
+      "fr": "Prix",
+      "tr": "Fiyat"
+    },
+    "Field.rep_code": {
+      "en": "Representative",
+      "ar": "المندوب",
+      "fr": "Représentant",
+      "tr": "Temsilci"
+    },
+    "Field.device_serial": {
+      "en": "Device Serial",
+      "ar": "الرقم التسلسلي للجهاز",
+      "fr": "N° de série de l'appareil",
+      "tr": "Cihaz Seri No"
+    },
+    "Field.device_code": {
+      "en": "Device Code",
+      "ar": "رمز الجهاز",
+      "fr": "Code de l'appareil",
+      "tr": "Cihaz Kodu"
+    },
+    "Field.area_code": {
+      "en": "Area",
+      "ar": "المنطقة",
+      "fr": "Zone",
+      "tr": "Bölge"
+    },
+    "Field.weekday": {
+      "en": "Weekday (0-6)",
+      "ar": "يوم الأسبوع (0-6)",
+      "fr": "Jour de semaine (0-6)",
+      "tr": "Haftanın Günü (0-6)"
+    },
+    "Field.visit_order": {
+      "en": "Visit Order",
+      "ar": "ترتيب الزيارة",
+      "fr": "Ordre de visite",
+      "tr": "Ziyaret Sırası"
+    },
+    "Field.phone": {
+      "en": "Phone",
+      "ar": "الهاتف",
+      "fr": "Téléphone",
+      "tr": "Telefon"
+    },
+    "Field.vehicle_no": {
+      "en": "Vehicle No.",
+      "ar": "رقم المركبة",
+      "fr": "N° de véhicule",
+      "tr": "Araç No"
+    },
+    "Field.license_no": {
+      "en": "License No.",
+      "ar": "رقم الرخصة",
+      "fr": "N° de permis",
+      "tr": "Ehliyet No"
+    },
+    "Field.min_order": {
+      "en": "Minimum Order",
+      "ar": "الحد الأدنى للطلب",
+      "fr": "Commande minimale",
+      "tr": "Minimum Sipariş"
+    },
+    "Field.entity_kind": {
+      "en": "Entity Kind",
+      "ar": "نوع الكيان",
+      "fr": "Type d'entité",
+      "tr": "Varlık Türü"
+    },
+    "Field.field_code": {
+      "en": "Field Code",
+      "ar": "رمز الحقل",
+      "fr": "Code du champ",
+      "tr": "Alan Kodu"
+    },
+    "Field.field_type": {
+      "en": "Field Type",
+      "ar": "نوع الحقل",
+      "fr": "Type de champ",
+      "tr": "Alan Türü"
+    },
+    "Field.is_required": {
+      "en": "Required",
+      "ar": "إلزامي",
+      "fr": "Obligatoire",
+      "tr": "Zorunlu"
+    },
+    "Field.uom_code": {
+      "en": "Unit Code",
+      "ar": "رمز الوحدة",
+      "fr": "Code d'unité",
+      "tr": "Birim Kodu"
+    },
+    "Field.material_id": {
+      "en": "Material ID",
+      "ar": "معرّف المادة",
+      "fr": "ID article",
+      "tr": "Malzeme Kimliği"
+    },
+    "Field.attr_key": {
+      "en": "Attribute",
+      "ar": "السمة",
+      "fr": "Attribut",
+      "tr": "Özellik"
+    },
+    "Field.attr_value": {
+      "en": "Value",
+      "ar": "القيمة",
+      "fr": "Valeur",
+      "tr": "Değer"
+    },
+    "Field.attr_group": {
+      "en": "Attribute Group",
+      "ar": "مجموعة السمات",
+      "fr": "Groupe d'attributs",
+      "tr": "Özellik Grubu"
+    },
+    "Field.sort_order": {
+      "en": "Sort Order",
+      "ar": "ترتيب الفرز",
+      "fr": "Ordre de tri",
+      "tr": "Sıralama"
+    }
+  },
+  "Installments": {
+    "Title": {
+      "en": "Installments",
+      "ar": "الأقساط",
+      "fr": "Échéanciers",
+      "tr": "Taksitler"
+    },
+    "Schedule": {
+      "en": "Schedule",
+      "ar": "جدول الأقساط",
+      "fr": "Échéancier",
+      "tr": "Taksit Planı"
+    },
+    "PermissionDenied": {
+      "en": "You do not have permission to manage installments.",
+      "ar": "ليس لديك صلاحية لإدارة الأقساط.",
+      "fr": "Vous n'avez pas l'autorisation de gérer les échéanciers.",
+      "tr": "Taksitleri yönetme izniniz yok."
+    },
+    "ServiceUnavailable": {
+      "en": "The definitions service is unavailable.",
+      "ar": "خدمة التعريفات غير متاحة.",
+      "fr": "Le service de définitions est indisponible.",
+      "tr": "Tanımlar hizmeti kullanılamıyor."
+    },
+    "PartyCode": {
+      "en": "Party Code",
+      "ar": "رمز الطرف",
+      "fr": "Code du tiers",
+      "tr": "Taraf Kodu"
+    },
+    "DocRef": {
+      "en": "Document Reference",
+      "ar": "مرجع المستند",
+      "fr": "Référence du document",
+      "tr": "Belge Referansı"
+    },
+    "Total": {
+      "en": "Total Amount",
+      "ar": "المبلغ الإجمالي",
+      "fr": "Montant total",
+      "tr": "Toplam Tutar"
+    },
+    "DownPayment": {
+      "en": "Down Payment",
+      "ar": "الدفعة الأولى",
+      "fr": "Acompte",
+      "tr": "Peşinat"
+    },
+    "Count": {
+      "en": "Installments",
+      "ar": "عدد الأقساط",
+      "fr": "Nombre d'échéances",
+      "tr": "Taksit Sayısı"
+    },
+    "StartDate": {
+      "en": "Start Date",
+      "ar": "تاريخ البدء",
+      "fr": "Date de début",
+      "tr": "Başlangıç Tarihi"
+    },
+    "Status": {
+      "en": "Status",
+      "ar": "الحالة",
+      "fr": "Statut",
+      "tr": "Durum"
+    },
+    "Notes": {
+      "en": "Notes",
+      "ar": "ملاحظات",
+      "fr": "Notes",
+      "tr": "Notlar"
+    },
+    "Seq": {
+      "en": "Seq.",
+      "ar": "التسلسل",
+      "fr": "N°",
+      "tr": "Sıra"
+    },
+    "DueDate": {
+      "en": "Due Date",
+      "ar": "تاريخ الاستحقاق",
+      "fr": "Date d'échéance",
+      "tr": "Vade Tarihi"
+    },
+    "Amount": {
+      "en": "Amount",
+      "ar": "المبلغ",
+      "fr": "Montant",
+      "tr": "Tutar"
+    },
+    "PaidAmount": {
+      "en": "Paid",
+      "ar": "المدفوع",
+      "fr": "Payé",
+      "tr": "Ödenen"
+    },
+    "PaidDate": {
+      "en": "Paid Date",
+      "ar": "تاريخ الدفع",
+      "fr": "Date de paiement",
+      "tr": "Ödeme Tarihi"
+    },
+    "Remaining": {
+      "en": "Remaining",
+      "ar": "المتبقي",
+      "fr": "Restant",
+      "tr": "Kalan"
+    },
+    "CreatePlan": {
+      "en": "Create Plan",
+      "ar": "إنشاء خطة",
+      "fr": "Créer le plan",
+      "tr": "Plan Oluştur"
+    },
+    "Collect": {
+      "en": "Collect",
+      "ar": "تحصيل",
+      "fr": "Encaisser",
+      "tr": "Tahsil Et"
+    },
+    "CollectAmount": {
+      "en": "Collection Amount",
+      "ar": "مبلغ التحصيل",
+      "fr": "Montant encaissé",
+      "tr": "Tahsilat Tutarı"
+    },
+    "Search": {
+      "en": "Search",
+      "ar": "بحث",
+      "fr": "Rechercher",
+      "tr": "Ara"
+    },
+    "Created": {
+      "en": "Installment plan created with its schedule.",
+      "ar": "تم إنشاء خطة الأقساط مع جدولها.",
+      "fr": "Plan d'échéances créé avec son échéancier.",
+      "tr": "Taksit planı çizelgesiyle oluşturuldu."
+    },
+    "Collected": {
+      "en": "Collection recorded.",
+      "ar": "تم تسجيل التحصيل.",
+      "fr": "Encaissement enregistré.",
+      "tr": "Tahsilat kaydedildi."
+    }
+  },
+  "Loyalty": {
+    "Title": {
+      "en": "Loyalty Points",
+      "ar": "نقاط الولاء",
+      "fr": "Points de fidélité",
+      "tr": "Sadakat Puanları"
+    },
+    "Entries": {
+      "en": "Entries",
+      "ar": "الحركات",
+      "fr": "Écritures",
+      "tr": "Hareketler"
+    },
+    "PermissionDenied": {
+      "en": "You do not have permission to manage loyalty points.",
+      "ar": "ليس لديك صلاحية لإدارة نقاط الولاء.",
+      "fr": "Vous n'avez pas l'autorisation de gérer les points de fidélité.",
+      "tr": "Sadakat puanlarını yönetme izniniz yok."
+    },
+    "ServiceUnavailable": {
+      "en": "The definitions service is unavailable.",
+      "ar": "خدمة التعريفات غير متاحة.",
+      "fr": "Le service de définitions est indisponible.",
+      "tr": "Tanımlar hizmeti kullanılamıyor."
+    },
+    "PartyCode": {
+      "en": "Party Code",
+      "ar": "رمز الطرف",
+      "fr": "Code du tiers",
+      "tr": "Taraf Kodu"
+    },
+    "Balance": {
+      "en": "Points Balance",
+      "ar": "رصيد النقاط",
+      "fr": "Solde de points",
+      "tr": "Puan Bakiyesi"
+    },
+    "Points": {
+      "en": "Points",
+      "ar": "النقاط",
+      "fr": "Points",
+      "tr": "Puan"
+    },
+    "DocRef": {
+      "en": "Document Reference",
+      "ar": "مرجع المستند",
+      "fr": "Référence du document",
+      "tr": "Belge Referansı"
+    },
+    "Notes": {
+      "en": "Notes",
+      "ar": "ملاحظات",
+      "fr": "Notes",
+      "tr": "Notlar"
+    },
+    "EntryDate": {
+      "en": "Entry Date",
+      "ar": "تاريخ الحركة",
+      "fr": "Date d'écriture",
+      "tr": "Hareket Tarihi"
+    },
+    "Earn": {
+      "en": "Earn",
+      "ar": "اكتساب",
+      "fr": "Gagner",
+      "tr": "Kazan"
+    },
+    "Redeem": {
+      "en": "Redeem",
+      "ar": "استبدال",
+      "fr": "Utiliser",
+      "tr": "Kullan"
+    },
+    "PartyRequired": {
+      "en": "Party code is required.",
+      "ar": "رمز الطرف مطلوب.",
+      "fr": "Le code du tiers est requis.",
+      "tr": "Taraf kodu gereklidir."
+    }
+  },
+  "Delivery": {
+    "Title": {
+      "en": "Delivery Desk",
+      "ar": "مكتب التوصيل",
+      "fr": "Bureau de livraison",
+      "tr": "Teslimat Masası"
+    },
+    "Requests": {
+      "en": "Delivery Requests",
+      "ar": "طلبات التوصيل",
+      "fr": "Demandes de livraison",
+      "tr": "Teslimat Talepleri"
+    },
+    "Settlements": {
+      "en": "Driver Settlements",
+      "ar": "تسويات السائقين",
+      "fr": "Règlements des chauffeurs",
+      "tr": "Sürücü Mutabakatları"
+    },
+    "PermissionDenied": {
+      "en": "You do not have permission to use the delivery desk.",
+      "ar": "ليس لديك صلاحية لاستخدام مكتب التوصيل.",
+      "fr": "Vous n'avez pas l'autorisation d'utiliser le bureau de livraison.",
+      "tr": "Teslimat masasını kullanma izniniz yok."
+    },
+    "ServiceUnavailable": {
+      "en": "The definitions service is unavailable.",
+      "ar": "خدمة التعريفات غير متاحة.",
+      "fr": "Le service de définitions est indisponible.",
+      "tr": "Tanımlar hizmeti kullanılamıyor."
+    },
+    "DocNo": {
+      "en": "Doc. No.",
+      "ar": "رقم المستند",
+      "fr": "N° de document",
+      "tr": "Belge No"
+    },
+    "RequestDate": {
+      "en": "Request Date",
+      "ar": "تاريخ الطلب",
+      "fr": "Date de demande",
+      "tr": "Talep Tarihi"
+    },
+    "PartyCode": {
+      "en": "Party Code",
+      "ar": "رمز الطرف",
+      "fr": "Code du tiers",
+      "tr": "Taraf Kodu"
+    },
+    "Address": {
+      "en": "Address",
+      "ar": "العنوان",
+      "fr": "Adresse",
+      "tr": "Adres"
+    },
+    "AreaCode": {
+      "en": "Area",
+      "ar": "المنطقة",
+      "fr": "Zone",
+      "tr": "Bölge"
+    },
+    "DriverCode": {
+      "en": "Driver",
+      "ar": "السائق",
+      "fr": "Chauffeur",
+      "tr": "Sürücü"
+    },
+    "Status": {
+      "en": "Status",
+      "ar": "الحالة",
+      "fr": "Statut",
+      "tr": "Durum"
+    },
+    "Amount": {
+      "en": "Amount",
+      "ar": "المبلغ",
+      "fr": "Montant",
+      "tr": "Tutar"
+    },
+    "Notes": {
+      "en": "Notes",
+      "ar": "ملاحظات",
+      "fr": "Notes",
+      "tr": "Notlar"
+    },
+    "SettleDate": {
+      "en": "Settlement Date",
+      "ar": "تاريخ التسوية",
+      "fr": "Date de règlement",
+      "tr": "Mutabakat Tarihi"
+    },
+    "Collected": {
+      "en": "Collected",
+      "ar": "المحصّل",
+      "fr": "Encaissé",
+      "tr": "Tahsil Edilen"
+    },
+    "Fees": {
+      "en": "Fees",
+      "ar": "الرسوم",
+      "fr": "Frais",
+      "tr": "Ücretler"
+    },
+    "Net": {
+      "en": "Net",
+      "ar": "الصافي",
+      "fr": "Net",
+      "tr": "Net"
+    },
+    "Assign": {
+      "en": "Assign Driver",
+      "ar": "إسناد سائق",
+      "fr": "Affecter le chauffeur",
+      "tr": "Sürücü Ata"
+    },
+    "Deliver": {
+      "en": "Mark Delivered",
+      "ar": "تحديد كمُسلَّم",
+      "fr": "Marquer livré",
+      "tr": "Teslim Edildi İşaretle"
+    },
+    "CancelRequest": {
+      "en": "Cancel Request",
+      "ar": "إلغاء الطلب",
+      "fr": "Annuler la demande",
+      "tr": "Talebi İptal Et"
+    },
+    "CloseCash": {
+      "en": "Close Driver Cash",
+      "ar": "إغلاق نقدية السائق",
+      "fr": "Clôturer la caisse du chauffeur",
+      "tr": "Sürücü Kasasını Kapat"
+    },
+    "Saved": {
+      "en": "Delivery request saved.",
+      "ar": "تم حفظ طلب التوصيل.",
+      "fr": "Demande de livraison enregistrée.",
+      "tr": "Teslimat talebi kaydedildi."
+    },
+    "SettlementClosed": {
+      "en": "Driver cash settlement closed.",
+      "ar": "تم إغلاق تسوية نقدية السائق.",
+      "fr": "Règlement de caisse du chauffeur clôturé.",
+      "tr": "Sürücü kasa mutabakatı kapatıldı."
+    },
+    "DriverRequired": {
+      "en": "Driver code is required.",
+      "ar": "رمز السائق مطلوب.",
+      "fr": "Le code du chauffeur est requis.",
+      "tr": "Sürücü kodu gereklidir."
+    },
+    "OpenRequests": {
+      "en": "Open requests",
+      "ar": "الطلبات المفتوحة",
+      "fr": "Demandes ouvertes",
+      "tr": "Açık talepler"
+    }
+  }
+}

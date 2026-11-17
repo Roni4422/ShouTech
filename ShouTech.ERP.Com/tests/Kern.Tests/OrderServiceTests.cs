@@ -1,0 +1,311 @@
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
+using ShouTech.Application.Services;
+using ShouTech.Domain.Entities;
+using ShouTech.Domain.Interfaces;
+using ShouTech.Infrastructure;
+using Xunit;
+
+namespace Kern.Tests
+{
+    /// <summary>
+    /// Order engine tests (ribbon completion, RS-5/RS-6): order drafts persist
+    /// with scheduling fields, posting is a status flip with no side effects,
+    /// convert-to-invoice copies only the remaining unbilled quantities and
+    /// writes the party ledger + document link atomically, progress is
+    /// computed from document_links, and expired quotations cannot convert.
+    /// </summary>
+    public class OrderServiceTests
+    {
+        [Fact]
+        public async Task SalesOrder_SaveReloadPost_PersistsSchedulingFields()
+        {
+            var (service, orders, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                var docId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.SalesOrder, "SO-9001", 10m, 25m,
+                        delivery: new DateOnly(2026, 11, 1)), "order-test");
+
+                var saved = await orders.FindByIdAsync(CommercialDocSide.Sales, docId);
+                Assert.NotNull(saved);
+                Assert.Equal(CommercialDocumentStatus.Draft, saved!.Status);
+                Assert.Equal(new DateOnly(2026, 11, 1), saved.DeliveryDate);
+                Assert.Equal(250m, saved.GrandTotal);
+                Assert.Equal("CUST-1", saved.PartyCode);
+
+                await service.PostOrderAsync(CommercialDocSide.Sales, docId, "order-test");
+                var posted = await orders.FindByIdAsync(CommercialDocSide.Sales, docId);
+                Assert.Equal(CommercialDocumentStatus.Posted, posted!.Status);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task UpdateDraft_RejectsPostedOrder()
+        {
+            var (service, _, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                var docId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.SalesOrder, "SO-9002", 5m, 10m), "order-test");
+                await service.PostOrderAsync(CommercialDocSide.Sales, docId, "order-test");
+
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    service.UpdateOrderAsync(docId,
+                        Order(companyId, CommercialDocKinds.SalesOrder, "SO-9002", 6m, 10m), "order-test"));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task ConvertToInvoice_BillsRemainingOnce_AndWritesLedgerAndLink()
+        {
+            var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var docId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.SalesOrder, "SO-9003", 10m, 25m), "order-test");
+                await service.PostOrderAsync(CommercialDocSide.Sales, docId, "order-test");
+
+                var (invoiceId, invoiceDocNo) = await service.ConvertToInvoiceAsync(
+                    CommercialDocSide.Sales, docId, new DateOnly(2026, 11, 2), "order-test");
+                Assert.StartsWith("SAL-", invoiceDocNo);
+
+                var invoice = await orders.FindByIdAsync(CommercialDocSide.Sales, invoiceId);
+                Assert.NotNull(invoice);
+                Assert.Equal(CommercialDocKinds.SalesInvoice, invoice!.DocKind);
+                Assert.Equal(CommercialDocumentStatus.Posted, invoice.Status);
+                Assert.Equal(10m, invoice.Lines[0].Qty);
+                Assert.Equal(250m, invoice.GrandTotal);
+
+                var progress = await service.GetProgressAsync(CommercialDocSide.Sales, docId);
+                Assert.Equal(100m, progress.PerBilled);
+                Assert.Equal(0m, progress.PerFulfilled);
+
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    service.ConvertToInvoiceAsync(CommercialDocSide.Sales, docId, new DateOnly(2026, 11, 3), "order-test"));
+
+                await using var connection = new SqliteConnection(connectionString);
+                await connection.OpenAsync();
+                await using var ledger = connection.CreateCommand();
+                ledger.CommandText = "SELECT COUNT(*), COALESCE(SUM(debit),0), COALESCE(SUM(credit),0) FROM party_ledger WHERE doc_id = $doc AND party_kind = 'C'";
+                ledger.Parameters.AddWithValue("$doc", invoiceId);
+                await using var reader = await ledger.ExecuteReaderAsync();
+                Assert.True(await reader.ReadAsync());
+                Assert.Equal(1L, reader.GetInt64(0));
+                Assert.Equal(250m, reader.GetDecimal(1));
+                Assert.Equal(0m, reader.GetDecimal(2));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task PurchaseOrder_ConvertToInvoice_CreditsSupplierLedger()
+        {
+            var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var docId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-9001", 4m, 50m, partyId: 9, partyCode: "SUP-1"), "order-test");
+                await service.PostOrderAsync(CommercialDocSide.Purchase, docId, "order-test");
+
+                var (invoiceId, _) = await service.ConvertToInvoiceAsync(
+                    CommercialDocSide.Purchase, docId, new DateOnly(2026, 11, 2), "order-test");
+                var invoice = await orders.FindByIdAsync(CommercialDocSide.Purchase, invoiceId);
+                Assert.Equal(CommercialDocKinds.PurchaseInvoice, invoice!.DocKind);
+                Assert.Equal(200m, invoice.GrandTotal);
+
+                await using var connection = new SqliteConnection(connectionString);
+                await connection.OpenAsync();
+                await using var ledger = connection.CreateCommand();
+                ledger.CommandText = "SELECT COALESCE(SUM(credit),0) FROM party_ledger WHERE doc_id = $doc AND party_kind = 'S'";
+                ledger.Parameters.AddWithValue("$doc", invoiceId);
+                Assert.Equal(200m, Convert.ToDecimal(await ledger.ExecuteScalarAsync()));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task CloseAndCancel_EnforceTransitions()
+        {
+            var (service, orders, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                var docId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.SalesOrder, "SO-9004", 2m, 10m), "order-test");
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    service.CloseOrderAsync(CommercialDocSide.Sales, docId, "order-test"));
+
+                await service.PostOrderAsync(CommercialDocSide.Sales, docId, "order-test");
+                await service.CloseOrderAsync(CommercialDocSide.Sales, docId, "order-test");
+                var closed = await orders.FindByIdAsync(CommercialDocSide.Sales, docId);
+                Assert.Equal(CommercialDocumentStatus.Closed, closed!.Status);
+
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    service.ConvertToInvoiceAsync(CommercialDocSide.Sales, docId, new DateOnly(2026, 11, 2), "order-test"));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task NextDocNo_IncrementsPerKind()
+        {
+            var (service, _, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                var first = await service.NextDocNoAsync(CommercialDocSide.Sales, companyId, CommercialDocKinds.SalesOrder);
+                Assert.Equal("SO-1001", first);
+                await service.CreateOrderAsync(Order(companyId, CommercialDocKinds.SalesOrder, first, 1m, 1m), "order-test");
+                var second = await service.NextDocNoAsync(CommercialDocSide.Sales, companyId, CommercialDocKinds.SalesOrder);
+                Assert.Equal("SO-1002", second);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task ExpiredQuotation_ConversionBlocked()
+        {
+            var (service, _, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                // Create + post a quotation whose validity already lapsed.
+                var repo = new CommercialDocumentRepository("SQLite", LastConnectionString);
+                var quotationId = await repo.CreateSalesDraftAsync(
+                    Order(companyId, CommercialDocKinds.SalesQuotation, "QUO-9001", 3m, 10m,
+                        validTill: DateOnly.FromDateTime(DateTime.Today).AddDays(-1)), "order-test");
+                await repo.PostSalesAsync(quotationId, "order-test");
+
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    service.ConvertQuotationToOrderAsync(quotationId, DateOnly.FromDateTime(DateTime.Today), "order-test"));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task DeliveryBeforeOrderDate_Rejected()
+        {
+            var (service, _, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                var draft = Order(companyId, CommercialDocKinds.SalesOrder, "SO-9005", 1m, 1m,
+                    delivery: new DateOnly(2026, 1, 1));
+                await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateOrderAsync(draft, "order-test"));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        // ------------------------------------------------------------ harness
+
+        private static string LastConnectionString = string.Empty;
+
+        private static CommercialDocumentDraft Order(
+            Guid companyId, string kind, string docNo, decimal qty, decimal price,
+            long partyId = 7, string partyCode = "CUST-1", DateOnly? delivery = null, DateOnly? validTill = null)
+            => new(
+                companyId,
+                kind,
+                docNo,
+                new DateOnly(2026, 10, 20),
+                partyId,
+                "Test Party",
+                null,
+                "SAR",
+                1m,
+                null,
+                new[] { new CommercialLineDraft(42, "MAT-42", "Order test item", "PCS", qty, price) },
+                partyCode,
+                delivery,
+                validTill);
+
+        private static async Task<(OrderService Service, OrderDocumentRepository Orders, Guid CompanyId, string ConnectionString, Action Cleanup)> CreateAsync()
+        {
+            var databasePath = Path.Combine(Path.GetTempPath(), $"shoutech-orders-{Guid.NewGuid():N}.sqlite3");
+            var connectionString = $"Data Source={databasePath};";
+            LastConnectionString = connectionString;
+            var companyId = Guid.NewGuid();
+
+            ApplySqliteMigrations(databasePath);
+
+            var orders = new OrderDocumentRepository("SQLite", connectionString);
+            var chain = new CommercialDocumentRepository("SQLite", connectionString);
+            var service = new OrderService(orders, chain);
+            Action cleanup = () =>
+            {
+                SqliteConnection.ClearAllPools();
+                if (File.Exists(databasePath)) File.Delete(databasePath);
+                foreach (var suffix in new[] { "-wal", "-shm" })
+                {
+                    var sidecar = databasePath + suffix;
+                    if (File.Exists(sidecar)) File.Delete(sidecar);
+                }
+            };
+            return (service, orders, companyId, connectionString, cleanup);
+        }
+
+        private static void ApplySqliteMigrations(string databasePath)
+        {
+            var root = new DirectoryInfo(AppContext.BaseDirectory);
+            while (root is not null && !Directory.Exists(Path.Combine(root.FullName, "dba", "mig")))
+                root = root.Parent;
+
+            Assert.NotNull(root);
+            var migrator = Path.Combine(root!.FullName, "tools", "SqlMigrator", "bin", "Release", "net8.0", "SqlMigrator.dll");
+            Assert.True(File.Exists(migrator), $"SQL migrator was not built: {migrator}");
+
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "dotnet",
+                    WorkingDirectory = root.FullName,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
+            process.StartInfo.ArgumentList.Add(migrator);
+            process.StartInfo.ArgumentList.Add("--provider");
+            process.StartInfo.ArgumentList.Add("sqlite");
+            process.StartInfo.ArgumentList.Add("--connection");
+            process.StartInfo.ArgumentList.Add($"Data Source={databasePath};");
+
+            Assert.True(process.Start(), "Could not start the DBA SQL migrator.");
+            var stdout = process.StandardOutput.ReadToEndAsync();
+            var stderr = process.StandardError.ReadToEndAsync();
+            Assert.True(process.WaitForExit(120_000), "DBA SQL migrations timed out.");
+            var output = stdout.GetAwaiter().GetResult();
+            var errors = stderr.GetAwaiter().GetResult();
+            Assert.True(process.ExitCode == 0,
+                $"Applying SQLite DBA migrations failed (exit {process.ExitCode}).\n{output}\n{errors}");
+        }
+    }
+}

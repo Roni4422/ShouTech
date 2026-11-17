@@ -1,97 +1,111 @@
 using System;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
+using System.Collections.Generic;
 using System.Globalization;
-using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
 using System.Windows.Media;
+using ShouTech.App.Services;
+using ShouTech.Domain.Entities;
 
 namespace ShouTech.App.Views;
 
 /// <summary>
+/// Sales representative card (ribbon chunk B): fully persisted through
+/// <see cref="ShouTech.Application.Services.MasterCardService"/> — code, names,
+/// phone, commission %, target amount and group (from sales_rep_groups).
+/// Load by code, save (insert/update), delete. Bottom command bar.
 /// </summary>
 public sealed class RepCard : BaseWin
 {
-
-    /// <summary>
-    /// Prevents a false success message when this screen has no database persistence wired.
-    /// This intentionally does not claim to save any values.
-    /// </summary>
-    private void ShowPersistenceUnavailable()
-    {
-        const string errorCode = "APP-2010";
-        const string context = "This window has no database persistence implementation.";
-        var definition = ShouTech.App.Localization.ErrorCatalog.Resolve(errorCode);
-        var exception = new NotSupportedException(context);
-
-        // Errors are routed to errors.log; the operational trace goes to log.log.
-        ShouTech.App.Services.AppHost.Logging?.LogError(
-            "WindowPersistence",
-            $"[{definition.Code}] {definition.Name} | Window={GetType().Name} | {context}",
-            exception);
-        ShouTech.App.Services.AppHost.Logging?.LogOperation(
-            "WindowPersistence",
-            "PersistenceUnavailable",
-            $"Code={definition.Code} | Window={GetType().Name}");
-
-        MessageBox.Show(
-            this,
-            $"[{definition.Code}] {definition.Message}\n{context}\n{ShouTech.App.Localization.Loc.Get("Common.NoDataSaved", "No data was saved.")}",
-            ShouTech.App.Localization.Loc.Get("Common.OperationUnavailable", "Operation unavailable"),
-            MessageBoxButton.OK,
-            MessageBoxImage.Warning);
-    }
-
-
     private readonly TextBox _txtCode = new() { Width = 110, Height = 26 };
-    private readonly TextBox _txtName = new() { Width = 220, Height = 26 };
+    private readonly TextBox _txtNameEn = new() { Width = 220, Height = 26 };
+    private readonly TextBox _txtNameAr = new() { Width = 220, Height = 26 };
     private readonly TextBox _txtPhone = new() { Width = 130, Height = 26 };
-    private readonly TextBox _txtComm = new() { Width = 90, Height = 26, Text = "2.5" };
-    private readonly TextBox _txtTarget = new() { Width = 120, Height = 26, Text = "100000.00" };
+    private readonly TextBox _txtComm = new() { Width = 90, Height = 26, Text = "0" };
+    private readonly TextBox _txtTarget = new() { Width = 120, Height = 26, Text = "0.00" };
+    private readonly ComboBox _cbGroup = new() { Width = 200, Height = 26 };
+    private readonly CheckBox _chkActive = new() { VerticalAlignment = VerticalAlignment.Center, IsChecked = true };
 
+    private readonly Button _btnLoad = new();
     private readonly Button _btnNew = new();
     private readonly Button _btnSave = new();
     private readonly Button _btnDelete = new();
 
-    private readonly TextBlock _lblTotSales = new();
-    private readonly TextBlock _lblTotComm = new();
+    private readonly TextBlock _lblSummary = new();
 
-    private readonly DataGrid _grid = new();
-    private readonly ObservableCollection<RepTargetVm> _targets = new();
+    private readonly List<SalesRepGroup> _groups = new();
+    private Guid? _loadedId;
 
     public RepCard()
     {
-        Width = 760;
-        Height = 490;
-        MinWidth = 680;
-        MinHeight = 400;
+        Width = 720;
+        Height = 400;
+        MinWidth = 640;
+        MinHeight = 320;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
         BuildUi();
         ApplyLocalizedText();
         ResetCard();
+        Loaded += OnLoaded;
+    }
+
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        if (!AppHost.Permissions.Has(PermCat.Representatives.View))
+        {
+            MessageBox.Show(this, T("MasterCards.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            Close();
+            return;
+        }
+        await RefreshGroupsAsync();
+    }
+
+    /// <summary>Loads the sales rep with the given code into the card.</summary>
+    public async Task LoadByCodeAsync(string code)
+    {
+        try
+        {
+            var service = AppHost.MasterCards;
+            if (service is null)
+            {
+                MessageBox.Show(this, T("MasterCards.ServiceUnavailable"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            var rep = await service.GetSalesRepByCodeAsync(CurrentCompanyCode, code);
+            if (rep is null)
+            {
+                MessageBox.Show(this, T("MasterCards.NotFound"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            await RefreshGroupsAsync();
+            ShowRep(rep);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void BuildUi()
     {
         var root = new DockPanel { Margin = new Thickness(10) };
 
-        // 1. Toolbar
-        var toolbar = new WrapPanel { Margin = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Right };
+        var toolbar = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
+        StyleButton(_btnLoad, "MasterCards.Load");
         StyleButton(_btnNew, "Common.New");
         StyleButton(_btnSave, "Common.Save");
         StyleButton(_btnDelete, "Common.Delete");
 
+        _btnLoad.Click += async (_, _) => await LoadByCodeAsync(_txtCode.Text.Trim());
         _btnNew.Click += (_, _) => ResetCard();
-        _btnSave.Click += (_, _) => ShowPersistenceUnavailable();
-        _btnDelete.Click += (_, _) => ShowPersistenceUnavailable();
+        _btnSave.Click += async (_, _) => await SaveAsync();
+        _btnDelete.Click += async (_, _) => await DeleteAsync();
 
-        foreach (var b in new[] { _btnNew, _btnSave, _btnDelete })
+        foreach (var b in new[] { _btnLoad, _btnNew, _btnSave, _btnDelete })
             toolbar.Children.Add(b);
 
-        // Explorer-style bottom command bar: flat, transparent, subtle 1px top divider.
         var actionBar = new Border
         {
             Child = toolbar,
@@ -102,7 +116,6 @@ public sealed class RepCard : BaseWin
         actionBar.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
         DockPanel.SetDock(actionBar, Dock.Bottom);
 
-        // 2. Metrics Bar
         var metricsBorder = new Border
         {
             Margin = new Thickness(0, 8, 0, 0),
@@ -112,89 +125,158 @@ public sealed class RepCard : BaseWin
         };
         metricsBorder.SetResourceReference(Border.BackgroundProperty, "SurfaceSecondaryBrush");
         metricsBorder.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
-
-        var metricsPanel = new StackPanel { Orientation = Orientation.Horizontal };
-        metricsPanel.Children.Add(_lblTotSales);
-        metricsPanel.Children.Add(new TextBlock { Width = 25 });
-        metricsPanel.Children.Add(_lblTotComm);
-        metricsBorder.Child = metricsPanel;
+        metricsBorder.Child = _lblSummary;
+        _lblSummary.FontWeight = FontWeights.Bold;
 
         DockPanel.SetDock(metricsBorder, Dock.Bottom);
         root.Children.Add(metricsBorder);
         root.Children.Add(actionBar);
 
-        // 3. Body
-        var body = new Grid();
-        body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        var formPanel = new StackPanel { Margin = new Thickness(4) };
 
-        var headerPanel = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
-        headerPanel.Children.Add(Labeled("SalesRepCard.Code", _txtCode));
-        headerPanel.Children.Add(Labeled("SalesRepCard.Name", _txtName));
-        headerPanel.Children.Add(Labeled("SalesRepCard.Phone", _txtPhone));
-        headerPanel.Children.Add(Labeled("SalesRepCard.Commission", _txtComm));
-        headerPanel.Children.Add(Labeled("SalesRepCard.Target", _txtTarget));
+        var r1 = new WrapPanel();
+        r1.Children.Add(Labeled("SalesRepCard.Code", _txtCode));
+        r1.Children.Add(Labeled("SalesRepCard.Name", _txtNameEn));
+        r1.Children.Add(Labeled("SalesRepCard.Phone", _txtPhone));
+        formPanel.Children.Add(r1);
 
-        Grid.SetRow(headerPanel, 0);
-        body.Children.Add(headerPanel);
+        var r2 = new WrapPanel();
+        r2.Children.Add(Labeled("MasterCards.NameAr", _txtNameAr));
+        r2.Children.Add(Labeled("MasterCards.Group", _cbGroup));
+        formPanel.Children.Add(r2);
 
-        // Setup DataGrid
-        _grid.AutoGenerateColumns = false;
-        _grid.CanUserAddRows = false;
-        _grid.AlternationCount = 2;
-        _grid.SetResourceReference(StyleProperty, "VisuDataGridStyle");
-        _grid.SetResourceReference(DataGrid.ColumnHeaderStyleProperty, "VisuDataGridHeaderStyle");
-        _grid.SetResourceReference(DataGrid.RowStyleProperty, "VisuDataGridRowStyle");
-        _grid.SetResourceReference(DataGrid.CellStyleProperty, "VisuDataGridCellStyle");
-        _grid.SetResourceReference(DataGrid.RowBackgroundProperty, "TableSurfaceBrush");
-        _grid.SetResourceReference(DataGrid.AlternatingRowBackgroundProperty, "TableAlternateRowBrush");
+        var r3 = new WrapPanel();
+        r3.Children.Add(Labeled("SalesRepCard.Commission", _txtComm));
+        r3.Children.Add(Labeled("SalesRepCard.Target", _txtTarget));
+        var activePanel = new StackPanel { Margin = new Thickness(0, 20, 10, 6) };
+        _chkActive.Content = T("MasterCards.Active");
+        _chkActive.Tag = "MasterCards.Active";
+        activePanel.Children.Add(_chkActive);
+        r3.Children.Add(activePanel);
+        formPanel.Children.Add(r3);
 
-        _grid.ItemsSource = _targets;
-        _grid.Columns.Add(TextCol(nameof(RepTargetVm.Period), 110));
-        _grid.Columns.Add(TextCol(nameof(RepTargetVm.TargetText), 120));
-        _grid.Columns.Add(TextCol(nameof(RepTargetVm.ActualSalesText), 130));
-        _grid.Columns.Add(TextCol(nameof(RepTargetVm.CommissionEarnedText), 130));
-        _grid.Columns.Add(TextCol(nameof(RepTargetVm.Status), 120));
-
-        Grid.SetRow(_grid, 1);
-        body.Children.Add(_grid);
-
-        root.Children.Add(body);
+        root.Children.Add(formPanel);
         Content = root;
+    }
+
+    private async Task RefreshGroupsAsync()
+    {
+        var service = AppHost.MasterCards;
+        if (service is null)
+            return;
+        var groups = await service.GetSalesRepGroupsAsync(CurrentCompanyCode);
+        _groups.Clear();
+        _groups.AddRange(groups);
+        var selected = (_cbGroup.SelectedItem as SalesRepGroup)?.Id;
+        _cbGroup.ItemsSource = null;
+        _cbGroup.ItemsSource = _groups;
+        _cbGroup.DisplayMemberPath = nameof(SalesRepGroup.Code);
+        if (selected.HasValue)
+        {
+            foreach (var group in _groups)
+                if (group.Id == selected.Value)
+                    _cbGroup.SelectedItem = group;
+        }
+    }
+
+    private void ShowRep(SalesRep rep)
+    {
+        _loadedId = rep.Id;
+        _txtCode.Text = rep.Code;
+        _txtNameEn.Text = rep.NameEn;
+        _txtNameAr.Text = rep.NameAr ?? string.Empty;
+        _txtPhone.Text = rep.Phone ?? string.Empty;
+        _txtComm.Text = rep.CommissionPct.ToString("0.##", CultureInfo.InvariantCulture);
+        _txtTarget.Text = rep.TargetAmount.ToString("0.##", CultureInfo.InvariantCulture);
+        _chkActive.IsChecked = rep.IsActive;
+        _cbGroup.SelectedItem = null;
+        if (rep.GroupId.HasValue)
+        {
+            foreach (var group in _groups)
+                if (group.Id == rep.GroupId.Value)
+                    _cbGroup.SelectedItem = group;
+        }
+        UpdateSummary(rep.TargetAmount, rep.CommissionPct);
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            var service = AppHost.MasterCards
+                ?? throw new InvalidOperationException(T("MasterCards.ServiceUnavailable"));
+            var permission = _loadedId.HasValue ? PermCat.Representatives.Update : PermCat.Representatives.Create;
+            if (!AppHost.Permissions.Has(permission))
+                throw new InvalidOperationException(T("MasterCards.PermissionDenied"));
+            var rep = new SalesRep
+            {
+                Id = _loadedId ?? Guid.NewGuid(),
+                Code = _txtCode.Text.Trim(),
+                NameEn = _txtNameEn.Text.Trim(),
+                NameAr = string.IsNullOrWhiteSpace(_txtNameAr.Text) ? null : _txtNameAr.Text.Trim(),
+                Phone = string.IsNullOrWhiteSpace(_txtPhone.Text) ? null : _txtPhone.Text.Trim(),
+                CommissionPct = ParseDecimal(_txtComm.Text),
+                TargetAmount = ParseDecimal(_txtTarget.Text),
+                GroupId = (_cbGroup.SelectedItem as SalesRepGroup)?.Id,
+                IsActive = _chkActive.IsChecked == true
+            };
+            await service.SaveSalesRepAsync(CurrentCompanyCode, rep, CurrentUserId);
+            _loadedId = rep.Id;
+            UpdateSummary(rep.TargetAmount, rep.CommissionPct);
+            MessageBox.Show(this, T("SalesRepCard.Saved"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        try
+        {
+            var service = AppHost.MasterCards
+                ?? throw new InvalidOperationException(T("MasterCards.ServiceUnavailable"));
+            if (!_loadedId.HasValue)
+                return;
+            if (!AppHost.Permissions.Has(PermCat.Representatives.Delete))
+                throw new InvalidOperationException(T("MasterCards.PermissionDenied"));
+            if (MessageBox.Show(this, T("Common.ConfirmDelete"), Title, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                return;
+            await service.DeleteSalesRepAsync(CurrentCompanyCode, _loadedId.Value, CurrentUserId);
+            MessageBox.Show(this, T("MasterCards.Deleted"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            ResetCard();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void ResetCard()
     {
-        _txtCode.Text = "REP-01";
-        _txtName.Text = string.Empty;
+        _loadedId = null;
+        _txtCode.Text = string.Empty;
+        _txtNameEn.Text = string.Empty;
+        _txtNameAr.Text = string.Empty;
         _txtPhone.Text = string.Empty;
-        _txtComm.Text = "2.5";
-        _txtTarget.Text = "100000.00";
-        _targets.Clear();
-        _targets.Add(new RepTargetVm { Period = DateTime.Now.ToString("yyyy-MM", CultureInfo.InvariantCulture), Target = 100000, ActualSales = 0, CommissionEarned = 0, Status = T("Invoice.StatusDraft") });
-        UpdateSummary();
+        _txtComm.Text = "0";
+        _txtTarget.Text = "0.00";
+        _cbGroup.SelectedItem = null;
+        _chkActive.IsChecked = true;
+        UpdateSummary(0, 0);
     }
 
-    private void UpdateSummary()
+    private void UpdateSummary(decimal target, decimal commissionPct)
     {
-        _lblTotSales.Text = $"{T("SalesRepCard.SalesTotal")}: 0.00 SAR";
-        _lblTotComm.Text = $"{T("SalesRepCard.Commission")}: 0.00 SAR";
-        _lblTotSales.FontWeight = FontWeights.Bold;
+        _lblSummary.Text = $"{T("SalesRepCard.Target")}: {target.ToString("N2", CultureInfo.CurrentCulture)} · {T("SalesRepCard.Commission")}: {commissionPct.ToString("0.##", CultureInfo.CurrentCulture)}%";
     }
 
     protected override void ApplyLocalizedText()
     {
         Title = T("SalesRepCard.Title");
-        if (_grid.Columns.Count >= 5)
-        {
-            _grid.Columns[0].Header = T("Invoice.Date");
-            _grid.Columns[1].Header = T("SalesRepCard.Target");
-            _grid.Columns[2].Header = T("SalesRepCard.SalesTotal");
-            _grid.Columns[3].Header = T("SalesRepCard.Commission");
-            _grid.Columns[4].Header = T("Invoice.Status");
-        }
+        _chkActive.Content = T("MasterCards.Active");
         RefreshLocalizedContent(Content as DependencyObject);
-        UpdateSummary();
     }
 
     private static void RefreshLocalizedContent(DependencyObject? parent)
@@ -204,6 +286,8 @@ public sealed class RepCard : BaseWin
             button.Content = T(bKey);
         if (parent is TextBlock tb && tb.Tag is string tKey)
             tb.Text = T(tKey);
+        if (parent is CheckBox check && check.Tag is string cKey)
+            check.Content = T(cKey);
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
             RefreshLocalizedContent(VisualTreeHelper.GetChild(parent, i));
     }
@@ -214,6 +298,8 @@ public sealed class RepCard : BaseWin
         sp.Children.Add(new TextBlock { Text = T(key), Tag = key, Margin = new Thickness(0, 0, 0, 2), Opacity = 0.85 });
         if (control is TextBox textBox)
             textBox.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
+        if (control is ComboBox comboBox)
+            comboBox.SetResourceReference(StyleProperty, "VisuComboBoxStyle");
         sp.Children.Add(control);
         return sp;
     }
@@ -229,30 +315,13 @@ public sealed class RepCard : BaseWin
         btn.SetResourceReference(StyleProperty, "VisuButtonStyle");
     }
 
-    private static DataGridTextColumn TextCol(string path, double width)
-        => new()
-        {
-            Binding = new Binding(path) { UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged },
-            Width = width
-        };
-
-    private sealed class RepTargetVm : INotifyPropertyChanged
+    private static decimal ParseDecimal(string text)
     {
-        private string _period = "", _status = "";
-        private decimal _target, _actual, _comm;
-
-        public string Period { get => _period; set { _period = value; OnChanged(); } }
-        public decimal Target { get => _target; set { _target = value; OnChanged(nameof(TargetText)); } }
-        public decimal ActualSales { get => _actual; set { _actual = value; OnChanged(nameof(ActualSalesText)); } }
-        public decimal CommissionEarned { get => _comm; set { _comm = value; OnChanged(nameof(CommissionEarnedText)); } }
-        public string Status { get => _status; set { _status = value; OnChanged(); } }
-
-        public string TargetText { get => _target.ToString("N2", CultureInfo.InvariantCulture); set { if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)) Target = v; } }
-        public string ActualSalesText { get => _actual.ToString("N2", CultureInfo.InvariantCulture); set { if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)) ActualSales = v; } }
-        public string CommissionEarnedText { get => _comm.ToString("N2", CultureInfo.InvariantCulture); set { if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)) CommissionEarned = v; } }
-
-        public event PropertyChangedEventHandler? PropertyChanged;
-        private void OnChanged([CallerMemberName] string? name = null)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        if (string.IsNullOrWhiteSpace(text))
+            return 0m;
+        if (decimal.TryParse(text.Trim(), NumberStyles.Number, CultureInfo.CurrentCulture, out var v) ||
+            decimal.TryParse(text.Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out v))
+            return v;
+        throw new InvalidOperationException("Invalid number format.");
     }
 }

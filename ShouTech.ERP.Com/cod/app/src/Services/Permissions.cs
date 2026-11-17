@@ -130,6 +130,7 @@ namespace ShouTech.App.Services
                 "SYS.PERMISSION_TEMPLATES.MANAGE";
 
             public const string Maintenance = "SYS.MAINTENANCE";
+            public const string CustomFieldsManage = "SYS.CUSTOM_FIELDS.MANAGE";
             public const string FiscalRollForward = "ACC.FISCAL.ROLL_FORWARD";
             public const string PluginsManage = "SYS.PLUGINS.MANAGE";
         }
@@ -325,6 +326,7 @@ namespace ShouTech.App.Services
             public const string OrderCreate = "SALES.ORDER.CREATE";
             public const string OrderUpdate = "SALES.ORDER.UPDATE";
             public const string OrderCancel = "SALES.ORDER.CANCEL";
+            public const string OrderConvert = "SALES.ORDER.CONVERT";
 
             public const string CashInvoiceCreate = "SALES.CASH.CREATE";
             public const string PriceOverride = "SALES.PRICE.OVERRIDE";
@@ -356,6 +358,7 @@ namespace ShouTech.App.Services
             public const string OrderCreate = "PURCH.ORDER.CREATE";
             public const string OrderUpdate = "PURCH.ORDER.UPDATE";
             public const string OrderCancel = "PURCH.ORDER.CANCEL";
+            public const string OrderConvert = "PURCH.ORDER.CONVERT";
 
             public const string ReportsView = "PURCH.REPORTS.VIEW";
         }

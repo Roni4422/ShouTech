@@ -47,13 +47,21 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         decimal paidAmount;
         string status;
         string? notes;
+        string? partyCode;
+        string? branchName;
+        string? salesRepName;
+        string? costCenter;
+        string? warehouseName;
+        DateOnly? deliveryDate;
+        DateOnly? validTill;
 
         await using (var header = connection.CreateCommand())
         {
             header.CommandText = """
                 SELECT doc_id, company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id,
                        currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total,
-                       paid_amount, status, notes
+                       paid_amount, status, notes, party_code, branch_name, sales_rep_name, cost_center,
+                       warehouse_name, delivery_date, valid_till
                 FROM sales_documents
                 WHERE doc_id = @docId AND is_deleted = 0
                 """;
@@ -80,6 +88,13 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             paidAmount = Convert.ToDecimal(reader.GetValue(14), CultureInfo.InvariantCulture);
             status = reader.GetString(15);
             notes = reader.IsDBNull(16) ? null : reader.GetString(16);
+            partyCode = reader.IsDBNull(17) ? null : reader.GetString(17);
+            branchName = reader.IsDBNull(18) ? null : reader.GetString(18);
+            salesRepName = reader.IsDBNull(19) ? null : reader.GetString(19);
+            costCenter = reader.IsDBNull(20) ? null : reader.GetString(20);
+            warehouseName = reader.IsDBNull(21) ? null : reader.GetString(21);
+            deliveryDate = reader.IsDBNull(22) ? null : DateOnly.Parse(Convert.ToString(reader.GetValue(22), CultureInfo.InvariantCulture)!, CultureInfo.InvariantCulture);
+            validTill = reader.IsDBNull(23) ? null : DateOnly.Parse(Convert.ToString(reader.GetValue(23), CultureInfo.InvariantCulture)!, CultureInfo.InvariantCulture);
         }
 
         var lines = new List<CommercialLineSnapshot>();
@@ -117,7 +132,8 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         return new CommercialDocumentSnapshot(
             foundId, companyId, docKind, docNo, docDate, partyId, partyName, warehouseId,
             currencyCode, exchangeRate, subtotal, discountAmount, taxAmount, grandTotal,
-            paidAmount, status, notes, lines.AsReadOnly());
+            paidAmount, status, notes, lines.AsReadOnly(),
+            partyCode, branchName, salesRepName, costCenter, warehouseName, deliveryDate, validTill);
     }
 
     public async Task<long> CreateSalesDraftAsync(CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default)
@@ -151,8 +167,8 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
 
             long docId;
             var insertHeader = CreateCommand(connection, transaction,
-                "INSERT INTO sales_documents (company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id, currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total, status, notes, created_by) " +
-                "VALUES (@company, @kind, @no, @date, @party, @partyName, @warehouse, @currency, @rate, @subtotal, @discount, @tax, @total, @status, @notes, @actor)" +
+                "INSERT INTO sales_documents (company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id, currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total, status, notes, created_by, party_code, delivery_date, valid_till, cost_center, branch_name, sales_rep_name, warehouse_name) " +
+                "VALUES (@company, @kind, @no, @date, @party, @partyName, @warehouse, @currency, @rate, @subtotal, @discount, @tax, @total, @status, @notes, @actor, @partyCode, @deliveryDate, @validTill, @costCenter, @branchName, @salesRepName, @warehouseName)" +
                 (_provider == "PostgreSQL" ? " RETURNING doc_id" : "; SELECT last_insert_rowid();"));
             Add(insertHeader, "@company", draft.CompanyId.ToString("D"));
             Add(insertHeader, "@kind", draft.DocKind.Trim());
@@ -170,6 +186,13 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             Add(insertHeader, "@status", CommercialDocumentStatus.Draft);
             Add(insertHeader, "@notes", (object?)draft.Notes ?? DBNull.Value);
             Add(insertHeader, "@actor", userId.Trim());
+            Add(insertHeader, "@partyCode", (object?)draft.PartyCode ?? DBNull.Value);
+            Add(insertHeader, "@deliveryDate", (object?)draft.DeliveryDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? DBNull.Value);
+            Add(insertHeader, "@validTill", (object?)draft.ValidTill?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? DBNull.Value);
+            Add(insertHeader, "@costCenter", (object?)draft.CostCenter ?? DBNull.Value);
+            Add(insertHeader, "@branchName", (object?)draft.BranchName ?? DBNull.Value);
+            Add(insertHeader, "@salesRepName", (object?)draft.SalesRepName ?? DBNull.Value);
+            Add(insertHeader, "@warehouseName", (object?)draft.WarehouseName ?? DBNull.Value);
             docId = Convert.ToInt64(await insertHeader.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
 
             var lineNumber = 0;
