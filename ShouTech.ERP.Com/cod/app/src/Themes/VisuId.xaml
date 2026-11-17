@@ -3,7 +3,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:System="clr-namespace:System;assembly=mscorlib"
     xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
-    xmlns:wpf="clr-namespace:System.Windows;assembly=PresentationFramework">
+    xmlns:wpf="clr-namespace:System.Windows;assembly=PresentationFramework"
+    xmlns:interaction="clr-namespace:ShouTech.App.Interaction">
 
     <!-- =========================================================
          SHOUTECH ERP - CENTRAL VISUAL IDENTITY
@@ -480,6 +481,35 @@
     <SolidColorBrush
         x:Key="TableSelectedBorderBrush"
         Color="#F39A16"/>
+
+    <!-- =========================================================
+         SCHEDULE TINT PALETTE
+         Per-window zebra tints: a window claims one tint by name
+         (BaseWin.ScheduleTintName) and every schedule in that window
+         alternates white (TableSurfaceBrush) with the tint. All tints
+         are light Win11-harmonized pastels in the same lightness band
+         as the default TableAlternateRowBrush (#F1F5F7), so body text
+         keeps full contrast and the hover (#E7EEF1) and selection
+         (translucent #F39A16 wash + solid border) states stay clearly
+         visible on top of every tint.
+         ========================================================= -->
+
+    <SolidColorBrush x:Key="ScheduleTintBlueBrush" Color="#E9F1FC"/>
+    <SolidColorBrush x:Key="ScheduleTintSkyBrush" Color="#E5F3FA"/>
+    <SolidColorBrush x:Key="ScheduleTintAquaBrush" Color="#E1F5F7"/>
+    <SolidColorBrush x:Key="ScheduleTintTealBrush" Color="#E3F4F1"/>
+    <SolidColorBrush x:Key="ScheduleTintMintBrush" Color="#E6F6EC"/>
+    <SolidColorBrush x:Key="ScheduleTintGreenBrush" Color="#EDF7E3"/>
+    <SolidColorBrush x:Key="ScheduleTintAmberBrush" Color="#FBF2D9"/>
+    <SolidColorBrush x:Key="ScheduleTintSandBrush" Color="#F6EEDD"/>
+    <SolidColorBrush x:Key="ScheduleTintPeachBrush" Color="#FDEEDD"/>
+    <SolidColorBrush x:Key="ScheduleTintRoseBrush" Color="#FBE9EA"/>
+    <SolidColorBrush x:Key="ScheduleTintLavenderBrush" Color="#EEEAF9"/>
+    <SolidColorBrush x:Key="ScheduleTintLilacBrush" Color="#F2E9FA"/>
+    <SolidColorBrush x:Key="ScheduleTintPeriwinkleBrush" Color="#E8EBFA"/>
+    <SolidColorBrush x:Key="ScheduleTintSlateBrush" Color="#EBEFF4"/>
+    <SolidColorBrush x:Key="ScheduleTintStoneBrush" Color="#F2EFE9"/>
+    <SolidColorBrush x:Key="ScheduleTintSilverBrush" Color="#EFF2F0"/>
 
     <SolidColorBrush
         x:Key="TableHeaderSalesBrush"
@@ -1431,6 +1461,15 @@
         <Setter Property="HeadersVisibility" Value="Column"/>
         <Setter Property="AutoGenerateColumns" Value="False"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <!-- Every grid gets the central table behavior (context menu, copy/paste,
+             Excel-style Enter navigation). This keyed style is applied explicitly
+             by code-built windows, which bypasses the App.xaml implicit style,
+             so the behavior must be attached here as well. -->
+        <Setter Property="interaction:DataGridTableBehavior.EnableStandardContextMenu" Value="True"/>
+        <!-- Schedules render every row of their data: keep row/column
+             virtualization on so thousands of banded rows scroll smoothly. -->
+        <Setter Property="EnableRowVirtualization" Value="True"/>
+        <Setter Property="EnableColumnVirtualization" Value="True"/>
 
     </Style>
 

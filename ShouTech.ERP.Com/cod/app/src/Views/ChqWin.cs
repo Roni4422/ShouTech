@@ -33,6 +33,8 @@ public enum ChqKind
 /// </summary>
 public sealed class ChqWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Periwinkle";
+
     private readonly ChqKind _kind;
 
     private readonly TextBox _txtDocNo = new() { Width = 110, Height = 26 };

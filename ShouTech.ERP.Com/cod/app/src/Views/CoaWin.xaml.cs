@@ -26,6 +26,8 @@ namespace ShouTech.App.Views;
 /// </summary>
 public partial class CoaWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Lavender";
+
         private static bool IsGroupMode(string? postingMode)
         {
             if (string.IsNullOrWhiteSpace(postingMode)) return false;

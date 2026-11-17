@@ -35,6 +35,8 @@ public enum OrdKind
 /// </summary>
 public sealed class OrdWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Sky";
+
     private readonly OrdKind _kind;
 
     private readonly TextBox _txtDocNo = new() { Width = 130, Height = 26 };

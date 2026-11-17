@@ -727,8 +727,7 @@ public static class RptQuery
               AND d.doc_date >= $from AND d.doc_date <= $to
               AND ($mat = '' OR LOWER(COALESCE(l.material_code, '')) LIKE '%' || LOWER($mat) || '%'
                    OR LOWER(COALESCE(l.description, '')) LIKE '%' || LOWER($mat) || '%')
-            ORDER BY DocDate DESC, DocNo DESC
-            LIMIT 2000;
+            ORDER BY DocDate DESC, DocNo DESC;
             """;
         return await QueryAsync(sql, ct, ("$company", Company),
             ("$from", FmtDate(from)), ("$to", FmtDate(to)), ("$mat", materialSearch ?? string.Empty));

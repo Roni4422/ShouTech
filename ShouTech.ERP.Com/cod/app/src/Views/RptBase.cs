@@ -33,6 +33,11 @@ namespace ShouTech.App.Views;
 /// </summary>
 public abstract class RptBase : BaseWin
 {
+    // The whole report family shares one tint: reports are read/print
+    // surfaces, and a single recognizable report color keeps them distinct
+    // from the entry windows they summarize.
+    protected override string? ScheduleTintName => "Silver";
+
     private static readonly ConcurrentDictionary<string, CompositeFormat> StatusFormats = new(StringComparer.Ordinal);
     private readonly Grid _root = new();
     private readonly WrapPanel _filterBar = new() { Margin = new Thickness(0, 0, 0, 3) };

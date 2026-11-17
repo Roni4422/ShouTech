@@ -60,6 +60,8 @@ public string StatusLabel =>
 /// </summary>
 public partial class MatDirWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Sand";
+
 private readonly ObservableCollection<MatDirListItem> _all = new();
 private readonly ObservableCollection<MatDirListItem> _view = new();
 

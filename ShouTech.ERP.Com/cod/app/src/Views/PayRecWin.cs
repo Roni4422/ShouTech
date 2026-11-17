@@ -24,6 +24,8 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class PayRecWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Lilac";
+
     private readonly ReconciliationService? _service;
     private readonly List<OpenDocumentRow> _documents = new();
     private readonly List<UnallocatedPaymentRow> _payments = new();

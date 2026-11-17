@@ -22,6 +22,8 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class BankRecWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Slate";
+
     private readonly OperationsService? _service;
     private readonly List<BankJournalLineRow> _lines = new();
     private readonly List<(TextBlock Label, string Key)> _labels = new();

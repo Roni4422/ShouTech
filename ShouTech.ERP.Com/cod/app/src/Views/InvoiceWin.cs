@@ -24,6 +24,8 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class InvoiceWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Mint";
+
     private readonly InvDoc _doc;
     private readonly ObservableCollection<LineVm> _lines = new();
 

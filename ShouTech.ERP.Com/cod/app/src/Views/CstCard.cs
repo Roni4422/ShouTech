@@ -22,6 +22,8 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class CstCard : BaseWin
 {
+    protected override string? ScheduleTintName => "Rose";
+
     private readonly TextBox _txtCode = new() { Width = 130, Height = 26 };
     private readonly TextBox _txtNameAr = new() { Width = 240, Height = 26 };
     private readonly TextBox _txtNameEn = new() { Width = 240, Height = 26 };

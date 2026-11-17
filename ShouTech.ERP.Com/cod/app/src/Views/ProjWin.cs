@@ -23,6 +23,8 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class ProjWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Aqua";
+
     private readonly ProjectService? _service;
     private readonly List<Project> _projects = new();
     private readonly List<ProjectTask> _tasks = new();
