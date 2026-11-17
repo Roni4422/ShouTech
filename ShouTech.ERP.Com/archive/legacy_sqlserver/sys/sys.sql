@@ -402,13 +402,13 @@ BEGIN TRY
     IF NOT EXISTS (SELECT 1 FROM dbo.NumberSequences WHERE SequenceCode = 'INV')
     BEGIN
         INSERT INTO dbo.NumberSequences (CompanyID, SequenceCode, SequenceNameAR, Prefix, CurrentNumber, PadLength, ResetFrequency, IsActive, CreatedBy)
-        SELECT TOP 1 CompanyID, 'INV', N'تسلسل الفواتير', 'INV-', 1000, 6, 'YEARLY', 1, '00000000-0000-0000-0000-000000000001'
+        SELECT TOP 1 CompanyID, 'INV', N'Invoice sequence', 'INV-', 1000, 6, 'YEARLY', 1, '00000000-0000-0000-0000-000000000001'
         FROM MST.dbo.Companies
         UNION ALL
-        SELECT TOP 1 CompanyID, 'PO', N'تسلسل أوامر الشراء', 'PO-', 1000, 6, 'YEARLY', 1, '00000000-0000-0000-0000-000000000001'
+        SELECT TOP 1 CompanyID, 'PO', N'Purchase order sequence', 'PO-', 1000, 6, 'YEARLY', 1, '00000000-0000-0000-0000-000000000001'
         FROM MST.dbo.Companies
         UNION ALL
-        SELECT TOP 1 CompanyID, 'PAY', N'تسلسل المدفوعات', 'PAY-', 1000, 6, 'YEARLY', 1, '00000000-0000-0000-0000-000000000001'
+        SELECT TOP 1 CompanyID, 'PAY', N'Payment sequence', 'PAY-', 1000, 6, 'YEARLY', 1, '00000000-0000-0000-0000-000000000001'
         FROM MST.dbo.Companies;
     END
 
@@ -416,7 +416,7 @@ BEGIN TRY
     IF NOT EXISTS (SELECT 1 FROM dbo.TaxConfiguration WHERE TaxCode = 'VAT15')
     BEGIN
         INSERT INTO dbo.TaxConfiguration (CompanyID, TaxCode, TaxNameAR, TaxNameEN, TaxType, TaxRate, ZATCA_CategoryCode, EffectiveDate, IsDefault, IsActive, CreatedBy)
-        SELECT TOP 1 CompanyID, 'VAT15', N'ضريبة القيمة المضافة 15%', 'Value Added Tax 15%', 'VAT', 15.00, 'S', CAST(GETDATE() AS DATE), 1, 1, '00000000-0000-0000-0000-000000000001'
+        SELECT TOP 1 CompanyID, 'VAT15', N'Value Added Tax 15%', 'Value Added Tax 15%', 'VAT', 15.00, 'S', CAST(GETDATE() AS DATE), 1, 1, '00000000-0000-0000-0000-000000000001'
         FROM MST.dbo.Companies;
     END
 
@@ -424,10 +424,10 @@ BEGIN TRY
     IF NOT EXISTS (SELECT 1 FROM dbo.LocalSettings WHERE SettingKey = 'DefaultDateFormat')
     BEGIN
         INSERT INTO dbo.LocalSettings (CompanyID, SettingCategory, SettingKey, SettingValue, SettingType, Description, CreatedBy)
-        SELECT TOP 1 CompanyID, 'SYSTEM', 'DefaultDateFormat', 'dd/MM/yyyy', 'STRING', N'تنسيق التاريخ الافتراضي', '00000000-0000-0000-0000-000000000001'
+        SELECT TOP 1 CompanyID, 'SYSTEM', 'DefaultDateFormat', 'dd/MM/yyyy', 'STRING', N'Default date format', '00000000-0000-0000-0000-000000000001'
         FROM MST.dbo.Companies
         UNION ALL
-        SELECT TOP 1 CompanyID, 'SYSTEM', 'DefaultDecimalPlaces', '2', 'INT', N'عدد الخانات العشرية', '00000000-0000-0000-0000-000000000001'
+        SELECT TOP 1 CompanyID, 'SYSTEM', 'DefaultDecimalPlaces', '2', 'INT', N'Number of decimal places', '00000000-0000-0000-0000-000000000001'
         FROM MST.dbo.Companies;
     END
 

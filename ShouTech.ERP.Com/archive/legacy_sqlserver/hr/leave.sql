@@ -138,20 +138,20 @@ BEGIN TRY
         CROSS JOIN (VALUES
             -- KSA Labor Law: Art.109 (21d → 30d after 5y), 113 (Hajj 10-15d once),
             --              114 (maternity 10w), 117 (sick: 30d full + 60d 75% + 30d unpaid)
-            ('ANNUAL',    N'إجازة سنوية',            'Annual Leave',       'SA', 21.0,  1, 100.00, 0, 6,  NULL),
-            ('ANNUAL-5Y', N'إجازة سنوية (بعد 5 سنوات)','Annual Leave (5+ years)','SA', 30.0, 1, 100.00, 0, 60, NULL),
-            ('SICK',      N'إجازة مرضية',            'Sick Leave',         'SA', 120.0, 1, 100.00, 1, 3,  NULL),
-            ('HAJJ',      N'إجازة الحج',             'Hajj Leave',         'SA', 15.0,  1, 100.00, 0, 12, NULL),
-            ('MATERNITY', N'إجازة الأمومة',          'Maternity Leave',    'SA', 70.0,  1, 100.00, 0, 0,  'F'),
-            ('PATERNITY', N'إجازة الأبوة',           'Paternity Leave',    'SA', 3.0,   1, 100.00, 0, 0,  'M'),
-            ('BEREAVE',   N'إجازة وفاة',             'Bereavement Leave',  'SA', 5.0,   1, 100.00, 0, 0,  NULL),
-            ('UNPAID',    N'إجازة بدون أجر',         'Unpaid Leave',       NULL, 0.0,  0, 0.00,   0, 0,  NULL),
+            ('ANNUAL',    N'Annual Leave',            'Annual Leave',       'SA', 21.0,  1, 100.00, 0, 6,  NULL),
+            ('ANNUAL-5Y', N'Annual Leave (after 5 years)','Annual Leave (5+ years)','SA', 30.0, 1, 100.00, 0, 60, NULL),
+            ('SICK',      N'Sick Leave',            'Sick Leave',         'SA', 120.0, 1, 100.00, 1, 3,  NULL),
+            ('HAJJ',      N'Hajj Leave',             'Hajj Leave',         'SA', 15.0,  1, 100.00, 0, 12, NULL),
+            ('MATERNITY', N'Maternity Leave',          'Maternity Leave',    'SA', 70.0,  1, 100.00, 0, 0,  'F'),
+            ('PATERNITY', N'Paternity Leave',           'Paternity Leave',    'SA', 3.0,   1, 100.00, 0, 0,  'M'),
+            ('BEREAVE',   N'Bereavement Leave',             'Bereavement Leave',  'SA', 5.0,   1, 100.00, 0, 0,  NULL),
+            ('UNPAID',    N'Unpaid Leave',         'Unpaid Leave',       NULL, 0.0,  0, 0.00,   0, 0,  NULL),
             -- UAE: 30d annual, 60d maternity
-            ('AE-ANNUAL', N'إجازة سنوية — الإمارات',  'Annual Leave (UAE)', 'AE', 30.0,  1, 100.00, 0, 6,  NULL),
+            ('AE-ANNUAL', N'Annual Leave - UAE',  'Annual Leave (UAE)', 'AE', 30.0,  1, 100.00, 0, 6,  NULL),
             -- Jordan: 14d annual, 70d maternity
-            ('JO-ANNUAL', N'إجازة سنوية — الأردن',    'Annual Leave (Jordan)','JO', 14.0, 1, 100.00, 0, 6,  NULL),
+            ('JO-ANNUAL', N'Annual Leave - Jordan',    'Annual Leave (Jordan)','JO', 14.0, 1, 100.00, 0, 6,  NULL),
             -- Egypt: 21d annual
-            ('EG-ANNUAL', N'إجازة سنوية — مصر',       'Annual Leave (Egypt)','EG', 21.0,  1, 100.00, 0, 6,  NULL)
+            ('EG-ANNUAL', N'Annual Leave - Egypt',       'Annual Leave (Egypt)','EG', 21.0,  1, 100.00, 0, 6,  NULL)
         ) X (Code, NameAR, NameEN, CC, Days, Paid, PaidPct, NeedsAtt, MinSvc, Gender);
     END
 

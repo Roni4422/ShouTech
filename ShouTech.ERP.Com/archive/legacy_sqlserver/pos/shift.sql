@@ -41,7 +41,7 @@ BEGIN TRY
             CashierUserID INT NOT NULL,
             BusinessDate DATE NOT NULL,
             OpenedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
-            OpeningFloat DECIMAL(18,4) NOT NULL DEFAULT 0,   -- عهدة بداية الوردية
+            OpeningFloat DECIMAL(18,4) NOT NULL DEFAULT 0,   -- shift opening float
             -- ── Closing (populated only on close; immutable afterwards) ──
             ClosedAt DATETIME2(7) NULL,
             ClosedBy UNIQUEIDENTIFIER NULL,
@@ -127,7 +127,7 @@ BEGIN TRY
             CashCountID BIGINT IDENTITY(1,1) NOT NULL,
             CompanyID UNIQUEIDENTIFIER NOT NULL,
             ShiftID BIGINT NOT NULL,
-            CountType NVARCHAR(10) NOT NULL,             -- OPEN | CLOSE | SPOT (جرد مفاجئ)
+            CountType NVARCHAR(10) NOT NULL,             -- OPEN | CLOSE | SPOT (surprise count)
             Denomination DECIMAL(18,4) NOT NULL,         -- 500, 200, 100, 50, 10, 5, 1, 0.5…
             Qty INT NOT NULL DEFAULT 0,
             SubTotal AS (Denomination * Qty) PERSISTED,

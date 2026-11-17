@@ -729,21 +729,21 @@ BEGIN TRY
     IF NOT EXISTS (SELECT 1 FROM dbo.Departments WHERE DepartmentCode = 'GEN')
     BEGIN
         INSERT INTO dbo.Departments (CompanyID, DepartmentCode, DepartmentNameAR, DepartmentNameEN, IsActive, CreatedBy)
-        SELECT TOP 1 CompanyID, 'GEN', N'عام', N'General', 1, '00000000-0000-0000-0000-000000000001'
+        SELECT TOP 1 CompanyID, 'GEN', N'General', N'General', 1, '00000000-0000-0000-0000-000000000001'
         FROM MST.dbo.Companies;
     END
 
     IF NOT EXISTS (SELECT 1 FROM dbo.JobTitles WHERE JobTitleCode = 'EMPLOYEE')
     BEGIN
         INSERT INTO dbo.JobTitles (CompanyID, JobTitleCode, JobTitleNameAR, JobTitleNameEN, JobCategory, IsActive, CreatedBy)
-        SELECT TOP 1 CompanyID, 'EMPLOYEE', N'موظف', N'Employee', 'ADMINISTRATIVE', 1, '00000000-0000-0000-0000-000000000001'
+        SELECT TOP 1 CompanyID, 'EMPLOYEE', N'Employee', N'Employee', 'ADMINISTRATIVE', 1, '00000000-0000-0000-0000-000000000001'
         FROM MST.dbo.Companies;
     END
 
     IF NOT EXISTS (SELECT 1 FROM dbo.JobTitles WHERE JobTitleCode = 'MANAGER')
     BEGIN
         INSERT INTO dbo.JobTitles (CompanyID, JobTitleCode, JobTitleNameAR, JobTitleNameEN, JobCategory, IsActive, CreatedBy)
-        SELECT TOP 1 CompanyID, 'MANAGER', N'مدير', N'Manager', 'MANAGEMENT', 1, '00000000-0000-0000-0000-000000000001'
+        SELECT TOP 1 CompanyID, 'MANAGER', N'Manager', N'Manager', 'MANAGEMENT', 1, '00000000-0000-0000-0000-000000000001'
         FROM MST.dbo.Companies;
     END
     GO

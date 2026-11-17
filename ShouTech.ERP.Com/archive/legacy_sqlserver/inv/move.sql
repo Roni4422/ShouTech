@@ -100,7 +100,7 @@ BEGIN TRY
             CONSTRAINT CK_StockMovements_ZATCA CHECK (ZATCAComplianceStatus IN 
                 ('PENDING', 'VERIFIED', 'REJECTED', NULL))
         ) WITH (DATA_COMPRESSION = PAGE);
-        PRINT N'✅ القسم 1: StockMovements table created (Ultimate with full tracking).';
+        PRINT N'✅ Section 1: StockMovements table created (Ultimate with full tracking).';
     END
 
     CREATE NONCLUSTERED INDEX IF NOT EXISTS IX_StockMovements_Product 
@@ -206,7 +206,7 @@ BEGIN
             @ExpiryDate = @ExpiryDate,
             @UnitCost = @UnitCost,
             @ReferenceType = @MovementType,
-            @ReferenceID = NULL, -- سيتم تحديثه لاحقاً بمعرف الحركة
+            @ReferenceID = NULL, -- will be updated later with the movement ID
             @ReferenceLineID = @ReferenceLineID,
             @CreatedBy = @CreatedBy,
             @ZATCAStatus = @ZATCAStatus,
@@ -314,8 +314,8 @@ BEGIN
 
         DECLARE @IsReversed BIT;
         SELECT @IsReversed = IsReversal FROM dbo.StockMovements WHERE MovementID = @MovementID AND IsDeleted = 0;
-        IF @IsReversed IS NULL THROW 50000, 'الحركة غير موجودة.', 1;
-        IF @IsReversed = 1 THROW 50000, 'لا يمكن التراجع عن حركة تراجع.', 1;
+        IF @IsReversed IS NULL THROW 50000, 'The movement does not exist.', 1;
+        IF @IsReversed = 1 THROW 50000, 'A reversal movement cannot be reversed.', 1;
 
         DECLARE @CompanyID UNIQUEIDENTIFIER,
                 @ProductID INT,
@@ -348,7 +348,7 @@ BEGIN
         FROM dbo.StockMovements
         WHERE MovementID = @MovementID AND IsDeleted = 0;
 
-        IF @CompanyID IS NULL THROW 50000, 'فشل في جلب بيانات الحركة.', 1;
+        IF @CompanyID IS NULL THROW 50000, 'Failed to fetch the movement data.', 1;
 
         DECLARE @ReverseType NVARCHAR(30);
         SET @ReverseType = CASE 
@@ -358,7 +358,7 @@ BEGIN
             WHEN @MovementType = 'RETURN_SALE' THEN 'SALE'
             WHEN @MovementType = 'TRANSFER_IN' THEN 'TRANSFER_OUT'
             WHEN @MovementType = 'TRANSFER_OUT' THEN 'TRANSFER_IN'
-            WHEN @MovementType = 'ADJUSTMENT' THEN 'ADJUSTMENT' -- التسوية العكسية بنفس النوع (مع إشارة معاكسة)
+            WHEN @MovementType = 'ADJUSTMENT' THEN 'ADJUSTMENT' -- reverse adjustment with the same type (opposite sign)
             ELSE 'REVERSAL'
         END;
 
@@ -388,7 +388,7 @@ BEGIN
             @ReversalReason = @ReversalReason,
             @ZATCAStatus = @ZATCAStatus,
             @TaxNumber = @TaxNumber,
-            @Notes = N'حركة تراجع عن الحركة رقم ' + CAST(@MovementID AS NVARCHAR),
+            @Notes = N'Reversal of movement no. ' + CAST(@MovementID AS NVARCHAR),
             @CreatedBy = @ReversedBy,
             @NewMovementID = @NewReversalID OUTPUT;
 
@@ -453,10 +453,10 @@ BEGIN
         m.Notes,
         u.UserName AS CreatedByUser,
         CASE 
-            WHEN m.IsReversal = 1 THEN N'حركة تراجع'
+            WHEN m.IsReversal = 1 THEN N'Reversal movement'
             WHEN EXISTS (SELECT 1 FROM dbo.StockMovements p WHERE p.ParentMovementID = m.MovementID AND p.IsReversal = 1 AND p.IsDeleted = 0) 
-                THEN N'تم التراجع عنها'
-            ELSE N'نشطة'
+                THEN N'Reversed'
+            ELSE N'Active'
         END AS MovementStatus
     FROM dbo.StockMovements m
     LEFT JOIN dbo.Warehouses wf ON m.WarehouseIDFrom = wf.WarehouseID

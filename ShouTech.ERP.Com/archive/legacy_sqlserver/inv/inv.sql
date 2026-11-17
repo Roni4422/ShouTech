@@ -776,10 +776,10 @@ BEGIN TRY
                 AND ProductID = @ProductID AND IsDeleted = 0;
             
             IF @CurrentQty IS NULL
-                THROW 50000, 'لا يوجد مخزون لهذا المنتج.', 1;
+                THROW 50000, 'There is no stock for this product.', 1;
             
             IF @CurrentQty < @Quantity
-                THROW 50000, N'الكمية المطلوبة أكبر من الرصيد المتاح.', 1;
+                THROW 50000, N'The requested quantity exceeds the available balance.', 1;
             
             UPDATE dbo.StockBalances 
             SET AvailableQty = AvailableQty - @Quantity,
@@ -1074,9 +1074,9 @@ BEGIN TRY
         b.CurrentQuantity,
         w.WarehouseNameAR AS WarehouseName,
         CASE 
-            WHEN DATEDIFF(DAY, GETDATE(), b.ExpiryDate) <= 0 THEN N'منتهي الصلاحية'
-            WHEN DATEDIFF(DAY, GETDATE(), b.ExpiryDate) <= 30 THEN N'ينتهي قريباً (أقل من 30 يوم)'
-            ELSE N'ساري'
+            WHEN DATEDIFF(DAY, GETDATE(), b.ExpiryDate) <= 0 THEN N'Expired'
+            WHEN DATEDIFF(DAY, GETDATE(), b.ExpiryDate) <= 30 THEN N'Expiring soon (less than 30 days)'
+            ELSE N'Valid'
         END AS ExpiryStatus
     FROM dbo.Batches b
     INNER JOIN dbo.Products p ON b.ProductID = p.ProductID
@@ -1124,10 +1124,10 @@ BEGIN TRY
     BEGIN
         INSERT INTO dbo.UnitsOfMeasure (CompanyID, UOMCode, UOMNameAR, UOMNameEN, IsBaseUnit, IsActive, CreatedBy)
         VALUES 
-            (@SystemCompanyID, 'UNIT', N'وحدة', N'Unit', 1, 1, @SystemUserID),
-            (@SystemCompanyID, 'KG', N'كيلو جرام', N'Kilogram', 0, 1, @SystemUserID),
-            (@SystemCompanyID, 'BOX', N'صندوق', N'Box', 0, 1, @SystemUserID),
-            (@SystemCompanyID, 'PACK', N'باكيت', N'Pack', 0, 1, @SystemUserID);
+            (@SystemCompanyID, 'UNIT', N'Unit', N'Unit', 1, 1, @SystemUserID),
+            (@SystemCompanyID, 'KG', N'Kilogram', N'Kilogram', 0, 1, @SystemUserID),
+            (@SystemCompanyID, 'BOX', N'Cash Box', N'Box', 0, 1, @SystemUserID),
+            (@SystemCompanyID, 'PACK', N'Packet', N'Pack', 0, 1, @SystemUserID);
         PRINT N'✅ 8.1 Units of Measure seeded.';
     END
 
@@ -1135,10 +1135,10 @@ BEGIN TRY
     BEGIN
         INSERT INTO dbo.ProductCategories (CompanyID, CategoryCode, CategoryNameAR, CategoryNameEN, IsActive, CreatedBy)
         VALUES 
-            (@SystemCompanyID, 'GENERAL', N'عام', N'General', 1, @SystemUserID),
-            (@SystemCompanyID, 'FOOD', N'مواد غذائية', N'Food', 1, @SystemUserID),
-            (@SystemCompanyID, 'BEVERAGE', N'مشروبات', N'Beverages', 1, @SystemUserID),
-            (@SystemCompanyID, 'ELECTRONICS', N'إلكترونيات', N'Electronics', 1, @SystemUserID);
+            (@SystemCompanyID, 'GENERAL', N'General', N'General', 1, @SystemUserID),
+            (@SystemCompanyID, 'FOOD', N'Food Products', N'Food', 1, @SystemUserID),
+            (@SystemCompanyID, 'BEVERAGE', N'Beverages', N'Beverages', 1, @SystemUserID),
+            (@SystemCompanyID, 'ELECTRONICS', N'Electronics', N'Electronics', 1, @SystemUserID);
         PRINT N'✅ 8.2 Categories seeded.';
     END
 
@@ -1146,9 +1146,9 @@ BEGIN TRY
     BEGIN
         INSERT INTO dbo.ValuationMethods (CompanyID, MethodCode, MethodNameAR, MethodNameEN, IsDefault, IsActive, CreatedBy)
         VALUES 
-            (@SystemCompanyID, 'FIFO', N'الوارد أولاً صادر أولاً', N'FIFO', 0, 1, @SystemUserID),
-            (@SystemCompanyID, 'LIFO', N'الوارد أخيراً صادر أولاً', N'LIFO', 0, 1, @SystemUserID),
-            (@SystemCompanyID, 'AVG', N'المتوسط المرجح', N'Weighted Average', 1, 1, @SystemUserID);
+            (@SystemCompanyID, 'FIFO', N'First In First Out', N'FIFO', 0, 1, @SystemUserID),
+            (@SystemCompanyID, 'LIFO', N'Last In First Out', N'LIFO', 0, 1, @SystemUserID),
+            (@SystemCompanyID, 'AVG', N'Weighted Average', N'Weighted Average', 1, 1, @SystemUserID);
         PRINT N'✅ 8.3 Valuation Methods seeded (FIFO, LIFO, AVG).';
     END
 
@@ -1156,7 +1156,7 @@ BEGIN TRY
     BEGIN
         DECLARE @DefaultWarehouseID BIGINT = (SELECT TOP 1 WarehouseID FROM dbo.Warehouses WHERE CompanyID = @SystemCompanyID AND IsDefault = 1 AND IsDeleted = 0);
         INSERT INTO dbo.POSTerminals (CompanyID, TerminalCode, TerminalNameAR, TerminalNameEN, WarehouseID, IsActive, CreatedBy)
-        VALUES (@SystemCompanyID, 'POS-001', N'نقطة بيع رئيسية', N'Main POS', @DefaultWarehouseID, 1, @SystemUserID);
+        VALUES (@SystemCompanyID, 'POS-001', N'Main Point of Sale', N'Main POS', @DefaultWarehouseID, 1, @SystemUserID);
         PRINT N'✅ 8.4 Default POS Terminal seeded.';
     END
 
@@ -1165,16 +1165,16 @@ BEGIN TRY
     COMMIT TRANSACTION;
     PRINT N'═══════════════════════════════════════════════════════════════════════';
     PRINT N'✅ INVENTORY & POS MODULE (ULTIMATE 10/10) DEPLOYED.';
-    PRINT N'📌 الأقسام المتكاملة:';
-    PRINT N'   1. المنتجات والفئات والعلامات';
-    PRINT N'   2. الأرصدة والحركات و FIFO Layers';
-    PRINT N'   3. الدُفعات والأرقام التسلسلية';
-    PRINT N'   4. التقييم (FIFO/LIFO/AVG)';
-    PRINT N'   5. نقاط البيع (الأجهزة، الجلسات، المعاملات)';
-    PRINT N'   6. الإجراءات المخزنة (زيادة، نقصان، حجز، تقييم، بحث)';
-    PRINT N'   7. طرق العرض (التقارير)';
-    PRINT N'   8. البيانات الأولية';
-    PRINT N'🏆 متكامل مع wh.sql (المستودعات) و crm.sql (العملاء).';
+    PRINT N'📌 Integrated sections:';
+    PRINT N'   1. Products, categories, and tags';
+    PRINT N'   2. Balances, movements, and FIFO layers';
+    PRINT N'   3. Batches and serial numbers';
+    PRINT N'   4. Valuation (FIFO/LIFO/AVG)';
+    PRINT N'   5. Points of sale (terminals, sessions, transactions)';
+    PRINT N'   6. Stored procedures (increase, decrease, reserve, value, search)';
+    PRINT N'   7. Views (reports)';
+    PRINT N'   8. Seed data';
+    PRINT N'🏆 Integrated with wh.sql (warehouses) and crm.sql (customers).';
     PRINT N'═══════════════════════════════════════════════════════════════════════';
 END TRY
 BEGIN CATCH

@@ -24,7 +24,7 @@ BEGIN TRY
             TenantID            INT NOT NULL DEFAULT 1,
             CompanyID           INT NOT NULL DEFAULT 1,
             SequenceCode        VARCHAR(50) NOT NULL,    -- e.g., 'SEQ_JOURNAL_ENTRY', 'SEQ_SALES_INVOICE'
-            FiscalYear          INT NOT NULL,            -- السنة المالية
+            FiscalYear          INT NOT NULL,            -- fiscal year
             Prefix              VARCHAR(20) NOT NULL,    -- e.g., 'JV-', 'INV-2026-'
             Suffix              VARCHAR(20) NULL,
             PaddingLength       INT NOT NULL DEFAULT 6,  -- length of zeros e.g. 000001

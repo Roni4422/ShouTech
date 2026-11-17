@@ -557,8 +557,8 @@ BEGIN
           AND ISNULL(LocationID, -1) = ISNULL(@LocationID, -1)
           AND ProductID = @ProductID AND IsDeleted = 0;
         
-        IF @StockBalanceID IS NULL THROW 50000, 'لا يوجد رصيد مخزون.', 1;
-        IF @AvailableQty < @Quantity THROW 50000, N'الكمية المتاحة غير كافية.', 1;
+        IF @StockBalanceID IS NULL THROW 50000, 'There is no stock balance.', 1;
+        IF @AvailableQty < @Quantity THROW 50000, N'The available quantity is insufficient.', 1;
         
         UPDATE dbo.StockBalances
         SET ReservedQty = ReservedQty + @Quantity,
@@ -612,13 +612,13 @@ BEGIN
         FROM dbo.StockReservations
         WHERE ReservationID = @ReservationID AND Status = 'ACTIVE' AND IsDeleted = 0;
         
-        IF @CompanyID IS NULL THROW 50000, 'الحجز غير موجود.', 1;
+        IF @CompanyID IS NULL THROW 50000, 'The reservation does not exist.', 1;
         
         IF @Quantity IS NULL OR @Quantity <= 0
             SET @Quantity = @ReservedQty - @CurrentReleased;
         
         IF @Quantity > (@ReservedQty - @CurrentReleased)
-            THROW 50000, 'الكمية المطلوب إطلاقها أكبر من المتبقي.', 1;
+            THROW 50000, 'The quantity to release exceeds the remaining quantity.', 1;
         
         DECLARE @NewReleased DECIMAL(18,4) = @CurrentReleased + @Quantity;
         DECLARE @NewStatus NVARCHAR(20) = CASE WHEN @NewReleased >= @ReservedQty THEN 'RELEASED' ELSE 'PARTIAL' END;
@@ -814,9 +814,9 @@ SELECT
     DATEDIFF(DAY, GETDATE(), b.ExpiryDate) AS DaysUntilExpiry,
     b.PurchaseCost, b.ZATCAComplianceStatus,
     CASE 
-        WHEN b.ExpiryDate < GETDATE() THEN N'منتهي الصلاحية'
-        WHEN DATEDIFF(DAY, GETDATE(), b.ExpiryDate) <= 30 THEN N'ينتهي خلال 30 يوم'
-        ELSE N'صالحة'
+        WHEN b.ExpiryDate < GETDATE() THEN N'Expired'
+        WHEN DATEDIFF(DAY, GETDATE(), b.ExpiryDate) <= 30 THEN N'Expires within 30 days'
+        ELSE N'Valid'
     END AS ExpiryStatus
 FROM dbo.Batches b
 INNER JOIN dbo.Products p ON b.ProductID = p.ProductID
@@ -848,12 +848,12 @@ PRINT N'✅ [8.3] vw_ActiveReservations created.';
     COMMIT TRANSACTION;
     PRINT N'═══════════════════════════════════════════════════════════════════════';
     PRINT N'✅ ULTIMATE STOCK MANAGEMENT (10.10.0) DEPLOYED SUCCESSFULLY.';
-    PRINT N'📌 يحتوي هذا الملف على جميع الجداول والإجراءات اللازمة:';
+    PRINT N'📌 This file contains all the required tables and procedures:';
     PRINT N'   - StockBalances, Batches, SerialNumbers, FIFOLayers.';
     PRINT N'   - StockReservations, StockAdjustments, StockAdjustmentItems.';
-    PRINT N'   - 7 إجراءات مخزنة (مع FIFO مدمج).';
-    PRINT N'   - 3 طرق عرض للتقارير.';
-    PRINT N'🏆 هذا هو الإصدار الكامل 10/10 ULTIMATE.';
+    PRINT N'   - 7 stored procedures (with built-in FIFO).';
+    PRINT N'   - 3 reporting views.';
+    PRINT N'🏆 This is the complete 10/10 ULTIMATE edition.';
     PRINT N'═══════════════════════════════════════════════════════════════════════';
 END TRY
 BEGIN CATCH

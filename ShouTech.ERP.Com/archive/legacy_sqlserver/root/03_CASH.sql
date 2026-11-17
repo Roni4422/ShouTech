@@ -12,7 +12,7 @@ CREATE TABLE Banks (
     AccountNo NVARCHAR(50) NOT NULL,
     IBAN NVARCHAR(50) NULL,
     SWIFTCode NVARCHAR(20) NULL,
-    AccountID INT NOT NULL FOREIGN KEY REFERENCES Accounts(AccountID), -- الربط بالشجرة المحاسبية
+    AccountID INT NOT NULL FOREIGN KEY REFERENCES Accounts(AccountID), -- link to the chart of accounts
     IsActive BIT DEFAULT 1,
     IsDeleted BIT DEFAULT 0,
     CreatedAt DATETIME2 DEFAULT GETDATE(),
@@ -36,8 +36,8 @@ CREATE TABLE ReceiptVouchers (
     VoucherDate DATE NOT NULL,
     CurrencyID INT NOT NULL FOREIGN KEY REFERENCES Currencies(CurrencyID),
     ExchangeRate DECIMAL(18,6) NOT NULL DEFAULT 1.000000,
-    PayeeName NVARCHAR(200) NOT NULL, -- اسم المسلّم
-    AccountID INT NOT NULL FOREIGN KEY REFERENCES Accounts(AccountID), -- الحساب المدين (الخزينة/البنك)
+    PayeeName NVARCHAR(200) NOT NULL, -- payee name
+    AccountID INT NOT NULL FOREIGN KEY REFERENCES Accounts(AccountID), -- debit account (cash/bank)
     PaymentMethodID INT NOT NULL FOREIGN KEY REFERENCES PaymentMethods(PaymentMethodID),
     TotalAmount DECIMAL(18,4) NOT NULL CHECK (TotalAmount > 0),
     TotalAmountFC DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
@@ -54,7 +54,7 @@ CREATE TABLE ReceiptVouchers (
 CREATE TABLE ReceiptVoucherLines (
     LineID BIGINT IDENTITY(1,1) PRIMARY KEY,
     VoucherID BIGINT NOT NULL FOREIGN KEY REFERENCES ReceiptVouchers(VoucherID) ON DELETE CASCADE,
-    AccountID INT NOT NULL FOREIGN KEY REFERENCES Accounts(AccountID), -- الحساب الدائن
+    AccountID INT NOT NULL FOREIGN KEY REFERENCES Accounts(AccountID), -- credit account
     CostCenterID INT NULL FOREIGN KEY REFERENCES CostCenters(CostCenterID),
     Amount DECIMAL(18,4) NOT NULL CHECK (Amount > 0),
     AmountFC DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
@@ -70,8 +70,8 @@ CREATE TABLE PaymentVouchers (
     VoucherDate DATE NOT NULL,
     CurrencyID INT NOT NULL FOREIGN KEY REFERENCES Currencies(CurrencyID),
     ExchangeRate DECIMAL(18,6) NOT NULL DEFAULT 1.000000,
-    PayeeName NVARCHAR(200) NOT NULL, -- اسم المستلم
-    AccountID INT NOT NULL FOREIGN KEY REFERENCES Accounts(AccountID), -- الحساب الدائن (الخزينة/البنك)
+    PayeeName NVARCHAR(200) NOT NULL, -- recipient name
+    AccountID INT NOT NULL FOREIGN KEY REFERENCES Accounts(AccountID), -- credit account (cash/bank)
     PaymentMethodID INT NOT NULL FOREIGN KEY REFERENCES PaymentMethods(PaymentMethodID),
     TotalAmount DECIMAL(18,4) NOT NULL CHECK (TotalAmount > 0),
     TotalAmountFC DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
@@ -88,7 +88,7 @@ CREATE TABLE PaymentVouchers (
 CREATE TABLE PaymentVoucherLines (
     LineID BIGINT IDENTITY(1,1) PRIMARY KEY,
     VoucherID BIGINT NOT NULL FOREIGN KEY REFERENCES PaymentVouchers(VoucherID) ON DELETE CASCADE,
-    AccountID INT NOT NULL FOREIGN KEY REFERENCES Accounts(AccountID), -- الحساب المدين
+    AccountID INT NOT NULL FOREIGN KEY REFERENCES Accounts(AccountID), -- debit account
     CostCenterID INT NULL FOREIGN KEY REFERENCES CostCenters(CostCenterID),
     Amount DECIMAL(18,4) NOT NULL CHECK (Amount > 0),
     AmountFC DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
@@ -103,7 +103,7 @@ CREATE TABLE Checks (
     CheckDate DATE NOT NULL,
     DueDate DATE NOT NULL,
     Amount DECIMAL(18,4) NOT NULL CHECK (Amount > 0),
-    Type NVARCHAR(10) NOT NULL, -- Inward (مقبوض), Outward (مدفوع)
+    Type NVARCHAR(10) NOT NULL, -- Inward (received), Outward (paid)
     Status NVARCHAR(20) NOT NULL DEFAULT 'UnderCollection', -- UnderCollection, Cleared, Bounced, Cancelled
     ReceiptVoucherID BIGINT NULL FOREIGN KEY REFERENCES ReceiptVouchers(VoucherID),
     PaymentVoucherID BIGINT NULL FOREIGN KEY REFERENCES PaymentVouchers(VoucherID),

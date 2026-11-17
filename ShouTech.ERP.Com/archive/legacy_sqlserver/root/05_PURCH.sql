@@ -24,7 +24,7 @@ CREATE TABLE Vendors (
     Email NVARCHAR(100) NULL,
     Address NVARCHAR(300) NULL,
     BankIBAN NVARCHAR(50) NULL,
-    AccountID INT NOT NULL FOREIGN KEY REFERENCES Accounts(AccountID), -- حساب الذمم الدائنة
+    AccountID INT NOT NULL FOREIGN KEY REFERENCES Accounts(AccountID), -- accounts payable account
     IsActive BIT DEFAULT 1,
     IsDeleted BIT DEFAULT 0,
     CreatedAt DATETIME2 DEFAULT GETDATE(),
@@ -98,7 +98,7 @@ CREATE TABLE GoodsReceiptNotes (
     VendorID INT NOT NULL FOREIGN KEY REFERENCES Vendors(VendorID),
     WarehouseID INT NOT NULL,
     ReceiptDate DATE NOT NULL,
-    VendorDeliveryNoteNo NVARCHAR(50) NULL, -- رقم إذن التوريد الخارجي الخاص بالمورد
+    VendorDeliveryNoteNo NVARCHAR(50) NULL, -- vendor external delivery note number
     Status NVARCHAR(20) DEFAULT 'Received', -- Received, Inspected, Billed
     CreatedBy INT NOT NULL FOREIGN KEY REFERENCES Users(UserID),
     CreatedAt DATETIME2 DEFAULT GETDATE()
@@ -118,7 +118,7 @@ CREATE TABLE GoodsReceiptNoteLines (
 CREATE TABLE PurchaseInvoices (
     InvoiceID BIGINT IDENTITY(1,1) PRIMARY KEY,
     InvoiceNo NVARCHAR(30) NOT NULL UNIQUE,
-    VendorInvoiceNo NVARCHAR(50) NOT NULL, -- رقم فاتورة المورد الأصلية
+    VendorInvoiceNo NVARCHAR(50) NOT NULL, -- original vendor invoice number
     VendorID INT NOT NULL FOREIGN KEY REFERENCES Vendors(VendorID),
     BranchID INT NOT NULL FOREIGN KEY REFERENCES Branches(BranchID),
     FiscalYearID INT NOT NULL FOREIGN KEY REFERENCES FiscalYears(FiscalYearID),
@@ -132,7 +132,7 @@ CREATE TABLE PurchaseInvoices (
     SubTotal DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
     TotalDiscount DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
     TotalTax DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
-    LandedCostAmount DECIMAL(18,4) DEFAULT 0.0000, -- المصاريف الموزعة
+    LandedCostAmount DECIMAL(18,4) DEFAULT 0.0000, -- distributed costs
     GrandTotal DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
     PaidAmount DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
     
@@ -150,8 +150,8 @@ CREATE TABLE PurchaseInvoiceLines (
     WarehouseID INT NOT NULL,
     Quantity DECIMAL(18,4) NOT NULL CHECK (Quantity > 0),
     UnitPrice DECIMAL(18,4) NOT NULL,
-    LandedCostPerUnit DECIMAL(18,4) DEFAULT 0.0000, -- نصيب الوحدة من المصاريف الإضافية
-    EffectiveUnitCost AS (UnitPrice + LandedCostPerUnit), -- التكلفة الفعلية الشاملة
+    LandedCostPerUnit DECIMAL(18,4) DEFAULT 0.0000, -- unit share of landed costs
+    EffectiveUnitCost AS (UnitPrice + LandedCostPerUnit), -- total effective cost
     TaxRate DECIMAL(5,2) DEFAULT 15.00,
     TaxAmount DECIMAL(18,4) DEFAULT 0.0000,
     LineTotal DECIMAL(18,4) NOT NULL,

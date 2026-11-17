@@ -18,14 +18,14 @@ CREATE TABLE Customers (
     GroupID INT NULL FOREIGN KEY REFERENCES CustomerGroups(GroupID),
     NameAr NVARCHAR(200) NOT NULL,
     NameEn NVARCHAR(200) NULL,
-    TaxNumber NVARCHAR(20) NULL, -- الرقم الضريبي للمنشآت
+    TaxNumber NVARCHAR(20) NULL, -- establishment tax number
     CommercialRegister NVARCHAR(30) NULL,
     Phone NVARCHAR(30) NULL,
     Email NVARCHAR(100) NULL,
     Address NVARCHAR(300) NULL,
     CreditLimit DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
-    PaymentTermsDays INT DEFAULT 0, -- فترة السداد بالأيام
-    AccountID INT NOT NULL FOREIGN KEY REFERENCES Accounts(AccountID), -- حساب الذمم المدينة
+    PaymentTermsDays INT DEFAULT 0, -- payment period in days
+    AccountID INT NOT NULL FOREIGN KEY REFERENCES Accounts(AccountID), -- Accounts Receivable account
     IsActive BIT DEFAULT 1,
     IsDeleted BIT DEFAULT 0,
     CreatedAt DATETIME2 DEFAULT GETDATE(),
@@ -34,7 +34,7 @@ CREATE TABLE Customers (
 
 CREATE TABLE SalesInvoices (
     InvoiceID BIGINT IDENTITY(1,1) PRIMARY KEY,
-    InvoiceUUID UNIQUEIDENTIFIER DEFAULT NEWID() NOT NULL UNIQUE, -- معرف فريد عالمي للفوترة
+    InvoiceUUID UNIQUEIDENTIFIER DEFAULT NEWID() NOT NULL UNIQUE, -- globally unique invoice identifier
     InvoiceNo NVARCHAR(30) NOT NULL UNIQUE,
     InvoiceType NVARCHAR(20) NOT NULL DEFAULT 'Standard', -- Standard (B2B), Simplified (B2C)
     BranchID INT NOT NULL FOREIGN KEY REFERENCES Branches(BranchID),
@@ -69,15 +69,15 @@ CREATE TABLE SalesInvoices (
 CREATE TABLE SalesInvoiceLines (
     LineID BIGINT IDENTITY(1,1) PRIMARY KEY,
     InvoiceID BIGINT NOT NULL FOREIGN KEY REFERENCES SalesInvoices(InvoiceID) ON DELETE CASCADE,
-    ProductID BIGINT NOT NULL, -- يرتبط بجدول الأصناف Products
-    WarehouseID INT NOT NULL,  -- يرتبط بجدول المستودعات Warehouses
+    ProductID BIGINT NOT NULL, -- links to the Products table
+    WarehouseID INT NOT NULL,  -- links to the Warehouses table
     Quantity DECIMAL(18,4) NOT NULL CHECK (Quantity > 0),
     UnitPrice DECIMAL(18,4) NOT NULL CHECK (UnitPrice >= 0),
     DiscountRate DECIMAL(5,2) DEFAULT 0.00,
     DiscountAmount DECIMAL(18,4) DEFAULT 0.0000,
     TaxRate DECIMAL(5,2) NOT NULL DEFAULT 15.00,
     TaxAmount DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
-    LineTotal DECIMAL(18,4) NOT NULL, -- الإجمالي شامل الضريبة
+    LineTotal DECIMAL(18,4) NOT NULL, -- total including tax
     LineNo INT NOT NULL
 );
 

@@ -101,7 +101,7 @@ BEGIN TRY
             AddressLine2 NVARCHAR(300) NULL,
             City NVARCHAR(100) NULL,
             Region NVARCHAR(100) NULL,
-            Country NVARCHAR(100) DEFAULT N'المملكة العربية السعودية',
+            Country NVARCHAR(100) DEFAULT N'Kingdom of Saudi Arabia',
             PostalCode NVARCHAR(20) NULL,
             Latitude DECIMAL(10,7) NULL,
             Longitude DECIMAL(10,7) NULL,
@@ -445,7 +445,7 @@ BEGIN TRY
         CREATE TABLE dbo.WarehouseStaff (
             StaffID BIGINT IDENTITY(1,1) NOT NULL,
             CompanyID UNIQUEIDENTIFIER NOT NULL,
-            EmployeeID BIGINT NOT NULL,           -- FK إلى جدول الموظفين (سيُربط لاحقاً)
+            EmployeeID BIGINT NOT NULL,           -- FK to the Employees table (to be linked later)
             WarehouseID BIGINT NOT NULL,
             JobTitle NVARCHAR(100) NULL,
             IsActive BIT NOT NULL DEFAULT 1,
@@ -617,11 +617,11 @@ BEGIN TRY
             WHERE CompanyID = @CompanyID AND ProductID = @ProductID 
               AND WarehouseID = @WarehouseID AND ISNULL(LocationID, -1) = ISNULL(@LocationID, -1) AND IsDeleted = 0;
 
-            IF @StockID IS NULL THROW 50000, 'لا يوجد مخزون لهذا المنتج.', 1;
+            IF @StockID IS NULL THROW 50000, 'There is no stock for this product.', 1;
 
             SELECT @AllowNegative = AllowNegativeStock FROM dbo.Warehouses WHERE WarehouseID = @WarehouseID;
             IF @AllowNegative = 0 AND @CurrentQty < @Quantity
-                THROW 50000, N'الكمية المطلوبة أكبر من الرصيد المتاح.', 1;
+                THROW 50000, N'The requested quantity exceeds the available balance.', 1;
 
             IF @BatchNumber IS NOT NULL
             BEGIN
@@ -678,13 +678,13 @@ BEGIN TRY
             EXEC dbo.usp_Stock_Decrease 
                 @CompanyID, @ProductID, (SELECT WarehouseID FROM dbo.WarehouseLocations WHERE LocationID = @FromLocationID),
                 @FromLocationID, @Quantity, 'LOCATION_MOVE', NULL, NULL, 'PENDING',
-                'LocationMove', NULL, NULL, @Notes + N' (انتقال من ' + CAST(@FromLocationID AS NVARCHAR) + N' إلى ' + CAST(@ToLocationID AS NVARCHAR) + N')',
+                'LocationMove', NULL, NULL, @Notes + N' (transfer from ' + CAST(@FromLocationID AS NVARCHAR) + N' to ' + CAST(@ToLocationID AS NVARCHAR) + N')',
                 @CreatedBy, @NewBalance OUTPUT;
 
             EXEC dbo.usp_Stock_Increase 
                 @CompanyID, @ProductID, (SELECT WarehouseID FROM dbo.WarehouseLocations WHERE LocationID = @ToLocationID),
                 @ToLocationID, @Quantity, 'LOCATION_MOVE', NULL, NULL, NULL, 'PENDING',
-                'LocationMove', NULL, NULL, @Notes + N' (انتقال من ' + CAST(@FromLocationID AS NVARCHAR) + N' إلى ' + CAST(@ToLocationID AS NVARCHAR) + N')',
+                'LocationMove', NULL, NULL, @Notes + N' (transfer from ' + CAST(@FromLocationID AS NVARCHAR) + N' to ' + CAST(@ToLocationID AS NVARCHAR) + N')',
                 @CreatedBy, @NewBalance OUTPUT;
             COMMIT TRANSACTION;
         END TRY
@@ -722,7 +722,7 @@ BEGIN TRY
             WHERE CompanyID = @CompanyID AND ProductID = @ProductID 
               AND WarehouseID = @WarehouseID AND ISNULL(LocationID, -1) = ISNULL(@LocationID, -1) AND IsDeleted = 0;
 
-            IF @StockID IS NULL THROW 50000, 'لا يوجد سجل مخزون لهذا المنتج.', 1;
+            IF @StockID IS NULL THROW 50000, 'There is no stock record for this product.', 1;
 
             SET @AdjustedQuantity = @PhysicalQuantity - @CurrentQty;
             IF @AdjustedQuantity = 0
@@ -744,7 +744,7 @@ BEGIN TRY
             ) VALUES (
                 @CompanyID, @StockID, 'ADJUSTMENT', @AdjustedQuantity, @CurrentQty, @PhysicalQuantity,
                 'WarehouseCounts', @CountID, 'PENDING',
-                CASE WHEN @AdjustedQuantity > 0 THEN N'زيادة في الجرد' ELSE N'نقص في الجرد' END + ISNULL(' - ' + @Notes, ''),
+                CASE WHEN @AdjustedQuantity > 0 THEN N'Inventory Increase' ELSE N'Inventory Shortage' END + ISNULL(' - ' + @Notes, ''),
                 @CreatedBy
             );
             COMMIT TRANSACTION;
@@ -813,7 +813,7 @@ BEGIN TRY
             BEGIN TRANSACTION;
             DECLARE @WarehouseID BIGINT;
             SELECT @WarehouseID = WarehouseID FROM dbo.WarehouseCounts WHERE CountID = @CountID AND IsDeleted = 0;
-            IF @WarehouseID IS NULL THROW 50000, 'سجل الجرد غير موجود.', 1;
+            IF @WarehouseID IS NULL THROW 50000, 'The inventory count record does not exist.', 1;
 
             IF @AdjustStock = 1
             BEGIN
@@ -835,7 +835,7 @@ BEGIN TRY
                         @PhysicalQuantity = @PhysicalQty,
                         @BatchNumber = NULL,
                         @CountID = @CountID,
-                        @Notes = N'تسوية تلقائية من الجرد الدوري',
+                        @Notes = N'Automatic adjustment from periodic inventory count',
                         @CreatedBy = @CompletedBy,
                         @AdjustedQuantity = @AdjQty OUTPUT;
                     FETCH NEXT FROM cur INTO @ProductID, @PhysicalQty, @ExpectedQty;
@@ -904,14 +904,14 @@ BEGIN TRY
                 @CompanyID, @ProductID, @FromWarehouseID, @FromLocationID, @Quantity,
                 'TRANSFER_OUT', NULL, @BatchNumber, 'PENDING',
                 'WarehouseTransfers', @TransferID, NULL,
-                @Notes + N' (نقل إلى المستودع ' + CAST(@ToWarehouseID AS NVARCHAR) + N')',
+                @Notes + N' (transfer to warehouse ' + CAST(@ToWarehouseID AS NVARCHAR) + N')',
                 @CreatedBy, @NewBalance OUTPUT;
 
             EXEC dbo.usp_Stock_Increase 
                 @CompanyID, @ProductID, @ToWarehouseID, @ToLocationID, @Quantity,
                 'TRANSFER_IN', NULL, @BatchNumber, NULL, 'PENDING',
                 'WarehouseTransfers', @TransferID, NULL,
-                @Notes + N' (نقل من المستودع ' + CAST(@FromWarehouseID AS NVARCHAR) + N')',
+                @Notes + N' (transfer from warehouse ' + CAST(@FromWarehouseID AS NVARCHAR) + N')',
                 @CreatedBy, @NewBalance OUTPUT;
 
             UPDATE dbo.WarehouseTransfers SET TransferStatus = 'COMPLETED', ReceivedAt = SYSUTCDATETIME()
@@ -1028,9 +1028,9 @@ BEGIN TRY
             b.CurrentQuantity - b.ReservedQuantity AS AvailableQuantity,
             b.ZATCAComplianceStatus,
             CASE 
-                WHEN b.ExpiryDate < GETDATE() THEN N'منتهي الصلاحية'
-                WHEN DATEDIFF(DAY, GETDATE(), b.ExpiryDate) <= @DaysThreshold THEN N'ينتهي خلال ' + CAST(@DaysThreshold AS NVARCHAR) + N' يوم'
-                ELSE N'صالحة'
+                WHEN b.ExpiryDate < GETDATE() THEN N'Expired'
+                WHEN DATEDIFF(DAY, GETDATE(), b.ExpiryDate) <= @DaysThreshold THEN N'Expires within ' + CAST(@DaysThreshold AS NVARCHAR) + N' days'
+                ELSE N'Valid'
             END AS ExpiryStatus
         FROM dbo.WarehouseBatches b
         INNER JOIN dbo.Products p ON b.ProductID = p.ProductID
@@ -1088,10 +1088,10 @@ BEGIN TRY
         w.WarehouseCode,
         w.WarehouseNameAR,
         CASE 
-            WHEN w.IsFrozen = 1 THEN N'مجمّد (جرد)'
-            WHEN w.IsActive = 0 THEN N'غير نشط'
-            WHEN w.IsDeleted = 1 THEN N'محذوف'
-            ELSE N'نشط'
+            WHEN w.IsFrozen = 1 THEN N'Frozen (Inventory Count)'
+            WHEN w.IsActive = 0 THEN N'Inactive'
+            WHEN w.IsDeleted = 1 THEN N'Deleted'
+            ELSE N'Active'
         END AS Status,
         w.FrozenAt,
         (SELECT COUNT(*) FROM dbo.WarehouseTransfers t 
@@ -1156,9 +1156,9 @@ BEGIN TRY
         b.CurrentQuantity - b.ReservedQuantity AS AvailableQuantity,
         b.ZATCAComplianceStatus,
         CASE 
-            WHEN b.ExpiryDate < GETDATE() THEN N'منتهي الصلاحية'
-            WHEN DATEDIFF(DAY, GETDATE(), b.ExpiryDate) <= 30 THEN N'ينتهي خلال 30 يوم'
-            ELSE N'صالحة'
+            WHEN b.ExpiryDate < GETDATE() THEN N'Expired'
+            WHEN DATEDIFF(DAY, GETDATE(), b.ExpiryDate) <= 30 THEN N'Expires within 30 days'
+            ELSE N'Valid'
         END AS ExpiryStatus
     FROM dbo.WarehouseBatches b
     INNER JOIN dbo.Products p ON b.ProductID = p.ProductID
@@ -1177,11 +1177,11 @@ BEGIN TRY
     BEGIN
         INSERT INTO dbo.WarehouseTypes (CompanyID, TypeCode, TypeNameAR, TypeNameEN, CreatedBy)
         VALUES 
-            (@SystemCompanyID, 'MAIN', N'مستودع رئيسي', N'Main Warehouse', @SystemUserID),
-            (@SystemCompanyID, 'BRANCH', N'مستودع فرعي', N'Branch Warehouse', @SystemUserID),
-            (@SystemCompanyID, 'TRANSIT', N'مستودع انتقالي', N'Transit Warehouse', @SystemUserID),
-            (@SystemCompanyID, 'DAMAGED', N'مستودع تالف', N'Damaged Goods', @SystemUserID),
-            (@SystemCompanyID, 'QUARANTINE', N'مستودع حجر صحي', N'Quarantine', @SystemUserID);
+            (@SystemCompanyID, 'MAIN', N'Main Warehouse', N'Main Warehouse', @SystemUserID),
+            (@SystemCompanyID, 'BRANCH', N'Branch Warehouse', N'Branch Warehouse', @SystemUserID),
+            (@SystemCompanyID, 'TRANSIT', N'Transit Warehouse', N'Transit Warehouse', @SystemUserID),
+            (@SystemCompanyID, 'DAMAGED', N'Damaged Goods Warehouse', N'Damaged Goods', @SystemUserID),
+            (@SystemCompanyID, 'QUARANTINE', N'Quarantine Warehouse', N'Quarantine', @SystemUserID);
         PRINT N'✅ [11] Warehouse Types seeded.';
     END
 
@@ -1192,8 +1192,8 @@ BEGIN TRY
             CompanyID, WarehouseTypeID, WarehouseCode, WarehouseNameAR, WarehouseNameEN,
             City, Region, Country, IsDefault, IsActive, CreatedBy
         ) VALUES (
-            @SystemCompanyID, @MainTypeID, 'MAIN', N'المستودع الرئيسي', N'Main Warehouse',
-            N'الرياض', N'الرياض', N'المملكة العربية السعودية', 1, 1, @SystemUserID
+            @SystemCompanyID, @MainTypeID, 'MAIN', N'Main Warehouse', N'Main Warehouse',
+            N'Riyadh', N'Riyadh', N'Kingdom of Saudi Arabia', 1, 1, @SystemUserID
         );
         PRINT N'✅ [11] Default Main Warehouse seeded.';
     END
@@ -1203,16 +1203,16 @@ BEGIN TRY
     BEGIN
         INSERT INTO dbo.WarehouseZones (CompanyID, WarehouseID, ZoneCode, ZoneNameAR, ZoneNameEN, ZoneType, IsDefault, CreatedBy)
         VALUES 
-            (@SystemCompanyID, @MainWarehouseID, 'RECV', N'منطقة الاستلام', N'Receiving Area', 'RECEIVING', 1, @SystemUserID),
-            (@SystemCompanyID, @MainWarehouseID, 'STOR', N'منطقة التخزين', N'Storage Area', 'STORAGE', 1, @SystemUserID),
-            (@SystemCompanyID, @MainWarehouseID, 'PICK', N'منطقة الالتقاط', N'Picking Area', 'PICKING', 0, @SystemUserID);
+            (@SystemCompanyID, @MainWarehouseID, 'RECV', N'Receiving Zone', N'Receiving Area', 'RECEIVING', 1, @SystemUserID),
+            (@SystemCompanyID, @MainWarehouseID, 'STOR', N'Storage Zone', N'Storage Area', 'STORAGE', 1, @SystemUserID),
+            (@SystemCompanyID, @MainWarehouseID, 'PICK', N'Picking Zone', N'Picking Area', 'PICKING', 0, @SystemUserID);
 
         DECLARE @StorageZoneID INT = (SELECT ZoneID FROM dbo.WarehouseZones WHERE ZoneCode = 'STOR' AND WarehouseID = @MainWarehouseID);
         INSERT INTO dbo.WarehouseLocations (WarehouseID, ZoneID, LocationCode, LocationName, Aisle, Rack, Shelf, Bin, LocationType, MaxWeight, MaxVolume, CreatedBy)
         VALUES 
-            (@MainWarehouseID, @StorageZoneID, 'A-01-01', N'الممر أ - رف 1 - خلية 1', 'A', '1', '1', '1', 'STORAGE', 1000, 10, @SystemUserID),
-            (@MainWarehouseID, @StorageZoneID, 'A-01-02', N'الممر أ - رف 1 - خلية 2', 'A', '1', '1', '2', 'STORAGE', 1000, 10, @SystemUserID),
-            (@MainWarehouseID, @StorageZoneID, 'B-02-01', N'الممر ب - رف 2 - خلية 1', 'B', '2', '1', '1', 'PICKING', 500, 5, @SystemUserID);
+            (@MainWarehouseID, @StorageZoneID, 'A-01-01', N'Aisle A - Shelf 1 - Bin 1', 'A', '1', '1', '1', 'STORAGE', 1000, 10, @SystemUserID),
+            (@MainWarehouseID, @StorageZoneID, 'A-01-02', N'Aisle A - Shelf 1 - Bin 2', 'A', '1', '1', '2', 'STORAGE', 1000, 10, @SystemUserID),
+            (@MainWarehouseID, @StorageZoneID, 'B-02-01', N'Aisle B - Shelf 2 - Bin 1', 'B', '2', '1', '1', 'PICKING', 500, 5, @SystemUserID);
         PRINT N'✅ [11] Sample Zones and Locations seeded.';
     END
 

@@ -41,7 +41,7 @@ BEGIN TRY
             CrossesMidnight BIT NOT NULL DEFAULT 0,
             BreakMinutes INT NOT NULL DEFAULT 0,
             ScheduledHours DECIMAL(4,2) NOT NULL,
-            GraceLateMinutes INT NOT NULL DEFAULT 0,     -- سماحية التأخير
+            GraceLateMinutes INT NOT NULL DEFAULT 0,     -- late grace period
             GraceEarlyLeaveMinutes INT NOT NULL DEFAULT 0,
             IsFlexible BIT NOT NULL DEFAULT 0,
             WorkDaysMask NVARCHAR(7) NOT NULL DEFAULT '1111110', -- Sun..Sat (Gulf: Fri/Sat weekend)

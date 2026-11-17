@@ -97,14 +97,14 @@ BEGIN TRY
             WarehouseID BIGINT NOT NULL,
             BatchID BIGINT NULL,
             LayerDate DATE NOT NULL,
-            LayerSequence INT NOT NULL DEFAULT 0,  -- 0=FIFO, 1=LIFO (لتسهيل الاستهلاك)
+            LayerSequence INT NOT NULL DEFAULT 0,  -- 0=FIFO, 1=LIFO (for easier consumption)
             Quantity DECIMAL(18,4) NOT NULL,
             UnitCost DECIMAL(18,6) NOT NULL,
             RemainingQuantity DECIMAL(18,4) NOT NULL,
             CurrencyCode NVARCHAR(3) DEFAULT 'SAR',
             SourceReference NVARCHAR(50) NULL,
             SourceID BIGINT NULL,
-            SourceMovementID BIGINT NULL,          -- ربط مباشر بـ StockMovements
+            SourceMovementID BIGINT NULL,          -- direct link to StockMovements
             IsConsumed BIT NOT NULL DEFAULT 0,
             ConsumedAt DATETIME2(7) NULL,
             ConsumedBy UNIQUEIDENTIFIER NULL,
@@ -318,7 +318,7 @@ BEGIN
     CLOSE cur; DEALLOCATE cur;
     
     IF @RemainingQty > 0
-        THROW 50000, N'الكمية المطلوبة غير متوفرة في طبقات التكلفة.', 1;
+        THROW 50000, N'The requested quantity is not available in the cost layers.', 1;
     
     SELECT @UsedLayers = STRING_AGG(
         CAST(LayerID AS NVARCHAR) + ':' + CAST(ConsumedQty AS NVARCHAR) + '@' + CAST(UnitCost AS NVARCHAR),
@@ -400,7 +400,7 @@ BEGIN
         FROM dbo.ValuationMethods 
         WHERE CompanyID = @CompanyID AND MethodCode = @NewMethodCode AND IsActive = 1 AND IsDeleted = 0;
         
-        IF @MethodID IS NULL THROW 50000, 'طريقة التقييم غير موجودة أو غير نشطة.', 1;
+        IF @MethodID IS NULL THROW 50000, 'The valuation method does not exist or is inactive.', 1;
 
         DECLARE @CurrentQty DECIMAL(18,4), @CurrentValue DECIMAL(18,6), @AvgCost DECIMAL(18,6);
         
@@ -421,7 +421,7 @@ BEGIN
             CompanyID, ProductID, ValuationMethodID, EffectiveDate, IsActive, CreatedBy, Notes
         ) VALUES (
             @CompanyID, @ProductID, @MethodID, @RevaluationDate, 1, @PerformedBy, 
-            N'إعادة تقييم من ' + @NewMethodCode
+            N'Revaluation from ' + @NewMethodCode
         );
 
         INSERT INTO dbo.ValuationHistory (
@@ -430,7 +430,7 @@ BEGIN
         ) VALUES (
             @CompanyID, @ProductID, @WarehouseID, @RevaluationDate, @MethodID,
             @CurrentQty, @CurrentValue, @AvgCost, 'SAR',
-            N'إعادة تقييم بعد تغيير الطريقة إلى ' + @NewMethodCode,
+            N'Revaluation after changing the method to ' + @NewMethodCode,
             @PerformedBy
         );
 
@@ -480,9 +480,9 @@ BEGIN
         vm.MethodNameAR AS ValuationMethod,
         pv.EffectiveDate AS ValuationEffectiveDate,
         CASE 
-            WHEN (sb.AvailableQty - sb.ReservedQty) = 0 THEN N'نفد المخزون'
-            WHEN sb.AvailableQty <= p.ReorderLevel THEN N'يحتاج إعادة طلب'
-            ELSE N'متوفر'
+            WHEN (sb.AvailableQty - sb.ReservedQty) = 0 THEN N'Out of Stock'
+            WHEN sb.AvailableQty <= p.ReorderLevel THEN N'Needs Reorder'
+            ELSE N'Available'
         END AS StockStatus,
         DATEDIFF(DAY, ISNULL(sb.LastUpdated, GETDATE()), GETDATE()) AS DaysSinceLastUpdate
     FROM dbo.StockBalances sb
@@ -694,12 +694,12 @@ PRINT N'✅ [7.2] vw_InventoryValuation created.';
     BEGIN
         INSERT INTO dbo.ValuationMethods (CompanyID, MethodCode, MethodNameAR, MethodNameEN, MethodDescription, IsDefault, IsActive, CreatedBy)
         VALUES 
-            (@SystemCompanyID, 'FIFO', N'الوارد أولاً صادر أولاً', N'FIFO (First In First Out)', 
-             N'يتم احتساب تكلفة المبيعات بناءً على أقدم تكلفة شراء.', 0, 1, @SystemUserID),
-            (@SystemCompanyID, 'LIFO', N'الوارد أخيراً صادر أولاً', N'LIFO (Last In First Out)',
-             N'يتم احتساب تكلفة المبيعات بناءً على أحدث تكلفة شراء.', 0, 1, @SystemUserID),
-            (@SystemCompanyID, 'AVG', N'المتوسط المرجح', N'Weighted Average',
-             N'يتم احتساب تكلفة المبيعات بناءً على متوسط جميع تكاليف الشراء.', 1, 1, @SystemUserID);
+            (@SystemCompanyID, 'FIFO', N'First In First Out', N'FIFO (First In First Out)', 
+             N'Cost of sales is calculated from the oldest purchase cost.', 0, 1, @SystemUserID),
+            (@SystemCompanyID, 'LIFO', N'Last In First Out', N'LIFO (Last In First Out)',
+             N'Cost of sales is calculated from the latest purchase cost.', 0, 1, @SystemUserID),
+            (@SystemCompanyID, 'AVG', N'Weighted Average', N'Weighted Average',
+             N'Cost of sales is calculated from the average of all purchase costs.', 1, 1, @SystemUserID);
         PRINT N'✅ [8] Valuation Methods seeded (FIFO, LIFO, AVG).';
     END
 

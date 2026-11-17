@@ -45,7 +45,7 @@ BEGIN TRY
             CompanyID UNIQUEIDENTIFIER NOT NULL,
             CountryCode NVARCHAR(2) NOT NULL,            -- ISO 3166-1 alpha-2 (SA, AE, EG, DE…)
             RegionCode NVARCHAR(10) NULL,                -- State/province when applicable
-            AuthorityNameAR NVARCHAR(200) NOT NULL,      -- e.g. هيئة الزكاة والضريبة والجمارك
+            AuthorityNameAR NVARCHAR(200) NOT NULL,      -- e.g. Zakat, Tax and Customs Authority
             AuthorityNameEN NVARCHAR(200) NOT NULL,      -- e.g. ZATCA, FTA, ETA
             TaxSystem NVARCHAR(30) NOT NULL,             -- VAT | GST | SALES_TAX | NONE
             CurrencyCode NVARCHAR(3) NOT NULL,
@@ -387,14 +387,14 @@ BEGIN TRY
         SELECT C.CompanyGuid, X.CategoryCode, X.NameAR, X.NameEN, X.Nature, X.Recoverable, X.NeedsInvoice, X.SortOrd, C.CompanyGuid
         FROM (SELECT DISTINCT CompanyID AS CompanyGuid FROM dbo.TaxJurisdictions) C
         CROSS JOIN (VALUES
-            ('STD',  N'النسبة الأساسية',        'Standard Rate',      'VAT',    1, 1, 1),
-            ('RED',  N'النسبة المخفضة',         'Reduced Rate',       'VAT',    1, 1, 2),
-            ('ZERO', N'صفرية',                  'Zero-Rated',         'VAT',    1, 1, 3),
-            ('EXM',  N'معفاة',                  'Exempt',             'VAT',    0, 0, 4),
-            ('OOS',  N'خارج النطاق',            'Out of Scope',       'VAT',    0, 0, 5),
-            ('RC',   N'احتساب عكسي',            'Reverse Charge',     'VAT',    1, 1, 6),
-            ('EXC',  N'ضريبة انتقائية',         'Excise Tax',         'EXCISE', 0, 1, 7),
-            ('WHT',  N'استقطاع من المنبع',      'Withholding Tax',    'WHT',    0, 0, 8)
+            ('STD',  N'Standard Rate',        'Standard Rate',      'VAT',    1, 1, 1),
+            ('RED',  N'Reduced Rate',         'Reduced Rate',       'VAT',    1, 1, 2),
+            ('ZERO', N'Zero-Rated',                  'Zero-Rated',         'VAT',    1, 1, 3),
+            ('EXM',  N'Exempt',                  'Exempt',             'VAT',    0, 0, 4),
+            ('OOS',  N'Out of Scope',            'Out of Scope',       'VAT',    0, 0, 5),
+            ('RC',   N'Reverse Charge',            'Reverse Charge',     'VAT',    1, 1, 6),
+            ('EXC',  N'Excise Tax',         'Excise Tax',         'EXCISE', 0, 1, 7),
+            ('WHT',  N'Withholding Tax',      'Withholding Tax',    'WHT',    0, 0, 8)
         ) X (CategoryCode, NameAR, NameEN, Nature, Recoverable, NeedsInvoice, SortOrd);
     END
 
@@ -413,27 +413,27 @@ BEGIN TRY
                CASE WHEN X.CC = 'SA' THEN 1 ELSE 0 END, '00000000-0000-0000-0000-000000000001'
         FROM MST.dbo.Companies C
         CROSS JOIN (VALUES
-            ('SA', N'هيئة الزكاة والضريبة والجمارك',        'ZATCA',  'VAT', 'SAR', 'FATOORA',  375000),
-            ('AE', N'الهيئة الاتحادية للضرائب',             'FTA',    'VAT', 'AED', NULL,       375000),
-            ('BH', N'الجهاز الوطني للإيرادات',              'NBR',    'VAT', 'BHD', NULL,        37500),
-            ('OM', N'جهاز الضرائب',                         'OTA',    'VAT', 'OMR', NULL,        38500),
-            ('KW', N'وزارة المالية الكويتية',               'MOF-KW', 'NONE','KWD', NULL,          NULL),
-            ('QA', N'الهيئة العامة للضرائب',                'GTA',    'NONE','QAR', NULL,          NULL),
-            ('JO', N'دائرة ضريبة الدخل والمبيعات',          'ISTD',   'VAT', 'JOD', 'JOFOTARA',  30000),
-            ('LB', N'مديرية الضريبة على القيمة المضافة',    'MOF-LB', 'VAT', 'LBP', NULL,          NULL),
-            ('PS', N'دائرة ضريبة القيمة المضافة',           'MOF-PS', 'VAT', 'ILS', NULL,          NULL),
-            ('SY', N'الهيئة العامة للضرائب والرسوم',        'GTF',    'NONE','SYP', NULL,          NULL),
-            ('IQ', N'الهيئة العامة للضرائب',                'GCT-IQ', 'NONE','IQD', NULL,          NULL),
-            ('EG', N'مصلحة الضرائب المصرية',                'ETA',    'VAT', 'EGP', 'ETA',      500000),
-            ('MA', N'المديرية العامة للضرائب',              'DGI',    'VAT', 'MAD', NULL,     2000000),
-            ('DZ', N'المديرية العامة للضرائب',              'DGI-DZ', 'VAT', 'DZD', NULL,          NULL),
-            ('TN', N'الإدارة العامة للدراسات والتشريع الجبائي','DGI-TN','VAT', 'TND', NULL,      100000),
-            ('LY', N'مصلحة الضرائب الليبية',                'LTA',    'NONE','LYD', NULL,          NULL),
-            ('SD', N'ديوان الضرائب السوداني',               'STC',    'VAT', 'SDG', NULL,          NULL),
-            ('DE', N'مكتب الضرائب الاتحادي',                'BZSt',   'VAT', 'EUR', 'PEPPOL',   100000),
-            ('FR', N'المديرية العامة للمالية العامة',       'DGFiP',  'VAT', 'EUR', 'PEPPOL',    91900),
-            ('GB', N'هيئة الضرائب والجمارك',                'HMRC',   'VAT', 'GBP', NULL,        90000),
-            ('TR', N'رئاسة إدارة الإيرادات',                'GIB',    'VAT', 'TRY', 'E-FATURA',  NULL)
+            ('SA', N'Zakat, Tax and Customs Authority',        'ZATCA',  'VAT', 'SAR', 'FATOORA',  375000),
+            ('AE', N'Federal Tax Authority',             'FTA',    'VAT', 'AED', NULL,       375000),
+            ('BH', N'National Bureau for Revenue',              'NBR',    'VAT', 'BHD', NULL,        37500),
+            ('OM', N'Tax Authority',                         'OTA',    'VAT', 'OMR', NULL,        38500),
+            ('KW', N'Kuwait Ministry of Finance',               'MOF-KW', 'NONE','KWD', NULL,          NULL),
+            ('QA', N'General Tax Authority',                'GTA',    'NONE','QAR', NULL,          NULL),
+            ('JO', N'Income and Sales Tax Department',          'ISTD',   'VAT', 'JOD', 'JOFOTARA',  30000),
+            ('LB', N'VAT Directorate',    'MOF-LB', 'VAT', 'LBP', NULL,          NULL),
+            ('PS', N'VAT Department',           'MOF-PS', 'VAT', 'ILS', NULL,          NULL),
+            ('SY', N'General Commission for Taxes and Fees',        'GTF',    'NONE','SYP', NULL,          NULL),
+            ('IQ', N'General Tax Authority',                'GCT-IQ', 'NONE','IQD', NULL,          NULL),
+            ('EG', N'Egyptian Tax Authority',                'ETA',    'VAT', 'EGP', 'ETA',      500000),
+            ('MA', N'General Directorate of Taxes',              'DGI',    'VAT', 'MAD', NULL,     2000000),
+            ('DZ', N'General Directorate of Taxes',              'DGI-DZ', 'VAT', 'DZD', NULL,          NULL),
+            ('TN', N'General Directorate of Tax Studies and Legislation','DGI-TN','VAT', 'TND', NULL,      100000),
+            ('LY', N'Libyan Tax Authority',                'LTA',    'NONE','LYD', NULL,          NULL),
+            ('SD', N'Sudanese Taxation Chamber',               'STC',    'VAT', 'SDG', NULL,          NULL),
+            ('DE', N'Federal Central Tax Office',                'BZSt',   'VAT', 'EUR', 'PEPPOL',   100000),
+            ('FR', N'Directorate General of Public Finances',       'DGFiP',  'VAT', 'EUR', 'PEPPOL',    91900),
+            ('GB', N'HM Revenue and Customs',                'HMRC',   'VAT', 'GBP', NULL,        90000),
+            ('TR', N'Revenue Administration Presidency',                'GIB',    'VAT', 'TRY', 'E-FATURA',  NULL)
         ) X (CC, AuthAR, AuthEN, Sys, Ccy, EInv, Thresh);
     END
 
@@ -498,7 +498,7 @@ BEGIN TRY
     IF NOT EXISTS (SELECT 1 FROM dbo.TaxGroups WHERE GroupCode = 'DEF-STD')
     BEGIN
         INSERT INTO dbo.TaxGroups (CompanyID, GroupCode, GroupNameAR, GroupNameEN, IsDefault, CreatedBy)
-        SELECT TOP 1 CompanyID, 'DEF-STD', N'المجموعة الافتراضية — النسبة الأساسية',
+        SELECT TOP 1 CompanyID, 'DEF-STD', N'Default Group - Standard Rate',
                'Default Group — Standard Rate', 1, '00000000-0000-0000-0000-000000000001'
         FROM MST.dbo.Companies;
     END

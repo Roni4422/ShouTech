@@ -81,7 +81,7 @@ BEGIN TRY
             ClearDate DATE NULL,
             BounceDate DATE NULL,
             BounceReason NVARCHAR(300) NULL,
-            EndorsedTo NVARCHAR(200) NULL,               -- Endorsement (تظهير) to third party
+            EndorsedTo NVARCHAR(200) NULL,               -- Endorsement to third party
             SourceDocumentID BIGINT NULL,                -- Invoice/payment ref
             BankAccountID INT NULL,                      -- Our bank account (loose ref)
             JournalEntryID BIGINT NULL,
@@ -177,12 +177,12 @@ BEGIN TRY
                '00000000-0000-0000-0000-000000000001'
         FROM MST.dbo.Companies C
         CROSS JOIN (VALUES
-            ('COD',          N'الدفع عند الاستلام',            'Cash on Delivery',      0,  0,  0),
-            ('NET15',        N'صافي 15 يوم',                  'Net 15 Days',           15,  0,  0),
-            ('NET30',        N'صافي 30 يوم',                  'Net 30 Days',           30,  0,  0),
-            ('NET60',        N'صافي 60 يوم',                  'Net 60 Days',           60,  0,  0),
-            ('NET90',        N'صافي 90 يوم',                  'Net 90 Days',           90,  0,  0),
-            ('2-10-NET30',   N'خصم 2% خلال 10 أيام / صافي 30', '2/10 Net 30',           30,  2, 10)
+            ('COD',          N'Cash on Delivery',            'Cash on Delivery',      0,  0,  0),
+            ('NET15',        N'Net 15 days',                  'Net 15 Days',           15,  0,  0),
+            ('NET30',        N'Net 30 days',                  'Net 30 Days',           30,  0,  0),
+            ('NET60',        N'Net 60 days',                  'Net 60 Days',           60,  0,  0),
+            ('NET90',        N'Net 90 days',                  'Net 90 Days',           90,  0,  0),
+            ('2-10-NET30',   N'2% discount within 10 days / Net 30', '2/10 Net 30',           30,  2, 10)
         ) X (Code, NameAR, NameEN, Days, EpdPct, EpdDays);
     END
 
@@ -195,12 +195,12 @@ BEGIN TRY
                '00000000-0000-0000-0000-000000000001'
         FROM MST.dbo.Companies C
         CROSS JOIN (VALUES
-            (1, 7,  N'تذكير ودي',
-             N'عميلنا العزيز {CustomerName}، نذكّركم بأن الفاتورة بمبلغ {Amount} مستحقة منذ {DueDate}. نأمل التكرم بالسداد.', 1, 0, 0),
-            (2, 15, N'إشعار ثانٍ',
-             N'السيد/ة {CustomerName} المحترم/ة، رغم تذكيرنا السابق لا تزال الذمة بمبلغ {Amount} قائمة. نرجو السداد خلال 7 أيام.', 1, 1, 0),
-            (3, 30, N'إشعار نهائي',
-             N'إشعار نهائي: الذمة المستحقة على {CustomerName} بمبلغ {Amount} متأخرة. سيتم إيقاف البيع الآجل واتخاذ الإجراءات النظامية.', 1, 1, 1)
+            (1, 7,  N'Friendly Reminder',
+             N'Dear {CustomerName}, we remind you that the invoice of {Amount} has been due since {DueDate}. We kindly ask you to settle it.', 1, 0, 0),
+            (2, 15, N'Second Notice',
+             N'Dear {CustomerName}, despite our previous reminder, a balance of {Amount} remains outstanding. Please settle within 7 days.', 1, 1, 0),
+            (3, 30, N'Final Notice',
+             N'Final notice: the balance of {Amount} owed by {CustomerName} is overdue. Credit sales will be suspended and legal action taken.', 1, 1, 1)
         ) X (Lvl, Overdue, TName, Msg, Email, Sms, Block);
     END
 

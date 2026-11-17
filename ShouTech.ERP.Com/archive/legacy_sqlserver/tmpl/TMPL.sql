@@ -33,7 +33,7 @@ GO
 -- ==========================================================================
 IF DB_NAME() != '$(FiscalYearDb)'
 BEGIN
-    PRINT '❌ خطأ: يجب تنفيذ السكريبت داخل قاعدة السنة المالية';
+    PRINT '❌ Error: the script must run inside the fiscal year database';
     RAISERROR('Invalid database context', 16, 1);
     RETURN;
 END

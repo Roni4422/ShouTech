@@ -112,7 +112,7 @@ BEGIN TRY
         ON dbo.ProductCategories(CategoryPath);
 
     -- Extended Properties
-    EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'تصنيف المنتجات مع حسابات المخزون والمبيعات', @level0type = N'SCHEMA', @level0name = 'dbo', @level1type = N'TABLE', @level1name = 'ProductCategories';
+    EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Product classification with inventory and sales accounts', @level0type = N'SCHEMA', @level0name = 'dbo', @level1type = N'TABLE', @level1name = 'ProductCategories';
     GO
 
     -- ==========================================================================
@@ -147,8 +147,8 @@ BEGIN TRY
             CostingMethod NVARCHAR(20) NOT NULL DEFAULT 'FIFO',
             StandardCost DECIMAL(18,6) NOT NULL DEFAULT 0,
             AverageCost DECIMAL(18,6) NOT NULL DEFAULT 0,
-			LandedCostFactor DECIMAL(5,4) NOT NULL DEFAULT 1.0000,  -- معامل التكلفة الإضافية
-			AdditionalLandedCost DECIMAL(18,6) NOT NULL DEFAULT 0, -- شحن + جمارك + تأمين
+			LandedCostFactor DECIMAL(5,4) NOT NULL DEFAULT 1.0000,  -- landed cost factor
+			AdditionalLandedCost DECIMAL(18,6) NOT NULL DEFAULT 0, -- freight + customs + insurance
 			EffectiveUnitCost AS (StandardCost * LandedCostFactor + AdditionalLandedCost) PERSISTED,
             LastPurchaseCost DECIMAL(18,6) NOT NULL DEFAULT 0,
             ReplacementCost DECIMAL(18,6) NOT NULL DEFAULT 0,
@@ -260,7 +260,7 @@ BEGIN TRY
         WHERE IsDiscontinued = 1 AND IsDeleted = 0;
     
     -- Extended Properties
-    EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'المنتجات والخدمات', @level0type = N'SCHEMA', @level0name = 'dbo', @level1type = N'TABLE', @level1name = 'Products';
+    EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Products and Services', @level0type = N'SCHEMA', @level0name = 'dbo', @level1type = N'TABLE', @level1name = 'Products';
     GO
 
     -- ==========================================================================
@@ -280,7 +280,7 @@ BEGIN TRY
             City NVARCHAR(100),
             State NVARCHAR(100),
             PostalCode NVARCHAR(20),
-            Country NVARCHAR(100) NOT NULL DEFAULT N'المملكة العربية السعودية',
+            Country NVARCHAR(100) NOT NULL DEFAULT N'Kingdom of Saudi Arabia',
             Latitude DECIMAL(10,7),
             Longitude DECIMAL(10,7),
             ManagerUserID UNIQUEIDENTIFIER,
@@ -328,7 +328,7 @@ BEGIN TRY
         ON dbo.Warehouses(CompanyID, IsDefault) 
         WHERE IsDefault = 1 AND IsActive = 1 AND IsDeleted = 0;
 
-    EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'المستودعات', @level0type = N'SCHEMA', @level0name = 'dbo', @level1type = N'TABLE', @level1name = 'Warehouses';
+    EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Warehouses', @level0type = N'SCHEMA', @level0name = 'dbo', @level1type = N'TABLE', @level1name = 'Warehouses';
     GO
 
     -- ==========================================================================
@@ -552,7 +552,7 @@ END;
             TypeNameAR NVARCHAR(200) NOT NULL,
             TypeNameEN NVARCHAR(200),
             IsPercentage BIT NOT NULL DEFAULT 0,  -- 0 = fixed amount, 1 = percentage
-            GLAccountCode NVARCHAR(50),          -- حساب المصروف (deferred FK)
+            GLAccountCode NVARCHAR(50),          -- expense account (deferred FK)
             IsActive BIT NOT NULL DEFAULT 1,
             IsDeleted BIT NOT NULL DEFAULT 0,
             DeletedAt DATETIME2(7),
@@ -1293,7 +1293,7 @@ END;
             KitCode NVARCHAR(50) NOT NULL,
             KitNameAR NVARCHAR(200) NOT NULL,
             KitNameEN NVARCHAR(200),
-            ProductID INT NOT NULL,                -- المركب
+            ProductID INT NOT NULL,                -- the composite
             QuantityOutput DECIMAL(18,6) NOT NULL DEFAULT 1,
             IsActive BIT NOT NULL DEFAULT 1,
             IsDeleted BIT NOT NULL DEFAULT 0,
@@ -1452,7 +1452,7 @@ END;
             WHERE sm.IsDeleted = 0
         )
         BEGIN
-            RAISERROR(N'لا يمكن حذف منتج له حركات مخزنية. استخدم IsDeleted بدلاً من الحذف.', 16, 1);
+            RAISERROR(N'A product with stock movements cannot be deleted. Use IsDeleted instead of deleting.', 16, 1);
             RETURN;
         END
         
@@ -1497,7 +1497,7 @@ END;
     IF NOT EXISTS (SELECT 1 FROM dbo.ProductCategories WHERE CategoryCode = 'DEF')
     BEGIN
         INSERT INTO dbo.ProductCategories (CompanyID, CategoryCode, CategoryNameAR, CategoryNameEN, IsActive, CreatedBy)
-        SELECT TOP 1 CompanyID, 'DEF', N'عام', N'General', 1, '00000000-0000-0000-0000-000000000001'
+        SELECT TOP 1 CompanyID, 'DEF', N'General', N'General', 1, '00000000-0000-0000-0000-000000000001'
         FROM MST.dbo.Companies;
         PRINT N'✅ Default category inserted';
     END
@@ -1506,8 +1506,8 @@ END;
 	IF NOT EXISTS (SELECT 1 FROM dbo.UnitsOfMeasure WHERE UnitCode = 'PCS')
     INSERT INTO dbo.UnitsOfMeasure (CompanyID, UnitCode, UnitNameAR, UnitNameEN, BaseConversion) 
     VALUES 
-    ('00000000-0000-0000-0000-000000000001', 'PCS', N'قطعة', 'Piece', 1),
-    ('00000000-0000-0000-0000-000000000001', 'KG',  N'كيلوغرام', 'Kilogram', 1);
+    ('00000000-0000-0000-0000-000000000001', 'PCS', N'Piece', 'Piece', 1),
+    ('00000000-0000-0000-0000-000000000001', 'KG',  N'Kilogram', 'Kilogram', 1);
     
 	-- Seed Unit Conversions
     IF NOT EXISTS (SELECT 1 FROM dbo.UnitConversions WHERE FromUOM = 'PCS' AND ToUOM = 'BOX')
@@ -1525,13 +1525,13 @@ END;
     IF NOT EXISTS (SELECT 1 FROM dbo.LandedCostTypes WHERE TypeCode = 'SHIPPING')
     BEGIN
         INSERT INTO dbo.LandedCostTypes (CompanyID, TypeCode, TypeNameAR, TypeNameEN, IsPercentage, GLAccountCode, IsActive, CreatedBy)
-        SELECT TOP 1 CompanyID, 'SHIPPING', N'تكاليف الشحن', 'Shipping Cost', 0, '7410-001', 1, '00000000-0000-0000-0000-000000000001'
+        SELECT TOP 1 CompanyID, 'SHIPPING', N'Shipping Costs', 'Shipping Cost', 0, '7410-001', 1, '00000000-0000-0000-0000-000000000001'
         FROM MST.dbo.Companies
         UNION ALL
-        SELECT TOP 1 CompanyID, 'CUSTOMS', N'رسوم جمركية', 'Customs Duty', 1, '7420-001', 1, '00000000-0000-0000-0000-000000000001'
+        SELECT TOP 1 CompanyID, 'CUSTOMS', N'Customs Duties', 'Customs Duty', 1, '7420-001', 1, '00000000-0000-0000-0000-000000000001'
         FROM MST.dbo.Companies
         UNION ALL
-        SELECT TOP 1 CompanyID, 'INSURANCE', N'تأمين', 'Insurance', 0, '7430-001', 1, '00000000-0000-0000-0000-000000000001'
+        SELECT TOP 1 CompanyID, 'INSURANCE', N'Insurance', 'Insurance', 0, '7430-001', 1, '00000000-0000-0000-0000-000000000001'
         FROM MST.dbo.Companies;
         PRINT N'✅ Landed cost types seeded';
     END
@@ -1539,9 +1539,9 @@ END;
     -- ==========================================================================
     -- 23. EXTENDED PROPERTIES (documentation)
     -- ==========================================================================
-    EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'نظام إدارة المخزون المتكامل مع FIFO، التكاليف الإضافية، تتبع الجودة، الجرد الدوري، والمجموعات', @level0type = N'SCHEMA', @level0name = 'dbo', @level1type = N'TABLE', @level1name = 'StockMovements';
-    EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'طبقات التكلفة FIFO محمية ضد التعديل المباشر', @level0type = N'SCHEMA', @level0name = 'dbo', @level1type = N'TABLE', @level1name = 'InventoryCostLayers';
-    EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'جرد دوري وعد كامل للمخزون', @level0type = N'SCHEMA', @level0name = 'dbo', @level1type = N'TABLE', @level1name = 'StockCounts';
+    EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Integrated inventory management system with FIFO, landed costs, quality tracking, periodic counts, and groups', @level0type = N'SCHEMA', @level0name = 'dbo', @level1type = N'TABLE', @level1name = 'StockMovements';
+    EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'FIFO cost layers are protected against direct modification', @level0type = N'SCHEMA', @level0name = 'dbo', @level1type = N'TABLE', @level1name = 'InventoryCostLayers';
+    EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Periodic full inventory count', @level0type = N'SCHEMA', @level0name = 'dbo', @level1type = N'TABLE', @level1name = 'StockCounts';
     PRINT N'✅ Extended properties added';
 
     -- ==========================================================================

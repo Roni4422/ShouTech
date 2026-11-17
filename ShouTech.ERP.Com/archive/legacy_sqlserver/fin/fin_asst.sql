@@ -201,12 +201,12 @@ BEGIN TRY
                '00000000-0000-0000-0000-000000000001'
         FROM MST.dbo.Companies C
         CROSS JOIN (VALUES
-            ('BLDG',  N'مبانٍ وإنشاءات',       'Buildings',            25, 'STRAIGHT_LINE',     5),
-            ('PLANT', N'آلات ومعدات',          'Plant & Machinery',    10, 'STRAIGHT_LINE',     5),
-            ('VEH',   N'سيارات ومركبات',       'Vehicles',              5, 'STRAIGHT_LINE',    10),
-            ('FURN',  N'أثاث ومفروشات',        'Furniture & Fixtures',  7, 'STRAIGHT_LINE',     0),
-            ('IT',    N'أجهزة حاسوب وتقنية',   'IT Equipment',          4, 'STRAIGHT_LINE',     0),
-            ('LAND',  N'أراضٍ',                'Land (non-depreciable)',0, 'STRAIGHT_LINE',     0)
+            ('BLDG',  N'Buildings and Constructions',       'Buildings',            25, 'STRAIGHT_LINE',     5),
+            ('PLANT', N'Machinery and Equipment',          'Plant & Machinery',    10, 'STRAIGHT_LINE',     5),
+            ('VEH',   N'Cars and Vehicles',       'Vehicles',              5, 'STRAIGHT_LINE',    10),
+            ('FURN',  N'Furniture and Fixtures',        'Furniture & Fixtures',  7, 'STRAIGHT_LINE',     0),
+            ('IT',    N'Computers and IT Equipment',   'IT Equipment',          4, 'STRAIGHT_LINE',     0),
+            ('LAND',  N'Land',                'Land (non-depreciable)',0, 'STRAIGHT_LINE',     0)
         ) X (Code, NameAR, NameEN, Life, Method, Salvage);
     END
 

@@ -67,7 +67,7 @@ BEGIN TRY
         IF @SysCompanyID IS NOT NULL
         BEGIN
             INSERT INTO dbo.AIModels (CompanyID, ModelCode, ModelName, ModelType, ModelVersion, ModelFormat, IsProduction, IsActive, CreatedBy)
-            VALUES (@SysCompanyID, 'SALES_FORECAST_V1', N'تنبؤ المبيعات الإصدار الأول', 'SALES_FORECAST', '1.0', 'ONNX', 1, 1, '00000000-0000-0000-0000-000000000001');
+            VALUES (@SysCompanyID, 'SALES_FORECAST_V1', N'Sales Forecast v1', 'SALES_FORECAST', '1.0', 'ONNX', 1, 1, '00000000-0000-0000-0000-000000000001');
             PRINT N'✅ Example AI model seeded.';
         END
     END

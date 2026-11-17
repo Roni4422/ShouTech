@@ -186,12 +186,12 @@ BEGIN TRY
                'ALL', X.Freq, X.Prio, '00000000-0000-0000-0000-000000000001'
         FROM MST.dbo.Companies C
         CROSS JOIN (VALUES
-            ('STOCK-LOW',     N'انخفاض المخزون تحت حد الطلب',   'Stock below reorder level',   'STOCK',       N'{"field":"QtyOnHand","op":"<","value":"ReorderLevel"}', 'HOURLY',  1),
-            ('INV-DUE-7',     N'فواتير مستحقة خلال 7 أيام',     'Invoices due within 7 days',  'INVOICE_DUE', N'{"field":"DueDate","op":"<=","value":"+7d"}',             'DAILY',   2),
-            ('INV-OVERDUE',   N'فواتير متأخرة السداد',          'Overdue invoices',            'INVOICE_DUE', N'{"field":"DueDate","op":"<","value":"today"}',           'DAILY',   1),
-            ('LIC-EXPIRE-30', N'الترخيص ينتهي خلال 30 يوماً',   'License expires in 30 days',  'LICENSE',     N'{"field":"LicenseExpiry","op":"<=","value":"+30d"}',     'DAILY',   1),
-            ('BACKUP-FAIL',   N'فشل آخر نسخة احتياطية',         'Last backup failed',          'BACKUP',      N'{"field":"LastBackupStatus","op":"=","value":"FAILED"}', 'REALTIME',1),
-            ('SEC-LOGIN-FAIL',N'محاولات دخول فاشلة متكررة',     'Repeated failed logins',      'SECURITY',    N'{"field":"FailedLoginCount","op":">=","value":5}',       'REALTIME',1)
+            ('STOCK-LOW',     N'Stock below reorder level',   'Stock below reorder level',   'STOCK',       N'{"field":"QtyOnHand","op":"<","value":"ReorderLevel"}', 'HOURLY',  1),
+            ('INV-DUE-7',     N'Invoices due within 7 days',     'Invoices due within 7 days',  'INVOICE_DUE', N'{"field":"DueDate","op":"<=","value":"+7d"}',             'DAILY',   2),
+            ('INV-OVERDUE',   N'Overdue invoices',          'Overdue invoices',            'INVOICE_DUE', N'{"field":"DueDate","op":"<","value":"today"}',           'DAILY',   1),
+            ('LIC-EXPIRE-30', N'License expires within 30 days',   'License expires in 30 days',  'LICENSE',     N'{"field":"LicenseExpiry","op":"<=","value":"+30d"}',     'DAILY',   1),
+            ('BACKUP-FAIL',   N'Last backup failed',         'Last backup failed',          'BACKUP',      N'{"field":"LastBackupStatus","op":"=","value":"FAILED"}', 'REALTIME',1),
+            ('SEC-LOGIN-FAIL',N'Repeated failed login attempts',     'Repeated failed logins',      'SECURITY',    N'{"field":"FailedLoginCount","op":">=","value":5}',       'REALTIME',1)
         ) X (Code, NameAR, NameEN, Cat, Cond, Freq, Prio);
     END
 

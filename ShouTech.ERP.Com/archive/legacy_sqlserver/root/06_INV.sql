@@ -36,7 +36,7 @@ CREATE TABLE Products (
     CategoryID INT NOT NULL FOREIGN KEY REFERENCES Categories(CategoryID),
     BaseUOMID INT NOT NULL FOREIGN KEY REFERENCES UnitsOfMeasure(UOMID),
     
-    CostingMethod NVARCHAR(20) NOT NULL DEFAULT 'AVCO', -- AVCO (المتوسط المتحرك), FIFO, Standard
+    CostingMethod NVARCHAR(20) NOT NULL DEFAULT 'AVCO', -- AVCO (moving average), FIFO, Standard
     TrackingType NVARCHAR(20) NOT NULL DEFAULT 'None', -- None, Batch, Serial
     
     StandardCost DECIMAL(18,4) DEFAULT 0.0000,
@@ -49,7 +49,7 @@ CREATE TABLE Products (
     TaxRate DECIMAL(5,2) DEFAULT 15.00,
     
     InventoryAccountID INT NOT NULL FOREIGN KEY REFERENCES Accounts(AccountID),
-    COGSAccountID INT NOT NULL FOREIGN KEY REFERENCES Accounts(AccountID), -- حساب تكلفة البضاعة المباعة
+    COGSAccountID INT NOT NULL FOREIGN KEY REFERENCES Accounts(AccountID), -- Cost of Goods Sold account
     SalesAccountID INT NOT NULL FOREIGN KEY REFERENCES Accounts(AccountID),
     
     IsActive BIT DEFAULT 1,
@@ -144,9 +144,9 @@ CREATE TABLE StockAdjustmentLines (
     LineID BIGINT IDENTITY(1,1) PRIMARY KEY,
     AdjustmentID BIGINT NOT NULL FOREIGN KEY REFERENCES StockAdjustments(AdjustmentID) ON DELETE CASCADE,
     ProductID BIGINT NOT NULL FOREIGN KEY REFERENCES Products(ProductID),
-    SystemQty DECIMAL(18,4) NOT NULL, -- الكمية بالنظام
-    PhysicalQty DECIMAL(18,4) NOT NULL, -- الكمية الفعلية بالجرد
-    VarianceQty AS (PhysicalQty - SystemQty), -- الفارق (+ أو -)
+    SystemQty DECIMAL(18,4) NOT NULL, -- system quantity
+    PhysicalQty DECIMAL(18,4) NOT NULL, -- physical counted quantity
+    VarianceQty AS (PhysicalQty - SystemQty), -- variance (+ or -)
     UnitCost DECIMAL(18,4) NOT NULL,
     TotalVarianceValue AS ((PhysicalQty - SystemQty) * UnitCost),
     LineNo INT NOT NULL

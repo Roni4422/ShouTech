@@ -44,13 +44,13 @@ BEGIN TRY
 
     MERGE INTO sys.SystemSettings AS Target
     USING (VALUES 
-        (1, 1, 'COMPANY_NAME_AR', N'شركة شو تيك للحلول التقنية', 'STRING', 'GENERAL', N'اسم الشركة باللغة العربية'),
-        (1, 1, 'COMPANY_NAME_EN', 'ShouTech Solutions Co.', 'STRING', 'GENERAL', N'اسم الشركة باللغة الإنجليزية'),
-        (1, 1, 'VAT_NUMBER', '300000000000003', 'STRING', 'FINANCE', N'الرقم الضريبي للشركة'),
-        (1, 1, 'VAT_DEFAULT_RATE', '15.00', 'DECIMAL', 'FINANCE', N'نسبة ضريبة القيمة المضافة الافتراضية'),
-        (1, 1, 'BASE_CURRENCY_CODE', 'SAR', 'STRING', 'FINANCE', N'العملة الأساسية للنظام'),
-        (1, 1, 'ENABLE_MULTI_CURRENCY', 'false', 'BOOL', 'FINANCE', N'تفعيل تعدد العملات'),
-        (1, 1, 'ZATCA_ENVIRONMENT', 'DEVELOPMENT', 'STRING', 'ZATCA', N'بيئة ربط هيئة الزكاة والضريبة (SANDBOX, SIMULATION, PRODUCTION)')
+        (1, 1, 'COMPANY_NAME_AR', N'ShouTech Technology Solutions Company', 'STRING', 'GENERAL', N'Company name in Arabic'),
+        (1, 1, 'COMPANY_NAME_EN', 'ShouTech Solutions Co.', 'STRING', 'GENERAL', N'Company name in English'),
+        (1, 1, 'VAT_NUMBER', '300000000000003', 'STRING', 'FINANCE', N'Company tax number'),
+        (1, 1, 'VAT_DEFAULT_RATE', '15.00', 'DECIMAL', 'FINANCE', N'Default VAT rate'),
+        (1, 1, 'BASE_CURRENCY_CODE', 'SAR', 'STRING', 'FINANCE', N'System base currency'),
+        (1, 1, 'ENABLE_MULTI_CURRENCY', 'false', 'BOOL', 'FINANCE', N'Enable multi-currency'),
+        (1, 1, 'ZATCA_ENVIRONMENT', 'DEVELOPMENT', 'STRING', 'ZATCA', N'Tax authority integration environment (SANDBOX, SIMULATION, PRODUCTION)')
     ) AS Source (TenantID, CompanyID, SettingKey, SettingValue, DataType, Category, DescriptionAR)
     ON (Target.TenantID = Source.TenantID AND Target.CompanyID = Source.CompanyID AND Target.SettingKey = Source.SettingKey)
     WHEN NOT MATCHED THEN

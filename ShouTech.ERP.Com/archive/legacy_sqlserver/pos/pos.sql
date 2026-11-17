@@ -220,12 +220,12 @@ BEGIN TRY
                '00000000-0000-0000-0000-000000000001'
         FROM MST.dbo.Companies C
         CROSS JOIN (VALUES
-            ('CASH',   N'نقدي',            'Cash',          1, 0, 1, 1),
-            ('CARD',   N'بطاقة بنكية',     'Bank Card',     0, 1, 0, 2),
-            ('WALLET', N'محفظة إلكترونية', 'E-Wallet',      0, 1, 0, 3),
-            ('CREDIT', N'آجل (ذمم)',       'On Credit',     0, 0, 0, 4),
-            ('CHEQUE', N'شيك',             'Cheque',        0, 1, 0, 5),
-            ('TRANSFER', N'تحويل بنكي',    'Bank Transfer', 0, 1, 0, 6)
+            ('CASH',   N'Cash',            'Cash',          1, 0, 1, 1),
+            ('CARD',   N'Bank Card',     'Bank Card',     0, 1, 0, 2),
+            ('WALLET', N'E-Wallet', 'E-Wallet',      0, 1, 0, 3),
+            ('CREDIT', N'On Credit (Receivables)',       'On Credit',     0, 0, 0, 4),
+            ('CHEQUE', N'Cheque',             'Cheque',        0, 1, 0, 5),
+            ('TRANSFER', N'Bank Transfer',    'Bank Transfer', 0, 1, 0, 6)
         ) X (Code, NameAR, NameEN, Drawer, NeedsRef, Overpay, SortOrd);
     END
 

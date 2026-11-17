@@ -218,16 +218,16 @@ BEGIN TRY
                X.Taxable, X.Gosi, X.OtBase, X.EosBase, X.SortOrd, '00000000-0000-0000-0000-000000000001'
         FROM MST.dbo.Companies C
         CROSS JOIN (VALUES
-            ('BASIC',    N'الراتب الأساسي',        'Basic Salary',        'EARNING', 'FIXED',        0,  1, 1, 1, 1, 1),
-            ('HOUSING',  N'بدل السكن',             'Housing Allowance',   'EARNING', 'PCT_OF_BASIC', 25, 1, 1, 0, 1, 2),
-            ('TRANSPORT',N'بدل المواصلات',         'Transport Allowance', 'EARNING', 'FIXED',        0,  1, 1, 0, 1, 3),
-            ('FOOD',     N'بدل الطعام',            'Food Allowance',      'EARNING', 'FIXED',        0,  1, 0, 0, 1, 4),
-            ('PHONE',    N'بدل الهاتف',            'Phone Allowance',     'EARNING', 'FIXED',        0,  0, 0, 0, 0, 5),
-            ('OT-NORMAL',N'عمل إضافي — عادي',      'Overtime — Normal',   'EARNING', 'FORMULA',      0,  0, 0, 0, 0, 6),
-            ('GOSI-EE',  N'حصة الموظف — التأمينات','GOSI Employee Share', 'DEDUCTION','FORMULA',     0,  0, 0, 0, 0, 20),
-            ('LOAN-DED', N'قسط سلفة',              'Loan Installment',    'DEDUCTION','FIXED',       0,  0, 0, 0, 0, 21),
-            ('ABS-DED',  N'خصم الغياب',            'Absence Deduction',   'DEDUCTION','FORMULA',     0,  0, 0, 0, 0, 22),
-            ('GOSI-ER',  N'حصة صاحب العمل — التأمينات','GOSI Employer Share','EMPLOYER_COST','FORMULA',0,0, 0, 0, 0, 30)
+            ('BASIC',    N'Basic Salary',        'Basic Salary',        'EARNING', 'FIXED',        0,  1, 1, 1, 1, 1),
+            ('HOUSING',  N'Housing Allowance',             'Housing Allowance',   'EARNING', 'PCT_OF_BASIC', 25, 1, 1, 0, 1, 2),
+            ('TRANSPORT',N'Transportation Allowance',         'Transport Allowance', 'EARNING', 'FIXED',        0,  1, 1, 0, 1, 3),
+            ('FOOD',     N'Food Allowance',            'Food Allowance',      'EARNING', 'FIXED',        0,  1, 0, 0, 1, 4),
+            ('PHONE',    N'Phone Allowance',            'Phone Allowance',     'EARNING', 'FIXED',        0,  0, 0, 0, 0, 5),
+            ('OT-NORMAL',N'Overtime - Regular',      'Overtime — Normal',   'EARNING', 'FORMULA',      0,  0, 0, 0, 0, 6),
+            ('GOSI-EE',  N'Employee share - Insurance','GOSI Employee Share', 'DEDUCTION','FORMULA',     0,  0, 0, 0, 0, 20),
+            ('LOAN-DED', N'Loan Installment',              'Loan Installment',    'DEDUCTION','FIXED',       0,  0, 0, 0, 0, 21),
+            ('ABS-DED',  N'Absence Deduction',            'Absence Deduction',   'DEDUCTION','FORMULA',     0,  0, 0, 0, 0, 22),
+            ('GOSI-ER',  N'Employer share - Insurance','GOSI Employer Share','EMPLOYER_COST','FORMULA',0,0, 0, 0, 0, 30)
         ) X (Code, NameAR, NameEN, Kind, Method, DefVal, Taxable, Gosi, OtBase, EosBase, SortOrd);
     END
 
@@ -244,14 +244,14 @@ BEGIN TRY
         CROSS JOIN (VALUES
             -- KSA GOSI: Saudi employee 9.75% (annuities 9% + SANED 0.75%),
             --           employer 11.75% (annuities 9% + hazards 2% + SANED 0.75%)
-            ('SA', 'GOSI-SA',    N'التأمينات الاجتماعية — السعودية (سعودي)', 'GOSI — Saudi National', 9.7500, 11.7500, 1500, 45000, 'LOCAL', '2024-01-01'),
-            ('SA', 'GOSI-SA-XP', N'التأمينات الاجتماعية — السعودية (وافد)',  'GOSI — Expatriate',     0.0000,  2.0000, NULL, NULL,  'EXPAT', '2024-01-01'),
+            ('SA', 'GOSI-SA',    N'Social Insurance - Saudi Arabia (Saudi national)', 'GOSI — Saudi National', 9.7500, 11.7500, 1500, 45000, 'LOCAL', '2024-01-01'),
+            ('SA', 'GOSI-SA-XP', N'Social Insurance - Saudi Arabia (Expatriate)',  'GOSI — Expatriate',     0.0000,  2.0000, NULL, NULL,  'EXPAT', '2024-01-01'),
             -- UAE GPSSA: employee 11%, employer 15% (private sector, UAE nationals)
-            ('AE', 'GPSSA-AE',   N'المعاشات — الإمارات (مواطن)',            'GPSSA — UAE National',  11.0000, 15.0000, NULL, 50000, 'LOCAL', '2024-01-01'),
+            ('AE', 'GPSSA-AE',   N'Pensions - UAE (Citizen)',            'GPSSA — UAE National',  11.0000, 15.0000, NULL, 50000, 'LOCAL', '2024-01-01'),
             -- Jordan SSC: employee 7.5%, employer 14.25%
-            ('JO', 'SSC-JO',     N'الضمان الاجتماعي — الأردن',               'SSC — Jordan',           7.5000, 14.2500, NULL, NULL,  'ALL',   '2024-01-01'),
+            ('JO', 'SSC-JO',     N'Social Security - Jordan',               'SSC — Jordan',           7.5000, 14.2500, NULL, NULL,  'ALL',   '2024-01-01'),
             -- Egypt SI: employee 11%, employer 18.75% (Law 148/2019)
-            ('EG', 'SI-EG',      N'التأمينات الاجتماعية — مصر',              'Social Insurance — Egypt',11.0000, 18.7500, 2000, 12600, 'ALL',  '2024-01-01')
+            ('EG', 'SI-EG',      N'Social Insurance - Egypt',              'Social Insurance — Egypt',11.0000, 18.7500, 2000, 12600, 'ALL',  '2024-01-01')
         ) X (CC, Code, NameAR, NameEN, EeRate, ErRate, MinBase, MaxBase, Nat, VFrom);
     END
 

@@ -708,19 +708,19 @@ CREATE INDEX IF NOT EXISTS ix_material_stock_movements_wh_mat_date
 -- ========================================================================
 
 INSERT OR IGNORE INTO account_types (type_code, type_name_ar, type_name_en, normal_balance, sort_order) VALUES
-    ('ASSET',     'أصول',       'Assets',      'DEBIT',  1),
-    ('LIABILITY', 'التزامات',   'Liabilities', 'CREDIT', 2),
-    ('EQUITY',    'حقوق ملكية', 'Equity',      'CREDIT', 3),
-    ('REVENUE',   'إيرادات',    'Revenue',     'CREDIT', 4),
-    ('EXPENSE',   'مصروفات',    'Expenses',    'DEBIT',  5);
+    ('ASSET',     'Assets',       'Assets',      'DEBIT',  1),
+    ('LIABILITY', 'Liabilities',   'Liabilities', 'CREDIT', 2),
+    ('EQUITY',    'Equity', 'Equity',      'CREDIT', 3),
+    ('REVENUE',   'Revenue',    'Revenue',     'CREDIT', 4),
+    ('EXPENSE',   'Expenses',    'Expenses',    'DEBIT',  5);
 
 INSERT OR IGNORE INTO currencies (currency_code, currency_name_ar, currency_name_en, symbol, decimal_places) VALUES
-    ('SAR', 'ريال سعودي',   'Saudi Riyal',   'ر.س', 2),
-    ('USD', 'دولار أمريكي', 'US Dollar',     '$',   2),
-    ('EUR', 'يورو',         'Euro',          '€',   2),
-    ('SYP', 'ليرة سورية',   'Syrian Pound',  'ل.س', 2),
-    ('TRY', 'ليرة تركية',   'Turkish Lira',  '₺',   2),
-    ('AED', 'درهم إماراتي', 'UAE Dirham',    'د.إ', 2);
+    ('SAR', 'Saudi Riyal',   'Saudi Riyal',   'SAR', 2),
+    ('USD', 'US Dollar', 'US Dollar',     '$',   2),
+    ('EUR', 'Euro',         'Euro',          '€',   2),
+    ('SYP', 'Syrian Pound',   'Syrian Pound',  'SYP', 2),
+    ('TRY', 'Turkish Lira',   'Turkish Lira',  '₺',   2),
+    ('AED', 'UAE Dirham', 'UAE Dirham',    'AED', 2);
 
 
 -- ========================================================================

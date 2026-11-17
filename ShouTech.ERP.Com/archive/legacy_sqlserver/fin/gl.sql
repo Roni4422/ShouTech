@@ -53,7 +53,7 @@ BEGIN TRY
             AccountLevel        TINYINT NOT NULL DEFAULT 1,
             AccountType         VARCHAR(20) NOT NULL, -- ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
             NormalBalance       CHAR(1) NOT NULL,     -- 'D' (Debit) or 'C' (Credit)
-            IsPostingAccount    BIT NOT NULL DEFAULT 1, -- 1: حقيقي يقبل القيود, 0: تجميعي (Parent)
+            IsPostingAccount    BIT NOT NULL DEFAULT 1, -- 1: real posting account, 0: summary (Parent)
             IsActive            BIT NOT NULL DEFAULT 1,
             
             -- Audit & Soft Delete
@@ -80,7 +80,7 @@ BEGIN TRY
             JournalHeaderID     BIGINT IDENTITY(1,1) NOT NULL,
             TenantID            INT NOT NULL DEFAULT 1,
             CompanyID           INT NOT NULL DEFAULT 1,
-            JournalNo           VARCHAR(100) NOT NULL,   -- مولد عبر sys.sp_GetNextSequenceValue
+            JournalNo           VARCHAR(100) NOT NULL,   -- generated via sys.sp_GetNextSequenceValue
             FiscalYear          INT NOT NULL,
             PostingDate         DATE NOT NULL,
             DocumentDate        DATE NOT NULL DEFAULT CAST(SYSDATETIME() AS DATE),
@@ -100,7 +100,7 @@ BEGIN TRY
 
             CONSTRAINT PK_fin_JournalHeaders PRIMARY KEY CLUSTERED (JournalHeaderID),
             CONSTRAINT UQ_fin_JournalHeaders_No UNIQUE (TenantID, CompanyID, JournalNo),
-            CONSTRAINT CK_fin_JournalHeaders_Balance CHECK (TotalDebit = TotalCredit) -- حارس التوازن المالي الصارم
+            CONSTRAINT CK_fin_JournalHeaders_Balance CHECK (TotalDebit = TotalCredit) -- strict financial balance guard
         );
     END;
 

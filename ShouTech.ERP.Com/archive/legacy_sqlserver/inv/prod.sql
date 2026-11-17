@@ -159,8 +159,8 @@ BEGIN TRY
             TaxCategory NVARCHAR(20) NOT NULL DEFAULT 'STANDARD',
             TaxRate DECIMAL(5,2) NOT NULL DEFAULT 15,
             TaxExemptReason NVARCHAR(200) NULL,
-            ZATCAItemCode NVARCHAR(50) NULL,          -- رقم السلع الضريبي (ZATCA)
-            ZATCAUnitCode NVARCHAR(20) NULL,           -- رمز الوحدة الضريبي
+            ZATCAItemCode NVARCHAR(50) NULL,          -- ZATCA tax item code
+            ZATCAUnitCode NVARCHAR(20) NULL,           -- tax unit code
             
             IsStockItem BIT NOT NULL DEFAULT 1,
             IsServiceItem BIT NOT NULL DEFAULT 0,
@@ -170,7 +170,7 @@ BEGIN TRY
             IsExpiryTracked BIT NOT NULL DEFAULT 0,
             ExpiryDays INT NULL,
             ShelfLifeDays INT NULL,
-            IsCompositeProduct BIT NOT NULL DEFAULT 0,   -- منتج مركب (BOM)
+            IsCompositeProduct BIT NOT NULL DEFAULT 0,   -- composite product (BOM)
             
             ReorderLevel DECIMAL(18,3) NOT NULL DEFAULT 0,
             ReorderQuantity DECIMAL(18,3) NOT NULL DEFAULT 0,
@@ -181,7 +181,7 @@ BEGIN TRY
             Length DECIMAL(18,6) NULL,
             Width DECIMAL(18,6) NULL,
             Height DECIMAL(18,6) NULL,
-            Volume DECIMAL(18,6) NULL,                 -- الحجم (محسوب)
+            Volume DECIMAL(18,6) NULL,                 -- volume (calculated)
             
             MainImagePath NVARCHAR(500) NULL,
             
@@ -311,8 +311,8 @@ BEGIN TRY
         CREATE TABLE dbo.ProductBOM (
             BOMID BIGINT IDENTITY(1,1) NOT NULL,
             CompanyID UNIQUEIDENTIFIER NOT NULL,
-            ProductID INT NOT NULL,              -- المنتج النهائي (الأب)
-            ComponentProductID INT NOT NULL,     -- المادة الخام (الابن)
+            ProductID INT NOT NULL,              -- the final product (parent)
+            ComponentProductID INT NOT NULL,     -- the raw material (child)
             Quantity DECIMAL(18,6) NOT NULL,
             UOMID INT NOT NULL,
             WastePercentage DECIMAL(5,2) NOT NULL DEFAULT 0,
@@ -516,9 +516,9 @@ BEGIN
             IsDeleted, CreatedBy, CreatedAt
         )
         SELECT 
-            CompanyID, @NewProductCode, ISNULL(@NewProductNameAR, ProductNameAR + N' (نسخة)'), ProductNameEN, ProductDescription, ShortDescription,
+            CompanyID, @NewProductCode, ISNULL(@NewProductNameAR, ProductNameAR + N' (copy)'), ProductNameEN, ProductDescription, ShortDescription,
             CategoryID, BrandID, PrimaryUOMID, SaleUOMID, PurchaseUOMID,
-            NULL, QuickCode, NULL,  -- لا ننسخ Barcode و SKU
+            NULL, QuickCode, NULL,  -- do not copy Barcode and SKU
             DefaultSalePrice, DefaultPurchasePrice, CostPrice,
             TaxCategory, TaxRate, TaxExemptReason, ZATCAItemCode, ZATCAUnitCode,
             IsStockItem, IsServiceItem, IsPOSItem, IsSerialized, IsBatchTracked, IsExpiryTracked,
@@ -781,10 +781,10 @@ PRINT N'✅ [10.3] vw_ProductsDashboard created.';
     BEGIN
         INSERT INTO dbo.UnitsOfMeasure (CompanyID, UOMCode, UOMNameAR, UOMNameEN, IsBaseUnit, IsActive, CreatedBy)
         VALUES 
-            (@SystemCompanyID, 'UNIT', N'وحدة', N'Unit', 1, 1, @SystemUserID),
-            (@SystemCompanyID, 'KG', N'كيلو جرام', N'Kilogram', 0, 1, @SystemUserID),
-            (@SystemCompanyID, 'BOX', N'صندوق', N'Box', 0, 1, @SystemUserID),
-            (@SystemCompanyID, 'PACK', N'باكيت', N'Pack', 0, 1, @SystemUserID);
+            (@SystemCompanyID, 'UNIT', N'Unit', N'Unit', 1, 1, @SystemUserID),
+            (@SystemCompanyID, 'KG', N'Kilogram', N'Kilogram', 0, 1, @SystemUserID),
+            (@SystemCompanyID, 'BOX', N'Cash Box', N'Box', 0, 1, @SystemUserID),
+            (@SystemCompanyID, 'PACK', N'Packet', N'Pack', 0, 1, @SystemUserID);
         PRINT N'✅ Default Units of Measure seeded.';
     END
 
@@ -792,17 +792,17 @@ PRINT N'✅ [10.3] vw_ProductsDashboard created.';
     BEGIN
         INSERT INTO dbo.ProductCategories (CompanyID, CategoryCode, CategoryNameAR, CategoryNameEN, IsActive, CreatedBy)
         VALUES 
-            (@SystemCompanyID, 'GENERAL', N'عام', N'General', 1, @SystemUserID),
-            (@SystemCompanyID, 'FOOD', N'مواد غذائية', N'Food', 1, @SystemUserID),
-            (@SystemCompanyID, 'BEVERAGE', N'مشروبات', N'Beverages', 1, @SystemUserID),
-            (@SystemCompanyID, 'ELECTRONICS', N'إلكترونيات', N'Electronics', 1, @SystemUserID);
+            (@SystemCompanyID, 'GENERAL', N'General', N'General', 1, @SystemUserID),
+            (@SystemCompanyID, 'FOOD', N'Food Products', N'Food', 1, @SystemUserID),
+            (@SystemCompanyID, 'BEVERAGE', N'Beverages', N'Beverages', 1, @SystemUserID),
+            (@SystemCompanyID, 'ELECTRONICS', N'Electronics', N'Electronics', 1, @SystemUserID);
         PRINT N'✅ Default Categories seeded.';
     END
 
     IF NOT EXISTS (SELECT 1 FROM dbo.PriceLists WHERE PriceListCode = 'DEFAULT' AND CompanyID = @SystemCompanyID)
     BEGIN
         INSERT INTO dbo.PriceLists (CompanyID, PriceListCode, PriceListNameAR, PriceListNameEN, CurrencyCode, IsDefault, IsActive, CreatedBy)
-        VALUES (@SystemCompanyID, 'DEFAULT', N'قائمة الأسعار الافتراضية', N'Default Price List', 'SAR', 1, 1, @SystemUserID);
+        VALUES (@SystemCompanyID, 'DEFAULT', N'Default price list', N'Default Price List', 'SAR', 1, 1, @SystemUserID);
         PRINT N'✅ Default Price List seeded.';
     END
 
