@@ -1,24 +1,24 @@
 # ShouTech ERP — File Abbreviation Map
 
-مرجع يربط **أسماء الملفات المختصرة** الحالية في المشروع ب**أسمائها الطويلة الأصلية** (قبل الاختصار).
+A reference that maps the current **abbreviated file names** in the project to their **original long names** (before abbreviation).
 
-> **قاعدة التسمية:** 6–9 أحرف تقريباً، مع لاحقة دلالية عند التشابه:
+> **Naming rule:** roughly 6–9 characters, with a semantic suffix when names are similar:
 > `VM` = ViewModel · `Vw` = View · `Svc`/`Serv` = Service · `Cv` = Converter · `Sv` = Service/helper
 
 ---
 
-## تطبيق WPF — `cod/app/src`
+## WPF Application — `cod/app/src`
 
-### نقطة الدخول
+### Entry point
 
-| ملف مختصر | اسم طويل / أصلي | Class / Namespace |
+| Abbreviated file | Long / original name | Class / Namespace |
 |-----------|-----------------|-------------------|
 | `App.xaml` | Application entry | `ShouTech.App.App` |
 | `App.xaml.cs` | Application code-behind | — |
 
 ### ViewModels — `ViewModels/`
 
-| ملف مختصر | اسم طويل الأصلي | Class |
+| Abbreviated file | Original long name | Class |
 |-----------|-----------------|-------|
 | `MainShVM.cs` | `MainShellViewModel.cs` | `MainShVM` |
 | `MainWnVM.cs` | `MainWindowViewModel.cs` (legacy) | `MainWnVM` |
@@ -28,10 +28,10 @@
 
 ### Views — `Views/`
 
-| ملف مختصر | اسم طويل الأصلي | Class |
+| Abbreviated file | Original long name | Class |
 |-----------|-----------------|-------|
 | `MWin.xaml` (+ `.cs`) | `MainWindow.xaml` | `MWin` |
-| `LogWin.xaml` (+ `.cs`) | Login window (كان مختصراً من البداية) | `LogWin` |
+| `LogWin.xaml` (+ `.cs`) | Login window (abbreviated from the start) | `LogWin` |
 | `ComWin.xaml` (+ `.cs`) | Company selection window | `ComWin` |
 | `SplWin.xaml` (+ `.cs`) | `SplashWindow.xaml` | `SplWin` |
 | `StpWiz.xaml` (+ `.cs`) | `SetupWizardWindow.xaml` | `StpWiz` |
@@ -41,14 +41,14 @@
 
 ### Module Views — `Views/Modules/`
 
-| ملف مختصر | اسم طويل الأصلي | Class |
+| Abbreviated file | Original long name | Class |
 |-----------|-----------------|-------|
 | `ModWsVw.xaml` (+ `.cs`) | `ModuleWorkspaceView.xaml` | `ModWsVw` |
 | `DashVw.xaml` (+ `.cs`) | `DashboardView.xaml` | `DashVw` |
 
 ### Services — `Services/`
 
-| ملف مختصر | اسم طويل الأصلي | Class / Interface |
+| Abbreviated file | Original long name | Class / Interface |
 |-----------|-----------------|-------------------|
 | `AppHost.cs` | `AppServiceHost.cs` | `AppHost` |
 | `AuthServ.cs` | `AuthService.cs` | `AuthServ` |
@@ -71,7 +71,7 @@
 
 ### Online Services — `Services/Online/`
 
-| ملف مختصر | اسم طويل الأصلي | Class / Interface |
+| Abbreviated file | Original long name | Class / Interface |
 |-----------|-----------------|-------------------|
 | `OnlCoord.cs` | `OnlineServicesCoordinator.cs` | `OnlCoord` |
 | `IOnlCoord.cs` | `IOnlineServicesCoordinator.cs` | `IOnlCoord` |
@@ -86,7 +86,7 @@
 
 ### Configuration — `Configuration/`
 
-| ملف مختصر | اسم طويل الأصلي | Class |
+| Abbreviated file | Original long name | Class |
 |-----------|-----------------|-------|
 | `AppCfgSvc.cs` | `AppConfigService.cs` | `AppCfgSvc` |
 | `AppSetng.cs` | `AppSettings.cs` | `AppSetng` |
@@ -94,7 +94,7 @@
 
 ### Common — `Common/`
 
-| ملف مختصر | اسم طويل الأصلي | Class |
+| Abbreviated file | Original long name | Class |
 |-----------|-----------------|-------|
 | `AppFormat.cs` | `AppFormats.cs` | `AppFormat` |
 | `JsonDefs.cs` | `JsonDefaults.cs` | `JsonDefs` |
@@ -102,7 +102,7 @@
 
 ### Localization — `Localization/`
 
-| ملف مختصر | اسم طويل الأصلي | Class |
+| Abbreviated file | Original long name | Class |
 |-----------|-----------------|-------|
 | `Loc.cs` | Localization helper | `Loc` |
 | `LocProps.cs` | `LocalizationProperties.cs` | `LocProps` |
@@ -110,13 +110,13 @@
 
 ### Navigation — `Navigation/`
 
-| ملف مختصر | اسم طويل الأصلي | Class |
+| Abbreviated file | Original long name | Class |
 |-----------|-----------------|-------|
 | `RibModMap.cs` | `RibbonModuleMapper.cs` | `RibModMap` |
 
 ### Converters — `Converters/`
 
-| ملف مختصر | Class داخل الملف | اسم طويل الأصلي |
+| Abbreviated file | Class inside the file | Original long name |
 |-----------|------------------|-----------------|
 | `BoolVis.cs` | `BoolVis` | `BoolToVisibilityConverter` |
 | `BoolVis.cs` | `InvBVis` | `InverseBoolToVisibilityConverter` |
@@ -126,7 +126,7 @@
 
 ### Themes — `Themes/`
 
-| ملف مختصر | اسم طويل الأصلي | نوع |
+| Abbreviated file | Original long name | Type |
 |-----------|-----------------|-----|
 | `DkTheme.xaml` | `DarkTheme.xaml` | ResourceDictionary |
 | `LtTheme.xaml` | `LightTheme.xaml` | ResourceDictionary |
@@ -137,7 +137,7 @@
 
 ## Core / Inventory — `cod/cor/`
 
-| ملف مختصر | اسم طويل / المعنى | Class |
+| Abbreviated file | Long name / meaning | Class |
 |-----------|-------------------|-------|
 | `navrep.cs` | Navigation repository | `NavigationRepository` |
 | `invrep.cs` | Inventory repository | — |
@@ -149,9 +149,9 @@
 
 ---
 
-## Configuration خارج المشروع — `cfg/`
+## Configuration outside the project — `cfg/`
 
-| ملف مختصر | اسم طويل الأصلي | Class |
+| Abbreviated file | Original long name | Class |
 |-----------|-----------------|-------|
 | `UsrPref.cs` | User preferences | `UsrPref` |
 | `appset.json` | Application settings (deploy) | — |
@@ -160,25 +160,25 @@
 
 ## Domain — `src/ShouTech.Domain/`
 
-| ملف / مسار | ملاحظة |
+| File / path | Note |
 |------------|--------|
 | `Pref.cs` | User preference model (encrypted local storage) |
-| `Entities/Navigation/NavigationModels.cs` | Navigation DTOs (لم يُختصر بعد) |
+| `Entities/Navigation/NavigationModels.cs` | Navigation DTOs (not yet abbreviated) |
 | `Interfaces/INavigationRepository.cs` | Navigation repo contract |
 
 ---
 
-## أدوات الصيانة — `tools/`
+## Maintenance tools — `tools/`
 
-| سكربت | الغرض |
+| Script | Purpose |
 |-------|--------|
-| `rename_short.ps1` | الاختصار الأولي للأسماء الطويلة |
-| `rename_distinct.ps1` | تمييز الأسماء المتشابهة (+1–2 حرف) |
-| `generate_nav_seed.ps1` | توليد `dba/sds/sds_nav.sql` من XAML + Lang JSON |
+| `rename_short.ps1` | The initial abbreviation of the long names |
+| `rename_distinct.ps1` | Disambiguating similar names (+1–2 characters) |
+| `generate_nav_seed.ps1` | Generating `dba/sds/sds_nav.sql` from XAML + Lang JSON |
 
 ---
 
-## علاقات ملفات مترابطة (XAML + Code-behind + VM)
+## Related file groups (XAML + Code-behind + VM)
 
 ```
 LogWin.xaml  ←→  LogWin.xaml.cs  ←→  LogWinVM.cs
@@ -190,12 +190,12 @@ ComWin.xaml  ←→  ComWin.xaml.cs
 
 ---
 
-## ملاحظات للمطورين
+## Notes for developers
 
-1. **لا تغيّر `Application.MainWindow`** — خاصية WPF؛ اسم النافذة المختصر هو Class `MWin` فقط.
-2. **شريط الحالة** يستخدم `StatBarEn` (إنجليزي ثابت) — لا يمر عبر `LocSvc`.
-3. **خدمات Online** (مزامنة، ترخيص، اتصال) تعمل في الخلفية ولا تُعرض تفاصيلها في UI.
-4. عند إضافة ملف جديد: اتبع نفس النمط (`LogWin`, `NavServ`, `ModWsVM`) وحدّث هذا الملف.
+1. **Do not change `Application.MainWindow`** — a WPF property; the abbreviated window name is only the `MWin` class.
+2. **The status bar** uses `StatBarEn` (fixed English) — it does not go through `LocSvc`.
+3. **Online services** (sync, licensing, connectivity) run in the background and their details are not shown in the UI.
+4. When adding a new file: follow the same pattern (`LogWin`, `NavServ`, `ModWsVM`) and update this file.
 
 ---
 
@@ -206,7 +206,7 @@ ComWin.xaml  ←→  ComWin.xaml.cs
 
 ### Views — `cod/app/src/Views/`
 
-| ملف مختصر | اسم طويل / المعنى | Class |
+| Abbreviated file | Long name / meaning | Class |
 |-----------|-------------------|-------|
 | `BaseWin.cs` | Base window (mandatory for secondary windows) | `BaseWin` |
 | `RptBase.cs` | Report base window | `RptBase` |
@@ -214,7 +214,7 @@ ComWin.xaml  ←→  ComWin.xaml.cs
 
 ### Reporting — `cod/app/src/Reporting/`
 
-| ملف مختصر | اسم طويل / المعنى | Class |
+| Abbreviated file | Long name / meaning | Class |
 |-----------|-------------------|-------|
 | `RptDef.cs` | Report definitions (columns, filters, data models) | `RptDef`, `RptCol`, `RptFlt`, `RptData` |
 | `RptRend.cs` | Report renderer (print + PDF page composition) | `RptRend`, `RptPaginator` |
@@ -222,7 +222,7 @@ ComWin.xaml  ←→  ComWin.xaml.cs
 
 ### Services — `cod/app/src/Services/` (merged into existing folder)
 
-| ملف مختصر | اسم طويل / المعنى | Class |
+| Abbreviated file | Long name / meaning | Class |
 |-----------|-------------------|-------|
 | `WinPref.cs` | Window geometry + report column preferences (per user/company) | `WinPref` |
 | `XptCry.cs` | Export crypto container AES-256-GCM (.shx) | `XptCry` |
@@ -235,7 +235,7 @@ ComWin.xaml  ←→  ComWin.xaml.cs
 - Sections: `Report.*`, `Export.*`
 - Common: `Columns`, `Refresh`, `Print`, `Export`, `OK`, `Cancel`, `MoveUp`, `MoveDown`, `SelectAll`, `ClearAll`, `Info`, `Warning`, `Error`, `Confirm`
 
-*آخر تحديث: 2026-10-05 · ShouTech ERP v0.4 — Batch 1 Foundation merged*
+*Last updated: 2026-10-05 · ShouTech ERP v0.4 — Batch 1 Foundation merged*
 
 
 ---

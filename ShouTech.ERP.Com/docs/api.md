@@ -1,6 +1,6 @@
 // Path: doc\api.md
 // Language: Markdown
-// Description: توثيق API الداخلي بين الطبقات.
+// Description: Internal API documentation between the layers.
 ======================================================================
 
 SHOUTECH ERP V9 - Enterprise System

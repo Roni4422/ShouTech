@@ -1,6 +1,6 @@
 // Path: doc\architecture.md
 // Language: Markdown
-// Description: وصف معماري كامل للنظام.
+// Description: Complete architectural description of the system.
 ======================================================================
 
 SHOUTECH ERP V9 - Enterprise System

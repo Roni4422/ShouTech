@@ -39,10 +39,10 @@ The application runs **Offline-First**: core business operations work without a 
 
 ```
 © 2026 ShouTech Software — ShouTech. All rights reserved.
-© 2026 شو تيك للبرمجيات — جميع الحقوق محفوظة.
+© 2026 ShouTech Software — All rights reserved.
 ```
 
-All intellectual property rights in the software, its user interfaces, database schemas, documentation, logos, and the trade names **"ShouTech"** and **"شو تيك"** are owned exclusively by **ShouTech Software / شو تيك للبرمجيات**.
+All intellectual property rights in the software, its user interfaces, database schemas, documentation, logos, and the trade names **"ShouTech"** is owned exclusively by **ShouTech Software**.
 
 ### 2.2 Protected Materials
 
@@ -52,7 +52,7 @@ All intellectual property rights in the software, its user interfaces, database 
 | **Databases** | `dba/` schemas, stored procedures, seed data |
 | **User interfaces** | Ribbon, menus, themes, icons |
 | **Documentation** | This file, `FILE_ABBR.md`, `NAV_README.md` |
-| **Trademarks** | ShouTech ERP, شو تيك ERP |
+| **Trademarks** | ShouTech ERP |
 | **Configuration** | `appset.json`, `UsrPref`, license files |
 
 ### 2.3 Prohibited Actions (Without Written License)
@@ -90,8 +90,8 @@ The software is provided **"AS IS"**. ShouTech Software does not warrant that it
 | | |
 |---|---|
 | **Name (En)** | ShouTech Software |
-| **Name (Ar)** | شو تيك للبرمجيات |
-| **Product** | ShouTech ERP / شو تيك ERP |
+| **Name (Ar)** | ShouTech Software |
+| **Product** | ShouTech ERP |
 | **Email** | info@shoutech.com |
 | **Technical support** | support@shoutech.com |
 | **Website** | https://www.shoutech.com |
@@ -376,15 +376,11 @@ dotnet run
 ═══════════════════════════════════════════════════════════════════
   ShouTech ERP v10.6.0
   Copyright © 2026 ShouTech Software. All Rights Reserved.
-  حقوق النشر © 2026 شو تيك للبرمجيات. جميع الحقوق محفوظة.
 
   This software is proprietary and confidential.
   Unauthorized copying, modification, or distribution is strictly
   prohibited and may result in civil and criminal penalties.
 
-  هذا البرنامج ملكية خاصة وسرية.
-  النسخ أو التعديل أو التوزيع غير المصرّح به ممنوع منعاً باتاً
-  وقد يعرّض المخالف للمساءلة القانونية.
 ═══════════════════════════════════════════════════════════════════
 ```
 

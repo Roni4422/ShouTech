@@ -23,7 +23,7 @@ dba\
 │   └──  rpt.sql
 ├── hr\                                                
 │   ├── att.sql  
-│   ├── دemp.sql                          
+│   ├── emp.sql                          
 │   ├── hr.sql
 │   ├── leave.sql  
 │   └──  payr.sql                         

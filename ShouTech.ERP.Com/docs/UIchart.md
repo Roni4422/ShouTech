@@ -1,248 +1,248 @@
 
-├── ملف                                    
-│   ├── فتح
-│   ├── جديد
-│   ├── استيراد بيانات
-│   ├── تصدير بيانات
-│   ├── النسخ الاحتياطي
-│   └── خروج 
+├── File
+│   ├── Open
+│   ├── New
+│   ├── Import Data
+│   ├── Export Data
+│   ├── Backup
+│   └── Exit
 │
-├── المستودعات
-│   ├── بطاقة مادة  
-│   ├── بطاقة صنف
-│   ├── بطاقة مستودع
-│   ├── مجموعات المواد
-│   ├── الباركود
-│   │   ├──   توليد الباركود                         
-│   │   ├──   تصميم وطباعة الباركود                        
-│   │   └──    انشاء باركود
-│   ├── قائمة الأسعار
-│   ├── بضاعة اخر المدة
-│   ├── لائحة النواقص
-│   ├── نقل حركة مادة 
-│   ├── تسوية جردية 
-│   ├── تقارير المواد
-│   │   ├──  شجرة المواد
-│   │   ├──  بحث المواد                           
-│   │   ├──  جرد المستودعات
-│   │   ├──  حركة مادة                   
-│   │   ├──  مخطط حركة مادة 
-│   │   ├──  المواد المنتهية الصلاحية                        
-│   │   ├──  اعمار الفواتير 
-│   │   ├──   ارباح المواد                      
-│   │   ├──   تاريخ اسعار المواد
-│   │   ├──   تقارير المواد الخدمية                 
-│   │   ├──   احصائيات المواد 
-│   │   ├──   المواد الراكدة   
-│   │   ├──  المواد الاكثر حركة
-│   │   ├──   مقارنة مادة                          
-│   │   ├──   لائحة المواد 
-│   │   ├──   تقرير حركة المواد والمجموعات            
-│   │   └──  الاخراج بالسالب     
-│   ├── العملاء
-│   │   └──  تقاطع المواد مع العملاء 
-│   ├── الارقام التسلسلية 
-│   │   ├──  تقرير الارقام التسلسلية                       
-│   │   └──    تعديل رقم تسلسلي
-│   ├── مواد الفروع
-│   ├── تقرير المبيعات             
-│   ├── تعديل مواصفات المواد           
-│   └── حسومات المواد
-├── الحسابات                             
-│   ├── شجرة الحسابات  
-│   ├── مركز كلفة 
-│   │   ├── بطاقة مركز كلفة             
-│   │   ├──  ربط مع الحسابات
-│   │   ├──  تقرير مركز كلفة           
-│   │   ├──  حركة مواد مركز كلفة  
-│   │   └──   ميزان مركز كلفة  
-│   ├── العملات
-│   │   ├── تعريف عملة   
-│   │   ├──  نشرة اسعار العملات
-│   │   ├──  متوسط سعر العملات
-│   │   └──  فروق اسعار الصرف
-│   ├── دفتر الاستاذ                                                
-│   ├── كشف حساب عميل  
-│   ├── دفتر اليومية العامة                           
-│   ├── التقرير اليومي
-│   ├── مخطط حركة حساب                               
-│   ├──  رصيد حساب  
-│   ├── حركة حساب الفروع                                 
-│   ├── ميزان المراجعة
-│   ├── الحسابات الختامية 
-│   │   ├──  التشغيل
-│   │   ├──  المتاجرة 
-│   │   └──  ارباح خسائر
-│   ├── القوائم المالية
-│   │   ├──  الميزانية
-│   │   ├──  قائمة الدخل 
-│   │   └──  قائمة التدفق النقدي
-│   ├── الحسابات الراكدة              
-│   ├──  اعمار الذمم    
-│   ├──  نسب التحصيل      
-│   ├──  مقارنة حساب              
-│   └──   تحليل مالي                       
-│       ├──محلي                            
-│       └── AI                            
+├── Warehouses
+│   ├── Material Card
+│   ├── Category Card
+│   ├── Warehouse Card
+│   ├── Material Groups
+│   ├── Barcode
+│   │   ├──   Generate Barcode
+│   │   ├──   Barcode Design and Printing
+│   │   └──    Create Barcode
+│   ├── Price List
+│   ├── Closing Stock
+│   ├── Shortage List
+│   ├── Material Movement Transfer
+│   ├── Inventory Adjustment
+│   ├── Material Reports
+│   │   ├──  Material Tree
+│   │   ├──  Material Search
+│   │   ├──  Warehouse Inventory
+│   │   ├──  Material Movement
+│   │   ├──  Material Movement Chart
+│   │   ├──  Expired Materials
+│   │   ├──  Invoice Aging
+│   │   ├──   Material Profits
+│   │   ├──   Material Price History
+│   │   ├──   Service Material Reports
+│   │   ├──   Material Statistics
+│   │   ├──   Dormant Materials
+│   │   ├──  Most Active Materials
+│   │   ├──   Material Comparison
+│   │   ├──   Material List
+│   │   ├──   Materials and Groups Movement Report
+│   │   └──  Negative Issue
+│   ├── Customers
+│   │   └──  Materials by Customers
+│   ├── Serial Numbers
+│   │   ├──  Serial Numbers Report
+│   │   └──    Edit Serial Number
+│   ├── Branch Materials
+│   ├── Sales Report
+│   ├── Edit Material Specifications
+│   └── Material Discounts
+├── Accounts
+│   ├── Chart of Accounts
+│   ├── Cost Center
+│   │   ├── Cost Center Card
+│   │   ├──  Link to Accounts
+│   │   ├──  Cost Center Report
+│   │   ├──  Cost Center Material Movement
+│   │   └──   Cost Center Balance
+│   ├── Currencies
+│   │   ├── Define Currency
+│   │   ├──  Currency Rates Bulletin
+│   │   ├──  Average Currency Rates
+│   │   └──  Exchange Rate Differences
+│   ├── General Ledger
+│   ├── Customer Statement
+│   ├── General Journal
+│   ├── Daily Report
+│   ├── Account Movement Chart
+│   ├──  Account Balance
+│   ├── Branch Account Movement
+│   ├── Trial Balance
+│   ├── Closing Accounts
+│   │   ├──  Operating
+│   │   ├──  Trading
+│   │   └──  Profit and Loss
+│   ├── Financial Statements
+│   │   ├──  Balance Sheet
+│   │   ├──  Income Statement
+│   │   └──  Cash Flow Statement
+│   ├── Dormant Accounts
+│   ├──  Receivables Aging
+│   ├──  Collection Ratios
+│   ├──  Account Comparison
+│   └──   Financial Analysis
+│       ├──Local
+│       └── AI
 │
-├── السندات                                      
-│   ├── سند قيد
-│   ├── سند قبض                     
-│   ├── سند دفع
-│   ├── سند يومية
-│   ├── يومية الصندوق
-│   ├── تعريف انماط السندات
-│   ├── تقسيط المبالغ                            
-│   ├── بحث تقسيط المبالغ      
-│   ├── الاوراق المالية
-│   │   ├── شيك قبض                         
-│   │   ├── شيك دفع
-│   │   ├── تعريف الاوراق المالية                            
-│   │   └── بحث الاوراق المالية                            
-│   ├── انماط الدفعات
-│   │   └── تعريف انماط الدفعات                             
-│   └── مراقبة وتعديل السندات                                 
-├── فواتير                                     
-│   ├── فاتورة 
-│   │   ├── مناقلة                        
-│   │   ├── فاتورة بضاعة اول المدة
-│   │   ├── فاتورة ادخال مواد                         
-│   │   └── فاتورة اخراج مواد
-│   ├── مشتريات                
-│   │   ├── فاتورة مشتريات                       
-│   │   ├── فاتورة مردودات مشتريات            
-│   ├── مبيعات                 
-│   │   ├── فاتورة مبيعات                         
-│   │   ├── فاتورة مردودات مبيعات
-│   │   ├── فاتورة محضر جرد                           
-│   │   └── طباعة الباركود      
-│   ├── تعريف الفواتير
-│   ├── بحث الفواتير
-│   ├── فواتير المبيعات النقدية
-│   ├── اغلاق الصندوق
-│   ├── عرض سعر 
-│   ├── بحث عروض السعر
-│   ├── ارباح الفواتير
-│   ├── لائحة التعبئة 
-│   └── ادوات اخرى
-│       ├── ضعط الفواتير                           
-│       └── اعادة ترحيل الفواتير                                            
-├──  نقاط البيع 
-│   ├── النقاط
-│   ├── تعريف نقاط البيع
-│   ├── تقرير صندوق نقطة بيع
-│   ├── حسومات نقطة بيع
-│   ├── مزامنة نقاط البيع
-│   └── تقارير نقطة بيع                  
-├── طلبيات                                    
-│   ├──  الطلبيات                               
-│   │   ├── طلبية شراء                       
-│   │   └── طلبية بيع 
-│   ├── تعريف الطلبيات
-│   ├── فواتير استلام وتسليم الطلبيات
-│   ├── متابعة الطلبيات
-│   ├── دفعات الطلبيات
-│   └── بحث الطلبيات                   
-├──  عملاء                                      
-│   ├── بطاقة عميل 
-│   ├── اسعار عميل                         
-│   ├── حسومات عميل                    
-│   ├── مناطق
-│   ├── اهداف العملاء
-│   │   ├── تخصيص اهداف العملاء                      
-│   │   └── تقرير اهداف العملاء
-│   ├── بحث العملاء 
-│   ├── استحقاق
-│   │   ├── استحقاق عميل 
-│   │   ├── ربط دفعات العميل                   
-│   │   └── بحث الاستحقاقات
-│   ├── رصيد العملاء
-│   ├── ترصيد حسابات العملاء 
-│   ├── تعديل العملاء 
-│   ├── مجموعات العملاء
-│   └── تقارير العملاء
-├──  مندوب
-│   ├── بطاقة مندوب                    
-│   ├── مجموعات المندوب
-│   ├── اهداف المندوبين
-│   │   ├── تخصيص اهداف المندوبين                      
-│   │   └── تقرير اهداف المندوبين
-│   ├── بحث العملاء 
-│   ├── استحقاق
-│   │   ├── حركة مندوب
-│   │   └── تحصيلات المندوب                   
-│   └── الاجهزة الكفية
-│       ├── بطاقات الاجهزة الكفية
-│       └── مسارات الاجهزة الكفية                
-├──  التصنيع
-│   ├── نماذج التصنيع                        
-│   ├── عميلة تصنيع                  
-│   ├── انحراف تكاليف المواد المصنعة
-│   ├── انحراف تكاليف المواد الأولية
-│   ├── انحراف التكاليف الإضافية
-│   ├── انحراف التكاليف الإضافية للمواد المصنعة                   
-│   ├── تكاليف المواد المصنعة                   
-│   ├── امكانية التصنيع
-│   ├── بحث التصنيع
-│   └── اعادة ترحيل عمليات التصنيع 
-├──  البنوك
-│   ├── تعريف البنوك                        
-│   ├── كشف البنك التقديري                 
-│   ├── تسوية بنكية                      
-│   ├── ارصدة البنوك                  
-├──  تقارير
-│   ├── احصائيات                       
-│   ├── لمحة عن مادة                
-│   ├── لمحة عن عميل                    
-│   └── تقارير مخصصة                      
-│       └── تخصيص التقارير                                                             
-├──  أدوات
-│   ├── آلة حاسبة                      
-│   ├── لوحة المفاتيح                 
-│   ├── خيارات 
-│   ├── معالج الصيانة
-│   ├── النسخ الاحتياطي
-│   ├── اللغة   
-│   │   ├── عربي
-│   │   ├── English                 
-│   │   └── Francis              
-│   ├── تغيير كلمة المرور                  
-│   ├── مسجل الحركات
-│   ├── اضافات البرنامج
-│   └── الذكاء الصناعي
-├──  أدوات أخرى
-│   ├── التدوير                     
-│   ├── صلاحيات                 
-│   ├── قوالب الصلاحيات
-│   ├── حقول مخصصة 
-│   ├── تعريف واحدات القياس
-│   ├── تعريف طرق الدفع            
-│   ├── تعريف مواصفات المواد
-│   └── التوصيل 
-│       ├── بطاقة سائق
-│       ├── اسعار التوصيل  
-│       ├── طلبات استلام 
-│       ├── بحث التوصيل                
-│       └── اغلاق صندوق سائق                       
-├── عرض  
-│   ├── شجرة الحسابات                     
-│   ├── شجرة المواد              
-│   ├── شجرة التصنيع
-│   ├── شجرة مراكز الكلف
-│   ├── نافذة المعلومات
-│   ├── تعريف طرق الدفع            
-│   ├── معلومات الشركة
-│   └── تصدير البيانات                                 
-├── خروج   
-│   ├── شاشة حماية
-│   ├── تبديل الشركة           
-│   ├── خروج
-│   └── خروج و اطفاء الحاسب                           
-└──  مساعدة                                
-    ├── تحقق من وجود تحديثات
-    ├── تحديث من ملف
-    ├── تعليمات البرنامج
-    ├── الدعم الفني           
-    ├── اقتراحاتكم 
-    ├── تجديد الترخيص
-    └── حول البرنامج  
+├── Vouchers
+│   ├── Entry Voucher
+│   ├── Receipt Voucher
+│   ├── Payment Voucher
+│   ├── Journal Voucher
+│   ├── Cash Journal
+│   ├── Define Voucher Types
+│   ├── Installment Plans
+│   ├── Search Installments
+│   ├── Financial Papers
+│   │   ├── Receipt Cheque
+│   │   ├── Payment Cheque
+│   │   ├── Define Financial Papers
+│   │   └── Search Financial Papers
+│   ├── Payment Patterns
+│   │   └── Define Payment Patterns
+│   └── Voucher Monitoring and Editing
+├── Invoices
+│   ├── Invoice
+│   │   ├── Transfer
+│   │   ├── Opening Stock Invoice
+│   │   ├── Material In Invoice
+│   │   └── Material Out Invoice
+│   ├── Purchases
+│   │   ├── Purchase Invoice
+│   │   ├── Purchase Returns Invoice
+│   ├── Sales
+│   │   ├── Sales Invoice
+│   │   ├── Sales Returns Invoice
+│   │   ├── Inventory Count Invoice
+│   │   └── Print Barcode
+│   ├── Define Invoices
+│   ├── Search Invoices
+│   ├── Cash Sales Invoices
+│   ├── Close Cash Drawer
+│   ├── Quotation
+│   ├── Search Quotations
+│   ├── Invoice Profits
+│   ├── Packing List
+│   └── Other Tools
+│       ├── Compress Invoices
+│       └── Repost Invoices
+├──  Points of Sale
+│   ├── Points
+│   ├── Define Points of Sale
+│   ├── POS Cash Report
+│   ├── POS Discounts
+│   ├── POS Synchronization
+│   └── POS Reports
+├── Orders
+│   ├──  Orders
+│   │   ├── Purchase Order
+│   │   └── Sales Order
+│   ├── Define Orders
+│   ├── Order Receipt and Delivery Invoices
+│   ├── Order Tracking
+│   ├── Order Payments
+│   └── Search Orders
+├──  Customers
+│   ├── Customer Card
+│   ├── Customer Prices
+│   ├── Customer Discounts
+│   ├── Regions
+│   ├── Customer Targets
+│   │   ├── Assign Customer Targets
+│   │   └── Customer Targets Report
+│   ├── Customer Search
+│   ├── Dues
+│   │   ├── Customer Dues
+│   │   ├── Link Customer Payments
+│   │   └── Search Dues
+│   ├── Customer Balances
+│   ├── Customer Account Balancing
+│   ├── Edit Customers
+│   ├── Customer Groups
+│   └── Customer Reports
+├──  Representative
+│   ├── Representative Card
+│   ├── Representative Groups
+│   ├── Representative Targets
+│   │   ├── Assign Representative Targets
+│   │   └── Representative Targets Report
+│   ├── Customer Search
+│   ├── Dues
+│   │   ├── Representative Movement
+│   │   └── Representative Collections
+│   └── Handheld Devices
+│       ├── Handheld Device Cards
+│       └── Handheld Device Routes
+├──  Manufacturing
+│   ├── Manufacturing Templates
+│   ├── Manufacturing Operation
+│   ├── Manufactured Material Cost Variance
+│   ├── Raw Material Cost Variance
+│   ├── Overhead Cost Variance
+│   ├── Manufactured Material Overhead Variance
+│   ├── Manufactured Material Costs
+│   ├── Manufacturing Feasibility
+│   ├── Manufacturing Search
+│   └── Repost Manufacturing Operations
+├──  Banks
+│   ├── Define Banks
+│   ├── Estimated Bank Statement
+│   ├── Bank Reconciliation
+│   ├── Bank Balances
+├──  Reports
+│   ├── Statistics
+│   ├── Material Overview
+│   ├── Customer Overview
+│   └── Custom Reports
+│       └── Customize Reports
+├──  Tools
+│   ├── Calculator
+│   ├── Keyboard
+│   ├── Options
+│   ├── Maintenance Wizard
+│   ├── Backup
+│   ├── Language
+│   │   ├── Arabic
+│   │   ├── English
+│   │   └── French
+│   ├── Change Password
+│   ├── Activity Log
+│   ├── Program Add-ins
+│   └── Artificial Intelligence
+├──  Other Tools
+│   ├── Rollover
+│   ├── Permissions
+│   ├── Permission Templates
+│   ├── Custom Fields
+│   ├── Define Units of Measure
+│   ├── Define Payment Methods
+│   ├── Define Material Specifications
+│   └── Delivery
+│       ├── Driver Card
+│       ├── Delivery Prices
+│       ├── Pickup Requests
+│       ├── Delivery Search
+│       └── Close Driver Cash Drawer
+├── View
+│   ├── Chart of Accounts
+│   ├── Material Tree
+│   ├── Manufacturing Tree
+│   ├── Cost Center Tree
+│   ├── Info Window
+│   ├── Define Payment Methods
+│   ├── Company Info
+│   └── Export Data
+├── Exit
+│   ├── Lock Screen
+│   ├── Switch Company
+│   ├── Exit
+│   └── Exit and Shut Down Computer
+└──  Help
+    ├── Check for Updates
+    ├── Update from File
+    ├── Program Instructions
+    ├── Technical Support
+    ├── Your Suggestions
+    ├── Renew License
+    └── About the Program

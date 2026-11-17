@@ -1,65 +1,65 @@
-# تدقيق حقول النوافذ والحفظ في قاعدة البيانات
+# Window Field and Database Persistence Audit
 
-- المستودع: `Roni4422/ShouTech.ERP.Company-fresh`
-- الفرع المرجعي الذي فُحص: `main`
-- تاريخ الفحص: 2026-10-16
-- نوع الفحص: مراجعة ساكنة للكود ومسارات الأحداث والحفظ والتحميل. **ليس اختبار تشغيل GUI شاملًا**.
-- نطاق الجرد: ملفات الواجهات في `cod/app/src/Views`، بما فيها نوافذ XAML والنوافذ المبنية برمجيًا والتقارير. تم فحص مسارات الحفظ مباشرةً في النوافذ الرئيسية، ومقارنة handlers الظاهرة باستدعاءات المستودعات وقاعدة البيانات.
+- Repository: `Roni4422/ShouTech.ERP.Company-fresh`
+- Reference branch audited: `main`
+- Audit date: 2026-10-16
+- Audit type: static review of the code, event paths, save and load paths. **Not a comprehensive GUI run test**.
+- Inventory scope: the UI files in `cod/app/src/Views`, including XAML windows, code-built windows, and reports. Save paths were inspected directly in the main windows, and the visible handlers were compared against repository and database calls.
 
-## النتيجة التنفيذية
+## Executive Result
 
-**لا، ليس كل حقل مقبولًا ومحفوظًا في قاعدة البيانات في النسخة التي فُحصت.** توجد نوافذ تعرض رسالة نجاح دون أن تنفّذ حفظًا فعليًا، ونوافذ أخرى تحفظ عبر repositories فعلية. لذلك لا يصح إعلان سلامة جميع الحقول.
+**No — not every field is accepted and saved to the database in the version audited.** Some windows display a success message without performing an actual save, while others save through real repositories. It is therefore not valid to declare all fields sound.
 
-## عيوب مؤكدة ذات أولوية عالية
+## Confirmed High-Priority Defects
 
-| الأولوية | النافذة | الدليل من الكود | النتيجة |
+| Priority | Window | Evidence from the code | Result |
 |---|---|---|---|
-| P0 | بطاقة العميل `CstCard.cs` | أزرار Save/Delete/Statement تعرض `MessageBox.Show` فقط | بيانات العميل لا تُحفظ/تُحذف من قاعدة البيانات من هذه النافذة، ورسالة النجاح مضللة |
-| P0 | بطاقة البنك `BnkCard.cs` | Save/Delete يعرضان رسالة فقط؛ لا يوجد استدعاء repository في handler | بيانات البنك لا تُحفظ/تُحذف فعليًا |
-| P0 | بطاقة مركز التكلفة `CcCard.cs` | Save/Delete يعرضان رسالة فقط | لا يوجد حفظ فعلي للحقول |
-| P0 | بطاقة مندوب المبيعات `RepCard.cs` | Save/Delete يعرضان رسالة فقط | لا يوجد حفظ فعلي للحقول |
-| P0 | بطاقة العملة `CurCard.cs` | Save يعرض رسالة فقط؛ إضافة سعر تاريخي تعدّل collection داخل الذاكرة فقط | العملة وأسعار الصرف لا تُحفظ من هذه النافذة |
-| P0 | سندات القبض والصرف `CshWin.cs` | `SaveVoucher` يعرض رسالة فقط؛ `PostVoucher` يغيّر حالة الواجهة فقط | لا يوجد حفظ أو ترحيل محاسبي فعلي من هذه النافذة |
-| P0 | سندات اليومية `JrnWin.cs` | `SaveVoucher` يتحقق من وجود سطور ثم يعرض رسالة فقط؛ `PostVoucher` يقفل الواجهة ويعرض نجاحًا فقط | لا يوجد حفظ/ترحيل فعلي في قاعدة البيانات |
-| P0 | الشيكات `ChqWin.cs` | Save/Print يعرضان رسالة فقط؛ بيانات الشيكات مجموعة داخل ObservableCollection | لا يوجد حفظ فعلي للدفعة أو تفاصيل الشيكات |
-| P0 | أوامر البيع والشراء `OrdWin.cs` | Save يعرض رسالة فقط؛ تحويل الأمر يفتح فاتورة جديدة دون حفظ الأمر نفسه | الأمر وحقوله لا تُحفظ، والتحويل لا يثبت علاقة محفوظة بالأمر الأصلي |
-| P0 | أوامر التصنيع `MfgWin.cs` | Save/Post/Print تعرض رسائل، والترحيل يغيّر حالة الأزرار والشبكة فقط | لا يوجد حفظ فعلي للأمر أو حركة مخزون/تكلفة إنتاج |
-| P1 | نافذة نقاط البيع `PosWin.cs` | مسار الدفع يمر إلى `PosCheckoutWin`؛ الأخيرة تستدعي `InvRepo.SaveDraft` ثم `InvRepo.Post` | يوجد مسار حفظ حقيقي في checkout، لكن يلزم اختبار كامل لتأكيد انتقال كل حقل/طريقة دفع إلى المستند الصحيح |
-| P1 | بطاقة المادة `MatCard.xaml.cs` | يوجد بناء لسجل المادة من الحقول، بما فيها الوحدات والأسعار والخصائص، واستدعاءات `MatRepo` | المسار موجود؛ لم يُثبت بعد أن كل حقل إضافي يُكتب ويُقرأ round-trip على SQLite وPostgreSQL |
-| P1 | بطاقة الحساب `AccCard.xaml.cs` | `Save_Click` يتحقق من معدل الضريبة ويبني `AccRec` ثم يستدعي `AccRepo.Save` ويعيد تحميل السجل | يوجد حفظ فعلي؛ يلزم اختبار جميع الحقول والعلاقات والقيم الحدّية |
-| P1 | الفواتير `InvoiceWin.cs` | `CaptureDoc` يجمع رأس المستند والبنود، ثم `InvRepo.SaveDraft`؛ الترحيل عبر `InvRepo.Post` | يوجد حفظ فعلي؛ يلزم اختبارات حقول شاملة وإعادة فتح المستند بعد الحفظ |
-| P1 | المستودعات `WhsWin.xaml.cs` | يوجد تحقق من رقم/اسم المستودع واستدعاء `MatRepo.SaveWarehouse` | يوجد حفظ فعلي؛ يلزم اختبار جميع حقول العنوان والعلاقات |
-| P1 | التصنيفات `CatWin.xaml.cs` | تحميل/تعديل/حذف عبر `MatRepo` | يوجد مسار بيانات؛ يلزم تأكيد حفظ كل الحقول وقراءة القيم بعد إعادة الفتح |
+| P0 | Customer card `CstCard.cs` | Save/Delete/Statement buttons only show `MessageBox.Show` | Customer data is not saved/deleted to the database from this window, and the success message is misleading |
+| P0 | Bank card `BnkCard.cs` | Save/Delete only show a message; no repository call in the handler | Bank data is not actually saved/deleted |
+| P0 | Cost center card `CcCard.cs` | Save/Delete only show a message | No actual saving of the fields |
+| P0 | Sales representative card `RepCard.cs` | Save/Delete only show a message | No actual saving of the fields |
+| P0 | Currency card `CurCard.cs` | Save only shows a message; adding a historical rate only modifies an in-memory collection | The currency and exchange rates are not saved from this window |
+| P0 | Receipt and payment vouchers `CshWin.cs` | `SaveVoucher` only shows a message; `PostVoucher` only changes the UI state | No actual save or accounting posting from this window |
+| P0 | Journal vouchers `JrnWin.cs` | `SaveVoucher` checks that lines exist and then only shows a message; `PostVoucher` locks the UI and shows success only | No actual save/posting in the database |
+| P0 | Cheques `ChqWin.cs` | Save/Print only show a message; cheque data is collected in an ObservableCollection | No actual saving of the batch or the cheque details |
+| P0 | Sales and purchase orders `OrdWin.cs` | Save only shows a message; converting the order opens a new invoice without saving the order itself | The order and its fields are not saved, and the conversion does not record a persisted relationship to the original order |
+| P0 | Manufacturing orders `MfgWin.cs` | Save/Post/Print show messages, and posting only changes the state of the buttons and the grid | No actual saving of the order or of inventory/production-cost movements |
+| P1 | Point of sale window `PosWin.cs` | The payment path goes to `PosCheckoutWin`, which calls `InvRepo.SaveDraft` then `InvRepo.Post` | A real save path exists at checkout, but a full test is required to confirm that every field/payment method reaches the correct document |
+| P1 | Material card `MatCard.xaml.cs` | A material record is built from the fields, including units, prices, and properties, with `MatRepo` calls | The path exists; it is not yet proven that every additional field is written and read back round-trip on SQLite and PostgreSQL |
+| P1 | Account card `AccCard.xaml.cs` | `Save_Click` validates the tax rate, builds an `AccRec`, calls `AccRepo.Save`, and reloads the record | Actual saving exists; all fields, relationships, and boundary values must be tested |
+| P1 | Invoices `InvoiceWin.cs` | `CaptureDoc` collects the document header and lines, then `InvRepo.SaveDraft`; posting via `InvRepo.Post` | Actual saving exists; comprehensive field tests and reopening the document after save are required |
+| P1 | Warehouses `WhsWin.xaml.cs` | Warehouse code/name validation and a `MatRepo.SaveWarehouse` call | Actual saving exists; all address fields and relationships must be tested |
+| P1 | Categories `CatWin.xaml.cs` | Load/edit/delete via `MatRepo` | A data path exists; saving of every field and reading the values back after reopening must be confirmed |
 
-> ملاحظة: P0 هنا يعني خللًا وظيفيًا مؤكدًا في مسار الحفظ الظاهر، وليس تقديرًا لخطر أمني.
+> Note: P0 here means a confirmed functional defect in the visible save path, not a security risk estimate.
 
-## ما يجب إصلاحه قبل اعتماد النظام
+## What Must Be Fixed Before the System Is Approved
 
-1. استبدال معالجات النجاح الوهمية في النوافذ P0 بخدمات/repositories فعلية، وعدم عرض رسالة نجاح إلا بعد نجاح عملية قاعدة البيانات.
-2. إضافة مخططات بيانات وعمليات حفظ/تحميل/تعديل/حذف متسقة، مع معاملات SQL حيث يلزم.
-3. التحقق من الحقول الإلزامية، القيم العشرية حتى الدقة المعتمدة، التواريخ، العملات، الحسابات، العملاء/الموردين، المستودعات، ومراكز التكلفة.
-4. التأكد من حفظ تفاصيل السطور مع رأس المستند ضمن معاملة واحدة، ومن توازن القيد قبل الترحيل، ومن عدم تكرار رقم المستند.
-5. تنفيذ round-trip tests: إنشاء سجل بكل الحقول، حفظه، قراءته من قاعدة البيانات، ومقارنة جميع القيم، ثم تعديله وحفظه وإعادة قراءته.
-6. تشغيل الاختبارات على SQLite وPostgreSQL، مع بيانات شركة مستقلة واختبارات تمنع تداخل بيانات الشركات.
-7. إضافة اختبارات UI smoke/automation على Windows؛ اختبارات unit الحالية وحدها لا تثبت أن كل نافذة تعمل من الواجهة.
+1. Replace the fake success handlers in the P0 windows with real services/repositories, and never show a success message until the database operation has succeeded.
+2. Add consistent data schemas and save/load/edit/delete operations, with parameterized SQL where needed.
+3. Validate required fields, decimal values to the approved precision, dates, currencies, accounts, customers/suppliers, warehouses, and cost centers.
+4. Ensure line details are saved with the document header in a single transaction, that the entry balances before posting, and that document numbers are not duplicated.
+5. Implement round-trip tests: create a record with all fields, save it, read it back from the database, compare all values, then edit it, save, and read it back again.
+6. Run the tests on SQLite and PostgreSQL, with separate company data and tests that prevent cross-company data leakage.
+7. Add UI smoke/automation tests on Windows; the current unit tests alone do not prove that every window works from the UI.
 
-## جرد ملفات الواجهات
+## UI File Inventory
 
-يشمل الجرد كل ملفات الواجهات المعروفة في الشجرة، وليس كل ملف منها نافذة إدخال بيانات. ملفات التقارير غالبًا تعرض البيانات ولا تحفظ سجلات تشغيلية.
+The inventory covers every known UI file in the tree; not every file is a data-entry window. Report files mostly display data and do not save operational records.
 
-### النوافذ الأساسية والإدارة
+### Core and administration windows
 - `MWin`, `LogWin`, `Lang`, `StpWiz`, `ComWin`, `PrmWin`, `SplWin`, `SerWin`, `DatWin`, `BkpWin`, `RestoreCoWin`, `BinWin`, `ColChsWin`.
 
-### البطاقات والقواميس
+### Cards and dictionaries
 - `AccCard`, `MatCard`, `MatDirWin`, `CatWin`, `WhsWin`, `CstCard`, `BnkCard`, `CcCard`, `CurCard`, `RepCard`.
 
-### المستندات والحركات
+### Documents and transactions
 - `InvoiceWin`, `OrdWin`, `JrnWin`, `CshWin`, `ChqWin`, `PosWin`, `PosCheckoutWin`, `MfgWin`, `BarWin`, `BcdGenWin`, `BcdDesWin`, `CashDrawer`.
 
-### وحدات العرض والتقارير
+### Display modules and reports
 - `DashVw`, `ModuleWorkspaceView`, `ReportGridVw`, `RptBase`.
 - `AccBalWin`, `AccStmtWin`, `BalSheetWin`, `CustAgingWin`, `CustBalWin`, `IncStmtWin`, `ItemProfitWin`, `JrnListWin`, `MatListWin`, `MatMoveWin`, `PriceListWin`, `PurListWin`, `SalListWin`, `ShortListWin`, `StkAdjRptWin`, `StkBalWin`, `SupAgingWin`, `SupBalWin`, `TrialBalanceWin`.
 
-## حدود هذا التقرير
+## Limits of This Report
 
-هذا تقرير تدقيق ساكن مبني على الكود المتاح على `main`. لا يدّعي أن كل حقل في كل نافذة جرى تشغيله عمليًا؛ يلزم اختبار الواجهة وقواعد البيانات لإكمال ذلك. لكن معالجات الحفظ التي تكتفي بإظهار رسالة نجاح دون استدعاء تخزين هي عيوب مثبتة بالكود ويجب التعامل معها قبل اعتماد البيانات المحاسبية.
+This is a static audit report based on the code available on `main`. It does not claim that every field in every window was exercised at runtime; UI and database testing is required to complete that. However, save handlers that merely show a success message without calling storage are defects proven by the code and must be addressed before the accounting data can be relied upon.

@@ -1,6 +1,6 @@
 // Path: doc\migration_guide.md
 // Language: Markdown
-// Description: دليل ترقية قواعد البيانات.
+// Description: Database upgrade guide.
 ======================================================================
 
 SHOUTECH ERP V9 - Enterprise System
