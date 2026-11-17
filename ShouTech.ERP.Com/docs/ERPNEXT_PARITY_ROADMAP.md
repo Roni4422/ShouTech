@@ -84,7 +84,7 @@ Positioning advantages to protect and advertise:
 ### Engineering rules for every phase
 - Feature-complete = schema (`dba/mig`) + service + WPF view + RBAC permission key + tests (`Kern.Tests`) + docs entry.
 - No new "legacy-style" code in `cod/`; all new features go through `src/ShouTech.Domain|Application|Infrastructure`.
-- Journal reversal must create compensating entries (known caveat in ARCHITECTURE.md) before Phase 2 accounting features ship.
+- Journal reversal already creates compensating entries: `JournalRepository.ReverseAsync` posts a linked compensating entry (`reversal_of_entry_id`), marks the original reversed, and writes audit events in one transaction — see [ACCOUNTING_REVERSALS_AND_OUTBOX.md](ACCOUNTING_REVERSALS_AND_OUTBOX.md). This prerequisite for Phase 2 accounting features is satisfied.
 
 ---
 

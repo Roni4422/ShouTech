@@ -19,4 +19,4 @@ The archived `System.zip` contains legacy SQL Server objects. These are used as 
 
 ## Accounting caveat
 
-The current `ReverseAsync` marks a posted entry as Reversed and records an audit event; it does not yet create a separate compensating journal entry. Before production accounting close, implement explicit reversal-entry linkage and verify balance-report rules against the business requirements. Do not interpret the status transition alone as a full double-entry reversal workflow.
+`JournalRepository.ReverseAsync` implements a full double-entry reversal: in one transaction it creates a separate compensating journal entry (every source line copied with debit and credit swapped), posts it, links it to the original through `reversal_of_entry_id`, marks the original entry as Reversed, and writes audit events for both entries. A unique partial index on `reversal_of_entry_id` prevents a second reversal of the same entry, and reversal is blocked when the original fiscal period is closed. See [ACCOUNTING_REVERSALS_AND_OUTBOX.md](ACCOUNTING_REVERSALS_AND_OUTBOX.md) for the full behavior.
