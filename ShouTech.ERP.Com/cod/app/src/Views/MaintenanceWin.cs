@@ -33,8 +33,8 @@ public sealed class MaintenanceWin : BaseWin
         _service = AppHost.Operations;
         Width = 860;
         Height = 560;
-        MinWidth = 700;
-        MinHeight = 440;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

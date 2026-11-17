@@ -78,8 +78,8 @@ public abstract class RptBase : BaseWin
     {
         Width = 1040;
         Height = 620;
-        MinWidth = 760;
-        MinHeight = 440;
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         BuildLayout();
         Loaded += async (_, _) => await RefreshAsync();

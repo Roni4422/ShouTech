@@ -65,8 +65,8 @@ public sealed class ChqListWin : BaseWin
     {
         Width = 1180;
         Height = 700;
-        MinWidth = 980;
-        MinHeight = 560;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

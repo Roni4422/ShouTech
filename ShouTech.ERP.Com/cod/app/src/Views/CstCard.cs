@@ -82,8 +82,8 @@ public sealed class CstCard : BaseWin
         _partyKind = isSupplier ? PartyKinds.Supplier : PartyKinds.Customer;
         Width = 820;
         Height = 560;
-        MinWidth = 720;
-        MinHeight = 460;
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
         BuildUi();

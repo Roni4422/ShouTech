@@ -35,8 +35,8 @@ public sealed class MfgListWin : BaseWin
     {
         Width = 1080;
         Height = 640;
-        MinWidth = 900;
-        MinHeight = 520;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

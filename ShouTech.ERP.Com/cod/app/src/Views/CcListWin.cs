@@ -44,8 +44,8 @@ public sealed class CcListWin : BaseWin
     {
         Width = 1020;
         Height = 640;
-        MinWidth = 820;
-        MinHeight = 480;
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         BuildUi();
         Loaded += OnLoaded;

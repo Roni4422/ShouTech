@@ -103,8 +103,8 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
 
         Width = 1100;
         Height = 700;
-        MinWidth = 960;
-        MinHeight = 560;
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Title = WindowTitleFor(kind);
 

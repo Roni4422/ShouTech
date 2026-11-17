@@ -74,8 +74,8 @@ public sealed class ChqWin : BaseWin, IWindowMode
         _kind = kind;
         Width = 980;
         Height = 600;
-        MinWidth = 800;
-        MinHeight = 440;
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         BuildUi();
         // CHQ-08: lifecycle buttons are kind-gated — Deposit/Endorse/

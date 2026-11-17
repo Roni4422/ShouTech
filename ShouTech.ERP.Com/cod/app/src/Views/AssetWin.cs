@@ -64,8 +64,8 @@ public sealed class AssetWin : BaseWin
         _service = AppHost.Assets;
         Width = 1180;
         Height = 740;
-        MinWidth = 980;
-        MinHeight = 620;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

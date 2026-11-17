@@ -49,8 +49,8 @@ public sealed class LoyaltyWin : BaseWin
         _service = AppHost.Definitions;
         Width = 1080;
         Height = 700;
-        MinWidth = 900;
-        MinHeight = 560;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

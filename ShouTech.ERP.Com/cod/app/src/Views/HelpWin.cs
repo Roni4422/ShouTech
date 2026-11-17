@@ -28,8 +28,8 @@ public sealed class HelpWin : BaseWin
     {
         Width = 1080;
         Height = 680;
-        MinWidth = 860;
-        MinHeight = 520;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

@@ -36,8 +36,8 @@ public sealed class PartyManagerWin : BaseWin
     {
         Width = 1040;
         Height = 620;
-        MinWidth = 840;
-        MinHeight = 460;
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         BuildUi();
         Loaded += OnLoaded;

@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:ShouTech.App.Views"
         Title="Chart of accounts"
-        Width="1100" Height="780" MinWidth="760" MinHeight="620" SizeToContent="Manual"
+        Width="1100" Height="780" MinWidth="660" MinHeight="360" SizeToContent="Manual"
         WindowStartupLocation="Manual"
         Background="{DynamicResource BackgroundBrush}"
         Foreground="{DynamicResource TextBrush}"

@@ -62,8 +62,8 @@ public sealed class SupportWin : BaseWin, IWindowMode
         _service = AppHost.Operations;
         Width = 920;
         Height = 640;
-        MinWidth = 760;
-        MinHeight = 500;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

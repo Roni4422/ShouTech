@@ -50,7 +50,7 @@ public sealed class GroupManagerWin : BaseWin, IWindowMode
         Width = 760;
         Height = 500;
         MinWidth = 640;
-        MinHeight = 400;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         BuildUi();
         ApplyLocalizedText();

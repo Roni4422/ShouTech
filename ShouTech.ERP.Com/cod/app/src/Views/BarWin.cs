@@ -46,7 +46,7 @@ public sealed class BarWin : BaseWin
         Width = 760;
         Height = 500;
         MinWidth = 660;
-        MinHeight = 430;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
         BuildUi();

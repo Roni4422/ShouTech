@@ -1167,8 +1167,8 @@ namespace ShouTech.App.Views
                 {
                     Width = 980,
                     Height = 560,
-                    MinWidth = 760,
-                    MinHeight = 420,
+                    MinWidth = 660,
+                    MinHeight = 360,
                     WindowStartupLocation = WindowStartupLocation.CenterOwner,
                     ResizeMode = ResizeMode.CanResize
                 };

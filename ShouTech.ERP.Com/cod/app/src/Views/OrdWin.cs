@@ -83,8 +83,8 @@ public sealed class OrdWin : BaseWin, IWindowMode
         _kind = kind;
         Width = 980;
         Height = 600;
-        MinWidth = 820;
-        MinHeight = 460;
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
         BuildUi();

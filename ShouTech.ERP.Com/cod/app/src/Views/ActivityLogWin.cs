@@ -39,8 +39,8 @@ public sealed class ActivityLogWin : BaseWin
         _service = AppHost.Operations;
         Width = 1120;
         Height = 640;
-        MinWidth = 900;
-        MinHeight = 500;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

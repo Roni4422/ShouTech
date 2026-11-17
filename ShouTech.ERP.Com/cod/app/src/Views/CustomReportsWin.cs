@@ -71,8 +71,8 @@ public sealed class CustomReportsWin : BaseWin
     {
         Width = 1180;
         Height = 720;
-        MinWidth = 980;
-        MinHeight = 580;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

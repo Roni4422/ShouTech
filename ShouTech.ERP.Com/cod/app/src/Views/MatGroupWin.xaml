@@ -4,7 +4,7 @@
         xmlns:views="clr-namespace:ShouTech.App.Views"
         Title="Material Groups"
         Width="1120" Height="720"
-        MinWidth="820" MinHeight="520"
+        MinWidth="660" MinHeight="360"
         WindowStartupLocation="CenterOwner">
     <Grid Margin="16">
         <Grid.RowDefinitions>

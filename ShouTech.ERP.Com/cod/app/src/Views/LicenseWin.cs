@@ -32,7 +32,7 @@ public sealed class LicenseWin : BaseWin
         Width = 720;
         Height = 520;
         MinWidth = 600;
-        MinHeight = 420;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

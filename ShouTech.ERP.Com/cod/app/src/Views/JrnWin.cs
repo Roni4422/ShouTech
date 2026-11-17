@@ -72,8 +72,8 @@ public sealed class JrnWin : BaseWin
     {
         Width = 920;
         Height = 580;
-        MinWidth = 800;
-        MinHeight = 450;
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
         BuildUi();

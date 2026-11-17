@@ -45,8 +45,8 @@ public sealed class FinancialAnalysisWin : BaseWin
     {
         Width = 1060;
         Height = 620;
-        MinWidth = 860;
-        MinHeight = 480;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

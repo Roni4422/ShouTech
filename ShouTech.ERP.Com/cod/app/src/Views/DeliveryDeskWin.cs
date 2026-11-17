@@ -64,8 +64,8 @@ public sealed class DeliveryDeskWin : BaseWin
         _service = AppHost.Definitions;
         Width = 1180;
         Height = 740;
-        MinWidth = 980;
-        MinHeight = 600;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

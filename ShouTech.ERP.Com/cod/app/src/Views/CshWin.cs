@@ -83,8 +83,8 @@ public sealed class CshWin : BaseWin, IWindowMode
         _kind = kind;
         Width = 920;
         Height = 580;
-        MinWidth = 760;
-        MinHeight = 440;
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
         BuildUi();

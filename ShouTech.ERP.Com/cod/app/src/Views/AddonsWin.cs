@@ -41,8 +41,8 @@ public sealed class AddonsWin : BaseWin
     {
         Width = 860;
         Height = 540;
-        MinWidth = 700;
-        MinHeight = 420;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

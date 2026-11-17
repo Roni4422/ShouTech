@@ -60,7 +60,7 @@ public sealed class PosCheckoutWin : BaseWin
         Width = 560;
         Height = 440;
         MinWidth = 500;
-        MinHeight = 400;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
         BuildUi();

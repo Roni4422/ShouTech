@@ -53,7 +53,7 @@ public sealed class BcdGenWin : BaseWin
         Width = 860;
         Height = 560;
         MinWidth = 660;
-        MinHeight = 430;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
         BuildUi();

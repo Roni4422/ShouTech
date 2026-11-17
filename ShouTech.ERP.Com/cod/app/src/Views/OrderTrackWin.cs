@@ -32,8 +32,8 @@ public sealed class OrderTrackWin : BaseWin
     {
         Width = 920;
         Height = 540;
-        MinWidth = 780;
-        MinHeight = 420;
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         BuildUi();
         ApplyLocalizedText();

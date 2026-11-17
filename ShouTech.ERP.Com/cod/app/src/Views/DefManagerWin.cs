@@ -59,8 +59,8 @@ public sealed class DefManagerWin : BaseWin, IWindowMode
         _service = AppHost.Definitions;
         Width = 1180;
         Height = 720;
-        MinWidth = 940;
-        MinHeight = 580;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

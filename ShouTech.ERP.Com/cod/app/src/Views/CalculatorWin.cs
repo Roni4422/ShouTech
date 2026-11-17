@@ -28,7 +28,7 @@ public sealed class CalculatorWin : BaseWin
         Width = 360;
         Height = 480;
         MinWidth = 320;
-        MinHeight = 430;
+        MinHeight = 360;
         BuildUi();
         Loaded += (_, _) => _display.Focus();
     }

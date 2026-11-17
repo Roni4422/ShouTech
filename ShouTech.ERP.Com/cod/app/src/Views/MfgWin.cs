@@ -61,8 +61,8 @@ public sealed class MfgWin : BaseWin
     {
         Width = 920;
         Height = 580;
-        MinWidth = 800;
-        MinHeight = 440;
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         BuildUi();
         ApplyLocalizedText();

@@ -62,8 +62,8 @@ public sealed class InstallmentsWin : BaseWin
         _service = AppHost.Definitions;
         Width = 1180;
         Height = 760;
-        MinWidth = 980;
-        MinHeight = 620;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

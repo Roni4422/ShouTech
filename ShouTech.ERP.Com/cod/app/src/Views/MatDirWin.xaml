@@ -6,7 +6,7 @@
      loc:LocProps.WindowKey="Inventory.MaterialTree"
      Title="Material Directory"
      Width="400" Height="590"
-     MinWidth="380" MinHeight="520"
+     MinWidth="380" MinHeight="360"
      WindowStartupLocation="CenterOwner"
      Background="{DynamicResource BackgroundBrush}"
      Foreground="{DynamicResource TextBrush}"

@@ -49,8 +49,8 @@ public sealed class PayRecWin : BaseWin
         _service = AppHost.Reconciliation;
         Width = 1180;
         Height = 700;
-        MinWidth = 980;
-        MinHeight = 580;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

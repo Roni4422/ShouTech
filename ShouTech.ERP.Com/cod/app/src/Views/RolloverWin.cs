@@ -39,8 +39,8 @@ public sealed class RolloverWin : BaseWin
         _service = AppHost.Operations;
         Width = 920;
         Height = 560;
-        MinWidth = 760;
-        MinHeight = 440;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

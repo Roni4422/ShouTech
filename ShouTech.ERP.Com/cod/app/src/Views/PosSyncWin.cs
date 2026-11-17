@@ -33,8 +33,8 @@ public sealed class PosSyncWin : BaseWin
         _service = AppHost.Operations;
         Width = 1080;
         Height = 600;
-        MinWidth = 860;
-        MinHeight = 460;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

@@ -60,8 +60,8 @@ public sealed class DocSearchWin : BaseWin, IWindowMode
         _mode = mode;
         Width = 900;
         Height = 540;
-        MinWidth = 760;
-        MinHeight = 420;
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         BuildUi();
         ApplyLocalizedText();
