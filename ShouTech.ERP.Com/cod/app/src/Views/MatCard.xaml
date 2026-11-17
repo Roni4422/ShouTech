@@ -105,7 +105,7 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
 
             <Setter Property="Margin"
-                    Value="0,0,5,0"/>
+                    Value="5,0,5,0"/>
 
             <Setter Property="Foreground"
                     Value="{DynamicResource TextPrimary}"/>
@@ -113,9 +113,25 @@
             <Setter Property="TextTrimming"
                     Value="CharacterEllipsis"/>
 
+            <!-- Label alignment follows the app-wide convention (same
+                 pattern as CatWin's FieldLabel): text aligns to the
+                 reading-start edge of the label column — left in LTR,
+                 right in RTL — which is the edge ADJACENT to the field,
+                 so the label sits a few pixels from its field instead of
+                 floating at the far edge of the column. The previous
+                 trigger set Left in RTL, which pushed Arabic labels to
+                 the far edge and left a wide empty band (owner report,
+                 2026-11-17). -->
+
+            <Setter Property="TextAlignment" Value="Left"/>
+
             <Style.Triggers>
                 <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
                              Value="RightToLeft">
+                    <Setter Property="TextAlignment" Value="Right"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                             Value="LeftToRight">
                     <Setter Property="TextAlignment" Value="Left"/>
                 </DataTrigger>
             </Style.Triggers>
@@ -778,7 +794,8 @@
                                       Grid.Column="3"
                                       Grid.ColumnSpan="2"
                                       Style="{StaticResource FieldCombo}"
-                                      Margin="0,3,0,3"/>
+                                      Margin="0,3,0,3"
+                                      SelectionChanged="ItemType_SelectionChanged"/>
 
 
                             <!-- Name -->
@@ -908,9 +925,9 @@
                         <Grid x:Name="PanelDesc">
 
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="115"/>
+                                <ColumnDefinition Width="{StaticResource FormLabelColumnWidth}"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="115"/>
+                                <ColumnDefinition Width="{StaticResource FormLabelColumnWidth}"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
 
@@ -1118,7 +1135,8 @@
                                           Content="Stocked"
                                           loc:LocProps.Key="MatCard.Stocked"
                                           Margin="0,0,12,0"
-                                          IsChecked="True"/>
+                                          IsChecked="True"
+                                          Checked="IsStocked_Checked"/>
 
                                 <CheckBox x:Name="ChkIsPurchased"
                                           Content="Purchased"
@@ -1139,7 +1157,9 @@
 
                                 <CheckBox x:Name="ChkIsService"
                                           Content="Service"
-                                          loc:LocProps.Key="MatCard.Service"/>
+                                          loc:LocProps.Key="MatCard.Service"
+                                          Checked="IsService_Changed"
+                                          Unchecked="IsService_Changed"/>
 
                             </StackPanel>
 
@@ -1589,9 +1609,9 @@
                               Visibility="Collapsed">
 
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="100"/>
+                                <ColumnDefinition Width="{StaticResource FormLabelColumnWidth}"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="100"/>
+                                <ColumnDefinition Width="{StaticResource FormLabelColumnWidth}"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
 
@@ -1762,9 +1782,9 @@
                               Visibility="Collapsed">
 
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="110"/>
+                                <ColumnDefinition Width="{StaticResource FormLabelColumnWidth}"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="110"/>
+                                <ColumnDefinition Width="{StaticResource FormLabelColumnWidth}"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
 

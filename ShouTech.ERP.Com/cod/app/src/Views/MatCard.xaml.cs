@@ -1068,10 +1068,12 @@ public partial class MatCard : BaseWin
         SetCombo(CmbItemType, "Stock");
         SetCombo(CmbColor, "None");
         CmbGroup.SelectedIndex = -1;
+        CmbGroup.Text = "";
         CmbAbcClass.SelectedIndex = -1;
         CmbPriceCurrency.SelectedIndex = -1;
         CmbCostMethod.SelectedIndex = -1;
         CmbDefaultWarehouse.SelectedIndex = -1;
+        CmbDefaultWarehouse.Text = "";
 
         _units.Clear();
         EnsureUnitRows(UnitWorkspaceRows);
@@ -1239,6 +1241,8 @@ public partial class MatCard : BaseWin
             foreach (var a in m.Attributes)
                 _attrs.Add(a);
         }
+
+        NormalizeServiceControls();
     }
 
     private void Inactive_Changed(object sender, RoutedEventArgs e)
@@ -1254,6 +1258,87 @@ public partial class MatCard : BaseWin
             ChkInactive.IsChecked = false;
         else if (string.Equals(status, "Inactive", StringComparison.OrdinalIgnoreCase))
             ChkInactive.IsChecked = true;
+    }
+
+    // ----------------------------------------------------------------
+    //  Service-material consistency (owner rule, 2026-11-17): the item
+    //  type, the Service flag and the Stocked flag are three views of
+    //  one fact — a service material is NON-STOCK. Each control's own
+    //  gesture wins and brings the other two into agreement, so the
+    //  card can never present (or save) a "service but stock-tracked"
+    //  material. Collect applies the same normalization to the record
+    //  itself, and the posting layer refuses stock effects for service
+    //  materials regardless of which view a legacy row carries.
+    // ----------------------------------------------------------------
+    private bool _syncingServiceState;
+
+    private void ItemType_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_syncingServiceState) return;
+        _syncingServiceState = true;
+        try
+        {
+            var isService = string.Equals(
+                GetComboKey(CmbItemType), "Service", StringComparison.OrdinalIgnoreCase);
+            ChkIsService.IsChecked = isService;
+            if (isService) ChkIsStocked.IsChecked = false;
+        }
+        finally { _syncingServiceState = false; }
+    }
+
+    private void IsService_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_syncingServiceState) return;
+        _syncingServiceState = true;
+        try
+        {
+            if (ChkIsService.IsChecked == true)
+            {
+                SetCombo(CmbItemType, "Service");
+                ChkIsStocked.IsChecked = false;
+            }
+            else if (string.Equals(GetComboKey(CmbItemType), "Service", StringComparison.OrdinalIgnoreCase))
+            {
+                SetCombo(CmbItemType, "Stock");
+            }
+        }
+        finally { _syncingServiceState = false; }
+    }
+
+    private void IsStocked_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_syncingServiceState) return;
+        _syncingServiceState = true;
+        try
+        {
+            // Explicitly marking the material as stocked ends service state.
+            ChkIsService.IsChecked = false;
+            if (string.Equals(GetComboKey(CmbItemType), "Service", StringComparison.OrdinalIgnoreCase))
+                SetCombo(CmbItemType, "Stock");
+        }
+        finally { _syncingServiceState = false; }
+    }
+
+    /// <summary>
+    /// Brings the three service controls into agreement for a record being
+    /// displayed: a legacy row whose type says Service but whose flags
+    /// disagree (or vice versa) is shown — and will re-save — as a service
+    /// material: type Service, Service on, Stocked off.
+    /// </summary>
+    private void NormalizeServiceControls()
+    {
+        if (_syncingServiceState) return;
+        var isService = ChkIsService.IsChecked == true
+            || string.Equals(GetComboKey(CmbItemType), "Service", StringComparison.OrdinalIgnoreCase);
+        if (!isService) return;
+        _syncingServiceState = true;
+        try
+        {
+            SetCombo(CmbItemType, "Service");
+            ChkIsService.IsChecked = true;
+            ChkIsStocked.IsChecked = false;
+        }
+        finally { _syncingServiceState = false; }
     }
 
     private MatRepo.MatRec Collect()
@@ -1286,6 +1371,16 @@ public partial class MatCard : BaseWin
         m.IsSold = ChkIsSold.IsChecked == true;
         m.IsProduced = ChkIsProduced.IsChecked == true;
         m.IsService = ChkIsService.IsChecked == true;
+
+        // Service-material rule (owner, 2026-11-17): any service indication
+        // normalizes all three stored views — a service material is
+        // non-stock and must never reach the posting layer as tracked.
+        if (string.Equals(m.ItemType, "Service", StringComparison.OrdinalIgnoreCase) || m.IsService)
+        {
+            m.ItemType = "Service";
+            m.IsService = true;
+            m.IsStocked = false;
+        }
 
         m.MinQty = D(TxtMinQty.Text);
         m.MaxQty = D(TxtMaxQty.Text);
@@ -1324,10 +1419,16 @@ public partial class MatCard : BaseWin
         m.PriceSpecial     = Z(u1?.PriceSpecial);
         m.PriceExport      = Z(u1?.PriceExport);
         m.PriceDistributor = Z(u1?.PriceDistributor);
-        m.PriceMin = 0;
+        // PriceMin has no field on this card: it is preserved from the
+        // loaded record via CloneSparse. (It was previously overwritten
+        // with the constant 0 on every save — silent data loss.)
         m.UnitsJson = JsonSerializer.Serialize(active);
 
-        if (u1?.PricePurchase is not null) m.Cost = u1.PricePurchase.Value;
+        // The section's Cost field (TxtCost, already collected above) is
+        // authoritative for materials.cost. Unit 1's purchase price keeps
+        // its own store (units_json) — it previously overwrote the Cost
+        // field's value on every save, so the field never round-tripped
+        // whenever the grid's purchase cell was filled.
 
         m.ReorderQty = D(TxtReorderQty.Text);
         m.SafetyStock = D(TxtSafetyStock.Text);
@@ -1355,7 +1456,14 @@ public partial class MatCard : BaseWin
         m.SalesBlocked = ChkSalesBlocked.IsChecked == true;
 
         m.ImagePath = SN(TxtImagePath.Text);
-        m.Attributes = _attrs.Where(a => !string.IsNullOrWhiteSpace(a.Key)).ToList();
+
+        // Renumber attribute order by grid position (same treatment as the
+        // unit rows' LineNo): rows added in the grid carry SortOrder 0 and
+        // would otherwise jump to the top on reload, which orders by
+        // sort_order.
+        var attrs = _attrs.Where(a => !string.IsNullOrWhiteSpace(a.Key)).ToList();
+        for (var i = 0; i < attrs.Count; i++) attrs[i].SortOrder = i + 1;
+        m.Attributes = attrs;
 
         return m;
     }
@@ -1387,6 +1495,7 @@ public partial class MatCard : BaseWin
             AvgCost = src.AvgCost, CostCurrency = src.CostCurrency,
             OverheadPct = src.OverheadPct, LandedCost = src.LandedCost,
             LastPurchaseDate = src.LastPurchaseDate,
+            PriceMin = src.PriceMin,
             PriceOnline = src.PriceOnline, MarginTargetPct = src.MarginTargetPct,
             DiscountMaxPct = src.DiscountMaxPct, AllowInvoiceDisc = src.AllowInvoiceDisc,
             LotSize = src.LotSize, OrderMultiple = src.OrderMultiple,
@@ -1441,6 +1550,24 @@ public partial class MatCard : BaseWin
         });
 
         if (match != null) { combo.SelectedItem = match; return; }
+
+        // Stored-value fallback (same pattern as InitCategories/InitGroups):
+        // a value outside the built-in option list — e.g. a currency, status
+        // or color written by an import or another module — must still
+        // display and round-trip. On a non-editable combo the old behavior
+        // (SelectedIndex=-1 + Text) showed nothing and Collect then saved
+        // null, silently clearing the stored value on every save.
+        if (combo.ItemsSource is IEnumerable<object> current
+            && current.All(i => i is MatComboOption))
+        {
+            var options = current.Cast<MatComboOption>().ToList();
+            var fallback = new MatComboOption(key, key);
+            options.Add(fallback);
+            combo.ItemsSource = options;
+            combo.SelectedItem = fallback;
+            return;
+        }
+
         combo.SelectedIndex = -1;
         combo.Text = key;
     }
