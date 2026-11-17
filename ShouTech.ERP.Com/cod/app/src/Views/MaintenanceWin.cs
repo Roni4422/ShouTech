@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -95,7 +96,7 @@ public sealed class MaintenanceWin : BaseWin
                 var result = await health.CheckAsync();
                 _results.Items.Add($"{T("Maintenance.Provider")}: {result.Provider}");
                 _results.Items.Add($"{T("Maintenance.Available")}: {result.IsAvailable}");
-                _results.Items.Add($"{T("Maintenance.Latency")}: {(result.Latency.HasValue ? result.Latency.Value.TotalMilliseconds.ToString("0") + " ms" : "-")}");
+                _results.Items.Add($"{T("Maintenance.Latency")}: {(result.Latency.HasValue ? result.Latency.Value.TotalMilliseconds.ToString("0", CultureInfo.CurrentCulture) + " ms" : "-")}");
                 _results.Items.Add($"{T("Maintenance.Message")}: {result.Message}");
             }
             else

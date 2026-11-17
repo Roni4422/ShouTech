@@ -5,8 +5,6 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using ShouTech.App.Common;
 using ShouTech.App.Services;
-
-using ShouTech.App.Services;
 using ShouTech.Domain;
 namespace ShouTech.App.Views;
 

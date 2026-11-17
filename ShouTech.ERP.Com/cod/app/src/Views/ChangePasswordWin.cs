@@ -139,7 +139,7 @@ public sealed class ChangePasswordWin : BaseWin
     }
 
     /// <summary>Database users path (mirrors AuthServ's credential lookup).</summary>
-    private async Task<bool> ChangeDatabasePasswordAsync(string username, string current, string next)
+    private static async Task<bool> ChangeDatabasePasswordAsync(string username, string current, string next)
     {
         var connectionString = DatabaseRuntime.GetConnectionString();
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -196,7 +196,7 @@ public sealed class ChangePasswordWin : BaseWin
     }
 
     /// <summary>Local company-administrator path (CoLocalStore record).</summary>
-    private async Task<bool> ChangeLocalAdminPasswordAsync(string username, string current, string next)
+    private static async Task<bool> ChangeLocalAdminPasswordAsync(string username, string current, string next)
     {
         var company = await CoLocalStore.FindUserCompanyAsync(CurrentCompanyCode, username, current);
         if (company is null)

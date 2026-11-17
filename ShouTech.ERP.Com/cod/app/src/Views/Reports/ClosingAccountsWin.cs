@@ -60,7 +60,7 @@ public sealed class ClosingAccountsWin : RptBase
         var expenses = accounts.Where(a => !a.Code.StartsWith('5') && !a.Code.StartsWith('4')).ToList();
 
         var rows = new List<IReadOnlyDictionary<string, object?>>();
-        void Add(string section, string code, string name, decimal amount)
+        void Add(string section, string code, string? name, decimal amount)
             => rows.Add(new Dictionary<string, object?> { ["Section"] = section, ["Code"] = code, ["Name"] = name, ["Amount"] = amount });
 
         foreach (var a in revenue) Add(T("Reports.Col.Revenue"), a.Code, a.Name, a.Amount);

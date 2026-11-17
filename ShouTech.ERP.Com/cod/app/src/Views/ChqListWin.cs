@@ -219,7 +219,7 @@ public sealed class ChqListWin : BaseWin
 
     private ChequeRow? SelectedRow() => _grid.SelectedItem as ChequeRow;
 
-    private void RequireManage()
+    private static void RequireManage()
     {
         if (!AppHost.Permissions.Has(PermCat.Vouchers.SecuritiesManage))
             throw new InvalidOperationException(T("Cheques.PermissionDenied"));

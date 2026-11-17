@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -44,6 +47,10 @@ public sealed class SupportWin : BaseWin
     private readonly Button _refreshButton = new();
     private readonly Button _closeButton = new();
 
+    // CA1863: cache CompositeFormat instances for repeatedly used format strings.
+    private static readonly ConcurrentDictionary<string, CompositeFormat> CompositeFormats =
+        new(StringComparer.Ordinal);
+
     public SupportWin(SupportWinMode mode = SupportWinMode.Support)
     {
         _mode = mode;
@@ -54,6 +61,23 @@ public sealed class SupportWin : BaseWin
         MinHeight = 500;
         BuildUi();
         Loaded += OnLoaded;
+    }
+
+    /// <summary>
+    /// Formats a localized pattern using a cached CompositeFormat
+    /// to avoid re-parsing the format string on every call (CA1863),
+    /// with the current UI culture applied explicitly (CA1305).
+    /// </summary>
+    private static string FormatLocalized(string pattern, params object?[] args)
+    {
+        if (string.IsNullOrEmpty(pattern))
+            return string.Empty;
+
+        var compositeFormat = CompositeFormats.GetOrAdd(
+            pattern,
+            static value => CompositeFormat.Parse(value));
+
+        return string.Format(CultureInfo.CurrentCulture, compositeFormat, args);
     }
 
     private string Kind => _mode == SupportWinMode.Suggestion ? SupportTicketKinds.Suggestion : SupportTicketKinds.Support;
@@ -154,7 +178,7 @@ public sealed class SupportWin : BaseWin
             };
             var saved = await _service.CreateTicketAsync(CurrentCompanyCode, ticket, CurrentUserId);
             MessageBox.Show(this,
-                string.Format(System.Globalization.CultureInfo.CurrentCulture, T("Support.Saved"), saved.TicketNo),
+                FormatLocalized(T("Support.Saved"), saved.TicketNo),
                 Title, MessageBoxButton.OK, MessageBoxImage.Information);
             _subject.Clear();
             _body.Clear();

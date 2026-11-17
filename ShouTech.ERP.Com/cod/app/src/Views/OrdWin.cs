@@ -266,7 +266,7 @@ public sealed class OrdWin : BaseWin
         }
     }
 
-    private void ResolveMaterial(OrderLineVm line)
+    private static void ResolveMaterial(OrderLineVm line)
     {
         var found = TaxSvc.ResolveMaterial(line.ItemCode.Trim());
         if (found is { } material)
@@ -310,7 +310,7 @@ public sealed class OrdWin : BaseWin
     {
         if (AppHost.Orders is null || _companyId == Guid.Empty)
         {
-            ShowError(T("OrderDoc.ServiceUnavailable"));
+            ShowWarningMessage(T("OrderDoc.ServiceUnavailable"));
             return;
         }
         var docNo = _txtDocNo.Text.Trim();
@@ -320,7 +320,7 @@ public sealed class OrdWin : BaseWin
             var doc = await AppHost.Orders.FindByNumberAsync(Side, _companyId, DocKindCode, docNo);
             if (doc is null)
             {
-                ShowError(T("OrderDoc.NotFound"));
+                ShowWarningMessage(T("OrderDoc.NotFound"));
                 return;
             }
             ApplySnapshot(doc);
@@ -329,7 +329,7 @@ public sealed class OrdWin : BaseWin
         }
         catch (Exception ex)
         {
-            ShowError(ex.Message);
+            ShowWarningMessage(ex.Message);
         }
     }
 
@@ -415,7 +415,7 @@ public sealed class OrdWin : BaseWin
     {
         if (AppHost.Orders is null || _companyId == Guid.Empty)
         {
-            ShowError(T("OrderDoc.ServiceUnavailable"));
+            ShowWarningMessage(T("OrderDoc.ServiceUnavailable"));
             return;
         }
         var permission = _docId is null
@@ -423,7 +423,7 @@ public sealed class OrdWin : BaseWin
             : (_kind == OrdKind.Sales ? PermCat.Sales.OrderUpdate : PermCat.Purchasing.OrderUpdate);
         if (!AppHost.Permissions.Has(permission))
         {
-            ShowError(T("OrderDoc.PermissionDenied"));
+            ShowWarningMessage(T("OrderDoc.PermissionDenied"));
             return;
         }
         try
@@ -441,7 +441,7 @@ public sealed class OrdWin : BaseWin
         }
         catch (Exception ex)
         {
-            ShowError(ex.Message);
+            ShowWarningMessage(ex.Message);
         }
     }
 
@@ -491,7 +491,7 @@ public sealed class OrdWin : BaseWin
     {
         if (AppHost.Orders is null || _docId is null)
         {
-            ShowError(T("OrderDoc.SaveFirst"));
+            ShowWarningMessage(T("OrderDoc.SaveFirst"));
             return;
         }
         try
@@ -504,7 +504,7 @@ public sealed class OrdWin : BaseWin
         }
         catch (Exception ex)
         {
-            ShowError(ex.Message);
+            ShowWarningMessage(ex.Message);
         }
     }
 
@@ -513,12 +513,12 @@ public sealed class OrdWin : BaseWin
         var permission = _kind == OrdKind.Sales ? PermCat.Sales.OrderConvert : PermCat.Purchasing.OrderConvert;
         if (!AppHost.Permissions.Has(permission))
         {
-            ShowError(T("OrderDoc.PermissionDenied"));
+            ShowWarningMessage(T("OrderDoc.PermissionDenied"));
             return;
         }
         if (AppHost.Orders is null || _docId is null)
         {
-            ShowError(T("OrderDoc.SaveFirst"));
+            ShowWarningMessage(T("OrderDoc.SaveFirst"));
             return;
         }
         try
@@ -534,12 +534,12 @@ public sealed class OrdWin : BaseWin
             // converted invoice): localized catalog message, not raw text.
             AppHost.Errors.Report(ex.Code, ex, "OrdWin.Convert");
             var info = AppHost.Errors.Resolve(ex.Code, ex.Args.ToArray());
-            ShowError($"{info.Message} (Error {info.Code})");
+            ShowWarningMessage($"{info.Message} (Error {info.Code})");
         }
         catch (Exception ex)
         {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OrdWin.Convert");
-            ShowError(ex.Message);
+            ShowWarningMessage(ex.Message);
         }
     }
 
@@ -547,12 +547,12 @@ public sealed class OrdWin : BaseWin
     {
         if (!AppHost.Permissions.Has(permission))
         {
-            ShowError(T("OrderDoc.PermissionDenied"));
+            ShowWarningMessage(T("OrderDoc.PermissionDenied"));
             return;
         }
         if (AppHost.Orders is null || _docId is null)
         {
-            ShowError(T("OrderDoc.SaveFirst"));
+            ShowWarningMessage(T("OrderDoc.SaveFirst"));
             return;
         }
         var confirm = MessageBox.Show(this, T("OrderDoc.ConfirmStatusChange"), Title,
@@ -570,7 +570,7 @@ public sealed class OrdWin : BaseWin
         }
         catch (Exception ex)
         {
-            ShowError(ex.Message);
+            ShowWarningMessage(ex.Message);
         }
     }
 
@@ -609,7 +609,7 @@ public sealed class OrdWin : BaseWin
             _lblStatus.Text = $"{T("OrderDoc.Status")}: {StatusText(_status)}";
     }
 
-    private string StatusText(string status) => status switch
+    private static string StatusText(string status) => status switch
     {
         CommercialDocumentStatus.Posted => T("Invoice.StatusPosted"),
         CommercialDocumentStatus.Closed => T("OrderDoc.StatusClosed"),
@@ -617,7 +617,11 @@ public sealed class OrdWin : BaseWin
         _ => T("Invoice.StatusDraft")
     };
 
-    private void ShowError(string message)
+    // Shows an already-localized literal message as a warning. Deliberately
+    // NOT named ShowError: BaseWin.ShowError takes a localization KEY and
+    // shows the error dialog — this helper takes final text (T(...) results,
+    // exception messages) and shows the warning dialog.
+    private void ShowWarningMessage(string message)
         => MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
 
     // ------------------------------------------------------------- printing
@@ -657,7 +661,7 @@ public sealed class OrdWin : BaseWin
         foreach (var line in _lines)
         {
             AddPrintRow(table, row++, line.LineNo.ToString(CultureInfo.InvariantCulture), line.ItemCode, line.Description, line.Unit,
-                line.Qty.ToString("0.###", CultureInfo.InvariantCulture), line.UnitPrice.ToString("N2"), line.LineTotal.ToString("N2"));
+                line.Qty.ToString("0.###", CultureInfo.InvariantCulture), line.UnitPrice.ToString("N2", CultureInfo.InvariantCulture), line.LineTotal.ToString("N2", CultureInfo.InvariantCulture));
         }
         panel.Children.Add(table);
         panel.Children.Add(new TextBlock { Text = _lblTotal.Text, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 12, 0, 0), HorizontalAlignment = HorizontalAlignment.Right });
