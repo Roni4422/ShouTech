@@ -32,6 +32,10 @@ public abstract class BaseWin : Window
 
     protected BaseWin()
     {
+        // Windows 11 DWM chrome (rounded corners + Mica) for every
+        // secondary window; best effort, no-op where unsupported.
+        Win11Chrome.Apply(this);
+
         // Central theme: brushes resolve through the application resource dictionaries
         // so any theme or accent change propagates without code behind.
         SetResourceReference(BackgroundProperty, "BackgroundBrush");

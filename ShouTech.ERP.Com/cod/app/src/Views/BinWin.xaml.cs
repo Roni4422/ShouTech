@@ -26,6 +26,7 @@ public partial class BinWin : Window
     public BinWin()
     {
         InitializeComponent();
+        Win11Chrome.Apply(this);
         ApplyLanguage();
         Loaded += OnLoaded;
         try
