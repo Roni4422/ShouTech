@@ -1,102 +1,118 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Globalization;
-using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
+using ShouTech.App.Configuration;
+using ShouTech.App.Services;
+using ShouTech.Domain.Entities;
 
 namespace ShouTech.App.Views;
 
 /// <summary>
+/// Currency card (ribbon chunk B): the currency master is persisted through
+/// <see cref="ShouTech.Application.Services.MasterCardService"/>, and the rate
+/// grid is the real dated history from currency_rates (newest first). Add Rate
+/// saves a dated rate row; the company base currency rate is enforced as 1.
 /// </summary>
 public sealed class CurCard : BaseWin
 {
-
-    /// <summary>
-    /// Prevents a false success message when this screen has no database persistence wired.
-    /// This intentionally does not claim to save any values.
-    /// </summary>
-    private void ShowPersistenceUnavailable()
-    {
-        const string errorCode = "APP-2010";
-        const string context = "This window has no database persistence implementation.";
-        var definition = ShouTech.App.Localization.ErrorCatalog.Resolve(errorCode);
-        var exception = new NotSupportedException(context);
-
-        // Errors are routed to errors.log; the operational trace goes to log.log.
-        ShouTech.App.Services.AppHost.Logging?.LogError(
-            "WindowPersistence",
-            $"[{definition.Code}] {definition.Name} | Window={GetType().Name} | {context}",
-            exception);
-        ShouTech.App.Services.AppHost.Logging?.LogOperation(
-            "WindowPersistence",
-            "PersistenceUnavailable",
-            $"Code={definition.Code} | Window={GetType().Name}");
-
-        MessageBox.Show(
-            this,
-            $"[{definition.Code}] {definition.Message}\n{context}\nلم يتم حفظ أي بيانات.",
-            "العملية غير متاحة",
-            MessageBoxButton.OK,
-            MessageBoxImage.Warning);
-    }
-
-
-    private readonly TextBox _txtCode = new() { Width = 90, Height = 26, Text = "USD" };
+    private readonly TextBox _txtCode = new() { Width = 90, Height = 26 };
     private readonly TextBox _txtNameAr = new() { Width = 150, Height = 26 };
     private readonly TextBox _txtNameEn = new() { Width = 150, Height = 26 };
-    private readonly TextBox _txtSymbol = new() { Width = 70, Height = 26, Text = "$" };
+    private readonly TextBox _txtSymbol = new() { Width = 70, Height = 26 };
     private readonly TextBox _txtFraction = new() { Width = 120, Height = 26 };
-    private readonly TextBox _txtRate = new() { Width = 90, Height = 26, Text = "3.7500" };
-    private readonly TextBox _txtMinRate = new() { Width = 90, Height = 26, Text = "3.7400" };
-    private readonly TextBox _txtMaxRate = new() { Width = 90, Height = 26, Text = "3.7600" };
+    private readonly TextBox _txtRate = new() { Width = 90, Height = 26 };
+    private readonly TextBox _txtMinRate = new() { Width = 90, Height = 26 };
+    private readonly TextBox _txtMaxRate = new() { Width = 90, Height = 26 };
+    private readonly DatePicker _rateDate = new() { Width = 140, Height = 26 };
+    private readonly CheckBox _chkActive = new() { VerticalAlignment = VerticalAlignment.Center, IsChecked = true };
 
+    private readonly Button _btnLoad = new();
     private readonly Button _btnNew = new();
     private readonly Button _btnSave = new();
+    private readonly Button _btnDelete = new();
     private readonly Button _btnAddRate = new();
 
     private readonly DataGrid _grid = new();
-    private readonly ObservableCollection<RateHistoryVm> _rates = new();
+    private readonly ObservableCollection<RateRow> _rates = new();
+    private readonly List<(DataGridColumn Column, string Key)> _headers = new();
+
+    private Guid? _loadedId;
 
     public CurCard()
     {
-        Width = 820;
-        Height = 480;
-        MinWidth = 720;
-        MinHeight = 400;
+        Width = 860;
+        Height = 500;
+        MinWidth = 740;
+        MinHeight = 420;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
         BuildUi();
         ApplyLocalizedText();
         ResetCard();
+        Loaded += OnLoaded;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        if (!AppHost.Permissions.Has(PermCat.Accounting.CurrencyView))
+        {
+            MessageBox.Show(this, T("MasterCards.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            Close();
+        }
+    }
+
+    /// <summary>Loads the currency with the given code, including its rate history.</summary>
+    public async Task LoadByCodeAsync(string code)
+    {
+        try
+        {
+            var service = AppHost.MasterCards;
+            if (service is null)
+            {
+                MessageBox.Show(this, T("MasterCards.ServiceUnavailable"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            var currency = await service.GetCurrencyByCodeAsync(CurrentCompanyCode, code);
+            if (currency is null)
+            {
+                MessageBox.Show(this, T("MasterCards.NotFound"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            ShowCurrency(currency);
+            await RefreshRatesAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void BuildUi()
     {
         var root = new DockPanel { Margin = new Thickness(10) };
 
-        // 1. Toolbar
-        var toolbar = new WrapPanel { Margin = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Right };
+        var toolbar = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
+        StyleButton(_btnLoad, "MasterCards.Load");
         StyleButton(_btnNew, "Common.New");
         StyleButton(_btnSave, "Common.Save");
-        StyleButton(_btnAddRate, "Invoice.AddLine");
+        StyleButton(_btnDelete, "Common.Delete");
+        StyleButton(_btnAddRate, "MasterCards.AddRate");
 
+        _btnLoad.Click += async (_, _) => await LoadByCodeAsync(_txtCode.Text.Trim());
         _btnNew.Click += (_, _) => ResetCard();
-        _btnSave.Click += (_, _) => ShowPersistenceUnavailable();
-        _btnAddRate.Click += (_, _) =>
-        {
-            var r = new RateHistoryVm { Date = DateTime.Today, Rate = 3.75m };
-            _rates.Insert(0, r);
-            _grid.SelectedItem = r;
-        };
+        _btnSave.Click += async (_, _) => await SaveAsync();
+        _btnDelete.Click += async (_, _) => await DeleteAsync();
+        _btnAddRate.Click += async (_, _) => await AddRateAsync();
 
-        foreach (var b in new[] { _btnNew, _btnSave, _btnAddRate })
+        foreach (var b in new[] { _btnLoad, _btnNew, _btnSave, _btnDelete, _btnAddRate })
             toolbar.Children.Add(b);
 
-        // Explorer-style bottom command bar: flat, transparent, subtle 1px top divider.
         var actionBar = new Border
         {
             Child = toolbar,
@@ -108,9 +124,8 @@ public sealed class CurCard : BaseWin
         DockPanel.SetDock(actionBar, Dock.Bottom);
         root.Children.Add(actionBar);
 
-        // 2. Main Body: Split Left and Right
         var gridRoot = new Grid();
-        gridRoot.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(320) });
+        gridRoot.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(330) });
         gridRoot.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
         gridRoot.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
@@ -129,10 +144,15 @@ public sealed class CurCard : BaseWin
         cr1.Children.Add(Labeled("CurrencyCard.Symbol", _txtSymbol));
         cardPanel.Children.Add(cr1);
 
-        cardPanel.Children.Add(Labeled("CurrencyCard.Name", _txtNameAr));
+        cardPanel.Children.Add(Labeled("CurrencyCard.NameAr", _txtNameAr));
         cardPanel.Children.Add(Labeled("CurrencyCard.NameEn", _txtNameEn));
         cardPanel.Children.Add(Labeled("CurrencyCard.Fraction", _txtFraction));
 
+        _chkActive.Content = T("MasterCards.Active");
+        _chkActive.Tag = "MasterCards.Active";
+        cardPanel.Children.Add(new StackPanel { Margin = new Thickness(0, 4, 0, 8), Children = { _chkActive } });
+
+        cardPanel.Children.Add(Labeled("MasterCards.RateDate", _rateDate));
         var cr2 = new WrapPanel();
         cr2.Children.Add(Labeled("CurrencyCard.Rate", _txtRate));
         cr2.Children.Add(Labeled("CurrencyCard.MinRate", _txtMinRate));
@@ -143,9 +163,10 @@ public sealed class CurCard : BaseWin
         Grid.SetColumn(leftCard, 0);
         gridRoot.Children.Add(leftCard);
 
-        // Right DataGrid
         _grid.AutoGenerateColumns = false;
         _grid.CanUserAddRows = false;
+        _grid.CanUserDeleteRows = false;
+        _grid.IsReadOnly = true;
         _grid.AlternationCount = 2;
         _grid.SetResourceReference(StyleProperty, "VisuDataGridStyle");
         _grid.SetResourceReference(DataGrid.ColumnHeaderStyleProperty, "VisuDataGridHeaderStyle");
@@ -155,11 +176,10 @@ public sealed class CurCard : BaseWin
         _grid.SetResourceReference(DataGrid.AlternatingRowBackgroundProperty, "TableAlternateRowBrush");
 
         _grid.ItemsSource = _rates;
-        _grid.Columns.Add(TextCol(nameof(RateHistoryVm.DateText), 100));
-        _grid.Columns.Add(TextCol(nameof(RateHistoryVm.RateText), 90));
-        _grid.Columns.Add(TextCol(nameof(RateHistoryVm.BuyRateText), 90));
-        _grid.Columns.Add(TextCol(nameof(RateHistoryVm.SellRateText), 90));
-        _grid.Columns.Add(TextCol(nameof(RateHistoryVm.Notes), 120));
+        _grid.Columns.Add(TextCol("MasterCards.RateDate", nameof(RateRow.DateText), 110));
+        _grid.Columns.Add(TextCol("CurrencyCard.Rate", nameof(RateRow.RateText), 110));
+        _grid.Columns.Add(TextCol("CurrencyCard.MinRate", nameof(RateRow.MinText), 110));
+        _grid.Columns.Add(TextCol("CurrencyCard.MaxRate", nameof(RateRow.MaxText), 110));
 
         Grid.SetColumn(_grid, 2);
         gridRoot.Children.Add(_grid);
@@ -168,31 +188,138 @@ public sealed class CurCard : BaseWin
         Content = root;
     }
 
+    private void ShowCurrency(Currency currency)
+    {
+        _loadedId = currency.Id;
+        _txtCode.Text = currency.Code;
+        _txtNameEn.Text = currency.NameEn;
+        _txtNameAr.Text = currency.NameAr ?? string.Empty;
+        _txtSymbol.Text = currency.Symbol ?? string.Empty;
+        _txtFraction.Text = currency.FractionName ?? string.Empty;
+        _chkActive.IsChecked = currency.IsActive;
+    }
+
+    private async Task RefreshRatesAsync()
+    {
+        var service = AppHost.MasterCards;
+        _rates.Clear();
+        if (service is null || string.IsNullOrWhiteSpace(_txtCode.Text))
+            return;
+        var rows = await service.GetRatesAsync(CurrentCompanyCode, _txtCode.Text.Trim());
+        foreach (var row in rows)
+            _rates.Add(RateRow.From(row));
+        if (rows.Count > 0)
+        {
+            _txtRate.Text = rows[0].Rate.ToString("0.####", CultureInfo.InvariantCulture);
+            _txtMinRate.Text = rows[0].MinRate?.ToString("0.####", CultureInfo.InvariantCulture) ?? string.Empty;
+            _txtMaxRate.Text = rows[0].MaxRate?.ToString("0.####", CultureInfo.InvariantCulture) ?? string.Empty;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            var service = AppHost.MasterCards
+                ?? throw new InvalidOperationException(T("MasterCards.ServiceUnavailable"));
+            if (!AppHost.Permissions.Has(PermCat.Accounting.CurrencyManage))
+                throw new InvalidOperationException(T("MasterCards.PermissionDenied"));
+            var currency = new Currency
+            {
+                Id = _loadedId ?? Guid.NewGuid(),
+                Code = _txtCode.Text.Trim(),
+                NameEn = _txtNameEn.Text.Trim(),
+                NameAr = string.IsNullOrWhiteSpace(_txtNameAr.Text) ? null : _txtNameAr.Text.Trim(),
+                Symbol = string.IsNullOrWhiteSpace(_txtSymbol.Text) ? null : _txtSymbol.Text.Trim(),
+                FractionName = string.IsNullOrWhiteSpace(_txtFraction.Text) ? null : _txtFraction.Text.Trim(),
+                IsActive = _chkActive.IsChecked == true
+            };
+            await service.SaveCurrencyAsync(CurrentCompanyCode, currency, CurrentUserId);
+            _loadedId = currency.Id;
+            _txtCode.Text = currency.Code;
+            MessageBox.Show(this, T("CurrencyCard.Saved"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        try
+        {
+            var service = AppHost.MasterCards
+                ?? throw new InvalidOperationException(T("MasterCards.ServiceUnavailable"));
+            if (!_loadedId.HasValue)
+                return;
+            if (!AppHost.Permissions.Has(PermCat.Accounting.CurrencyManage))
+                throw new InvalidOperationException(T("MasterCards.PermissionDenied"));
+            if (MessageBox.Show(this, T("Common.ConfirmDelete"), Title, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                return;
+            await service.DeleteCurrencyAsync(CurrentCompanyCode, _loadedId.Value, CurrentUserId);
+            MessageBox.Show(this, T("MasterCards.Deleted"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            ResetCard();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task AddRateAsync()
+    {
+        try
+        {
+            var service = AppHost.MasterCards
+                ?? throw new InvalidOperationException(T("MasterCards.ServiceUnavailable"));
+            if (!AppHost.Permissions.Has(PermCat.Accounting.ExchangeRateManage))
+                throw new InvalidOperationException(T("MasterCards.PermissionDenied"));
+            if (_loadedId is null)
+                throw new InvalidOperationException(T("MasterCards.SaveCurrencyFirst"));
+            var rate = new CurrencyRate
+            {
+                CurrencyCode = _txtCode.Text.Trim(),
+                RateDate = _rateDate.SelectedDate.HasValue ? DateOnly.FromDateTime(_rateDate.SelectedDate.Value) : DateOnly.FromDateTime(DateTime.Today),
+                Rate = ParseDecimal(_txtRate.Text, "CurrencyCard.Rate"),
+                MinRate = ParseNullableDecimal(_txtMinRate.Text),
+                MaxRate = ParseNullableDecimal(_txtMaxRate.Text)
+            };
+            string? baseCurrency = null;
+            try { baseCurrency = AppCfgSvc.Current.Currency.ExchangeRates.BaseCurrency; }
+            catch { /* configuration not loaded yet: the > 0 rule still applies */ }
+            await service.AddRateAsync(CurrentCompanyCode, rate, CurrentUserId, baseCurrency);
+            MessageBox.Show(this, T("MasterCards.RateSaved"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            await RefreshRatesAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     private void ResetCard()
     {
-        _txtCode.Text = "USD";
+        _loadedId = null;
+        _txtCode.Text = string.Empty;
         _txtNameAr.Text = string.Empty;
         _txtNameEn.Text = string.Empty;
-        _txtSymbol.Text = "$";
+        _txtSymbol.Text = string.Empty;
         _txtFraction.Text = string.Empty;
-        _txtRate.Text = "3.7500";
-        _txtMinRate.Text = "3.7400";
-        _txtMaxRate.Text = "3.7600";
+        _txtRate.Text = string.Empty;
+        _txtMinRate.Text = string.Empty;
+        _txtMaxRate.Text = string.Empty;
+        _rateDate.SelectedDate = DateTime.Today;
+        _chkActive.IsChecked = true;
         _rates.Clear();
-        _rates.Add(new RateHistoryVm { Date = DateTime.Today, Rate = 3.7500m, BuyRate = 3.7450m, SellRate = 3.7550m, Notes = "Daily Bulletin" });
     }
 
     protected override void ApplyLocalizedText()
     {
         Title = T("CurrencyCard.Title");
-        if (_grid.Columns.Count >= 5)
-        {
-            _grid.Columns[0].Header = T("Invoice.Date");
-            _grid.Columns[1].Header = T("CurrencyCard.Rate");
-            _grid.Columns[2].Header = T("Invoice.Col.PurchasePrice");
-            _grid.Columns[3].Header = T("Invoice.Col.SalePrice");
-            _grid.Columns[4].Header = T("CostCenter.Notes");
-        }
+        _chkActive.Content = T("MasterCards.Active");
+        foreach (var (column, key) in _headers)
+            column.Header = T(key);
         RefreshLocalizedContent(Content as DependencyObject);
     }
 
@@ -203,6 +330,8 @@ public sealed class CurCard : BaseWin
             button.Content = T(bKey);
         if (parent is TextBlock tb && tb.Tag is string tKey)
             tb.Text = T(tKey);
+        if (parent is CheckBox check && check.Tag is string cKey)
+            check.Content = T(cKey);
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
             RefreshLocalizedContent(VisualTreeHelper.GetChild(parent, i));
     }
@@ -228,32 +357,50 @@ public sealed class CurCard : BaseWin
         btn.SetResourceReference(StyleProperty, "VisuButtonStyle");
     }
 
-    private static DataGridTextColumn TextCol(string path, double width)
-        => new()
-        {
-            Binding = new Binding(path) { UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged },
-            Width = width
-        };
-
-    private sealed class RateHistoryVm : INotifyPropertyChanged
+    private DataGridTextColumn TextCol(string key, string path, double width)
     {
-        private DateTime _date = DateTime.Today;
-        private decimal _rate, _buyRate, _sellRate;
-        private string _notes = "";
+        var column = new DataGridTextColumn
+        {
+            Binding = new Binding(path),
+            Width = new DataGridLength(width),
+            Header = T(key)
+        };
+        _headers.Add((column, key));
+        return column;
+    }
 
-        public DateTime Date { get => _date; set { _date = value; OnChanged(); OnChanged(nameof(DateText)); } }
-        public string DateText { get => _date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture); set { if (DateTime.TryParse(value, out var d)) Date = d; } }
-        public decimal Rate { get => _rate; set { _rate = value; OnChanged(nameof(RateText)); } }
-        public decimal BuyRate { get => _buyRate; set { _buyRate = value; OnChanged(nameof(BuyRateText)); } }
-        public decimal SellRate { get => _sellRate; set { _sellRate = value; OnChanged(nameof(SellRateText)); } }
-        public string Notes { get => _notes; set { _notes = value; OnChanged(); } }
+    private static decimal ParseDecimal(string text, string fieldKey)
+    {
+        if (decimal.TryParse((text ?? string.Empty).Trim(), NumberStyles.Number, CultureInfo.CurrentCulture, out var v) ||
+            decimal.TryParse((text ?? string.Empty).Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out v))
+            return v;
+        throw new InvalidOperationException($"{T(fieldKey)}: invalid number.");
+    }
 
-        public string RateText { get => _rate.ToString("0.####", CultureInfo.InvariantCulture); set { if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)) Rate = v; } }
-        public string BuyRateText { get => _buyRate == 0 ? "" : _buyRate.ToString("0.####", CultureInfo.InvariantCulture); set { if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)) BuyRate = v; } }
-        public string SellRateText { get => _sellRate == 0 ? "" : _sellRate.ToString("0.####", CultureInfo.InvariantCulture); set { if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)) SellRate = v; } }
+    private static decimal? ParseNullableDecimal(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+        if (decimal.TryParse(text.Trim(), NumberStyles.Number, CultureInfo.CurrentCulture, out var v) ||
+            decimal.TryParse(text.Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out v))
+            return v;
+        throw new InvalidOperationException("Invalid number format.");
+    }
 
-        public event PropertyChangedEventHandler? PropertyChanged;
-        private void OnChanged([CallerMemberName] string? name = null)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    /// <summary>Read-only display row for one persisted currency_rates entry.</summary>
+    private sealed class RateRow
+    {
+        public string DateText { get; init; } = string.Empty;
+        public string RateText { get; init; } = string.Empty;
+        public string MinText { get; init; } = string.Empty;
+        public string MaxText { get; init; } = string.Empty;
+
+        public static RateRow From(CurrencyRate rate) => new()
+        {
+            DateText = rate.RateDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            RateText = rate.Rate.ToString("0.####", CultureInfo.InvariantCulture),
+            MinText = rate.MinRate?.ToString("0.####", CultureInfo.InvariantCulture) ?? string.Empty,
+            MaxText = rate.MaxRate?.ToString("0.####", CultureInfo.InvariantCulture) ?? string.Empty
+        };
     }
 }
