@@ -12,7 +12,164 @@
 
     <!-- Identity metadata -->
     <System:String x:Key="ThemeName">Light</System:String>
-    <System:String x:Key="VisualIdentityVersion">2026.3</System:String>
+    <System:String x:Key="VisualIdentityVersion">2026.4</System:String>
+
+    <!-- Window material requested from Win11Chrome (DWM backdrop):
+         None | Mica | MicaAlt. Read centrally by
+         Services/Win11Chrome.cs; unsupported systems degrade to None. -->
+    <System:String x:Key="WindowBackdropKind">Mica</System:String>
+
+
+    <!-- =========================================================
+         DESIGN TOKEN SYSTEM (2026-2035)
+         Layered tokens. Component styles must reference SEMANTIC
+         tokens only; semantic tokens resolve to PRIMITIVE values.
+         A future dark palette only re-values the primitives and
+         the semantic layer below - component styles never change.
+
+           Layer 1  PRIMITIVES   raw palette / scale values
+           Layer 2  SEMANTIC     purpose-named brushes and metrics
+           Layer 3  COMPONENT    the styles further down this file
+         ========================================================= -->
+
+    <!-- ===== Layer 1: primitive neutral ramp ===== -->
+    <Color x:Key="NeutralWhiteColor">#FFFFFF</Color>
+    <Color x:Key="Neutral50Color">#FAFBFC</Color>
+    <Color x:Key="Neutral100Color">#F5F6F8</Color>
+    <Color x:Key="Neutral150Color">#F1F3F5</Color>
+    <Color x:Key="Neutral200Color">#F0F2F5</Color>
+    <Color x:Key="Neutral250Color">#E2E5E9</Color>
+    <Color x:Key="Neutral300Color">#D5D9DE</Color>
+    <Color x:Key="Neutral400Color">#B8BEC6</Color>
+    <Color x:Key="Neutral500Color">#9AA0A6</Color>
+    <Color x:Key="Neutral600Color">#5F6368</Color>
+    <Color x:Key="Neutral900Color">#202124</Color>
+    <Color x:Key="TextTertiaryColor">#71777D</Color>
+
+    <!-- ===== Layer 1: primitive accent (default palette; the
+         accent service in Services/VisuId.cs replaces the accent
+         BRUSHES at application level when the user switches
+         accent, so components keep referencing the brushes). ===== -->
+    <Color x:Key="AccentPrimaryColor">#607D8B</Color>
+    <Color x:Key="AccentDarkColor">#455A64</Color>
+    <Color x:Key="AccentLightColor">#ECEFF1</Color>
+    <Color x:Key="AccentHoverColor">#CFD8DC</Color>
+
+    <!-- ===== Layer 1: primitive status colors + light tints ===== -->
+    <Color x:Key="SuccessColor">#198754</Color>
+    <Color x:Key="WarningColor">#D99100</Color>
+    <Color x:Key="ErrorColor">#C0392B</Color>
+    <Color x:Key="InfoColor">#2878B5</Color>
+    <Color x:Key="SuccessDarkColor">#146C43</Color>
+    <Color x:Key="ErrorDarkColor">#922B21</Color>
+    <Color x:Key="SuccessTintColor">#E6F4EA</Color>
+    <Color x:Key="WarningTintColor">#FEF7E0</Color>
+    <Color x:Key="ErrorTintColor">#FDECEA</Color>
+    <Color x:Key="InfoTintColor">#E8F0FE</Color>
+
+    <!-- ===== Layer 2: semantic surface tokens ===== -->
+    <SolidColorBrush x:Key="SurfaceCanvasBrush" Color="{StaticResource Neutral100Color}"/>
+    <SolidColorBrush x:Key="SurfaceCardBrush" Color="{StaticResource NeutralWhiteColor}"/>
+    <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="{StaticResource NeutralWhiteColor}"/>
+    <SolidColorBrush x:Key="SurfaceSunkenBrush" Color="{StaticResource Neutral200Color}"/>
+    <SolidColorBrush x:Key="SurfaceFlyoutBrush" Color="{StaticResource NeutralWhiteColor}"/>
+    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="{StaticResource Neutral200Color}"/>
+    <SolidColorBrush x:Key="SurfacePressedBrush" Color="{StaticResource Neutral250Color}"/>
+    <!-- Accent-tinted selection wash. Services/VisuId.cs refreshes
+         this brush (and AccentSubtleBrush / FocusRingBrush /
+         FieldBorderFocusBrush) whenever the accent changes. -->
+    <SolidColorBrush x:Key="SurfaceSelectedBrush" Color="#26607D8B"/>
+    <SolidColorBrush x:Key="AccentSubtleBrush" Color="#26607D8B"/>
+
+    <!-- ===== Layer 2: semantic text tokens ===== -->
+    <SolidColorBrush x:Key="TextTertiaryBrush" Color="{StaticResource TextTertiaryColor}"/>
+    <SolidColorBrush x:Key="TextOnAccentBrush" Color="{StaticResource NeutralWhiteColor}"/>
+    <SolidColorBrush x:Key="TextInverseBrush" Color="{StaticResource NeutralWhiteColor}"/>
+
+    <!-- ===== Layer 2: semantic border / focus tokens ===== -->
+    <SolidColorBrush x:Key="BorderSubtleBrush" Color="{StaticResource Neutral250Color}"/>
+    <SolidColorBrush x:Key="BorderDefaultBrush" Color="{StaticResource Neutral300Color}"/>
+    <SolidColorBrush x:Key="FocusRingBrush" Color="{StaticResource AccentPrimaryColor}"/>
+
+    <!-- ===== Layer 2: semantic field tokens ===== -->
+    <SolidColorBrush x:Key="FieldBorderBrush" Color="{StaticResource Neutral300Color}"/>
+    <SolidColorBrush x:Key="FieldBorderHoverBrush" Color="{StaticResource Neutral400Color}"/>
+    <SolidColorBrush x:Key="FieldBorderFocusBrush" Color="{StaticResource AccentPrimaryColor}"/>
+    <SolidColorBrush x:Key="FieldBackgroundHoverBrush" Color="{StaticResource Neutral50Color}"/>
+
+    <!-- ===== Layer 2: semantic status surface tokens ===== -->
+    <SolidColorBrush x:Key="SuccessBackgroundBrush" Color="{StaticResource SuccessTintColor}"/>
+    <SolidColorBrush x:Key="WarningBackgroundBrush" Color="{StaticResource WarningTintColor}"/>
+    <SolidColorBrush x:Key="ErrorBackgroundBrush" Color="{StaticResource ErrorTintColor}"/>
+    <SolidColorBrush x:Key="InfoBackgroundBrush" Color="{StaticResource InfoTintColor}"/>
+
+    <!-- ===== Layer 2: compatibility tokens for module views
+         (DashVw / ModuleWorkspaceView / ReportGridVw / MatCard /
+         Lang / SerWin referenced these names before they existed;
+         they now resolve to the semantic layer). ===== -->
+    <SolidColorBrush x:Key="FieldBackground" Color="{StaticResource NeutralWhiteColor}"/>
+    <SolidColorBrush x:Key="SideBackground" Color="{StaticResource Neutral200Color}"/>
+    <SolidColorBrush x:Key="PanelBackground" Color="{StaticResource NeutralWhiteColor}"/>
+    <SolidColorBrush x:Key="SecondaryBrush" Color="{StaticResource Neutral200Color}"/>
+    <SolidColorBrush x:Key="ModuleCardBackgroundBrush" Color="{StaticResource NeutralWhiteColor}"/>
+    <SolidColorBrush x:Key="ModuleCardBorderBrush" Color="{StaticResource Neutral300Color}"/>
+    <SolidColorBrush x:Key="ModuleHeaderBackgroundBrush" Color="{StaticResource Neutral200Color}"/>
+
+    <!-- ===== Spacing scale (4px grid) ===== -->
+    <System:Double x:Key="Spacing0">0</System:Double>
+    <System:Double x:Key="Spacing1">4</System:Double>
+    <System:Double x:Key="Spacing2">8</System:Double>
+    <System:Double x:Key="Spacing3">12</System:Double>
+    <System:Double x:Key="Spacing4">16</System:Double>
+    <System:Double x:Key="Spacing5">20</System:Double>
+    <System:Double x:Key="Spacing6">24</System:Double>
+    <System:Double x:Key="Spacing8">32</System:Double>
+    <System:Double x:Key="Spacing10">40</System:Double>
+
+    <Thickness x:Key="PaddingField">10,0</Thickness>
+    <Thickness x:Key="PaddingCard">16</Thickness>
+    <Thickness x:Key="PaddingDialog">24</Thickness>
+    <Thickness x:Key="PaddingListItem">12,6</Thickness>
+    <Thickness x:Key="PaddingMenuItem">10,6</Thickness>
+
+    <!-- ===== Radius scale (controls stay crisp at 4px;
+         containers scale 8-12px) ===== -->
+    <CornerRadius x:Key="RadiusNone">0</CornerRadius>
+    <CornerRadius x:Key="RadiusXSmall">2</CornerRadius>
+    <CornerRadius x:Key="RadiusSmall">4</CornerRadius>
+    <CornerRadius x:Key="RadiusMedium">6</CornerRadius>
+    <CornerRadius x:Key="RadiusLarge">8</CornerRadius>
+    <CornerRadius x:Key="RadiusXLarge">12</CornerRadius>
+    <CornerRadius x:Key="FlyoutCornerRadius">8</CornerRadius>
+    <CornerRadius x:Key="CardLargeCornerRadius">12</CornerRadius>
+
+    <!-- ===== Type ramp: Display face for headings, Text face
+         for body (existing ApplicationFontFamily stays the
+         canonical body token). ===== -->
+    <FontFamily x:Key="DisplayFontFamily">Segoe UI Variable Display, Segoe UI</FontFamily>
+    <FontFamily x:Key="HeadingFontFamily">Segoe UI Variable Display, Segoe UI</FontFamily>
+
+    <!-- ===== Elevation tokens (soft, restrained; flyouts and
+         dialogs layer above cards) ===== -->
+    <DropShadowEffect x:Key="CardShadowEffect"
+                      Color="#000000" BlurRadius="12" ShadowDepth="2" Opacity="0.10"/>
+    <DropShadowEffect x:Key="FlyoutShadowEffect"
+                      Color="#000000" BlurRadius="24" ShadowDepth="4" Opacity="0.18"/>
+    <DropShadowEffect x:Key="DialogShadowEffect"
+                      Color="#000000" BlurRadius="32" ShadowDepth="8" Opacity="0.22"/>
+
+    <!-- ===== Motion tokens (referenced by template storyboards;
+         keep interactions at or below 300ms) ===== -->
+    <Duration x:Key="MotionDurationFast">0:0:0.1</Duration>
+    <Duration x:Key="MotionDurationNormal">0:0:0.167</Duration>
+    <Duration x:Key="MotionDurationSlow">0:0:0.3</Duration>
+    <CubicEase x:Key="MotionEaseOut" EasingMode="EaseOut"/>
+    <CubicEase x:Key="MotionEaseIn" EasingMode="EaseIn"/>
+    <CubicEase x:Key="MotionEaseStandard" EasingMode="EaseInOut"/>
+
+    <!-- ===== Touch-friendly metric (dense ERP default stays
+         ControlHeight = 32; touch surfaces opt into 40) ===== -->
+    <System:Double x:Key="TouchControlHeight">40</System:Double>
 
 
     <!-- =========================================================
@@ -163,15 +320,15 @@
 
     <SolidColorBrush
         x:Key="BackgroundBrush"
-        Color="#F5F6F8"/>
+        Color="{StaticResource Neutral100Color}"/>
 
     <SolidColorBrush
         x:Key="SurfaceBrush"
-        Color="#FFFFFF"/>
+        Color="{StaticResource NeutralWhiteColor}"/>
 
     <SolidColorBrush
         x:Key="SurfaceSecondaryBrush"
-        Color="#F0F2F5"/>
+        Color="{StaticResource Neutral200Color}"/>
 
     <SolidColorBrush
         x:Key="SurfaceDarkBrush"
@@ -183,11 +340,11 @@
 
     <SolidColorBrush
         x:Key="FieldBackgroundBrush"
-        Color="#FFFFFF"/>
+        Color="{StaticResource NeutralWhiteColor}"/>
 
     <SolidColorBrush
         x:Key="FieldReadOnlyBrush"
-        Color="#F1F3F5"/>
+        Color="{StaticResource Neutral150Color}"/>
 
 
     <!-- =========================================================
@@ -196,27 +353,27 @@
 
     <SolidColorBrush
         x:Key="TextPrimary"
-        Color="#202124"/>
+        Color="{StaticResource Neutral900Color}"/>
 
     <SolidColorBrush
         x:Key="TextSecondary"
-        Color="#5F6368"/>
+        Color="{StaticResource Neutral600Color}"/>
 
     <SolidColorBrush
         x:Key="TextDisabled"
-        Color="#9AA0A6"/>
+        Color="{StaticResource Neutral500Color}"/>
 
     <SolidColorBrush
         x:Key="BorderBrush"
-        Color="#D5D9DE"/>
+        Color="{StaticResource Neutral300Color}"/>
 
     <SolidColorBrush
         x:Key="BorderStrongBrush"
-        Color="#B8BEC6"/>
+        Color="{StaticResource Neutral400Color}"/>
 
     <SolidColorBrush
         x:Key="DividerBrush"
-        Color="#E2E5E9"/>
+        Color="{StaticResource Neutral250Color}"/>
 
 
     <!-- =========================================================
@@ -225,19 +382,19 @@
 
     <SolidColorBrush
         x:Key="AccentPrimary"
-        Color="#607D8B"/>
+        Color="{StaticResource AccentPrimaryColor}"/>
 
     <SolidColorBrush
         x:Key="AccentDark"
-        Color="#455A64"/>
+        Color="{StaticResource AccentDarkColor}"/>
 
     <SolidColorBrush
         x:Key="AccentLight"
-        Color="#ECEFF1"/>
+        Color="{StaticResource AccentLightColor}"/>
 
     <SolidColorBrush
         x:Key="AccentHover"
-        Color="#CFD8DC"/>
+        Color="{StaticResource AccentHoverColor}"/>
 
     <SolidColorBrush
         x:Key="AccentOnPrimaryBrush"
@@ -250,27 +407,27 @@
 
     <SolidColorBrush
         x:Key="SuccessBrush"
-        Color="#198754"/>
+        Color="{StaticResource SuccessColor}"/>
 
     <SolidColorBrush
         x:Key="WarningBrush"
-        Color="#D99100"/>
+        Color="{StaticResource WarningColor}"/>
 
     <SolidColorBrush
         x:Key="ErrorBrush"
-        Color="#C0392B"/>
+        Color="{StaticResource ErrorColor}"/>
 
     <SolidColorBrush
         x:Key="InfoBrush"
-        Color="#2878B5"/>
+        Color="{StaticResource InfoColor}"/>
 
     <SolidColorBrush
         x:Key="SuccessDarkBrush"
-        Color="#146C43"/>
+        Color="{StaticResource SuccessDarkColor}"/>
 
     <SolidColorBrush
         x:Key="ErrorDarkBrush"
-        Color="#922B21"/>
+        Color="{StaticResource ErrorDarkColor}"/>
     <SolidColorBrush x:Key="TextOnErrorBrush" Color="#FFD0D0"/>
     <SolidColorBrush x:Key="TextMutedOnDarkBrush" Color="#F0F0F0"/>
     <SolidColorBrush x:Key="TextOnDarkMutedBrush" Color="#CCFFFFFF"/>
@@ -302,7 +459,7 @@
 
     <SolidColorBrush
         x:Key="TableSurfaceBrush"
-        Color="#FAFBFC"/>
+        Color="{StaticResource Neutral50Color}"/>
 
     <SolidColorBrush
         x:Key="TableHeaderBrush"
@@ -373,71 +530,71 @@
 
     <SolidColorBrush
         x:Key="PrimaryBrush"
-        Color="#607D8B"/>
+        Color="{StaticResource AccentPrimaryColor}"/>
 
     <SolidColorBrush
         x:Key="PrimaryDarkBrush"
-        Color="#455A64"/>
+        Color="{StaticResource AccentDarkColor}"/>
 
     <SolidColorBrush
         x:Key="PrimaryLightBrush"
-        Color="#ECEFF1"/>
+        Color="{StaticResource AccentLightColor}"/>
 
     <SolidColorBrush
         x:Key="AccentBrush"
-        Color="#607D8B"/>
+        Color="{StaticResource AccentPrimaryColor}"/>
 
     <SolidColorBrush
         x:Key="AccentDarkBrush"
-        Color="#455A64"/>
+        Color="{StaticResource AccentDarkColor}"/>
 
     <SolidColorBrush
         x:Key="AccentLightBrush"
-        Color="#ECEFF1"/>
+        Color="{StaticResource AccentLightColor}"/>
 
     <SolidColorBrush
         x:Key="ShellBackgroundBrush"
-        Color="#F5F6F8"/>
+        Color="{StaticResource Neutral100Color}"/>
 
     <SolidColorBrush
         x:Key="ShellUnifiedLightBrush"
-        Color="#F5F6F8"/>
+        Color="{StaticResource Neutral100Color}"/>
 
     <SolidColorBrush
         x:Key="ShellContentBackgroundBrush"
-        Color="#F5F6F8"/>
+        Color="{StaticResource Neutral100Color}"/>
 
     <SolidColorBrush
         x:Key="SurfaceLightBrush"
-        Color="#F0F2F5"/>
+        Color="{StaticResource Neutral200Color}"/>
 
     <SolidColorBrush
         x:Key="TextBrush"
-        Color="#202124"/>
+        Color="{StaticResource Neutral900Color}"/>
 
     <SolidColorBrush
         x:Key="TextSecondaryBrush"
-        Color="#5F6368"/>
+        Color="{StaticResource Neutral600Color}"/>
 
     <SolidColorBrush
         x:Key="TextDisabledBrush"
-        Color="#9AA0A6"/>
+        Color="{StaticResource Neutral500Color}"/>
 
     <SolidColorBrush
         x:Key="BorderLightBrush"
-        Color="#E2E5E9"/>
+        Color="{StaticResource Neutral250Color}"/>
 
     <SolidColorBrush
         x:Key="BorderDarkBrush"
-        Color="#B8BEC6"/>
+        Color="{StaticResource Neutral400Color}"/>
 
     <SolidColorBrush
         x:Key="ShellContentBorderBrush"
-        Color="#D5D9DE"/>
+        Color="{StaticResource Neutral300Color}"/>
 
     <SolidColorBrush
         x:Key="FieldBorder"
-        Color="#D5D9DE"/>
+        Color="{StaticResource Neutral300Color}"/>
 
     <SolidColorBrush
         x:Key="PrimaryTransparentBrush"
@@ -596,6 +753,68 @@
         <Setter
             Property="Effect"
             Value="{StaticResource VisuTextShadow}"/>
+
+    </Style>
+
+
+    <!-- Type ramp (2026): Display face for display/heading roles,
+         Text face for body. Sizes come from the FontSize tokens. -->
+    <Style
+        x:Key="VisuDisplayStyle"
+        TargetType="{x:Type TextBlock}"
+        BasedOn="{StaticResource VisuTextStyle}">
+
+        <Setter
+            Property="FontFamily"
+            Value="{DynamicResource DisplayFontFamily}"/>
+
+        <Setter
+            Property="FontSize"
+            Value="{DynamicResource FontSize28}"/>
+
+        <Setter
+            Property="FontWeight"
+            Value="SemiBold"/>
+
+    </Style>
+
+
+    <Style
+        x:Key="VisuHeadingStyle"
+        TargetType="{x:Type TextBlock}"
+        BasedOn="{StaticResource VisuTextStyle}">
+
+        <Setter
+            Property="FontFamily"
+            Value="{DynamicResource HeadingFontFamily}"/>
+
+        <Setter
+            Property="FontSize"
+            Value="{DynamicResource FontSize20}"/>
+
+        <Setter
+            Property="FontWeight"
+            Value="SemiBold"/>
+
+    </Style>
+
+
+    <Style
+        x:Key="VisuSubheadingStyle"
+        TargetType="{x:Type TextBlock}"
+        BasedOn="{StaticResource VisuTextStyle}">
+
+        <Setter
+            Property="FontFamily"
+            Value="{DynamicResource HeadingFontFamily}"/>
+
+        <Setter
+            Property="FontSize"
+            Value="{DynamicResource FontSize15}"/>
+
+        <Setter
+            Property="FontWeight"
+            Value="SemiBold"/>
 
     </Style>
 
@@ -1087,6 +1306,29 @@
         <Setter
             Property="Padding"
             Value="12"/>
+
+    </Style>
+
+
+    <!-- Section card: card surface with the larger container
+         radius and card elevation. (WhsWin and other module
+         windows reference this key.) -->
+    <Style
+        x:Key="VisuSectionCardStyle"
+        TargetType="{x:Type Border}"
+        BasedOn="{StaticResource VisuCardStyle}">
+
+        <Setter
+            Property="CornerRadius"
+            Value="{DynamicResource CardLargeCornerRadius}"/>
+
+        <Setter
+            Property="Effect"
+            Value="{StaticResource CardShadowEffect}"/>
+
+        <Setter
+            Property="Padding"
+            Value="{DynamicResource PaddingCard}"/>
 
     </Style>
 
