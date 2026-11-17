@@ -17,6 +17,14 @@ namespace ShouTech.App.Services;
 ///   * transparent windows (AllowsTransparency, e.g. the splash) are
 ///     skipped because Mica requires an opaque window.
 ///
+/// The backdrop kind is a central design token: the string resource
+/// "WindowBackdropKind" in Themes/VisuId.xaml ("Mica", "MicaAlt" or
+/// "None"). Mica Alt (DWMSBT_TRANSIENTWINDOW) is the flatter,
+/// stronger-tinted variant Windows 11 uses for utility windows;
+/// it suits dense ERP dialogs. Change the token - or call
+/// <see cref="SetBackdrop"/> for a live window - and every window
+/// follows.
+///
 /// The app ships a light theme only (see Themes/VisuId.xaml,
 /// ThemeName = Light) and the theme service exposes no dark-mode
 /// state, so DWMWA_USE_IMMERSIVE_DARK_MODE is deliberately not set;
@@ -24,6 +32,14 @@ namespace ShouTech.App.Services;
 /// </summary>
 public static class Win11Chrome
 {
+    /// <summary>Backdrop material requested for a window.</summary>
+    public enum BackdropKind
+    {
+        None = 0,
+        Mica = 1,
+        MicaAlt = 2
+    }
+
     // DWM window attributes (dwmapi.h).
     private const int DwmwaWindowCornerPreference = 33;
     private const int DwmwaSystemBackdropType = 38;
@@ -31,8 +47,10 @@ public static class Win11Chrome
     // DWM_WINDOW_CORNER_PREFERENCE: DWMWCP_ROUND.
     private const int DwmwcpRound = 2;
 
-    // DWM_SYSTEMBACKDROP_TYPE: DWMSBT_MAINWINDOW (Mica).
-    private const int DwmsbtMainWindow = 2;
+    // DWM_SYSTEMBACKDROP_TYPE values.
+    private const int DwmsbtNone = 1;
+    private const int DwmsbtMainWindow = 2;   // Mica.
+    private const int DwmsbtTransientWindow = 3; // Mica Alt.
 
     private static readonly HashSet<Window> HookedWindows = new();
     private static readonly object HookLock = new();
@@ -94,6 +112,62 @@ public static class Win11Chrome
         }
     }
 
+    /// <summary>
+    /// Resolves the backdrop kind from the central
+    /// "WindowBackdropKind" design token in Themes/VisuId.xaml.
+    /// Unknown or missing values fall back to Mica, the long-standing
+    /// default, so a token typo can never break window creation.
+    /// </summary>
+    public static BackdropKind ResolveBackdropKind()
+    {
+        try
+        {
+            if (System.Windows.Application.Current?.TryFindResource("WindowBackdropKind") is string raw)
+            {
+                switch (raw.Trim().Replace(" ", string.Empty).ToLowerInvariant())
+                {
+                    case "none":
+                    case "off":
+                        return BackdropKind.None;
+                    case "micaalt":
+                    case "alt":
+                        return BackdropKind.MicaAlt;
+                }
+            }
+        }
+        catch
+        {
+            // Token lookup must never break chrome application.
+        }
+
+        return BackdropKind.Mica;
+    }
+
+    /// <summary>
+    /// Changes the backdrop of a window whose handle already exists
+    /// (e.g. from a future settings surface). Safe on any window and
+    /// on Windows 10, where the DWM call simply no-ops.
+    /// </summary>
+    public static void SetBackdrop(Window? window, BackdropKind kind)
+    {
+        if (window == null)
+            return;
+
+        try
+        {
+            if (window.AllowsTransparency)
+                return;
+
+            var hwnd = new WindowInteropHelper(window).Handle;
+            if (hwnd != IntPtr.Zero)
+                ApplyBackdrop(hwnd, kind);
+        }
+        catch
+        {
+            // Best effort only.
+        }
+    }
+
     private static void ApplyToHandle(Window window)
     {
         try
@@ -114,23 +188,33 @@ public static class Win11Chrome
                 // Older DWM: keep the WPF WindowChrome corner radius.
             }
 
-            // Mica backdrop (Windows 11 22H2, build 22621+). Where the
-            // window background is opaque this is a no-op visually; it
-            // tints any region the shell lets show through.
-            try
-            {
-                var backdrop = DwmsbtMainWindow;
-                _ = DwmSetWindowAttribute(
-                    hwnd, DwmwaSystemBackdropType, ref backdrop, sizeof(int));
-            }
-            catch
-            {
-                // Older DWM: no backdrop, window keeps its theme brush.
-            }
+            ApplyBackdrop(hwnd, ResolveBackdropKind());
         }
         catch
         {
             // Best effort only.
+        }
+    }
+
+    private static void ApplyBackdrop(IntPtr hwnd, BackdropKind kind)
+    {
+        // System backdrop (Windows 11 22H2, build 22621+). Where the
+        // window background is opaque this is a no-op visually; it
+        // tints any region the shell lets show through.
+        try
+        {
+            var backdrop = kind switch
+            {
+                BackdropKind.MicaAlt => DwmsbtTransientWindow,
+                BackdropKind.None => DwmsbtNone,
+                _ => DwmsbtMainWindow
+            };
+            _ = DwmSetWindowAttribute(
+                hwnd, DwmwaSystemBackdropType, ref backdrop, sizeof(int));
+        }
+        catch
+        {
+            // Older DWM: no backdrop, window keeps its theme brush.
         }
     }
 }

@@ -863,6 +863,24 @@ namespace ShouTech.App.Services
                 MakeBrush(palette.Light);
 
             /*
+             * Semantic tokens derived from the accent (2026 design
+             * system): templates reference these brushes, so they
+             * must follow the accent exactly like AccentPrimary.
+             */
+
+            app.Resources["AccentSubtleBrush"] =
+                MakeBrush(palette.Primary, 0x26);
+
+            app.Resources["SurfaceSelectedBrush"] =
+                MakeBrush(palette.Primary, 0x26);
+
+            app.Resources["FocusRingBrush"] =
+                MakeBrush(palette.Primary);
+
+            app.Resources["FieldBorderFocusBrush"] =
+                MakeBrush(palette.Primary);
+
+            /*
              * Existing ShouTech shell compatibility.
              */
 
