@@ -24,7 +24,7 @@
                                 CaptionHeight="0"
                                 ResizeBorderThickness="0"
                                 GlassFrameThickness="0"
-                                CornerRadius="8"
+                                CornerRadius="{DynamicResource Win11WindowCornerRadius}"
                                 UseAeroCaptionButtons="False"/>
 
             <!-- Window chrome buttons: minimize / maximize -->
@@ -183,7 +183,7 @@
             <!-- ============================================================
                  LISTS
                  ============================================================ -->
-            <Style TargetType="ListBox">
+            <Style TargetType="ListBox" BasedOn="{StaticResource VisuListBoxStyle}">
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
                 <Setter Property="BorderThickness" Value="0"/>
@@ -192,34 +192,38 @@
                 <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
             </Style>
 
-            <Style TargetType="ListBoxItem">
+            <Style TargetType="ListBoxItem" BasedOn="{StaticResource VisuListBoxItemStyle}">
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
                 <Setter Property="Padding" Value="12,8"/>
                 <Setter Property="Cursor" Value="Hand"/>
                 <Setter Property="Margin" Value="2"/>
-                <Style.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True">
-                        <Setter Property="Background" Value="{DynamicResource SurfaceLightBrush}"/>
-                    </Trigger>
-                    <Trigger Property="IsSelected" Value="True">
-                        <Setter Property="Background" Value="{DynamicResource PrimaryTransparentBrush}"/>
-                    </Trigger>
-                </Style.Triggers>
             </Style>
+
+            <Style TargetType="ListView" BasedOn="{StaticResource VisuListViewStyle}">
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                <Setter Property="FontSize" Value="{DynamicResource ApplicationFontSize}"/>
+            </Style>
+
+            <Style TargetType="ListViewItem" BasedOn="{StaticResource VisuListViewItemStyle}">
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                <Setter Property="FontSize" Value="{DynamicResource ApplicationFontSize}"/>
+            </Style>
+            <!-- GridViewColumnHeader implicit lives in VisuId.xaml,
+                 BasedOn VisuGridViewColumnHeaderStyle. -->
 
 
             <!-- ============================================================
                  TREES
                  ============================================================ -->
-            <Style TargetType="TreeView">
+            <Style TargetType="TreeView" BasedOn="{StaticResource VisuTreeViewStyle}">
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="BorderThickness" Value="0"/>
                 <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
                 <Setter Property="FontSize" Value="{DynamicResource ApplicationFontSize}"/>
             </Style>
 
-            <Style TargetType="TreeViewItem">
+            <Style TargetType="TreeViewItem" BasedOn="{StaticResource VisuTreeViewItemStyle}">
                 <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
                 <Setter Property="Padding" Value="4,2"/>
                 <Setter Property="FontSize" Value="{DynamicResource ApplicationFontSize}"/>
@@ -259,7 +263,7 @@
             <!-- ============================================================
                  TABS
                  ============================================================ -->
-            <Style TargetType="TabControl" BasedOn="{StaticResource VisuTabControlStyle}">
+            <Style TargetType="TabControl" BasedOn="{StaticResource Win11TabControlStyle}">
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
                 <Setter Property="BorderThickness" Value="0"/>
@@ -283,7 +287,7 @@
             <!-- ============================================================
                  TOOLTIP
                  ============================================================ -->
-            <Style TargetType="ToolTip">
+            <Style TargetType="ToolTip" BasedOn="{StaticResource Win11ToolTipStyle}">
                 <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
                 <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
@@ -297,25 +301,19 @@
             <!-- ============================================================
                  MENU / CONTEXTMENU
                  ============================================================ -->
-            <Style TargetType="Menu">
+            <Style TargetType="Menu" BasedOn="{StaticResource Win11MenuStyle}">
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
             </Style>
 
-            <Style TargetType="MenuItem">
+            <Style TargetType="MenuItem" BasedOn="{StaticResource Win11MenuItemStyle}">
                 <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="Padding" Value="10,6"/>
                 <Setter Property="FontSize" Value="{DynamicResource ApplicationFontSize}"/>
-                <Style.Triggers>
-                    <Trigger Property="IsHighlighted" Value="True">
-                        <Setter Property="Background"
-                                Value="{DynamicResource PrimaryTransparentBrush}"/>
-                    </Trigger>
-                </Style.Triggers>
             </Style>
 
-            <Style TargetType="ContextMenu">
+            <Style TargetType="ContextMenu" BasedOn="{StaticResource Win11ContextMenuStyle}">
                 <Setter Property="Padding" Value="4"/>
                 <Setter Property="HasDropShadow" Value="True"/>
                 <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
@@ -328,18 +326,15 @@
             <!-- ============================================================
                  SCROLLBAR
                  ============================================================ -->
-            <Style TargetType="ScrollBar">
+            <Style TargetType="ScrollBar" BasedOn="{StaticResource Win11ScrollBarStyle}">
                 <Setter Property="Background" Value="Transparent"/>
-                <Setter Property="Width" Value="8"/>
-                <Setter Property="MinWidth" Value="8"/>
             </Style>
 
 
             <!-- ============================================================
                  PROGRESSBAR
                  ============================================================ -->
-            <Style TargetType="ProgressBar">
-                <Setter Property="Height" Value="4"/>
+            <Style TargetType="ProgressBar" BasedOn="{StaticResource Win11ProgressBarStyle}">
                 <Setter Property="Background" Value="{DynamicResource SurfaceSecondaryBrush}"/>
                 <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}"/>
                 <Setter Property="BorderThickness" Value="0"/>
@@ -415,21 +410,15 @@
             <Storyboard x:Key="FadeInAnimation">
                 <DoubleAnimation Storyboard.TargetProperty="Opacity"
                                  From="0" To="1"
-                                 Duration="0:0:0.3">
-                    <DoubleAnimation.EasingFunction>
-                        <QuadraticEase EasingMode="EaseOut"/>
-                    </DoubleAnimation.EasingFunction>
-                </DoubleAnimation>
+                                 Duration="{StaticResource MotionDurationSlow}"
+                                 EasingFunction="{StaticResource MotionEaseOut}"/>
             </Storyboard>
 
             <Storyboard x:Key="FadeOutAnimation">
                 <DoubleAnimation Storyboard.TargetProperty="Opacity"
                                  From="1" To="0"
-                                 Duration="0:0:0.2">
-                    <DoubleAnimation.EasingFunction>
-                        <QuadraticEase EasingMode="EaseIn"/>
-                    </DoubleAnimation.EasingFunction>
-                </DoubleAnimation>
+                                 Duration="{StaticResource MotionDurationNormal}"
+                                 EasingFunction="{StaticResource MotionEaseIn}"/>
             </Storyboard>
 
         </ResourceDictionary>
