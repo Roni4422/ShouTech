@@ -27,25 +27,12 @@ namespace ShouTech.App.Views
 
         private void ApplyLanguage()
         {
-            var lang = ShouTech.App.App.CurrentLanguageCode ?? "ar";
-            Title = lang switch
-            {
-                "tr" => "Şirket geri yükleme",
-                "fr" => "Restaurer une société",
-                "en" => "Restore company",
-                _ => "استعادة شركة"
-            };
+            Title = ShouTech.App.Localization.Loc.Get("RestoreCompany.Title", "Restore a Company");
             txtTitle.Text = Title;
-            txtHint.Text = lang switch
-            {
-                "tr" => "Silinmiş bir şirket seçin, ardından Geri yükle'ye basın.",
-                "fr" => "Sélectionnez une société supprimée puis cliquez sur Restaurer.",
-                "en" => "Select a soft-deleted company, then click Restore.",
-                _ => "اختر شركة محذوفة منطقياً ثم اضغط استعادة."
-            };
-            btnRefresh.Content = lang switch { "tr" => "Yenile", "fr" => "Actualiser", "en" => "Refresh", _ => "تحديث" };
-            btnRestore.Content = lang switch { "tr" => "Geri yükle", "fr" => "Restaurer", "en" => "Restore", _ => "استعادة" };
-            btnClose.Content = lang switch { "tr" => "Kapat", "fr" => "Fermer", "en" => "Close", _ => "إغلاق" };
+            txtHint.Text = ShouTech.App.Localization.Loc.Get("RestoreCompany.Hint", "Select a deleted company, then click Restore.");
+            btnRefresh.Content = ShouTech.App.Localization.Loc.Get("RestoreCompany.Refresh", "Refresh");
+            btnRestore.Content = ShouTech.App.Localization.Loc.Get("RestoreCompany.Restore", "Restore");
+            btnClose.Content = ShouTech.App.Localization.Loc.Get("RestoreCompany.Close", "Close");
         }
 
         private async Task ReloadAsync()
@@ -68,13 +55,7 @@ namespace ShouTech.App.Views
                 {
                     var lang = ShouTech.App.App.CurrentLanguageCode ?? "ar";
                     MessageBox.Show(
-                        lang switch
-                        {
-                            "tr" => "Geri yüklenecek kayıt yok.\nNot: Daha önce indeksten tamamen silinen şirketler burada görünmez.",
-                            "fr" => "Aucun enregistrement à restaurer.\nNote: les sociétés purement retirées de l'index avant cette version n'apparaissent pas.",
-                            "en" => "No deleted companies to restore.\nNote: companies fully purged from the index before this update cannot appear here.",
-                            _ => "لا توجد شركات محذوفة للاستعادة.\nملاحظة: الشركات التي حُذفت من الفهرس بالكامل قبل هذا التحديث لا يمكن استرجاعها من هنا."
-                        },
+                        ShouTech.App.Localization.Loc.Get("RestoreCompany.EmptyList", "No deleted companies to restore."),
                         Title,
                         MessageBoxButton.OK,
                         MessageBoxImage.Information);
@@ -94,9 +75,7 @@ namespace ShouTech.App.Views
             if (lstDeleted.SelectedItem is not DeletedCompanyItem item)
             {
                 MessageBox.Show(
-                    (ShouTech.App.App.CurrentLanguageCode ?? "ar").StartsWith("ar", StringComparison.OrdinalIgnoreCase)
-                        ? "يرجى اختيار شركة."
-                        : "Please select a company.",
+                    ShouTech.App.Localization.Loc.Get("RestoreCompany.SelectCompany", "Please select a company."),
                     Title,
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
@@ -109,9 +88,7 @@ namespace ShouTech.App.Views
                 if (!ok)
                 {
                     MessageBox.Show(
-                        (ShouTech.App.App.CurrentLanguageCode ?? "ar").StartsWith("ar", StringComparison.OrdinalIgnoreCase)
-                            ? "تعذر استعادة الشركة من قاعدة البيانات."
-                            : "Could not restore the company from the database.",
+                        ShouTech.App.Localization.Loc.Get("RestoreCompany.RestoreDbFailed", "Could not restore the company from the database."),
                         Title,
                         MessageBoxButton.OK,
                         MessageBoxImage.Warning);
@@ -119,9 +96,7 @@ namespace ShouTech.App.Views
                 }
 
                 MessageBox.Show(
-                    (ShouTech.App.App.CurrentLanguageCode ?? "ar").StartsWith("ar", StringComparison.OrdinalIgnoreCase)
-                        ? $"تمت استعادة «{item.DisplayName}» وإعادة فهرستها."
-                        : $"«{item.DisplayName}» was restored and re-indexed.",
+                    string.Format(ShouTech.App.Localization.Loc.Get("RestoreCompany.RestoreOk", "\u201C{0}\u201D was restored and reindexed."), item.DisplayName),
                     Title,
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);

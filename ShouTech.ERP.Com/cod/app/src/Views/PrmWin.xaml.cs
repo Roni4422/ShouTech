@@ -33,7 +33,7 @@ public partial class PrmWin : Window
         catch (Exception ex)
         {
             AppHost.Logging.LogWarning("PrmWin", ex.Message);
-            MessageBox.Show(this, "تعذر تحميل الصلاحيات.", "ShouTech ERP", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(this, "Could not load permissions.", "ShouTech ERP", MessageBoxButton.OK, MessageBoxImage.Error);
             DialogResult = false;
             Close();
         }

@@ -93,7 +93,7 @@ namespace Kern.Tests
                     using var insertCompany = connection.CreateCommand();
                     insertCompany.CommandText = """
                         INSERT INTO companies (company_id, company_code, company_name_ar, company_name_en)
-                        VALUES ($id, $code, 'شركة اختبار الحماية', 'Guard Test Company');
+                        VALUES ($id, $code, 'Guard Test Company', 'Guard Test Company');
                         """;
                     insertCompany.Parameters.AddWithValue("$id", companyId.ToString("D"));
                     insertCompany.Parameters.AddWithValue("$code", GuardCompanyCode);

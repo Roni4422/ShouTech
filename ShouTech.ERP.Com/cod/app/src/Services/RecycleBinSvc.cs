@@ -809,9 +809,9 @@ public static class RecycleBinSvc
 			command.Parameters.Add(parameter);
 		}
 
-		// ==== التصحيح المطلوب لحل CS8604 ====
-		// كانت: private static string Quote(string identifier)
-		// أصبحت: private static string Quote(string? identifier)  مع فحص null صريح.
+		// ==== Fix required to resolve CS8604 ====
+		// Was: private static string Quote(string identifier)
+		// Became: private static string Quote(string? identifier) with an explicit null check.
 		// Phase 4: quoting/validation centralized in the shared SqlIdentifier helper.
 		private static string Quote(string? identifier)
 			=> SqlIdentifier.Quote(identifier);

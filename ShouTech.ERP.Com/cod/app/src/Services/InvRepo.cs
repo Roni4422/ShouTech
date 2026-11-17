@@ -277,7 +277,7 @@ public static class InvRepo
         using (var upd = connection.CreateCommand())
         {
             upd.Transaction = tx;
-            // Assign a journal voucher number for Phenix «السند» (invoice doc no as reference key).
+            // Assign a journal voucher number for Phenix "voucher" (invoice doc no as reference key).
             var journalNo = "JV-" + (doc.DocNo ?? docId.ToString(CultureInfo.InvariantCulture));
             doc.JournalDocNo = journalNo;
 
@@ -534,7 +534,7 @@ public static class InvRepo
                 ExchangeRate = original.ExchangeRate,
                 TaxCode = original.TaxCode,
                 DefaultTaxRate = original.DefaultTaxRate,
-                // Phenix «الأصل»: return documents point at the original invoice.
+                // Phenix "original": return documents point at the original invoice.
                 OriginalDocId = original.DocId,
                 OriginalDocKind = original.Kind,
                 OriginalDocNo = original.DocNo,

@@ -111,9 +111,9 @@ namespace ShouTech.App.Reporting
     /// </summary>
     public sealed class ReportDefinition
     {
-        public int? ReportDefID { get; set; }           // NULL = لم يُحفظ بعد
-        public string ReportKey { get; set; } = string.Empty;   // التقرير الأساسي (مثل SALES_BY_ITEM)
-        public string ReportName { get; set; } = string.Empty;  // الاسم الذي اختاره المستخدم
+        public int? ReportDefID { get; set; }           // NULL = not saved yet
+        public string ReportKey { get; set; } = string.Empty;   // The base report (e.g. SALES_BY_ITEM)
+        public string ReportName { get; set; } = string.Empty;  // The name chosen by the user
         public string? Description { get; set; }
         public string LanguageCode { get; set; } = "ar";
         public int OwnerUserID { get; set; }
@@ -137,13 +137,13 @@ namespace ShouTech.App.Reporting
         {
             var clone = new ReportDefinition
             {
-                ReportDefID = null,                     // نسخة جديدة — هوية جديدة عند الحفظ
+                ReportDefID = null,                     // New copy - new identity on save
                 ReportKey = ReportKey,
                 ReportName = newName,
                 Description = Description,
                 LanguageCode = LanguageCode,
                 OwnerUserID = ownerUserId,
-                Visibility = ReportVisibility.Private,  // النسخ تبدأ خاصة دائماً
+                Visibility = ReportVisibility.Private,  // Copies always start as private
                 DataSourceKey = DataSourceKey,
                 IsLandscape = IsLandscape,
                 ShowTotalsRow = ShowTotalsRow,

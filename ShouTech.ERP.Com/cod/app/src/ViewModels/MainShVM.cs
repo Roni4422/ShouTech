@@ -375,26 +375,29 @@ namespace ShouTech.App.ViewModels
         {
             var key = actionKey ?? label ?? string.Empty;
 
+            // Callers may pass localized display text instead of a key (e.g. a
+            // ribbon header). Resolve it to its catalog key through the
+            // locale-neutral label index, which covers every UI language.
+            if (AppHost.Localization is LocSvc locSvc &&
+                locSvc.TryResolveKeyFromLabel(key, out var resolvedKey))
+                key = resolvedKey;
+
             switch (key)
             {
                 case "Menu.Open":
-                case "فتح":
                     OpenCompanyWindow();
                     return true;
 
                 case "Menu.New":
-                case "جديد":
                     OpenNewCompanyWizard();
                     return true;
 
                 case "Menu.Exit":
                 case "Exit.Exit":
-                case "خروج":
                     ExecuteExit();
                     return true;
 
                 case "Exit.ExitAndShutdown":
-                case "خروج وإطفاء الحاسب":
                     var result = MessageBox.Show(
                         Loc.Get("Messages.ConfirmExit"),
                         Loc.Get("Buttons.OK"),
@@ -419,7 +422,6 @@ namespace ShouTech.App.ViewModels
                     return true;
 
                 case "Help.About":
-                case "حول البرنامج":
                     MessageBox.Show(
                         $"{Loc.Get("Application.Title")}\n" +
                         $"{Loc.Get("Shell.VersionLabel")}\n" +
@@ -433,7 +435,6 @@ namespace ShouTech.App.ViewModels
                     return true;
 
                 case "Tools.Backup":
-                case "النسخ الاحتياطي":
                     try
                     {
                         StatusMessage = StatBarEn.Loading;
@@ -849,7 +850,7 @@ namespace ShouTech.App.ViewModels
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    $"تعذر فتح نافذة الشركات: {ex.Message}",
+                    $"Could not open the companies window: {ex.Message}",
                     "ShouTech ERP",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);

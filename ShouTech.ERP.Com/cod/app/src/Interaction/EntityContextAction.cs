@@ -20,17 +20,17 @@ public static class EntityContextActions
     {
         EntityContextType.Item =>
         [
-            new("item.details", "تفاصيل المادة", "Inventory", contextType),
-            new("item.movements", "حركة المادة", "Inventory", contextType),
-            new("item.sales", "مبيعات المادة", "Reports", contextType),
-            new("item.valuation", "تقييم المخزون", "Reports", contextType)
+            new("item.details", "Item Details", "Inventory", contextType),
+            new("item.movements", "Item Movements", "Inventory", contextType),
+            new("item.sales", "Item Sales", "Reports", contextType),
+            new("item.valuation", "Inventory Valuation", "Reports", contextType)
         ],
         EntityContextType.Account =>
         [
-            new("account.card", "كشف الحساب", "Accounting", contextType),
-            new("account.ledger", "دفتر الأستاذ", "Accounting", contextType),
-            new("account.balance", "ميزان المراجعة", "Reports", contextType),
-            new("account.analysis", "تحليل الحساب", "Reports", contextType)
+            new("account.card", "Account Statement", "Accounting", contextType),
+            new("account.ledger", "Ledger", "Accounting", contextType),
+            new("account.balance", "Trial Balance", "Reports", contextType),
+            new("account.analysis", "Account Analysis", "Reports", contextType)
         ],
         _ => Array.Empty<EntityContextAction>()
     };

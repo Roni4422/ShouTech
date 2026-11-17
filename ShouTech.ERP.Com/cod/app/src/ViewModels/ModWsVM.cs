@@ -13,8 +13,8 @@ namespace ShouTech.App.ViewModels
 			ModuleKey = moduleKey;
 			ActionTitle = actionTitle;
 			ModuleDisplayName = RibModMap.GetModuleDisplayName(moduleKey);
-			Description = $"وحدة {ModuleDisplayName} — {ActionTitle}";
-			StatusHint = "جاهز للتطوير — سيتم ربط هذه الشاشة بقاعدة البيانات والخدمات التجارية.";
+			Description = $"{ModuleDisplayName} module - {ActionTitle}";
+			StatusHint = "Ready for development - this screen will be connected to the database and business services.";
 
 			ItemActions = GetItemActions();
 			AccountActions = GetAccountActions();
@@ -46,7 +46,7 @@ namespace ShouTech.App.ViewModels
             if (action is null)
                 return;
 
-            StatusHint = $"تم طلب: {action.Label}";
+            StatusHint = $"Requested: {action.Label}";
             OnPropertyChanged(nameof(StatusHint));
         }
     }

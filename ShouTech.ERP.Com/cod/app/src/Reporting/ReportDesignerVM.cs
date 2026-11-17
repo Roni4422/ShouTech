@@ -198,7 +198,7 @@ namespace ShouTech.App.Reporting
                 }
                 catch (FormulaException ex)
                 {
-                    StatusMessage = $"خطأ في معادلة العمود «{col.CaptionAR}»: {ex.Message}";
+                    StatusMessage = $"Error in the formula of column '{col.CaptionAR}': {ex.Message}";
                 }
             }
 
@@ -242,7 +242,7 @@ namespace ShouTech.App.Reporting
             var col = new ReportColumnDef
             {
                 FieldKey = key,
-                CaptionAR = $"عمود محسوب {index - 1}",
+                CaptionAR = $"Calculated column {index - 1}",
                 ColumnType = ReportColumnType.Formula,
                 FormulaText = string.Empty,
                 DataFormat = ReportDataFormat.Money,
@@ -305,7 +305,7 @@ namespace ShouTech.App.Reporting
         {
             if (!IsOwner)
             {
-                StatusMessage = "لا يمكنك تعديل هذا التقرير — استخدم «حفظ باسم».";
+                StatusMessage = "You cannot edit this report - use 'Save As'.";
                 return;
             }
 
@@ -317,11 +317,11 @@ namespace ShouTech.App.Reporting
             {
                 _definition.ReportDefID = await ReportRepo.SaveReportAsync(
                     _definition, _companyId, _userId);
-                StatusMessage = "تم حفظ التقرير بنجاح.";
+                StatusMessage = "The report was saved successfully.";
             }
             catch (Exception ex)
             {
-                StatusMessage = $"فشل الحفظ: {ex.Message}";
+                StatusMessage = $"Save failed: {ex.Message}";
             }
             finally
             {
@@ -333,7 +333,7 @@ namespace ShouTech.App.Reporting
         {
             if (string.IsNullOrWhiteSpace(newName))
             {
-                StatusMessage = "أدخل اسماً للتقرير الجديد.";
+                StatusMessage = "Enter a name for the new report.";
                 return;
             }
 
@@ -350,11 +350,11 @@ namespace ShouTech.App.Reporting
                 OnChanged(nameof(Definition));
                 OnChanged(nameof(ReportName));
                 OnChanged(nameof(IsOwner));
-                StatusMessage = $"تم حفظ التقرير باسم «{newName.Trim()}».";
+                StatusMessage = $"The report was saved as '{newName.Trim()}'.";
             }
             catch (Exception ex)
             {
-                StatusMessage = $"فشل الحفظ باسم: {ex.Message}";
+                StatusMessage = $"Save As failed: {ex.Message}";
             }
             finally
             {
@@ -369,7 +369,7 @@ namespace ShouTech.App.Reporting
                 .FirstOrDefault(g => g.Count() > 1);
             if (duplicate is not null)
             {
-                StatusMessage = $"مفتاح عمود مكرر: {duplicate.Key}.";
+                StatusMessage = $"Duplicate column key: {duplicate.Key}.";
                 return false;
             }
 
@@ -378,12 +378,12 @@ namespace ShouTech.App.Reporting
             {
                 if (string.IsNullOrWhiteSpace(col.FormulaText))
                 {
-                    StatusMessage = $"العمود «{col.CaptionAR}» معادلته فارغة.";
+                    StatusMessage = $"Column '{col.CaptionAR}' has an empty formula.";
                     return false;
                 }
                 if (!CompiledFormula.TryCompile(col.FormulaText, out var err))
                 {
-                    StatusMessage = $"معادلة العمود «{col.CaptionAR}» غير صالحة: {err}";
+                    StatusMessage = $"The formula of column '{col.CaptionAR}' is invalid: {err}";
                     return false;
                 }
             }

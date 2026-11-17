@@ -871,14 +871,11 @@ public static class DataExportSvc
     {
         var normalized = value.ToLowerInvariant();
         return normalized.Contains("return", StringComparison.Ordinal) ||
-            normalized.Contains("refund", StringComparison.Ordinal) ||
-            value.Contains("مرتجع", StringComparison.Ordinal);
+            normalized.Contains("refund", StringComparison.Ordinal);
     }
 
     private static bool IsOpeningStockType(string value)
-        => value.Contains("open", StringComparison.OrdinalIgnoreCase) ||
-            value.Contains("افتتاح", StringComparison.Ordinal) ||
-            value.Contains("أول", StringComparison.Ordinal);
+        => value.Contains("open", StringComparison.OrdinalIgnoreCase);
 
     private const string DatasetIdentityPrefix = "__SHOUTECH_DATASET_V1__:";
     private const int DatasetIdentityVersion = 1;
@@ -1461,7 +1458,7 @@ public static class DataExportSvc
         if (option.Filter == DataExportFilter.OpeningStock &&
             (string.Equals(option.TableName, "stock_movements", StringComparison.OrdinalIgnoreCase) ||
              string.Equals(option.TableName, "material_stock_movements", StringComparison.OrdinalIgnoreCase)))
-            return " WHERE LOWER(CAST(movement_type AS TEXT)) LIKE '%open%' OR CAST(movement_type AS TEXT) LIKE '%افتتاح%' OR CAST(movement_type AS TEXT) LIKE '%أول%'";
+            return " WHERE LOWER(CAST(movement_type AS TEXT)) LIKE '%open%'";
 
         return string.Empty;
     }
@@ -1475,8 +1472,8 @@ public static class DataExportSvc
 
     private static string TransactionTypeFilter(bool returns)
         => returns
-            ? "(LOWER(CAST(transaction_type AS TEXT)) LIKE '%return%' OR LOWER(CAST(transaction_type AS TEXT)) LIKE '%refund%' OR CAST(transaction_type AS TEXT) LIKE '%مرتجع%')"
-            : "(LOWER(CAST(transaction_type AS TEXT)) NOT LIKE '%return%' AND LOWER(CAST(transaction_type AS TEXT)) NOT LIKE '%refund%' AND CAST(transaction_type AS TEXT) NOT LIKE '%مرتجع%')";
+            ? "(LOWER(CAST(transaction_type AS TEXT)) LIKE '%return%' OR LOWER(CAST(transaction_type AS TEXT)) LIKE '%refund%')"
+            : "(LOWER(CAST(transaction_type AS TEXT)) NOT LIKE '%return%' AND LOWER(CAST(transaction_type AS TEXT)) NOT LIKE '%refund%')";
 
     // Phase 4: identifier quoting is centralized in SqlIdentifier, which rejects
     // any identifier outside [A-Za-z_][A-Za-z0-9_]* instead of merely escaping it.

@@ -890,7 +890,7 @@ internal static class SteiSvc
             finally
             {
                
-                try { if (File.Exists(tmpPath)) File.Delete(tmpPath); } catch { /* أفضل جهد */ }
+                try { if (File.Exists(tmpPath)) File.Delete(tmpPath); } catch { /* best effort */ }
             }
         }
 

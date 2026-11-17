@@ -97,14 +97,14 @@ public interface IAuthSvc
         public void Login(string username)
         {
             CurrentUser = username;
-            AppHost.Logging.LogInfo("Session", $"✅ بدء جلسة المستخدم: {username}");
+            AppHost.Logging.LogInfo("Session", $"✅ User session started: {username}");
         }
 
         public void Logout()
         {
             if (CurrentUser != null)
             {
-                AppHost.Logging.LogInfo("Session", $"🚪 إنهاء جلسة المستخدم: {CurrentUser}");
+                AppHost.Logging.LogInfo("Session", $"🚪 User session ended: {CurrentUser}");
                 CurrentUser = null;
             }
         }
@@ -808,13 +808,13 @@ public sealed class AuthServ : IAuthSvc
     private static AuthResult Succeed(UserInfo user)
     {
         SyncSession(user);
-        return new AuthResult { Success = true, Message = "تم تسجيل الدخول بنجاح", User = user };
+        return new AuthResult { Success = true, Message = "Login succeeded", User = user };
     }
 
     private static AuthResult Failed() => new()
     {
         Success = false,
-        Message = "اسم المستخدم أو كلمة المرور غير صحيحة"
+        Message = "The username or password is incorrect"
     };
 
     private static UserInfo BuildCompanyAdminUser(string username, StoredCoRec company) => new()
@@ -1285,7 +1285,7 @@ public sealed class AuthServ : IAuthSvc
             && !string.IsNullOrWhiteSpace(company.Name))
             return company.Name;
 
-        return "الشركة الرئيسية";
+        return "Main Company";
     }
 }
 

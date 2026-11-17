@@ -121,7 +121,7 @@ namespace ShouTech.App.Reporting
                 "+" => l.Value + r.Value,
                 "-" => l.Value - r.Value,
                 "*" => l.Value * r.Value,
-                "/" => r.Value == 0m ? null : l.Value / r.Value,   // ÷0 → NULL لا انفجار
+                "/" => r.Value == 0m ? null : l.Value / r.Value,   // divide by zero -> NULL, never throws
                 "%" => r.Value == 0m ? null : l.Value % r.Value,
                 _ => null
             };
@@ -465,7 +465,7 @@ namespace ShouTech.App.Reporting
             }
             catch (OverflowException)
             {
-                return null; // قيمة تفوق النطاق → خلية فارغة بدل انهيار الشبكة
+                return null; // value out of range -> empty cell instead of crashing the grid
             }
         }
 

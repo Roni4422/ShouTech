@@ -57,8 +57,8 @@ namespace ShouTech.App.ViewModels
                 new()
                 {
                     Code = "ar",
-                    DisplayName = "العربية",
-                    NativeName = "العربية",
+                    DisplayName = "Arabic",
+                    NativeName = "Arabic",
                     Icon = "🇸🇦"
                 },
 
@@ -81,8 +81,8 @@ namespace ShouTech.App.ViewModels
                 new()
                 {
                     Code = "ku",
-                    DisplayName = "کوردی",
-                    NativeName = "کوردی",
+                    DisplayName = "Kurdish",
+                    NativeName = "Kurdish",
                     Icon = "🌐"
                 },
 
