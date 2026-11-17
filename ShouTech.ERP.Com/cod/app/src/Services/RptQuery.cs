@@ -28,6 +28,16 @@ namespace ShouTech.App.Services;
 /// CODE; journal tables carry the company Guid). No GL report reads stored
 /// account balances — the legacy accounts.balance/debit/credit columns
 /// were never maintained (sweep C-2) and their table no longer exists.
+///
+/// BASE-CURRENCY BASIS (Fix Phase Step 7, migration 062, sweep J-5):
+/// every GL total below sums the lines' BASE amounts
+/// (COALESCE(base_debit, debit) / COALESCE(base_credit, credit) — the
+/// fallback keeps rows written before the 062 backfill honest), and
+/// every party-balance total sums party_ledger's base amounts, so a
+/// foreign-currency entry reports at its converted value, never at
+/// face value. Document-list reports (invoice lists, price history,
+/// targets) still show DOCUMENT amounts in the document's own
+/// currency — they are transaction-currency views by design.
 /// </summary>
 public static class RptQuery
 {
@@ -57,7 +67,7 @@ public static class RptQuery
             FROM chart_of_accounts a
             INNER JOIN companies co ON co.company_id = a.company_id
             LEFT JOIN (
-                SELECT l.account_id AS aid, l.debit AS debit, l.credit AS credit
+                SELECT l.account_id AS aid, COALESCE(l.base_debit, l.debit) AS debit, COALESCE(l.base_credit, l.credit) AS credit
                 FROM journal_entry_lines l
                 INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
                 WHERE j.status = 1 AND j.entry_date >= $from AND j.entry_date < $to
@@ -83,8 +93,8 @@ public static class RptQuery
                    COALESCE(a.name_ar, a.account_name) AS Name,
                    a.account_name AS NameEn,
                    CASE WHEN a.account_type IN ('LIABILITY', 'EQUITY')
-                        THEN SUM(COALESCE(l.credit, 0) - COALESCE(l.debit, 0))
-                        ELSE SUM(COALESCE(l.debit, 0) - COALESCE(l.credit, 0))
+                        THEN SUM(COALESCE(COALESCE(l.base_credit, l.credit), 0) - COALESCE(COALESCE(l.base_debit, l.debit), 0))
+                        ELSE SUM(COALESCE(COALESCE(l.base_debit, l.debit), 0) - COALESCE(COALESCE(l.base_credit, l.credit), 0))
                    END AS Amount
             FROM chart_of_accounts a
             INNER JOIN companies co ON co.company_id = a.company_id
@@ -106,7 +116,7 @@ public static class RptQuery
                     AND child.is_deleted = 0
               )
             GROUP BY a.account_id, a.account_code, a.name_ar, a.account_name, a.account_type
-            HAVING ABS(SUM(COALESCE(l.debit, 0) - COALESCE(l.credit, 0))) > 0.0001
+            HAVING ABS(SUM(COALESCE(COALESCE(l.base_debit, l.debit), 0) - COALESCE(COALESCE(l.base_credit, l.credit), 0))) > 0.0001
             ORDER BY a.account_code;
             """;
         if (DatabaseRuntime.IsPostgreSql())
@@ -126,8 +136,8 @@ public static class RptQuery
                    COALESCE(a.name_ar, a.account_name) AS Name,
                    a.account_name AS NameEn,
                    CASE WHEN a.account_type = 'REVENUE'
-                        THEN SUM(COALESCE(l.credit, 0) - COALESCE(l.debit, 0))
-                        ELSE SUM(COALESCE(l.debit, 0) - COALESCE(l.credit, 0))
+                        THEN SUM(COALESCE(COALESCE(l.base_credit, l.credit), 0) - COALESCE(COALESCE(l.base_debit, l.debit), 0))
+                        ELSE SUM(COALESCE(COALESCE(l.base_debit, l.debit), 0) - COALESCE(COALESCE(l.base_credit, l.credit), 0))
                    END AS Amount
             FROM chart_of_accounts a
             INNER JOIN companies co ON co.company_id = a.company_id
@@ -150,7 +160,7 @@ public static class RptQuery
                     AND child.is_deleted = 0
               )
             GROUP BY a.account_id, a.account_code, a.name_ar, a.account_name, a.account_type
-            HAVING ABS(SUM(COALESCE(l.debit, 0) - COALESCE(l.credit, 0))) > 0.0001
+            HAVING ABS(SUM(COALESCE(COALESCE(l.base_debit, l.debit), 0) - COALESCE(COALESCE(l.base_credit, l.credit), 0))) > 0.0001
             ORDER BY a.account_code;
             """;
         if (DatabaseRuntime.IsPostgreSql())
@@ -170,8 +180,8 @@ public static class RptQuery
             SELECT j.entry_date AS EntryDate,
                    COALESCE(j.document_number, CAST(j.journal_entry_id AS TEXT)) AS DocNo,
                    COALESCE(j.description, '') AS Description,
-                   COALESCE(l.debit, 0) AS Debit,
-                   COALESCE(l.credit, 0) AS Credit,
+                   COALESCE(COALESCE(l.base_debit, l.debit), 0) AS Debit,
+                   COALESCE(COALESCE(l.base_credit, l.credit), 0) AS Credit,
                    COALESCE(l.note, '') AS Note
             FROM journal_entry_lines l
             INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
@@ -200,8 +210,8 @@ public static class RptQuery
                    COALESCE(j.document_number, CAST(j.journal_entry_id AS TEXT)) AS DocNo,
                    COALESCE(j.description, '') AS Description,
                    CASE j.status WHEN 0 THEN 'Draft' WHEN 1 THEN 'Posted' ELSE 'Reversed' END AS Status,
-                   COALESCE((SELECT SUM(debit) FROM journal_entry_lines x WHERE x.journal_entry_id = j.journal_entry_id), 0) AS Debit,
-                   COALESCE((SELECT SUM(credit) FROM journal_entry_lines x WHERE x.journal_entry_id = j.journal_entry_id), 0) AS Credit,
+                   COALESCE((SELECT SUM(COALESCE(base_debit, debit)) FROM journal_entry_lines x WHERE x.journal_entry_id = j.journal_entry_id), 0) AS Debit,
+                   COALESCE((SELECT SUM(COALESCE(base_credit, credit)) FROM journal_entry_lines x WHERE x.journal_entry_id = j.journal_entry_id), 0) AS Credit,
                    COALESCE(j.created_by, '') AS CreatedBy
             FROM journal_entries j
             INNER JOIN companies co ON co.company_id = j.company_id
@@ -380,7 +390,7 @@ public static class RptQuery
                    COALESCE(bal.balance, 0) AS Balance
             FROM parties c
             LEFT JOIN (
-                SELECT party_id, SUM(debit - credit) AS balance
+                SELECT party_id, SUM(COALESCE(base_debit, debit) - COALESCE(base_credit, credit)) AS balance
                 FROM party_ledger
                 WHERE company_id = $company AND party_kind = 'C'
                 GROUP BY party_id
@@ -405,7 +415,7 @@ public static class RptQuery
                    COALESCE(bal.balance, 0) AS Balance
             FROM parties s
             LEFT JOIN (
-                SELECT party_id, SUM(credit - debit) AS balance
+                SELECT party_id, SUM(COALESCE(base_credit, credit) - COALESCE(base_debit, debit)) AS balance
                 FROM party_ledger
                 WHERE company_id = $company AND party_kind = 'S'
                 GROUP BY party_id
@@ -484,7 +494,9 @@ public static class RptQuery
         // amount is oriented per kind (suppliers age their payables,
         // credit - debit — RP-2). Day difference is provider-aware
         // (julianday is SQLite-only — report-family R-5).
-        var amount = customers ? "l.debit - l.credit" : "l.credit - l.debit";
+        // Step 7: aging buckets are BASE amounts — a foreign invoice
+        // ages at its converted value, not its face value.
+        var amount = customers ? "COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit)" : "COALESCE(l.base_credit, l.credit) - COALESCE(l.base_debit, l.debit)";
         var ageDays = DatabaseRuntime.IsPostgreSql()
             ? "(CURRENT_DATE - CAST(l.entry_date AS DATE))"
             : "(julianday('now') - julianday(l.entry_date))";
@@ -1055,9 +1067,9 @@ public static class RptQuery
         DocSchema.Ensure();
         const string sql = """
             SELECT COALESCE(NULLIF(l.cost_center, ''), '-') AS CostCenter,
-                   COALESCE(SUM(l.debit), 0) AS Debit,
-                   COALESCE(SUM(l.credit), 0) AS Credit,
-                   COALESCE(SUM(l.debit - l.credit), 0) AS Balance,
+                   COALESCE(SUM(COALESCE(l.base_debit, l.debit)), 0) AS Debit,
+                   COALESCE(SUM(COALESCE(l.base_credit, l.credit)), 0) AS Credit,
+                   COALESCE(SUM(COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit)), 0) AS Balance,
                    COUNT(*) AS LineCount
             FROM journal_entry_lines l
             INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
@@ -1078,9 +1090,9 @@ public static class RptQuery
             SELECT a.account_code AS AccountCode,
                    a.name_ar AS AccountName,
                    COALESCE(NULLIF(l.cost_center, ''), '-') AS CostCenter,
-                   COALESCE(SUM(l.debit), 0) AS Debit,
-                   COALESCE(SUM(l.credit), 0) AS Credit,
-                   COALESCE(SUM(l.debit - l.credit), 0) AS Balance
+                   COALESCE(SUM(COALESCE(l.base_debit, l.debit)), 0) AS Debit,
+                   COALESCE(SUM(COALESCE(l.base_credit, l.credit)), 0) AS Credit,
+                   COALESCE(SUM(COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit)), 0) AS Balance
             FROM journal_entry_lines l
             INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
             INNER JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = j.company_id
@@ -1109,7 +1121,7 @@ public static class RptQuery
             FROM journal_entries j
             INNER JOIN companies co ON co.company_id = j.company_id
             LEFT JOIN (
-                SELECT journal_entry_id, SUM(debit) AS TotalDebit
+                SELECT journal_entry_id, SUM(COALESCE(base_debit, debit)) AS TotalDebit
                 FROM journal_entry_lines GROUP BY journal_entry_id
             ) t ON t.journal_entry_id = j.journal_entry_id
             WHERE co.company_code = $company AND j.status = 1
@@ -1123,8 +1135,12 @@ public static class RptQuery
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> ExchangeRateDifferencesAsync(
         DateTime from, DateTime to, CancellationToken ct)
     {
-        // Entry amounts are recorded in the entry currency; BaseDebit restates
-        // them at the entry rate and Difference is the effect vs. a rate of 1.
+        // Step 7: BaseDebit is the lines' STORED base amount (migration
+        // 062 — converted at posting at the effective rate), and
+        // Difference is base minus transaction. Before, both were
+        // derived by multiplying the unconverted sums by the header
+        // rate at report time, which disagreed with the posted lines
+        // whenever a line's effective rate came from the master table.
         DocSchema.Ensure();
         const string sql = """
             SELECT j.entry_date AS DocDate,
@@ -1133,8 +1149,8 @@ public static class RptQuery
                    COALESCE(j.exchange_rate, 1) AS Rate,
                    COALESCE(SUM(l.debit), 0) AS Debit,
                    COALESCE(SUM(l.credit), 0) AS Credit,
-                   COALESCE(SUM(l.debit), 0) * COALESCE(j.exchange_rate, 1) AS BaseDebit,
-                   COALESCE(SUM(l.debit), 0) * (COALESCE(j.exchange_rate, 1) - 1) AS Difference
+                   COALESCE(SUM(COALESCE(l.base_debit, l.debit)), 0) AS BaseDebit,
+                   COALESCE(SUM(COALESCE(l.base_debit, l.debit)), 0) - COALESCE(SUM(l.debit), 0) AS Difference
             FROM journal_entries j
             INNER JOIN companies co ON co.company_id = j.company_id
             INNER JOIN journal_entry_lines l ON l.journal_entry_id = j.journal_entry_id
@@ -1155,9 +1171,9 @@ public static class RptQuery
             SELECT a.account_code AS AccountCode,
                    a.name_ar AS AccountName,
                    substr(j.entry_date, 1, 7) AS Month,
-                   COALESCE(SUM(l.debit), 0) AS Debit,
-                   COALESCE(SUM(l.credit), 0) AS Credit,
-                   COALESCE(SUM(l.debit - l.credit), 0) AS Balance
+                   COALESCE(SUM(COALESCE(l.base_debit, l.debit)), 0) AS Debit,
+                   COALESCE(SUM(COALESCE(l.base_credit, l.credit)), 0) AS Credit,
+                   COALESCE(SUM(COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit)), 0) AS Balance
             FROM journal_entry_lines l
             INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
             INNER JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = j.company_id
@@ -1212,7 +1228,7 @@ public static class RptQuery
                      WHEN cp.Code LIKE '15%' OR cp.Code LIKE '16%' THEN 'Investing'
                      WHEN cp.Code LIKE '3%' OR cp.Code LIKE '23%' THEN 'Financing'
                      ELSE 'Operating' END AS Section,
-                   COALESCE(SUM(l.debit - l.credit), 0) AS Amount
+                   COALESCE(SUM(COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit)), 0) AS Amount
             FROM journal_entry_lines l
             INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
             INNER JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = j.company_id
@@ -1241,7 +1257,7 @@ public static class RptQuery
     {
         DocSchema.Ensure();
         var sql = PgBoolFix($"""
-            SELECT COALESCE(SUM(l.debit - l.credit), 0) AS Balance
+            SELECT COALESCE(SUM(COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit)), 0) AS Balance
             FROM journal_entry_lines l
             INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
             INNER JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = j.company_id
@@ -1268,7 +1284,7 @@ public static class RptQuery
             FROM chart_of_accounts a
             INNER JOIN companies co ON co.company_id = a.company_id
             LEFT JOIN (
-                SELECT l.account_id AS aid, l.debit AS debit, l.credit AS credit, j.entry_date AS entry_date
+                SELECT l.account_id AS aid, COALESCE(l.base_debit, l.debit) AS debit, COALESCE(l.base_credit, l.credit) AS credit, j.entry_date AS entry_date
                 FROM journal_entry_lines l
                 INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
                 WHERE j.status = 1
@@ -1289,15 +1305,15 @@ public static class RptQuery
         const string sql = """
             SELECT COALESCE(c.code, CAST(pl.party_id AS TEXT)) AS PartyCode,
                    COALESCE(NULLIF(c.name_en, ''), c.name_ar, '') AS PartyName,
-                   COALESCE(SUM(pl.debit), 0) AS Invoiced,
-                   COALESCE(SUM(pl.credit), 0) AS Collected,
-                   COALESCE(SUM(pl.debit - pl.credit), 0) AS Balance,
-                   CASE WHEN SUM(pl.debit) = 0 THEN 0 ELSE SUM(pl.credit) / SUM(pl.debit) END AS CollectionPct
+                   COALESCE(SUM(COALESCE(pl.base_debit, pl.debit)), 0) AS Invoiced,
+                   COALESCE(SUM(COALESCE(pl.base_credit, pl.credit)), 0) AS Collected,
+                   COALESCE(SUM(COALESCE(pl.base_debit, pl.debit) - COALESCE(pl.base_credit, pl.credit)), 0) AS Balance,
+                   CASE WHEN SUM(COALESCE(pl.base_debit, pl.debit)) = 0 THEN 0 ELSE SUM(COALESCE(pl.base_credit, pl.credit)) / SUM(COALESCE(pl.base_debit, pl.debit)) END AS CollectionPct
             FROM party_ledger pl
             LEFT JOIN parties c ON c.ledger_id = pl.party_id AND c.company_id = pl.company_id AND c.kind = 'C'
             WHERE pl.company_id = $company AND pl.party_kind = 'C'
             GROUP BY pl.party_id, c.code, c.name_en, c.name_ar
-            HAVING ABS(COALESCE(SUM(pl.debit), 0)) > 0.0001
+            HAVING ABS(COALESCE(SUM(COALESCE(pl.base_debit, pl.debit)), 0)) > 0.0001
             ORDER BY PartyCode;
             """;
         return await QueryAsync(sql, ct, ("$company", Company));
@@ -1310,14 +1326,14 @@ public static class RptQuery
         var sql = PgBoolFix("""
             SELECT a.account_code AS AccountCode,
                    a.name_ar AS AccountName,
-                   COALESCE(SUM(CASE WHEN j.entry_date >= $f1 AND j.entry_date <= $t1 THEN l.debit ELSE 0 END), 0) AS Debit1,
-                   COALESCE(SUM(CASE WHEN j.entry_date >= $f1 AND j.entry_date <= $t1 THEN l.credit ELSE 0 END), 0) AS Credit1,
-                   COALESCE(SUM(CASE WHEN j.entry_date >= $f1 AND j.entry_date <= $t1 THEN l.debit - l.credit ELSE 0 END), 0) AS Balance1,
-                   COALESCE(SUM(CASE WHEN j.entry_date >= $f2 AND j.entry_date <= $t2 THEN l.debit ELSE 0 END), 0) AS Debit2,
-                   COALESCE(SUM(CASE WHEN j.entry_date >= $f2 AND j.entry_date <= $t2 THEN l.credit ELSE 0 END), 0) AS Credit2,
-                   COALESCE(SUM(CASE WHEN j.entry_date >= $f2 AND j.entry_date <= $t2 THEN l.debit - l.credit ELSE 0 END), 0) AS Balance2,
-                   COALESCE(SUM(CASE WHEN j.entry_date >= $f2 AND j.entry_date <= $t2 THEN l.debit - l.credit ELSE 0 END), 0)
-                     - COALESCE(SUM(CASE WHEN j.entry_date >= $f1 AND j.entry_date <= $t1 THEN l.debit - l.credit ELSE 0 END), 0) AS Diff
+                   COALESCE(SUM(CASE WHEN j.entry_date >= $f1 AND j.entry_date <= $t1 THEN COALESCE(l.base_debit, l.debit) ELSE 0 END), 0) AS Debit1,
+                   COALESCE(SUM(CASE WHEN j.entry_date >= $f1 AND j.entry_date <= $t1 THEN COALESCE(l.base_credit, l.credit) ELSE 0 END), 0) AS Credit1,
+                   COALESCE(SUM(CASE WHEN j.entry_date >= $f1 AND j.entry_date <= $t1 THEN COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit) ELSE 0 END), 0) AS Balance1,
+                   COALESCE(SUM(CASE WHEN j.entry_date >= $f2 AND j.entry_date <= $t2 THEN COALESCE(l.base_debit, l.debit) ELSE 0 END), 0) AS Debit2,
+                   COALESCE(SUM(CASE WHEN j.entry_date >= $f2 AND j.entry_date <= $t2 THEN COALESCE(l.base_credit, l.credit) ELSE 0 END), 0) AS Credit2,
+                   COALESCE(SUM(CASE WHEN j.entry_date >= $f2 AND j.entry_date <= $t2 THEN COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit) ELSE 0 END), 0) AS Balance2,
+                   COALESCE(SUM(CASE WHEN j.entry_date >= $f2 AND j.entry_date <= $t2 THEN COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit) ELSE 0 END), 0)
+                     - COALESCE(SUM(CASE WHEN j.entry_date >= $f1 AND j.entry_date <= $t1 THEN COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit) ELSE 0 END), 0) AS Diff
             FROM journal_entry_lines l
             INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
             INNER JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = j.company_id
@@ -1342,8 +1358,8 @@ public static class RptQuery
                    COALESCE(j.document_number, j.journal_entry_id) AS DocNo,
                    COALESCE(j.description, '') AS Description,
                    COALESCE(j.reference_number, '') AS Reference,
-                   COALESCE(SUM(l.debit), 0) AS Debit,
-                   COALESCE(SUM(l.credit), 0) AS Credit,
+                   COALESCE(SUM(COALESCE(l.base_debit, l.debit)), 0) AS Debit,
+                   COALESCE(SUM(COALESCE(l.base_credit, l.credit)), 0) AS Credit,
                    CASE j.status WHEN 0 THEN 'Draft' WHEN 1 THEN 'Posted' ELSE 'Reversed' END AS Status
             FROM journal_entries j
             INNER JOIN journal_entry_lines l ON l.journal_entry_id = j.journal_entry_id
@@ -1469,15 +1485,15 @@ public static class RptQuery
             SELECT COALESCE(c.code, CAST(pl.party_id AS TEXT)) AS PartyCode,
                    COALESCE(NULLIF(c.name_en, ''), c.name_ar, '') AS PartyName,
                    COALESCE(c.phone, '') AS Phone,
-                   COALESCE(SUM(pl.debit), 0) AS Invoiced,
-                   COALESCE(SUM(pl.credit), 0) AS Collected,
-                   COALESCE(SUM(pl.debit - pl.credit), 0) AS Balance,
+                   COALESCE(SUM(COALESCE(pl.base_debit, pl.debit)), 0) AS Invoiced,
+                   COALESCE(SUM(COALESCE(pl.base_credit, pl.credit)), 0) AS Collected,
+                   COALESCE(SUM(COALESCE(pl.base_debit, pl.debit) - COALESCE(pl.base_credit, pl.credit)), 0) AS Balance,
                    MIN(pl.entry_date) AS OldestDate
             FROM party_ledger pl
             LEFT JOIN parties c ON c.ledger_id = pl.party_id AND c.company_id = pl.company_id AND c.kind = 'C'
             WHERE pl.company_id = $company AND pl.party_kind = 'C'
             GROUP BY pl.party_id, c.code, c.name_en, c.name_ar, c.phone
-            HAVING COALESCE(SUM(pl.debit - pl.credit), 0) > 0.0001
+            HAVING COALESCE(SUM(COALESCE(pl.base_debit, pl.debit) - COALESCE(pl.base_credit, pl.credit)), 0) > 0.0001
             ORDER BY OldestDate, Balance DESC;
             """;
         return await QueryAsync(sql, ct, ("$company", Company));
@@ -1671,7 +1687,7 @@ public static class RptQuery
             INNER JOIN companies co ON co.company_code = b.company_id
             INNER JOIN chart_of_accounts a ON a.company_id = co.company_id AND a.account_code = b.gl_account_code
             LEFT JOIN (
-                SELECT l.account_id AS aid, l.debit AS debit, l.credit AS credit
+                SELECT l.account_id AS aid, COALESCE(l.base_debit, l.debit) AS debit, COALESCE(l.base_credit, l.credit) AS credit
                 FROM journal_entry_lines l
                 INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
                 WHERE j.status = 1
@@ -1696,7 +1712,7 @@ public static class RptQuery
             FROM chart_of_accounts a
             INNER JOIN companies co ON co.company_id = a.company_id
             LEFT JOIN (
-                SELECT l.account_id AS aid, l.debit AS debit, l.credit AS credit
+                SELECT l.account_id AS aid, COALESCE(l.base_debit, l.debit) AS debit, COALESCE(l.base_credit, l.credit) AS credit
                 FROM journal_entry_lines l
                 INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
                 WHERE j.status = 1
