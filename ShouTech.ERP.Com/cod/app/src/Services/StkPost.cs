@@ -6,6 +6,7 @@ using Microsoft.Data.Sqlite;
 using Npgsql;
 using ShouTech.App.Reporting.Invoices;
 using ShouTech.App.Views;
+using ShouTech.Domain;
 
 namespace ShouTech.App.Services;
 
@@ -84,9 +85,19 @@ public static class StkPost
             if (!TryGetStockableMaterial(
                     connection, tx, company, productId.Value, line.MaterialCode, out var allowNegative))
                 continue;
-            var qtyIn = isOut ? 0m : line.Qty;
-            var qtyOut = isOut ? line.Qty : 0m;
-            var unitCost = line.UnitPrice;
+
+            // Unit equivalence (owner definition, 2026-11-17): stock is kept in
+            // the material's FIRST (base) unit. A line entered in another unit
+            // moves base_qty = line_qty x equivalent(chosen unit), and its unit
+            // price (quoted per chosen unit) is restated per base unit so the
+            // movement's qty x unit_cost stays the line's value.
+            var equivalent = ResolveUnitEquivalent(connection, tx, company, productId.Value, line.Unit);
+            var baseQty = line.Qty * equivalent;
+            var qtyIn = isOut ? 0m : baseQty;
+            var qtyOut = isOut ? baseQty : 0m;
+            var unitCost = equivalent == 1m
+                ? line.UnitPrice
+                : decimal.Round(line.UnitPrice / equivalent, 6, MidpointRounding.AwayFromZero);
 
             // Movement row
             using (var cmd = connection.CreateCommand())
@@ -219,6 +230,90 @@ public static class StkPost
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Resolves the equivalence of a document line's chosen unit relative to
+    /// the material's first (base) unit, from the unit rows saved on the
+    /// material card (units_json carries the complete list; the
+    /// unit1..unit5 column pairs are the fallback for legacy rows).
+    /// Rules: no unit chosen, the base unit itself, an unknown or free-typed
+    /// unit, or a stored equivalent of 0 or less all resolve to 1 — the
+    /// quantity is then already expressed in base units.
+    /// </summary>
+    private static decimal ResolveUnitEquivalent(
+        DbConnection connection, DbTransaction tx, string company, long materialId, string? unitName)
+    {
+        if (string.IsNullOrWhiteSpace(unitName)) return 1m;
+        var wanted = unitName.Trim();
+
+        var units = new List<(string Name, decimal Factor)>();
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = """
+                SELECT unit1, unit1_factor, unit2, unit2_factor, unit3, unit3_factor,
+                       unit4, unit4_factor, unit5, unit5_factor, units_json
+                FROM materials
+                WHERE company_id=$c AND material_id=$m;
+                """;
+            Add(cmd, "$c", company);
+            Add(cmd, "$m", materialId);
+            using var reader = cmd.ExecuteReader();
+            if (!reader.Read()) return 1m;
+
+            var json = reader.IsDBNull(10) ? null : reader.GetValue(10)?.ToString();
+            if (!string.IsNullOrWhiteSpace(json) && json.Trim() != "[]")
+            {
+                try
+                {
+                    var rows = System.Text.Json.JsonSerializer.Deserialize<List<UnitFactorRow>>(json)
+                               ?? new List<UnitFactorRow>();
+                    foreach (var row in rows)
+                        if (!string.IsNullOrWhiteSpace(row.UnitName))
+                            units.Add((row.UnitName.Trim(), row.Factor ?? 0m));
+                }
+                catch (Exception exJson)
+                {
+                    // Malformed legacy JSON must not block posting: report it
+                    // and fall back to the unit column pairs below.
+                    AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exJson,
+                        "StkPost.ResolveUnitEquivalent");
+                    units.Clear();
+                }
+            }
+
+            if (units.Count == 0)
+            {
+                for (var i = 0; i < 5; i++)
+                {
+                    var name = reader.IsDBNull(i * 2) ? null : reader.GetValue(i * 2)?.ToString();
+                    if (string.IsNullOrWhiteSpace(name)) continue;
+                    var factor = reader.IsDBNull(i * 2 + 1)
+                        ? 0m
+                        : Convert.ToDecimal(reader.GetValue(i * 2 + 1), CultureInfo.InvariantCulture);
+                    units.Add((name.Trim(), factor));
+                }
+            }
+        }
+
+        if (units.Count == 0) return 1m;
+
+        // The first unit is the base unit: its equivalent is 1 by definition.
+        if (string.Equals(wanted, units[0].Name, StringComparison.OrdinalIgnoreCase)) return 1m;
+
+        foreach (var (name, factor) in units)
+            if (string.Equals(wanted, name, StringComparison.OrdinalIgnoreCase))
+                return factor > 0 ? factor : 1m;
+
+        return 1m;
+    }
+
+    /// <summary>One unit row as serialized into materials.units_json by the material card.</summary>
+    private sealed class UnitFactorRow
+    {
+        public string? UnitName { get; set; }
+        public decimal? Factor { get; set; }
     }
 
     public static int PostCount(
@@ -1011,7 +1106,7 @@ public static class StkPost
         var active = postgres ? "is_deleted=FALSE" : "is_deleted=0";
         var codeFilter = string.IsNullOrWhiteSpace(materialCode) ? "" : "AND code=$code";
         command.CommandText = $"""
-            SELECT is_stocked, is_service, allow_negative
+            SELECT is_stocked, is_service, allow_negative, item_type
             FROM materials
             WHERE company_id=$c AND material_id=$m AND {active}
               {codeFilter};
@@ -1026,8 +1121,15 @@ public static class StkPost
             throw new InvalidOperationException(
                 $"Material '{materialCode ?? materialId.ToString(CultureInfo.InvariantCulture)}' does not exist in the current company.");
 
+        // Service-material rule (owner, 2026-11-17): a service material is
+        // non-stock and must never move stock. The card keeps the type and
+        // the flags in agreement, but a legacy or imported row may carry
+        // the Service TYPE with inconsistent flags — honor any of the
+        // three views here so such a row still cannot post stock.
+        var itemType = reader.IsDBNull(3) ? null : reader.GetValue(3)?.ToString();
         if (!Convert.ToBoolean(reader.GetValue(0), CultureInfo.InvariantCulture) ||
-            Convert.ToBoolean(reader.GetValue(1), CultureInfo.InvariantCulture))
+            Convert.ToBoolean(reader.GetValue(1), CultureInfo.InvariantCulture) ||
+            string.Equals(itemType, "Service", StringComparison.OrdinalIgnoreCase))
         {
             allowNegative = false;
             return false;

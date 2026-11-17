@@ -105,7 +105,7 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
 
             <Setter Property="Margin"
-                    Value="0,0,5,0"/>
+                    Value="5,0,5,0"/>
 
             <Setter Property="Foreground"
                     Value="{DynamicResource TextPrimary}"/>
@@ -113,9 +113,25 @@
             <Setter Property="TextTrimming"
                     Value="CharacterEllipsis"/>
 
+            <!-- Label alignment follows the app-wide convention (same
+                 pattern as CatWin's FieldLabel): text aligns to the
+                 reading-start edge of the label column — left in LTR,
+                 right in RTL — which is the edge ADJACENT to the field,
+                 so the label sits a few pixels from its field instead of
+                 floating at the far edge of the column. The previous
+                 trigger set Left in RTL, which pushed Arabic labels to
+                 the far edge and left a wide empty band (owner report,
+                 2026-11-17). -->
+
+            <Setter Property="TextAlignment" Value="Left"/>
+
             <Style.Triggers>
                 <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
                              Value="RightToLeft">
+                    <Setter Property="TextAlignment" Value="Right"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                             Value="LeftToRight">
                     <Setter Property="TextAlignment" Value="Left"/>
                 </DataTrigger>
             </Style.Triggers>
@@ -722,27 +738,17 @@
                                        loc:LocProps.Key="MatCard.Code"
                                        Style="{StaticResource Lbl}"/>
 
+                            <!-- The item number lives in the record navigator
+                                 (owner directive 2026-11-17): it replaces the
+                                 old "1 / 4" position text between the arrows.
+                                 The Code field spans the freed field columns so
+                                 every field edge stays on the shared grid. -->
+
                             <TextBox x:Name="TxtCode"
                                      Grid.Row="0"
                                      Grid.Column="1"
+                                     Grid.ColumnSpan="3"
                                      Style="{StaticResource CodeBox}"
-                                     Margin="0,3,12,3"/>
-
-
-                            <!-- Item number -->
-
-                            <TextBlock Grid.Row="0"
-                                       Grid.Column="2"
-                                       Text="Item #"
-                                       loc:LocProps.Key="MatCard.ItemNo"
-                                       Style="{StaticResource Lbl}"/>
-
-                            <TextBox x:Name="TxtItemNo"
-                                     Grid.Row="0"
-                                     Grid.Column="3"
-                                     Style="{StaticResource CodeBox}"
-                                     IsReadOnly="True"
-                                     Background="{DynamicResource PanelBackground}"
                                      Margin="0,3,12,3"/>
 
 
@@ -788,7 +794,8 @@
                                       Grid.Column="3"
                                       Grid.ColumnSpan="2"
                                       Style="{StaticResource FieldCombo}"
-                                      Margin="0,3,0,3"/>
+                                      Margin="0,3,0,3"
+                                      SelectionChanged="ItemType_SelectionChanged"/>
 
 
                             <!-- Name -->
@@ -857,12 +864,21 @@
                                     Style="{StaticResource FootBtn}"
                                     MinWidth="28"/>
 
-                            <TextBlock x:Name="TxtNavPos"
-                                       MinWidth="44"
-                                       TextAlignment="Center"
-                                       VerticalAlignment="Center"
-                                       Margin="4,0"
-                                       FlowDirection="LeftToRight"/>
+                            <!-- Item number (moved from the header form, owner
+                                 directive 2026-11-17): shows the current record's
+                                 number; type a number and press Enter to jump to
+                                 the record carrying it. -->
+
+                            <TextBox x:Name="TxtItemNo"
+                                     Width="72"
+                                     Height="{StaticResource ControlHeight}"
+                                     Margin="4,0"
+                                     Style="{StaticResource CodeBox}"
+                                     TextAlignment="Center"
+                                     FlowDirection="LeftToRight"
+                                     VerticalContentAlignment="Center"
+                                     KeyDown="TxtItemNo_KeyDown"
+                                     loc:LocProps.ToolTipKey="MatCard.ItemNo"/>
 
                             <Button x:Name="BtnNavNext"
                                     Content="▶"
@@ -909,9 +925,9 @@
                         <Grid x:Name="PanelDesc">
 
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="115"/>
+                                <ColumnDefinition Width="{StaticResource FormLabelColumnWidth}"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="115"/>
+                                <ColumnDefinition Width="{StaticResource FormLabelColumnWidth}"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
 
@@ -1119,7 +1135,8 @@
                                           Content="Stocked"
                                           loc:LocProps.Key="MatCard.Stocked"
                                           Margin="0,0,12,0"
-                                          IsChecked="True"/>
+                                          IsChecked="True"
+                                          Checked="IsStocked_Checked"/>
 
                                 <CheckBox x:Name="ChkIsPurchased"
                                           Content="Purchased"
@@ -1140,7 +1157,9 @@
 
                                 <CheckBox x:Name="ChkIsService"
                                           Content="Service"
-                                          loc:LocProps.Key="MatCard.Service"/>
+                                          loc:LocProps.Key="MatCard.Service"
+                                          Checked="IsService_Changed"
+                                          Unchecked="IsService_Changed"/>
 
                             </StackPanel>
 
@@ -1416,18 +1435,38 @@
                                     </DataGridTextColumn>
 
 
-                                    <DataGridTextColumn
-                                        Binding="{Binding UnitName, UpdateSourceTrigger=LostFocus}"
-                                        Width="130"
-                                        ElementStyle="{StaticResource UnitTextCellStyle}"
-                                        EditingElementStyle="{StaticResource UnitTextEditStyle}">
+                                    <!-- Unit name with autocomplete (owner directive
+                                         2026-11-17): the editing cell is an editable
+                                         ComboBox fed from the saved units; typing
+                                         filters by CONTAINS, selecting fills the
+                                         cell, and a genuinely new name still types
+                                         and saves exactly like the old text cell. -->
 
-                                        <DataGridTextColumn.Header>
+                                    <DataGridTemplateColumn
+                                        Width="130">
+
+                                        <DataGridTemplateColumn.Header>
                                             <TextBlock Text="Unit"
                                                        loc:LocProps.Key="MatCard.GridUnit"/>
-                                        </DataGridTextColumn.Header>
+                                        </DataGridTemplateColumn.Header>
 
-                                    </DataGridTextColumn>
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding UnitName}"
+                                                           Style="{StaticResource UnitTextCellStyle}"/>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+
+                                        <DataGridTemplateColumn.CellEditingTemplate>
+                                            <DataTemplate>
+                                                <ComboBox IsEditable="True"
+                                                          IsTextSearchEnabled="False"
+                                                          StaysOpenOnEdit="True"
+                                                          Text="{Binding UnitName, UpdateSourceTrigger=LostFocus}"/>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellEditingTemplate>
+
+                                    </DataGridTemplateColumn>
 
 
                                     <DataGridTextColumn
@@ -1570,9 +1609,9 @@
                               Visibility="Collapsed">
 
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="100"/>
+                                <ColumnDefinition Width="{StaticResource FormLabelColumnWidth}"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="100"/>
+                                <ColumnDefinition Width="{StaticResource FormLabelColumnWidth}"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
 
@@ -1743,9 +1782,9 @@
                               Visibility="Collapsed">
 
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="110"/>
+                                <ColumnDefinition Width="{StaticResource FormLabelColumnWidth}"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="110"/>
+                                <ColumnDefinition Width="{StaticResource FormLabelColumnWidth}"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
 

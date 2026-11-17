@@ -850,6 +850,7 @@ internal static class MatRepo
               AND m.is_deleted = 0
               AND m.is_stocked = 1
               AND m.is_service = 0
+              AND LOWER(COALESCE(m.item_type, '')) <> 'service'
             ORDER BY m.code;
             """;
         if (DatabaseRuntime.IsPostgreSql())
@@ -2224,6 +2225,77 @@ internal static class MatRepo
 			});
 		}
 		return result;
+	}
+
+	/// <summary>
+	/// Unit-name suggestions for the material card's units grid autocomplete:
+	/// the units master (units_of_measure) merged with the distinct unit
+	/// names already saved on materials' unit rows, so suggestions are never
+	/// empty when units exist anywhere — the master alone can be empty in a
+	/// fresh company because nothing else populates it yet.
+	/// </summary>
+	public static List<string> LoadUnitNameSuggestions()
+	{
+		var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		var cs = DatabaseRuntime.GetConnectionString();
+		if (string.IsNullOrWhiteSpace(cs)) return new List<string>();
+
+		var company = AppState.CurrentCompanyCode ?? string.Empty;
+
+		using var conn = Open(cs);
+
+		// Source 1: the units master.
+		try
+		{
+			using var cmd = conn.CreateCommand();
+			var activeValue = DatabaseRuntime.IsPostgreSql() ? "TRUE" : "1";
+			var notDeletedValue = DatabaseRuntime.IsPostgreSql() ? "FALSE" : "0";
+			cmd.CommandText = $@"
+				SELECT uom_code
+				FROM units_of_measure
+				WHERE company_id = $company
+				  AND is_active = {activeValue}
+				  AND is_deleted = {notDeletedValue};";
+			Add(cmd, "$company", company);
+			using var reader = cmd.ExecuteReader();
+			while (reader.Read())
+			{
+				var name = reader.IsDBNull(0) ? null : reader.GetValue(0)?.ToString()?.Trim();
+				if (!string.IsNullOrWhiteSpace(name)) names.Add(name);
+			}
+		}
+		catch (Exception exUom)
+		{
+			AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exUom,
+				"MatRepo.LoadUnitNameSuggestions.UnitsOfMeasure");
+		}
+
+		// Source 2: unit names already saved on materials (unit1..unit5).
+		try
+		{
+			using var cmd = conn.CreateCommand();
+			cmd.CommandText = @"
+				SELECT unit1, unit2, unit3, unit4, unit5
+				FROM materials
+				WHERE company_id = $company AND is_deleted = 0;";
+			Add(cmd, "$company", company);
+			using var reader = cmd.ExecuteReader();
+			while (reader.Read())
+			{
+				for (var i = 0; i < 5; i++)
+				{
+					var name = reader.IsDBNull(i) ? null : reader.GetValue(i)?.ToString()?.Trim();
+					if (!string.IsNullOrWhiteSpace(name)) names.Add(name);
+				}
+			}
+		}
+		catch (Exception exMat)
+		{
+			AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exMat,
+				"MatRepo.LoadUnitNameSuggestions.Materials");
+		}
+
+		return names.OrderBy(x => x, StringComparer.CurrentCultureIgnoreCase).ToList();
 	}
 
 	public static List<MatGroupRec> LoadGroups()
