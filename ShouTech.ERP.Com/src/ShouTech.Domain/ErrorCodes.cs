@@ -85,6 +85,12 @@ public static class ErrorCodes
     public const string ExchangeRateMissing = "ACC-5015";
     public const string BankStatementNotReconciled = "ACC-5016";
     public const string StatementLineAlreadyMatched = "ACC-5017";
+    // Phase B 055 (Budgets): the design proposed ACC-5009/5010 for the
+    // budget guard, but Fix Phase Step 3 consumed those two codes for
+    // cost-center validation (CostCenterUnknown / CostCenterRequired),
+    // so the guard takes the next free ACC codes instead.
+    public const string BudgetExceededAnnual = "ACC-5018";
+    public const string BudgetExceededMonthly = "ACC-5019";
 
     // ---- INV 6000-6999 -------------------------------------------------
     public const string InventoryOperationFailed = "INV-6001";

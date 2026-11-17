@@ -374,5 +374,17 @@
     "name": "DocumentImportRequiresPackage",
     "message": "Belgeler ve yevmiye kayıtları bir elektronik tablodan içe aktarılamaz. Bunları şifreli bir .stei veri paketi olarak değişin.",
     "hint": "Veri kümesini .stei paketi olarak dışa aktarın ve onun yerine o paketi içe aktarın."
+  },
+  "ACC-5018": {
+    "code": "ACC-5018",
+    "name": "BudgetExceededAnnual",
+    "message": "Bu kaydın deftere işlenmesi yıllık bütçeyi '{0}' aşacaktır. Limit: {1}; bu kayıttan önceki gerçekleşen: {2}; bu kayıt: {3}; aşım: {4}.",
+    "hint": "Kaydı azaltın, tutarı başka bir hesaba veya maliyet merkezine taşıyın ya da Bütçeler penceresinden bütçe satırını yükseltin."
+  },
+  "ACC-5019": {
+    "code": "ACC-5019",
+    "name": "BudgetExceededMonthly",
+    "message": "Bu kaydın deftere işlenmesi, bu aya kadar birikmiş aylık bütçeyi '{0}' aşacaktır. Limit: {1}; bu kayıttan önceki gerçekleşen: {2}; bu kayıt: {3}; aşım: {4}.",
+    "hint": "Kaydı azaltın, daha sonraki bir ayda işleyin ya da Bütçeler penceresinden aylık dağılımı ayarlayın."
   }
 }

@@ -83,7 +83,10 @@ public sealed class JournalService
         await _repository.UpdateDraftAsync(companyId, journalEntryId, entry, userId, cancellationToken).ConfigureAwait(false);
     }
 
-    public Task PostAsync(Guid journalEntryId, string userId, CancellationToken cancellationToken = default) =>
+    /// <summary>Posts a draft entry, returning any budget warnings the
+    /// posting produced in Warn mode (Phase B 055) so the posting
+    /// window can show them after the entry posts.</summary>
+    public Task<IReadOnlyList<BudgetWarning>> PostAsync(Guid journalEntryId, string userId, CancellationToken cancellationToken = default) =>
         _repository.PostAsync(journalEntryId, userId, cancellationToken);
 
     public Task<Guid> ReverseAsync(Guid journalEntryId, string userId, string? details = null, CancellationToken cancellationToken = default) =>

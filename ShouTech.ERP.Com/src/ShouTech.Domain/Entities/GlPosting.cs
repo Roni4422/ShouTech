@@ -22,4 +22,10 @@ public sealed record GlDocumentRequest(
     IReadOnlyList<GlLineRequest> Lines);
 
 /// <summary>Result of a document GL posting: the real journal entry.</summary>
-public sealed record GlPostingResult(Guid JournalEntryId, string DocumentNumber);
+public sealed record GlPostingResult(Guid JournalEntryId, string DocumentNumber)
+{
+    /// <summary>Budget warnings produced by BudgetGuard in Warn mode
+    /// (Phase B 055); empty when no Active budget warned. A Stop-mode
+    /// budget never reaches a result — it throws ACC-5018/5019.</summary>
+    public IReadOnlyList<BudgetWarning> BudgetWarnings { get; init; } = Array.Empty<BudgetWarning>();
+}

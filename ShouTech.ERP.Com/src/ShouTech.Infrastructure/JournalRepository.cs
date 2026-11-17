@@ -440,16 +440,21 @@ public sealed class JournalRepository : IJournalRepository
         }
     }
 
-    public async Task PostAsync(Guid journalEntryId, string userId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<BudgetWarning>> PostAsync(Guid journalEntryId, string userId, CancellationToken cancellationToken = default)
     {
         if (journalEntryId == Guid.Empty) throw new ArgumentException("Journal entry is required.", nameof(journalEntryId));
         if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        // Phase B 055: BudgetGuard fills this sink with Stop violations
+        // before throwing; the Blocked events are recorded after the
+        // rollback below (an in-transaction row would roll back too).
+        var budgetBlocked = new List<BudgetViolation>();
+        IReadOnlyList<BudgetWarning> budgetWarnings = Array.Empty<BudgetWarning>();
+        Guid companyId = Guid.Empty;
         try
         {
-            Guid companyId;
             DateOnly entryDate;
             string entryCurrency = "SAR";
             decimal entryRate = 1m;
@@ -534,6 +539,13 @@ public sealed class JournalRepository : IJournalRepository
             var postLines = await LoadCostLinesAsync(connection, transaction, companyId, journalEntryId, cancellationToken).ConfigureAwait(false);
             GlPosting.ApplyCostCenters(connection, transaction, _provider, companyId, journalEntryId, entryDate, postLines, enforceValidation: true);
 
+            // Phase B 055: BudgetGuard, beside the cost splits it reads —
+            // a Stop (ACC-5018/5019) throws here and the whole posting
+            // rolls back, leaving the entry Draft; Warn warnings are
+            // returned to the caller after the commit.
+            budgetWarnings = BudgetGuard.Check(connection, transaction, _provider,
+                companyId, journalEntryId, userId, budgetBlocked);
+
             await using (var update = CreateCommand(connection, transaction,
                 "UPDATE journal_entries SET status = @posted, posted_by = @actor, posted_at = CURRENT_TIMESTAMP WHERE journal_entry_id = @id AND status = @draft"))
             {
@@ -591,10 +603,14 @@ public sealed class JournalRepository : IJournalRepository
             }
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return budgetWarnings;
         }
-        catch
+        catch (Exception ex)
         {
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            var recordFailure = await TryRecordBudgetBlockedAsync(connection, companyId, userId, budgetBlocked).ConfigureAwait(false);
+            if (recordFailure is not null && ex is AppError appError)
+                throw new AppError(appError.Code, appError.Message, recordFailure, appError.Args.ToArray());
             throw;
         }
     }
@@ -639,16 +655,54 @@ public sealed class JournalRepository : IJournalRepository
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var budgetBlocked = new List<BudgetViolation>();
         try
         {
-            var result = GlPosting.PostInTransaction(connection, transaction, _provider, request, userId);
+            var result = GlPosting.PostInTransaction(connection, transaction, _provider, request, userId, budgetBlocked);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return result;
         }
-        catch
+        catch (Exception ex)
         {
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            var recordFailure = await TryRecordBudgetBlockedAsync(connection, request.CompanyId, userId, budgetBlocked).ConfigureAwait(false);
+            if (recordFailure is not null && ex is AppError appError)
+                throw new AppError(appError.Code, appError.Message, recordFailure, appError.Args.ToArray());
             throw;
+        }
+    }
+
+    /// <summary>Phase B 055: records BudgetGuard Blocked events after a
+    /// refused posting rolled back (the events table is the audit of
+    /// every block; an in-transaction row would have rolled back with
+    /// the posting). Returns the recording failure, if any, instead of
+    /// throwing it: the caller attaches it to the refusal's AppError as
+    /// the inner exception, so a failed audit write never masks the
+    /// refusal itself.</summary>
+    private async Task<Exception?> TryRecordBudgetBlockedAsync(
+        DbConnection connection, Guid companyId, string userId,
+        List<BudgetViolation> violations)
+    {
+        if (violations.Count == 0 || companyId == Guid.Empty)
+            return null;
+        try
+        {
+            await using var eventsTx = await connection.BeginTransactionAsync(CancellationToken.None).ConfigureAwait(false);
+            try
+            {
+                BudgetGuard.RecordBlockedEvents(connection, eventsTx, _provider, companyId, userId, violations);
+                await eventsTx.CommitAsync(CancellationToken.None).ConfigureAwait(false);
+                return null;
+            }
+            catch
+            {
+                await eventsTx.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                throw;
+            }
+        }
+        catch (Exception recordEx)
+        {
+            return recordEx;
         }
     }
 

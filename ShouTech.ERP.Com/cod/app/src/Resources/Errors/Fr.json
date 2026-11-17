@@ -374,5 +374,17 @@
     "name": "DocumentImportRequiresPackage",
     "message": "Les documents et les écritures de journal ne peuvent pas être importés depuis un tableur. Échangez-les sous forme de package de données .stei chiffré.",
     "hint": "Exportez le jeu de données en package .stei et importez ce package à la place."
+  },
+  "ACC-5018": {
+    "code": "ACC-5018",
+    "name": "BudgetExceededAnnual",
+    "message": "La comptabilisation de cette écriture dépasserait le budget annuel '{0}'. Limite : {1} ; réel avant cette écriture : {2} ; cette écriture : {3} ; dépassement : {4}.",
+    "hint": "Réduisez l'écriture, affectez le montant à un autre compte ou centre de coûts, ou relevez la ligne budgétaire dans la fenêtre Budgets."
+  },
+  "ACC-5019": {
+    "code": "ACC-5019",
+    "name": "BudgetExceededMonthly",
+    "message": "La comptabilisation de cette écriture dépasserait le budget mensuel cumulé '{0}' jusqu'à ce mois. Limite : {1} ; réel avant cette écriture : {2} ; cette écriture : {3} ; dépassement : {4}.",
+    "hint": "Réduisez l'écriture, comptabilisez-la un mois plus tard, ou ajustez la répartition mensuelle dans la fenêtre Budgets."
   }
 }

@@ -374,5 +374,17 @@
     "name": "DocumentImportRequiresPackage",
     "message": "Documents and journal entries cannot be imported from a spreadsheet. Exchange them as an encrypted .stei dataset package.",
     "hint": "Export the dataset as a .stei package and import that package instead."
+  },
+  "ACC-5018": {
+    "code": "ACC-5018",
+    "name": "BudgetExceededAnnual",
+    "message": "Posting this entry would exceed the annual budget '{0}'. Limit: {1}; actual before this entry: {2}; this entry: {3}; overage: {4}.",
+    "hint": "Reduce the entry, move the amount to another account or cost center, or raise the budget line in the Budgets window."
+  },
+  "ACC-5019": {
+    "code": "ACC-5019",
+    "name": "BudgetExceededMonthly",
+    "message": "Posting this entry would exceed the accumulated monthly budget '{0}' through this month. Limit: {1}; actual before this entry: {2}; this entry: {3}; overage: {4}.",
+    "hint": "Reduce the entry, post it in a later month, or adjust the monthly distribution in the Budgets window."
   }
 }

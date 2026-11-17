@@ -56,7 +56,8 @@ public static class GlPosting
     /// transaction scope without changing their commit boundary.</summary>
     public static GlPostingResult PostInTransaction(
         DbConnection connection, DbTransaction transaction, string provider,
-        GlDocumentRequest request, string userId)
+        GlDocumentRequest request, string userId,
+        List<BudgetViolation>? budgetBlockedSink = null)
     {
         ArgumentNullException.ThrowIfNull(connection);
         ArgumentNullException.ThrowIfNull(transaction);
@@ -186,6 +187,15 @@ public static class GlPosting
         ApplyCostCenters(connection, transaction, prov, request.CompanyId, entryId, request.EntryDate,
             snapshots, enforceValidation: true);
 
+        // Phase B 055: the budget guard runs in the shared posting core
+        // (after the cost splits exist, before the entry flips to
+        // Posted), so document postings are guarded exactly like manual
+        // journals. A Stop throws ACC-5018/5019 and the caller's whole
+        // transaction (document + entry) rolls back; Warn warnings ride
+        // back on the result.
+        var budgetWarnings = BudgetGuard.Check(connection, transaction, prov,
+            request.CompanyId, entryId, userId, budgetBlockedSink);
+
         using (var post = CreateCommand(connection, transaction,
             "UPDATE journal_entries SET status = 1, posted_by = @actor, posted_at = CURRENT_TIMESTAMP WHERE journal_entry_id = @id AND status = 0"))
         {
@@ -196,7 +206,7 @@ public static class GlPosting
         }
         AddAudit(connection, transaction, prov, entryId, 1, userId, "Document posting created");
         AddAudit(connection, transaction, prov, entryId, 2, userId, $"Posted from {request.SourceDocType} {request.SourceDocNo}");
-        return new GlPostingResult(entryId, documentNumber);
+        return new GlPostingResult(entryId, documentNumber) { BudgetWarnings = budgetWarnings };
     }
 
     /// <summary>Finds the live (posted, non-reversal) GL entry created for
