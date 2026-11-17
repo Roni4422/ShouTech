@@ -7,6 +7,7 @@ using Npgsql;
 using ShouTech.App.Reporting.Invoices;
 using ShouTech.App.Views;
 using ShouTech.Domain;
+using ShouTech.Infrastructure;
 
 namespace ShouTech.App.Services;
 
@@ -109,137 +110,80 @@ public static class StkPost
                 ? line.UnitPrice
                 : decimal.Round(line.UnitPrice / equivalent, 6, MidpointRounding.AwayFromZero);
 
-            // Movement row
-            using (var cmd = connection.CreateCommand())
+            // Availability guard (unchanged message/behaviour): the
+            // engine carries the same check as a backstop (INV-6002),
+            // but this path has always failed with this exact error.
+            if (qtyOut > 0 && !allowNegative)
             {
-                cmd.Transaction = tx;
-                cmd.CommandText = """
-                    INSERT INTO material_stock_movements
-                    (company_id, warehouse_id, material_id, movement_date, movement_type, document_no,
-                     qty_in, qty_out, unit_cost, note)
-                    VALUES
-                    ($c, $w, $p, $d, $t, $doc, $qin, $qout, $cost, $note);
-                    """;
-                Add(cmd, "$c", company);
-                Add(cmd, "$w", warehouseId);
-                Add(cmd, "$p", productId.Value);
-                Add(cmd, "$d", DatabaseRuntime.IsPostgreSql()
-                    ? DateTime.SpecifyKind(doc.DocDate.Date, DateTimeKind.Utc)
-                    : doc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-                Add(cmd, "$t", moveType);
-                Add(cmd, "$doc", doc.DocNo);
-                Add(cmd, "$qin", qtyIn);
-                Add(cmd, "$qout", qtyOut);
-                Add(cmd, "$cost", unitCost);
-                Add(cmd, "$note", line.Description);
-                cmd.ExecuteNonQuery();
-            }
-
-            // Upsert balance
-            using (var cmd = connection.CreateCommand())
-            {
-                cmd.Transaction = tx;
-                cmd.CommandText = """
-                    SELECT stock_balance_id, available_qty, average_cost
-                    FROM material_stock_balances
-                    WHERE company_id=$c AND warehouse_id=$w AND material_id=$p
-                      AND is_deleted=0
-                    LIMIT 1;
-                    """;
-                if (DatabaseRuntime.IsPostgreSql())
-                {
-                    cmd.CommandText = """
-                        SELECT stock_balance_id, available_qty, average_cost
-                        FROM material_stock_balances
-                        WHERE company_id=$c AND warehouse_id=$w AND material_id=$p
-                          AND is_deleted=FALSE
-                        LIMIT 1
-                        FOR UPDATE;
-                        """;
-                }
-                Add(cmd, "$c", company);
-                Add(cmd, "$w", warehouseId);
-                Add(cmd, "$p", productId.Value);
-                long? balId = null;
-                decimal avail = 0, avg = 0;
-                using (var reader = cmd.ExecuteReader())
-                {
-                    if (reader.Read())
-                    {
-                        balId = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture);
-                        avail = Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
-                        avg = reader.IsDBNull(2) ? 0 : Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture);
-                    }
-                }
-
-                var newQty = avail + qtyIn - qtyOut;
-                if (newQty < 0 && !allowNegative)
+                var available = ReadAvailableQty(connection, tx, company, warehouseId, productId.Value);
+                if (available - qtyOut < 0)
                     throw new InvalidOperationException(
                         $"Insufficient stock for material '{line.MaterialCode}'.");
-
-                decimal newAvg = avg;
-                if (qtyIn > 0)
-                {
-                    var valuedQty = Math.Max(avail, 0);
-                    var totalVal = (valuedQty * avg) + (qtyIn * unitCost);
-                    var totalQty = valuedQty + qtyIn;
-                    newAvg = totalQty == 0 ? unitCost : decimal.Round(totalVal / totalQty, 6, MidpointRounding.AwayFromZero);
-                }
-
-                if (balId is null)
-                {
-                    using var ins = connection.CreateCommand();
-                    ins.Transaction = tx;
-                    ins.CommandText = """
-                        INSERT INTO material_stock_balances
-                        (company_id, warehouse_id, material_id, available_qty, reserved_qty,
-                         average_cost, last_cost, last_updated, is_deleted)
-                        VALUES
-                        ($c, $w, $p, $qty, 0, $avg, $cost, datetime('now'), 0);
-                        """;
-                    if (DatabaseRuntime.IsPostgreSql())
-                    {
-                        ins.CommandText = """
-                            INSERT INTO material_stock_balances
-                            (company_id, warehouse_id, material_id, available_qty, reserved_qty,
-                             average_cost, last_cost, last_updated, is_deleted)
-                            VALUES
-                            ($c, $w, $p, $qty, 0, $avg, $cost, NOW(), FALSE);
-                            """;
-                    }
-                    Add(ins, "$c", company);
-                    Add(ins, "$w", warehouseId);
-                    Add(ins, "$p", productId.Value);
-                    Add(ins, "$qty", newQty);
-                    Add(ins, "$avg", newAvg);
-                    Add(ins, "$cost", unitCost);
-                    ins.ExecuteNonQuery();
-                }
-                else
-                {
-                    using var upd = connection.CreateCommand();
-                    upd.Transaction = tx;
-                    upd.CommandText = """
-                        UPDATE material_stock_balances
-                        SET available_qty=$qty, average_cost=$avg, last_cost=$cost, last_updated=datetime('now')
-                        WHERE stock_balance_id=$id;
-                        """;
-                    if (DatabaseRuntime.IsPostgreSql())
-                    {
-                        upd.CommandText = """
-                            UPDATE material_stock_balances
-                            SET available_qty=$qty, average_cost=$avg, last_cost=$cost, last_updated=NOW()
-                            WHERE stock_balance_id=$id;
-                            """;
-                    }
-                    Add(upd, "$qty", newQty);
-                    Add(upd, "$avg", newAvg);
-                    Add(upd, "$cost", unitCost);
-                    Add(upd, "$id", balId.Value);
-                    upd.ExecuteNonQuery();
-                }
             }
+
+            // Valuation (Step 6, Phase B 053): the ONE StockValuationEngine
+            // writes the movement (with its valuation record), the balance
+            // and the layer queue. Receipts enter at their actual cost
+            // (unitCost above); issues are valued by the engine from the
+            // balance/queue per the material's cost_method — the line's
+            // selling price NEVER values an outbound movement again, and
+            // a linked sales return re-enters at the original sale's
+            // issue rate (sweep RC-1).
+            decimal? linkedRate = null;
+            if (doc.Kind == InvDocKind.SalesReturn)
+            {
+                var originalDocNo = ResolveOriginalDocNo(connection, tx, doc);
+                if (!string.IsNullOrWhiteSpace(originalDocNo))
+                    linkedRate = StockValuationEngine.TryGetDocumentRate(
+                        connection, tx, ProviderName, company, originalDocNo,
+                        productId.Value, warehouseId, issued: true);
+            }
+
+            StockValuationEngine.Apply(connection, tx, ProviderName,
+                new StockMovementRequest(
+                    company, warehouseId, productId.Value,
+                    doc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    moveType, doc.DocNo ?? string.Empty,
+                    qtyIn, qtyOut,
+                    ReceiptUnitCost: qtyIn > 0 ? unitCost : null,
+                    LinkedRate: linkedRate,
+                    Note: line.Description));
         }
+    }
+
+    private static string ProviderName => DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+
+    private static decimal ReadAvailableQty(
+        DbConnection connection, DbTransaction tx, string company, long warehouseId, long materialId)
+    {
+        using var cmd = connection.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = DatabaseRuntime.IsPostgreSql()
+            ? "SELECT available_qty FROM material_stock_balances WHERE company_id=$c AND warehouse_id=$w AND material_id=$m AND is_deleted=FALSE LIMIT 1;"
+            : "SELECT available_qty FROM material_stock_balances WHERE company_id=$c AND warehouse_id=$w AND material_id=$m AND is_deleted=0 LIMIT 1;";
+        Add(cmd, "$c", company);
+        Add(cmd, "$w", warehouseId);
+        Add(cmd, "$m", materialId);
+        var value = cmd.ExecuteScalar();
+        return value is null or DBNull ? 0m : Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>The original document number of a return document, from
+    /// the in-memory document when the caller set it, else from the
+    /// stored header (InvRepo.Post loads headers without the original_*
+    /// columns, so the reversal's link lives only in storage there).</summary>
+    private static string? ResolveOriginalDocNo(DbConnection connection, DbTransaction tx, InvDoc doc)
+    {
+        if (!string.IsNullOrWhiteSpace(doc.OriginalDocNo)) return doc.OriginalDocNo;
+        if (doc.DocId <= 0) return null;
+        var table = doc.Kind.IsSales() ? "sales_documents" : "purchase_documents";
+        using var cmd = connection.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = $"SELECT original_doc_no FROM {table} WHERE doc_id=$id AND company_id=$c LIMIT 1;";
+        Add(cmd, "$id", doc.DocId);
+        Add(cmd, "$c", AppState.CurrentCompanyCode ?? string.Empty);
+        var value = cmd.ExecuteScalar();
+        return value is null or DBNull ? null : Convert.ToString(value, CultureInfo.InvariantCulture);
     }
 
     /// <summary>
@@ -382,7 +326,6 @@ public static class StkPost
         {
             EnsureMaterialExists(connection, tx, company, line.MaterialId, line.MaterialCode);
 
-            long? balanceId;
             decimal currentQty;
             decimal currentCost;
             using (var read = connection.CreateCommand())
@@ -390,14 +333,14 @@ public static class StkPost
                 read.Transaction = tx;
                 read.CommandText = DatabaseRuntime.IsPostgreSql()
                     ? """
-                      SELECT stock_balance_id, available_qty, average_cost
+                      SELECT available_qty, average_cost
                       FROM material_stock_balances
                       WHERE company_id=$c AND warehouse_id=$w AND material_id=$m AND is_deleted=FALSE
                       LIMIT 1
                       FOR UPDATE;
                       """
                     : """
-                      SELECT stock_balance_id, available_qty, average_cost
+                      SELECT available_qty, average_cost
                       FROM material_stock_balances
                       WHERE company_id=$c AND warehouse_id=$w AND material_id=$m AND is_deleted=0
                       LIMIT 1;
@@ -408,105 +351,37 @@ public static class StkPost
                 using var reader = read.ExecuteReader();
                 if (reader.Read())
                 {
-                    balanceId = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture);
-                    currentQty = Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
-                    currentCost = reader.IsDBNull(2)
+                    currentQty = Convert.ToDecimal(reader.GetValue(0), CultureInfo.InvariantCulture);
+                    currentCost = reader.IsDBNull(1)
                         ? line.UnitCost
-                        : Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture);
+                        : Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
                 }
                 else
                 {
-                    balanceId = null;
                     currentQty = 0;
                     currentCost = line.UnitCost;
                 }
             }
 
             var delta = line.CountedQty - currentQty;
-            var qtyIn = Math.Max(delta, 0);
-            var qtyOut = Math.Max(-delta, 0);
-            var averageCost = line.CountedQty == 0
-                ? 0
-                : delta > 0
-                    ? currentQty <= 0
-                        ? line.UnitCost
-                        : decimal.Round(
-                            ((currentQty * currentCost) + (delta * line.UnitCost)) / line.CountedQty,
-                            6,
-                            MidpointRounding.AwayFromZero)
-                    : currentCost;
+            if (delta == 0)
+                continue; // no stock effect; a zero movement is not recorded
 
-            using (var movement = connection.CreateCommand())
-            {
-                movement.Transaction = tx;
-                movement.CommandText = """
-                    INSERT INTO material_stock_movements
-                    (company_id, warehouse_id, material_id, movement_date, movement_type, document_no,
-                     qty_in, qty_out, unit_cost, note)
-                    VALUES ($c, $w, $m, $d, 'COUNT_CLOSE', $doc, $qin, $qout, $cost, $note);
-                    """;
-                Add(movement, "$c", company);
-                Add(movement, "$w", warehouseId);
-                Add(movement, "$m", line.MaterialId);
-                Add(movement, "$d", DatabaseRuntime.IsPostgreSql()
-                    ? DateTime.SpecifyKind(countDate.Date, DateTimeKind.Utc)
-                    : date);
-                Add(movement, "$doc", documentNo);
-                Add(movement, "$qin", qtyIn);
-                Add(movement, "$qout", qtyOut);
-                Add(movement, "$cost", line.UnitCost);
-                Add(movement, "$note", reason.Trim());
-                movement.ExecuteNonQuery();
-            }
-
-            if (delta != 0 && balanceId is long id)
-            {
-                using var update = connection.CreateCommand();
-                update.Transaction = tx;
-                update.CommandText = DatabaseRuntime.IsPostgreSql()
-                    ? """
-                      UPDATE material_stock_balances
-                      SET available_qty=$qty, average_cost=$avg, last_cost=$cost, last_updated=NOW()
-                      WHERE stock_balance_id=$id;
-                      """
-                    : """
-                      UPDATE material_stock_balances
-                      SET available_qty=$qty, average_cost=$avg, last_cost=$cost, last_updated=datetime('now')
-                      WHERE stock_balance_id=$id;
-                      """;
-                Add(update, "$qty", line.CountedQty);
-                Add(update, "$avg", averageCost);
-                Add(update, "$cost", line.UnitCost);
-                Add(update, "$id", id);
-                if (update.ExecuteNonQuery() != 1)
-                    throw new InvalidOperationException($"Stock balance for '{line.MaterialCode}' changed while posting.");
-            }
-            else if (delta != 0)
-            {
-                using var insert = connection.CreateCommand();
-                insert.Transaction = tx;
-                insert.CommandText = DatabaseRuntime.IsPostgreSql()
-                    ? """
-                      INSERT INTO material_stock_balances
-                      (company_id, warehouse_id, material_id, available_qty, average_cost, last_cost, last_updated)
-                      VALUES ($c, $w, $m, $qty, $avg, $cost, NOW());
-                      """
-                    : """
-                      INSERT INTO material_stock_balances
-                      (company_id, warehouse_id, material_id, available_qty, average_cost, last_cost, last_updated)
-                      VALUES ($c, $w, $m, $qty, $avg, $cost, datetime('now'));
-                      """;
-                Add(insert, "$c", company);
-                Add(insert, "$w", warehouseId);
-                Add(insert, "$m", line.MaterialId);
-                Add(insert, "$qty", line.CountedQty);
-                Add(insert, "$avg", averageCost);
-                Add(insert, "$cost", line.UnitCost);
-                insert.ExecuteNonQuery();
-            }
-
-            if (delta != 0)
-                posted++;
+            // Valuation (Step 6, Phase B 053): the delta goes through
+            // the ONE engine. A surplus enters at the current rate when
+            // stock is on hand (LinkedRate = the balance's display
+            // average), else at the count sheet's cost; a shortage is
+            // valued by the engine per cost_method (FIFO counts consume
+            // the newest layers first, per the design).
+            StockValuationEngine.Apply(connection, tx, ProviderName,
+                new StockMovementRequest(
+                    company, warehouseId, line.MaterialId, date,
+                    "COUNT_CLOSE", documentNo,
+                    QtyIn: Math.Max(delta, 0), QtyOut: Math.Max(-delta, 0),
+                    ReceiptUnitCost: line.UnitCost,
+                    LinkedRate: delta > 0 && currentQty > 0 ? currentCost : null,
+                    Note: reason.Trim()));
+            posted++;
         }
 
         tx.Commit();
@@ -672,14 +547,14 @@ public static class StkPost
             command.CommandText = DatabaseRuntime.IsPostgreSql()
                 ? """
                   SELECT stock_balance_id, warehouse_id, material_id, available_qty, reserved_qty,
-                         average_cost, last_cost, is_deleted
+                         average_cost, last_cost, is_deleted, stock_value
                   FROM material_stock_balances
                   WHERE company_id=$c AND material_id IN ($source, $target)
                   FOR UPDATE;
                   """
                 : """
                   SELECT stock_balance_id, warehouse_id, material_id, available_qty, reserved_qty,
-                         average_cost, last_cost, is_deleted
+                         average_cost, last_cost, is_deleted, stock_value
                   FROM material_stock_balances
                   WHERE company_id=$c AND material_id IN ($source, $target);
                   """;
@@ -698,10 +573,28 @@ public static class StkPost
                     Reserved = Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture),
                     AverageCost = Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture),
                     LastCost = Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture),
-                    IsDeleted = Convert.ToBoolean(reader.GetValue(7), CultureInfo.InvariantCulture)
+                    IsDeleted = Convert.ToBoolean(reader.GetValue(7), CultureInfo.InvariantCulture),
+                    StockValue = reader.IsDBNull(8) ? 0m : Convert.ToDecimal(reader.GetValue(8), CultureInfo.InvariantCulture)
                 };
                 balances[(balance.WarehouseId, balance.MaterialId)] = balance;
             }
+        }
+
+        // Step 6: the FIFO/LIFO layer queue follows the material, like
+        // the movements above — otherwise the target material would
+        // inherit balances whose layers still belong to the source.
+        using (var layers = connection.CreateCommand())
+        {
+            layers.Transaction = tx;
+            layers.CommandText = """
+                UPDATE stock_cost_layers
+                SET material_id=$target
+                WHERE company_id=$c AND material_id=$source;
+                """;
+            Add(layers, "$target", targetMaterialId);
+            Add(layers, "$source", sourceMaterialId);
+            Add(layers, "$c", company);
+            layers.ExecuteNonQuery();
         }
 
         foreach (var sourceBalance in balances.Values
@@ -711,8 +604,10 @@ public static class StkPost
             var targetActive = targetBalance is not null && !targetBalance.IsDeleted;
             var available = sourceBalance.Available + (targetActive ? targetBalance!.Available : 0m);
             var reserved = sourceBalance.Reserved + (targetActive ? targetBalance!.Reserved : 0m);
-            var value = sourceBalance.Available * sourceBalance.AverageCost +
-                        (targetActive ? targetBalance!.Available * targetBalance.AverageCost : 0m);
+            // Step 6: merge the engine-maintained stock_value, not a
+            // re-derived qty x average (the two are the same only while
+            // every writer was the engine).
+            var value = sourceBalance.StockValue + (targetActive ? targetBalance!.StockValue : 0m);
             var averageCost = available == 0
                 ? (targetActive ? targetBalance!.AverageCost : sourceBalance.AverageCost)
                 : decimal.Round(value / available, 6, MidpointRounding.AwayFromZero);
@@ -728,8 +623,8 @@ public static class StkPost
                 insert.CommandText = $"""
                     INSERT INTO material_stock_balances
                     (company_id, warehouse_id, material_id, available_qty, reserved_qty,
-                     average_cost, last_cost, last_updated, is_deleted)
-                    VALUES ($c, $w, $target, $available, $reserved, $average, $last, {now},
+                     average_cost, last_cost, stock_value, last_updated, is_deleted)
+                    VALUES ($c, $w, $target, $available, $reserved, $average, $last, $value, {now},
                             {(DatabaseRuntime.IsPostgreSql() ? "FALSE" : "0")});
                     """;
                 Add(insert, "$c", company);
@@ -739,6 +634,7 @@ public static class StkPost
                 Add(insert, "$reserved", reserved);
                 Add(insert, "$average", averageCost);
                 Add(insert, "$last", lastCost);
+                Add(insert, "$value", value);
                 insert.ExecuteNonQuery();
             }
             else
@@ -748,7 +644,7 @@ public static class StkPost
                 updateTarget.CommandText = $"""
                     UPDATE material_stock_balances
                     SET available_qty=$available, reserved_qty=$reserved,
-                        average_cost=$average, last_cost=$last, last_updated={now},
+                        average_cost=$average, last_cost=$last, stock_value=$value, last_updated={now},
                         is_deleted={(DatabaseRuntime.IsPostgreSql() ? "FALSE" : "0")}
                     WHERE stock_balance_id=$id;
                     """;
@@ -756,6 +652,7 @@ public static class StkPost
                 Add(updateTarget, "$reserved", reserved);
                 Add(updateTarget, "$average", averageCost);
                 Add(updateTarget, "$last", lastCost);
+                Add(updateTarget, "$value", value);
                 Add(updateTarget, "$id", targetBalance.Id);
                 updateTarget.ExecuteNonQuery();
             }
@@ -764,7 +661,7 @@ public static class StkPost
             clearSource.Transaction = tx;
             clearSource.CommandText = $"""
                 UPDATE material_stock_balances
-                SET available_qty=0, reserved_qty=0, last_updated={now},
+                SET available_qty=0, reserved_qty=0, stock_value=0, last_updated={now},
                     is_deleted={(DatabaseRuntime.IsPostgreSql() ? "TRUE" : "1")}
                 WHERE stock_balance_id=$id;
                 """;
@@ -783,6 +680,7 @@ public static class StkPost
         public decimal AverageCost { get; init; }
         public decimal LastCost { get; init; }
         public bool IsDeleted { get; init; }
+        public decimal StockValue { get; init; }
     }
 
     private sealed record MaterialIdentity(
@@ -849,9 +747,7 @@ public static class StkPost
             var documentNo = string.Create(
                 CultureInfo.InvariantCulture,
                 $"TRF-{transferDate:yyyyMMdd}-{Guid.NewGuid():N}");
-            object movementDate = DatabaseRuntime.IsPostgreSql()
-                ? DateTime.SpecifyKind(transferDate.Date, DateTimeKind.Utc)
-                : transferDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var movementDate = transferDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
             foreach (var line in lines)
             {
@@ -865,98 +761,24 @@ public static class StkPost
                         "INV-TRF-004",
                         $"Insufficient stock for material '{line.MaterialCode}'.");
 
-                var target = ReadBalance(
-                    connection, tx, company, targetWarehouseId, line.MaterialId);
-                var sourceCost = source.Value.AverageCost > 0
-                    ? source.Value.AverageCost
-                    : source.Value.LastCost;
-                var targetQty = target?.Quantity ?? 0m;
-                var targetCost = target?.AverageCost ?? sourceCost;
-                var newTargetQty = targetQty + line.Quantity;
-                var newTargetCost = targetQty <= 0
-                    ? sourceCost
-                    : decimal.Round(
-                        ((targetQty * targetCost) + (line.Quantity * sourceCost)) / newTargetQty,
-                        6,
-                        MidpointRounding.AwayFromZero);
-
-                using (var updateSource = connection.CreateCommand())
-                {
-                    updateSource.Transaction = tx;
-                    updateSource.CommandText = DatabaseRuntime.IsPostgreSql()
-                        ? """
-                          UPDATE material_stock_balances
-                          SET available_qty=available_qty-$qty, last_updated=NOW()
-                          WHERE stock_balance_id=$id AND available_qty >= $qty AND is_deleted=FALSE;
-                          """
-                        : """
-                          UPDATE material_stock_balances
-                          SET available_qty=available_qty-$qty, last_updated=datetime('now')
-                          WHERE stock_balance_id=$id AND available_qty >= $qty AND is_deleted=0;
-                          """;
-                    Add(updateSource, "$qty", line.Quantity);
-                    Add(updateSource, "$id", source.Value.BalanceId);
-                    if (updateSource.ExecuteNonQuery() != 1)
-                        throw new StockTransferException(
-                            "INV-TRF-004",
-                            $"Available stock for material '{line.MaterialCode}' changed. Refresh and retry.");
-                }
-
-                if (target is null)
-                {
-                    using var insertTarget = connection.CreateCommand();
-                    insertTarget.Transaction = tx;
-                    insertTarget.CommandText = DatabaseRuntime.IsPostgreSql()
-                        ? """
-                          INSERT INTO material_stock_balances
-                          (company_id, warehouse_id, material_id, available_qty, average_cost, last_cost, last_updated)
-                          VALUES ($c, $w, $m, $qty, $cost, $cost, NOW());
-                          """
-                        : """
-                          INSERT INTO material_stock_balances
-                          (company_id, warehouse_id, material_id, available_qty, average_cost, last_cost, last_updated)
-                          VALUES ($c, $w, $m, $qty, $cost, $cost, datetime('now'));
-                          """;
-                    Add(insertTarget, "$c", company);
-                    Add(insertTarget, "$w", targetWarehouseId);
-                    Add(insertTarget, "$m", line.MaterialId);
-                    Add(insertTarget, "$qty", line.Quantity);
-                    Add(insertTarget, "$cost", sourceCost);
-                    insertTarget.ExecuteNonQuery();
-                }
-                else
-                {
-                    using var updateTarget = connection.CreateCommand();
-                    updateTarget.Transaction = tx;
-                    updateTarget.CommandText = DatabaseRuntime.IsPostgreSql()
-                        ? """
-                          UPDATE material_stock_balances
-                          SET available_qty=$qty, average_cost=$avg, last_cost=$cost, last_updated=NOW()
-                          WHERE stock_balance_id=$id;
-                          """
-                        : """
-                          UPDATE material_stock_balances
-                          SET available_qty=$qty, average_cost=$avg, last_cost=$cost, last_updated=datetime('now')
-                          WHERE stock_balance_id=$id;
-                          """;
-                    Add(updateTarget, "$qty", newTargetQty);
-                    Add(updateTarget, "$avg", newTargetCost);
-                    Add(updateTarget, "$cost", sourceCost);
-                    Add(updateTarget, "$id", target.Value.BalanceId);
-                    if (updateTarget.ExecuteNonQuery() != 1)
-                        throw new StockTransferException(
-                            "INV-TRF-005",
-                            $"Destination balance for '{line.MaterialCode}' changed while posting.");
-                }
-
-                InsertTransferMovement(
-                    connection, tx, company, sourceWarehouseId, line.MaterialId,
-                    movementDate, "TRANSFER_OUT", documentNo, line.Quantity,
-                    sourceCost, $"{reason.Trim()} → {targetWarehouseId.ToString(CultureInfo.InvariantCulture)}");
-                InsertTransferMovement(
-                    connection, tx, company, targetWarehouseId, line.MaterialId,
-                    movementDate, "TRANSFER_IN", documentNo, line.Quantity,
-                    sourceCost, $"{reason.Trim()} ← {sourceWarehouseId.ToString(CultureInfo.InvariantCulture)}");
+                // Valuation (Step 6, Phase B 053): both legs go through
+                // the ONE engine. Out at the source's method rate; in at
+                // the EXACT same value (ReceiptCostAmount), so a transfer
+                // never creates or destroys stock value, and FIFO layers
+                // move with the stock at identical rates.
+                var outbound = StockValuationEngine.Apply(connection, tx, ProviderName,
+                    new StockMovementRequest(
+                        company, sourceWarehouseId, line.MaterialId, movementDate,
+                        "TRANSFER_OUT", documentNo,
+                        QtyIn: 0m, QtyOut: line.Quantity,
+                        Note: $"{reason.Trim()} → {targetWarehouseId.ToString(CultureInfo.InvariantCulture)}"));
+                StockValuationEngine.Apply(connection, tx, ProviderName,
+                    new StockMovementRequest(
+                        company, targetWarehouseId, line.MaterialId, movementDate,
+                        "TRANSFER_IN", documentNo,
+                        QtyIn: line.Quantity, QtyOut: 0m,
+                        ReceiptCostAmount: -outbound.CostAmount,
+                        Note: $"{reason.Trim()} ← {sourceWarehouseId.ToString(CultureInfo.InvariantCulture)}"));
             }
 
             tx.Commit();
@@ -1009,40 +831,6 @@ public static class StkPost
             Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture),
             reader.IsDBNull(2) ? 0 : Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture),
             reader.IsDBNull(3) ? 0 : Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture));
-    }
-
-    private static void InsertTransferMovement(
-        DbConnection connection,
-        DbTransaction tx,
-        string company,
-        long warehouseId,
-        long materialId,
-        object movementDate,
-        string movementType,
-        string documentNo,
-        decimal quantity,
-        decimal unitCost,
-        string note)
-    {
-        using var command = connection.CreateCommand();
-        command.Transaction = tx;
-        command.CommandText = """
-            INSERT INTO material_stock_movements
-            (company_id, warehouse_id, material_id, movement_date, movement_type, document_no,
-             qty_in, qty_out, unit_cost, note)
-            VALUES ($c, $w, $m, $d, $t, $doc, $qin, $qout, $cost, $note);
-            """;
-        Add(command, "$c", company);
-        Add(command, "$w", warehouseId);
-        Add(command, "$m", materialId);
-        Add(command, "$d", movementDate);
-        Add(command, "$t", movementType);
-        Add(command, "$doc", documentNo);
-        Add(command, "$qin", movementType == "TRANSFER_IN" ? quantity : 0m);
-        Add(command, "$qout", movementType == "TRANSFER_OUT" ? quantity : 0m);
-        Add(command, "$cost", unitCost);
-        Add(command, "$note", note);
-        command.ExecuteNonQuery();
     }
 
     private static void EnsureWarehouseIsActive(

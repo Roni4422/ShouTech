@@ -322,33 +322,15 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                     // same rule StkPost applies to invoice documents.
                     var baseQty = qty * await ResolveUnitEquivalentAsync(
                         connection, transaction, materialId, lineUnit, cancellationToken).ConfigureAwait(false);
-                    await using var movement = CreateCommand(connection, transaction, """
-                        INSERT INTO material_stock_movements
-                            (company_id, warehouse_id, material_id, movement_date, movement_type, document_no, qty_in, qty_out, unit_cost, note)
-                        VALUES (@company, @warehouse, @material, @date, @type, @docNo, 0, @qty, 0, @note)
-                        """);
-                    Add(movement, "@company", companyId);
-                    Add(movement, "@warehouse", lineWarehouse);
-                    Add(movement, "@material", materialId);
-                    Add(movement, "@date", docDate);
-                    Add(movement, "@type", "DLV");
-                    Add(movement, "@docNo", docNo);
-                    Add(movement, "@qty", baseQty);
-                    Add(movement, "@note", $"Delivery note {docNo} posting");
-                    await movement.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-
-                    await using var balance = CreateCommand(connection, transaction, """
-                        INSERT INTO material_stock_balances (company_id, warehouse_id, material_id, available_qty)
-                        VALUES (@company, @warehouse, @material, -@qty)
-                        ON CONFLICT (company_id, warehouse_id, material_id)
-                        DO UPDATE SET available_qty = material_stock_balances.available_qty - @qty,
-                                      last_updated = CURRENT_TIMESTAMP
-                        """);
-                    Add(balance, "@company", companyId);
-                    Add(balance, "@warehouse", lineWarehouse);
-                    Add(balance, "@material", materialId);
-                    Add(balance, "@qty", baseQty);
-                    await balance.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                    // Valuation (Step 6, Phase B 053): the delivery note
+                    // is valued by the ONE StockValuationEngine at the
+                    // material's cost method — the pre-engine code wrote
+                    // unit_cost = 0 and never touched average_cost, so
+                    // chain deliveries carried no cost at all (RC-1).
+                    StockValuationEngine.Apply(connection, transaction, _provider,
+                        new StockMovementRequest(companyId, lineWarehouse, materialId,
+                            docDate, "DLV", docNo, QtyIn: 0m, QtyOut: baseQty,
+                            Note: $"Delivery note {docNo} posting"));
                 }
             }
             else if (docKind == CommercialDocKinds.SalesInvoice && partyId is not null)

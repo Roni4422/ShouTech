@@ -5,6 +5,7 @@ using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Npgsql;
 using ShouTech.App.Views;
+using ShouTech.Infrastructure;
 
 namespace ShouTech.App.Services;
 
@@ -332,9 +333,9 @@ public static class CardStore
     /// <summary>
     /// Posts a saved draft order in ONE transaction: consumes the raw
     /// materials (qty_out) and receives the finished good (qty_in at the
-    /// computed unit cost) in material_stock_movements, updates
-    /// material_stock_balances with the same weighted-average rule as
-    /// StkPost, then flips the order to Posted.
+    /// computed unit cost) through the ONE StockValuationEngine
+    /// (Step 6, Phase B 053 — this class's private weighted-average copy
+    /// is gone), then flips the order to Posted.
     /// </summary>
     public static void PostOrder(long orderId, string actor)
     {
@@ -350,23 +351,23 @@ public static class CardStore
         var cs = ConnectionString() ?? throw new InvalidOperationException("No database connection is configured.");
         using var connection = Open(cs);
         using var tx = connection.BeginTransaction();
-        var date = order.OrderDate;
+        var dateText = order.OrderDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
 
         foreach (var line in order.Lines)
         {
             if (line.MaterialId is null || line.Quantity <= 0) continue;
-            InsertMovement(connection, tx, order, line.MaterialId.Value, date,
-                "MFG-OUT", qtyIn: 0, qtyOut: line.Quantity, unitCost: line.UnitCost,
-                note: line.MaterialName);
-            ApplyBalance(connection, tx, order.WarehouseId.Value, line.MaterialId.Value,
-                qtyDelta: -line.Quantity, movementCost: line.UnitCost);
+            StockValuationEngine.Apply(connection, tx, provider,
+                new StockMovementRequest(Company(), order.WarehouseId.Value, line.MaterialId.Value,
+                    dateText, "MFG-OUT", order.OrderNo,
+                    QtyIn: 0m, QtyOut: line.Quantity, Note: line.MaterialName));
         }
 
-        InsertMovement(connection, tx, order, order.FinishedMaterialId.Value, date,
-            "MFG-IN", qtyIn: order.Quantity, qtyOut: 0, unitCost: order.UnitCost,
-            note: order.FinishedMaterialName);
-        ApplyBalance(connection, tx, order.WarehouseId.Value, order.FinishedMaterialId.Value,
-            qtyDelta: order.Quantity, movementCost: order.UnitCost);
+        StockValuationEngine.Apply(connection, tx, provider,
+            new StockMovementRequest(Company(), order.WarehouseId.Value, order.FinishedMaterialId.Value,
+                dateText, "MFG-IN", order.OrderNo,
+                QtyIn: order.Quantity, QtyOut: 0m, ReceiptUnitCost: order.UnitCost,
+                Note: order.FinishedMaterialName));
 
         using (var cmd = connection.CreateCommand())
         {
@@ -398,100 +399,6 @@ public static class CardStore
             if (value is not null and not DBNull) orderNo = Convert.ToString(value, CultureInfo.InvariantCulture);
         }
         return orderNo is null ? null : LoadOrder(orderNo);
-    }
-
-    private static void InsertMovement(DbConnection connection, DbTransaction tx, MfgOrderRec order,
-        long materialId, DateTime date, string type, decimal qtyIn, decimal qtyOut, decimal unitCost, string note)
-    {
-        using var cmd = connection.CreateCommand();
-        cmd.Transaction = tx;
-        cmd.CommandText = """
-            INSERT INTO material_stock_movements
-                (company_id, warehouse_id, material_id, movement_date, movement_type, document_no,
-                 qty_in, qty_out, unit_cost, note)
-            VALUES ($c, $w, $m, $d, $t, $doc, $qin, $qout, $cost, $note);
-            """;
-        Add(cmd, "$c", Company());
-        Add(cmd, "$w", order.WarehouseId!.Value);
-        Add(cmd, "$m", materialId);
-        Add(cmd, "$d", DatabaseRuntime.IsPostgreSql()
-            ? (object)DateTime.SpecifyKind(date.Date, DateTimeKind.Utc)
-            : date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-        Add(cmd, "$t", type);
-        Add(cmd, "$doc", order.OrderNo);
-        Add(cmd, "$qin", qtyIn);
-        Add(cmd, "$qout", qtyOut);
-        Add(cmd, "$cost", unitCost);
-        Add(cmd, "$note", note);
-        cmd.ExecuteNonQuery();
-    }
-
-    /// <summary>
-    /// Mirrors the StkPost balance rule: inbound quantity re-weights the
-    /// average cost; outbound quantity leaves the average unchanged.
-    /// </summary>
-    private static void ApplyBalance(DbConnection connection, DbTransaction tx,
-        long warehouseId, long materialId, decimal qtyDelta, decimal movementCost)
-    {
-        long? balanceId = null;
-        var available = 0m;
-        var average = 0m;
-        using (var cmd = connection.CreateCommand())
-        {
-            cmd.Transaction = tx;
-            cmd.CommandText = """
-                SELECT stock_balance_id, available_qty, average_cost
-                FROM material_stock_balances
-                WHERE company_id=$c AND warehouse_id=$w AND material_id=$m AND is_deleted=0
-                LIMIT 1;
-                """;
-            Add(cmd, "$c", Company());
-            Add(cmd, "$w", warehouseId);
-            Add(cmd, "$m", materialId);
-            using var reader = cmd.ExecuteReader();
-            if (reader.Read())
-            {
-                balanceId = GetLong(reader, 0);
-                available = GetDec(reader, 1);
-                average = GetDec(reader, 2);
-            }
-        }
-
-        var newQty = available + qtyDelta;
-        var newAverage = average;
-        if (qtyDelta > 0)
-        {
-            newAverage = newQty > 0
-                ? ((available * average) + (qtyDelta * movementCost)) / newQty
-                : movementCost;
-        }
-
-        using var up = connection.CreateCommand();
-        up.Transaction = tx;
-        if (balanceId.HasValue)
-        {
-            up.CommandText = $"""
-                UPDATE material_stock_balances
-                SET available_qty=$qty, average_cost=$avg, last_cost=$cost, last_updated={Now()}
-                WHERE stock_balance_id=$id;
-                """;
-            Add(up, "$id", balanceId.Value);
-        }
-        else
-        {
-            up.CommandText = """
-                INSERT INTO material_stock_balances
-                    (company_id, warehouse_id, material_id, available_qty, reserved_qty, average_cost, last_cost)
-                VALUES ($c, $w, $m, $qty, 0, $avg, $cost);
-                """;
-            Add(up, "$c", Company());
-            Add(up, "$w", warehouseId);
-            Add(up, "$m", materialId);
-        }
-        Add(up, "$qty", newQty);
-        Add(up, "$avg", newAverage);
-        Add(up, "$cost", movementCost);
-        up.ExecuteNonQuery();
     }
 
     /// <summary>Resolves a material code to (id, name) in the active company; null when unknown.</summary>

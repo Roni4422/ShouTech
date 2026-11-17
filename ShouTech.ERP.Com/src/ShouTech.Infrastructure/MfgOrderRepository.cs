@@ -1,4 +1,4 @@
-using System.Data.Common;
+﻿using System.Data.Common;
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Npgsql;
@@ -205,9 +205,14 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
 
             ComputeTotals(order);
 
-            // 1) Validate + consume every RAW line. A non-stockable line
-            //    (service material — owner rule, 2026-11-17) contributes its
-            //    cost to the order totals but never moves stock.
+            // 1) Validate + consume every RAW line through the ONE
+            //    valuation engine (Step 6, Phase B 053) — the private
+            //    moving-average copy this repository used to carry is
+            //    gone; consumption is costed per material cost_method.
+            //    A non-stockable line (service material — owner rule,
+            //    2026-11-17) contributes its cost to the order totals
+            //    but never moves stock.
+            var rawEngineCosts = new List<(MfgOrderLine Line, decimal Cost)>();
             foreach (var line in order.Lines.Where(l => l.LineKind == MfgLineKinds.Raw))
             {
                 var materialId = await ResolveMaterialIdAsync(connection, transaction, companyId, line.ItemCode, cancellationToken).ConfigureAwait(false);
@@ -217,10 +222,11 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 if (onHand < line.Qty)
                     throw new InvalidOperationException(
                         $"Insufficient stock for material '{line.ItemCode.Trim()}': required {line.Qty}, on hand {onHand} in warehouse {warehouseId}.");
-                await InsertMovementAsync(connection, transaction, companyId, warehouseId, materialId, dateText,
-                    "MFG_CONSUME", documentNo, qtyIn: 0m, qtyOut: line.Qty, unitCost: line.UnitCost,
-                    note: $"Manufacturing order {documentNo} consumption", cancellationToken).ConfigureAwait(false);
-                await AdjustBalanceAsync(connection, transaction, companyId, warehouseId, materialId, delta: -line.Qty, unitCost: line.UnitCost, cancellationToken).ConfigureAwait(false);
+                var consumed = StockValuationEngine.Apply(connection, transaction, _provider,
+                    new StockMovementRequest(companyId.Trim(), warehouseId, materialId, dateText,
+                        "MFG_CONSUME", documentNo, QtyIn: 0m, QtyOut: line.Qty,
+                        Note: $"Manufacturing order {documentNo} consumption"));
+                rawEngineCosts.Add((line, -consumed.CostAmount));
             }
 
             // 2) Produce the finished item at the computed unit cost — unless
@@ -229,10 +235,11 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
             var finishedId = await ResolveMaterialIdAsync(connection, transaction, companyId, order.ItemCode, cancellationToken).ConfigureAwait(false);
             if (await IsStockableAsync(connection, transaction, companyId, finishedId, cancellationToken).ConfigureAwait(false))
             {
-                await InsertMovementAsync(connection, transaction, companyId, warehouseId, finishedId, dateText,
-                    "MFG_PRODUCE", documentNo, qtyIn: order.Qty, qtyOut: 0m, unitCost: order.UnitCost,
-                    note: $"Manufacturing order {documentNo} production", cancellationToken).ConfigureAwait(false);
-                await AdjustBalanceAsync(connection, transaction, companyId, warehouseId, finishedId, delta: order.Qty, unitCost: order.UnitCost, cancellationToken).ConfigureAwait(false);
+                StockValuationEngine.Apply(connection, transaction, _provider,
+                    new StockMovementRequest(companyId.Trim(), warehouseId, finishedId, dateText,
+                        "MFG_PRODUCE", documentNo, QtyIn: order.Qty, QtyOut: 0m,
+                        ReceiptUnitCost: order.UnitCost,
+                        Note: $"Manufacturing order {documentNo} production"));
             }
 
             // 3) Persist computed costs + status (compare-and-swap on Draft).
@@ -250,11 +257,12 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
             // Real GL posting (Step 3, J-2): completion transfers the raw
             // materials' value into finished inventory in this same
             // transaction — Dr Inventory (finished item's acc_inventory)
-            // / Cr Inventory (each raw item's acc_inventory), at the raw
-            // lines' amounts (the stock layer's current cost figures;
-            // overhead stays in the expense accounts where it was
-            // incurred — Step 6 owns costing unification).
-            var rawTotal = decimal.Round(order.Lines.Where(l => l.LineKind == MfgLineKinds.Raw).Sum(l => l.Amount), 2);
+            // / Cr Inventory (each raw item's acc_inventory). Step 6:
+            // the amounts are the valuation engine's consumption costs
+            // (per material cost_method), not the order lines' entered
+            // unit costs, so GL and the stock layer agree. Overhead
+            // stays in the expense accounts where it was incurred.
+            var rawTotal = decimal.Round(rawEngineCosts.Sum(r => r.Cost), 2);
             if (rawTotal > 0)
             {
                 var companyGuid = ResolveCompanyGuid(connection, transaction, companyId);
@@ -262,9 +270,9 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 {
                     new(MaterialInventoryAccount(connection, transaction, companyId, order.ItemCode), rawTotal, 0m)
                 };
-                foreach (var raw in order.Lines.Where(l => l.LineKind == MfgLineKinds.Raw && l.Amount > 0))
+                foreach (var (rawLine, rawCost) in rawEngineCosts.Where(r => r.Cost > 0))
                     glLines.Add(new GlLineRequest(
-                        MaterialInventoryAccount(connection, transaction, companyId, raw.ItemCode), 0m, decimal.Round(raw.Amount, 2)));
+                        MaterialInventoryAccount(connection, transaction, companyId, rawLine.ItemCode), 0m, decimal.Round(rawCost, 2)));
                 GlPosting.PostInTransaction(connection, transaction, _provider,
                     new GlDocumentRequest(companyGuid, order.DocDate,
                         $"MFG {documentNo}", "MFG", order.Id.ToString("D"), documentNo,
@@ -314,10 +322,10 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                     if (finishedOnHand < order.Qty)
                         throw new InvalidOperationException(
                             $"Cannot cancel: produced quantity of '{order.ItemCode.Trim()}' is no longer fully on hand (required {order.Qty}, on hand {finishedOnHand}).");
-                    await InsertMovementAsync(connection, transaction, companyId, warehouseId, finishedId, dateText,
-                        "MFG_PRODUCE_REV", documentNo, qtyIn: 0m, qtyOut: order.Qty, unitCost: order.UnitCost,
-                        note: $"Manufacturing order {documentNo} cancellation", cancellationToken).ConfigureAwait(false);
-                    await AdjustBalanceAsync(connection, transaction, companyId, warehouseId, finishedId, delta: -order.Qty, unitCost: order.UnitCost, cancellationToken).ConfigureAwait(false);
+                    StockValuationEngine.Apply(connection, transaction, _provider,
+                        new StockMovementRequest(companyId.Trim(), warehouseId, finishedId, dateText,
+                            "MFG_PRODUCE_REV", documentNo, QtyIn: 0m, QtyOut: order.Qty,
+                            Note: $"Manufacturing order {documentNo} cancellation"));
                 }
 
                 foreach (var line in order.Lines.Where(l => l.LineKind == MfgLineKinds.Raw))
@@ -325,10 +333,16 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                     var materialId = await ResolveMaterialIdAsync(connection, transaction, companyId, line.ItemCode, cancellationToken).ConfigureAwait(false);
                     if (!await IsStockableAsync(connection, transaction, companyId, materialId, cancellationToken).ConfigureAwait(false))
                         continue;
-                    await InsertMovementAsync(connection, transaction, companyId, warehouseId, materialId, dateText,
-                        "MFG_CONSUME_REV", documentNo, qtyIn: line.Qty, qtyOut: 0m, unitCost: line.UnitCost,
-                        note: $"Manufacturing order {documentNo} cancellation", cancellationToken).ConfigureAwait(false);
-                    await AdjustBalanceAsync(connection, transaction, companyId, warehouseId, materialId, delta: line.Qty, unitCost: line.UnitCost, cancellationToken).ConfigureAwait(false);
+                    // Raw materials re-enter at their ORIGINAL consumption
+                    // rate (the rate the order consumed them at), never at
+                    // a re-typed line cost (Step 6 return rule).
+                    var originalRate = StockValuationEngine.TryGetDocumentRate(
+                        connection, transaction, _provider, companyId.Trim(), documentNo, materialId, warehouseId, issued: true);
+                    StockValuationEngine.Apply(connection, transaction, _provider,
+                        new StockMovementRequest(companyId.Trim(), warehouseId, materialId, dateText,
+                            "MFG_CONSUME_REV", documentNo, QtyIn: line.Qty, QtyOut: 0m,
+                            ReceiptUnitCost: line.UnitCost, LinkedRate: originalRate,
+                            Note: $"Manufacturing order {documentNo} cancellation"));
                 }
             }
 
@@ -448,77 +462,6 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
         Add(command, "@warehouse", warehouseId);
         Add(command, "@material", materialId);
         return Convert.ToDecimal(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
-    }
-
-    private async Task InsertMovementAsync(DbConnection connection, DbTransaction transaction, string companyId, long warehouseId, long materialId,
-        string dateText, string movementType, string documentNo, decimal qtyIn, decimal qtyOut, decimal unitCost, string note, CancellationToken cancellationToken)
-    {
-        await using var command = CreateCommand(connection, transaction,
-            "INSERT INTO material_stock_movements (company_id, warehouse_id, material_id, movement_date, movement_type, document_no, qty_in, qty_out, unit_cost, note) VALUES (@company, @warehouse, @material, @date, @type, @doc, @in, @out, @cost, @note)");
-        Add(command, "@company", companyId.Trim());
-        Add(command, "@warehouse", warehouseId);
-        Add(command, "@material", materialId);
-        Add(command, "@date", dateText);
-        Add(command, "@type", movementType);
-        Add(command, "@doc", documentNo);
-        Add(command, "@in", qtyIn);
-        Add(command, "@out", qtyOut);
-        Add(command, "@cost", unitCost);
-        Add(command, "@note", note);
-        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    private async Task AdjustBalanceAsync(DbConnection connection, DbTransaction transaction, string companyId, long warehouseId, long materialId,
-        decimal delta, decimal unitCost, CancellationToken cancellationToken)
-    {
-        long? balanceId = null;
-        decimal available = 0m, average = 0m;
-        await using (var read = CreateCommand(connection, transaction,
-            $"SELECT stock_balance_id, available_qty, average_cost FROM material_stock_balances WHERE company_id = @company AND warehouse_id = @warehouse AND material_id = @material AND {NotDeleted} LIMIT 1"))
-        {
-            Add(read, "@company", companyId.Trim());
-            Add(read, "@warehouse", warehouseId);
-            Add(read, "@material", materialId);
-            await using var reader = await read.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-            {
-                balanceId = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture);
-                available = Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
-                average = reader.IsDBNull(2) ? 0m : Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture);
-            }
-        }
-
-        var newQty = available + delta;
-        var newAverage = average;
-        if (delta > 0)
-        {
-            var valuedQty = Math.Max(available, 0m);
-            var totalQty = valuedQty + delta;
-            newAverage = totalQty == 0 ? unitCost : decimal.Round(((valuedQty * average) + (delta * unitCost)) / totalQty, 6, MidpointRounding.AwayFromZero);
-        }
-
-        if (balanceId is null)
-        {
-            await using var insert = CreateCommand(connection, transaction,
-                "INSERT INTO material_stock_balances (company_id, warehouse_id, material_id, available_qty, reserved_qty, average_cost, last_cost, last_updated) VALUES (@company, @warehouse, @material, @qty, 0, @avg, @cost, " + NowExpr + ")");
-            Add(insert, "@company", companyId.Trim());
-            Add(insert, "@warehouse", warehouseId);
-            Add(insert, "@material", materialId);
-            Add(insert, "@qty", newQty);
-            Add(insert, "@avg", newAverage);
-            Add(insert, "@cost", unitCost);
-            await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            await using var update = CreateCommand(connection, transaction,
-                $"UPDATE material_stock_balances SET available_qty = @qty, average_cost = @avg, last_cost = @cost, last_updated = {NowExpr} WHERE stock_balance_id = @id");
-            Add(update, "@qty", newQty);
-            Add(update, "@avg", newAverage);
-            Add(update, "@cost", unitCost);
-            Add(update, "@id", balanceId.Value);
-            await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-        }
     }
 
     // ------------------------------------------------------------------
