@@ -80,6 +80,12 @@
     "message": "'{0}' belge türü fatura deftere işleme yoluyla işlenemez.",
     "hint": "Bu belge türü için ayrılmış pencereyi kullanın (stok transferleri ve stok sayımları depo motorlarıyla işlenir) veya belge türünü kontrol edin."
   },
+  "ACC-5015": {
+    "code": "ACC-5015",
+    "name": "ExchangeRateMissing",
+    "message": "'{0}' para birimi için kullanılabilir kur yok: belgede kur bulunmuyor ve {1} tarihinde veya öncesinde ana kur mevcut değil.",
+    "hint": "Belgeye bir kur girin veya para birimi kartında tarihli bir kur tanımlayın, ardından yeniden kaydedin."
+  },
   "AUTH-2001": {
     "code": "AUTH-2001",
     "name": "InvalidCredentials",

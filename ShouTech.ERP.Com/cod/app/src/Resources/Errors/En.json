@@ -80,6 +80,12 @@
     "message": "Document kind '{0}' cannot be posted through the invoice posting path.",
     "hint": "Use the dedicated window for this document kind (stock transfers and stock counts post through the warehouse engines), or check the document kind."
   },
+  "ACC-5015": {
+    "code": "ACC-5015",
+    "name": "ExchangeRateMissing",
+    "message": "No exchange rate is available for currency '{0}': the document carries no rate and no master rate exists on or before {1}.",
+    "hint": "Enter a rate on the document, or maintain a dated rate for the currency in the currency card, then post again."
+  },
   "AUTH-2001": {
     "code": "AUTH-2001",
     "name": "InvalidCredentials",

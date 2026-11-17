@@ -79,6 +79,7 @@ public static class ErrorCodes
     public const string DocumentAlreadyPostedToGl = "ACC-5012";
     public const string DocumentTotalMismatch = "ACC-5013";
     public const string DocumentKindNotPostable = "ACC-5014";
+    public const string ExchangeRateMissing = "ACC-5015";
 
     // ---- INV 6000-6999 -------------------------------------------------
     public const string InventoryOperationFailed = "INV-6001";

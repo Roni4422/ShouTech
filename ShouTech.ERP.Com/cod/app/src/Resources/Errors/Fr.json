@@ -80,6 +80,12 @@
     "message": "Le type de document « {0} » ne peut pas être comptabilisé par le chemin de comptabilisation des factures.",
     "hint": "Utilisez la fenêtre dédiée à ce type de document (les transferts et inventaires de stock passent par les moteurs d'entrepôt), ou vérifiez le type de document."
   },
+  "ACC-5015": {
+    "code": "ACC-5015",
+    "name": "ExchangeRateMissing",
+    "message": "Aucun taux de change n'est disponible pour la devise '{0}' : le document ne porte aucun taux et aucun taux maître n'existe au {1} ou avant.",
+    "hint": "Saisissez un taux sur le document, ou maintenez un taux daté pour la devise dans la fiche devise, puis validez à nouveau."
+  },
   "AUTH-2001": {
     "code": "AUTH-2001",
     "name": "InvalidCredentials",
