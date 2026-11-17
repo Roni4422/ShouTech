@@ -1,4 +1,4 @@
-// ========================================================================
+﻿// ========================================================================
 // FILE: Services/Company.cs
 // PROJECT: SHOUTECH ERP — Company registry & creation
 // Merged: CoModels + CoLocalStore + CoRegSvc + CoCreateSvc
@@ -1674,9 +1674,11 @@ public sealed class CoCreateSvc : ICoCreateSvc
                         VALUES
                         (
                             @CompanyId, @FiscalYear, @DbName, @StartDate, @EndDate, TRUE, FALSE
-                        );
+                        )
+                        RETURNING fiscal_year_id;
                         """;
 
+                    long fiscalYearId;
                     await using (var cmd = new NpgsqlCommand(insertFiscal, connection, transaction))
                     {
                         cmd.Parameters.Add("@CompanyId", NpgsqlDbType.Uuid).Value = record.CompanyId;
@@ -1684,8 +1686,15 @@ public sealed class CoCreateSvc : ICoCreateSvc
                         cmd.Parameters.Add("@DbName", NpgsqlDbType.Varchar).Value = dbName;
                         cmd.Parameters.Add("@StartDate", NpgsqlDbType.Date).Value = record.FiscalYearStart;
                         cmd.Parameters.Add("@EndDate", NpgsqlDbType.Date).Value = record.FiscalYearEnd;
-                        await cmd.ExecuteNonQueryAsync();
+                        fiscalYearId = Convert.ToInt64(await cmd.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
                     }
+
+                    // The journal requires an OPEN fiscal period covering the
+                    // entry date (JournalRepository + posting trigger); a
+                    // fiscal year without periods made every fresh company
+                    // unable to save a journal. Seed the monthly periods in
+                    // the same transaction (Step 2 companion fix).
+                    await SeedFiscalPeriodsPostgreSqlAsync(connection, transaction, record, fiscalYearId);
 
                     const string insertUser = """
                         INSERT INTO public.users
@@ -1758,9 +1767,10 @@ public sealed class CoCreateSvc : ICoCreateSvc
                     }
 
                     // Consume the selected COA template: seed the new company's
-                    // chart of accounts inside the same transaction, keyed by
-                    // company code — the tenant key every account reader uses.
-                    await SeedCoaAccountsPostgreSqlAsync(connection, transaction, record.Code, template);
+                    // chart of accounts inside the same transaction, into the
+                    // ONE canonical store (chart_of_accounts, migration 059),
+                    // keyed by the company Guid — the key the journal uses.
+                    await SeedCoaAccountsPostgreSqlAsync(connection, transaction, record, template);
 
                     await transaction.CommitAsync();
                     return true;
@@ -1837,6 +1847,13 @@ public sealed class CoCreateSvc : ICoCreateSvc
                     ("dbName", string.IsNullOrWhiteSpace(record.DbPath) ? $"SHOUTECH_{record.Code}_{fiscalYear}" : Path.GetFileName(record.DbPath.TrimEnd('\\', '/'))),
                     ("start", record.FiscalYearStart.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
                     ("end", record.FiscalYearEnd.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+                long fiscalYearId;
+                await using (var idCommand = new SqliteCommand("SELECT last_insert_rowid()", connection, transaction))
+                    fiscalYearId = Convert.ToInt64(await idCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+                // The journal requires an OPEN fiscal period covering the
+                // entry date; seed the monthly periods in the same
+                // transaction (see the PostgreSQL path).
+                await SeedFiscalPeriodsSqliteAsync(connection, transaction, record, fiscalYearId);
                 var adminUserId = Guid.NewGuid().ToString();
                 await ExecuteSqliteAsync(connection, transaction, """
                     INSERT INTO users
@@ -1862,17 +1879,35 @@ public sealed class CoCreateSvc : ICoCreateSvc
                     WHERE r.company_id=@companyId AND r.role_code='ROLE_ADMINISTRATOR' AND p.is_active=1
                     """, ("companyId", record.CompanyId.ToString()));
                 // Consume the selected COA template inside the same transaction
-                // (see the PostgreSQL path): accounts are keyed by company code.
-                foreach (var row in BuildCoaSeedRows(template))
+                // (see the PostgreSQL path): the ONE canonical store is
+                // chart_of_accounts (migration 059), keyed by company Guid.
+                // Two passes so template order cannot break the parent FK.
+                var seedRows = BuildCoaSeedRows(template);
+                var seedIdByCode = seedRows.ToDictionary(
+                    r => r.Code, _ => Guid.NewGuid().ToString(), StringComparer.OrdinalIgnoreCase);
+                foreach (var row in seedRows)
                 {
                     await ExecuteSqliteAsync(connection, transaction, """
-                        INSERT INTO accounts
-                            (company_id, account_code, parent_code, name_ar, name_en, posting_mode, status, risk, cost_center)
-                        VALUES (@company, @code, @parent, @nameAr, @nameEn, @posting, 'Active', 'Low', 'Unspecified')
+                        INSERT INTO chart_of_accounts
+                            (account_id, company_id, account_code, account_name, name_ar, account_type,
+                             parent_account_id, is_postable, is_active, is_deleted,
+                             risk, cost_center_mode)
+                        VALUES (@id, @company, @code, @nameEn, @nameAr, @type,
+                                NULL, @postable, 1, 0, 'Low', 'Unspecified')
                         ON CONFLICT(company_id, account_code) DO NOTHING
-                        """, ("company", record.Code), ("code", row.Code),
-                        ("parent", (object?)row.ParentCode ?? DBNull.Value),
-                        ("nameAr", row.NameAr), ("nameEn", row.NameEn), ("posting", row.PostingMode));
+                        """, ("id", seedIdByCode[row.Code]), ("company", record.CompanyId.ToString()),
+                        ("code", row.Code), ("nameAr", row.NameAr), ("nameEn", row.NameEn),
+                        ("type", AccRepo.AccountTypeForCode(row.Code)),
+                        ("postable", string.Equals(row.PostingMode, "Summary", StringComparison.OrdinalIgnoreCase) ? 0 : 1));
+                }
+                foreach (var row in seedRows)
+                {
+                    if (string.IsNullOrWhiteSpace(row.ParentCode)
+                        || !seedIdByCode.TryGetValue(row.ParentCode, out var parentId))
+                        continue;
+                    await ExecuteSqliteAsync(connection, transaction, """
+                        UPDATE chart_of_accounts SET parent_account_id = @parent WHERE account_id = @id
+                        """, ("parent", parentId), ("id", seedIdByCode[row.Code]));
                 }
                 await transaction.CommitAsync();
                 return true;
@@ -1943,25 +1978,119 @@ public sealed class CoCreateSvc : ICoCreateSvc
 
         private static async Task SeedCoaAccountsPostgreSqlAsync(
             NpgsqlConnection connection, NpgsqlTransaction transaction,
-            string companyCode, CoaTemplateV5 template)
+            StoredCoRec record, CoaTemplateV5 template)
         {
+            // Canonical chart seeding (migration 059): chart_of_accounts is
+            // the only chart store. Two passes — insert every account with a
+            // fresh Guid and no parent, then resolve parent_account_id by
+            // code — so template row order can never break the parent FK.
+            var rows = BuildCoaSeedRows(template);
+            var idByCode = rows.ToDictionary(r => r.Code, _ => Guid.NewGuid(), StringComparer.OrdinalIgnoreCase);
+
             const string insertAccount = """
-                INSERT INTO public.accounts
-                    (company_id, account_code, parent_code, name_ar, name_en, posting_mode, status, risk, cost_center)
-                VALUES (@Company, @Code, @Parent, @NameAr, @NameEn, @Posting, 'Active', 'Low', 'Unspecified')
+                INSERT INTO public.chart_of_accounts
+                    (account_id, company_id, account_code, account_name, name_ar, account_type,
+                     parent_account_id, is_postable, is_active, is_deleted,
+                     risk, cost_center_mode)
+                VALUES (@Id, @Company, @Code, @NameEn, @NameAr, @Type,
+                        NULL, @Postable, TRUE, FALSE, 'Low', 'Unspecified')
                 ON CONFLICT (company_id, account_code) DO NOTHING;
                 """;
 
-            foreach (var row in BuildCoaSeedRows(template))
+            foreach (var row in rows)
             {
                 await using var cmd = new NpgsqlCommand(insertAccount, connection, transaction);
-                cmd.Parameters.Add("@Company", NpgsqlDbType.Varchar).Value = companyCode;
+                cmd.Parameters.Add("@Id", NpgsqlDbType.Uuid).Value = idByCode[row.Code];
+                cmd.Parameters.Add("@Company", NpgsqlDbType.Uuid).Value = record.CompanyId;
                 cmd.Parameters.Add("@Code", NpgsqlDbType.Varchar).Value = row.Code;
-                cmd.Parameters.Add("@Parent", NpgsqlDbType.Varchar).Value = (object?)row.ParentCode ?? DBNull.Value;
                 cmd.Parameters.Add("@NameAr", NpgsqlDbType.Varchar).Value = row.NameAr;
                 cmd.Parameters.Add("@NameEn", NpgsqlDbType.Varchar).Value = row.NameEn;
-                cmd.Parameters.Add("@Posting", NpgsqlDbType.Varchar).Value = row.PostingMode;
+                cmd.Parameters.Add("@Type", NpgsqlDbType.Varchar).Value = AccRepo.AccountTypeForCode(row.Code);
+                cmd.Parameters.Add("@Postable", NpgsqlDbType.Boolean).Value =
+                    !string.Equals(row.PostingMode, "Summary", StringComparison.OrdinalIgnoreCase);
                 await cmd.ExecuteNonQueryAsync();
+            }
+
+            const string linkParent = """
+                UPDATE public.chart_of_accounts
+                SET parent_account_id = @ParentId
+                WHERE account_id = @Id;
+                """;
+            foreach (var row in rows)
+            {
+                if (string.IsNullOrWhiteSpace(row.ParentCode)
+                    || !idByCode.TryGetValue(row.ParentCode, out var parentId))
+                    continue;
+                await using var cmd = new NpgsqlCommand(linkParent, connection, transaction);
+                cmd.Parameters.Add("@ParentId", NpgsqlDbType.Uuid).Value = parentId;
+                cmd.Parameters.Add("@Id", NpgsqlDbType.Uuid).Value = idByCode[row.Code];
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+
+        /// <summary>
+        /// Monthly OPEN periods tiling the fiscal year's actual start..end
+        /// (at most 13, the schema cap), mirroring migration 059's backfill
+        /// and AccountingStructureRepository.CreateFiscalYearAsync.
+        /// </summary>
+        private static List<(int Number, DateTime Start, DateTime End)> BuildFiscalPeriods(StoredCoRec record)
+        {
+            var periods = new List<(int Number, DateTime Start, DateTime End)>();
+            var start = record.FiscalYearStart.Date;
+            var end = record.FiscalYearEnd.Date;
+            for (var i = 0; i < 13; i++)
+            {
+                var periodStart = start.AddMonths(i);
+                if (periodStart > end)
+                    break;
+                var periodEnd = periodStart.AddMonths(1).AddDays(-1);
+                if (periodEnd > end)
+                    periodEnd = end;
+                periods.Add((i + 1, periodStart, periodEnd));
+            }
+            return periods;
+        }
+
+        private static async Task SeedFiscalPeriodsPostgreSqlAsync(
+            NpgsqlConnection connection, NpgsqlTransaction transaction,
+            StoredCoRec record, long fiscalYearId)
+        {
+            const string insertPeriod = """
+                INSERT INTO public.fiscal_periods
+                    (fiscal_period_id, company_id, fiscal_year_id, period_number, period_name, start_date, end_date, status)
+                VALUES (@Id, @Company, @YearId, @Number, @Name, @Start, @End, 'OPEN')
+                ON CONFLICT DO NOTHING;
+                """;
+            foreach (var period in BuildFiscalPeriods(record))
+            {
+                await using var cmd = new NpgsqlCommand(insertPeriod, connection, transaction);
+                cmd.Parameters.Add("@Id", NpgsqlDbType.Uuid).Value = Guid.NewGuid();
+                cmd.Parameters.Add("@Company", NpgsqlDbType.Uuid).Value = record.CompanyId;
+                cmd.Parameters.Add("@YearId", NpgsqlDbType.Bigint).Value = fiscalYearId;
+                cmd.Parameters.Add("@Number", NpgsqlDbType.Integer).Value = period.Number;
+                cmd.Parameters.Add("@Name", NpgsqlDbType.Varchar).Value =
+                    period.Start.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+                cmd.Parameters.Add("@Start", NpgsqlDbType.Date).Value = period.Start;
+                cmd.Parameters.Add("@End", NpgsqlDbType.Date).Value = period.End;
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+
+        private static async Task SeedFiscalPeriodsSqliteAsync(
+            SqliteConnection connection, SqliteTransaction transaction,
+            StoredCoRec record, long fiscalYearId)
+        {
+            foreach (var period in BuildFiscalPeriods(record))
+            {
+                await ExecuteSqliteAsync(connection, transaction, """
+                    INSERT OR IGNORE INTO fiscal_periods
+                        (fiscal_period_id, company_id, fiscal_year_id, period_number, period_name, start_date, end_date, status)
+                    VALUES (@id, @company, @yearId, @number, @name, @start, @end, 'OPEN')
+                    """, ("id", Guid.NewGuid().ToString()), ("company", record.CompanyId.ToString()),
+                    ("yearId", fiscalYearId), ("number", period.Number),
+                    ("name", period.Start.ToString("yyyy-MM", CultureInfo.InvariantCulture)),
+                    ("start", period.Start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
+                    ("end", period.End.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
             }
         }
 

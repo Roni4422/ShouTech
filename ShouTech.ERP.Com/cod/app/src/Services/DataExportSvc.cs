@@ -1,4 +1,4 @@
-using System.Data.Common;
+﻿using System.Data.Common;
 using System.IO.Compression;
 using System.Globalization;
 using System.IO;
@@ -119,7 +119,7 @@ public static class DataExportSvc
     [
         new("Company", "Company data", ["companies", "Companies"]),
         new("Branches", "Branches", ["branches", "Branches"]),
-        new("Accounts", "Chart of accounts", ["accounts", "chart_of_accounts", "Accounts"]),
+        new("Accounts", "Chart of accounts", ["chart_of_accounts", "Accounts"]),
         new("AccountTypes", "Account types", ["account_types", "AccountTypes"]),
         new("Products", "Product cards and directory", ["materials", "products", "Products"]),
         new("ProductClasses", "Product classes", ["product_categories", "product_classes", "ProductClasses", "Categories"]),
@@ -1395,7 +1395,6 @@ public static class DataExportSvc
             || tableName.Equals("material_groups", StringComparison.OrdinalIgnoreCase)
             || tableName.Equals("customers", StringComparison.OrdinalIgnoreCase)
             || tableName.Equals("suppliers", StringComparison.OrdinalIgnoreCase)
-            || tableName.Equals("accounts", StringComparison.OrdinalIgnoreCase)
             || tableName.Equals("chart_of_accounts", StringComparison.OrdinalIgnoreCase)
             || tableName.Equals("branches", StringComparison.OrdinalIgnoreCase)
             || tableName.Equals("warehouses", StringComparison.OrdinalIgnoreCase)

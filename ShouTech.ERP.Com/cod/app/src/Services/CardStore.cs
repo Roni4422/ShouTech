@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Globalization;
@@ -290,8 +290,9 @@ public static class CardStore
 
     /// <summary>
     /// Book balance of a bank card = posted journal movement on its linked
-    /// GL account (accounts.balance is maintained by the journal engine;
-    /// debit/credit columns are the fallback when balance is unused).
+    /// GL account in the canonical chart (chart_of_accounts, migration 059),
+    /// computed from journal_entry_lines — never from a stored balance
+    /// column (the legacy accounts.balance was never maintained, C-2).
     /// </summary>
     public static decimal BankBookBalance(string glAccountCode)
     {
@@ -303,17 +304,22 @@ public static class CardStore
             using var connection = Open(cs);
             using var cmd = connection.CreateCommand();
             cmd.CommandText = """
-                SELECT COALESCE(balance, 0), COALESCE(debit, 0), COALESCE(credit, 0)
-                FROM accounts
-                WHERE company_id=$c AND account_code=$code AND is_deleted=0
-                LIMIT 1;
+                SELECT COALESCE(SUM(m.debit - m.credit), 0)
+                FROM chart_of_accounts a
+                INNER JOIN companies co ON co.company_id = a.company_id
+                LEFT JOIN (
+                    SELECT l.account_id AS aid, l.debit AS debit, l.credit AS credit
+                    FROM journal_entry_lines l
+                    INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
+                    WHERE j.status = 1
+                ) m ON m.aid = a.account_id
+                WHERE co.company_code=$c AND a.account_code=$code AND a.is_deleted=0;
                 """;
             Add(cmd, "$c", Company());
             Add(cmd, "$code", glAccountCode.Trim());
             using var reader = cmd.ExecuteReader();
             if (!reader.Read()) return 0;
-            var balance = GetDec(reader, 0);
-            return balance != 0 ? balance : GetDec(reader, 1) - GetDec(reader, 2);
+            return GetDec(reader, 0);
         }
         catch (Exception ex)
         {

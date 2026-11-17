@@ -1,4 +1,4 @@
-using System.Data.Common;
+﻿using System.Data.Common;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Text.Json;
@@ -75,12 +75,9 @@ public static class RecycleBinSvc
         new("suppliers", "Suppliers",
             ["supplier_name_ar", "supplier_name", "name", "code"],
             ["supplier_id", "id"], CompanyIdIsCode: true),
-        new("accounts", "Accounts",
-            ["account_name_ar", "account_name", "name", "code", "account_code"],
-            ["account_id", "id"], CompanyIdIsCode: true),
         new("chart_of_accounts", "Accounts",
-            ["account_name_ar", "account_name", "name", "code"],
-            ["account_id", "id"], CompanyIdIsCode: true),
+            ["account_name_ar", "account_name", "name_ar", "name", "code", "account_code"],
+            ["account_id", "id"]),
         new("branches", "Branches",
             ["branch_name_ar", "branch_name", "name", "code"],
             ["branch_id", "id"], CompanyIdIsCode: true),
