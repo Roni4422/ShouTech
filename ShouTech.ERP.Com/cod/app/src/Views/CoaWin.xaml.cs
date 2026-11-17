@@ -232,7 +232,12 @@ public partial class CoaWin : BaseWin
             return ft.WidthIncludingTrailingWhitespace;
         });
 
-        Width = Math.Clamp(Math.Ceiling((maxWidth + 90) * 1.20), MinWidth, 1600);
+        // Step 12: never re-widen past the work area — this Loaded-time
+        // resize runs AFTER the central clamp/cap, so the old uncapped
+        // 1600 upper bound silently defeated the screen-fit policy
+        // (sweep section 13, CoaWin post-clamp re-widening).
+        var maxFit = Math.Max(MinWidth, SystemParameters.WorkArea.Width);
+        Width = Math.Clamp(Math.Ceiling((maxWidth + 90) * 1.20), MinWidth, Math.Min(1600, maxFit));
     }
 
     private static string GetDisplayName(AccountNode node) =>

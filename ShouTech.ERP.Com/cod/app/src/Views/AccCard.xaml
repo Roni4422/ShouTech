@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:ShouTech.App.Views"
         Title="Account card"
-        Width="450" Height="560"
+        Width="700" Height="560"
         MinWidth="660" MinHeight="360"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource BackgroundBrush}"
@@ -190,17 +190,21 @@
             </ScrollViewer>
         </Border>
 
-        <DockPanel Grid.Row="3" Margin="0,7,0,0">
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                <Button Content="New" Click="New_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
-                <Button Content="Save" Click="Save_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0" FontWeight="SemiBold"/>
-                <Button Content="Edit" Click="Edit_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
-                <Button Content="Content" Click="Disable_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
-                <Button Content="Delete" Click="Delete_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
-                <Button Content="Content" Click="Statement_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
-                <Button Content="Content" Click="Ledger_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
-            </StackPanel>
-            <Button DockPanel.Dock="Left" Content="Close" Click="Close_Click" MinWidth="62" Padding="8,4"/>
-        </DockPanel>
+        <!-- Step 12 screen-fit: the old single-row DockPanel bar needed
+             ~734 DIP inside a 450-wide card, so New/Save/Edit opened off
+             the card's edge (sweep V3). The card is wider (700) and the
+             bar is a WrapPanel: the same eight buttons in the same order
+             flow on one row when there is room and wrap to a second row
+             at the 660 minimum — every action stays reachable. -->
+        <WrapPanel Grid.Row="3" Margin="0,7,0,0" HorizontalAlignment="Right">
+            <Button Content="New" Click="New_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
+            <Button Content="Save" Click="Save_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0" FontWeight="SemiBold"/>
+            <Button Content="Edit" Click="Edit_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
+            <Button Content="Content" Click="Disable_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
+            <Button Content="Delete" Click="Delete_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
+            <Button Content="Content" Click="Statement_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
+            <Button Content="Content" Click="Ledger_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
+            <Button Content="Close" Click="Close_Click" MinWidth="62" Padding="8,4" Margin="8,0,0,0"/>
+        </WrapPanel>
     </Grid>
 </local:BaseWin>

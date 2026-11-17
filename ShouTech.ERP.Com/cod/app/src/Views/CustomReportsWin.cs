@@ -132,10 +132,16 @@ public sealed class CustomReportsWin : BaseWin
         root.Children.Add(F2Ui.BottomBar(_runButton, _newButton, _editButton, _saveButton, _refreshButton, _closeButton));
 
         var content = new Grid();
-        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(190) });
-        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(330) });
+        // Step 12 screen-fit: the run-results row was a fixed 190 DIP
+        // and the designer column a fixed 330 — at the 660x360 minimum
+        // the designer form (taller than the remaining star row) clipped.
+        // Star proportions now (1.4* / 1* rows, results MinHeight 80;
+        // 2.5* / 1* designer column, MinWidth 240) + a scrollable
+        // designer host below.
+        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1.4, GridUnitType.Star) });
+        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 80 });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2.5, GridUnitType.Star) });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 240 });
 
         var listPanel = new DockPanel { Margin = new Thickness(0, 0, 12, 0) };
         var keyRow = F2Ui.CreateFormGrid(1);
@@ -168,9 +174,10 @@ public sealed class CustomReportsWin : BaseWin
         _columnsInfo.Height = 90;
         _columnsInfo.TextWrapping = TextWrapping.Wrap;
         F2Ui.AddField(_labels, designer, 4, 0, "CustomReports.Columns", _columnsInfo);
-        Grid.SetRow(designer, 0);
-        Grid.SetColumn(designer, 1);
-        content.Children.Add(designer);
+        var designerScroll = new ScrollViewer { Content = designer, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        Grid.SetRow(designerScroll, 0);
+        Grid.SetColumn(designerScroll, 1);
+        content.Children.Add(designerScroll);
 
         _runGrid.AutoGenerateColumns = true;
         _runGrid.IsReadOnly = true;

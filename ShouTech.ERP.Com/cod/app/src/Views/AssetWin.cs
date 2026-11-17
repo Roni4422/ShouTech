@@ -122,11 +122,17 @@ public sealed class AssetWin : BaseWin
         root.Children.Add(barBorder);
 
         var content = new Grid();
-        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        // Step 12 screen-fit: the depreciation-schedule row was a fixed
+        // 180 DIP and the editor column a fixed 330 — at the 660x360
+        // minimum they starved the asset list. Star proportions now
+        // (1.25* / 0.85* rows; 2.5* / 1* editor column, MinWidth 240);
+        // the schedule grid and the already-scrollable editor shrink
+        // with the window instead of clipping.
+        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1.25, GridUnitType.Star) });
         content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(180) });
-        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(330) });
+        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(0.85, GridUnitType.Star) });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2.5, GridUnitType.Star) });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 240 });
 
         var listPanel = new DockPanel { Margin = new Thickness(0, 0, 12, 0) };
         _assetsHeader.FontWeight = FontWeights.SemiBold;

@@ -26,7 +26,7 @@ public sealed class PosWin : BaseWin
     private static readonly Brush Teal = ShouTech.App.Services.VisuId.ResolveBrushResource("PosTealBrush", "#087F8C");
     private static readonly Brush Canvas = ShouTech.App.Services.VisuId.ResolveBrushResource("PosCanvasBrush", "#F3F6F8");
     private static readonly Brush PosBorderBrush = ShouTech.App.Services.VisuId.ResolveBrushResource("PosBorderBrush", "#DCE5EA");
-    private readonly TextBox _scan = new() { MinWidth = 260, FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(20), Height = 48, Padding = new Thickness(12, 7, 12, 7), VerticalContentAlignment = VerticalAlignment.Center };
+    private readonly TextBox _scan = new() { MinWidth = 180, FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(20), Height = 48, Padding = new Thickness(12, 7, 12, 7), VerticalContentAlignment = VerticalAlignment.Center };
     private readonly ObservableCollection<PosLine> _cart = new();
     private readonly DataGrid _grid = new() { AutoGenerateColumns = false, CanUserAddRows = false, HeadersVisibility = DataGridHeadersVisibility.Column, SelectionMode = DataGridSelectionMode.Single, SelectionUnit = DataGridSelectionUnit.FullRow };
     private readonly TextBlock _subtotal = new() { FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(16), Foreground = Ink };
@@ -50,7 +50,7 @@ public sealed class PosWin : BaseWin
     public PosWin()
     {
         Title = "ShouTech | Point of Sale";
-        Width = 1360; Height = 820; MinWidth = 1080; MinHeight = 680;
+        Width = 1360; Height = 820; MinWidth = 660; MinHeight = 360; // Step 12 screen-fit: was 1080x680 — larger than the 50% cap at EVERY profile (sweep worst offender). Touch targets keep the TouchControlHeight family; at the minimum the summary rail scrolls and the cart grid scrolls (see BuildUi).
         Background = Canvas;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         BuildUi();
@@ -129,7 +129,7 @@ public sealed class PosWin : BaseWin
         // Header: brand, clear instructions, and barcode-first workflow.
         var header = new Border { Background = ShouTech.App.Services.VisuId.ResolveBrushResource("SurfaceBrush", "#FFFFFF"), BorderBrush = PosBorderBrush, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(18), Margin = new Thickness(0, 0, 0, 14) };
         var headerGrid = new Grid();
-        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(250) });
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Step 12: brand sizes to content so the scan field keeps room at the minimum width
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var brand = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
@@ -155,8 +155,10 @@ public sealed class PosWin : BaseWin
 
         // Main work area: fast editable cart on the left, always-visible totals on the right.
         var body = new Grid();
-        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(320) });
+        // Step 12: star split (was a fixed 320-DIP summary rail) — the
+        // rail keeps its designed ~1/4 share at any width, MinWidth 250.
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star) });
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 250 });
         var cartCard = new Border { Background = ShouTech.App.Services.VisuId.ResolveBrushResource("SurfaceBrush", "#FFFFFF"), BorderBrush = PosBorderBrush, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(14), Margin = new Thickness(0, 0, 14, 0) };
         var cartLayout = new Grid();
         cartLayout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -178,12 +180,12 @@ public sealed class PosWin : BaseWin
         _grid.SetResourceReference(DataGrid.ColumnHeaderStyleProperty, "VisuDataGridHeaderStyle");
         _grid.SetResourceReference(DataGrid.RowStyleProperty, "VisuDataGridRowStyle");
         _grid.SetResourceReference(DataGrid.CellStyleProperty, "VisuDataGridCellStyle");
-        _grid.Columns.Add(new DataGridTextColumn { Header = "BARCODE", Binding = new System.Windows.Data.Binding(nameof(PosLine.Code)), IsReadOnly = true, Width = 118 });
+        _grid.Columns.Add(new DataGridTextColumn { Header = "BARCODE", Binding = new System.Windows.Data.Binding(nameof(PosLine.Code)), IsReadOnly = true, Width = 110 });
         _grid.Columns.Add(new DataGridTextColumn { Header = "PRODUCT", Binding = new System.Windows.Data.Binding(nameof(PosLine.Name)), IsReadOnly = true, Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
-        _grid.Columns.Add(new DataGridTextColumn { Header = "QTY", Binding = new System.Windows.Data.Binding(nameof(PosLine.Qty)) { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged, StringFormat = "N3" }, Width = 82 });
-        _grid.Columns.Add(new DataGridTextColumn { Header = "PRICE", Binding = new System.Windows.Data.Binding(nameof(PosLine.Price)) { StringFormat = "N2" }, IsReadOnly = true, Width = 100 });
-        _grid.Columns.Add(new DataGridTextColumn { Header = "TAX", Binding = new System.Windows.Data.Binding(nameof(PosLine.TaxAmount)) { StringFormat = "N2" }, IsReadOnly = true, Width = 90 });
-        _grid.Columns.Add(new DataGridTextColumn { Header = "LINE TOTAL", Binding = new System.Windows.Data.Binding(nameof(PosLine.Total)) { StringFormat = "N2" }, IsReadOnly = true, Width = 112 });
+        _grid.Columns.Add(new DataGridTextColumn { Header = "QTY", Binding = new System.Windows.Data.Binding(nameof(PosLine.Qty)) { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged, StringFormat = "N3" }, Width = 76 });
+        _grid.Columns.Add(new DataGridTextColumn { Header = "PRICE", Binding = new System.Windows.Data.Binding(nameof(PosLine.Price)) { StringFormat = "N2" }, IsReadOnly = true, Width = 90 });
+        _grid.Columns.Add(new DataGridTextColumn { Header = "TAX", Binding = new System.Windows.Data.Binding(nameof(PosLine.TaxAmount)) { StringFormat = "N2" }, IsReadOnly = true, Width = 80 });
+        _grid.Columns.Add(new DataGridTextColumn { Header = "LINE TOTAL", Binding = new System.Windows.Data.Binding(nameof(PosLine.Total)) { StringFormat = "N2" }, IsReadOnly = true, Width = 100 });
         _grid.CellEditEnding += (_, _) => Dispatcher.BeginInvoke(new Action(UpdateTotals));
         _grid.CurrentCellChanged += (_, _) => UpdateTotals();
         Grid.SetRow(_grid, 1); cartLayout.Children.Add(_grid);
@@ -239,7 +241,7 @@ public sealed class PosWin : BaseWin
         checkout.Click += (_, _) => Checkout(); actions.Children.Add(checkout);
         _status.Margin = new Thickness(0, 12, 0, 0); actions.Children.Add(_status);
         Grid.SetRow(actions, 3); summaryLayout.Children.Add(actions);
-        summary.Child = summaryLayout; Grid.SetColumn(summary, 1); body.Children.Add(summary);
+        summary.Child = new ScrollViewer { Content = summaryLayout, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled }; Grid.SetColumn(summary, 1); body.Children.Add(summary); // Step 12: rail scrolls at small heights instead of clipping the checkout actions
 
         Grid.SetRow(body, 1); root.Children.Add(body);
 

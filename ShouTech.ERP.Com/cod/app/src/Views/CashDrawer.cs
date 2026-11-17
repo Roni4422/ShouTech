@@ -18,7 +18,7 @@ public sealed class CashDrawerOptionsWin : BaseWin
     public CashDrawerOptionsWin()
     {
         Title = "POS Cash Drawer Options";
-        Width = 570; Height = 270; ResizeMode = ResizeMode.NoResize;
+        Width = 570; Height = 300; ResizeMode = ResizeMode.NoResize; // Step 12: 270 clipped ~9 DIP of content on every screen (sweep MINOR); 300 fits the cap
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         var root = new StackPanel { Margin = new Thickness(22) };
         root.Children.Add(new TextBlock { Text = "Cash drawer printer", FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(17), FontWeight = FontWeights.SemiBold });

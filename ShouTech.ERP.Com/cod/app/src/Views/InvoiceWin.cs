@@ -237,11 +237,18 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
 
     private void BuildUi()
     {
-        // Root: three proportional bands 30% / 40% / 30% + action bar at the BOTTOM (layout rule)
+        // Root: three star bands + action bar at the BOTTOM (layout rule).
+        // Step 12 screen-fit: the old fixed 30% / 40% / 30% bands clipped
+        // the header's payment column at EVERY size (its 8 rows need more
+        // than 30% of any window) with no way to scroll. The header and
+        // bottom bands are now scrollable star bands (3* / 2.5* / 2.5*):
+        // at a large size everything shows at once; squeezed to the
+        // 660x360 minimum, each band scrolls internally and the lines
+        // grid keeps its own scrollbars — nothing is ever clipped.
         var root = new Grid { Margin = new Thickness(4) };
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(3, GridUnitType.Star) }); // top 30%
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(4, GridUnitType.Star) }); // grid 40%
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(3, GridUnitType.Star) }); // bottom 30%
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(3, GridUnitType.Star) }); // header band (scrollable)
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(2.5, GridUnitType.Star) }); // lines grid
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(2.5, GridUnitType.Star) }); // bottom band (scrollable)
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // action bar
 
         // ---- Toolbar ----
@@ -300,7 +307,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         // ---- Top 30%: header fields (compact, no large gaps) ----
         var headerHost = new Border
         {
-            Child = BuildHeaderPanel(),
+            Child = new ScrollViewer { Content = BuildHeaderPanel(), VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled },
             Padding = new Thickness(2),
             Margin = new Thickness(0, 0, 0, 2),
             BorderThickness = new Thickness(1),
@@ -387,7 +394,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
 
         var bottomHost = new Border
         {
-            Child = bottom,
+            Child = new ScrollViewer { Content = bottom, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled },
             Padding = new Thickness(2),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(3)

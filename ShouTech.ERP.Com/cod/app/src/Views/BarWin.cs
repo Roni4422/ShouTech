@@ -96,7 +96,10 @@ public sealed class BarWin : BaseWin
 
         // 2. Main split layout
         var splitGrid = new Grid();
-        splitGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(380) });
+        // Step 12 screen-fit: star-proportioned split (was a fixed
+        // 380-DIP form column that left the 240-DIP preview card no room
+        // at the 660-wide minimum); the form scrolls (below).
+        splitGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.1, GridUnitType.Star), MinWidth = 250 });
         splitGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
         splitGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
@@ -121,8 +124,9 @@ public sealed class BarWin : BaseWin
         _chkIncludePrice.Checked += (_, _) => UpdatePreview();
         _chkIncludePrice.Unchecked += (_, _) => UpdatePreview();
 
-        Grid.SetColumn(formPanel, 0);
-        splitGrid.Children.Add(formPanel);
+        var formScroll = new ScrollViewer { Content = formPanel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        Grid.SetColumn(formScroll, 0);
+        splitGrid.Children.Add(formScroll);
 
         // Right Preview Container
         var previewContainer = new Border

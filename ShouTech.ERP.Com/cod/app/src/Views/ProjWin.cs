@@ -129,11 +129,16 @@ public sealed class ProjWin : BaseWin
 
         // Content: list + editor on top, tasks below.
         var content = new Grid();
-        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        // Step 12 screen-fit: the task row was a fixed 170 DIP while its
+        // editor needs ~200 — it clipped at every size. Rows and editor
+        // columns are star-proportioned now (the 330-DIP editor becomes
+        // 1* of a 2.5*/1* split, MinWidth 240), so both bands shrink
+        // proportionally to the 660x360 minimum and grow back on enlarge.
+        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1.25, GridUnitType.Star) });
         content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(170) });
-        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(330) });
+        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2.5, GridUnitType.Star) });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 240 });
 
         var listPanel = new DockPanel { Margin = new Thickness(0, 0, 12, 0) };
         _projectsHeader.FontWeight = FontWeights.SemiBold;
@@ -180,8 +185,8 @@ public sealed class ProjWin : BaseWin
         content.Children.Add(_tasksHeader);
 
         var taskPanel = new Grid();
-        taskPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        taskPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(330) });
+        taskPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2.5, GridUnitType.Star) });
+        taskPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 240 });
         ConfigureGrid(_taskGrid);
         _taskGrid.Columns.Add(TextCol("Projects.TaskName", nameof(ProjectTask.Name), 220));
         _taskGrid.Columns.Add(TextCol("Projects.Status", nameof(ProjectTask.Status), 100));
@@ -202,8 +207,12 @@ public sealed class ProjWin : BaseWin
         AddFormField(_labels, taskEditor, 4, 0, "Projects.Notes", _taskNotes);
         _taskStatus.ItemsSource = ProjectTaskStatuses.All;
         _taskStatus.SelectedItem = ProjectTaskStatuses.ToDo;
-        Grid.SetColumn(taskEditor, 1);
-        taskPanel.Children.Add(taskEditor);
+        // Step 12: the task editor sits in a scrollable host, exactly
+        // like the project editor above — squeezed into its star row it
+        // scrolls instead of clipping its last fields.
+        var taskEditorScroll = new ScrollViewer { Content = taskEditor, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        Grid.SetColumn(taskEditorScroll, 1);
+        taskPanel.Children.Add(taskEditorScroll);
         Grid.SetRow(taskPanel, 2);
         Grid.SetColumnSpan(taskPanel, 2);
         content.Children.Add(taskPanel);
