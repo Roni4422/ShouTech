@@ -284,5 +284,23 @@
     "code": "UI-7004",
     "name": "NavigationFailed",
     "message": "Gezinme tamamlanamadı."
+  },
+  "INV-6002": {
+    "code": "INV-6002",
+    "name": "StockValuationFailed",
+    "message": "'{0}' malzemesi için stok değerlemesi başarısız oldu.",
+    "hint": "Malzeme maliyet yöntemini ve stok bakiyesini kontrol edip tekrar işleyin."
+  },
+  "INV-6003": {
+    "code": "INV-6003",
+    "name": "RecalculationFailed",
+    "message": "Maliyetleri Yeniden Hesapla işi başarısız oldu.",
+    "hint": "Hata için stock_revaluation_jobs içindeki iş kaydına bakın, nedeni düzeltin ve işi tekrar çalıştırın."
+  },
+  "INV-6004": {
+    "code": "INV-6004",
+    "name": "RecalculationClosedPeriod",
+    "message": "Maliyetleri Yeniden Hesapla, kapalı bir mali dönemdeki hareketleri yeniden yazamaz (başlangıç tarihi '{0}').",
+    "hint": "Açık bir mali dönem içinde bir başlangıç tarihi seçin."
   }
 }

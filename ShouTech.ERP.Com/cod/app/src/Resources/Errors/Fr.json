@@ -284,5 +284,23 @@
     "code": "UI-7004",
     "name": "NavigationFailed",
     "message": "La navigation n'a pas pu être terminée."
+  },
+  "INV-6002": {
+    "code": "INV-6002",
+    "name": "StockValuationFailed",
+    "message": "L'évaluation du stock a échoué pour l'article « {0} ».",
+    "hint": "Vérifiez la méthode de coût et le solde de stock de l'article, puis comptabilisez à nouveau."
+  },
+  "INV-6003": {
+    "code": "INV-6003",
+    "name": "RecalculationFailed",
+    "message": "Le travail de recalcul des coûts a échoué.",
+    "hint": "Consultez l'enregistrement du travail dans stock_revaluation_jobs pour l'erreur, corrigez la cause, puis relancez le travail."
+  },
+  "INV-6004": {
+    "code": "INV-6004",
+    "name": "RecalculationClosedPeriod",
+    "message": "Le recalcul des coûts ne peut pas réécrire les mouvements d'une période fiscale clôturée (à partir du '{0}').",
+    "hint": "Choisissez une date de début dans une période fiscale ouverte."
   }
 }

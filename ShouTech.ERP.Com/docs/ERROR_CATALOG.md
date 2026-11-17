@@ -147,6 +147,9 @@ change and not yet converted.
 | DB-1005 | DatabaseQueryFailed | A database operation failed. | A database query failed (Classify default for DB exceptions; dashboard collectors in DataServ). |
 | DB-1006 | UnsupportedDatabaseProvider | Unsupported database provider. | Configured database provider is not supported (ComWin company-open). |
 | INV-6001 | InventoryOperationFailed | The inventory operation could not be completed. | Default code for inventory operation failures (Inventory service and repositories). |
+| INV-6002 | StockValuationFailed | Stock valuation failed for material '{0}'. | Thrown by StockValuationEngine when a movement cannot be valued (e.g. an issue exceeds the available quantity for a material that does not allow negative stock) (Step 6, Phase B 053). |
+| INV-6003 | RecalculationFailed | The Recalculate Costs job failed. | Thrown by StockRecalculationService when a replay fails; the job row in stock_revaluation_jobs is marked Failed with the error (Step 6, Phase B 053). |
+| INV-6004 | RecalculationClosedPeriod | Recalculate Costs cannot rewrite movements in a closed fiscal period (from date '{0}'). | Thrown by StockRecalculationService when the replay range touches a closed/locked fiscal period or a closed fiscal year (Step 6, Phase B 053). |
 | LIC-8001 | LicenseCheckFailed | The license could not be verified. | License check failed (License service). |
 | SYS-0001 | UnknownError | An unexpected error occurred. | Fallback for any error with no better code; also what an unregistered code resolves to. |
 | SYS-0002 | DispatcherUnhandled | An unexpected error interrupted the current operation. | Unhandled exception on the UI dispatcher (global handler fallback). |

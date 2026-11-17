@@ -284,5 +284,23 @@
     "code": "UI-7004",
     "name": "NavigationFailed",
     "message": "Navigation could not be completed."
+  },
+  "INV-6002": {
+    "code": "INV-6002",
+    "name": "StockValuationFailed",
+    "message": "Stock valuation failed for material '{0}'.",
+    "hint": "Check the material cost method and stock balance, then post again."
+  },
+  "INV-6003": {
+    "code": "INV-6003",
+    "name": "RecalculationFailed",
+    "message": "The Recalculate Costs job failed.",
+    "hint": "See the job record in stock_revaluation_jobs for the error, fix the cause, and run the job again."
+  },
+  "INV-6004": {
+    "code": "INV-6004",
+    "name": "RecalculationClosedPeriod",
+    "message": "Recalculate Costs cannot rewrite movements in a closed fiscal period (from date '{0}').",
+    "hint": "Choose a from date inside an open fiscal period."
   }
 }

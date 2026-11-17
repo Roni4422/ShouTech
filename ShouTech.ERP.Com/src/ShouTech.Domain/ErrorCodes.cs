@@ -82,6 +82,9 @@ public static class ErrorCodes
 
     // ---- INV 6000-6999 -------------------------------------------------
     public const string InventoryOperationFailed = "INV-6001";
+    public const string StockValuationFailed = "INV-6002";
+    public const string RecalculationFailed = "INV-6003";
+    public const string RecalculationClosedPeriod = "INV-6004";
 
     // ---- UI 7000-7999 --------------------------------------------------
     public const string WindowOperationFailed = "UI-7001";
