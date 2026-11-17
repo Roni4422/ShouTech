@@ -2087,7 +2087,10 @@
     "Saved": "Asset saved.",
     "Deleted": "Asset deleted.",
     "PermissionDenied": "You do not have permission to perform this asset action.",
-    "ServiceUnavailable": "Fixed assets service is unavailable (no database connection)."
+    "ServiceUnavailable": "Fixed assets service is unavailable (no database connection).",
+    "PostDepreciation": "Post Depreciation",
+    "DepreciationPosted": "Depreciation posted to the general ledger: {0}",
+    "DepreciationNone": "No new depreciation to post for this asset."
   },
   "MasterCards": {
     "Active": "Active",

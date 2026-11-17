@@ -2052,7 +2052,10 @@
     "Saved": "Immobilisation enregistrée.",
     "Deleted": "Immobilisation supprimée.",
     "PermissionDenied": "Vous n'avez pas l'autorisation d'effectuer cette action sur les immobilisations.",
-    "ServiceUnavailable": "Le service des immobilisations est indisponible (aucune connexion à la base de données)."
+    "ServiceUnavailable": "Le service des immobilisations est indisponible (aucune connexion à la base de données).",
+    "PostDepreciation": "Comptabiliser l'amortissement",
+    "DepreciationPosted": "Amortissement comptabilisé au grand livre : {0}",
+    "DepreciationNone": "Aucun nouvel amortissement à comptabiliser pour cet actif."
   },
   "MasterCards": {
     "Active": "Actif",

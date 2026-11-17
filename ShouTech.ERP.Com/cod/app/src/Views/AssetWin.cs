@@ -53,6 +53,7 @@ public sealed class AssetWin : BaseWin
     private readonly Button _newButton = new();
     private readonly Button _saveButton = new();
     private readonly Button _deleteButton = new();
+    private readonly Button _postDepButton = new();
     private readonly Button _refreshButton = new();
     private readonly Button _closeButton = new();
 
@@ -98,14 +99,16 @@ public sealed class AssetWin : BaseWin
         StyleButton(_newButton, "Common.New");
         StyleButton(_saveButton, "Common.Save");
         StyleButton(_deleteButton, "Common.Delete");
+        StyleButton(_postDepButton, "Assets.PostDepreciation");
         StyleButton(_refreshButton, "Common.Refresh");
         StyleButton(_closeButton, "Common.Close");
         _newButton.Click += (_, _) => ClearEditor();
         _saveButton.Click += async (_, _) => await SaveAsync();
         _deleteButton.Click += async (_, _) => await DeleteAsync();
+        _postDepButton.Click += async (_, _) => await PostDepreciationAsync();
         _refreshButton.Click += async (_, _) => await RefreshAsync();
         _closeButton.Click += (_, _) => Close();
-        foreach (var b in new[] { _newButton, _saveButton, _deleteButton, _refreshButton, _closeButton })
+        foreach (var b in new[] { _newButton, _saveButton, _deleteButton, _postDepButton, _refreshButton, _closeButton })
             bar.Children.Add(b);
         var barBorder = new Border
         {
@@ -200,7 +203,7 @@ public sealed class AssetWin : BaseWin
             label.Text = T(key);
         foreach (var (column, key) in _headers)
             column.Header = T(key);
-        foreach (var b in new[] { _newButton, _saveButton, _deleteButton, _refreshButton, _closeButton })
+        foreach (var b in new[] { _newButton, _saveButton, _deleteButton, _postDepButton, _refreshButton, _closeButton })
             if (b.Tag is string key)
                 b.Content = T(key);
         UpdateStatusBar();
@@ -287,6 +290,32 @@ public sealed class AssetWin : BaseWin
         catch (Exception ex)
         {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "AssetWin.SaveAsync");
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>Posts the selected asset's accumulated depreciation to
+    /// the GL through AssetService (Step 3, AST-01): Dr depreciation
+    /// expense / Cr accumulated depreciation, only the not-yet-posted
+    /// increment. The journal document number is shown to the user.</summary>
+    private async Task PostDepreciationAsync()
+    {
+        try
+        {
+            if (_service is null || !_selectedId.HasValue)
+                return;
+            if (!AppHost.Permissions.Has(PermCat.Assets.Update))
+                throw new InvalidOperationException(T("Assets.PermissionDenied"));
+            var journalNo = await _service.PostDepreciationAsync(
+                CurrentCompanyCode, _selectedId.Value, DateOnly.FromDateTime(DateTime.Today), CurrentUserId);
+            MessageBox.Show(this,
+                journalNo is null ? T("Assets.DepreciationNone") : T("Assets.DepreciationPosted").Replace("{0}", journalNo, StringComparison.Ordinal),
+                Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "AssetWin.PostDepreciationAsync");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

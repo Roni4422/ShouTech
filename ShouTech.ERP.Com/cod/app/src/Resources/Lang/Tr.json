@@ -2052,7 +2052,10 @@
     "Saved": "Sabit kıymet kaydedildi.",
     "Deleted": "Sabit kıymet silindi.",
     "PermissionDenied": "Bu sabit kıymet işlemini yapma izniniz yok.",
-    "ServiceUnavailable": "Sabit kıymet hizmeti kullanılamıyor (veritabanı bağlantısı yok)."
+    "ServiceUnavailable": "Sabit kıymet hizmeti kullanılamıyor (veritabanı bağlantısı yok).",
+    "PostDepreciation": "Amortismanı Deftere İşle",
+    "DepreciationPosted": "Amortisman genel muhasebe defterine işlendi: {0}",
+    "DepreciationNone": "Bu varlık için işlenecek yeni amortisman yok."
   },
   "MasterCards": {
     "Active": "Aktif",
