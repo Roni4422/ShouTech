@@ -113,16 +113,23 @@ namespace ShouTech.App.Services
         // The English index is static so the logging layer (LogServ) can
         // stamp [Name=...] onto error lines before/without a service
         // instance (logging is initialized first and must never depend
-        // on this service being constructed).
+        // on this service being constructed). It resolves from the
+        // deployed catalog directory next to the executable.
         private static readonly Lazy<Dictionary<string, Entry>> EnglishIndex = new(() => LoadCatalogFile(ResolveCatalogDirectory(), "En.json"));
+
+        // The instance base layer: the same English index, but loaded
+        // from THIS instance's catalog directory, so an instance pointed
+        // at another directory (tests, tools) resolves consistently.
+        private readonly Lazy<Dictionary<string, Entry>> _english;
 
         public ErrorCatalogSvc(Func<string> languageProvider, string? catalogDirectory = null)
         {
             _languageProvider = languageProvider ?? throw new ArgumentNullException(nameof(languageProvider));
             _catalogDirectory = catalogDirectory ?? ResolveCatalogDirectory();
+            _english = new Lazy<Dictionary<string, Entry>>(() => LoadCatalogFile(_catalogDirectory, "En.json"));
         }
 
-        public IReadOnlyCollection<string> KnownCodes => EnglishIndex.Value.Keys;
+        public IReadOnlyCollection<string> KnownCodes => _english.Value.Keys;
 
         // ---------------------------------------------------------------
         // Static catalog access for the logging layer
@@ -151,20 +158,21 @@ namespace ShouTech.App.Services
         {
             var requested = string.IsNullOrWhiteSpace(code) ? ErrorCodes.Unknown : code.Trim();
 
+            var hasEnglish = _english.Value.TryGetValue(requested, out var englishEntry);
+
+            // Selected-language overlay: per-field fallback — a field the
+            // overlay entry leaves empty keeps the English value.
+            Entry? overlay = null;
             var language = NormalizeLanguage(SafeCurrentLanguage());
-            Entry? entry = null;
-
             if (!string.Equals(language, "en", StringComparison.OrdinalIgnoreCase))
-                entry = GetOverlay(language).TryGetValue(requested, out var overlayEntry) ? overlayEntry : null;
+                GetOverlay(language).TryGetValue(requested, out overlay);
 
-            if (entry == null && EnglishIndex.Value.TryGetValue(requested, out var englishEntry))
-                entry = englishEntry;
-
-            if (entry == null)
+            if (!hasEnglish)
             {
-                // Unknown code: fall back to SYS-0001; the raw requested
+                // Unknown code (a code must exist in the English index to
+                // be known): fall back to SYS-0001; the raw requested
                 // code is preserved on the result (and in the log line).
-                var fallback = EnglishIndex.Value.TryGetValue(ErrorCodes.Unknown, out var unknownEntry)
+                var fallback = _english.Value.TryGetValue(ErrorCodes.Unknown, out var unknownEntry)
                     ? unknownEntry
                     : new Entry { Name = "UnknownError", Message = "An unexpected error occurred." };
 
@@ -177,12 +185,16 @@ namespace ShouTech.App.Services
                     isKnown: false);
             }
 
+            var name = !string.IsNullOrWhiteSpace(overlay?.Name) ? overlay!.Name : englishEntry!.Name;
+            var message = !string.IsNullOrWhiteSpace(overlay?.Message) ? overlay!.Message : englishEntry!.Message;
+            var hint = !string.IsNullOrWhiteSpace(overlay?.Hint) ? overlay!.Hint : englishEntry!.Hint;
+
             return new ErrorInfo(
                 requested,
                 requested,
-                entry.Name,
-                Format(entry.Message, args),
-                entry.Hint,
+                name,
+                Format(message, args),
+                hint,
                 isKnown: true);
         }
 
