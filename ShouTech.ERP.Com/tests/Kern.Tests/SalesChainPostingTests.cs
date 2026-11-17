@@ -96,6 +96,54 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task PostingDeliveryNote_ForServiceMaterial_CreatesNoMovementOrBalance()
+        {
+            var (service, _, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                // Material 42 is a SERVICE material (non-stock): delivering
+                // it must not move stock, even though the line carries qty.
+                await using (var seed = new SqliteConnection(connectionString))
+                {
+                    await seed.OpenAsync();
+                    await using var insert = seed.CreateCommand();
+                    insert.CommandText = """
+                        INSERT INTO materials
+                          (material_id, company_id, code, name_ar, name_en,
+                           is_stocked, is_service, item_type, unit1, unit1_factor)
+                        VALUES
+                          (42, $company, 'MAT-42', 'Posting test item', 'Posting test item',
+                           0, 1, 'Service', 'PCS', 1);
+                        """;
+                    var companyParam = insert.CreateParameter();
+                    companyParam.ParameterName = "$company";
+                    companyParam.Value = companyId.ToString();
+                    insert.Parameters.Add(companyParam);
+                    await insert.ExecuteNonQueryAsync();
+                }
+
+                var quotationId = await service.CreateQuotationAsync(Draft(companyId, "QT-7005"), "posting-test");
+                var orderId = await service.CreateFromSourceAsync(quotationId, "SO-7005", new DateOnly(2026, 10, 20), "posting-test");
+                await service.PostAsync(orderId, "posting-test");
+                var deliveryId = await service.CreateFromSourceAsync(orderId, "DLV-7005", new DateOnly(2026, 10, 21), "posting-test");
+
+                await service.PostAsync(deliveryId, "posting-test");
+
+                await using var connection = new SqliteConnection(connectionString);
+                await connection.OpenAsync();
+
+                Assert.Equal(0, (int)Scalar(connection,
+                    "SELECT COUNT(*) FROM material_stock_movements WHERE material_id = 42"));
+                Assert.Equal(0, (int)Scalar(connection,
+                    "SELECT COUNT(*) FROM material_stock_balances WHERE material_id = 42"));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task PostingSalesInvoice_WritesCustomerPartyLedgerDebit()
         {
             var (service, _, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
