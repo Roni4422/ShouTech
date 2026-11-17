@@ -747,6 +747,10 @@ public static class InvRepo
             return InvPaymentMethod.Credit;
         if (string.Equals(value, "Checks", StringComparison.OrdinalIgnoreCase))
             return InvPaymentMethod.Checks;
+        if (string.Equals(value, "Card", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(value, "K-Net", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(value, "Visa", StringComparison.OrdinalIgnoreCase))
+            return InvPaymentMethod.Card;
         return InvPaymentMethod.Cash;
     }
 

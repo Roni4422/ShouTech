@@ -9,6 +9,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Media;
+using ShouTech.App.Configuration;
 
 namespace ShouTech.App.Views;
 
@@ -17,10 +18,14 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class JrnWin : BaseWin
 {
+    // Note: the former ShowOperationUnavailable helper was removed — every
+    // JrnWin operation (New/Load/Save/Post/Reverse/Print) is implemented;
+    // no placeholder operations remain in this window.
+
     private readonly TextBox _txtDocNo = new() { Width = 110, Height = 26 };
     private readonly DatePicker _dtDate = new() { Width = 120, Height = 26, SelectedDate = DateTime.Today };
     private readonly TextBox _txtRefNo = new() { Width = 110, Height = 26 };
-    private readonly TextBox _txtCur = new() { Width = 70, Height = 26, Text = "SAR" };
+    private readonly TextBox _txtCur = new() { Width = 70, Height = 26, Text = UsrPref.Load().CurrencyCode };
     private readonly TextBox _txtRate = new() { Width = 70, Height = 26, Text = "1.00" };
     private readonly TextBox _txtCc = new() { Width = 110, Height = 26 };
     private readonly TextBox _txtMemo = new() { Width = 400, Height = 26 };
@@ -274,7 +279,7 @@ public sealed class JrnWin : BaseWin
         var documentNumber = _txtDocNo.Text.Trim();
         if (string.IsNullOrWhiteSpace(documentNumber))
         {
-            MessageBox.Show(this, "أدخل رقم القيد المراد فتحه.", "رقم القيد مطلوب",
+            MessageBox.Show(this, T("Vouchers.EntryNumberRequired"), T("Common.Warning"),
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
@@ -284,15 +289,15 @@ public sealed class JrnWin : BaseWin
             var user = ShouTech.App.Services.UsrSession.Current;
             var companyCode = user?.CompanyId;
             if (string.IsNullOrWhiteSpace(companyCode))
-                throw new InvalidOperationException("لا توجد شركة نشطة في جلسة المستخدم.");
+                throw new InvalidOperationException("There is no active company in the user session.");
             if (ShouTech.App.Services.AppHost.JournalStore is not { } store ||
                 ShouTech.App.Services.AppHost.Journal is not { } journal)
-                throw new InvalidOperationException("خدمة القيود غير مهيأة؛ تحقق من إعداد اتصال قاعدة البيانات.");
+                throw new InvalidOperationException("The journal service is not initialized; check the database connection setup.");
 
             var companyId = await store.ResolveCompanyIdAsync(companyCode);
             var snapshot = await journal.FindByDocumentNumberAsync(companyId, documentNumber);
             if (snapshot is null)
-                throw new InvalidOperationException($"لم يُعثر على القيد '{documentNumber}' في الشركة النشطة.");
+                throw new InvalidOperationException($"Journal entry '{documentNumber}' was not found in the active company.");
 
             _currentJournalId = snapshot.Id;
             _journalPosted = snapshot.Status != ShouTech.Domain.Entities.JournalEntryStatus.Draft;
@@ -338,8 +343,8 @@ public sealed class JrnWin : BaseWin
 
             MessageBox.Show(
                 this,
-                $"تم تحميل القيد من قاعدة البيانات.\nالحالة: {snapshot.Status}\nالمعرف: {snapshot.Id:D}",
-                "تم التحميل",
+                string.Format(T("Vouchers.EntryLoaded"), snapshot.Status, snapshot.Id.ToString("D")),
+                T("Vouchers.EntryLoadedTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
         }
@@ -368,7 +373,7 @@ public sealed class JrnWin : BaseWin
     {
         if (_currentJournalId.HasValue)
         {
-            MessageBox.Show(this, "هذا القيد محفوظ بالفعل. لا تُنشأ نسخة مكررة؛ افتح قيدًا جديدًا لإدخال قيد آخر.", "القيد محفوظ", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, T("Vouchers.EntryAlreadySaved"), T("Vouchers.Saved"), MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -381,40 +386,40 @@ public sealed class JrnWin : BaseWin
             var companyCode = user?.CompanyId;
             var actor = !string.IsNullOrWhiteSpace(user?.Id) ? user.Id : ShouTech.App.Services.AppHost.Session.CurrentUser;
             if (string.IsNullOrWhiteSpace(companyCode))
-                throw new InvalidOperationException("لا توجد شركة نشطة في جلسة المستخدم.");
+                throw new InvalidOperationException("There is no active company in the user session.");
             if (string.IsNullOrWhiteSpace(actor))
-                throw new InvalidOperationException("تعذر تحديد المستخدم الحالي لحفظ القيد.");
+                throw new InvalidOperationException("Could not determine the current user to save the entry.");
             if (ShouTech.App.Services.AppHost.JournalStore is not { } store ||
                 ShouTech.App.Services.AppHost.Journal is not { } journal)
-                throw new InvalidOperationException("خدمة حفظ القيود غير مهيأة؛ تحقق من اتصال قاعدة البيانات وإعداداتها.");
+                throw new InvalidOperationException("The journal save service is not initialized; check the database connection and its settings.");
 
             if (_dtDate.SelectedDate is not DateTime selectedDate)
-                throw new InvalidOperationException("تاريخ القيد مطلوب.");
+                throw new InvalidOperationException("The entry date is required.");
             if (string.IsNullOrWhiteSpace(_txtDocNo.Text))
-                throw new InvalidOperationException("رقم القيد مطلوب.");
+                throw new InvalidOperationException("Entry Number Required.");
             if (string.IsNullOrWhiteSpace(_txtMemo.Text))
-                throw new InvalidOperationException("بيان القيد مطلوب.");
+                throw new InvalidOperationException("The entry description is required.");
 
             var currency = _txtCur.Text.Trim().ToUpperInvariant();
             if (currency.Length != 3 || !currency.All(char.IsAsciiLetter))
-                throw new InvalidOperationException("رمز العملة يجب أن يتكون من ثلاثة أحرف لاتينية.");
+                throw new InvalidOperationException("The currency code must consist of three Latin letters.");
             if (!decimal.TryParse(_txtRate.Text, NumberStyles.Number, CultureInfo.CurrentCulture, out var rate) &&
                 !decimal.TryParse(_txtRate.Text, NumberStyles.Number, CultureInfo.InvariantCulture, out rate))
-                throw new InvalidOperationException("سعر الصرف غير صالح.");
+                throw new InvalidOperationException("The exchange rate is invalid.");
             if (rate <= 0)
-                throw new InvalidOperationException("سعر الصرف يجب أن يكون أكبر من صفر.");
+                throw new InvalidOperationException("The exchange rate must be greater than zero.");
             if (_lines.Count < 2)
-                throw new InvalidOperationException("القيد يتطلب سطرين على الأقل.");
+                throw new InvalidOperationException("The entry requires at least two lines.");
 
             var companyId = await store.ResolveCompanyIdAsync(companyCode);
             var requests = new List<ShouTech.Application.Services.JournalLineRequest>();
             foreach (var line in _lines)
             {
                 if (string.IsNullOrWhiteSpace(line.AccountCode))
-                    throw new InvalidOperationException($"رمز الحساب مطلوب في السطر {line.LineNo}.");
+                    throw new InvalidOperationException($"The account code is required on line {line.LineNo}.");
                 if (line.Debit < 0 || line.Credit < 0 || (line.Debit > 0 && line.Credit > 0) ||
                     (line.Debit == 0 && line.Credit == 0))
-                    throw new InvalidOperationException($"يجب إدخال مدين أو دائن واحد فقط بمبلغ موجب في السطر {line.LineNo}.");
+                    throw new InvalidOperationException($"Enter exactly one of debit or credit with a positive amount on line {line.LineNo}.");
 
                 var accountId = await store.ResolveAccountIdAsync(companyId, line.AccountCode);
                 line.AccountName = await store.ResolveAccountNameAsync(companyId, line.AccountCode);
@@ -438,7 +443,7 @@ public sealed class JrnWin : BaseWin
             _btnPost.IsEnabled = true;
             _btnReverse.IsEnabled = false;
             SetVoucherReadOnly(true);
-            MessageBox.Show(this, $"تم حفظ مسودة القيد في قاعدة البيانات.\nالمعرف: {id:D}", "تم الحفظ", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, string.Format(T("Vouchers.EntryDraftSaved"), id.ToString("D")), T("Vouchers.Saved"), MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
@@ -463,9 +468,9 @@ public sealed class JrnWin : BaseWin
             var user = ShouTech.App.Services.UsrSession.Current;
             var actor = !string.IsNullOrWhiteSpace(user?.Id) ? user.Id : ShouTech.App.Services.AppHost.Session.CurrentUser;
             if (string.IsNullOrWhiteSpace(actor))
-                throw new InvalidOperationException("تعذر تحديد المستخدم الحالي لترحيل القيد.");
+                throw new InvalidOperationException("Could not determine the current user to post the entry.");
             if (ShouTech.App.Services.AppHost.Journal is not { } journal)
-                throw new InvalidOperationException("خدمة ترحيل القيود غير مهيأة.");
+                throw new InvalidOperationException("The journal posting service is not initialized.");
 
             await journal.PostAsync(_currentJournalId.Value, actor);
             _journalPosted = true;
@@ -473,7 +478,7 @@ public sealed class JrnWin : BaseWin
             _btnPost.IsEnabled = false;
             _btnReverse.IsEnabled = true;
             SetVoucherReadOnly(true);
-            MessageBox.Show(this, "تم ترحيل القيد فعليًا في قاعدة البيانات.", "تم الترحيل", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, T("Vouchers.EntryPosted"), T("Vouchers.Posted"), MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
@@ -492,14 +497,14 @@ public sealed class JrnWin : BaseWin
         {
             if (!ShouTech.App.Services.AppHost.Permissions.Has(
                     ShouTech.App.Services.PermCat.Accounting.JournalReverse))
-                throw new InvalidOperationException("المستخدم الحالي لا يملك صلاحية عكس القيود (ACC.JOURNAL.REVERSE).");
+                throw new InvalidOperationException("The current user does not have permission to reverse journal entries (ACC.JOURNAL.REVERSE).");
 
             var user = ShouTech.App.Services.UsrSession.Current;
             var actor = !string.IsNullOrWhiteSpace(user?.Id) ? user.Id : ShouTech.App.Services.AppHost.Session.CurrentUser;
             if (string.IsNullOrWhiteSpace(actor))
-                throw new InvalidOperationException("تعذر تحديد المستخدم الحالي لعكس القيد.");
+                throw new InvalidOperationException("Could not determine the current user to reverse the entry.");
             if (ShouTech.App.Services.AppHost.Journal is not { } journal)
-                throw new InvalidOperationException("خدمة عكس القيود غير مهيأة.");
+                throw new InvalidOperationException("The journal reversal service is not initialized.");
 
             // JournalRepository.ReverseAsync creates the compensating posted
             // entry (lines swapped, linked via reversal_of_entry_id), marks
@@ -533,8 +538,8 @@ public sealed class JrnWin : BaseWin
             $"Code={definition.Code}; {context}; Error={exception.Message}");
         MessageBox.Show(
             this,
-            $"لم تنجح العملية ولم تُعرض كنجاح.\n[{definition.Code}] {exception.Message}",
-            "فشل حفظ القيد",
+            string.Format(T("Vouchers.SaveFailedMsg"), definition.Code, exception.Message),
+            T("Vouchers.SaveFailedTitle"),
             MessageBoxButton.OK,
             MessageBoxImage.Error);
     }

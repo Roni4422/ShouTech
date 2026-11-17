@@ -1,10 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
 using ShouTech.App.Localization;
 using ShouTech.App.Services;
@@ -226,6 +227,7 @@ private void Reload()
     }
     catch (Exception ex)
     {
+        AppHost.Logging?.LogError("MatDirWin", "Reload failed", ex);
         MessageBox.Show(
             this,
             ex.Message,
@@ -306,7 +308,11 @@ private void LoadGroups()
             });
         }
     }
-    catch (Exception ex) { AppHost.Logging?.LogError("MatDirWin", "Material group load failed (groups are optional)", ex); }
+    catch (Exception ex)
+    {
+        // Groups are optional in the filter, but the failure is reported.
+        AppHost.Logging?.LogError("MatDirWin", "LoadGroups failed", ex);
+    }
 }
 
 private void ApplyFilter()
@@ -433,11 +439,14 @@ private void OpenSelected()
 
         window.Closed += (_, _) => Reload();
 
+        // Open at the SELECTED material (was: selection discarded, the
+        // card always showed the first material in its cache).
+        window.OpenMaterial(item.Id);
         window.Show();
     }
     else
     {
-        OpenGroupsWindow();
+        OpenGroupsWindow(item.Id);
     }
 }
 
@@ -488,6 +497,7 @@ private void Remove_Click(
     }
     catch (Exception ex)
     {
+        AppHost.Logging?.LogError("MatDirWin", "Remove material failed", ex);
         MessageBox.Show(
             this,
             ex.Message,
@@ -501,17 +511,54 @@ private void Print_Click(
     object sender,
     RoutedEventArgs e)
 {
-    MessageBox.Show(
-        this,
-        Loc.Get(
-            "Inventory.MaterialTreeTexts.PrintHint",
-            "Print list") +
-        ": " +
-        _view.Count.ToString(
-            CultureInfo.CurrentCulture),
-        Title,
-        MessageBoxButton.OK,
-        MessageBoxImage.Information);
+  try
+  {
+    // Real list print (was a fake handler that only showed the row count
+    // in a message box). Same FlowDocument pattern as CoaWin's print.
+    var dialog = new PrintDialog();
+    if (dialog.ShowDialog() != true)
+        return;
+
+    var document = new FlowDocument
+    {
+        PagePadding = new Thickness(40),
+        FlowDirection = FlowDirection,
+        FontFamily = VisuId.ResolveFontFamily("ApplicationFontFamily", "Segoe UI"),
+        FontSize = VisuId.ResolveFontSize(11)
+    };
+    document.Blocks.Add(new Paragraph(new Run(Title))
+    {
+        FontSize = VisuId.ResolveFontSize(18),
+        FontWeight = FontWeights.Bold,
+        TextAlignment = TextAlignment.Center
+    });
+    document.Blocks.Add(new Paragraph(new Run(
+        DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)))
+    {
+        TextAlignment = TextAlignment.Right
+    });
+
+    foreach (var item in _view)
+    {
+        document.Blocks.Add(new Paragraph(new Run(
+            $"{item.Code}    {item.DisplayName}    {item.StatusLabel}"))
+        {
+            Margin = new Thickness(0, 1, 0, 1),
+            TextAlignment = FlowDirection == FlowDirection.RightToLeft
+                ? TextAlignment.Right
+                : TextAlignment.Left
+        });
+    }
+
+    dialog.PrintDocument(
+        ((IDocumentPaginatorSource)document).DocumentPaginator,
+        Title);
+  }
+  catch (Exception ex)
+  {
+    AppHost.Logging?.LogError("MatDirWin", "Print failed", ex);
+    MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+  }
 }
 
 private void Ctx_Opened(
@@ -567,7 +614,7 @@ private void CopyName_Click(
     }
 }
 
-private void OpenGroupsWindow()
+private void OpenGroupsWindow(long? groupId = null)
 {
     try
     {
@@ -600,6 +647,11 @@ x => x != null);
     var window =
         (Window)Activator.CreateInstance(type)!;
 
+    // Focus the SELECTED group when opened from a selection (was: the
+    // groups window always showed its first group).
+    if (groupId.HasValue && window is MatGroupWin groupWin)
+        groupWin.SelectGroup(groupId.Value);
+
     window.Owner = this;
 
     window.WindowStartupLocation =
@@ -611,6 +663,7 @@ x => x != null);
 }
 catch (Exception ex)
 {
+    AppHost.Logging?.LogError("MatDirWin", "Open material groups failed", ex);
     MessageBox.Show(
         this,
         ex.Message,

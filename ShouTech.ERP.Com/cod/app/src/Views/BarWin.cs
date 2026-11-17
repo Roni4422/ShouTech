@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using ShouTech.App.Common;
+using ShouTech.App.Services;
 
 namespace ShouTech.App.Views;
 
@@ -15,10 +16,10 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class BarWin : BaseWin
 {
-    private readonly TextBox _txtItemCode = new() { Width = 130, Height = 26, Text = "ITEM-001" };
-    private readonly TextBox _txtItemName = new() { Width = 230, Height = 26, Text = "Sample Product" };
-    private readonly TextBox _txtBarcode = new() { Width = 180, Height = 26, Text = "6281001234567" };
-    private readonly TextBox _txtPrice = new() { Width = 100, Height = 26, Text = "25.00" };
+    private readonly TextBox _txtItemCode = new() { Width = 130, Height = 26 };
+    private readonly TextBox _txtItemName = new() { Width = 230, Height = 26 };
+    private readonly TextBox _txtBarcode = new() { Width = 180, Height = 26 };
+    private readonly TextBox _txtPrice = new() { Width = 100, Height = 26, Text = "0.00" };
     private readonly ComboBox _cbType = new() { Width = 120, Height = 26 };
     private readonly CheckBox _chkIncludePrice = new() { IsChecked = true, Margin = new Thickness(0, 4, 10, 4) };
     private readonly CheckBox _chkIncludeName = new() { IsChecked = true, Margin = new Thickness(0, 4, 10, 4) };
@@ -27,6 +28,12 @@ public sealed class BarWin : BaseWin
     private readonly Button _btnGen = new();
     private readonly Button _btnPrint = new();
     private readonly Button _btnPick = new();
+    private readonly Button _btnSave = new();
+
+    // The material the barcode/price belong to (set by the picker; a typed
+    // code is re-resolved at save time so the save never targets a stale pick).
+    private long? _materialId;
+    private string _pickedCode = string.Empty;
 
     private readonly Border _previewCard = new();
     private readonly TextBlock _prevName = new();
@@ -55,9 +62,11 @@ public sealed class BarWin : BaseWin
         var toolbar = new WrapPanel { Margin = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Right };
         StyleButton(_btnPick, T("Invoice.FindMaterial"));
         StyleButton(_btnGen, T("Common.New"));
+        StyleButton(_btnSave, T("BarcodeTool.SaveToMaterial"));
         StyleButton(_btnPrint, T("BarcodeTool.Print"));
 
         _btnPick.Click += (_, _) => PickMaterial();
+        _btnSave.Click += (_, _) => SaveToMaterial();
         _btnPrint.Click += (_, _) => PrintCopies();
         _btnGen.Click += (_, _) =>
         {
@@ -71,6 +80,7 @@ public sealed class BarWin : BaseWin
 
         toolbar.Children.Add(_btnPick);
         toolbar.Children.Add(_btnGen);
+        toolbar.Children.Add(_btnSave);
         toolbar.Children.Add(_btnPrint);
         // Explorer-style bottom command bar: flat, transparent, subtle 1px top divider.
         var actionBar = new Border
@@ -203,6 +213,8 @@ public sealed class BarWin : BaseWin
             if (material == null)
                 return;
 
+            _materialId = material.Id;
+            _pickedCode = material.Code;
             _txtItemCode.Text = material.Code;
 
             var name = string.Equals(
@@ -213,14 +225,71 @@ public sealed class BarWin : BaseWin
                 : string.IsNullOrWhiteSpace(material.NameEn) ? material.Name : material.NameEn;
             _txtItemName.Text = name;
 
-            if (string.IsNullOrWhiteSpace(_txtBarcode.Text))
-                _txtBarcode.Text = material.Code;
+            // Load the material's persisted barcode and retail price so the
+            // window edits the real card values, not blanks.
+            if (!string.IsNullOrWhiteSpace(material.Unit1Barcode))
+                _txtBarcode.Text = material.Unit1Barcode;
+            _txtPrice.Text = material.PriceRetail.ToString("0.00", CultureInfo.InvariantCulture);
 
             UpdatePreview();
         }
-        catch
+        catch (Exception ex)
         {
-            // The picker is optional; failures must not break the window.
+            // The picker is optional; failures must not break the window,
+            // but they are logged instead of silently swallowed.
+            AppHost.Logging?.LogError("BarcodeCreate", "Material picker failed", ex);
+        }
+    }
+
+    /// <summary>
+    /// Persists the barcode and retail price onto the material card
+    /// (materials.unit1_barcode / price_retail) through MatRepo — the same
+    /// full-record save BcdGenWin uses, so no other material field is lost.
+    /// Before this, the window printed labels but never saved anything.
+    /// </summary>
+    private void SaveToMaterial()
+    {
+        if (!AppHost.Permissions.Has(PermCat.Inventory.ItemUpdate))
+        {
+            ShowWarn("Cards.PermissionDenied");
+            return;
+        }
+
+        var code = _txtItemCode.Text.Trim();
+        long? id = _materialId.HasValue && string.Equals(code, _pickedCode, StringComparison.OrdinalIgnoreCase)
+            ? _materialId
+            : CardStore.ResolveMaterial(code)?.Id;
+        if (id is null)
+        {
+            ShowWarn("BarcodeTool.MaterialNotFound");
+            return;
+        }
+        if (!decimal.TryParse(_txtPrice.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out var price)
+            && !decimal.TryParse(_txtPrice.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out price))
+        {
+            ShowWarn("Cards.InvalidAmount");
+            return;
+        }
+
+        try
+        {
+            var full = MatRepo.LoadById(id.Value, includeChildren: true);
+            if (full is null)
+            {
+                ShowWarn("Cards.NotFound");
+                return;
+            }
+            full.Unit1Barcode = string.IsNullOrWhiteSpace(_txtBarcode.Text) ? null : _txtBarcode.Text.Trim();
+            full.PriceRetail = price;
+            MatRepo.Save(full, isNew: false);
+            _materialId = full.Id;
+            _pickedCode = full.Code;
+            ShowInfo("BarcodeTool.SavedToMaterial");
+        }
+        catch (Exception ex)
+        {
+            AppHost.Logging?.LogError("BarcodeCreate", $"Save barcode to material failed | Code={code}", ex);
+            MessageBox.Show(this, ex.Message, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -315,8 +384,9 @@ public sealed class BarWin : BaseWin
                 ? fallback
                 : s;
         }
-        catch
+        catch (Exception ex)
         {
+            AppHost.Logging?.LogError("BarWin", $"Localization lookup failed | Key={key}", ex);
             return fallback;
         }
     }

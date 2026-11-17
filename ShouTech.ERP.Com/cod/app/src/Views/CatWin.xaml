@@ -283,6 +283,16 @@
                                  TextAlignment="Left"
                                  MaxLength="120"/>
 
+                        <!-- Parent Category -->
+                        <TextBlock Text="Parent Category"
+                                   loc:LocProps.Key="CatWin.Parent"
+                                   Style="{StaticResource FieldLabel}"/>
+                        <ComboBox x:Name="CmbParent"
+                                  Style="{StaticResource FieldCombo}"
+                                  DisplayMemberPath="Display"
+                                  SelectedValuePath="Code"
+                                  IsEditable="False"/>
+
                         <!-- Warehouse -->
                         <TextBlock Text="Warehouse"
                                    loc:LocProps.Key="CatWin.Warehouse"

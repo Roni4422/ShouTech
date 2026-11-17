@@ -38,7 +38,9 @@ public enum InvPaymentMethod
     /// <summary>Credit - party account cleared until party is chosen, then follows party AR/AP account.</summary>
     Credit = 1,
     /// <summary>Checks - party account defaults to bank; still editable.</summary>
-    Checks = 2
+    Checks = 2,
+    /// <summary>Card - bank card networks (K-Net, Visa, ...); settles through the bank.</summary>
+    Card = 3
 }
 
 /// <summary>One line on a commercial invoice / return.</summary>

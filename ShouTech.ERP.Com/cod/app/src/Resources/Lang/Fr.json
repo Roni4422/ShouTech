@@ -1218,7 +1218,9 @@
     "Refreshed": "Actualisé.",
     "RefreshFailed": "Échec de l'actualisation.",
     "ErrorCode": "Code d'erreur : {0}",
-    "CreateFailed": "Impossible de créer l'article."
+    "CreateFailed": "Impossible de créer l'article.",
+    "Parent": "Catégorie parente",
+    "NoParent": "(Aucun parent)"
   },
   "WhsWin": {
     "Title": "Fiche entrepôt",
@@ -1570,7 +1572,15 @@
   "Vouchers": {
     "Reverse": "Contre-passer",
     "ConfirmReverse": "Contre-passer cette écriture ? Une écriture de compensation validée sera créée et l'originale sera marquée comme contre-passée.",
-    "Reversed": "Écriture contre-passée ; une écriture de compensation a été validée."
+    "Reversed": "Écriture contre-passée ; une écriture de compensation a été validée.",
+    "EntryNumberRequired": "Saisissez le numéro de l'écriture à ouvrir.",
+    "EntryLoadedTitle": "Chargé",
+    "EntryLoaded": "L'écriture a été chargée depuis la base de données.\nStatut : {0}\nID : {1}",
+    "EntryAlreadySaved": "Cette écriture est déjà enregistrée. Aucun doublon ne sera créé ; ouvrez une nouvelle écriture pour en saisir une autre.",
+    "EntryDraftSaved": "Le brouillon de l'écriture a été enregistré dans la base de données.\nID : {0}",
+    "EntryPosted": "L'écriture a été comptabilisée dans la base de données.",
+    "SaveFailedMsg": "L'opération n'a pas abouti et n'a pas été présentée comme un succès.\n[{0}] {1}",
+    "SaveFailedTitle": "Échec de l'enregistrement de l'écriture"
   },
   "JrnWin.EnterDocumentNumber": "Saisissez le numéro d'écriture à ouvrir.",
   "JrnWin.DocumentNumberRequired": "Numéro de document requis",
@@ -1603,7 +1613,8 @@
     "AllocatedOk": "Paiement affecté avec succès.",
     "SelectBoth": "Sélectionnez d'abord un document ouvert et un paiement.",
     "ServiceUnavailable": "Le service de rapprochement est indisponible (aucune connexion à la base de données).",
-    "PermissionDenied": "Vous n'avez pas l'autorisation d'affecter des paiements (ACC.PAYREC.ALLOCATE)."
+    "PermissionDenied": "Vous n'avez pas l'autorisation d'affecter des paiements (ACC.PAYREC.ALLOCATE).",
+    "Note": "Note"
   },
   "Projects": {
     "Title": "Projets",
@@ -2228,5 +2239,28 @@
     "ConfirmPurge": "Les éléments sélectionnés seront supprimés définitivement et ne pourront pas être restaurés.\n\nContinuer ?",
     "Purged": "{0:N0} élément(s) supprimé(s) définitivement.",
     "PurgedPartial": "{0:N0} élément(s) supprimé(s) définitivement. {1:N0} échec(s).{2}{3}"
+  },
+  "Cards":   {
+      "NotFound": "L'enregistrement est introuvable dans la base de données.",
+      "PermissionDenied": "Vous n'avez pas l'autorisation pour cette opération.",
+      "CodeRequired": "Le code est obligatoire.",
+      "NameRequired": "Le nom est obligatoire.",
+      "InvalidAmount": "Une valeur numérique est invalide.",
+      "ConfirmDelete": "Supprimer cette fiche ? Elle sera placée dans la corbeille."
+  },
+  "BarcodeTool":   {
+      "Title": "Générateur et concepteur de codes-barres",
+      "Material": "Article",
+      "Type": "Type de code-barres",
+      "Value": "Valeur du code-barres",
+      "IncludePrice": "Inclure le prix",
+      "IncludeName": "Inclure le nom",
+      "Copies": "Copies d'impression",
+      "Print": "Imprimer l'étiquette",
+      "Preview": "Aperçu",
+      "PrintSuccess": "Tâche d'impression envoyée avec succès",
+      "SaveToMaterial": "Enregistrer dans la fiche article",
+      "SavedToMaterial": "Code-barres et prix enregistrés dans la fiche article.",
+      "MaterialNotFound": "Choisissez un article ou saisissez le code d'un article existant."
   }
 }

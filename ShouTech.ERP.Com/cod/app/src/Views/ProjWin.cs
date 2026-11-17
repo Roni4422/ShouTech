@@ -43,6 +43,7 @@ public sealed class ProjWin : BaseWin
     private readonly ComboBox _taskStatus = new();
     private readonly DatePicker _taskDue = new();
     private readonly TextBox _taskAssigned = new();
+    private readonly TextBox _taskNotes = new();
     private readonly TextBlock _projectsHeader = new();
     private readonly TextBlock _tasksHeader = new();
     private readonly TextBlock _statusBar = new();
@@ -199,6 +200,9 @@ public sealed class ProjWin : BaseWin
         taskRow.Children.Add(Labeled("Projects.DueDate", _taskDue, 140));
         taskEditor.Children.Add(taskRow);
         taskEditor.Children.Add(Labeled("Projects.AssignedTo", _taskAssigned, 200));
+        // Task notes — project_tasks.notes + repo support existed, but the
+        // window never collected it (tasks always saved with null notes).
+        taskEditor.Children.Add(Labeled("Projects.Notes", _taskNotes, 300));
         _taskStatus.ItemsSource = ProjectTaskStatuses.All;
         _taskStatus.SelectedItem = ProjectTaskStatuses.ToDo;
         Grid.SetColumn(taskEditor, 1);
@@ -245,6 +249,7 @@ public sealed class ProjWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Logging?.LogError("ProjWin", "RefreshAsync failed", ex);
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -281,6 +286,7 @@ public sealed class ProjWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Logging?.LogError("ProjWin", "LoadTasksAsync failed", ex);
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
         UpdateStatusBar();
@@ -295,6 +301,7 @@ public sealed class ProjWin : BaseWin
         _taskStatus.SelectedItem = task.Status;
         _taskDue.SelectedDate = task.DueDate.HasValue ? task.DueDate.Value.ToDateTime(TimeOnly.MinValue) : null;
         _taskAssigned.Text = task.AssignedTo ?? string.Empty;
+        _taskNotes.Text = task.Notes ?? string.Empty;
     }
 
     private async Task SaveAsync()
@@ -326,6 +333,7 @@ public sealed class ProjWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Logging?.LogError("ProjWin", "SaveAsync failed", ex);
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -348,6 +356,7 @@ public sealed class ProjWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Logging?.LogError("ProjWin", "DeleteAsync failed", ex);
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -367,7 +376,8 @@ public sealed class ProjWin : BaseWin
                 Name = _taskName.Text.Trim(),
                 Status = _taskStatus.SelectedItem as string ?? ProjectTaskStatuses.ToDo,
                 DueDate = ToDateOnly(_taskDue.SelectedDate),
-                AssignedTo = NullIfBlank(_taskAssigned.Text)
+                AssignedTo = NullIfBlank(_taskAssigned.Text),
+                Notes = NullIfBlank(_taskNotes.Text)
             };
             await _service.SaveTaskAsync(CurrentCompanyCode, task, CurrentUserId);
             ClearTaskEditor();
@@ -375,6 +385,7 @@ public sealed class ProjWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Logging?.LogError("ProjWin", "SaveTaskAsync failed", ex);
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -395,6 +406,7 @@ public sealed class ProjWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Logging?.LogError("ProjWin", "DeleteTaskAsync failed", ex);
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -426,6 +438,7 @@ public sealed class ProjWin : BaseWin
         _taskStatus.SelectedItem = ProjectTaskStatuses.ToDo;
         _taskDue.SelectedDate = null;
         _taskAssigned.Clear();
+        _taskNotes.Clear();
     }
 
     private void UpdateStatusBar()

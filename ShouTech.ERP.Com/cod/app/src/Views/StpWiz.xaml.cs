@@ -379,23 +379,27 @@ namespace ShouTech.App.Views
         {
             if (_mode == StpWizMode.FirstRun)
             {
-                txtCompanyName.Text = "ShouTech Software Solutions";
-                txtCompanyNameEn.Text = "ShouTech Solutions";
-                txtTaxNumber.Text = "123456789";
-                txtEmail.Text = "info@shoutech.com";
-                txtWebsite.Text = "https://shoutech.com";
-                txtPhone.Text = "+963111234567";
-                txtMobile.Text = "+963944123456";
-                txtAddressLine1.Text = "Damascus - Al Midan";
-                txtAddressLine2.Text = "Al Midan Corniche Street";
-                txtCity.Text = "Damascus";
-                txtCountry.Text = "Syria";
-                txtLicense.Text = "TR-2026-001";
-                txtNotes.Text =
-                    "Sample company created by the initial setup wizard.";
+                // No fabricated sample company: this branch previously
+                // pre-filled a complete fake company (name, tax number,
+                // phones, license) that was persisted verbatim if the user
+                // clicked through the wizard. All identity fields start
+                // empty so the saved company is the user's real data.
+                txtCompanyName.Text = string.Empty;
+                txtCompanyNameEn.Text = string.Empty;
+                txtTaxNumber.Text = string.Empty;
+                txtEmail.Text = string.Empty;
+                txtWebsite.Text = string.Empty;
+                txtPhone.Text = string.Empty;
+                txtMobile.Text = string.Empty;
+                txtAddressLine1.Text = string.Empty;
+                txtAddressLine2.Text = string.Empty;
+                txtCity.Text = string.Empty;
+                txtCountry.Text = string.Empty;
+                txtLicense.Text = string.Empty;
+                txtNotes.Text = string.Empty;
 
                 txtAdminUser.Text = string.Empty;
-                txtAdminFullName.Text = "System Administrator";
+                txtAdminFullName.Text = string.Empty;
                 txtAdminPassword.Password = string.Empty;
                 txtAdminPasswordConfirm.Password = string.Empty;
 

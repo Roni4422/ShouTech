@@ -357,8 +357,11 @@ public partial class AccCard : BaseWin
         }
     }
 
-    private void Statement_Click(object sender, RoutedEventArgs e) => MessageBox.Show(this, "The account statement will open here once general ledger activity is linked.", "Account Statement", MessageBoxButton.OK, MessageBoxImage.Information);
-    private void Ledger_Click(object sender, RoutedEventArgs e) => MessageBox.Show(this, "The ledger will open here once general ledger activity is linked.", "Ledger", MessageBoxButton.OK, MessageBoxImage.Information);
+    // The account statement report (AccStmtWin) is the real general-ledger
+    // activity view — both buttons open it (previously fake "will open
+    // here once linked" message boxes).
+    private void Statement_Click(object sender, RoutedEventArgs e) => RptNav.OpenAccountStatement(this);
+    private void Ledger_Click(object sender, RoutedEventArgs e) => RptNav.OpenAccountStatement(this);
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
     protected override void ApplyLocalizedText()
     {

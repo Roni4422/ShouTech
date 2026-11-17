@@ -1,4 +1,4 @@
-﻿// ========================================================================
+// ========================================================================
 // FILE: Services/Inventory.cs
 // PROJECT: SHOUTECH ERP - Inventory & Material master
 // Merged: InventoryModels, IInvServ, InvServ, InvRepo, InventoryRepositoryFactory, MatRepo
@@ -1623,9 +1623,35 @@ internal static class MatRepo
 		}
 	}
 
+	/// <summary>
+	/// Loads ALL non-deleted warehouses (active and inactive) for the current
+	/// company, without the auto-create side effect of <see cref="LoadWarehouses"/>.
+	/// Master-data windows (WhsWin) must use this: the consumer loader filters
+	/// is_active = 1, which made deactivated warehouses vanish from the very
+	/// window that manages them (they could never be reactivated).
+	/// </summary>
+	public static List<WarehouseRec> LoadAllWarehouses()
+	{
+		var cs = DatabaseRuntime.GetConnectionString();
+
+		if (string.IsNullOrWhiteSpace(cs))
+		{
+			throw new InvalidOperationException(
+				"WHS-004: Current company database connection is unavailable.");
+		}
+
+		var company = RequireCurrentCompanyCode();
+
+		using var conn = Open(cs);
+		EnsureWarehouseSchema(conn);
+
+		return ReadActiveWarehouses(conn, company, activeOnly: false);
+	}
+
 	private static List<WarehouseRec> ReadActiveWarehouses(
 		DbConnection conn,
-		string company)
+		string company,
+		bool activeOnly = true)
 	{
 		var result = new List<WarehouseRec>();
 
@@ -1653,7 +1679,7 @@ internal static class MatRepo
 			FROM warehouses
 			WHERE company_id = $co
 			  AND is_deleted = 0
-			  AND is_active  = 1
+			  " + (activeOnly ? "AND is_active  = 1" : string.Empty) + @"
 			ORDER BY warehouse_id;";
 
 		Add(cmd, "$co", company);
@@ -1763,7 +1789,7 @@ internal static class MatRepo
 			}
 			catch
 			{
-				try { tx.Rollback(); } catch { /* ignored */ }
+				try { tx.Rollback(); } catch (Exception rollbackEx) { LogWarehouseError("Rollback", rollbackEx); }
 				throw;
 			}
 		}
@@ -1866,7 +1892,7 @@ internal static class MatRepo
 			}
 			catch
 			{
-				try { tx.Rollback(); } catch { /* ignored */ }
+				try { tx.Rollback(); } catch (Exception rollbackEx) { LogWarehouseError("Rollback", rollbackEx); }
 				throw;
 			}
 		}
@@ -1983,7 +2009,7 @@ internal static class MatRepo
 				$na, $ne, $pc,
 				$ad, $ci, $re, $cy, $ph,
 				$ai, $rk, $sh, $no,
-				$def, 1, 0, {0}
+				$def, $act, 0, {0}
 			)";
 
 		ins.CommandText = string.Format(
@@ -2012,6 +2038,7 @@ internal static class MatRepo
 		Add(ins, "$sh",   (object?)rec.Shelf   ?? DBNull.Value);
 		Add(ins, "$no",   (object?)rec.Notes   ?? DBNull.Value);
 		Add(ins, "$def",  rec.IsDefault ? 1 : 0);
+		Add(ins, "$act",  rec.IsActive ? 1 : 0);
 
 		if (DatabaseRuntime.IsPostgreSql())
 		{
