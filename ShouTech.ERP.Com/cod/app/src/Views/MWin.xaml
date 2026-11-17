@@ -56,14 +56,6 @@
             </Style.Triggers>
         </Style>
 
-        <Style x:Key="RadioPanelVisibility" TargetType="StackPanel">
-            <Setter Property="Visibility" Value="Collapsed"/>
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Minimized">
-                    <Setter Property="Visibility" Value="Visible"/>
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
     </ribbon:RibbonWindow.Resources>
 
     <Border x:Name="RootBorder"
@@ -122,13 +114,6 @@
 								Background="{DynamicResource ChromeBackgroundBrush}"
 								Foreground="{DynamicResource ChromeForegroundBrush}"
 								Click="OnMaximizeClick"/>
-						<!-- Radio panel shown only when window is minimized -->
-						<StackPanel x:Name="RadioPanel" Orientation="Horizontal" Margin="5"
-									Style="{StaticResource RadioPanelVisibility}">
-							<RadioButton Content="Option 1"/>
-							<RadioButton Content="Option 2"/>
-							<RadioButton Content="Option 3"/>
-						</StackPanel>
 						<Button x:Name="CloseButton"
 								shell:WindowChrome.IsHitTestVisibleInChrome="True"
 								Style="{StaticResource WindowChromeCloseButtonStyle}"
@@ -150,7 +135,7 @@
                   ClipToBounds="True">
                 <Menu.Resources>
                     <Style TargetType="{x:Type MenuItem}">
-                        <Setter Property="FontFamily" Value="Tahoma"/>
+                        <Setter Property="FontFamily" Value="{DynamicResource ShellChromeFontFamily}"/>
                         <Setter Property="FontWeight" Value="SemiBold"/>
                         <Setter Property="FontSize" Value="{DynamicResource FontSize12}"/>
                         <Setter Property="Padding" Value="6,4"/>

@@ -208,7 +208,7 @@ internal static class F2Ui
         if (decimal.TryParse(text.Trim(), NumberStyles.Number, CultureInfo.CurrentCulture, out var v) ||
             decimal.TryParse(text.Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out v))
             return v;
-        throw new InvalidOperationException("Invalid number format.");
+        throw new InvalidOperationException(AppHost.Localization.GetString("Common.InvalidNumberFormat", "Invalid number format."));
     }
 
     public static string Fmt(decimal value) => value.ToString("N2", CultureInfo.CurrentCulture);
