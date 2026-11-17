@@ -1081,7 +1081,9 @@
     "Refreshed": "Actualisé.",
     "RefreshFailed": "Échec de l'actualisation.",
     "ErrorCode": "Code d'erreur : {0}",
-    "CreateFailed": "Impossible de créer l'article."
+    "CreateFailed": "Impossible de créer l'article.",
+    "Parent": "Catégorie parente",
+    "NoParent": "(Aucun parent)"
   },
   "WhsWin": {
     "Title": "Fiche entrepôt",

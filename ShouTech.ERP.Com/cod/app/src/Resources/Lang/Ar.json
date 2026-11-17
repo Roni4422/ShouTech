@@ -1241,7 +1241,9 @@
     "Refreshed": "تم التحديث.",
     "RefreshFailed": "فشل التحديث.",
     "ErrorCode": "رقم الخطأ: {0}",
-    "CreateFailed": "تعذر إنشاء الصنف."
+    "CreateFailed": "تعذر إنشاء الصنف.",
+    "Parent": "الفئة الأصل",
+    "NoParent": "(بدون أصل)"
   },
   "WhsWin": {
     "Title": "بطاقة المستودع",

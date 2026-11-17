@@ -181,7 +181,9 @@
     "Refreshed": "Refreshed.",
     "RefreshFailed": "Refresh failed.",
     "ErrorCode": "Error code: {0}",
-    "CreateFailed": "Could not create the item."
+    "CreateFailed": "Could not create the item.",
+    "Parent": "Parent Category",
+    "NoParent": "(No parent)"
   },
   "Common": {
     "OperationUnavailable": "Operation unavailable",

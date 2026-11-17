@@ -1098,7 +1098,9 @@
     "Refreshed": "Yenilendi.",
     "RefreshFailed": "Yenileme başarısız.",
     "ErrorCode": "Hata kodu: {0}",
-    "CreateFailed": "Stok oluşturulamadı."
+    "CreateFailed": "Stok oluşturulamadı.",
+    "Parent": "Üst Kategori",
+    "NoParent": "(Üst kategori yok)"
   },
   "WhsWin": {
     "Title": "Depo Kartı",
