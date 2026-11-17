@@ -794,70 +794,13 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
     /// chain repository apply (units_json first, unit column pairs as
     /// fallback; base unit, unknown unit, or a non-positive stored
     /// equivalent all resolve to 1).</summary>
-    private async Task<decimal> ResolveUnitEquivalentAsync(
+    private Task<decimal> ResolveUnitEquivalentAsync(
         DbConnection connection, DbTransaction transaction, long materialId, string? unitName,
         CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(unitName)) return 1m;
-        var wanted = unitName.Trim();
-
-        var units = new List<(string Name, decimal Factor)>();
-        await using (var command = CreateCommand(connection, transaction, """
-            SELECT unit1, unit1_factor, unit2, unit2_factor, unit3, unit3_factor,
-                   unit4, unit4_factor, unit5, unit5_factor, units_json
-            FROM materials
-            WHERE material_id = @material
-            """))
-        {
-            Add(command, "@material", materialId);
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) return 1m;
-
-            var json = reader.IsDBNull(10) ? null : reader.GetValue(10)?.ToString();
-            if (!string.IsNullOrWhiteSpace(json) && json.Trim() != "[]")
-            {
-                try
-                {
-                    var rows = System.Text.Json.JsonSerializer.Deserialize<List<UnitFactorRow>>(json)
-                               ?? new List<UnitFactorRow>();
-                    foreach (var row in rows)
-                        if (!string.IsNullOrWhiteSpace(row.UnitName))
-                            units.Add((row.UnitName.Trim(), row.Factor ?? 0m));
-                }
-                catch (System.Text.Json.JsonException)
-                {
-                    units.Clear();
-                }
-            }
-
-            if (units.Count == 0)
-            {
-                for (var i = 0; i < 5; i++)
-                {
-                    var name = reader.IsDBNull(i * 2) ? null : reader.GetValue(i * 2)?.ToString();
-                    if (string.IsNullOrWhiteSpace(name)) continue;
-                    var factor = reader.IsDBNull(i * 2 + 1)
-                        ? 0m
-                        : Convert.ToDecimal(reader.GetValue(i * 2 + 1), CultureInfo.InvariantCulture);
-                    units.Add((name.Trim(), factor));
-                }
-            }
-        }
-
-        if (units.Count == 0) return 1m;
-        if (string.Equals(wanted, units[0].Name, StringComparison.OrdinalIgnoreCase)) return 1m;
-        foreach (var (name, factor) in units)
-            if (string.Equals(wanted, name, StringComparison.OrdinalIgnoreCase))
-                return factor > 0 ? factor : 1m;
-        return 1m;
-    }
-
-    /// <summary>One unit row as serialized into materials.units_json by the material card.</summary>
-    private sealed class UnitFactorRow
-    {
-        public string? UnitName { get; set; }
-        public decimal? Factor { get; set; }
-    }
+        // Step 11: the rule lives ONCE in UnitEquivalents (shared with
+        // MfgOrderRepository and CommercialDocumentRepository); this
+        // wrapper keeps the order repository's material_id-only scoping.
+        => UnitEquivalents.ResolveAsync(connection, transaction, null, materialId, unitName, cancellationToken);
 
     /// <summary>The company's default stock warehouse for a conversion
     /// line that carries none: the lowest warehouse id under the company
