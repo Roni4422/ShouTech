@@ -1,0 +1,542 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
+using ShouTech.Application.Services;
+using ShouTech.Domain.Entities;
+using ShouTech.Domain.Interfaces;
+using ShouTech.Infrastructure;
+using Xunit;
+
+namespace Kern.Tests;
+
+/// <summary>
+/// Chunk C coverage (ribbon completion): cheque CRUD + duplicate-number guard
+/// + lifecycle transition legality (service over a real SQLite
+/// ChequeRepository with an in-memory IJournalRepository double, following
+/// the UnitTest1 InMemoryJournalRepository pattern), and manufacturing
+/// save/post/cancel with repository-level stock-movement assertions.
+/// SQLite schemas are created from the real migration files 033/034 plus the
+/// minimal stock tables the manufacturing post path touches.
+/// </summary>
+public class ChequeMfgServiceTests
+{
+    private const string Company = "CHUNK-C";
+
+    // ------------------------------------------------------------------
+    // Cheques: save batch + journal map
+    // ------------------------------------------------------------------
+    [Fact]
+    public async Task Cheque_SaveBatch_Incoming_PostsBalancedJournal_AndStoresRows()
+    {
+        using var db = new TempDb(withCheques: true, withStock: false);
+        var journal = new FakeJournalRepository();
+        var service = new ChequeService(new ChequeRepository("SQLite", db.ConnectionString), journal);
+        var cheques = new List<Cheque>
+        {
+            NewCheque("1001", "Bank A", "Drawer One", "4101", 300m),
+            NewCheque("1002", "Bank A", "Drawer Two", "4102", 200m)
+        };
+
+        var ids = await service.SaveBatchAsync(Company, cheques, "1101", "tester",
+            new DateOnly(2026, 11, 17));
+
+        Assert.Equal(2, ids.Count);
+        Assert.Single(journal.Posted);
+        var entry = journal.Posted[0];
+        Assert.Equal(500m, entry.Lines.Sum(l => l.Debit));
+        Assert.Equal(500m, entry.Lines.Sum(l => l.Credit));
+        var rows = await service.GetAllAsync(Company);
+        Assert.Equal(2, rows.Count);
+        Assert.All(rows, r => Assert.Equal(ChequeStatuses.InPortfolio, r.Status));
+        Assert.All(rows, r => Assert.Equal(entry.Id, r.JournalEntryId));
+    }
+
+    [Fact]
+    public async Task Cheque_SaveBatch_RequiresJournal_AndValidatesInput()
+    {
+        using var db = new TempDb(withCheques: true, withStock: false);
+        var noJournal = new ChequeService(new ChequeRepository("SQLite", db.ConnectionString), journal: null);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            noJournal.SaveBatchAsync(Company, new List<Cheque> { NewCheque("2001", "Bank A", "D", "4101", 10m) },
+                "1101", "tester", new DateOnly(2026, 11, 17)));
+
+        var service = new ChequeService(new ChequeRepository("SQLite", db.ConnectionString), new FakeJournalRepository());
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.SaveBatchAsync(Company, new List<Cheque> { NewCheque("2002", "Bank A", "D", "4101", 0m) },
+                "1101", "tester", new DateOnly(2026, 11, 17)));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.SaveBatchAsync(Company, new List<Cheque> { NewCheque(" ", "Bank A", "D", "4101", 10m) },
+                "1101", "tester", new DateOnly(2026, 11, 17)));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.SaveBatchAsync(Company, new List<Cheque> { NewCheque("2003", " ", "D", "4101", 10m) },
+                "1101", "tester", new DateOnly(2026, 11, 17)));
+    }
+
+    [Fact]
+    public async Task Cheque_DuplicateNumber_IsRejected_AndJournalIsCompensated()
+    {
+        using var db = new TempDb(withCheques: true, withStock: false);
+        var journal = new FakeJournalRepository();
+        var service = new ChequeService(new ChequeRepository("SQLite", db.ConnectionString), journal);
+        await service.SaveBatchAsync(Company,
+            new List<Cheque> { NewCheque("3001", "Bank A", "Same Drawer", "4101", 100m) },
+            "1101", "tester", new DateOnly(2026, 11, 17));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.SaveBatchAsync(Company,
+                new List<Cheque> { NewCheque("3001", "Bank A", "Same Drawer", "4101", 100m) },
+                "1101", "tester", new DateOnly(2026, 11, 17)));
+
+        // The second (duplicate) batch posted a journal before the insert
+        // failed; the service must have reversed it as compensation.
+        Assert.Equal(2, journal.Posted.Count);
+        Assert.Single(journal.Reversed);
+        Assert.Equal(journal.Posted[1].Id, journal.Reversed[0]);
+        Assert.Single(await service.GetAllAsync(Company));
+    }
+
+    // ------------------------------------------------------------------
+    // Cheques: lifecycle state machine
+    // ------------------------------------------------------------------
+    [Fact]
+    public async Task Cheque_Transitions_EnforceLegalOrder()
+    {
+        using var db = new TempDb(withCheques: true, withStock: false);
+        var journal = new FakeJournalRepository();
+        var service = new ChequeService(new ChequeRepository("SQLite", db.ConnectionString), journal);
+        var ids = await service.SaveBatchAsync(Company,
+            new List<Cheque> { NewCheque("4001", "Bank A", "Drawer", "4101", 250m) },
+            "1101", "tester", new DateOnly(2026, 11, 17));
+        var id = ids[0];
+        var today = new DateOnly(2026, 11, 18);
+
+        // Clear directly from InPortfolio is illegal (must Deposit first).
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.ClearAsync(Company, id, today, "tester"));
+        // Endorse is legal from InPortfolio, but then Deposit is not.
+        Assert.True(ChequeService.CanTransition(ChequeDirections.In, ChequeStatuses.InPortfolio, ChequeStatuses.Endorsed));
+        Assert.False(ChequeService.CanTransition(ChequeDirections.In, ChequeStatuses.Endorsed, ChequeStatuses.Deposited));
+        Assert.False(ChequeService.CanTransition(ChequeDirections.Out, ChequeStatuses.Issued, ChequeStatuses.Bounced));
+
+        await service.DepositAsync(Company, id, "1102", today, "tester");
+        var deposited = await service.GetByIdAsync(Company, id);
+        Assert.Equal(ChequeStatuses.Deposited, deposited!.Status);
+        Assert.Equal("1102", deposited.DepositBankAccountCode);
+
+        // Deposit twice is illegal.
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.DepositAsync(Company, id, "1102", today, "tester"));
+
+        await service.ClearAsync(Company, id, today, "tester");
+        var cleared = await service.GetByIdAsync(Company, id);
+        Assert.Equal(ChequeStatuses.Cleared, cleared!.Status);
+        Assert.Equal(today, cleared.ClearanceDate);
+        // Clear posted Dr Bank / Cr Portfolio through the journal double.
+        Assert.Equal(2, journal.Posted.Count);
+        var clearEntry = journal.Posted[1];
+        Assert.Equal(250m, clearEntry.Lines.Sum(l => l.Debit));
+        Assert.Equal(250m, clearEntry.Lines.Sum(l => l.Credit));
+
+        // Terminal: nothing may leave Cleared.
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.BounceAsync(Company, id, today, "late", 0m, "tester"));
+    }
+
+    [Fact]
+    public async Task Cheque_Bounce_ReversesReceipt_AndRecordsFees()
+    {
+        using var db = new TempDb(withCheques: true, withStock: false);
+        var journal = new FakeJournalRepository();
+        var service = new ChequeService(new ChequeRepository("SQLite", db.ConnectionString), journal);
+        var ids = await service.SaveBatchAsync(Company,
+            new List<Cheque> { NewCheque("5001", "Bank B", "Drawer", "4101", 90m) },
+            "1101", "tester", new DateOnly(2026, 11, 17));
+        var receiptEntryId = journal.Posted[0].Id;
+
+        await service.BounceAsync(Company, ids[0], new DateOnly(2026, 11, 20), "Insufficient funds", 15m, "tester");
+
+        var bounced = await service.GetByIdAsync(Company, ids[0]);
+        Assert.Equal(ChequeStatuses.Bounced, bounced!.Status);
+        Assert.Equal(15m, bounced.FeesAmount);
+        Assert.Equal("Insufficient funds", bounced.BounceReason);
+        Assert.Contains(receiptEntryId, journal.Reversed);
+    }
+
+    [Fact]
+    public async Task Cheque_Outgoing_IssuedThenCancel_ReversesPayment()
+    {
+        using var db = new TempDb(withCheques: true, withStock: false);
+        var journal = new FakeJournalRepository();
+        var service = new ChequeService(new ChequeRepository("SQLite", db.ConnectionString), journal);
+        var outgoing = NewCheque("6001", "Bank C", "Supplier", "2101", 400m);
+        outgoing.Direction = ChequeDirections.Out;
+        var ids = await service.SaveBatchAsync(Company, new List<Cheque> { outgoing },
+            "1101", "tester", new DateOnly(2026, 11, 17));
+
+        var issued = await service.GetByIdAsync(Company, ids[0]);
+        Assert.Equal(ChequeStatuses.Issued, issued!.Status);
+        var entry = journal.Posted[0];
+        Assert.Equal(400m, entry.Lines.Sum(l => l.Debit));
+
+        // Bounce does not exist for outgoing cheques.
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.BounceAsync(Company, ids[0], new DateOnly(2026, 11, 18), "n/a", 0m, "tester"));
+
+        await service.CancelOutgoingAsync(Company, ids[0], "tester");
+        Assert.Equal(ChequeStatuses.Cancelled, (await service.GetByIdAsync(Company, ids[0]))!.Status);
+        Assert.Contains(entry.Id, journal.Reversed);
+    }
+
+    [Fact]
+    public async Task Cheque_RepositoryTransition_RevalidatesStoredStatus()
+    {
+        using var db = new TempDb(withCheques: true, withStock: false);
+        var repo = new ChequeRepository("SQLite", db.ConnectionString);
+        var cheque = NewCheque("7001", "Bank D", "Drawer", "4101", 50m);
+        cheque.Status = ChequeStatuses.InPortfolio;
+        await repo.InsertBatchAsync(Company, new List<Cheque> { cheque }, "tester");
+
+        // A caller holding a stale expected status must be refused.
+        cheque.Status = ChequeStatuses.Deposited;
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            repo.UpdateTransitionAsync(Company, cheque, expectedStatus: ChequeStatuses.Deposited, "tester"));
+        // With the true stored status the transition succeeds.
+        await repo.UpdateTransitionAsync(Company, cheque, expectedStatus: ChequeStatuses.InPortfolio, "tester");
+        Assert.Equal(ChequeStatuses.Deposited, (await repo.GetByIdAsync(Company, cheque.Id))!.Status);
+    }
+
+    // ------------------------------------------------------------------
+    // Manufacturing
+    // ------------------------------------------------------------------
+    [Fact]
+    public async Task Mfg_SaveDraft_AssignsSequentialDocNumbers_AndComputesTotals()
+    {
+        using var db = new TempDb(withCheques: false, withStock: true);
+        var service = new MfgOrderService(new MfgOrderRepository("SQLite", db.ConnectionString));
+
+        var first = NewOrder(qty: 10m, rawQty: 25m, rawCost: 2m, overhead: 10m);
+        var second = NewOrder(qty: 5m, rawQty: 10m, rawCost: 3m, overhead: 0m);
+        await service.SaveDraftAsync(Company, first, "tester");
+        await service.SaveDraftAsync(Company, second, "tester");
+
+        Assert.Equal(1, first.DocNo);
+        Assert.Equal(2, second.DocNo);
+        Assert.Equal(60m, first.TotalCost);          // 25*2 + 10
+        Assert.Equal(6m, first.UnitCost);            // 60 / 10
+        var loaded = await service.GetByDocNoAsync(Company, 1);
+        Assert.NotNull(loaded);
+        Assert.Single(loaded!.Lines);
+        Assert.Equal(50m, loaded.Lines[0].Amount);
+        Assert.Equal(MfgOrderStatuses.Draft, loaded.Status);
+    }
+
+    [Fact]
+    public async Task Mfg_Service_RejectsInvalidOrders()
+    {
+        using var db = new TempDb(withCheques: false, withStock: true);
+        var service = new MfgOrderService(new MfgOrderRepository("SQLite", db.ConnectionString));
+
+        var noLines = NewOrder(1m, 1m, 1m, 0m);
+        noLines.Lines.Clear();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.SaveDraftAsync(Company, noLines, "tester"));
+        var badQty = NewOrder(0m, 1m, 1m, 0m);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.SaveDraftAsync(Company, badQty, "tester"));
+        var badLine = NewOrder(1m, 0m, 1m, 0m);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.SaveDraftAsync(Company, badLine, "tester"));
+    }
+
+    [Fact]
+    public async Task Mfg_Post_ConsumesRaw_ProducesFinished_AndComputesCosts()
+    {
+        using var db = new TempDb(withCheques: false, withStock: true);
+        db.SeedMaterial(1, "RM-1");
+        db.SeedMaterial(2, "FG-1");
+        db.SeedWarehouse(1);
+        db.SeedOpeningStock(materialId: 1, warehouseId: 1, qty: 100m, cost: 2m);
+        var repo = new MfgOrderRepository("SQLite", db.ConnectionString);
+        var service = new MfgOrderService(repo);
+        var order = NewOrder(qty: 10m, rawQty: 25m, rawCost: 2m, overhead: 10m);
+        await service.SaveDraftAsync(Company, order, "tester");
+
+        await service.PostAsync(Company, order.Id, "tester");
+
+        var posted = await service.GetByDocNoAsync(Company, order.DocNo);
+        Assert.Equal(MfgOrderStatuses.Posted, posted!.Status);
+        Assert.Equal(60m, posted.TotalCost);
+        Assert.Equal(6m, posted.UnitCost);
+
+        Assert.Equal(25m, db.ScalarDecimal("SELECT qty_out FROM material_stock_movements WHERE movement_type='MFG_CONSUME' AND material_id=1"));
+        Assert.Equal(10m, db.ScalarDecimal("SELECT qty_in FROM material_stock_movements WHERE movement_type='MFG_PRODUCE' AND material_id=2"));
+        Assert.Equal(6m, db.ScalarDecimal("SELECT unit_cost FROM material_stock_movements WHERE movement_type='MFG_PRODUCE' AND material_id=2"));
+        Assert.Equal(75m, db.ScalarDecimal("SELECT available_qty FROM material_stock_balances WHERE material_id=1 AND warehouse_id=1"));
+        Assert.Equal(10m, db.ScalarDecimal("SELECT available_qty FROM material_stock_balances WHERE material_id=2 AND warehouse_id=1"));
+
+        // Double-post is refused by the repository status guard.
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.PostAsync(Company, order.Id, "tester"));
+    }
+
+    [Fact]
+    public async Task Mfg_Post_InsufficientStock_RollsBackEverything()
+    {
+        using var db = new TempDb(withCheques: false, withStock: true);
+        db.SeedMaterial(1, "RM-1");
+        db.SeedMaterial(2, "FG-1");
+        db.SeedWarehouse(1);
+        db.SeedOpeningStock(materialId: 1, warehouseId: 1, qty: 10m, cost: 2m);
+        var service = new MfgOrderService(new MfgOrderRepository("SQLite", db.ConnectionString));
+        var order = NewOrder(qty: 10m, rawQty: 25m, rawCost: 2m, overhead: 0m);
+        await service.SaveDraftAsync(Company, order, "tester");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.PostAsync(Company, order.Id, "tester"));
+
+        var still = await service.GetByDocNoAsync(Company, order.DocNo);
+        Assert.Equal(MfgOrderStatuses.Draft, still!.Status);
+        Assert.Equal(0m, db.ScalarDecimal("SELECT COUNT(*) FROM material_stock_movements WHERE movement_type LIKE 'MFG%'"));
+        Assert.Equal(10m, db.ScalarDecimal("SELECT available_qty FROM material_stock_balances WHERE material_id=1 AND warehouse_id=1"));
+    }
+
+    [Fact]
+    public async Task Mfg_CancelPosted_ReversesMovements_AndRestoresBalances()
+    {
+        using var db = new TempDb(withCheques: false, withStock: true);
+        db.SeedMaterial(1, "RM-1");
+        db.SeedMaterial(2, "FG-1");
+        db.SeedWarehouse(1);
+        db.SeedOpeningStock(materialId: 1, warehouseId: 1, qty: 100m, cost: 2m);
+        var service = new MfgOrderService(new MfgOrderRepository("SQLite", db.ConnectionString));
+        var order = NewOrder(qty: 10m, rawQty: 25m, rawCost: 2m, overhead: 10m);
+        await service.SaveDraftAsync(Company, order, "tester");
+        await service.PostAsync(Company, order.Id, "tester");
+
+        await service.CancelAsync(Company, order.Id, "tester");
+
+        Assert.Equal(MfgOrderStatuses.Cancelled, (await service.GetByDocNoAsync(Company, order.DocNo))!.Status);
+        Assert.Equal(100m, db.ScalarDecimal("SELECT available_qty FROM material_stock_balances WHERE material_id=1 AND warehouse_id=1"));
+        Assert.Equal(0m, db.ScalarDecimal("SELECT available_qty FROM material_stock_balances WHERE material_id=2 AND warehouse_id=1"));
+        Assert.Equal(25m, db.ScalarDecimal("SELECT qty_in FROM material_stock_movements WHERE movement_type='MFG_CONSUME_REV' AND material_id=1"));
+        Assert.Equal(10m, db.ScalarDecimal("SELECT qty_out FROM material_stock_movements WHERE movement_type='MFG_PRODUCE_REV' AND material_id=2"));
+    }
+
+    // ------------------------------------------------------------------
+    // NumWords (printed voucher wording)
+    // ------------------------------------------------------------------
+    [Fact]
+    public void NumWords_FormatsAmountsInEnglish()
+    {
+        Assert.Equal("Zero Riyals Only", NumWordsCheck(0m, "SAR"));
+        Assert.Equal("One Riyal Only", NumWordsCheck(1m, "SAR"));
+        Assert.Equal("One Thousand Two Hundred Thirty-Four Riyals and Fifty Halalas Only", NumWordsCheck(1234.50m, "SAR"));
+        Assert.Equal("Two Million Five Dollars and Five Cents Only", NumWordsCheck(2000005.05m, "USD"));
+    }
+
+    private static string NumWordsCheck(decimal amount, string currency)
+        => ShouTech.App.Services.NumWords.ToWords(amount, currency);
+
+    // ------------------------------------------------------------------
+    // Builders / doubles
+    // ------------------------------------------------------------------
+    private static Cheque NewCheque(string no, string bank, string drawer, string partyAccount, decimal amount) => new()
+    {
+        Direction = ChequeDirections.In,
+        ChequeNo = no,
+        BankName = bank,
+        DrawerName = drawer,
+        PartyName = drawer,
+        PartyAccountCode = partyAccount,
+        Amount = amount,
+        CurrencyCode = "SAR",
+        ExchangeRate = 1m,
+        IssueDate = new DateOnly(2026, 11, 17),
+        DueDate = new DateOnly(2026, 12, 17)
+    };
+
+    private static MfgOrder NewOrder(decimal qty, decimal rawQty, decimal rawCost, decimal overhead) => new()
+    {
+        DocDate = new DateOnly(2026, 11, 17),
+        ItemCode = "FG-1",
+        ItemName = "Finished Good",
+        Qty = qty,
+        UnitCode = "PCS",
+        WarehouseCode = "1",
+        OverheadAmount = overhead,
+        StandardUnitCost = 5m,
+        Lines = new List<MfgOrderLine>
+        {
+            new() { LineKind = MfgLineKinds.Raw, ItemCode = "RM-1", ItemName = "Raw Material", Qty = rawQty, UnitCode = "KG", UnitCost = rawCost, StandardUnitCost = rawCost }
+        }
+    };
+
+    /// <summary>In-memory journal double (UnitTest1 pattern): records drafts,
+    /// posts and reversals; resolves company/account GUIDs deterministically
+    /// is NOT its job — the real ChequeRepository does that against the
+    /// companies / chart_of_accounts tables seeded by TempDb.</summary>
+    private sealed class FakeJournalRepository : IJournalRepository
+    {
+        public List<JournalEntry> Posted { get; } = new();
+        public List<Guid> Reversed { get; } = new();
+        private readonly Dictionary<Guid, JournalEntry> _drafts = new();
+
+        public Task<JournalEntrySnapshot?> FindByDocumentNumberAsync(Guid companyId, string documentNumber, CancellationToken cancellationToken = default)
+            => Task.FromResult<JournalEntrySnapshot?>(null);
+
+        public Task SaveDraftAsync(Guid companyId, JournalEntry entry, string userId, CancellationToken cancellationToken = default)
+        {
+            _drafts[entry.Id] = entry;
+            return Task.CompletedTask;
+        }
+
+        public Task PostAsync(Guid journalEntryId, string userId, CancellationToken cancellationToken = default)
+        {
+            if (_drafts.TryGetValue(journalEntryId, out var entry))
+                Posted.Add(entry);
+            return Task.CompletedTask;
+        }
+
+        public Task<Guid> ReverseAsync(Guid journalEntryId, string userId, string? details = null, CancellationToken cancellationToken = default)
+        {
+            Reversed.Add(journalEntryId);
+            return Task.FromResult(Guid.NewGuid());
+        }
+    }
+
+    private sealed class TempDb : IDisposable
+    {
+        private readonly string _path;
+        public string ConnectionString { get; }
+        public Guid CompanyGuid { get; } = Guid.NewGuid();
+
+        public TempDb(bool withCheques, bool withStock)
+        {
+            _path = Path.Combine(Path.GetTempPath(), $"shoutech-chunkc-{Guid.NewGuid():N}.sqlite3");
+            ConnectionString = $"Data Source={_path};";
+            using var connection = new SqliteConnection(ConnectionString);
+            connection.Open();
+            Exec(connection, """
+                CREATE TABLE companies (company_id TEXT PRIMARY KEY, company_code TEXT NOT NULL, is_active INTEGER NOT NULL DEFAULT 1, is_deleted INTEGER NOT NULL DEFAULT 0);
+                CREATE TABLE chart_of_accounts (account_id TEXT PRIMARY KEY, company_id TEXT NOT NULL, account_code TEXT NOT NULL, account_name TEXT, is_active INTEGER NOT NULL DEFAULT 1, is_deleted INTEGER NOT NULL DEFAULT 0, is_postable INTEGER NOT NULL DEFAULT 1);
+                """);
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = "INSERT INTO companies (company_id, company_code) VALUES ($id, $code);";
+                cmd.Parameters.AddWithValue("$id", CompanyGuid.ToString("D"));
+                cmd.Parameters.AddWithValue("$code", Company);
+                cmd.ExecuteNonQuery();
+            }
+            foreach (var (code, name) in new[] { ("1101", "Cash Box"), ("1102", "Bank Account"), ("4101", "Customer A"), ("4102", "Customer B"), ("2101", "Supplier A") })
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = "INSERT INTO chart_of_accounts (account_id, company_id, account_code, account_name) VALUES ($id, $company, $code, $name);";
+                cmd.Parameters.AddWithValue("$id", DeterministicAccountGuid(code).ToString("D"));
+                cmd.Parameters.AddWithValue("$company", CompanyGuid.ToString("D"));
+                cmd.Parameters.AddWithValue("$code", code);
+                cmd.Parameters.AddWithValue("$name", name);
+                cmd.ExecuteNonQuery();
+            }
+            if (withCheques)
+                Exec(connection, ReadMigration("033_cheques.sql"));
+            if (withStock)
+            {
+                Exec(connection, ReadMigration("034_manufacturing.sql"));
+                Exec(connection, """
+                    CREATE TABLE materials (material_id INTEGER PRIMARY KEY, company_id TEXT NOT NULL DEFAULT '', code TEXT NOT NULL, name_ar TEXT NOT NULL DEFAULT '', is_deleted INTEGER NOT NULL DEFAULT 0);
+                    CREATE TABLE warehouses (warehouse_id INTEGER PRIMARY KEY, company_id TEXT NOT NULL DEFAULT '', warehouse_code INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0);
+                    CREATE TABLE material_stock_movements (stock_movement_id INTEGER PRIMARY KEY AUTOINCREMENT, company_id TEXT NOT NULL, warehouse_id INTEGER NOT NULL, material_id INTEGER NOT NULL, movement_date TEXT NOT NULL, movement_type TEXT NOT NULL, document_no TEXT NOT NULL, qty_in NUMERIC NOT NULL DEFAULT 0, qty_out NUMERIC NOT NULL DEFAULT 0, unit_cost NUMERIC NOT NULL DEFAULT 0, note TEXT, is_deleted INTEGER NOT NULL DEFAULT 0);
+                    CREATE TABLE material_stock_balances (stock_balance_id INTEGER PRIMARY KEY AUTOINCREMENT, company_id TEXT NOT NULL, warehouse_id INTEGER NOT NULL, material_id INTEGER NOT NULL, available_qty NUMERIC NOT NULL DEFAULT 0, reserved_qty NUMERIC NOT NULL DEFAULT 0, average_cost NUMERIC NOT NULL DEFAULT 0, last_cost NUMERIC NOT NULL DEFAULT 0, last_updated TEXT NOT NULL DEFAULT (datetime('now')), is_deleted INTEGER NOT NULL DEFAULT 0, UNIQUE(company_id, warehouse_id, material_id));
+                    """);
+            }
+        }
+
+        // The fake journal records entries by the account GUIDs the real
+        // repository resolved; account codes map to GUIDs deterministically
+        // so SaveBatchAsync resolution succeeds against the seeded COA.
+        private static Guid DeterministicAccountGuid(string code)
+        {
+            // ChequeRepository.ResolveAccountIdAsync reads the GUID stored in
+            // chart_of_accounts, so any stable GUID works.
+            return Guid.Parse($"00000000-0000-0000-0000-{(Array.IndexOf(new[] { "1101", "1102", "4101", "4102", "2101" }, code) + 1):D12}");
+        }
+
+        public void SeedMaterial(long id, string code)
+        {
+            using var connection = new SqliteConnection(ConnectionString);
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "INSERT INTO materials (material_id, company_id, code, name_ar) VALUES ($id, $company, $code, $code);";
+            cmd.Parameters.AddWithValue("$id", id);
+            cmd.Parameters.AddWithValue("$company", Company);
+            cmd.Parameters.AddWithValue("$code", code);
+            cmd.ExecuteNonQuery();
+        }
+
+        public void SeedWarehouse(long id)
+        {
+            using var connection = new SqliteConnection(ConnectionString);
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "INSERT INTO warehouses (warehouse_id, company_id, warehouse_code) VALUES ($id, $company, $id);";
+            cmd.Parameters.AddWithValue("$id", id);
+            cmd.Parameters.AddWithValue("$company", Company);
+            cmd.ExecuteNonQuery();
+        }
+
+        public void SeedOpeningStock(long materialId, long warehouseId, decimal qty, decimal cost)
+        {
+            using var connection = new SqliteConnection(ConnectionString);
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = """
+                INSERT INTO material_stock_movements (company_id, warehouse_id, material_id, movement_date, movement_type, document_no, qty_in, qty_out, unit_cost, note)
+                VALUES ($company, $wh, $mat, '2026-11-01', 'OPN', 'OPEN-1', $qty, 0, $cost, 'Opening stock');
+                INSERT INTO material_stock_balances (company_id, warehouse_id, material_id, available_qty, average_cost, last_cost)
+                VALUES ($company, $wh, $mat, $qty, $cost, $cost);
+                """;
+            cmd.Parameters.AddWithValue("$company", Company);
+            cmd.Parameters.AddWithValue("$wh", warehouseId);
+            cmd.Parameters.AddWithValue("$mat", materialId);
+            cmd.Parameters.AddWithValue("$qty", qty);
+            cmd.Parameters.AddWithValue("$cost", cost);
+            cmd.ExecuteNonQuery();
+        }
+
+        public decimal ScalarDecimal(string sql)
+        {
+            using var connection = new SqliteConnection(ConnectionString);
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = sql;
+            var value = cmd.ExecuteScalar();
+            return value is null or DBNull ? 0m : Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+        }
+
+        private static void Exec(SqliteConnection connection, string sql)
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.ExecuteNonQuery();
+        }
+
+        private static string ReadMigration(string fileName)
+        {
+            var root = new DirectoryInfo(AppContext.BaseDirectory);
+            while (root is not null && !Directory.Exists(Path.Combine(root.FullName, "dba", "mig")))
+                root = root.Parent;
+            Assert.NotNull(root);
+            var path = Path.Combine(root!.FullName, "dba", "mig", "sqlite", fileName);
+            Assert.True(File.Exists(path), $"Migration not found: {path}");
+            return File.ReadAllText(path);
+        }
+
+        public void Dispose()
+        {
+            SqliteConnection.ClearAllPools();
+            if (File.Exists(_path)) File.Delete(_path);
+            foreach (var suffix in new[] { "-wal", "-shm" })
+            {
+                var sidecar = _path + suffix;
+                if (File.Exists(sidecar)) File.Delete(sidecar);
+            }
+        }
+    }
+}

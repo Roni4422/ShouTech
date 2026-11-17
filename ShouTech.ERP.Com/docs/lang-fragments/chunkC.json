@@ -1,0 +1,344 @@
+{
+  "CashVoucher": {
+    "PermissionDenied": {
+      "en": "You do not have permission for cash vouchers.",
+      "ar": "ليس لديك صلاحية لسندات الصندوق.",
+      "fr": "Vous n'avez pas l'autorisation pour les bons de caisse.",
+      "tr": "Nakit makbuzlar icin yetkiniz yok."
+    },
+    "DeleteUnavailable": {
+      "en": "Drafts cannot be deleted; post and reverse instead.",
+      "ar": "لا يمكن حذف المسودات؛ قم بالترحيل والعكس بدلا من ذلك.",
+      "fr": "Les brouillons ne peuvent pas etre supprimes ; comptabilisez puis contre-passez.",
+      "tr": "Taslaklar silinemez; bunun yerine kaydedip ters kayit olusturun."
+    },
+    "NoCompany": {
+      "en": "No active company in the current session.",
+      "ar": "لا توجد شركه نشطه في الجلسه الحاليه.",
+      "fr": "Aucune societe active dans la session.",
+      "tr": "Oturumda aktif sirket yok."
+    },
+    "NoUser": {
+      "en": "The current user could not be determined.",
+      "ar": "تعذر تحديد المستخدم الحالي.",
+      "fr": "Impossible de determiner l'utilisateur actuel.",
+      "tr": "Gecerli kullanici belirlenemedi."
+    },
+    "ServiceUnavailable": {
+      "en": "The journal service is not initialized; check the database connection.",
+      "ar": "خدمه القيود غير مهياه؛ تحقق من اتصال قاعده البيانات.",
+      "fr": "Le service de journal n'est pas initialise ; verifiez la connexion a la base.",
+      "tr": "Yevmiye hizmeti baslatilmadi; veritabani baglantisini kontrol edin."
+    },
+    "AlreadySaved": {
+      "en": "This voucher is already saved. Start a new voucher for another entry.",
+      "ar": "هذا السند محفوظ بالفعل. ابدا سندا جديدا لقيد اخر.",
+      "fr": "Ce bon est deja enregistre. Creez un nouveau bon pour une autre ecriture.",
+      "tr": "Bu makbuz zaten kaydedildi. Baska bir kayit icin yeni makbuz baslatin."
+    },
+    "DateRequired": {
+      "en": "The voucher date is required.",
+      "ar": "تاريخ السند مطلوب.",
+      "fr": "La date du bon est requise.",
+      "tr": "Makbuz tarihi gereklidir."
+    },
+    "DocNoRequired": {
+      "en": "The voucher number is required.",
+      "ar": "رقم السند مطلوب.",
+      "fr": "Le numero du bon est requis.",
+      "tr": "Makbuz numarasi gereklidir."
+    },
+    "BoxRequired": {
+      "en": "The treasury / box account code is required.",
+      "ar": "رمز حساب الصندوق مطلوب.",
+      "fr": "Le code du compte de caisse est requis.",
+      "tr": "Kasa hesap kodu gereklidir."
+    },
+    "MemoRequired": {
+      "en": "A memo or party name is required.",
+      "ar": "البيان او اسم الطرف مطلوب.",
+      "fr": "Un libelle ou le nom du tiers est requis.",
+      "tr": "Aciklama veya taraf adi gereklidir."
+    },
+    "CurrencyInvalid": {
+      "en": "The currency code must be three Latin letters.",
+      "ar": "يجب ان يتكون رمز العمله من ثلاثه احرف لاتينيه.",
+      "fr": "Le code devise doit comporter trois lettres latines.",
+      "tr": "Para birimi kodu uc Latin harfinden olusmalidir."
+    },
+    "RateInvalid": {
+      "en": "The exchange rate is invalid; it must be greater than zero.",
+      "ar": "سعر الصرف غير صالح؛ يجب ان يكون اكبر من صفر.",
+      "fr": "Le taux de change est invalide ; il doit etre superieur a zero.",
+      "tr": "Doviz kuru gecersiz; sifirdan buyuk olmalidir."
+    },
+    "AmountMismatch": {
+      "en": "Posting is blocked: the header amount differs from the sum of lines by",
+      "ar": "الترحيل محظور: مبلغ الترويسه يختلف عن مجموع السطور بمقدار",
+      "fr": "Comptabilisation bloquee : le montant d'en-tete differe de la somme des lignes de",
+      "tr": "Kayit engellendi: baslik tutari satirlarin toplamindan su kadar farkli:"
+    },
+    "AmountInWords": {
+      "en": "Amount in words",
+      "ar": "المبلغ كتابه",
+      "fr": "Montant en lettres",
+      "tr": "Tutar yaziyla"
+    },
+    "NotFound": {
+      "en": "No voucher was found with this number in the active company",
+      "ar": "لم يتم العثور على سند بهذا الرقم في الشركه النشطه",
+      "fr": "Aucun bon trouve avec ce numero dans la societe active",
+      "tr": "Aktif sirkette bu numarayla makbuz bulunamadi"
+    }
+  },
+  "Cheques": {
+    "Deposit": {
+      "en": "Deposit",
+      "ar": "ايداع",
+      "fr": "Deposer",
+      "tr": "Yatir"
+    },
+    "Clear": {
+      "en": "Clear",
+      "ar": "تحصيل",
+      "fr": "Compenser",
+      "tr": "Takas Et"
+    },
+    "Bounce": {
+      "en": "Bounce",
+      "ar": "ارتجاع",
+      "fr": "Rejeter",
+      "tr": "Karsiliksiz"
+    },
+    "Endorse": {
+      "en": "Endorse",
+      "ar": "تظهير",
+      "fr": "Endosser",
+      "tr": "Ciro Et"
+    },
+    "CancelCheque": {
+      "en": "Cancel Cheque",
+      "ar": "الغاء الشيك",
+      "fr": "Annuler le cheque",
+      "tr": "Ceki Iptal Et"
+    },
+    "DepositBankAccount": {
+      "en": "Deposit Bank Account",
+      "ar": "حساب بنك الايداع",
+      "fr": "Compte bancaire de depot",
+      "tr": "Yatirma Banka Hesabi"
+    },
+    "EndorsedToAccount": {
+      "en": "Endorsed-To Account",
+      "ar": "حساب المظهر له",
+      "fr": "Compte du beneficiaire de l'endos",
+      "tr": "Ciro Edilen Hesap"
+    },
+    "PermissionDenied": {
+      "en": "You do not have permission for securities and cheques.",
+      "ar": "ليس لديك صلاحيه للاوراق الماليه والشيكات.",
+      "fr": "Vous n'avez pas l'autorisation pour les titres et cheques.",
+      "tr": "Kıymetli evrak ve cekler icin yetkiniz yok."
+    },
+    "ServiceUnavailable": {
+      "en": "The cheque service is not initialized; check the database connection.",
+      "ar": "خدمه الشيكات غير مهياه؛ تحقق من اتصال قاعده البيانات.",
+      "fr": "Le service des cheques n'est pas initialise ; verifiez la connexion a la base.",
+      "tr": "Cek hizmeti baslatilmadi; veritabani baglantisini kontrol edin."
+    },
+    "NoCompany": {
+      "en": "No active company in the current session.",
+      "ar": "لا توجد شركه نشطه في الجلسه الحاليه.",
+      "fr": "Aucune societe active dans la session.",
+      "tr": "Oturumda aktif sirket yok."
+    },
+    "NoUser": {
+      "en": "The current user could not be determined.",
+      "ar": "تعذر تحديد المستخدم الحالي.",
+      "fr": "Impossible de determiner l'utilisateur actuel.",
+      "tr": "Gecerli kullanici belirlenemedi."
+    },
+    "BoxRequired": {
+      "en": "The portfolio / box account code is required.",
+      "ar": "رمز حساب المحفظه / الصندوق مطلوب.",
+      "fr": "Le code du compte portefeuille / caisse est requis.",
+      "tr": "Portfoy / kasa hesap kodu gereklidir."
+    },
+    "DateRequired": {
+      "en": "The batch date is required.",
+      "ar": "تاريخ الدفعه مطلوب.",
+      "fr": "La date du lot est requise.",
+      "tr": "Parti tarihi gereklidir."
+    },
+    "CurrencyInvalid": {
+      "en": "The currency code must be three Latin letters.",
+      "ar": "يجب ان يتكون رمز العمله من ثلاثه احرف لاتينيه.",
+      "fr": "Le code devise doit comporter trois lettres latines.",
+      "tr": "Para birimi kodu uc Latin harfinden olusmalidir."
+    },
+    "BatchSaved": {
+      "en": "Cheque batch saved and its journal entry posted.",
+      "ar": "تم حفظ دفعه الشيكات وترحيل قيدها.",
+      "fr": "Lot de cheques enregistre et son ecriture comptabilisee.",
+      "tr": "Cek partisi kaydedildi ve yevmiye kaydi olusturuldu."
+    },
+    "BatchDraft": {
+      "en": "Draft batch — not saved yet.",
+      "ar": "دفعه مسوده — لم تحفظ بعد.",
+      "fr": "Lot brouillon — pas encore enregistre.",
+      "tr": "Taslak parti — henuz kaydedilmedi."
+    },
+    "SelectSavedCheque": {
+      "en": "Select a saved cheque first.",
+      "ar": "اختر شيكا محفوظا اولا.",
+      "fr": "Selectionnez d'abord un cheque enregistre.",
+      "tr": "Once kayitli bir cek secin."
+    },
+    "DepositBankRequired": {
+      "en": "Enter the deposit bank account code in the header first.",
+      "ar": "ادخل رمز حساب بنك الايداع في الترويسه اولا.",
+      "fr": "Saisissez d'abord le code du compte bancaire de depot dans l'en-tete.",
+      "tr": "Once baslikta yatirma banka hesap kodunu girin."
+    },
+    "EndorseToRequired": {
+      "en": "Enter the endorsed-to account code in the header first.",
+      "ar": "ادخل رمز حساب المظهر له في الترويسه اولا.",
+      "fr": "Saisissez d'abord le code du compte du beneficiaire dans l'en-tete.",
+      "tr": "Once baslikta ciro edilen hesap kodunu girin."
+    },
+    "IncomingTitle": {
+      "en": "Incoming Cheques",
+      "ar": "الشيكات الوارده",
+      "fr": "Cheques recus",
+      "tr": "Gelen Cekler"
+    },
+    "OutgoingTitle": {
+      "en": "Outgoing Cheques",
+      "ar": "الشيكات الصادره",
+      "fr": "Cheques emis",
+      "tr": "Giden Cekler"
+    },
+    "RegisterTitle": {
+      "en": "Cheque Register",
+      "ar": "سجل الشيكات",
+      "fr": "Registre des cheques",
+      "tr": "Cek Kayit Defteri"
+    },
+    "Direction": {
+      "en": "Direction",
+      "ar": "الاتجاه",
+      "fr": "Sens",
+      "tr": "Yon"
+    },
+    "PartyDrawer": {
+      "en": "Party / Drawer",
+      "ar": "الطرف / الساحب",
+      "fr": "Tiers / Tireur",
+      "tr": "Taraf / Kesideci"
+    },
+    "DaysToDue": {
+      "en": "Days to Due",
+      "ar": "الايام حتى الاستحقاق",
+      "fr": "Jours avant echeance",
+      "tr": "Vadeye Kalan Gun"
+    },
+    "DueSoon": {
+      "en": "Due within 30 days",
+      "ar": "يستحق خلال 30 يوما",
+      "fr": "Echeance sous 30 jours",
+      "tr": "30 gun icinde vadesi dolanlar"
+    },
+    "PrintRegister": {
+      "en": "Print Register",
+      "ar": "طباعه السجل",
+      "fr": "Imprimer le registre",
+      "tr": "Defteri Yazdir"
+    },
+    "BounceReason": {
+      "en": "Bounce Reason",
+      "ar": "سبب الارتجاع",
+      "fr": "Motif du rejet",
+      "tr": "Karsiliksiz Nedeni"
+    },
+    "BounceFees": {
+      "en": "Bounce Fees",
+      "ar": "رسوم الارتجاع",
+      "fr": "Frais de rejet",
+      "tr": "Karsiliksiz Ucretleri"
+    }
+  },
+  "MfgOrders": {
+    "PermissionDenied": {
+      "en": "You do not have permission for manufacturing orders.",
+      "ar": "ليس لديك صلاحيه لاوامر التصنيع.",
+      "fr": "Vous n'avez pas l'autorisation pour les ordres de fabrication.",
+      "tr": "Uretim emirleri icin yetkiniz yok."
+    },
+    "ServiceUnavailable": {
+      "en": "The manufacturing service is not initialized; check the database connection.",
+      "ar": "خدمه التصنيع غير مهياه؛ تحقق من اتصال قاعده البيانات.",
+      "fr": "Le service de fabrication n'est pas initialise ; verifiez la connexion a la base.",
+      "tr": "Uretim hizmeti baslatilmadi; veritabani baglantisini kontrol edin."
+    },
+    "NoCompany": {
+      "en": "No active company in the current session.",
+      "ar": "لا توجد شركه نشطه في الجلسه الحاليه.",
+      "fr": "Aucune societe active dans la session.",
+      "tr": "Oturumda aktif sirket yok."
+    },
+    "NoUser": {
+      "en": "The current user could not be determined.",
+      "ar": "تعذر تحديد المستخدم الحالي.",
+      "fr": "Impossible de determiner l'utilisateur actuel.",
+      "tr": "Gecerli kullanici belirlenemedi."
+    },
+    "NotFound": {
+      "en": "No manufacturing order was found with this number",
+      "ar": "لم يتم العثور على امر تصنيع بهذا الرقم",
+      "fr": "Aucun ordre de fabrication trouve avec ce numero",
+      "tr": "Bu numarayla uretim emri bulunamadi"
+    },
+    "StandardUnitCost": {
+      "en": "Standard Unit Cost",
+      "ar": "التكلفه المعياريه للوحده",
+      "fr": "Cout unitaire standard",
+      "tr": "Standart Birim Maliyet"
+    },
+    "CancelOrder": {
+      "en": "Cancel Order",
+      "ar": "الغاء الامر",
+      "fr": "Annuler l'ordre",
+      "tr": "Emri Iptal Et"
+    },
+    "ConfirmPost": {
+      "en": "Post this manufacturing order? Raw materials will be consumed and the finished item produced.",
+      "ar": "ترحيل امر التصنيع؟ ستستهلك المواد الخام وينتج الصنف التام.",
+      "fr": "Comptabiliser cet ordre de fabrication ? Les matieres premieres seront consommees et l'article fini produit.",
+      "tr": "Bu uretim emri kaydedilsin mi? Hammaddeler tuketilecek ve bitmis urun uretilecektir."
+    },
+    "ConfirmCancel": {
+      "en": "Cancel this manufacturing order? Posted stock movements will be reversed.",
+      "ar": "الغاء امر التصنيع؟ ستعكس حركات المخزون المرحله.",
+      "fr": "Annuler cet ordre de fabrication ? Les mouvements de stock comptabilises seront contre-passes.",
+      "tr": "Bu uretim emri iptal edilsin mi? Kaydedilen stok hareketleri tersine cevrilecektir."
+    },
+    "ListTitle": {
+      "en": "Manufacturing Orders",
+      "ar": "اوامر التصنيع",
+      "fr": "Ordres de fabrication",
+      "tr": "Uretim Emirleri"
+    },
+    "Open": {
+      "en": "Open",
+      "ar": "فتح",
+      "fr": "Ouvrir",
+      "tr": "Ac"
+    },
+    "SelectOrder": {
+      "en": "Select a manufacturing order first.",
+      "ar": "اختر امر تصنيع اولا.",
+      "fr": "Selectionnez d'abord un ordre de fabrication.",
+      "tr": "Once bir uretim emri secin."
+    }
+  }
+}
