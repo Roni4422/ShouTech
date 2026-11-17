@@ -4,6 +4,7 @@
         xmlns:ribbon="clr-namespace:System.Windows.Controls.Ribbon;assembly=System.Windows.Controls.Ribbon"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:loc="clr-namespace:ShouTech.App.Localization"
+        xmlns:qb="clr-namespace:ShouTech.App.Interaction"
         Title="ShouTech"
         WindowStyle="None"
         ResizeMode="CanResize"
@@ -193,63 +194,9 @@
             </Menu>
 
             
-            <ToolBar x:Name="MainToolBar" Grid.Row="2"
-                     Background="Transparent"
-                     Height="32"
-                     ToolBarTray.IsLocked="True">
-                <ToolBar.Resources>
-                    <Style TargetType="Button">
-                        <Setter Property="Background" Value="Transparent"/>
-                        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-                        <Setter Property="BorderThickness" Value="0"/>
-                        <Setter Property="Padding" Value="4"/>
-                        <Setter Property="Margin" Value="1"/>
-                        <Setter Property="Cursor" Value="Hand"/>
-                        <Style.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="{DynamicResource ShellRibbonHoverBrush}"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter Property="Background" Value="{DynamicResource BorderDarkBrush}"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Foreground" Value="{DynamicResource TextDisabledBrush}"/>
-                            </Trigger>
-                        </Style.Triggers>
-                    </Style>
-                </ToolBar.Resources>
-                <Button Content="💾" Margin="2" ToolTip="Save" Background="Transparent" Foreground="{DynamicResource TextBrush}" FontSize="{DynamicResource FontSize16}" Command="{Binding SaveCommand}"/>
-                <Button Content="↩️" Margin="2" ToolTip="Undo" Background="Transparent" Foreground="{DynamicResource TextBrush}" FontSize="{DynamicResource FontSize16}" Command="{Binding UndoCommand}"/>
-                <Button Content="↪️" Margin="2" ToolTip="Redo" Background="Transparent" Foreground="{DynamicResource TextBrush}" FontSize="{DynamicResource FontSize16}" Command="{Binding RedoCommand}"/>
-                <Button Content="🖨️" Margin="2" ToolTip="Print" Background="Transparent" Foreground="{DynamicResource TextBrush}" FontSize="{DynamicResource FontSize16}" Command="{Binding PrintCommand}"/>
-                <Button Content="🔍" Margin="2" ToolTip="Search" Background="Transparent" Foreground="{DynamicResource TextBrush}" FontSize="{DynamicResource FontSize16}" Command="{Binding FindCommand}"/>
-                <Button Content="⚙️" Margin="2" ToolTip="Settings" Background="Transparent" Foreground="{DynamicResource TextBrush}" FontSize="{DynamicResource FontSize16}" Command="{Binding SettingsCommand}"/>
-                <Button Content="📊" Margin="2" ToolTip="Reports" Background="Transparent" Foreground="{DynamicResource TextBrush}" FontSize="{DynamicResource FontSize16}" Command="{Binding ReportsCommand}"/>
-                <Button Content="📥" Margin="2" ToolTip="Import" Background="Transparent" Foreground="{DynamicResource TextBrush}" FontSize="{DynamicResource FontSize16}" Command="{Binding ImportCommand}"/>
-                <Button Content="📤" Margin="2" ToolTip="Export" Background="Transparent" Foreground="{DynamicResource TextBrush}" FontSize="{DynamicResource FontSize16}" Command="{Binding ExportCommand}"/>
-                <Button x:Name="AccentPickerButton"
-                        Margin="2"
-                        Width="32"
-                        Height="28"
-                        ToolTip="Accent color"
-                        Background="Transparent"
-                        Foreground="{DynamicResource TextBrush}"
-                        Cursor="Hand"
-                        Click="OnAccentPickerClick">
-                    <Button.Content>
-                        <Border Width="18" Height="18"
-                                CornerRadius="3"
-                                BorderBrush="{DynamicResource BorderDarkBrush}"
-                                BorderThickness="1"
-                                Background="{DynamicResource AccentPrimary}"/>
-                    </Button.Content>
-                </Button>
-                
-                <Button Content="🚪" Margin="2" ToolTip="Exit" Background="Transparent" Foreground="{DynamicResource TextBrush}" FontSize="{DynamicResource FontSize16}" Command="{Binding ExitCommand}"/>
-            </ToolBar>
 
             
-            <ribbon:Ribbon Grid.Row="3" x:Name="RibbonControl"
+            <ribbon:Ribbon Grid.Row="2" x:Name="RibbonControl"
                            Background="Transparent"
                            Foreground="{DynamicResource ShellRibbonForegroundBrush}"
                            Visibility="Collapsed"
@@ -653,7 +600,102 @@
 
             </ribbon:Ribbon>
 
-            
+            <!-- Quick Access Bar: always visible, directly under the ribbon.
+                 Icon per button is a single settable value: qb:QuickBarProps.Glyph
+                 (Segoe MDL2 Assets) today; swap that one attribute to
+                 qb:QuickBarProps.Icon="/Resources/Ico/Qb*.png" when icon files
+                 arrive (see docs/QUICK_ACCESS_BAR.md). Tag = the same navigation
+                 key the ribbon uses; routed by OnQuickAccessClick through
+                 RibbonReportRouter / RibbonNav / RptNav. -->
+            <Border x:Name="QuickAccessBar" Grid.Row="3" Style="{StaticResource QuickAccessBarStyle}">
+                <StackPanel x:Name="QuickAccessPanel" Orientation="Horizontal">
+                    <Button Style="{StaticResource QuickAccessButtonStyle}"
+                            qb:QuickBarProps.Glyph="&#xE80F;"
+                            loc:LocProps.ToolTipKey="Dashboard.Title"
+                            ToolTip="Executive Dashboard"
+                            Command="{Binding ShowDashboardCommand}"/>
+                    <Button Style="{StaticResource QuickAccessButtonStyle}"
+                            qb:QuickBarProps.Glyph="&#xE8A5;"
+                            loc:LocProps.ToolTipKey="Invoices.SalesInvoice"
+                            ToolTip="Sales Invoice"
+                            Tag="Invoices.SalesInvoice"
+                            Click="OnQuickAccessClick"/>
+                    <Button Style="{StaticResource QuickAccessButtonStyle}"
+                            qb:QuickBarProps.Glyph="&#xE7BF;"
+                            loc:LocProps.ToolTipKey="POS.OpenCashier"
+                            ToolTip="Open POS Cashier"
+                            Tag="POS.OpenCashier"
+                            Click="OnQuickAccessClick"/>
+                    <Button Style="{StaticResource QuickAccessButtonStyle}"
+                            qb:QuickBarProps.Glyph="&#xE8F1;"
+                            loc:LocProps.ToolTipKey="Bonds.JournalVoucher"
+                            ToolTip="Journal Voucher"
+                            Tag="Bonds.JournalVoucher"
+                            Click="OnQuickAccessClick"/>
+                    <Button Style="{StaticResource QuickAccessButtonStyle}"
+                            qb:QuickBarProps.Glyph="&#xE8C7;"
+                            loc:LocProps.ToolTipKey="Bonds.ReceiptVoucher"
+                            ToolTip="Receipt Voucher"
+                            Tag="Bonds.ReceiptVoucher"
+                            Click="OnQuickAccessClick"/>
+                    <Button Style="{StaticResource QuickAccessButtonStyle}"
+                            qb:QuickBarProps.Glyph="&#xE7B8;"
+                            loc:LocProps.ToolTipKey="Inventory.MaterialTree"
+                            ToolTip="Material Tree"
+                            Tag="View.MaterialTree"
+                            Click="OnQuickAccessClick"/>
+                    <Button Style="{StaticResource QuickAccessButtonStyle}"
+                            qb:QuickBarProps.Glyph="&#xE716;"
+                            loc:LocProps.ToolTipKey="Customers.CustomerCard"
+                            ToolTip="Customer Card"
+                            Tag="Customers.CustomerCard"
+                            Click="OnQuickAccessClick"/>
+                    <Button Style="{StaticResource QuickAccessButtonStyle}"
+                            qb:QuickBarProps.Glyph="&#xF0E3;"
+                            loc:LocProps.ToolTipKey="Orders.SalesOrder"
+                            ToolTip="Sales Order"
+                            Tag="Orders.SalesOrder"
+                            Click="OnQuickAccessClick"/>
+                    <Button Style="{StaticResource QuickAccessButtonStyle}"
+                            qb:QuickBarProps.Glyph="&#xE77C;"
+                            loc:LocProps.ToolTipKey="Bonds.ReceiptCheque"
+                            ToolTip="Receipt Cheque"
+                            Tag="Bonds.ReceiptCheque"
+                            Click="OnQuickAccessClick"/>
+                    <Button Style="{StaticResource QuickAccessButtonStyle}"
+                            qb:QuickBarProps.Glyph="&#xE825;"
+                            loc:LocProps.ToolTipKey="Banks.DefineBanks"
+                            ToolTip="Define Banks"
+                            Tag="Banks.DefineBanks"
+                            Click="OnQuickAccessClick"/>
+                    <Button Style="{StaticResource QuickAccessButtonStyle}"
+                            qb:QuickBarProps.Glyph="&#xE9D2;"
+                            loc:LocProps.ToolTipKey="Menu.Reports"
+                            ToolTip="Reports"
+                            Click="OnQuickReportsClick"/>
+                    <Button x:Name="QuickRecycleBinButton"
+                            Style="{StaticResource QuickAccessButtonStyle}"
+                            qb:QuickBarProps.Icon="pack://application:,,,/Resources/Ico/ArchiveBin.png"
+                            loc:LocProps.ToolTipKey="RecycleBin.Title"
+                            ToolTip="Recycle Bin"
+                            Click="OnRecycleBinClick"/>
+                    <Border Width="1"
+                            Margin="6,4"
+                            Background="{DynamicResource ShellContentBorderBrush}"/>
+                    <Button x:Name="AccentPickerButton"
+                            Style="{StaticResource QuickAccessButtonStyle}"
+                            ToolTip="Accent color"
+                            Click="OnAccentPickerClick">
+                        <Border Width="18" Height="18" CornerRadius="3"
+                                BorderBrush="#555555" BorderThickness="1">
+                            <Border.Background>
+                                <SolidColorBrush Color="{DynamicResource ShellAccentColor}"/>
+                            </Border.Background>
+                        </Border>
+                    </Button>
+                </StackPanel>
+            </Border>
+
             <Border Grid.Row="4"
                     Background="{DynamicResource ShellContentBackgroundBrush}"
                     BorderBrush="{DynamicResource ShellContentBorderBrush}"
