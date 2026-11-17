@@ -330,6 +330,15 @@ public static class InvRepo
                     "InvRepo.Post");
         }
 
+        // Inventory effects FIRST (Step 6): the valuation engine writes
+        // the document's movements inside this transaction, and the GL
+        // COGS legs below are built from those movements' cost_amount —
+        // the engine's per-method valuation — instead of a balance
+        // average read before posting. Same transaction throughout, so
+        // a GL failure still rolls the stock back with everything else.
+        if (effects.Stock)
+            StkPost.ApplyDocument(connection, tx, doc);
+
         // Real GL posting (Step 3, J-2): build the document's journal lines
         // from the document's STORED totals (Step 5) and post them INSIDE
         // this transaction. The journal number that used to be fabricated
@@ -488,12 +497,8 @@ public static class InvRepo
             }
         }
 
-        // Inventory effects (same transaction as ledger + status), only
-        // for kinds whose policy carries a stock effect through this
-        // engine (a quotation never moves stock; transfers/counts are
-        // blocked above and post through their dedicated engines).
-        if (effects.Stock)
-            StkPost.ApplyDocument(connection, tx, doc);
+        // (Inventory effects were applied before the GL block above —
+        // Step 6 ordering, so COGS reads the engine's movement costs.)
 
         tx.Commit();
     }
@@ -969,7 +974,7 @@ public static class InvRepo
     private sealed record MaterialGlInfo(
         string? AccSales, string? AccSalesReturn, string? AccCogs,
         string? AccPurchase, string? AccPurchaseReturn, string? AccInventory,
-        string? TaxAccount, bool Stockable, decimal AvgCost);
+        string? TaxAccount, bool Stockable, decimal AvgCost, long? MaterialId = null);
 
     private static Guid ResolveCompanyGuid(DbConnection connection, DbTransaction tx)
     {
@@ -999,7 +1004,7 @@ public static class InvRepo
             materialId = found is null or DBNull ? null : Convert.ToInt64(found, CultureInfo.InvariantCulture);
         }
         if (materialId is null or 0)
-            return new MaterialGlInfo(null, null, null, null, null, null, null, false, 0m);
+            return new MaterialGlInfo(null, null, null, null, null, null, null, false, 0m, null);
 
         string? accSales = null, accSalesReturn = null, accCogs = null, accPurchase = null,
             accPurchaseReturn = null, accInventory = null, taxAccount = null;
@@ -1059,7 +1064,7 @@ public static class InvRepo
                 if (balanceAvg > 0) avgCost = balanceAvg;
             }
         }
-        return new MaterialGlInfo(accSales, accSalesReturn, accCogs, accPurchase, accPurchaseReturn, accInventory, taxAccount, stockable, avgCost);
+        return new MaterialGlInfo(accSales, accSalesReturn, accCogs, accPurchase, accPurchaseReturn, accInventory, taxAccount, stockable, avgCost, materialId);
     }
 
     private static string CodeOr(string? configured, string fallback)
@@ -1135,15 +1140,79 @@ public static class InvRepo
             lines.Add(new ShouTech.Domain.Entities.GlLineRequest(code, debit, credit, costCenter));
         }
 
-        // COGS at the stock layer's current cost figures (Step 6 scope).
+        // COGS from the valuation engine (Step 6): StkPost applied this
+        // document's stock effects earlier in THIS transaction, so the
+        // movements' cost_amount IS the COGS — valued per material
+        // cost_method, in base units, at the moment of posting. (Before
+        // Step 6 this read the balance average_cost before posting and
+        // multiplied the raw line quantity, understating cost for
+        // non-base units and disagreeing with FIFO stock entirely.)
+        // The pre-posting average remains only as a defensive fallback
+        // for a stockable line the engine wrote no movement for.
         void AddCogs(bool reverse)
         {
+            var moveType = doc.Kind switch
+            {
+                InvDocKind.SalesReturn => "SRT",
+                InvDocKind.PosSale => "POS",
+                _ => "SAL"
+            };
+            var byKey = new Dictionary<(long Material, long Warehouse), decimal>();
+            var byMaterial = new Dictionary<long, decimal>();
+            using (var mc = connection.CreateCommand())
+            {
+                mc.Transaction = tx;
+                mc.CommandText = DatabaseRuntime.IsPostgreSql()
+                    ? "SELECT material_id, warehouse_id, COALESCE(SUM(cost_amount), 0) FROM material_stock_movements WHERE company_id=$c AND document_no=$doc AND movement_type=$t AND is_deleted=FALSE GROUP BY material_id, warehouse_id;"
+                    : "SELECT material_id, warehouse_id, COALESCE(SUM(cost_amount), 0) FROM material_stock_movements WHERE company_id=$c AND document_no=$doc AND movement_type=$t AND is_deleted=0 GROUP BY material_id, warehouse_id;";
+                // NB: the static Add(DbCommand, ...) helper is shadowed
+                // by BuildGlLines' local Add(string, ...) GL helper.
+                foreach (var (name, value) in new (string, object)[]
+                         { ("$c", Company), ("$doc", doc.DocNo ?? string.Empty), ("$t", moveType) })
+                {
+                    var p = mc.CreateParameter();
+                    p.ParameterName = name;
+                    p.Value = value;
+                    mc.Parameters.Add(p);
+                }
+                using var mr = mc.ExecuteReader();
+                while (mr.Read())
+                {
+                    var mat = Convert.ToInt64(mr.GetValue(0), CultureInfo.InvariantCulture);
+                    var wh = Convert.ToInt64(mr.GetValue(1), CultureInfo.InvariantCulture);
+                    var amount = Convert.ToDecimal(mr.GetValue(2), CultureInfo.InvariantCulture);
+                    byKey[(mat, wh)] = amount;
+                    byMaterial[mat] = byMaterial.GetValueOrDefault(mat) + amount;
+                }
+            }
+            var linesPerMaterial = doc.Lines
+                .Where(l => l.MaterialId is not null)
+                .GroupBy(l => l.MaterialId!.Value)
+                .ToDictionary(g => g.Key, g => g.Count());
+
             for (var i = 0; i < doc.Lines.Count; i++)
             {
                 var line = doc.Lines[i];
                 var info = infos[i];
-                if (!info.Stockable || line.Qty == 0 || info.AvgCost <= 0) continue;
-                var cost = decimal.Round(line.Qty * info.AvgCost, 4, MidpointRounding.AwayFromZero);
+                if (!info.Stockable || line.Qty == 0) continue;
+                decimal cost;
+                var warehouse = (long)(line.WarehouseId ?? doc.WarehouseId ?? 0);
+                if (info.MaterialId is long mid
+                    && byKey.TryGetValue((mid, warehouse), out var moved))
+                {
+                    cost = reverse ? moved : -moved;
+                }
+                else if (info.MaterialId is long midOnly
+                         && linesPerMaterial.GetValueOrDefault(midOnly) == 1
+                         && byMaterial.TryGetValue(midOnly, out var movedTotal))
+                {
+                    cost = reverse ? movedTotal : -movedTotal;
+                }
+                else if (info.AvgCost > 0)
+                {
+                    cost = decimal.Round(line.Qty * info.AvgCost, 4, MidpointRounding.AwayFromZero);
+                }
+                else continue;
                 if (cost <= 0) continue;
                 var cogs = CodeOr(info.AccCogs, GlAccounts.Cogs);
                 var inventory = CodeOr(info.AccInventory, GlAccounts.Inventory);
