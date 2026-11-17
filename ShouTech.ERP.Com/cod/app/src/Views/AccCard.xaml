@@ -76,10 +76,12 @@
             <TextBlock Grid.Row="0" Grid.Column="1" Text="Account card" FontSize="{DynamicResource FontSize18}" FontWeight="SemiBold"
                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
 
-            <!-- -->
+            <!-- Record navigation: inherits the window FlowDirection, so the
+                 First/Previous/Next/Last order mirrors under RTL like the
+                 rest of the window. The serial box inside is centered
+                 numeric text and needs no direction pin. -->
             <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal"
-                        HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,5,0,0"
-                        FlowDirection="LeftToRight">
+                        HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,5,0,0">
                 <Button x:Name="BtnFirst" Click="First_Click" Style="{StaticResource NavArrowStyle}" ToolTip="ToolTip" Margin="0,0,10,0">
                     <Path Width="30" Height="28" Stretch="Uniform" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                           StrokeThickness="3.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"

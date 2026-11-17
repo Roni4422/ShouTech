@@ -12,19 +12,17 @@
         ShowInTaskbar="False"
         Topmost="True"
         FontFamily="{DynamicResource ApplicationFontFamily}"
-        FlowDirection="LeftToRight"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True">
 
     <Border CornerRadius="8"
-            ClipToBounds="True"
-            FlowDirection="LeftToRight">
+            ClipToBounds="True">
         <Border.Background>
             <ImageBrush ImageSource="pack://application:,,,/Resources/Ico/spl.png"
                         Stretch="UniformToFill"/>
         </Border.Background>
 
-        <Grid FlowDirection="LeftToRight">
+        <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
@@ -49,7 +47,7 @@
 
         <!-- Progress Bar -->
         <Grid x:Name="progressBarContainer" Grid.Row="1" Height="3" Margin="40,20,40,20" 
-              HorizontalAlignment="Stretch" FlowDirection="LeftToRight" 
+              HorizontalAlignment="Stretch"
               SizeChanged="OnProgressBarContainerSizeChanged">
             <Border Background="{DynamicResource BorderLightBrush}" CornerRadius="1.5"/>
             <Border x:Name="progressBarIndicator" Background="{DynamicResource PrimaryBrush}" 
@@ -57,7 +55,7 @@
         </Grid>
 
         <!-- Bottom Status Texts -->
-        <Grid Grid.Row="2" Margin="40,0,40,25" FlowDirection="LeftToRight">
+        <Grid Grid.Row="2" Margin="40,0,40,25">
             <TextBlock x:Name="txtStatus" Text="Loading..." FontSize="{DynamicResource FontSize11}" FontWeight="Normal" 
                        Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Left" VerticalAlignment="Center"/>
             <TextBlock x:Name="txtCopyright" Text="© 2026 ShouTech. All rights reserved." FontSize="{DynamicResource FontSize11}" 

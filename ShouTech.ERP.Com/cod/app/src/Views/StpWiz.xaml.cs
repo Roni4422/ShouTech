@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.Globalization;
 using System.IO;
@@ -219,10 +219,7 @@ namespace ShouTech.App.Views
                     return;
                 }
             }
-            catch
-            {
-                // Native title bar styling is optional.
-            }
+            catch (Exception ex) { AppHost.Logging?.LogError("StpWiz", "Native title bar styling failed", ex); }
         }
 
         #endregion
@@ -304,10 +301,7 @@ namespace ShouTech.App.Views
                         });
                     }
                 }
-                catch
-                {
-                    // Fall through to empty list; a minimal fallback is added below.
-                }
+                catch (Exception ex) { AppHost.Logging?.LogError("StpWiz", "Chart-of-accounts template enumeration failed", ex); }
 
                 if (items.Count == 0)
                 {
@@ -516,9 +510,7 @@ namespace ShouTech.App.Views
                 // explicitly changes the language selector.
                 _langUserTouched = false;
             }
-            catch
-            {
-            }
+            catch (Exception ex) { AppHost.Logging?.LogError("StpWiz", "Language selector reset failed", ex); }
         }
 
         private static string NormalizeLang(string? code)
@@ -610,9 +602,7 @@ namespace ShouTech.App.Views
                         return NormalizeLang(tag);
                     }
                 }
-                catch
-                {
-                }
+                catch (Exception ex) { AppHost.Logging?.LogError("StpWiz", "Language tag normalization failed", ex); }
             }
 
             try
@@ -664,9 +654,7 @@ namespace ShouTech.App.Views
                 // buttons, chrome content) flips with the language.
                 LangDirSv.ApplyToWindow(this, lang);
             }
-            catch
-            {
-            }
+            catch (Exception ex) { AppHost.Logging?.LogError("StpWiz", "Wizard direction apply failed", ex); }
 
             // Keep the root layout flowing with the window (defensive if a parent overrides).
             try
@@ -674,9 +662,7 @@ namespace ShouTech.App.Views
                 if (rootLayout != null)
                     rootLayout.FlowDirection = LangDirSv.GetFlowDirection(lang);
             }
-            catch
-            {
-            }
+            catch (Exception ex) { AppHost.Logging?.LogError("StpWiz", "Wizard root layout direction failed", ex); }
 
             Title = W(_mode == StpWizMode.NewCompany ? "Title.NewCompany" : "Title.Setup", _mode == StpWizMode.NewCompany ? "New company — ShouTech ERP" : "Company setup — ShouTech ERP");
 
@@ -791,36 +777,17 @@ namespace ShouTech.App.Views
                     chkAutoBackup.Content = W("Fields.EnableAutoBackup", "Enable automatic backup");
                 }
             }
-            catch
-            {
-            }
+            catch (Exception ex) { AppHost.Logging?.LogError("StpWiz", "Wizard field localization failed", ex); }
 
             UpdateStepTitle(lang);
             UpdateFiscalHint();
-            ApplyNavigationButtonOrder(lang);
-        }
 
-        private void ApplyNavigationButtonOrder(string lang)
-        {
-            if (navigationButtons == null)
-                return;
-
-            // Force LTR strip so the programmed order is physical left→right.
-            // In RTL the strip is aligned to the start edge (physical left in WPF RTL terms = visual start).
-            navigationButtons.FlowDirection = FlowDirection.LeftToRight;
-            navigationButtons.HorizontalAlignment = LangDirSv.IsRtl(lang)
-                ? HorizontalAlignment.Left
-                : HorizontalAlignment.Right;
-            navigationButtons.Children.Clear();
-
-            // RTL: primary action (Next/Finish) sits at the visual start (right side of strip when strip is LTR-ordered for RTL UX).
-            // Order chosen so Cancel stays farthest from the primary action.
-            var orderedButtons = LangDirSv.IsRtl(lang)
-                ? new UIElement[] { btnFinish, btnNext, btnBack, btnCancel }
-                : new UIElement[] { btnCancel, btnBack, btnNext, btnFinish };
-
-            foreach (var button in orderedButtons)
-                navigationButtons.Children.Add(button);
+            // Navigation strip: no local direction handling. The strip
+            // inherits the window FlowDirection (central LangDirSv), so under
+            // RTL the StackPanel mirrors the declared XAML order
+            // (Cancel, Back, Next, Finish) and aligns to the reading-start
+            // edge — the primary action lands exactly where the previous
+            // hand-rolled reorder logic put it, in both directions.
         }
 
         private void UpdateStepTitle(string lang)
@@ -850,9 +817,7 @@ namespace ShouTech.App.Views
 
                 textBlock.Text = W($"Fields.{controlName}", englishFallback);
             }
-            catch
-            {
-            }
+            catch (Exception ex) { AppHost.Logging?.LogError("StpWiz", "Wizard field text apply failed", ex); }
         }
 
         private string W(string key, string englishFallback)

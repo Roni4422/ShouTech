@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
@@ -44,8 +44,6 @@ public partial class BkpWin : Window
         };
     }
 
-    private static string Lang => App.CurrentLanguageCode ?? "en";
-
     private static string CompanyCode => AppState.CurrentCompanyCode?.Trim() ?? string.Empty;
 
     /// <summary>Localized string from Resources/Lang/*.json under Backup.*</summary>
@@ -63,9 +61,10 @@ public partial class BkpWin : Window
 
     private void ApplyLanguage()
     {
-        var isAr = Lang.StartsWith("ar", StringComparison.OrdinalIgnoreCase);
-        FlowDirection = isAr ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
-
+        // Direction comes from the central mechanism (VisuId.ApplyWindow in
+        // the constructor applies LangDirSv with the current language, the
+        // App Loaded class handler re-applies it, and a live language switch
+        // sweeps all open windows). This method only refreshes texts.
         Title = L("Title", "Backup");
         txtTitle.Text = Title;
         txtCompany.Text = Lf("CompanyLine", "Company: {0}  |  Code: {1}",
@@ -290,10 +289,7 @@ public partial class BkpWin : Window
             Activate();
             Focus();
         }
-        catch
-        {
-            // Ignore activation failures.
-        }
+        catch (Exception ex) { AppHost.Logging?.LogError("BkpWin", "Window activation failed", ex); }
     }
 
     private async void Restore_Click(object sender, RoutedEventArgs e)
@@ -524,12 +520,12 @@ public partial class BkpWin : Window
                 try { vm.FreezeForCompanySwitch(); }
                 catch
                 {
-                    try { main.FreezeForCompanySwitch(); } catch { /* ignore */ }
+                    try { main.FreezeForCompanySwitch(); } catch (Exception ex) { AppHost.Logging?.LogError("BkpWin", "Shell freeze fallback failed", ex); }
                 }
             }
             else
             {
-                try { main.FreezeForCompanySwitch(); } catch { /* ignore */ }
+                try { main.FreezeForCompanySwitch(); } catch (Exception ex) { AppHost.Logging?.LogError("BkpWin", "Shell freeze fallback failed", ex); }
             }
 
             main.IsEnabled = false;
@@ -562,15 +558,15 @@ public partial class BkpWin : Window
                 try { vm.UnfreezeAfterCompanyLogin(); }
                 catch
                 {
-                    try { main.UnfreezeAfterCompanyLogin(); } catch { /* ignore */ }
+                    try { main.UnfreezeAfterCompanyLogin(); } catch (Exception ex) { AppHost.Logging?.LogError("BkpWin", "Shell unfreeze fallback failed", ex); }
                 }
             }
             else
             {
-                try { main.UnfreezeAfterCompanyLogin(); } catch { /* ignore */ }
+                try { main.UnfreezeAfterCompanyLogin(); } catch (Exception ex) { AppHost.Logging?.LogError("BkpWin", "Shell unfreeze fallback failed", ex); }
             }
 
-            try { main.Activate(); } catch { /* ignore */ }
+            try { main.Activate(); } catch (Exception ex) { AppHost.Logging?.LogError("BkpWin", "Shell activation failed", ex); }
         }
         catch (Exception ex)
         {
@@ -722,25 +718,25 @@ public partial class BkpWin : Window
                     try { vm.UnfreezeAfterCompanyLogin(); }
                     catch
                     {
-                        try { main.UnfreezeAfterCompanyLogin(); } catch { }
+                        try { main.UnfreezeAfterCompanyLogin(); } catch (Exception ex) { AppHost.Logging?.LogError("BkpWin", "Shell unfreeze fallback failed", ex); }
                     }
                 }
                 else
                 {
-                    try { main.UnfreezeAfterCompanyLogin(); } catch { }
+                    try { main.UnfreezeAfterCompanyLogin(); } catch (Exception ex) { AppHost.Logging?.LogError("BkpWin", "Shell unfreeze fallback failed", ex); }
                 }
 
-                try { main.Activate(); } catch { }
+                try { main.Activate(); } catch (Exception ex) { AppHost.Logging?.LogError("BkpWin", "Shell activation failed", ex); }
             }
             else
             {
-                try { ReleaseIsolation(); } catch { }
+                try { ReleaseIsolation(); } catch (Exception ex) { AppHost.Logging?.LogError("BkpWin", "Backup isolation release failed", ex); }
             }
         }
         catch (Exception ex)
         {
             try { AppHost.Logging.LogError("BkpWin", "OnClosed unfreeze failed", ex); }
-            catch { }
+            catch { System.Diagnostics.Debug.WriteLine("BkpWin OnClosed unfreeze log failed"); }
         }
         finally
         {

@@ -307,6 +307,7 @@
     "Rows": "Records",
     "Running": "Operation in progress...",
     "SavePackage": "ShouTech Export/Import (*.stei)|*.stei",
+    "SkippedDuplicates": "Skipped duplicates",
     "Start": "Start",
     "Succeeded": "Succeeded",
     "Success": "Operation completed successfully",

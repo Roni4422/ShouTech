@@ -1,4 +1,4 @@
-using Microsoft.Win32;
+﻿using Microsoft.Win32;
 using Npgsql;
 using System.Globalization;
 using System.IO;
@@ -61,12 +61,12 @@ public partial class DatWin : Window
 
     private static void LogInfo(string message)
     {
-        try { AppServiceHost.Logging.LogInfo(LogCategory, message); } catch { }
+        try { AppServiceHost.Logging.LogInfo(LogCategory, message); } catch { System.Diagnostics.Debug.WriteLine("DatWin LogInfo failed"); }
     }
 
     private static void LogWarn(string message)
     {
-        try { AppServiceHost.Logging.LogWarning(LogCategory, message); } catch { }
+        try { AppServiceHost.Logging.LogWarning(LogCategory, message); } catch { System.Diagnostics.Debug.WriteLine("DatWin LogWarn failed"); }
     }
 
     private static void LogError(string message, Exception? ex = null)
@@ -76,12 +76,12 @@ public partial class DatWin : Window
             if (ex != null) AppServiceHost.Logging.LogError(LogCategory, message, ex);
             else AppServiceHost.Logging.LogError(LogCategory, message);
         }
-        catch { }
+        catch { System.Diagnostics.Debug.WriteLine("DatWin LogError failed"); }
     }
 
     private static void LogOp(string action, string message)
     {
-        try { AppServiceHost.Logging.LogOperation(LogCategory, action, message); } catch { }
+        try { AppServiceHost.Logging.LogOperation(LogCategory, action, message); } catch { System.Diagnostics.Debug.WriteLine("DatWin LogOp failed"); }
     }
 
 
@@ -395,7 +395,7 @@ public partial class DatWin : Window
                         $"Export attempted without DATA.EXPORT | mode={_mode} | user={GetCurrentUserName()}",
                         GetCurrentUserName());
             }
-            catch { /* audit forwarding must not change the outcome */ }
+            catch (Exception ex) { LogError("Security audit forwarding failed", ex); }
 
             MessageBox.Show(
                 L("ExportNotPermitted", "You do not have permission to export data (DATA.EXPORT)."),
@@ -670,6 +670,7 @@ public partial class DatWin : Window
             $"{L("Message", "Message")}: {result.Message}",
             $"{L("Rows", "Rows")}: {result.Rows.ToString("N0", CultureInfo.InvariantCulture)}",
             $"{L("FailedRows", "Failed rows")}: {result.FailedRows.ToString("N0", CultureInfo.InvariantCulture)}",
+            $"{L("SkippedDuplicates", "Skipped duplicates")}: {result.SkippedDuplicates.ToString("N0", CultureInfo.InvariantCulture)}",
             $"{L("Tables", "Tables")}: {result.Tables.ToString(CultureInfo.InvariantCulture)}",
             $"{L("FailedTables", "Failed tables")}: {result.FailedTables.ToString(CultureInfo.InvariantCulture)}",
             $"{L("Date", "Date")}: {DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}",
@@ -729,7 +730,7 @@ public partial class DatWin : Window
             if (user is not null)
                 return !string.IsNullOrWhiteSpace(user.FullName) ? user.FullName : user.Username;
         }
-        catch { }
+        catch (Exception ex) { LogError("Current user name resolution failed", ex); }
         return Environment.UserName;
     }
 
@@ -754,7 +755,7 @@ public partial class DatWin : Window
                     return builder.Database;
             }
         }
-        catch { }
+        catch (Exception ex) { LogError("Target database name resolution failed", ex); }
 
         return "-";
     }

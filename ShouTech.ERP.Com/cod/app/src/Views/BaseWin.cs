@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows;
 using ShouTech.App.Services;
 using WpfApp = System.Windows.Application;
@@ -50,10 +50,7 @@ public abstract class BaseWin : Window
             {
                 Owner = WpfApp.Current.MainWindow;
             }
-            catch
-            {
-                // Window owner assignment should never block window initialization
-            }
+            catch (Exception ex) { AppHost.Logging?.LogError("BaseWin", "Owner assignment failed", ex); }
         }
 
         Loaded += OnBaseLoaded;
@@ -91,18 +88,13 @@ public abstract class BaseWin : Window
     /// <summary>Applies RTL/LTR according to the active language code.</summary>
     protected void ApplyFlowDirection()
     {
-        var code = LocSvc?.GetCurrentLanguage() ?? App.CurrentLanguageCode;
-        LangDirSv.ApplyToWindow(this, code);
-        
-        // Apply Arabic RTL or other LTR based on language
-        if (code != null && code.StartsWith("ar", StringComparison.OrdinalIgnoreCase))
-        {
-            FlowDirection = FlowDirection.RightToLeft;
-        }
-        else
-        {
-            FlowDirection = FlowDirection.LeftToRight;
-        }
+        // Single central mechanism: ShellContext applies the shell's live
+        // context (direction via LangDirSv, which covers ar/he/fa/ur/...,
+        // plus the context stamps), resolved at call time from the central
+        // holders. Do not re-derive direction here — a local "ar"-only
+        // check would silently override the service for any other RTL
+        // language.
+        ShellContext.ApplyToWindow(this);
     }
 
     private void OnBaseLoaded(object sender, RoutedEventArgs e)
@@ -149,10 +141,7 @@ public abstract class BaseWin : Window
         {
             WinPref.SaveGeometry(this, GeometryScope());
         }
-        catch
-        {
-            // Geometry persistence must never block a window from closing.
-        }
+        catch (Exception ex) { AppHost.Logging?.LogError("BaseWin", "Window geometry save failed", ex); }
     }
 
     private string GeometryScope()

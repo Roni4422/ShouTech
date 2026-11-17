@@ -434,6 +434,15 @@ public partial class CoaWin : BaseWin
             SetExpandedRecursive(child, expanded);
     }
 
+    // The XAML-declared TreeView context menu lives in a popup and does not
+    // inherit the window FlowDirection; sync it from the window every time it
+    // opens (same pattern as the code-created menus below).
+    private void TreeContextMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        if (sender is ContextMenu menu)
+            menu.FlowDirection = FlowDirection;
+    }
+
     private void ExportMenu_Click(object sender, RoutedEventArgs e)
     {
         var menu = new ContextMenu { FlowDirection = FlowDirection };

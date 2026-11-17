@@ -194,7 +194,7 @@ namespace ShouTech.App.Views
 				SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
 					SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("ComWin", "Window chrome frame update failed", ex); }
         }
 
         private void ApplyLayoutForMode()
@@ -213,21 +213,17 @@ namespace ShouTech.App.Views
             }
 
             editBtnBar.Visibility = Visibility.Collapsed;
-            rootDock.FlowDirection = FlowDirection.LeftToRight;
-            contentGrid.FlowDirection = IsArabicUi() ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
 
-            if (IsArabicUi())
-            {
-                DockPanel.SetDock(mgmtPanel, Dock.Right);
-                mgmtPanel.Margin = new Thickness(12, 0, 0, 0);
-                mgmtPanel.FlowDirection = FlowDirection.RightToLeft;
-            }
-            else
-            {
-                DockPanel.SetDock(mgmtPanel, Dock.Left);
-                mgmtPanel.Margin = new Thickness(0, 0, 12, 0);
-                mgmtPanel.FlowDirection = FlowDirection.LeftToRight;
-            }
+            // Direction is inherited from the window (central LangDirSv via
+            // ApplyWindowDirection / the App class handler). DockPanel mirrors
+            // Dock.Left to the visual right under RTL, so the management panel
+            // always sits at the reading-start edge without any local
+            // FlowDirection pins. Only the physical gap margin differs:
+            // the gap must face the content area in both directions.
+            DockPanel.SetDock(mgmtPanel, Dock.Left);
+            mgmtPanel.Margin = IsArabicUi()
+                ? new Thickness(12, 0, 0, 0)
+                : new Thickness(0, 0, 12, 0);
         }
 
         private void OnLanguageChanged(object? sender, EventArgs e)
@@ -289,7 +285,7 @@ namespace ShouTech.App.Views
 
         private void ApplyWindowDirection()
         {
-            try { LangDirSv.ApplyToWindow(this, ShouTech.App.App.CurrentLanguageCode); } catch { }
+            try { LangDirSv.ApplyToWindow(this, ShouTech.App.App.CurrentLanguageCode); } catch (Exception ex) { AppHost.Logging?.LogError("ComWin", "Window direction apply failed", ex); }
         }
 
         private void ApplyButtonOrder()
@@ -300,7 +296,7 @@ namespace ShouTech.App.Views
                 Grid.SetColumn(btnOk, 2);
                 Grid.SetColumn(btnCancel, 4);
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("ComWin", "Footer layout apply failed", ex); }
         }
 
         private void OnPreviewKeyDown(object sender, KeyEventArgs e)
@@ -433,7 +429,7 @@ namespace ShouTech.App.Views
             {
                 await CoRegSvc.RebuildCompanyIndexAsync().ConfigureAwait(false);
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("ComWin", "Company index rebuild failed", ex); }
         }
 
         private void PopulateCompanies(IReadOnlyList<CompanyIndexEntry> entries)
@@ -491,7 +487,7 @@ namespace ShouTech.App.Views
             {
                 if (_mode == ComWinMode.Startup)
                 {
-                    try { WpfApp.Current?.Shutdown(); } catch { }
+                    try { WpfApp.Current?.Shutdown(); } catch (Exception ex) { AppHost.Logging?.LogError("ComWin", "Shutdown on company-selection cancel failed", ex); }
                 }
                 return;
             }
@@ -502,7 +498,7 @@ namespace ShouTech.App.Views
                 pref.CompanySetupComplete = true;
                 pref.Save();
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("ComWin", "Company setup completion save failed", ex); }
 
             _ = LoadCompaniesAsync();
         }
@@ -543,7 +539,7 @@ namespace ShouTech.App.Views
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("ComWin", "Shell window detection failed", ex); }
 
             if (hasShell)
             {
@@ -738,7 +734,7 @@ namespace ShouTech.App.Views
                 if (ReferenceEquals(window, this) || window is MWin)
                     continue;
 
-                try { window.Close(); } catch { }
+                try { window.Close(); } catch (Exception ex) { AppHost.Logging?.LogError("ComWin", "Secondary window close failed", ex); }
             }
         }
 

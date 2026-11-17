@@ -94,12 +94,9 @@ private void ApplySizeFromOwner()
 
 private void ApplyDirection()
 {
-    var lang = App.CurrentLanguageCode ?? "en";
-
-    FlowDirection =
-        lang.StartsWith("ar", StringComparison.OrdinalIgnoreCase)
-            ? FlowDirection.RightToLeft
-            : FlowDirection.LeftToRight;
+    // Central direction mechanism (also applied by BaseWin); no local
+    // language-prefix checks.
+    LangDirSv.ApplyToWindow(this, App.CurrentLanguageCode);
 
     Title = Loc.Get(
         "Inventory.MaterialTree",
@@ -309,10 +306,7 @@ private void LoadGroups()
             });
         }
     }
-    catch
-    {
-        // Groups are optional.
-    }
+    catch (Exception ex) { AppHost.Logging?.LogError("MatDirWin", "Material group load failed (groups are optional)", ex); }
 }
 
 private void ApplyFilter()

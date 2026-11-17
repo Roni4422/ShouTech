@@ -92,7 +92,7 @@ public partial class SerWin : BaseWin
                 $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [SerWin] [{context}] " +
                 $"{ex.GetType().Name}: {ex.Message}\r\n{ex.StackTrace}\r\n\r\n");
         }
-        catch { }
+        catch { System.Diagnostics.Debug.WriteLine("SerWin file log write failed"); }
     }
 
     // ---------- Result ----------
@@ -130,10 +130,10 @@ public partial class SerWin : BaseWin
                 Closed += (_, _) =>
                 {
                     try { AppServiceHost.Localization.LanguageChanged -= OnLanguageChanged; }
-                    catch { }
+                    catch (Exception ex) { LogError("LanguageChanged unsubscribe", ex); }
                 };
             }
-            catch { }
+            catch (Exception ex) { LogError("Language hook registration", ex); }
 
             TxtSearch.Focus();
         }
@@ -149,7 +149,7 @@ public partial class SerWin : BaseWin
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
         try { Dispatcher.Invoke(ApplyDirectionAndLanguage); }
-        catch { try { ApplyDirectionAndLanguage(); } catch { } }
+        catch { try { ApplyDirectionAndLanguage(); } catch (Exception ex) { LogError("ApplyDirectionAndLanguage fallback", ex); } }
     }
 
     // ================================================================
@@ -159,12 +159,8 @@ public partial class SerWin : BaseWin
     {
         try
         {
-            var lang = App.CurrentLanguageCode ?? "ar";
-            bool isRtl = lang.StartsWith("ar", StringComparison.OrdinalIgnoreCase);
-
-            FlowDirection = isRtl
-                ? FlowDirection.RightToLeft
-                : FlowDirection.LeftToRight;
+            // Central direction mechanism (also applied by BaseWin).
+            LangDirSv.ApplyToWindow(this, App.CurrentLanguageCode);
 
             BtnOk.Content     = Loc.Get("SerWin.Ok",     "OK");
             BtnCancel.Content = Loc.Get("SerWin.Cancel", "Cancel");
@@ -611,15 +607,12 @@ internal sealed class SerWinPrefs
             File.Move(tmp, FilePath, overwrite: true);
             tmp = null;
         }
-        catch
-        {
-            // Never allow preference saving to crash the application.
-        }
+        catch (Exception ex) { AppServiceHost.Logging?.LogError("SerWin", "Preference save failed", ex); }
         finally
         {
             if (tmp != null)
             {
-                try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+                try { if (File.Exists(tmp)) File.Delete(tmp); } catch (Exception ex) { AppServiceHost.Logging?.LogError("SerWin", "Preference temp file cleanup failed", ex); }
             }
         }
     }

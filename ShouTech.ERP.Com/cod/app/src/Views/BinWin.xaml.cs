@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
@@ -34,13 +34,8 @@ public partial class BinWin : Window
         {
             LangDirSv.ApplyToWindow(this);
         }
-        catch
-        {
-            // Direction helpers must not block the window.
-        }
+        catch (Exception ex) { AppHost.Logging?.LogError("BinWin", "Direction apply failed", ex); }
     }
-
-    private static bool IsArabic => (App.CurrentLanguageCode ?? "en").StartsWith("ar", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Formats a localized pattern using a cached CompositeFormat
@@ -60,7 +55,9 @@ public partial class BinWin : Window
 
     private void ApplyLanguage()
     {
-        FlowDirection = IsArabic ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
+        // Direction is applied centrally (LangDirSv.ApplyToWindow in the
+        // constructor + the App Loaded class handler + live-switch sweep);
+        // this method only refreshes texts.
         Title = Loc.Get("RecycleBin.Title", "Recycle Bin");
         TitleText.Text = Title;
         HintText.Text = Loc.Get("RecycleBin.Description",

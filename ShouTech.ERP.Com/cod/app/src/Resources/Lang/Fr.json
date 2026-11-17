@@ -667,6 +667,7 @@
     "ImportFile": "Fichier d’importation",
     "ExportFile": "Fichier d’exportation",
     "Browse": "Parcourir",
+    "SkippedDuplicates": "Doublons ignorés",
     "Start": "Démarrer",
     "Result": "Résultat de l’opération",
     "Ready": "Prêt",

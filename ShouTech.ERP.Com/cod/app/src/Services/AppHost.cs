@@ -126,19 +126,43 @@ namespace ShouTech.App.Services
             _ = Audit.LogSystemStartAsync();
         }
 
+        /// <summary>
+        /// Rebinds every connection-bound service to the CURRENT runtime
+        /// database. Each company has its own database (ComWin's
+        /// ConfigureRuntimeDatabase rewrites the "Default" connection when
+        /// the shell switches company and then calls this method), while
+        /// Journal / Projects / Assets / Reconciliation /
+        /// AccountingStructure / DatabaseHealth capture their connection at
+        /// construction — without this rebind they would keep reading and
+        /// writing the PREVIOUS company's database after a switch. All
+        /// other services (Data, Auth, Permissions, backup/export) resolve
+        /// DatabaseRuntime.GetConnectionString() per call and need no
+        /// rebind. Never throws: a failed rebind leaves the affected
+        /// services null and their windows report it honestly.
+        /// </summary>
         public static void RebindDatabaseContext()
         {
+            if (!_initialized)
+                return;
+
             try
             {
-                // Re-read connection string from current config.
-                var cs = DatabaseRuntime.GetConnectionString();
+                Journal = CreateJournalService();
+                Projects = CreatePhase3Service((provider, connection) => new ProjectService(new ProjectRepository(provider, connection)), "Projects");
+                Assets = CreatePhase3Service((provider, connection) => new AssetService(new AssetRepository(provider, connection)), "Fixed Assets");
+                Reconciliation = CreatePhase3Service((provider, connection) => new ReconciliationService(new ReconciliationRepository(provider, connection)), "Payment Reconciliation");
+                AccountingStructure = CreateAccountingStructureRepository();
+                DatabaseHealth = CreateDatabaseHealth();
 
-                // DatabaseRuntime reads the current configuration
-                // when the connection is requested.
+                Logging.LogInfo(
+                    "AppHost",
+                    $"Database context rebound to the current company database (company '{AppState.CurrentCompanyCode}').");
             }
-            catch
+            catch (System.Exception ex)
             {
-                // Intentionally ignored.
+                Logging.LogWarning(
+                    "AppHost",
+                    $"Database context rebind failed: {ex.Message}");
             }
         }
 
