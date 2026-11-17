@@ -35,6 +35,12 @@ namespace ShouTech.App.Services
         public static ProjectService? Projects { get; private set; }
         public static AssetService? Assets { get; private set; }
         public static ReconciliationService? Reconciliation { get; private set; }
+        public static MasterCardService? MasterCards { get; private set; }
+        public static ChequeService? Cheques { get; private set; }
+        public static MfgOrderService? Manufacturing { get; private set; }
+        public static OrderService? Orders { get; private set; }
+        public static DefinitionService? Definitions { get; private set; }
+        public static OperationsService? Operations { get; private set; }
         public static AccountingStructureRepository? AccountingStructure { get; private set; }
         public static IDatabaseHealth? DatabaseHealth { get; private set; }
 
@@ -82,6 +88,12 @@ namespace ShouTech.App.Services
             Projects = CreatePhase3Service((provider, connection) => new ProjectService(new ProjectRepository(provider, connection)), "Projects");
             Assets = CreatePhase3Service((provider, connection) => new AssetService(new AssetRepository(provider, connection)), "Fixed Assets");
             Reconciliation = CreatePhase3Service((provider, connection) => new ReconciliationService(new ReconciliationRepository(provider, connection)), "Payment Reconciliation");
+            MasterCards = CreatePhase3Service((provider, connection) => new MasterCardService(new MasterCardRepository(provider, connection)), "Master Cards");
+            Cheques = CreatePhase3Service((provider, connection) => new ChequeService(new ChequeRepository(provider, connection), JournalStore), "Cheques");
+            Manufacturing = CreatePhase3Service((provider, connection) => new MfgOrderService(new MfgOrderRepository(provider, connection)), "Manufacturing Orders");
+            Orders = CreatePhase3Service((provider, connection) => new OrderService(new CommercialDocumentRepository(provider, connection)), "Orders");
+            Definitions = CreatePhase3Service((provider, connection) => new DefinitionService(new DefinitionRepository(provider, connection)), "Definitions");
+            Operations = CreatePhase3Service((provider, connection) => new OperationsService(new OperationsRepository(provider, connection)), "Operations");
             AccountingStructure = CreateAccountingStructureRepository();
             DatabaseHealth = CreateDatabaseHealth();
 
@@ -289,6 +301,12 @@ namespace ShouTech.App.Services
         public static ProjectService? Projects => AppHost.Projects;
         public static AssetService? Assets => AppHost.Assets;
         public static ReconciliationService? Reconciliation => AppHost.Reconciliation;
+        public static MasterCardService? MasterCards => AppHost.MasterCards;
+        public static ChequeService? Cheques => AppHost.Cheques;
+        public static MfgOrderService? Manufacturing => AppHost.Manufacturing;
+        public static OrderService? Orders => AppHost.Orders;
+        public static DefinitionService? Definitions => AppHost.Definitions;
+        public static OperationsService? Operations => AppHost.Operations;
         public static AccountingStructureRepository? AccountingStructure => AppHost.AccountingStructure;
         public static IDatabaseHealth? DatabaseHealth => AppHost.DatabaseHealth;
         public static ILocSvc Localization => AppHost.Localization;
