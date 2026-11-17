@@ -73,6 +73,10 @@ public static class ErrorCodes
     public const string CreditLimitExceeded = "ACC-5006";
     public const string CostCenterAllocationInvalid = "ACC-5007";
     public const string CostCenterNotLeaf = "ACC-5008";
+    public const string CostCenterUnknown = "ACC-5009";
+    public const string CostCenterRequired = "ACC-5010";
+    public const string DocumentPostingAccountMissing = "ACC-5011";
+    public const string DocumentAlreadyPostedToGl = "ACC-5012";
 
     // ---- INV 6000-6999 -------------------------------------------------
     public const string InventoryOperationFailed = "INV-6001";

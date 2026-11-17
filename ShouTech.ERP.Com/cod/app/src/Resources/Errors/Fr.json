@@ -44,6 +44,30 @@
     "message": "Le centre de coûts « {0} » est un groupe ou un centre inactif et ne peut pas recevoir de comptabilisation.",
     "hint": "Choisissez un centre de coûts feuille actif, ou définissez une répartition pour le centre groupe."
   },
+  "ACC-5009": {
+    "code": "ACC-5009",
+    "name": "CostCenterUnknown",
+    "message": "Le centre de coûts « {0} » ne correspond à aucun centre de coûts actif de cette société et ne peut pas être comptabilisé.",
+    "hint": "Créez le centre de coûts ou corrigez le code, puis comptabilisez à nouveau."
+  },
+  "ACC-5010": {
+    "code": "ACC-5010",
+    "name": "CostCenterRequired",
+    "message": "Le compte « {0} » exige un centre de coûts ; la ligne d'écriture n'en a aucun.",
+    "hint": "Ajoutez un centre de coûts à la ligne, ou désactivez l'indicateur d'obligation sur la fiche du compte."
+  },
+  "ACC-5011": {
+    "code": "ACC-5011",
+    "name": "DocumentPostingAccountMissing",
+    "message": "Le compte de comptabilisation du document « {0} » est absent, inactif, supprimé ou non comptabilisable pour cette société.",
+    "hint": "Créez ou activez un compte comptabilisable avec ce code dans le plan comptable, puis comptabilisez à nouveau."
+  },
+  "ACC-5012": {
+    "code": "ACC-5012",
+    "name": "DocumentAlreadyPostedToGl",
+    "message": "Le document « {0} » possède déjà une écriture comptable comptabilisée et ne peut pas être comptabilisé deux fois.",
+    "hint": "Extournez l'écriture existante avant de comptabiliser à nouveau le document."
+  },
   "AUTH-2001": {
     "code": "AUTH-2001",
     "name": "InvalidCredentials",
