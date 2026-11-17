@@ -15,7 +15,7 @@
   ],
   "metadata": {
     "nameKey": "COA.Template.SIMPLE-FR",
-    "nameAr": "دليل بسيط باللغة الفرنسية",
+    "nameAr": "Simple Chart of Accounts (French)",
     "nameEn": "Simple Chart of Accounts (French)",
     "latinName": "Simple Chart of Accounts (French)",
     "framework": "Proposed sector-specific chart; not a statutory unified chart. Configure local reporting and operational mappings before production use.",
@@ -50,7 +50,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "الأصول",
+        "ar": "Assets",
         "en": "Assets",
         "fr": "Actifs"
       }
@@ -69,7 +69,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "الأصول غير المتداولة",
+        "ar": "Non-current Assets",
         "en": "Non-current Assets",
         "fr": "Actifs non courants"
       }
@@ -88,7 +88,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "الأراضي",
+        "ar": "Land",
         "en": "Land",
         "fr": "Terrains"
       }
@@ -107,7 +107,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "المباني والمنشآت",
+        "ar": "Buildings and Structures",
         "en": "Buildings and Structures",
         "fr": "Bâtiments"
       }
@@ -126,7 +126,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "الآلات والمعدات",
+        "ar": "Machinery and Equipment",
         "en": "Machinery and Equipment",
         "fr": "Machines et équipements"
       }
@@ -145,7 +145,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "مجمع الإهلاك والإطفاء",
+        "ar": "Accumulated Depreciation and Amortization",
         "en": "Accumulated Depreciation and Amortization",
         "fr": "Amortissements cumulés"
       }
@@ -164,7 +164,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "الأصول المتداولة",
+        "ar": "Current Assets",
         "en": "Current Assets",
         "fr": "Actifs courants"
       }
@@ -183,7 +183,7 @@
       "posting": true,
       "cardType": "Customer",
       "names": {
-        "ar": "العملاء والذمم المدينة التجارية",
+        "ar": "Trade Accounts Receivable",
         "en": "Trade Accounts Receivable",
         "fr": "Clients"
       }
@@ -202,7 +202,7 @@
       "posting": true,
       "cardType": "Inventory",
       "names": {
-        "ar": "المخزون التجاري",
+        "ar": "Merchandise Inventory",
         "en": "Merchandise Inventory",
         "fr": "Stocks de marchandises"
       }
@@ -221,7 +221,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "المصروفات المدفوعة مقدماً",
+        "ar": "Prepaid Expenses",
         "en": "Prepaid Expenses",
         "fr": "Charges payées d’avance"
       }
@@ -240,7 +240,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "ضريبة قيمة مضافة مدخلات قابلة للاسترداد",
+        "ar": "Recoverable Input VAT",
         "en": "Recoverable Input VAT",
         "fr": "Taxes récupérables sur achats"
       }
@@ -259,7 +259,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "النقدية وما في حكمها",
+        "ar": "Cash and Cash Equivalents",
         "en": "Cash and Cash Equivalents",
         "fr": "Trésorerie et équivalents de trésorerie"
       }
@@ -278,7 +278,7 @@
       "posting": true,
       "cardType": "Cash",
       "names": {
-        "ar": "الصندوق",
+        "ar": "Cash on Hand",
         "en": "Cash on Hand",
         "fr": "Caisse"
       }
@@ -297,7 +297,7 @@
       "posting": true,
       "cardType": "Bank",
       "names": {
-        "ar": "الحسابات المصرفية",
+        "ar": "Bank Accounts",
         "en": "Bank Accounts",
         "fr": "Comptes bancaires"
       }
@@ -316,7 +316,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "الالتزامات وحقوق الملكية",
+        "ar": "Liabilities and Equity",
         "en": "Liabilities and Equity",
         "fr": "Passifs et capitaux propres"
       }
@@ -335,7 +335,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "حقوق الملكية",
+        "ar": "Equity",
         "en": "Equity",
         "fr": "Capitaux propres"
       }
@@ -354,7 +354,7 @@
       "posting": true,
       "cardType": "Equity",
       "names": {
-        "ar": "رأس المال",
+        "ar": "Share Capital",
         "en": "Share Capital",
         "fr": "Capital social"
       }
@@ -373,7 +373,7 @@
       "posting": true,
       "cardType": "Equity",
       "names": {
-        "ar": "جاري المالك أو الشركاء",
+        "ar": "Owner or Partners Current Account",
         "en": "Owner or Partners Current Account",
         "fr": "Compte courant du propriétaire ou des associés"
       }
@@ -392,7 +392,7 @@
       "posting": true,
       "cardType": "Equity",
       "names": {
-        "ar": "الأرباح المحتجزة",
+        "ar": "Retained Earnings",
         "en": "Retained Earnings",
         "fr": "Bénéfices non distribués"
       }
@@ -411,7 +411,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "الالتزامات المتداولة",
+        "ar": "Current Liabilities",
         "en": "Current Liabilities",
         "fr": "Passifs courants"
       }
@@ -430,7 +430,7 @@
       "posting": true,
       "cardType": "Supplier",
       "names": {
-        "ar": "الموردون والذمم الدائنة التجارية",
+        "ar": "Trade Accounts Payable",
         "en": "Trade Accounts Payable",
         "fr": "Fournisseurs"
       }
@@ -449,7 +449,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "المصروفات المستحقة",
+        "ar": "Accrued Expenses",
         "en": "Accrued Expenses",
         "fr": "Charges à payer"
       }
@@ -468,7 +468,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "الرواتب والأجور المستحقة",
+        "ar": "Salaries and Wages Payable",
         "en": "Salaries and Wages Payable",
         "fr": "Salaires à payer"
       }
@@ -487,7 +487,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "ضريبة قيمة مضافة مستحقة",
+        "ar": "VAT Payable",
         "en": "VAT Payable",
         "fr": "Taxes sur ventes à payer"
       }
@@ -506,7 +506,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "الالتزامات طويلة الأجل",
+        "ar": "Non-current Liabilities",
         "en": "Non-current Liabilities",
         "fr": "Passifs non courants"
       }
@@ -525,7 +525,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "قروض طويلة الأجل",
+        "ar": "Long-term Loans",
         "en": "Long-term Loans",
         "fr": "Emprunts à long terme"
       }
@@ -544,7 +544,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "الإيرادات",
+        "ar": "Revenue",
         "en": "Revenue",
         "fr": "Produits"
       }
@@ -563,7 +563,7 @@
       "posting": true,
       "cardType": "Revenue",
       "names": {
-        "ar": "مبيعات البضائع",
+        "ar": "Goods Sales",
         "en": "Goods Sales",
         "fr": "Ventes de marchandises"
       }
@@ -582,7 +582,7 @@
       "posting": true,
       "cardType": "Revenue",
       "names": {
-        "ar": "مردودات ومسموحات المبيعات",
+        "ar": "Sales Returns and Allowances",
         "en": "Sales Returns and Allowances",
         "fr": "Retours et réductions sur ventes"
       }
@@ -601,7 +601,7 @@
       "posting": true,
       "cardType": "Revenue",
       "names": {
-        "ar": "إيرادات الخدمات",
+        "ar": "Service Revenue",
         "en": "Service Revenue",
         "fr": "Produits des services"
       }
@@ -620,7 +620,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "المشتريات وتكلفة المبيعات",
+        "ar": "Purchases and Cost of Sales",
         "en": "Purchases and Cost of Sales",
         "fr": "Achats et coût des ventes"
       }
@@ -639,7 +639,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "تكلفة البضاعة المباعة",
+        "ar": "Cost of Goods Sold",
         "en": "Cost of Goods Sold",
         "fr": "Coût des marchandises vendues"
       }
@@ -658,7 +658,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "مشتريات البضائع",
+        "ar": "Merchandise Purchases",
         "en": "Merchandise Purchases",
         "fr": "Achats de marchandises"
       }
@@ -677,7 +677,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "مردودات المشتريات",
+        "ar": "Purchase Returns",
         "en": "Purchase Returns",
         "fr": "Retours sur achats"
       }
@@ -696,7 +696,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "المصروفات التشغيلية والإدارية",
+        "ar": "Operating and Administrative Expenses",
         "en": "Operating and Administrative Expenses",
         "fr": "Charges d’exploitation et administratives"
       }
@@ -715,7 +715,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "الرواتب والأجور",
+        "ar": "Salaries and Wages",
         "en": "Salaries and Wages",
         "fr": "Salaires et rémunérations"
       }
@@ -734,7 +734,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "الإيجارات",
+        "ar": "Rent Expense",
         "en": "Rent Expense",
         "fr": "Loyers"
       }
@@ -753,7 +753,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "الكهرباء والمياه والطاقة",
+        "ar": "Utilities and Energy",
         "en": "Utilities and Energy",
         "fr": "Électricité, eau et énergie"
       }
@@ -772,7 +772,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "الإهلاك والإطفاء",
+        "ar": "Depreciation and Amortization",
         "en": "Depreciation and Amortization",
         "fr": "Dotations aux amortissements"
       }
@@ -791,7 +791,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "المصروفات الإدارية والعمومية",
+        "ar": "General and Administrative Expenses",
         "en": "General and Administrative Expenses",
         "fr": "Frais généraux et administratifs"
       }
@@ -810,7 +810,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "التسويق والإعلان",
+        "ar": "Marketing and Advertising",
         "en": "Marketing and Advertising",
         "fr": "Marketing et publicité"
       }
@@ -829,7 +829,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "الرسوم المصرفية",
+        "ar": "Bank Charges",
         "en": "Bank Charges",
         "fr": "Frais bancaires"
       }
@@ -848,7 +848,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "الحسابات الختامية",
+        "ar": "Closing Accounts",
         "en": "Closing Accounts",
         "fr": "Comptes de clôture"
       }

@@ -14,7 +14,7 @@
   ],
   "metadata": {
     "nameKey": "COA.Template.EMPTY",
-    "nameAr": "دليل حسابات فارغ - الحسابات الرئيسية فقط",
+    "nameAr": "Blank Chart of Accounts - Main Accounts Only",
     "nameEn": "Blank Chart of Accounts - Main Accounts Only",
     "latinName": "Empty Chart of Accounts",
     "framework": "Proposed commercial chart aligned to applicable financial reporting principles; not a statutory unified chart of accounts.",
@@ -48,7 +48,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "الأصول",
+        "ar": "Assets",
         "en": "Assets"
       }
     },
@@ -66,7 +66,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "الأصول الثابتة",
+        "ar": "Fixed Assets",
         "en": "Fixed Assets"
       }
     },
@@ -84,7 +84,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "الأصول المتداولة",
+        "ar": "Current Assets",
         "en": "Current Assets"
       }
     },
@@ -102,7 +102,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "النقدية وما في حكمها",
+        "ar": "Cash and Cash Equivalents",
         "en": "Cash and Cash Equivalents"
       }
     },
@@ -120,7 +120,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "الالتزامات وحقوق الملكية",
+        "ar": "Liabilities and Equity",
         "en": "Liabilities and Equity"
       }
     },
@@ -138,7 +138,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "حقوق الملكية",
+        "ar": "Equity",
         "en": "Equity"
       }
     },
@@ -156,7 +156,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "الالتزامات المتداولة",
+        "ar": "Current Liabilities",
         "en": "Current Liabilities"
       }
     },
@@ -174,7 +174,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "الالتزامات طويلة الأجل",
+        "ar": "Non-current Liabilities",
         "en": "Non-current Liabilities"
       }
     },
@@ -192,7 +192,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "صافي المشتريات",
+        "ar": "Net Purchases",
         "en": "Net Purchases"
       }
     },
@@ -210,7 +210,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "صافي المبيعات",
+        "ar": "Net Sales",
         "en": "Net Sales"
       }
     },
@@ -228,7 +228,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "المصروفات",
+        "ar": "Expenses",
         "en": "Expenses"
       }
     },
@@ -246,7 +246,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "الحسابات الختامية",
+        "ar": "Closing Accounts",
         "en": "Closing Accounts"
       }
     }
