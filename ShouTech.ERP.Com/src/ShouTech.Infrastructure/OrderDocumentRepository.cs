@@ -550,7 +550,10 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 VALUES (@company, @partyKind, @party, @kind, @doc, @docNo, @date, @debit, @credit, @currency, @note)
                 """))
             {
-                Add(ledger, "@company", order.CompanyId.ToString("D"));
+                // Step 4 (B-06): party_ledger.company_id is the company
+                // CODE, not the Guid this repository keys documents by.
+                Add(ledger, "@company", await PartyLedger.ResolveCompanyCodeAsync(
+                    connection, transaction, _provider, order.CompanyId.ToString("D"), cancellationToken).ConfigureAwait(false));
                 Add(ledger, "@partyKind", side == CommercialDocSide.Sales ? "C" : "S");
                 Add(ledger, "@party", order.PartyId.Value);
                 Add(ledger, "@kind", invoiceKind);

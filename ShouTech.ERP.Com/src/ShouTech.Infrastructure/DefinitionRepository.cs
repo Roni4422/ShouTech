@@ -494,11 +494,28 @@ public sealed class DefinitionRepository : IDefinitionRepository
                 throw new InvalidOperationException($"Collection {amount} exceeds the remaining {row.Remaining} on this installment.");
             var newStatus = newPaid >= row.Amount ? ScheduleStatuses.Paid : ScheduleStatuses.Partial;
 
-            // party_ledger keys parties by integer id (see migration 010 and
-            // CommercialDocumentRepository): the installment party_code must
-            // be that numeric id, as everywhere else in the codebase.
-            if (!long.TryParse(partyCode.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var partyId))
-                throw new InvalidOperationException($"Party code '{partyCode}' is not a numeric party id; a party_ledger credit cannot be posted for it.");
+            // Step 4 (sweep L-11): the installment party_code is a real
+            // party CODE (the only kind CstCard produces, e.g. CUST-100).
+            // Resolve it against the canonical parties store in this
+            // company; legacy plans that stored the numeric ledger id as
+            // the "code" keep working through the ledger_id fallback —
+            // matched by identity, never by parsing a code into an id.
+            long partyId;
+            var resolved = await PartyLedger.ResolveLedgerIdAsync(
+                connection, transaction, _provider, companyId, "C", partyCode, cancellationToken).ConfigureAwait(false);
+            if (resolved is not null)
+            {
+                partyId = resolved.Value;
+            }
+            else if (long.TryParse(partyCode.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var legacyId)
+                     && await PartyExistsByLedgerIdAsync(connection, transaction, companyId, legacyId, cancellationToken).ConfigureAwait(false))
+            {
+                partyId = legacyId;
+            }
+            else
+            {
+                throw new InvalidOperationException($"Party code '{partyCode}' does not resolve to a party in this company; a party_ledger credit cannot be posted for it.");
+            }
 
             await using (var update = CreateCommand(connection, transaction,
                 $"UPDATE installment_schedule SET paid_amount = @paid, paid_date = @date, status = @status, updated_by = @actor, updated_at = {NowExpr} WHERE company_id = @company AND id = @id"))
@@ -1013,6 +1030,20 @@ public sealed class DefinitionRepository : IDefinitionRepository
             DefColumnType.Date => ReadDate(reader, ordinal)?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             _ => ReadString(reader, ordinal)
         };
+    }
+
+    /// <summary>True when a live canonical party owns this ledger id in the
+    /// company (the legacy installment-plan fallback: plans created before
+    /// unification stored the numeric ledger id in party_code).</summary>
+    private async Task<bool> PartyExistsByLedgerIdAsync(DbConnection connection, DbTransaction transaction, string companyId, long ledgerId, CancellationToken cancellationToken)
+    {
+        if (!PartyLedger.TableExists(connection, transaction, _provider, "parties"))
+            return true; // Hand-built fixtures without the parties table keep the historical numeric behavior.
+        await using var command = CreateCommand(connection, transaction,
+            $"SELECT COUNT(*) FROM parties WHERE company_id = @company AND ledger_id = @party AND {NotDeleted}");
+        Add(command, "@company", companyId.Trim());
+        Add(command, "@party", ledgerId);
+        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture) > 0;
     }
 
     private static void RequireCompany(string companyId)

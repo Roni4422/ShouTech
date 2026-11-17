@@ -19,10 +19,19 @@ namespace ShouTech.Infrastructure;
 /// document open amount inside it, so concurrent or double submissions cannot
 /// over-allocate. All SQL is parameterized; the only composed identifiers are
 /// the whitelisted document table names.
+///
+/// Step 4 discipline (sweep L-10, cash-payments MAJORs):
+/// - Only genuine payment entries are allocatable: doc_kind RCV (cash
+///   receipt / collected at invoice posting), PAY (cash payment) and INS
+///   (installment collection). Return credits/debits (SRT/PRT) are NOT
+///   payments and can no longer be allocated as if they were cash.
+/// - Only real trade documents are settleable: SAL/POS on the sales side,
+///   PUR on the purchase side — returns and stock kinds are excluded.
+/// - No row caps: the lists are the full open sets (unlimited-rows rule);
+///   settled rows are filtered in SQL, not after a LIMIT.
 /// </summary>
 public sealed class ReconciliationRepository : IReconciliationRepository
 {
-    private const int ListLimit = 500;
     private const decimal Tolerance = 0.005m;
 
     private readonly string _provider;
@@ -44,6 +53,9 @@ public sealed class ReconciliationRepository : IReconciliationRepository
         var table = DocumentTable(PartyKindToDocTable(partyKind));
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var kindFilter = PartyKindToDocTable(partyKind) == "SALES"
+            ? "d.doc_kind IN ('SAL', 'POS')"
+            : "d.doc_kind IN ('PUR')";
         await using var command = CreateCommand(connection, null,
             $"""
             SELECT d.doc_id, d.doc_no, d.doc_date, d.party_id, d.party_name, d.currency_code, d.grand_total, d.paid_amount,
@@ -51,8 +63,8 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                              WHERE a.company_id = d.company_id AND a.doc_table = @docTable AND a.doc_id = d.doc_id), 0) AS allocated
             FROM {table} d
             WHERE d.company_id = @company AND d.{NotDeleted} AND d.status = 'Posted' AND d.party_id IS NOT NULL
+              AND {kindFilter} AND d.grand_total - d.paid_amount > 0.005
             ORDER BY d.doc_date, d.doc_id
-            LIMIT {ListLimit}
             """);
         Add(command, "@company", companyId.Trim());
         Add(command, "@docTable", PartyKindToDocTable(partyKind));
@@ -90,11 +102,15 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             $"""
             SELECT l.ledger_id, l.entry_date, l.doc_kind, l.doc_no, l.party_id, l.note, {amountExpr} AS amount,
                    COALESCE((SELECT SUM(a.amount) FROM payment_allocations a
-                             WHERE a.company_id = l.company_id AND a.payment_ledger_id = l.ledger_id), 0) AS allocated
+                             WHERE a.company_id = l.company_id AND a.payment_ledger_id = l.ledger_id), 0) AS allocated,
+                   COALESCE(NULLIF(p.name_en, ''), p.name_ar, '') AS party_name,
+                   COALESCE(l.currency_code, 'SAR') AS currency_code
             FROM party_ledger l
+            LEFT JOIN parties p
+              ON p.company_id = l.company_id AND p.kind = l.party_kind AND p.ledger_id = l.party_id
             WHERE l.company_id = @company AND l.party_kind = @kind AND {sidePredicate}
+              AND l.doc_kind IN ('RCV', 'PAY', 'INS')
             ORDER BY l.entry_date, l.ledger_id
-            LIMIT {ListLimit}
             """);
         Add(command, "@company", companyId.Trim());
         Add(command, "@kind", partyKind);
@@ -110,7 +126,9 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                 PartyId: Convert.ToInt64(reader.GetValue(4), CultureInfo.InvariantCulture),
                 Note: ReadString(reader, 5),
                 Amount: ReadDecimal(reader, 6),
-                Allocated: ReadDecimal(reader, 7));
+                Allocated: ReadDecimal(reader, 7),
+                PartyName: ReadString(reader, 8),
+                CurrencyCode: ReadString(reader, 9) ?? "SAR");
             if (row.Available > Tolerance)
                 result.Add(row);
         }
@@ -137,8 +155,9 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             string paymentKind;
             long paymentParty;
             decimal paymentAmount;
+            string? paymentDocKind;
             await using (var pay = CreateCommand(connection, transaction,
-                "SELECT party_kind, party_id, debit, credit FROM party_ledger WHERE company_id = @company AND ledger_id = @id"))
+                "SELECT party_kind, party_id, debit, credit, doc_kind FROM party_ledger WHERE company_id = @company AND ledger_id = @id"))
             {
                 Add(pay, "@company", companyId.Trim());
                 Add(pay, "@id", paymentLedgerId);
@@ -150,7 +169,12 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                 var debit = ReadDecimal(reader, 2);
                 var credit = ReadDecimal(reader, 3);
                 paymentAmount = partyKind == "C" ? credit : debit;
+                paymentDocKind = ReadString(reader, 4);
             }
+            // Step 4 (L-10): returns and other non-payment entries are not
+            // allocatable payments, even if they sit on the payment side.
+            if (paymentDocKind is not ("RCV" or "PAY" or "INS"))
+                throw new InvalidOperationException("The selected ledger entry is not a payment (only receipt, payment and installment-collection entries can be allocated).");
             if (!string.Equals(paymentKind, partyKind, StringComparison.Ordinal))
                 throw new InvalidOperationException("The payment entry belongs to a different party kind.");
             if (paymentAmount <= 0)

@@ -359,12 +359,19 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                     connection, transaction, _provider, companyId, "C", partyId.Value, partyCode,
                     grandTotal, "@", cancellationToken).ConfigureAwait(false);
 
+                // Step 4 (B-06): party_ledger.company_id is the company
+                // CODE; this repository's documents key the company by
+                // Guid, so resolve before writing (the guard above accepts
+                // both of the company's own keys).
+                var ledgerCompany = await PartyLedger.ResolveCompanyCodeAsync(
+                    connection, transaction, _provider, companyId, cancellationToken).ConfigureAwait(false);
+
                 await using var ledger = CreateCommand(connection, transaction, """
                     INSERT INTO party_ledger
                         (company_id, party_kind, party_id, doc_kind, doc_id, doc_no, entry_date, debit, credit, currency_code, note)
                     VALUES (@company, 'C', @party, @kind, @doc, @docNo, @date, @debit, 0, @currency, @note)
                     """);
-                Add(ledger, "@company", companyId);
+                Add(ledger, "@company", ledgerCompany);
                 Add(ledger, "@party", partyId.Value);
                 Add(ledger, "@kind", CommercialDocKinds.SalesInvoice);
                 Add(ledger, "@doc", docId);
