@@ -96,6 +96,23 @@ Code windows build forms **only** through the central helpers:
 - `F2Ui.CreateFormGrid/AddField/AddElement` — the same helpers for the
   F2-window family (labels registered in the window's list).
 
+**The central label contract.** A form label's geometry is owned by the
+central styles, never by a window: `VisuTextBlockLabelStyle` (TextBlock —
+what XAML forms use and what `AddFormField` applies) and `VisuLabelStyle`
+(Label control), both in `Themes/VisuId.xaml`. Applying one guarantees:
+the label occupies the `FormLabelColumnWidth` column beside its field;
+its text aligns to the **reading-start edge of that column** — Left in
+LTR, Right in RTL — which is the edge adjacent to the field, so the label
+rests a few pixels from its field in both directions; the alignment is
+resolved from the window's live `FlowDirection` by the style's data
+triggers (never hardcoded per window); the label is vertically centered
+on its field and ellipsizes inside its column instead of overflowing it.
+Cell spacing stays with the margin tokens above (`MarginFormLabel` /
+`MarginFormField`). A window must not define a local form-label style —
+the one time a window carried its own copy (MatCard), the copy inverted
+the RTL trigger and pushed Arabic labels to the far edge of their
+columns; MatCard now uses the central style like every other form.
+
 Fields carry **no Width/Height of their own** inside a form grid: height
 comes from the central style (32), width from the star-sized column.
 
@@ -124,6 +141,20 @@ through `MarginFormField` (bottom 8); button gaps are 8.
 All reports share `RptBase`'s filter area: ONE 3-pair form grid; filters
 flow row by row (filter *i* → row *i*/3, pair *i*%3), so every report's
 filters have identical proportions and aligned edges.
+
+### 2.7 Window sizing — open comfortably
+
+Only the main shell window (MWin) is meant to fill the screen. Every
+child window (all `BaseWin` windows) opens **slightly smaller than the
+work area**: at load, `BaseWin.ClampToWorkArea` caps width/height at the
+work area minus a 24-DIP comfort margin (`WorkAreaComfortMargin`) and
+pulls any off-screen position back inside, so no window opens glued to
+the screen edges or with its bottom command bar out of reach. The cap is
+a load-time trim, not a limit: no `MaxWidth`/`MaxHeight` is set, the user
+can resize larger or maximize freely, geometry persistence keeps the
+size they leave, and the trim re-applies on the next load only if that
+size still exceeds the cap. Windows smaller than the cap are never
+grown, and a window is never shrunk below its declared minimum size.
 
 ---
 

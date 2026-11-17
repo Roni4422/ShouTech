@@ -94,48 +94,8 @@
         </Style>
 
 
-        <!-- =========================================================
-             LABEL
-             ========================================================= -->
-
-        <Style x:Key="Lbl"
-               TargetType="TextBlock">
-
-            <Setter Property="FontSize" Value="{DynamicResource FontSize10_5}"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-
-            <Setter Property="Margin"
-                    Value="5,0,5,0"/>
-
-            <Setter Property="Foreground"
-                    Value="{DynamicResource TextPrimary}"/>
-
-            <Setter Property="TextTrimming"
-                    Value="CharacterEllipsis"/>
-
-            <!-- Label alignment follows the app-wide convention (same
-                 pattern as CatWin's FieldLabel): text aligns to the
-                 reading-start edge of the label column — left in LTR,
-                 right in RTL — which is the edge ADJACENT to the field,
-                 so the label sits a few pixels from its field instead of
-                 floating at the far edge of the column. The previous
-                 trigger set Left in RTL, which pushed Arabic labels to
-                 the far edge and left a wide empty band (owner report,
-                 2026-11-17). -->
-
-            <Setter Property="TextAlignment" Value="Left"/>
-
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-                             Value="RightToLeft">
-                    <Setter Property="TextAlignment" Value="Right"/>
-                </DataTrigger>
-                <DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-                             Value="LeftToRight">
-                    <Setter Property="TextAlignment" Value="Left"/>
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
+        <!-- Form labels use the central VisuTextBlockLabelStyle
+             (Themes/VisuId.xaml) — no local label style, by design. -->
 
 
         <!-- =========================================================
@@ -736,7 +696,7 @@
                                        Grid.Column="0"
                                        Text="Code"
                                        loc:LocProps.Key="MatCard.Code"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <!-- The item number lives in the record navigator
                                  (owner directive 2026-11-17): it replaces the
@@ -771,7 +731,7 @@
                                        Grid.Column="0"
                                        Text="Group"
                                        loc:LocProps.Key="MatCard.Group"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <ComboBox x:Name="CmbGroup"
                                       Grid.Row="1"
@@ -787,7 +747,7 @@
                                        Grid.Column="2"
                                        Text="Type"
                                        loc:LocProps.Key="MatCard.Type"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <ComboBox x:Name="CmbItemType"
                                       Grid.Row="1"
@@ -804,7 +764,7 @@
                                        Grid.Column="0"
                                        Text="Name"
                                        loc:LocProps.Key="MatCard.Name"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtName"
                                      Grid.Row="2"
@@ -821,7 +781,7 @@
                                        Grid.Column="0"
                                        Text="Latin Name"
                                        loc:LocProps.Key="MatCard.LatinName"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtNameEn"
                                      Grid.Row="3"
@@ -961,7 +921,7 @@
                                        Grid.Column="0"
                                        Text="Category"
                                        loc:LocProps.Key="MatCard.Category"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <ComboBox x:Name="CmbCategory"
                                       Grid.Row="1"
@@ -978,7 +938,7 @@
                                        Grid.Column="2"
                                        Text="Brand"
                                        loc:LocProps.Key="MatCard.Brand"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtBrand"
                                      Grid.Row="1"
@@ -993,7 +953,7 @@
                                        Grid.Column="0"
                                        Text="Model"
                                        loc:LocProps.Key="MatCard.Model"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtModel"
                                      Grid.Row="2"
@@ -1005,7 +965,7 @@
                                        Grid.Column="2"
                                        Text="Size / Spec"
                                        loc:LocProps.Key="MatCard.SizeSpec"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtSizeSpec"
                                      Grid.Row="2"
@@ -1020,7 +980,7 @@
                                        Grid.Column="0"
                                        Text="Manufacturer"
                                        loc:LocProps.Key="MatCard.Manufacturer"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtManufacturer"
                                      Grid.Row="3"
@@ -1032,7 +992,7 @@
                                        Grid.Column="2"
                                        Text="Origin"
                                        loc:LocProps.Key="MatCard.Origin"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtOriginCountry"
                                      Grid.Row="3"
@@ -1047,7 +1007,7 @@
                                        Grid.Column="0"
                                        Text="Source"
                                        loc:LocProps.Key="MatCard.Source"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtSource"
                                      Grid.Row="4"
@@ -1059,7 +1019,7 @@
                                        Grid.Column="2"
                                        Text="Alternate Code"
                                        loc:LocProps.Key="MatCard.AltCode"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtAltCode"
                                      Grid.Row="4"
@@ -1074,7 +1034,7 @@
                                        Grid.Column="0"
                                        Text="GTIN"
                                        loc:LocProps.Key="MatCard.Gtin"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtGtin"
                                      Grid.Row="5"
@@ -1086,7 +1046,7 @@
                                        Grid.Column="2"
                                        Text="Supplier Code"
                                        loc:LocProps.Key="MatCard.SupplierCode"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtSupplierCode"
                                      Grid.Row="5"
@@ -1101,7 +1061,7 @@
                                        Grid.Column="0"
                                        Text="ABC Class"
                                        loc:LocProps.Key="MatCard.Abc"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <ComboBox x:Name="CmbAbcClass"
                                       Grid.Row="6"
@@ -1113,7 +1073,7 @@
                                        Grid.Column="2"
                                        Text="Status"
                                        loc:LocProps.Key="MatCard.StatusLabel"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <ComboBox x:Name="CmbStatus"
                                       Grid.Row="6"
@@ -1170,7 +1130,7 @@
                                        Grid.Column="0"
                                        Text="Notes"
                                        loc:LocProps.Key="MatCard.Notes"
-                                       Style="{StaticResource Lbl}"
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"
                                        VerticalAlignment="Top"/>
 
                             <TextBox x:Name="TxtNotes"
@@ -1240,7 +1200,7 @@
                                            Grid.Column="0"
                                            Text="Min"
                                            loc:LocProps.Key="MatCard.MinQty"
-                                           Style="{StaticResource Lbl}"/>
+                                           Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                                 <TextBox x:Name="TxtMinQty"
                                          Grid.Row="0"
@@ -1255,7 +1215,7 @@
                                            Grid.Column="2"
                                            Text="Max"
                                            loc:LocProps.Key="MatCard.MaxQty"
-                                           Style="{StaticResource Lbl}"/>
+                                           Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                                 <TextBox x:Name="TxtMaxQty"
                                          Grid.Row="0"
@@ -1270,7 +1230,7 @@
                                            Grid.Column="4"
                                            Text="Currency"
                                            loc:LocProps.Key="MatCard.Currency"
-                                           Style="{StaticResource Lbl}"/>
+                                           Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                                 <ComboBox x:Name="CmbPriceCurrency"
                                           Grid.Row="0"
@@ -1284,7 +1244,7 @@
                                            Grid.Column="0"
                                            Text="Cost"
                                            loc:LocProps.Key="MatCard.Cost"
-                                           Style="{StaticResource Lbl}"/>
+                                           Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                                 <TextBox x:Name="TxtCost"
                                          Grid.Row="1"
@@ -1299,7 +1259,7 @@
                                            Grid.Column="2"
                                            Text="Method"
                                            loc:LocProps.Key="MatCard.Method"
-                                           Style="{StaticResource Lbl}"/>
+                                           Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                                 <ComboBox x:Name="CmbCostMethod"
                                           Grid.Row="1"
@@ -1314,7 +1274,7 @@
                                            Grid.Column="4"
                                            Text="Tax %"
                                            loc:LocProps.Key="MatCard.TaxRate"
-                                           Style="{StaticResource Lbl}"/>
+                                           Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                                 <TextBox x:Name="TxtTaxRate"
                                          Grid.Row="1"
@@ -1357,7 +1317,7 @@
 
                                     <TextBlock Text="Shelf Life"
                                                loc:LocProps.Key="MatCard.ShelfDays"
-                                               Style="{StaticResource Lbl}"
+                                               Style="{StaticResource VisuTextBlockLabelStyle}"
                                                Margin="7,0,4,0"/>
 
                                     <TextBox x:Name="TxtShelfLifeDays"
@@ -1641,7 +1601,7 @@
                                        Grid.Column="0"
                                        Text="On Hand"
                                        loc:LocProps.Key="MatCard.QtyOnHand"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtQtyOnHand"
                                      Grid.Row="1"
@@ -1654,7 +1614,7 @@
                                        Grid.Column="2"
                                        Text="Reorder Qty"
                                        loc:LocProps.Key="MatCard.ReorderQty"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtReorderQty"
                                      Grid.Row="1"
@@ -1666,7 +1626,7 @@
                                        Grid.Column="0"
                                        Text="Safety Stock"
                                        loc:LocProps.Key="MatCard.SafetyStock"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtSafetyStock"
                                      Grid.Row="2"
@@ -1679,7 +1639,7 @@
                                        Grid.Column="2"
                                        Text="Default Warehouse"
                                        loc:LocProps.Key="MatCard.DefaultWarehouse"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <ComboBox x:Name="CmbDefaultWarehouse"
                                       Grid.Row="2"
@@ -1692,7 +1652,7 @@
                                        Grid.Column="0"
                                        Text="Shelf / Bin"
                                        loc:LocProps.Key="MatCard.ShelfBin"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtShelfBin"
                                      Grid.Row="3"
@@ -1705,7 +1665,7 @@
                                        Grid.Column="2"
                                        Text="Lead Time"
                                        loc:LocProps.Key="MatCard.LeadTime"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtLeadTimeDays"
                                      Grid.Row="3"
@@ -1717,7 +1677,7 @@
                                        Grid.Column="0"
                                        Text="Net Weight"
                                        loc:LocProps.Key="MatCard.WeightNet"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtWeightNet"
                                      Grid.Row="4"
@@ -1730,7 +1690,7 @@
                                        Grid.Column="2"
                                        Text="Gross Weight"
                                        loc:LocProps.Key="MatCard.WeightGross"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtWeightGross"
                                      Grid.Row="4"
@@ -1813,7 +1773,7 @@
                                        Grid.Column="0"
                                        Text="Inventory"
                                        loc:LocProps.Key="MatCard.AccInventory"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtAccInventory"
                                      Grid.Row="1"
@@ -1826,7 +1786,7 @@
                                        Grid.Column="2"
                                        Text="Sales"
                                        loc:LocProps.Key="MatCard.AccSales"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtAccSales"
                                      Grid.Row="1"
@@ -1838,7 +1798,7 @@
                                        Grid.Column="0"
                                        Text="Sales Return"
                                        loc:LocProps.Key="MatCard.AccSalesReturn"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtAccSalesReturn"
                                      Grid.Row="2"
@@ -1851,7 +1811,7 @@
                                        Grid.Column="2"
                                        Text="COGS"
                                        loc:LocProps.Key="MatCard.AccCogs"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtAccCogs"
                                      Grid.Row="2"
@@ -1863,7 +1823,7 @@
                                        Grid.Column="0"
                                        Text="Purchase"
                                        loc:LocProps.Key="MatCard.AccPurchase"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtAccPurchase"
                                      Grid.Row="3"
@@ -1876,7 +1836,7 @@
                                        Grid.Column="2"
                                        Text="Purchase Return"
                                        loc:LocProps.Key="MatCard.AccPurchaseReturn"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtAccPurchaseReturn"
                                      Grid.Row="3"
@@ -1888,7 +1848,7 @@
                                        Grid.Column="0"
                                        Text="Expense"
                                        loc:LocProps.Key="MatCard.AccExpense"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtAccExpense"
                                      Grid.Row="4"
@@ -1901,7 +1861,7 @@
                                        Grid.Column="2"
                                        Text="WIP"
                                        loc:LocProps.Key="MatCard.AccWip"
-                                       Style="{StaticResource Lbl}"/>
+                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
 
                             <TextBox x:Name="TxtAccWip"
                                      Grid.Row="4"
