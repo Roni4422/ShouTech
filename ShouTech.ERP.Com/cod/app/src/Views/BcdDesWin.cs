@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -19,16 +19,16 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class BcdDesWin : BaseWin
 {
-    private readonly TextBox _txtWidth = new() { Width = 60, Text = "240" };
-    private readonly TextBox _txtHeight = new() { Width = 60, Text = "150" };
-    private readonly TextBox _txtModuleWidth = new() { Width = 45, Text = "2" };
-    private readonly TextBox _txtBarHeight = new() { Width = 45, Text = "44" };
-    private readonly ComboBox _cbFont = new() { Width = 120 };
-    private readonly ComboBox _cbFontSize = new() { Width = 55 };
+    private readonly TextBox _txtWidth = new() { Width = VisuId.FieldWidthTiny, Text = "240" };
+    private readonly TextBox _txtHeight = new() { Width = VisuId.FieldWidthTiny, Text = "150" };
+    private readonly TextBox _txtModuleWidth = new() { Width = VisuId.FieldWidthTiny, Text = "2" };
+    private readonly TextBox _txtBarHeight = new() { Width = VisuId.FieldWidthTiny, Text = "44" };
+    private readonly ComboBox _cbFont = new() { Width = VisuId.FieldWidthShort };
+    private readonly ComboBox _cbFontSize = new() { Width = VisuId.FieldWidthTiny };
     private readonly CheckBox _chkBold = new() { Content = "B", FontWeight = FontWeights.Bold, IsChecked = true };
-    private readonly ComboBox _cbTextColor = new() { Width = 100 };
-    private readonly ComboBox _cbBarColor = new() { Width = 100 };
-    private readonly ComboBox _cbBackground = new() { Width = 100 };
+    private readonly ComboBox _cbTextColor = new() { Width = VisuId.FieldWidthShort };
+    private readonly ComboBox _cbBarColor = new() { Width = VisuId.FieldWidthShort };
+    private readonly ComboBox _cbBackground = new() { Width = VisuId.FieldWidthShort };
     private readonly CheckBox _chkShowName = new() { Content = "Name", IsChecked = true };
     private readonly CheckBox _chkShowPrice = new() { Content = "Price", IsChecked = true };
     private readonly CheckBox _chkShowCode = new() { Content = "Code", IsChecked = true };
@@ -37,9 +37,9 @@ public sealed class BcdDesWin : BaseWin
     private readonly Button _btnReset = new();
     private readonly Button _btnPrint = new();
 
-    private readonly TextBox _txtName = new() { Width = 150, Text = "Sample Product" };
-    private readonly TextBox _txtPrice = new() { Width = 70, Text = "25.00" };
-    private readonly TextBox _txtCode = new() { Width = 150, Text = "6281001234567" };
+    private readonly TextBox _txtName = new() { Width = VisuId.FieldWidthMedium, Text = "Sample Product" };
+    private readonly TextBox _txtPrice = new() { Width = VisuId.FieldWidthTiny, Text = "25.00" };
+    private readonly TextBox _txtCode = new() { Width = VisuId.FieldWidthMedium, Text = "6281001234567" };
 
     private readonly Border _label = new();
     private readonly TextBlock _prevName = new();
@@ -192,6 +192,12 @@ public sealed class BcdDesWin : BaseWin
     private StackPanel BuildSettings()
     {
         var panel = new StackPanel();
+
+        _cbFont.SetResourceReference(StyleProperty, "VisuComboBoxStyle");
+        _cbFontSize.SetResourceReference(StyleProperty, "VisuComboBoxStyle");
+        _cbTextColor.SetResourceReference(StyleProperty, "VisuComboBoxStyle");
+        _cbBarColor.SetResourceReference(StyleProperty, "VisuComboBoxStyle");
+        _cbBackground.SetResourceReference(StyleProperty, "VisuComboBoxStyle");
 
         // Label size.
         var sizeRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
@@ -687,9 +693,8 @@ public sealed class BcdDesWin : BaseWin
     private static void StyleButton(Button btn, string text)
     {
         btn.Content = text;
-        btn.Margin = new Thickness(0, 0, 6, 0);
-        btn.Padding = new Thickness(10, 4, 10, 4);
-        btn.Height = 28;
+        btn.Margin = new Thickness(0, 0, 8, 0);
+        btn.MinWidth = VisuId.ButtonMinWidth;
         btn.SetResourceReference(StyleProperty, "VisuButtonStyle");
     }
 }

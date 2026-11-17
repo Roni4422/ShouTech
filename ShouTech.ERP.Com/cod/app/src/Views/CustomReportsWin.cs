@@ -113,11 +113,11 @@ public sealed class CustomReportsWin : BaseWin
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(330) });
 
         var listPanel = new DockPanel { Margin = new Thickness(0, 0, 12, 0) };
-        var keyRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+        var keyRow = F2Ui.CreateFormGrid(1);
+        keyRow.Margin = new Thickness(0, 0, 0, 8);
         _reportKey.IsEditable = true;
-        _reportKey.Width = 260;
         _reportKey.SelectionChanged += async (_, _) => await RefreshAsync();
-        keyRow.Children.Add(F2Ui.Labeled(_labels, "CustomReports.ReportKey", _reportKey, 270));
+        F2Ui.AddField(_labels, keyRow, 0, 0, "CustomReports.ReportKey", _reportKey);
         DockPanel.SetDock(keyRow, Dock.Top);
         listPanel.Children.Add(keyRow);
 
@@ -132,15 +132,17 @@ public sealed class CustomReportsWin : BaseWin
         Grid.SetColumn(listPanel, 0);
         content.Children.Add(listPanel);
 
-        var designer = new StackPanel();
-        designer.Children.Add(F2Ui.Labeled(_labels, "CustomReports.Name", _name, 300));
-        designer.Children.Add(F2Ui.Labeled(_labels, "CustomReports.ReportKey", _key, 300));
-        designer.Children.Add(F2Ui.Labeled(_labels, "CustomReports.DataSource", _dataSource, 300));
-        designer.Children.Add(F2Ui.Labeled(_labels, "CustomReports.Visibility", _visibility, 300));
+        // Designer = a one-pair form grid: side labels, aligned edges
+        // down the whole panel (Phenix rule).
+        var designer = F2Ui.CreateFormGrid(1);
+        F2Ui.AddField(_labels, designer, 0, 0, "CustomReports.Name", _name);
+        F2Ui.AddField(_labels, designer, 1, 0, "CustomReports.ReportKey", _key);
+        F2Ui.AddField(_labels, designer, 2, 0, "CustomReports.DataSource", _dataSource);
+        F2Ui.AddField(_labels, designer, 3, 0, "CustomReports.Visibility", _visibility);
         _columnsInfo.IsReadOnly = true;
         _columnsInfo.Height = 90;
         _columnsInfo.TextWrapping = TextWrapping.Wrap;
-        designer.Children.Add(F2Ui.Labeled(_labels, "CustomReports.Columns", _columnsInfo, 300));
+        F2Ui.AddField(_labels, designer, 4, 0, "CustomReports.Columns", _columnsInfo);
         Grid.SetRow(designer, 0);
         Grid.SetColumn(designer, 1);
         content.Children.Add(designer);

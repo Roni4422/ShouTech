@@ -85,12 +85,16 @@ public sealed class SupportWin : BaseWin
 
         var content = new DockPanel();
         var form = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
-        form.Children.Add(F2Ui.Labeled(_labels, "Support.Subject", _subject, 560));
+        // One-pair form grid: side labels, fields stretch to the window
+        // width, edges aligned (Phenix rule).
+        var formGrid = F2Ui.CreateFormGrid(1);
+        F2Ui.AddField(_labels, formGrid, 0, 0, "Support.Subject", _subject);
         _body.Height = 110;
         _body.AcceptsReturn = true;
         _body.TextWrapping = TextWrapping.Wrap;
-        form.Children.Add(F2Ui.Labeled(_labels, "Support.Body", _body, 560));
-        form.Children.Add(F2Ui.Labeled(_labels, "Support.ContactEmail", _email, 320));
+        F2Ui.AddField(_labels, formGrid, 1, 0, "Support.Body", _body);
+        F2Ui.AddField(_labels, formGrid, 2, 0, "Support.ContactEmail", _email);
+        form.Children.Add(formGrid);
         _note.TextWrapping = TextWrapping.Wrap;
         _note.Margin = new Thickness(0, 2, 0, 4);
         form.Children.Add(_note);
