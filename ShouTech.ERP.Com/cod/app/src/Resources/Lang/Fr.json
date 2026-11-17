@@ -1396,6 +1396,11 @@
     "Result": "Codes-barres générés : {0}. Ignorés (déjà codés) : {1}. Total des articles : {2}. Utilisez Enregistrer pour les écrire dans les fiches articles.",
     "SavedSummary": "Enregistrés dans les fiches articles : {0}. Échecs : {1}."
   },
+  "Vouchers": {
+    "Reverse": "Contre-passer",
+    "ConfirmReverse": "Contre-passer cette écriture ? Une écriture de compensation validée sera créée et l'originale sera marquée comme contre-passée.",
+    "Reversed": "Écriture contre-passée ; une écriture de compensation a été validée."
+  },
   "JrnWin.EnterDocumentNumber": "Saisissez le numéro d'écriture à ouvrir.",
   "JrnWin.DocumentNumberRequired": "Numéro de document requis",
   "JrnWin.PostedSuccessfully": "L'écriture a été validée dans la base de données.",

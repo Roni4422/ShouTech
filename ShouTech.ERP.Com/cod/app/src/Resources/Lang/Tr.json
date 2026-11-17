@@ -1413,6 +1413,11 @@
     "Result": "Üretilen barkodlar: {0}. Atlanan (zaten kodlu): {1}. Toplam ürün: {2}. Kartlara yazmak için Kaydet'i kullanın.",
     "SavedSummary": "Ürün kartlarına kaydedildi: {0}. Hatalı: {1}."
   },
+  "Vouchers": {
+    "Reverse": "Ters çevir",
+    "ConfirmReverse": "Bu yevmiye kaydı ters çevrilsin mi? Telafi edici onaylı bir kayıt oluşturulacak ve orijinal kayıt ters çevrildi olarak işaretlenecek.",
+    "Reversed": "Yevmiye kaydı ters çevrildi; telafi kaydı onaylandı."
+  },
   "JrnWin.EnterDocumentNumber": "Açılacak yevmiye fiş numarasını girin.",
   "JrnWin.DocumentNumberRequired": "Fiş numarası gerekli",
   "JrnWin.PostedSuccessfully": "Yevmiye kaydı veritabanına aktarıldı.",

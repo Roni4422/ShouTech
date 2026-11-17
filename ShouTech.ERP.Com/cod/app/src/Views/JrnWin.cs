@@ -53,6 +53,7 @@ public sealed class JrnWin : BaseWin
     private readonly Button _btnLoad = new();
     private readonly Button _btnSave = new();
     private readonly Button _btnPost = new();
+    private readonly Button _btnReverse = new();
     private readonly Button _btnPrint = new();
     private readonly Button _btnAddLine = new();
     private readonly Button _btnRemoveLine = new();
@@ -67,6 +68,7 @@ public sealed class JrnWin : BaseWin
     private readonly ObservableCollection<JrnLineVm> _lines = new();
     private Guid? _currentJournalId;
     private bool _journalPosted;
+    private bool _journalReversed;
 
     public JrnWin()
     {
@@ -91,6 +93,8 @@ public sealed class JrnWin : BaseWin
         StyleButton(_btnLoad, "Vouchers.Load");
         StyleButton(_btnSave, "Common.Save");
         StyleButton(_btnPost, "Vouchers.Post");
+        StyleButton(_btnReverse, "Vouchers.Reverse");
+        _btnReverse.IsEnabled = false;
         StyleButton(_btnPrint, "Invoice.Print");
         StyleButton(_btnAddLine, "Invoice.AddLine");
         StyleButton(_btnRemoveLine, "Invoice.RemoveLine");
@@ -100,6 +104,7 @@ public sealed class JrnWin : BaseWin
         _btnLoad.Click += async (_, _) => await LoadVoucherAsync();
         _btnSave.Click += async (_, _) => await SaveVoucherAsync();
         _btnPost.Click += async (_, _) => await PostVoucherAsync();
+        _btnReverse.Click += async (_, _) => await ReverseVoucherAsync();
         _btnPrint.Click += (_, _) => ShowOperationUnavailable("Print");
         _btnAddLine.Click += (_, _) =>
         {
@@ -119,7 +124,7 @@ public sealed class JrnWin : BaseWin
         };
         _btnAutoBal.Click += (_, _) => AutoBalance();
 
-        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnPrint, _btnAddLine, _btnRemoveLine, _btnAutoBal })
+        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnReverse, _btnPrint, _btnAddLine, _btnRemoveLine, _btnAutoBal })
             toolbar.Children.Add(b);
 
         DockPanel.SetDock(toolbar, Dock.Top);
@@ -213,6 +218,7 @@ public sealed class JrnWin : BaseWin
         _txtDocNo.Text = "JV-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
         _currentJournalId = null;
         _journalPosted = false;
+        _journalReversed = false;
         _dtDate.SelectedDate = DateTime.Today;
         _txtRefNo.Text = string.Empty;
         _txtCc.Text = string.Empty;
@@ -223,6 +229,7 @@ public sealed class JrnWin : BaseWin
         _btnLoad.IsEnabled = true;
         _btnSave.IsEnabled = true;
         _btnPost.IsEnabled = true;
+        _btnReverse.IsEnabled = false;
         SetVoucherReadOnly(false);
         RefreshBalances();
     }
@@ -304,6 +311,7 @@ public sealed class JrnWin : BaseWin
 
             _currentJournalId = snapshot.Id;
             _journalPosted = snapshot.Status != ShouTech.Domain.Entities.JournalEntryStatus.Draft;
+            _journalReversed = snapshot.Status == ShouTech.Domain.Entities.JournalEntryStatus.Reversed;
             _txtDocNo.Text = snapshot.DocumentNumber ?? string.Empty;
             _dtDate.SelectedDate = snapshot.EntryDate.ToDateTime(TimeOnly.MinValue);
             _txtRefNo.Text = snapshot.ReferenceNumber ?? string.Empty;
@@ -339,6 +347,7 @@ public sealed class JrnWin : BaseWin
 
             _btnSave.IsEnabled = false;
             _btnPost.IsEnabled = snapshot.Status == ShouTech.Domain.Entities.JournalEntryStatus.Draft;
+            _btnReverse.IsEnabled = snapshot.Status == ShouTech.Domain.Entities.JournalEntryStatus.Posted;
             SetVoucherReadOnly(true);
             RefreshBalances();
 
@@ -442,6 +451,7 @@ public sealed class JrnWin : BaseWin
             _currentJournalId = id;
             _btnSave.IsEnabled = false;
             _btnPost.IsEnabled = true;
+            _btnReverse.IsEnabled = false;
             SetVoucherReadOnly(true);
             MessageBox.Show(this, $"تم حفظ مسودة القيد في قاعدة البيانات.\nالمعرف: {id:D}", "تم الحفظ", MessageBoxButton.OK, MessageBoxImage.Information);
         }
@@ -476,12 +486,50 @@ public sealed class JrnWin : BaseWin
             _journalPosted = true;
             _btnSave.IsEnabled = false;
             _btnPost.IsEnabled = false;
+            _btnReverse.IsEnabled = true;
             SetVoucherReadOnly(true);
             MessageBox.Show(this, "تم ترحيل القيد فعليًا في قاعدة البيانات.", "تم الترحيل", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
             ReportPersistenceFailure("Post", ex);
+        }
+    }
+
+    private async Task ReverseVoucherAsync()
+    {
+        if (_journalReversed || !_currentJournalId.HasValue)
+            return;
+        if (!AskConfirm("Vouchers.ConfirmReverse"))
+            return;
+
+        try
+        {
+            if (!ShouTech.App.Services.AppHost.Permissions.Has(
+                    ShouTech.App.Services.PermCat.Accounting.JournalReverse))
+                throw new InvalidOperationException("المستخدم الحالي لا يملك صلاحية عكس القيود (ACC.JOURNAL.REVERSE).");
+
+            var user = ShouTech.App.Services.UsrSession.Current;
+            var actor = !string.IsNullOrWhiteSpace(user?.Id) ? user.Id : ShouTech.App.Services.AppHost.Session.CurrentUser;
+            if (string.IsNullOrWhiteSpace(actor))
+                throw new InvalidOperationException("تعذر تحديد المستخدم الحالي لعكس القيد.");
+            if (ShouTech.App.Services.AppHost.Journal is not { } journal)
+                throw new InvalidOperationException("خدمة عكس القيود غير مهيأة.");
+
+            // JournalRepository.ReverseAsync creates the compensating posted
+            // entry (lines swapped, linked via reversal_of_entry_id), marks
+            // this entry Reversed, and writes audit events in one transaction.
+            await journal.ReverseAsync(_currentJournalId.Value, actor);
+            _journalReversed = true;
+            _btnSave.IsEnabled = false;
+            _btnPost.IsEnabled = false;
+            _btnReverse.IsEnabled = false;
+            SetVoucherReadOnly(true);
+            ShowInfo("Vouchers.Reversed");
+        }
+        catch (Exception ex)
+        {
+            ReportPersistenceFailure("Reverse", ex);
         }
     }
 

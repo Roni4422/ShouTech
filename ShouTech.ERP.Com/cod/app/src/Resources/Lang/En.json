@@ -1273,7 +1273,10 @@
     "Posted": "Voucher posted successfully",
     "MustBalance": "Cannot post an unbalanced journal voucher",
     "NeedLines": "Add at least one line",
-    "ConfirmPost": "Post this voucher? It cannot be edited after posting."
+    "ConfirmPost": "Post this voucher? It cannot be edited after posting.",
+    "Reverse": "Reverse",
+    "ConfirmReverse": "Reverse this journal entry? A compensating posted entry will be created and the original will be marked reversed.",
+    "Reversed": "Journal entry reversed; a compensating entry was posted."
   },
   "CustCard": {
     "Title": "Customer & Supplier Card",
