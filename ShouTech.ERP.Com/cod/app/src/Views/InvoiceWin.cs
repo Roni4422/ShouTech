@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
@@ -30,28 +30,28 @@ public sealed class InvoiceWin : BaseWin
     private readonly ObservableCollection<LineVm> _lines = new();
 
     // ---- Right header (document + payment) ----
-    private readonly ComboBox _cmbPayment = new() { Width = 130, Height = 26 };
-    private readonly TextBox _txtDocNo = new() { IsReadOnly = true, Width = 120, Height = 26 };
-    private readonly DatePicker _dtDate = new() { SelectedDate = DateTime.Today, Width = 130, Height = 26 };
-    private readonly TextBox _txtCurrency = new() { Width = 80, Height = 26 };
-    private readonly TextBox _txtTaxRate = new() { Width = 70, Height = 26 };
-    private readonly TextBox _txtReceiptNo = new() { Width = 120, Height = 26 };
-    private readonly TextBox _txtReference = new() { Width = 120, Height = 26 };
-    private readonly TextBox _txtBranch = new() { Width = 120, Height = 26 };
+    private readonly ComboBox _cmbPayment = new();
+    private readonly TextBox _txtDocNo = new() { IsReadOnly = true };
+    private readonly DatePicker _dtDate = new() { SelectedDate = DateTime.Today };
+    private readonly TextBox _txtCurrency = new();
+    private readonly TextBox _txtTaxRate = new();
+    private readonly TextBox _txtReceiptNo = new();
+    private readonly TextBox _txtReference = new();
+    private readonly TextBox _txtBranch = new();
 
     // ---- Middle header ----
-    private readonly TextBox _txtPartyCode = new() { Width = 100, Height = 26 };
-    private readonly TextBox _txtPartyName = new() { Width = 180, Height = 26 };
-    private readonly TextBox _txtSalesRep = new() { Width = 140, Height = 26 };
-    private readonly TextBox _txtWarehouse = new() { Width = 140, Height = 26 };
+    private readonly TextBox _txtPartyCode = new();
+    private readonly TextBox _txtPartyName = new();
+    private readonly TextBox _txtSalesRep = new();
+    private readonly TextBox _txtWarehouse = new();
 
     // ---- Left header (accounts) ----
-    private readonly TextBox _txtCostCenter = new() { Width = 140, Height = 26 };
-    private readonly TextBox _txtPartyAccount = new() { Width = 160, Height = 26 };
-    private readonly TextBox _txtGoodsAccount = new() { Width = 160, Height = 26 };
+    private readonly TextBox _txtCostCenter = new();
+    private readonly TextBox _txtPartyAccount = new();
+    private readonly TextBox _txtGoodsAccount = new();
 
     // ---- Notes / grid / actions ----
-    private readonly TextBox _txtNotes = new() { Height = 40, AcceptsReturn = true };
+    private readonly TextBox _txtNotes = new() { AcceptsReturn = true };
     private readonly DataGrid _grid = new();
     private readonly Button _btnSave = new();
     private readonly Button _btnPost = new();
@@ -67,14 +67,14 @@ public sealed class InvoiceWin : BaseWin
     private readonly Button _btnOriginal = new();
 
     // ---- Footer totals (Phenix-style three columns) ----
-    private readonly TextBox _txtLinesTotal = new() { IsReadOnly = true, Width = 110, Height = 26 };
-    private readonly TextBox _txtInvoiceValue = new() { IsReadOnly = true, Width = 110, Height = 26 };
-    private readonly TextBox _txtPaid = new() { Width = 110, Height = 26, Text = "0" };
-    private readonly TextBox _txtLinesDiscount = new() { Width = 110, Height = 26, Text = "0" };
-    private readonly TextBox _txtPaymentValue = new() { Width = 110, Height = 26, Text = "0" };
-    private readonly TextBox _txtRemaining = new() { IsReadOnly = true, Width = 110, Height = 26 };
-    private readonly TextBox _txtLinesExtra = new() { Width = 110, Height = 26, Text = "0" };
-    private readonly TextBox _txtNet = new() { IsReadOnly = true, Width = 110, Height = 26 };
+    private readonly TextBox _txtLinesTotal = new() { IsReadOnly = true };
+    private readonly TextBox _txtInvoiceValue = new() { IsReadOnly = true };
+    private readonly TextBox _txtPaid = new() { Text = "0" };
+    private readonly TextBox _txtLinesDiscount = new() { Text = "0" };
+    private readonly TextBox _txtPaymentValue = new() { Text = "0" };
+    private readonly TextBox _txtRemaining = new() { IsReadOnly = true };
+    private readonly TextBox _txtLinesExtra = new() { Text = "0" };
+    private readonly TextBox _txtNet = new() { IsReadOnly = true };
     private readonly TextBlock _lblStatus = new() { Margin = new Thickness(8, 4, 0, 0), VerticalAlignment = VerticalAlignment.Center };
 
     private bool _syncingPayment;
@@ -339,18 +339,23 @@ public sealed class InvoiceWin : BaseWin
         Grid.SetRow(cmdBar, 1);
         bottom.Children.Add(cmdBar);
 
-        _txtNotes.Height = 28;
-        _txtNotes.MinHeight = 28;
-        _txtNotes.MaxHeight = 40;
+        _txtNotes.Height = ShouTech.App.Services.VisuId.MultilineFieldHeight;
         _txtNotes.AcceptsReturn = true;
         _txtNotes.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
-        var notesPanel = new StackPanel { Margin = new Thickness(0, 2, 0, 0) };
-        notesPanel.Children.Add(new TextBlock
+        // Notes keep the side-label scheme: label column + stretching field.
+        var notesPanel = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+        notesPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ShouTech.App.Services.VisuId.FormLabelWidth) });
+        notesPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var notesLabel = new TextBlock
         {
             Text = Tf("Invoice.Notes", "Notes"),
-            FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(11),
-            Margin = new Thickness(0, 0, 0, 1)
-        });
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 4, 8, 0)
+        };
+        notesLabel.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
+        notesPanel.Children.Add(notesLabel);
+        ApplyFieldStyle(_txtNotes);
+        Grid.SetColumn(_txtNotes, 1);
         notesPanel.Children.Add(_txtNotes);
         Grid.SetRow(notesPanel, 2);
         bottom.Children.Add(notesPanel);
@@ -377,37 +382,34 @@ public sealed class InvoiceWin : BaseWin
     /// </summary>
     private Grid BuildHeaderPanel()
     {
-        const double h = 24;
-        const double gap = 2;
+        const double gap = 4;
 
-        void Size(Control c, double w)
+        // Heights and padding come from the central styles (ControlHeight
+        // 32); fields only opt into stretching inside their form cell.
+        static void Size(Control c)
         {
-            c.Height = h;
-            c.MinHeight = h;
-            c.MaxHeight = h;
             c.Width = double.NaN; // stretch within cell
             c.MinWidth = 60;
             c.HorizontalAlignment = HorizontalAlignment.Stretch;
             c.VerticalContentAlignment = VerticalAlignment.Center;
             c.Margin = new Thickness(0);
-            c.Padding = new Thickness(4, 0, 4, 0);
         }
 
-        Size(_cmbPayment, 100);
-        Size(_txtDocNo, 100);
-        Size(_dtDate, 100);
-        Size(_txtCurrency, 60);
-        Size(_txtTaxRate, 50);
-        Size(_txtReceiptNo, 100);
-        Size(_txtReference, 100);
-        Size(_txtBranch, 100);
-        Size(_txtPartyCode, 80);
-        Size(_txtPartyName, 120);
-        Size(_txtSalesRep, 100);
-        Size(_txtWarehouse, 100);
-        Size(_txtCostCenter, 100);
-        Size(_txtPartyAccount, 120);
-        Size(_txtGoodsAccount, 120);
+        Size(_cmbPayment);
+        Size(_txtDocNo);
+        Size(_dtDate);
+        Size(_txtCurrency);
+        Size(_txtTaxRate);
+        Size(_txtReceiptNo);
+        Size(_txtReference);
+        Size(_txtBranch);
+        Size(_txtPartyCode);
+        Size(_txtPartyName);
+        Size(_txtSalesRep);
+        Size(_txtWarehouse);
+        Size(_txtCostCenter);
+        Size(_txtPartyAccount);
+        Size(_txtGoodsAccount);
 
         BuildPaymentCombo();
 
@@ -455,21 +457,37 @@ public sealed class InvoiceWin : BaseWin
         return grid;
     }
 
-    /// <summary>Label (11px) + control in one auto row — minimal vertical gap.</summary>
+    /// <summary>
+    /// Side label + control in one form row of the host group grid: the
+    /// label sits in the group's shared label column (FormLabelWidth) and
+    /// the control stretches in the field column, so labels and field
+    /// edges align down the whole group (Phenix rule — labels beside the
+    /// field, never above it).
+    /// </summary>
     private static void AddLabeledCell(Grid host, int row, string label, FrameworkElement control)
     {
-        var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 2) };
-        panel.Children.Add(new TextBlock
+        if (host.ColumnDefinitions.Count == 0)
+        {
+            host.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ShouTech.App.Services.VisuId.FormLabelWidth) });
+            host.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        }
+        var labelBlock = new TextBlock
         {
             Text = label,
-            FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(11),
-            Margin = new Thickness(0, 0, 0, 1),
-            Padding = new Thickness(0),
-            LineHeight = 14
-        });
-        panel.Children.Add(control);
-        Grid.SetRow(panel, row);
-        host.Children.Add(panel);
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 8, 8)
+        };
+        labelBlock.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
+        Grid.SetRow(labelBlock, row);
+        Grid.SetColumn(labelBlock, 0);
+        host.Children.Add(labelBlock);
+
+        ApplyFieldStyle(control);
+        control.Margin = new Thickness(0, 0, 0, 8);
+        Grid.SetRow(control, row);
+        Grid.SetColumn(control, 1);
+        host.Children.Add(control);
     }
 
     private void BuildPaymentCombo()
@@ -485,18 +503,15 @@ public sealed class InvoiceWin : BaseWin
     /// <summary>Footer totals: three equal columns, uniform fields, tight spacing.</summary>
     private Grid BuildFooterPanel()
     {
-        const double h = 24;
+        // Heights and padding come from the central styles (ControlHeight
+        // 32, applied by AddLabeledCell); totals only opt into stretching.
         foreach (var tb in new[] { _txtLinesTotal, _txtInvoiceValue, _txtPaid, _txtLinesDiscount, _txtPaymentValue, _txtRemaining, _txtLinesExtra, _txtNet })
         {
-            tb.Height = h;
-            tb.MinHeight = h;
-            tb.MaxHeight = h;
             tb.Width = double.NaN;
             tb.MinWidth = 70;
             tb.HorizontalAlignment = HorizontalAlignment.Stretch;
             tb.VerticalContentAlignment = VerticalAlignment.Center;
             tb.Margin = new Thickness(0);
-            tb.Padding = new Thickness(4, 0, 4, 0);
         }
 
         var grid = new Grid { Margin = new Thickness(0, 2, 0, 0) };
@@ -992,19 +1007,6 @@ public sealed class InvoiceWin : BaseWin
         return col;
     }
 
-    private static StackPanel Labeled(string key, FrameworkElement control)
-    {
-        var panel = new StackPanel { Margin = new Thickness(0, 0, 8, 4) };
-        var label = new TextBlock
-        {
-            Text = Tf(key, key),
-            Margin = new Thickness(0, 0, 0, 2),
-            FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(12)
-        };
-        panel.Children.Add(label);
-        panel.Children.Add(control);
-        return panel;
-    }
 
     private static TextBlock SectionTitle(string key)
         => new()
@@ -1020,10 +1022,8 @@ public sealed class InvoiceWin : BaseWin
     {
         button.Tag = key;
         button.Content = Tf(key, key);
-        button.MinWidth = 72;
-        button.Height = 28;
-        button.Margin = new Thickness(0, 0, 3, 0);
-        button.Padding = new Thickness(8, 0, 8, 0);
+        button.MinWidth = VisuId.ButtonMinWidth;
+        button.Margin = new Thickness(0, 0, 8, 0);
         try { button.SetResourceReference(StyleProperty, "VisuButtonStyle"); } catch (Exception exL983) {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL983, "InvoiceWin.StyleButton"); /* theme optional */ }
     }

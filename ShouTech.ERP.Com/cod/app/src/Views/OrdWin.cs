@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
@@ -39,13 +39,13 @@ public sealed class OrdWin : BaseWin
 
     private readonly OrdKind _kind;
 
-    private readonly TextBox _txtDocNo = new() { Width = 130, Height = 26 };
-    private readonly DatePicker _dtDate = new() { Width = 120, Height = 26, SelectedDate = DateTime.Today };
-    private readonly DatePicker _dtDeliveryDate = new() { Width = 120, Height = 26, SelectedDate = DateTime.Today.AddDays(7) };
-    private readonly TextBox _txtPartyCode = new() { Width = 110, Height = 26 };
-    private readonly TextBox _txtPartyName = new() { Width = 220, Height = 26 };
-    private readonly TextBox _txtWhs = new() { Width = 110, Height = 26, Text = "WH-01" };
-    private readonly TextBox _txtNotes = new() { Width = 380, Height = 26 };
+    private readonly TextBox _txtDocNo = new();
+    private readonly DatePicker _dtDate = new() { SelectedDate = DateTime.Today };
+    private readonly DatePicker _dtDeliveryDate = new() { SelectedDate = DateTime.Today.AddDays(7) };
+    private readonly TextBox _txtPartyCode = new();
+    private readonly TextBox _txtPartyName = new();
+    private readonly TextBox _txtWhs = new() { Text = "WH-01" };
+    private readonly TextBox _txtNotes = new();
 
     private readonly Button _btnNew = new();
     private readonly Button _btnLoad = new();
@@ -193,14 +193,19 @@ public sealed class OrdWin : BaseWin
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        var headerPanel = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
-        headerPanel.Children.Add(Labeled("OrderDoc.OrderNo", _txtDocNo));
-        headerPanel.Children.Add(Labeled("OrderDoc.Date", _dtDate));
-        headerPanel.Children.Add(Labeled("OrderDoc.DeliveryDate", _dtDeliveryDate));
-        headerPanel.Children.Add(Labeled(_kind == OrdKind.Sales ? "Invoice.CustomerCode" : "Invoice.SupplierCode", _txtPartyCode));
-        headerPanel.Children.Add(Labeled(_kind == OrdKind.Sales ? "Invoice.CustomerName" : "Invoice.SupplierName", _txtPartyName));
-        headerPanel.Children.Add(Labeled("Invoice.Warehouse", _txtWhs));
-        headerPanel.Children.Add(Labeled("Invoice.Notes", _txtNotes));
+        // Header = one shared column grid (4 pairs), side labels, edges
+        // aligned across rows; party name spans two pairs, notes take a
+        // full-width row (Phenix rule).
+        var headerForm = CreateFormGrid(4);
+        headerForm.Margin = new Thickness(0, 0, 0, 8);
+        AddFormField(headerForm, 0, 0, "OrderDoc.OrderNo", _txtDocNo);
+        AddFormField(headerForm, 0, 1, "OrderDoc.Date", _dtDate);
+        AddFormField(headerForm, 0, 2, "OrderDoc.DeliveryDate", _dtDeliveryDate);
+        AddFormField(headerForm, 0, 3, _kind == OrdKind.Sales ? "Invoice.CustomerCode" : "Invoice.SupplierCode", _txtPartyCode);
+        AddFormField(headerForm, 1, 0, _kind == OrdKind.Sales ? "Invoice.CustomerName" : "Invoice.SupplierName", _txtPartyName, spanPairs: 2);
+        AddFormField(headerForm, 1, 2, "Invoice.Warehouse", _txtWhs);
+        AddFormField(headerForm, 2, 0, "Invoice.Notes", _txtNotes, spanPairs: 4);
+        var headerPanel = headerForm;
 
         _txtPartyCode.LostFocus += (_, _) => ResolveParty();
         Grid.SetRow(headerPanel, 0);
@@ -738,23 +743,12 @@ public sealed class OrdWin : BaseWin
             RefreshLocalizedContent(VisualTreeHelper.GetChild(parent, i));
     }
 
-    private static StackPanel Labeled(string key, UIElement control)
-    {
-        var sp = new StackPanel { Margin = new Thickness(0, 0, 8, 4) };
-        sp.Children.Add(new TextBlock { Text = T(key), Tag = key, Margin = new Thickness(0, 0, 0, 2), Opacity = 0.85 });
-        if (control is TextBox textBox)
-            textBox.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
-        sp.Children.Add(control);
-        return sp;
-    }
 
     private static void StyleButton(Button btn, string key)
     {
         btn.Content = T(key);
-        btn.Margin = new Thickness(0, 0, 5, 0);
-        btn.Padding = new Thickness(9, 3, 9, 3);
-        btn.MinWidth = 76;
-        btn.Height = 28;
+        btn.Margin = new Thickness(0, 0, 8, 0);
+        btn.MinWidth = VisuId.ButtonMinWidth;
         btn.Tag = key;
         btn.SetResourceReference(StyleProperty, "VisuButtonStyle");
     }

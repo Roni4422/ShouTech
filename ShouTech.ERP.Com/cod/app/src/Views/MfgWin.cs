@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
@@ -29,16 +29,16 @@ public sealed class MfgWin : BaseWin
 {
     protected override string? ScheduleTintName => "Green";
 
-    private readonly TextBox _txtDocNo = new() { Width = 110, Height = 26 };
-    private readonly DatePicker _dtDate = new() { Width = 120, Height = 26, SelectedDate = DateTime.Today };
-    private readonly TextBox _txtItem = new() { Width = 130, Height = 26 };
-    private readonly TextBox _txtItemName = new() { Width = 220, Height = 26 };
-    private readonly TextBox _txtQty = new() { Width = 80, Height = 26, Text = "1" };
-    private readonly TextBox _txtUnit = new() { Width = 70, Height = 26, Text = "PCS" };
-    private readonly TextBox _txtWhs = new() { Width = 110, Height = 26 };
-    private readonly TextBox _txtOverheads = new() { Width = 90, Height = 26, Text = "0.00" };
-    private readonly TextBox _txtStdCost = new() { Width = 90, Height = 26, Text = "0.00" };
-    private readonly TextBox _txtNotes = new() { Width = 300, Height = 26 };
+    private readonly TextBox _txtDocNo = new();
+    private readonly DatePicker _dtDate = new() { SelectedDate = DateTime.Today };
+    private readonly TextBox _txtItem = new();
+    private readonly TextBox _txtItemName = new();
+    private readonly TextBox _txtQty = new() { Text = "1" };
+    private readonly TextBox _txtUnit = new() { Text = "PCS" };
+    private readonly TextBox _txtWhs = new();
+    private readonly TextBox _txtOverheads = new() { Text = "0.00" };
+    private readonly TextBox _txtStdCost = new() { Text = "0.00" };
+    private readonly TextBox _txtNotes = new();
 
     private readonly Button _btnNew = new();
     private readonly Button _btnSave = new();
@@ -214,19 +214,23 @@ public sealed class MfgWin : BaseWin
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        var headerPanel = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
-        headerPanel.Children.Add(Labeled("MfgOrder.OrderNo", _txtDocNo));
-        headerPanel.Children.Add(Labeled("MfgOrder.Date", _dtDate));
-        headerPanel.Children.Add(Labeled("MfgOrder.TargetMaterial", _txtItem));
-        headerPanel.Children.Add(Labeled("Invoice.Col.Description", _txtItemName));
-        headerPanel.Children.Add(Labeled("MfgOrder.Quantity", _txtQty));
-        headerPanel.Children.Add(Labeled("MfgOrder.Unit", _txtUnit));
-        headerPanel.Children.Add(Labeled("Invoice.Warehouse", _txtWhs));
-        headerPanel.Children.Add(Labeled("MfgOrder.ExtraCosts", _txtOverheads));
-        headerPanel.Children.Add(Labeled("MfgOrders.StandardUnitCost", _txtStdCost));
-        headerPanel.Children.Add(Labeled("Vouchers.Memo", _txtNotes));
-        Grid.SetRow(headerPanel, 0);
-        body.Children.Add(headerPanel);
+        // Header = one shared column grid (4 pairs), side labels, edges
+        // aligned across rows; the memo spans the last three pairs
+        // (Phenix rule).
+        var headerForm = CreateFormGrid(4);
+        headerForm.Margin = new Thickness(0, 0, 0, 8);
+        AddFormField(headerForm, 0, 0, "MfgOrder.OrderNo", _txtDocNo);
+        AddFormField(headerForm, 0, 1, "MfgOrder.Date", _dtDate);
+        AddFormField(headerForm, 0, 2, "MfgOrder.TargetMaterial", _txtItem);
+        AddFormField(headerForm, 0, 3, "Invoice.Col.Description", _txtItemName);
+        AddFormField(headerForm, 1, 0, "MfgOrder.Quantity", _txtQty);
+        AddFormField(headerForm, 1, 1, "MfgOrder.Unit", _txtUnit);
+        AddFormField(headerForm, 1, 2, "Invoice.Warehouse", _txtWhs);
+        AddFormField(headerForm, 1, 3, "MfgOrder.ExtraCosts", _txtOverheads);
+        AddFormField(headerForm, 2, 0, "MfgOrders.StandardUnitCost", _txtStdCost);
+        AddFormField(headerForm, 2, 1, "Vouchers.Memo", _txtNotes, spanPairs: 3);
+        Grid.SetRow(headerForm, 0);
+        body.Children.Add(headerForm);
 
         _grid.AutoGenerateColumns = false;
         _grid.CanUserAddRows = false;
@@ -550,23 +554,12 @@ public sealed class MfgWin : BaseWin
             RefreshLocalizedContent(VisualTreeHelper.GetChild(parent, i));
     }
 
-    private static StackPanel Labeled(string key, UIElement control)
-    {
-        var sp = new StackPanel { Margin = new Thickness(0, 0, 8, 4) };
-        sp.Children.Add(new TextBlock { Text = T(key), Tag = key, Margin = new Thickness(0, 0, 0, 2), Opacity = 0.85 });
-        if (control is TextBox textBox)
-            textBox.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
-        sp.Children.Add(control);
-        return sp;
-    }
 
     private static void StyleButton(Button btn, string key)
     {
         btn.Content = T(key);
-        btn.Margin = new Thickness(0, 0, 5, 0);
-        btn.Padding = new Thickness(9, 3, 9, 3);
-        btn.MinWidth = 76;
-        btn.Height = 28;
+        btn.Margin = new Thickness(0, 0, 8, 0);
+        btn.MinWidth = VisuId.ButtonMinWidth;
         btn.Tag = key;
         btn.SetResourceReference(StyleProperty, "VisuButtonStyle");
     }
