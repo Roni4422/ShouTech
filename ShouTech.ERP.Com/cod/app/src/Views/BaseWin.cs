@@ -177,7 +177,7 @@ public abstract class BaseWin : Window
     /// ApplyLocalizedText can set its text from the key, exactly as the old
     /// per-window Labeled helpers did.
     /// </summary>
-    protected void AddFormField(
+    protected static void AddFormField(
         List<(TextBlock Label, string Key)> labels,
         Grid grid, int row, int pair, string key, UIElement control, int spanPairs = 1)
     {
