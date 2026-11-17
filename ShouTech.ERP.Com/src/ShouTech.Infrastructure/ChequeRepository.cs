@@ -15,12 +15,11 @@ namespace ShouTech.Infrastructure;
 /// </summary>
 public sealed class ChequeRepository : IChequeRepository
 {
-    private const int ListLimit = 1000;
     private const string Columns =
         "id, direction, cheque_no, bank_name, branch_name, drawer_name, party_account_code, party_name, " +
         "amount, currency_code, exchange_rate, issue_date, due_date, status, portfolio_account_code, " +
         "deposit_bank_account_code, deposit_date, clearance_date, endorsed_to_account_code, bounce_date, " +
-        "bounce_reason, fees_amount, journal_entry_id, notes";
+        "bounce_reason, fees_amount, journal_entry_id, notes, batch_doc_no, cancel_reason";
 
     private readonly string _provider;
     private readonly string _connectionString;
@@ -47,7 +46,9 @@ public sealed class ChequeRepository : IChequeRepository
         var sql = $"SELECT {Columns} FROM cheques WHERE company_id = @company AND {NotDeleted}";
         if (!string.IsNullOrWhiteSpace(status)) sql += " AND status = @status";
         if (!string.IsNullOrWhiteSpace(direction)) sql += " AND direction = @direction";
-        sql += $" ORDER BY due_date, cheque_no LIMIT {ListLimit}";
+        // No row cap (standing unlimited-rows rule; CHQ-13: the old
+        // LIMIT 1000 silently truncated the register and its totals).
+        sql += " ORDER BY due_date, cheque_no";
         await using var command = CreateCommand(connection, null, sql);
         Add(command, "@company", companyId.Trim());
         if (!string.IsNullOrWhiteSpace(status)) Add(command, "@status", status.Trim());
@@ -98,7 +99,7 @@ public sealed class ChequeRepository : IChequeRepository
                         $"Cheque '{cheque.ChequeNo.Trim()}' from drawer '{cheque.DrawerName}' at bank '{cheque.BankName.Trim()}' already exists for this company.");
 
                 await using var insert = CreateCommand(connection, transaction,
-                    $"INSERT INTO cheques ({Columns}, company_id, created_by) VALUES (@id, @direction, @no, @bank, @branch, @drawer, @partyAcc, @partyName, @amount, @currency, @rate, @issue, @due, @status, @portfolio, @depositBank, @depositDate, @clearance, @endorsed, @bounceDate, @bounceReason, @fees, @journal, @notes, @company, @user)");
+                    $"INSERT INTO cheques ({Columns}, company_id, created_by) VALUES (@id, @direction, @no, @bank, @branch, @drawer, @partyAcc, @partyName, @amount, @currency, @rate, @issue, @due, @status, @portfolio, @depositBank, @depositDate, @clearance, @endorsed, @bounceDate, @bounceReason, @fees, @journal, @notes, @batchDocNo, @cancelReason, @company, @user)");
                 Bind(insert, companyId, cheque, userId);
                 await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
@@ -139,7 +140,7 @@ public sealed class ChequeRepository : IChequeRepository
             await using var update = CreateCommand(connection, transaction,
                 $"UPDATE cheques SET status = @status, deposit_bank_account_code = @depositBank, deposit_date = @depositDate, " +
                 $"clearance_date = @clearance, endorsed_to_account_code = @endorsed, bounce_date = @bounceDate, " +
-                $"bounce_reason = @bounceReason, fees_amount = @fees, journal_entry_id = @journal, notes = @notes, " +
+                $"bounce_reason = @bounceReason, fees_amount = @fees, journal_entry_id = @journal, notes = @notes, cancel_reason = @cancelReason, " +
                 $"updated_by = @user, updated_at = {NowExpr} " +
                 $"WHERE company_id = @company AND id = @id AND status = @expected AND {NotDeleted}");
             Add(update, "@status", cheque.Status);
@@ -152,6 +153,7 @@ public sealed class ChequeRepository : IChequeRepository
             Add(update, "@fees", cheque.FeesAmount);
             Add(update, "@journal", (object?)(cheque.JournalEntryId?.ToString("D")) ?? DBNull.Value);
             Add(update, "@notes", (object?)NullIfBlank(cheque.Notes) ?? DBNull.Value);
+            Add(update, "@cancelReason", (object?)NullIfBlank(cheque.CancelReason) ?? DBNull.Value);
             Add(update, "@user", userId);
             Add(update, "@company", companyId.Trim());
             Add(update, "@id", FormatGuid(cheque.Id));
@@ -229,7 +231,22 @@ public sealed class ChequeRepository : IChequeRepository
         Add(command, "@fees", cheque.FeesAmount);
         Add(command, "@journal", (object?)(cheque.JournalEntryId?.ToString("D")) ?? DBNull.Value);
         Add(command, "@notes", (object?)NullIfBlank(cheque.Notes) ?? DBNull.Value);
+        Add(command, "@batchDocNo", (object?)NullIfBlank(cheque.BatchDocNo) ?? DBNull.Value);
+        Add(command, "@cancelReason", (object?)NullIfBlank(cheque.CancelReason) ?? DBNull.Value);
         Add(command, "@user", userId);
+    }
+
+    public async Task<int> CountByJournalEntryAsync(string companyId, Guid journalEntryId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        if (journalEntryId == Guid.Empty) throw new ArgumentException("Journal entry is required.", nameof(journalEntryId));
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = CreateCommand(connection, null,
+            $"SELECT COUNT(*) FROM cheques WHERE company_id = @company AND journal_entry_id = @journal AND {NotDeleted}");
+        Add(command, "@company", companyId.Trim());
+        Add(command, "@journal", journalEntryId.ToString("D"));
+        return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
     }
 
     private static Cheque ReadCheque(DbDataReader reader) => new()
@@ -257,7 +274,9 @@ public sealed class ChequeRepository : IChequeRepository
         BounceReason = ReadString(reader, 20),
         FeesAmount = ReadDecimal(reader, 21),
         JournalEntryId = Guid.TryParse(ReadString(reader, 22), out var j) ? j : null,
-        Notes = ReadString(reader, 23)
+        Notes = ReadString(reader, 23),
+        BatchDocNo = ReadString(reader, 24),
+        CancelReason = ReadString(reader, 25)
     };
 
     private static void RequireCompany(string companyId)

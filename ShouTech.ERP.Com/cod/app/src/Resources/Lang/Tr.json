@@ -2138,7 +2138,9 @@
     "DueSoon": "30 gun icinde vadesi dolanlar",
     "PrintRegister": "Defteri Yazdir",
     "BounceReason": "Karsiliksiz Nedeni",
-    "BounceFees": "Karsiliksiz Ucretleri"
+    "BounceFees": "Karsiliksiz Ucretleri",
+    "IssueDate": "Düzenleme Tarihi",
+    "CancelReason": "Ödeme Durdurma Notu"
   },
   "MfgOrders": {
     "PermissionDenied": "Uretim emirleri icin yetkiniz yok.",
@@ -2365,7 +2367,23 @@
     "BookBalance": "Defter bakiyesi",
     "ClearedTotal": "Mutabık toplam",
     "UnclearedTotal": "Mutabık olmayan toplam",
-    "Difference": "Fark"
+    "Difference": "Fark",
+    "OpeningBalance": "Açılış bakiyesi",
+    "ClosingBalance": "Kapanış (ekstre) bakiyesi",
+    "SaveStatement": "Ekstreyi Kaydet",
+    "StatementLines": "Ekstre satırları",
+    "AddLine": "Satır Ekle",
+    "RemoveLine": "Satırı Sil",
+    "Match": "Eşleştir",
+    "Unmatch": "Eşleştirmeyi Kaldır",
+    "CloseStatement": "Ekstreyi Kapat",
+    "StatementSaved": "Banka ekstresi kaydedildi.",
+    "Matched": "Eşleşti",
+    "Description": "Açıklama",
+    "Amount": "Tutar",
+    "StatementRequired": "Önce banka ekstresini kaydedin.",
+    "SelectStatementLine": "Önce bir ekstre satırı seçin.",
+    "SelectBookLine": "Önce bir defter satırı seçin."
   },
   "CloseCash": {
     "Title": "POS Kasa Kapanışı",

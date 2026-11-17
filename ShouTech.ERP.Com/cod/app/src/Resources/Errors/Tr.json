@@ -86,6 +86,18 @@
     "message": "'{0}' para birimi için kullanılabilir kur yok: belgede kur bulunmuyor ve {1} tarihinde veya öncesinde ana kur mevcut değil.",
     "hint": "Belgeye bir kur girin veya para birimi kartında tarihli bir kur tanımlayın, ardından yeniden kaydedin."
   },
+  "ACC-5016": {
+    "code": "ACC-5016",
+    "name": "BankStatementNotReconciled",
+    "message": "Farkı sıfır olmadığı sürece banka ekstresi kapatılamaz.",
+    "hint": "Fark sıfır olana kadar kalan ekstre satırlarını defter satırlarıyla eşleştirin (veya eksik defter kayıtlarını girin)."
+  },
+  "ACC-5017": {
+    "code": "ACC-5017",
+    "name": "StatementLineAlreadyMatched",
+    "message": "Ekstre satırı zaten bir defter satırıyla eşleştirilmiş.",
+    "hint": "Ekstre satırını başka bir defter satırıyla eşleştirmeden önce eşleştirmeyi kaldırın."
+  },
   "AUTH-2001": {
     "code": "AUTH-2001",
     "name": "InvalidCredentials",
@@ -214,6 +226,24 @@
     "name": "InventoryOperationFailed",
     "message": "Envanter işlemi tamamlanamadı."
   },
+  "INV-6002": {
+    "code": "INV-6002",
+    "name": "StockValuationFailed",
+    "message": "'{0}' malzemesi için stok değerlemesi başarısız oldu.",
+    "hint": "Malzeme maliyet yöntemini ve stok bakiyesini kontrol edip tekrar işleyin."
+  },
+  "INV-6003": {
+    "code": "INV-6003",
+    "name": "RecalculationFailed",
+    "message": "Maliyetleri Yeniden Hesapla işi başarısız oldu.",
+    "hint": "Hata için stock_revaluation_jobs içindeki iş kaydına bakın, nedeni düzeltin ve işi tekrar çalıştırın."
+  },
+  "INV-6004": {
+    "code": "INV-6004",
+    "name": "RecalculationClosedPeriod",
+    "message": "Maliyetleri Yeniden Hesapla, kapalı bir mali dönemdeki hareketleri yeniden yazamaz (başlangıç tarihi '{0}').",
+    "hint": "Açık bir mali dönem içinde bir başlangıç tarihi seçin."
+  },
   "LIC-8001": {
     "code": "LIC-8001",
     "name": "LicenseCheckFailed",
@@ -290,23 +320,5 @@
     "code": "UI-7004",
     "name": "NavigationFailed",
     "message": "Gezinme tamamlanamadı."
-  },
-  "INV-6002": {
-    "code": "INV-6002",
-    "name": "StockValuationFailed",
-    "message": "'{0}' malzemesi için stok değerlemesi başarısız oldu.",
-    "hint": "Malzeme maliyet yöntemini ve stok bakiyesini kontrol edip tekrar işleyin."
-  },
-  "INV-6003": {
-    "code": "INV-6003",
-    "name": "RecalculationFailed",
-    "message": "Maliyetleri Yeniden Hesapla işi başarısız oldu.",
-    "hint": "Hata için stock_revaluation_jobs içindeki iş kaydına bakın, nedeni düzeltin ve işi tekrar çalıştırın."
-  },
-  "INV-6004": {
-    "code": "INV-6004",
-    "name": "RecalculationClosedPeriod",
-    "message": "Maliyetleri Yeniden Hesapla, kapalı bir mali dönemdeki hareketleri yeniden yazamaz (başlangıç tarihi '{0}').",
-    "hint": "Açık bir mali dönem içinde bir başlangıç tarihi seçin."
   }
 }

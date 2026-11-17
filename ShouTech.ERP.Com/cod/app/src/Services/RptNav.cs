@@ -115,8 +115,15 @@ public static class RptNav
             case "Accounts.PaymentVoucher":
             case "Vouchers.PaymentTitle":
                 OpenPaymentVoucher(owner); return true;
+            // Step 8 (CHQ-01): incoming and outgoing cheques are
+            // DIFFERENT documents with inverse GL. The outgoing key
+            // must open the outgoing window — before this fix both
+            // keys opened an incoming window and issuing a cheque
+            // posted Dr Box / Cr Party (the exact inverse).
             case "Bonds.ReceiptCheque":
+                OpenIncomingChequeVoucher(owner); return true;
             case "Bonds.PaymentCheque":
+                OpenOutgoingChequeVoucher(owner); return true;
             case "Accounts.ChequeVoucher":
             case "Vouchers.ChequeTitle":
                 OpenChequeVoucher(owner); return true;
@@ -208,7 +215,42 @@ public static class RptNav
     public static void OpenJournalVoucher(Window? owner = null) => Show(new JrnWin(), owner);
     public static void OpenReceiptVoucher(Window? owner = null) => Show(new CshWin(CshKind.Receipt), owner);
     public static void OpenPaymentVoucher(Window? owner = null) => Show(new CshWin(CshKind.Payment), owner);
-    public static void OpenChequeVoucher(Window? owner = null) => Show(new ChqWin(), owner);
+    public static void OpenChequeVoucher(Window? owner = null) => OpenIncomingChequeVoucher(owner);
+    public static void OpenIncomingChequeVoucher(Window? owner = null) => ShowCheque(ChqKind.Incoming, owner);
+    public static void OpenOutgoingChequeVoucher(Window? owner = null) => ShowCheque(ChqKind.Outgoing, owner);
+
+    /// <summary>Cheque windows are parameterised by kind, so the
+    /// type-only dedupe in Show() would activate an INCOMING window
+    /// for an OUTGOING request (the router mode-stickiness defect).
+    /// Dedupe on (type, kind): a visible window of the OTHER kind is
+    /// left alone and a new window of the requested kind opens.</summary>
+    private static void ShowCheque(ChqKind kind, Window? owner)
+    {
+        try
+        {
+            foreach (Window w in System.Windows.Application.Current.Windows)
+            {
+                if (w is ChqWin existing && existing.Kind == kind && existing.IsVisible)
+                {
+                    existing.Activate();
+                    if (existing.WindowState == WindowState.Minimized)
+                        existing.WindowState = WindowState.Normal;
+                    return;
+                }
+            }
+        }
+        catch (Exception exCheque)
+        {
+            AppHost.Errors.Report(ErrorCodes.NavigationFailed, exCheque, "RptNav.ShowCheque");
+        }
+        var win = new ChqWin(kind);
+        try { win.Owner = owner ?? System.Windows.Application.Current?.MainWindow; }
+        catch (Exception exOwner)
+        {
+            AppHost.Errors.Report(ErrorCodes.NavigationFailed, exOwner, "RptNav.ShowCheque.Owner");
+        }
+        win.Show();
+    }
 
     public static void OpenCustCard(Window? owner = null) => Show(new CstCard(), owner);
     public static void OpenCostCenterCard(Window? owner = null) => Show(new CcCard(), owner);

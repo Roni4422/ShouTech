@@ -1,3 +1,4 @@
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
 
@@ -29,19 +30,169 @@ public sealed class OperationsService
         return _repository.GetBankJournalLinesAsync(RequireCompany(companyId), accountCode.Trim(), ct);
     }
 
-    /// <summary>Totals over a loaded line set: book = all lines, cleared =
-    /// marked lines, uncleared = the rest. Pure function of the rows.</summary>
-    public static BankReconciliationTotals ComputeTotals(IEnumerable<BankJournalLineRow> lines)
+    /// <summary>
+    /// Reconciliation totals against ONE bank statement (Step 8, BNK-01).
+    /// Book side: book = all loaded book lines, cleared = lines matched
+    /// to a statement line of THIS statement, uncleared = the rest.
+    /// Statement side: the statement's own opening/closing balances and
+    /// the sums of its matched/unmatched lines. Difference (on the
+    /// record) = closing − opening − cleared: the statement movement
+    /// not yet matched in the books — a real quantity that can be
+    /// non-zero, moves by each matched amount, and is legitimately
+    /// zero only at a full match. Pure function of the rows.
+    /// </summary>
+    public static BankReconciliationTotals ComputeTotals(
+        IEnumerable<BankJournalLineRow> lines,
+        BankStatement? statement,
+        IEnumerable<BankStatementLine>? statementLines = null)
     {
         ArgumentNullException.ThrowIfNull(lines);
+        var matchedKeys = new HashSet<string>(StringComparer.Ordinal);
+        decimal matchedStatement = 0m, unmatchedStatement = 0m;
+        if (statementLines is not null)
+        {
+            foreach (var sl in statementLines)
+            {
+                if (sl.IsMatched)
+                {
+                    matchedStatement += sl.Amount;
+                    matchedKeys.Add(sl.MatchedJournalLineKey!);
+                }
+                else
+                {
+                    unmatchedStatement += sl.Amount;
+                }
+            }
+        }
         decimal book = 0m, cleared = 0m;
         foreach (var line in lines)
         {
             book += line.Amount;
-            if (line.IsCleared)
+            // With a statement in scope, "cleared" means matched to THIS
+            // statement; without one, fall back to any persisted mark.
+            var isCleared = statement is null ? line.IsCleared : matchedKeys.Contains(line.LineKey);
+            if (isCleared)
                 cleared += line.Amount;
         }
-        return new BankReconciliationTotals(book, cleared, book - cleared);
+        return new BankReconciliationTotals(
+            book, cleared, book - cleared,
+            statement?.ClosingBalance ?? 0m, statement?.OpeningBalance ?? 0m,
+            matchedStatement, unmatchedStatement);
+    }
+
+    // ------------------------------------------------------------ Bank statements (063)
+
+    public async Task<Guid> SaveBankStatementAsync(string companyId, BankStatement statement, string userId, CancellationToken ct = default)
+    {
+        RequireCompany(companyId);
+        ArgumentNullException.ThrowIfNull(statement);
+        if (string.IsNullOrWhiteSpace(statement.AccountCode))
+            throw new InvalidOperationException("A bank account code is required for a statement.");
+        if (statement.PeriodFrom is { } from && statement.PeriodTo is { } to && to < from)
+            throw new InvalidOperationException("The statement period end cannot precede its start.");
+        statement.AccountCode = statement.AccountCode.Trim();
+        await _repository.SaveBankStatementAsync(companyId, statement, RequireUser(userId), ct).ConfigureAwait(false);
+        return statement.Id;
+    }
+
+    public Task<IReadOnlyList<BankStatement>> GetBankStatementsAsync(string companyId, string accountCode, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(accountCode))
+            throw new InvalidOperationException("A bank account code is required.");
+        return _repository.GetBankStatementsAsync(RequireCompany(companyId), accountCode.Trim(), ct);
+    }
+
+    public Task<BankStatement?> GetBankStatementAsync(string companyId, Guid statementId, CancellationToken ct = default)
+    {
+        if (statementId == Guid.Empty) throw new ArgumentException("Statement is required.", nameof(statementId));
+        return _repository.GetBankStatementAsync(RequireCompany(companyId), statementId, ct);
+    }
+
+    public async Task<Guid> AddBankStatementLineAsync(string companyId, BankStatementLine line, string userId, CancellationToken ct = default)
+    {
+        RequireCompany(companyId);
+        ArgumentNullException.ThrowIfNull(line);
+        if (line.StatementId == Guid.Empty)
+            throw new InvalidOperationException("A statement line needs its statement.");
+        if (string.IsNullOrWhiteSpace(line.AccountCode))
+            throw new InvalidOperationException("A statement line needs an account code.");
+        if (line.Amount == 0m)
+            throw new InvalidOperationException("A statement line amount cannot be zero.");
+        line.AccountCode = line.AccountCode.Trim();
+        return await _repository.AddBankStatementLineAsync(companyId, line, RequireUser(userId), ct).ConfigureAwait(false);
+    }
+
+    public Task<IReadOnlyList<BankStatementLine>> GetBankStatementLinesAsync(string companyId, Guid statementId, CancellationToken ct = default)
+    {
+        if (statementId == Guid.Empty) throw new ArgumentException("Statement is required.", nameof(statementId));
+        return _repository.GetBankStatementLinesAsync(RequireCompany(companyId), statementId, ct);
+    }
+
+    public Task RemoveBankStatementLineAsync(string companyId, Guid lineId, string userId, CancellationToken ct = default)
+    {
+        if (lineId == Guid.Empty) throw new ArgumentException("Statement line is required.", nameof(lineId));
+        return _repository.RemoveBankStatementLineAsync(RequireCompany(companyId), lineId, RequireUser(userId), ct);
+    }
+
+    /// <summary>Matches one statement line to one book line. The two
+    /// amounts must be EQUAL — a partial or mismatched match would hide
+    /// exactly the discrepancy the Difference exists to surface; a
+    /// genuinely different bank amount stays unmatched until the book
+    /// side is corrected or an adjustment entry is posted.</summary>
+    public async Task MatchBankLineAsync(string companyId, BankStatementLine statementLine, BankJournalLineRow bookLine, Guid statementId, string userId, CancellationToken ct = default)
+    {
+        RequireCompany(companyId);
+        ArgumentNullException.ThrowIfNull(statementLine);
+        ArgumentNullException.ThrowIfNull(bookLine);
+        if (statementLine.IsMatched)
+            throw new AppError(ErrorCodes.StatementLineAlreadyMatched,
+                "The statement line is already matched to a book line; unmatch it first.", statementLine.Id.ToString("D"));
+        if (bookLine.IsCleared)
+            throw new InvalidOperationException("The book line is already cleared by another statement line or mark.");
+        if (statementLine.Amount != bookLine.Amount)
+            throw new InvalidOperationException(
+                $"Statement amount {statementLine.Amount} does not equal the book line amount {bookLine.Amount}; only equal amounts can be matched.");
+        var statement = await _repository.GetBankStatementAsync(companyId, statementId, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Bank statement was not found for this company.");
+        var mark = new BankReconciliationMark
+        {
+            JournalEntryId = bookLine.EntryId,
+            JournalLineKey = bookLine.LineKey,
+            AccountCode = statement.AccountCode,
+            StatementDate = statement.StatementDate,
+            StatementRef = statement.StatementRef,
+            ClearedAmount = bookLine.Amount,
+            StatementId = statementId,
+            StatementLineId = statementLine.Id
+        };
+        await _repository.MatchBankLineAsync(companyId, statementLine.Id, mark, RequireUser(userId), ct).ConfigureAwait(false);
+    }
+
+    public Task UnmatchBankLineAsync(string companyId, Guid statementLineId, string userId, CancellationToken ct = default)
+    {
+        if (statementLineId == Guid.Empty) throw new ArgumentException("Statement line is required.", nameof(statementLineId));
+        return _repository.UnmatchBankLineAsync(RequireCompany(companyId), statementLineId, RequireUser(userId), ct);
+    }
+
+    /// <summary>Closes a statement once it fully reconciles: the
+    /// difference must be exactly zero (ACC-5016 otherwise) — a
+    /// statement that still disagrees with the books stays open.</summary>
+    public async Task CloseBankStatementAsync(string companyId, Guid statementId, string userId, CancellationToken ct = default)
+    {
+        RequireCompany(companyId);
+        if (statementId == Guid.Empty) throw new ArgumentException("Statement is required.", nameof(statementId));
+        var statement = await _repository.GetBankStatementAsync(companyId, statementId, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Bank statement was not found for this company.");
+        if (statement.Status == BankStatementStatuses.Closed)
+            throw new InvalidOperationException("Bank statement is already closed.");
+        var bookLines = await _repository.GetBankJournalLinesAsync(companyId, statement.AccountCode, ct).ConfigureAwait(false);
+        var statementLines = await _repository.GetBankStatementLinesAsync(companyId, statementId, ct).ConfigureAwait(false);
+        var totals = ComputeTotals(bookLines, statement, statementLines);
+        if (totals.Difference != 0m)
+            throw new AppError(ErrorCodes.BankStatementNotReconciled,
+                $"The statement cannot be closed: its difference is {totals.Difference}, not zero. Match the remaining statement movement first.",
+                statementId.ToString("D"));
+        await _repository.CloseBankStatementAsync(companyId, statementId, RequireUser(userId), ct).ConfigureAwait(false);
     }
 
     public async Task SaveBankMarksAsync(string companyId, IReadOnlyList<BankReconciliationMark> marks, string userId, CancellationToken ct = default)

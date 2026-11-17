@@ -4,20 +4,42 @@ using ShouTech.Domain.Interfaces;
 namespace ShouTech.Application.Services;
 
 /// <summary>
-/// Cheque portfolio service (RS-4): lifecycle transitions post through the
-/// journal engine. Posting map:
-///   IN save    : Dr Portfolio/Box (total), Cr Party (per cheque) -> InPortfolio
-///   IN Deposit : no GL (bank + date only)                        -> Deposited
-///   IN Clear   : Dr Deposit Bank GL, Cr Portfolio                -> Cleared
-///   IN Bounce  : reverse the receipt entry                       -> Bounced
-///   IN Endorse : Dr Endorsed-To account, Cr Portfolio            -> Endorsed
-///   OUT save   : Dr Party (per cheque), Cr Box (total)           -> Issued
-///   OUT Clear  : no GL (status + date only)                      -> Cleared
-///   OUT Cancel : reverse the payment entry                       -> Cancelled
-/// Every transition is validated against the legal-transitions table here and
-/// re-validated against the stored status inside the repository transaction.
-/// Transitions that move GL require a journal repository; without one they
-/// fail honestly instead of recording a status-only fiction.
+/// Cheque portfolio service: lifecycle transitions post through the
+/// Step-3 GlPosting engine (via IJournalRepository.PostDocumentAsync).
+///
+/// Step 8 posting map — EVERY cheque event is its OWN journal entry,
+/// linked to that cheque alone (migration 060 source columns:
+/// source_doc_id = the cheque id), so no cheque's GL can ever be
+/// disturbed by a sibling's lifecycle:
+///
+///   IN save    : per cheque Dr Portfolio/Box, Cr Party          -> InPortfolio  [CHQ-ISSUE]
+///   IN Deposit : no GL (bank + date only)                       -> Deposited
+///   IN Clear   : per cheque Dr Deposit Bank GL, Cr Portfolio    -> Cleared      [CHQ-CLEAR]
+///   IN Bounce  : reverse THE cheque's own issue entry           -> Bounced
+///                (historical shared batch entry: per-cheque
+///                compensating entry Dr Party, Cr Portfolio     [CHQ-BOUNCE],
+///                the shared entry is NEVER reversed)
+///                + fees, when charged: Dr Party, Cr Bank/Portfolio [CHQ-FEE]
+///   IN Endorse : per cheque Dr Endorsed-To account, Cr Portfolio -> Endorsed    [CHQ-ENDORSE]
+///   OUT save   : per cheque Dr Party, Cr Box (portfolio)        -> Issued       [CHQ-ISSUE]
+///   OUT Clear  : per cheque Dr Portfolio, Cr Paying Bank        -> Cleared      [CHQ-CLEAR]
+///                (CHQ-04: clearance now debits the liability/box leg
+///                and credits the bank that actually paid out)
+///   OUT Cancel : reverse THE cheque's own issue entry           -> Cancelled
+///                (historical shared batch entry: compensating
+///                entry Dr Portfolio, Cr Party                   [CHQ-CANCEL])
+///
+/// Atomicity (CHQ-03): a lifecycle transition first CLAIMS the new
+/// status through the repository's compare-and-swap update, then posts
+/// its GL; if the GL step fails, the status claim is rolled back with
+/// a compensating CAS update before the error propagates — a retry can
+/// never double-post, and a failed transition never strands the cheque
+/// in a terminal status without its GL (or vice versa). Batch save
+/// posts each cheque's entry, then inserts the batch; any failure
+/// reverses every entry posted so far as compensation.
+/// Base-currency treatment is Step 7's: each entry carries the
+/// cheque's own currency + rate and GlPosting/JournalRepository derive
+/// the dual base amounts (migration 062) — no pre-multiplication.
 /// </summary>
 public sealed class ChequeService
 {
@@ -67,7 +89,7 @@ public sealed class ChequeService
     }
 
     // ------------------------------------------------------------------
-    // Batch save + receipt/payment journal (one entry per batch).
+    // Batch save: ONE journal entry per cheque (Step 8, CHQ-02).
     // ------------------------------------------------------------------
     public async Task<IReadOnlyList<Guid>> SaveBatchAsync(
         string companyId,
@@ -86,6 +108,7 @@ public sealed class ChequeService
         if (string.IsNullOrWhiteSpace(boxAccountCode))
             throw new InvalidOperationException("The portfolio / box account code is required.");
         var journal = RequireJournal();
+        var companyGuid = await _repository.ResolveCompanyGuidAsync(companyId, cancellationToken).ConfigureAwait(false);
         var direction = cheques[0].Direction;
         foreach (var cheque in cheques)
         {
@@ -96,70 +119,41 @@ public sealed class ChequeService
             cheque.PortfolioAccountCode = boxAccountCode.Trim();
         }
 
-        var companyGuid = await _repository.ResolveCompanyGuidAsync(companyId, cancellationToken).ConfigureAwait(false);
-        var boxId = await _repository.ResolveAccountIdAsync(companyGuid, boxAccountCode, cancellationToken).ConfigureAwait(false);
-
-        // Step 7 (J-5 / cash-payments cheque BLOCKER): a batch whose
-        // cheques share ONE currency and ONE rate now posts as a proper
-        // transaction-currency journal entry — header currency + rate
-        // are the batch's, lines carry the RAW cheque amounts, and
-        // JournalRepository derives the base amounts (migration 062).
-        // Before, lines were pre-multiplied by each cheque's rate while
-        // the header claimed rate 1, so transaction amounts and base
-        // amounts were conflated in the same columns. A batch mixing
-        // currencies/rates cannot be represented by the one-rate-per-
-        // entry journal model; it keeps the legacy pre-converted shape
-        // (lines in base, header rate 1) — flagged in FIX_PHASE_STEP7
-        // as an owner decision, not silently "fixed" into wrong money.
-        var uniform = cheques.All(c =>
-            string.Equals(c.CurrencyCode, cheques[0].CurrencyCode, StringComparison.OrdinalIgnoreCase)
-            && c.ExchangeRate == cheques[0].ExchangeRate);
-        var total = uniform
-            ? cheques.Sum(c => c.Amount)
-            : cheques.Sum(c => c.Amount * c.ExchangeRate);
-        decimal LineAmount(Cheque c) => uniform ? c.Amount : c.Amount * c.ExchangeRate;
-        var entry = new JournalEntry(
-            journalDate,
-            string.IsNullOrWhiteSpace(description) ? $"Cheque batch ({direction})" : description.Trim(),
-            referenceNumber: null,
-            currencyCode: cheques[0].CurrencyCode,
-            exchangeRate: uniform ? cheques[0].ExchangeRate : 1m,
-            documentNumber: ($"CHQ-{journalDate:yyyyMMdd}-{Guid.NewGuid():N}")[..36]);
-        if (direction == ChequeDirections.In)
-        {
-            entry.AddLine(boxId, total, 0m, "Cheques received into portfolio");
-            foreach (var cheque in cheques)
-            {
-                var partyId = await _repository.ResolveAccountIdAsync(companyGuid, cheque.PartyAccountCode!, cancellationToken).ConfigureAwait(false);
-                entry.AddLine(partyId, 0m, LineAmount(cheque), $"Cheque {cheque.ChequeNo.Trim()}");
-            }
-        }
-        else
-        {
-            foreach (var cheque in cheques)
-            {
-                var partyId = await _repository.ResolveAccountIdAsync(companyGuid, cheque.PartyAccountCode!, cancellationToken).ConfigureAwait(false);
-                entry.AddLine(partyId, LineAmount(cheque), 0m, $"Cheque {cheque.ChequeNo.Trim()}");
-            }
-            entry.AddLine(boxId, 0m, total, "Cheques issued");
-        }
-        entry.EnsureBalanced();
-
-        await journal.SaveDraftAsync(companyGuid, entry, userId, cancellationToken).ConfigureAwait(false);
-        await journal.PostAsync(entry.Id, userId, cancellationToken).ConfigureAwait(false);
-
-        foreach (var cheque in cheques)
-            cheque.JournalEntryId = entry.Id;
+        var posted = new List<Guid>();
         try
         {
+            foreach (var cheque in cheques)
+            {
+                var lines = direction == ChequeDirections.In
+                    ? new[]
+                    {
+                        new GlLineRequest(boxAccountCode.Trim(), cheque.Amount, 0m, Note: "Cheques received into portfolio"),
+                        new GlLineRequest(cheque.PartyAccountCode!, 0m, cheque.Amount, Note: $"Cheque {cheque.ChequeNo}")
+                    }
+                    : new[]
+                    {
+                        new GlLineRequest(cheque.PartyAccountCode!, cheque.Amount, 0m, Note: $"Cheque {cheque.ChequeNo}"),
+                        new GlLineRequest(boxAccountCode.Trim(), 0m, cheque.Amount, Note: "Cheques issued")
+                    };
+                var result = await journal.PostDocumentAsync(new GlDocumentRequest(
+                    companyGuid, journalDate,
+                    string.IsNullOrWhiteSpace(description) ? $"Cheque {cheque.ChequeNo} ({direction})" : description.Trim(),
+                    ChequeSourceTypes.Issue, cheque.Id.ToString("D"), cheque.ChequeNo,
+                    cheque.CurrencyCode, cheque.ExchangeRate, lines), userId, cancellationToken).ConfigureAwait(false);
+                cheque.JournalEntryId = result.JournalEntryId;
+                posted.Add(result.JournalEntryId);
+            }
             await _repository.InsertBatchAsync(companyId, cheques, userId, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
-            // Compensation: the GL entry is already posted, so reverse it
-            // (best effort) rather than leaving an orphan receipt/payment.
-            try { await journal.ReverseAsync(entry.Id, userId, "Cheque batch insert failed; compensating reversal.", CancellationToken.None).ConfigureAwait(false); }
-            catch { /* original exception is the one the caller must see */ }
+            // Compensation: reverse every entry this batch posted (best
+            // effort per entry) rather than leaving orphan GL behind.
+            foreach (var entryId in posted)
+            {
+                try { await journal.ReverseAsync(entryId, userId, "Cheque batch save failed; compensating reversal.", CancellationToken.None).ConfigureAwait(false); }
+                catch { /* the original exception is the one the caller must see */ }
+            }
             throw;
         }
         return cheques.Select(c => c.Id).ToArray();
@@ -182,26 +176,54 @@ public sealed class ChequeService
     }
 
     public async Task ClearAsync(string companyId, Guid chequeId, DateOnly clearanceDate, string userId, CancellationToken cancellationToken = default)
+        => await ClearAsync(companyId, chequeId, clearanceDate, userId, bankAccountCode: null, cancellationToken).ConfigureAwait(false);
+
+    /// <summary>Clears a cheque. Incoming: Dr Deposit Bank / Cr Portfolio.
+    /// Outgoing: Dr Portfolio / Cr Paying Bank — the bank is the explicit
+    /// <paramref name="bankAccountCode"/> when given, else the bank code
+    /// recorded on the cheque (deposit/paying bank field).</summary>
+    public async Task ClearAsync(string companyId, Guid chequeId, DateOnly clearanceDate, string userId, string? bankAccountCode, CancellationToken cancellationToken = default)
     {
         var cheque = await LoadAsync(companyId, chequeId, cancellationToken).ConfigureAwait(false);
         EnsureTransition(cheque, ChequeStatuses.Cleared);
-        var expected = cheque.Status;
-        if (cheque.Direction == ChequeDirections.In)
-        {
-            // Dr Deposit Bank GL, Cr Portfolio.
-            var bankCode = !string.IsNullOrWhiteSpace(cheque.DepositBankAccountCode)
+        var portfolioCode = !string.IsNullOrWhiteSpace(cheque.PortfolioAccountCode)
+            ? cheque.PortfolioAccountCode!
+            : throw new InvalidOperationException("The cheque has no portfolio account recorded.");
+        var bankCode = !string.IsNullOrWhiteSpace(bankAccountCode)
+            ? bankAccountCode!.Trim()
+            : !string.IsNullOrWhiteSpace(cheque.DepositBankAccountCode)
                 ? cheque.DepositBankAccountCode!
-                : throw new InvalidOperationException("Deposit the cheque before clearing it (a deposit bank account is required).");
-            var portfolioCode = !string.IsNullOrWhiteSpace(cheque.PortfolioAccountCode)
-                ? cheque.PortfolioAccountCode!
-                : throw new InvalidOperationException("The cheque has no portfolio account recorded.");
-            await PostSimpleEntryAsync(companyId, cheque, clearanceDate, userId,
-                debitCode: bankCode, creditCode: portfolioCode,
-                description: $"Cheque {cheque.ChequeNo} cleared", cancellationToken).ConfigureAwait(false);
-        }
+                : throw new InvalidOperationException(cheque.Direction == ChequeDirections.In
+                    ? "Deposit the cheque before clearing it (a deposit bank account is required)."
+                    : "A paying bank account is required to clear an outgoing cheque.");
+        var expected = cheque.Status;
+        var previousDepositBank = cheque.DepositBankAccountCode;
+        var previousDepositDate = cheque.DepositDate;
         cheque.ClearanceDate = clearanceDate;
+        if (cheque.Direction == ChequeDirections.Out && string.IsNullOrWhiteSpace(cheque.DepositBankAccountCode))
+        {
+            cheque.DepositBankAccountCode = bankCode;
+            cheque.DepositDate = clearanceDate;
+        }
         cheque.Status = ChequeStatuses.Cleared;
-        await _repository.UpdateTransitionAsync(companyId, cheque, expected, RequireUser(userId), cancellationToken).ConfigureAwait(false);
+        await ClaimAsync(companyId, cheque, expected, userId, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var (debit, credit) = cheque.Direction == ChequeDirections.In
+                ? (bankCode, portfolioCode)
+                : (portfolioCode, bankCode);
+            await PostChequeEntryAsync(companyId, cheque, clearanceDate, userId,
+                ChequeSourceTypes.Clear, debit, credit,
+                $"Cheque {cheque.ChequeNo} cleared", cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            cheque.ClearanceDate = null;
+            cheque.DepositBankAccountCode = previousDepositBank;
+            cheque.DepositDate = previousDepositDate;
+            await ReleaseClaimAsync(companyId, cheque, expected, userId).ConfigureAwait(false);
+            throw;
+        }
     }
 
     public async Task BounceAsync(string companyId, Guid chequeId, DateOnly bounceDate, string? reason, decimal feesAmount, string userId, CancellationToken cancellationToken = default)
@@ -209,16 +231,46 @@ public sealed class ChequeService
         var cheque = await LoadAsync(companyId, chequeId, cancellationToken).ConfigureAwait(false);
         EnsureTransition(cheque, ChequeStatuses.Bounced);
         if (feesAmount < 0) throw new InvalidOperationException("Bounce fees cannot be negative.");
-        var journal = RequireJournal();
+        RequireJournal();
+        if (string.IsNullOrWhiteSpace(cheque.PartyAccountCode) || string.IsNullOrWhiteSpace(cheque.PortfolioAccountCode))
+            throw new InvalidOperationException("The cheque has no party / portfolio account recorded; its receipt cannot be reversed safely.");
         if (cheque.JournalEntryId is not Guid entryId)
             throw new InvalidOperationException("The cheque has no receipt journal entry to reverse.");
         var expected = cheque.Status;
-        await journal.ReverseAsync(entryId, RequireUser(userId), $"Cheque {cheque.ChequeNo} bounced.", cancellationToken).ConfigureAwait(false);
         cheque.BounceDate = bounceDate;
         cheque.BounceReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
         cheque.FeesAmount = feesAmount;
         cheque.Status = ChequeStatuses.Bounced;
-        await _repository.UpdateTransitionAsync(companyId, cheque, expected, userId, cancellationToken).ConfigureAwait(false);
+        await ClaimAsync(companyId, cheque, expected, userId, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await ReverseOwnOrCompensateAsync(companyId, cheque, entryId, bounceDate, userId,
+                ChequeSourceTypes.Bounce,
+                debitCode: cheque.PartyAccountCode!, creditCode: cheque.PortfolioAccountCode!,
+                description: $"Cheque {cheque.ChequeNo} bounced",
+                reversalDetails: $"Cheque {cheque.ChequeNo} bounced.", cancellationToken).ConfigureAwait(false);
+            if (feesAmount > 0)
+            {
+                // CHQ-07: bounce fees are POSTED, not just recorded:
+                // Dr Party (the drawer owes the fee), Cr the bank that
+                // charged it (deposit bank when deposited, else the
+                // portfolio account).
+                var feeCredit = !string.IsNullOrWhiteSpace(cheque.DepositBankAccountCode)
+                    ? cheque.DepositBankAccountCode! : cheque.PortfolioAccountCode!;
+                await PostChequeEntryAsync(companyId, cheque, bounceDate, userId,
+                    ChequeSourceTypes.Fee, cheque.PartyAccountCode!, feeCredit,
+                    $"Cheque {cheque.ChequeNo} bounce fees", cancellationToken,
+                    amountOverride: feesAmount).ConfigureAwait(false);
+            }
+        }
+        catch
+        {
+            cheque.BounceDate = null;
+            cheque.BounceReason = null;
+            cheque.FeesAmount = 0m;
+            await ReleaseClaimAsync(companyId, cheque, expected, userId).ConfigureAwait(false);
+            throw;
+        }
     }
 
     public async Task EndorseAsync(string companyId, Guid chequeId, string endorsedToAccountCode, DateOnly endorseDate, string userId, CancellationToken cancellationToken = default)
@@ -231,48 +283,130 @@ public sealed class ChequeService
             ? cheque.PortfolioAccountCode!
             : throw new InvalidOperationException("The cheque has no portfolio account recorded.");
         var expected = cheque.Status;
-        await PostSimpleEntryAsync(companyId, cheque, endorseDate, userId,
-            debitCode: endorsedToAccountCode.Trim(), creditCode: portfolioCode,
-            description: $"Cheque {cheque.ChequeNo} endorsed", cancellationToken).ConfigureAwait(false);
         cheque.EndorsedToAccountCode = endorsedToAccountCode.Trim();
         cheque.Status = ChequeStatuses.Endorsed;
-        await _repository.UpdateTransitionAsync(companyId, cheque, expected, RequireUser(userId), cancellationToken).ConfigureAwait(false);
+        await ClaimAsync(companyId, cheque, expected, userId, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await PostChequeEntryAsync(companyId, cheque, endorseDate, userId,
+                ChequeSourceTypes.Endorse, endorsedToAccountCode.Trim(), portfolioCode,
+                $"Cheque {cheque.ChequeNo} endorsed", cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            cheque.EndorsedToAccountCode = null;
+            await ReleaseClaimAsync(companyId, cheque, expected, userId).ConfigureAwait(false);
+            throw;
+        }
     }
 
     public async Task CancelOutgoingAsync(string companyId, Guid chequeId, string userId, CancellationToken cancellationToken = default)
+        => await CancelOutgoingAsync(companyId, chequeId, userId, reason: null, cancelDate: null, cancellationToken).ConfigureAwait(false);
+
+    /// <summary>Cancels an issued cheque, recording the stop-payment
+    /// note (<paramref name="reason"/>) on the cheque (migration 063).</summary>
+    public async Task CancelOutgoingAsync(string companyId, Guid chequeId, string userId, string? reason, DateOnly? cancelDate, CancellationToken cancellationToken = default)
     {
         var cheque = await LoadAsync(companyId, chequeId, cancellationToken).ConfigureAwait(false);
         EnsureTransition(cheque, ChequeStatuses.Cancelled);
-        var journal = RequireJournal();
+        RequireJournal();
+        if (string.IsNullOrWhiteSpace(cheque.PartyAccountCode) || string.IsNullOrWhiteSpace(cheque.PortfolioAccountCode))
+            throw new InvalidOperationException("The cheque has no party / portfolio account recorded; its payment cannot be reversed safely.");
         if (cheque.JournalEntryId is not Guid entryId)
             throw new InvalidOperationException("The cheque has no payment journal entry to reverse.");
         var expected = cheque.Status;
-        await journal.ReverseAsync(entryId, RequireUser(userId), $"Outgoing cheque {cheque.ChequeNo} cancelled.", cancellationToken).ConfigureAwait(false);
+        cheque.CancelReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
         cheque.Status = ChequeStatuses.Cancelled;
-        await _repository.UpdateTransitionAsync(companyId, cheque, expected, userId, cancellationToken).ConfigureAwait(false);
+        await ClaimAsync(companyId, cheque, expected, userId, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await ReverseOwnOrCompensateAsync(companyId, cheque, entryId, cancelDate ?? cheque.IssueDate ?? DateOnly.FromDateTime(DateTime.Today), userId,
+                ChequeSourceTypes.Cancel,
+                debitCode: cheque.PortfolioAccountCode!, creditCode: cheque.PartyAccountCode!,
+                description: $"Outgoing cheque {cheque.ChequeNo} cancelled",
+                reversalDetails: $"Outgoing cheque {cheque.ChequeNo} cancelled.", cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            cheque.CancelReason = null;
+            await ReleaseClaimAsync(companyId, cheque, expected, userId).ConfigureAwait(false);
+            throw;
+        }
     }
 
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
-    private async Task PostSimpleEntryAsync(string companyId, Cheque cheque, DateOnly entryDate, string userId,
-        string debitCode, string creditCode, string description, CancellationToken cancellationToken)
+
+    /// <summary>
+    /// The Step-8 reversal rule. When the cheque's issue entry is its
+    /// OWN (the normal case from this step on: exactly one live cheque
+    /// references it), the entry is reversed outright. When the entry
+    /// is a HISTORICAL batch entry shared with siblings (pre-Step-8
+    /// data), reversing it would wipe the siblings' GL (CHQ-02), so a
+    /// per-cheque compensating entry with the mirror legs is posted
+    /// instead and the shared entry is left untouched — the siblings'
+    /// balances stay exact, and each sibling later gets its own
+    /// compensating entry (or, for the last one, the same treatment;
+    /// the shared entry itself is never split or fabricated away —
+    /// see FIX_PHASE_STEP8.md for the historical treatment).
+    /// </summary>
+    private async Task ReverseOwnOrCompensateAsync(
+        string companyId, Cheque cheque, Guid entryId, DateOnly eventDate, string userId,
+        string sourceType, string debitCode, string creditCode, string description, string reversalDetails,
+        CancellationToken cancellationToken)
+    {
+        var journal = RequireJournal();
+        var sharing = await _repository.CountByJournalEntryAsync(companyId, entryId, cancellationToken).ConfigureAwait(false);
+        if (sharing <= 1)
+        {
+            await journal.ReverseAsync(entryId, RequireUser(userId), reversalDetails, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+        await PostChequeEntryAsync(companyId, cheque, eventDate, userId, sourceType,
+            debitCode, creditCode, description, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task PostChequeEntryAsync(
+        string companyId, Cheque cheque, DateOnly entryDate, string userId,
+        string sourceType, string debitCode, string creditCode, string description,
+        CancellationToken cancellationToken, decimal? amountOverride = null)
     {
         var journal = RequireJournal();
         var companyGuid = await _repository.ResolveCompanyGuidAsync(companyId, cancellationToken).ConfigureAwait(false);
-        var debitId = await _repository.ResolveAccountIdAsync(companyGuid, debitCode, cancellationToken).ConfigureAwait(false);
-        var creditId = await _repository.ResolveAccountIdAsync(companyGuid, creditCode, cancellationToken).ConfigureAwait(false);
-        // Step 7: a single-cheque entry is uniform by construction —
-        // raw amount as the transaction amount, the cheque's own rate
-        // on the header, base derived by JournalRepository.
-        var amount = cheque.Amount;
-        var entry = new JournalEntry(entryDate, description, null, cheque.CurrencyCode, cheque.ExchangeRate,
-            ($"CHQ-{cheque.ChequeNo.Trim()}-{Guid.NewGuid():N}")[..36]);
-        entry.AddLine(debitId, amount, 0m, description);
-        entry.AddLine(creditId, 0m, amount, description);
-        entry.EnsureBalanced();
-        await journal.SaveDraftAsync(companyGuid, entry, RequireUser(userId), cancellationToken).ConfigureAwait(false);
-        await journal.PostAsync(entry.Id, userId, cancellationToken).ConfigureAwait(false);
+        var amount = amountOverride ?? cheque.Amount;
+        await journal.PostDocumentAsync(new GlDocumentRequest(
+            companyGuid, entryDate, description,
+            sourceType, cheque.Id.ToString("D"), cheque.ChequeNo,
+            cheque.CurrencyCode, cheque.ExchangeRate,
+            new[]
+            {
+                new GlLineRequest(debitCode, amount, 0m, Note: description),
+                new GlLineRequest(creditCode, 0m, amount, Note: description)
+            }), RequireUser(userId), cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Claims a lifecycle status via the repository CAS update.</summary>
+    private Task ClaimAsync(string companyId, Cheque cheque, string expectedStatus, string userId, CancellationToken cancellationToken)
+        => _repository.UpdateTransitionAsync(companyId, cheque, expectedStatus, RequireUser(userId), cancellationToken);
+
+    /// <summary>Rolls a claimed status back after a GL failure: the
+    /// cheque returns to its pre-transition status/fields so the
+    /// operation can be retried cleanly (CHQ-03 compensation).</summary>
+    private async Task ReleaseClaimAsync(string companyId, Cheque cheque, string originalStatus, string userId)
+    {
+        var claimedStatus = cheque.Status;
+        cheque.Status = originalStatus;
+        try
+        {
+            await _repository.UpdateTransitionAsync(companyId, cheque, claimedStatus, RequireUser(userId), CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception rollbackEx)
+        {
+            throw new InvalidOperationException(
+                $"Cheque {cheque.ChequeNo}: the GL step failed and the status rollback also failed ({rollbackEx.Message}). " +
+                $"The cheque may be stranded in status '{claimedStatus}'; reconcile it manually before retrying.", rollbackEx);
+        }
     }
 
     private async Task<Cheque> LoadAsync(string companyId, Guid chequeId, CancellationToken cancellationToken)

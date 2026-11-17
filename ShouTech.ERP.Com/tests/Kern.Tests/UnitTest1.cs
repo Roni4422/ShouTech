@@ -986,6 +986,9 @@ namespace Kern.Tests
 
             public Task<Guid> ReverseAsync(Guid journalEntryId, string userId, string? details = null, CancellationToken cancellationToken 	    = default) =>
     		   Task.FromResult(Guid.NewGuid());
+
+            public Task<GlPostingResult> PostDocumentAsync(GlDocumentRequest request, string userId, CancellationToken cancellationToken = default) =>
+                Task.FromResult(new GlPostingResult(Guid.NewGuid(), "JV-" + request.SourceDocNo));
         }
     }
 }

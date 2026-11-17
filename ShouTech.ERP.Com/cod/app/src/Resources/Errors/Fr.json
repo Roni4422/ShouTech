@@ -86,6 +86,18 @@
     "message": "Aucun taux de change n'est disponible pour la devise '{0}' : le document ne porte aucun taux et aucun taux maître n'existe au {1} ou avant.",
     "hint": "Saisissez un taux sur le document, ou maintenez un taux daté pour la devise dans la fiche devise, puis validez à nouveau."
   },
+  "ACC-5016": {
+    "code": "ACC-5016",
+    "name": "BankStatementNotReconciled",
+    "message": "Le relevé bancaire ne peut pas être clôturé tant que sa différence n'est pas nulle.",
+    "hint": "Rapprochez les lignes restantes du relevé avec les lignes comptables (ou comptabilisez les écritures manquantes) jusqu'à ce que la différence soit nulle."
+  },
+  "ACC-5017": {
+    "code": "ACC-5017",
+    "name": "StatementLineAlreadyMatched",
+    "message": "La ligne du relevé est déjà rapprochée d'une ligne comptable.",
+    "hint": "Annulez le rapprochement de la ligne avant de la rapprocher d'une autre ligne comptable."
+  },
   "AUTH-2001": {
     "code": "AUTH-2001",
     "name": "InvalidCredentials",
@@ -214,6 +226,24 @@
     "name": "InventoryOperationFailed",
     "message": "L'opération d'inventaire n'a pas pu être terminée."
   },
+  "INV-6002": {
+    "code": "INV-6002",
+    "name": "StockValuationFailed",
+    "message": "L'évaluation du stock a échoué pour l'article « {0} ».",
+    "hint": "Vérifiez la méthode de coût et le solde de stock de l'article, puis comptabilisez à nouveau."
+  },
+  "INV-6003": {
+    "code": "INV-6003",
+    "name": "RecalculationFailed",
+    "message": "Le travail de recalcul des coûts a échoué.",
+    "hint": "Consultez l'enregistrement du travail dans stock_revaluation_jobs pour l'erreur, corrigez la cause, puis relancez le travail."
+  },
+  "INV-6004": {
+    "code": "INV-6004",
+    "name": "RecalculationClosedPeriod",
+    "message": "Le recalcul des coûts ne peut pas réécrire les mouvements d'une période fiscale clôturée (à partir du '{0}').",
+    "hint": "Choisissez une date de début dans une période fiscale ouverte."
+  },
   "LIC-8001": {
     "code": "LIC-8001",
     "name": "LicenseCheckFailed",
@@ -290,23 +320,5 @@
     "code": "UI-7004",
     "name": "NavigationFailed",
     "message": "La navigation n'a pas pu être terminée."
-  },
-  "INV-6002": {
-    "code": "INV-6002",
-    "name": "StockValuationFailed",
-    "message": "L'évaluation du stock a échoué pour l'article « {0} ».",
-    "hint": "Vérifiez la méthode de coût et le solde de stock de l'article, puis comptabilisez à nouveau."
-  },
-  "INV-6003": {
-    "code": "INV-6003",
-    "name": "RecalculationFailed",
-    "message": "Le travail de recalcul des coûts a échoué.",
-    "hint": "Consultez l'enregistrement du travail dans stock_revaluation_jobs pour l'erreur, corrigez la cause, puis relancez le travail."
-  },
-  "INV-6004": {
-    "code": "INV-6004",
-    "name": "RecalculationClosedPeriod",
-    "message": "Le recalcul des coûts ne peut pas réécrire les mouvements d'une période fiscale clôturée (à partir du '{0}').",
-    "hint": "Choisissez une date de début dans une période fiscale ouverte."
   }
 }

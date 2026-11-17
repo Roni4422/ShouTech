@@ -86,6 +86,18 @@
     "message": "No exchange rate is available for currency '{0}': the document carries no rate and no master rate exists on or before {1}.",
     "hint": "Enter a rate on the document, or maintain a dated rate for the currency in the currency card, then post again."
   },
+  "ACC-5016": {
+    "code": "ACC-5016",
+    "name": "BankStatementNotReconciled",
+    "message": "The bank statement cannot be closed while its difference is not zero.",
+    "hint": "Match the remaining statement lines to book lines (or post the missing book entries) until the difference is zero."
+  },
+  "ACC-5017": {
+    "code": "ACC-5017",
+    "name": "StatementLineAlreadyMatched",
+    "message": "The statement line is already matched to a book line.",
+    "hint": "Unmatch the statement line before matching it to a different book line."
+  },
   "AUTH-2001": {
     "code": "AUTH-2001",
     "name": "InvalidCredentials",
@@ -214,6 +226,24 @@
     "name": "InventoryOperationFailed",
     "message": "The inventory operation could not be completed."
   },
+  "INV-6002": {
+    "code": "INV-6002",
+    "name": "StockValuationFailed",
+    "message": "Stock valuation failed for material '{0}'.",
+    "hint": "Check the material cost method and stock balance, then post again."
+  },
+  "INV-6003": {
+    "code": "INV-6003",
+    "name": "RecalculationFailed",
+    "message": "The Recalculate Costs job failed.",
+    "hint": "See the job record in stock_revaluation_jobs for the error, fix the cause, and run the job again."
+  },
+  "INV-6004": {
+    "code": "INV-6004",
+    "name": "RecalculationClosedPeriod",
+    "message": "Recalculate Costs cannot rewrite movements in a closed fiscal period (from date '{0}').",
+    "hint": "Choose a from date inside an open fiscal period."
+  },
   "LIC-8001": {
     "code": "LIC-8001",
     "name": "LicenseCheckFailed",
@@ -290,23 +320,5 @@
     "code": "UI-7004",
     "name": "NavigationFailed",
     "message": "Navigation could not be completed."
-  },
-  "INV-6002": {
-    "code": "INV-6002",
-    "name": "StockValuationFailed",
-    "message": "Stock valuation failed for material '{0}'.",
-    "hint": "Check the material cost method and stock balance, then post again."
-  },
-  "INV-6003": {
-    "code": "INV-6003",
-    "name": "RecalculationFailed",
-    "message": "The Recalculate Costs job failed.",
-    "hint": "See the job record in stock_revaluation_jobs for the error, fix the cause, and run the job again."
-  },
-  "INV-6004": {
-    "code": "INV-6004",
-    "name": "RecalculationClosedPeriod",
-    "message": "Recalculate Costs cannot rewrite movements in a closed fiscal period (from date '{0}').",
-    "hint": "Choose a from date inside an open fiscal period."
   }
 }

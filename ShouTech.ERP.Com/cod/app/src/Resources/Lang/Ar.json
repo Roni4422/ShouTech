@@ -2289,7 +2289,9 @@
     "DueSoon": "يستحق خلال 30 يوما",
     "PrintRegister": "طباعه السجل",
     "BounceReason": "سبب الارتجاع",
-    "BounceFees": "رسوم الارتجاع"
+    "BounceFees": "رسوم الارتجاع",
+    "IssueDate": "تاريخ الإصدار",
+    "CancelReason": "ملاحظة إيقاف الدفع"
   },
   "MfgOrders": {
     "PermissionDenied": "ليس لديك صلاحيه لاوامر التصنيع.",
@@ -2487,7 +2489,23 @@
     "BookBalance": "الرصيد الدفتري",
     "ClearedTotal": "إجمالي المُسوّى",
     "UnclearedTotal": "إجمالي غير المُسوّى",
-    "Difference": "الفرق"
+    "Difference": "الفرق",
+    "OpeningBalance": "الرصيد الافتتاحي",
+    "ClosingBalance": "رصيد الإقفال (كشف الحساب)",
+    "SaveStatement": "حفظ الكشف",
+    "StatementLines": "سطور الكشف",
+    "AddLine": "إضافة سطر",
+    "RemoveLine": "حذف سطر",
+    "Match": "مطابقة",
+    "Unmatch": "إلغاء المطابقة",
+    "CloseStatement": "إقفال الكشف",
+    "StatementSaved": "تم حفظ كشف الحساب البنكي.",
+    "Matched": "مطابق",
+    "Description": "البيان",
+    "Amount": "المبلغ",
+    "StatementRequired": "احفظ كشف الحساب أولاً.",
+    "SelectStatementLine": "اختر سطراً من الكشف أولاً.",
+    "SelectBookLine": "اختر سطراً محاسبياً أولاً."
   },
   "CloseCash": {
     "Title": "إغلاق صندوق نقطة البيع",

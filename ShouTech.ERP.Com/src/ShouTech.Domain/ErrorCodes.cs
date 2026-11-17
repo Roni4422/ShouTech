@@ -80,6 +80,8 @@ public static class ErrorCodes
     public const string DocumentTotalMismatch = "ACC-5013";
     public const string DocumentKindNotPostable = "ACC-5014";
     public const string ExchangeRateMissing = "ACC-5015";
+    public const string BankStatementNotReconciled = "ACC-5016";
+    public const string StatementLineAlreadyMatched = "ACC-5017";
 
     // ---- INV 6000-6999 -------------------------------------------------
     public const string InventoryOperationFailed = "INV-6001";

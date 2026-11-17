@@ -26,6 +26,41 @@ public interface IOperationsRepository
     /// <summary>Deletes the marks for the given line keys in ONE transaction.</summary>
     Task UnmarkBankLinesAsync(string companyId, IReadOnlyList<string> lineKeys, string userId, CancellationToken cancellationToken = default);
 
+    // ------------------------------------------------------------ Bank statements (063, Step 8)
+
+    /// <summary>Creates or updates a bank statement header (one
+    /// transaction). Returns the statement id.</summary>
+    Task<Guid> SaveBankStatementAsync(string companyId, BankStatement statement, string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Statements for one account, newest first.</summary>
+    Task<IReadOnlyList<BankStatement>> GetBankStatementsAsync(string companyId, string accountCode, CancellationToken cancellationToken = default);
+
+    /// <summary>One statement by id, or null.</summary>
+    Task<BankStatement?> GetBankStatementAsync(string companyId, Guid statementId, CancellationToken cancellationToken = default);
+
+    /// <summary>Adds one statement line to an OPEN statement (one transaction).</summary>
+    Task<Guid> AddBankStatementLineAsync(string companyId, BankStatementLine line, string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>All lines of one statement, in date order.</summary>
+    Task<IReadOnlyList<BankStatementLine>> GetBankStatementLinesAsync(string companyId, Guid statementId, CancellationToken cancellationToken = default);
+
+    /// <summary>Soft-deletes an unmatched statement line (one transaction).</summary>
+    Task RemoveBankStatementLineAsync(string companyId, Guid lineId, string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Matches one statement line to one book line in ONE
+    /// transaction: the statement line records the book line key and the
+    /// cleared mark is upserted with the statement link (063).</summary>
+    Task MatchBankLineAsync(string companyId, Guid statementLineId, BankReconciliationMark mark, string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Unmatches one statement line in ONE transaction: clears
+    /// its book-line link and deletes the linked mark.</summary>
+    Task UnmatchBankLineAsync(string companyId, Guid statementLineId, string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Closes a statement (status Open -> Closed) in one
+    /// transaction. The service refuses to close while the difference
+    /// is non-zero (ACC-5016); the repository re-checks Open status.</summary>
+    Task CloseBankStatementAsync(string companyId, Guid statementId, string userId, CancellationToken cancellationToken = default);
+
     // ------------------------------------------------------------ POS closing
     /// <summary>Sales-document totals used as the expected cash for a date:
     /// non-deleted SAL documents of that business date (POS sales are SAL).</summary>

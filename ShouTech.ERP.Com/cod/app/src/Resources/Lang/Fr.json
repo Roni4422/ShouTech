@@ -2138,7 +2138,9 @@
     "DueSoon": "Echeance sous 30 jours",
     "PrintRegister": "Imprimer le registre",
     "BounceReason": "Motif du rejet",
-    "BounceFees": "Frais de rejet"
+    "BounceFees": "Frais de rejet",
+    "IssueDate": "Date d'émission",
+    "CancelReason": "Note d'opposition"
   },
   "MfgOrders": {
     "PermissionDenied": "Vous n'avez pas l'autorisation pour les ordres de fabrication.",
@@ -2365,7 +2367,23 @@
     "BookBalance": "Solde comptable",
     "ClearedTotal": "Total pointé",
     "UnclearedTotal": "Total non pointé",
-    "Difference": "Différence"
+    "Difference": "Différence",
+    "OpeningBalance": "Solde d'ouverture",
+    "ClosingBalance": "Solde de clôture (relevé)",
+    "SaveStatement": "Enregistrer le relevé",
+    "StatementLines": "Lignes du relevé",
+    "AddLine": "Ajouter une ligne",
+    "RemoveLine": "Supprimer la ligne",
+    "Match": "Rapprocher",
+    "Unmatch": "Annuler le rapprochement",
+    "CloseStatement": "Clôturer le relevé",
+    "StatementSaved": "Relevé bancaire enregistré.",
+    "Matched": "Rapproché",
+    "Description": "Description",
+    "Amount": "Montant",
+    "StatementRequired": "Enregistrez d'abord le relevé bancaire.",
+    "SelectStatementLine": "Sélectionnez d'abord une ligne du relevé.",
+    "SelectBookLine": "Sélectionnez d'abord une ligne comptable."
   },
   "CloseCash": {
     "Title": "Clôture de caisse PDV",

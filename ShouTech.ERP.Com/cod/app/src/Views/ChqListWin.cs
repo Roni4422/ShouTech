@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -34,6 +34,9 @@ public sealed class ChqListWin : BaseWin
         public string Direction => Cheque.Direction;
         public string Party => Cheque.PartyName ?? Cheque.DrawerName ?? string.Empty;
         public string Bank => Cheque.BankName;
+        public string Branch => Cheque.BranchName ?? string.Empty;
+        public string Currency => Cheque.CurrencyCode;
+        public string IssueText => Cheque.IssueDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty;
         public decimal Amount => Cheque.Amount;
         public string DueText => Cheque.DueDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         public string Status => Cheque.Status;
@@ -54,6 +57,7 @@ public sealed class ChqListWin : BaseWin
     private readonly Button _clearButton = new();
     private readonly Button _bounceButton = new();
     private readonly Button _endorseButton = new();
+    private readonly Button _cancelButton = new();
     private readonly Button _printButton = new();
     private readonly Button _closeButton = new();
 
@@ -97,6 +101,7 @@ public sealed class ChqListWin : BaseWin
         StyleButton(_clearButton, "Cheques.Clear");
         StyleButton(_bounceButton, "Cheques.Bounce");
         StyleButton(_endorseButton, "Cheques.Endorse");
+        StyleButton(_cancelButton, "Cheques.CancelCheque");
         StyleButton(_printButton, "Cheques.PrintRegister");
         StyleButton(_refreshButton, "Common.Refresh");
         StyleButton(_closeButton, "Common.Close");
@@ -104,10 +109,11 @@ public sealed class ChqListWin : BaseWin
         _clearButton.Click += async (_, _) => await ClearAsync();
         _bounceButton.Click += async (_, _) => await BounceAsync();
         _endorseButton.Click += async (_, _) => await EndorseAsync();
+        _cancelButton.Click += async (_, _) => await CancelAsync();
         _printButton.Click += (_, _) => PrintRegister();
         _refreshButton.Click += async (_, _) => await RefreshAsync();
         _closeButton.Click += (_, _) => Close();
-        foreach (var b in new[] { _depositButton, _clearButton, _bounceButton, _endorseButton, _printButton, _refreshButton, _closeButton })
+        foreach (var b in new[] { _depositButton, _clearButton, _bounceButton, _endorseButton, _cancelButton, _printButton, _refreshButton, _closeButton })
             bar.Children.Add(b);
         var barBorder = new Border
         {
@@ -142,6 +148,9 @@ public sealed class ChqListWin : BaseWin
         _grid.Columns.Add(TextCol("Cheques.Direction", nameof(ChequeRow.Direction), 80, center: true));
         _grid.Columns.Add(TextCol("Cheques.PartyDrawer", nameof(ChequeRow.Party), 190));
         _grid.Columns.Add(TextCol("Vouchers.Bank", nameof(ChequeRow.Bank), 150));
+        _grid.Columns.Add(TextCol("BankCard.Branch", nameof(ChequeRow.Branch), 100));
+        _grid.Columns.Add(TextCol("Vouchers.Currency", nameof(ChequeRow.Currency), 70, center: true));
+        _grid.Columns.Add(TextCol("Cheques.IssueDate", nameof(ChequeRow.IssueText), 100, center: true));
         _grid.Columns.Add(TextCol("MfgOrder.Amount", nameof(ChequeRow.Amount), 110, numeric: true));
         _grid.Columns.Add(TextCol("Vouchers.DueDate", nameof(ChequeRow.DueText), 100, center: true));
         _grid.Columns.Add(TextCol("Vouchers.Status", nameof(ChequeRow.Status), 110, center: true));
@@ -160,7 +169,7 @@ public sealed class ChqListWin : BaseWin
             label.Text = T(key);
         foreach (var (column, key) in _headers)
             column.Header = T(key);
-        foreach (var b in new[] { _depositButton, _clearButton, _bounceButton, _endorseButton, _printButton, _refreshButton, _closeButton })
+        foreach (var b in new[] { _depositButton, _clearButton, _bounceButton, _endorseButton, _cancelButton, _printButton, _refreshButton, _closeButton })
             if (b.Tag is string key)
                 b.Content = T(key);
         UpdateStatusBar();
@@ -183,7 +192,11 @@ public sealed class ChqListWin : BaseWin
             _rows.Clear();
             foreach (var cheque in rows)
             {
-                if (_dueSoon.IsChecked == true && (cheque.DueDate.ToDateTime(TimeOnly.MinValue) - DateTime.Today).Days > 30)
+                // Due-soon is a maturity workflow: terminal cheques are
+                // never "due soon" (CHQ-16).
+                if (_dueSoon.IsChecked == true &&
+                    (cheque.Status is ChequeStatuses.Cleared or ChequeStatuses.Bounced or ChequeStatuses.Endorsed or ChequeStatuses.Cancelled
+                     || (cheque.DueDate.ToDateTime(TimeOnly.MinValue) - DateTime.Today).Days > 30))
                     continue;
                 _rows.Add(new ChequeRow(cheque));
             }
@@ -191,10 +204,7 @@ public sealed class ChqListWin : BaseWin
             _grid.ItemsSource = _rows;
             UpdateStatusBar();
         }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
-        }
+        catch (Exception ex) { ReportFailure("Refresh", ex); }
     }
 
     private void UpdateStatusBar()
@@ -232,7 +242,7 @@ public sealed class ChqListWin : BaseWin
             await AppHost.Cheques!.DepositAsync(CurrentCompanyCode, row.Id, input[0], DateOnly.FromDateTime(DateTime.Today), CurrentUserId);
             await RefreshAsync();
         }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error); }
+        catch (Exception ex) { ReportFailure("Lifecycle", ex); }
     }
 
     private async Task ClearAsync()
@@ -241,10 +251,19 @@ public sealed class ChqListWin : BaseWin
         {
             RequireManage();
             var row = SelectedRow() ?? throw new InvalidOperationException(T("Cheques.SelectSavedCheque"));
-            await AppHost.Cheques!.ClearAsync(CurrentCompanyCode, row.Id, DateOnly.FromDateTime(DateTime.Today), CurrentUserId);
+            string? bankCode = null;
+            if (row.Cheque.Direction == ChequeDirections.Out)
+            {
+                // Outgoing clearance credits the paying bank (CHQ-04).
+                var input = PromptDialog.Show(this, T("Cheques.Clear"),
+                    (T("Cheques.DepositBankAccount"), row.Cheque.DepositBankAccountCode ?? string.Empty));
+                if (input is null) return;
+                bankCode = input[0];
+            }
+            await AppHost.Cheques!.ClearAsync(CurrentCompanyCode, row.Id, DateOnly.FromDateTime(DateTime.Today), CurrentUserId, bankCode);
             await RefreshAsync();
         }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error); }
+        catch (Exception ex) { ReportFailure("Lifecycle", ex); }
     }
 
     private async Task BounceAsync()
@@ -262,7 +281,7 @@ public sealed class ChqListWin : BaseWin
                 string.IsNullOrWhiteSpace(input[0]) ? null : input[0], fees, CurrentUserId);
             await RefreshAsync();
         }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error); }
+        catch (Exception ex) { ReportFailure("Lifecycle", ex); }
     }
 
     private async Task EndorseAsync()
@@ -277,7 +296,37 @@ public sealed class ChqListWin : BaseWin
             await AppHost.Cheques!.EndorseAsync(CurrentCompanyCode, row.Id, input[0], DateOnly.FromDateTime(DateTime.Today), CurrentUserId);
             await RefreshAsync();
         }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error); }
+        catch (Exception ex) { ReportFailure("Lifecycle", ex); }
+    }
+
+    private async Task CancelAsync()
+    {
+        try
+        {
+            RequireManage();
+            var row = SelectedRow() ?? throw new InvalidOperationException(T("Cheques.SelectSavedCheque"));
+            var input = PromptDialog.Show(this, T("Cheques.CancelCheque"),
+                (T("Cheques.CancelReason"), string.Empty));
+            if (input is null) return;
+            await AppHost.Cheques!.CancelOutgoingAsync(CurrentCompanyCode, row.Id, CurrentUserId,
+                string.IsNullOrWhiteSpace(input[0]) ? null : input[0], DateOnly.FromDateTime(DateTime.Today));
+            await RefreshAsync();
+        }
+        catch (Exception ex) { ReportFailure("Cancel", ex); }
+    }
+
+    /// <summary>Central error reporting (CHQ-18): every failure is
+    /// logged with its catalog code (APP-2010, the ChqWin pattern)
+    /// instead of a raw unlogged MessageBox.</summary>
+    private void ReportFailure(string operation, Exception exception)
+    {
+        const string errorCode = "APP-2010";
+        var definition = ShouTech.App.Localization.ErrorCatalog.Resolve(errorCode);
+        var context = $"Operation={operation}; Window={GetType().Name}; Company={CurrentCompanyCode}";
+        AppHost.Logging?.LogError("WindowPersistence",
+            $"[{definition.Code}] {definition.Name} | {context} | {exception.Message}", exception);
+        MessageBox.Show(this, $"[{definition.Code}] {exception.Message}", Title,
+            MessageBoxButton.OK, MessageBoxImage.Error);
     }
 
     // ------------------------------------------------------------------

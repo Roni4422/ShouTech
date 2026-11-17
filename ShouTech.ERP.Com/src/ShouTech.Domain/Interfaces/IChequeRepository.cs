@@ -34,4 +34,10 @@ public interface IChequeRepository
 
     /// <summary>Resolves an active, postable GL account code to its GUID.</summary>
     Task<Guid> ResolveAccountIdAsync(Guid companyGuid, string accountCode, CancellationToken cancellationToken = default);
+
+    /// <summary>How many live cheques reference the given journal entry.
+    /// Step 8 posts one entry per cheque, so a count above 1 identifies a
+    /// historical (pre-Step-8) batch entry shared by siblings — such an
+    /// entry must never be reversed for a single cheque.</summary>
+    Task<int> CountByJournalEntryAsync(string companyId, Guid journalEntryId, CancellationToken cancellationToken = default);
 }

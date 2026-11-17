@@ -37,7 +37,8 @@ public sealed class BankJournalLineRow
     public decimal Amount => Debit - Credit;
 }
 
-/// <summary>A persisted cleared mark (migration 035).</summary>
+/// <summary>A persisted cleared mark (migration 035; statement link
+/// added by migration 063).</summary>
 public sealed class BankReconciliationMark
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -47,12 +48,87 @@ public sealed class BankReconciliationMark
     public DateOnly StatementDate { get; set; }
     public string? StatementRef { get; set; }
     public decimal ClearedAmount { get; set; }
+    /// <summary>The bank statement this mark belongs to (063), when the
+    /// clearing came from statement matching rather than a bare mark.</summary>
+    public Guid? StatementId { get; set; }
+    /// <summary>The statement line that cleared this book line (063).</summary>
+    public Guid? StatementLineId { get; set; }
 }
 
-/// <summary>Book / cleared / uncleared totals for one bank account.</summary>
-public sealed record BankReconciliationTotals(decimal BookBalance, decimal ClearedTotal, decimal UnclearedTotal)
+/// <summary>Statement statuses (migration 063).</summary>
+public static class BankStatementStatuses
 {
-    public decimal Difference => BookBalance - ClearedTotal - UnclearedTotal;
+    public const string Open = "Open";
+    public const string Closed = "Closed";
+    public static readonly IReadOnlyList<string> All = new[] { Open, Closed };
+}
+
+/// <summary>
+/// One bank statement (migration 063): the bank's side of a
+/// reconciliation, with its own identity, period and balances. This is
+/// the object whose absence made the old "Difference" identically zero
+/// (BNK-01): there was no statement balance to differ from the books.
+/// </summary>
+public sealed class BankStatement
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string AccountCode { get; set; } = string.Empty;
+    public DateOnly StatementDate { get; set; }
+    public string? StatementRef { get; set; }
+    public DateOnly? PeriodFrom { get; set; }
+    public DateOnly? PeriodTo { get; set; }
+    /// <summary>Balance at the start of the statement period (the prior
+    /// statement's closing balance, or the account's opening figure).</summary>
+    public decimal OpeningBalance { get; set; }
+    /// <summary>The closing balance AS PRINTED ON THE STATEMENT — bank
+    /// data, independent of the books.</summary>
+    public decimal ClosingBalance { get; set; }
+    public string Status { get; set; } = BankStatementStatuses.Open;
+}
+
+/// <summary>
+/// One line of a bank statement (migration 063): a movement the bank
+/// recorded, entered in BankRecWin (file import is a flagged gap).
+/// Amount is signed in bank-account terms: positive = money into the
+/// account (a book debit), negative = money out (a book credit), so a
+/// statement line matches a book line when their amounts are equal.
+/// </summary>
+public sealed class BankStatementLine
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid StatementId { get; set; }
+    public string AccountCode { get; set; } = string.Empty;
+    public DateOnly LineDate { get; set; }
+    public string? Reference { get; set; }
+    public string? Description { get; set; }
+    public decimal Amount { get; set; }
+    /// <summary>The book (journal) line key this statement line is
+    /// matched to, or null while unmatched.</summary>
+    public string? MatchedJournalLineKey { get; set; }
+    public bool IsMatched => !string.IsNullOrWhiteSpace(MatchedJournalLineKey);
+}
+
+/// <summary>
+/// Reconciliation totals for one bank account against ONE statement
+/// (Step 8, BNK-01). BookBalance / ClearedTotal / UnclearedTotal are the
+/// book side; StatementBalance is the statement's closing balance.
+/// Difference = StatementBalance − OpeningBalance − ClearedTotal: the
+/// statement movement not yet matched in the books. It is a real
+/// computed quantity — non-zero whenever the bank and the books
+/// disagree, moving by each matched amount as matching proceeds, and
+/// legitimately zero only when the whole statement movement is matched.
+/// (The pre-Step-8 formula Book − Cleared − Uncleared was identically
+/// zero for every dataset and has been removed.)
+/// </summary>
+public sealed record BankReconciliationTotals(
+    decimal BookBalance, decimal ClearedTotal, decimal UnclearedTotal,
+    decimal StatementBalance, decimal OpeningBalance,
+    decimal MatchedStatementTotal, decimal UnmatchedStatementTotal)
+{
+    public decimal Difference => StatementBalance - OpeningBalance - ClearedTotal;
+    /// <summary>Statement movement (closing − opening) for comparison
+    /// with the sum of the entered statement lines.</summary>
+    public decimal StatementMovement => StatementBalance - OpeningBalance;
 }
 
 /// <summary>One POS cash closing (migration 037). Difference = Counted - Expected.</summary>

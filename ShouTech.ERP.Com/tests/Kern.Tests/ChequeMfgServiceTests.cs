@@ -46,14 +46,21 @@ public class ChequeMfgServiceTests
             new DateOnly(2026, 11, 17));
 
         Assert.Equal(2, ids.Count);
-        Assert.Single(journal.Posted);
-        var entry = journal.Posted[0];
-        Assert.Equal(500m, entry.Lines.Sum(l => l.Debit));
-        Assert.Equal(500m, entry.Lines.Sum(l => l.Credit));
+        // Step 8: ONE journal entry per cheque (never a shared batch entry).
+        Assert.Equal(2, journal.DocumentPostings.Count);
+        Assert.All(journal.DocumentPostings, p =>
+        {
+            Assert.Equal(p.Request.Lines.Sum(l => l.Debit), p.Request.Lines.Sum(l => l.Credit));
+            Assert.Equal(ChequeSourceTypes.Issue, p.Request.SourceDocType);
+        });
+        Assert.Equal(300m, journal.DocumentPostings[0].Request.Lines.Sum(l => l.Debit));
+        Assert.Equal(200m, journal.DocumentPostings[1].Request.Lines.Sum(l => l.Debit));
         var rows = await service.GetAllAsync(Company);
         Assert.Equal(2, rows.Count);
         Assert.All(rows, r => Assert.Equal(ChequeStatuses.InPortfolio, r.Status));
-        Assert.All(rows, r => Assert.Equal(entry.Id, r.JournalEntryId));
+        // Each row carries its OWN entry id, and the two ids differ.
+        Assert.Equal(2, rows.Select(r => r.JournalEntryId).Distinct().Count());
+        Assert.All(rows, r => Assert.Contains(journal.DocumentPostings, p => p.EntryId == r.JournalEntryId));
     }
 
     [Fact]
@@ -92,11 +99,12 @@ public class ChequeMfgServiceTests
                 new List<Cheque> { NewCheque("3001", "Bank A", "Same Drawer", "4101", 100m) },
                 "1101", "tester", new DateOnly(2026, 11, 17)));
 
-        // The second (duplicate) batch posted a journal before the insert
-        // failed; the service must have reversed it as compensation.
-        Assert.Equal(2, journal.Posted.Count);
+        // The second (duplicate) batch posted its per-cheque journal
+        // before the insert failed; the service must have reversed it
+        // as compensation.
+        Assert.Equal(2, journal.DocumentPostings.Count);
         Assert.Single(journal.Reversed);
-        Assert.Equal(journal.Posted[1].Id, journal.Reversed[0]);
+        Assert.Equal(journal.DocumentPostings[1].EntryId, journal.Reversed[0]);
         Assert.Single(await service.GetAllAsync(Company));
     }
 
@@ -134,11 +142,13 @@ public class ChequeMfgServiceTests
         var cleared = await service.GetByIdAsync(Company, id);
         Assert.Equal(ChequeStatuses.Cleared, cleared!.Status);
         Assert.Equal(today, cleared.ClearanceDate);
-        // Clear posted Dr Bank / Cr Portfolio through the journal double.
-        Assert.Equal(2, journal.Posted.Count);
-        var clearEntry = journal.Posted[1];
-        Assert.Equal(250m, clearEntry.Lines.Sum(l => l.Debit));
-        Assert.Equal(250m, clearEntry.Lines.Sum(l => l.Credit));
+        // Clear posted Dr Bank / Cr Portfolio as the cheque's OWN
+        // entry through the journal double.
+        Assert.Equal(2, journal.DocumentPostings.Count);
+        var clearPosting = journal.DocumentPostings[1];
+        Assert.Equal(ChequeSourceTypes.Clear, clearPosting.Request.SourceDocType);
+        Assert.Equal(250m, clearPosting.Request.Lines.Sum(l => l.Debit));
+        Assert.Equal(250m, clearPosting.Request.Lines.Sum(l => l.Credit));
 
         // Terminal: nothing may leave Cleared.
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.BounceAsync(Company, id, today, "late", 0m, "tester"));
@@ -153,7 +163,7 @@ public class ChequeMfgServiceTests
         var ids = await service.SaveBatchAsync(Company,
             new List<Cheque> { NewCheque("5001", "Bank B", "Drawer", "4101", 90m) },
             "1101", "tester", new DateOnly(2026, 11, 17));
-        var receiptEntryId = journal.Posted[0].Id;
+        var receiptEntryId = journal.DocumentPostings[0].EntryId;
 
         await service.BounceAsync(Company, ids[0], new DateOnly(2026, 11, 20), "Insufficient funds", 15m, "tester");
 
@@ -177,8 +187,9 @@ public class ChequeMfgServiceTests
 
         var issued = await service.GetByIdAsync(Company, ids[0]);
         Assert.Equal(ChequeStatuses.Issued, issued!.Status);
-        var entry = journal.Posted[0];
-        Assert.Equal(400m, entry.Lines.Sum(l => l.Debit));
+        var entry = journal.DocumentPostings[0];
+        Assert.Equal(400m, entry.Request.Lines.Sum(l => l.Debit));
+        Assert.Equal(ChequeSourceTypes.Issue, entry.Request.SourceDocType);
 
         // Bounce does not exist for outgoing cheques.
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -186,7 +197,7 @@ public class ChequeMfgServiceTests
 
         await service.CancelOutgoingAsync(Company, ids[0], "tester");
         Assert.Equal(ChequeStatuses.Cancelled, (await service.GetByIdAsync(Company, ids[0]))!.Status);
-        Assert.Contains(entry.Id, journal.Reversed);
+        Assert.Contains(entry.EntryId, journal.Reversed);
     }
 
     [Fact]
@@ -376,7 +387,17 @@ public class ChequeMfgServiceTests
     {
         public List<JournalEntry> Posted { get; } = new();
         public List<Guid> Reversed { get; } = new();
+        /// <summary>Step 8: cheque postings arrive as GlPosting document
+        /// requests — one per cheque/event, each with its own entry id.</summary>
+        public List<(GlDocumentRequest Request, Guid EntryId)> DocumentPostings { get; } = new();
         private readonly Dictionary<Guid, JournalEntry> _drafts = new();
+
+        public Task<GlPostingResult> PostDocumentAsync(GlDocumentRequest request, string userId, CancellationToken cancellationToken = default)
+        {
+            var id = Guid.NewGuid();
+            DocumentPostings.Add((request, id));
+            return Task.FromResult(new GlPostingResult(id, "JV-" + request.SourceDocNo));
+        }
 
         public Task<JournalEntrySnapshot?> FindByDocumentNumberAsync(Guid companyId, string documentNumber, CancellationToken cancellationToken = default)
             => Task.FromResult<JournalEntrySnapshot?>(null);
@@ -441,7 +462,13 @@ public class ChequeMfgServiceTests
                 cmd.ExecuteNonQuery();
             }
             if (withCheques)
+            {
                 Exec(connection, ReadMigration("033_cheques.sql"));
+                // Migration 063 columns (plain-SQL equivalent; the
+                // migrator-directive file itself is exercised through
+                // SchemaMigrator in ChequeBankRecStep8Tests).
+                Exec(connection, "ALTER TABLE cheques ADD COLUMN batch_doc_no TEXT; ALTER TABLE cheques ADD COLUMN cancel_reason TEXT;");
+            }
             if (withStock)
             {
                 // Step 3: MFG completion/cancellation post + reverse real

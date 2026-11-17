@@ -1,4 +1,4 @@
-﻿using System.Data.Common;
+using System.Data.Common;
 using System.IO.Compression;
 using System.Globalization;
 using System.IO;
@@ -150,7 +150,9 @@ public static class DataExportSvc
         new("Currencies", "Currencies and rates", ["currencies", "Currencies"]),
         new("CurrencyRates", "Currency exchange rates", ["currency_rates", "CurrencyRates"]),
         new("Banks", "Banks and bank accounts", ["banks", "Banks"]),
-        new("BankAccounts", "Bank accounts", ["bank_accounts", "BankAccounts"]),
+        // Step 8 (BNKC-01): the "BankAccounts" dataset over the dead
+        // migration-050 bank_accounts table was removed — bank accounts
+        // export through the canonical "Banks" dataset (banks, 031).
         new("TaxCodes", "Tax codes", ["tax_codes", "TaxCodes"]),
         new("Sales", "Sales invoices", ["sales_invoices", "SalesInvoices", "pos_transactions"], DataExportFilter.Sales),
         new("SalesLines", "Sales invoice details", ["sales_invoice_lines", "SalesInvoiceLines", "pos_transaction_items"], DataExportFilter.Sales),

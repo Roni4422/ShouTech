@@ -2173,7 +2173,9 @@
     "DueSoon": "Due within 30 days",
     "PrintRegister": "Print Register",
     "BounceReason": "Bounce Reason",
-    "BounceFees": "Bounce Fees"
+    "BounceFees": "Bounce Fees",
+    "IssueDate": "Issue Date",
+    "CancelReason": "Stop-Payment Note"
   },
   "MfgOrders": {
     "PermissionDenied": "You do not have permission for manufacturing orders.",
@@ -2371,7 +2373,23 @@
     "BookBalance": "Book balance",
     "ClearedTotal": "Cleared total",
     "UnclearedTotal": "Uncleared total",
-    "Difference": "Difference"
+    "Difference": "Difference",
+    "OpeningBalance": "Opening balance",
+    "ClosingBalance": "Closing (statement) balance",
+    "SaveStatement": "Save Statement",
+    "StatementLines": "Statement lines",
+    "AddLine": "Add Line",
+    "RemoveLine": "Remove Line",
+    "Match": "Match",
+    "Unmatch": "Unmatch",
+    "CloseStatement": "Close Statement",
+    "StatementSaved": "Bank statement saved.",
+    "Matched": "Matched",
+    "Description": "Description",
+    "Amount": "Amount",
+    "StatementRequired": "Save the bank statement first.",
+    "SelectStatementLine": "Select a statement line first.",
+    "SelectBookLine": "Select a book line first."
   },
   "CloseCash": {
     "Title": "POS Cash Closing",

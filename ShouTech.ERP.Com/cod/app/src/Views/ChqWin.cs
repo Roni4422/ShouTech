@@ -25,11 +25,14 @@ public enum ChqKind
 /// <summary>
 /// Cheque batch window (RS-4): each grid row is an individual cheque sharing
 /// the header context (date, portfolio/box account, currency). Save inserts
-/// the batch and posts ONE receipt/payment journal entry through
-/// ChequeService (IN: Dr Box total, Cr Party per cheque; OUT mirrored),
-/// storing journal_entry_id on every row. Lifecycle actions (Deposit, Clear,
-/// Bounce, Endorse, Cancel) act on the selected saved cheque and are also
-/// available in the register (ChqListWin).
+/// the batch and posts ONE receipt/payment journal entry PER CHEQUE through
+/// ChequeService (Step 8: IN per cheque Dr Box, Cr Party; OUT mirrored),
+/// storing that cheque's own journal_entry_id on its row — bouncing or
+/// cancelling one cheque can never disturb a sibling's GL. The header
+/// voucher number is persisted on every row as batch_doc_no (CHQ-05).
+/// Lifecycle actions (Deposit, Clear, Bounce, Endorse, Cancel) act on the
+/// selected saved cheque and are also available in the register
+/// (ChqListWin); buttons are gated by kind (CHQ-08).
 /// </summary>
 public sealed class ChqWin : BaseWin
 {
@@ -75,6 +78,19 @@ public sealed class ChqWin : BaseWin
         MinHeight = 440;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         BuildUi();
+        // CHQ-08: lifecycle buttons are kind-gated — Deposit/Endorse/
+        // Bounce exist only for incoming cheques, Cancel only for
+        // outgoing ones; an illegal click can no longer be offered.
+        if (_kind == ChqKind.Outgoing)
+        {
+            _btnDeposit.IsEnabled = false;
+            _btnBounce.IsEnabled = false;
+            _btnEndorse.IsEnabled = false;
+        }
+        else
+        {
+            _btnCancelChq.IsEnabled = false;
+        }
         ApplyLocalizedText();
         ResetBatch();
         Loaded += OnLoaded;
@@ -300,6 +316,7 @@ public sealed class ChqWin : BaseWin
                     IssueDate = DateOnly.FromDateTime(issueDate),
                     DueDate = DateOnly.FromDateTime(row.DueDate),
                     PortfolioAccountCode = _txtBox.Text.Trim(),
+                    BatchDocNo = string.IsNullOrWhiteSpace(_txtDocNo.Text) ? null : _txtDocNo.Text.Trim(),
                     Notes = string.IsNullOrWhiteSpace(row.Memo) ? (string.IsNullOrWhiteSpace(_txtMemo.Text) ? null : _txtMemo.Text.Trim()) : row.Memo.Trim()
                 };
                 row.EntityId = entity.Id;
@@ -350,7 +367,11 @@ public sealed class ChqWin : BaseWin
                     row.Status = ChequeStatuses.Deposited;
                     break;
                 case "Clear":
-                    await service.ClearAsync(CurrentCompanyCode, row.EntityId.Value, today, CurrentUserId);
+                    // Outgoing clearance credits the paying bank typed
+                    // in the header (CHQ-04); incoming ignores it and
+                    // uses the recorded deposit bank.
+                    await service.ClearAsync(CurrentCompanyCode, row.EntityId.Value, today, CurrentUserId,
+                        string.IsNullOrWhiteSpace(_txtDepositBank.Text) ? null : _txtDepositBank.Text.Trim());
                     row.Status = ChequeStatuses.Cleared;
                     break;
                 case "Bounce":
@@ -365,7 +386,9 @@ public sealed class ChqWin : BaseWin
                     row.Status = ChequeStatuses.Endorsed;
                     break;
                 case "Cancel":
-                    await service.CancelOutgoingAsync(CurrentCompanyCode, row.EntityId.Value, CurrentUserId);
+                    // The header memo doubles as the stop-payment note.
+                    await service.CancelOutgoingAsync(CurrentCompanyCode, row.EntityId.Value, CurrentUserId,
+                        string.IsNullOrWhiteSpace(_txtMemo.Text) ? null : _txtMemo.Text.Trim(), today);
                     row.Status = ChequeStatuses.Cancelled;
                     break;
             }
