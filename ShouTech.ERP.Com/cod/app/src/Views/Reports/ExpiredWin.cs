@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ShouTech.App.Reporting;
@@ -9,14 +7,16 @@ using ShouTech.App.Services;
 
 namespace ShouTech.App.Views.Reports;
 
-
 /// <summary>
-/// Expired / expiring materials. Schema fact: no batch or lot expiry dates
-/// are stored anywhere in the database — materials only carry the has_expiry
-/// flag, shelf_life_days and alert_before_expiry_days. The report therefore
-/// lists flagged materials with their last movement date and derives the
-/// Note honestly from shelf life relative to that last movement; it never
-/// invents a batch expiry date.
+/// Expired / near-expiry materials BY BATCH (Phase B 054 rebuild).
+/// Every row is a real batch from stock_batches with stock on hand in
+/// stock_batch_balances: its recorded expiry_date has passed, or falls
+/// within the material's alert_before_expiry_days. The pre-054 version
+/// inferred an expiry from the last movement date + shelf life because
+/// no batch expiry existed anywhere; that inference is retired — this
+/// window never fabricates a date. The data rule lives in
+/// RptQuery.ExpiredMaterialsAsync and is mirrored by
+/// BatchSerialService.GetExpiredBatches (the headless-provable copy).
 /// </summary>
 public sealed class ExpiredWin : RptBase
 {
@@ -27,13 +27,14 @@ public sealed class ExpiredWin : RptBase
         Columns = new RptCol[]
         {
             new() { Key = "MaterialCode", HeaderTextKey = "Reports.Col.MaterialCode", Type = RptColType.Text, Width = 110 },
-            new() { Key = "MaterialName", HeaderTextKey = "Reports.Col.MaterialName", Type = RptColType.Text, Width = 220 },
+            new() { Key = "MaterialName", HeaderTextKey = "Reports.Col.MaterialName", Type = RptColType.Text, Width = 200 },
             new() { Key = "Unit", HeaderTextKey = "Reports.Col.Unit", Type = RptColType.Text, Width = 70 },
-            new() { Key = "ShelfLifeDays", HeaderTextKey = "Reports.Col.ShelfLifeDays", Type = RptColType.WholeNumber, Width = 110 },
-            new() { Key = "AlertDays", HeaderTextKey = "Reports.Col.AlertDays", Type = RptColType.WholeNumber, Width = 100 },
-            new() { Key = "LastMoveDate", HeaderTextKey = "Reports.Col.LastMovement", Type = RptColType.Date, Width = 110 },
+            new() { Key = "BatchNo", HeaderTextKey = "Reports.Col.BatchNo", Type = RptColType.Text, Width = 120 },
+            new() { Key = "Warehouse", HeaderTextKey = "Reports.Col.Warehouse", Type = RptColType.Text, Width = 110 },
+            new() { Key = "ExpiryDate", HeaderTextKey = "Reports.Col.ExpiryDate", Type = RptColType.Date, Width = 110 },
+            new() { Key = "DaysRemaining", HeaderTextKey = "Reports.Col.DaysRemaining", Type = RptColType.WholeNumber, Width = 110 },
             new() { Key = "OnHand", HeaderTextKey = "Reports.Col.OnHand", Type = RptColType.FractionalNumber, Width = 100, Format = "N3" },
-            new() { Key = "Note", HeaderTextKey = "Reports.Col.Note", Type = RptColType.Text, Width = 320 },
+            new() { Key = "Note", HeaderTextKey = "Reports.Col.Note", Type = RptColType.Text, Width = 200 },
         },
         Filters = Array.Empty<RptFlt>()
     };
@@ -45,30 +46,18 @@ public sealed class ExpiredWin : RptBase
         var rows = new List<IReadOnlyDictionary<string, object?>>();
         foreach (var r in raw)
         {
-            var shelf = (int)RptWinUtil.Dec(r.GetValueOrDefault("ShelfLifeDays"));
-            var alert = (int)RptWinUtil.Dec(r.GetValueOrDefault("AlertDays"));
-            var last = RptWinUtil.ParseDate(r.GetValueOrDefault("LastMoveDate"));
-            string note;
-            if (shelf <= 0 || last is null)
-                note = T("Reports.ExpiryNoteFlagOnly");
-            else
-            {
-                var expiry = last.Value.Date.AddDays(shelf);
-                var daysLeft = (expiry - DateTime.Today).Days;
-                note = daysLeft < 0 ? T("Reports.ExpiryNoteElapsed")
-                     : daysLeft <= alert ? T("Reports.ExpiryNoteWithinAlert")
-                     : T("Reports.ExpiryNoteWithinLife");
-            }
+            var isExpired = (int)RptWinUtil.Dec(r.GetValueOrDefault("IsExpired")) != 0;
             rows.Add(new Dictionary<string, object?>
             {
                 ["MaterialCode"] = r.GetValueOrDefault("MaterialCode"),
                 ["MaterialName"] = r.GetValueOrDefault("MaterialName"),
                 ["Unit"] = r.GetValueOrDefault("Unit"),
-                ["ShelfLifeDays"] = shelf,
-                ["AlertDays"] = alert,
-                ["LastMoveDate"] = r.GetValueOrDefault("LastMoveDate"),
+                ["BatchNo"] = r.GetValueOrDefault("BatchNo"),
+                ["Warehouse"] = r.GetValueOrDefault("Warehouse"),
+                ["ExpiryDate"] = r.GetValueOrDefault("ExpiryDate"),
+                ["DaysRemaining"] = (int)RptWinUtil.Dec(r.GetValueOrDefault("DaysRemaining")),
                 ["OnHand"] = RptWinUtil.Dec(r.GetValueOrDefault("OnHand")),
-                ["Note"] = note,
+                ["Note"] = T(isExpired ? "Reports.ExpiryNoteExpired" : "Reports.ExpiryNoteNearExpiry"),
             });
         }
         return new RptData

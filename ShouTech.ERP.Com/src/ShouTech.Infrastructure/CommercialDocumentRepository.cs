@@ -335,10 +335,17 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                     // material's cost method — the pre-engine code wrote
                     // unit_cost = 0 and never touched average_cost, so
                     // chain deliveries carried no cost at all (RC-1).
+                    // Batch/serial (Phase B 054): batch issues
+                    // auto-allocate FEFO/FIFO inside the engine; the
+                    // chain has no serial capture UI, so serial-tracked
+                    // lines auto-pick the oldest in-stock serials
+                    // (AutoAllocateSerials) — recorded either way in
+                    // stock_movement_allocations.
                     StockValuationEngine.Apply(connection, transaction, _provider,
                         new StockMovementRequest(companyId, lineWarehouse, materialId,
                             docDate, "DLV", docNo, QtyIn: 0m, QtyOut: baseQty,
-                            Note: $"Delivery note {docNo} posting"));
+                            Note: $"Delivery note {docNo} posting",
+                            AutoAllocateSerials: true));
                 }
             }
             else if (docKind == CommercialDocKinds.SalesInvoice && partyId is not null)

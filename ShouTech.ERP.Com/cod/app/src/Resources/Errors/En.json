@@ -244,6 +244,42 @@
     "message": "Recalculate Costs cannot rewrite movements in a closed fiscal period (from date '{0}').",
     "hint": "Choose a from date inside an open fiscal period."
   },
+  "INV-6005": {
+    "code": "INV-6005",
+    "name": "BatchSerialRequired",
+    "message": "Batch or serial data is required to post material '{0}'.",
+    "hint": "Capture the batch (with expiry) or the serial numbers for the line, then post again."
+  },
+  "INV-6006": {
+    "code": "INV-6006",
+    "name": "BatchStockInsufficient",
+    "message": "Batch '{0}' does not hold enough stock for material '{1}'.",
+    "hint": "Choose another batch or reduce the quantity, then post again."
+  },
+  "INV-6007": {
+    "code": "INV-6007",
+    "name": "SerialUnavailable",
+    "message": "Serial '{0}' is not available in stock for material '{1}'.",
+    "hint": "Only serials in stock at the document warehouse can be issued; check the serial status and warehouse."
+  },
+  "INV-6008": {
+    "code": "INV-6008",
+    "name": "SerialDuplicate",
+    "message": "Serial '{0}' already exists for material '{1}'.",
+    "hint": "Serial numbers are unique per material; correct the number and post again."
+  },
+  "INV-6009": {
+    "code": "INV-6009",
+    "name": "BatchAllocationMismatch",
+    "message": "The batch/serial allocations do not match the movement quantity for material '{0}'.",
+    "hint": "Allocate exactly the line quantity across batches, or exactly one serial per unit."
+  },
+  "INV-6010": {
+    "code": "INV-6010",
+    "name": "BatchExpired",
+    "message": "Batch '{0}' for material '{1}' expired on {2} and cannot be issued.",
+    "hint": "Choose a batch that has not expired, or post with the expired-batch override permission (the override is recorded)."
+  },
   "LIC-8001": {
     "code": "LIC-8001",
     "name": "LicenseCheckFailed",

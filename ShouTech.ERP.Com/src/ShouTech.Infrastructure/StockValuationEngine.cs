@@ -28,7 +28,18 @@ public sealed record StockMovementRequest(
     decimal? ReceiptUnitCost = null,
     decimal? LinkedRate = null,
     decimal? ReceiptCostAmount = null,
-    string? Note = null);
+    string? Note = null,
+    // ---- Batch/serial dimension (Phase B 054) -------------------------
+    // All optional: an untracked material ignores them, and every
+    // pre-054 caller compiles and behaves exactly as before.
+    IReadOnlyList<BatchAllocationRequest>? BatchAllocations = null,
+    IReadOnlyList<SerialSelection>? Serials = null,
+    string? OriginalDocumentNo = null,
+    long? SourceMovementId = null,
+    bool AutoAllocateSerials = false,
+    bool AllowExpiredBatchIssue = false,
+    long? PartyId = null,
+    string? Actor = null);
 
 public sealed record StockMovementResult(
     long MovementId,
@@ -36,7 +47,14 @@ public sealed record StockMovementResult(
     decimal CostAmount,
     decimal BalanceQtyAfter,
     decimal StockValueAfter,
-    string ValuationMethod);
+    string ValuationMethod,
+    IReadOnlyList<StockAllocationRecord>? Allocations = null)
+{
+    /// <summary>The batch/serial allocations written for this movement
+    /// (stock_movement_allocations); empty for untracked materials.</summary>
+    public IReadOnlyList<StockAllocationRecord> AllocationRecords
+        => Allocations ?? Array.Empty<StockAllocationRecord>();
+}
 
 /// <summary>
 /// THE stock valuation engine (Fix Phase Step 6, Phase B design
@@ -177,6 +195,20 @@ public static class StockValuationEngine
         var movementId = InsertMovement(connection, transaction, isPg, company, request, isReceipt,
             valuationRate, isReceipt ? costAmount : costAmount, state, methodLabel);
 
+        // Batch/serial dimension (Phase B 054): for a tracked, stocked,
+        // non-service material the allocator validates the movement's
+        // batches/serials, maintains batch balances and serial states,
+        // and writes the allocation bundle rows — inside this same
+        // transaction, so a cataloged allocation failure (INV-6005..
+        // 6010) rolls the whole posting back. Untracked materials skip
+        // the allocator entirely: pre-054 behavior is the baseline.
+        IReadOnlyList<StockAllocationRecord> allocations = Array.Empty<StockAllocationRecord>();
+        if (material.Tracking.IsTracked && !material.IsService && material.IsStocked)
+        {
+            allocations = BatchSerialAllocator.Apply(connection, transaction, isPg,
+                request, material.Tracking, material.Code, movementId);
+        }
+
         UpsertBalance(connection, transaction, isPg, company, request.WarehouseId, request.MaterialId,
             balance?.Id, balance?.AverageCost ?? 0m, state, valuationRate);
         PersistLayers(connection, transaction, isPg, company, request.WarehouseId, request.MaterialId,
@@ -184,7 +216,8 @@ public static class StockValuationEngine
         UpdateMaterialCard(connection, transaction, isPg, material, request, isReceipt, valuationRate);
 
         return new StockMovementResult(movementId, valuationRate,
-            isReceipt ? costAmount : costAmount, state.Quantity, state.Value, methodLabel);
+            isReceipt ? costAmount : costAmount, state.Quantity, state.Value, methodLabel,
+            allocations);
     }
 
     /// <summary>
@@ -254,7 +287,8 @@ public static class StockValuationEngine
     // ------------------------------------------------------------------
     private sealed record MaterialInfo(
         string CompanyKey, string Code, string? CostMethod, decimal StandardCost,
-        decimal LastPurchaseCost, decimal CardAvgCost, bool AllowNegative);
+        decimal LastPurchaseCost, decimal CardAvgCost, bool AllowNegative,
+        MaterialTracking Tracking, bool IsService, bool IsStocked);
 
     private static MaterialInfo LoadMaterial(
         DbConnection connection, DbTransaction transaction, bool isPg, string company, long materialId)
@@ -267,13 +301,22 @@ public static class StockValuationEngine
         foreach (var scoped in new[] { true, false })
         {
             using var cmd = CreateCommand(connection, transaction, scoped
-                ? $"SELECT company_id, code, cost_method, standard_cost, last_purchase_cost, avg_cost, allow_negative FROM materials WHERE company_id = @c AND material_id = @m AND is_deleted = {(isPg ? "FALSE" : "0")} LIMIT 1"
-                : $"SELECT company_id, code, cost_method, standard_cost, last_purchase_cost, avg_cost, allow_negative FROM materials WHERE material_id = @m AND is_deleted = {(isPg ? "FALSE" : "0")} LIMIT 1");
+                ? $"SELECT company_id, code, cost_method, standard_cost, last_purchase_cost, avg_cost, allow_negative, has_batch, has_lot, has_serial, has_expiry, removal_strategy, shelf_life_days, alert_before_expiry_days, is_service, is_stocked FROM materials WHERE company_id = @c AND material_id = @m AND is_deleted = {(isPg ? "FALSE" : "0")} LIMIT 1"
+                : $"SELECT company_id, code, cost_method, standard_cost, last_purchase_cost, avg_cost, allow_negative, has_batch, has_lot, has_serial, has_expiry, removal_strategy, shelf_life_days, alert_before_expiry_days, is_service, is_stocked FROM materials WHERE material_id = @m AND is_deleted = {(isPg ? "FALSE" : "0")} LIMIT 1");
             if (scoped) Add(cmd, "@c", company);
             Add(cmd, "@m", materialId);
             using var reader = cmd.ExecuteReader();
             if (reader.Read())
             {
+                bool Flag(int i) => !reader.IsDBNull(i)
+                    && Convert.ToBoolean(reader.GetValue(i), CultureInfo.InvariantCulture);
+                var tracking = new MaterialTracking(
+                    HasBatch: Flag(7) || Flag(8),
+                    HasSerial: Flag(9),
+                    HasExpiry: Flag(10),
+                    RemovalStrategy: ValuationText.ToText(reader.GetValue(11)) ?? "FIFO",
+                    ShelfLifeDays: reader.IsDBNull(12) ? 0 : Convert.ToInt32(reader.GetValue(12), CultureInfo.InvariantCulture),
+                    AlertBeforeExpiryDays: reader.IsDBNull(13) ? 0 : Convert.ToInt32(reader.GetValue(13), CultureInfo.InvariantCulture));
                 return new MaterialInfo(
                     ValuationText.ToText(reader.GetValue(0)) ?? company,
                     ValuationText.ToText(reader.GetValue(1)) ?? materialId.ToString(CultureInfo.InvariantCulture),
@@ -281,7 +324,12 @@ public static class StockValuationEngine
                     ValuationText.ToDecimal(reader.GetValue(3)),
                     ValuationText.ToDecimal(reader.GetValue(4)),
                     ValuationText.ToDecimal(reader.GetValue(5)),
-                    !reader.IsDBNull(6) && Convert.ToBoolean(reader.GetValue(6), CultureInfo.InvariantCulture));
+                    Flag(6),
+                    tracking,
+                    IsService: Flag(14),
+                    // A legacy row with a NULL is_stocked is stocked
+                    // (the column is NOT NULL DEFAULT 1 since 013).
+                    IsStocked: reader.IsDBNull(15) || Flag(15));
             }
         }
         throw new AppError(ErrorCodes.StockValuationFailed,

@@ -91,6 +91,12 @@ public static class ErrorCodes
     public const string StockValuationFailed = "INV-6002";
     public const string RecalculationFailed = "INV-6003";
     public const string RecalculationClosedPeriod = "INV-6004";
+    public const string BatchSerialRequired = "INV-6005";
+    public const string BatchStockInsufficient = "INV-6006";
+    public const string SerialUnavailable = "INV-6007";
+    public const string SerialDuplicate = "INV-6008";
+    public const string BatchAllocationMismatch = "INV-6009";
+    public const string BatchExpired = "INV-6010";
 
     // ---- UI 7000-7999 --------------------------------------------------
     public const string WindowOperationFailed = "UI-7001";

@@ -244,6 +244,42 @@
     "message": "Le recalcul des coûts ne peut pas réécrire les mouvements d'une période fiscale clôturée (à partir du '{0}').",
     "hint": "Choisissez une date de début dans une période fiscale ouverte."
   },
+  "INV-6005": {
+    "code": "INV-6005",
+    "name": "BatchSerialRequired",
+    "message": "Les données de lot ou les numéros de série sont requis pour comptabiliser l'article '{0}'.",
+    "hint": "Saisissez le lot (avec sa date d'expiration) ou les numéros de série de la ligne, puis comptabilisez à nouveau."
+  },
+  "INV-6006": {
+    "code": "INV-6006",
+    "name": "BatchStockInsufficient",
+    "message": "Le lot '{0}' ne contient pas assez de stock pour l'article '{1}'.",
+    "hint": "Choisissez un autre lot ou réduisez la quantité, puis comptabilisez à nouveau."
+  },
+  "INV-6007": {
+    "code": "INV-6007",
+    "name": "SerialUnavailable",
+    "message": "Le numéro de série '{0}' n'est pas disponible en stock pour l'article '{1}'.",
+    "hint": "Seuls les numéros de série en stock dans l'entrepôt du document peuvent être émis ; vérifiez le statut et l'entrepôt."
+  },
+  "INV-6008": {
+    "code": "INV-6008",
+    "name": "SerialDuplicate",
+    "message": "Le numéro de série '{0}' existe déjà pour l'article '{1}'.",
+    "hint": "Les numéros de série sont uniques par article ; corrigez le numéro et comptabilisez à nouveau."
+  },
+  "INV-6009": {
+    "code": "INV-6009",
+    "name": "BatchAllocationMismatch",
+    "message": "Les allocations de lots/séries ne correspondent pas à la quantité du mouvement pour l'article '{0}'.",
+    "hint": "Allouez exactement la quantité de la ligne entre les lots, ou exactement un numéro de série par unité."
+  },
+  "INV-6010": {
+    "code": "INV-6010",
+    "name": "BatchExpired",
+    "message": "Le lot '{0}' de l'article '{1}' a expiré le {2} et ne peut pas être émis.",
+    "hint": "Choisissez un lot non expiré, ou comptabilisez avec l'autorisation de dérogation pour lot expiré (la dérogation est enregistrée)."
+  },
   "LIC-8001": {
     "code": "LIC-8001",
     "name": "LicenseCheckFailed",

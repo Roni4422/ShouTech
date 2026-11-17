@@ -250,19 +250,40 @@ public static class CardStore
             if (line.MaterialId is null || line.Quantity <= 0) continue;
             var (baseQty, _) = StkPost.ToBaseUnits(connection, tx, line.MaterialId.Value,
                 line.UnitCode, line.Quantity, line.UnitCost);
+            // Batch/serial (054): raw batches auto-allocate FEFO/FIFO;
+            // serials auto-pick (no capture UI on this path).
             StockValuationEngine.Apply(connection, tx, provider,
                 new StockMovementRequest(Company(), order.WarehouseId.Value, line.MaterialId.Value,
                     dateText, "MFG-OUT", order.OrderNo,
-                    QtyIn: 0m, QtyOut: baseQty, Note: line.MaterialName));
+                    QtyIn: 0m, QtyOut: baseQty, Note: line.MaterialName,
+                    AutoAllocateSerials: true));
         }
 
         var (finishedBaseQty, finishedBaseCost) = StkPost.ToBaseUnits(connection, tx,
             order.FinishedMaterialId.Value, order.UnitCode, order.Quantity, order.UnitCost);
+        // Batch/serial (054): finished batch named after the order;
+        // finished serials system-generated, mirroring MfgOrderRepository.
+        var finishedTracking = BatchSerialCapture.LoadTracking(connection, tx, provider,
+            Company(), order.FinishedMaterialId.Value);
+        IReadOnlyList<BatchAllocationRequest>? finishedBatches = null;
+        IReadOnlyList<SerialSelection>? finishedSerials = null;
+        if (finishedTracking.HasBatch)
+            finishedBatches = new[] { new BatchAllocationRequest(order.OrderNo, finishedBaseQty) };
+        if (finishedTracking.HasSerial)
+        {
+            if (finishedBaseQty != decimal.Truncate(finishedBaseQty))
+                throw new InvalidOperationException(
+                    "The finished material is serial-tracked: the produced quantity must be a whole number of units.");
+            finishedSerials = Enumerable.Range(1, (int)finishedBaseQty)
+                .Select(i => new SerialSelection($"{order.OrderNo}-{i}"))
+                .ToList();
+        }
         StockValuationEngine.Apply(connection, tx, provider,
             new StockMovementRequest(Company(), order.WarehouseId.Value, order.FinishedMaterialId.Value,
                 dateText, "MFG-IN", order.OrderNo,
                 QtyIn: finishedBaseQty, QtyOut: 0m, ReceiptUnitCost: finishedBaseCost,
-                Note: order.FinishedMaterialName));
+                Note: order.FinishedMaterialName,
+                BatchAllocations: finishedBatches, Serials: finishedSerials));
 
         using (var cmd = connection.CreateCommand())
         {

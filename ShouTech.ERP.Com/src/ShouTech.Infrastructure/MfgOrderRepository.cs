@@ -232,10 +232,15 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 if (onHand < baseQty)
                     throw new InvalidOperationException(
                         $"Insufficient stock for material '{line.ItemCode.Trim()}': required {baseQty} (base units), on hand {onHand} in warehouse {warehouseId}.");
+                // Batch/serial (054): raw batch issues auto-allocate
+                // FEFO/FIFO in the engine and the allocations are the
+                // genealogy link (raw batch -> this order -> finished
+                // batch); serial raw auto-picks in-stock serials.
                 var consumed = StockValuationEngine.Apply(connection, transaction, _provider,
                     new StockMovementRequest(companyId.Trim(), warehouseId, materialId, dateText,
                         "MFG_CONSUME", documentNo, QtyIn: 0m, QtyOut: baseQty,
-                        Note: $"Manufacturing order {documentNo} consumption"));
+                        Note: $"Manufacturing order {documentNo} consumption",
+                        AutoAllocateSerials: true, Actor: userId));
                 rawEngineCosts.Add((line, -consumed.CostAmount));
             }
 
@@ -255,11 +260,35 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 var finishedBaseUnitCost = finishedEquivalent == 1m
                     ? order.UnitCost
                     : decimal.Round(order.TotalCost / finishedBaseQty, 4, MidpointRounding.AwayFromZero);
+                // Batch/serial (054): a batch-tracked finished item is
+                // produced INTO a batch named after the order (design:
+                // batch no defaults to the order's doc no) — together
+                // with the raw allocations above this is the batch
+                // genealogy. A serial-tracked finished item receives
+                // system-generated serials MO-<doc>-<n> (Phenix allows
+                // system-generated serials), one per base unit.
+                var finishedTracking = BatchSerialCapture.LoadTracking(
+                    connection, transaction, _provider, companyId.Trim(), finishedId);
+                IReadOnlyList<BatchAllocationRequest>? finishedBatches = null;
+                IReadOnlyList<SerialSelection>? finishedSerials = null;
+                if (finishedTracking.HasBatch)
+                    finishedBatches = new[] { new BatchAllocationRequest(documentNo, finishedBaseQty) };
+                if (finishedTracking.HasSerial)
+                {
+                    if (finishedBaseQty != decimal.Truncate(finishedBaseQty))
+                        throw new InvalidOperationException(
+                            $"Finished material '{order.ItemCode.Trim()}' is serial-tracked: the produced quantity must be a whole number of units.");
+                    finishedSerials = Enumerable.Range(1, (int)finishedBaseQty)
+                        .Select(i => new SerialSelection($"{documentNo}-{i}"))
+                        .ToList();
+                }
                 StockValuationEngine.Apply(connection, transaction, _provider,
                     new StockMovementRequest(companyId.Trim(), warehouseId, finishedId, dateText,
                         "MFG_PRODUCE", documentNo, QtyIn: finishedBaseQty, QtyOut: 0m,
                         ReceiptUnitCost: finishedBaseUnitCost,
-                        Note: $"Manufacturing order {documentNo} production"));
+                        Note: $"Manufacturing order {documentNo} production",
+                        BatchAllocations: finishedBatches,
+                        Serials: finishedSerials, Actor: userId));
             }
 
             // 3) Persist computed costs + status (compare-and-swap on Draft).
@@ -347,10 +376,14 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                     if (finishedOnHand < finishedBaseQty)
                         throw new InvalidOperationException(
                             $"Cannot cancel: produced quantity of '{order.ItemCode.Trim()}' is no longer fully on hand (required {finishedBaseQty} base units, on hand {finishedOnHand}).");
+                    // Batch/serial (054): the reversal consumes the
+                    // order's own finished batch (FEFO finds only it)
+                    // and auto-picks the produced serials.
                     StockValuationEngine.Apply(connection, transaction, _provider,
                         new StockMovementRequest(companyId.Trim(), warehouseId, finishedId, dateText,
                             "MFG_PRODUCE_REV", documentNo, QtyIn: 0m, QtyOut: finishedBaseQty,
-                            Note: $"Manufacturing order {documentNo} cancellation"));
+                            Note: $"Manufacturing order {documentNo} cancellation",
+                            AutoAllocateSerials: true, Actor: userId));
                 }
 
                 foreach (var line in order.Lines.Where(l => l.LineKind == MfgLineKinds.Raw))
@@ -368,11 +401,14 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                     var (baseQty, baseUnitCost) = UnitEquivalents.ToBase(line.Qty, line.UnitCost, equivalent);
                     var originalRate = StockValuationEngine.TryGetDocumentRate(
                         connection, transaction, _provider, companyId.Trim(), documentNo, materialId, warehouseId, issued: true);
+                    // Batch/serial (054): raw re-enters its ORIGINAL
+                    // batches/serials via the order's document number.
                     StockValuationEngine.Apply(connection, transaction, _provider,
                         new StockMovementRequest(companyId.Trim(), warehouseId, materialId, dateText,
                             "MFG_CONSUME_REV", documentNo, QtyIn: baseQty, QtyOut: 0m,
                             ReceiptUnitCost: baseUnitCost, LinkedRate: originalRate,
-                            Note: $"Manufacturing order {documentNo} cancellation"));
+                            Note: $"Manufacturing order {documentNo} cancellation",
+                            OriginalDocumentNo: documentNo, Actor: userId));
                 }
             }
 

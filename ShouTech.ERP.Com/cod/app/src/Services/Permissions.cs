@@ -214,6 +214,12 @@ namespace ShouTech.App.Services
             public const string SerialView = "INV.SERIAL.VIEW";
             public const string SerialUpdate = "INV.SERIAL.UPDATE";
 
+            // Phase B 054 batch/serial (migration 054 seeds).
+            public const string BatchView = "INV.BATCH.VIEW";
+            public const string BatchManage = "INV.BATCH.MANAGE";
+            public const string SerialTraceView = "INV.SERIAL.VIEW";
+            public const string BatchExpiredOverride = "INV.BATCH.EXPIREDOVERRIDE";
+
             public const string ExpiryView = "INV.EXPIRY.VIEW";
 
             public const string ItemDiscountView = "INV.DISCOUNT.VIEW";

@@ -28,6 +28,7 @@ public static class RibbonNav
             case "Inventory.EndOfPeriod": Show(new EndOfPeriodWin(), owner); return true;
             case "Inventory.MaterialMovementChart": Show(new MatMoveChartWin(), owner); return true;
             case "Inventory.ExpiredMaterials": Show(new ExpiredWin(), owner); return true;
+            case "Inventory.BatchBalances": Show(new BatchBalWin(), owner); return true;
             case "Inventory.InvoiceAge": Show(new InvoiceAgeWin(), owner); return true;
             case "Inventory.MaterialPriceHistory": Show(new PriceHistoryWin(), owner); return true;
             case "Inventory.ServiceMaterials": Show(new ServiceMatWin(), owner); return true;

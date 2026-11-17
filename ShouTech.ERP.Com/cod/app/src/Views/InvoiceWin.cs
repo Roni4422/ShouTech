@@ -950,7 +950,12 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             ResolveParty();
             var doc = CaptureDoc();
             if (doc.DocId <= 0) InvRepo.SaveDraft(doc);
-            InvRepo.Post(doc.DocId, doc.Kind, AppState.CurrentUser?.Username ?? Environment.UserName);
+            // Batch/serial capture (Phase B 054): tracked lines are
+            // captured in the picker before posting; cancelling the
+            // picker aborts the post and keeps the draft.
+            var captures = BatchSerialCaptureSvc.CaptureForPosting(doc, this);
+            if (captures is null) return;
+            InvRepo.Post(doc.DocId, doc.Kind, AppState.CurrentUser?.Username ?? Environment.UserName, captures);
             doc.Status = InvDocStatus.Posted;
             // Reload so JournalDocNo assigned during post is visible to the voucher button.
             var reloaded = InvRepo.Load(doc.DocId, doc.Kind);

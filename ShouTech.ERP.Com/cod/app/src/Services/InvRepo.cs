@@ -212,7 +212,8 @@ public static class InvRepo
         return docId;
     }
 
-    public static void Post(long docId, InvDocKind kind, string userId)
+    public static void Post(long docId, InvDocKind kind, string userId,
+        IReadOnlyDictionary<int, LineBatchSerialCapture>? batchSerialByLine = null)
     {
         DocSchema.Ensure();
         MatRepo.EnsureSchema();
@@ -227,7 +228,7 @@ public static class InvRepo
         // are wired to the engines, the block is replaced by the route.
         if (kind is InvDocKind.StockTransfer or InvDocKind.InventoryCount)
         {
-            PostDedicatedEngineDocument(docId, kind, userId);
+            PostDedicatedEngineDocument(docId, kind, userId, batchSerialByLine);
             return;
         }
 
@@ -333,6 +334,25 @@ public static class InvRepo
                     TaxRate = Convert.ToDecimal(lr.GetValue(8), CultureInfo.InvariantCulture),
                     WarehouseId = lr.IsDBNull(9) ? null : Convert.ToInt32(lr.GetValue(9), CultureInfo.InvariantCulture),
                 });
+            }
+        }
+
+        // Batch/serial capture (Phase B 054): merge the picker's
+        // per-line selections (keyed by line number) into the loaded
+        // lines so StkPost hands them to the valuation engine's
+        // allocator. Lines without a capture entry post untracked —
+        // for a tracked material the allocator then fails the posting
+        // with INV-6005 rather than skipping silently.
+        if (batchSerialByLine is not null)
+        {
+            foreach (var line in doc.Lines)
+            {
+                if (batchSerialByLine.TryGetValue(line.LineNo, out var capture))
+                {
+                    line.BatchAllocations = capture.Batches;
+                    line.Serials = capture.Serials;
+                    line.AllowExpiredBatchIssue = capture.AllowExpiredBatchIssue;
+                }
             }
         }
 
@@ -587,7 +607,8 @@ public static class InvRepo
     /// conserved inside the inventory account); counts adjust stock
     /// only — exactly the effects InvPostingPolicy records for them.
     /// </summary>
-    private static void PostDedicatedEngineDocument(long docId, InvDocKind kind, string userId)
+    private static void PostDedicatedEngineDocument(long docId, InvDocKind kind, string userId,
+        IReadOnlyDictionary<int, LineBatchSerialCapture>? batchSerialByLine = null)
     {
         var doc = Load(docId, kind)
             ?? throw new InvalidOperationException("Document not found.");
@@ -595,6 +616,18 @@ public static class InvRepo
             throw new InvalidOperationException("Document is already posted.");
         if (doc.Lines.Count == 0)
             throw new InvalidOperationException("The document has no lines to post.");
+        if (batchSerialByLine is not null)
+        {
+            foreach (var line in doc.Lines)
+            {
+                if (batchSerialByLine.TryGetValue(line.LineNo, out var capture))
+                {
+                    line.BatchAllocations = capture.Batches;
+                    line.Serials = capture.Serials;
+                    line.AllowExpiredBatchIssue = capture.AllowExpiredBatchIssue;
+                }
+            }
+        }
 
         ClaimDedicatedPost(docId, kind, userId);
         try
@@ -678,7 +711,23 @@ public static class InvRepo
                 // material identity at all are unusable.
                 var materialId = ResolveLineMaterialId(connection, tx, line);
                 var (baseQty, baseUnitCost) = StkPost.ToBaseUnits(connection, tx, materialId, line.Unit, line.Qty, line.UnitPrice);
-                lines.Add(new StkPost.StockCountLine(materialId, line.MaterialCode, baseQty, baseUnitCost));
+                // Batch capture (054) restated per base unit like the
+                // counted quantity itself.
+                IReadOnlyList<ShouTech.Infrastructure.BatchAllocationRequest>? countBatches = null;
+                if (line.BatchAllocations.Count > 0)
+                {
+                    var converted = new List<ShouTech.Infrastructure.BatchAllocationRequest>();
+                    foreach (var b in line.BatchAllocations)
+                    {
+                        var (bBase, _) = StkPost.ToBaseUnits(connection, tx, materialId, line.Unit, b.Qty, 0m);
+                        converted.Add(new ShouTech.Infrastructure.BatchAllocationRequest(
+                            b.BatchNo, bBase, b.ExpiryDate, b.MfgDate, b.SupplierBatchNo));
+                    }
+                    countBatches = converted;
+                }
+                lines.Add(new StkPost.StockCountLine(materialId, line.MaterialCode, baseQty, baseUnitCost,
+                    countBatches,
+                    line.Serials.Count > 0 ? line.Serials : null));
             }
         }
         if (lines.Count == 0)

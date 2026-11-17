@@ -27,7 +27,12 @@ public static class StkPost
         long MaterialId,
         string MaterialCode,
         decimal CountedQty,
-        decimal UnitCost);
+        decimal UnitCost,
+        // Batch/serial capture for tracked materials (Phase B 054):
+        // a surplus receipt needs them exactly like any receipt; a
+        // shortage without them allocates FEFO/FIFO in the engine.
+        IReadOnlyList<BatchAllocationRequest>? BatchAllocations = null,
+        IReadOnlyList<SerialSelection>? Serials = null);
 
     public sealed record MaterialHistoryMoveResult(int DocumentLines, int Movements)
     {
@@ -130,14 +135,34 @@ public static class StkPost
             // a linked sales return re-enters at the original sale's
             // issue rate (sweep RC-1).
             decimal? linkedRate = null;
-            if (doc.Kind == InvDocKind.SalesReturn)
+            string? originalDocNo = null;
+            if (doc.Kind is InvDocKind.SalesReturn or InvDocKind.PurchaseReturn)
             {
-                var originalDocNo = ResolveOriginalDocNo(connection, tx, doc);
-                if (!string.IsNullOrWhiteSpace(originalDocNo))
+                originalDocNo = ResolveOriginalDocNo(connection, tx, doc);
+                if (doc.Kind == InvDocKind.SalesReturn && !string.IsNullOrWhiteSpace(originalDocNo))
                     linkedRate = StockValuationEngine.TryGetDocumentRate(
                         connection, tx, ProviderName, company, originalDocNo,
                         productId.Value, warehouseId, issued: true);
             }
+
+            // Batch/serial dimension (Phase B 054): the line's captured
+            // batches/serials travel with the movement into the engine,
+            // whose allocator validates and records them. Batch slices
+            // were captured in the line's chosen unit, so they are
+            // restated per base unit with the same equivalent as the
+            // line quantity; returns carry the original document number
+            // so the allocator re-enters / consumes the ORIGINAL
+            // batches and serials where the line captured none.
+            IReadOnlyList<BatchAllocationRequest>? batchAllocs = null;
+            if (line.BatchAllocations.Count > 0)
+            {
+                batchAllocs = line.BatchAllocations
+                    .Select(b => new BatchAllocationRequest(
+                        b.BatchNo, b.Qty * equivalent, b.ExpiryDate, b.MfgDate, b.SupplierBatchNo))
+                    .ToList();
+            }
+            IReadOnlyList<SerialSelection>? serials =
+                line.Serials.Count > 0 ? line.Serials : null;
 
             StockValuationEngine.Apply(connection, tx, ProviderName,
                 new StockMovementRequest(
@@ -147,7 +172,13 @@ public static class StkPost
                     qtyIn, qtyOut,
                     ReceiptUnitCost: qtyIn > 0 ? unitCost : null,
                     LinkedRate: linkedRate,
-                    Note: line.Description));
+                    Note: line.Description,
+                    BatchAllocations: batchAllocs,
+                    Serials: serials,
+                    OriginalDocumentNo: originalDocNo,
+                    AllowExpiredBatchIssue: line.AllowExpiredBatchIssue,
+                    PartyId: doc.PartyId,
+                    Actor: AppState.CurrentUser?.Username));
         }
     }
 
@@ -401,7 +432,10 @@ public static class StkPost
                     QtyIn: Math.Max(delta, 0), QtyOut: Math.Max(-delta, 0),
                     ReceiptUnitCost: line.UnitCost,
                     LinkedRate: delta > 0 && currentQty > 0 ? currentCost : null,
-                    Note: reason.Trim()));
+                    Note: reason.Trim(),
+                    BatchAllocations: line.BatchAllocations,
+                    Serials: line.Serials,
+                    Actor: AppState.CurrentUser?.Username));
             posted++;
         }
 
@@ -792,14 +826,21 @@ public static class StkPost
                         company, sourceWarehouseId, line.MaterialId, movementDate,
                         "TRANSFER_OUT", documentNo,
                         QtyIn: 0m, QtyOut: line.Quantity,
-                        Note: $"{reason.Trim()} → {targetWarehouseId.ToString(CultureInfo.InvariantCulture)}"));
+                        Note: $"{reason.Trim()} → {targetWarehouseId.ToString(CultureInfo.InvariantCulture)}",
+                        Actor: AppState.CurrentUser?.Username));
+                // Batch/serial (054): the in-leg re-creates the out-leg's
+                // allocations at the destination (SourceMovementId), so
+                // batches keep their identity and serials keep their
+                // numbers across the transfer.
                 StockValuationEngine.Apply(connection, tx, ProviderName,
                     new StockMovementRequest(
                         company, targetWarehouseId, line.MaterialId, movementDate,
                         "TRANSFER_IN", documentNo,
                         QtyIn: line.Quantity, QtyOut: 0m,
                         ReceiptCostAmount: -outbound.CostAmount,
-                        Note: $"{reason.Trim()} ← {sourceWarehouseId.ToString(CultureInfo.InvariantCulture)}"));
+                        Note: $"{reason.Trim()} ← {sourceWarehouseId.ToString(CultureInfo.InvariantCulture)}",
+                        SourceMovementId: outbound.MovementId,
+                        Actor: AppState.CurrentUser?.Username));
             }
 
             tx.Commit();

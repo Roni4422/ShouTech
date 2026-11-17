@@ -244,6 +244,42 @@
     "message": "Maliyetleri Yeniden Hesapla, kapalı bir mali dönemdeki hareketleri yeniden yazamaz (başlangıç tarihi '{0}').",
     "hint": "Açık bir mali dönem içinde bir başlangıç tarihi seçin."
   },
+  "INV-6005": {
+    "code": "INV-6005",
+    "name": "BatchSerialRequired",
+    "message": "'{0}' malzemesini kaydetmek için parti veya seri verisi gereklidir.",
+    "hint": "Satır için partiyi (son kullanma tarihiyle) veya seri numaralarını girin ve yeniden kaydedin."
+  },
+  "INV-6006": {
+    "code": "INV-6006",
+    "name": "BatchStockInsufficient",
+    "message": "'{0}' partisinde '{1}' malzemesi için yeterli stok yok.",
+    "hint": "Başka bir parti seçin veya miktarı azaltın, sonra yeniden kaydedin."
+  },
+  "INV-6007": {
+    "code": "INV-6007",
+    "name": "SerialUnavailable",
+    "message": "'{0}' seri numarası '{1}' malzemesi için stokta mevcut değil.",
+    "hint": "Yalnızca belge deposunda stokta olan seri numaraları çıkarılabilir; seri durumunu ve depoyu kontrol edin."
+  },
+  "INV-6008": {
+    "code": "INV-6008",
+    "name": "SerialDuplicate",
+    "message": "'{0}' seri numarası '{1}' malzemesi için zaten mevcut.",
+    "hint": "Seri numaraları malzeme başına benzersizdir; numarayı düzeltip yeniden kaydedin."
+  },
+  "INV-6009": {
+    "code": "INV-6009",
+    "name": "BatchAllocationMismatch",
+    "message": "Parti/seri tahsisleri '{0}' malzemesinin hareket miktarıyla eşleşmiyor.",
+    "hint": "Satır miktarını partiler arasında tam olarak tahsis edin veya birim başına tam bir seri numarası belirtin."
+  },
+  "INV-6010": {
+    "code": "INV-6010",
+    "name": "BatchExpired",
+    "message": "'{1}' malzemesinin '{0}' partisinin süresi {2} tarihinde doldu ve çıkarılamaz.",
+    "hint": "Süresi dolmamış bir parti seçin veya süresi dolmuş parti geçersiz kılma izniyle kaydedin (geçersiz kılma kaydedilir)."
+  },
   "LIC-8001": {
     "code": "LIC-8001",
     "name": "LicenseCheckFailed",

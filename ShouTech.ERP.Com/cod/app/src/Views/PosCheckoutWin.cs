@@ -221,7 +221,15 @@ public sealed class PosCheckoutWin : BaseWin
             // A completed POS sale is settled in full unless it is on credit.
             _doc.PaidAmount = _doc.PaymentMethod == InvPaymentMethod.Credit ? 0m : _doc.GrandTotal;
             InvRepo.SaveDraft(_doc);
-            InvRepo.Post(_doc.DocId, _doc.Kind, AppState.CurrentUser?.Username ?? Environment.UserName);
+            // Batch/serial capture (Phase B 054, decision B2): serial
+            // capture is required at POS exactly as on invoices.
+            var captures = BatchSerialCaptureSvc.CaptureForPosting(_doc, this);
+            if (captures is null)
+            {
+                _complete.IsEnabled = true;
+                return;
+            }
+            InvRepo.Post(_doc.DocId, _doc.Kind, AppState.CurrentUser?.Username ?? Environment.UserName, captures);
             ShowInfo("POS.SalePosted");
             DialogResult = true;
         }

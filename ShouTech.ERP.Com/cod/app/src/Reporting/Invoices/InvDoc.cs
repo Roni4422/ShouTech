@@ -58,6 +58,18 @@ public sealed class InvLine
     public int? WarehouseId { get; set; }
     public string WarehouseName { get; set; } = string.Empty;
 
+    // ---- Batch/serial capture (Phase B 054) ---------------------------
+    // Captured at posting time by the batch/serial picker (quantities in
+    // the line's chosen unit for batches — StkPost restates them per
+    // base unit exactly like the line quantity; serials are per unit and
+    // unit-independent). Transient by design: the persisted record of a
+    // posting is stock_movement_allocations, written by the engine.
+    public List<ShouTech.Infrastructure.BatchAllocationRequest> BatchAllocations { get; set; } = new();
+    public List<ShouTech.Infrastructure.SerialSelection> Serials { get; set; } = new();
+    /// <summary>Holder of the INV.BATCH.EXPIREDOVERRIDE permission
+    /// confirmed the expired-batch override for this line at capture.</summary>
+    public bool AllowExpiredBatchIssue { get; set; }
+
     public decimal LineSubtotal
     {
         get
@@ -73,6 +85,14 @@ public sealed class InvLine
 
     public decimal LineTotal => LineSubtotal + LineTax;
 }
+
+/// <summary>Batch/serial capture for one document line, keyed by line
+/// number into <see cref="InvRepo"/> posting: what the picker collected
+/// at posting time (Phase B 054).</summary>
+public sealed record LineBatchSerialCapture(
+    List<ShouTech.Infrastructure.BatchAllocationRequest> Batches,
+    List<ShouTech.Infrastructure.SerialSelection> Serials,
+    bool AllowExpiredBatchIssue);
 
 /// <summary>
 /// Full commercial document model (sales or purchase).

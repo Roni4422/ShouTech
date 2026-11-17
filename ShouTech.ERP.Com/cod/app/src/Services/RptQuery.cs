@@ -755,24 +755,77 @@ public static class RptQuery
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> ExpiredMaterialsAsync(
         CancellationToken ct)
     {
-        // Schema fact: there is NO batch/lot expiry-date table. Materials only
-        // carry has_expiry / shelf_life_days / alert_before_expiry_days, so the
-        // report lists flagged materials with their last movement date and the
-        // window derives an honest note from shelf life + last movement.
+        // Phase B 054: REAL batch expiry. Rows are batches with stock on
+        // hand whose stock_batches.expiry_date is past, or within the
+        // material's alert_before_expiry_days of today — the same rule
+        // BatchSerialService.GetExpiredBatches implements for the
+        // headless proof. The pre-054 inference (last movement + shelf
+        // life) is gone: no date is ever fabricated here.
         DocSchema.Ensure(); MatRepo.EnsureSchema();
         var sql = PgBoolFix("""
             SELECT m.code AS MaterialCode,
                    m.name_ar AS MaterialName,
                    COALESCE(m.default_unit, '') AS Unit,
-                   COALESCE(m.shelf_life_days, 0) AS ShelfLifeDays,
+                   b.batch_no AS BatchNo,
+                   COALESCE(w.warehouse_code, CAST(bb.warehouse_id AS TEXT)) AS Warehouse,
+                   b.expiry_date AS ExpiryDate,
                    COALESCE(m.alert_before_expiry_days, 0) AS AlertDays,
-                   (SELECT MAX(x.movement_date) FROM material_stock_movements x
-                     WHERE x.company_id = m.company_id AND x.material_id = m.material_id AND x.is_deleted = 0) AS LastMoveDate,
-                   COALESCE((SELECT SUM(b.available_qty) FROM material_stock_balances b
-                     WHERE b.company_id = m.company_id AND b.material_id = m.material_id AND b.is_deleted = 0), 0) AS OnHand
-            FROM materials m
-            WHERE m.company_id = $company AND m.is_deleted = 0 AND m.has_expiry = 1
-            ORDER BY m.code;
+                   bb.qty_on_hand AS OnHand
+            FROM stock_batch_balances bb
+            INNER JOIN stock_batches b ON b.batch_id = bb.batch_id
+            INNER JOIN materials m ON m.company_id = b.company_id AND m.material_id = b.material_id
+            LEFT JOIN warehouses w ON w.company_id = bb.company_id AND w.warehouse_id = bb.warehouse_id
+            WHERE bb.company_id = $company AND bb.qty_on_hand > 0
+              AND b.is_deleted = 0 AND m.is_deleted = 0
+              AND b.expiry_date IS NOT NULL AND b.expiry_date <> ''
+            ORDER BY b.expiry_date, m.code, b.batch_no;
+            """);
+        var rows = await QueryAsync(sql, ct, ("$company", Company));
+        var today = DateTime.Today;
+        var kept = new List<IReadOnlyDictionary<string, object?>>();
+        foreach (var row in rows)
+        {
+            var expiryText = Convert.ToString(row.GetValueOrDefault("ExpiryDate"), CultureInfo.InvariantCulture);
+            if (!DateTime.TryParseExact(expiryText, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var expiry))
+                continue;
+            var alertDays = (int)RptWinUtil.Dec(row.GetValueOrDefault("AlertDays"));
+            var daysRemaining = (expiry.Date - today).Days;
+            if (daysRemaining >= 0 && daysRemaining > alertDays)
+                continue;
+            var copy = new Dictionary<string, object?>(row)
+            {
+                ["DaysRemaining"] = daysRemaining,
+                ["IsExpired"] = daysRemaining < 0 ? 1 : 0
+            };
+            kept.Add(copy);
+        }
+        return kept;
+    }
+
+    /// <summary>Stock by batch x warehouse (Phase B 054): every batch
+    /// balance row with its batch master data — the BatchBalWin source.</summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> BatchBalancesAsync(
+        CancellationToken ct)
+    {
+        DocSchema.Ensure(); MatRepo.EnsureSchema();
+        var sql = PgBoolFix("""
+            SELECT m.code AS MaterialCode,
+                   m.name_ar AS MaterialName,
+                   COALESCE(m.default_unit, '') AS Unit,
+                   b.batch_no AS BatchNo,
+                   COALESCE(b.supplier_batch_no, '') AS SupplierBatchNo,
+                   b.mfg_date AS MfgDate,
+                   b.expiry_date AS ExpiryDate,
+                   b.status AS BatchStatus,
+                   COALESCE(w.warehouse_code, CAST(bb.warehouse_id AS TEXT)) AS Warehouse,
+                   bb.qty_on_hand AS OnHand
+            FROM stock_batch_balances bb
+            INNER JOIN stock_batches b ON b.batch_id = bb.batch_id
+            INNER JOIN materials m ON m.company_id = b.company_id AND m.material_id = b.material_id
+            LEFT JOIN warehouses w ON w.company_id = bb.company_id AND w.warehouse_id = bb.warehouse_id
+            WHERE bb.company_id = $company AND b.is_deleted = 0 AND m.is_deleted = 0
+            ORDER BY m.code, b.batch_no, Warehouse;
             """);
         return await QueryAsync(sql, ct, ("$company", Company));
     }
