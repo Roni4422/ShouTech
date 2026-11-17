@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using ShouTech.App.Configuration;
 using ShouTech.App.Services;
 
 namespace ShouTech.App.Views;
@@ -20,7 +21,7 @@ public sealed class BnkCard : BaseWin
     private readonly TextBox _txtBranch = new() { Width = 150, Height = 26 };
     private readonly TextBox _txtAccNo = new() { Width = 180, Height = 26 };
     private readonly TextBox _txtIban = new() { Width = 260, Height = 26 };
-    private readonly TextBox _txtCur = new() { Width = 70, Height = 26, Text = "SAR" };
+    private readonly TextBox _txtCur = new() { Width = 70, Height = 26, Text = UsrPref.Load().CurrencyCode };
     private readonly TextBox _txtGlAcc = new() { Width = 140, Height = 26 };
 
     private readonly TextBlock _lblBal = new();
@@ -124,7 +125,7 @@ public sealed class BnkCard : BaseWin
         _txtBranch.Text = string.Empty;
         _txtAccNo.Text = string.Empty;
         _txtIban.Text = "SA";
-        _txtCur.Text = "SAR";
+        _txtCur.Text = UsrPref.Load().CurrencyCode;
         _txtGlAcc.Text = "121201";
         UpdateBalance(0);
     }
@@ -170,7 +171,7 @@ public sealed class BnkCard : BaseWin
             var rec = new CardStore.BankCardRec(
                 _loadedId ?? 0, code, _txtName.Text.Trim(), _txtBranch.Text.Trim(),
                 _txtAccNo.Text.Trim(), _txtIban.Text.Trim(),
-                string.IsNullOrWhiteSpace(_txtCur.Text) ? "SAR" : _txtCur.Text.Trim().ToUpperInvariant(),
+                string.IsNullOrWhiteSpace(_txtCur.Text) ? UsrPref.Load().CurrencyCode : _txtCur.Text.Trim().ToUpperInvariant(),
                 _txtGlAcc.Text.Trim());
             _loadedId = CardStore.SaveBank(rec, Actor());
             UpdateBalance(CardStore.BankBookBalance(rec.GlAccountCode));

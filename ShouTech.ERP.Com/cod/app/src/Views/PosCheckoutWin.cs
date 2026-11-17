@@ -5,6 +5,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using ShouTech.App.Configuration;
 using ShouTech.App.Reporting.Invoices;
 using ShouTech.App.Services;
 
@@ -36,7 +37,8 @@ public sealed class PosCheckoutWin : BaseWin
             Kind = InvDocKind.PosSale,
             DocNo = InvRepo.NextDocNo(InvDocKind.PosSale),
             DocDate = DateTime.Today,
-            CurrencyCode = "SAR",
+            CurrencyCode = UsrPref.Load().CurrencyCode,
+            PaymentMethod = MapPaymentMethod(paymentMethod),
             DefaultTaxRate = TaxSvc.GetDefaultRate(),
             Notes = notes,
             Lines = lines.Select(line => new InvLine
@@ -189,6 +191,19 @@ public sealed class PosCheckoutWin : BaseWin
     private string PaymentMethodKey()
         => "POS." + (_paymentMethod.Equals("K-Net", StringComparison.OrdinalIgnoreCase) ? "KNet" : _paymentMethod);
 
+    /// <summary>Maps the POS tender label onto the persisted payment-method enum.
+    /// Card networks (K-Net, Visa) post as Card, never silently as Cash.</summary>
+    private static InvPaymentMethod MapPaymentMethod(string method)
+    {
+        if (method.Equals("Credit", StringComparison.OrdinalIgnoreCase))
+            return InvPaymentMethod.Credit;
+        if (method.Equals("K-Net", StringComparison.OrdinalIgnoreCase)
+            || method.Equals("Visa", StringComparison.OrdinalIgnoreCase)
+            || method.Equals("Card", StringComparison.OrdinalIgnoreCase))
+            return InvPaymentMethod.Card;
+        return InvPaymentMethod.Cash;
+    }
+
     private void CompleteSale()
     {
         if (_doc.Lines.Count == 0)
@@ -214,6 +229,8 @@ public sealed class PosCheckoutWin : BaseWin
         _complete.IsEnabled = false;
         try
         {
+            // A completed POS sale is settled in full unless it is on credit.
+            _doc.PaidAmount = _doc.PaymentMethod == InvPaymentMethod.Credit ? 0m : _doc.GrandTotal;
             InvRepo.SaveDraft(_doc);
             InvRepo.Post(_doc.DocId, _doc.Kind, AppState.CurrentUser?.Username ?? Environment.UserName);
             ShowInfo("POS.SalePosted");

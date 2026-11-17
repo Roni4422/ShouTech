@@ -1306,7 +1306,15 @@
     "ConfirmPost": "Post this voucher? It cannot be edited after posting.",
     "Reverse": "Reverse",
     "ConfirmReverse": "Reverse this journal entry? A compensating posted entry will be created and the original will be marked reversed.",
-    "Reversed": "Journal entry reversed; a compensating entry was posted."
+    "Reversed": "Journal entry reversed; a compensating entry was posted.",
+    "EntryNumberRequired": "Enter the journal entry number to open.",
+    "EntryLoadedTitle": "Loaded",
+    "EntryLoaded": "The entry was loaded from the database.\nStatus: {0}\nId: {1}",
+    "EntryAlreadySaved": "This entry is already saved. No duplicate copy is created; open a new entry to enter another one.",
+    "EntryDraftSaved": "The entry draft was saved to the database.\nId: {0}",
+    "EntryPosted": "The entry was posted to the database.",
+    "SaveFailedMsg": "The operation did not succeed and was not shown as a success.\n[{0}] {1}",
+    "SaveFailedTitle": "Failed to Save Entry"
   },
   "CustCard": {
     "Title": "Customer & Supplier Card",
@@ -1452,7 +1460,10 @@
     "Copies": "Print Copies",
     "Print": "Print Label",
     "Preview": "Preview",
-    "PrintSuccess": "Print job dispatched successfully"
+    "PrintSuccess": "Print job dispatched successfully",
+    "SaveToMaterial": "Save to Material",
+    "SavedToMaterial": "Barcode and price saved to the material card.",
+    "MaterialNotFound": "Pick a material or enter the code of an existing material first."
   },
   "CompanyWizard": {
     "Title": {

@@ -8,6 +8,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
+using ShouTech.App.Configuration;
 using ShouTech.App.Reporting;
 using ShouTech.App.Reporting.Invoices;
 using ShouTech.App.Services;
@@ -29,7 +30,7 @@ public sealed class InvoiceWin : BaseWin
     private readonly ComboBox _cmbPayment = new() { Width = 130, Height = 26 };
     private readonly TextBox _txtDocNo = new() { IsReadOnly = true, Width = 120, Height = 26 };
     private readonly DatePicker _dtDate = new() { SelectedDate = DateTime.Today, Width = 130, Height = 26 };
-    private readonly TextBox _txtCurrency = new() { Width = 80, Height = 26, Text = "SAR" };
+    private readonly TextBox _txtCurrency = new() { Width = 80, Height = 26 };
     private readonly TextBox _txtTaxRate = new() { Width = 70, Height = 26 };
     private readonly TextBox _txtReceiptNo = new() { Width = 120, Height = 26 };
     private readonly TextBox _txtReference = new() { Width = 120, Height = 26 };
@@ -86,7 +87,7 @@ public sealed class InvoiceWin : BaseWin
         {
             Kind = kind,
             DefaultTaxRate = TaxSvc.GetDefaultRate(),
-            CurrencyCode = "SAR",
+            CurrencyCode = UsrPref.Load().CurrencyCode,
             WarehouseName = InvDoc.DefaultWarehouseName(),
             GoodsAccountName = InvDoc.DefaultGoodsAccountName(kind),
             PaymentMethod = InvPaymentMethod.Cash,
@@ -633,7 +634,7 @@ public sealed class InvoiceWin : BaseWin
         _doc.PartyCode = _txtPartyCode.Text.Trim();
         _doc.PartyName = _txtPartyName.Text.Trim();
         _doc.CurrencyCode = string.IsNullOrWhiteSpace(_txtCurrency.Text)
-            ? "SAR"
+            ? UsrPref.Load().CurrencyCode
             : _txtCurrency.Text.Trim().ToUpperInvariant();
         _doc.DefaultTaxRate = ParseDec(_txtTaxRate.Text, TaxSvc.GetDefaultRate());
         _doc.Notes = _txtNotes.Text;
@@ -655,6 +656,16 @@ public sealed class InvoiceWin : BaseWin
         _doc.Lines = _lines.Select(l => l.ToLine())
             .Where(l => !string.IsNullOrWhiteSpace(l.Description) || l.Qty != 0)
             .ToList();
+        // Resolve typed codes/names to ids so stock posting and reloads work:
+        // lines used to persist as free text with MaterialId/WarehouseId null.
+        // The visible code/name is the source of truth; a previously loaded id
+        // is only the fallback when the text no longer resolves.
+        _doc.WarehouseId = (int?)CardStore.ResolveWarehouseId(_doc.WarehouseName) ?? _doc.WarehouseId;
+        foreach (var line in _doc.Lines)
+        {
+            line.MaterialId = CardStore.ResolveMaterial(line.MaterialCode)?.Id ?? line.MaterialId;
+            line.WarehouseId = (int?)CardStore.ResolveWarehouseId(line.WarehouseName) ?? line.WarehouseId ?? _doc.WarehouseId;
+        }
         _doc.RenumberLines();
         return _doc;
     }
@@ -1063,6 +1074,8 @@ public sealed class InvoiceWin : BaseWin
         private string _taxRateText = "0";
         private string _warehouseName = string.Empty;
 
+        public long? MaterialId { get; set; }
+        public int? WarehouseId { get; set; }
         public string MaterialCode { get => _materialCode; set { _materialCode = value; OnPropertyChanged(); } }
         public string Description { get => _description; set { _description = value; OnPropertyChanged(); } }
         public string Unit { get => _unit; set { _unit = value; OnPropertyChanged(); } }
@@ -1097,6 +1110,7 @@ public sealed class InvoiceWin : BaseWin
 
         public InvLine ToLine() => new()
         {
+            MaterialId = MaterialId,
             MaterialCode = MaterialCode,
             Description = Description,
             Unit = Unit,
@@ -1104,11 +1118,13 @@ public sealed class InvoiceWin : BaseWin
             UnitPrice = ParseDec(UnitPriceText, 0),
             DiscountPct = ParseDec(DiscountPctText, 0),
             TaxRate = ParseDec(TaxRateText, 0),
+            WarehouseId = WarehouseId,
             WarehouseName = WarehouseName
         };
 
         public static LineVm FromLine(InvLine line) => new()
         {
+            MaterialId = line.MaterialId,
             MaterialCode = line.MaterialCode,
             Description = line.Description,
             Unit = line.Unit,
@@ -1116,6 +1132,7 @@ public sealed class InvoiceWin : BaseWin
             UnitPriceText = line.UnitPrice.ToString("0.####", CultureInfo.InvariantCulture),
             DiscountPctText = line.DiscountPct.ToString("0.##", CultureInfo.InvariantCulture),
             TaxRateText = line.TaxRate.ToString("0.##", CultureInfo.InvariantCulture),
+            WarehouseId = line.WarehouseId,
             WarehouseName = line.WarehouseName
         };
 

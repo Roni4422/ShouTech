@@ -9,6 +9,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Media;
+using ShouTech.App.Configuration;
 
 namespace ShouTech.App.Views;
 
@@ -45,7 +46,7 @@ public sealed class JrnWin : BaseWin
     private readonly TextBox _txtDocNo = new() { Width = 110, Height = 26 };
     private readonly DatePicker _dtDate = new() { Width = 120, Height = 26, SelectedDate = DateTime.Today };
     private readonly TextBox _txtRefNo = new() { Width = 110, Height = 26 };
-    private readonly TextBox _txtCur = new() { Width = 70, Height = 26, Text = "SAR" };
+    private readonly TextBox _txtCur = new() { Width = 70, Height = 26, Text = UsrPref.Load().CurrencyCode };
     private readonly TextBox _txtRate = new() { Width = 70, Height = 26, Text = "1.00" };
     private readonly TextBox _txtCc = new() { Width = 110, Height = 26 };
     private readonly TextBox _txtMemo = new() { Width = 400, Height = 26 };
@@ -299,7 +300,7 @@ public sealed class JrnWin : BaseWin
         var documentNumber = _txtDocNo.Text.Trim();
         if (string.IsNullOrWhiteSpace(documentNumber))
         {
-            MessageBox.Show(this, "Enter the journal entry number to open.", "Entry Number Required",
+            MessageBox.Show(this, T("Vouchers.EntryNumberRequired"), T("Common.Warning"),
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
@@ -363,8 +364,8 @@ public sealed class JrnWin : BaseWin
 
             MessageBox.Show(
                 this,
-                $"The entry was loaded from the database.\nStatus: {snapshot.Status}\nId: {snapshot.Id:D}",
-                "Loaded",
+                string.Format(T("Vouchers.EntryLoaded"), snapshot.Status, snapshot.Id.ToString("D")),
+                T("Vouchers.EntryLoadedTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
         }
@@ -393,7 +394,7 @@ public sealed class JrnWin : BaseWin
     {
         if (_currentJournalId.HasValue)
         {
-            MessageBox.Show(this, "This entry is already saved. No duplicate copy is created; open a new entry to enter another one.", "Entry Saved", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, T("Vouchers.EntryAlreadySaved"), T("Vouchers.Saved"), MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -463,7 +464,7 @@ public sealed class JrnWin : BaseWin
             _btnPost.IsEnabled = true;
             _btnReverse.IsEnabled = false;
             SetVoucherReadOnly(true);
-            MessageBox.Show(this, $"The entry draft was saved to the database.\nId: {id:D}", "Saved", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, string.Format(T("Vouchers.EntryDraftSaved"), id.ToString("D")), T("Vouchers.Saved"), MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
@@ -498,7 +499,7 @@ public sealed class JrnWin : BaseWin
             _btnPost.IsEnabled = false;
             _btnReverse.IsEnabled = true;
             SetVoucherReadOnly(true);
-            MessageBox.Show(this, "The entry was actually posted in the database.", "Posted", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, T("Vouchers.EntryPosted"), T("Vouchers.Posted"), MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
@@ -558,8 +559,8 @@ public sealed class JrnWin : BaseWin
             $"Code={definition.Code}; {context}; Error={exception.Message}");
         MessageBox.Show(
             this,
-            $"The operation did not succeed and was not shown as a success.\n[{definition.Code}] {exception.Message}",
-            "Failed to Save Entry",
+            string.Format(T("Vouchers.SaveFailedMsg"), definition.Code, exception.Message),
+            T("Vouchers.SaveFailedTitle"),
             MessageBoxButton.OK,
             MessageBoxImage.Error);
     }
