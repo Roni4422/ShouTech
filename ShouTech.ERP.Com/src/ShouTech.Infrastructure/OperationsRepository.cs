@@ -1,3 +1,8 @@
+using System.Data.Common;
+using System.Globalization;
+using Microsoft.Data.Sqlite;
+using Npgsql;
+using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
 
 namespace ShouTech.Infrastructure;
@@ -5,18 +10,1071 @@ namespace ShouTech.Infrastructure;
 /// <summary>
 /// Provider-neutral Operations persistence (SQLite + PostgreSQL): parameterized SQL
 /// only, company scoping on every statement, single-transaction writes.
+/// Covers bank reconciliation marks (035), POS cash closings + support tickets
+/// (037), the outbound_messages outbox (006), the audit logs (001/029),
+/// fiscal_years roll-over, audited compression of soft-deleted drafts and
+/// transactional document-total repost.
 /// </summary>
 public sealed class OperationsRepository : IOperationsRepository
 {
+    private const int ListLimit = 1000;
+
     private readonly string _provider;
     private readonly string _connectionString;
 
     public OperationsRepository(string provider, string connectionString)
     {
-        _provider = provider ?? throw new ArgumentNullException(nameof(provider));
+        if (string.IsNullOrWhiteSpace(connectionString))
+            throw new ArgumentException("A database connection string is required.", nameof(connectionString));
+        _provider = NormalizeProvider(provider ?? throw new ArgumentNullException(nameof(provider)));
         _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
     }
 
     internal string Provider => _provider;
     internal string ConnectionString => _connectionString;
+
+    private bool IsPg => _provider == "PostgreSQL";
+    private string NotDeleted => IsPg ? "is_deleted = false" : "is_deleted = 0";
+    private string Deleted => IsPg ? "is_deleted = true" : "is_deleted = 1";
+    private string NowExpr => IsPg ? "now()" : "datetime('now')";
+    private object Bool(bool value) => IsPg ? value : (value ? 1 : 0);
+
+    // ------------------------------------------------------------ Bank rec
+
+    public async Task<IReadOnlyList<BankAccountOption>> GetBankAccountsAsync(string companyId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        if (await TableExistsAsync(connection, "banks").ConfigureAwait(false))
+        {
+            var bankRows = await QueryOptionsAsync(connection,
+                $"SELECT gl_account_code, name_en FROM banks WHERE company_id = @company AND gl_account_code IS NOT NULL AND gl_account_code <> '' AND {NotDeleted} ORDER BY name_en",
+                companyId, cancellationToken).ConfigureAwait(false);
+            if (bankRows.Count > 0)
+                return bankRows;
+        }
+
+        if (await TableExistsAsync(connection, "accounts").ConfigureAwait(false))
+        {
+            var flagged = await QueryOptionsAsync(connection,
+                $"SELECT account_code, name_en FROM accounts WHERE company_id = @company AND allow_reconcile = {(IsPg ? "true" : "1")} AND {NotDeleted} ORDER BY account_code",
+                companyId, cancellationToken).ConfigureAwait(false);
+            if (flagged.Count > 0)
+                return flagged;
+        }
+
+        if (await TableExistsAsync(connection, "chart_of_accounts").ConfigureAwait(false))
+        {
+            return await QueryOptionsAsync(connection,
+                $"SELECT account_code, account_name FROM chart_of_accounts WHERE company_id = @company AND account_type = 'ASSET' AND is_postable = {(IsPg ? "true" : "1")} AND {NotDeleted} ORDER BY account_code",
+                companyId, cancellationToken).ConfigureAwait(false);
+        }
+
+        return Array.Empty<BankAccountOption>();
+    }
+
+    private async Task<List<BankAccountOption>> QueryOptionsAsync(DbConnection connection, string sql, string companyId, CancellationToken ct)
+    {
+        await using var command = CreateCommand(connection, null, sql);
+        Add(command, "@company", companyId.Trim());
+        var result = new List<BankAccountOption>();
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            var code = ReadString(reader, 0);
+            if (string.IsNullOrWhiteSpace(code))
+                continue;
+            var name = ReadString(reader, 1);
+            result.Add(new BankAccountOption
+            {
+                AccountCode = code.Trim(),
+                DisplayName = string.IsNullOrWhiteSpace(name) ? code.Trim() : $"{code.Trim()} - {name.Trim()}"
+            });
+        }
+        return result;
+    }
+
+    public async Task<IReadOnlyList<BankJournalLineRow>> GetBankJournalLinesAsync(string companyId, string accountCode, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        if (string.IsNullOrWhiteSpace(accountCode))
+            throw new ArgumentException("Account code is required.", nameof(accountCode));
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        // Resolve the account code to the line-level account_id values used by
+        // journal_entry_lines: chart_of_accounts.account_id (text/uuid) and/or
+        // CAST(accounts.account_id AS TEXT) (the join RptQuery already uses).
+        var accountIds = new List<string>();
+        if (await TableExistsAsync(connection, "chart_of_accounts").ConfigureAwait(false))
+        {
+            await using var cmd = CreateCommand(connection, null,
+                "SELECT CAST(account_id AS TEXT) FROM chart_of_accounts WHERE company_id = @company AND account_code = @code");
+            Add(cmd, "@company", companyId.Trim());
+            Add(cmd, "@code", accountCode.Trim());
+            await using var r = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await r.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var v = ReadString(r, 0);
+                if (!string.IsNullOrWhiteSpace(v)) accountIds.Add(v!);
+            }
+        }
+        if (await TableExistsAsync(connection, "accounts").ConfigureAwait(false))
+        {
+            await using var cmd = CreateCommand(connection, null,
+                "SELECT CAST(account_id AS TEXT) FROM accounts WHERE company_id = @company AND account_code = @code");
+            Add(cmd, "@company", companyId.Trim());
+            Add(cmd, "@code", accountCode.Trim());
+            await using var r = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await r.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var v = ReadString(r, 0);
+                if (!string.IsNullOrWhiteSpace(v) && !accountIds.Contains(v!)) accountIds.Add(v!);
+            }
+        }
+        // Free-entry fallback: the code itself may be the stored account_id.
+        if (accountIds.Count == 0)
+            accountIds.Add(accountCode.Trim());
+
+        var inList = string.Join(", ", accountIds.Select((_, i) => $"@acct{i}"));
+        var sql = $"""
+            SELECT CAST(l.journal_entry_line_id AS TEXT), CAST(j.journal_entry_id AS TEXT),
+                   CAST(j.entry_date AS TEXT), COALESCE(j.document_number, CAST(j.journal_entry_id AS TEXT)),
+                   COALESCE(l.note, j.description), l.debit, l.credit,
+                   m.statement_date, m.statement_ref, m.id
+            FROM journal_entry_lines l
+            INNER JOIN journal_entries j ON CAST(j.journal_entry_id AS TEXT) = CAST(l.journal_entry_id AS TEXT)
+            LEFT JOIN bank_reconciliation_marks m
+              ON m.company_id = @company AND m.journal_line_key = CAST(l.journal_entry_line_id AS TEXT)
+            WHERE j.company_id = @company AND j.status = 1 AND CAST(l.account_id AS TEXT) IN ({inList})
+            ORDER BY j.entry_date, l.line_number
+            LIMIT {ListLimit}
+            """;
+        await using var command = CreateCommand(connection, null, sql);
+        Add(command, "@company", companyId.Trim());
+        for (var i = 0; i < accountIds.Count; i++)
+            Add(command, $"@acct{i}", accountIds[i]);
+
+        var result = new List<BankJournalLineRow>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            var cleared = !reader.IsDBNull(9);
+            result.Add(new BankJournalLineRow
+            {
+                LineKey = ReadString(reader, 0) ?? string.Empty,
+                EntryId = ReadString(reader, 1) ?? string.Empty,
+                EntryDate = ShortDate(ReadString(reader, 2)),
+                DocNo = ReadString(reader, 3) ?? string.Empty,
+                Memo = ReadString(reader, 4) ?? string.Empty,
+                Debit = ReadDecimal(reader, 5),
+                Credit = ReadDecimal(reader, 6),
+                IsCleared = cleared,
+                Selected = cleared,
+                StatementDate = ReadString(reader, 7),
+                StatementRef = ReadString(reader, 8)
+            });
+        }
+        return result;
+    }
+
+    public async Task SaveBankMarksAsync(string companyId, IReadOnlyList<BankReconciliationMark> marks, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        ArgumentNullException.ThrowIfNull(marks);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            foreach (var mark in marks)
+            {
+                await using var cmd = CreateCommand(connection, transaction, """
+                    INSERT INTO bank_reconciliation_marks
+                        (id, company_id, journal_entry_id, journal_line_key, account_code, statement_date, statement_ref, cleared_amount, is_cleared, created_by)
+                    VALUES (@id, @company, @entry, @key, @code, @sdate, @sref, @amount, 1, @user)
+                    ON CONFLICT (company_id, journal_line_key) DO UPDATE SET
+                        statement_date = EXCLUDED.statement_date,
+                        statement_ref = EXCLUDED.statement_ref,
+                        cleared_amount = EXCLUDED.cleared_amount,
+                        is_cleared = 1,
+                        updated_by = EXCLUDED.created_by,
+                        updated_at = CURRENT_TIMESTAMP
+                    """);
+                // SQLite does not support EXCLUDED in the same way in older versions;
+                // the statement above is valid for SQLite >= 3.24 and PostgreSQL.
+                Add(cmd, "@id", FormatGuid(mark.Id));
+                Add(cmd, "@company", companyId.Trim());
+                Add(cmd, "@entry", mark.JournalEntryId);
+                Add(cmd, "@key", mark.JournalLineKey);
+                Add(cmd, "@code", mark.AccountCode.Trim());
+                Add(cmd, "@sdate", mark.StatementDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                Add(cmd, "@sref", (object?)NullIfBlank(mark.StatementRef) ?? DBNull.Value);
+                Add(cmd, "@amount", mark.ClearedAmount);
+                Add(cmd, "@user", userId);
+                await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    public async Task UnmarkBankLinesAsync(string companyId, IReadOnlyList<string> lineKeys, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        ArgumentNullException.ThrowIfNull(lineKeys);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            foreach (var key in lineKeys)
+            {
+                await using var cmd = CreateCommand(connection, transaction,
+                    "DELETE FROM bank_reconciliation_marks WHERE company_id = @company AND journal_line_key = @key");
+                Add(cmd, "@company", companyId.Trim());
+                Add(cmd, "@key", key);
+                await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    // ------------------------------------------------------------ POS closing
+
+    public async Task<PosSalesSummary> GetPosSalesSummaryAsync(string companyId, DateOnly businessDate, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var cmd = CreateCommand(connection, null, $"""
+            SELECT COUNT(*), COALESCE(SUM(grand_total), 0) FROM sales_documents
+            WHERE company_id = @company AND doc_kind = 'SAL' AND doc_date = @date
+              AND {NotDeleted} AND status <> 'Cancelled'
+            """);
+        Add(cmd, "@company", companyId.Trim());
+        Add(cmd, "@date", businessDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            return new PosSalesSummary(Convert.ToInt32(reader.GetValue(0), CultureInfo.InvariantCulture), ReadDecimal(reader, 1));
+        return new PosSalesSummary(0, 0m);
+    }
+
+    public async Task SavePosClosingAsync(string companyId, PosCashClosing closing, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        ArgumentNullException.ThrowIfNull(closing);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var cmd = CreateCommand(connection, null, """
+            INSERT INTO pos_cash_closings
+                (id, company_id, terminal_code, business_date, opened_by, closed_by, opening_amount, expected_amount, counted_amount, difference, status, notes, created_by)
+            VALUES (@id, @company, @terminal, @date, @opened, @closed, @opening, @expected, @counted, @diff, @status, @notes, @user)
+            """);
+        Add(cmd, "@id", FormatGuid(closing.Id));
+        Add(cmd, "@company", companyId.Trim());
+        Add(cmd, "@terminal", closing.TerminalCode.Trim());
+        Add(cmd, "@date", closing.BusinessDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        Add(cmd, "@opened", (object?)NullIfBlank(closing.OpenedBy) ?? DBNull.Value);
+        Add(cmd, "@closed", (object?)NullIfBlank(closing.ClosedBy) ?? DBNull.Value);
+        Add(cmd, "@opening", closing.OpeningAmount);
+        Add(cmd, "@expected", closing.ExpectedAmount);
+        Add(cmd, "@counted", closing.CountedAmount);
+        Add(cmd, "@diff", closing.Difference);
+        Add(cmd, "@status", string.IsNullOrWhiteSpace(closing.Status) ? "Closed" : closing.Status);
+        Add(cmd, "@notes", (object?)NullIfBlank(closing.Notes) ?? DBNull.Value);
+        Add(cmd, "@user", userId);
+        await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<PosCashClosing>> GetPosClosingsAsync(string companyId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var cmd = CreateCommand(connection, null, $"""
+            SELECT id, terminal_code, business_date, opened_by, closed_by, opening_amount, expected_amount, counted_amount, difference, status, notes
+            FROM pos_cash_closings WHERE company_id = @company ORDER BY business_date DESC, created_at DESC LIMIT {ListLimit}
+            """);
+        Add(cmd, "@company", companyId.Trim());
+        var result = new List<PosCashClosing>();
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            result.Add(new PosCashClosing
+            {
+                Id = ReadGuid(reader, 0),
+                TerminalCode = ReadString(reader, 1) ?? string.Empty,
+                BusinessDate = ReadDate(reader, 2) ?? DateOnly.MinValue,
+                OpenedBy = ReadString(reader, 3),
+                ClosedBy = ReadString(reader, 4),
+                OpeningAmount = ReadDecimal(reader, 5),
+                ExpectedAmount = ReadDecimal(reader, 6),
+                CountedAmount = ReadDecimal(reader, 7),
+                Difference = ReadDecimal(reader, 8),
+                Status = ReadString(reader, 9) ?? "Closed",
+                Notes = ReadString(reader, 10)
+            });
+        }
+        return result;
+    }
+
+    // ------------------------------------------------------------ Outbox
+
+    public async Task<IReadOnlyList<OutboundMessageRow>> GetOutboundMessagesAsync(string companyId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var cmd = CreateCommand(connection, null, $"""
+            SELECT outbound_message_id, channel, recipient_address, COALESCE(subject, ''), status,
+                   attempt_count, max_attempts, last_error, CAST(created_at AS TEXT), CAST(next_attempt_at AS TEXT)
+            FROM outbound_messages
+            WHERE (company_id IS NULL OR company_id = @company)
+            ORDER BY outbound_message_id DESC LIMIT {ListLimit}
+            """);
+        Add(cmd, "@company", companyId.Trim());
+        var result = new List<OutboundMessageRow>();
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            result.Add(new OutboundMessageRow
+            {
+                Id = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+                Channel = ReadString(reader, 1) ?? string.Empty,
+                Recipient = ReadString(reader, 2) ?? string.Empty,
+                Subject = ReadString(reader, 3) ?? string.Empty,
+                Status = ReadString(reader, 4) ?? string.Empty,
+                Attempts = Convert.ToInt32(reader.GetValue(5), CultureInfo.InvariantCulture),
+                MaxAttempts = Convert.ToInt32(reader.GetValue(6), CultureInfo.InvariantCulture),
+                LastError = ReadString(reader, 7),
+                CreatedAt = ReadString(reader, 8) ?? string.Empty,
+                NextAttemptAt = ReadString(reader, 9)
+            });
+        }
+        return result;
+    }
+
+    public async Task RetryOutboundMessageAsync(long messageId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var cmd = CreateCommand(connection, null, $"""
+            UPDATE outbound_messages
+            SET status = 'QUEUED', attempt_count = 0, last_error = NULL,
+                next_attempt_at = {NowExpr}, updated_at = {NowExpr}
+            WHERE outbound_message_id = @id AND status = 'FAILED'
+            """);
+        Add(cmd, "@id", messageId);
+        if (await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+            throw new InvalidOperationException("Only a FAILED outbound message can be retried (it may have been sent or already re-queued).");
+    }
+
+    // ------------------------------------------------------------ Audit viewers
+
+    public async Task<IReadOnlyList<SecurityAuditRow>> GetSecurityAuditAsync(string companyId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var resolved = await ResolveCompanyIdAsync(connection, companyId, cancellationToken).ConfigureAwait(false);
+        await using var cmd = CreateCommand(connection, null, $"""
+            SELECT security_audit_id, CAST(occurred_at AS TEXT), username, event_type, details
+            FROM security_audit_log
+            WHERE (company_id IS NULL OR company_id = @company OR company_id = @resolved)
+              AND (@from IS NULL OR CAST(occurred_at AS TEXT) >= @from)
+              AND (@to IS NULL OR CAST(occurred_at AS TEXT) < @to)
+            ORDER BY occurred_at DESC, security_audit_id DESC LIMIT {ListLimit}
+            """);
+        Add(cmd, "@company", companyId.Trim());
+        Add(cmd, "@resolved", resolved);
+        Add(cmd, "@from", (object?)from?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? DBNull.Value);
+        Add(cmd, "@to", (object?)to?.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? DBNull.Value);
+        var result = new List<SecurityAuditRow>();
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            result.Add(new SecurityAuditRow
+            {
+                Id = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+                OccurredAt = ReadString(reader, 1) ?? string.Empty,
+                Username = ReadString(reader, 2) ?? string.Empty,
+                EventType = ReadString(reader, 3) ?? string.Empty,
+                Details = ReadString(reader, 4)
+            });
+        }
+        return result;
+    }
+
+    public async Task<IReadOnlyList<JournalAuditRow>> GetJournalAuditAsync(string companyId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var resolved = await ResolveCompanyIdAsync(connection, companyId, cancellationToken).ConfigureAwait(false);
+        await using var cmd = CreateCommand(connection, null, $"""
+            SELECT e.journal_audit_event_id, CAST(e.journal_entry_id AS TEXT), CAST(e.event_type AS TEXT), e.actor, CAST(e.event_at AS TEXT), e.details
+            FROM journal_audit_events e
+            INNER JOIN journal_entries j ON CAST(j.journal_entry_id AS TEXT) = CAST(e.journal_entry_id AS TEXT)
+            WHERE (j.company_id = @company OR j.company_id = @resolved)
+              AND (@from IS NULL OR CAST(e.event_at AS TEXT) >= @from)
+              AND (@to IS NULL OR CAST(e.event_at AS TEXT) < @to)
+            ORDER BY e.event_at DESC, e.journal_audit_event_id DESC LIMIT {ListLimit}
+            """);
+        Add(cmd, "@company", companyId.Trim());
+        Add(cmd, "@resolved", resolved);
+        Add(cmd, "@from", (object?)from?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? DBNull.Value);
+        Add(cmd, "@to", (object?)to?.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? DBNull.Value);
+        var result = new List<JournalAuditRow>();
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            result.Add(new JournalAuditRow
+            {
+                Id = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+                EntryId = ReadString(reader, 1) ?? string.Empty,
+                EventType = ReadString(reader, 2) ?? string.Empty,
+                Actor = ReadString(reader, 3) ?? string.Empty,
+                EventAt = ReadString(reader, 4) ?? string.Empty,
+                Details = ReadString(reader, 5)
+            });
+        }
+        return result;
+    }
+
+    // ------------------------------------------------------------ Maintenance
+
+    public async Task VacuumAnalyzeAsync(CancellationToken cancellationToken = default)
+    {
+        if (IsPg)
+            throw new NotSupportedException("VACUUM/ANALYZE from this window is SQLite-only; on PostgreSQL use the database server's autovacuum/maintenance tooling.");
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using (var vacuum = CreateCommand(connection, null, "VACUUM"))
+            await vacuum.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        await using (var analyze = CreateCommand(connection, null, "ANALYZE"))
+            await analyze.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> GetIntegritySummaryAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        if (!IsPg)
+        {
+            await using var cmd = CreateCommand(connection, null, "PRAGMA integrity_check");
+            var value = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            var tables = await ScalarLongAsync(connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'", cancellationToken).ConfigureAwait(false);
+            return $"SQLite integrity_check: {Convert.ToString(value, CultureInfo.InvariantCulture)}; tables: {tables}";
+        }
+        else
+        {
+            await using var cmd = CreateCommand(connection, null, "SELECT version()");
+            var version = Convert.ToString(await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+            var tables = await ScalarLongAsync(connection, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'", cancellationToken).ConfigureAwait(false);
+            return $"PostgreSQL reachable; tables (public): {tables}; {version}";
+        }
+    }
+
+    // ------------------------------------------------------------ Fiscal roll-over
+
+    public async Task<IReadOnlyList<FiscalYearRow>> GetFiscalYearsAsync(string companyId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var resolved = await ResolveCompanyIdAsync(connection, companyId, cancellationToken).ConfigureAwait(false);
+        var hasClosedCols = await ColumnExistsAsync(connection, "fiscal_years", "closed_by").ConfigureAwait(false);
+        var closedCols = hasClosedCols ? ", closed_by, CAST(closed_at AS TEXT)" : ", NULL, NULL";
+        await using var cmd = CreateCommand(connection, null, $"""
+            SELECT fiscal_year_id, fiscal_year, CAST(start_date AS TEXT), CAST(end_date AS TEXT), is_current, is_closed {closedCols}
+            FROM fiscal_years
+            WHERE company_id = @company OR CAST(company_id AS TEXT) = @resolved
+            ORDER BY fiscal_year
+            """);
+        Add(cmd, "@company", companyId.Trim());
+        Add(cmd, "@resolved", resolved);
+        var result = new List<FiscalYearRow>();
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            result.Add(new FiscalYearRow
+            {
+                Id = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+                FiscalYear = Convert.ToInt32(reader.GetValue(1), CultureInfo.InvariantCulture),
+                StartDate = (ReadString(reader, 2) ?? string.Empty),
+                EndDate = (ReadString(reader, 3) ?? string.Empty),
+                IsCurrent = ReadBool(reader, 4),
+                IsClosed = ReadBool(reader, 5),
+                ClosedBy = ReadString(reader, 6),
+                ClosedAt = ReadString(reader, 7)
+            });
+        }
+        return result;
+    }
+
+    public async Task CreateNextFiscalYearAsync(string companyId, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        var years = await GetFiscalYearsAsync(companyId, cancellationToken).ConfigureAwait(false);
+        if (years.Count == 0)
+            throw new InvalidOperationException("No fiscal year exists yet for this company; create the first year from company setup.");
+        var last = years[^1];
+        if (!DateOnly.TryParse(last.EndDate.Length >= 10 ? last.EndDate[..10] : last.EndDate, CultureInfo.InvariantCulture, out var lastEnd) ||
+            !DateOnly.TryParse(last.StartDate.Length >= 10 ? last.StartDate[..10] : last.StartDate, CultureInfo.InvariantCulture, out var lastStart))
+            throw new InvalidOperationException("The latest fiscal year has invalid dates and cannot be rolled forward.");
+        var newStart = lastEnd.AddDays(1);
+        var length = lastEnd.DayNumber - lastStart.DayNumber;
+        var newEnd = newStart.AddDays(length);
+
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var resolved = await ResolveCompanyIdAsync(connection, companyId, cancellationToken).ConfigureAwait(false);
+        string dbName;
+        await using (var cmd = CreateCommand(connection, null,
+            "SELECT database_name FROM fiscal_years WHERE fiscal_year_id = @id"))
+        {
+            Add(cmd, "@id", last.Id);
+            dbName = Convert.ToString(await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture) ?? string.Empty;
+        }
+        await using var insert = CreateCommand(connection, null, """
+            INSERT INTO fiscal_years (company_id, fiscal_year, database_name, start_date, end_date, is_current, is_closed)
+            VALUES (@company, @year, @db, @start, @end, @current, @closed)
+            """);
+        Add(insert, "@company", resolved);
+        Add(insert, "@year", newStart.Year);
+        Add(insert, "@db", dbName);
+        Add(insert, "@start", newStart.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        Add(insert, "@end", newEnd.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        Add(insert, "@current", Bool(false));
+        Add(insert, "@closed", Bool(false));
+        await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task CloseFiscalYearAsync(string companyId, long fiscalYearId, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var resolved = await ResolveCompanyIdAsync(connection, companyId, cancellationToken).ConfigureAwait(false);
+        var hasClosedCols = await ColumnExistsAsync(connection, "fiscal_years", "closed_by").ConfigureAwait(false);
+        var extra = hasClosedCols ? $", closed_by = @user, closed_at = {NowExpr}" : string.Empty;
+        await using var cmd = CreateCommand(connection, null, $"""
+            UPDATE fiscal_years SET is_closed = @closed, is_current = @current {extra}
+            WHERE fiscal_year_id = @id AND (company_id = @company OR CAST(company_id AS TEXT) = @resolved)
+              AND is_closed = @open
+            """);
+        Add(cmd, "@closed", Bool(true));
+        Add(cmd, "@current", Bool(false));
+        Add(cmd, "@open", Bool(false));
+        Add(cmd, "@user", userId);
+        Add(cmd, "@id", fiscalYearId);
+        Add(cmd, "@company", companyId.Trim());
+        Add(cmd, "@resolved", resolved);
+        if (await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+            throw new InvalidOperationException("Fiscal year was not found or is already closed.");
+    }
+
+    // ------------------------------------------------------------ Compression
+
+    public async Task<CompressCounts> GetCompressCountsAsync(string companyId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var sales = await CountDeletedDraftsAsync(connection, "sales_documents", companyId, cancellationToken).ConfigureAwait(false);
+        var purchase = await CountDeletedDraftsAsync(connection, "purchase_documents", companyId, cancellationToken).ConfigureAwait(false);
+        return new CompressCounts(sales, purchase);
+    }
+
+    private async Task<int> CountDeletedDraftsAsync(DbConnection connection, string table, string companyId, CancellationToken ct)
+    {
+        await using var cmd = CreateCommand(connection, null,
+            $"SELECT COUNT(*) FROM {table} WHERE company_id = @company AND {Deleted} AND status = 'Draft'");
+        Add(cmd, "@company", companyId.Trim());
+        return Convert.ToInt32(await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false), CultureInfo.InvariantCulture);
+    }
+
+    public async Task<int> CompressDeletedDraftsAsync(string companyId, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var auditExists = await TableExistsAsync(connection, "security_audit_log").ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var deleted = 0;
+            deleted += await PurgeTableAsync(connection, transaction, "sales_documents", "sales_document_lines", companyId, cancellationToken).ConfigureAwait(false);
+            deleted += await PurgeTableAsync(connection, transaction, "purchase_documents", "purchase_document_lines", companyId, cancellationToken).ConfigureAwait(false);
+
+            if (auditExists && deleted > 0)
+            {
+                await using var audit = CreateCommand(connection, transaction, """
+                    INSERT INTO security_audit_log (company_id, user_id, username, event_type, details)
+                    VALUES (@company, NULL, @user, 'INVOICE_COMPRESS', @details)
+                    """);
+                Add(audit, "@company", companyId.Trim());
+                Add(audit, "@user", userId);
+                Add(audit, "@details", $"Hard-deleted {deleted} soft-deleted draft document(s).");
+                await audit.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return deleted;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private async Task<int> PurgeTableAsync(DbConnection connection, DbTransaction transaction, string table, string linesTable, string companyId, CancellationToken ct)
+    {
+        // Lines first (explicit, so the purge does not depend on FK cascade),
+        // then the draft headers. The status/Deleted predicate is repeated on
+        // both statements: posted documents can never match.
+        await using (var lines = CreateCommand(connection, transaction, $"""
+            DELETE FROM {linesTable} WHERE doc_id IN
+                (SELECT doc_id FROM {table} WHERE company_id = @company AND {Deleted} AND status = 'Draft')
+            """))
+        {
+            Add(lines, "@company", companyId.Trim());
+            await lines.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+        await using var docs = CreateCommand(connection, transaction,
+            $"DELETE FROM {table} WHERE company_id = @company AND {Deleted} AND status = 'Draft'");
+        Add(docs, "@company", companyId.Trim());
+        return await docs.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
+    // ------------------------------------------------------------ Repost
+
+    public async Task<DocumentTotalsRow?> GetDocumentTotalsAsync(string companyId, string table, string docNo, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        var (docs, lines) = Tables(table);
+        if (string.IsNullOrWhiteSpace(docNo))
+            throw new ArgumentException("Document number is required.", nameof(docNo));
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        DocumentTotalsRow? row = null;
+        await using (var cmd = CreateCommand(connection, null, $"""
+            SELECT doc_id, doc_kind, doc_no, CAST(doc_date AS TEXT), status, subtotal, discount_amount, tax_amount, grand_total
+            FROM {docs} WHERE company_id = @company AND doc_no = @no AND {NotDeleted}
+            ORDER BY doc_id LIMIT 1
+            """))
+        {
+            Add(cmd, "@company", companyId.Trim());
+            Add(cmd, "@no", docNo.Trim());
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                row = new DocumentTotalsRow
+                {
+                    DocId = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+                    DocKind = ReadString(reader, 1) ?? string.Empty,
+                    DocNo = ReadString(reader, 2) ?? string.Empty,
+                    DocDate = ReadString(reader, 3) ?? string.Empty,
+                    Status = ReadString(reader, 4) ?? string.Empty,
+                    StoredSubtotal = ReadDecimal(reader, 5),
+                    StoredDiscount = ReadDecimal(reader, 6),
+                    StoredTax = ReadDecimal(reader, 7),
+                    StoredGrand = ReadDecimal(reader, 8)
+                };
+            }
+        }
+        if (row is null)
+            return null;
+
+        await using var linesCmd = CreateCommand(connection, null, $"""
+            SELECT COUNT(*),
+                   COALESCE(SUM(qty * unit_price), 0),
+                   COALESCE(SUM(qty * unit_price * discount_pct / 100.0), 0),
+                   COALESCE(SUM(line_tax), 0)
+            FROM {lines} WHERE doc_id = @id
+            """);
+        Add(linesCmd, "@id", row.DocId);
+        await using var linesReader = await linesCmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (await linesReader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            row.LineCount = Convert.ToInt32(linesReader.GetValue(0), CultureInfo.InvariantCulture);
+            row.ComputedSubtotal = Math.Round(ReadDecimal(linesReader, 1), 2);
+            row.ComputedDiscount = Math.Round(ReadDecimal(linesReader, 2), 2);
+            row.ComputedTax = Math.Round(ReadDecimal(linesReader, 3), 2);
+            row.ComputedGrand = Math.Round(row.ComputedSubtotal - row.ComputedDiscount + row.ComputedTax, 2);
+        }
+        return row;
+    }
+
+    public async Task ApplyRepostAsync(string companyId, string table, DocumentTotalsRow totals, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        ArgumentNullException.ThrowIfNull(totals);
+        var (docs, _) = Tables(table);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var auditExists = await TableExistsAsync(connection, "security_audit_log").ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using (var cmd = CreateCommand(connection, transaction, $"""
+                UPDATE {docs} SET subtotal = @sub, discount_amount = @disc, tax_amount = @tax, grand_total = @grand
+                WHERE company_id = @company AND doc_id = @id AND {NotDeleted}
+                """))
+            {
+                Add(cmd, "@sub", totals.ComputedSubtotal);
+                Add(cmd, "@disc", totals.ComputedDiscount);
+                Add(cmd, "@tax", totals.ComputedTax);
+                Add(cmd, "@grand", totals.ComputedGrand);
+                Add(cmd, "@company", companyId.Trim());
+                Add(cmd, "@id", totals.DocId);
+                if (await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+                    throw new InvalidOperationException("Document could not be reposted (missing or deleted).");
+            }
+            if (auditExists)
+            {
+                await using var audit = CreateCommand(connection, transaction, """
+                    INSERT INTO security_audit_log (company_id, user_id, username, event_type, details)
+                    VALUES (@company, NULL, @user, 'INVOICE_REPOST', @details)
+                    """);
+                Add(audit, "@company", companyId.Trim());
+                Add(audit, "@user", userId);
+                Add(audit, "@details", $"Reposted {table} document {totals.DocNo}: grand {totals.StoredGrand} -> {totals.ComputedGrand}.");
+                await audit.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    public async Task<DocumentTotalsRow?> GetMfgOrderTotalsAsync(string companyId, string docNo, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        if (string.IsNullOrWhiteSpace(docNo) || !long.TryParse(docNo.Trim(), out var docNumber))
+            throw new ArgumentException("Manufacturing order number must be a whole number.", nameof(docNo));
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        if (!await TableExistsAsync(connection, "mfg_orders").ConfigureAwait(false))
+            return null;
+
+        string orderId = string.Empty;
+        decimal overhead = 0m, qty = 0m;
+        DocumentTotalsRow? row = null;
+        await using (var cmd = CreateCommand(connection, null, $"""
+            SELECT CAST(id AS TEXT), CAST(doc_date AS TEXT), status, total_cost, overhead_amount, qty
+            FROM mfg_orders WHERE company_id = @company AND doc_no = @no AND {NotDeleted} LIMIT 1
+            """))
+        {
+            Add(cmd, "@company", companyId.Trim());
+            Add(cmd, "@no", docNumber);
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                orderId = ReadString(reader, 0) ?? string.Empty;
+                row = new DocumentTotalsRow
+                {
+                    DocKind = "MFG",
+                    DocNo = docNo.Trim(),
+                    DocDate = ReadString(reader, 1) ?? string.Empty,
+                    Status = ReadString(reader, 2) ?? string.Empty,
+                    StoredSubtotal = ReadDecimal(reader, 3),
+                    StoredGrand = ReadDecimal(reader, 3)
+                };
+                overhead = ReadDecimal(reader, 4);
+                qty = ReadDecimal(reader, 5);
+            }
+        }
+        if (row is null)
+            return null;
+
+        await using var linesCmd = CreateCommand(connection, null,
+            "SELECT COUNT(*), COALESCE(SUM(amount), 0) FROM mfg_order_lines WHERE CAST(order_id AS TEXT) = @id");
+        Add(linesCmd, "@id", orderId);
+        await using var linesReader = await linesCmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (await linesReader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            row.LineCount = Convert.ToInt32(linesReader.GetValue(0), CultureInfo.InvariantCulture);
+            var computed = Math.Round(ReadDecimal(linesReader, 1) + overhead, 2);
+            row.ComputedSubtotal = computed;
+            row.ComputedGrand = computed;
+            row.StoredDiscount = qty; // carried for unit-cost display in the window (qty, not money)
+        }
+        return row;
+    }
+
+    public async Task ApplyMfgRepostAsync(string companyId, DocumentTotalsRow totals, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        ArgumentNullException.ThrowIfNull(totals);
+        if (!long.TryParse(totals.DocNo, out var docNumber))
+            throw new ArgumentException("Manufacturing order number must be a whole number.", nameof(totals));
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var auditExists = await TableExistsAsync(connection, "security_audit_log").ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using (var cmd = CreateCommand(connection, transaction, $"""
+                UPDATE mfg_orders
+                SET total_cost = @total,
+                    unit_cost = CASE WHEN qty > 0 THEN @total / qty ELSE 0 END,
+                    updated_by = @user, updated_at = {NowExpr}
+                WHERE company_id = @company AND doc_no = @no AND {NotDeleted}
+                """))
+            {
+                Add(cmd, "@total", totals.ComputedGrand);
+                Add(cmd, "@user", userId);
+                Add(cmd, "@company", companyId.Trim());
+                Add(cmd, "@no", docNumber);
+                if (await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+                    throw new InvalidOperationException("Manufacturing order could not be reposted (missing or deleted).");
+            }
+            if (auditExists)
+            {
+                await using var audit = CreateCommand(connection, transaction, """
+                    INSERT INTO security_audit_log (company_id, user_id, username, event_type, details)
+                    VALUES (@company, NULL, @user, 'MFG_REPOST', @details)
+                    """);
+                Add(audit, "@company", companyId.Trim());
+                Add(audit, "@user", userId);
+                Add(audit, "@details", $"Reposted manufacturing order {totals.DocNo}: total cost {totals.StoredGrand} -> {totals.ComputedGrand}.");
+                await audit.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private static (string Docs, string Lines) Tables(string table) => table.Trim().ToLowerInvariant() switch
+    {
+        "sales" => ("sales_documents", "sales_document_lines"),
+        "purchase" => ("purchase_documents", "purchase_document_lines"),
+        _ => throw new ArgumentException("Table must be 'sales' or 'purchase'.", nameof(table))
+    };
+
+    // ------------------------------------------------------------ Support tickets
+
+    public async Task<SupportTicket> CreateTicketAsync(string companyId, SupportTicket ticket, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        ArgumentNullException.ThrowIfNull(ticket);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            int nextNo;
+            await using (var max = CreateCommand(connection, transaction,
+                "SELECT COALESCE(MAX(ticket_no), 0) FROM support_tickets WHERE company_id = @company"))
+            {
+                Add(max, "@company", companyId.Trim());
+                nextNo = Convert.ToInt32(await max.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture) + 1;
+            }
+            await using var cmd = CreateCommand(connection, transaction, """
+                INSERT INTO support_tickets (id, company_id, ticket_no, kind, subject, body, contact_email, status, created_by)
+                VALUES (@id, @company, @no, @kind, @subject, @body, @email, 'Open', @user)
+                """);
+            Add(cmd, "@id", FormatGuid(ticket.Id));
+            Add(cmd, "@company", companyId.Trim());
+            Add(cmd, "@no", nextNo);
+            Add(cmd, "@kind", ticket.Kind);
+            Add(cmd, "@subject", ticket.Subject.Trim());
+            Add(cmd, "@body", ticket.Body.Trim());
+            Add(cmd, "@email", (object?)NullIfBlank(ticket.ContactEmail) ?? DBNull.Value);
+            Add(cmd, "@user", userId);
+            await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            ticket.TicketNo = nextNo;
+            ticket.Status = "Open";
+            return ticket;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    public async Task<IReadOnlyList<SupportTicket>> GetTicketsAsync(string companyId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var cmd = CreateCommand(connection, null, $"""
+            SELECT id, ticket_no, kind, subject, body, contact_email, status, CAST(created_at AS TEXT)
+            FROM support_tickets WHERE company_id = @company ORDER BY ticket_no DESC LIMIT {ListLimit}
+            """);
+        Add(cmd, "@company", companyId.Trim());
+        var result = new List<SupportTicket>();
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            result.Add(new SupportTicket
+            {
+                Id = ReadGuid(reader, 0),
+                TicketNo = Convert.ToInt32(reader.GetValue(1), CultureInfo.InvariantCulture),
+                Kind = ReadString(reader, 2) ?? SupportTicketKinds.Support,
+                Subject = ReadString(reader, 3) ?? string.Empty,
+                Body = ReadString(reader, 4) ?? string.Empty,
+                ContactEmail = ReadString(reader, 5),
+                Status = ReadString(reader, 6) ?? "Open",
+                CreatedAt = ReadString(reader, 7) ?? string.Empty
+            });
+        }
+        return result;
+    }
+
+    // ------------------------------------------------------------ Helpers
+
+    private async Task<string> ResolveCompanyIdAsync(DbConnection connection, string companyCode, CancellationToken ct)
+    {
+        try
+        {
+            await using var cmd = CreateCommand(connection, null,
+                "SELECT CAST(company_id AS TEXT) FROM companies WHERE company_code = @code LIMIT 1");
+            Add(cmd, "@code", companyCode.Trim());
+            var value = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+            var text = Convert.ToString(value, CultureInfo.InvariantCulture);
+            return string.IsNullOrWhiteSpace(text) ? companyCode.Trim() : text!;
+        }
+        catch
+        {
+            return companyCode.Trim();
+        }
+    }
+
+    private async Task<bool> TableExistsAsync(DbConnection connection, string table)
+    {
+        await using var cmd = CreateCommand(connection, null, IsPg
+            ? "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = @t"
+            : "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = @t");
+        Add(cmd, "@t", table);
+        var value = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+        return Convert.ToInt64(value, CultureInfo.InvariantCulture) > 0;
+    }
+
+    private async Task<bool> ColumnExistsAsync(DbConnection connection, string table, string column)
+    {
+        await using var cmd = CreateCommand(connection, null, IsPg
+            ? "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = @t AND column_name = @c"
+            : "SELECT COUNT(*) FROM pragma_table_info(@t) WHERE name = @c");
+        Add(cmd, "@t", table);
+        Add(cmd, "@c", column);
+        var value = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+        return Convert.ToInt64(value, CultureInfo.InvariantCulture) > 0;
+    }
+
+    private static async Task<long> ScalarLongAsync(DbConnection connection, string sql, CancellationToken ct)
+    {
+        await using var cmd = CreateCommand(connection, null, sql);
+        var value = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        return Convert.ToInt64(value, CultureInfo.InvariantCulture);
+    }
+
+    private static void RequireCompany(string companyId)
+    {
+        if (string.IsNullOrWhiteSpace(companyId))
+            throw new ArgumentException("Company is required.", nameof(companyId));
+    }
+
+    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string ShortDate(string? value)
+        => string.IsNullOrWhiteSpace(value) ? string.Empty : (value.Length >= 10 ? value[..10] : value);
+
+    private DbConnection CreateConnection() => IsPg
+        ? new NpgsqlConnection(_connectionString)
+        : new SqliteConnection(_connectionString);
+
+    private static DbCommand CreateCommand(DbConnection connection, DbTransaction? transaction, string sql)
+    {
+        var command = connection.CreateCommand();
+        if (transaction != null)
+            command.Transaction = transaction;
+        command.CommandText = sql;
+        return command;
+    }
+
+    private static void Add(DbCommand command, string name, object value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.Value = value;
+        command.Parameters.Add(parameter);
+    }
+
+    private object FormatGuid(Guid value) => IsPg ? value : value.ToString();
+
+    private static Guid ReadGuid(DbDataReader reader, int ordinal)
+    {
+        var value = reader.GetValue(ordinal);
+        return value switch
+        {
+            Guid g => g,
+            string s when Guid.TryParse(s, out var parsed) => parsed,
+            _ => Guid.Parse(Convert.ToString(value, CultureInfo.InvariantCulture)!)
+        };
+    }
+
+    private static string? ReadString(DbDataReader reader, int ordinal)
+        => reader.IsDBNull(ordinal) ? null : Convert.ToString(reader.GetValue(ordinal), CultureInfo.InvariantCulture);
+
+    private static decimal ReadDecimal(DbDataReader reader, int ordinal)
+        => reader.IsDBNull(ordinal) ? 0m : Convert.ToDecimal(reader.GetValue(ordinal), CultureInfo.InvariantCulture);
+
+    private static bool ReadBool(DbDataReader reader, int ordinal)
+    {
+        if (reader.IsDBNull(ordinal))
+            return false;
+        var value = reader.GetValue(ordinal);
+        return value switch
+        {
+            bool b => b,
+            string s => s is "1" or "true" or "True" or "t",
+            _ => Convert.ToInt64(value, CultureInfo.InvariantCulture) != 0
+        };
+    }
+
+    private static DateOnly? ReadDate(DbDataReader reader, int ordinal)
+    {
+        if (reader.IsDBNull(ordinal))
+            return null;
+        var value = reader.GetValue(ordinal);
+        return value switch
+        {
+            DateOnly d => d,
+            DateTime dt => DateOnly.FromDateTime(dt),
+            string s when s.Length >= 10 && DateOnly.TryParse(s[..10], CultureInfo.InvariantCulture, out var parsed) => parsed,
+            _ => null
+        };
+    }
+
+    private static string NormalizeProvider(string provider) => provider.Trim().ToLowerInvariant() switch
+    {
+        "sqlite" or "sqlite3" => "SQLite",
+        "postgres" or "postgresql" or "npgsql" => "PostgreSQL",
+        _ => throw new NotSupportedException($"Unsupported database provider '{provider}'. Use SQLite or PostgreSQL.")
+    };
 }
