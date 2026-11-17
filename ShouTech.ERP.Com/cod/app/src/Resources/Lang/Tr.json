@@ -722,7 +722,8 @@
     "RemovedFromList": "Şirket listeden kaldırıldı.",
     "ConfirmPermanentDelete": "Seçili şirket kalıcı olarak silinecek. Bu işlem geri alınamaz. Devam edilsin mi?",
     "PermanentDeleteTitle": "Kalıcı Silme",
-    "PermanentlyDeleted": "Şirket kalıcı olarak silindi."
+    "PermanentlyDeleted": "Şirket kalıcı olarak silindi.",
+    "PermissionDenied": "Bir şirketi kalıcı olarak silme izniniz yok."
   },
   "CompanyEdit": {
     "NameAr": "Ad (AR)",
@@ -959,14 +960,16 @@
     "ConfirmCreate": "Tam şirket STBK2 yedeği oluşturulsun mu?\n\nİkincil pencereler kapanacak, ana pencere dondurulacak.\n\n{0}Devam?",
     "ConfirmRestore": "Yedek geri yüklensin mi?\n\n{0}İkincil pencereler kapanacak, ana pencere dondurulacak.\n\n{1}Devam?",
     "OpenSecondaryCount": "Açık ikincil pencere: {0}\n\n",
-    "UnknownError": "Bilinmeyen hata."
+    "UnknownError": "Bilinmeyen hata.",
+    "PermissionDenied": "Bu yedekleme işlemini gerçekleştirme izniniz yok."
   },
   "Permissions": {
     "Title": "Kullanıcı izinleri",
     "Hint": "Değişiklikler yalnızca kullanıcı istisnaları olarak kaydedilir.",
     "Cancel": "İptal",
     "Save": "Kaydet",
-    "LoadFailed": "İzinler yüklenemedi."
+    "LoadFailed": "İzinler yüklenemedi.",
+    "PermissionDenied": "Kullanıcı izinlerini yönetme izniniz yok."
   },
   "RestoreCompany": {
     "Title": "Şirketi geri yükle",
@@ -978,7 +981,8 @@
     "EmptyList": "Geri yüklenecek silinmiş şirket yok.\nNot: Bu güncellemeden önce dizinden tamamen kaldırılan şirketler buradan geri yüklenemez.",
     "SelectCompany": "Lütfen bir şirket seçin.",
     "RestoreDbFailed": "Şirket veritabanından geri yüklenemedi.",
-    "RestoreOk": "«{0}» geri yüklendi ve yeniden dizine eklendi."
+    "RestoreOk": "«{0}» geri yüklendi ve yeniden dizine eklendi.",
+    "PermissionDenied": "Bir şirketi geri yükleme izniniz yok."
   },
   "Workspace": {
     "Title": "Çalışma alanı",
@@ -2635,29 +2639,30 @@
     "SelectToPurge": "Kalıcı olarak silinecek bir veya daha fazla satır seçin.",
     "ConfirmPurge": "Seçili öğeler kalıcı olarak silinecek ve geri yüklenemeyecek.\n\nDevam edilsin mi?",
     "Purged": "{0:N0} öğe kalıcı olarak silindi.",
-    "PurgedPartial": "{0:N0} öğe kalıcı olarak silindi. {1:N0} başarısız.{2}{3}"
+    "PurgedPartial": "{0:N0} öğe kalıcı olarak silindi. {1:N0} başarısız.{2}{3}",
+    "PermissionDenied": "Öğeleri kalıcı olarak silme izniniz yok. Bu işlem bir yönetici gerektirir."
   },
-  "Cards":   {
-      "NotFound": "Kayıt veritabanında bulunamadı.",
-      "PermissionDenied": "Bu işlem için yetkiniz yok.",
-      "CodeRequired": "Kod gereklidir.",
-      "NameRequired": "Ad gereklidir.",
-      "InvalidAmount": "Sayısal bir değer geçersiz.",
-      "ConfirmDelete": "Bu kart silinsin mi? Geri dönüşüm kutusuna taşınacak."
+  "Cards": {
+    "NotFound": "Kayıt veritabanında bulunamadı.",
+    "PermissionDenied": "Bu işlem için yetkiniz yok.",
+    "CodeRequired": "Kod gereklidir.",
+    "NameRequired": "Ad gereklidir.",
+    "InvalidAmount": "Sayısal bir değer geçersiz.",
+    "ConfirmDelete": "Bu kart silinsin mi? Geri dönüşüm kutusuna taşınacak."
   },
-  "BarcodeTool":   {
-      "Title": "Barkod Oluşturucu ve Tasarımcı",
-      "Material": "Malzeme",
-      "Type": "Barkod Türü",
-      "Value": "Barkod Değeri",
-      "IncludePrice": "Fiyatı Dahil Et",
-      "IncludeName": "Adı Dahil Et",
-      "Copies": "Yazdırma Kopyaları",
-      "Print": "Etiketi Yazdır",
-      "Preview": "Önizleme",
-      "PrintSuccess": "Yazdırma işi başarıyla gönderildi",
-      "SaveToMaterial": "Malzeme Kartına Kaydet",
-      "SavedToMaterial": "Barkod ve fiyat malzeme kartına kaydedildi.",
-      "MaterialNotFound": "Önce bir malzeme seçin veya mevcut bir malzemenin kodunu girin."
+  "BarcodeTool": {
+    "Title": "Barkod Oluşturucu ve Tasarımcı",
+    "Material": "Malzeme",
+    "Type": "Barkod Türü",
+    "Value": "Barkod Değeri",
+    "IncludePrice": "Fiyatı Dahil Et",
+    "IncludeName": "Adı Dahil Et",
+    "Copies": "Yazdırma Kopyaları",
+    "Print": "Etiketi Yazdır",
+    "Preview": "Önizleme",
+    "PrintSuccess": "Yazdırma işi başarıyla gönderildi",
+    "SaveToMaterial": "Malzeme Kartına Kaydet",
+    "SavedToMaterial": "Barkod ve fiyat malzeme kartına kaydedildi.",
+    "MaterialNotFound": "Önce bir malzeme seçin veya mevcut bir malzemenin kodunu girin."
   }
 }

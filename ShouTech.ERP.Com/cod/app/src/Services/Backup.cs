@@ -1060,11 +1060,17 @@ internal static class SteiSvc
             _log = log;
         }
 
-        public BkpServ(ILogServ log, IDevInfoSv devInfo, ISyncServ sync)
+        public BkpServ(ILogServ log, IDevInfoSv devInfo, ISyncServ sync, IPermServ? perm = null)
         {
             _log = log;
             _devInfo = devInfo;
             _sync = sync;
+            // The live AppHost instance passes the session permission
+            // service here; without it the permission checks below were
+            // dead in production (the old 3-argument construction left
+            // _perm null, so any signed-in user could restore a backup
+            // over the company database).
+            _perm = perm;
         }
 
         public Task<string> CreateBackupAsync(string companyCode, string notes)
@@ -1084,8 +1090,8 @@ internal static class SteiSvc
             if (_lic != null)
                 await _lic.EnsureCanWriteAsync(ct);
 
-            if (_perm != null && !_perm.Has(PermKey.SysBackup))
-                throw new UnauthorizedAccessException("You do not have permission to create backups.");
+            if (_perm != null && !_perm.Has(PermCat.Backup.Create))
+                throw new UnauthorizedAccessException("You do not have permission to create backups (BACKUP.CREATE).");
 
             if (string.IsNullOrWhiteSpace(companyCode))
                 throw new ArgumentException("Company code is required.");
@@ -1173,8 +1179,8 @@ internal static class SteiSvc
             if (_lic != null)
                 await _lic.EnsureCanWriteAsync(ct);
 
-            if (_perm != null && !_perm.Has(PermKey.SysBackup))
-                throw new UnauthorizedAccessException("You do not have permission to restore backups.");
+            if (_perm != null && !_perm.Has(PermCat.Backup.Restore))
+                throw new UnauthorizedAccessException("You do not have permission to restore backups (BACKUP.RESTORE).");
 
             if (!File.Exists(backupFilePath))
                 throw new FileNotFoundException("Backup file not found.", backupFilePath);
