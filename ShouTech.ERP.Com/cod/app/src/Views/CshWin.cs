@@ -10,6 +10,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Media;
+using ShouTech.App.Configuration;
 using ShouTech.App.Services;
 using ShouTech.Application.Services;
 using ShouTech.Domain.Entities;
@@ -41,7 +42,7 @@ public sealed class CshWin : BaseWin
     private readonly TextBox _txtBox = new() { Width = 150, Height = 26 };
     private readonly TextBox _txtParty = new() { Width = 220, Height = 26 };
     private readonly TextBox _txtAmount = new() { Width = 110, Height = 26, Text = "0.00" };
-    private readonly TextBox _txtCur = new() { Width = 70, Height = 26, Text = "SAR" };
+    private readonly TextBox _txtCur = new() { Width = 70, Height = 26, Text = UsrPref.Load().CurrencyCode };
     private readonly TextBox _txtRate = new() { Width = 70, Height = 26, Text = "1.00" };
     private readonly TextBox _txtRefNo = new() { Width = 110, Height = 26 };
     private readonly TextBox _txtCc = new() { Width = 110, Height = 26 };

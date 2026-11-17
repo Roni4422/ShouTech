@@ -10,6 +10,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Media;
+using ShouTech.App.Configuration;
 using ShouTech.App.Services;
 using ShouTech.Domain.Entities;
 
@@ -37,7 +38,7 @@ public sealed class ChqWin : BaseWin
     private readonly TextBox _txtDocNo = new() { Width = 110, Height = 26 };
     private readonly DatePicker _dtDate = new() { Width = 120, Height = 26, SelectedDate = DateTime.Today };
     private readonly TextBox _txtBox = new() { Width = 160, Height = 26 };
-    private readonly TextBox _txtCur = new() { Width = 70, Height = 26, Text = "SAR" };
+    private readonly TextBox _txtCur = new() { Width = 70, Height = 26, Text = UsrPref.Load().CurrencyCode };
     private readonly TextBox _txtMemo = new() { Width = 300, Height = 26 };
     private readonly TextBox _txtDepositBank = new() { Width = 150, Height = 26 };
     private readonly TextBox _txtEndorseTo = new() { Width = 150, Height = 26 };

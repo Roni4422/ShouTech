@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using ShouTech.App.Configuration;
 using ShouTech.App.Services;
 using ShouTech.Domain.Entities;
 
@@ -23,7 +24,7 @@ public sealed class BnkCard : BaseWin
     private readonly TextBox _txtBranch = new() { Width = 150, Height = 26 };
     private readonly TextBox _txtAccNo = new() { Width = 180, Height = 26 };
     private readonly TextBox _txtIban = new() { Width = 260, Height = 26 };
-    private readonly TextBox _txtCur = new() { Width = 70, Height = 26, Text = "SAR" };
+    private readonly TextBox _txtCur = new() { Width = 70, Height = 26, Text = UsrPref.Load().CurrencyCode };
     private readonly TextBox _txtGlAcc = new() { Width = 140, Height = 26 };
     private readonly TextBox _txtNotes = new() { Width = 470, Height = 26 };
     private readonly CheckBox _chkActive = new() { VerticalAlignment = VerticalAlignment.Center, IsChecked = true };
@@ -210,7 +211,7 @@ public sealed class BnkCard : BaseWin
                 BranchName = string.IsNullOrWhiteSpace(_txtBranch.Text) ? null : _txtBranch.Text.Trim(),
                 AccountNo = string.IsNullOrWhiteSpace(_txtAccNo.Text) ? null : _txtAccNo.Text.Trim(),
                 Iban = string.IsNullOrWhiteSpace(_txtIban.Text) ? null : _txtIban.Text.Trim(),
-                CurrencyCode = string.IsNullOrWhiteSpace(_txtCur.Text) ? "SAR" : _txtCur.Text.Trim(),
+                CurrencyCode = string.IsNullOrWhiteSpace(_txtCur.Text) ? UsrPref.Load().CurrencyCode : _txtCur.Text.Trim(),
                 GlAccountCode = string.IsNullOrWhiteSpace(_txtGlAcc.Text) ? null : _txtGlAcc.Text.Trim(),
                 IsActive = _chkActive.IsChecked == true,
                 Notes = string.IsNullOrWhiteSpace(_txtNotes.Text) ? null : _txtNotes.Text.Trim()
@@ -257,11 +258,11 @@ public sealed class BnkCard : BaseWin
         _txtBranch.Text = string.Empty;
         _txtAccNo.Text = string.Empty;
         _txtIban.Text = string.Empty;
-        _txtCur.Text = "SAR";
+        _txtCur.Text = UsrPref.Load().CurrencyCode;
         _txtGlAcc.Text = string.Empty;
         _txtNotes.Text = string.Empty;
         _chkActive.IsChecked = true;
-        _lblBal.Text = $"{T("BankCard.Balance")}: 0.00 SAR";
+        _lblBal.Text = $"{T("BankCard.Balance")}: 0.00 {UsrPref.Load().CurrencyCode}";
     }
 
     protected override void ApplyLocalizedText()

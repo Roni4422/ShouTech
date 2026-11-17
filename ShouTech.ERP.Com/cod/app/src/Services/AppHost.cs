@@ -91,7 +91,7 @@ namespace ShouTech.App.Services
             MasterCards = CreatePhase3Service((provider, connection) => new MasterCardService(new MasterCardRepository(provider, connection)), "Master Cards");
             Cheques = CreatePhase3Service((provider, connection) => new ChequeService(new ChequeRepository(provider, connection), JournalStore), "Cheques");
             Manufacturing = CreatePhase3Service((provider, connection) => new MfgOrderService(new MfgOrderRepository(provider, connection)), "Manufacturing Orders");
-            Orders = CreatePhase3Service((provider, connection) => new OrderService(new CommercialDocumentRepository(provider, connection)), "Orders");
+            Orders = CreatePhase3Service((provider, connection) => new OrderService(new OrderDocumentRepository(provider, connection), new CommercialDocumentRepository(provider, connection)), "Orders");
             Definitions = CreatePhase3Service((provider, connection) => new DefinitionService(new DefinitionRepository(provider, connection)), "Definitions");
             Operations = CreatePhase3Service((provider, connection) => new OperationsService(new OperationsRepository(provider, connection)), "Operations");
             AccountingStructure = CreateAccountingStructureRepository();
