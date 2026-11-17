@@ -270,8 +270,8 @@ namespace ShouTech.App.Views
             if (MainMenu != null)
                 MainMenu.FlowDirection = direction;
 
-            if (MainToolBar != null)
-                MainToolBar.FlowDirection = direction;
+            if (QuickAccessBar != null)
+                QuickAccessBar.FlowDirection = direction;
 
             if (RibbonControl != null)
                 RibbonControl.FlowDirection = direction;
@@ -348,6 +348,69 @@ namespace ShouTech.App.Views
             }
         }
 
+        // Quick Access Bar: each navigation button carries the same action key
+        // the ribbon uses in its Tag, and is routed through the exact chain the
+        // ribbon click uses (RibbonReportRouter -> RibbonNav -> RptNav ->
+        // MainShVM.HandleRibbonAction), so a quick-bar button always opens the
+        // same window as its ribbon counterpart.
+        private void OnQuickAccessClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button button)
+                return;
+
+            var actionKey = button.Tag as string;
+
+            if (string.IsNullOrWhiteSpace(actionKey))
+                return;
+
+            CollapseRibbon();
+
+            try
+            {
+                if (RibbonReportRouter.TryHandle(actionKey, this))
+                    return;
+
+                if (RibbonNav.TryHandle(actionKey, this))
+                    return;
+
+                if (RptNav.TryHandle(actionKey, this))
+                    return;
+
+                if (DataContext is MainShVM viewModel)
+                {
+                    viewModel.HandleRibbonAction(
+                        button.ToolTip?.ToString(),
+                        actionKey,
+                        null,
+                        null);
+                }
+            }
+            catch (Exception ex)
+            {
+                AppHost.Errors.Report(
+                    ErrorCodes.NavigationFailed,
+                    ex,
+                    "MWin.xaml.OnQuickAccessClick");
+            }
+        }
+
+        // Quick Access Bar Reports button: opens the ribbon on the Reports tab,
+        // exactly like clicking the Reports menu.
+        private void OnQuickReportsClick(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                ShowRibbonTab("TabReports");
+            }
+            catch (Exception ex)
+            {
+                AppHost.Errors.Report(
+                    ErrorCodes.ShellOperationFailed,
+                    ex,
+                    "MWin.xaml.OnQuickReportsClick");
+            }
+        }
+
         private bool _recycleBinOpen;
 
         private async void OnRecycleBinClick(object sender, RoutedEventArgs e)
@@ -397,6 +460,9 @@ namespace ShouTech.App.Views
 
                 if (RecycleBinCornerButton != null)
                     RecycleBinCornerButton.ToolTip = tooltip;
+
+                if (QuickRecycleBinButton != null)
+                    QuickRecycleBinButton.ToolTip = tooltip;
 
             }
             catch (Exception exL395)
@@ -1279,7 +1345,7 @@ namespace ShouTech.App.Views
             MaximizeButton.IsEnabled = false;
             CloseButton.IsEnabled = false;
 
-            MainToolBar.IsEnabled = false;
+            QuickAccessBar.IsEnabled = false;
             MainMenu.IsEnabled = false;
 
             foreach (var item in MainMenu.Items.OfType<MenuItem>())
@@ -1336,7 +1402,7 @@ namespace ShouTech.App.Views
             CloseButton.IsEnabled = true;
 
             MainMenu.IsEnabled = true;
-            MainToolBar.IsEnabled = true;
+            QuickAccessBar.IsEnabled = true;
             RibbonControl.IsEnabled = true;
             MainStatusBar.IsEnabled = true;
             InternalWindowDock.IsEnabled = true;

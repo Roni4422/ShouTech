@@ -1,6 +1,7 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                    xmlns:ribbon="clr-namespace:System.Windows.Controls.Ribbon;assembly=System.Windows.Controls.Ribbon">
+                    xmlns:ribbon="clr-namespace:System.Windows.Controls.Ribbon;assembly=System.Windows.Controls.Ribbon"
+                    xmlns:qb="clr-namespace:ShouTech.App.Interaction">
 
     <Style TargetType="{x:Type ribbon:Ribbon}">
         <Setter Property="Background" Value="{DynamicResource ShellRibbonBackgroundBrush}"/>
@@ -26,6 +27,79 @@
         <Setter Property="Foreground" Value="{DynamicResource ShellRibbonForegroundBrush}"/>
         <Setter Property="FontFamily" Value="{StaticResource ShellChromeFontFamily}"/>
         <Setter Property="FontWeight" Value="Bold"/>
+    </Style>
+
+    <!-- ============================================================
+         QUICK ACCESS BAR (MWin) — flat command-bar pattern: a Border
+         strip with icon buttons. Each button's icon is ONE settable
+         value (qb:QuickBarProps.Glyph today; swap that single
+         attribute to qb:QuickBarProps.Icon="/Resources/Ico/Qb*.png"
+         when real icon files arrive — no template change needed).
+         ============================================================ -->
+    <Style x:Key="QuickAccessBarStyle" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource ShellUnifiedLightBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource ShellContentBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="0,1,0,0"/>
+        <Setter Property="Padding" Value="4,3"/>
+        <Setter Property="Height" Value="38"/>
+    </Style>
+
+    <Style x:Key="QuickAccessButtonStyle" TargetType="Button">
+        <Setter Property="Width" Value="38"/>
+        <Setter Property="Height" Value="30"/>
+        <Setter Property="Margin" Value="1,0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="QbBorder"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="4"
+                            SnapsToDevicePixels="True">
+                        <Grid>
+                            <TextBlock x:Name="QbGlyph"
+                                       Text="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=(qb:QuickBarProps.Glyph)}"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="16"
+                                       Foreground="{TemplateBinding Foreground}"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                            <Image x:Name="QbIcon"
+                                   Source="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=(qb:QuickBarProps.Icon)}"
+                                   Width="20"
+                                   Height="20"
+                                   Stretch="Uniform"
+                                   Visibility="Collapsed"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="QbBorder" Property="Background"
+                                    Value="{DynamicResource ShellRibbonHoverBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="QbBorder" Property="Background"
+                                    Value="{DynamicResource BorderDarkBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground"
+                                    Value="{DynamicResource TextDisabledBrush}"/>
+                        </Trigger>
+                        <DataTrigger Binding="{Binding RelativeSource={RelativeSource Self}, Path=(qb:QuickBarProps.HasIcon)}" Value="True">
+                            <Setter TargetName="QbGlyph" Property="Visibility" Value="Collapsed"/>
+                            <Setter TargetName="QbIcon" Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <Style TargetType="{x:Type ribbon:RibbonButton}">
