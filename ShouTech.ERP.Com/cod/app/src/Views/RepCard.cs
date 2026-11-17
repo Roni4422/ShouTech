@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
@@ -18,13 +18,13 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class RepCard : BaseWin
 {
-    private readonly TextBox _txtCode = new() { Width = 110, Height = 26 };
-    private readonly TextBox _txtNameEn = new() { Width = 220, Height = 26 };
-    private readonly TextBox _txtNameAr = new() { Width = 220, Height = 26 };
-    private readonly TextBox _txtPhone = new() { Width = 130, Height = 26 };
-    private readonly TextBox _txtComm = new() { Width = 90, Height = 26, Text = "0" };
-    private readonly TextBox _txtTarget = new() { Width = 120, Height = 26, Text = "0.00" };
-    private readonly ComboBox _cbGroup = new() { Width = 200, Height = 26 };
+    private readonly TextBox _txtCode = new();
+    private readonly TextBox _txtNameEn = new();
+    private readonly TextBox _txtNameAr = new();
+    private readonly TextBox _txtPhone = new();
+    private readonly TextBox _txtComm = new() { Text = "0" };
+    private readonly TextBox _txtTarget = new() { Text = "0.00" };
+    private readonly ComboBox _cbGroup = new();
     private readonly CheckBox _chkActive = new() { VerticalAlignment = VerticalAlignment.Center, IsChecked = true };
 
     private readonly Button _btnLoad = new();
@@ -132,30 +132,22 @@ public sealed class RepCard : BaseWin
         root.Children.Add(metricsBorder);
         root.Children.Add(actionBar);
 
-        var formPanel = new StackPanel { Margin = new Thickness(4) };
-
-        var r1 = new WrapPanel();
-        r1.Children.Add(Labeled("SalesRepCard.Code", _txtCode));
-        r1.Children.Add(Labeled("SalesRepCard.Name", _txtNameEn));
-        r1.Children.Add(Labeled("SalesRepCard.Phone", _txtPhone));
-        formPanel.Children.Add(r1);
-
-        var r2 = new WrapPanel();
-        r2.Children.Add(Labeled("MasterCards.NameAr", _txtNameAr));
-        r2.Children.Add(Labeled("MasterCards.Group", _cbGroup));
-        formPanel.Children.Add(r2);
-
-        var r3 = new WrapPanel();
-        r3.Children.Add(Labeled("SalesRepCard.Commission", _txtComm));
-        r3.Children.Add(Labeled("SalesRepCard.Target", _txtTarget));
-        var activePanel = new StackPanel { Margin = new Thickness(0, 20, 10, 6) };
+        // One shared column grid for the whole form (3 pairs), side labels,
+        // field edges aligned across rows (Phenix rule).
+        var form = CreateFormGrid(3);
+        form.Margin = new Thickness(16);
+        AddFormField(form, 0, 0, "SalesRepCard.Code", _txtCode);
+        AddFormField(form, 0, 1, "SalesRepCard.Name", _txtNameEn);
+        AddFormField(form, 0, 2, "SalesRepCard.Phone", _txtPhone);
+        AddFormField(form, 1, 0, "MasterCards.NameAr", _txtNameAr, spanPairs: 2);
+        AddFormField(form, 1, 2, "MasterCards.Group", _cbGroup);
+        AddFormField(form, 2, 0, "SalesRepCard.Commission", _txtComm);
+        AddFormField(form, 2, 1, "SalesRepCard.Target", _txtTarget);
         _chkActive.Content = T("MasterCards.Active");
         _chkActive.Tag = "MasterCards.Active";
-        activePanel.Children.Add(_chkActive);
-        r3.Children.Add(activePanel);
-        formPanel.Children.Add(r3);
+        AddFormElement(form, 2, 2, _chkActive);
 
-        root.Children.Add(formPanel);
+        root.Children.Add(form);
         Content = root;
     }
 
@@ -292,25 +284,12 @@ public sealed class RepCard : BaseWin
             RefreshLocalizedContent(VisualTreeHelper.GetChild(parent, i));
     }
 
-    private static StackPanel Labeled(string key, UIElement control)
-    {
-        var sp = new StackPanel { Margin = new Thickness(0, 0, 8, 4) };
-        sp.Children.Add(new TextBlock { Text = T(key), Tag = key, Margin = new Thickness(0, 0, 0, 2), Opacity = 0.85 });
-        if (control is TextBox textBox)
-            textBox.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
-        if (control is ComboBox comboBox)
-            comboBox.SetResourceReference(StyleProperty, "VisuComboBoxStyle");
-        sp.Children.Add(control);
-        return sp;
-    }
 
     private static void StyleButton(Button btn, string key)
     {
         btn.Content = T(key);
-        btn.Margin = new Thickness(0, 0, 5, 0);
-        btn.Padding = new Thickness(9, 3, 9, 3);
-        btn.MinWidth = 76;
-        btn.Height = 28;
+        btn.Margin = new Thickness(0, 0, 8, 0);
+        btn.MinWidth = VisuId.ButtonMinWidth;
         btn.Tag = key;
         btn.SetResourceReference(StyleProperty, "VisuButtonStyle");
     }
