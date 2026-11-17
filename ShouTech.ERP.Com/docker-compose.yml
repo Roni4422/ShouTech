@@ -1,16 +1,31 @@
-version: '3.8'
+# ShouTech ERP — local development database.
+#
+# Supported providers are SQLite (no service needed) and PostgreSQL only;
+# SQL Server is legacy/archive material and is not a runtime provider.
+# This service mirrors the PostgreSQL 16 instance used by CI
+# (.github/workflows/db-migrations-smoke.yml).
+#
+# Credentials come from the environment; the defaults below are
+# throwaway local-development values only. Override them in a local
+# .env file or your shell before using this file anywhere shared:
+#   POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
 services:
-  mssql:
-    image: mcr.microsoft.com/mssql/server:2019-latest
-    container_name: shoutech_mssql
+  postgres:
+    image: postgres:16
+    container_name: shoutech_postgres
     environment:
-      - ACCEPT_EULA=Y
-      - SA_PASSWORD=${MSSQL_SA_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER:-shoutech}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shoutech_dev_only}
+      POSTGRES_DB: ${POSTGRES_DB:-shoutech_erp}
     ports:
-      - "1433:1433"
+      - "5432:5432"
     volumes:
-      - ./mssql-data:/var/opt/mssql
+      - shoutech_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P '${MSSQL_SA_PASSWORD}' -Q 'SELECT 1'"
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-shoutech} -d ${POSTGRES_DB:-shoutech_erp}"]
       interval: 10s
+      timeout: 5s
       retries: 10
+
+volumes:
+  shoutech_pgdata:
