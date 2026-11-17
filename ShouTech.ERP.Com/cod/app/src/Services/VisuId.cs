@@ -252,6 +252,9 @@ namespace ShouTech.App.Services
 
 			EnsureVisualIdentityLoaded();
 
+			// Windows 11 DWM chrome (rounded corners + Mica), best effort.
+			Win11Chrome.Apply(window);
+
 			// Every child window inherits the main application language direction.
 			LangDirSv.ApplyToWindow(window);
 
@@ -467,7 +470,7 @@ namespace ShouTech.App.Services
                     FindResource(
                         window,
                         "ChromeCornerRadius",
-                        new CornerRadius(0)),
+                        new CornerRadius(8)),
 
                 GlassFrameThickness =
                     new Thickness(0),

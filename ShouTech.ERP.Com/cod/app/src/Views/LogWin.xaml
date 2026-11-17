@@ -266,7 +266,7 @@
         </Grid>
 
         <!-- Loading overlay -->
-        <Border Background="#B3000000"
+        <Border Background="{DynamicResource OverlayBrush}"
                 Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}"
                 AutomationProperties.Name="Loading">
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">

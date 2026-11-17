@@ -24,7 +24,7 @@
                                 CaptionHeight="0"
                                 ResizeBorderThickness="0"
                                 GlassFrameThickness="0"
-                                CornerRadius="0"
+                                CornerRadius="8"
                                 UseAeroCaptionButtons="False"/>
 
             <!-- Window chrome buttons: minimize / maximize -->
@@ -100,22 +100,29 @@
                  BUTTONS — Primary / Secondary / Danger / Success / Icon
                  ============================================================ -->
             <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource VisuAccentButtonStyle}">
+                <Setter Property="Effect" Value="{x:Null}"/>
                 <Setter Property="Padding" Value="18,8"/>
                 <Setter Property="Height" Value="{DynamicResource PrimaryButtonHeight}"/>
                 <Setter Property="MinWidth" Value="{DynamicResource PrimaryButtonMinWidth}"/>
             </Style>
 
             <Style x:Key="SecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource VisuSecondaryButtonStyle}">
+                <Setter Property="Effect" Value="{x:Null}"/>
                 <Setter Property="Height" Value="{DynamicResource SecondaryButtonHeight}"/>
                 <Setter Property="MinWidth" Value="{DynamicResource SecondaryButtonMinWidth}"/>
             </Style>
 
-            <Style x:Key="DangerButtonStyle" TargetType="Button" BasedOn="{StaticResource VisuDangerButtonStyle}"/>
+            <Style x:Key="DangerButtonStyle" TargetType="Button" BasedOn="{StaticResource VisuDangerButtonStyle}">
+                <Setter Property="Effect" Value="{x:Null}"/>
+            </Style>
 
-            <Style x:Key="SuccessButtonStyle" TargetType="Button" BasedOn="{StaticResource VisuSuccessButtonStyle}"/>
+            <Style x:Key="SuccessButtonStyle" TargetType="Button" BasedOn="{StaticResource VisuSuccessButtonStyle}">
+                <Setter Property="Effect" Value="{x:Null}"/>
+            </Style>
 
             <!-- Icon button (small, transparent) -->
             <Style x:Key="IconButtonStyle" TargetType="Button" BasedOn="{StaticResource VisuButtonStyle}">
+                <Setter Property="Effect" Value="{x:Null}"/>
                 <Setter Property="Width" Value="{DynamicResource IconButtonSize}"/>
                 <Setter Property="Height" Value="{DynamicResource IconButtonSize}"/>
                 <Setter Property="Padding" Value="0"/>
@@ -129,6 +136,7 @@
                  TEXT INPUTS — TextBox / PasswordBox / ComboBox
                  ============================================================ -->
             <Style x:Key="AppTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource VisuTextBoxStyle}">
+                <Setter Property="Effect" Value="{x:Null}"/>
                 <Setter Property="Padding" Value="10,0"/>
                 <Setter Property="CaretBrush" Value="{DynamicResource TextPrimary}"/>
                 <Setter Property="Height" Value="{DynamicResource AppTextInputHeight}"/>
@@ -136,6 +144,7 @@
             </Style>
 
             <Style x:Key="AppPasswordBoxStyle" TargetType="PasswordBox" BasedOn="{StaticResource VisuPasswordBoxStyle}">
+                <Setter Property="Effect" Value="{x:Null}"/>
                 <Setter Property="Padding" Value="10,0"/>
                 <Setter Property="CaretBrush" Value="{DynamicResource TextPrimary}"/>
                 <Setter Property="Height" Value="{DynamicResource AppTextInputHeight}"/>
@@ -144,6 +153,7 @@
 
             
             <Style x:Key="AppComboBoxStyle" TargetType="ComboBox" BasedOn="{StaticResource VisuComboBoxStyle}">
+                <Setter Property="Effect" Value="{x:Null}"/>
                 <Setter Property="Padding" Value="8,0"/>
                 <Setter Property="Height" Value="{DynamicResource AppComboBoxHeight}"/>
                 <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -153,7 +163,7 @@
             <!-- ============================================================
                  CHECKBOX / RADIOBUTTON
                  ============================================================ -->
-            <Style TargetType="CheckBox">
+            <Style TargetType="CheckBox" BasedOn="{StaticResource Win11CheckBoxStyle}">
                 <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
                 <Setter Property="FontSize" Value="{DynamicResource ApplicationFontSize}"/>
                 <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -161,7 +171,7 @@
                 <Setter Property="Padding" Value="6,0,0,0"/>
             </Style>
 
-            <Style TargetType="RadioButton">
+            <Style TargetType="RadioButton" BasedOn="{StaticResource Win11RadioButtonStyle}">
                 <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
                 <Setter Property="FontSize" Value="{DynamicResource ApplicationFontSize}"/>
                 <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -220,6 +230,7 @@
                  DATAGRID — Enterprise styling
                  ============================================================ -->
             <Style TargetType="DataGrid" BasedOn="{StaticResource VisuDataGridStyle}">
+                <Setter Property="GridLinesVisibility" Value="Horizontal"/>
                 <Setter Property="RowBackground" Value="{DynamicResource TableSurfaceBrush}"/>
                 <Setter Property="AlternatingRowBackground"
                         Value="{DynamicResource TableAlternateRowBrush}"/>
@@ -254,7 +265,7 @@
                 <Setter Property="BorderThickness" Value="0"/>
             </Style>
 
-            <Style TargetType="TabItem">
+            <Style TargetType="TabItem" BasedOn="{StaticResource Win11TabItemStyle}">
                 <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="FontSize" Value="{DynamicResource ApplicationFontSize}"/>
@@ -273,8 +284,8 @@
                  TOOLTIP
                  ============================================================ -->
             <Style TargetType="ToolTip">
-                <Setter Property="Background" Value="{DynamicResource SurfaceDarkBrush}"/>
-                <Setter Property="Foreground" Value="{DynamicResource TextOnDarkBrush}"/>
+                <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
                 <Setter Property="BorderThickness" Value="1"/>
                 <Setter Property="Padding" Value="8,4"/>
@@ -305,6 +316,8 @@
             </Style>
 
             <Style TargetType="ContextMenu">
+                <Setter Property="Padding" Value="4"/>
+                <Setter Property="HasDropShadow" Value="True"/>
                 <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
                 <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
@@ -317,8 +330,8 @@
                  ============================================================ -->
             <Style TargetType="ScrollBar">
                 <Setter Property="Background" Value="Transparent"/>
-                <Setter Property="Width" Value="10"/>
-                <Setter Property="MinWidth" Value="10"/>
+                <Setter Property="Width" Value="8"/>
+                <Setter Property="MinWidth" Value="8"/>
             </Style>
 
 
@@ -326,8 +339,8 @@
                  PROGRESSBAR
                  ============================================================ -->
             <Style TargetType="ProgressBar">
-                <Setter Property="Height" Value="6"/>
-                <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+                <Setter Property="Height" Value="4"/>
+                <Setter Property="Background" Value="{DynamicResource SurfaceSecondaryBrush}"/>
                 <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}"/>
                 <Setter Property="BorderThickness" Value="0"/>
             </Style>

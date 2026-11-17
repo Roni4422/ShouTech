@@ -36,6 +36,7 @@ namespace ShouTech.App.Views
             {
                 InitializeComponent();
                 VisuId.ApplyWindow(this);
+                Win11Chrome.Apply(this);
                 ApplyUiDirection();
                 _ = RefreshRecycleBinBadgeAsync();
 
