@@ -72,7 +72,7 @@ public sealed class BnkCard : BaseWin
         var root = new DockPanel { Margin = new Thickness(12) };
 
         // 1. Toolbar
-        var toolbar = new WrapPanel { Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Right };
+        var toolbar = new WrapPanel { Margin = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Right };
         StyleButton(_btnNew, "Common.New");
         StyleButton(_btnSave, "Common.Save");
         StyleButton(_btnDelete, "Common.Delete");
@@ -84,7 +84,16 @@ public sealed class BnkCard : BaseWin
         foreach (var b in new[] { _btnNew, _btnSave, _btnDelete })
             toolbar.Children.Add(b);
 
-        DockPanel.SetDock(toolbar, Dock.Bottom);
+        // Explorer-style bottom command bar: flat, transparent, subtle 1px top divider.
+        var actionBar = new Border
+        {
+            Child = toolbar,
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Padding = new Thickness(0, 8, 0, 0),
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        actionBar.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
+        DockPanel.SetDock(actionBar, Dock.Bottom);
 
         // 2. Metrics Bar
         var metricsBorder = new Border
@@ -102,7 +111,7 @@ public sealed class BnkCard : BaseWin
 
         DockPanel.SetDock(metricsBorder, Dock.Bottom);
         root.Children.Add(metricsBorder);
-        root.Children.Add(toolbar);
+        root.Children.Add(actionBar);
 
         // 3. Form Content
         var formPanel = new StackPanel { Margin = new Thickness(4) };

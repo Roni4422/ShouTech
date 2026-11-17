@@ -149,7 +149,7 @@
     <!-- Action bar (bottom, layout rule) -->
     <Border Grid.Row="3"
             Padding="6,5"
-            Background="{DynamicResource SurfaceBrush}"
+            Background="Transparent"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,1,0,0">
 

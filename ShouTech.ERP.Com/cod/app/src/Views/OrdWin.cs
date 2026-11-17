@@ -120,7 +120,7 @@ public sealed class OrdWin : BaseWin
         var root = new DockPanel { Margin = new Thickness(10) };
 
         // 1. Toolbar
-        var toolbar = new WrapPanel { Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Right };
+        var toolbar = new WrapPanel { Margin = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Right };
         StyleButton(_btnNew, "Common.New");
         StyleButton(_btnSave, "Common.Save");
         StyleButton(_btnConvert, "OrderDoc.ConvertToInvoice");
@@ -155,7 +155,16 @@ public sealed class OrdWin : BaseWin
         foreach (var b in new[] { _btnNew, _btnSave, _btnConvert, _btnAddLine, _btnRemLine, _btnPrint })
             toolbar.Children.Add(b);
 
-        DockPanel.SetDock(toolbar, Dock.Bottom);
+        // Explorer-style bottom command bar: flat, transparent, subtle 1px top divider.
+        var actionBar = new Border
+        {
+            Child = toolbar,
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Padding = new Thickness(0, 8, 0, 0),
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        actionBar.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
+        DockPanel.SetDock(actionBar, Dock.Bottom);
 
         // 2. Footer
         var footer = new Border
@@ -176,7 +185,7 @@ public sealed class OrdWin : BaseWin
         footer.Child = footerContent;
         DockPanel.SetDock(footer, Dock.Bottom);
         root.Children.Add(footer);
-        root.Children.Add(toolbar);
+        root.Children.Add(actionBar);
 
         // 3. Body
         var body = new Grid();

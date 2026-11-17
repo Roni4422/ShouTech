@@ -219,7 +219,7 @@ public sealed class InvoiceWin : BaseWin
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 8, 0, 0)
+            Margin = new Thickness(0)
         };
         StyleButton(_btnSave, "Common.Save");
         StyleButton(_btnPost, "Invoice.Post");
@@ -255,8 +255,17 @@ public sealed class InvoiceWin : BaseWin
         _btnFindMaterial.Click += (_, _) => PickMaterial();
         foreach (var b in new[] { _btnSave, _btnPost, _btnReverse, _btnPrint, _btnPdf, _btnAddLine, _btnRemoveLine, _btnFindMaterial })
             toolbar.Children.Add(b);
-        Grid.SetRow(toolbar, 3);
-        root.Children.Add(toolbar);
+        // Explorer-style bottom command bar: flat, transparent, subtle 1px top divider.
+        var actionBar = new Border
+        {
+            Child = toolbar,
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Padding = new Thickness(0, 8, 0, 0),
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        actionBar.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
+        Grid.SetRow(actionBar, 3);
+        root.Children.Add(actionBar);
 
         // ---- Top 30%: header fields (compact, no large gaps) ----
         var headerHost = new Border

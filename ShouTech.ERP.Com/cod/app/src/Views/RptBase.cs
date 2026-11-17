@@ -160,9 +160,15 @@ public abstract class RptBase : BaseWin
         // Action bar at the BOTTOM of the window (layout rule): the report
         // commands (Refresh / Columns / Export / Print) live under the status
         // line instead of in the title row.
-        var actionBar = new DockPanel { Margin = new Thickness(0, 6, 0, 0), LastChildFill = false };
-        DockPanel.SetDock(toolbar, Dock.Right);
-        actionBar.Children.Add(toolbar);
+        // Explorer-style bottom command bar: flat, transparent, subtle 1px top divider.
+        var actionBar = new Border
+        {
+            Child = toolbar,
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Padding = new Thickness(0, 6, 0, 0),
+            Margin = new Thickness(0, 6, 0, 0)
+        };
+        actionBar.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
         Grid.SetRow(actionBar, 5);
         _root.Children.Add(actionBar);
 

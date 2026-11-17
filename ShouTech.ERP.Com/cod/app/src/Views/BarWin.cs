@@ -52,7 +52,7 @@ public sealed class BarWin : BaseWin
         var root = new DockPanel { Margin = new Thickness(12) };
 
         // 1. Toolbar
-        var toolbar = new WrapPanel { Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Right };
+        var toolbar = new WrapPanel { Margin = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Right };
         StyleButton(_btnPick, T("Invoice.FindMaterial"));
         StyleButton(_btnGen, T("Common.New"));
         StyleButton(_btnPrint, T("BarcodeTool.Print"));
@@ -72,8 +72,17 @@ public sealed class BarWin : BaseWin
         toolbar.Children.Add(_btnPick);
         toolbar.Children.Add(_btnGen);
         toolbar.Children.Add(_btnPrint);
-        DockPanel.SetDock(toolbar, Dock.Bottom);
-        root.Children.Add(toolbar);
+        // Explorer-style bottom command bar: flat, transparent, subtle 1px top divider.
+        var actionBar = new Border
+        {
+            Child = toolbar,
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Padding = new Thickness(0, 8, 0, 0),
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        actionBar.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
+        DockPanel.SetDock(actionBar, Dock.Bottom);
+        root.Children.Add(actionBar);
 
         // 2. Main split layout
         var splitGrid = new Grid();

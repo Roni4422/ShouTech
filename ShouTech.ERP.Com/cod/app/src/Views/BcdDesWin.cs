@@ -107,9 +107,18 @@ public sealed class BcdDesWin : BaseWin
 
         // Action bar - docked at the BOTTOM (layout rule). It was previously added
         // un-docked, which DockPanel treats as Dock.Left.
-        var actionBar = BuildToolbar();
-        actionBar.Margin = new Thickness(0, 10, 0, 0);
-        actionBar.HorizontalAlignment = HorizontalAlignment.Right;
+        var actionPanel = BuildToolbar();
+        actionPanel.Margin = new Thickness(0);
+        actionPanel.HorizontalAlignment = HorizontalAlignment.Right;
+        // Explorer-style bottom command bar: flat, transparent, subtle 1px top divider.
+        var actionBar = new Border
+        {
+            Child = actionPanel,
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Padding = new Thickness(0, 8, 0, 0),
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        actionBar.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
         DockPanel.SetDock(actionBar, Dock.Bottom);
         root.Children.Add(actionBar);
 
