@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Documents;
 using System.Windows.Media;
 
 namespace ShouTech.App.Views;
@@ -105,7 +106,7 @@ public sealed class JrnWin : BaseWin
         _btnSave.Click += async (_, _) => await SaveVoucherAsync();
         _btnPost.Click += async (_, _) => await PostVoucherAsync();
         _btnReverse.Click += async (_, _) => await ReverseVoucherAsync();
-        _btnPrint.Click += (_, _) => ShowOperationUnavailable("Print");
+        _btnPrint.Click += (_, _) => PrintVoucher();
         _btnAddLine.Click += (_, _) =>
         {
             var line = new JrnLineVm { LineNo = _lines.Count + 1 };
@@ -610,6 +611,130 @@ public sealed class JrnWin : BaseWin
             Width = width,
             IsReadOnly = readOnly
         };
+
+    /// <summary>
+    /// Prints the current voucher on an A4 page, following the same visual
+    /// print pattern as <see cref="ShouTech.App.Services.InvPrn"/> for invoices.
+    /// Print rendering is paper output (white page), not window styling.
+    /// </summary>
+    private void PrintVoucher()
+    {
+        var page = BuildPrintPage();
+        var paginator = new SinglePagePaginator(page);
+        var dlg = new PrintDialog();
+        if (dlg.ShowDialog() == true)
+            dlg.PrintDocument(paginator, string.IsNullOrWhiteSpace(_txtDocNo.Text) ? T("Vouchers.JournalTitle") : _txtDocNo.Text.Trim());
+    }
+
+    private Border BuildPrintPage()
+    {
+        var root = new Border
+        {
+            Background = Brushes.White,
+            Padding = new Thickness(40),
+            Width = 794,
+            Height = 1123
+        };
+        var stack = new StackPanel();
+        root.Child = stack;
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = CurrentCompanyDisplay,
+            FontSize = 18,
+            FontWeight = FontWeights.Bold,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x1F, 0x4E, 0x79))
+        });
+        stack.Children.Add(new TextBlock
+        {
+            Text = T("Vouchers.JournalTitle"),
+            FontSize = 15,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 4, 0, 10)
+        });
+
+        void Meta(string labelKey, string value)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 3) };
+            row.Children.Add(new TextBlock { Text = T(labelKey) + ": ", FontWeight = FontWeights.SemiBold, FontSize = 12 });
+            row.Children.Add(new TextBlock { Text = value, FontSize = 12 });
+            stack.Children.Add(row);
+        }
+
+        Meta("Vouchers.VoucherNo", _txtDocNo.Text.Trim());
+        Meta("Vouchers.Date", (_dtDate.SelectedDate ?? DateTime.Today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        Meta("Vouchers.RefNo", _txtRefNo.Text.Trim());
+        Meta("Vouchers.Currency", _txtCur.Text.Trim());
+        Meta("Vouchers.Memo", _txtMemo.Text.Trim());
+
+        var table = new Grid { Margin = new Thickness(0, 14, 0, 0) };
+        foreach (var (width, _) in new[] { (36, 0), (110, 0), (200, 0), (90, 0), (90, 0), (100, 0), (140, 0) })
+            table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(width) });
+
+        void Cell(int row, int col, string text, bool bold = false)
+        {
+            var tb = new TextBlock
+            {
+                Text = text,
+                FontSize = 11,
+                FontWeight = bold ? FontWeights.Bold : FontWeights.Normal,
+                Margin = new Thickness(3, 2, 3, 2),
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+            Grid.SetRow(tb, row);
+            Grid.SetColumn(tb, col);
+            table.Children.Add(tb);
+        }
+
+        table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Cell(0, 0, "#", true);
+        Cell(0, 1, T("Vouchers.AccountCode"), true);
+        Cell(0, 2, T("Vouchers.AccountName"), true);
+        Cell(0, 3, T("Vouchers.Debit"), true);
+        Cell(0, 4, T("Vouchers.Credit"), true);
+        Cell(0, 5, T("Vouchers.CostCenter"), true);
+        Cell(0, 6, T("Vouchers.Memo"), true);
+
+        var rowIndex = 1;
+        foreach (var line in _lines)
+        {
+            table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Cell(rowIndex, 0, line.LineNo.ToString(CultureInfo.InvariantCulture));
+            Cell(rowIndex, 1, line.AccountCode);
+            Cell(rowIndex, 2, line.AccountName);
+            Cell(rowIndex, 3, line.Debit == 0 ? "" : line.Debit.ToString("N2", CultureInfo.InvariantCulture));
+            Cell(rowIndex, 4, line.Credit == 0 ? "" : line.Credit.ToString("N2", CultureInfo.InvariantCulture));
+            Cell(rowIndex, 5, line.CostCenter);
+            Cell(rowIndex, 6, line.Memo);
+            rowIndex++;
+        }
+
+        table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Cell(rowIndex, 2, T("Vouchers.TotalDebit") + " / " + T("Vouchers.TotalCredit"), true);
+        Cell(rowIndex, 3, _lines.Sum(l => l.Debit).ToString("N2", CultureInfo.InvariantCulture), true);
+        Cell(rowIndex, 4, _lines.Sum(l => l.Credit).ToString("N2", CultureInfo.InvariantCulture), true);
+
+        stack.Children.Add(table);
+        return root;
+    }
+
+    /// <summary>Single-page paginator, mirroring the one inside InvPrn.</summary>
+    private sealed class SinglePagePaginator : DocumentPaginator
+    {
+        private readonly FrameworkElement _page;
+        public SinglePagePaginator(FrameworkElement page) => _page = page;
+        public override bool IsPageCountValid => true;
+        public override int PageCount => 1;
+        public override Size PageSize { get; set; } = new(794, 1123);
+        public override IDocumentPaginatorSource Source => null!;
+        public override DocumentPage GetPage(int pageNumber)
+        {
+            _page.Measure(PageSize);
+            _page.Arrange(new Rect(PageSize));
+            _page.UpdateLayout();
+            return new DocumentPage(_page);
+        }
+    }
 
     private sealed class JrnLineVm : INotifyPropertyChanged
     {
