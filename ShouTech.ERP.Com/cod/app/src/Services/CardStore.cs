@@ -240,19 +240,28 @@ public static class CardStore
         var dateText = order.OrderDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
 
+        // Unit equivalents (Step 11, sweep MFG-2): stock moves in BASE
+        // units, converted by the SAME StkPost.ToBaseUnits the invoice
+        // path uses — a line in a non-base unit moves qty × equivalent,
+        // and the finished receipt credits the base quantity at the
+        // total cost restated per base unit.
         foreach (var line in order.Lines)
         {
             if (line.MaterialId is null || line.Quantity <= 0) continue;
+            var (baseQty, _) = StkPost.ToBaseUnits(connection, tx, line.MaterialId.Value,
+                line.UnitCode, line.Quantity, line.UnitCost);
             StockValuationEngine.Apply(connection, tx, provider,
                 new StockMovementRequest(Company(), order.WarehouseId.Value, line.MaterialId.Value,
                     dateText, "MFG-OUT", order.OrderNo,
-                    QtyIn: 0m, QtyOut: line.Quantity, Note: line.MaterialName));
+                    QtyIn: 0m, QtyOut: baseQty, Note: line.MaterialName));
         }
 
+        var (finishedBaseQty, finishedBaseCost) = StkPost.ToBaseUnits(connection, tx,
+            order.FinishedMaterialId.Value, order.UnitCode, order.Quantity, order.UnitCost);
         StockValuationEngine.Apply(connection, tx, provider,
             new StockMovementRequest(Company(), order.WarehouseId.Value, order.FinishedMaterialId.Value,
                 dateText, "MFG-IN", order.OrderNo,
-                QtyIn: order.Quantity, QtyOut: 0m, ReceiptUnitCost: order.UnitCost,
+                QtyIn: finishedBaseQty, QtyOut: 0m, ReceiptUnitCost: finishedBaseCost,
                 Note: order.FinishedMaterialName));
 
         using (var cmd = connection.CreateCommand())

@@ -212,19 +212,29 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
             //    A non-stockable line (service material — owner rule,
             //    2026-11-17) contributes its cost to the order totals
             //    but never moves stock.
+            //    Unit equivalents (Step 11, sweep MFG-2): stock moves in
+            //    BASE units — a line expressed in a non-base unit consumes
+            //    qty × equivalent(that unit), resolved by the SAME
+            //    UnitEquivalents rule the invoice/chain paths use. The
+            //    line keeps its display unit and display quantity on the
+            //    order; only the stock crossing is converted. The
+            //    availability guard compares base quantities, because
+            //    on-hand is a base-unit figure.
             var rawEngineCosts = new List<(MfgOrderLine Line, decimal Cost)>();
             foreach (var line in order.Lines.Where(l => l.LineKind == MfgLineKinds.Raw))
             {
                 var materialId = await ResolveMaterialIdAsync(connection, transaction, companyId, line.ItemCode, cancellationToken).ConfigureAwait(false);
                 if (!await IsStockableAsync(connection, transaction, companyId, materialId, cancellationToken).ConfigureAwait(false))
                     continue;
+                var equivalent = await UnitEquivalents.ResolveAsync(connection, transaction, companyId, materialId, line.UnitCode, cancellationToken).ConfigureAwait(false);
+                var baseQty = line.Qty * equivalent;
                 var onHand = await GetOnHandAsync(connection, transaction, companyId, warehouseId, materialId, cancellationToken).ConfigureAwait(false);
-                if (onHand < line.Qty)
+                if (onHand < baseQty)
                     throw new InvalidOperationException(
-                        $"Insufficient stock for material '{line.ItemCode.Trim()}': required {line.Qty}, on hand {onHand} in warehouse {warehouseId}.");
+                        $"Insufficient stock for material '{line.ItemCode.Trim()}': required {baseQty} (base units), on hand {onHand} in warehouse {warehouseId}.");
                 var consumed = StockValuationEngine.Apply(connection, transaction, _provider,
                     new StockMovementRequest(companyId.Trim(), warehouseId, materialId, dateText,
-                        "MFG_CONSUME", documentNo, QtyIn: 0m, QtyOut: line.Qty,
+                        "MFG_CONSUME", documentNo, QtyIn: 0m, QtyOut: baseQty,
                         Note: $"Manufacturing order {documentNo} consumption"));
                 rawEngineCosts.Add((line, -consumed.CostAmount));
             }
@@ -232,13 +242,23 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
             // 2) Produce the finished item at the computed unit cost — unless
             //    the finished item itself is non-stock (a service): the order
             //    still posts its costs and status, but nothing enters stock.
+            //    The receipt also crosses into stock in BASE units: the
+            //    produced base quantity is order.Qty × equivalent(finished
+            //    unit), and the receipt cost is the order's total cost
+            //    restated per BASE unit (TotalCost / base qty), so the
+            //    finished stock carries exactly the order's total cost.
             var finishedId = await ResolveMaterialIdAsync(connection, transaction, companyId, order.ItemCode, cancellationToken).ConfigureAwait(false);
             if (await IsStockableAsync(connection, transaction, companyId, finishedId, cancellationToken).ConfigureAwait(false))
             {
+                var finishedEquivalent = await UnitEquivalents.ResolveAsync(connection, transaction, companyId, finishedId, order.UnitCode, cancellationToken).ConfigureAwait(false);
+                var finishedBaseQty = order.Qty * finishedEquivalent;
+                var finishedBaseUnitCost = finishedEquivalent == 1m
+                    ? order.UnitCost
+                    : decimal.Round(order.TotalCost / finishedBaseQty, 4, MidpointRounding.AwayFromZero);
                 StockValuationEngine.Apply(connection, transaction, _provider,
                     new StockMovementRequest(companyId.Trim(), warehouseId, finishedId, dateText,
-                        "MFG_PRODUCE", documentNo, QtyIn: order.Qty, QtyOut: 0m,
-                        ReceiptUnitCost: order.UnitCost,
+                        "MFG_PRODUCE", documentNo, QtyIn: finishedBaseQty, QtyOut: 0m,
+                        ReceiptUnitCost: finishedBaseUnitCost,
                         Note: $"Manufacturing order {documentNo} production"));
             }
 
@@ -314,17 +334,22 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
 
                 // The produced quantity must still be on hand to reverse out.
                 // Non-stockable items (services) were never moved by Post,
-                // so there is nothing to reverse for them either.
+                // so there is nothing to reverse for them either. The
+                // reversal crosses in BASE units exactly as Post did
+                // (Step 11): the finished guard and movement use
+                // order.Qty × equivalent(finished unit).
                 var finishedId = await ResolveMaterialIdAsync(connection, transaction, companyId, order.ItemCode, cancellationToken).ConfigureAwait(false);
                 if (await IsStockableAsync(connection, transaction, companyId, finishedId, cancellationToken).ConfigureAwait(false))
                 {
+                    var finishedEquivalent = await UnitEquivalents.ResolveAsync(connection, transaction, companyId, finishedId, order.UnitCode, cancellationToken).ConfigureAwait(false);
+                    var finishedBaseQty = order.Qty * finishedEquivalent;
                     var finishedOnHand = await GetOnHandAsync(connection, transaction, companyId, warehouseId, finishedId, cancellationToken).ConfigureAwait(false);
-                    if (finishedOnHand < order.Qty)
+                    if (finishedOnHand < finishedBaseQty)
                         throw new InvalidOperationException(
-                            $"Cannot cancel: produced quantity of '{order.ItemCode.Trim()}' is no longer fully on hand (required {order.Qty}, on hand {finishedOnHand}).");
+                            $"Cannot cancel: produced quantity of '{order.ItemCode.Trim()}' is no longer fully on hand (required {finishedBaseQty} base units, on hand {finishedOnHand}).");
                     StockValuationEngine.Apply(connection, transaction, _provider,
                         new StockMovementRequest(companyId.Trim(), warehouseId, finishedId, dateText,
-                            "MFG_PRODUCE_REV", documentNo, QtyIn: 0m, QtyOut: order.Qty,
+                            "MFG_PRODUCE_REV", documentNo, QtyIn: 0m, QtyOut: finishedBaseQty,
                             Note: $"Manufacturing order {documentNo} cancellation"));
                 }
 
@@ -335,13 +360,18 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                         continue;
                     // Raw materials re-enter at their ORIGINAL consumption
                     // rate (the rate the order consumed them at), never at
-                    // a re-typed line cost (Step 6 return rule).
+                    // a re-typed line cost (Step 6 return rule) — in BASE
+                    // units, symmetric with the consumption (Step 11); the
+                    // fallback receipt cost is the line cost restated per
+                    // base unit for the case the linked rate is missing.
+                    var equivalent = await UnitEquivalents.ResolveAsync(connection, transaction, companyId, materialId, line.UnitCode, cancellationToken).ConfigureAwait(false);
+                    var (baseQty, baseUnitCost) = UnitEquivalents.ToBase(line.Qty, line.UnitCost, equivalent);
                     var originalRate = StockValuationEngine.TryGetDocumentRate(
                         connection, transaction, _provider, companyId.Trim(), documentNo, materialId, warehouseId, issued: true);
                     StockValuationEngine.Apply(connection, transaction, _provider,
                         new StockMovementRequest(companyId.Trim(), warehouseId, materialId, dateText,
-                            "MFG_CONSUME_REV", documentNo, QtyIn: line.Qty, QtyOut: 0m,
-                            ReceiptUnitCost: line.UnitCost, LinkedRate: originalRate,
+                            "MFG_CONSUME_REV", documentNo, QtyIn: baseQty, QtyOut: 0m,
+                            ReceiptUnitCost: baseUnitCost, LinkedRate: originalRate,
                             Note: $"Manufacturing order {documentNo} cancellation"));
                 }
             }
