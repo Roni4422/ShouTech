@@ -201,11 +201,16 @@ public class MasterCardServiceTests
         };
         await service.SavePartyAsync(Company, party, User);
 
-        // Legacy bridge: customers row with numeric id 42 carries code CUS-1.
-        await db.InsertLegacyCustomerAsync(42, "CUS-1");
-        await db.InsertLedgerAsync("C", 42, debit: 700m, credit: 0m);
-        await db.InsertLedgerAsync("C", 42, debit: 0m, credit: 200m);
-        await db.InsertLedgerAsync("S", 42, debit: 0m, credit: 999m); // other kind ignored
+        // Step 4: the balance resolves through the party's OWN ledger_id
+        // (assigned by the repository on save) — ledger rows of a stranger
+        // who happens to share the numeric space must not leak in.
+        var saved = await service.GetPartyByCodeAsync(Company, "C", "CUS-1");
+        Assert.NotNull(saved);
+        Assert.True(saved!.LedgerId > 0);
+        await db.InsertLedgerAsync("C", saved.LedgerId, debit: 700m, credit: 0m);
+        await db.InsertLedgerAsync("C", saved.LedgerId, debit: 0m, credit: 200m);
+        await db.InsertLedgerAsync("S", saved.LedgerId, debit: 0m, credit: 999m); // other kind ignored
+        await db.InsertLedgerAsync("C", saved.LedgerId + 1000, debit: 777m, credit: 0m); // stranger ignored
 
         var balance = await service.GetPartyBalanceAsync(Company, "C", "CUS-1");
         Assert.Equal(700m, balance.Debit);
@@ -306,6 +311,8 @@ public class MasterCardServiceTests
             var path = Path.Combine(Path.GetTempPath(), $"shoutech-mastercards-{Guid.NewGuid():N}.sqlite3");
             var db = new TestDb(path);
             await db.ExecuteAsync(ReadMigration031());
+            // Migration 061 adds the canonical party ledger identity.
+            await db.ExecuteAsync("ALTER TABLE parties ADD COLUMN ledger_id INTEGER;");
             // Core ledger shapes (from migrations 001/009/010) needed by the
             // balance and delete-guard queries.
             await db.ExecuteAsync("""
@@ -404,13 +411,6 @@ public class MasterCardServiceTests
             var value = await command.ExecuteScalarAsync();
             Assert.NotNull(value);
             return Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture)!;
-        }
-
-        public async Task InsertLegacyCustomerAsync(long id, string code)
-        {
-            await ExecuteAsync(
-                "INSERT INTO customers (customer_id, company_id, customer_code) VALUES ($id, $company, $code);",
-                ("$id", id), ("$company", Company), ("$code", code));
         }
 
         public async Task InsertLedgerAsync(string kind, long partyId, decimal debit, decimal credit)
