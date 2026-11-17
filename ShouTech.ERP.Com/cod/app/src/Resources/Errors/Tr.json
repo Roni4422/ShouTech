@@ -68,6 +68,18 @@
     "message": "'{0}' belgesinin zaten deftere işlenmiş bir yevmiye kaydı var; iki kez işlenemez.",
     "hint": "Belgeyi yeniden işlemeden önce mevcut yevmiye kaydını ters çevirin."
   },
+  "ACC-5013": {
+    "code": "ACC-5013",
+    "name": "DocumentTotalMismatch",
+    "message": "'{0}' belgesinin kayıtlı toplamı {1}, satırlarından yeniden hesaplanan toplamla ({2}) uyuşmuyor; deftere işlemede kayıtlı toplam kullanılır.",
+    "hint": "Belgenin başlık indirimini ve ek ücretlerini kontrol edin; kayıtlı toplam yanlışsa kayıtlı belgeyi düzeltin."
+  },
+  "ACC-5014": {
+    "code": "ACC-5014",
+    "name": "DocumentKindNotPostable",
+    "message": "'{0}' belge türü fatura deftere işleme yoluyla işlenemez.",
+    "hint": "Bu belge türü için ayrılmış pencereyi kullanın (stok transferleri ve stok sayımları depo motorlarıyla işlenir) veya belge türünü kontrol edin."
+  },
   "AUTH-2001": {
     "code": "AUTH-2001",
     "name": "InvalidCredentials",

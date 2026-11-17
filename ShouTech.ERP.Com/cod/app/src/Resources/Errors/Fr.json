@@ -68,6 +68,18 @@
     "message": "Le document « {0} » possède déjà une écriture comptable comptabilisée et ne peut pas être comptabilisé deux fois.",
     "hint": "Extournez l'écriture existante avant de comptabiliser à nouveau le document."
   },
+  "ACC-5013": {
+    "code": "ACC-5013",
+    "name": "DocumentTotalMismatch",
+    "message": "Le total enregistré du document « {0} » ({1}) ne correspond pas au total recalculé depuis ses lignes ({2}) ; la comptabilisation utilise le total enregistré.",
+    "hint": "Vérifiez la remise d'en-tête et les frais supplémentaires du document ; corrigez le document enregistré si le total enregistré est faux."
+  },
+  "ACC-5014": {
+    "code": "ACC-5014",
+    "name": "DocumentKindNotPostable",
+    "message": "Le type de document « {0} » ne peut pas être comptabilisé par le chemin de comptabilisation des factures.",
+    "hint": "Utilisez la fenêtre dédiée à ce type de document (les transferts et inventaires de stock passent par les moteurs d'entrepôt), ou vérifiez le type de document."
+  },
   "AUTH-2001": {
     "code": "AUTH-2001",
     "name": "InvalidCredentials",

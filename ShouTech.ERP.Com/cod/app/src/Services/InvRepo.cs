@@ -224,6 +224,7 @@ public static class InvRepo
             cmd.CommandText = $"""
                 SELECT doc_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id,
                        currency_code, exchange_rate, subtotal, tax_amount, grand_total, status, tax_rate, party_code,
+                       discount_amount, extra_amount,
                        paid_amount, payment_method, cost_center
                 FROM {headerTable}
                 WHERE doc_id=$id AND company_id=$company AND is_deleted=0;
@@ -250,8 +251,37 @@ public static class InvRepo
                 PaidAmount = reader.IsDBNull(reader.GetOrdinal("paid_amount")) ? 0m : Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("paid_amount")), CultureInfo.InvariantCulture),
                 PaymentMethod = ParsePaymentMethod(reader.IsDBNull(reader.GetOrdinal("payment_method")) ? null : reader.GetString(reader.GetOrdinal("payment_method"))),
                 CostCenter = reader.IsDBNull(reader.GetOrdinal("cost_center")) ? "" : reader.GetString(reader.GetOrdinal("cost_center")),
+                // Step 5 (sweep I-1): the STORED header totals are the
+                // amounts of record for posting. Before this fix Post
+                // selected subtotal/tax_amount/grand_total and discarded
+                // them, then debited doc.GrandTotal — recomputed from the
+                // lines with LinesDiscountAmount/LinesExtraAmount still
+                // at their 0 defaults — so a document storing 1,050
+                // (1,000 + 150 tax − 100 header discount) debited 1,150
+                // to party_ledger, the GL and the credit guard.
+                LinesDiscountAmount = reader.IsDBNull(reader.GetOrdinal("discount_amount")) ? 0m : Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("discount_amount")), CultureInfo.InvariantCulture),
+                LinesExtraAmount = reader.IsDBNull(reader.GetOrdinal("extra_amount")) ? 0m : Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("extra_amount")), CultureInfo.InvariantCulture),
+                StoredSubtotal = reader.IsDBNull(reader.GetOrdinal("subtotal")) ? null : Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("subtotal")), CultureInfo.InvariantCulture),
+                StoredTaxAmount = reader.IsDBNull(reader.GetOrdinal("tax_amount")) ? null : Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("tax_amount")), CultureInfo.InvariantCulture),
+                StoredGrandTotal = reader.IsDBNull(reader.GetOrdinal("grand_total")) ? null : Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("grand_total")), CultureInfo.InvariantCulture),
             };
         }
+
+        // Kind guard (Step 5, sweep I-2): the effects a kind may have are
+        // defined ONCE in InvPostingPolicy and enforced here, at the
+        // repository layer, so every caller (InvoiceWin, PosCheckoutWin,
+        // any future caller) is safe. Kinds whose correct engine is not
+        // this path are blocked outright — a stock transfer or an
+        // inventory count posted through here fabricated stock (the
+        // transfer created qty-in from nothing; the count added the full
+        // counted quantity instead of the delta, sweep I-6/I-7); their
+        // dedicated engines are StkPost.PostTransfer / StkPost.PostCount.
+        var effects = InvPostingPolicy.For(kind);
+        if (effects.Blocked)
+            throw new AppError(
+                ErrorCodes.DocumentKindNotPostable,
+                $"Document kind '{kind}' cannot be posted through the invoice posting path.",
+                kind.ToString());
 
         // Load lines for inventory posting within this connection/transaction.
         {
@@ -283,13 +313,31 @@ public static class InvRepo
             }
         }
 
+        // Stored-total discrepancy report (Step 5): if the lines and the
+        // header adjustments in storage no longer recompute to the stored
+        // grand_total (a hand-edited or legacy-corrupted row), the STORED
+        // total still wins for every posting consumer below — and the
+        // disagreement is reported through the error catalog (ACC-5013),
+        // never silently recomputed into a different posted number.
+        if (doc.StoredGrandTotal is decimal storedGrand)
+        {
+            var recomputed = doc.GrandTotal;
+            if (recomputed != storedGrand)
+                AppHost.Errors.Report(
+                    ErrorCodes.DocumentTotalMismatch,
+                    new InvalidOperationException(
+                        $"Document '{doc.DocNo}' stored grand_total {storedGrand} != recomputed {recomputed} (lines subtotal {doc.Subtotal} - discount {doc.LinesDiscountAmount} + extra {doc.LinesExtraAmount} + tax {doc.TaxAmount}); posting uses the stored total."),
+                    "InvRepo.Post");
+        }
+
         // Real GL posting (Step 3, J-2): build the document's journal lines
-        // from the totals the document layer hands us today (Step 5 owns
-        // the stored-total / header-discount correctness of those totals)
-        // and post them INSIDE this transaction. The journal number that
-        // used to be fabricated as "JV-" + DocNo is now the REAL entry's
-        // document number, returned by the posting engine.
-        var glLines = BuildGlLines(connection, tx, doc);
+        // from the document's STORED totals (Step 5) and post them INSIDE
+        // this transaction. The journal number that used to be fabricated
+        // as "JV-" + DocNo is now the REAL entry's document number,
+        // returned by the posting engine. Kinds with no GL effect
+        // (quotation, opening stock) build no lines and keep an empty
+        // journal number.
+        var glLines = effects.Gl ? BuildGlLines(connection, tx, doc) : new List<ShouTech.Domain.Entities.GlLineRequest>();
         string journalNo = string.Empty;
         if (glLines.Count > 0)
         {
@@ -334,27 +382,35 @@ public static class InvRepo
                 throw new InvalidOperationException("Post failed — document may already be posted.");
         }
 
-        // Party ledger: sales increase receivable (debit customer), purchases increase payable.
-        if (doc.PartyId is long partyId)
+        // Party ledger: sales increase receivable (debit customer),
+        // purchases increase payable — ONLY for kinds whose policy carries
+        // a party-ledger effect (Step 5). Before this gate the block ran
+        // for ANY kind with a PartyId: a QUOTATION created a real
+        // receivable and stock documents credited a supplier (sweep I-2).
+        // The amount is the STORED grand total (doc.PostingTotal) — the
+        // same figure the GL above and the credit guard below consume.
+        if (effects.PartyLedger && doc.PartyId is long partyId)
         {
             var partyKind = isSales ? "C" : "S";
             decimal debit = 0, credit = 0;
             if (isSales)
             {
-                if (kind == InvDocKind.SalesReturn) credit = doc.GrandTotal;
-                else debit = doc.GrandTotal;
+                if (kind == InvDocKind.SalesReturn) credit = doc.PostingTotal;
+                else debit = doc.PostingTotal;
             }
             else
             {
-                if (kind == InvDocKind.PurchaseReturn) debit = doc.GrandTotal;
-                else credit = doc.GrandTotal;
+                if (kind == InvDocKind.PurchaseReturn) debit = doc.PostingTotal;
+                else credit = doc.PostingTotal;
             }
 
             // Credit-limit gate (ACC-5006): only a movement that increases
             // the party's exposure is checked (customer debit / supplier
             // credit). Returns reduce the balance and never block. A
-            // violation aborts the whole posting transaction.
-            var exposureIncrease = partyKind == "C" ? debit : credit;
+            // violation aborts the whole posting transaction. The guard is
+            // fed the SAME stored total that is about to post (Step 5) —
+            // before, it received the recomputed lines-only figure.
+            var exposureIncrease = effects.CreditGuard ? (partyKind == "C" ? debit : credit) : 0m;
             PartyCreditGuard.EnsureWithinLimit(
                 connection, tx,
                 DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite",
@@ -393,9 +449,9 @@ public static class InvRepo
             // GlPosting above — the two stay consistent because both are
             // driven by the same paid_amount in the same transaction.
             // Returns are not payments and never take this path.
-            if (doc.PaidAmount > 0m && kind is InvDocKind.SalesInvoice or InvDocKind.PurchaseInvoice or InvDocKind.PosSale)
+            if (effects.Settlement && doc.PaidAmount > 0m && kind is InvDocKind.SalesInvoice or InvDocKind.PurchaseInvoice or InvDocKind.PosSale)
             {
-                var settled = Math.Min(doc.PaidAmount, doc.GrandTotal);
+                var settled = Math.Min(doc.PaidAmount, doc.PostingTotal);
                 if (settled > 0m)
                 {
                     var (payDebit, payCredit) = PartyLedger.SettlementSides(partyKind, settled);
@@ -432,8 +488,12 @@ public static class InvRepo
             }
         }
 
-        // Inventory effects (same transaction as ledger + status).
-        StkPost.ApplyDocument(connection, tx, doc);
+        // Inventory effects (same transaction as ledger + status), only
+        // for kinds whose policy carries a stock effect through this
+        // engine (a quotation never moves stock; transfers/counts are
+        // blocked above and post through their dedicated engines).
+        if (effects.Stock)
+            StkPost.ApplyDocument(connection, tx, doc);
 
         tx.Commit();
     }
@@ -454,6 +514,7 @@ public static class InvRepo
             cmd.CommandText = $"""
                 SELECT doc_id, doc_kind, doc_no, doc_date, party_id, party_code, party_name, warehouse_id,
                        warehouse_name, currency_code, exchange_rate, status, tax_code, tax_rate, notes,
+                       subtotal, tax_amount, grand_total,
                        discount_amount, extra_amount, paid_amount, payment_method, receipt_no, reference_no,
                        branch_name, sales_rep_name, cost_center, party_account_name, goods_account_name,
                        original_doc_id, original_doc_kind, original_doc_no, journal_doc_no
@@ -484,6 +545,9 @@ public static class InvRepo
                 Notes = reader.IsDBNull(reader.GetOrdinal("notes")) ? null : reader.GetString(reader.GetOrdinal("notes")),
                 LinesDiscountAmount = ReadDecimal(reader, "discount_amount"),
                 LinesExtraAmount = ReadDecimal(reader, "extra_amount"),
+                StoredSubtotal = ReadDecimal(reader, "subtotal"),
+                StoredTaxAmount = ReadDecimal(reader, "tax_amount"),
+                StoredGrandTotal = ReadDecimal(reader, "grand_total"),
                 PaidAmount = ReadDecimal(reader, "paid_amount"),
                 PaymentMethod = ParsePaymentMethod(ReadString(reader, "payment_method")),
                 ReceiptNo = ReadString(reader, "receipt_no"),
@@ -625,10 +689,31 @@ public static class InvRepo
                 PartyCode = original.PartyCode,
                 PartyName = original.PartyName,
                 WarehouseId = original.WarehouseId,
+                WarehouseName = original.WarehouseName,
                 CurrencyCode = original.CurrencyCode,
                 ExchangeRate = original.ExchangeRate,
                 TaxCode = original.TaxCode,
                 DefaultTaxRate = original.DefaultTaxRate,
+                // Step 5 (sweep §2 reversal BLOCKER): the reversal copies
+                // the original's header MONEY and context fields in full.
+                // Before, LinesDiscountAmount / LinesExtraAmount /
+                // PaidAmount / PaymentMethod and the context fields were
+                // left at defaults, so the reversal's stored grand_total
+                // excluded the discount/extra the original included and
+                // stored totals netted to the discount/extra amount
+                // instead of zero — and its GL carried no settlement leg
+                // to mirror the original's collected-at-posting cash.
+                LinesDiscountAmount = original.LinesDiscountAmount,
+                LinesExtraAmount = original.LinesExtraAmount,
+                PaidAmount = original.PaidAmount,
+                PaymentMethod = original.PaymentMethod,
+                ReceiptNo = original.ReceiptNo,
+                Reference = original.Reference,
+                BranchName = original.BranchName,
+                SalesRepName = original.SalesRepName,
+                CostCenter = original.CostCenter,
+                PartyAccountName = original.PartyAccountName,
+                GoodsAccountName = original.GoodsAccountName,
                 // Phenix "original": return documents point at the original invoice.
                 OriginalDocId = original.DocId,
                 OriginalDocKind = original.Kind,
@@ -644,7 +729,8 @@ public static class InvRepo
                     UnitPrice = line.UnitPrice,
                     DiscountPct = line.DiscountPct,
                     TaxRate = line.TaxRate,
-                    WarehouseId = line.WarehouseId
+                    WarehouseId = line.WarehouseId,
+                    WarehouseName = line.WarehouseName
                 }).ToList()
             };
 
@@ -690,6 +776,16 @@ public static class InvRepo
             Add(update, "$originalId", originalDocId);
             if (update.ExecuteNonQuery() != 1)
                 throw new InvalidOperationException("The reversal posted, but its audit link could not be finalized. Do not retry; ask an administrator to reconcile the pending reversal.");
+
+            // Step 5 settlement symmetry (Step 4 owner flag 3): the
+            // return document's own party_ledger entry mirrors the
+            // original invoice entry, but the SETTLEMENT written at the
+            // original's posting (and any later allocations against it)
+            // would otherwise dangle — the party would keep a credit for
+            // money collected on an invoice that no longer stands, and
+            // the original would still read as paid. Un-settle inside
+            // this same finalise transaction.
+            UnsettleOriginalOnReversal(connection, tx, original, reversal, userId);
             tx.Commit();
             return reversalId;
         }
@@ -724,6 +820,106 @@ public static class InvRepo
                 }
             }
             throw new InvalidOperationException("Invoice reversal did not complete successfully. Verify the invoice and reversal history before retrying.", ex);
+        }
+    }
+
+    /// <summary>
+    /// Step 5: makes a full reversal of a posted invoice symmetric with
+    /// its settlement state, inside the caller's transaction:
+    /// 1. Every settlement entry written AT the original's posting
+    ///    (party_ledger rows with doc_kind RCV/PAY and doc_id = the
+    ///    original — the shape only InvRepo.Post writes; cash-voucher
+    ///    settlements carry doc_id NULL and installment collections use
+    ///    INS, so neither can be mistaken for one) is MIRRORED with
+    ///    debit/credit swapped, pointing at the reversal document. The
+    ///    ledger stays append-only; the settlement's net effect becomes
+    ///    zero, exactly as the GL mirror does for journal settlements.
+    /// 2. Every payment_allocations row against the original is
+    ///    deleted. Allocations of EXTERNAL payments (receipt/payment
+    ///    vouchers) simply free that payment again — the voucher's own
+    ///    ledger row stands, because the money really was received; the
+    ///    party keeps the resulting credit balance, which is the
+    ///    correct post-reversal position (a refund is owed / credit on
+    ///    account). This is a FULL reversal (all lines, full quantity),
+    ///    so no allocation against the original may survive it.
+    /// 3. The original's paid_amount returns to 0 — its settled state is
+    ///    exactly as if it had never been posted or paid.
+    /// </summary>
+    private static void UnsettleOriginalOnReversal(
+        DbConnection connection, DbTransaction tx, InvDoc original, InvDoc reversal, string userId)
+    {
+        var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+        var headerTable = original.IsSalesSide ? "sales_documents" : "purchase_documents";
+        // userId is part of the call contract (the reversal row itself
+        // records the actor; allocation rows carry no per-row actor on
+        // delete), kept explicit so future audit columns have it.
+
+        if (original.PartyId is long partyId
+            && PartyLedger.TableExists(connection, tx, provider, "party_ledger"))
+        {
+            var partyKind = original.IsSalesSide ? "C" : "S";
+            var settlements = new List<(decimal Debit, decimal Credit, string Currency)>();
+            using (var find = connection.CreateCommand())
+            {
+                find.Transaction = tx;
+                find.CommandText = """
+                    SELECT debit, credit, currency_code FROM party_ledger
+                    WHERE company_id=$company AND party_id=$pid AND doc_id=$orig
+                      AND doc_kind IN ('RCV', 'PAY');
+                    """;
+                Add(find, "$company", Company);
+                Add(find, "$pid", partyId);
+                Add(find, "$orig", original.DocId);
+                using var reader = find.ExecuteReader();
+                while (reader.Read())
+                {
+                    settlements.Add((
+                        Convert.ToDecimal(reader.GetValue(0), CultureInfo.InvariantCulture),
+                        Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture),
+                        reader.IsDBNull(2) ? original.CurrencyCode : reader.GetString(2)));
+                }
+            }
+
+            foreach (var (debit, credit, currency) in settlements)
+            {
+                PartyLedger.WriteEntry(
+                    connection, tx, provider,
+                    Company, partyKind, partyId,
+                    reversal.KindCode, reversal.DocId, reversal.DocNo,
+                    DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    credit, debit, currency,
+                    $"Reversal of settlement collected at posting for {original.DocNo}");
+            }
+        }
+
+        if (PartyLedger.TableExists(connection, tx, provider, "payment_allocations"))
+        {
+            using var del = connection.CreateCommand();
+            del.Transaction = tx;
+            del.CommandText = """
+                DELETE FROM payment_allocations
+                WHERE company_id=$company AND doc_id=$orig AND doc_table IN ('SALES', 'PURCHASE');
+                """;
+            Add(del, "$company", Company);
+            Add(del, "$orig", original.DocId);
+            del.ExecuteNonQuery();
+        }
+
+        using (var upd = connection.CreateCommand())
+        {
+            upd.Transaction = tx;
+            upd.CommandText = $"""
+                UPDATE {headerTable} SET paid_amount=0
+                WHERE doc_id=$id AND company_id=$company AND is_deleted=0;
+                """;
+            if (DatabaseRuntime.IsPostgreSql())
+                upd.CommandText = $"""
+                    UPDATE {headerTable} SET paid_amount=0
+                    WHERE doc_id=$id AND company_id=$company AND is_deleted=FALSE;
+                    """;
+            Add(upd, "$id", original.DocId);
+            Add(upd, "$company", Company);
+            upd.ExecuteNonQuery();
         }
     }
 
@@ -877,9 +1073,10 @@ public static class InvRepo
 
         var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
         var cc = string.IsNullOrWhiteSpace(doc.CostCenter) ? null : doc.CostCenter.Trim();
-        var grand = doc.GrandTotal;
-        var subtotal = doc.Subtotal;
-        var tax = doc.TaxAmount;
+        // Step 5: every GL amount derives from the STORED totals, exactly
+        // like party_ledger and the credit guard — one figure everywhere.
+        var grand = doc.PostingTotal;
+        var tax = doc.PostingTaxAmount;
 
         var infos = doc.Lines.Select(l => LoadMaterialGl(connection, tx, l, doc.WarehouseId)).ToList();
 
@@ -891,7 +1088,46 @@ public static class InvRepo
         var companyGuid = ResolveCompanyGuid(connection, tx);
         var splitTax = tax > 0 && GlPosting.TryResolveAccount(connection, tx, provider, companyGuid, taxAccountCode) is not null;
         var taxLeg = splitTax ? tax : 0m;
-        var netLeg = subtotal + (splitTax ? 0m : tax); // tax-inclusive when unsplit
+
+        // Per-line revenue / purchase / returns leg amounts, adjusted so
+        // their sum is EXACTLY (stored grand − tax leg). Before Step 5
+        // the legs were the raw line subtotals (+ tax when unsplit), so
+        // any header discount/extra made the entry unbalanced against
+        // the control leg (which carries the grand total) and GlPosting
+        // rejected it with ACC-5001. The header adjustment
+        // (− discount + extra, plus any stored-vs-lines residue) is a
+        // revenue/purchase adjustment in accounting terms: it is
+        // allocated across the lines in proportion to |line subtotal|,
+        // with the rounding residue on the largest line, so per-material
+        // account overrides (acc_sales / acc_purchase / …) still carry
+        // their share and the aggregated entry balances on the stored
+        // total to the last 0.0001.
+        var leg = new decimal[doc.Lines.Count];
+        {
+            var bases = doc.Lines
+                .Select(l => decimal.Round(l.LineSubtotal + (splitTax ? 0m : l.LineTax), 4, MidpointRounding.AwayFromZero))
+                .ToArray();
+            var adjustment = (grand - taxLeg) - bases.Sum();
+            if (adjustment != 0m && bases.Length > 0)
+            {
+                var weights = doc.Lines.Select(l => Math.Abs(l.LineSubtotal)).ToArray();
+                var weightSum = weights.Sum();
+                decimal allocated = 0m;
+                var largest = 0;
+                for (var i = 0; i < bases.Length; i++)
+                {
+                    if (weights[i] > weights[largest]) largest = i;
+                    var share = weightSum == 0m
+                        ? (i == 0 ? adjustment : 0m)
+                        : decimal.Round(adjustment * weights[i] / weightSum, 4, MidpointRounding.AwayFromZero);
+                    leg[i] = share;
+                    allocated += share;
+                }
+                leg[largest] += adjustment - allocated;
+            }
+            for (var i = 0; i < bases.Length; i++)
+                leg[i] += bases[i];
+        }
 
         void Add(string code, decimal debit, decimal credit, string? costCenter = null)
         {
@@ -938,8 +1174,7 @@ public static class InvRepo
                 }
                 else Add(GlAccounts.Receivable, grand, 0);
                 for (var i = 0; i < doc.Lines.Count; i++)
-                    Add(CodeOr(infos[i].AccSales, GlAccounts.SalesRevenue), 0,
-                        decimal.Round(doc.Lines[i].LineSubtotal + (splitTax ? 0m : doc.Lines[i].LineTax), 4, MidpointRounding.AwayFromZero), cc);
+                    Add(CodeOr(infos[i].AccSales, GlAccounts.SalesRevenue), 0, leg[i], cc);
                 if (splitTax) Add(taxAccountCode, 0, taxLeg);
                 AddCogs(reverse: false);
                 break;
@@ -947,40 +1182,49 @@ public static class InvRepo
             case InvDocKind.SalesReturn:
             {
                 for (var i = 0; i < doc.Lines.Count; i++)
-                    Add(CodeOr(infos[i].AccSalesReturn, GlAccounts.SalesReturns),
-                        decimal.Round(doc.Lines[i].LineSubtotal + (splitTax ? 0m : doc.Lines[i].LineTax), 4, MidpointRounding.AwayFromZero), 0, cc);
+                    Add(CodeOr(infos[i].AccSalesReturn, GlAccounts.SalesReturns), leg[i], 0, cc);
                 if (splitTax) Add(taxAccountCode, taxLeg, 0);
-                Add(GlAccounts.Receivable, 0, grand);
+                // Step 5 reversal symmetry: a return of a document that was
+                // collected at posting mirrors its settlement leg too —
+                // credit the settlement account for the paid part and only
+                // the unpaid remainder to Receivable — so invoice + return
+                // net to zero on EVERY account, cash/bank included.
+                var paid = Math.Min(Math.Max(doc.PaidAmount, 0m), grand);
+                Add(settleAccount, 0, paid);
+                Add(GlAccounts.Receivable, 0, grand - paid);
                 AddCogs(reverse: true);
                 break;
             }
             case InvDocKind.PurchaseInvoice:
             {
                 for (var i = 0; i < doc.Lines.Count; i++)
-                    Add(CodeOr(infos[i].AccPurchase, GlAccounts.Purchases),
-                        decimal.Round(doc.Lines[i].LineSubtotal + (splitTax ? 0m : doc.Lines[i].LineTax), 4, MidpointRounding.AwayFromZero), 0, cc);
+                    Add(CodeOr(infos[i].AccPurchase, GlAccounts.Purchases), leg[i], 0, cc);
                 if (splitTax) Add(taxAccountCode, taxLeg, 0);
                 var paid = Math.Min(Math.Max(doc.PaidAmount, 0m), grand);
-                Add(doc.PaymentMethod == InvPaymentMethod.Cash ? GlAccounts.Cash : GlAccounts.Bank, 0, paid);
+                Add(settleAccount, 0, paid);
                 Add(GlAccounts.Payable, 0, grand - paid);
                 break;
             }
             case InvDocKind.PurchaseReturn:
             {
-                Add(GlAccounts.Payable, grand, 0);
+                // Mirror of the purchase settlement leg (Step 5, as
+                // SalesReturn above): the paid part comes back through
+                // the settlement account, the unpaid part off Payable.
+                var paid = Math.Min(Math.Max(doc.PaidAmount, 0m), grand);
+                Add(GlAccounts.Payable, grand - paid, 0);
+                Add(settleAccount, paid, 0);
                 for (var i = 0; i < doc.Lines.Count; i++)
-                    Add(CodeOr(infos[i].AccPurchaseReturn, GlAccounts.PurchaseReturns), 0,
-                        decimal.Round(doc.Lines[i].LineSubtotal + (splitTax ? 0m : doc.Lines[i].LineTax), 4, MidpointRounding.AwayFromZero), cc);
+                    Add(CodeOr(infos[i].AccPurchaseReturn, GlAccounts.PurchaseReturns), 0, leg[i], cc);
                 if (splitTax) Add(taxAccountCode, 0, taxLeg);
                 break;
             }
             case InvDocKind.StockIn:
-                Add(GlAccounts.Inventory, netLeg + taxLeg, 0);
-                Add(GlAccounts.Purchases, 0, netLeg + taxLeg);
+                Add(GlAccounts.Inventory, grand, 0);
+                Add(GlAccounts.Purchases, 0, grand);
                 break;
             case InvDocKind.StockOut:
-                Add(GlAccounts.Cogs, netLeg + taxLeg, 0);
-                Add(GlAccounts.Inventory, 0, netLeg + taxLeg);
+                Add(GlAccounts.Cogs, grand, 0);
+                Add(GlAccounts.Inventory, 0, grand);
                 break;
         }
         return lines;
@@ -1106,4 +1350,60 @@ internal static class InvDocKindExt
 {
     public static bool IsSales(this InvDocKind kind)
         => kind is InvDocKind.SalesInvoice or InvDocKind.SalesReturn or InvDocKind.PosSale or InvDocKind.Quotation;
+}
+
+/// <summary>
+/// The kind → effects policy for the invoice posting path (Fix Phase
+/// Step 5, sweep I-2). ONE definition, enforced inside
+/// <see cref="InvRepo.Post"/> at the repository layer, so no caller can
+/// post a kind into effects it must not have. The full matrix is in
+/// docs/FIX_PHASE_STEP5.md §3.
+///
+/// - SalesInvoice / PosSale: GL + party ledger (customer debit) + stock
+///   out + settlement of money collected at posting + credit guard.
+/// - SalesReturn: GL + party ledger (customer credit) + stock in. A
+///   return is not a payment: no settlement, and it never blocks on the
+///   credit guard (it reduces exposure).
+/// - PurchaseInvoice: GL + party ledger (supplier credit) + stock in +
+///   settlement + credit guard (supplier exposure, as before Step 5).
+/// - PurchaseReturn: mirror of SalesReturn on the supplier side.
+/// - StockIn / StockOut: GL (Step 3 mapping) + stock. NO party ledger —
+///   a stock document is not a receivable/payable, whatever party text
+///   was typed on it (before Step 5 these credited a supplier).
+/// - OpeningStock: stock in only (valuation event, Step 6 owns its GL).
+/// - Quotation: NO effects at all. Posting a quotation only advances
+///   its status; it must never create a receivable, a GL sales entry,
+///   a stock deduction or a settlement (sweep I-2). Quotations/orders
+///   of the commercial chain (CommercialDocKinds QUO/SO/PO/…) do not
+///   flow through InvRepo at all — CommercialDocumentRepository already
+///   guards them the same way (QUO/SO post with no side effects).
+/// - StockTransfer / InventoryCount: BLOCKED in this path. Their
+///   correct engines exist (StkPost.PostTransfer — two-sided, and
+///   StkPost.PostCount — delta-based) and are what the warehouse
+///   windows use; through InvRepo a transfer fabricated stock from
+///   nothing and a count added the full counted quantity (I-6/I-7).
+/// </summary>
+public static class InvPostingPolicy
+{
+    public sealed record Effects(
+        bool Gl, bool PartyLedger, bool Stock, bool Settlement, bool CreditGuard, bool Blocked);
+
+    private static readonly Effects None = new(false, false, false, false, false, false);
+    private static readonly Effects BlockedHere = new(false, false, false, false, false, true);
+
+    public static Effects For(InvDocKind kind) => kind switch
+    {
+        InvDocKind.SalesInvoice => new Effects(true, true, true, true, true, false),
+        InvDocKind.PosSale => new Effects(true, true, true, true, true, false),
+        InvDocKind.SalesReturn => new Effects(true, true, true, false, false, false),
+        InvDocKind.PurchaseInvoice => new Effects(true, true, true, true, true, false),
+        InvDocKind.PurchaseReturn => new Effects(true, true, true, false, false, false),
+        InvDocKind.StockIn => new Effects(true, false, true, false, false, false),
+        InvDocKind.StockOut => new Effects(true, false, true, false, false, false),
+        InvDocKind.OpeningStock => new Effects(false, false, true, false, false, false),
+        InvDocKind.Quotation => None,
+        InvDocKind.StockTransfer => BlockedHere,
+        InvDocKind.InventoryCount => BlockedHere,
+        _ => BlockedHere
+    };
 }

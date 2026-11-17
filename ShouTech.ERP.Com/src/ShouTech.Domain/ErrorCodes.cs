@@ -77,6 +77,8 @@ public static class ErrorCodes
     public const string CostCenterRequired = "ACC-5010";
     public const string DocumentPostingAccountMissing = "ACC-5011";
     public const string DocumentAlreadyPostedToGl = "ACC-5012";
+    public const string DocumentTotalMismatch = "ACC-5013";
+    public const string DocumentKindNotPostable = "ACC-5014";
 
     // ---- INV 6000-6999 -------------------------------------------------
     public const string InventoryOperationFailed = "INV-6001";

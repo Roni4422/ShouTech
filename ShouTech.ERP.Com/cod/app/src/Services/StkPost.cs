@@ -51,6 +51,16 @@ public static class StkPost
 
         if (doc.Kind == InvDocKind.Quotation) return;
 
+        // Step 5 kind guard (defense in depth — InvRepo.Post blocks these
+        // kinds before this point): a stock transfer applied as a generic
+        // document posted every line as qty-IN at the single header
+        // warehouse, creating stock from nothing (sweep I-6), and an
+        // inventory count added the full counted quantity instead of the
+        // delta (I-7). Transfers post through PostTransfer (two-sided)
+        // and counts through PostCount (delta-based); this generic
+        // document path must never move stock for them.
+        if (doc.Kind is InvDocKind.StockTransfer or InvDocKind.InventoryCount) return;
+
         var company = AppState.CurrentCompanyCode ?? string.Empty;
         var isOut = doc.Kind is InvDocKind.SalesInvoice or InvDocKind.PosSale or InvDocKind.PurchaseReturn or InvDocKind.StockOut;
         var moveType = doc.Kind switch

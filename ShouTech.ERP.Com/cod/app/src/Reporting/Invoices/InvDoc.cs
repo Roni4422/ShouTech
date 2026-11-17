@@ -174,8 +174,35 @@ public sealed class InvDoc
     public decimal RemainingAmount =>
         decimal.Round(InvoiceValue - PaidAmount, 4, MidpointRounding.AwayFromZero);
 
-    /// <summary>Legacy grand total alias.</summary>
+    /// <summary>Legacy grand total alias (recomputed from the in-memory lines).</summary>
     public decimal GrandTotal => InvoiceValue;
+
+    // ---- Stored totals (Fix Phase Step 5) ----
+    // The header row persisted by SaveDraft carries subtotal / tax_amount /
+    // grand_total computed AT SAVE TIME from the lines + header discount /
+    // extra. When a document is reloaded for POSTING, those stored figures
+    // are the amounts of record: posting (GL, party_ledger, credit guard)
+    // must use them exactly, never a recomputation that can drop the
+    // header discount/extra (sweep I-1: a document storing 1,050 was
+    // debited 1,150). Null in memory-built documents (drafts not yet
+    // saved), where the recomputed value is the only one that exists.
+    public decimal? StoredSubtotal { get; set; }
+    public decimal? StoredTaxAmount { get; set; }
+    public decimal? StoredGrandTotal { get; set; }
+
+    /// <summary>Subtotal that posting must use: the stored figure when present.</summary>
+    public decimal PostingSubtotal => StoredSubtotal ?? Subtotal;
+
+    /// <summary>Tax amount that posting must use: the stored figure when present.</summary>
+    public decimal PostingTaxAmount => StoredTaxAmount ?? TaxAmount;
+
+    /// <summary>
+    /// THE amount posting must use everywhere (GL control legs,
+    /// party_ledger, credit guard, settlement cap): the stored
+    /// grand_total when the document was loaded from storage; the
+    /// recomputed invoice value only for a never-saved in-memory draft.
+    /// </summary>
+    public decimal PostingTotal => StoredGrandTotal ?? GrandTotal;
 
     /// <summary>
     /// Default goods / stock account caption by document kind
