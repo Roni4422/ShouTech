@@ -46,6 +46,56 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task PostingDeliveryNote_InSecondUnit_DeductsQuantityTimesEquivalent()
+        {
+            var (service, _, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                // Material 42 is stocked in BOX (base unit); the draft line's
+                // unit PCS is its second unit with equivalent 0.25, so
+                // delivering 10 PCS must deduct exactly 2.5 BOX.
+                await using (var seed = new SqliteConnection(connectionString))
+                {
+                    await seed.OpenAsync();
+                    await using var insert = seed.CreateCommand();
+                    insert.CommandText = """
+                        INSERT INTO materials
+                          (material_id, company_id, code, name_ar, name_en,
+                           unit1, unit1_factor, unit2, unit2_factor, units_json)
+                        VALUES
+                          (42, $company, 'MAT-42', 'Posting test item', 'Posting test item',
+                           'BOX', 1, 'PCS', 0.25,
+                           '[{"UnitName":"BOX","Factor":1},{"UnitName":"PCS","Factor":0.25}]');
+                        """;
+                    var companyParam = insert.CreateParameter();
+                    companyParam.ParameterName = "$company";
+                    companyParam.Value = companyId.ToString();
+                    insert.Parameters.Add(companyParam);
+                    await insert.ExecuteNonQueryAsync();
+                }
+
+                var quotationId = await service.CreateQuotationAsync(Draft(companyId, "QT-7004"), "posting-test");
+                var orderId = await service.CreateFromSourceAsync(quotationId, "SO-7004", new DateOnly(2026, 10, 20), "posting-test");
+                await service.PostAsync(orderId, "posting-test");
+                var deliveryId = await service.CreateFromSourceAsync(orderId, "DLV-7004", new DateOnly(2026, 10, 21), "posting-test");
+
+                await service.PostAsync(deliveryId, "posting-test");
+
+                await using var connection = new SqliteConnection(connectionString);
+                await connection.OpenAsync();
+
+                Assert.Equal(2.5m, Scalar(connection,
+                    "SELECT qty_out FROM material_stock_movements WHERE document_no = 'DLV-7004' AND material_id = 42"));
+                Assert.Equal(-2.5m, Scalar(connection,
+                    "SELECT available_qty FROM material_stock_balances WHERE material_id = 42 AND warehouse_id = 1"));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task PostingSalesInvoice_WritesCustomerPartyLedgerDebit()
         {
             var (service, _, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
