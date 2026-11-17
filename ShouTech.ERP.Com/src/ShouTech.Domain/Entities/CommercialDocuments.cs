@@ -21,6 +21,9 @@ public static class CommercialDocumentStatus
 {
     public const string Draft = "Draft";
     public const string Posted = "Posted";
+    public const string Closed = "Closed";
+    public const string Cancelled = "Cancelled";
+    public const string Lost = "Lost";
 }
 
 /// <summary>An immutable line of a commercial document as stored in the database.</summary>
@@ -59,7 +62,14 @@ public sealed record CommercialDocumentSnapshot(
     decimal PaidAmount,
     string Status,
     string? Notes,
-    IReadOnlyList<CommercialLineSnapshot> Lines);
+    IReadOnlyList<CommercialLineSnapshot> Lines,
+    string? PartyCode = null,
+    string? BranchName = null,
+    string? SalesRepName = null,
+    string? CostCenter = null,
+    string? WarehouseName = null,
+    DateOnly? DeliveryDate = null,
+    DateOnly? ValidTill = null);
 
 /// <summary>A cross-document chain link (see dba document_links table).</summary>
 public sealed record CommercialDocumentLink(
@@ -94,4 +104,46 @@ public sealed record CommercialDocumentDraft(
     string CurrencyCode,
     decimal ExchangeRate,
     string? Notes,
-    IReadOnlyList<CommercialLineDraft> Lines);
+    IReadOnlyList<CommercialLineDraft> Lines,
+    string? PartyCode = null,
+    DateOnly? DeliveryDate = null,
+    DateOnly? ValidTill = null,
+    string? CostCenter = null,
+    string? BranchName = null,
+    string? SalesRepName = null,
+    string? WarehouseName = null);
+
+/// <summary>Header-only projection used by document search / order tracking lists.</summary>
+public sealed record CommercialDocumentSummary(
+    long DocId,
+    string DocKind,
+    string DocNo,
+    DateOnly DocDate,
+    string? PartyCode,
+    string? PartyName,
+    decimal GrandTotal,
+    string Status,
+    DateOnly? DeliveryDate,
+    DateOnly? ValidTill);
+
+/// <summary>Per-material fulfilment/billing progress of a posted order.</summary>
+public sealed record OrderProgressLine(
+    long? MaterialId,
+    string? MaterialCode,
+    string Description,
+    decimal OrderedQty,
+    decimal FulfilledQty,
+    decimal BilledQty)
+{
+    public decimal RemainingToFulfill => Math.Max(0m, OrderedQty - FulfilledQty);
+    public decimal RemainingToBill => Math.Max(0m, OrderedQty - BilledQty);
+}
+
+/// <summary>Order progress roll-up (ERPNext per_delivered / per_billed pattern).</summary>
+public sealed record OrderProgress(
+    long DocId,
+    string DocKind,
+    string DocNo,
+    IReadOnlyList<OrderProgressLine> Lines,
+    decimal PerFulfilled,
+    decimal PerBilled);

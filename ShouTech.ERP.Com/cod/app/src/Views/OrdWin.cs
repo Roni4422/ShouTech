@@ -4,11 +4,16 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Documents;
 using System.Windows.Media;
-using ShouTech.App.Reporting.Invoices;
+using ShouTech.App.Configuration;
+using ShouTech.App.Services;
+using ShouTech.Domain.Entities;
+using ShouTech.Domain.Interfaces;
 
 namespace ShouTech.App.Views;
 
@@ -19,68 +24,19 @@ public enum OrdKind
 }
 
 /// <summary>
+/// Sales / purchase order window (RS-5). Orders are commitment documents on
+/// the commercial-document engine (sales_documents / purchase_documents):
+/// they post no GL and no stock. Save/Post/Close/Cancel persist through
+/// OrderService; Convert creates a posted invoice with only the remaining
+/// unbilled quantities in a single transaction (invoice + party ledger +
+/// document link). Progress columns show fulfilled/billed quantities from
+/// document_links, ERPNext-style.
 /// </summary>
 public sealed class OrdWin : BaseWin
 {
-    /// <summary>Logs unavailable operations instead of reporting a false success.</summary>
-    private void ShowOperationUnavailable(string operation)
-    {
-        const string errorCode = "APP-2011";
-        var context = $"Operation={operation} is not implemented in window {GetType().Name}.";
-        var definition = ShouTech.App.Localization.ErrorCatalog.Resolve(errorCode);
-        var exception = new NotSupportedException(context);
-
-        ShouTech.App.Services.AppHost.Logging?.LogError(
-            "WindowOperation",
-            $"[{definition.Code}] {definition.Name} | Window={GetType().Name} | {context}",
-            exception);
-        ShouTech.App.Services.AppHost.Logging?.LogOperation(
-            "WindowOperation",
-            "OperationUnavailable",
-            $"Code={definition.Code} | Window={GetType().Name} | {context}");
-
-        MessageBox.Show(
-            this,
-            $"[{definition.Code}] {definition.Message}\n{context}",
-            "العملية غير متاحة",
-            MessageBoxButton.OK,
-            MessageBoxImage.Warning);
-    }
-
-
-    /// <summary>
-    /// Prevents a false success message when this screen has no database persistence wired.
-    /// This intentionally does not claim to save any values.
-    /// </summary>
-    private void ShowPersistenceUnavailable()
-    {
-        const string errorCode = "APP-2010";
-        const string context = "This window has no database persistence implementation.";
-        var definition = ShouTech.App.Localization.ErrorCatalog.Resolve(errorCode);
-        var exception = new NotSupportedException(context);
-
-        // Errors are routed to errors.log; the operational trace goes to log.log.
-        ShouTech.App.Services.AppHost.Logging?.LogError(
-            "WindowPersistence",
-            $"[{definition.Code}] {definition.Name} | Window={GetType().Name} | {context}",
-            exception);
-        ShouTech.App.Services.AppHost.Logging?.LogOperation(
-            "WindowPersistence",
-            "PersistenceUnavailable",
-            $"Code={definition.Code} | Window={GetType().Name}");
-
-        MessageBox.Show(
-            this,
-            $"[{definition.Code}] {definition.Message}\n{context}\nلم يتم حفظ أي بيانات.",
-            "العملية غير متاحة",
-            MessageBoxButton.OK,
-            MessageBoxImage.Warning);
-    }
-
-
     private readonly OrdKind _kind;
 
-    private readonly TextBox _txtDocNo = new() { Width = 110, Height = 26 };
+    private readonly TextBox _txtDocNo = new() { Width = 130, Height = 26 };
     private readonly DatePicker _dtDate = new() { Width = 120, Height = 26, SelectedDate = DateTime.Today };
     private readonly DatePicker _dtDeliveryDate = new() { Width = 120, Height = 26, SelectedDate = DateTime.Today.AddDays(7) };
     private readonly TextBox _txtPartyCode = new() { Width = 110, Height = 26 };
@@ -89,8 +45,12 @@ public sealed class OrdWin : BaseWin
     private readonly TextBox _txtNotes = new() { Width = 380, Height = 26 };
 
     private readonly Button _btnNew = new();
+    private readonly Button _btnLoad = new();
     private readonly Button _btnSave = new();
+    private readonly Button _btnPost = new();
     private readonly Button _btnConvert = new();
+    private readonly Button _btnClose = new();
+    private readonly Button _btnCancel = new();
     private readonly Button _btnAddLine = new();
     private readonly Button _btnRemLine = new();
     private readonly Button _btnPrint = new();
@@ -101,41 +61,81 @@ public sealed class OrdWin : BaseWin
     private readonly DataGrid _grid = new();
     private readonly ObservableCollection<OrderLineVm> _lines = new();
 
+    private long? _docId;
+    private long? _partyId;
+    private string _status = CommercialDocumentStatus.Draft;
+    private Guid _companyId;
+    private bool _loading;
+
     public OrdWin(OrdKind kind = OrdKind.Sales)
     {
         _kind = kind;
-        Width = 880;
-        Height = 560;
-        MinWidth = 780;
-        MinHeight = 440;
+        Width = 980;
+        Height = 600;
+        MinWidth = 820;
+        MinHeight = 460;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
         BuildUi();
         ApplyLocalizedText();
-        ResetOrder();
+        Loaded += OnLoaded;
+    }
+
+    private string DocKindCode => _kind == OrdKind.Sales ? CommercialDocKinds.SalesOrder : CommercialDocKinds.PurchaseOrder;
+    private CommercialDocSide Side => _kind == OrdKind.Sales ? CommercialDocSide.Sales : CommercialDocSide.Purchase;
+    private string ViewPermission => _kind == OrdKind.Sales ? PermCat.Sales.OrderView : PermCat.Purchasing.OrderView;
+
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        if (!AppHost.Permissions.Has(ViewPermission))
+        {
+            MessageBox.Show(this, T("OrderDoc.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            Close();
+            return;
+        }
+        if (AppHost.JournalStore is not null)
+        {
+            try
+            {
+                _companyId = await AppHost.JournalStore.ResolveCompanyIdAsync(CurrentCompanyCode);
+            }
+            catch
+            {
+                _companyId = Guid.Empty;
+            }
+        }
+        await ResetOrderAsync();
     }
 
     private void BuildUi()
     {
         var root = new DockPanel { Margin = new Thickness(10) };
 
-        // 1. Toolbar
-        var toolbar = new WrapPanel { Margin = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Right };
+        var toolbar = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
         StyleButton(_btnNew, "Common.New");
+        StyleButton(_btnLoad, "OrderDoc.Load");
         StyleButton(_btnSave, "Common.Save");
+        StyleButton(_btnPost, "OrderDoc.Post");
         StyleButton(_btnConvert, "OrderDoc.ConvertToInvoice");
+        StyleButton(_btnClose, "OrderDoc.CloseOrder");
+        StyleButton(_btnCancel, "OrderDoc.CancelOrder");
         StyleButton(_btnAddLine, "Invoice.AddLine");
         StyleButton(_btnRemLine, "Invoice.RemoveLine");
         StyleButton(_btnPrint, "Invoice.Print");
 
-        _btnNew.Click += (_, _) => ResetOrder();
-        _btnSave.Click += (_, _) => ShowPersistenceUnavailable();
-        _btnConvert.Click += (_, _) => ConvertToInvoice();
-        _btnPrint.Click += (_, _) => ShowOperationUnavailable("Print");
+        _btnNew.Click += async (_, _) => await ResetOrderAsync();
+        _btnLoad.Click += async (_, _) => await LoadByNumberAsync();
+        _btnSave.Click += async (_, _) => await SaveAsync();
+        _btnPost.Click += async (_, _) => await PostAsync();
+        _btnConvert.Click += async (_, _) => await ConvertAsync();
+        _btnClose.Click += async (_, _) => await SetStatusAsync(CommercialDocumentStatus.Closed, PermCat.Sales.OrderCancel);
+        _btnCancel.Click += async (_, _) => await SetStatusAsync(CommercialDocumentStatus.Cancelled, _kind == OrdKind.Sales ? PermCat.Sales.OrderCancel : PermCat.Purchasing.OrderCancel);
+        _btnPrint.Click += (_, _) => PrintOrder();
 
         _btnAddLine.Click += (_, _) =>
         {
-            var l = new OrderLineVm { LineNo = _lines.Count + 1, Unit = "PCS", Qty = 1, UnitPrice = 100 };
+            if (!IsEditable) return;
+            var l = new OrderLineVm { LineNo = _lines.Count + 1, Unit = "PCS", Qty = 1, UnitPrice = 0 };
             _lines.Add(l);
             _grid.SelectedItem = l;
             _grid.ScrollIntoView(l);
@@ -144,6 +144,7 @@ public sealed class OrdWin : BaseWin
 
         _btnRemLine.Click += (_, _) =>
         {
+            if (!IsEditable) return;
             if (_grid.SelectedItem is OrderLineVm selected && _lines.Count > 1)
             {
                 _lines.Remove(selected);
@@ -152,10 +153,9 @@ public sealed class OrdWin : BaseWin
             }
         };
 
-        foreach (var b in new[] { _btnNew, _btnSave, _btnConvert, _btnAddLine, _btnRemLine, _btnPrint })
+        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnConvert, _btnClose, _btnCancel, _btnAddLine, _btnRemLine, _btnPrint })
             toolbar.Children.Add(b);
 
-        // Explorer-style bottom command bar: flat, transparent, subtle 1px top divider.
         var actionBar = new Border
         {
             Child = toolbar,
@@ -166,7 +166,6 @@ public sealed class OrdWin : BaseWin
         actionBar.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
         DockPanel.SetDock(actionBar, Dock.Bottom);
 
-        // 2. Footer
         var footer = new Border
         {
             Margin = new Thickness(0, 8, 0, 0),
@@ -187,7 +186,6 @@ public sealed class OrdWin : BaseWin
         root.Children.Add(footer);
         root.Children.Add(actionBar);
 
-        // 3. Body
         var body = new Grid();
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -201,10 +199,10 @@ public sealed class OrdWin : BaseWin
         headerPanel.Children.Add(Labeled("Invoice.Warehouse", _txtWhs));
         headerPanel.Children.Add(Labeled("Invoice.Notes", _txtNotes));
 
+        _txtPartyCode.LostFocus += (_, _) => ResolveParty();
         Grid.SetRow(headerPanel, 0);
         body.Children.Add(headerPanel);
 
-        // Setup DataGrid
         _grid.AutoGenerateColumns = false;
         _grid.CanUserAddRows = false;
         _grid.AlternationCount = 2;
@@ -216,21 +214,29 @@ public sealed class OrdWin : BaseWin
         _grid.SetResourceReference(DataGrid.AlternatingRowBackgroundProperty, "TableAlternateRowBrush");
 
         _grid.ItemsSource = _lines;
-        _grid.Columns.Add(TextCol(nameof(OrderLineVm.LineNo), 45, readOnly: true));
-        _grid.Columns.Add(TextCol(nameof(OrderLineVm.ItemCode), 110));
-        _grid.Columns.Add(TextCol(nameof(OrderLineVm.Description), 240));
-        _grid.Columns.Add(TextCol(nameof(OrderLineVm.Unit), 70));
-        _grid.Columns.Add(TextCol(nameof(OrderLineVm.QtyText), 90));
-        _grid.Columns.Add(TextCol(nameof(OrderLineVm.PriceText), 100));
-        _grid.Columns.Add(TextCol(nameof(OrderLineVm.DiscountText), 80));
+        _grid.Columns.Add(TextCol(nameof(OrderLineVm.LineNo), 40, readOnly: true));
+        _grid.Columns.Add(TextCol(nameof(OrderLineVm.ItemCode), 105));
+        _grid.Columns.Add(TextCol(nameof(OrderLineVm.Description), 210));
+        _grid.Columns.Add(TextCol(nameof(OrderLineVm.Unit), 60));
+        _grid.Columns.Add(TextCol(nameof(OrderLineVm.QtyText), 75));
+        _grid.Columns.Add(TextCol(nameof(OrderLineVm.PriceText), 90));
+        _grid.Columns.Add(TextCol(nameof(OrderLineVm.DiscountText), 70));
+        _grid.Columns.Add(TextCol(nameof(OrderLineVm.TaxText), 60));
         _grid.Columns.Add(new DataGridTextColumn
         {
             Binding = new Binding(nameof(OrderLineVm.LineTotalText)) { Mode = BindingMode.OneWay },
-            Width = 110,
+            Width = 100,
             IsReadOnly = true
         });
+        _grid.Columns.Add(TextCol(nameof(OrderLineVm.FulfilledText), 80, readOnly: true));
+        _grid.Columns.Add(TextCol(nameof(OrderLineVm.BilledText), 80, readOnly: true));
 
-        _grid.CellEditEnding += (_, _) => Dispatcher.BeginInvoke(RefreshTotals);
+        _grid.CellEditEnding += (_, e) =>
+        {
+            if (e.Row.Item is OrderLineVm line && e.Column.DisplayIndex == 1)
+                ResolveMaterial(line);
+            Dispatcher.BeginInvoke(RefreshTotals);
+        };
 
         Grid.SetRow(_grid, 1);
         body.Children.Add(_grid);
@@ -239,44 +245,460 @@ public sealed class OrdWin : BaseWin
         Content = root;
     }
 
+    private bool IsEditable => _status == CommercialDocumentStatus.Draft;
+
+    private void ResolveParty()
+    {
+        if (_loading) return;
+        var found = TaxSvc.ResolveParty(_txtPartyCode.Text.Trim(), _kind == OrdKind.Sales);
+        if (found is { } party)
+        {
+            _partyId = party.Id;
+            if (string.IsNullOrWhiteSpace(_txtPartyName.Text))
+                _txtPartyName.Text = party.Name;
+        }
+        else
+        {
+            _partyId = null;
+        }
+    }
+
+    private void ResolveMaterial(OrderLineVm line)
+    {
+        var found = TaxSvc.ResolveMaterial(line.ItemCode.Trim());
+        if (found is { } material)
+        {
+            line.MaterialId = material.Id;
+            if (string.IsNullOrWhiteSpace(line.Description)) line.Description = material.Name;
+            if (line.UnitPrice <= 0m) line.UnitPrice = material.Price;
+            if (string.IsNullOrWhiteSpace(line.Unit) || line.Unit == "PCS") line.Unit = string.IsNullOrWhiteSpace(material.Unit) ? line.Unit : material.Unit;
+            if (line.TaxRate <= 0m) line.TaxRate = material.TaxRate;
+        }
+    }
+
+    private async Task ResetOrderAsync()
+    {
+        _loading = true;
+        try
+        {
+            _docId = null;
+            _partyId = null;
+            _status = CommercialDocumentStatus.Draft;
+            _txtDocNo.Text = AppHost.Orders is not null && _companyId != Guid.Empty
+                ? await AppHost.Orders.NextDocNoAsync(Side, _companyId, DocKindCode)
+                : (_kind == OrdKind.Sales ? "SO-" : "PO-") + DateTime.Now.ToString("yyyyMMdd-HHmm", CultureInfo.InvariantCulture);
+            _dtDate.SelectedDate = DateTime.Today;
+            _dtDeliveryDate.SelectedDate = DateTime.Today.AddDays(7);
+            _txtPartyCode.Text = string.Empty;
+            _txtPartyName.Text = string.Empty;
+            _txtNotes.Text = string.Empty;
+            _lines.Clear();
+            _lines.Add(new OrderLineVm { LineNo = 1, Unit = "PCS", Qty = 1, UnitPrice = 0 });
+        }
+        finally
+        {
+            _loading = false;
+        }
+        UpdateEditState();
+        RefreshTotals();
+    }
+
+    private async Task LoadByNumberAsync()
+    {
+        if (AppHost.Orders is null || _companyId == Guid.Empty)
+        {
+            ShowError(T("OrderDoc.ServiceUnavailable"));
+            return;
+        }
+        var docNo = _txtDocNo.Text.Trim();
+        if (string.IsNullOrWhiteSpace(docNo)) return;
+        try
+        {
+            var doc = await AppHost.Orders.FindByNumberAsync(Side, _companyId, DocKindCode, docNo);
+            if (doc is null)
+            {
+                ShowError(T("OrderDoc.NotFound"));
+                return;
+            }
+            ApplySnapshot(doc);
+            if (doc.Status == CommercialDocumentStatus.Posted)
+                await RefreshProgressAsync(doc.DocId);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    /// <summary>Loads an order by database id (used by search/tracking windows).</summary>
+    public async Task LoadOrderAsync(long docId)
+    {
+        if (AppHost.Orders is null) return;
+        var doc = await AppHost.Orders.FindByIdAsync(Side, docId);
+        if (doc is null) return;
+        ApplySnapshot(doc);
+        if (doc.Status == CommercialDocumentStatus.Posted)
+            await RefreshProgressAsync(doc.DocId);
+    }
+
+    private void ApplySnapshot(CommercialDocumentSnapshot doc)
+    {
+        _loading = true;
+        try
+        {
+            _docId = doc.DocId;
+            _partyId = doc.PartyId;
+            _status = doc.Status;
+            _txtDocNo.Text = doc.DocNo;
+            _dtDate.SelectedDate = doc.DocDate.ToDateTime(TimeOnly.MinValue);
+            _dtDeliveryDate.SelectedDate = doc.DeliveryDate?.ToDateTime(TimeOnly.MinValue);
+            _txtPartyCode.Text = doc.PartyCode ?? string.Empty;
+            _txtPartyName.Text = doc.PartyName ?? string.Empty;
+            _txtWhs.Text = doc.WarehouseName ?? string.Empty;
+            _txtNotes.Text = doc.Notes ?? string.Empty;
+            _lines.Clear();
+            foreach (var line in doc.Lines)
+            {
+                _lines.Add(new OrderLineVm
+                {
+                    LineNo = line.LineNo,
+                    MaterialId = line.MaterialId,
+                    ItemCode = line.MaterialCode ?? string.Empty,
+                    Description = line.Description,
+                    Unit = line.Unit ?? "PCS",
+                    Qty = line.Qty,
+                    UnitPrice = line.UnitPrice,
+                    DiscountPct = line.DiscountPct,
+                    TaxRate = line.TaxRate
+                });
+            }
+            if (_lines.Count == 0)
+                _lines.Add(new OrderLineVm { LineNo = 1, Unit = "PCS", Qty = 1 });
+        }
+        finally
+        {
+            _loading = false;
+        }
+        UpdateEditState();
+        RefreshTotals();
+    }
+
+    private async Task RefreshProgressAsync(long docId)
+    {
+        if (AppHost.Orders is null) return;
+        try
+        {
+            var progress = await AppHost.Orders.GetProgressAsync(Side, docId);
+            foreach (var line in _lines)
+            {
+                var match = progress.Lines.FirstOrDefault(p =>
+                    (p.MaterialId is not null && p.MaterialId == line.MaterialId) ||
+                    (p.MaterialId is null && p.MaterialCode == line.ItemCode));
+                if (match is not null)
+                {
+                    line.FulfilledQty = match.FulfilledQty;
+                    line.BilledQty = match.BilledQty;
+                }
+            }
+            _lblStatus.Text = $"{T("OrderDoc.Status")}: {StatusText(_status)} | {T("OrderDoc.Fulfilled")}: {progress.PerFulfilled:N1}% | {T("OrderDoc.Billed")}: {progress.PerBilled:N1}%";
+        }
+        catch
+        {
+            // Progress is informational; the order itself already loaded.
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (AppHost.Orders is null || _companyId == Guid.Empty)
+        {
+            ShowError(T("OrderDoc.ServiceUnavailable"));
+            return;
+        }
+        var permission = _docId is null
+            ? (_kind == OrdKind.Sales ? PermCat.Sales.OrderCreate : PermCat.Purchasing.OrderCreate)
+            : (_kind == OrdKind.Sales ? PermCat.Sales.OrderUpdate : PermCat.Purchasing.OrderUpdate);
+        if (!AppHost.Permissions.Has(permission))
+        {
+            ShowError(T("OrderDoc.PermissionDenied"));
+            return;
+        }
+        try
+        {
+            var draft = BuildDraft();
+            if (_docId is null)
+            {
+                _docId = await AppHost.Orders.CreateOrderAsync(draft, CurrentUserId);
+            }
+            else
+            {
+                await AppHost.Orders.UpdateOrderAsync(_docId.Value, draft, CurrentUserId);
+            }
+            _lblStatus.Text = $"{T("OrderDoc.Status")}: {StatusText(_status)} | {T("OrderDoc.Saved")}";
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private CommercialDocumentDraft BuildDraft()
+    {
+        ResolveParty();
+        if (string.IsNullOrWhiteSpace(_txtPartyCode.Text) && string.IsNullOrWhiteSpace(_txtPartyName.Text))
+            throw new InvalidOperationException(T("OrderDoc.PartyRequired"));
+        var lines = _lines
+            .Where(l => !string.IsNullOrWhiteSpace(l.ItemCode) || !string.IsNullOrWhiteSpace(l.Description))
+            .Select(l => new CommercialLineDraft(
+                l.MaterialId,
+                string.IsNullOrWhiteSpace(l.ItemCode) ? null : l.ItemCode.Trim(),
+                string.IsNullOrWhiteSpace(l.Description) ? l.ItemCode.Trim() : l.Description.Trim(),
+                string.IsNullOrWhiteSpace(l.Unit) ? "PCS" : l.Unit.Trim(),
+                l.Qty,
+                l.UnitPrice,
+                l.DiscountPct,
+                l.TaxRate,
+                null))
+            .ToList();
+        if (lines.Count == 0)
+            throw new InvalidOperationException(T("OrderDoc.LinesRequired"));
+
+        return new CommercialDocumentDraft(
+            _companyId,
+            DocKindCode,
+            _txtDocNo.Text.Trim(),
+            DateOnly.FromDateTime(_dtDate.SelectedDate ?? DateTime.Today),
+            _partyId,
+            string.IsNullOrWhiteSpace(_txtPartyName.Text) ? null : _txtPartyName.Text.Trim(),
+            null,
+            UsrPref.Load().CurrencyCode,
+            1m,
+            string.IsNullOrWhiteSpace(_txtNotes.Text) ? null : _txtNotes.Text.Trim(),
+            lines,
+            string.IsNullOrWhiteSpace(_txtPartyCode.Text) ? null : _txtPartyCode.Text.Trim(),
+            _dtDeliveryDate.SelectedDate is { } delivery ? DateOnly.FromDateTime(delivery) : null,
+            null,
+            null,
+            null,
+            null,
+            string.IsNullOrWhiteSpace(_txtWhs.Text) ? null : _txtWhs.Text.Trim());
+    }
+
+    private async Task PostAsync()
+    {
+        if (AppHost.Orders is null || _docId is null)
+        {
+            ShowError(T("OrderDoc.SaveFirst"));
+            return;
+        }
+        try
+        {
+            await AppHost.Orders.PostOrderAsync(Side, _docId.Value, CurrentUserId);
+            _status = CommercialDocumentStatus.Posted;
+            UpdateEditState();
+            RefreshTotals();
+            await RefreshProgressAsync(_docId.Value);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private async Task ConvertAsync()
+    {
+        var permission = _kind == OrdKind.Sales ? PermCat.Sales.OrderConvert : PermCat.Purchasing.OrderConvert;
+        if (!AppHost.Permissions.Has(permission))
+        {
+            ShowError(T("OrderDoc.PermissionDenied"));
+            return;
+        }
+        if (AppHost.Orders is null || _docId is null)
+        {
+            ShowError(T("OrderDoc.SaveFirst"));
+            return;
+        }
+        try
+        {
+            var (invoiceId, invoiceDocNo) = await AppHost.Orders.ConvertToInvoiceAsync(
+                Side, _docId.Value, DateOnly.FromDateTime(DateTime.Today), CurrentUserId);
+            _lblStatus.Text = $"{T("OrderDoc.Converted")}: {invoiceDocNo}";
+            await RefreshProgressAsync(_docId.Value);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private async Task SetStatusAsync(string newStatus, string permission)
+    {
+        if (!AppHost.Permissions.Has(permission))
+        {
+            ShowError(T("OrderDoc.PermissionDenied"));
+            return;
+        }
+        if (AppHost.Orders is null || _docId is null)
+        {
+            ShowError(T("OrderDoc.SaveFirst"));
+            return;
+        }
+        var confirm = MessageBox.Show(this, T("OrderDoc.ConfirmStatusChange"), Title,
+            MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return;
+        try
+        {
+            if (newStatus == CommercialDocumentStatus.Closed)
+                await AppHost.Orders.CloseOrderAsync(Side, _docId.Value, CurrentUserId);
+            else
+                await AppHost.Orders.CancelOrderAsync(Side, _docId.Value, CurrentUserId);
+            _status = newStatus;
+            UpdateEditState();
+            RefreshTotals();
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private void UpdateEditState()
+    {
+        var editable = IsEditable;
+        _grid.IsReadOnly = !editable;
+        _txtPartyCode.IsEnabled = editable;
+        _txtPartyName.IsEnabled = editable;
+        _dtDate.IsEnabled = editable;
+        _dtDeliveryDate.IsEnabled = editable;
+        _txtWhs.IsEnabled = editable;
+        _txtNotes.IsEnabled = editable;
+        _btnSave.IsEnabled = editable;
+        _btnPost.IsEnabled = editable && _docId is not null;
+        _btnConvert.IsEnabled = _status == CommercialDocumentStatus.Posted;
+        _btnClose.IsEnabled = _status == CommercialDocumentStatus.Posted;
+        _btnCancel.IsEnabled = _status is CommercialDocumentStatus.Draft or CommercialDocumentStatus.Posted;
+        _btnAddLine.IsEnabled = editable;
+        _btnRemLine.IsEnabled = editable;
+    }
+
     private void Renumber()
     {
         for (var i = 0; i < _lines.Count; i++)
             _lines[i].LineNo = i + 1;
     }
 
-    private void ResetOrder()
-    {
-        var prefix = _kind == OrdKind.Sales ? "SO-" : "PO-";
-        _txtDocNo.Text = prefix + DateTime.Now.ToString("yyyyMMdd-HHmm", CultureInfo.InvariantCulture);
-        _dtDate.SelectedDate = DateTime.Today;
-        _dtDeliveryDate.SelectedDate = DateTime.Today.AddDays(7);
-        _txtPartyCode.Text = string.Empty;
-        _txtPartyName.Text = string.Empty;
-        _txtNotes.Text = string.Empty;
-        _lines.Clear();
-        _lines.Add(new OrderLineVm { LineNo = 1, Unit = "PCS", Qty = 1, UnitPrice = 100 });
-        RefreshTotals();
-    }
-
     private void RefreshTotals()
     {
         var total = _lines.Sum(l => l.LineTotal);
-        _lblTotal.Text = $"{T("Invoice.Total")}: {total:N2} SAR";
+        var tax = _lines.Sum(l => l.LineTotal * l.TaxRate / 100m);
+        _lblTotal.Text = $"{T("Invoice.Total")}: {total + tax:N2} {UsrPref.Load().CurrencyCode}";
         _lblTotal.FontWeight = FontWeights.Bold;
-        _lblStatus.Text = $"{T("OrderDoc.Status")}: {T("Invoice.StatusDraft")}";
+        if (_status != CommercialDocumentStatus.Posted)
+            _lblStatus.Text = $"{T("OrderDoc.Status")}: {StatusText(_status)}";
     }
 
-    private void ConvertToInvoice()
+    private string StatusText(string status) => status switch
     {
-        // An order is not persisted yet; opening a blank invoice is not a conversion.
-        ShowOperationUnavailable("ConvertToInvoice");
+        CommercialDocumentStatus.Posted => T("Invoice.StatusPosted"),
+        CommercialDocumentStatus.Closed => T("OrderDoc.StatusClosed"),
+        CommercialDocumentStatus.Cancelled => T("Invoice.StatusCancelled"),
+        _ => T("Invoice.StatusDraft")
+    };
+
+    private void ShowError(string message)
+        => MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+
+    // ------------------------------------------------------------- printing
+
+    private void PrintOrder()
+    {
+        var page = BuildPrintPage();
+        var paginator = new SimplePaginator(page, new Size(793, 1122));
+        var dlg = new PrintDialog();
+        if (dlg.ShowDialog() == true)
+            dlg.PrintDocument(paginator, string.IsNullOrWhiteSpace(_txtDocNo.Text) ? Title : _txtDocNo.Text.Trim());
+    }
+
+    private Border BuildPrintPage()
+    {
+        var panel = new StackPanel { Margin = new Thickness(48) };
+        panel.Children.Add(new TextBlock
+        {
+            Text = AppState.CurrentCompanyDisplayName,
+            FontSize = 13,
+            Opacity = 0.75
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = T(_kind == OrdKind.Sales ? "OrderDoc.TitleSales" : "OrderDoc.TitlePurchase"),
+            FontSize = 20,
+            FontWeight = FontWeights.Bold
+        });
+        panel.Children.Add(new TextBlock { Text = $"{T("OrderDoc.OrderNo")}: {_txtDocNo.Text}    {T("OrderDoc.Date")}: {_dtDate.SelectedDate:yyyy-MM-dd}    {T("OrderDoc.DeliveryDate")}: {_dtDeliveryDate.SelectedDate:yyyy-MM-dd}", Margin = new Thickness(0, 8, 0, 2) });
+        panel.Children.Add(new TextBlock { Text = $"{T("OrderDoc.Partner")}: {_txtPartyCode.Text} - {_txtPartyName.Text}", Margin = new Thickness(0, 2, 0, 12) });
+
+        var table = new Grid();
+        foreach (var width in new[] { 40.0, 110.0, 240.0, 60.0, 70.0, 90.0, 100.0 })
+            table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(width) });
+        AddPrintRow(table, 0, "#", T("Invoice.Col.Code"), T("Invoice.Col.Description"), T("Invoice.Col.Unit"), T("Invoice.Col.Qty"), T(_kind == OrdKind.Sales ? "Invoice.Col.SalePrice" : "Invoice.Col.PurchasePrice"), T("Invoice.Col.LineTotal"), header: true);
+        var row = 1;
+        foreach (var line in _lines)
+        {
+            AddPrintRow(table, row++, line.LineNo.ToString(CultureInfo.InvariantCulture), line.ItemCode, line.Description, line.Unit,
+                line.Qty.ToString("0.###", CultureInfo.InvariantCulture), line.UnitPrice.ToString("N2"), line.LineTotal.ToString("N2"));
+        }
+        panel.Children.Add(table);
+        panel.Children.Add(new TextBlock { Text = _lblTotal.Text, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 12, 0, 0), HorizontalAlignment = HorizontalAlignment.Right });
+        panel.Children.Add(new TextBlock { Text = $"{T("OrderDoc.Status")}: {StatusText(_status)}", Margin = new Thickness(0, 24, 0, 0), Opacity = 0.7 });
+
+        return new Border { Background = Brushes.White, Child = panel, Width = 793, Height = 1122 };
+    }
+
+    private static void AddPrintRow(Grid table, int rowIndex, string c0, string c1, string c2, string c3, string c4, string c5, string c6, bool header = false)
+    {
+        table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var values = new[] { c0, c1, c2, c3, c4, c5, c6 };
+        for (var i = 0; i < values.Length; i++)
+        {
+            var cell = new TextBlock
+            {
+                Text = values[i],
+                FontWeight = header ? FontWeights.Bold : FontWeights.Normal,
+                Margin = new Thickness(2, 3, 2, 3),
+                FontSize = 12
+            };
+            Grid.SetRow(cell, rowIndex);
+            Grid.SetColumn(cell, i);
+            table.Children.Add(cell);
+        }
+    }
+
+    private sealed class SimplePaginator : DocumentPaginator
+    {
+        private readonly FrameworkElement _page;
+        private readonly Size _size;
+
+        public SimplePaginator(FrameworkElement page, Size size)
+        {
+            _page = page;
+            _size = size;
+            _page.Measure(size);
+            _page.Arrange(new Rect(size));
+        }
+
+        public override bool IsPageCountValid => true;
+        public override int PageCount => 1;
+        public override Size PageSize { get => _size; set { } }
+        public override IDocumentPaginatorSource? Source => null;
+
+        public override DocumentPage GetPage(int pageNumber)
+            => new(new Border { Background = Brushes.White, Child = _page }, _size, new Rect(_size), new Rect(_size));
     }
 
     protected override void ApplyLocalizedText()
     {
         Title = T(_kind == OrdKind.Sales ? "OrderDoc.TitleSales" : "OrderDoc.TitlePurchase");
-        if (_grid.Columns.Count >= 8)
+        if (_grid.Columns.Count >= 11)
         {
             _grid.Columns[0].Header = "#";
             _grid.Columns[1].Header = T("Invoice.Col.Code");
@@ -285,10 +707,12 @@ public sealed class OrdWin : BaseWin
             _grid.Columns[4].Header = T("Invoice.Col.Qty");
             _grid.Columns[5].Header = T(_kind == OrdKind.Sales ? "Invoice.Col.SalePrice" : "Invoice.Col.PurchasePrice");
             _grid.Columns[6].Header = T("Invoice.Col.Discount");
-            _grid.Columns[7].Header = T("Invoice.Col.LineTotal");
+            _grid.Columns[7].Header = T("Invoice.ColTax");
+            _grid.Columns[8].Header = T("Invoice.Col.LineTotal");
+            _grid.Columns[9].Header = T("OrderDoc.Fulfilled");
+            _grid.Columns[10].Header = T("OrderDoc.Billed");
         }
         RefreshLocalizedContent(Content as DependencyObject);
-        RefreshTotals();
     }
 
     private static void RefreshLocalizedContent(DependencyObject? parent)
@@ -335,8 +759,10 @@ public sealed class OrdWin : BaseWin
     {
         private int _lineNo;
         private string _itemCode = "", _desc = "", _unit = "";
-        private decimal _qty = 1, _price, _disc;
+        private decimal _qty = 1, _price, _disc, _tax;
+        private decimal _fulfilled, _billed;
 
+        public long? MaterialId { get; set; }
         public int LineNo { get => _lineNo; set { _lineNo = value; OnChanged(); } }
         public string ItemCode { get => _itemCode; set { _itemCode = value; OnChanged(); } }
         public string Description { get => _desc; set { _desc = value; OnChanged(); } }
@@ -345,9 +771,14 @@ public sealed class OrdWin : BaseWin
         public decimal Qty { get => _qty; set { _qty = value; OnChanged(nameof(QtyText)); OnChanged(nameof(LineTotalText)); } }
         public decimal UnitPrice { get => _price; set { _price = value; OnChanged(nameof(PriceText)); OnChanged(nameof(LineTotalText)); } }
         public decimal DiscountPct { get => _disc; set { _disc = value; OnChanged(nameof(DiscountText)); OnChanged(nameof(LineTotalText)); } }
+        public decimal TaxRate { get => _tax; set { _tax = value; OnChanged(nameof(TaxText)); OnChanged(nameof(LineTotalText)); } }
+        public decimal FulfilledQty { get => _fulfilled; set { _fulfilled = value; OnChanged(nameof(FulfilledText)); } }
+        public decimal BilledQty { get => _billed; set { _billed = value; OnChanged(nameof(BilledText)); } }
 
         public decimal LineTotal => _qty * _price * (1m - _disc / 100m);
         public string LineTotalText => LineTotal.ToString("N2", CultureInfo.InvariantCulture);
+        public string FulfilledText => _fulfilled.ToString("0.###", CultureInfo.InvariantCulture);
+        public string BilledText => _billed.ToString("0.###", CultureInfo.InvariantCulture);
 
         public string QtyText
         {
@@ -365,6 +796,12 @@ public sealed class OrdWin : BaseWin
         {
             get => _disc.ToString("0.##", CultureInfo.InvariantCulture);
             set { if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)) DiscountPct = v; }
+        }
+
+        public string TaxText
+        {
+            get => _tax.ToString("0.##", CultureInfo.InvariantCulture);
+            set { if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)) TaxRate = v; }
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
