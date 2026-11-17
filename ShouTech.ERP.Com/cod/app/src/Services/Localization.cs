@@ -324,7 +324,27 @@ public static class LangDirSv
                 _languageResources[language] = resources;
             }
 
-            return resources.TryGetValue(key, out var value) ? value : defaultValue;
+            if (resources.TryGetValue(key, out var value))
+                return value;
+
+            // Per-key fallback: a key missing from the selected language
+            // resolves to the canonical English catalog before the caller default.
+            if (!string.Equals(language, LangDirSv.DefaultLanguageCode, StringComparison.OrdinalIgnoreCase)
+                && GetEnglishResources().TryGetValue(key, out var englishValue))
+                return englishValue;
+
+            return defaultValue;
+        }
+
+        private Dictionary<string, string> GetEnglishResources()
+        {
+            if (!_languageResources.TryGetValue(LangDirSv.DefaultLanguageCode, out var english))
+            {
+                english = LoadLanguageResources(LangDirSv.DefaultLanguageCode);
+                _languageResources[LangDirSv.DefaultLanguageCode] = english;
+            }
+
+            return english;
         }
 
         private Dictionary<string, string> LoadLanguageResources(string languageCode)
@@ -405,33 +425,43 @@ public static class LangDirSv
         {
             try
             {
-                var fileName = languageCode switch
-                {
-                    "ar" => "Ar.json",
-                    "en" => "En.json",
-                    "fr" => "Fr.json",
-                    "tr" => "Tr.json",
-                    _ => $"{char.ToUpper(languageCode[0], CultureInfo.InvariantCulture)}{languageCode.Substring(1)}.json"
-                };
-                
-                var filePath = Path.Combine(_resourcesPath, fileName);
-                
-                if (!File.Exists(filePath))
-                    CreateDefaultLanguageFile(filePath, languageCode);
+                // English is the base layer: the active resource set starts as a
+                // copy of the canonical English catalog, then the selected
+                // language overlays its translations key by key. A key that is
+                // missing (or not yet translated) in ar/fr/tr therefore resolves
+                // to English instead of surfacing as a raw key.
+                EnsureLanguageFile(LangDirSv.DefaultLanguageCode);
+                var merged = new Dictionary<string, string>(GetEnglishResources(), StringComparer.OrdinalIgnoreCase);
 
-                var json = File.ReadAllText(filePath);
-                var data = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
-                
-                if (data != null)
+                if (!string.Equals(languageCode, LangDirSv.DefaultLanguageCode, StringComparison.OrdinalIgnoreCase))
                 {
-                    _resources.Clear();
-                    FlattenDictionary(data, "");
+                    EnsureLanguageFile(languageCode);
+                    foreach (var pair in LoadLanguageResources(languageCode))
+                        merged[pair.Key] = pair.Value;
                 }
+
+                _resources = merged;
             }
             catch (Exception)
             {
                 // Keep previously loaded resources if reload fails.
             }
+        }
+
+        private void EnsureLanguageFile(string languageCode)
+        {
+            var fileName = languageCode switch
+            {
+                "ar" => "Ar.json",
+                "en" => "En.json",
+                "fr" => "Fr.json",
+                "tr" => "Tr.json",
+                _ => $"{char.ToUpper(languageCode[0], CultureInfo.InvariantCulture)}{languageCode.Substring(1)}.json"
+            };
+
+            var filePath = Path.Combine(_resourcesPath, fileName);
+            if (!File.Exists(filePath))
+                CreateDefaultLanguageFile(filePath, languageCode);
         }
 
         private static void CreateDefaultLanguageFile(string filePath, string languageCode)
@@ -440,37 +470,40 @@ public static class LangDirSv
             {
                 var defaultContent = languageCode switch
                 {
+                    // English is the canonical source language: a missing Arabic
+                    // catalog is seeded with the English content, never with
+                    // embedded Arabic text (Arabic lives only in Ar.json).
                     "ar" => @"{
   ""Application"": {
-    ""Title"": ""شو تيك إي آر بي"",
-    ""Subtitle"": ""منصة إدارة المؤسسات المتكاملة"",
-    ""Version"": ""الإصدار"",
-    ""Ready"": ""جاهز""
+    ""Title"": ""ShouTech ERP"",
+    ""Subtitle"": ""Integrated Enterprise Management Platform"",
+    ""Version"": ""Version"",
+    ""Ready"": ""Ready""
   },
   ""Menu"": {
-    ""File"": ""ملف"",
-    ""Inventory"": ""المستودعات"",
-    ""Accounts"": ""الحسابات"",
-    ""Reports"": ""تقارير"",
-    ""Tools"": ""أدوات"",
-    ""Help"": ""مساعدة"",
-    ""Exit"": ""خروج""
+    ""File"": ""File"",
+    ""Inventory"": ""Inventory"",
+    ""Accounts"": ""Accounts"",
+    ""Reports"": ""Reports"",
+    ""Tools"": ""Tools"",
+    ""Help"": ""Help"",
+    ""Exit"": ""Exit""
   },
   ""Dashboard"": {
-    ""Title"": ""لوحة القيادة"",
-    ""Welcome"": ""مرحباً بك""
+    ""Title"": ""Dashboard"",
+    ""Welcome"": ""Welcome""
   },
   ""Status"": {
-    ""Ready"": ""جاهز"",
-    ""Connected"": ""متصل""
+    ""Ready"": ""Ready"",
+    ""Connected"": ""Connected""
   },
   ""Buttons"": {
-    ""Save"": ""حفظ"",
-    ""Cancel"": ""إلغاء"",
-    ""Delete"": ""حذف"",
-    ""Edit"": ""تعديل"",
-    ""Add"": ""إضافة"",
-    ""Search"": ""بحث""
+    ""Save"": ""Save"",
+    ""Cancel"": ""Cancel"",
+    ""Delete"": ""Delete"",
+    ""Edit"": ""Edit"",
+    ""Add"": ""Add"",
+    ""Search"": ""Search""
   }
 }",
                     "en" => @"{
@@ -591,40 +624,5 @@ public static class LangDirSv
             }
         }
 
-        private void FlattenDictionary(Dictionary<string, object> dict, string prefix)
-        {
-            foreach (var kvp in dict)
-            {
-                var key = string.IsNullOrEmpty(prefix) ? kvp.Key : $"{prefix}.{kvp.Key}";
-                
-                if (kvp.Value is JsonElement jsonElement)
-                {
-                    if (jsonElement.ValueKind == JsonValueKind.Object)
-                    {
-                        var nested = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonElement.GetRawText());
-                        if (nested != null)
-                        {
-                            FlattenDictionary(nested, key);
-                        }
-                    }
-                    else if (jsonElement.ValueKind == JsonValueKind.String)
-                    {
-                        _resources[key] = jsonElement.GetString() ?? key;
-                    }
-                    else
-                    {
-                        _resources[key] = jsonElement.ToString();
-                    }
-                }
-                else if (kvp.Value is string str)
-                {
-                    _resources[key] = str;
-                }
-                else if (kvp.Value is Dictionary<string, object> nestedDict)
-                {
-                    FlattenDictionary(nestedDict, key);
-                }
-            }
-        }
     }
 }
