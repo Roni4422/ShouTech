@@ -548,13 +548,20 @@ public sealed class CrmRepository : ICrmRepository
         RequireCompany(companyId);
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await using var command = CreateCommand(connection, null, """
+        // Insertion order is the truth for a history: SQLite's
+        // datetime('now') has one-second resolution and the ids are
+        // random Guids, so (changed_at, history_id) can scramble rows
+        // written inside the same second. SQLite orders by rowid;
+        // PostgreSQL's timestamptz has microsecond resolution and its
+        // clock_timestamp ordering is safe with the id tiebreak.
+        var orderBy = IsPg ? "h.changed_at, h.history_id" : "h.rowid";
+        await using var command = CreateCommand(connection, null, $"""
             SELECT h.history_id, h.opp_id, h.from_stage_id, fs.name_en, h.to_stage_id, ts.name_en,
                    h.from_probability, h.to_probability, h.changed_by, h.changed_at, h.notes
             FROM crm_opportunity_stage_history h
             LEFT JOIN crm_stages fs ON fs.stage_id = h.from_stage_id
             LEFT JOIN crm_stages ts ON ts.stage_id = h.to_stage_id
-            WHERE h.company_id = @c AND h.opp_id = @id ORDER BY h.changed_at, h.history_id
+            WHERE h.company_id = @c AND h.opp_id = @id ORDER BY {orderBy}
             """);
         Add(command, "@c", companyId.Trim());
         Add(command, "@id", FormatGuid(oppId));
