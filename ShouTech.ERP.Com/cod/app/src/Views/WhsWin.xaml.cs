@@ -1583,7 +1583,10 @@ namespace ShouTech.App.Views
                     AllowsTransparency = true,
                     Background = Brushes.Transparent,
                     ShowInTaskbar = false,
-                    Topmost = true,
+                    // No Topmost: the toast is owned by this window, and an
+                    // owned window already stays above its owner. Topmost
+                    // would strand it above EVERY application, including
+                    // while the user works in another program.
                     ResizeMode = ResizeMode.NoResize,
                     SizeToContent = SizeToContent.WidthAndHeight,
                     Owner = this,

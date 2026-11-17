@@ -393,14 +393,25 @@ namespace ShouTech.App.Views
                 WpfApp.Current.ShutdownMode = ShutdownMode.OnMainWindowClose;
             }
 
-            Close();
-
+            // Z-order hand-off (owner rule: the program must behave like a
+            // normal Windows program): this splash is the process's
+            // foreground window, so it stays open until its successor is
+            // visible. Closing it first — as this method used to — breaks
+            // the foreground chain: the company window then opens behind
+            // whatever other program Windows picks, and because ComWin is
+            // a startup gate with no guaranteed taskbar presence there was
+            // no way to bring the program back. The same show-then-close
+            // order is used by the ComWin -> LogWin -> MWin hand-offs.
             if (!hasCompanies)
             {
-                var wizard = new StpWiz(StpWizMode.NewCompany);
+                // Owned by the splash so the modal wizard inherits its
+                // place in the z-order instead of opening unowned into a
+                // foreground gap.
+                var wizard = new StpWiz(StpWizMode.NewCompany, this);
                 var created = wizard.ShowDialog() == true && wizard.CompletedSuccessfully;
                 if (!created)
                 {
+                    Close();
                     WpfApp.Current?.Shutdown();
                     return;
                 }
@@ -408,6 +419,8 @@ namespace ShouTech.App.Views
 
             companyWindow.Show();
             companyWindow.Activate();
+
+            Close();
         }
     }
 }

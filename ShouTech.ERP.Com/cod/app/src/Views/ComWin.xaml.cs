@@ -93,6 +93,18 @@ namespace ShouTech.App.Views
             ApplyButtonOrder();
             ApplyLocalizedMgmtLabels();
 
+            // Taskbar presence follows ownership (z-order policy): while
+            // this window is the program's unowned front door (startup,
+            // before any shell exists) it MUST have a taskbar button, so
+            // the program can always be brought back if the user switches
+            // to another application — without one, the window sinks
+            // behind every other program with no way to recover it. When
+            // an opener owns the window (e.g. Switch Company from the
+            // shell), the owner carries it and no button is needed. The
+            // decision is made at SourceInitialized because openers assign
+            // Owner after construction, before Show.
+            SourceInitialized += (_, _) => ShowInTaskbar = Owner == null;
+
             PreviewKeyDown += OnPreviewKeyDown;
             Loaded += (_, _) =>
             {
@@ -114,7 +126,8 @@ namespace ShouTech.App.Views
                 WindowStyle = WindowStyle.None;
                 ResizeMode = ResizeMode.NoResize;
                 AllowsTransparency = false;
-                ShowInTaskbar = false;
+                // ShowInTaskbar is NOT forced here: it follows ownership,
+                // decided at SourceInitialized in the constructor.
 
                 var chrome = WindowChrome.GetWindowChrome(this);
                 if (chrome == null)

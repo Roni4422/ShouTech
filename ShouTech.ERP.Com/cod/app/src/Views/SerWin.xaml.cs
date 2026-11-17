@@ -288,9 +288,18 @@ public partial class SerWin : BaseWin
     {
         var dlg = new SerWin();
 
-        if (owner != null)
+        // This dialog has no taskbar button (SerWin.xaml), so it must
+        // never be shown unowned — an unowned no-taskbar dialog that
+        // loses the foreground is unrecoverable. Every current caller
+        // passes its window; if a future one passes null, fall back to
+        // the active window, then the application main window.
+        var effectiveOwner = owner
+            ?? System.Windows.Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive)
+            ?? System.Windows.Application.Current?.MainWindow;
+
+        if (effectiveOwner != null && effectiveOwner != dlg)
         {
-            dlg.Owner = owner;
+            dlg.Owner = effectiveOwner;
             dlg.WindowStartupLocation = WindowStartupLocation.CenterOwner;
         }
 
