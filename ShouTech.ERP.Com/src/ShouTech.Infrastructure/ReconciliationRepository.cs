@@ -189,16 +189,9 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             }
             if (!string.Equals(docStatus, "Posted", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Only posted documents can be reconciled.");
-            decimal docAllocated;
-            await using (var sum = CreateCommand(connection, transaction,
-                "SELECT COALESCE(SUM(amount), 0) FROM payment_allocations WHERE company_id = @company AND doc_table = @docTable AND doc_id = @doc"))
-            {
-                Add(sum, "@company", companyId.Trim());
-                Add(sum, "@docTable", docTable);
-                Add(sum, "@doc", docId);
-                docAllocated = Convert.ToDecimal(await sum.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
-            }
-            openAmount = docTotal - docPaid - docAllocated;
+            // paid_amount already includes every prior allocation (this same
+            // transaction maintains it), so it is the document's settled total.
+            openAmount = docTotal - docPaid;
             if (docParty != paymentParty)
                 throw new InvalidOperationException("The payment and the document belong to different parties.");
             if (amount > openAmount + Tolerance)

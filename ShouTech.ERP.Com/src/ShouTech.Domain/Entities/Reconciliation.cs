@@ -2,8 +2,10 @@ namespace ShouTech.Domain.Entities;
 
 /// <summary>
 /// One open (posted, not fully settled) sales or purchase document.
-/// OpenAmount is what can still be allocated: total minus the amount already
-/// recorded as paid on the document and minus recorded allocations.
+/// OpenAmount is what can still be allocated: total minus paid_amount.
+/// paid_amount is the single source of truth for settlement: the allocation
+/// transaction increases it, and Allocated merely reports how much of it came
+/// through payment allocations (informational, never subtracted twice).
 /// </summary>
 public sealed record OpenDocumentRow(
     long DocId,
@@ -17,7 +19,7 @@ public sealed record OpenDocumentRow(
     decimal Paid,
     decimal Allocated)
 {
-    public decimal OpenAmount => Total - Paid - Allocated;
+    public decimal OpenAmount => Total - Paid;
 }
 
 /// <summary>
