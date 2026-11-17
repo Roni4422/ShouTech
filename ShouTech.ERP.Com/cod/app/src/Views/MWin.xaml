@@ -411,6 +411,10 @@
                         <ribbon:RibbonButton loc:LocProps.Key="Customers.CustomerDue" Label="Customer due" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Customers.LinkPayments" Label="Link customer payments" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Customers.SearchDues" Label="Search dues" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="CRM.Leads" Label="CRM leads" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="CRM.Pipeline" Label="CRM pipeline" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="CRM.Opportunities" Label="CRM opportunities" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="CRM.Activities" Label="CRM activities" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.CustomersReports" Header="Reports">
                         <ribbon:RibbonButton loc:LocProps.Key="Customers.CustomerBalance" Label="Customer balances" Click="OnRibbonButtonClick"/>

@@ -295,6 +295,27 @@ namespace ShouTech.App.Services
         }
 
         // =====================================================================
+        // CRM (Phase B 057, migration 057 seeds). NOTE: the older
+        // PermCat.Customers class below also uses the CRM. prefix for
+        // CUSTOMER-master permissions (CRM.CUSTOMER.*) — those are the
+        // core customer-card permissions and stay untouched; the
+        // pipeline permissions here are CRM.LEAD/OPP/ACTIVITY/STAGE.*.
+        // No entitlement gate: licensing is postponed by the owner.
+        // =====================================================================
+
+        public static class Crm
+        {
+            public const string LeadView = "CRM.LEAD.VIEW";
+            public const string LeadEdit = "CRM.LEAD.EDIT";
+            public const string LeadConvert = "CRM.LEAD.CONVERT";
+            public const string OppView = "CRM.OPP.VIEW";
+            public const string OppEdit = "CRM.OPP.EDIT";
+            public const string ActivityView = "CRM.ACTIVITY.VIEW";
+            public const string ActivityEdit = "CRM.ACTIVITY.EDIT";
+            public const string StageEdit = "CRM.STAGE.EDIT";
+        }
+
+        // =====================================================================
         // PROJECTS
         // =====================================================================
 

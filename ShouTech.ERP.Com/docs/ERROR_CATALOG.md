@@ -171,6 +171,12 @@ change and not yet converted.
 | INV-6015 | QualityInspectionQtyMismatch | Accepted and rejected quantities for document '{0}' do not add up to the inspected quantity, or the disposition is missing. | Thrown by QualityGate completion when accepted + rejected ≠ total, quantities are negative, or a rejected part has no valid disposition (Phase B 056). |
 | INV-6016 | QualityTemplateInvalid | Quality template '{0}' is invalid. | Thrown by QualityService/QualityRepository when a template references an unknown or duplicated parameter, or a line's criteria do not match its parameter kind (Phase B 056). |
 | LIC-8001 | LicenseCheckFailed | The license could not be verified. | License check failed (License service). |
+| CRM-9001 | CrmLeadAlreadyConverted | Lead '{0}' has already been converted. | Thrown by CrmRepository.ConvertLeadAsync when the lead already carries conversion links (Phase B 057). |
+| CRM-9002 | CrmLeadStateInvalid | Lead '{0}' cannot change state as requested. | Thrown when an unqualified lead is converted, a lead is missing, or a status edit tries to forge Converted (Phase B 057). |
+| CRM-9003 | CrmOpportunityStageInvalid | Opportunity stage '{0}' is invalid. | Thrown when an opportunity or stage move references a stage/opportunity that does not exist for the company (Phase B 057). |
+| CRM-9004 | CrmQuotationPartyMissing | A quotation cannot be created for '{0}'. | Thrown when an opportunity has no customer party, or the company Guid needed for the chain-compatible quotation cannot be resolved (Phase B 057, decision C3). |
+| CRM-9005 | CrmActivityTargetInvalid | Activity '{0}' must target exactly one of a lead, an opportunity or a party. | Thrown when an activity carries zero or several targets, or a completion targets a non-planned activity (Phase B 057). |
+| CRM-9006 | CrmLostReasonRequired | A lost reason is required when opportunity '{0}' is marked lost. | Thrown by CrmRepository.MoveStageAsync when the target stage is Lost and no lost reason was supplied (Phase B 057). |
 | SYS-0001 | UnknownError | An unexpected error occurred. | Fallback for any error with no better code; also what an unregistered code resolves to. |
 | SYS-0002 | DispatcherUnhandled | An unexpected error interrupted the current operation. | Unhandled exception on the UI dispatcher (global handler fallback). |
 | SYS-0003 | AppDomainUnhandled | An unexpected error occurred in the application. | Unhandled AppDomain exception (global handler fallback). |

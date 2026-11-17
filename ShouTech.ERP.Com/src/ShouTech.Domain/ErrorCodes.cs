@@ -16,6 +16,7 @@ namespace ShouTech.Domain;
 ///   INV  6000-6999  inventory / orders
 ///   UI   7000-7999  windows / shell
 ///   LIC  8000-8999  licensing
+///   CRM  9000-9999  customer relationship management
 ///
 /// RULE: codes are immutable once assigned. A retired code is never
 /// reused; a changed meaning gets a new code.
@@ -121,4 +122,16 @@ public static class ErrorCodes
 
     // ---- LIC 8000-8999 -------------------------------------------------
     public const string LicenseCheckFailed = "LIC-8001";
+
+    // ---- CRM 9000-9999 -------------------------------------------------
+    // Phase B 057 (CRM): conversion / pipeline / activity state
+    // violations. The design asked for "a small CRM error range
+    // registered in ErrorCodes.cs (precedent: LIC range)"; CRM takes
+    // the next free prefix block, 9000-9999.
+    public const string CrmLeadAlreadyConverted = "CRM-9001";
+    public const string CrmLeadStateInvalid = "CRM-9002";
+    public const string CrmOpportunityStageInvalid = "CRM-9003";
+    public const string CrmQuotationPartyMissing = "CRM-9004";
+    public const string CrmActivityTargetInvalid = "CRM-9005";
+    public const string CrmLostReasonRequired = "CRM-9006";
 }

@@ -422,5 +422,41 @@
     "name": "QualityTemplateInvalid",
     "message": "Le modèle qualité '{0}' est invalide.",
     "hint": "Vérifiez les lignes du modèle : les paramètres numériques exigent une plage, les paramètres de valeur une valeur acceptée, et un paramètre ne peut apparaître qu'une fois."
+  },
+  "CRM-9001": {
+    "code": "CRM-9001",
+    "name": "CrmLeadAlreadyConverted",
+    "message": "Le prospect '{0}' a déjà été converti.",
+    "hint": "Un prospect converti conserve ses liens de tiers et d'opportunité ; créez un nouveau prospect ou travaillez avec le tiers converti."
+  },
+  "CRM-9002": {
+    "code": "CRM-9002",
+    "name": "CrmLeadStateInvalid",
+    "message": "L'état du prospect '{0}' ne peut pas être modifié comme demandé.",
+    "hint": "Les prospects non qualifiés ne peuvent pas être convertis, et un prospect ne devient Converti que par conversion."
+  },
+  "CRM-9003": {
+    "code": "CRM-9003",
+    "name": "CrmOpportunityStageInvalid",
+    "message": "L'étape d'opportunité '{0}' est invalide.",
+    "hint": "Configurez les étapes du pipeline pour la société, puis réessayez."
+  },
+  "CRM-9004": {
+    "code": "CRM-9004",
+    "name": "CrmQuotationPartyMissing",
+    "message": "Impossible de créer un devis pour '{0}'.",
+    "hint": "Liez l'opportunité à un tiers client (ou convertissez son prospect) et vérifiez que la société se résout avant de créer un devis."
+  },
+  "CRM-9005": {
+    "code": "CRM-9005",
+    "name": "CrmActivityTargetInvalid",
+    "message": "L'activité '{0}' doit cibler exactement un prospect, une opportunité ou un tiers.",
+    "hint": "Choisissez exactement une cible pour l'activité."
+  },
+  "CRM-9006": {
+    "code": "CRM-9006",
+    "name": "CrmLostReasonRequired",
+    "message": "Un motif de perte est requis lorsque l'opportunité '{0}' est marquée perdue.",
+    "hint": "Choisissez un motif de perte (configurez les motifs dans la fenêtre du pipeline si la liste est vide)."
   }
 }

@@ -422,5 +422,41 @@
     "name": "QualityTemplateInvalid",
     "message": "'{0}' kalite şablonu geçersiz.",
     "hint": "Şablon satırlarını kontrol edin: sayısal parametreler bir aralık, değer parametreleri kabul edilen bir değer gerektirir ve bir parametre yalnızca bir kez geçebilir."
+  },
+  "CRM-9001": {
+    "code": "CRM-9001",
+    "name": "CrmLeadAlreadyConverted",
+    "message": "'{0}' adayı zaten dönüştürüldü.",
+    "hint": "Dönüştürülen aday taraf ve fırsat bağlantılarını korur; yeni bir aday oluşturun veya dönüştürülen tarafla çalışın."
+  },
+  "CRM-9002": {
+    "code": "CRM-9002",
+    "name": "CrmLeadStateInvalid",
+    "message": "'{0}' adayının durumu istendiği gibi değiştirilemez.",
+    "hint": "Niteliksiz adaylar dönüştürülemez ve bir aday yalnızca dönüştürme yoluyla Dönüştürüldü olur."
+  },
+  "CRM-9003": {
+    "code": "CRM-9003",
+    "name": "CrmOpportunityStageInvalid",
+    "message": "'{0}' fırsat aşaması geçersiz.",
+    "hint": "Şirket için süreç aşamalarını yapılandırıp tekrar deneyin."
+  },
+  "CRM-9004": {
+    "code": "CRM-9004",
+    "name": "CrmQuotationPartyMissing",
+    "message": "'{0}' için teklif oluşturulamıyor.",
+    "hint": "Fırsatı bir müşteri tarafına bağlayın (veya adayını dönüştürün) ve teklif oluşturmadan önce şirket kaydının çözüldüğünden emin olun."
+  },
+  "CRM-9005": {
+    "code": "CRM-9005",
+    "name": "CrmActivityTargetInvalid",
+    "message": "'{0}' etkinliği tam olarak bir adayı, fırsatı veya tarafı hedeflemelidir.",
+    "hint": "Etkinlik için tam olarak bir hedef seçin."
+  },
+  "CRM-9006": {
+    "code": "CRM-9006",
+    "name": "CrmLostReasonRequired",
+    "message": "'{0}' fırsatı kayıp olarak işaretlenirken kayıp nedeni gereklidir.",
+    "hint": "Bir kayıp nedeni seçin (liste boşsa nedenleri süreç penceresinde yapılandırın)."
   }
 }

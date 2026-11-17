@@ -422,5 +422,41 @@
     "name": "QualityTemplateInvalid",
     "message": "Quality template '{0}' is invalid.",
     "hint": "Check the template lines: numeric parameters need a band, value parameters need an accepted value, and a parameter may appear only once."
+  },
+  "CRM-9001": {
+    "code": "CRM-9001",
+    "name": "CrmLeadAlreadyConverted",
+    "message": "Lead '{0}' has already been converted.",
+    "hint": "A converted lead keeps its party and opportunity links; create a new lead or work with the converted party."
+  },
+  "CRM-9002": {
+    "code": "CRM-9002",
+    "name": "CrmLeadStateInvalid",
+    "message": "Lead '{0}' cannot change state as requested.",
+    "hint": "Unqualified leads cannot be converted, and a lead becomes Converted only through conversion."
+  },
+  "CRM-9003": {
+    "code": "CRM-9003",
+    "name": "CrmOpportunityStageInvalid",
+    "message": "Opportunity stage '{0}' is invalid.",
+    "hint": "Configure the pipeline stages for the company, then retry the move."
+  },
+  "CRM-9004": {
+    "code": "CRM-9004",
+    "name": "CrmQuotationPartyMissing",
+    "message": "A quotation cannot be created for '{0}'.",
+    "hint": "Link the opportunity to a customer party (or convert its lead) and make sure the company record resolves before creating a quotation."
+  },
+  "CRM-9005": {
+    "code": "CRM-9005",
+    "name": "CrmActivityTargetInvalid",
+    "message": "Activity '{0}' must target exactly one of a lead, an opportunity or a party.",
+    "hint": "Pick exactly one target for the activity."
+  },
+  "CRM-9006": {
+    "code": "CRM-9006",
+    "name": "CrmLostReasonRequired",
+    "message": "A lost reason is required when opportunity '{0}' is marked lost.",
+    "hint": "Choose a lost reason (configure reasons in the pipeline window if the list is empty)."
   }
 }

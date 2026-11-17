@@ -48,6 +48,12 @@ public static class RibbonNav
             case "Inventory.QualityAlerts": Show(new QcAlertWin(), owner); return true;
             case "Inventory.QualitySummary": Show(new QcSummaryWin(), owner); return true;
 
+            // ------------------------------------------------ CRM (Phase B 057; CRM.* prefix per design section 4.2 — RBAC only, entitlement gating postponed)
+            case "CRM.Leads": Show(new CrmLeadWin(), owner); return true;
+            case "CRM.Pipeline": Show(new CrmPipelineWin(), owner); return true;
+            case "CRM.Opportunities": Show(new CrmOppWin(), owner); return true;
+            case "CRM.Activities": Show(new CrmActivitiesWin(), owner); return true;
+
             // ------------------------------------------------ Accounts reports & cards
             case "Accounts.CostCenter":
             case "Accounts.LinkWithAccounts": Show(new CcListWin(), owner); return true;

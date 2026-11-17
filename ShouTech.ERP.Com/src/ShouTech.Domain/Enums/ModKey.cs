@@ -14,6 +14,7 @@ public static class ModKey
     public const string Purch = "PURCH";      // Core purchasing
 
     // ===== Optional paid modules =====
+    public const string Crm = "CRM";          // Customer relationship management (Phase B 057; entitlement gating postponed by the owner - the key is registered, no gate is enforced yet)
     public const string Hr = "HR";            // Human resources
     public const string Mfg = "MFG";          // Manufacturing
     public const string Pos = "POS";          // Point of sale
