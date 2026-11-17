@@ -1,4 +1,4 @@
-// ========================================================================
+﻿// ========================================================================
 // FILE: App.xaml.cs
 // PROJECT: SHOUTECH ERP V10
 // PURPOSE: Application bootstrap, DI container, lifecycle, unhandled
@@ -90,7 +90,7 @@ namespace ShouTech.App
                         "Schema bootstrap failed.",
                         ex);
                 }
-                catch { }
+                catch { System.Diagnostics.Debug.WriteLine("Failed to log schema bootstrap failure"); }
                 throw;
             }
         }
@@ -139,7 +139,7 @@ namespace ShouTech.App
                 if (m.Success)
                     return "pg:" + m.Groups[1].Value.Trim().ToLowerInvariant();
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("App", "Database fingerprint probe failed", ex); }
 
             // Fallback
             return "cs:" + connectionString.GetHashCode().ToString(
@@ -201,12 +201,12 @@ namespace ShouTech.App
         // --------------------------------------------------------------------
         private static void SafeLogInfo(string msg)
         {
-            try { AppHost.Logging?.LogInfo("SchemaBootstrapper", msg); } catch { }
+            try { AppHost.Logging?.LogInfo("SchemaBootstrapper", msg); } catch { System.Diagnostics.Debug.WriteLine("SafeLogInfo failed"); }
         }
 
         private static void SafeLogWarning(string msg)
         {
-            try { AppHost.Logging?.LogWarning("SchemaBootstrapper", msg); } catch { }
+            try { AppHost.Logging?.LogWarning("SchemaBootstrapper", msg); } catch { System.Diagnostics.Debug.WriteLine("SafeLogWarning failed"); }
         }
     }
 
@@ -236,19 +236,19 @@ namespace ShouTech.App
             CurrentLanguageCode = langCode;
 
             try { LangDirSv.ApplyCulture(langCode); }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("App", "ApplyCulture failed during language change", ex); }
 
             try
             {
                 if (Current is App app)
                     app.Localization.SetLanguage(langCode);
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("App", "Localization.SetLanguage failed", ex); }
 
             void ApplyUi()
             {
-                try { LangDirSv.ApplyToAllWindows(langCode); } catch { }
-                try { UiLoczr.ScheduleApplyToAllWindows(); } catch { }
+                try { LangDirSv.ApplyToAllWindows(langCode); } catch (Exception ex) { AppHost.Logging?.LogError("App", "LangDirSv.ApplyToAllWindows failed", ex); }
+                try { UiLoczr.ScheduleApplyToAllWindows(); } catch (Exception ex) { AppHost.Logging?.LogError("App", "UiLoczr.ScheduleApplyToAllWindows failed", ex); }
             }
 
             try
@@ -309,7 +309,7 @@ namespace ShouTech.App
                     new TextCompositionEventHandler(GlobalWesternDigitTextInput),
                     handledEventsToo: true);
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("App", "Western-digit handler registration failed", ex); }
 
             // ---------- Global window logging + direction ----------
             try
@@ -326,7 +326,7 @@ namespace ShouTech.App
                     new RoutedEventHandler(GlobalWindowUnloaded),
                     handledEventsToo: true);
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("App", "Window lifecycle handler registration failed", ex); }
 
             // ---------- Global exception handlers ----------
             AppDomain.CurrentDomain.UnhandledException +=
@@ -390,7 +390,7 @@ namespace ShouTech.App
                 }
                 catch (Exception auditEx)
                 {
-                    try { AppHost.Logging?.LogWarning("Audit", "Delete-audit bootstrap deferred until a company database is available: " + auditEx.Message); } catch { }
+                    try { AppHost.Logging?.LogWarning("Audit", "Delete-audit bootstrap deferred until a company database is available: " + auditEx.Message); } catch { System.Diagnostics.Debug.WriteLine("Delete-audit bootstrap warning failed"); }
                 }
             }
             catch (Exception ex)
@@ -402,7 +402,7 @@ namespace ShouTech.App
                         "Schema bootstrap failed at startup.",
                         ex);
                 }
-                catch { }
+                catch { System.Diagnostics.Debug.WriteLine("Startup schema failure log failed"); }
 
                 try
                 {
@@ -412,9 +412,9 @@ namespace ShouTech.App
                         MessageBoxButton.OK,
                         MessageBoxImage.Error);
                 }
-                catch { }
+                catch (Exception ex2) { AppHost.Logging?.LogError("App", "Startup failure dialog failed", ex2); }
 
-                try { Shutdown(1); } catch { }
+                try { Shutdown(1); } catch (Exception ex2) { AppHost.Logging?.LogError("App", "Shutdown after startup failure failed", ex2); }
                 return;
             }
 
@@ -428,7 +428,7 @@ namespace ShouTech.App
                     $"Args={e.Args.Length}; BaseDirectory={AppDomain.CurrentDomain.BaseDirectory}; " +
                     $"Lang={CurrentLanguageCode}");
             }
-            catch { }
+            catch { System.Diagnostics.Debug.WriteLine("Startup lifecycle log failed"); }
 
             // ---------- Run startup sequence ----------
             // Pass pref so the file is not read again and the language stays consistent.
@@ -468,7 +468,7 @@ namespace ShouTech.App
                         $"Unhandled AppDomain exception object. IsTerminating={args.IsTerminating}");
                 }
             }
-            catch { }
+            catch { System.Diagnostics.Debug.WriteLine("AppDomain unhandled-exception handler failed"); }
         }
 
         // ====================================================================
@@ -487,7 +487,7 @@ namespace ShouTech.App
 
                 args.SetObserved();
             }
-            catch { }
+            catch { System.Diagnostics.Debug.WriteLine("Unobserved-task handler failed"); }
         }
 
         // ====================================================================
@@ -501,7 +501,7 @@ namespace ShouTech.App
                 NumberSubstitution.SetCultureOverride(window, CultureInfo.GetCultureInfo("en-US"));
                 NumberSubstitution.SetSubstitution(window, NumberSubstitutionMethod.European);
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("App", "Western digit presentation failed", ex); }
         }
 
         private static string ConvertToWesternDigits(string value)
@@ -537,7 +537,7 @@ namespace ShouTech.App
                 textBox.SelectedText = western;
                 textBox.CaretIndex = start + western.Length;
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("App", "Western digit text input failed", ex); }
         }
 
         // ====================================================================
@@ -584,11 +584,11 @@ namespace ShouTech.App
                             {
                                 ShellContext.ApplyToWindow(window);
                             }
-                            catch { }
+                            catch (Exception ex) { AppHost.Logging?.LogError("App", "Deferred shell-context apply failed", ex); }
                         }));
                 }
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("App", "GlobalWindowLoaded failed", ex); }
         }
 
         // ====================================================================
@@ -619,10 +619,7 @@ namespace ShouTech.App
                     hwnd, DWMWA_TEXT_COLOR, ref textColor, sizeof(int));
                 if (textResult != 0) return;
             }
-            catch
-            {
-                // Older Windows versions don't support this - ignore.
-            }
+            catch (Exception ex) { AppHost.Logging?.LogError("App", "Title bar color apply failed", ex); }
         }
 
         private static void GlobalWindowUnloaded(
@@ -638,7 +635,7 @@ namespace ShouTech.App
                         $"Type={window.GetType().FullName}; Title={window.Title}");
                 }
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("App", "GlobalWindowUnloaded failed", ex); }
         }
 
         // ====================================================================
@@ -661,7 +658,7 @@ namespace ShouTech.App
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("App", "Error dialog display failed", ex); }
 
             args.Handled = true;
         }
@@ -711,7 +708,7 @@ namespace ShouTech.App
 
                 if (!accepted)
                 {
-                    try { Shutdown(); } catch { }
+                    try { Shutdown(); } catch (Exception ex) { AppHost.Logging?.LogError("App", "Shutdown after license rejection failed", ex); }
                     return;
                 }
 
@@ -720,7 +717,7 @@ namespace ShouTech.App
 
                 SetApplicationLanguage(chosen);
 
-                try { pref.Save(); } catch { }
+                try { pref.Save(); } catch (Exception ex) { AppHost.Logging?.LogError("App", "Preference save after language selection failed", ex); }
             }
             // else: the language is already adopted in OnStartup - no need to set it again.
 
@@ -738,7 +735,7 @@ namespace ShouTech.App
                         MessageBoxButton.OK,
                         MessageBoxImage.Warning);
                 }
-                catch { }
+                catch (Exception ex2) { AppHost.Logging?.LogError("App", "Warning dialog display failed", ex2); }
 
                 try
                 {
@@ -776,7 +773,7 @@ namespace ShouTech.App
                         MessageBoxButton.OK,
                         MessageBoxImage.Warning);
                 }
-                catch { }
+                catch (Exception ex2) { AppHost.Logging?.LogError("App", "Warning dialog display failed", ex2); }
 
                 ShowCompanySelection();
             }
@@ -941,7 +938,7 @@ namespace ShouTech.App
                     "Application exit requested",
                     $"ExitCode={e.ApplicationExitCode}; ShutdownMode={ShutdownMode}");
             }
-            catch { }
+            catch { System.Diagnostics.Debug.WriteLine("Exit lifecycle log failed"); }
 
             try
             {
@@ -950,9 +947,7 @@ namespace ShouTech.App
                     .GetResult();
             }
             catch
-            {
-                // Shutdown must never be interrupted by audit logging.
-            }
+            { System.Diagnostics.Debug.WriteLine("Exit audit flush failed"); }
 
             try
             {
@@ -965,9 +960,7 @@ namespace ShouTech.App
                     disposableProvider.Dispose();
             }
             catch
-            {
-                // Shutdown must never be interrupted by cleanup errors.
-            }
+            { System.Diagnostics.Debug.WriteLine("Service provider dispose failed"); }
 
             try
             {
@@ -975,7 +968,7 @@ namespace ShouTech.App
                     "Application exit completed",
                     $"ExitCode={e.ApplicationExitCode}");
             }
-            catch { }
+            catch { System.Diagnostics.Debug.WriteLine("Exit completion log failed"); }
 
             base.OnExit(e);
         }

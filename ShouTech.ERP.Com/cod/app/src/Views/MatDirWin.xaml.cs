@@ -306,10 +306,7 @@ private void LoadGroups()
             });
         }
     }
-    catch
-    {
-        // Groups are optional.
-    }
+    catch (Exception ex) { AppHost.Logging?.LogError("MatDirWin", "Material group load failed (groups are optional)", ex); }
 }
 
 private void ApplyFilter()

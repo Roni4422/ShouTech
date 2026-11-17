@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
@@ -34,10 +34,7 @@ public partial class BinWin : Window
         {
             LangDirSv.ApplyToWindow(this);
         }
-        catch
-        {
-            // Direction helpers must not block the window.
-        }
+        catch (Exception ex) { AppHost.Logging?.LogError("BinWin", "Direction apply failed", ex); }
     }
 
     /// <summary>

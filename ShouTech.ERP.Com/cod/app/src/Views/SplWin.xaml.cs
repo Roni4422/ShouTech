@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
@@ -73,7 +73,7 @@ namespace ShouTech.App.Views
                     "ShouTech ERP",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
-                try { WpfApp.Current?.Shutdown(1); } catch { }
+                try { WpfApp.Current?.Shutdown(1); } catch (Exception ex2) { AppHost.Logging?.LogError("SplWin", "Shutdown after fatal startup error failed", ex2); }
                 return;
             }
         }
@@ -186,14 +186,14 @@ namespace ShouTech.App.Views
                 {
                 }
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("SplWin", "Settings file probe failed", ex); }
 
             try
             {
                 var pref = UsrPref.Load();
                 _ = pref.Lang;
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("SplWin", "User preferences preload failed", ex); }
 
             return Task.CompletedTask;
         }
@@ -204,7 +204,7 @@ namespace ShouTech.App.Views
             {
                 AppHost.DeviceInfo?.Collect();
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("SplWin", "Device info collection failed", ex); }
 
             return Task.CompletedTask;
         }
@@ -216,7 +216,7 @@ namespace ShouTech.App.Views
                 if (AppHost.License != null)
                     await AppHost.License.InitializeAsync();
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("SplWin", "License initialization failed", ex); }
         }
 
         private static async Task PrepareUserDataAsync()
@@ -226,7 +226,7 @@ namespace ShouTech.App.Views
                 if (AppHost.Sync != null)
                     await AppHost.Sync.SnapshotLocalUserDataAsync();
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("SplWin", "Sync local-data snapshot failed", ex); }
         }
 
         private static Task StartBackgroundServicesAsync()
@@ -235,7 +235,7 @@ namespace ShouTech.App.Views
             {
                 AppHost.OnlineCoordinator?.Start();
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("SplWin", "Online coordinator start failed", ex); }
 
             return Task.CompletedTask;
         }
@@ -250,7 +250,7 @@ namespace ShouTech.App.Views
                 LangDirSv.ApplyToWindow(this, App.CurrentLanguageCode);
                 Title = "ShouTech ERP - Starting";
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("SplWin", "Splash localization failed", ex); }
         }
 
         private void ApplyConfigTexts()
@@ -273,7 +273,7 @@ namespace ShouTech.App.Views
                 if (!string.IsNullOrWhiteSpace(settings.Application.Copyright))
                     txtCopyright.Text = settings.Application.Copyright;
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("SplWin", "Splash settings apply failed", ex); }
         }
 
         private void SetStatus(string text)
@@ -288,7 +288,7 @@ namespace ShouTech.App.Views
 
                 txtStatus.Text = text;
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("SplWin", "Splash status update failed", ex); }
         }
 
         private int _lastProgressValue;
@@ -308,7 +308,7 @@ namespace ShouTech.App.Views
 
                 UpdateProgressBarWidth(value);
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("SplWin", "Splash progress update failed", ex); }
         }
 
         private void UpdateProgressBarWidth(int value)
@@ -321,7 +321,7 @@ namespace ShouTech.App.Views
                 progressBarIndicator.Width = width * value / 100.0;
                 progressBarIndicator.HorizontalAlignment = HorizontalAlignment.Left;
             }
-            catch { }
+            catch (Exception ex) { AppHost.Logging?.LogError("SplWin", "Splash progress bar update failed", ex); }
         }
 
         private void OnProgressBarContainerSizeChanged(object sender, SizeChangedEventArgs e)
@@ -331,7 +331,7 @@ namespace ShouTech.App.Views
 
         private static async Task SafeDelay(int ms)
         {
-            try { await Task.Delay(Math.Max(0, ms)); } catch { }
+            try { await Task.Delay(Math.Max(0, ms)); } catch (Exception ex) { AppHost.Logging?.LogInfo("SplWin", "SafeDelay interrupted: " + ex.Message); }
         }
 
         private static string Truncate(string value, int max)

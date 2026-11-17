@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows;
 using ShouTech.App.Configuration;
 
@@ -184,7 +184,7 @@ public static class ShellContext
         foreach (Window window in app.Windows)
         {
             try { Stamp(window); }
-            catch { /* a closing window must never break a context refresh */ }
+            catch (Exception ex) { AppHost.Logging?.LogError("ShellContext", "Context restamp failed for an open window", ex); }
         }
     }
 
@@ -210,12 +210,12 @@ public static class ShellContext
             if (System.Windows.Application.Current is App app)
                 app.Localization.LanguageChanged += (_, _) => RestampAllOpenWindows();
         }
-        catch { /* non-critical */ }
+        catch (Exception ex) { AppHost.Logging?.LogError("ShellContext", "LanguageChanged subscription for context restamp failed", ex); }
 
         try
         {
             AppHost.Visual.AccentChanged += (_, _) => RestampAllOpenWindows();
         }
-        catch { /* non-critical */ }
+        catch (Exception ex) { AppHost.Logging?.LogError("ShellContext", "AccentChanged subscription for context restamp failed", ex); }
     }
 }
