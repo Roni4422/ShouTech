@@ -7,13 +7,18 @@ using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Npgsql;
 using ShouTech.App.Views;
+using ShouTech.Domain;
 
 namespace ShouTech.App.Services;
 
 /// <summary>
 /// Shared, company-scoped query surface for standard report windows.
-/// Failures never crash the UI: empty result sets are returned when schema
-/// or connection is unavailable so reports remain usable during setup.
+/// Failures SURFACE (Step 6, sweep RC-5): a failed report query is
+/// reported through the central error mechanism (DB-1005) and thrown
+/// as a cataloged AppError — never silently swallowed into an empty
+/// result set that looks like "no data". Report windows handle the
+/// error through RptBase, which reports it and shows the load-failed
+/// status; a genuinely empty result still renders as 0 rows.
 ///
 /// GL BASIS (Fix Phase Step 2, migration 059): every general-ledger report
 /// below computes from POSTED journal_entry_lines (journal_entries.status
@@ -231,7 +236,8 @@ public static class RptQuery
                    COALESCE(s.available_qty, 0) + COALESCE(s.reserved_qty, 0) AS OnHand,
                    COALESCE(m.min_qty, 0) AS MinQty,
                    COALESCE(s.average_cost, 0) AS AvgCost,
-                   COALESCE(s.available_qty, 0) * COALESCE(s.average_cost, 0) AS Value
+                   CASE WHEN COALESCE(s.stock_value, 0) <> 0 THEN s.stock_value
+                        ELSE COALESCE(s.available_qty, 0) * COALESCE(s.average_cost, 0) END AS Value
             FROM material_stock_balances s
             LEFT JOIN warehouses w
               ON w.company_id = s.company_id AND w.warehouse_id = s.warehouse_id
@@ -253,6 +259,11 @@ public static class RptQuery
             """;
         if (DatabaseRuntime.IsPostgreSql())
             sql = sql.Replace("s.is_deleted = 0", "s.is_deleted = FALSE", StringComparison.Ordinal);
+        // Step 6: a STOCK report excludes service and non-stocked
+        // materials (sweep finding — they inflated the stock value).
+        sql += DatabaseRuntime.IsPostgreSql()
+            ? " AND (m.is_service IS NULL OR m.is_service = FALSE) AND (m.is_stocked IS NULL OR m.is_stocked = TRUE)"
+            : " AND COALESCE(m.is_service, 0) = 0 AND COALESCE(m.is_stocked, 1) = 1";
         if (!string.IsNullOrWhiteSpace(warehouseId))
             sql += " AND CAST(s.warehouse_id AS TEXT) = $wh";
         sql += " ORDER BY Warehouse, MaterialCode;";
@@ -297,6 +308,9 @@ public static class RptQuery
                        COALESCE(sm.qty_in, 0) AS QtyIn,
                        COALESCE(sm.qty_out, 0) AS QtyOut,
                        COALESCE(sm.unit_cost, 0) AS UnitCost,
+                       COALESCE(sm.cost_amount, (COALESCE(sm.qty_in, 0) - COALESCE(sm.qty_out, 0)) * COALESCE(sm.unit_cost, 0)) AS CostAmount,
+                       COALESCE(sm.valuation_rate, sm.unit_cost, 0) AS ValuationRate,
+                       COALESCE(sm.stock_value_after, 0) AS StockValueAfter,
                        COALESCE(sm.note, '') AS Note,
                        SUM(COALESCE(sm.qty_in, 0) - COALESCE(sm.qty_out, 0))
                            OVER (
@@ -324,7 +338,9 @@ public static class RptQuery
                    QtyIn AS "QtyIn",
                    QtyOut AS "QtyOut",
                    UnitCost AS "UnitCost",
-                   (QtyIn - QtyOut) * UnitCost AS "MoveValue",
+                   CostAmount AS "MoveValue",
+                   ValuationRate AS "ValuationRate",
+                   StockValueAfter AS "BalanceValue",
                    Balance AS "Balance",
                    Note AS "Note"
             FROM ledger
@@ -495,27 +511,53 @@ public static class RptQuery
         DateTime from, DateTime to, CancellationToken ct)
     {
         DocSchema.Ensure();
-        const string sql = """
-            SELECT COALESCE(l.material_code, '') AS MaterialCode,
-                   COALESCE(l.description, '') AS MaterialName,
-                   COALESCE(SUM(l.qty), 0) AS QtySold,
-                   COALESCE(SUM(l.line_subtotal), 0) AS Revenue,
-                   COALESCE(SUM(l.line_tax), 0) AS Tax,
-                   COALESCE(SUM(l.line_total), 0) AS Total
-            FROM sales_document_lines l
-            INNER JOIN sales_documents d ON d.doc_id = l.doc_id
-            WHERE d.company_id = $company
-              AND d.is_deleted = 0
-              AND d.status = 'Posted'
-              AND d.doc_kind IN ('SAL','POS')
-              AND d.doc_date >= $from AND d.doc_date <= $to
-            GROUP BY l.material_code, l.description
+        // Step 6: Cost/Profit/MarginPct added — cost is the engine's
+        // movement cost_amount per material (net of returns), so this
+        // report finally shows profitability instead of revenue only.
+        // Sales returns net against qty/revenue/cost.
+        var sql = PgBoolFix("""
+            SELECT agg.MaterialCode AS MaterialCode,
+                   agg.MaterialName AS MaterialName,
+                   agg.QtySold AS QtySold,
+                   agg.Revenue AS Revenue,
+                   agg.Tax AS Tax,
+                   agg.Total AS Total,
+                   COALESCE(c.Cost, 0) AS Cost,
+                   agg.Revenue - COALESCE(c.Cost, 0) AS Profit,
+                   CASE WHEN agg.Revenue = 0 THEN 0
+                        ELSE (agg.Revenue - COALESCE(c.Cost, 0)) / agg.Revenue END AS MarginPct
+            FROM (
+                SELECT COALESCE(l.material_code, '') AS MaterialCode,
+                       COALESCE(l.description, '') AS MaterialName,
+                       COALESCE(SUM(CASE WHEN d.doc_kind = 'SRT' THEN -l.qty ELSE l.qty END), 0) AS QtySold,
+                       COALESCE(SUM(CASE WHEN d.doc_kind = 'SRT' THEN -l.line_subtotal ELSE l.line_subtotal END), 0) AS Revenue,
+                       COALESCE(SUM(CASE WHEN d.doc_kind = 'SRT' THEN -l.line_tax ELSE l.line_tax END), 0) AS Tax,
+                       COALESCE(SUM(CASE WHEN d.doc_kind = 'SRT' THEN -l.line_total ELSE l.line_total END), 0) AS Total
+                FROM sales_document_lines l
+                INNER JOIN sales_documents d ON d.doc_id = l.doc_id
+                WHERE d.company_id = $company
+                  AND d.is_deleted = 0
+                  AND d.status = 'Posted'
+                  AND d.doc_kind IN ('SAL','POS','SRT')
+                  AND d.doc_date >= $from AND d.doc_date <= $to
+                GROUP BY l.material_code, l.description
+            ) agg
+            LEFT JOIN (
+                SELECT mm.code AS code, -SUM(mv.cost_amount) AS Cost
+                FROM material_stock_movements mv
+                INNER JOIN materials mm ON mm.company_id = mv.company_id AND mm.material_id = mv.material_id
+                WHERE mv.company_id = $company AND mv.is_deleted = 0
+                  AND mv.movement_type IN ('SAL', 'POS', 'SRT')
+                  AND mv.movement_date >= $from AND mv.movement_date < $toEx
+                GROUP BY mm.code
+            ) c ON c.code = agg.MaterialCode
             ORDER BY Revenue DESC;
-            """;
+            """);
         return await QueryAsync(sql, ct,
             ("$company", Company),
             ("$from", from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
-            ("$to", to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+            ("$to", to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
+            ("$toEx", DateEndExclusive(to)));
     }
 
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> StockAdjustmentsAsync(
@@ -656,16 +698,22 @@ public static class RptQuery
                    COALESCE(SUM(sm.qty_out), 0) AS QtyOut,
                    COALESCE(SUM(sm.qty_in - sm.qty_out), 0) AS Balance,
                    CASE WHEN SUM(sm.qty_in - sm.qty_out) = 0 THEN 0
-                        ELSE SUM((sm.qty_in - sm.qty_out) * sm.unit_cost) / SUM(sm.qty_in - sm.qty_out) END AS AvgCost,
-                   COALESCE(SUM((sm.qty_in - sm.qty_out) * sm.unit_cost), 0) AS Value
+                        ELSE SUM(COALESCE(sm.cost_amount, (sm.qty_in - sm.qty_out) * sm.unit_cost)) / SUM(sm.qty_in - sm.qty_out) END AS AvgCost,
+                   COALESCE(SUM(COALESCE(sm.cost_amount, (sm.qty_in - sm.qty_out) * sm.unit_cost)), 0) AS Value
             FROM material_stock_movements sm
             LEFT JOIN materials m ON m.company_id = sm.company_id AND m.material_id = sm.material_id
             LEFT JOIN warehouses w ON w.company_id = sm.company_id AND w.warehouse_id = sm.warehouse_id
-            WHERE sm.company_id = $company AND sm.is_deleted = 0 AND sm.movement_date <= $asof
+            WHERE sm.company_id = $company AND sm.is_deleted = 0 AND sm.movement_date < $asof
             GROUP BY sm.warehouse_id, w.warehouse_code, m.code, m.name_ar, m.default_unit
             ORDER BY Warehouse, MaterialCode;
             """);
-        return await QueryAsync(sql, ct, ("$company", Company), ("$asof", FmtDate(asOf)));
+        // Step 6: Value is the sum of the engine's signed cost_amount
+        // (legacy rows fall back to qty x recorded unit_cost), and the
+        // as-of boundary is end-exclusive like every other report here —
+        // the old '<= date' form dropped same-day movements whose
+        // timestamps carried a time component on PostgreSQL, which is
+        // how this report disagreed with Stock Balances (70 vs 40).
+        return await QueryAsync(sql, ct, ("$company", Company), ("$asof", DateEndExclusive(asOf)));
     }
 
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> MaterialMovementChartAsync(
@@ -800,6 +848,11 @@ public static class RptQuery
         DateTime from, DateTime to, CancellationToken ct)
     {
         DocSchema.Ensure(); MatRepo.EnsureSchema();
+        // Step 6: Cost comes from the engine's movement cost_amount
+        // (per material, net of sales returns), and sales/purchase
+        // aggregates net their returns (SRT/PRT) instead of ignoring
+        // them. The old Cost multiplied raw line qty by the card's
+        // avg_cost — a figure no posting path maintained.
         var sql = PgBoolFix("""
             SELECT m.code AS MaterialCode,
                    m.name_ar AS MaterialName,
@@ -807,30 +860,43 @@ public static class RptQuery
                    COALESCE(s.Revenue, 0) AS Revenue,
                    COALESCE(p.QtyPurchased, 0) AS QtyPurchased,
                    COALESCE(p.PurchaseAmount, 0) AS PurchaseAmount,
-                   COALESCE(s.QtySold, 0) * COALESCE(NULLIF(m.avg_cost, 0), m.cost, 0) AS Cost,
-                   COALESCE(s.Revenue, 0) - COALESCE(s.QtySold, 0) * COALESCE(NULLIF(m.avg_cost, 0), m.cost, 0) AS Margin,
+                   COALESCE(c.Cost, 0) AS Cost,
+                   COALESCE(s.Revenue, 0) - COALESCE(c.Cost, 0) AS Margin,
                    CASE WHEN COALESCE(s.Revenue, 0) = 0 THEN 0
-                        ELSE (COALESCE(s.Revenue, 0) - COALESCE(s.QtySold, 0) * COALESCE(NULLIF(m.avg_cost, 0), m.cost, 0)) / s.Revenue END AS MarginPct
+                        ELSE (COALESCE(s.Revenue, 0) - COALESCE(c.Cost, 0)) / s.Revenue END AS MarginPct
             FROM materials m
             LEFT JOIN (
-                SELECT l.material_code AS code, SUM(l.qty) AS QtySold, SUM(l.line_total) AS Revenue
+                SELECT l.material_code AS code,
+                       SUM(CASE WHEN d.doc_kind = 'SRT' THEN -l.qty ELSE l.qty END) AS QtySold,
+                       SUM(CASE WHEN d.doc_kind = 'SRT' THEN -l.line_total ELSE l.line_total END) AS Revenue
                 FROM sales_document_lines l INNER JOIN sales_documents d ON d.doc_id = l.doc_id
                 WHERE d.company_id = $company AND d.is_deleted = 0 AND d.status = 'Posted'
-                  AND d.doc_kind IN ('SAL', 'POS') AND d.doc_date >= $from AND d.doc_date <= $to
+                  AND d.doc_kind IN ('SAL', 'POS', 'SRT') AND d.doc_date >= $from AND d.doc_date <= $to
                 GROUP BY l.material_code
             ) s ON s.code = m.code
             LEFT JOIN (
-                SELECT l.material_code AS code, SUM(l.qty) AS QtyPurchased, SUM(l.line_total) AS PurchaseAmount
+                SELECT l.material_code AS code,
+                       SUM(CASE WHEN d.doc_kind = 'PRT' THEN -l.qty ELSE l.qty END) AS QtyPurchased,
+                       SUM(CASE WHEN d.doc_kind = 'PRT' THEN -l.line_total ELSE l.line_total END) AS PurchaseAmount
                 FROM purchase_document_lines l INNER JOIN purchase_documents d ON d.doc_id = l.doc_id
                 WHERE d.company_id = $company AND d.is_deleted = 0 AND d.status = 'Posted'
-                  AND d.doc_kind IN ('PUR') AND d.doc_date >= $from AND d.doc_date <= $to
+                  AND d.doc_kind IN ('PUR', 'PRT') AND d.doc_date >= $from AND d.doc_date <= $to
                 GROUP BY l.material_code
             ) p ON p.code = m.code
+            LEFT JOIN (
+                SELECT mv.material_id AS mid, -SUM(mv.cost_amount) AS Cost
+                FROM material_stock_movements mv
+                WHERE mv.company_id = $company AND mv.is_deleted = 0
+                  AND mv.movement_type IN ('SAL', 'POS', 'SRT')
+                  AND mv.movement_date >= $from AND mv.movement_date < $toEx
+                GROUP BY mv.material_id
+            ) c ON c.mid = m.material_id
             WHERE m.company_id = $company AND m.is_deleted = 0
               AND (COALESCE(s.QtySold, 0) <> 0 OR COALESCE(p.QtyPurchased, 0) <> 0)
             ORDER BY Revenue DESC;
             """);
-        return await QueryAsync(sql, ct, ("$company", Company), ("$from", FmtDate(from)), ("$to", FmtDate(to)));
+        return await QueryAsync(sql, ct, ("$company", Company), ("$from", FmtDate(from)), ("$to", FmtDate(to)),
+            ("$toEx", DateEndExclusive(to)));
     }
 
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> StagnantMaterialsAsync(
@@ -844,7 +910,8 @@ public static class RptQuery
                    COALESCE(m.name_ar, '') AS MaterialName,
                    COALESCE(b.available_qty, 0) AS OnHand,
                    COALESCE(b.average_cost, 0) AS AvgCost,
-                   COALESCE(b.available_qty, 0) * COALESCE(b.average_cost, 0) AS Value,
+                   CASE WHEN COALESCE(b.stock_value, 0) <> 0 THEN b.stock_value
+                        ELSE COALESCE(b.available_qty, 0) * COALESCE(b.average_cost, 0) END AS Value,
                    (SELECT MAX(x.movement_date) FROM material_stock_movements x
                      WHERE x.company_id = b.company_id AND x.warehouse_id = b.warehouse_id
                        AND x.material_id = b.material_id AND x.is_deleted = 0 AND x.qty_out > 0) AS LastOutDate
@@ -873,7 +940,7 @@ public static class RptQuery
                    COALESCE(SUM(sm.qty_in), 0) AS QtyIn,
                    COALESCE(SUM(sm.qty_out), 0) AS QtyOut,
                    COALESCE(SUM(sm.qty_in + sm.qty_out), 0) AS TotalQty,
-                   COALESCE(SUM((sm.qty_in + sm.qty_out) * sm.unit_cost), 0) AS Value
+                   COALESCE(SUM(ABS(COALESCE(sm.cost_amount, (sm.qty_in - sm.qty_out) * sm.unit_cost))), 0) AS Value
             FROM material_stock_movements sm
             LEFT JOIN materials m ON m.company_id = sm.company_id AND m.material_id = sm.material_id
             WHERE sm.company_id = $company AND sm.is_deleted = 0
@@ -894,13 +961,13 @@ public static class RptQuery
             SELECT COALESCE(m.code, '') AS MaterialCode,
                    COALESCE(m.name_ar, '') AS MaterialName,
                    COALESCE(SUM(CASE WHEN sm.movement_date >= $f1 AND sm.movement_date <= $t1 THEN sm.qty_in - sm.qty_out ELSE 0 END), 0) AS Qty1,
-                   COALESCE(SUM(CASE WHEN sm.movement_date >= $f1 AND sm.movement_date <= $t1 THEN (sm.qty_in - sm.qty_out) * sm.unit_cost ELSE 0 END), 0) AS Value1,
+                   COALESCE(SUM(CASE WHEN sm.movement_date >= $f1 AND sm.movement_date <= $t1 THEN COALESCE(sm.cost_amount, (sm.qty_in - sm.qty_out) * sm.unit_cost) ELSE 0 END), 0) AS Value1,
                    COALESCE(SUM(CASE WHEN sm.movement_date >= $f2 AND sm.movement_date <= $t2 THEN sm.qty_in - sm.qty_out ELSE 0 END), 0) AS Qty2,
-                   COALESCE(SUM(CASE WHEN sm.movement_date >= $f2 AND sm.movement_date <= $t2 THEN (sm.qty_in - sm.qty_out) * sm.unit_cost ELSE 0 END), 0) AS Value2,
+                   COALESCE(SUM(CASE WHEN sm.movement_date >= $f2 AND sm.movement_date <= $t2 THEN COALESCE(sm.cost_amount, (sm.qty_in - sm.qty_out) * sm.unit_cost) ELSE 0 END), 0) AS Value2,
                    COALESCE(SUM(CASE WHEN sm.movement_date >= $f2 AND sm.movement_date <= $t2 THEN sm.qty_in - sm.qty_out ELSE 0 END), 0)
                      - COALESCE(SUM(CASE WHEN sm.movement_date >= $f1 AND sm.movement_date <= $t1 THEN sm.qty_in - sm.qty_out ELSE 0 END), 0) AS QtyDiff,
-                   COALESCE(SUM(CASE WHEN sm.movement_date >= $f2 AND sm.movement_date <= $t2 THEN (sm.qty_in - sm.qty_out) * sm.unit_cost ELSE 0 END), 0)
-                     - COALESCE(SUM(CASE WHEN sm.movement_date >= $f1 AND sm.movement_date <= $t1 THEN (sm.qty_in - sm.qty_out) * sm.unit_cost ELSE 0 END), 0) AS ValueDiff
+                   COALESCE(SUM(CASE WHEN sm.movement_date >= $f2 AND sm.movement_date <= $t2 THEN COALESCE(sm.cost_amount, (sm.qty_in - sm.qty_out) * sm.unit_cost) ELSE 0 END), 0)
+                     - COALESCE(SUM(CASE WHEN sm.movement_date >= $f1 AND sm.movement_date <= $t1 THEN COALESCE(sm.cost_amount, (sm.qty_in - sm.qty_out) * sm.unit_cost) ELSE 0 END), 0) AS ValueDiff
             FROM material_stock_movements sm
             LEFT JOIN materials m ON m.company_id = sm.company_id AND m.material_id = sm.material_id
             WHERE sm.company_id = $company AND sm.is_deleted = 0
@@ -916,20 +983,22 @@ public static class RptQuery
         CancellationToken ct)
     {
         DocSchema.Ensure(); MatRepo.EnsureSchema();
+        // Step 6: read from the balances (the valuation of record), so
+        // this report agrees with Stock Balances' NEGATIVE filter by
+        // construction — the old movement-sum version could disagree
+        // with it whenever the two derivations diverged.
         var sql = PgBoolFix("""
-            SELECT COALESCE(w.warehouse_code, CAST(sm.warehouse_id AS TEXT)) AS Warehouse,
+            SELECT COALESCE(w.warehouse_code, CAST(b.warehouse_id AS TEXT)) AS Warehouse,
                    COALESCE(m.code, '') AS MaterialCode,
                    COALESCE(m.name_ar, '') AS MaterialName,
-                   COALESCE(SUM(sm.qty_in - sm.qty_out), 0) AS Balance,
-                   CASE WHEN SUM(sm.qty_in - sm.qty_out) = 0 THEN 0
-                        ELSE SUM((sm.qty_in - sm.qty_out) * sm.unit_cost) / SUM(sm.qty_in - sm.qty_out) END AS AvgCost,
-                   COALESCE(SUM((sm.qty_in - sm.qty_out) * sm.unit_cost), 0) AS Value
-            FROM material_stock_movements sm
-            LEFT JOIN materials m ON m.company_id = sm.company_id AND m.material_id = sm.material_id
-            LEFT JOIN warehouses w ON w.company_id = sm.company_id AND w.warehouse_id = sm.warehouse_id
-            WHERE sm.company_id = $company AND sm.is_deleted = 0
-            GROUP BY sm.warehouse_id, w.warehouse_code, m.code, m.name_ar
-            HAVING SUM(sm.qty_in - sm.qty_out) < -0.0001
+                   COALESCE(b.available_qty, 0) AS Balance,
+                   COALESCE(b.average_cost, 0) AS AvgCost,
+                   CASE WHEN COALESCE(b.stock_value, 0) <> 0 THEN b.stock_value
+                        ELSE COALESCE(b.available_qty, 0) * COALESCE(b.average_cost, 0) END AS Value
+            FROM material_stock_balances b
+            LEFT JOIN materials m ON m.company_id = b.company_id AND m.material_id = b.material_id
+            LEFT JOIN warehouses w ON w.company_id = b.company_id AND w.warehouse_id = b.warehouse_id
+            WHERE b.company_id = $company AND b.is_deleted = 0 AND COALESCE(b.available_qty, 0) < -0.0001
             ORDER BY Balance;
             """);
         return await QueryAsync(sql, ct, ("$company", Company));
@@ -967,7 +1036,8 @@ public static class RptQuery
                    COALESCE(m.name_ar, '') AS MaterialName,
                    COALESCE(b.available_qty, 0) AS Qty,
                    COALESCE(b.average_cost, 0) AS AvgCost,
-                   COALESCE(b.available_qty, 0) * COALESCE(b.average_cost, 0) AS Value
+                   CASE WHEN COALESCE(b.stock_value, 0) <> 0 THEN b.stock_value
+                        ELSE COALESCE(b.available_qty, 0) * COALESCE(b.average_cost, 0) END AS Value
             FROM material_stock_balances b
             LEFT JOIN materials m ON m.company_id = b.company_id AND m.material_id = b.material_id
             LEFT JOIN warehouses w ON w.company_id = b.company_id AND w.warehouse_id = b.warehouse_id
@@ -1293,21 +1363,45 @@ public static class RptQuery
         DateTime from, DateTime to, CancellationToken ct)
     {
         DocSchema.Ensure(); MatRepo.EnsureSchema();
+        // Step 6: Cost is the valuation engine's signed cost_amount for
+        // the document's own movements — valued per cost_method, in
+        // base units, at posting time. The old formula (line qty in the
+        // CHOSEN unit x the card's avg_cost, which no posting path ever
+        // updated) reported a margin of 235 on a true profit of 100 in
+        // the sweep case. Sales returns are included, netted: their
+        // revenue and their re-entry cost both reverse.
         var sql = PgBoolFix("""
             SELECT d.doc_date AS DocDate,
                    d.doc_no AS DocNo,
                    COALESCE(d.party_name, '') AS PartyName,
-                   COALESCE(SUM(l.line_total), 0) AS Revenue,
-                   COALESCE(SUM(l.qty * COALESCE(NULLIF(m.avg_cost, 0), m.cost, 0)), 0) AS Cost,
-                   COALESCE(SUM(l.line_total), 0) - COALESCE(SUM(l.qty * COALESCE(NULLIF(m.avg_cost, 0), m.cost, 0)), 0) AS Profit,
+                   CASE WHEN d.doc_kind = 'SRT' THEN -COALESCE(SUM(l.line_total), 0)
+                        ELSE COALESCE(SUM(l.line_total), 0) END AS Revenue,
+                   -COALESCE((
+                       SELECT SUM(mv.cost_amount) FROM material_stock_movements mv
+                       WHERE mv.company_id = d.company_id AND mv.document_no = d.doc_no
+                         AND mv.movement_type IN ('SAL', 'POS', 'SRT') AND mv.is_deleted = 0
+                   ), 0) AS Cost,
+                   (CASE WHEN d.doc_kind = 'SRT' THEN -COALESCE(SUM(l.line_total), 0)
+                         ELSE COALESCE(SUM(l.line_total), 0) END)
+                   + COALESCE((
+                       SELECT SUM(mv.cost_amount) FROM material_stock_movements mv
+                       WHERE mv.company_id = d.company_id AND mv.document_no = d.doc_no
+                         AND mv.movement_type IN ('SAL', 'POS', 'SRT') AND mv.is_deleted = 0
+                   ), 0) AS Profit,
                    CASE WHEN SUM(l.line_total) = 0 THEN 0
-                        ELSE (SUM(l.line_total) - SUM(l.qty * COALESCE(NULLIF(m.avg_cost, 0), m.cost, 0))) / SUM(l.line_total) END AS MarginPct
+                        ELSE ((CASE WHEN d.doc_kind = 'SRT' THEN -COALESCE(SUM(l.line_total), 0)
+                                    ELSE COALESCE(SUM(l.line_total), 0) END)
+                              + COALESCE((
+                                  SELECT SUM(mv.cost_amount) FROM material_stock_movements mv
+                                  WHERE mv.company_id = d.company_id AND mv.document_no = d.doc_no
+                                    AND mv.movement_type IN ('SAL', 'POS', 'SRT') AND mv.is_deleted = 0
+                              ), 0))
+                             / (CASE WHEN d.doc_kind = 'SRT' THEN -SUM(l.line_total) ELSE SUM(l.line_total) END) END AS MarginPct
             FROM sales_documents d
             INNER JOIN sales_document_lines l ON l.doc_id = d.doc_id
-            LEFT JOIN materials m ON m.company_id = d.company_id AND m.code = l.material_code
             WHERE d.company_id = $company AND d.is_deleted = 0 AND d.status = 'Posted'
-              AND d.doc_kind IN ('SAL', 'POS') AND d.doc_date >= $from AND d.doc_date <= $to
-            GROUP BY d.doc_id, d.doc_date, d.doc_no, d.party_name
+              AND d.doc_kind IN ('SAL', 'POS', 'SRT') AND d.doc_date >= $from AND d.doc_date <= $to
+            GROUP BY d.doc_id, d.doc_date, d.doc_no, d.party_name, d.doc_kind
             ORDER BY d.doc_date DESC, d.doc_no DESC;
             """);
         return await QueryAsync(sql, ct, ("$company", Company), ("$from", FmtDate(from)), ("$to", FmtDate(to)));
@@ -1682,7 +1776,8 @@ public static class RptQuery
     {
         var cs = DatabaseRuntime.GetConnectionString();
         if (string.IsNullOrWhiteSpace(cs))
-            return Array.Empty<IReadOnlyDictionary<string, object?>>();
+            throw new AppError(ErrorCodes.DatabaseNotInitialized,
+                "No database connection is configured for reports.");
 
         try
         {
@@ -1711,10 +1806,21 @@ public static class RptQuery
             }
             return result;
         }
-        catch
+        catch (OperationCanceledException)
         {
-            // Reports must never throw into the UI for missing optional tables.
-            return Array.Empty<IReadOnlyDictionary<string, object?>>();
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Sweep RC-5: this catch used to return an empty result set
+            // for EVERY failure, so any SQL/schema/provider error
+            // rendered as "0 rows" with a normal status line. Now the
+            // failure is reported centrally (error catalog + LogServ via
+            // AppHost.Errors) and thrown as a cataloged AppError; the
+            // report window surfaces it instead of faking emptiness.
+            AppHost.Errors.Report(ErrorCodes.DatabaseQueryFailed, ex, "RptQuery.QueryAsync");
+            throw new AppError(ErrorCodes.DatabaseQueryFailed,
+                "A database operation failed.", ex);
         }
     }
 

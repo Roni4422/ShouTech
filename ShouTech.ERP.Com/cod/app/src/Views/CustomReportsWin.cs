@@ -14,6 +14,7 @@ using Microsoft.Data.Sqlite;
 using Npgsql;
 using ShouTech.App.Reporting;
 using ShouTech.App.Services;
+using ShouTech.Domain;
 
 namespace ShouTech.App.Views;
 
@@ -201,9 +202,14 @@ public sealed class CustomReportsWin : BaseWin
             if (keys.Count > 0)
                 _reportKey.SelectedIndex = 0;
         }
-        catch
+        catch (Exception ex)
         {
-            // The definitions store may not exist yet; listing then reports it.
+            // Step 6 (report-layer swallow inventory): this catch used to
+            // be silent, so a broken definitions store looked like "no
+            // custom reports exist". The failure is now reported through
+            // the central mechanism; the window still opens with an
+            // empty key list, and listing then surfaces the problem.
+            AppHost.Errors.Report(ErrorCodes.DatabaseQueryFailed, ex, "CustomReportsWin.LoadKeysAsync");
         }
     }
 
@@ -211,7 +217,11 @@ public sealed class CustomReportsWin : BaseWin
     {
         var cs = DatabaseRuntime.GetConnectionString();
         if (string.IsNullOrWhiteSpace(cs))
-            return Array.Empty<string>();
+            // Step 6: no connection string is a configuration failure,
+            // not "no report keys" — surface it cataloged (DB-1004);
+            // LoadKeysAsync reports it through the central mechanism.
+            throw new AppError(ErrorCodes.DatabaseNotInitialized,
+                "No database connection is configured for reports.");
         var isPg = DatabaseRuntime.IsPostgreSql();
         await using var connection = isPg
             ? (DbConnection)new NpgsqlConnection(cs)
@@ -413,8 +423,13 @@ public sealed class CustomReportsWin : BaseWin
             var companies = await CoLocalStore.LoadAsync();
             return companies.FirstOrDefault(c => string.Equals(c.Code, CurrentCompanyCode, StringComparison.OrdinalIgnoreCase))?.CompanyId ?? Guid.Empty;
         }
-        catch
+        catch (Exception ex)
         {
+            // Step 6 (report-layer swallow inventory): a failed company
+            // lookup used to silently become Guid.Empty, so custom
+            // reports ran against no company and returned nothing. The
+            // failure is now reported centrally before the fallback.
+            AppHost.Errors.Report(ErrorCodes.DatabaseQueryFailed, ex, "CustomReportsWin.ResolveCompanyGuidAsync");
             return Guid.Empty;
         }
     }

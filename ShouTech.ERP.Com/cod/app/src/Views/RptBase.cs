@@ -328,13 +328,18 @@ public abstract class RptBase : BaseWin
 
     private async Task RefreshAsync()
     {
-        _def ??= BuildDefinition();
-        if (_filterControls.Count == 0 && _def.Filters.Count > 0)
-            BuildFilters();
-
         _refresh.IsEnabled = false;
         try
         {
+            // Definition/filter construction lives inside the try since
+            // Step 6: filter choice loaders query the database
+            // (RptQuery.WarehouseChoices), and a query failure there must
+            // surface through this same path now that RptQuery throws
+            // cataloged errors instead of returning empty sets (RC-5).
+            _def ??= BuildDefinition();
+            if (_filterControls.Count == 0 && _def.Filters.Count > 0)
+                BuildFilters();
+
             _data = await LoadDataAsync(CollectFilters(), CancellationToken.None);
             ApplyColumnLayout();
             BindGrid();
@@ -342,7 +347,11 @@ public abstract class RptBase : BaseWin
         }
         catch (Exception exL366)
         {
-            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL366, "RptBase.RefreshAsync");
+            // A cataloged AppError was already reported centrally by its
+            // source (e.g. RptQuery reports DB-1005); report only the
+            // failures that arrive unreported, so one failure = one log.
+            if (exL366 is not ShouTech.Domain.AppError)
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL366, "RptBase.RefreshAsync");
             ShowError("Report.LoadFailed");
         }
         finally
