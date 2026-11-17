@@ -11,6 +11,11 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.4.5" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Phase 4: the svc webhook signer is a standalone file; compile it
+         directly so its HMAC vectors are covered by this test project. -->
+    <Compile Include="..\..\svc\WebhookSigner.cs" Link="WebhookSigner.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\cod\app\src\MainApp.csproj" />
     <ProjectReference Include="..\..\src\ShouTech.Infrastructure\ShouTech.Infrastructure.csproj" />
     <ProjectReference Include="..\..\tools\SqlMigrator\SqlMigrator.csproj" ReferenceOutputAssembly="false" />
