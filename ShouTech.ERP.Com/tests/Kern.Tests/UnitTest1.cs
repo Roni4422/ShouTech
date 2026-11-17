@@ -975,6 +975,12 @@ namespace Kern.Tests
                 return Task.CompletedTask;
             }
 
+            public Task UpdateDraftAsync(Guid companyId, Guid journalEntryId, JournalEntry entry, string userId, CancellationToken cancellationToken = default)
+            {
+                SavedEntry = entry;
+                return Task.CompletedTask;
+            }
+
             public Task PostAsync(Guid journalEntryId, string userId, CancellationToken cancellationToken = default) =>
                 Task.CompletedTask;
 

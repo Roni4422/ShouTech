@@ -47,6 +47,42 @@ public sealed class JournalService
         return entry.Id;
     }
 
+    /// <summary>
+    /// Replaces the header and lines of an existing DRAFT journal entry with
+    /// the supplied values, under exactly the same validation as
+    /// <see cref="CreateDraftAsync"/> (balanced, at least two lines, non-zero
+    /// total, active postable accounts, open fiscal period). Posted and
+    /// reversed entries are immutable: the repository rejects the update
+    /// with a cataloged <see cref="ShouTech.Domain.AppError"/>
+    /// (ACC-5005). The document number is the entry's identity and is not
+    /// changed by an update.
+    /// </summary>
+    public async Task UpdateDraftAsync(
+        Guid companyId,
+        Guid journalEntryId,
+        DateOnly entryDate,
+        string description,
+        string userId,
+        IEnumerable<JournalLineRequest> lines,
+        CancellationToken cancellationToken = default,
+        string? referenceNumber = null,
+        string currencyCode = "SAR",
+        decimal exchangeRate = 1m)
+    {
+        if (journalEntryId == Guid.Empty) throw new ArgumentException("Journal entry is required.", nameof(journalEntryId));
+        ArgumentNullException.ThrowIfNull(lines);
+
+        // The JournalEntry aggregate reuses the create-path validation; its
+        // own Id is irrelevant here — the repository updates the row named
+        // by journalEntryId and keeps that row's document number.
+        var entry = new JournalEntry(entryDate, description, referenceNumber, currencyCode, exchangeRate);
+        foreach (var line in lines)
+            entry.AddLine(line.AccountId, line.Debit, line.Credit, line.Note, line.CostCenter);
+
+        entry.EnsureBalanced();
+        await _repository.UpdateDraftAsync(companyId, journalEntryId, entry, userId, cancellationToken).ConfigureAwait(false);
+    }
+
     public Task PostAsync(Guid journalEntryId, string userId, CancellationToken cancellationToken = default) =>
         _repository.PostAsync(journalEntryId, userId, cancellationToken);
 

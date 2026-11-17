@@ -8,6 +8,7 @@ using ShouTech.App.Reporting.Invoices;
 using ShouTech.App.Views;
 
 using ShouTech.Domain;
+using ShouTech.Infrastructure;
 namespace ShouTech.App.Services;
 
 /// <summary>
@@ -222,7 +223,7 @@ public static class InvRepo
             cmd.Transaction = tx;
             cmd.CommandText = $"""
                 SELECT doc_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id,
-                       currency_code, exchange_rate, subtotal, tax_amount, grand_total, status, tax_rate
+                       currency_code, exchange_rate, subtotal, tax_amount, grand_total, status, tax_rate, party_code
                 FROM {headerTable}
                 WHERE doc_id=$id AND company_id=$company AND is_deleted=0;
                 """;
@@ -240,6 +241,7 @@ public static class InvRepo
                 DocNo = reader.GetString(reader.GetOrdinal("doc_no")),
                 DocDate = DateTime.Parse(reader.GetString(reader.GetOrdinal("doc_date")), CultureInfo.InvariantCulture),
                 PartyId = reader.IsDBNull(reader.GetOrdinal("party_id")) ? null : Convert.ToInt64(reader.GetValue(reader.GetOrdinal("party_id")), CultureInfo.InvariantCulture),
+                PartyCode = reader.IsDBNull(reader.GetOrdinal("party_code")) ? "" : reader.GetString(reader.GetOrdinal("party_code")),
                 PartyName = reader.IsDBNull(reader.GetOrdinal("party_name")) ? "" : reader.GetString(reader.GetOrdinal("party_name")),
                 WarehouseId = reader.IsDBNull(reader.GetOrdinal("warehouse_id")) ? null : Convert.ToInt32(reader.GetValue(reader.GetOrdinal("warehouse_id")), CultureInfo.InvariantCulture),
                 CurrencyCode = reader.GetString(reader.GetOrdinal("currency_code")),
@@ -305,14 +307,6 @@ public static class InvRepo
         // Party ledger: sales increase receivable (debit customer), purchases increase payable.
         if (doc.PartyId is long partyId)
         {
-            using var led = connection.CreateCommand();
-            led.Transaction = tx;
-            led.CommandText = """
-                INSERT INTO party_ledger
-                (company_id, party_kind, party_id, doc_kind, doc_id, doc_no, entry_date, debit, credit, currency_code, note)
-                VALUES
-                ($company, $pk, $pid, $dk, $did, $dno, $date, $debit, $credit, $cur, $note);
-                """;
             var partyKind = isSales ? "C" : "S";
             decimal debit = 0, credit = 0;
             if (isSales)
@@ -325,6 +319,27 @@ public static class InvRepo
                 if (kind == InvDocKind.PurchaseReturn) debit = doc.GrandTotal;
                 else credit = doc.GrandTotal;
             }
+
+            // Credit-limit gate (ACC-5006): only a movement that increases
+            // the party's exposure is checked (customer debit / supplier
+            // credit). Returns reduce the balance and never block. A
+            // violation aborts the whole posting transaction.
+            var exposureIncrease = partyKind == "C" ? debit : credit;
+            PartyCreditGuard.EnsureWithinLimit(
+                connection, tx,
+                DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite",
+                Company, partyKind, partyId,
+                string.IsNullOrWhiteSpace(doc.PartyCode) ? null : doc.PartyCode,
+                exposureIncrease, "$");
+
+            using var led = connection.CreateCommand();
+            led.Transaction = tx;
+            led.CommandText = """
+                INSERT INTO party_ledger
+                (company_id, party_kind, party_id, doc_kind, doc_id, doc_no, entry_date, debit, credit, currency_code, note)
+                VALUES
+                ($company, $pk, $pid, $dk, $did, $dno, $date, $debit, $credit, $cur, $note);
+                """;
             Add(led, "$company", Company);
             Add(led, "$pk", partyKind);
             Add(led, "$pid", partyId);

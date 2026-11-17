@@ -53,6 +53,13 @@ public sealed class JrnWin : BaseWin
     private bool _journalPosted;
     private bool _journalReversed;
 
+    /// <summary>
+    /// True while the window shows a loaded DRAFT that may still be edited
+    /// and saved back (JournalService.UpdateDraftAsync). Posted/reversed
+    /// entries load read-only and never set this flag.
+    /// </summary>
+    private bool _loadedDraft;
+
     public JrnWin()
     {
         Width = 920;
@@ -209,6 +216,7 @@ public sealed class JrnWin : BaseWin
     {
         _txtDocNo.Text = "JV-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
         _currentJournalId = null;
+        _loadedDraft = false;
         _journalPosted = false;
         _journalReversed = false;
         _dtDate.SelectedDate = DateTime.Today;
@@ -337,10 +345,14 @@ public sealed class JrnWin : BaseWin
                 ? costCenters[0]!
                 : string.Empty;
 
-            _btnSave.IsEnabled = false;
-            _btnPost.IsEnabled = snapshot.Status == ShouTech.Domain.Entities.JournalEntryStatus.Draft;
+            // A loaded draft stays editable and can be saved back; posted
+            // and reversed entries are immutable and load read-only.
+            var isDraft = snapshot.Status == ShouTech.Domain.Entities.JournalEntryStatus.Draft;
+            _loadedDraft = isDraft;
+            _btnSave.IsEnabled = isDraft;
+            _btnPost.IsEnabled = isDraft;
             _btnReverse.IsEnabled = snapshot.Status == ShouTech.Domain.Entities.JournalEntryStatus.Posted;
-            SetVoucherReadOnly(true);
+            SetVoucherReadOnly(!isDraft);
             RefreshBalances();
 
             MessageBox.Show(
@@ -352,7 +364,8 @@ public sealed class JrnWin : BaseWin
         }
         catch (Exception ex)
         {
-            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "JrnWin.LoadVoucherAsync");
+            if (ex is not ShouTech.Domain.AppError)
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "JrnWin.LoadVoucherAsync");
             ReportPersistenceFailure("LoadByDocumentNumber", ex);
         }
     }
@@ -374,7 +387,7 @@ public sealed class JrnWin : BaseWin
 
     private async Task SaveVoucherAsync()
     {
-        if (_currentJournalId.HasValue)
+        if (_currentJournalId.HasValue && !_loadedDraft)
         {
             MessageBox.Show(this, T("Vouchers.EntryAlreadySaved"), T("Vouchers.Saved"), MessageBoxButton.OK, MessageBoxImage.Information);
             return;
@@ -431,6 +444,31 @@ public sealed class JrnWin : BaseWin
                     accountId, line.Debit, line.Credit, line.Memo, costCenter));
             }
 
+            if (_currentJournalId.HasValue)
+            {
+                // Saving an edited draft back: the document number stays the
+                // entry's identity; header and lines are replaced atomically
+                // under the same validation as a new draft, and the change
+                // is written to the journal audit trail.
+                await journal.UpdateDraftAsync(
+                    companyId,
+                    _currentJournalId.Value,
+                    DateOnly.FromDateTime(selectedDate),
+                    _txtMemo.Text.Trim(),
+                    actor,
+                    requests,
+                    referenceNumber: _txtRefNo.Text,
+                    currencyCode: currency,
+                    exchangeRate: rate);
+                _loadedDraft = false;
+                _btnSave.IsEnabled = false;
+                _btnPost.IsEnabled = true;
+                _btnReverse.IsEnabled = false;
+                SetVoucherReadOnly(true);
+                MessageBox.Show(this, string.Format(T("Vouchers.EntryDraftUpdated"), _currentJournalId.Value.ToString("D")), T("Vouchers.Saved"), MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
             var id = await journal.CreateDraftAsync(
                 companyId,
                 DateOnly.FromDateTime(selectedDate),
@@ -450,7 +488,8 @@ public sealed class JrnWin : BaseWin
         }
         catch (Exception ex)
         {
-            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "JrnWin.SaveVoucherAsync");
+            if (ex is not ShouTech.Domain.AppError)
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "JrnWin.SaveVoucherAsync");
             ReportPersistenceFailure("SaveDraft", ex);
         }
     }
@@ -462,10 +501,12 @@ public sealed class JrnWin : BaseWin
 
         try
         {
-            if (!_currentJournalId.HasValue)
+            if (!_currentJournalId.HasValue || _loadedDraft)
             {
+                // New entry, or a loaded draft with unsaved edits: persist
+                // first so posting always acts on what the user sees.
                 await SaveVoucherAsync();
-                if (!_currentJournalId.HasValue)
+                if (!_currentJournalId.HasValue || _loadedDraft)
                     return;
             }
 
@@ -486,7 +527,8 @@ public sealed class JrnWin : BaseWin
         }
         catch (Exception ex)
         {
-            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "JrnWin.PostVoucherAsync");
+            if (ex is not ShouTech.Domain.AppError)
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "JrnWin.PostVoucherAsync");
             ReportPersistenceFailure("Post", ex);
         }
     }
@@ -531,6 +573,22 @@ public sealed class JrnWin : BaseWin
 
     private void ReportPersistenceFailure(string operation, Exception exception)
     {
+        if (exception is ShouTech.Domain.AppError appError)
+        {
+            // Coded business blocks (ACC-5005 draft no longer editable,
+            // ACC-5007/5008 cost-center rules at posting): the log line
+            // carries the real catalog code and the dialog shows the
+            // localized catalog message.
+            AppHost.Errors.Report(appError.Code, appError, $"JrnWin.{operation}");
+            var info = AppHost.Errors.Resolve(appError.Code, appError.Args.ToArray());
+            var body = info.Message;
+            if (!string.IsNullOrWhiteSpace(info.Hint))
+                body += $"{Environment.NewLine}{Environment.NewLine}{info.Hint}";
+            body += $"{Environment.NewLine}{Environment.NewLine}(Error {info.Code})";
+            MessageBox.Show(this, body, T("Vouchers.SaveFailedTitle"), MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
         const string errorCode = "APP-2010";
         var definition = ShouTech.App.Localization.ErrorCatalog.Resolve(errorCode);
         var context = $"Operation={operation}; Window={GetType().Name}; Company={ShouTech.App.Services.UsrSession.Current?.CompanyId ?? "(none)"}";

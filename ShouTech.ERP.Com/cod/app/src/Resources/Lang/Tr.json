@@ -1798,6 +1798,7 @@
     "EntryLoaded": "Kayıt veritabanından yüklendi.\nDurum: {0}\nKimlik: {1}",
     "EntryAlreadySaved": "Bu kayıt zaten kaydedilmiş. Yineleme oluşturulmayacak; başka bir kayıt için yeni kayıt açın.",
     "EntryDraftSaved": "Kayıt taslağı veritabanına kaydedildi.\nKimlik: {0}",
+    "EntryDraftUpdated": "Kayıt taslağı veritabanında güncellendi.\nKimlik: {0}",
     "EntryPosted": "Kayıt veritabanına işlendi.",
     "SaveFailedMsg": "İşlem başarısız oldu ve başarılı olarak gösterilmedi.\n[{0}] {1}",
     "SaveFailedTitle": "Kayıt Kaydedilemedi"
