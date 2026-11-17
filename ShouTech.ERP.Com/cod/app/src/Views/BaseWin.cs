@@ -287,27 +287,33 @@ public abstract class BaseWin : Window
     }
 
     /// <summary>
-    /// Total breathing room (DIP) kept between a child window and the
-    /// work area: a window opens at most (work area − this margin) in
-    /// each dimension, so it sits slightly smaller than the screen
-    /// instead of filling it edge to edge.
+    /// Fraction of the work area a child window may occupy at load, per
+    /// dimension (owner rule, 2026-11-17): a ribbon/child window opens at
+    /// most 50% of the screen — equivalently 50% of the main window when
+    /// the shell is full-screen, because a maximized shell fills the work
+    /// area, so the work-area halves implement both formulations.
     /// </summary>
-    private const double WorkAreaComfortMargin = 24;
+    private const double WorkAreaSizeCapFraction = 0.5;
 
     /// <summary>
-    /// Window sizing policy (owner rule): only the main shell window is
-    /// meant to fill the screen; child windows open COMFORTABLY — a
-    /// window larger than the work area minus <see cref="WorkAreaComfortMargin"/>
-    /// is capped to that size at load, and a window positioned partly
-    /// off-screen (small displays, high scaling, geometry restored from
-    /// a larger monitor) is pulled back inside so its bottom command bar
-    /// can never sit unreachable off-screen. The cap is a load-time trim
-    /// only: no MaxWidth/MaxHeight is set, so the user can resize larger
-    /// or maximize freely afterwards, geometry persistence keeps whatever
-    /// size they leave the window at, and the same trim applies again on
-    /// the next load only if that size still exceeds the cap. Never grows
-    /// a window, never shrinks one below its declared MinWidth/MinHeight,
-    /// and never touches a maximized/minimized window.
+    /// Window sizing policy (owner rule, 2026-11-17 — supersedes the
+    /// earlier comfort-margin cap): only the main shell window is meant
+    /// to fill the screen; a child window opens at most
+    /// <see cref="WorkAreaSizeCapFraction"/> of the work area in each
+    /// dimension. A window larger than the cap is trimmed to it at load,
+    /// and a window positioned partly off-screen (small displays, high
+    /// scaling, geometry restored from a larger monitor) is pulled back
+    /// inside so its bottom command bar can never sit unreachable
+    /// off-screen. The cap is a load-time trim only: no MaxWidth/MaxHeight
+    /// is set, so the user can resize larger or maximize freely
+    /// afterwards, geometry persistence keeps whatever size they leave
+    /// the window at, and the same trim applies again on the next load
+    /// only if that size still exceeds the cap. Never grows a window and
+    /// never touches a maximized/minimized window. One exception: a
+    /// window is never shrunk below its declared MinWidth/MinHeight, so
+    /// a window whose minimum size exceeds the cap opens at its minimum
+    /// instead (the acceptance sweep catalogues those windows; reducing
+    /// their minimums is a separate layout pass).
     /// </summary>
     private void ClampToWorkArea()
     {
@@ -317,10 +323,10 @@ public abstract class BaseWin : Window
                 return;
 
             var area = SystemParameters.WorkArea;
-            var maxWidth = Math.Max(MinWidth, area.Width - WorkAreaComfortMargin);
+            var maxWidth = Math.Max(MinWidth, area.Width * WorkAreaSizeCapFraction);
             if (Width > maxWidth)
                 Width = maxWidth;
-            var maxHeight = Math.Max(MinHeight, area.Height - WorkAreaComfortMargin);
+            var maxHeight = Math.Max(MinHeight, area.Height * WorkAreaSizeCapFraction);
             if (Height > maxHeight)
                 Height = maxHeight;
             if (Left < area.Left)

@@ -142,19 +142,28 @@ All reports share `RptBase`'s filter area: ONE 3-pair form grid; filters
 flow row by row (filter *i* → row *i*/3, pair *i*%3), so every report's
 filters have identical proportions and aligned edges.
 
-### 2.7 Window sizing — open comfortably
+### 2.7 Window sizing — the 50% rule
 
+Owner rule (2026-11-17): *"Ribbon windows must be smaller than or equal
+to 50% of the screen, or of the main window when it is full-screen."*
 Only the main shell window (MWin) is meant to fill the screen. Every
-child window (all `BaseWin` windows) opens **slightly smaller than the
-work area**: at load, `BaseWin.ClampToWorkArea` caps width/height at the
-work area minus a 24-DIP comfort margin (`WorkAreaComfortMargin`) and
-pulls any off-screen position back inside, so no window opens glued to
-the screen edges or with its bottom command bar out of reach. The cap is
-a load-time trim, not a limit: no `MaxWidth`/`MaxHeight` is set, the user
-can resize larger or maximize freely, geometry persistence keeps the
-size they leave, and the trim re-applies on the next load only if that
-size still exceeds the cap. Windows smaller than the cap are never
-grown, and a window is never shrunk below its declared minimum size.
+child window (all `BaseWin` windows) opens at most **half the work area
+in each dimension**: at load, `BaseWin.ClampToWorkArea` caps width at
+50% of the work-area width and height at 50% of the work-area height
+(`WorkAreaSizeCapFraction`). A maximized shell fills the work area, so
+the work-area halves are also the main-window halves — one computation
+implements both halves of the rule. The same pass pulls any off-screen
+position back inside, so no window opens with its bottom command bar
+out of reach. The cap is a load-time trim, not a limit: no
+`MaxWidth`/`MaxHeight` is set, the user can resize larger or maximize
+freely, geometry persistence keeps the size they leave, and the trim
+re-applies on the next load only if that size still exceeds the cap.
+Windows smaller than the cap are never grown. One exception: a window
+is never shrunk below its declared `MinWidth`/`MinHeight`, so a window
+whose minimum exceeds the cap opens at its minimum instead — the
+acceptance sweep catalogues those windows, and reducing their minimums
+is a separate layout pass. (This rule supersedes the earlier
+work-area-minus-24-DIP comfort-margin cap.)
 
 ---
 
