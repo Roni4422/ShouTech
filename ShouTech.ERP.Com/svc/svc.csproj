@@ -2,7 +2,7 @@
 
   <!-- ================================================================
        ShouTech ERP — Background Windows Service (svc.exe)
-       المزامنة الخلفية + مراقبة الترخيص + طابور الرسائل الصادرة
+       Background sync + license monitoring + outbound message queue
        Target: .NET 8 / Windows Service
        ================================================================ -->
 

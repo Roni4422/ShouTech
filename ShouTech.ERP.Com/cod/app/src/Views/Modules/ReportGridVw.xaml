@@ -31,18 +31,18 @@
 
                 
                 <ToggleButton x:Name="EditModeToggle"
-                              Content="✏ تعديل التقرير"
+                              Content="✏ Edit Report"
                               IsChecked="{Binding IsEditMode, Mode=OneWay}"
                               Click="EditModeToggle_Click"
                               Padding="12,6" Margin="0,0,8,0"
                               Cursor="Hand"/>
 
-                <Button Content="💾 حفظ"
+                <Button Content="💾 Save"
                         Command="{Binding SaveCommand}"
                         Padding="12,6" Margin="0,0,8,0"
                         Cursor="Hand"/>
 
-                <Button Content="📄 حفظ باسم…"
+                <Button Content="📄 Save As…"
                         Click="SaveAsButton_Click"
                         Padding="12,6" Margin="0,0,8,0"
                         Cursor="Hand"/>
@@ -89,9 +89,9 @@
                     </Grid.RowDefinitions>
 
                     <StackPanel Grid.Row="0" Margin="0,0,0,10">
-                        <TextBlock Text="مصمم التقرير"
+                        <TextBlock Text="Report Designer"
                                    FontSize="{DynamicResource FontSize15}" FontWeight="Bold"/>
-                        <TextBlock Text="رتّب الأعمدة، عدّل العناوين والعروض، وأضف أعمدة محسوبة"
+                        <TextBlock Text="Arrange columns, edit titles and widths, and add calculated columns"
                                    FontSize="{DynamicResource FontSize11}" Foreground="{DynamicResource TextSecondary}"
                                    TextWrapping="Wrap" Margin="0,2,0,0"/>
                     </StackPanel>
@@ -113,31 +113,31 @@
 
                                                 <CheckBox IsChecked="{Binding IsVisible}"
                                                           VerticalAlignment="Center"
-                                                          ToolTip="إظهار/إخفاء العمود"/>
+                                                          ToolTip="Show/Hide column"/>
 
                                                 <TextBox Grid.Column="1"
                                                          Text="{Binding Caption, UpdateSourceTrigger=PropertyChanged}"
                                                          Margin="6,0"
-                                                         ToolTip="عنوان العمود"/>
+                                                         ToolTip="Column title"/>
 
                                                 <StackPanel Grid.Column="2" Orientation="Horizontal">
                                                     <Button Content="▲" Width="24" Padding="0,2"
                                                             Command="{Binding DataContext.MoveColumnUpCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding}"
-                                                            ToolTip="أعلى"/>
+                                                            ToolTip="Move up"/>
                                                     <Button Content="▼" Width="24" Padding="0,2"
                                                             Command="{Binding DataContext.MoveColumnDownCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding}"
-                                                            ToolTip="أسفل"/>
+                                                            ToolTip="Move down"/>
                                                     <Button Content="🗑" Width="24" Padding="0,2"
                                                             Command="{Binding DataContext.RemoveColumnCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding}"
-                                                            ToolTip="حذف العمود"/>
+                                                            ToolTip="Delete column"/>
                                                 </StackPanel>
                                             </Grid>
 
                                             <StackPanel Orientation="Horizontal" Margin="24,4,0,0">
-                                                <TextBlock Text="العرض:" FontSize="{DynamicResource FontSize11}"
+                                                <TextBlock Text="Width:" FontSize="{DynamicResource FontSize11}"
                                                            VerticalAlignment="Center"/>
                                                 <TextBox Text="{Binding Width, UpdateSourceTrigger=PropertyChanged}"
                                                          Width="56" Margin="4,0" FontSize="{DynamicResource FontSize11}"/>
@@ -151,7 +151,7 @@
                                                 <TextBox Text="{Binding FormulaText, UpdateSourceTrigger=PropertyChanged}"
                                                          FontFamily="{DynamicResource MonospaceFontFamily}"
                                                          FontSize="{DynamicResource FontSize12}"
-                                                         ToolTip="معادلة: =[Qty]*[Price] — الدوال: ROUND, ABS, MIN, MAX, IF, COALESCE"/>
+                                                         ToolTip="Formula: =[Qty]*[Price] - functions: ROUND, ABS, MIN, MAX, IF, COALESCE"/>
                                                 <TextBlock Text="{Binding FormulaError}"
                                                            Foreground="{DynamicResource ErrorBrush}" FontSize="{DynamicResource FontSize11}"
                                                            TextWrapping="Wrap"
@@ -165,7 +165,7 @@
                     </ScrollViewer>
 
                     <Button Grid.Row="2"
-                            Content="➕ إضافة عمود محسوب"
+                            Content="➕ Add Calculated Column"
                             Command="{Binding AddFormulaColumnCommand}"
                             Margin="0,10,0,0" Padding="0,8"
                             Cursor="Hand"/>
@@ -190,15 +190,15 @@
                     Padding="24" Width="420"
                     HorizontalAlignment="Center" VerticalAlignment="Center">
                 <StackPanel>
-                    <TextBlock Text="حفظ التقرير باسم"
+                    <TextBlock Text="Save Report As"
                                FontSize="{DynamicResource FontSize18}" FontWeight="Bold" Margin="0,0,0,12"/>
-                    <TextBlock Text="اسم التقرير الجديد:" FontSize="{DynamicResource FontSize12}" Margin="0,0,0,4"/>
+                    <TextBlock Text="New report name:" FontSize="{DynamicResource FontSize12}" Margin="0,0,0,4"/>
                     <TextBox x:Name="SaveAsNameBox"
                              FontSize="{DynamicResource FontSize14}" Padding="6,4"/>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-                        <Button Content="إلغاء" Padding="16,6" Margin="0,0,8,0"
+                        <Button Content="Cancel" Padding="16,6" Margin="0,0,8,0"
                                 Click="SaveAsCancel_Click"/>
-                        <Button Content="حفظ" Padding="16,6"
+                        <Button Content="Save" Padding="16,6"
                                 Background="{DynamicResource ReportDesignerButtonBrush}" Foreground="{DynamicResource TextOnDarkBrush}"
                                 Click="SaveAsConfirm_Click"/>
                     </StackPanel>

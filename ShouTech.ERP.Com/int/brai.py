@@ -189,7 +189,7 @@ class InsightRequest(BaseModel):
     current_value: float
     previous_value: float
     target_value: Optional[float] = None
-    language: Literal["ar", "en", "fr", "tr"] = "ar"
+    language: Literal["ar", "en", "fr", "tr"] = "en"
 
 
 class InsightResponse(BaseModel):
@@ -339,12 +339,6 @@ async def detect_anomalies(req: AnomalyRequest) -> AnomalyResponse:
 
 
 _INSIGHT_TEMPLATES = {
-    "ar": {
-        "up":   "المؤشر «{name}» ارتفع بنسبة {chg:.1f}% مقارنة بالفترة السابقة.",
-        "down": "المؤشر «{name}» انخفض بنسبة {chg:.1f}% مقارنة بالفترة السابقة — يستحق المراجعة.",
-        "flat": "المؤشر «{name}» مستقر دون تغيير يُذكر.",
-        "target": " نسبة الإنجاز من الهدف: {prog:.0f}%.",
-    },
     "en": {
         "up":   "Metric '{name}' is up {chg:.1f}% versus the previous period.",
         "down": "Metric '{name}' is down {chg:.1f}% versus the previous period — worth a review.",
@@ -388,7 +382,7 @@ async def insight_summary(req: InsightRequest) -> InsightResponse:
     if req.target_value is not None and abs(req.target_value) > 1e-12:
         progress = round(cur / abs(req.target_value) * 100.0, 1)
 
-    t = _INSIGHT_TEMPLATES[req.language]
+    t = _INSIGHT_TEMPLATES.get(req.language, _INSIGHT_TEMPLATES["en"])
     message = t[direction].format(name=req.metric_name, chg=abs(change_pct))
     if progress is not None:
         message += t["target"].format(prog=progress)

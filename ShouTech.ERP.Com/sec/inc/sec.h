@@ -547,7 +547,7 @@ static_assert(std::is_standard_layout_v<file_header>);
 
 // Modern alternative to ST_INIT_STRUCT macro
 template<typename T>
-void init_struct(T& s) noexcept  // ✅ أزل constexpr
+void init_struct(T& s) noexcept  // ✅ Removed constexpr
     requires std::is_standard_layout_v<T>
 {
     std::memset(&s, 0, sizeof(T));
@@ -565,7 +565,7 @@ inline void secure_zero(std::span<std::uint8_t> buffer) noexcept {
     for (std::size_t i = 0; i < buffer.size(); ++i) {
         p[i] = 0;
     }
-    std::atomic_thread_fence(std::memory_order_seq_cst); // ✅ thread_fence بدل signal_fence
+    std::atomic_thread_fence(std::memory_order_seq_cst); // ✅ thread_fence instead of signal_fence
 }
 
 // Constant-time compare (modern)

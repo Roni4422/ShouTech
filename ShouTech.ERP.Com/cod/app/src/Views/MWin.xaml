@@ -277,7 +277,7 @@
                         <ribbon:RibbonButton x:Name="RibbonMaterialCardButton" loc:LocProps.Key="Inventory.MaterialCard" Label="Material card" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton x:Name="RibbonCategoryCardButton" loc:LocProps.Key="Inventory.CategoryCard" Label="Category card" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton x:Name="RibbonWarehouseCardButton" loc:LocProps.Key="Inventory.WarehouseCard" Label="Warehouse card" Click="OnRibbonButtonClick"/>
-                        <ribbon:RibbonButton x:Name="RibbonMaterialGroupsButton" loc:LocProps.Key="Inventory.MaterialGroups" Label="مجموعات المواد" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton x:Name="RibbonMaterialGroupsButton" loc:LocProps.Key="Inventory.MaterialGroups" Label="Material Groups" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.InventoryBarcode" Header="Barcode">
                         <ribbon:RibbonButton loc:LocProps.Key="Inventory.GenerateBarcode" Label="Generate barcode" Click="OnRibbonButtonClick"/>
@@ -292,7 +292,7 @@
                         <ribbon:RibbonButton loc:LocProps.Key="Inventory.InventoryAdjustment" Label="Inventory adjustment" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.InventoryMaterialReports" Header="Material reports">
-                        <ribbon:RibbonButton x:Name="RibbonMaterialTreeButton" loc:LocProps.Key="Inventory.MaterialTree" Label="دليل المواد" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton x:Name="RibbonMaterialTreeButton" loc:LocProps.Key="Inventory.MaterialTree" Label="Material Tree" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Inventory.SearchMaterial" Label="Search materials" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Inventory.WarehouseInventory" Label="Warehouse inventory" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Inventory.MaterialMovement" Label="Material movement" Click="OnRibbonButtonClick"/>

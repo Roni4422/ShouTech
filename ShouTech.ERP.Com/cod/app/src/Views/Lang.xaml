@@ -209,7 +209,7 @@
 						  SelectionChanged="OnLanguageSelectionChanged">
 
 					<ComboBoxItem Tag="en" Content="English"/>
-					<ComboBoxItem Tag="ar" Content="العربية (Arabic)"/>
+					<ComboBoxItem Tag="ar" Content="Arabic"/>
 					<ComboBoxItem Tag="fr" Content="Français (French)"/>
 					<ComboBoxItem Tag="tr" Content="Türkçe (Turkish)"/>
 
