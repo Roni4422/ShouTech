@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services;
 
 /// <summary>
@@ -86,8 +87,9 @@ public static class Win11Chrome
             if (PresentationSource.FromVisual(window) is HwndSource)
                 ApplyToHandle(window);
         }
-        catch
+        catch (Exception exL89)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL89, "Win11Chrome.Apply");
             // Chrome effects must never prevent a window from opening.
         }
     }
@@ -135,8 +137,9 @@ public static class Win11Chrome
                 }
             }
         }
-        catch
+        catch (Exception exL138)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL138, "Win11Chrome.ResolveBackdropKind");
             // Token lookup must never break chrome application.
         }
 
@@ -162,8 +165,9 @@ public static class Win11Chrome
             if (hwnd != IntPtr.Zero)
                 ApplyBackdrop(hwnd, kind);
         }
-        catch
+        catch (Exception exL165)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL165, "Win11Chrome.SetBackdrop");
             // Best effort only.
         }
     }
@@ -183,15 +187,17 @@ public static class Win11Chrome
                 _ = DwmSetWindowAttribute(
                     hwnd, DwmwaWindowCornerPreference, ref corner, sizeof(int));
             }
-            catch
+            catch (Exception exL186)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL186, "Win11Chrome.ApplyToHandle");
                 // Older DWM: keep the WPF WindowChrome corner radius.
             }
 
             ApplyBackdrop(hwnd, ResolveBackdropKind());
         }
-        catch
+        catch (Exception exL193)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL193, "Win11Chrome.ApplyToHandle");
             // Best effort only.
         }
     }
@@ -212,8 +218,9 @@ public static class Win11Chrome
             _ = DwmSetWindowAttribute(
                 hwnd, DwmwaSystemBackdropType, ref backdrop, sizeof(int));
         }
-        catch
+        catch (Exception exL215)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL215, "Win11Chrome.ApplyBackdrop");
             // Older DWM: no backdrop, window keeps its theme brush.
         }
     }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -14,6 +14,7 @@ using ShouTech.App;
 using ShouTech.App.Localization;
 using ShouTech.App.Services;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views
 {
     /// <summary>
@@ -56,7 +57,8 @@ namespace ShouTech.App.Views
         {
             var fmt = L(key, fallback);
             try { return string.Format(CultureInfo.CurrentCulture, fmt, args); }
-            catch { return fmt; }
+            catch (Exception exL59) {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL59, "CatWin.xaml.Lf"); return fmt; }
         }
 
         public CatWin()
@@ -68,6 +70,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "CatWin.xaml.CatWin");
                 MessageBox.Show(
                     L("InitFailed", "Could not initialize the category card window.") + "\n\n" + ex.Message,
                     L("Title", "Category Card"),
@@ -93,6 +96,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "CatWin.xaml.OnLoaded");
                 ShowToast(false, L("LoadFailed", "Could not load category cards."), ErrLoadFailed, ex.Message);
                 PrepareNew();
             }
@@ -134,16 +138,18 @@ namespace ShouTech.App.Views
                         var cs = DatabaseRuntime.GetConnectionString();
                         db = ExtractDbName(cs) ?? "-";
                     }
-                    catch
+                    catch (Exception exL137)
                     {
+                        AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL137, "CatWin.xaml.RefreshStatusBar");
                         db = "-";
                     }
                 }
 
                 SafeSet(TxtStatus, Lf("StatusUserDb", "User: {0}  |  Database: {1}", user, db));
             }
-            catch
+            catch (Exception exL145)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL145, "CatWin.xaml.RefreshStatusBar");
                 SafeSet(TxtStatus, Lf("StatusUserDb", "User: {0}  |  Database: {1}", "-", "-"));
             }
         }
@@ -217,8 +223,9 @@ namespace ShouTech.App.Views
                 if (list != null)
                     _warehouses.AddRange(list);
             }
-            catch
+            catch (Exception exL220)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL220, "CatWin.xaml.LoadWarehouses");
                 // Loading failed - leave the list empty. The category card can
                 // still be viewed and edited; the warehouse field simply stays
                 // unselected. Never fabricate a synthetic warehouse record.
@@ -261,8 +268,9 @@ namespace ShouTech.App.Views
                     _items.Add(item);
                 }
             }
-            catch
+            catch (Exception exL264)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL264, "CatWin.xaml.LoadCards");
                 _repoAvailable = false;
                 _items.Clear();
             }
@@ -425,7 +433,8 @@ namespace ShouTech.App.Views
 
             ClearTreeSelection();
             RefreshStatusBar();
-            try { TxtCode?.Focus(); } catch { }
+            try { TxtCode?.Focus(); } catch (Exception exL426) {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL426, "CatWin.xaml.PrepareNew"); }
         }
 
         private string GetNextCardNoPreviewText()
@@ -438,6 +447,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "CatWin.xaml.GetNextCardNoPreviewText");
                 ShowToast(false,
                     L("CardNumberPreviewFailed", "Could not determine the next card number."),
                     ErrLoadFailed,
@@ -630,7 +640,10 @@ namespace ShouTech.App.Views
                 if (BtnPickImage != null) BtnPickImage.IsEnabled = enabled && _repoAvailable;
                 if (BtnClearImage != null) BtnClearImage.IsEnabled = enabled && _repoAvailable;
             }
-            catch { }
+            catch (Exception exL563)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL563, "CatWin.xaml.SetFieldsEnabled");
+            }
         }
 
         private void SelectTreeNode(long id)
@@ -661,7 +674,10 @@ namespace ShouTech.App.Views
                 if (TreeGroups.SelectedItem is TreeViewItem selected)
                     selected.IsSelected = false;
             }
-            catch { }
+            catch (Exception exL594)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL594, "CatWin.xaml.ClearTreeSelection");
+            }
             finally
             {
                 _suppressTreeSelect = false;
@@ -701,6 +717,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "CatWin.xaml.PickImage_Click");
                 ShowToast(false, L("ImageFailed", "Could not load the image."), ErrImageFailed, ex.Message);
             }
         }
@@ -731,15 +748,17 @@ namespace ShouTech.App.Views
                 bmp.Freeze();
                 ImgPreview.Source = bmp;
             }
-            catch
+            catch (Exception exL664)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL664, "CatWin.xaml.LoadImagePreview");
                 if (ImgPreview != null) ImgPreview.Source = null;
             }
         }
 
         private void ClearImagePreview()
         {
-            try { if (ImgPreview != null) ImgPreview.Source = null; } catch { }
+            try { if (ImgPreview != null) ImgPreview.Source = null; } catch (Exception exL672) {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL672, "CatWin.xaml.ClearImagePreview"); }
         }
 
         // ================================================================
@@ -750,14 +769,16 @@ namespace ShouTech.App.Views
             if (string.IsNullOrWhiteSpace(TxtCode?.Text))
             {
                 ShowToast(false, L("CodeRequired", "Item code is required."), ErrSaveFailed);
-                try { TxtCode?.Focus(); } catch { }
+                try { TxtCode?.Focus(); } catch (Exception exL683) {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL683, "CatWin.xaml.ValidateInput"); }
                 return false;
             }
 
             if (string.IsNullOrWhiteSpace(TxtName?.Text))
             {
                 ShowToast(false, L("NameRequired", "Item name is required."), ErrSaveFailed);
-                try { TxtName?.Focus(); } catch { }
+                try { TxtName?.Focus(); } catch (Exception exL690) {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL690, "CatWin.xaml.ValidateInput"); }
                 return false;
             }
 
@@ -765,7 +786,8 @@ namespace ShouTech.App.Views
             if (IsCodeDuplicate(code, _isNew ? null : _current?.Id))
             {
                 ShowToast(false, L("CodeDuplicate", "Item code already exists."), ErrSaveFailed);
-                try { TxtCode?.Focus(); } catch { }
+                try { TxtCode?.Focus(); } catch (Exception exL698) {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL698, "CatWin.xaml.ValidateInput"); }
                 return false;
             }
 
@@ -780,8 +802,9 @@ namespace ShouTech.App.Views
                     string.Equals(x.Code?.Trim(), code, StringComparison.OrdinalIgnoreCase) &&
                     (!excludeId.HasValue || x.Id != excludeId.Value));
             }
-            catch
+            catch (Exception exL713)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL713, "CatWin.xaml.IsCodeDuplicate");
                 return false;
             }
         }
@@ -861,7 +884,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
-                AppHost.Logging?.LogError("CatWin", "SaveCurrent failed", ex);
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "CatWin.xaml.SaveCurrent");
                 ShowToast(false, L("NotSaved", "Item was not saved."), ErrSaveFailed, ex.Message);
             }
             finally
@@ -884,7 +907,8 @@ namespace ShouTech.App.Views
             SetFieldsEnabled(true);
             SafeEnable(BtnSave, true);
             SafeSet(TxtMode, L("ModeEdit", "Edit"));
-            try { TxtCode?.Focus(); } catch { }
+            try { TxtCode?.Focus(); } catch (Exception exL815) {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL815, "CatWin.xaml.Edit_Click"); }
         }
 
         private void Save_Click(object sender, RoutedEventArgs e)
@@ -928,6 +952,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "CatWin.xaml.Delete_Click");
                 ShowToast(false, L("NotDeleted", "Item was not deleted."), ErrDeleteFailed, ex.Message);
             }
             finally
@@ -950,6 +975,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "CatWin.xaml.Refresh_Click");
                 ShowToast(false, L("RefreshFailed", "Refresh failed."), ErrLoadFailed, ex.Message);
             }
         }
@@ -996,6 +1022,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "CatWin.xaml.RunSearch");
                 ShowToast(false, L("SearchFailed", "Search failed."), ErrSearchFailed, ex.Message);
             }
         }
@@ -1101,7 +1128,10 @@ namespace ShouTech.App.Views
                             toast.WindowStartupLocation = WindowStartupLocation.CenterScreen;
                         }
                     }
-                    catch { }
+                    catch (Exception exL1032)
+                    {
+                        AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL1032, "CatWin.xaml.ShowToast");
+                    }
                 };
 
                 toast.Show();
@@ -1110,12 +1140,14 @@ namespace ShouTech.App.Views
                 timer.Tick += (_, __) =>
                 {
                     timer.Stop();
-                    try { toast.Close(); } catch { }
+                    try { toast.Close(); } catch (Exception exL1041) {
+                        AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL1041, "CatWin.xaml.ShowToast"); }
                 };
                 timer.Start();
             }
-            catch
+            catch (Exception exL1045)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL1045, "CatWin.xaml.ShowToast");
                 try
                 {
                     var text = message;
@@ -1127,7 +1159,10 @@ namespace ShouTech.App.Views
                         MessageBoxButton.OK,
                         success ? MessageBoxImage.Information : MessageBoxImage.Error);
                 }
-                catch { }
+                catch (Exception exL1058)
+                {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL1058, "CatWin.xaml.ShowToast");
+                }
             }
         }
 
@@ -1140,19 +1175,22 @@ namespace ShouTech.App.Views
         private static void SafeSet(TextBox? box, string? text)
         {
             if (box == null) return;
-            try { box.Text = text ?? ""; } catch { }
+            try { box.Text = text ?? ""; } catch (Exception exL1071) {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL1071, "CatWin.xaml.SafeSet"); }
         }
 
         private static void SafeSet(TextBlock? block, string? text)
         {
             if (block == null) return;
-            try { block.Text = text ?? ""; } catch { }
+            try { block.Text = text ?? ""; } catch (Exception exL1077) {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL1077, "CatWin.xaml.SafeSet"); }
         }
 
         private static void SafeEnable(UIElement? el, bool enabled)
         {
             if (el == null) return;
-            try { el.IsEnabled = enabled; } catch { }
+            try { el.IsEnabled = enabled; } catch (Exception exL1083) {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL1083, "CatWin.xaml.SafeEnable"); }
         }
     }
 }

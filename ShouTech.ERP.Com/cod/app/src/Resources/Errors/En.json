@@ -1,0 +1,210 @@
+{
+  "ACC-5001": {
+    "code": "ACC-5001",
+    "name": "JournalNotBalanced",
+    "message": "Journal entry debit and credit totals must balance.",
+    "hint": "Adjust the lines so total debit equals total credit."
+  },
+  "ACC-5002": {
+    "code": "ACC-5002",
+    "name": "JournalTooFewLines",
+    "message": "A journal entry requires at least two lines."
+  },
+  "ACC-5003": {
+    "code": "ACC-5003",
+    "name": "JournalZeroAmount",
+    "message": "A journal entry must have a non-zero amount."
+  },
+  "ACC-5004": {
+    "code": "ACC-5004",
+    "name": "JournalPostingFailed",
+    "message": "The journal entry could not be posted."
+  },
+  "AUTH-2001": {
+    "code": "AUTH-2001",
+    "name": "InvalidCredentials",
+    "message": "The username or password is incorrect",
+    "hint": "Check the username and password and try again."
+  },
+  "AUTH-2002": {
+    "code": "AUTH-2002",
+    "name": "AccountLocked",
+    "message": "This account is locked. Sign-in was refused.",
+    "hint": "Wait until the lockout period ends or ask an administrator to unlock the account."
+  },
+  "AUTH-2003": {
+    "code": "AUTH-2003",
+    "name": "AccountLockedNow",
+    "message": "The account was locked after repeated failed sign-in attempts.",
+    "hint": "Wait until the lockout period ends or ask an administrator to unlock the account."
+  },
+  "AUTH-2004": {
+    "code": "AUTH-2004",
+    "name": "PasswordPolicyViolation",
+    "message": "Administrator password does not meet the password policy: {0}",
+    "hint": "Use at least 12 characters with a mix of letters, digits, and a symbol."
+  },
+  "CO-3001": {
+    "code": "CO-3001",
+    "name": "CompanyRecordNotFound",
+    "message": "The local company record required to open this company was not found.",
+    "hint": "The company list on this computer is out of date. Reindex companies or restore the company data."
+  },
+  "CO-3002": {
+    "code": "CO-3002",
+    "name": "CompanyDatabasePathMissing",
+    "message": "Company database path is not set.",
+    "hint": "Edit the company and set its database path."
+  },
+  "CO-3003": {
+    "code": "CO-3003",
+    "name": "PostgresDatabaseNameMissing",
+    "message": "PostgreSQL database name is not set."
+  },
+  "CO-3004": {
+    "code": "CO-3004",
+    "name": "PostgresConnectionMissing",
+    "message": "Current PostgreSQL connection is not available."
+  },
+  "CO-3005": {
+    "code": "CO-3005",
+    "name": "CompanyLoadFailed",
+    "message": "Failed to load companies"
+  },
+  "CO-3006": {
+    "code": "CO-3006",
+    "name": "CompanyOpenFailed",
+    "message": "Unable to open company"
+  },
+  "DATA-4001": {
+    "code": "DATA-4001",
+    "name": "ExportPermissionDenied",
+    "message": "You do not have permission to export data (DATA.EXPORT).",
+    "hint": "Ask an administrator to grant the DATA.EXPORT permission."
+  },
+  "DATA-4002": {
+    "code": "DATA-4002",
+    "name": "ExportFailed",
+    "message": "The export could not be completed."
+  },
+  "DATA-4003": {
+    "code": "DATA-4003",
+    "name": "ImportFailed",
+    "message": "The import could not be completed."
+  },
+  "DB-1001": {
+    "code": "DB-1001",
+    "name": "DatabaseConnectionFailed",
+    "message": "Could not connect to the database.",
+    "hint": "Check that the database server is running and the connection settings are correct."
+  },
+  "DB-1002": {
+    "code": "DB-1002",
+    "name": "DatabaseFileMissing",
+    "message": "Company database file not found.",
+    "hint": "The company database file may have been moved or deleted. Restore it from a backup or re-create the company."
+  },
+  "DB-1003": {
+    "code": "DB-1003",
+    "name": "MigrationFailed",
+    "message": "A database migration failed."
+  },
+  "DB-1004": {
+    "code": "DB-1004",
+    "name": "DatabaseNotInitialized",
+    "message": "Company database file is not properly initialized.",
+    "hint": "The file exists but is not a valid company database. Restore from a backup or re-create the company."
+  },
+  "DB-1005": {
+    "code": "DB-1005",
+    "name": "DatabaseQueryFailed",
+    "message": "A database operation failed."
+  },
+  "DB-1006": {
+    "code": "DB-1006",
+    "name": "UnsupportedDatabaseProvider",
+    "message": "Unsupported database provider."
+  },
+  "INV-6001": {
+    "code": "INV-6001",
+    "name": "InventoryOperationFailed",
+    "message": "The inventory operation could not be completed."
+  },
+  "LIC-8001": {
+    "code": "LIC-8001",
+    "name": "LicenseCheckFailed",
+    "message": "The license could not be verified."
+  },
+  "SYS-0001": {
+    "code": "SYS-0001",
+    "name": "UnknownError",
+    "message": "An unexpected error occurred.",
+    "hint": "If the problem continues, note the error code and contact support."
+  },
+  "SYS-0002": {
+    "code": "SYS-0002",
+    "name": "DispatcherUnhandled",
+    "message": "An unexpected error interrupted the current operation.",
+    "hint": "If the problem continues, note the error code and contact support."
+  },
+  "SYS-0003": {
+    "code": "SYS-0003",
+    "name": "AppDomainUnhandled",
+    "message": "An unexpected error occurred in the application."
+  },
+  "SYS-0004": {
+    "code": "SYS-0004",
+    "name": "UnobservedTaskException",
+    "message": "A background task failed."
+  },
+  "SYS-0005": {
+    "code": "SYS-0005",
+    "name": "NonFatalInternalFailure",
+    "message": "A non-critical internal operation failed and was recovered."
+  },
+  "SYS-0006": {
+    "code": "SYS-0006",
+    "name": "ConfigurationLoadFailed",
+    "message": "The application configuration could not be loaded."
+  },
+  "SYS-0007": {
+    "code": "SYS-0007",
+    "name": "FileAccessFailed",
+    "message": "A file could not be accessed."
+  },
+  "SYS-0009": {
+    "code": "SYS-0009",
+    "name": "StartupFailed",
+    "message": "The application could not start."
+  },
+  "SYS-0010": {
+    "code": "SYS-0010",
+    "name": "SettingsLoadFailed",
+    "message": "Settings could not be loaded; defaults were used."
+  },
+  "SYS-0011": {
+    "code": "SYS-0011",
+    "name": "SettingsSaveFailed",
+    "message": "Settings could not be saved."
+  },
+  "UI-7001": {
+    "code": "UI-7001",
+    "name": "WindowOperationFailed",
+    "message": "The window operation could not be completed."
+  },
+  "UI-7002": {
+    "code": "UI-7002",
+    "name": "ShellOperationFailed",
+    "message": "A main window operation could not be completed."
+  },
+  "UI-7003": {
+    "code": "UI-7003",
+    "name": "WindowLoadFailed",
+    "message": "The window could not be loaded."
+  },
+  "UI-7004": {
+    "code": "UI-7004",
+    "name": "NavigationFailed",
+    "message": "Navigation could not be completed."
+  }
+}

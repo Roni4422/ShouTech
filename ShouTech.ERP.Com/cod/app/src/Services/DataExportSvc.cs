@@ -12,6 +12,7 @@ using ShouTech.App;
 using ShouTech.App.Configuration;
 using ShouTech.App.Reporting;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services;
 
 /// <summary>A user-facing export item backed by a known business table.</summary>
@@ -69,12 +70,14 @@ public static class DataExportSvc
 
     private static void LogInfo(string message)
     {
-        try { AppServiceHost.Logging.LogInfo(LogCategory, message); } catch { }
+        try { AppServiceHost.Logging.LogInfo(LogCategory, message); } catch (Exception exL72) {
+            AppHost.Errors.Report(ErrorCodes.ExportFailed, exL72, "DataExportSvc.LogInfo"); }
     }
 
     private static void LogWarn(string message)
     {
-        try { AppServiceHost.Logging.LogWarning(LogCategory, message); } catch { }
+        try { AppServiceHost.Logging.LogWarning(LogCategory, message); } catch (Exception exL77) {
+            AppHost.Errors.Report(ErrorCodes.ExportFailed, exL77, "DataExportSvc.LogWarn"); }
     }
 
     private static void LogError(string message, Exception? ex = null)
@@ -84,12 +87,16 @@ public static class DataExportSvc
             if (ex != null) AppServiceHost.Logging.LogError(LogCategory, message, ex);
             else AppServiceHost.Logging.LogError(LogCategory, message);
         }
-        catch { }
+        catch (Exception exL87)
+        {
+            AppHost.Errors.Report(ErrorCodes.ExportFailed, exL87, "DataExportSvc.LogError");
+        }
     }
 
     private static void LogOp(string action, string message)
     {
-        try { AppServiceHost.Logging.LogOperation(LogCategory, action, message); } catch { }
+        try { AppServiceHost.Logging.LogOperation(LogCategory, action, message); } catch (Exception exL92) {
+            AppHost.Errors.Report(ErrorCodes.ExportFailed, exL92, "DataExportSvc.LogOp"); }
     }
 
     private sealed record DatasetIdentity(

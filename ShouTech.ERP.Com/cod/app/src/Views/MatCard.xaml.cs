@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -21,6 +21,7 @@ using Microsoft.Win32;
 using ShouTech.App.Localization;
 using ShouTech.App.Services;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 // ====================================================================
@@ -284,11 +285,17 @@ public partial class MatCard : BaseWin
             Closed += (_, _) =>
             {
                 try { AppServiceHost.Localization.LanguageChanged -= OnLanguageChanged; }
-                catch { }
+                catch (Exception exL287)
+                {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL287, "MatCard.xaml.MatCard");
+                }
                 RestoreOwnerWindow();
             };
         }
-        catch { }
+        catch (Exception exL291)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL291, "MatCard.xaml.MatCard");
+        }
 
         try
         {
@@ -318,6 +325,7 @@ public partial class MatCard : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "MatCard.xaml.MatCard");
             MessageBox.Show(
                 "Failed to load material data:\n" +
                 ex.GetType().Name + ": " + ex.Message +
@@ -334,7 +342,10 @@ public partial class MatCard : BaseWin
                 SetEditMode(false);
                 ShowSection(0);
             }
-            catch { }
+            catch (Exception exL337)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL337, "MatCard.xaml.MatCard");
+            }
         }
     }
 
@@ -371,7 +382,10 @@ public partial class MatCard : BaseWin
                 owner.WindowState = WindowState.Normal;
             owner.Activate();
         }
-        catch { }
+        catch (Exception exL354)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL354, "MatCard.xaml.RestoreOwnerWindow");
+        }
     }
 
     // ================================================================
@@ -389,7 +403,8 @@ public partial class MatCard : BaseWin
         Title = L("Inventory.MaterialCard", "Material Card");
 
         // Localization pass over the visual tree (loc:LocProps.Key / ToolTipKey).
-        try { UiLoczr.ApplyToWindow(this); } catch { }
+        try { UiLoczr.ApplyToWindow(this); } catch (Exception exL372) {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL372, "MatCard.xaml.ApplyDirection"); }
 
         // Keep identifiers centered while allowing their reading direction to follow the UI language.
         if (TxtCode != null)
@@ -449,7 +464,8 @@ public partial class MatCard : BaseWin
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
         try { Dispatcher.Invoke(ApplyDirection); }
-        catch { ApplyDirection(); }
+        catch (Exception exL432) {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL432, "MatCard.xaml.OnLanguageChanged"); ApplyDirection(); }
     }
 
     // ================================================================
@@ -525,6 +541,7 @@ public partial class MatCard : BaseWin
 		}
 		catch (Exception ex)
 		{
+			AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "MatCard.xaml.InitCategories");
 			System.Diagnostics.Debug.WriteLine($"[MatCard] Error loading categories: {ex.Message}");
 			categories = new();
 		}
@@ -614,8 +631,9 @@ public partial class MatCard : BaseWin
                 }
             }
         }
-        catch
+        catch (Exception exL597)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL597, "MatCard.xaml.InitWarehouses");
             // The warehouse store may be unavailable; the combo stays editable
             // so the user can still type a warehouse code manually.
         }
@@ -651,6 +669,7 @@ public partial class MatCard : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "MatCard.xaml.InitGroups");
             System.Diagnostics.Debug.WriteLine($"[MatCard] Error loading groups: {ex.Message}");
         }
 
@@ -672,7 +691,8 @@ public partial class MatCard : BaseWin
                     groups = materialGroups;
                 }
             }
-            catch { groups = new(); }
+            catch (Exception exL655) {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL655, "MatCard.xaml.InitGroups"); groups = new(); }
         }
 
         CmbGroup.ItemsSource = groups;
@@ -738,8 +758,9 @@ public partial class MatCard : BaseWin
         {
             _cache = MatRepo.LoadAll() ?? new();
         }
-        catch
+        catch (Exception exL721)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL721, "MatCard.xaml.ReloadCache");
             _cache = new();
         }
     }
@@ -756,7 +777,10 @@ public partial class MatCard : BaseWin
         {
             MatRepo.MatRec? full = null;
             try { full = MatRepo.LoadById(_cache[_index].Id, true); }
-            catch { }
+            catch (Exception exL739)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL739, "MatCard.xaml.LoadCurrent");
+            }
 
             var m = full ?? _cache[_index];
             _loaded = m;
@@ -771,6 +795,7 @@ public partial class MatCard : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "MatCard.xaml.LoadCurrent");
             MessageBox.Show(this,
                 "Unable to load material:\n" + ex.Message,
                 Title, MessageBoxButton.OK, MessageBoxImage.Error);
@@ -786,7 +811,10 @@ public partial class MatCard : BaseWin
             var pos = _cache.Count == 0 ? "0 / 0" : $"{_index + 1} / {_cache.Count}";
             TxtNavPos.Text = pos;
         }
-        catch { }
+        catch (Exception exL769)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL769, "MatCard.xaml.UpdateNav");
+        }
     }
 
     private void ShowSection(int index)
@@ -977,8 +1005,9 @@ public partial class MatCard : BaseWin
                     restoredUnits = true;
                 }
             }
-            catch (JsonException)
+            catch (JsonException exL960)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL960, "MatCard.xaml.BindToUi");
                 // Unrecognized payloads fall back to the legacy unit columns below.
             }
         }
@@ -1341,7 +1370,8 @@ public partial class MatCard : BaseWin
         _loaded = null;
         ClearForm();
         try { TxtCode.Text = ToWesternDigits(MatRepo.NextCode()); }
-        catch { TxtCode.Text = "0001"; }
+        catch (Exception exL1320) {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL1320, "MatCard.xaml.New_Click"); TxtCode.Text = "0001"; }
         TxtCode.IsReadOnly = false;
         SetEditMode(true);
         ShowSection(0);
@@ -1392,6 +1422,7 @@ public partial class MatCard : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "MatCard.xaml.Save_Click");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -1429,7 +1460,8 @@ public partial class MatCard : BaseWin
             if (dialog.ShowDialog(this) != true) return;
             MaterialExcelExchange.Export(dialog.FileName, record);
         }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error); }
+        catch (Exception ex) {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "MatCard.xaml.ExcelExport_Click"); MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error); }
     }
 
     private void ExcelImport_Click(object sender, RoutedEventArgs e)
@@ -1470,7 +1502,8 @@ public partial class MatCard : BaseWin
                     : "Material imported into the form. Review the changes and click Save to update the material.",
                 Title, MessageBoxButton.OK, MessageBoxImage.Information);
         }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error); }
+        catch (Exception ex) {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "MatCard.xaml.ExcelImport_Click"); MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error); }
     }
 
     private void Delete_Click(object sender, RoutedEventArgs e)
@@ -1491,6 +1524,7 @@ public partial class MatCard : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "MatCard.xaml.Delete_Click");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -1630,7 +1664,10 @@ public partial class MatCard : BaseWin
             if (TxtStatusUser != null)
                 TxtStatusUser.Text = string.IsNullOrWhiteSpace(user) ? "\u2014" : user;
         }
-        catch { }
+        catch (Exception exL1609)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL1609, "MatCard.xaml.UpdateStatusBar");
+        }
     }
 
     private static string GetCurrentCompanyName()
@@ -1650,7 +1687,10 @@ public partial class MatCard : BaseWin
                 }
             }
         }
-        catch { }
+        catch (Exception exL1629)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL1629, "MatCard.xaml.GetCurrentCompanyName");
+        }
         return AppState.CurrentCompanyCode ?? "";
     }
 
@@ -1675,7 +1715,10 @@ public partial class MatCard : BaseWin
                 }
             }
         }
-        catch { }
+        catch (Exception exL1654)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL1654, "MatCard.xaml.GetCurrentUsername");
+        }
         return "";
     }
 
@@ -1713,8 +1756,9 @@ public partial class MatCard : BaseWin
             bitmap.EndInit();
             ImgPreview.Source = bitmap;
         }
-        catch
+        catch (Exception exL1692)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL1692, "MatCard.xaml.LoadImage");
             ImgPreview.Source = null;
         }
     }

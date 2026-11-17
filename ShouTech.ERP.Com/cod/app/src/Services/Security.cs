@@ -17,6 +17,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services
 {
 
@@ -550,7 +551,8 @@ public sealed class SecurityService : ISecurityService
             if (!IsNativeAvailable)
                 return false;
             try { return SecEngInterop.ST_IsInitialized(); }
-            catch { return false; }
+            catch (Exception exL553) {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL553, "Security.Fail"); return false; }
         }
     }
 
@@ -561,7 +563,8 @@ public sealed class SecurityService : ISecurityService
             if (!IsNativeAvailable)
                 return false;
             try { return SecEngInterop.ST_IsLicenseValid(); }
-            catch { return false; }
+            catch (Exception exL564) {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL564, "Security.Fail"); return false; }
         }
     }
 
@@ -583,6 +586,7 @@ public sealed class SecurityService : ISecurityService
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "Security.Initialize");
                 return SecurityOperationResult.Fail(
                     SecEngInterop.StatusNotInitialized,
                     "Failed to initialize security engine.",
@@ -605,8 +609,9 @@ public sealed class SecurityService : ISecurityService
                     ? SecurityOperationResult.Ok()
                     : SecurityOperationResult.Fail(code, ResolveMessage(code));
             }
-            catch
+            catch (Exception exL608)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL608, "Security.Shutdown");
                 return SecurityOperationResult.Fail(SecEngInterop.StatusNotInitialized, "Shutdown failed.");
             }
         }
@@ -625,7 +630,10 @@ public sealed class SecurityService : ISecurityService
                 if (SecEngInterop.ST_RandomBytes(buffer, (uint)count) == SecEngInterop.StatusOk)
                     return buffer;
             }
-            catch { /* fall through to managed CSPRNG */ }
+            catch (Exception exL628)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL628, "Security.RandomBytes");
+            }
         }
 
         var managed = new byte[count];
@@ -645,7 +653,10 @@ public sealed class SecurityService : ISecurityService
                 if (SecEngInterop.ST_HashSHA256(data, (uint)data.Length, hash) == SecEngInterop.StatusOk)
                     return hash;
             }
-            catch { /* managed fallback */ }
+            catch (Exception exL648)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL648, "Security.Sha256");
+            }
         }
 
         return SHA256.HashData(data);
@@ -832,16 +843,19 @@ public sealed class SecurityService : ISecurityService
                 _ = SecEngInterop.ST_IsInitialized();
                 _nativeLoaded = true;
             }
-            catch (DllNotFoundException)
+            catch (DllNotFoundException exL835)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL835, "Security.EnsureNativeProbed");
                 _nativeLoaded = false;
             }
-            catch (BadImageFormatException)
+            catch (BadImageFormatException exL839)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL839, "Security.EnsureNativeProbed");
                 _nativeLoaded = false;
             }
-            catch
+            catch (Exception exL843)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL843, "Security.EnsureNativeProbed");
                 // Other native failures still mean the DLL surface was found.
                 _nativeLoaded = true;
             }
@@ -870,7 +884,10 @@ public sealed class SecurityService : ISecurityService
             if (st == SecEngInterop.StatusOk)
                 return new string(buffer).TrimEnd('\0');
         }
-        catch { /* ignore */ }
+        catch (Exception exL873)
+        {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL873, "Security.ResolveMessage");
+        }
         return $"Security status 0x{code:X8}";
     }
 }

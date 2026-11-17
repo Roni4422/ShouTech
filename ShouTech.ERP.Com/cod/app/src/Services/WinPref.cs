@@ -5,6 +5,7 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services;
 
 /// <summary>
@@ -74,8 +75,9 @@ public static class WinPref
             if (rec.Maximized)
                 window.WindowState = WindowState.Maximized;
         }
-        catch
+        catch (Exception exL77)
         {
+            AppHost.Errors.Report(ErrorCodes.SettingsLoadFailed, exL77, "WinPref.RestoreGeometry");
             // Preference restore is best effort only.
         }
     }
@@ -103,8 +105,9 @@ public static class WinPref
             };
             SaveBag(scope, bag);
         }
-        catch
+        catch (Exception exL106)
         {
+            AppHost.Errors.Report(ErrorCodes.SettingsSaveFailed, exL106, "WinPref.SaveGeometry");
             // Preference save is best effort only.
         }
     }
@@ -123,8 +126,9 @@ public static class WinPref
                 ? new List<ColumnRec>(cols)
                 : null;
         }
-        catch
+        catch (Exception exL126)
         {
+            AppHost.Errors.Report(ErrorCodes.SettingsLoadFailed, exL126, "WinPref.LoadReportColumns");
             return null;
         }
     }
@@ -138,8 +142,9 @@ public static class WinPref
             bag.ReportColumns[elementKey] = new List<ColumnRec>(columns);
             SaveBag(scope, bag);
         }
-        catch
+        catch (Exception exL141)
         {
+            AppHost.Errors.Report(ErrorCodes.SettingsSaveFailed, exL141, "WinPref.SaveReportColumns");
             // Preference save is best effort only.
         }
     }
@@ -171,8 +176,9 @@ public static class WinPref
                     var json = File.ReadAllText(path);
                     return JsonSerializer.Deserialize<PrefBag>(json, JsonOpts) ?? new PrefBag();
                 }
-                catch
+                catch (Exception exL174)
                 {
+                    AppHost.Errors.Report(ErrorCodes.SettingsLoadFailed, exL174, "WinPref.LoadBag");
                     // A corrupted preference file must never crash the application.
                     return new PrefBag();
                 }

@@ -1,0 +1,210 @@
+{
+  "ACC-5001": {
+    "code": "ACC-5001",
+    "name": "JournalNotBalanced",
+    "message": "Les totaux débit et crédit de l'écriture comptable doivent être équilibrés.",
+    "hint": "Ajustez les lignes pour que le total débit égale le total crédit."
+  },
+  "ACC-5002": {
+    "code": "ACC-5002",
+    "name": "JournalTooFewLines",
+    "message": "Une écriture comptable nécessite au moins deux lignes."
+  },
+  "ACC-5003": {
+    "code": "ACC-5003",
+    "name": "JournalZeroAmount",
+    "message": "Une écriture comptable doit avoir un montant non nul."
+  },
+  "ACC-5004": {
+    "code": "ACC-5004",
+    "name": "JournalPostingFailed",
+    "message": "L'écriture comptable n'a pas pu être comptabilisée."
+  },
+  "AUTH-2001": {
+    "code": "AUTH-2001",
+    "name": "InvalidCredentials",
+    "message": "Le nom d'utilisateur ou le mot de passe est incorrect",
+    "hint": "Vérifiez le nom d'utilisateur et le mot de passe, puis réessayez."
+  },
+  "AUTH-2002": {
+    "code": "AUTH-2002",
+    "name": "AccountLocked",
+    "message": "Ce compte est verrouillé. La connexion a été refusée.",
+    "hint": "Attendez la fin de la période de verrouillage ou demandez à un administrateur de déverrouiller le compte."
+  },
+  "AUTH-2003": {
+    "code": "AUTH-2003",
+    "name": "AccountLockedNow",
+    "message": "Le compte a été verrouillé après plusieurs tentatives de connexion échouées.",
+    "hint": "Attendez la fin de la période de verrouillage ou demandez à un administrateur de déverrouiller le compte."
+  },
+  "AUTH-2004": {
+    "code": "AUTH-2004",
+    "name": "PasswordPolicyViolation",
+    "message": "Le mot de passe administrateur ne respecte pas la politique de mot de passe : {0}",
+    "hint": "Utilisez au moins 12 caractères avec des lettres, des chiffres et un symbole."
+  },
+  "CO-3001": {
+    "code": "CO-3001",
+    "name": "CompanyRecordNotFound",
+    "message": "L'enregistrement local de la société requis pour ouvrir cette société est introuvable.",
+    "hint": "La liste des sociétés sur cet ordinateur n'est pas à jour. Réindexez les sociétés ou restaurez les données de la société."
+  },
+  "CO-3002": {
+    "code": "CO-3002",
+    "name": "CompanyDatabasePathMissing",
+    "message": "Le chemin de la base de données de la société n'est pas défini.",
+    "hint": "Modifiez la société et définissez le chemin de sa base de données."
+  },
+  "CO-3003": {
+    "code": "CO-3003",
+    "name": "PostgresDatabaseNameMissing",
+    "message": "Le nom de la base de données PostgreSQL n'est pas défini."
+  },
+  "CO-3004": {
+    "code": "CO-3004",
+    "name": "PostgresConnectionMissing",
+    "message": "La connexion PostgreSQL actuelle n'est pas disponible."
+  },
+  "CO-3005": {
+    "code": "CO-3005",
+    "name": "CompanyLoadFailed",
+    "message": "Échec du chargement des sociétés"
+  },
+  "CO-3006": {
+    "code": "CO-3006",
+    "name": "CompanyOpenFailed",
+    "message": "Impossible d'ouvrir la société"
+  },
+  "DATA-4001": {
+    "code": "DATA-4001",
+    "name": "ExportPermissionDenied",
+    "message": "Vous n'avez pas l'autorisation d'exporter des données (DATA.EXPORT).",
+    "hint": "Demandez à un administrateur d'accorder l'autorisation DATA.EXPORT."
+  },
+  "DATA-4002": {
+    "code": "DATA-4002",
+    "name": "ExportFailed",
+    "message": "L'exportation n'a pas pu être terminée."
+  },
+  "DATA-4003": {
+    "code": "DATA-4003",
+    "name": "ImportFailed",
+    "message": "L'importation n'a pas pu être terminée."
+  },
+  "DB-1001": {
+    "code": "DB-1001",
+    "name": "DatabaseConnectionFailed",
+    "message": "Impossible de se connecter à la base de données.",
+    "hint": "Vérifiez que le serveur de base de données fonctionne et que les paramètres de connexion sont corrects."
+  },
+  "DB-1002": {
+    "code": "DB-1002",
+    "name": "DatabaseFileMissing",
+    "message": "Fichier de base de données de la société introuvable.",
+    "hint": "Le fichier de base de données de la société a peut-être été déplacé ou supprimé. Restaurez-le à partir d'une sauvegarde ou recréez la société."
+  },
+  "DB-1003": {
+    "code": "DB-1003",
+    "name": "MigrationFailed",
+    "message": "Une migration de la base de données a échoué."
+  },
+  "DB-1004": {
+    "code": "DB-1004",
+    "name": "DatabaseNotInitialized",
+    "message": "Le fichier de base de données de la société n'est pas correctement initialisé.",
+    "hint": "Le fichier existe mais n'est pas une base de données de société valide. Restaurez à partir d'une sauvegarde ou recréez la société."
+  },
+  "DB-1005": {
+    "code": "DB-1005",
+    "name": "DatabaseQueryFailed",
+    "message": "Une opération de base de données a échoué."
+  },
+  "DB-1006": {
+    "code": "DB-1006",
+    "name": "UnsupportedDatabaseProvider",
+    "message": "Fournisseur de base de données non pris en charge."
+  },
+  "INV-6001": {
+    "code": "INV-6001",
+    "name": "InventoryOperationFailed",
+    "message": "L'opération d'inventaire n'a pas pu être terminée."
+  },
+  "LIC-8001": {
+    "code": "LIC-8001",
+    "name": "LicenseCheckFailed",
+    "message": "La licence n'a pas pu être vérifiée."
+  },
+  "SYS-0001": {
+    "code": "SYS-0001",
+    "name": "UnknownError",
+    "message": "Une erreur inattendue s'est produite.",
+    "hint": "Si le problème persiste, notez le code d'erreur et contactez le support."
+  },
+  "SYS-0002": {
+    "code": "SYS-0002",
+    "name": "DispatcherUnhandled",
+    "message": "Une erreur inattendue a interrompu l'opération en cours.",
+    "hint": "Si le problème persiste, notez le code d'erreur et contactez le support."
+  },
+  "SYS-0003": {
+    "code": "SYS-0003",
+    "name": "AppDomainUnhandled",
+    "message": "Une erreur inattendue s'est produite dans l'application."
+  },
+  "SYS-0004": {
+    "code": "SYS-0004",
+    "name": "UnobservedTaskException",
+    "message": "Une tâche en arrière-plan a échoué."
+  },
+  "SYS-0005": {
+    "code": "SYS-0005",
+    "name": "NonFatalInternalFailure",
+    "message": "Une opération interne non critique a échoué et a été récupérée."
+  },
+  "SYS-0006": {
+    "code": "SYS-0006",
+    "name": "ConfigurationLoadFailed",
+    "message": "La configuration de l'application n'a pas pu être chargée."
+  },
+  "SYS-0007": {
+    "code": "SYS-0007",
+    "name": "FileAccessFailed",
+    "message": "Un fichier n'a pas pu être consulté."
+  },
+  "SYS-0009": {
+    "code": "SYS-0009",
+    "name": "StartupFailed",
+    "message": "L'application n'a pas pu démarrer."
+  },
+  "SYS-0010": {
+    "code": "SYS-0010",
+    "name": "SettingsLoadFailed",
+    "message": "Les paramètres n'ont pas pu être chargés ; les valeurs par défaut ont été utilisées."
+  },
+  "SYS-0011": {
+    "code": "SYS-0011",
+    "name": "SettingsSaveFailed",
+    "message": "Les paramètres n'ont pas pu être enregistrés."
+  },
+  "UI-7001": {
+    "code": "UI-7001",
+    "name": "WindowOperationFailed",
+    "message": "L'opération de la fenêtre n'a pas pu être terminée."
+  },
+  "UI-7002": {
+    "code": "UI-7002",
+    "name": "ShellOperationFailed",
+    "message": "Une opération de la fenêtre principale n'a pas pu être terminée."
+  },
+  "UI-7003": {
+    "code": "UI-7003",
+    "name": "WindowLoadFailed",
+    "message": "La fenêtre n'a pas pu être chargée."
+  },
+  "UI-7004": {
+    "code": "UI-7004",
+    "name": "NavigationFailed",
+    "message": "La navigation n'a pas pu être terminée."
+  }
+}

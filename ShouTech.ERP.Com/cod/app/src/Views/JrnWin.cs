@@ -11,6 +11,8 @@ using System.Windows.Documents;
 using System.Windows.Media;
 using ShouTech.App.Configuration;
 
+using ShouTech.App.Services;
+using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 /// <summary>
@@ -350,6 +352,7 @@ public sealed class JrnWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "JrnWin.LoadVoucherAsync");
             ReportPersistenceFailure("LoadByDocumentNumber", ex);
         }
     }
@@ -447,6 +450,7 @@ public sealed class JrnWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "JrnWin.SaveVoucherAsync");
             ReportPersistenceFailure("SaveDraft", ex);
         }
     }
@@ -482,6 +486,7 @@ public sealed class JrnWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "JrnWin.PostVoucherAsync");
             ReportPersistenceFailure("Post", ex);
         }
     }
@@ -519,6 +524,7 @@ public sealed class JrnWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "JrnWin.ReverseVoucherAsync");
             ReportPersistenceFailure("Reverse", ex);
         }
     }

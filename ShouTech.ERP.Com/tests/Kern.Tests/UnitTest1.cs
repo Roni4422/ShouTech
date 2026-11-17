@@ -13,6 +13,7 @@ using ShouTech.App.Converters;
 using ShouTech.App.Configuration;
 using ShouTech.App.Services;
 using ShouTech.App;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
 using ShouTech.Application.Services;
@@ -477,7 +478,8 @@ namespace Kern.Tests
             entry.AddLine(Guid.NewGuid(), debit: 1_000m, credit: 0m);
             entry.AddLine(Guid.NewGuid(), debit: 0m, credit: 900m);
 
-            Assert.Throws<InvalidOperationException>(() => entry.EnsureBalanced());
+            var balanceError = Assert.Throws<AppError>(() => entry.EnsureBalanced());
+            Assert.Equal(ErrorCodes.JournalNotBalanced, balanceError.Code);
         }
 
         [Fact]
@@ -742,12 +744,13 @@ namespace Kern.Tests
             Assert.Collection(repository.SavedEntry!.Lines,
                 line => Assert.Equal("CC-100", line.CostCenter),
                 line => Assert.Equal("CC-200", line.CostCenter));
-            await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateDraftAsync(
+            var lineError = await Assert.ThrowsAsync<AppError>(() => service.CreateDraftAsync(
                 Guid.NewGuid(),
                 new DateOnly(2026, 8, 21),
                 "Invalid transaction",
                 "user-001",
                 new[] { new JournalLineRequest(debitAccount, 250m, 0m) }));
+            Assert.Equal(ErrorCodes.JournalTooFewLines, lineError.Code);
         }
 
         [Fact]

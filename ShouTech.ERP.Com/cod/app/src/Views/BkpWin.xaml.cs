@@ -12,6 +12,7 @@ using ShouTech.App.Localization;
 using ShouTech.App.ViewModels;
 using WpfApp = System.Windows.Application;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 /// <summary>
@@ -56,7 +57,8 @@ public partial class BkpWin : Window
     {
         var fmt = L(key, fallback);
         try { return string.Format(System.Globalization.CultureInfo.CurrentCulture, fmt, args); }
-        catch { return fmt; }
+        catch (Exception exL61) {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL61, "BkpWin.xaml.Lf"); return fmt; }
     }
 
     private void ApplyLanguage()
@@ -222,6 +224,7 @@ public partial class BkpWin : Window
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "BkpWin.xaml.Create_Click");
             LogBackupError(
                 "Backup creation failed.",
                 ex);
@@ -289,7 +292,11 @@ public partial class BkpWin : Window
             Activate();
             Focus();
         }
-        catch (Exception ex) { AppHost.Logging?.LogError("BkpWin", "Window activation failed", ex); }
+        catch (Exception exL293)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL293, "BkpWin.xaml.Create_Click");
+            // Ignore activation failures.
+        }
     }
 
     private async void Restore_Click(object sender, RoutedEventArgs e)
@@ -457,8 +464,9 @@ public partial class BkpWin : Window
                             && w is not BkpWin
                             && w is not LogWin) ?? 0;
         }
-        catch
+        catch (Exception exL464)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL464, "BkpWin.xaml.CountSecondaryWindows");
             return 0;
         }
     }
@@ -518,14 +526,17 @@ public partial class BkpWin : Window
             if (main.DataContext is MainShVM vm)
             {
                 try { vm.FreezeForCompanySwitch(); }
-                catch
+                catch (Exception exL525)
                 {
-                    try { main.FreezeForCompanySwitch(); } catch (Exception ex) { AppHost.Logging?.LogError("BkpWin", "Shell freeze fallback failed", ex); }
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL525, "BkpWin.xaml.FreezeMainShell");
+                    try { main.FreezeForCompanySwitch(); } catch (Exception exL527) {
+                        AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL527, "BkpWin.xaml.FreezeMainShell"); /* ignore */ }
                 }
             }
             else
             {
-                try { main.FreezeForCompanySwitch(); } catch (Exception ex) { AppHost.Logging?.LogError("BkpWin", "Shell freeze fallback failed", ex); }
+                try { main.FreezeForCompanySwitch(); } catch (Exception exL532) {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL532, "BkpWin.xaml.FreezeMainShell"); /* ignore */ }
             }
 
             main.IsEnabled = false;
@@ -556,17 +567,21 @@ public partial class BkpWin : Window
             if (main.DataContext is MainShVM vm)
             {
                 try { vm.UnfreezeAfterCompanyLogin(); }
-                catch
+                catch (Exception exL563)
                 {
-                    try { main.UnfreezeAfterCompanyLogin(); } catch (Exception ex) { AppHost.Logging?.LogError("BkpWin", "Shell unfreeze fallback failed", ex); }
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL563, "BkpWin.xaml.UnfreezeMainShell");
+                    try { main.UnfreezeAfterCompanyLogin(); } catch (Exception exL565) {
+                        AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL565, "BkpWin.xaml.UnfreezeMainShell"); /* ignore */ }
                 }
             }
             else
             {
-                try { main.UnfreezeAfterCompanyLogin(); } catch (Exception ex) { AppHost.Logging?.LogError("BkpWin", "Shell unfreeze fallback failed", ex); }
+                try { main.UnfreezeAfterCompanyLogin(); } catch (Exception exL570) {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL570, "BkpWin.xaml.UnfreezeMainShell"); /* ignore */ }
             }
 
-            try { main.Activate(); } catch (Exception ex) { AppHost.Logging?.LogError("BkpWin", "Shell activation failed", ex); }
+            try { main.Activate(); } catch (Exception exL573) {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL573, "BkpWin.xaml.UnfreezeMainShell"); /* ignore */ }
         }
         catch (Exception ex)
         {
@@ -716,27 +731,35 @@ public partial class BkpWin : Window
                 if (main.DataContext is MainShVM vm)
                 {
                     try { vm.UnfreezeAfterCompanyLogin(); }
-                    catch
+                    catch (Exception exL723)
                     {
-                        try { main.UnfreezeAfterCompanyLogin(); } catch (Exception ex) { AppHost.Logging?.LogError("BkpWin", "Shell unfreeze fallback failed", ex); }
+                        AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL723, "BkpWin.xaml.OnClosed");
+                        try { main.UnfreezeAfterCompanyLogin(); } catch (Exception exL725) {
+                            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL725, "BkpWin.xaml.OnClosed"); }
                     }
                 }
                 else
                 {
-                    try { main.UnfreezeAfterCompanyLogin(); } catch (Exception ex) { AppHost.Logging?.LogError("BkpWin", "Shell unfreeze fallback failed", ex); }
+                    try { main.UnfreezeAfterCompanyLogin(); } catch (Exception exL730) {
+                        AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL730, "BkpWin.xaml.OnClosed"); }
                 }
 
-                try { main.Activate(); } catch (Exception ex) { AppHost.Logging?.LogError("BkpWin", "Shell activation failed", ex); }
+                try { main.Activate(); } catch (Exception exL733) {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL733, "BkpWin.xaml.OnClosed"); }
             }
             else
             {
-                try { ReleaseIsolation(); } catch (Exception ex) { AppHost.Logging?.LogError("BkpWin", "Backup isolation release failed", ex); }
+                try { ReleaseIsolation(); } catch (Exception exL737) {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL737, "BkpWin.xaml.OnClosed"); }
             }
         }
         catch (Exception ex)
         {
             try { AppHost.Logging.LogError("BkpWin", "OnClosed unfreeze failed", ex); }
-            catch { System.Diagnostics.Debug.WriteLine("BkpWin OnClosed unfreeze log failed"); }
+            catch (Exception exL743)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL743, "BkpWin.xaml.OnClosed");
+            }
         }
         finally
         {

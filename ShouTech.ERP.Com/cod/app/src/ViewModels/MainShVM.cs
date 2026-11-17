@@ -12,6 +12,7 @@ using ShouTech.App.Navigation;
 using ShouTech.App.Services;
 using ShouTech.App.Views;
 
+using ShouTech.Domain;
 namespace ShouTech.App.ViewModels
 {
     /// <summary>
@@ -172,8 +173,9 @@ namespace ShouTech.App.ViewModels
                     x += item.ItemWidth + 6;
                 }
             }
-            catch
+            catch (Exception exL175)
             {
+                AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, exL175, "MainShVM.LayoutDockedWindows");
             }
         }
 
@@ -414,8 +416,9 @@ namespace ShouTech.App.ViewModels
                                 "shutdown",
                                 "/s /t 0");
                         }
-                        catch
+                        catch (Exception exL417)
                         {
+                            AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, exL417, "MainShVM.TryHandleSystemAction");
                         }
                     }
 
@@ -743,8 +746,9 @@ namespace ShouTech.App.ViewModels
                 StatusMessage =
                     "Switching company...";
             }
-            catch
+            catch (Exception exL746)
             {
+                AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, exL746, "MainShVM.FreezeForCompanySwitch");
             }
         }
 
@@ -759,8 +763,9 @@ namespace ShouTech.App.ViewModels
             {
                 StatusMessage = "Ready";
             }
-            catch
+            catch (Exception exL762)
             {
+                AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, exL762, "MainShVM.UnfreezeAfterCompanyLogin");
             }
         }
 
@@ -849,6 +854,7 @@ namespace ShouTech.App.ViewModels
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, ex, "MainShVM.OpenCompanyWindow");
                 MessageBox.Show(
                     $"Could not open the companies window: {ex.Message}",
                     "ShouTech ERP",

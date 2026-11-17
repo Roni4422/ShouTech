@@ -9,6 +9,7 @@ using ShouTech.App.Configuration;
 using ShouTech.App.Reporting.Invoices;
 using ShouTech.App.Services;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 /// <summary>POS-specific tender review and document posting.</summary>
@@ -238,7 +239,7 @@ public sealed class PosCheckoutWin : BaseWin
         }
         catch (Exception ex)
         {
-            AppHost.Logging?.LogError("PosCheckoutWin", $"CompleteSale failed | DocNo={_doc.DocNo}", ex);
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, $"PosCheckoutWin.CompleteSale | DocNo={_doc.DocNo}");
             MessageBox.Show(this, ex.Message, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
             _complete.IsEnabled = true;
         }

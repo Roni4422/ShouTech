@@ -16,6 +16,7 @@ using ShouTech.App.Common;
 using ShouTech.App.Configuration;
 using ShouTech.App.Services;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views
 {
     public enum StpWizMode
@@ -219,7 +220,11 @@ namespace ShouTech.App.Views
                     return;
                 }
             }
-            catch (Exception ex) { AppHost.Logging?.LogError("StpWiz", "Native title bar styling failed", ex); }
+            catch (Exception exL222)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL222, "StpWiz.xaml.ApplyCustomTitleBarColor");
+                // Native title bar styling is optional.
+            }
         }
 
         #endregion
@@ -301,7 +306,11 @@ namespace ShouTech.App.Views
                         });
                     }
                 }
-                catch (Exception ex) { AppHost.Logging?.LogError("StpWiz", "Chart-of-accounts template enumeration failed", ex); }
+                catch (Exception exL307)
+                {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL307, "StpWiz.xaml.FromDisk");
+                    // Fall through to empty list; a minimal fallback is added below.
+                }
 
                 if (items.Count == 0)
                 {
@@ -514,7 +523,10 @@ namespace ShouTech.App.Views
                 // explicitly changes the language selector.
                 _langUserTouched = false;
             }
-            catch (Exception ex) { AppHost.Logging?.LogError("StpWiz", "Language selector reset failed", ex); }
+            catch (Exception exL519)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL519, "StpWiz.xaml.SyncLanguageComboWithApp");
+            }
         }
 
         private static string NormalizeLang(string? code)
@@ -606,7 +618,10 @@ namespace ShouTech.App.Views
                         return NormalizeLang(tag);
                     }
                 }
-                catch (Exception ex) { AppHost.Logging?.LogError("StpWiz", "Language tag normalization failed", ex); }
+                catch (Exception exL613)
+                {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL613, "StpWiz.xaml.ResolveWizardLanguage");
+                }
             }
 
             try
@@ -614,8 +629,9 @@ namespace ShouTech.App.Views
                 return NormalizeLang(
                     ShouTech.App.App.CurrentLanguageCode);
             }
-            catch
+            catch (Exception exL623)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL623, "StpWiz.xaml.ResolveWizardLanguage");
                 return "ar";
             }
         }
@@ -658,7 +674,10 @@ namespace ShouTech.App.Views
                 // buttons, chrome content) flips with the language.
                 LangDirSv.ApplyToWindow(this, lang);
             }
-            catch (Exception ex) { AppHost.Logging?.LogError("StpWiz", "Wizard direction apply failed", ex); }
+            catch (Exception exL667)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL667, "StpWiz.xaml.ApplyWizardLocalization");
+            }
 
             // Keep the root layout flowing with the window (defensive if a parent overrides).
             try
@@ -666,7 +685,10 @@ namespace ShouTech.App.Views
                 if (rootLayout != null)
                     rootLayout.FlowDirection = LangDirSv.GetFlowDirection(lang);
             }
-            catch (Exception ex) { AppHost.Logging?.LogError("StpWiz", "Wizard root layout direction failed", ex); }
+            catch (Exception exL677)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL677, "StpWiz.xaml.ApplyWizardLocalization");
+            }
 
             Title = W(_mode == StpWizMode.NewCompany ? "Title.NewCompany" : "Title.Setup", _mode == StpWizMode.NewCompany ? "New company — ShouTech ERP" : "Company setup — ShouTech ERP");
 
@@ -781,7 +803,10 @@ namespace ShouTech.App.Views
                     chkAutoBackup.Content = W("Fields.EnableAutoBackup", "Enable automatic backup");
                 }
             }
-            catch (Exception ex) { AppHost.Logging?.LogError("StpWiz", "Wizard field localization failed", ex); }
+            catch (Exception exL794)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL794, "StpWiz.xaml.ApplyWizardLocalization");
+            }
 
             UpdateStepTitle(lang);
             UpdateFiscalHint();
@@ -821,7 +846,10 @@ namespace ShouTech.App.Views
 
                 textBlock.Text = W($"Fields.{controlName}", englishFallback);
             }
-            catch (Exception ex) { AppHost.Logging?.LogError("StpWiz", "Wizard field text apply failed", ex); }
+            catch (Exception exL853)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL853, "StpWiz.xaml.SetText");
+            }
         }
 
         private string W(string key, string englishFallback)
@@ -1763,8 +1791,9 @@ namespace ShouTech.App.Views
 
                 return Path.IsPathRooted(fullPath);
             }
-            catch
+            catch (Exception exL1797)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL1797, "StpWiz.xaml.IsValidPath");
                 return false;
             }
         }

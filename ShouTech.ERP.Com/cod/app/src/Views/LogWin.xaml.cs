@@ -10,6 +10,7 @@ using ShouTech.App.Services;
 using ShouTech.App.ViewModels;
 using WpfApp = System.Windows.Application;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views
 {
     public partial class LogWin : Window
@@ -125,8 +126,9 @@ namespace ShouTech.App.Views
 				await CoLocalStore.MarkAsLastOpenedAsync(
 					AppState.CurrentCompanyCode ?? string.Empty);
 			}
-			catch
+			catch (Exception exL128)
 			{
+				AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL128, "LogWin.xaml.OnLoginSucceeded");
 				// Failure to update company order must not block login.
 			}
 
@@ -165,9 +167,11 @@ namespace ShouTech.App.Views
             {
                 AppState.CurrentUser = null;
                 AppState.ClearCompany();
-                try { WpfApp.Current.Properties.Remove("SelectedCompany"); } catch { }
+                try { WpfApp.Current.Properties.Remove("SelectedCompany"); } catch (Exception exL168) {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL168, "LogWin.xaml.OnRequestClose"); }
 
-                try { Close(); } catch { }
+                try { Close(); } catch (Exception exL170) {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL170, "LogWin.xaml.OnRequestClose"); }
                 shell.Activate();
                 shell.Focus();
                 return;
@@ -182,7 +186,10 @@ namespace ShouTech.App.Views
             {
                 LangDirSv.ApplyToWindow(this, ShouTech.App.App.CurrentLanguageCode);
             }
-            catch { }
+            catch (Exception exL185)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL185, "LogWin.xaml.ApplyWindowDirection");
+            }
         }
 
         /// <summary>
@@ -202,7 +209,10 @@ namespace ShouTech.App.Views
                         System.Windows.Controls.Grid.SetColumn(btnCancel, 2);
                 }
             }
-            catch { }
+            catch (Exception exL205)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL205, "LogWin.xaml.ApplyButtonOrder");
+            }
         }
 
         [DllImport("dwmapi.dll", PreserveSig = true)]
@@ -238,8 +248,9 @@ namespace ShouTech.App.Views
                     ref textColor,
                     sizeof(int));
             }
-            catch
+            catch (Exception exL241)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL241, "LogWin.xaml.ApplyCustomTitleBarColor");
             }
         }
 

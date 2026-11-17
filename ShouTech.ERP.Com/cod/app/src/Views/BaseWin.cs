@@ -3,6 +3,7 @@ using System.Windows;
 using ShouTech.App.Services;
 using WpfApp = System.Windows.Application;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 /// <summary>
@@ -50,7 +51,11 @@ public abstract class BaseWin : Window
             {
                 Owner = WpfApp.Current.MainWindow;
             }
-            catch (Exception ex) { AppHost.Logging?.LogError("BaseWin", "Owner assignment failed", ex); }
+            catch (Exception exL53)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL53, "BaseWin.BaseWin");
+                // Window owner assignment should never block window initialization
+            }
         }
 
         Loaded += OnBaseLoaded;
@@ -141,7 +146,11 @@ public abstract class BaseWin : Window
         {
             WinPref.SaveGeometry(this, GeometryScope());
         }
-        catch (Exception ex) { AppHost.Logging?.LogError("BaseWin", "Window geometry save failed", ex); }
+        catch (Exception exL152)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL152, "BaseWin.OnGeometryClosing");
+            // Geometry persistence must never block a window from closing.
+        }
     }
 
     private string GeometryScope()

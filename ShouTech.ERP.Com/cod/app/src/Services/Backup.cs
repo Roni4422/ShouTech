@@ -24,6 +24,7 @@ using Npgsql;
 using ShouTech.App.Configuration;
 using System.Globalization;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services
 {
 
@@ -1010,6 +1011,9 @@ internal static class SteiSvc
                     }
                     catch (Exception ex) when (ex is CryptographicException or FormatException or InvalidDataException)
                     {
+                        // Stored key material is unreadable/corrupt: report
+                        // it, then recover by generating a fresh key.
+                        AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "Backup.GetPackagePassword");
                         rawKey = GenerateAndStore(path);
                     }
                 }
@@ -1354,6 +1358,7 @@ internal static class SteiSvc
             }
             catch (System.Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "Backup.ValidateBackupDetailedAsync");
                 detail.IsValid = false;
                 detail.FailureReason = ex.Message;
             }
@@ -1369,8 +1374,9 @@ internal static class SteiSvc
                 System.IO.Directory.CreateDirectory(dir);
                 return dir;
             }
-            catch
+            catch (Exception exL1145)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL1145, "Backup.GetBackupDirectory");
                 return System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "backups");
             }
         }

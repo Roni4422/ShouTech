@@ -13,6 +13,7 @@ using ShouTech.App.Reporting;
 using ShouTech.App.Reporting.Invoices;
 using ShouTech.App.Services;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 /// <summary>
@@ -130,8 +131,9 @@ public sealed class InvoiceWin : BaseWin
             var code = App.CurrentLanguageCode;
             LangDirSv.ApplyToWindow(this, code);
         }
-        catch
+        catch (Exception exL132)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL132, "InvoiceWin.ApplyLanguageDirection");
             // Direction is best-effort when localization host is unavailable.
         }
     }
@@ -277,8 +279,10 @@ public sealed class InvoiceWin : BaseWin
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(3)
         };
-        try { headerHost.SetResourceReference(Border.BorderBrushProperty, "BorderBrush"); } catch { headerHost.BorderBrush = Brushes.LightGray; }
-        try { headerHost.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush"); } catch { }
+        try { headerHost.SetResourceReference(Border.BorderBrushProperty, "BorderBrush"); } catch (Exception exL279) {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL279, "InvoiceWin.BuildUi"); headerHost.BorderBrush = Brushes.LightGray; }
+        try { headerHost.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush"); } catch (Exception exL280) {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL280, "InvoiceWin.BuildUi"); }
         Grid.SetRow(headerHost, 0);
         root.Children.Add(headerHost);
 
@@ -292,8 +296,10 @@ public sealed class InvoiceWin : BaseWin
             Padding = new Thickness(0),
             CornerRadius = new CornerRadius(2)
         };
-        try { gridHost.SetResourceReference(Border.BorderBrushProperty, "BorderBrush"); } catch { gridHost.BorderBrush = Brushes.Gray; }
-        try { gridHost.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush"); } catch { }
+        try { gridHost.SetResourceReference(Border.BorderBrushProperty, "BorderBrush"); } catch (Exception exL294) {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL294, "InvoiceWin.BuildUi"); gridHost.BorderBrush = Brushes.Gray; }
+        try { gridHost.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush"); } catch (Exception exL295) {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL295, "InvoiceWin.BuildUi"); }
         Grid.SetRow(gridHost, 1);
         root.Children.Add(gridHost);
 
@@ -354,8 +360,10 @@ public sealed class InvoiceWin : BaseWin
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(3)
         };
-        try { bottomHost.SetResourceReference(Border.BorderBrushProperty, "BorderBrush"); } catch { bottomHost.BorderBrush = Brushes.LightGray; }
-        try { bottomHost.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush"); } catch { }
+        try { bottomHost.SetResourceReference(Border.BorderBrushProperty, "BorderBrush"); } catch (Exception exL356) {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL356, "InvoiceWin.BuildUi"); bottomHost.BorderBrush = Brushes.LightGray; }
+        try { bottomHost.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush"); } catch (Exception exL357) {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL357, "InvoiceWin.BuildUi"); }
         Grid.SetRow(bottomHost, 2);
         root.Children.Add(bottomHost);
 
@@ -544,7 +552,10 @@ public sealed class InvoiceWin : BaseWin
             _grid.SetResourceReference(DataGrid.RowBackgroundProperty, "TableSurfaceBrush");
             _grid.SetResourceReference(DataGrid.AlternatingRowBackgroundProperty, "TableAlternateRowBrush");
         }
-        catch { }
+        catch (Exception exL546)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL546, "InvoiceWin.ConfigureGrid");
+        }
 
         _grid.ItemsSource = _lines;
         _grid.Columns.Clear();
@@ -751,11 +762,8 @@ public sealed class InvoiceWin : BaseWin
         if (_btnReverse.IsEnabled)
         {
             try { _btnReverse.IsEnabled = !InvRepo.HasCompletedReversal(doc.DocId, doc.Kind); }
-            catch (Exception ex)
-            {
-                AppHost.Logging?.LogError("InvoiceWin", $"HasCompletedReversal check failed | DocId={doc.DocId}", ex);
-                _btnReverse.IsEnabled = false;
-            }
+            catch (Exception exL743) {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL743, "InvoiceWin.ApplyDoc"); _btnReverse.IsEnabled = false; }
         }
         _btnPost.IsEnabled = !locked;
         _grid.IsReadOnly = locked;
@@ -800,8 +808,9 @@ public sealed class InvoiceWin : BaseWin
                 if (field?.GetValue(win) is TextBox txt)
                     txt.Text = journalNo;
             }
-            catch
+            catch (Exception exL788)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL788, "InvoiceWin.OpenVoucher");
                 // JrnWin may load interactively if reflection surface changes.
             }
 
@@ -809,7 +818,7 @@ public sealed class InvoiceWin : BaseWin
         }
         catch (Exception ex)
         {
-            AppHost.Logging?.LogError("InvoiceWin", "OpenVoucher failed", ex);
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "InvoiceWin.OpenVoucher");
             MessageBox.Show(this,
                 Tf("Invoice.VoucherOpenFailed", "Could not open the journal voucher.") + " " + ex.Message,
                 Tf("Common.Error", "Error"),
@@ -837,7 +846,7 @@ public sealed class InvoiceWin : BaseWin
         }
         catch (Exception ex)
         {
-            AppHost.Logging?.LogError("InvoiceWin", "OpenOriginal failed", ex);
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "InvoiceWin.OpenOriginal");
             MessageBox.Show(this,
                 Tf("Invoice.OriginalOpenFailed", "Could not open the original invoice.") + " " + ex.Message,
                 Tf("Common.Error", "Error"),
@@ -860,7 +869,7 @@ public sealed class InvoiceWin : BaseWin
         }
         catch (Exception ex)
         {
-            AppHost.Logging?.LogError("InvoiceWin", "SaveDraft failed", ex);
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "InvoiceWin.SaveDraft");
             MessageBox.Show(this, ex.Message, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -891,7 +900,7 @@ public sealed class InvoiceWin : BaseWin
         }
         catch (Exception ex)
         {
-            AppHost.Logging?.LogError("InvoiceWin", "PostDoc failed", ex);
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "InvoiceWin.PostDoc");
             MessageBox.Show(this, ex.Message, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -913,7 +922,7 @@ public sealed class InvoiceWin : BaseWin
         }
         catch (Exception ex)
         {
-            AppHost.Logging?.LogError("InvoiceWin", "ReverseCurrentDocument failed", ex);
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "InvoiceWin.ReverseCurrentDocument");
             MessageBox.Show(this, ex.Message, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -939,8 +948,9 @@ public sealed class InvoiceWin : BaseWin
             _grid.BeginEdit();
             _grid.Focus();
         }
-        catch
+        catch (Exception exL922)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL922, "InvoiceWin.PickMaterial");
             // Grid may not be ready during early load.
         }
     }
@@ -1000,7 +1010,8 @@ public sealed class InvoiceWin : BaseWin
         button.Height = 28;
         button.Margin = new Thickness(0, 0, 3, 0);
         button.Padding = new Thickness(8, 0, 8, 0);
-        try { button.SetResourceReference(StyleProperty, "VisuButtonStyle"); } catch { /* theme optional */ }
+        try { button.SetResourceReference(StyleProperty, "VisuButtonStyle"); } catch (Exception exL983) {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL983, "InvoiceWin.StyleButton"); /* theme optional */ }
     }
 
     private static decimal ParseDec(string? text, decimal fallback)

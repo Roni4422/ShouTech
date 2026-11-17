@@ -14,6 +14,7 @@ using System.Windows.Media;
 using ShouTech.App.Reporting;
 using ShouTech.App.Services;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 /// <summary>
@@ -363,8 +364,9 @@ public abstract class RptBase : BaseWin
             BindGrid();
             RenderTotals();
         }
-        catch (Exception)
+        catch (Exception exL366)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL366, "RptBase.RefreshAsync");
             ShowError("Report.LoadFailed");
         }
         finally

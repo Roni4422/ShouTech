@@ -7,6 +7,7 @@ using Npgsql;
 using ShouTech.App.Reporting.Invoices;
 using ShouTech.App.Views;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services;
 
 /// <summary>
@@ -55,8 +56,9 @@ public static class InvRepo
             var count = Convert.ToInt32(cmd.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
             return $"{prefix}-{year}-{(count + 1).ToString("D4", CultureInfo.InvariantCulture)}";
         }
-        catch
+        catch (Exception exL58)
         {
+            AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exL58, "InvRepo.NextDocNo");
             return $"{prefix}-{year}-0001";
         }
     }
@@ -623,7 +625,10 @@ public static class InvRepo
                     Add(cleanup, "$id", originalDocId);
                     cleanup.ExecuteNonQuery();
                 }
-                catch { /* Preserve the original error and keep the reservation if reconciliation failed. */ }
+                catch (Exception exL626)
+                {
+                    AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exL626, "InvRepo.ReversePostedInvoice");
+                }
             }
             throw new InvalidOperationException("Invoice reversal did not complete successfully. Verify the invoice and reversal history before retrying.", ex);
         }
@@ -722,8 +727,9 @@ public static class InvRepo
             var ord = reader.GetOrdinal(column);
             return reader.IsDBNull(ord) ? "" : reader.GetString(ord);
         }
-        catch
+        catch (Exception exL725)
         {
+            AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exL725, "InvRepo.ReadString");
             return "";
         }
     }
@@ -735,8 +741,9 @@ public static class InvRepo
             var ord = reader.GetOrdinal(column);
             return reader.IsDBNull(ord) ? 0m : Convert.ToDecimal(reader.GetValue(ord), CultureInfo.InvariantCulture);
         }
-        catch
+        catch (Exception exL738)
         {
+            AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exL738, "InvRepo.ReadDecimal");
             return 0m;
         }
     }
@@ -761,8 +768,9 @@ public static class InvRepo
             var ord = reader.GetOrdinal(column);
             return reader.IsDBNull(ord) ? null : Convert.ToInt64(reader.GetValue(ord), CultureInfo.InvariantCulture);
         }
-        catch
+        catch (Exception exL760)
         {
+            AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exL760, "InvRepo.ReadLongNullable");
             return null;
         }
     }

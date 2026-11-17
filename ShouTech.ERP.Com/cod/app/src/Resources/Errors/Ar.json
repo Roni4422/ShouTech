@@ -1,0 +1,210 @@
+{
+  "ACC-5001": {
+    "code": "ACC-5001",
+    "name": "JournalNotBalanced",
+    "message": "يجب أن تتوازن مجاميع المدين والدائن في قيد اليومية.",
+    "hint": "عدّل البنود حتى يتساوى إجمالي المدين مع إجمالي الدائن."
+  },
+  "ACC-5002": {
+    "code": "ACC-5002",
+    "name": "JournalTooFewLines",
+    "message": "يتطلب قيد اليومية بندين على الأقل."
+  },
+  "ACC-5003": {
+    "code": "ACC-5003",
+    "name": "JournalZeroAmount",
+    "message": "يجب أن يكون مبلغ قيد اليومية غير صفري."
+  },
+  "ACC-5004": {
+    "code": "ACC-5004",
+    "name": "JournalPostingFailed",
+    "message": "تعذر ترحيل قيد اليومية."
+  },
+  "AUTH-2001": {
+    "code": "AUTH-2001",
+    "name": "InvalidCredentials",
+    "message": "اسم المستخدم أو كلمة المرور غير صحيحة",
+    "hint": "تحقق من اسم المستخدم وكلمة المرور وحاول مرة أخرى."
+  },
+  "AUTH-2002": {
+    "code": "AUTH-2002",
+    "name": "AccountLocked",
+    "message": "هذا الحساب مقفل. تم رفض تسجيل الدخول.",
+    "hint": "انتظر حتى تنتهي فترة القفل أو اطلب من المسؤول إلغاء قفل الحساب."
+  },
+  "AUTH-2003": {
+    "code": "AUTH-2003",
+    "name": "AccountLockedNow",
+    "message": "تم قفل الحساب بعد محاولات تسجيل دخول فاشلة متكررة.",
+    "hint": "انتظر حتى تنتهي فترة القفل أو اطلب من المسؤول إلغاء قفل الحساب."
+  },
+  "AUTH-2004": {
+    "code": "AUTH-2004",
+    "name": "PasswordPolicyViolation",
+    "message": "كلمة مرور المسؤول لا تستوفي سياسة كلمات المرور: {0}",
+    "hint": "استخدم 12 حرفًا على الأقل مع مزيج من الأحرف والأرقام ورمز."
+  },
+  "CO-3001": {
+    "code": "CO-3001",
+    "name": "CompanyRecordNotFound",
+    "message": "لم يتم العثور على سجل الشركة المحلي المطلوب لفتح هذه الشركة.",
+    "hint": "قائمة الشركات على هذا الكمبيوتر غير محدثة. أعد فهرسة الشركات أو استعد بيانات الشركة."
+  },
+  "CO-3002": {
+    "code": "CO-3002",
+    "name": "CompanyDatabasePathMissing",
+    "message": "مسار قاعدة بيانات الشركة غير معيّن.",
+    "hint": "حرر الشركة وعيّن مسار قاعدة بياناتها."
+  },
+  "CO-3003": {
+    "code": "CO-3003",
+    "name": "PostgresDatabaseNameMissing",
+    "message": "اسم قاعدة بيانات PostgreSQL غير معيّن."
+  },
+  "CO-3004": {
+    "code": "CO-3004",
+    "name": "PostgresConnectionMissing",
+    "message": "اتصال PostgreSQL الحالي غير متوفر."
+  },
+  "CO-3005": {
+    "code": "CO-3005",
+    "name": "CompanyLoadFailed",
+    "message": "فشل تحميل الشركات"
+  },
+  "CO-3006": {
+    "code": "CO-3006",
+    "name": "CompanyOpenFailed",
+    "message": "تعذر فتح الشركة"
+  },
+  "DATA-4001": {
+    "code": "DATA-4001",
+    "name": "ExportPermissionDenied",
+    "message": "ليس لديك إذن لتصدير البيانات (DATA.EXPORT).",
+    "hint": "اطلب من المسؤول منح إذن DATA.EXPORT."
+  },
+  "DATA-4002": {
+    "code": "DATA-4002",
+    "name": "ExportFailed",
+    "message": "تعذر إكمال التصدير."
+  },
+  "DATA-4003": {
+    "code": "DATA-4003",
+    "name": "ImportFailed",
+    "message": "تعذر إكمال الاستيراد."
+  },
+  "DB-1001": {
+    "code": "DB-1001",
+    "name": "DatabaseConnectionFailed",
+    "message": "تعذر الاتصال بقاعدة البيانات.",
+    "hint": "تحقق من أن خادم قاعدة البيانات يعمل وأن إعدادات الاتصال صحيحة."
+  },
+  "DB-1002": {
+    "code": "DB-1002",
+    "name": "DatabaseFileMissing",
+    "message": "لم يتم العثور على ملف قاعدة بيانات الشركة.",
+    "hint": "ربما تم نقل ملف قاعدة بيانات الشركة أو حذفه. استعده من نسخة احتياطية أو أعد إنشاء الشركة."
+  },
+  "DB-1003": {
+    "code": "DB-1003",
+    "name": "MigrationFailed",
+    "message": "فشلت ترقية قاعدة البيانات."
+  },
+  "DB-1004": {
+    "code": "DB-1004",
+    "name": "DatabaseNotInitialized",
+    "message": "لم تتم تهيئة ملف قاعدة بيانات الشركة بشكل صحيح.",
+    "hint": "الملف موجود لكنه ليس قاعدة بيانات شركة صالحة. استعده من نسخة احتياطية أو أعد إنشاء الشركة."
+  },
+  "DB-1005": {
+    "code": "DB-1005",
+    "name": "DatabaseQueryFailed",
+    "message": "فشلت عملية في قاعدة البيانات."
+  },
+  "DB-1006": {
+    "code": "DB-1006",
+    "name": "UnsupportedDatabaseProvider",
+    "message": "موفر قاعدة البيانات غير مدعوم."
+  },
+  "INV-6001": {
+    "code": "INV-6001",
+    "name": "InventoryOperationFailed",
+    "message": "تعذر إكمال عملية المخزون."
+  },
+  "LIC-8001": {
+    "code": "LIC-8001",
+    "name": "LicenseCheckFailed",
+    "message": "تعذر التحقق من الترخيص."
+  },
+  "SYS-0001": {
+    "code": "SYS-0001",
+    "name": "UnknownError",
+    "message": "حدث خطأ غير متوقع.",
+    "hint": "إذا استمرت المشكلة، دوّن رمز الخطأ واتصل بالدعم."
+  },
+  "SYS-0002": {
+    "code": "SYS-0002",
+    "name": "DispatcherUnhandled",
+    "message": "أدى خطأ غير متوقع إلى مقاطعة العملية الحالية.",
+    "hint": "إذا استمرت المشكلة، دوّن رمز الخطأ واتصل بالدعم."
+  },
+  "SYS-0003": {
+    "code": "SYS-0003",
+    "name": "AppDomainUnhandled",
+    "message": "حدث خطأ غير متوقع في التطبيق."
+  },
+  "SYS-0004": {
+    "code": "SYS-0004",
+    "name": "UnobservedTaskException",
+    "message": "فشلت مهمة في الخلفية."
+  },
+  "SYS-0005": {
+    "code": "SYS-0005",
+    "name": "NonFatalInternalFailure",
+    "message": "فشلت عملية داخلية غير حرجة وتمت استعادتها."
+  },
+  "SYS-0006": {
+    "code": "SYS-0006",
+    "name": "ConfigurationLoadFailed",
+    "message": "تعذر تحميل إعدادات التطبيق."
+  },
+  "SYS-0007": {
+    "code": "SYS-0007",
+    "name": "FileAccessFailed",
+    "message": "تعذر الوصول إلى ملف."
+  },
+  "SYS-0009": {
+    "code": "SYS-0009",
+    "name": "StartupFailed",
+    "message": "تعذر بدء التطبيق."
+  },
+  "SYS-0010": {
+    "code": "SYS-0010",
+    "name": "SettingsLoadFailed",
+    "message": "تعذر تحميل الإعدادات؛ تم استخدام القيم الافتراضية."
+  },
+  "SYS-0011": {
+    "code": "SYS-0011",
+    "name": "SettingsSaveFailed",
+    "message": "تعذر حفظ الإعدادات."
+  },
+  "UI-7001": {
+    "code": "UI-7001",
+    "name": "WindowOperationFailed",
+    "message": "تعذر إكمال عملية النافذة."
+  },
+  "UI-7002": {
+    "code": "UI-7002",
+    "name": "ShellOperationFailed",
+    "message": "تعذر إكمال عملية في النافذة الرئيسية."
+  },
+  "UI-7003": {
+    "code": "UI-7003",
+    "name": "WindowLoadFailed",
+    "message": "تعذر تحميل النافذة."
+  },
+  "UI-7004": {
+    "code": "UI-7004",
+    "name": "NavigationFailed",
+    "message": "تعذر إكمال التنقل."
+  }
+}

@@ -6,6 +6,8 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using ShouTech.App.Common;
 
+using ShouTech.App.Services;
+using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 /// <summary>
@@ -88,8 +90,9 @@ public sealed class BcdDesWin : BaseWin
                 ? fallback
                 : s;
         }
-        catch
+        catch (Exception exL91)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL91, "BcdDesWin.L");
             return fallback;
         }
     }
@@ -440,6 +443,7 @@ public sealed class BcdDesWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "BcdDesWin.PrintDesignedLabel");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -634,8 +638,9 @@ public sealed class BcdDesWin : BaseWin
                 }
             }
         }
-        catch
+        catch (Exception exL637)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL637, "BcdDesWin.LoadDesign");
             // A corrupt design file must never crash the window.
         }
     }

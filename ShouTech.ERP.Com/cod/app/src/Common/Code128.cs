@@ -14,6 +14,8 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
 
+using ShouTech.App.Services;
+using ShouTech.Domain;
 namespace ShouTech.App.Common
 {
     /// <summary>
@@ -356,6 +358,7 @@ namespace ShouTech.App.Common
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "Code128.Print");
                 MessageBox.Show(
                     owner,
                     ex.Message,
@@ -376,6 +379,7 @@ namespace ShouTech.App.Common
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "Code128.Print");
                 MessageBox.Show(
                     owner,
                     ex.Message,
@@ -412,6 +416,7 @@ namespace ShouTech.App.Common
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "Code128.PrintCopies");
                 MessageBox.Show(
                     owner,
                     ex.Message,
@@ -432,6 +437,7 @@ namespace ShouTech.App.Common
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "Code128.PrintCopies");
                 MessageBox.Show(
                     owner,
                     ex.Message,

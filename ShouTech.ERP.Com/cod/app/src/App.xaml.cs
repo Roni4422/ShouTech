@@ -28,6 +28,7 @@ using ShouTech.App.Localization;
 using ShouTech.App.Services;
 using ShouTech.App.Views;
 
+using ShouTech.Domain;
 namespace ShouTech.App
 {
     // ========================================================================
@@ -90,7 +91,10 @@ namespace ShouTech.App
                         "Schema bootstrap failed.",
                         ex);
                 }
-                catch { System.Diagnostics.Debug.WriteLine("Failed to log schema bootstrap failure"); }
+                catch (Exception exL93)
+                {
+                    AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL93, "App.xaml.EnsureSchema");
+                }
                 throw;
             }
         }
@@ -139,7 +143,10 @@ namespace ShouTech.App
                 if (m.Success)
                     return "pg:" + m.Groups[1].Value.Trim().ToLowerInvariant();
             }
-            catch (Exception ex) { AppHost.Logging?.LogError("App", "Database fingerprint probe failed", ex); }
+            catch (Exception exL142)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL142, "App.xaml.BuildDbKey");
+            }
 
             // Fallback
             return "cs:" + connectionString.GetHashCode().ToString(
@@ -159,8 +166,9 @@ namespace ShouTech.App
                 using var reader = new StreamReader(stream);
                 return reader.ReadToEnd();
             }
-            catch
+            catch (Exception exL162)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL162, "App.xaml.LoadSql");
                 return string.Empty;
             }
         }
@@ -201,12 +209,14 @@ namespace ShouTech.App
         // --------------------------------------------------------------------
         private static void SafeLogInfo(string msg)
         {
-            try { AppHost.Logging?.LogInfo("SchemaBootstrapper", msg); } catch { System.Diagnostics.Debug.WriteLine("SafeLogInfo failed"); }
+            try { AppHost.Logging?.LogInfo("SchemaBootstrapper", msg); } catch (Exception exL204) {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL204, "App.xaml.SafeLogInfo"); }
         }
 
         private static void SafeLogWarning(string msg)
         {
-            try { AppHost.Logging?.LogWarning("SchemaBootstrapper", msg); } catch { System.Diagnostics.Debug.WriteLine("SafeLogWarning failed"); }
+            try { AppHost.Logging?.LogWarning("SchemaBootstrapper", msg); } catch (Exception exL209) {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL209, "App.xaml.SafeLogWarning"); }
         }
     }
 
@@ -236,19 +246,27 @@ namespace ShouTech.App
             CurrentLanguageCode = langCode;
 
             try { LangDirSv.ApplyCulture(langCode); }
-            catch (Exception ex) { AppHost.Logging?.LogError("App", "ApplyCulture failed during language change", ex); }
+            catch (Exception exL239)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL239, "App.xaml.SetApplicationLanguage");
+            }
 
             try
             {
                 if (Current is App app)
                     app.Localization.SetLanguage(langCode);
             }
-            catch (Exception ex) { AppHost.Logging?.LogError("App", "Localization.SetLanguage failed", ex); }
+            catch (Exception exL246)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL246, "App.xaml.SetApplicationLanguage");
+            }
 
             void ApplyUi()
             {
-                try { LangDirSv.ApplyToAllWindows(langCode); } catch (Exception ex) { AppHost.Logging?.LogError("App", "LangDirSv.ApplyToAllWindows failed", ex); }
-                try { UiLoczr.ScheduleApplyToAllWindows(); } catch (Exception ex) { AppHost.Logging?.LogError("App", "UiLoczr.ScheduleApplyToAllWindows failed", ex); }
+                try { LangDirSv.ApplyToAllWindows(langCode); } catch (Exception exL250) {
+                    AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL250, "App.xaml.SetApplicationLanguage"); }
+                try { UiLoczr.ScheduleApplyToAllWindows(); } catch (Exception exL251) {
+                    AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL251, "App.xaml.SetApplicationLanguage"); }
             }
 
             try
@@ -264,8 +282,9 @@ namespace ShouTech.App
                     ApplyUi();
                 }
             }
-            catch
+            catch (Exception exL267)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL267, "App.xaml.SetApplicationLanguage");
                 ApplyUi();
             }
         }
@@ -309,7 +328,10 @@ namespace ShouTech.App
                     new TextCompositionEventHandler(GlobalWesternDigitTextInput),
                     handledEventsToo: true);
             }
-            catch (Exception ex) { AppHost.Logging?.LogError("App", "Western-digit handler registration failed", ex); }
+            catch (Exception exL312)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL312, "App.xaml.OnStartup");
+            }
 
             // ---------- Global window logging + direction ----------
             try
@@ -326,7 +348,10 @@ namespace ShouTech.App
                     new RoutedEventHandler(GlobalWindowUnloaded),
                     handledEventsToo: true);
             }
-            catch (Exception ex) { AppHost.Logging?.LogError("App", "Window lifecycle handler registration failed", ex); }
+            catch (Exception exL329)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL329, "App.xaml.OnStartup");
+            }
 
             // ---------- Global exception handlers ----------
             AppDomain.CurrentDomain.UnhandledException +=
@@ -360,8 +385,9 @@ namespace ShouTech.App
 
                 pref.Lang = NormalizeLanguageCode(pref.Lang);
             }
-            catch
+            catch (Exception exL363)
             {
+                AppHost.Errors.Report(ErrorCodes.SettingsLoadFailed, exL363, "App.xaml.OnStartup.LoadPreferences");
                 pref = new UsrPref
                 {
                     Lang = "en",
@@ -390,7 +416,8 @@ namespace ShouTech.App
                 }
                 catch (Exception auditEx)
                 {
-                    try { AppHost.Logging?.LogWarning("Audit", "Delete-audit bootstrap deferred until a company database is available: " + auditEx.Message); } catch { System.Diagnostics.Debug.WriteLine("Delete-audit bootstrap warning failed"); }
+                    try { AppHost.Logging?.LogWarning("Audit", "Delete-audit bootstrap deferred until a company database is available: " + auditEx.Message); } catch (Exception exL393) {
+                        AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL393, "App.xaml.OnStartup"); }
                 }
             }
             catch (Exception ex)
@@ -402,7 +429,10 @@ namespace ShouTech.App
                         "Schema bootstrap failed at startup.",
                         ex);
                 }
-                catch { System.Diagnostics.Debug.WriteLine("Startup schema failure log failed"); }
+                catch (Exception exL405)
+                {
+                    AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL405, "App.xaml.OnStartup");
+                }
 
                 try
                 {
@@ -412,9 +442,13 @@ namespace ShouTech.App
                         MessageBoxButton.OK,
                         MessageBoxImage.Error);
                 }
-                catch (Exception ex2) { AppHost.Logging?.LogError("App", "Startup failure dialog failed", ex2); }
+                catch (Exception exL415)
+                {
+                    AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL415, "App.xaml.OnStartup");
+                }
 
-                try { Shutdown(1); } catch (Exception ex2) { AppHost.Logging?.LogError("App", "Shutdown after startup failure failed", ex2); }
+                try { Shutdown(1); } catch (Exception exL417) {
+                    AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL417, "App.xaml.OnStartup"); }
                 return;
             }
 
@@ -428,7 +462,10 @@ namespace ShouTech.App
                     $"Args={e.Args.Length}; BaseDirectory={AppDomain.CurrentDomain.BaseDirectory}; " +
                     $"Lang={CurrentLanguageCode}");
             }
-            catch { System.Diagnostics.Debug.WriteLine("Startup lifecycle log failed"); }
+            catch (Exception exL431)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL431, "App.xaml.OnStartup");
+            }
 
             // ---------- Run startup sequence ----------
             // Pass pref so the file is not read again and the language stays consistent.
@@ -446,8 +483,11 @@ namespace ShouTech.App
             {
                 if (args.ExceptionObject is Exception ex)
                 {
+                    var info = ResolveErrorForDialog(ex, ErrorCodes.AppDomainUnhandled);
+
                     AppHost.Logging.LogError(
                         "Global",
+                        info.Code,
                         $"Unhandled AppDomain exception. IsTerminating={args.IsTerminating}",
                         ex);
 
@@ -455,20 +495,20 @@ namespace ShouTech.App
                         "Unhandled exception",
                         ex.GetType().FullName ?? ex.GetType().Name);
 
-                    MessageBox.Show(
-                        ex.Message,
-                        "Unexpected Error",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Error);
+                    ShowErrorDialog(info, "Unexpected Error");
                 }
                 else
                 {
                     AppHost.Logging.LogError(
                         "Global",
+                        ErrorCodes.AppDomainUnhandled,
                         $"Unhandled AppDomain exception object. IsTerminating={args.IsTerminating}");
                 }
             }
-            catch { System.Diagnostics.Debug.WriteLine("AppDomain unhandled-exception handler failed"); }
+            catch (Exception exL471)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL471, "App.xaml.CurrentDomain_UnhandledException");
+            }
         }
 
         // ====================================================================
@@ -480,14 +520,22 @@ namespace ShouTech.App
         {
             try
             {
+                var taskCode = AppHost.Errors.Classify(args.Exception);
+                if (taskCode == ErrorCodes.Unknown)
+                    taskCode = ErrorCodes.UnobservedTaskException;
+
                 AppHost.Logging.LogError(
                     "Global",
+                    taskCode,
                     "Unobserved task exception.",
                     args.Exception);
 
                 args.SetObserved();
             }
-            catch { System.Diagnostics.Debug.WriteLine("Unobserved-task handler failed"); }
+            catch (Exception exL495)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL495, "App.xaml.TaskScheduler_UnobservedTaskException");
+            }
         }
 
         // ====================================================================
@@ -501,7 +549,10 @@ namespace ShouTech.App
                 NumberSubstitution.SetCultureOverride(window, CultureInfo.GetCultureInfo("en-US"));
                 NumberSubstitution.SetSubstitution(window, NumberSubstitutionMethod.European);
             }
-            catch (Exception ex) { AppHost.Logging?.LogError("App", "Western digit presentation failed", ex); }
+            catch (Exception exL509)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL509, "App.xaml.ApplyWesternDigitPresentation");
+            }
         }
 
         private static string ConvertToWesternDigits(string value)
@@ -537,7 +588,10 @@ namespace ShouTech.App
                 textBox.SelectedText = western;
                 textBox.CaretIndex = start + western.Length;
             }
-            catch (Exception ex) { AppHost.Logging?.LogError("App", "Western digit text input failed", ex); }
+            catch (Exception exL545)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL545, "App.xaml.GlobalWesternDigitTextInput");
+            }
         }
 
         // ====================================================================
@@ -584,11 +638,17 @@ namespace ShouTech.App
                             {
                                 ShellContext.ApplyToWindow(window);
                             }
-                            catch (Exception ex) { AppHost.Logging?.LogError("App", "Deferred shell-context apply failed", ex); }
+                            catch (Exception exL585)
+                            {
+                                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL585, "App.xaml.GlobalWindowLoaded");
+                            }
                         }));
                 }
             }
-            catch (Exception ex) { AppHost.Logging?.LogError("App", "GlobalWindowLoaded failed", ex); }
+            catch (Exception exL589)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL589, "App.xaml.GlobalWindowLoaded");
+            }
         }
 
         // ====================================================================
@@ -619,7 +679,11 @@ namespace ShouTech.App
                     hwnd, DWMWA_TEXT_COLOR, ref textColor, sizeof(int));
                 if (textResult != 0) return;
             }
-            catch (Exception ex) { AppHost.Logging?.LogError("App", "Title bar color apply failed", ex); }
+            catch (Exception exL620)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL620, "App.xaml.ApplyCustomTitleBarColor");
+                // Older Windows versions don't support this - ignore.
+            }
         }
 
         private static void GlobalWindowUnloaded(
@@ -635,7 +699,10 @@ namespace ShouTech.App
                         $"Type={window.GetType().FullName}; Title={window.Title}");
                 }
             }
-            catch (Exception ex) { AppHost.Logging?.LogError("App", "GlobalWindowUnloaded failed", ex); }
+            catch (Exception exL639)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL639, "App.xaml.GlobalWindowUnloaded");
+            }
         }
 
         // ====================================================================
@@ -647,20 +714,56 @@ namespace ShouTech.App
         {
             try
             {
+                var info = ResolveErrorForDialog(args.Exception, ErrorCodes.DispatcherUnhandled);
+
                 AppHost.Logging.LogError(
                     "Global",
+                    info.Code,
                     "Dispatcher unhandled exception.",
                     args.Exception);
 
-                MessageBox.Show(
-                    args.Exception.Message,
-                    "Application Error",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                ShowErrorDialog(info, "Application Error");
             }
-            catch (Exception ex) { AppHost.Logging?.LogError("App", "Error dialog display failed", ex); }
+            catch (Exception exL661)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL661, "App.xaml.Dispatcher_UnhandledException");
+            }
 
             args.Handled = true;
+        }
+
+        /// <summary>
+        /// Resolves the catalog entry a global handler logs and shows:
+        /// an <see cref="AppError"/> resolves by its own code, any other
+        /// exception by classification, and anything unclassifiable by
+        /// the handler's fallback code (SYS-0002 / SYS-0003). The raw
+        /// exception message is never shown for a known error; it stays
+        /// in the log.
+        /// </summary>
+        private static ErrorInfo ResolveErrorForDialog(Exception exception, string fallbackCode)
+        {
+            if (exception is AppError appError)
+                return AppHost.Errors.Resolve(appError.Code, new List<object>(appError.Args).ToArray());
+
+            var classified = AppHost.Errors.Classify(exception);
+            return AppHost.Errors.Resolve(
+                classified == ErrorCodes.Unknown ? fallbackCode : classified);
+        }
+
+        private static void ShowErrorDialog(ErrorInfo info, string titlePrefix)
+        {
+            var body = info.Message;
+
+            if (!string.IsNullOrWhiteSpace(info.Hint))
+                body += $"{Environment.NewLine}{Environment.NewLine}{info.Hint}";
+
+            body += $"{Environment.NewLine}{Environment.NewLine}(Error {info.Code})";
+
+            MessageBox.Show(
+                body,
+                $"{titlePrefix} — {info.Code}",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
         }
 
         // ====================================================================
@@ -701,14 +804,16 @@ namespace ShouTech.App
                     if (accepted)
                         chosen = NormalizeLanguageCode(langWin.Selected);
                 }
-                catch
+                catch (Exception exL738)
                 {
+                    AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL738, "App.xaml.RunStartupSequence");
                     accepted = false;
                 }
 
                 if (!accepted)
                 {
-                    try { Shutdown(); } catch (Exception ex) { AppHost.Logging?.LogError("App", "Shutdown after license rejection failed", ex); }
+                    try { Shutdown(); } catch (Exception exL745) {
+                        AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL745, "App.xaml.RunStartupSequence"); }
                     return;
                 }
 
@@ -717,7 +822,8 @@ namespace ShouTech.App
 
                 SetApplicationLanguage(chosen);
 
-                try { pref.Save(); } catch (Exception ex) { AppHost.Logging?.LogError("App", "Preference save after language selection failed", ex); }
+                try { pref.Save(); } catch (Exception exL754) {
+                    AppHost.Errors.Report(ErrorCodes.SettingsSaveFailed, exL754, "App.xaml.RunStartupSequence.SavePreferences"); }
             }
             // else: the language is already adopted in OnStartup - no need to set it again.
 
@@ -727,6 +833,7 @@ namespace ShouTech.App
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "App.xaml.RunStartupSequence");
                 try
                 {
                     MessageBox.Show(
@@ -735,16 +842,21 @@ namespace ShouTech.App
                         MessageBoxButton.OK,
                         MessageBoxImage.Warning);
                 }
-                catch (Exception ex2) { AppHost.Logging?.LogError("App", "Warning dialog display failed", ex2); }
+                catch (Exception exL772)
+                {
+                    AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL772, "App.xaml.RunStartupSequence");
+                }
 
                 try
                 {
                     ShowCompanySelection();
                 }
-                catch
+                catch (Exception exL778)
                 {
+                    AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL778, "App.xaml.RunStartupSequence");
                     try { ShowLogin(); }
-                    catch { Shutdown(); }
+                    catch (Exception exL781) {
+                        AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL781, "App.xaml.RunStartupSequence"); Shutdown(); }
                 }
             }
         }
@@ -765,6 +877,7 @@ namespace ShouTech.App
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "App.xaml.ShowSplashScreen");
                 try
                 {
                     MessageBox.Show(
@@ -773,7 +886,10 @@ namespace ShouTech.App
                         MessageBoxButton.OK,
                         MessageBoxImage.Warning);
                 }
-                catch (Exception ex2) { AppHost.Logging?.LogError("App", "Warning dialog display failed", ex2); }
+                catch (Exception exL810)
+                {
+                    AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL810, "App.xaml.ShowSplashScreen");
+                }
 
                 ShowCompanySelection();
             }
@@ -826,6 +942,7 @@ namespace ShouTech.App
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "App.xaml.ShowLogin");
                 MessageBox.Show(
                     "Could not prepare the company database:\n\n" + ex.Message,
                     "ShouTech ERP",
@@ -872,6 +989,7 @@ namespace ShouTech.App
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "App.xaml.ShowMainApp");
                 MessageBox.Show(
                     "Could not prepare the company database:\n\n" + ex.Message,
                     "ShouTech ERP",
@@ -919,6 +1037,7 @@ namespace ShouTech.App
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "App.xaml.RefreshSchema");
                 MessageBox.Show(
                     "Could not reinitialize the schema:\n\n" + ex.Message,
                     "ShouTech ERP",
@@ -938,7 +1057,10 @@ namespace ShouTech.App
                     "Application exit requested",
                     $"ExitCode={e.ApplicationExitCode}; ShutdownMode={ShutdownMode}");
             }
-            catch { System.Diagnostics.Debug.WriteLine("Exit lifecycle log failed"); }
+            catch (Exception exL975)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL975, "App.xaml.OnExit");
+            }
 
             try
             {
@@ -946,8 +1068,11 @@ namespace ShouTech.App
                     .GetAwaiter()
                     .GetResult();
             }
-            catch
-            { System.Diagnostics.Debug.WriteLine("Exit audit flush failed"); }
+            catch (Exception exL983)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL983, "App.xaml.OnExit");
+                // Shutdown must never be interrupted by audit logging.
+            }
 
             try
             {
@@ -959,8 +1084,11 @@ namespace ShouTech.App
                 if (_serviceProvider is IDisposable disposableProvider)
                     disposableProvider.Dispose();
             }
-            catch
-            { System.Diagnostics.Debug.WriteLine("Service provider dispose failed"); }
+            catch (Exception exL998)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL998, "App.xaml.OnExit");
+                // Shutdown must never be interrupted by cleanup errors.
+            }
 
             try
             {
@@ -968,7 +1096,10 @@ namespace ShouTech.App
                     "Application exit completed",
                     $"ExitCode={e.ApplicationExitCode}");
             }
-            catch { System.Diagnostics.Debug.WriteLine("Exit completion log failed"); }
+            catch (Exception exL1009)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL1009, "App.xaml.OnExit");
+            }
 
             base.OnExit(e);
         }

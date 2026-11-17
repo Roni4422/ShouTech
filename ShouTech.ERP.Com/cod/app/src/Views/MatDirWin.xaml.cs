@@ -10,6 +10,7 @@ using System.Windows.Input;
 using ShouTech.App.Localization;
 using ShouTech.App.Services;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 public sealed class MatDirListItem

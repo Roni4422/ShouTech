@@ -15,6 +15,8 @@ using System.Windows.Input;
 using System;
 using CommunityToolkit.Mvvm.Input;
 
+using ShouTech.App.Services;
+using ShouTech.Domain;
 namespace ShouTech.App.Reporting
 {
     public sealed class ReportRow : Dictionary<string, object?>, IRowValueProvider
@@ -198,6 +200,7 @@ namespace ShouTech.App.Reporting
                 }
                 catch (FormulaException ex)
                 {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "ReportDesignerVM.ComputeFormulaColumns");
                     StatusMessage = $"Error in the formula of column '{col.CaptionAR}': {ex.Message}";
                 }
             }
@@ -321,6 +324,7 @@ namespace ShouTech.App.Reporting
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "ReportDesignerVM.SaveAsync");
                 StatusMessage = $"Save failed: {ex.Message}";
             }
             finally
@@ -354,6 +358,7 @@ namespace ShouTech.App.Reporting
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "ReportDesignerVM.SaveAsAsync");
                 StatusMessage = $"Save As failed: {ex.Message}";
             }
             finally

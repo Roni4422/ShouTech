@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
@@ -7,6 +7,7 @@ using System.Windows;
 using ShouTech.App.Configuration;
 using ShouTech.App.Services;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views
 {
     /// <summary>
@@ -64,6 +65,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "RestoreCoWin.xaml.ReloadAsync");
                 MessageBox.Show(ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -106,6 +108,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "RestoreCoWin.xaml.BtnRestore_Click");
                 MessageBox.Show(ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }

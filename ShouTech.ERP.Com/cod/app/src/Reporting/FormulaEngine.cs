@@ -19,6 +19,8 @@ using System.Globalization;
 using System.Linq;
 using System;
 
+using ShouTech.App.Services;
+using ShouTech.Domain;
 namespace ShouTech.App.Reporting
 {
     public sealed class FormulaException : Exception
@@ -452,6 +454,7 @@ namespace ShouTech.App.Reporting
             }
             catch (FormulaException ex)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "FormulaEngine.TryCompile");
                 error = ex.Position >= 0 ? $"{ex.Message} (position {ex.Position})" : ex.Message;
                 return false;
             }
@@ -463,8 +466,9 @@ namespace ShouTech.App.Reporting
             {
                 return _root.Evaluate(row);
             }
-            catch (OverflowException)
+            catch (OverflowException exL466)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL466, "FormulaEngine.Evaluate");
                 return null; // value out of range -> empty cell instead of crashing the grid
             }
         }
