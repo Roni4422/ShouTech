@@ -68,6 +68,18 @@
     "message": "Administrator password does not meet the password policy: {0}",
     "hint": "Use at least 12 characters with a mix of letters, digits, and a symbol."
   },
+  "AUTH-2005": {
+    "code": "AUTH-2005",
+    "name": "PermissionDenied",
+    "message": "You do not have permission to perform this operation.",
+    "hint": "Ask an administrator to grant the required permission."
+  },
+  "AUTH-2006": {
+    "code": "AUTH-2006",
+    "name": "PermissionLoadFailed",
+    "message": "The signed-in user's permissions could not be loaded.",
+    "hint": "Sign in again; if the problem persists, check the company database."
+  },
   "CO-3001": {
     "code": "CO-3001",
     "name": "CompanyRecordNotFound",

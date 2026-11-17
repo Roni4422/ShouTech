@@ -68,6 +68,18 @@
     "message": "Le mot de passe administrateur ne respecte pas la politique de mot de passe : {0}",
     "hint": "Utilisez au moins 12 caractères avec des lettres, des chiffres et un symbole."
   },
+  "AUTH-2005": {
+    "code": "AUTH-2005",
+    "name": "PermissionDenied",
+    "message": "Vous n'avez pas l'autorisation d'effectuer cette opération.",
+    "hint": "Demandez à un administrateur de vous accorder l'autorisation requise."
+  },
+  "AUTH-2006": {
+    "code": "AUTH-2006",
+    "name": "PermissionLoadFailed",
+    "message": "Impossible de charger les autorisations de l'utilisateur connecté.",
+    "hint": "Reconnectez-vous ; si le problème persiste, vérifiez la base de données de la société."
+  },
   "CO-3001": {
     "code": "CO-3001",
     "name": "CompanyRecordNotFound",

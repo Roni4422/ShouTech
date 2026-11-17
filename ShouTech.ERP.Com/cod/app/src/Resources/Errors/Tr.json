@@ -68,6 +68,18 @@
     "message": "Yönetici parolası parola politikasını karşılamıyor: {0}",
     "hint": "Harf, rakam ve bir sembol karışımıyla en az 12 karakter kullanın."
   },
+  "AUTH-2005": {
+    "code": "AUTH-2005",
+    "name": "PermissionDenied",
+    "message": "Bu işlemi gerçekleştirme izniniz yok.",
+    "hint": "Gerekli izni vermesi için bir yöneticiye başvurun."
+  },
+  "AUTH-2006": {
+    "code": "AUTH-2006",
+    "name": "PermissionLoadFailed",
+    "message": "Oturum açan kullanıcının izinleri yüklenemedi.",
+    "hint": "Tekrar oturum açın; sorun devam ederse şirket veritabanını denetleyin."
+  },
   "CO-3001": {
     "code": "CO-3001",
     "name": "CompanyRecordNotFound",

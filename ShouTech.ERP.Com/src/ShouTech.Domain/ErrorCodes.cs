@@ -47,6 +47,8 @@ public static class ErrorCodes
     public const string AccountLocked = "AUTH-2002";
     public const string AccountLockedNow = "AUTH-2003";
     public const string PasswordPolicyViolation = "AUTH-2004";
+    public const string PermissionDenied = "AUTH-2005";
+    public const string PermissionLoadFailed = "AUTH-2006";
 
     // ---- CO 3000-3999 --------------------------------------------------
     public const string CompanyRecordNotFound = "CO-3001";
