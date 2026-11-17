@@ -2,49 +2,24 @@ using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
+using ShouTech.App.Services;
 
 namespace ShouTech.App.Views;
 
 /// <summary>
+/// Currency card &amp; rate history. Fully persisted through
+/// <see cref="CardStore"/> (migration 050: currencies + currency_rates):
+/// the header fields and EVERY row of the rate-history schedule grid are
+/// saved in one transaction and reloaded by currency code.
 /// </summary>
 public sealed class CurCard : BaseWin
 {
-
-    /// <summary>
-    /// Prevents a false success message when this screen has no database persistence wired.
-    /// This intentionally does not claim to save any values.
-    /// </summary>
-    private void ShowPersistenceUnavailable()
-    {
-        const string errorCode = "APP-2010";
-        const string context = "This window has no database persistence implementation.";
-        var definition = ShouTech.App.Localization.ErrorCatalog.Resolve(errorCode);
-        var exception = new NotSupportedException(context);
-
-        // Errors are routed to errors.log; the operational trace goes to log.log.
-        ShouTech.App.Services.AppHost.Logging?.LogError(
-            "WindowPersistence",
-            $"[{definition.Code}] {definition.Name} | Window={GetType().Name} | {context}",
-            exception);
-        ShouTech.App.Services.AppHost.Logging?.LogOperation(
-            "WindowPersistence",
-            "PersistenceUnavailable",
-            $"Code={definition.Code} | Window={GetType().Name}");
-
-        MessageBox.Show(
-            this,
-            $"[{definition.Code}] {definition.Message}\n{context}\n{ShouTech.App.Localization.Loc.Get("Common.NoDataSaved", "No data was saved.")}",
-            ShouTech.App.Localization.Loc.Get("Common.OperationUnavailable", "Operation unavailable"),
-            MessageBoxButton.OK,
-            MessageBoxImage.Warning);
-    }
-
-
     private readonly TextBox _txtCode = new() { Width = 90, Height = 26, Text = "USD" };
     private readonly TextBox _txtNameAr = new() { Width = 150, Height = 26 };
     private readonly TextBox _txtNameEn = new() { Width = 150, Height = 26 };
@@ -55,11 +30,14 @@ public sealed class CurCard : BaseWin
     private readonly TextBox _txtMaxRate = new() { Width = 90, Height = 26, Text = "3.7600" };
 
     private readonly Button _btnNew = new();
+    private readonly Button _btnLoad = new();
     private readonly Button _btnSave = new();
     private readonly Button _btnAddRate = new();
 
     private readonly DataGrid _grid = new();
     private readonly ObservableCollection<RateHistoryVm> _rates = new();
+
+    private long? _loadedId;
 
     public CurCard()
     {
@@ -81,19 +59,21 @@ public sealed class CurCard : BaseWin
         // 1. Toolbar
         var toolbar = new WrapPanel { Margin = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Right };
         StyleButton(_btnNew, "Common.New");
+        StyleButton(_btnLoad, "Vouchers.Load");
         StyleButton(_btnSave, "Common.Save");
         StyleButton(_btnAddRate, "Invoice.AddLine");
 
         _btnNew.Click += (_, _) => ResetCard();
-        _btnSave.Click += (_, _) => ShowPersistenceUnavailable();
+        _btnLoad.Click += (_, _) => LoadCard();
+        _btnSave.Click += (_, _) => SaveCard();
         _btnAddRate.Click += (_, _) =>
         {
-            var r = new RateHistoryVm { Date = DateTime.Today, Rate = 3.75m };
+            var r = new RateHistoryVm { Date = DateTime.Today, Rate = ParseRate(_txtRate.Text) };
             _rates.Insert(0, r);
             _grid.SelectedItem = r;
         };
 
-        foreach (var b in new[] { _btnNew, _btnSave, _btnAddRate })
+        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnAddRate })
             toolbar.Children.Add(b);
 
         // Explorer-style bottom command bar: flat, transparent, subtle 1px top divider.
@@ -170,6 +150,7 @@ public sealed class CurCard : BaseWin
 
     private void ResetCard()
     {
+        _loadedId = null;
         _txtCode.Text = "USD";
         _txtNameAr.Text = string.Empty;
         _txtNameEn.Text = string.Empty;
@@ -179,7 +160,89 @@ public sealed class CurCard : BaseWin
         _txtMinRate.Text = "3.7400";
         _txtMaxRate.Text = "3.7600";
         _rates.Clear();
-        _rates.Add(new RateHistoryVm { Date = DateTime.Today, Rate = 3.7500m, BuyRate = 3.7450m, SellRate = 3.7550m, Notes = "Daily Bulletin" });
+    }
+
+    private void LoadCard()
+    {
+        try
+        {
+            var rec = CardStore.LoadCurrency(_txtCode.Text);
+            if (rec is null)
+            {
+                MessageBox.Show(this, T("Cards.NotFound"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            _loadedId = rec.Id;
+            _txtCode.Text = rec.Code;
+            _txtNameAr.Text = rec.NameAr;
+            _txtNameEn.Text = rec.NameEn;
+            _txtSymbol.Text = rec.Symbol;
+            _txtFraction.Text = rec.FractionName;
+            _txtRate.Text = rec.Rate.ToString("0.####", CultureInfo.InvariantCulture);
+            _txtMinRate.Text = rec.MinRate.ToString("0.####", CultureInfo.InvariantCulture);
+            _txtMaxRate.Text = rec.MaxRate.ToString("0.####", CultureInfo.InvariantCulture);
+            _rates.Clear();
+            foreach (var rate in rec.Rates)
+            {
+                _rates.Add(new RateHistoryVm
+                {
+                    Date = rate.Date,
+                    Rate = rate.Rate,
+                    BuyRate = rate.BuyRate,
+                    SellRate = rate.SellRate,
+                    Notes = rate.Notes
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            ReportFailure("LoadCurrency", ex);
+        }
+    }
+
+    private void SaveCard()
+    {
+        try
+        {
+            if (!AppHost.Permissions.Has(PermCat.Accounting.CurrencyManage))
+                throw new InvalidOperationException(T("Cards.PermissionDenied"));
+
+            // Commit any in-progress grid cell edit so the schedule values
+            // below are the values the user actually sees.
+            _grid.CommitEdit(DataGridEditingUnit.Cell, true);
+            _grid.CommitEdit(DataGridEditingUnit.Row, true);
+
+            var code = _txtCode.Text.Trim().ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(code))
+                throw new InvalidOperationException(T("Cards.CodeRequired"));
+
+            var rec = new CardStore.CurrencyRec(
+                _loadedId ?? 0, code, _txtNameAr.Text.Trim(), _txtNameEn.Text.Trim(),
+                _txtSymbol.Text.Trim(), _txtFraction.Text.Trim(),
+                ParseRate(_txtRate.Text), ParseRate(_txtMinRate.Text), ParseRate(_txtMaxRate.Text),
+                _rates.Select(r => new CardStore.CurrencyRateRec(r.Date, r.Rate, r.BuyRate, r.SellRate, r.Notes)).ToList());
+            _loadedId = CardStore.SaveCurrency(rec, Actor());
+            MessageBox.Show(this, T("CurrencyCard.Saved"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            ReportFailure("SaveCurrency", ex);
+        }
+    }
+
+    private static decimal ParseRate(string text)
+        => decimal.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out var v) ? v : 0m;
+
+    private static string Actor()
+        => !string.IsNullOrWhiteSpace(UsrSession.Current?.Id)
+            ? UsrSession.Current!.Id
+            : AppHost.Session.CurrentUser ?? string.Empty;
+
+    private void ReportFailure(string operation, Exception exception)
+    {
+        AppHost.Logging?.LogError("WindowPersistence",
+            $"Window={GetType().Name} | Operation={operation} | {exception.Message}", exception);
+        MessageBox.Show(this, exception.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
     }
 
     protected override void ApplyLocalizedText()

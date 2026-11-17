@@ -1551,5 +1551,13 @@
     "ConfirmPurge": "Seçili öğeler kalıcı olarak silinecek ve geri yüklenemeyecek.\n\nDevam edilsin mi?",
     "Purged": "{0:N0} öğe kalıcı olarak silindi.",
     "PurgedPartial": "{0:N0} öğe kalıcı olarak silindi. {1:N0} başarısız.{2}{3}"
+  },
+  "Cards":   {
+      "NotFound": "Kayıt veritabanında bulunamadı.",
+      "PermissionDenied": "Bu işlem için yetkiniz yok.",
+      "CodeRequired": "Kod gereklidir.",
+      "NameRequired": "Ad gereklidir.",
+      "InvalidAmount": "Sayısal bir değer geçersiz.",
+      "ConfirmDelete": "Bu kart silinsin mi? Geri dönüşüm kutusuna taşınacak."
   }
 }

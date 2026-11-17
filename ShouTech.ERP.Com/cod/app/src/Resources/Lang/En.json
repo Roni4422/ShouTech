@@ -1373,7 +1373,8 @@
     "Currency": "Currency",
     "GlAccount": "Linked GL Account",
     "Balance": "Book Balance",
-    "Saved": "Bank card saved successfully"
+    "Saved": "Bank card saved successfully",
+    "Deleted": "Bank card deleted"
   },
   "SalesRepCard": {
     "Title": "Sales Representative Card",
@@ -1383,7 +1384,8 @@
     "Commission": "Commission %",
     "Target": "Monthly Target",
     "SalesTotal": "Total Sales",
-    "Saved": "Sales rep card saved successfully"
+    "Saved": "Sales rep card saved successfully",
+    "Deleted": "Sales rep card deleted"
   },
   "MfgOrder": {
     "Title": "Manufacturing Orders & BOM",
@@ -1887,5 +1889,13 @@
     "ConfirmPurge": "Selected items will be permanently deleted and cannot be restored.\n\nContinue?",
     "Purged": "Permanently deleted {0:N0} item(s).",
     "PurgedPartial": "Permanently deleted {0:N0} item(s). {1:N0} failed.{2}{3}"
+  },
+  "Cards":   {
+      "NotFound": "The record was not found in the database.",
+      "PermissionDenied": "You do not have permission for this operation.",
+      "CodeRequired": "The code is required.",
+      "NameRequired": "The name is required.",
+      "InvalidAmount": "A numeric value is invalid.",
+      "ConfirmDelete": "Delete this card? It will be moved to the recycle bin."
   }
 }

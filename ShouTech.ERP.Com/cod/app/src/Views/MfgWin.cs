@@ -7,42 +7,22 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Documents;
 using System.Windows.Media;
+using ShouTech.App.Services;
 
 namespace ShouTech.App.Views;
 
 /// <summary>
+/// Manufacturing order. Fully persisted through <see cref="CardStore"/>
+/// (migration 050: manufacturing_orders + manufacturing_order_lines):
+/// the header and EVERY raw-material schedule row round-trip to the
+/// database, and Post consumes the raw materials and receives the
+/// finished good in material_stock_movements / material_stock_balances
+/// inside one transaction (see CardStore.PostOrder).
 /// </summary>
 public sealed class MfgWin : BaseWin
 {
-
-    /// <summary>Reports that persistence is not implemented instead of claiming success.</summary>
-    private void ShowPersistenceUnavailable()
-    {
-        const string errorCode = "APP-2010";
-        const string context = "This window has no database persistence implementation.";
-        var definition = ShouTech.App.Localization.ErrorCatalog.Resolve(errorCode);
-        var exception = new NotSupportedException(context);
-
-        // Errors are routed to errors.log; the operational trace goes to log.log.
-        ShouTech.App.Services.AppHost.Logging?.LogError(
-            "WindowPersistence",
-            $"[{definition.Code}] {definition.Name} | Window={GetType().Name} | {context}",
-            exception);
-        ShouTech.App.Services.AppHost.Logging?.LogOperation(
-            "WindowPersistence",
-            "PersistenceUnavailable",
-            $"Code={definition.Code} | Window={GetType().Name}");
-
-        MessageBox.Show(
-            this,
-            $"[{definition.Code}] {definition.Message}\n{context}\n{ShouTech.App.Localization.Loc.Get("Common.NoDataSaved", "No data was saved.")}",
-            ShouTech.App.Localization.Loc.Get("Common.OperationUnavailable", "Operation unavailable"),
-            MessageBoxButton.OK,
-            MessageBoxImage.Warning);
-    }
-
-
     private readonly TextBox _txtDocNo = new() { Width = 110, Height = 26 };
     private readonly DatePicker _dtDate = new() { Width = 120, Height = 26, SelectedDate = DateTime.Today };
     private readonly TextBox _txtItem = new() { Width = 130, Height = 26 };
@@ -53,6 +33,7 @@ public sealed class MfgWin : BaseWin
     private readonly TextBox _txtOverheads = new() { Width = 90, Height = 26, Text = "0.00" };
 
     private readonly Button _btnNew = new();
+    private readonly Button _btnLoad = new();
     private readonly Button _btnSave = new();
     private readonly Button _btnPost = new();
     private readonly Button _btnAddItem = new();
@@ -64,6 +45,9 @@ public sealed class MfgWin : BaseWin
 
     private readonly DataGrid _grid = new();
     private readonly ObservableCollection<MfgItemVm> _items = new();
+
+    private long? _loadedId;
+    private string _status = "Draft";
 
     public MfgWin()
     {
@@ -85,6 +69,7 @@ public sealed class MfgWin : BaseWin
         // 1. Toolbar
         var toolbar = new WrapPanel { Margin = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Right };
         StyleButton(_btnNew, "Common.New");
+        StyleButton(_btnLoad, "Vouchers.Load");
         StyleButton(_btnSave, "Common.Save");
         StyleButton(_btnPost, "MfgOrder.Posted");
         StyleButton(_btnAddItem, "Invoice.AddLine");
@@ -92,9 +77,10 @@ public sealed class MfgWin : BaseWin
         StyleButton(_btnPrint, "Invoice.Print");
 
         _btnNew.Click += (_, _) => ResetOrder();
-        _btnSave.Click += (_, _) => ShowPersistenceUnavailable();
-        _btnPost.Click += (_, _) => ShowPersistenceUnavailable();
-        _btnPrint.Click += (_, _) => ShowPersistenceUnavailable();
+        _btnLoad.Click += (_, _) => LoadOrder();
+        _btnSave.Click += (_, _) => SaveOrder();
+        _btnPost.Click += (_, _) => PostOrder();
+        _btnPrint.Click += (_, _) => PrintOrder();
 
         _btnAddItem.Click += (_, _) =>
         {
@@ -115,7 +101,7 @@ public sealed class MfgWin : BaseWin
             }
         };
 
-        foreach (var b in new[] { _btnNew, _btnSave, _btnPost, _btnAddItem, _btnRemItem, _btnPrint })
+        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnAddItem, _btnRemItem, _btnPrint })
             toolbar.Children.Add(b);
 
         // Explorer-style bottom command bar: flat, transparent, subtle 1px top divider.
@@ -210,6 +196,8 @@ public sealed class MfgWin : BaseWin
 
     private void ResetOrder()
     {
+        _loadedId = null;
+        _status = "Draft";
         _txtDocNo.Text = "MO-" + DateTime.Now.ToString("yyyyMMdd-HHmm", CultureInfo.InvariantCulture);
         _dtDate.SelectedDate = DateTime.Today;
         _txtItem.Text = string.Empty;
@@ -220,10 +208,137 @@ public sealed class MfgWin : BaseWin
         _txtOverheads.Text = "0.00";
         _items.Clear();
         _items.Add(new MfgItemVm { LineNo = 1, Unit = "KG", Qty = 1, UnitCost = 10 });
-        _btnSave.IsEnabled = true;
-        _btnPost.IsEnabled = true;
-        _grid.IsReadOnly = false;
+        SetPostedUi(false);
         CalculateCost();
+    }
+
+    private void SetPostedUi(bool posted)
+    {
+        _btnSave.IsEnabled = !posted;
+        _btnPost.IsEnabled = !posted;
+        _btnAddItem.IsEnabled = !posted;
+        _btnRemItem.IsEnabled = !posted;
+        _grid.IsReadOnly = posted;
+    }
+
+    private void LoadOrder()
+    {
+        try
+        {
+            var rec = CardStore.LoadOrder(_txtDocNo.Text);
+            if (rec is null)
+            {
+                MessageBox.Show(this, T("Cards.NotFound"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            _loadedId = rec.Id;
+            _status = rec.Status;
+            _txtDocNo.Text = rec.OrderNo;
+            _dtDate.SelectedDate = rec.OrderDate;
+            _txtItem.Text = rec.FinishedMaterialCode;
+            _txtItemName.Text = rec.FinishedMaterialName;
+            _txtQty.Text = rec.Quantity.ToString("0.###", CultureInfo.InvariantCulture);
+            _txtUnit.Text = rec.UnitCode;
+            _txtWhs.Text = rec.WarehouseCode;
+            _txtOverheads.Text = rec.OverheadCost.ToString("0.00", CultureInfo.InvariantCulture);
+            _items.Clear();
+            foreach (var line in rec.Lines)
+            {
+                _items.Add(new MfgItemVm
+                {
+                    LineNo = line.LineNo,
+                    ItemCode = line.MaterialCode,
+                    ItemName = line.MaterialName,
+                    Unit = line.UnitCode,
+                    Qty = line.Quantity,
+                    UnitCost = line.UnitCost
+                });
+            }
+            SetPostedUi(string.Equals(_status, "Posted", StringComparison.OrdinalIgnoreCase));
+            CalculateCost();
+        }
+        catch (Exception ex)
+        {
+            ReportFailure("LoadOrder", ex);
+        }
+    }
+
+    /// <summary>Builds the persistence record from the current UI, resolving material/warehouse codes.</summary>
+    private CardStore.MfgOrderRec CaptureOrder()
+    {
+        // Commit any in-progress grid cell edit so the schedule values
+        // below are the values the user actually sees.
+        _grid.CommitEdit(DataGridEditingUnit.Cell, true);
+        _grid.CommitEdit(DataGridEditingUnit.Row, true);
+
+        var orderNo = _txtDocNo.Text.Trim();
+        if (string.IsNullOrWhiteSpace(orderNo))
+            throw new InvalidOperationException(T("Cards.CodeRequired"));
+        if (_dtDate.SelectedDate is not DateTime date)
+            throw new InvalidOperationException(T("Cards.InvalidAmount"));
+
+        var qty = ParseDec(_txtQty.Text);
+        if (qty <= 0)
+            throw new InvalidOperationException(T("Cards.InvalidAmount"));
+        var overheads = ParseDec(_txtOverheads.Text);
+
+        var finished = CardStore.ResolveMaterial(_txtItem.Text);
+        var warehouseId = CardStore.ResolveWarehouseId(_txtWhs.Text);
+
+        var lines = _items.Select(i =>
+        {
+            var material = CardStore.ResolveMaterial(i.ItemCode);
+            return new CardStore.MfgLineRec(
+                i.LineNo, material?.Id, i.ItemCode.Trim(), i.ItemName.Trim(),
+                i.Unit.Trim(), i.Qty, i.UnitCost);
+        }).ToList();
+
+        var total = lines.Sum(l => l.Quantity * l.UnitCost) + overheads;
+        return new CardStore.MfgOrderRec(
+            _loadedId ?? 0, orderNo, date, finished?.Id,
+            _txtItem.Text.Trim(),
+            string.IsNullOrWhiteSpace(_txtItemName.Text) ? finished?.Name ?? string.Empty : _txtItemName.Text.Trim(),
+            qty, _txtUnit.Text.Trim(), warehouseId, _txtWhs.Text.Trim(),
+            overheads, total, qty > 0 ? total / qty : 0, _status, lines);
+    }
+
+    private void SaveOrder()
+    {
+        try
+        {
+            var permission = _loadedId is null ? PermCat.Manufacturing.OrderCreate : PermCat.Manufacturing.OrderUpdate;
+            if (!AppHost.Permissions.Has(permission))
+                throw new InvalidOperationException(T("Cards.PermissionDenied"));
+            var rec = CaptureOrder();
+            _loadedId = CardStore.SaveOrder(rec, Actor());
+            MessageBox.Show(this, T("MfgOrder.Saved"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            ReportFailure("SaveOrder", ex);
+        }
+    }
+
+    private void PostOrder()
+    {
+        try
+        {
+            if (!AppHost.Permissions.Has(PermCat.Manufacturing.ProductionPost))
+                throw new InvalidOperationException(T("Cards.PermissionDenied"));
+            if (_loadedId is null)
+            {
+                SaveOrder();
+                if (_loadedId is null) return;
+            }
+            CardStore.PostOrder(_loadedId.Value, Actor());
+            _status = "Posted";
+            SetPostedUi(true);
+            MessageBox.Show(this, T("MfgOrder.Posted"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            ReportFailure("PostOrder", ex);
+        }
     }
 
     private void CalculateCost()
@@ -239,6 +354,140 @@ public sealed class MfgWin : BaseWin
         _lblTotCost.Text = $"{T("MfgOrder.TotalCost")}: {grandTotal:N2} SAR";
         _lblTotCost.FontWeight = FontWeights.Bold;
         _lblUnitCost.Text = $"{T("MfgOrder.UnitCost")}: {unitCost:N2} SAR";
+    }
+
+    private static decimal ParseDec(string text)
+        => decimal.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out var v) ? v : 0m;
+
+    private static string Actor()
+        => !string.IsNullOrWhiteSpace(UsrSession.Current?.Id)
+            ? UsrSession.Current!.Id
+            : AppHost.Session.CurrentUser ?? string.Empty;
+
+    private void ReportFailure(string operation, Exception exception)
+    {
+        AppHost.Logging?.LogError("WindowPersistence",
+            $"Window={GetType().Name} | Operation={operation} | {exception.Message}", exception);
+        MessageBox.Show(this, exception.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+    }
+
+    /// <summary>Prints the current order on an A4 page (same pattern as JrnWin.PrintVoucher).</summary>
+    private void PrintOrder()
+    {
+        var page = BuildPrintPage();
+        var paginator = new SinglePagePaginator(page);
+        var dlg = new PrintDialog();
+        if (dlg.ShowDialog() == true)
+            dlg.PrintDocument(paginator, string.IsNullOrWhiteSpace(_txtDocNo.Text) ? T("MfgOrder.Title") : _txtDocNo.Text.Trim());
+    }
+
+    private Border BuildPrintPage()
+    {
+        var root = new Border
+        {
+            Background = Brushes.White,
+            Padding = new Thickness(40),
+            Width = 794,
+            Height = 1123
+        };
+        var stack = new StackPanel();
+        root.Child = stack;
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = CurrentCompanyDisplay,
+            FontSize = 18,
+            FontWeight = FontWeights.Bold,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x1F, 0x4E, 0x79))
+        });
+        stack.Children.Add(new TextBlock
+        {
+            Text = T("MfgOrder.Title"),
+            FontSize = 15,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 4, 0, 10)
+        });
+
+        void Meta(string labelKey, string value)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 3) };
+            row.Children.Add(new TextBlock { Text = T(labelKey) + ": ", FontWeight = FontWeights.SemiBold, FontSize = 12 });
+            row.Children.Add(new TextBlock { Text = value, FontSize = 12 });
+            stack.Children.Add(row);
+        }
+
+        Meta("MfgOrder.OrderNo", _txtDocNo.Text.Trim());
+        Meta("MfgOrder.Date", (_dtDate.SelectedDate ?? DateTime.Today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        Meta("MfgOrder.TargetMaterial", _txtItem.Text.Trim() + " " + _txtItemName.Text.Trim());
+        Meta("MfgOrder.Quantity", _txtQty.Text.Trim() + " " + _txtUnit.Text.Trim());
+        Meta("Invoice.Warehouse", _txtWhs.Text.Trim());
+
+        var table = new Grid { Margin = new Thickness(0, 14, 0, 0) };
+        foreach (var width in new[] { 36, 120, 260, 70, 90, 100, 110 })
+            table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(width) });
+
+        void Cell(int row, int col, string text, bool bold = false)
+        {
+            var tb = new TextBlock
+            {
+                Text = text,
+                FontSize = 11,
+                FontWeight = bold ? FontWeights.Bold : FontWeights.Normal,
+                Margin = new Thickness(3, 2, 3, 2),
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+            Grid.SetRow(tb, row);
+            Grid.SetColumn(tb, col);
+            table.Children.Add(tb);
+        }
+
+        table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Cell(0, 0, "#", true);
+        Cell(0, 1, T("Invoice.Col.Code"), true);
+        Cell(0, 2, T("Invoice.Col.Description"), true);
+        Cell(0, 3, T("MfgOrder.Unit"), true);
+        Cell(0, 4, T("MfgOrder.Quantity"), true);
+        Cell(0, 5, T("Invoice.Col.PurchasePrice"), true);
+        Cell(0, 6, T("Invoice.Col.LineTotal"), true);
+
+        var rowIndex = 1;
+        foreach (var item in _items)
+        {
+            table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Cell(rowIndex, 0, item.LineNo.ToString(CultureInfo.InvariantCulture));
+            Cell(rowIndex, 1, item.ItemCode);
+            Cell(rowIndex, 2, item.ItemName);
+            Cell(rowIndex, 3, item.Unit);
+            Cell(rowIndex, 4, item.Qty.ToString("0.###", CultureInfo.InvariantCulture));
+            Cell(rowIndex, 5, item.UnitCost.ToString("N2", CultureInfo.InvariantCulture));
+            Cell(rowIndex, 6, item.TotalCost.ToString("N2", CultureInfo.InvariantCulture));
+            rowIndex++;
+        }
+
+        table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Cell(rowIndex, 2, T("MfgOrder.TotalCost"), true);
+        Cell(rowIndex, 6, _items.Sum(i => i.TotalCost).ToString("N2", CultureInfo.InvariantCulture), true);
+
+        stack.Children.Add(table);
+        return root;
+    }
+
+    /// <summary>Single-page paginator, mirroring the one inside JrnWin/InvPrn.</summary>
+    private sealed class SinglePagePaginator : DocumentPaginator
+    {
+        private readonly FrameworkElement _page;
+        public SinglePagePaginator(FrameworkElement page) => _page = page;
+        public override bool IsPageCountValid => true;
+        public override int PageCount => 1;
+        public override Size PageSize { get; set; } = new(794, 1123);
+        public override IDocumentPaginatorSource Source => null!;
+        public override DocumentPage GetPage(int pageNumber)
+        {
+            _page.Measure(PageSize);
+            _page.Arrange(new Rect(PageSize));
+            _page.UpdateLayout();
+            return new DocumentPage(_page);
+        }
     }
 
     protected override void ApplyLocalizedText()

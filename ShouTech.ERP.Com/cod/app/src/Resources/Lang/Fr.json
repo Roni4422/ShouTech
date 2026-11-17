@@ -1534,5 +1534,13 @@
     "ConfirmPurge": "Les éléments sélectionnés seront supprimés définitivement et ne pourront pas être restaurés.\n\nContinuer ?",
     "Purged": "{0:N0} élément(s) supprimé(s) définitivement.",
     "PurgedPartial": "{0:N0} élément(s) supprimé(s) définitivement. {1:N0} échec(s).{2}{3}"
+  },
+  "Cards":   {
+      "NotFound": "L'enregistrement est introuvable dans la base de données.",
+      "PermissionDenied": "Vous n'avez pas l'autorisation pour cette opération.",
+      "CodeRequired": "Le code est obligatoire.",
+      "NameRequired": "Le nom est obligatoire.",
+      "InvalidAmount": "Une valeur numérique est invalide.",
+      "ConfirmDelete": "Supprimer cette fiche ? Elle sera placée dans la corbeille."
   }
 }

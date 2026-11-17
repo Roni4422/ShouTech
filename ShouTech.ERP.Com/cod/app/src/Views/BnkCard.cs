@@ -1,45 +1,20 @@
 using System;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using ShouTech.App.Services;
 
 namespace ShouTech.App.Views;
 
 /// <summary>
+/// Bank card. Fully persisted through <see cref="CardStore"/> (migration
+/// 050: bank_accounts table): every field round-trips to the database,
+/// delete is a soft delete, and the metrics bar shows the real book
+/// balance of the linked GL account.
 /// </summary>
 public sealed class BnkCard : BaseWin
 {
-
-    /// <summary>
-    /// Prevents a false success message when this screen has no database persistence wired.
-    /// This intentionally does not claim to save any values.
-    /// </summary>
-    private void ShowPersistenceUnavailable()
-    {
-        const string errorCode = "APP-2010";
-        const string context = "This window has no database persistence implementation.";
-        var definition = ShouTech.App.Localization.ErrorCatalog.Resolve(errorCode);
-        var exception = new NotSupportedException(context);
-
-        // Errors are routed to errors.log; the operational trace goes to log.log.
-        ShouTech.App.Services.AppHost.Logging?.LogError(
-            "WindowPersistence",
-            $"[{definition.Code}] {definition.Name} | Window={GetType().Name} | {context}",
-            exception);
-        ShouTech.App.Services.AppHost.Logging?.LogOperation(
-            "WindowPersistence",
-            "PersistenceUnavailable",
-            $"Code={definition.Code} | Window={GetType().Name}");
-
-        MessageBox.Show(
-            this,
-            $"[{definition.Code}] {definition.Message}\n{context}\n{ShouTech.App.Localization.Loc.Get("Common.NoDataSaved", "No data was saved.")}",
-            ShouTech.App.Localization.Loc.Get("Common.OperationUnavailable", "Operation unavailable"),
-            MessageBoxButton.OK,
-            MessageBoxImage.Warning);
-    }
-
-
     private readonly TextBox _txtCode = new() { Width = 120, Height = 26 };
     private readonly TextBox _txtName = new() { Width = 230, Height = 26 };
     private readonly TextBox _txtBranch = new() { Width = 150, Height = 26 };
@@ -51,8 +26,11 @@ public sealed class BnkCard : BaseWin
     private readonly TextBlock _lblBal = new();
 
     private readonly Button _btnNew = new();
+    private readonly Button _btnLoad = new();
     private readonly Button _btnSave = new();
     private readonly Button _btnDelete = new();
+
+    private long? _loadedId;
 
     public BnkCard()
     {
@@ -74,14 +52,16 @@ public sealed class BnkCard : BaseWin
         // 1. Toolbar
         var toolbar = new WrapPanel { Margin = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Right };
         StyleButton(_btnNew, "Common.New");
+        StyleButton(_btnLoad, "Vouchers.Load");
         StyleButton(_btnSave, "Common.Save");
         StyleButton(_btnDelete, "Common.Delete");
 
         _btnNew.Click += (_, _) => ResetCard();
-        _btnSave.Click += (_, _) => ShowPersistenceUnavailable();
-        _btnDelete.Click += (_, _) => ShowPersistenceUnavailable();
+        _btnLoad.Click += (_, _) => LoadCard();
+        _btnSave.Click += (_, _) => SaveCard();
+        _btnDelete.Click += (_, _) => DeleteCard();
 
-        foreach (var b in new[] { _btnNew, _btnSave, _btnDelete })
+        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnDelete })
             toolbar.Children.Add(b);
 
         // Explorer-style bottom command bar: flat, transparent, subtle 1px top divider.
@@ -138,13 +118,108 @@ public sealed class BnkCard : BaseWin
 
     private void ResetCard()
     {
+        _loadedId = null;
         _txtCode.Text = "BNK-01";
         _txtName.Text = string.Empty;
         _txtBranch.Text = string.Empty;
         _txtAccNo.Text = string.Empty;
         _txtIban.Text = "SA";
+        _txtCur.Text = "SAR";
         _txtGlAcc.Text = "121201";
-        _lblBal.Text = $"{T("BankCard.Balance")}: 0.00 SAR";
+        UpdateBalance(0);
+    }
+
+    private void LoadCard()
+    {
+        try
+        {
+            var rec = CardStore.LoadBank(_txtCode.Text);
+            if (rec is null)
+            {
+                MessageBox.Show(this, T("Cards.NotFound"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            _loadedId = rec.Id;
+            _txtCode.Text = rec.Code;
+            _txtName.Text = rec.Name;
+            _txtBranch.Text = rec.Branch;
+            _txtAccNo.Text = rec.AccountNo;
+            _txtIban.Text = rec.Iban;
+            _txtCur.Text = rec.CurrencyCode;
+            _txtGlAcc.Text = rec.GlAccountCode;
+            UpdateBalance(CardStore.BankBookBalance(rec.GlAccountCode));
+        }
+        catch (Exception ex)
+        {
+            ReportFailure("LoadBank", ex);
+        }
+    }
+
+    private void SaveCard()
+    {
+        try
+        {
+            if (!AppHost.Permissions.Has(PermCat.Banking.BankManage))
+                throw new InvalidOperationException(T("Cards.PermissionDenied"));
+            var code = _txtCode.Text.Trim();
+            if (string.IsNullOrWhiteSpace(code))
+                throw new InvalidOperationException(T("Cards.CodeRequired"));
+            if (string.IsNullOrWhiteSpace(_txtName.Text))
+                throw new InvalidOperationException(T("Cards.NameRequired"));
+
+            var rec = new CardStore.BankCardRec(
+                _loadedId ?? 0, code, _txtName.Text.Trim(), _txtBranch.Text.Trim(),
+                _txtAccNo.Text.Trim(), _txtIban.Text.Trim(),
+                string.IsNullOrWhiteSpace(_txtCur.Text) ? "SAR" : _txtCur.Text.Trim().ToUpperInvariant(),
+                _txtGlAcc.Text.Trim());
+            _loadedId = CardStore.SaveBank(rec, Actor());
+            UpdateBalance(CardStore.BankBookBalance(rec.GlAccountCode));
+            MessageBox.Show(this, T("BankCard.Saved"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            ReportFailure("SaveBank", ex);
+        }
+    }
+
+    private void DeleteCard()
+    {
+        try
+        {
+            if (!AppHost.Permissions.Has(PermCat.Banking.BankManage))
+                throw new InvalidOperationException(T("Cards.PermissionDenied"));
+            if (_loadedId is null)
+            {
+                MessageBox.Show(this, T("Cards.NotFound"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            if (MessageBox.Show(this, T("Cards.ConfirmDelete"), Title, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                return;
+            if (CardStore.SoftDeleteBank(_txtCode.Text, Actor()))
+            {
+                MessageBox.Show(this, T("BankCard.Deleted"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+                ResetCard();
+            }
+        }
+        catch (Exception ex)
+        {
+            ReportFailure("DeleteBank", ex);
+        }
+    }
+
+    private void UpdateBalance(decimal balance)
+        => _lblBal.Text = $"{T("BankCard.Balance")}: {balance:N2} {_txtCur.Text}";
+
+    private static string Actor()
+        => !string.IsNullOrWhiteSpace(UsrSession.Current?.Id)
+            ? UsrSession.Current!.Id
+            : AppHost.Session.CurrentUser ?? string.Empty;
+
+    private void ReportFailure(string operation, Exception exception)
+    {
+        AppHost.Logging?.LogError("WindowPersistence",
+            $"Window={GetType().Name} | Operation={operation} | {exception.Message}", exception);
+        MessageBox.Show(this, exception.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
     }
 
     protected override void ApplyLocalizedText()
