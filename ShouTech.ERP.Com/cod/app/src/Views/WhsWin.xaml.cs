@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -986,8 +986,7 @@ namespace ShouTech.App.Views
                     SelectedValuePath = nameof(MatRepo.WarehouseRec.Id),
                     SelectedValue = warehouseId ?? warehouses[0].Id,
                     IsEnabled = warehouseId is null,
-                    MinWidth = 260,
-                    Height = 28,
+                    MinWidth = ShouTech.App.Services.VisuId.FieldWidthLong,
                     BorderThickness = new Thickness(0),
                     Background = Brushes.Transparent,
                     Margin = new Thickness(8, 0, 0, 0)
@@ -995,8 +994,7 @@ namespace ShouTech.App.Views
                 picker.SetResourceReference(StyleProperty, "VisuComboBoxStyle");
                 var pickerShell = new Border
                 {
-                    MinWidth = 260,
-                    Height = 28,
+                    MinWidth = ShouTech.App.Services.VisuId.FieldWidthLong,
                     BorderBrush = System.Windows.Application.Current?.TryFindResource("BorderBrush") as Brush,
                     Background = System.Windows.Application.Current?.TryFindResource("FieldBackgroundBrush") as Brush,
                     BorderThickness = new Thickness(1),
@@ -1004,7 +1002,7 @@ namespace ShouTech.App.Views
                     Child = picker,
                     Margin = new Thickness(8, 0, 0, 0)
                 };
-                var reason = new TextBox { MinWidth = 360, Height = 28, MaxLength = 500 };
+                var reason = new TextBox { MinWidth = 360, MaxLength = 500 };
                 reason.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
                 var grid = new DataGrid
                 {
@@ -1024,7 +1022,7 @@ namespace ShouTech.App.Views
                 System.ComponentModel.ICollectionView? rowsView = null;
                 long? selectedMaterialId = null;
                 long? loadedWarehouseId = null;
-                var materialFilter = new TextBox { MinWidth = 260, Height = 28 };
+                var materialFilter = new TextBox { MinWidth = ShouTech.App.Services.VisuId.FieldWidthLong };
                 materialFilter.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
                 var summary = new TextBlock { Margin = new Thickness(0, 4, 0, 0) };
                 bool TryDecimal(string text, out decimal value)
@@ -1262,8 +1260,7 @@ namespace ShouTech.App.Views
                 var materialLookup = new Button
                 {
                     Content = "...",
-                    MinWidth = 32,
-                    Height = 28,
+                    Width = ShouTech.App.Services.VisuId.ControlHeight,
                     Margin = new Thickness(4, 0, 0, 0),
                     ToolTip = T("Inventory.SearchMaterial")
                 };
@@ -1309,8 +1306,7 @@ namespace ShouTech.App.Views
                 var post = new Button
                 {
                     Content = T("Inventory.StockCountPost"),
-                    MinWidth = 105,
-                    Height = 28,
+                    MinWidth = ShouTech.App.Services.VisuId.PrimaryButtonMinWidth,
                     Margin = new Thickness(0, 0, 4, 0),
                     IsDefault = true
                 };
@@ -1318,8 +1314,7 @@ namespace ShouTech.App.Views
                 var cancel = new Button
                 {
                     Content = T("WhsWin.Close"),
-                    MinWidth = 76,
-                    Height = 28,
+                    MinWidth = ShouTech.App.Services.VisuId.ButtonMinWidth,
                     IsCancel = true
                 };
                 cancel.SetResourceReference(StyleProperty, "VisuButtonStyle");
@@ -1776,14 +1771,12 @@ namespace ShouTech.App.Views
                             HorizontalAlignment = HorizontalAlignment.Right,
                             Margin = new Thickness(0, 4, 0, 0)
                         };
-                        _post.MinWidth = 82;
-                        _post.Height = 28;
+                        _post.MinWidth = ShouTech.App.Services.VisuId.ButtonMinWidth;
                         _post.Margin = new Thickness(0, 0, 4, 0);
                         _post.SetResourceReference(StyleProperty, "VisuAccentButtonStyle");
                         _post.IsDefault = true;
                         _post.Click += MoveHistory_Click;
-                        _cancel.MinWidth = 76;
-                        _cancel.Height = 28;
+                        _cancel.MinWidth = ShouTech.App.Services.VisuId.ButtonMinWidth;
                         _cancel.SetResourceReference(StyleProperty, "VisuButtonStyle");
                         _cancel.IsCancel = true;
                         _cancel.Click += (_, _) => Close();
@@ -1813,16 +1806,12 @@ namespace ShouTech.App.Views
                         label.Margin = new Thickness(0, 0, 7, 0);
                         Grid.SetColumn(label, 0);
                         line.Children.Add(label);
-
-                        input.Height = 28;
-                        input.Padding = new Thickness(6, 2, 6, 2);
                         input.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
                         Grid.SetColumn(input, 1);
                         line.Children.Add(input);
 
                         lookup.Content = "...";
                         lookup.Width = 30;
-                        lookup.Height = 28;
                         lookup.Margin = new Thickness(4, 0, 0, 0);
                         lookup.SetResourceReference(StyleProperty, "VisuButtonStyle");
                         lookup.Click += pick;
@@ -1974,10 +1963,8 @@ namespace ShouTech.App.Views
                             VerticalAlignment = VerticalAlignment.Center,
                             Margin = new Thickness(12, 0, 6, 0)
                         };
-                        _source.Height = 28;
                         _source.BorderThickness = new Thickness(0);
                         _source.Background = Brushes.Transparent;
-                        _target.Height = 28;
                         _target.BorderThickness = new Thickness(0);
                         _target.Background = Brushes.Transparent;
                         var sourceShell = CreateFieldShell(_source);
@@ -2036,8 +2023,6 @@ namespace ShouTech.App.Views
                         });
                         Grid.SetRow(_grid, 2);
                         root.Children.Add(_grid);
-
-                        _reason.Height = 28;
                         _reason.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
                         var reasonRow = new Grid { Margin = new Thickness(0, 0, 0, 5) };
                         reasonRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -2061,13 +2046,11 @@ namespace ShouTech.App.Views
                             HorizontalAlignment = HorizontalAlignment.Right
                         };
                         _post.MinWidth = 112;
-                        _post.Height = 28;
                         _post.Margin = new Thickness(0, 0, 4, 0);
                         _post.SetResourceReference(StyleProperty, "VisuAccentButtonStyle");
                         _post.IsDefault = true;
                         _post.Click += Post_Click;
-                        _cancel.MinWidth = 76;
-                        _cancel.Height = 28;
+                        _cancel.MinWidth = ShouTech.App.Services.VisuId.ButtonMinWidth;
                         _cancel.SetResourceReference(StyleProperty, "VisuButtonStyle");
                         _cancel.IsCancel = true;
                         _cancel.Click += (_, _) => Close();
@@ -2082,7 +2065,6 @@ namespace ShouTech.App.Views
                     private Border CreateFieldShell(Control control)
                         => new()
                         {
-                            Height = 28,
                             BorderBrush = TryFindResource("BorderBrush") as Brush,
                             Background = TryFindResource("FieldBackgroundBrush") as Brush,
                             BorderThickness = new Thickness(1),

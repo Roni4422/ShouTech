@@ -1,4 +1,4 @@
-<UserControl x:Class="ShouTech.App.Views.Modules.ReportGridVw"
+﻿<UserControl x:Class="ShouTech.App.Views.Modules.ReportGridVw"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -121,15 +121,15 @@
                                                          ToolTip="Column title"/>
 
                                                 <StackPanel Grid.Column="2" Orientation="Horizontal">
-                                                    <Button Content="▲" Width="24" Padding="0,2"
+                                                    <Button Content="▲" Width="{StaticResource SmallControlHeight}" Height="{StaticResource SmallControlHeight}" Padding="0,2"
                                                             Command="{Binding DataContext.MoveColumnUpCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding}"
                                                             ToolTip="Move up"/>
-                                                    <Button Content="▼" Width="24" Padding="0,2"
+                                                    <Button Content="▼" Width="{StaticResource SmallControlHeight}" Height="{StaticResource SmallControlHeight}" Padding="0,2"
                                                             Command="{Binding DataContext.MoveColumnDownCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding}"
                                                             ToolTip="Move down"/>
-                                                    <Button Content="🗑" Width="24" Padding="0,2"
+                                                    <Button Content="🗑" Width="{StaticResource SmallControlHeight}" Height="{StaticResource SmallControlHeight}" Padding="0,2"
                                                             Command="{Binding DataContext.RemoveColumnCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding}"
                                                             ToolTip="Delete column"/>

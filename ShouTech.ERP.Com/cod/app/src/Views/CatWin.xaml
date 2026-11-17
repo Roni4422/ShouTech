@@ -1,4 +1,4 @@
-<local:BaseWin x:Class="ShouTech.App.Views.CatWin"
+﻿<local:BaseWin x:Class="ShouTech.App.Views.CatWin"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:ShouTech.App.Views"
@@ -309,7 +309,7 @@
                                    Style="{StaticResource FieldLabel}"/>
                         <TextBox x:Name="TxtSpecs"
                                  Style="{StaticResource FieldBox}"
-                                 Height="70"
+                                 Height="{StaticResource MultilineFieldHeight}"
                                  Padding="8,6"
                                  AcceptsReturn="True"
                                  TextWrapping="Wrap"

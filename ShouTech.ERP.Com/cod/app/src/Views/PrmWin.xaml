@@ -1,4 +1,4 @@
-<Window x:Class="ShouTech.App.Views.PrmWin"
+﻿<Window x:Class="ShouTech.App.Views.PrmWin"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="User permissions"
@@ -49,8 +49,8 @@
         <DockPanel Grid.Row="2">
             <TextBlock Text="Changes are saved as user exceptions only; role base permissions stay intact." VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}"/>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
-                <Button x:Name="BtnCancel" Content="Cancel" Width="100" Height="36" Margin="0,0,8,0" Click="Cancel_Click"/>
-                <Button x:Name="BtnSave" Content="Save" Width="120" Height="36" Click="Save_Click" FontWeight="SemiBold"/>
+                <Button x:Name="BtnCancel" Content="Cancel" MinWidth="{StaticResource ButtonMinWidth}" Margin="0,0,8,0" Click="Cancel_Click"/>
+                <Button x:Name="BtnSave" Content="Save" MinWidth="{StaticResource PrimaryButtonMinWidth}" Click="Save_Click" FontWeight="SemiBold"/>
             </StackPanel>
         </DockPanel>
     </Grid>
