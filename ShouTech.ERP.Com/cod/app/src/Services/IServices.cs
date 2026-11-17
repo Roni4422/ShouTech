@@ -58,6 +58,16 @@ namespace ShouTech.App.Services
 		void LogInfo(string category, string message);
 		void LogWarning(string category, string message);
 		void LogError(string category, string message, Exception? ex = null);
+
+		/// <summary>
+		/// Coded error log: the catalog code is stamped onto the line as
+		/// [Code=...] [Name=...] in a fixed position (see docs/ERROR_CATALOG.md,
+		/// "Log format"). Unregistered codes are stamped as SYS-0001 with the
+		/// reported code preserved in the message. The legacy overload above
+		/// resolves its code from the exception (AppError code, else
+		/// classification, else SYS-0001), so every error line is catalog-coded.
+		/// </summary>
+		void LogError(string category, string code, string message, Exception? ex = null);
 		void LogDebug(string category, string message);
 		void LogLifecycle(string eventName, string message = "");
 		void LogOperation(string category, string action, string message);

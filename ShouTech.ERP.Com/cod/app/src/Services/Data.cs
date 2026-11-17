@@ -20,6 +20,7 @@ using Microsoft.Data.Sqlite;
 using Npgsql;
 using ShouTech.App.Common;
 using ShouTech.App.Configuration;
+using ShouTech.Domain;
 using ShouTech.Domain.Interfaces;
 
 namespace ShouTech.App.Services
@@ -703,10 +704,40 @@ private readonly ILogServ _logger;
             string message,
             Exception? ex = null)
         {
-            var detail = ex == null
-                ? message
-                : $"{message} | Exception={ex.GetType().FullName}: {ex.Message}" +
-                  $"{Environment.NewLine}StackTrace: {ex.StackTrace}";
+            // Structural log/catalog compatibility (docs/ERROR_CATALOG.md):
+            // every error line carries a catalog code in a fixed position.
+            // The code comes from the exception itself (AppError), else
+            // from classification, else SYS-0001 — never from callers
+            // pasting codes into message text.
+            var code = (ex as AppError)?.Code ?? ErrorCatalogSvc.ClassifyException(ex);
+            LogError(category, code, message, ex);
+        }
+
+        public void LogError(
+            string category,
+            string code,
+            string message,
+            Exception? ex = null)
+        {
+            var stampedCode = code;
+            var reportedSuffix = string.Empty;
+            if (!ErrorCatalogSvc.IsKnownCode(code))
+            {
+                // Invariant: every emitted code exists in the catalog.
+                // An unregistered code is stamped as SYS-0001 and the
+                // reported code is preserved in the message body.
+                reportedSuffix = $" | ReportedCode={code}";
+                stampedCode = ErrorCodes.Unknown;
+            }
+
+            var name = ErrorCatalogSvc.GetCatalogName(stampedCode);
+            var detail = $"[Code={stampedCode}] [Name={name}] {message}{reportedSuffix}";
+
+            if (ex != null)
+            {
+                detail += $" | Exception={ex.GetType().FullName}: {ex.Message}" +
+                          $"{Environment.NewLine}StackTrace: {ex.StackTrace}";
+            }
 
             Write(
                 "ERROR",

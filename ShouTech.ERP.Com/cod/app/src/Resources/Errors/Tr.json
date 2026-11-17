@@ -1,0 +1,210 @@
+{
+  "ACC-5001": {
+    "code": "ACC-5001",
+    "name": "JournalNotBalanced",
+    "message": "Yevmiye kaydının borç ve alacak toplamları dengeli olmalıdır.",
+    "hint": "Satırları, toplam borcun toplam alacağa eşit olacağı şekilde ayarlayın."
+  },
+  "ACC-5002": {
+    "code": "ACC-5002",
+    "name": "JournalTooFewLines",
+    "message": "Bir yevmiye kaydı en az iki satır gerektirir."
+  },
+  "ACC-5003": {
+    "code": "ACC-5003",
+    "name": "JournalZeroAmount",
+    "message": "Bir yevmiye kaydının tutarı sıfırdan farklı olmalıdır."
+  },
+  "ACC-5004": {
+    "code": "ACC-5004",
+    "name": "JournalPostingFailed",
+    "message": "Yevmiye kaydı deftere işlenemedi."
+  },
+  "AUTH-2001": {
+    "code": "AUTH-2001",
+    "name": "InvalidCredentials",
+    "message": "Kullanıcı adı veya parola yanlış",
+    "hint": "Kullanıcı adını ve parolayı kontrol edip tekrar deneyin."
+  },
+  "AUTH-2002": {
+    "code": "AUTH-2002",
+    "name": "AccountLocked",
+    "message": "Bu hesap kilitli. Oturum açma reddedildi.",
+    "hint": "Kilitleme süresi dolana kadar bekleyin veya yöneticiden hesabın kilidini açmasını isteyin."
+  },
+  "AUTH-2003": {
+    "code": "AUTH-2003",
+    "name": "AccountLockedNow",
+    "message": "Hesap, art arda başarısız oturum açma denemelerinden sonra kilitlendi.",
+    "hint": "Kilitleme süresi dolana kadar bekleyin veya yöneticiden hesabın kilidini açmasını isteyin."
+  },
+  "AUTH-2004": {
+    "code": "AUTH-2004",
+    "name": "PasswordPolicyViolation",
+    "message": "Yönetici parolası parola politikasını karşılamıyor: {0}",
+    "hint": "Harf, rakam ve bir sembol karışımıyla en az 12 karakter kullanın."
+  },
+  "CO-3001": {
+    "code": "CO-3001",
+    "name": "CompanyRecordNotFound",
+    "message": "Bu şirketi açmak için gereken yerel şirket kaydı bulunamadı.",
+    "hint": "Bu bilgisayardaki şirket listesi güncel değil. Şirketleri yeniden dizinleyin veya şirket verilerini geri yükleyin."
+  },
+  "CO-3002": {
+    "code": "CO-3002",
+    "name": "CompanyDatabasePathMissing",
+    "message": "Şirket veritabanı yolu ayarlanmamış.",
+    "hint": "Şirketi düzenleyin ve veritabanı yolunu ayarlayın."
+  },
+  "CO-3003": {
+    "code": "CO-3003",
+    "name": "PostgresDatabaseNameMissing",
+    "message": "PostgreSQL veritabanı adı ayarlanmamış."
+  },
+  "CO-3004": {
+    "code": "CO-3004",
+    "name": "PostgresConnectionMissing",
+    "message": "Geçerli PostgreSQL bağlantısı kullanılamıyor."
+  },
+  "CO-3005": {
+    "code": "CO-3005",
+    "name": "CompanyLoadFailed",
+    "message": "Şirketler yüklenemedi"
+  },
+  "CO-3006": {
+    "code": "CO-3006",
+    "name": "CompanyOpenFailed",
+    "message": "Şirket açılamadı"
+  },
+  "DATA-4001": {
+    "code": "DATA-4001",
+    "name": "ExportPermissionDenied",
+    "message": "Veri dışa aktarma izniniz yok (DATA.EXPORT).",
+    "hint": "Yöneticiden DATA.EXPORT iznini vermesini isteyin."
+  },
+  "DATA-4002": {
+    "code": "DATA-4002",
+    "name": "ExportFailed",
+    "message": "Dışa aktarma tamamlanamadı."
+  },
+  "DATA-4003": {
+    "code": "DATA-4003",
+    "name": "ImportFailed",
+    "message": "İçe aktarma tamamlanamadı."
+  },
+  "DB-1001": {
+    "code": "DB-1001",
+    "name": "DatabaseConnectionFailed",
+    "message": "Veritabanına bağlanılamadı.",
+    "hint": "Veritabanı sunucusunun çalıştığını ve bağlantı ayarlarının doğru olduğunu kontrol edin."
+  },
+  "DB-1002": {
+    "code": "DB-1002",
+    "name": "DatabaseFileMissing",
+    "message": "Şirket veritabanı dosyası bulunamadı.",
+    "hint": "Şirket veritabanı dosyası taşınmış veya silinmiş olabilir. Yedekten geri yükleyin veya şirketi yeniden oluşturun."
+  },
+  "DB-1003": {
+    "code": "DB-1003",
+    "name": "MigrationFailed",
+    "message": "Bir veritabanı geçişi başarısız oldu."
+  },
+  "DB-1004": {
+    "code": "DB-1004",
+    "name": "DatabaseNotInitialized",
+    "message": "Şirket veritabanı dosyası düzgün başlatılmamış.",
+    "hint": "Dosya mevcut ancak geçerli bir şirket veritabanı değil. Yedekten geri yükleyin veya şirketi yeniden oluşturun."
+  },
+  "DB-1005": {
+    "code": "DB-1005",
+    "name": "DatabaseQueryFailed",
+    "message": "Bir veritabanı işlemi başarısız oldu."
+  },
+  "DB-1006": {
+    "code": "DB-1006",
+    "name": "UnsupportedDatabaseProvider",
+    "message": "Desteklenmeyen veritabanı sağlayıcısı."
+  },
+  "INV-6001": {
+    "code": "INV-6001",
+    "name": "InventoryOperationFailed",
+    "message": "Envanter işlemi tamamlanamadı."
+  },
+  "LIC-8001": {
+    "code": "LIC-8001",
+    "name": "LicenseCheckFailed",
+    "message": "Lisans doğrulanamadı."
+  },
+  "SYS-0001": {
+    "code": "SYS-0001",
+    "name": "UnknownError",
+    "message": "Beklenmeyen bir hata oluştu.",
+    "hint": "Sorun devam ederse hata kodunu not edip destek ile iletişime geçin."
+  },
+  "SYS-0002": {
+    "code": "SYS-0002",
+    "name": "DispatcherUnhandled",
+    "message": "Beklenmeyen bir hata geçerli işlemi yarıda kesti.",
+    "hint": "Sorun devam ederse hata kodunu not edip destek ile iletişime geçin."
+  },
+  "SYS-0003": {
+    "code": "SYS-0003",
+    "name": "AppDomainUnhandled",
+    "message": "Uygulamada beklenmeyen bir hata oluştu."
+  },
+  "SYS-0004": {
+    "code": "SYS-0004",
+    "name": "UnobservedTaskException",
+    "message": "Bir arka plan görevi başarısız oldu."
+  },
+  "SYS-0005": {
+    "code": "SYS-0005",
+    "name": "NonFatalInternalFailure",
+    "message": "Kritik olmayan bir iç işlem başarısız oldu ve kurtarıldı."
+  },
+  "SYS-0006": {
+    "code": "SYS-0006",
+    "name": "ConfigurationLoadFailed",
+    "message": "Uygulama yapılandırması yüklenemedi."
+  },
+  "SYS-0007": {
+    "code": "SYS-0007",
+    "name": "FileAccessFailed",
+    "message": "Bir dosyaya erişilemedi."
+  },
+  "SYS-0009": {
+    "code": "SYS-0009",
+    "name": "StartupFailed",
+    "message": "Uygulama başlatılamadı."
+  },
+  "SYS-0010": {
+    "code": "SYS-0010",
+    "name": "SettingsLoadFailed",
+    "message": "Ayarlar yüklenemedi; varsayılanlar kullanıldı."
+  },
+  "SYS-0011": {
+    "code": "SYS-0011",
+    "name": "SettingsSaveFailed",
+    "message": "Ayarlar kaydedilemedi."
+  },
+  "UI-7001": {
+    "code": "UI-7001",
+    "name": "WindowOperationFailed",
+    "message": "Pencere işlemi tamamlanamadı."
+  },
+  "UI-7002": {
+    "code": "UI-7002",
+    "name": "ShellOperationFailed",
+    "message": "Ana pencere işlemi tamamlanamadı."
+  },
+  "UI-7003": {
+    "code": "UI-7003",
+    "name": "WindowLoadFailed",
+    "message": "Pencere yüklenemedi."
+  },
+  "UI-7004": {
+    "code": "UI-7004",
+    "name": "NavigationFailed",
+    "message": "Gezinme tamamlanamadı."
+  }
+}

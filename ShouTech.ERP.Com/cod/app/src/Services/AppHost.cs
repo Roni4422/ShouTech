@@ -14,6 +14,13 @@ namespace ShouTech.App.Services
         private static bool _initialized;
 
         public static ILogServ Logging { get; private set; } = null!;
+
+        /// <summary>
+        /// The numbered error catalog (docs/ERROR_CATALOG.md). Available
+        /// before <see cref="Initialize"/> so even startup error paths can
+        /// report with a catalog code: AppHost.Errors.Report(code, ex, context).
+        /// </summary>
+        public static IErrorCatalog Errors { get; } = new ErrorCatalogSvc(() => Localization.GetCurrentLanguage());
         public static VisuId Visual { get; private set; } = new VisuId();
         public static INavServ Navigation { get; private set; } = null!;
         public static IAuthSvc Auth { get; private set; } = new AuthServ();
@@ -271,6 +278,7 @@ namespace ShouTech.App.Services
     public static class AppServiceHost
     {
         public static ILogServ Logging => AppHost.Logging;
+        public static IErrorCatalog Errors => AppHost.Errors;
         public static VisuId Visual => AppHost.Visual;
         public static INavServ Navigation => AppHost.Navigation;
         public static IAuthSvc Auth => AppHost.Auth;

@@ -129,7 +129,7 @@
   <ItemGroup>
 
     <None Include="../../../cfg/appset.json" Condition="Exists('../../../cfg/appset.json')" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <None Include="Resources\Errors\Errors.json" Condition="Exists('Resources\Errors\Errors.json')" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="Resources\Errors\*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="Resources\Lang\*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	
 

@@ -40,16 +40,16 @@ public sealed class JournalEntry
     public void EnsureBalanced()
     {
         if (_lines.Count < 2)
-            throw new InvalidOperationException("A journal entry requires at least two lines.");
+            throw new AppError(ErrorCodes.JournalTooFewLines, "A journal entry requires at least two lines.");
 
         var totalDebit = _lines.Sum(line => line.Debit);
         var totalCredit = _lines.Sum(line => line.Credit);
 
         if (totalDebit != totalCredit)
-            throw new InvalidOperationException("Journal entry debit and credit totals must balance.");
+            throw new AppError(ErrorCodes.JournalNotBalanced, "Journal entry debit and credit totals must balance.");
 
         if (totalDebit == 0)
-            throw new InvalidOperationException("A journal entry must have a non-zero amount.");
+            throw new AppError(ErrorCodes.JournalZeroAmount, "A journal entry must have a non-zero amount.");
     }
 
     public void Post()
