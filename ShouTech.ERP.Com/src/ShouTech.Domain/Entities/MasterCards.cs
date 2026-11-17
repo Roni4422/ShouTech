@@ -104,6 +104,15 @@ public sealed class CurrencyRate
 public sealed class Party
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+
+    /// <summary>
+    /// Stable integer identity in the operational stores (Fix Phase Step 4,
+    /// migration 061): <c>party_ledger.party_id</c>, document
+    /// <c>party_id</c> and <c>payment_allocations.party_id</c> all carry this
+    /// value. Assigned by the repository on insert (legacy ids were kept by
+    /// the migration); 0 means "not yet persisted".
+    /// </summary>
+    public long LedgerId { get; set; }
     public string Kind { get; set; } = PartyKinds.Customer;
     public string Code { get; set; } = string.Empty;
     public string NameEn { get; set; } = string.Empty;
