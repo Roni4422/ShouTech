@@ -147,7 +147,8 @@ public sealed class OrderTrackWin : BaseWin
         {
             var kind = _cmbKind.SelectedItem as string ?? "SO";
             var side = kind == "SO" ? CommercialDocSide.Sales : CommercialDocSide.Purchase;
-            var orders = await AppHost.Orders.SearchAsync(side, _companyId, kind, CommercialDocumentStatus.Posted, null, null, null, 300);
+            // The tracking schedule shows every matching order — no row cap.
+            var orders = await AppHost.Orders.SearchAsync(side, _companyId, kind, CommercialDocumentStatus.Posted, null, null, null, int.MaxValue);
             foreach (var order in orders)
             {
                 var progress = await AppHost.Orders.GetProgressAsync(side, order.DocId);

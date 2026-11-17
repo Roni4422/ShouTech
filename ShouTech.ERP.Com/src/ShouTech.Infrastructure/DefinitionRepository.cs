@@ -586,7 +586,7 @@ public sealed class DefinitionRepository : IDefinitionRepository
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var command = CreateCommand(connection, null,
-            "SELECT id, account_id, entry_date, points, doc_ref, notes FROM loyalty_entries WHERE company_id = @company AND account_id = @account ORDER BY entry_date, created_at LIMIT 500");
+            "SELECT id, account_id, entry_date, points, doc_ref, notes FROM loyalty_entries WHERE company_id = @company AND account_id = @account ORDER BY entry_date, created_at");
         Add(command, "@company", companyId.Trim());
         Add(command, "@account", accountId);
         var result = new List<LoyaltyEntry>();

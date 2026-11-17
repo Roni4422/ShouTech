@@ -20,6 +20,8 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class JrnWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Blue";
+
     // Note: the former ShowOperationUnavailable helper was removed — every
     // JrnWin operation (New/Load/Save/Post/Reverse/Print) is implemented;
     // no placeholder operations remain in this window.

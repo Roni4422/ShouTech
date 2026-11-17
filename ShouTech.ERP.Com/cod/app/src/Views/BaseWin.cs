@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Windows;
+using System.Windows.Media;
 using ShouTech.App.Services;
 using WpfApp = System.Windows.Application;
 
@@ -27,6 +28,17 @@ public abstract class BaseWin : Window
 
     /// <summary>Stable key used to store per-user geometry. Defaults to the class name.</summary>
     protected virtual string PrefKey => GetType().Name;
+
+    /// <summary>
+    /// Name of this window's schedule tint from the central palette in
+    /// Themes/VisuId.xaml (the "ScheduleTint{Name}Brush" tokens), or null to
+    /// keep the default table tint. When set, every schedule (DataGrid) in
+    /// the window alternates its white rows with this tint, applied centrally
+    /// on load by overriding the TableAlternateRowBrush resource for this
+    /// window only. Each schedule-bearing window claims its own tint so a
+    /// window is recognizable by its schedule color alone.
+    /// </summary>
+    protected virtual string? ScheduleTintName => null;
 
     /// <summary>When false, geometry persistence is skipped (e.g. modal dialogs).</summary>
     protected virtual bool PersistGeometry => true;
@@ -105,9 +117,33 @@ public abstract class BaseWin : Window
     private void OnBaseLoaded(object sender, RoutedEventArgs e)
     {
         ApplyFlowDirection();
+        ApplyScheduleTint();
         ApplyLocalizedText();
         HookLanguageChanged();
         WireGeometryPersistence();
+    }
+
+    /// <summary>
+    /// Applies the window's claimed schedule tint (see
+    /// <see cref="ScheduleTintName"/>) by overriding the alternate-row brush
+    /// in this window's own resources. Every DataGrid in the window resolves
+    /// TableAlternateRowBrush through DynamicResource, so all of the window's
+    /// schedules share the tint and no other window is affected.
+    /// </summary>
+    private void ApplyScheduleTint()
+    {
+        try
+        {
+            if (ScheduleTintName is { Length: > 0 } name &&
+                TryFindResource($"ScheduleTint{name}Brush") is Brush tint)
+            {
+                Resources["TableAlternateRowBrush"] = tint;
+            }
+        }
+        catch (Exception exTint)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exTint, "BaseWin.ApplyScheduleTint");
+        }
     }
 
     private void HookLanguageChanged()

@@ -20,6 +20,9 @@ namespace ShouTech.App.Interaction;
 /// Standard Excel-like table behavior used by every DataGrid in the ERP.
 /// Provides row selection, a consistent right-click menu, row insertion/deletion,
 /// row-height expansion and copy helpers without requiring per-window XAML.
+/// Also owns the keyboard contract for every grid: Enter commits the cell and
+/// moves to the next editable cell in reading order (Shift+Enter reverses),
+/// wrapping across rows instead of dropping down the column.
 /// </summary>
 public static class DataGridTableBehavior
 {
@@ -85,10 +88,17 @@ public static class DataGridTableBehavior
                 $"effectiveKey={effectiveKey}");
         }
 
+        // Only a plain Enter is grid navigation (Ctrl/Alt+Enter keeps its
+        // default meaning elsewhere); Shift reverses the direction.
+        var modifiers = Keyboard.Modifiers;
+        var plainEnter = effectiveKey == Key.Enter
+            && (modifiers & (ModifierKeys.Control | ModifierKeys.Alt)) == 0;
+        var direction = (modifiers & ModifierKeys.Shift) != 0 ? -1 : 1;
+
         // View (read-only) mode: Enter still moves to the next cell in the row so
         // the table behaves the same whether or not the form is being edited.
         // Nothing is committed or edited here.
-        if (effectiveKey == Key.Enter
+        if (plainEnter
             && sender is DataGrid browseGrid
             && browseGrid.IsReadOnly
             && browseGrid.IsEnabled
@@ -106,7 +116,7 @@ public static class DataGridTableBehavior
             var browseColumn = browseGrid.CurrentCell.Column;
 
             browseGrid.Dispatcher.BeginInvoke(
-                new Action(() => MoveToNextEditableCell(browseGrid, browseItem, browseColumn, edit: false)),
+                new Action(() => MoveToNextEditableCell(browseGrid, browseItem, browseColumn, edit: false, direction)),
                 System.Windows.Threading.DispatcherPriority.Input);
             return;
         }
@@ -150,6 +160,43 @@ public static class DataGridTableBehavior
         if (effectiveKey is not (Key.Left or Key.Right or Key.Up or Key.Down or Key.Enter))
             return;
 
+        // Ctrl/Alt+Enter is not grid navigation.
+        if (effectiveKey == Key.Enter && !plainEnter)
+            return;
+
+        // Remember where the key was pressed. The DataGrid's own Enter handling
+        // (commit + move to the row below) may still run before the action below,
+        // so the target must be computed from this origin and never from
+        // whatever CurrentCell happens to be by then.
+        var originItem = grid.CurrentCell.Item ?? grid.SelectedItem;
+        var originColumn = grid.CurrentCell.Column;
+
+        if (effectiveKey == Key.Enter)
+        {
+            // A multi-line cell editor keeps Enter as a newline. (No grid in
+            // the app currently uses one; the guard keeps the rule central if
+            // one is ever added.)
+            if (IsInMultiLineCellEditor(grid))
+                return;
+
+            // A ComboBox editor with its drop-down open must accept the
+            // highlighted selection first: leave the key to the ComboBox (do
+            // not mark it handled) and advance once it has been processed,
+            // in the same deferred slot the normal Enter path uses.
+            if (IsComboDropDownOpenInCell(grid))
+            {
+                grid.Dispatcher.BeginInvoke(
+                    new Action(() =>
+                    {
+                        grid.CommitEdit(DataGridEditingUnit.Cell, true);
+                        grid.CommitEdit(DataGridEditingUnit.Row, true);
+                        MoveToNextEditableCell(grid, originItem, originColumn, edit: true, direction);
+                    }),
+                    System.Windows.Threading.DispatcherPriority.Input);
+                return;
+            }
+        }
+
         // Enter must never fall through to the DataGrid default (move to the row
         // below), even when keyboard focus is on the row or the grid itself and
         // not inside a cell (this happens whenever a target cell could not be
@@ -164,24 +211,24 @@ public static class DataGridTableBehavior
         e.Handled = true;
         var key = effectiveKey;
 
-        // Remember where the key was pressed. The DataGrid's own Enter handling
-        // (commit + move to the row below) may still run before the action below,
-        // so the target must be computed from this origin and never from
-        // whatever CurrentCell happens to be by then.
-        var originItem = grid.CurrentCell.Item ?? grid.SelectedItem;
-        var originColumn = grid.CurrentCell.Column;
-
         grid.Dispatcher.BeginInvoke(
             new Action(() =>
             {
                 grid.CommitEdit(DataGridEditingUnit.Cell, true);
                 grid.CommitEdit(DataGridEditingUnit.Row, true);
-                MoveCell(grid, key, originItem, originColumn);
 
                 if (key == Key.Enter)
+                {
+                    MoveToNextEditableCell(grid, originItem, originColumn, edit: true, direction);
                     DiagEnter("moved", grid, null,
+                        $"direction={direction}; " +
                         $"currentColumn={DescribeColumn(grid.CurrentCell.Column)}; " +
                         $"currentRow={grid.Items.IndexOf(grid.CurrentCell.Item)}");
+                }
+                else
+                {
+                    MoveCell(grid, key, originItem, originColumn);
+                }
             }),
             System.Windows.Threading.DispatcherPriority.Input);
     }
@@ -221,6 +268,37 @@ public static class DataGridTableBehavior
     private static bool IsColumnHeaderFocused() =>
         Keyboard.FocusedElement is DependencyObject focused
         && FindParent<System.Windows.Controls.Primitives.DataGridColumnHeader>(focused) != null;
+
+    /// <summary>
+    /// True when the keyboard focus sits in a ComboBox that belongs to a cell
+    /// of this grid and its drop-down is open. Such a ComboBox must receive
+    /// Enter itself so it can accept the highlighted selection.
+    /// </summary>
+    private static bool IsComboDropDownOpenInCell(DataGrid grid)
+    {
+        if (Keyboard.FocusedElement is not DependencyObject focused) return false;
+
+        var combo = FindParent<ComboBox>(focused);
+        if (combo is not { IsDropDownOpen: true }) return false;
+
+        var cell = FindParent<DataGridCell>(combo);
+        return cell != null && ReferenceEquals(FindParent<DataGrid>(cell), grid);
+    }
+
+    /// <summary>
+    /// True when the keyboard focus sits in a multi-line TextBox cell editor
+    /// of this grid; Enter there inserts a newline instead of navigating.
+    /// </summary>
+    private static bool IsInMultiLineCellEditor(DataGrid grid)
+    {
+        if (Keyboard.FocusedElement is not DependencyObject focused) return false;
+
+        var textBox = FindParent<TextBox>(focused);
+        if (textBox is not { AcceptsReturn: true }) return false;
+
+        var cell = FindParent<DataGridCell>(textBox);
+        return cell != null && ReferenceEquals(FindParent<DataGrid>(cell), grid);
+    }
 
     private static void MoveCell(DataGrid grid, Key key, object? originItem, DataGridColumn? originColumn)
     {
@@ -283,55 +361,63 @@ public static class DataGridTableBehavior
     }
 
     /// <summary>
-    /// Enter moves to the next editable cell in the same row and starts editing it.
-    /// "Next" follows DisplayIndex, which already mirrors under RightToLeft, so the
-    /// order matches the reading direction (right to left in Arabic, left to right
-    /// otherwise). After the last editable cell it continues at the first editable
-    /// cell of the next row; on the last row it stays where it is.
+    /// Enter moves to the next editable cell in the same row and starts editing
+    /// it; Shift+Enter moves to the previous editable cell. "Next" follows
+    /// DisplayIndex, which is the reading order (it already mirrors under
+    /// RightToLeft), so the movement matches the reading direction (right to
+    /// left in Arabic, left to right otherwise). After the last editable cell
+    /// of a row the move continues at the first editable cell of the next row
+    /// (reverse: the last editable cell of the previous row); when there is no
+    /// further editable cell the focus stays where it is. The item list is
+    /// re-read here, after the edit committed, so a row the window auto-created
+    /// during the commit is entered naturally. The target computation itself
+    /// lives in <see cref="GridCellNavigator"/> and is unit-tested there.
     /// </summary>
     private static void MoveToNextEditableCell(
-        DataGrid grid, object? originItem, DataGridColumn? originColumn, bool edit = true)
+        DataGrid grid, object? originItem, DataGridColumn? originColumn, bool edit = true, int direction = 1)
     {
-        // In view mode every column reports IsReadOnly, so all visible columns count.
+        // All visible columns in reading order. In view mode (edit: false)
+        // every column reports IsReadOnly, so all of them count as targets.
         var columns = grid.Columns
-            .Where(c => c.Visibility == Visibility.Visible && (!edit || !c.IsReadOnly))
+            .Where(c => c.Visibility == Visibility.Visible)
             .OrderBy(c => c.DisplayIndex)
             .ToList();
 
         if (columns.Count == 0 || grid.Items.Count == 0) return;
 
-        var currentColumn = originColumn ?? grid.CurrentCell.Column;
+        var reachable = columns
+            .Select(c => !edit || !c.IsReadOnly)
+            .ToArray();
+
         var currentItem = originItem ?? grid.CurrentCell.Item ?? grid.SelectedItem;
 
-        object item;
-        DataGridColumn? column;
-
+        GridCellNavigator.CellPosition start;
         if (currentItem == null)
         {
-            // No current cell at all: start at the first editable cell.
-            item = grid.Items[0];
-            column = columns[0];
+            // No current cell at all: forward starts before the first column
+            // of the first row, backward after the last column of the last row.
+            start = direction >= 0
+                ? new GridCellNavigator.CellPosition(0, -1)
+                : new GridCellNavigator.CellPosition(grid.Items.Count - 1, columns.Count);
         }
         else
         {
             var row = grid.Items.IndexOf(currentItem);
             if (row < 0) return;
 
-            item = currentItem;
-            column = currentColumn == null
-                ? columns[0]
-                : columns.FirstOrDefault(c => c.DisplayIndex > currentColumn.DisplayIndex);
+            var currentColumn = originColumn ?? grid.CurrentCell.Column;
+            var col = currentColumn == null
+                ? (direction >= 0 ? -1 : columns.Count)
+                : columns.IndexOf(currentColumn);
 
-            if (column == null)
-            {
-                if (row + 1 >= grid.Items.Count) return;
-                item = grid.Items[row + 1];
-                column = columns[0];
-            }
+            start = new GridCellNavigator.CellPosition(row, col);
         }
 
-        var targetItem = item;
-        var targetColumn = column;
+        var target = GridCellNavigator.Advance(reachable, grid.Items.Count, start, direction);
+        if (target == null) return;
+
+        var targetItem = grid.Items[target.Value.Row];
+        var targetColumn = columns[target.Value.Column];
 
         grid.SelectedItem = targetItem;
         grid.CurrentCell = new DataGridCellInfo(targetItem, targetColumn);

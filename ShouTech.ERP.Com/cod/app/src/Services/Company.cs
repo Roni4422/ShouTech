@@ -583,7 +583,6 @@ public static class CoLocalStore
                             FROM companies
                             WHERE is_deleted=1
                             ORDER BY company_name_ar
-                            LIMIT 1000
                             """, connection);
                         await using var reader = await command.ExecuteReaderAsync();
                         while (await reader.ReadAsync())
@@ -608,8 +607,7 @@ public static class CoLocalStore
                             SELECT company_code, company_name_ar, company_name_en
                             FROM public.companies
                             WHERE COALESCE(is_deleted, FALSE) = TRUE
-                            ORDER BY company_name_ar
-                            LIMIT 1000;
+                            ORDER BY company_name_ar;
                             """, connection);
                         await using var reader = await command.ExecuteReaderAsync();
                         while (await reader.ReadAsync())
@@ -1195,8 +1193,7 @@ private static string? ResolveConnectionString()
                     SELECT company_code, company_name_ar, company_name_en
                     FROM public.companies
                     WHERE COALESCE(is_deleted, FALSE) = FALSE AND COALESCE(is_active, TRUE) = TRUE
-                    ORDER BY company_name_ar
-                    LIMIT 1000;
+                    ORDER BY company_name_ar;
                     """, connection);
                 await using var reader = await command.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
@@ -1231,7 +1228,7 @@ private static string? ResolveConnectionString()
                 await using var command = new SqliteCommand("""
                     SELECT company_code, company_name_ar, company_name_en
                     FROM companies WHERE is_deleted=0 AND is_active=1
-                    ORDER BY company_name_ar LIMIT 1000
+                    ORDER BY company_name_ar
                     """, connection);
                 await using var reader = await command.ExecuteReaderAsync();
                 while (await reader.ReadAsync())

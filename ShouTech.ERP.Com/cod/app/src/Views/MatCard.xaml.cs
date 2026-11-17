@@ -164,6 +164,8 @@ public sealed class MatCategoryOption
 // ====================================================================
 public partial class MatCard : BaseWin
 {
+    protected override string? ScheduleTintName => "Amber";
+
     // ---------- State ----------
     private readonly ObservableCollection<MatUnitRow> _units = new();
     private readonly ObservableCollection<MatAttrRow> _attrs = new();

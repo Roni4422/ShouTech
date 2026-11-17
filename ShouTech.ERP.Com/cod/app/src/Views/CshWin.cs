@@ -36,6 +36,8 @@ public enum CshKind
 /// </summary>
 public sealed class CshWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Teal";
+
     private readonly CshKind _kind;
 
     private readonly TextBox _txtDocNo = new() { Width = 150, Height = 26 };

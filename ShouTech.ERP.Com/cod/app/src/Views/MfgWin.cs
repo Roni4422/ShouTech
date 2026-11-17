@@ -27,6 +27,8 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class MfgWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Green";
+
     private readonly TextBox _txtDocNo = new() { Width = 110, Height = 26 };
     private readonly DatePicker _dtDate = new() { Width = 120, Height = 26, SelectedDate = DateTime.Today };
     private readonly TextBox _txtItem = new() { Width = 130, Height = 26 };

@@ -24,6 +24,8 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class AssetWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Stone";
+
     private readonly AssetService? _service;
     private readonly List<FixedAsset> _assets = new();
     private readonly List<DepreciationYearRow> _schedule = new();

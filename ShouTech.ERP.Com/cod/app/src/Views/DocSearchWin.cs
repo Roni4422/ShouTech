@@ -190,8 +190,9 @@ public sealed class DocSearchWin : BaseWin
             var search = string.IsNullOrWhiteSpace(_txtSearch.Text) ? null : _txtSearch.Text.Trim();
             foreach (var (side, kind) in Queries())
             {
+                // The search schedule shows every matching document — no row cap.
                 var docs = await AppHost.Orders.SearchAsync(side, _companyId, kind,
-                    string.IsNullOrEmpty(status) ? null : status, search, from, to, 500);
+                    string.IsNullOrEmpty(status) ? null : status, search, from, to, int.MaxValue);
                 foreach (var doc in docs)
                 {
                     _rows.Add(new DocRow
