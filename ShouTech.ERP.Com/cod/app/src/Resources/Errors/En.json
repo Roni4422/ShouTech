@@ -386,5 +386,41 @@
     "name": "BudgetExceededMonthly",
     "message": "Posting this entry would exceed the accumulated monthly budget '{0}' through this month. Limit: {1}; actual before this entry: {2}; this entry: {3}; overage: {4}.",
     "hint": "Reduce the entry, post it in a later month, or adjust the monthly distribution in the Budgets window."
+  },
+  "INV-6011": {
+    "code": "INV-6011",
+    "name": "QualityGateBlocked",
+    "message": "A rejected quality inspection blocks document '{1}' for material '{0}'.",
+    "hint": "Resolve the failed inspection's alert (root cause and corrective action) or complete a new inspection before posting."
+  },
+  "INV-6012": {
+    "code": "INV-6012",
+    "name": "QualityQuarantinedSale",
+    "message": "Material '{0}' is in quarantine awaiting quality inspection and cannot be sold in Stop gate mode (document '{1}').",
+    "hint": "Complete the pending quality inspection to release the stock, or switch the company QC gate mode to Warn."
+  },
+  "INV-6013": {
+    "code": "INV-6013",
+    "name": "QualityOutgoingInspectionRequired",
+    "message": "Material '{0}' requires an accepted outgoing quality inspection before document '{1}' can be delivered (Stop gate mode).",
+    "hint": "Create and complete an outgoing inspection for the document, or switch the company QC gate mode to Warn."
+  },
+  "INV-6014": {
+    "code": "INV-6014",
+    "name": "QualityInspectionStateInvalid",
+    "message": "The quality inspection for document '{0}' cannot change state from '{1}'.",
+    "hint": "Refresh the inspection list; only a Draft inspection can be edited or completed."
+  },
+  "INV-6015": {
+    "code": "INV-6015",
+    "name": "QualityInspectionQtyMismatch",
+    "message": "Accepted and rejected quantities for document '{0}' do not add up to the inspected quantity, or the disposition is missing.",
+    "hint": "Enter accepted and rejected quantities that sum to the inspected quantity and choose a disposition for the rejected part."
+  },
+  "INV-6016": {
+    "code": "INV-6016",
+    "name": "QualityTemplateInvalid",
+    "message": "Quality template '{0}' is invalid.",
+    "hint": "Check the template lines: numeric parameters need a band, value parameters need an accepted value, and a parameter may appear only once."
   }
 }

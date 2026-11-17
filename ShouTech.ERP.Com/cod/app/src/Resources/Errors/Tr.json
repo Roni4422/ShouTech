@@ -386,5 +386,41 @@
     "name": "BudgetExceededMonthly",
     "message": "Bu kaydın deftere işlenmesi, bu aya kadar birikmiş aylık bütçeyi '{0}' aşacaktır. Limit: {1}; bu kayıttan önceki gerçekleşen: {2}; bu kayıt: {3}; aşım: {4}.",
     "hint": "Kaydı azaltın, daha sonraki bir ayda işleyin ya da Bütçeler penceresinden aylık dağılımı ayarlayın."
+  },
+  "INV-6011": {
+    "code": "INV-6011",
+    "name": "QualityGateBlocked",
+    "message": "Reddedilmiş bir kalite denetimi, '{0}' malzemesi için '{1}' belgesini engelliyor.",
+    "hint": "Başarısız denetimin uyarısını giderin (kök neden ve düzeltici faaliyet) veya kayıttan önce yeni bir denetimi tamamlayın."
+  },
+  "INV-6012": {
+    "code": "INV-6012",
+    "name": "QualityQuarantinedSale",
+    "message": "'{0}' malzemesi kalite denetimi bekleyerek karantinada ve Stop kapı modunda satılamaz (belge '{1}').",
+    "hint": "Stoğu serbest bırakmak için bekleyen kalite denetimini tamamlayın veya şirket KK kapı modunu Warn olarak değiştirin."
+  },
+  "INV-6013": {
+    "code": "INV-6013",
+    "name": "QualityOutgoingInspectionRequired",
+    "message": "'{0}' malzemesi, '{1}' belgesi teslim edilmeden önce kabul edilmiş bir giden kalite denetimi gerektirir (Stop modu).",
+    "hint": "Belge için bir giden denetim oluşturup tamamlayın veya şirket KK kapı modunu Warn olarak değiştirin."
+  },
+  "INV-6014": {
+    "code": "INV-6014",
+    "name": "QualityInspectionStateInvalid",
+    "message": "'{0}' belgesinin kalite denetimi '{1}' durumundan değiştirilemez.",
+    "hint": "Denetim listesini yenileyin; yalnızca Taslak durumundaki bir denetim düzenlenebilir veya tamamlanabilir."
+  },
+  "INV-6015": {
+    "code": "INV-6015",
+    "name": "QualityInspectionQtyMismatch",
+    "message": "'{0}' belgesinin kabul ve ret miktarları denetlenen miktara eşit değil veya dispozisyon eksik.",
+    "hint": "Toplamı denetlenen miktara eşit kabul ve ret miktarları girin ve reddedilen kısım için bir dispozisyon seçin."
+  },
+  "INV-6016": {
+    "code": "INV-6016",
+    "name": "QualityTemplateInvalid",
+    "message": "'{0}' kalite şablonu geçersiz.",
+    "hint": "Şablon satırlarını kontrol edin: sayısal parametreler bir aralık, değer parametreleri kabul edilen bir değer gerektirir ve bir parametre yalnızca bir kez geçebilir."
   }
 }

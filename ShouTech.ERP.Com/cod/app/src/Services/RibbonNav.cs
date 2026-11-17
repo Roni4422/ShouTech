@@ -43,6 +43,10 @@ public static class RibbonNav
             case "Inventory.EditMaterialSpecs": ShowDef(DefSets.MaterialSpecs, owner); return true;
             case "Inventory.SerialNumbersReport":
             case "Inventory.EditSerialNumber": Show(new SerWin(), owner); return true;
+            case "Inventory.QualityInspections": Show(new QcInspectWin(), owner); return true;
+            case "Inventory.QualityTemplates": Show(new QcTemplateWin(), owner); return true;
+            case "Inventory.QualityAlerts": Show(new QcAlertWin(), owner); return true;
+            case "Inventory.QualitySummary": Show(new QcSummaryWin(), owner); return true;
 
             // ------------------------------------------------ Accounts reports & cards
             case "Accounts.CostCenter":

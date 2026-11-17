@@ -278,6 +278,23 @@ namespace ShouTech.App.Services
         }
 
         // =====================================================================
+        // QUALITY (Phase B 056, migration 056 seeds)
+        // =====================================================================
+
+        public static class Quality
+        {
+            public const string ParamView = "QUALITY.PARAM.VIEW";
+            public const string ParamEdit = "QUALITY.PARAM.EDIT";
+            public const string TemplateView = "QUALITY.TEMPLATE.VIEW";
+            public const string TemplateEdit = "QUALITY.TEMPLATE.EDIT";
+            public const string InspectView = "QUALITY.INSPECT.VIEW";
+            public const string InspectEdit = "QUALITY.INSPECT.EDIT";
+            public const string InspectComplete = "QUALITY.INSPECT.COMPLETE";
+            public const string AlertView = "QUALITY.ALERT.VIEW";
+            public const string AlertEdit = "QUALITY.ALERT.EDIT";
+        }
+
+        // =====================================================================
         // PROJECTS
         // =====================================================================
 

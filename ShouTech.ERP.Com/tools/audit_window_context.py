@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "cod" / "app" / "src"
 VIEWS = SRC / "Views"
 
-APPHOST_SVC = re.compile(r"AppHost\.(Journal|JournalStore|Projects|Assets|Reconciliation|AccountingStructure|DatabaseHealth|Budgets)\b")
+APPHOST_SVC = re.compile(r"AppHost\.(Journal|JournalStore|Projects|Assets|Reconciliation|AccountingStructure|DatabaseHealth|Budgets|Quality)\b")
 CLASS_RE = re.compile(
     r"public\s+(?:partial\s+)?(?:sealed\s+)?class\s+(\w+)\s*:\s*([\w\.]+)")
 

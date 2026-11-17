@@ -386,5 +386,41 @@
     "name": "BudgetExceededMonthly",
     "message": "La comptabilisation de cette écriture dépasserait le budget mensuel cumulé '{0}' jusqu'à ce mois. Limite : {1} ; réel avant cette écriture : {2} ; cette écriture : {3} ; dépassement : {4}.",
     "hint": "Réduisez l'écriture, comptabilisez-la un mois plus tard, ou ajustez la répartition mensuelle dans la fenêtre Budgets."
+  },
+  "INV-6011": {
+    "code": "INV-6011",
+    "name": "QualityGateBlocked",
+    "message": "Une inspection qualité rejetée bloque le document '{1}' pour l'article '{0}'.",
+    "hint": "Traitez l'alerte de l'inspection échouée (cause racine et action corrective) ou terminez une nouvelle inspection avant la comptabilisation."
+  },
+  "INV-6012": {
+    "code": "INV-6012",
+    "name": "QualityQuarantinedSale",
+    "message": "L'article '{0}' est en quarantaine en attente d'inspection qualité et ne peut pas être vendu en mode Stop (document '{1}').",
+    "hint": "Terminez l'inspection qualité en attente pour libérer le stock, ou passez le mode de contrôle QC de la société sur Warn."
+  },
+  "INV-6013": {
+    "code": "INV-6013",
+    "name": "QualityOutgoingInspectionRequired",
+    "message": "L'article '{0}' exige une inspection qualité sortante acceptée avant la livraison du document '{1}' (mode Stop).",
+    "hint": "Créez et terminez une inspection sortante pour le document, ou passez le mode de contrôle QC de la société sur Warn."
+  },
+  "INV-6014": {
+    "code": "INV-6014",
+    "name": "QualityInspectionStateInvalid",
+    "message": "L'inspection qualité du document '{0}' ne peut pas changer d'état depuis '{1}'.",
+    "hint": "Actualisez la liste des inspections ; seule une inspection au brouillon peut être modifiée ou terminée."
+  },
+  "INV-6015": {
+    "code": "INV-6015",
+    "name": "QualityInspectionQtyMismatch",
+    "message": "Les quantités acceptées et rejetées du document '{0}' ne totalisent pas la quantité inspectée, ou la disposition est manquante.",
+    "hint": "Saisissez des quantités acceptées et rejetées dont la somme égale la quantité inspectée et choisissez une disposition pour la partie rejetée."
+  },
+  "INV-6016": {
+    "code": "INV-6016",
+    "name": "QualityTemplateInvalid",
+    "message": "Le modèle qualité '{0}' est invalide.",
+    "hint": "Vérifiez les lignes du modèle : les paramètres numériques exigent une plage, les paramètres de valeur une valeur acceptée, et un paramètre ne peut apparaître qu'une fois."
   }
 }
