@@ -373,11 +373,18 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         var (docs, _) = Tables(side);
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        // Step 9: the document tables carry TWO company keys — this
+        // repository's Guid and the invoice family's company CODE
+        // (InvRepo writes the code into the same column). DocSearch is
+        // the cross-family surface: a search for one company must match
+        // either of ITS OWN keys, or native InvoiceWin invoices and
+        // quotations (code-keyed) never appear in the results at all.
+        var companyCodeKey = await ResolveCompanyCodeAsync(connection, null, companyId, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = $"""
             SELECT doc_id, doc_kind, doc_no, doc_date, party_code, party_name, grand_total, status, delivery_date, valid_till
             FROM {docs}
-            WHERE company_id = @company AND is_deleted = 0
+            WHERE (company_id = @company OR company_id = @companyCode) AND is_deleted = 0
               AND (@kind IS NULL OR doc_kind = @kind)
               AND (@status IS NULL OR status = @status)
               AND (@from IS NULL OR doc_date >= @from)
@@ -387,6 +394,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             LIMIT @limit
             """;
         Add(command, "@company", companyId.ToString("D"));
+        Add(command, "@companyCode", (object?)companyCodeKey ?? DBNull.Value);
         Add(command, "@kind", (object?)docKind ?? DBNull.Value);
         Add(command, "@status", (object?)status ?? DBNull.Value);
         Add(command, "@from", (object?)from?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? DBNull.Value);
@@ -536,6 +544,60 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
             ComputeTotals(invoiceLines, out var invoiceSubtotal, out var invoiceTax, out var grandTotal);
 
+            // Step 9 (sweep ORD-01 / I-4): the converted invoice is born
+            // Posted, so its STOCK effect must happen HERE, in this same
+            // transaction — before this fix the conversion wrote the
+            // invoice, the party ledger and the GL but never moved
+            // stock, leaving converted goods double-sellable (sales) or
+            // never received (purchase) with no later path able to
+            // repair it. The movement goes through the ONE
+            // StockValuationEngine (Step 6), keyed by the company CODE —
+            // the stock world's key, the same one StkPost uses for
+            // invoice documents — so a converted invoice's stock is
+            // indistinguishable from an InvoiceWin-posted invoice's:
+            // sales issue at the material's cost method (never the
+            // selling price), purchases receive at the line's actual
+            // cost restated per base unit, unit equivalents applied,
+            // service materials skipped, insufficient stock aborts the
+            // whole conversion (engine guard, INV-6002 family).
+            var stockCompanyCode = await PartyLedger.ResolveCompanyCodeAsync(
+                connection, transaction, _provider, order.CompanyId.ToString("D"), cancellationToken).ConfigureAwait(false);
+            var cogsAmount = 0m;
+            foreach (var line in invoiceLines)
+            {
+                if (line.MaterialId is not long materialId)
+                    continue; // no stock identity — same rule as chain delivery notes
+                if (!await IsStockableAsync(connection, transaction, materialId, cancellationToken).ConfigureAwait(false))
+                    continue;
+                var warehouseId = line.WarehouseId ?? order.WarehouseId
+                    ?? await ResolveDefaultWarehouseAsync(connection, transaction, stockCompanyCode, cancellationToken).ConfigureAwait(false);
+                await EnsureWarehouseIsActiveAsync(connection, transaction, stockCompanyCode, warehouseId, cancellationToken).ConfigureAwait(false);
+                var equivalent = await ResolveUnitEquivalentAsync(connection, transaction, materialId, line.Unit, cancellationToken).ConfigureAwait(false);
+                var baseQty = line.Qty * equivalent;
+                var movementDate = invoiceDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                if (side == CommercialDocSide.Sales)
+                {
+                    var issued = StockValuationEngine.Apply(connection, transaction, _provider,
+                        new StockMovementRequest(stockCompanyCode, warehouseId, materialId,
+                            movementDate, CommercialDocKinds.SalesInvoice, invoiceDocNo.Trim(),
+                            QtyIn: 0m, QtyOut: baseQty,
+                            Note: line.Description));
+                    cogsAmount += -issued.CostAmount;
+                }
+                else
+                {
+                    var unitCost = equivalent == 1m
+                        ? line.UnitPrice
+                        : decimal.Round(line.UnitPrice / equivalent, 6, MidpointRounding.AwayFromZero);
+                    StockValuationEngine.Apply(connection, transaction, _provider,
+                        new StockMovementRequest(stockCompanyCode, warehouseId, materialId,
+                            movementDate, CommercialDocKinds.PurchaseInvoice, invoiceDocNo.Trim(),
+                            QtyIn: baseQty, QtyOut: 0m,
+                            ReceiptUnitCost: unitCost,
+                            Note: line.Description));
+                }
+            }
+
             // Step 7 (J-5): resolve the order's effective rate ONCE
             // through FxRates (document rate, else master, else
             // ACC-5015); guard + ledger consume BASE amounts at it, and
@@ -557,8 +619,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             // Step 7: written through PartyLedger.WriteEntry so the row
             // carries base amounts + the effective rate.
             PartyLedger.WriteEntry(connection, transaction, _provider,
-                await PartyLedger.ResolveCompanyCodeAsync(
-                    connection, transaction, _provider, order.CompanyId.ToString("D"), cancellationToken).ConfigureAwait(false),
+                stockCompanyCode,
                 side == CommercialDocSide.Sales ? "C" : "S", order.PartyId.Value,
                 invoiceKind, invoiceId, invoiceDocNo.Trim(),
                 invoiceDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
@@ -585,9 +646,12 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             // Real GL posting (Step 3, J-2): the converted invoice is
             // created already-Posted, so its balanced journal entry is
             // written in this same transaction (sales: Dr Receivable /
-            // Cr Revenue; purchase: Dr Purchases / Cr Payable; tax split
-            // only when a postable VAT account is configured).
-            if (grandTotal > 0)
+            // Cr Revenue + Step 9 Dr COGS / Cr Inventory; purchase:
+            // Dr Purchases / Cr Payable; tax split only when a postable
+            // VAT account is configured). A zero-value sales conversion
+            // still posts its COGS pair (GlPosting skips 0/0 lines, so
+            // the free-goods entry carries exactly the cost legs).
+            if (grandTotal > 0 || cogsAmount > 0)
             {
                 var splitTax = invoiceTax > 0 && GlPosting.TryResolveAccount(connection, transaction, _provider,
                     order.CompanyId, side == CommercialDocSide.Sales ? GlAccounts.OutputVat : GlAccounts.InputVat) is not null;
@@ -597,6 +661,18 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                     glLines.Add(new GlLineRequest(GlAccounts.Receivable, grandTotal, 0m));
                     glLines.Add(new GlLineRequest(GlAccounts.SalesRevenue, 0m, splitTax ? invoiceSubtotal : grandTotal, order.CostCenter));
                     if (splitTax) glLines.Add(new GlLineRequest(GlAccounts.OutputVat, 0m, invoiceTax));
+                    // Step 9: COGS at the valuation engine's cost for the
+                    // stock issued above — the same legs InvRepo builds
+                    // for an InvoiceWin sales invoice (Dr COGS / Cr
+                    // Inventory), so a converted sale carries its cost of
+                    // goods exactly like a direct one. The revenue entry
+                    // above stays balanced on its own; this pair balances
+                    // itself, so the whole entry remains balanced.
+                    if (cogsAmount > 0)
+                    {
+                        glLines.Add(new GlLineRequest(GlAccounts.Cogs, cogsAmount, 0m, order.CostCenter));
+                        glLines.Add(new GlLineRequest(GlAccounts.Inventory, 0m, cogsAmount));
+                    }
                 }
                 else
                 {
@@ -651,6 +727,170 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
     }
 
     // --------------------------------------------------------------- helpers
+
+    /// <summary>The company CODE for a company Guid (the key the stock
+    /// world and party_ledger use), or null when the company row cannot
+    /// be resolved. Mirrors PartyLedger.ResolveCompanyCodeAsync's lookup
+    /// without its throw, for read paths that must tolerate legacy rows.</summary>
+    private async Task<string?> ResolveCompanyCodeAsync(
+        DbConnection connection, DbTransaction? transaction, Guid companyId, CancellationToken cancellationToken)
+    {
+        await using var command = CreateCommand(connection, transaction,
+            "SELECT company_code FROM companies WHERE company_id = @id");
+        Add(command, "@id", companyId.ToString("D"));
+        var value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return value is null or DBNull ? null : Convert.ToString(value, CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>Whether the material is stock-tracked, mirroring the
+    /// guard StkPost and the chain repository apply: not stocked, flagged
+    /// as a service, or typed as a Service means non-stock. A material
+    /// with no card row keeps the historical behavior and is treated as
+    /// stockable (the valuation engine then fails honestly if the card
+    /// truly does not exist).</summary>
+    private async Task<bool> IsStockableAsync(
+        DbConnection connection, DbTransaction transaction, long materialId, CancellationToken cancellationToken)
+    {
+        await using var command = CreateCommand(connection, transaction, """
+            SELECT is_stocked, is_service, item_type
+            FROM materials
+            WHERE material_id = @material
+            """);
+        Add(command, "@material", materialId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) return true;
+
+        var isStocked = !reader.IsDBNull(0) && Convert.ToBoolean(reader.GetValue(0), CultureInfo.InvariantCulture);
+        var isService = !reader.IsDBNull(1) && Convert.ToBoolean(reader.GetValue(1), CultureInfo.InvariantCulture);
+        var itemType = reader.IsDBNull(2) ? null : reader.GetValue(2)?.ToString();
+        return isStocked
+               && !isService
+               && !string.Equals(itemType, "Service", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The equivalence of a line's chosen unit relative to the
+    /// material's first (base) unit — the same rule StkPost and the
+    /// chain repository apply (units_json first, unit column pairs as
+    /// fallback; base unit, unknown unit, or a non-positive stored
+    /// equivalent all resolve to 1).</summary>
+    private async Task<decimal> ResolveUnitEquivalentAsync(
+        DbConnection connection, DbTransaction transaction, long materialId, string? unitName,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(unitName)) return 1m;
+        var wanted = unitName.Trim();
+
+        var units = new List<(string Name, decimal Factor)>();
+        await using (var command = CreateCommand(connection, transaction, """
+            SELECT unit1, unit1_factor, unit2, unit2_factor, unit3, unit3_factor,
+                   unit4, unit4_factor, unit5, unit5_factor, units_json
+            FROM materials
+            WHERE material_id = @material
+            """))
+        {
+            Add(command, "@material", materialId);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) return 1m;
+
+            var json = reader.IsDBNull(10) ? null : reader.GetValue(10)?.ToString();
+            if (!string.IsNullOrWhiteSpace(json) && json.Trim() != "[]")
+            {
+                try
+                {
+                    var rows = System.Text.Json.JsonSerializer.Deserialize<List<UnitFactorRow>>(json)
+                               ?? new List<UnitFactorRow>();
+                    foreach (var row in rows)
+                        if (!string.IsNullOrWhiteSpace(row.UnitName))
+                            units.Add((row.UnitName.Trim(), row.Factor ?? 0m));
+                }
+                catch (System.Text.Json.JsonException)
+                {
+                    units.Clear();
+                }
+            }
+
+            if (units.Count == 0)
+            {
+                for (var i = 0; i < 5; i++)
+                {
+                    var name = reader.IsDBNull(i * 2) ? null : reader.GetValue(i * 2)?.ToString();
+                    if (string.IsNullOrWhiteSpace(name)) continue;
+                    var factor = reader.IsDBNull(i * 2 + 1)
+                        ? 0m
+                        : Convert.ToDecimal(reader.GetValue(i * 2 + 1), CultureInfo.InvariantCulture);
+                    units.Add((name.Trim(), factor));
+                }
+            }
+        }
+
+        if (units.Count == 0) return 1m;
+        if (string.Equals(wanted, units[0].Name, StringComparison.OrdinalIgnoreCase)) return 1m;
+        foreach (var (name, factor) in units)
+            if (string.Equals(wanted, name, StringComparison.OrdinalIgnoreCase))
+                return factor > 0 ? factor : 1m;
+        return 1m;
+    }
+
+    /// <summary>One unit row as serialized into materials.units_json by the material card.</summary>
+    private sealed class UnitFactorRow
+    {
+        public string? UnitName { get; set; }
+        public decimal? Factor { get; set; }
+    }
+
+    /// <summary>The company's default stock warehouse for a conversion
+    /// line that carries none: the lowest warehouse id under the company
+    /// CODE (the stock world's key), creating the MAIN warehouse when
+    /// the company has none — the same fallback StkPost applies to
+    /// invoice documents.</summary>
+    private async Task<long> ResolveDefaultWarehouseAsync(
+        DbConnection connection, DbTransaction transaction, string companyCode, CancellationToken cancellationToken)
+    {
+        var isPg = _provider == "PostgreSQL";
+        await using (var command = CreateCommand(connection, transaction, $"""
+            SELECT warehouse_id FROM warehouses
+            WHERE company_id = @company AND is_deleted = {(isPg ? "FALSE" : "0")}
+            ORDER BY warehouse_id LIMIT 1
+            """))
+        {
+            Add(command, "@company", companyCode);
+            var value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            if (value is not null and not DBNull)
+                return Convert.ToInt64(value, CultureInfo.InvariantCulture);
+        }
+
+        await using var insert = CreateCommand(connection, transaction, isPg
+            ? """
+              INSERT INTO warehouses (company_id, warehouse_code, warehouse_name_ar, is_active)
+              VALUES (@company, 'MAIN', 'Main Warehouse', TRUE) RETURNING warehouse_id
+              """
+            : """
+              INSERT INTO warehouses (company_id, warehouse_code, warehouse_name_ar, is_active)
+              VALUES (@company, 'MAIN', 'Main Warehouse', 1);
+              SELECT last_insert_rowid();
+              """);
+        Add(insert, "@company", companyCode);
+        return Convert.ToInt64(await insert.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>Mirrors StkPost's warehouse guard: stock may only move
+    /// through an existing, active warehouse of the company.</summary>
+    private async Task EnsureWarehouseIsActiveAsync(
+        DbConnection connection, DbTransaction transaction, string companyCode, long warehouseId,
+        CancellationToken cancellationToken)
+    {
+        var isPg = _provider == "PostgreSQL";
+        await using var command = CreateCommand(connection, transaction, $"""
+            SELECT COUNT(1) FROM warehouses
+            WHERE company_id = @company AND warehouse_id = @warehouse
+              AND is_deleted = {(isPg ? "FALSE" : "0")} AND is_active = {(isPg ? "TRUE" : "1")}
+            """);
+        Add(command, "@company", companyCode);
+        Add(command, "@warehouse", warehouseId);
+        var count = Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+        if (count != 1)
+            throw new InvalidOperationException("The selected warehouse is unavailable or inactive.");
+    }
 
     private static void ValidateDraft(CommercialDocumentDraft draft, string userId)
     {
