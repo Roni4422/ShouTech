@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Windows;
@@ -18,6 +18,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class PartySearchWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Mauve";
     private readonly TextBox _txtQuery = new();
     private readonly ComboBox _cbKind = new();
     private readonly DataGrid _grid = new();

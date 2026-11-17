@@ -17,6 +17,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class PosSyncWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Cobalt";
     private readonly OperationsService? _service;
     private readonly List<OutboundMessageRow> _rows = new();
     private readonly List<(TextBlock Label, string Key)> _labels = new();

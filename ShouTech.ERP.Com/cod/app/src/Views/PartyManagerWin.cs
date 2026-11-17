@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -20,6 +20,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class PartyManagerWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Blush";
     private readonly ComboBox _cbKind = new();
     private readonly DataGrid _grid = new();
     private readonly TextBlock _statusBar = new();

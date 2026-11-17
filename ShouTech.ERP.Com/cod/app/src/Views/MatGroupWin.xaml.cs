@@ -16,6 +16,7 @@ namespace ShouTech.App.Views;
 
 public partial class MatGroupWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Honey";
     private readonly ObservableCollection<GroupMaterialRow> _rows = new();
     private ICollectionView? _view;
     private bool _loading;

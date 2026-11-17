@@ -24,6 +24,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class ChqListWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Indigo";
     /// <summary>Grid row: a cheque plus its computed days-to-due.</summary>
     public sealed class ChequeRow
     {

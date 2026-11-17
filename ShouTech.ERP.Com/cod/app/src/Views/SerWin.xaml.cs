@@ -58,6 +58,7 @@ public sealed class SerWinItem
 /// </summary>
 public partial class SerWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Onyx";
     // ---------- Collections ----------
     private readonly ObservableCollection<SerWinItem> _all  = new();
     private readonly ObservableCollection<SerWinItem> _view = new();

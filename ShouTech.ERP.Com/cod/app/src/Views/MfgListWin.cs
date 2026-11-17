@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -21,6 +21,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class MfgListWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Fern";
     private readonly List<MfgOrder> _orders = new();
     private readonly List<(DataGridColumn Column, string Key)> _headers = new();
 

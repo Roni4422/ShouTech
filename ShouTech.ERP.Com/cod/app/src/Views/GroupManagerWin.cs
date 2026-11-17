@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using System.Windows;
@@ -18,6 +18,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class GroupManagerWin : BaseWin, IWindowMode
 {
+    protected override string? ScheduleTintName => "Topaz";
     public enum GroupKind
     {
         Party,

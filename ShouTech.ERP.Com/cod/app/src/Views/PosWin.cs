@@ -21,6 +21,7 @@ namespace ShouTech.App.Views;
 /// <summary>Retail cashier workspace. Final invoice posting remains in the existing invoice workflow.</summary>
 public sealed class PosWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Peach";
     private static readonly Brush Ink = ShouTech.App.Services.VisuId.ResolveBrushResource("PosInkBrush", "#172B3A");
     private static readonly Brush Muted = ShouTech.App.Services.VisuId.ResolveBrushResource("PosMutedBrush", "#687985");
     private static readonly Brush Teal = ShouTech.App.Services.VisuId.ResolveBrushResource("PosTealBrush", "#087F8C");

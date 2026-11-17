@@ -31,6 +31,7 @@ public enum SupportWinMode
 /// </summary>
 public sealed class SupportWin : BaseWin, IWindowMode
 {
+    protected override string? ScheduleTintName => "Ember";
     private readonly OperationsService? _service;
     private readonly SupportWinMode _mode;
 

@@ -22,6 +22,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class FinancialAnalysisWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Plum";
     public sealed class RatioRow
     {
         public string Ratio { get; set; } = string.Empty;

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -21,6 +21,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class CurCard : BaseWin
 {
+    protected override string? ScheduleTintName => "Peridot";
     private readonly TextBox _txtCode = new();
     private readonly TextBox _txtNameAr = new();
     private readonly TextBox _txtNameEn = new();

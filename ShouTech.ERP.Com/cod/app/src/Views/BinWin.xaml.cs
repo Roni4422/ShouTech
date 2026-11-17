@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
@@ -19,6 +19,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public partial class BinWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Bronze";
     private bool _busy;
 
     // CA1863: cache CompositeFormat instances for repeatedly used format strings.

@@ -17,6 +17,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class ActivityLogWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Olive";
     private readonly OperationsService? _service;
     private readonly List<SecurityAuditRow> _security = new();
     private readonly List<JournalAuditRow> _journal = new();

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -22,6 +22,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class LoyaltyWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Garnet";
     private readonly DefinitionService? _service;
     private readonly List<LoyaltyAccount> _accounts = new();
     private readonly List<LoyaltyEntry> _entries = new();

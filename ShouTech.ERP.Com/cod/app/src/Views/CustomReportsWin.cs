@@ -35,6 +35,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class CustomReportsWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Violet";
     private static readonly string[] DataSources =
     {
         "TrialBalance", "BalanceSheet", "IncomeStatement", "CustomerBalances",

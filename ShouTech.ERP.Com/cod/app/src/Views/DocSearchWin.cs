@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
@@ -27,6 +27,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class DocSearchWin : BaseWin, IWindowMode
 {
+    protected override string? ScheduleTintName => "Denim";
     public enum DocSearchMode
     {
         Invoices,

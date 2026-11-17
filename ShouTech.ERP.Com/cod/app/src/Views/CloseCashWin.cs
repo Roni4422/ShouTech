@@ -18,6 +18,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class CloseCashWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Coral";
     private readonly OperationsService? _service;
     private readonly List<PosCashClosing> _closings = new();
     private readonly List<(TextBlock Label, string Key)> _labels = new();

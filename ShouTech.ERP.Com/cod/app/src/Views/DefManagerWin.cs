@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -26,6 +26,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class DefManagerWin : BaseWin, IWindowMode
 {
+    protected override string? ScheduleTintName => "Jade";
     private readonly DefinitionService? _service;
     private readonly DefSet _set;
     private readonly List<DefRow> _rows = new();

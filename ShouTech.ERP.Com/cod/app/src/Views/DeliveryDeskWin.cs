@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -23,6 +23,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class DeliveryDeskWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Lime";
     private readonly DefinitionService? _service;
     private readonly List<DeliveryRequest> _requests = new();
     private readonly List<DriverSettlement> _settlements = new();
