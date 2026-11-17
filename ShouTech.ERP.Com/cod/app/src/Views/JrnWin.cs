@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -23,6 +25,10 @@ public sealed class JrnWin : BaseWin
     // Note: the former ShowOperationUnavailable helper was removed — every
     // JrnWin operation (New/Load/Save/Post/Reverse/Print) is implemented;
     // no placeholder operations remain in this window.
+
+    // CA1863: cache CompositeFormat instances for repeatedly used format strings.
+    private static readonly ConcurrentDictionary<string, CompositeFormat> CompositeFormats =
+        new(StringComparer.Ordinal);
 
     private readonly TextBox _txtDocNo = new() { Width = 110, Height = 26 };
     private readonly DatePicker _dtDate = new() { Width = 120, Height = 26, SelectedDate = DateTime.Today };
@@ -385,6 +391,23 @@ public sealed class JrnWin : BaseWin
         _btnAutoBal.IsEnabled = !readOnly;
     }
 
+    /// <summary>
+    /// Formats a localized pattern using a cached CompositeFormat
+    /// to avoid re-parsing the format string on every call (CA1863),
+    /// with the current UI culture applied explicitly (CA1305).
+    /// </summary>
+    private static string FormatLocalized(string pattern, params object?[] args)
+    {
+        if (string.IsNullOrEmpty(pattern))
+            return string.Empty;
+
+        var compositeFormat = CompositeFormats.GetOrAdd(
+            pattern,
+            static value => CompositeFormat.Parse(value));
+
+        return string.Format(CultureInfo.CurrentCulture, compositeFormat, args);
+    }
+
     private async Task SaveVoucherAsync()
     {
         if (_currentJournalId.HasValue && !_loadedDraft)
@@ -465,7 +488,7 @@ public sealed class JrnWin : BaseWin
                 _btnPost.IsEnabled = true;
                 _btnReverse.IsEnabled = false;
                 SetVoucherReadOnly(true);
-                MessageBox.Show(this, string.Format(T("Vouchers.EntryDraftUpdated"), _currentJournalId.Value.ToString("D")), T("Vouchers.Saved"), MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(this, FormatLocalized(T("Vouchers.EntryDraftUpdated"), _currentJournalId.Value.ToString("D")), T("Vouchers.Saved"), MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 

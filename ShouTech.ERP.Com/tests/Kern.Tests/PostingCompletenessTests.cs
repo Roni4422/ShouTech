@@ -388,17 +388,17 @@ namespace Kern.Tests
             }
         }
 
-        private static async Task<(SalesChainService Service, Guid CompanyId, string ConnectionString, Action Cleanup)> CreateChainContextAsync()
+        private static Task<(SalesChainService Service, Guid CompanyId, string ConnectionString, Action Cleanup)> CreateChainContextAsync()
         {
             var databasePath = Path.Combine(Path.GetTempPath(), $"shoutech-posting-chain-{Guid.NewGuid():N}.sqlite3");
             var connectionString = $"Data Source={databasePath};";
             var companyId = Guid.NewGuid();
             ApplySqliteMigrations(databasePath);
             var repository = new ShouTech.Infrastructure.CommercialDocumentRepository("SQLite", connectionString);
-            return (new SalesChainService(repository), companyId, connectionString, () => CleanupFiles(databasePath));
+            return Task.FromResult<(SalesChainService Service, Guid CompanyId, string ConnectionString, Action Cleanup)>((new SalesChainService(repository), companyId, connectionString, () => CleanupFiles(databasePath)));
         }
 
-        private static async Task<(OrderService Service, Guid CompanyId, string ConnectionString, Action Cleanup)> CreateOrderContextAsync()
+        private static Task<(OrderService Service, Guid CompanyId, string ConnectionString, Action Cleanup)> CreateOrderContextAsync()
         {
             var databasePath = Path.Combine(Path.GetTempPath(), $"shoutech-posting-orders-{Guid.NewGuid():N}.sqlite3");
             var connectionString = $"Data Source={databasePath};";
@@ -406,7 +406,7 @@ namespace Kern.Tests
             ApplySqliteMigrations(databasePath);
             var orders = new ShouTech.Infrastructure.OrderDocumentRepository("SQLite", connectionString);
             var chain = new ShouTech.Infrastructure.CommercialDocumentRepository("SQLite", connectionString);
-            return (new OrderService(orders, chain), companyId, connectionString, () => CleanupFiles(databasePath));
+            return Task.FromResult<(OrderService Service, Guid CompanyId, string ConnectionString, Action Cleanup)>((new OrderService(orders, chain), companyId, connectionString, () => CleanupFiles(databasePath)));
         }
 
         private static async Task<long> BuildChainInvoiceAsync(SalesChainService service, Guid companyId, string tag)
