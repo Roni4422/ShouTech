@@ -173,6 +173,7 @@ public partial class MatCard : BaseWin
     private List<MatCategoryOption> _categoryOptions = new();
     private List<string> _unitSuggestions = new();
     private bool _filteringUnitCombo;
+    private bool _unitComboNavigated;
     private int _index = -1;
     private bool _isNew;
     private bool _isEditing;
@@ -532,9 +533,19 @@ public partial class MatCard : BaseWin
     //  Units grid autocomplete (owner directive 2026-11-17): the unit
     //  cell's editor is an editable ComboBox fed from the saved units
     //  (units master + names already saved on materials). Typing filters
-    //  by CONTAINS; Enter with the dropdown open accepts the highlighted
-    //  suggestion (the central grid behavior leaves that Enter to the
-    //  ComboBox), Enter with it closed moves horizontally as usual.
+    //  by CONTAINS and opens the suggestion list.
+    //
+    //  Enter semantics (owner, refined 2026-11-17): the list opening is
+    //  not a choice. If the user has NOT deliberately highlighted a
+    //  suggestion (no arrow-key navigation, pointer not resting on a
+    //  list item), Enter commits the TYPED text — a brand-new unit name
+    //  is accepted exactly as typed — and then moves horizontally per
+    //  the central grid rule. Only a deliberate highlight (arrows, or
+    //  the pointer over an item) makes Enter accept the suggestion.
+    //  Escape dismisses the list and leaves the typed text intact.
+    //  _unitComboNavigated carries the "deliberate highlight" state for
+    //  the current edit session: set by Up/Down, cleared by fresh
+    //  typing (text input, Back, Delete) and at every edit start.
     // ----------------------------------------------------------------
     private void InitUnitSuggestions()
     {
@@ -561,6 +572,10 @@ public partial class MatCard : BaseWin
         try
         {
             if (e.EditingElement is not ComboBox combo) return;
+            // A new edit session starts un-navigated: until the user
+            // arrows into the list or points at an item, Enter means
+            // "take what I typed" (see UnitCombo_PreviewKeyDown).
+            _unitComboNavigated = false;
             combo.ItemsSource = _unitSuggestions;
             combo.ApplyTemplate();
             if (combo.Template?.FindName("PART_TextBox", combo) is TextBox textBox
@@ -568,6 +583,8 @@ public partial class MatCard : BaseWin
             {
                 textBox.Tag = combo;
                 textBox.TextChanged += UnitComboTextChanged;
+                combo.PreviewKeyDown += UnitCombo_PreviewKeyDown;
+                combo.PreviewTextInput += UnitCombo_PreviewTextInput;
             }
         }
         catch (Exception ex)
@@ -608,6 +625,120 @@ public partial class MatCard : BaseWin
         {
             _filteringUnitCombo = false;
         }
+    }
+
+    private void UnitCombo_PreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        // Fresh typing re-filters the list; whatever is highlighted after
+        // that is the automatic first match, not a choice — Enter must
+        // take the typed text again.
+        _unitComboNavigated = false;
+    }
+
+    // Runs in the tunnel AFTER the central grid behavior (attached at the
+    // DataGrid) and BEFORE the ComboBox's own key handling: exactly the
+    // slot where the "accept the highlighted suggestion" decision can
+    // still be pre-empted without disturbing the behavior's deferred
+    // commit + horizontal move, which it schedules for every Enter it
+    // leaves to the ComboBox.
+    private void UnitCombo_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is not ComboBox combo) return;
+
+        // Mirror the central behavior's key resolution (Arabic IME layouts
+        // deliver the real key as ImeProcessed).
+        var key = e.Key switch
+        {
+            Key.ImeProcessed => e.ImeProcessedKey,
+            Key.System => e.SystemKey,
+            _ => e.Key
+        };
+
+        try
+        {
+            switch (key)
+            {
+                case Key.Up:
+                case Key.Down:
+                    // Deliberate navigation into the suggestion list:
+                    // Enter must now accept the highlighted suggestion.
+                    _unitComboNavigated = true;
+                    break;
+
+                case Key.Back:
+                case Key.Delete:
+                    // Editing the text re-arms the "typed text wins" rule.
+                    _unitComboNavigated = false;
+                    break;
+
+                case Key.Enter:
+                    // Plain Enter only — Ctrl/Alt+Enter is not grid
+                    // navigation (the central behavior's own definition;
+                    // Shift+Enter stays plain and reverses its move).
+                    if ((Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Alt)) != 0)
+                        return;
+                    if (!combo.IsDropDownOpen || _unitComboNavigated || IsPointerOverUnitSuggestion())
+                        return;
+
+                    // The list is open only because typing produced
+                    // matches; its highlight is the automatic first match,
+                    // which the user never chose. Close the list WITHOUT
+                    // accepting it, so the typed text — possibly a
+                    // brand-new unit name — is what the central behavior's
+                    // deferred commit writes to the cell. Marking the key
+                    // handled also keeps the DataGrid's own Enter (commit
+                    // + one row down) from racing that horizontal move.
+                    CloseUnitDropDownPreservingText(combo);
+                    e.Handled = true;
+                    break;
+
+                case Key.Escape:
+                    if (!combo.IsDropDownOpen) return;
+
+                    // Dismiss the suggestions only; the typed text stays
+                    // in the editor. (With the list already closed, Escape
+                    // keeps its standard grid meaning — cancel the edit.)
+                    CloseUnitDropDownPreservingText(combo);
+                    e.Handled = true;
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "MatCard.xaml.UnitCombo_PreviewKeyDown");
+        }
+    }
+
+    private void CloseUnitDropDownPreservingText(ComboBox combo)
+    {
+        var typed = combo.Text ?? string.Empty;
+        combo.IsDropDownOpen = false;
+        if (string.Equals(combo.Text, typed, StringComparison.Ordinal)) return;
+
+        // Insurance: if closing the list snapped the text back to a
+        // previously committed value, restore what the user actually
+        // typed. The filtering guard keeps the resulting TextChanged
+        // from re-filtering and re-opening the list.
+        _filteringUnitCombo = true;
+        try
+        {
+            combo.Text = typed;
+        }
+        finally
+        {
+            _filteringUnitCombo = false;
+        }
+    }
+
+    private static bool IsPointerOverUnitSuggestion()
+    {
+        // The pointer resting on a suggestion counts as highlighting it:
+        // Enter then accepts the pointed item through the ComboBox's own
+        // handling. Only this cell's drop-down can be open while the cell
+        // is being edited, so a ComboBoxItem under the pointer is
+        // necessarily one of its suggestions.
+        return Mouse.DirectlyOver is DependencyObject over
+            && FindAncestor<ComboBoxItem>(over) != null;
     }
 
     private void InitCategories(string? preferredValue = null)

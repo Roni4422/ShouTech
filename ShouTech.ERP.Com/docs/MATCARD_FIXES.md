@@ -157,6 +157,50 @@ material "find" only focuses a cell).
   dropdown closed moves horizontally as before. The column is not
   read-only, so it stays part of the behavior's editable-column walk.
 
+### Defect 4 refinement — Enter takes the typed text unless a suggestion was deliberately chosen
+
+**Owner's rule (2026-11-17, after the first pass):** the cell searches
+the units table and shows suggestions, AND a new unit can be added in
+the cell itself — "if I don't choose a unit from the ones shown and
+press Enter, the new unit name is accepted."
+
+**Was:** the dropdown opening on a filter match was enough for Enter to
+accept the *highlighted* item — the automatic first match — even when
+the user never navigated the list. A brand-new typed name that merely
+resembled a suggestion (or a partially typed one) was silently replaced
+by that first suggestion on Enter.
+
+**Now** (all inside MatCard's autocomplete code; the central
+`DataGridTableBehavior` is untouched):
+
+- `_unitComboNavigated` tracks the *deliberate highlight* for the
+  current edit session. It is set by Up/Down arrow keys, and cleared at
+  every edit start and by fresh typing (`PreviewTextInput`, Back,
+  Delete) — after a re-filter, any highlight is again just the
+  automatic first match.
+- `UnitCombo_PreviewKeyDown` runs on the editing ComboBox in the
+  tunnel — after the central behavior (attached at the DataGrid) and
+  before the ComboBox's own key handling, the one slot where the
+  accept can still be pre-empted. On plain Enter (no Ctrl/Alt; Shift
+  still counts as plain and reverses the move) with the dropdown open:
+  - *Not navigated, pointer not over a list item* → the dropdown is
+    closed **without** accepting (`CloseUnitDropDownPreservingText`,
+    with a guarded restore in case closing snaps the text back), and
+    the key is marked handled so neither the ComboBox's accept nor the
+    DataGrid's default Enter (one row down) fires. The behavior's
+    already-scheduled deferred action then commits the **typed text**
+    and moves horizontally — a new unit name is accepted exactly as
+    typed and persists on save like any typed name (and joins the
+    suggestion pool via the post-save `InitUnitSuggestions` refresh).
+  - *Navigated (arrows), or the pointer resting on a suggestion item*
+    (`Mouse.DirectlyOver` inside a `ComboBoxItem` — only this cell's
+    dropdown can be open while it is edited) → the handler does
+    nothing; the ComboBox accepts the highlighted/pointed suggestion
+    exactly as in the first pass.
+- Escape with the dropdown open closes the list and leaves the typed
+  text intact; with the list closed, Escape keeps its standard grid
+  meaning (cancel the cell edit).
+
 ## Defect 5 — المعامل renamed to المعادل, and the equivalent now drives stock posting
 
 ### Rename
