@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using ShouTech.App;
+using ShouTech.App.Localization;
 using ShouTech.App.Services;
 
 namespace ShouTech.App.Views;

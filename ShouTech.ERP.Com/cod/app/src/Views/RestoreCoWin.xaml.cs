@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -96,7 +97,7 @@ namespace ShouTech.App.Views
                 }
 
                 MessageBox.Show(
-                    string.Format(ShouTech.App.Localization.Loc.Get("RestoreCompany.RestoreOk", "\u201C{0}\u201D was restored and reindexed."), item.DisplayName),
+                    string.Format(CultureInfo.CurrentCulture, ShouTech.App.Localization.Loc.Get("RestoreCompany.RestoreOk", "\u201C{0}\u201D was restored and reindexed."), item.DisplayName),
                     Title,
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
