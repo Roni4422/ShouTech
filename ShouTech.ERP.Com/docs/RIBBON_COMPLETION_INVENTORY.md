@@ -1,0 +1,570 @@
+# Ribbon Completion Inventory — ShouTech ERP
+
+Branch: `feat/ribbon-windows-complete` (from main @ 9c8dea8). Date: 2026-11-17.
+Goal (owner directive): every entry on the MWin ribbon opens a complete, working,
+data-backed window. Done = button wired, window exists, loads real data, core
+actions (new/edit/save/delete/post/convert as applicable) actually persist.
+Heavy-duty rules: transactional writes, parameterized SQL, RBAC, audit,
+both-database migrations, Lang keys in all 4 catalogs, green build.
+
+## How the ribbon routes today (architecture)
+
+- `cod/app/src/Views/MWin.xaml` (792 lines) defines 17 tabs, all
+  `Visibility=Collapsed`, revealed through the top Menu. Every button uses
+  `Click="OnRibbonButtonClick"` with a `Tag` = action key (228 buttons).
+- `MWin.xaml.cs::OnRibbonButtonClick` resolution order:
+  1. Named-button special cases (Backup, Category/Warehouse/Account/Material
+     cards, Material Groups/Tree, Chart of Accounts, Import/Export, Open
+     Company, Exit) and three key cases (`Tools.Options`,
+     `Inventory.InventoryAdjustment`, `Inventory.TransferMaterial`).
+  2. `RptNav.TryHandle(key)` — 99 keys to report windows, `InvoiceWin` kinds,
+     POS, journal/cash/cheque vouchers, cards, PayRecWin, ProjWin, AssetWin,
+     MfgWin, OrdWin, barcode and list windows.
+  3. `MainShVM.HandleRibbonAction` — a few system actions
+     (Menu.Open/New/Exit, Exit.ExitAndShutdown, Help.About, Tools.Backup).
+  4. Fallback: `NavServ.NavigateToModule` -> `ModuleWorkspaceView`, a
+     placeholder page ("ready for development - will be connected to the
+     database"). **Any button reaching step 4 is a dead button.**
+- Defect found: `Services/RibbonReportRouter.cs` (routes
+  Inventory.MaterialProfits, Inventory.MaterialGroupMovementReport,
+  Inventory.SalesReport, Accounts.DailyReport, Accounts.AgingReceivables)
+  is **never called** - those 5 buttons fall through to the placeholder.
+
+## Status counts - BEFORE
+
+| Status | Count | Meaning |
+|---|---|---|
+| COMPLETE | 74 | Opens a real, data-backed window whose core actions persist |
+| PLACEHOLDER | 14 | Window opens but Save/Delete/Post/Print are stubbed (`ShowOperationUnavailable` / fake data) |
+| UNWIRED | 140 | Falls through to the ModuleWorkspaceView placeholder (135) or to dead code (5) |
+| **Total** | **228** | |
+
+PLACEHOLDER windows (verified by grep for `ShowPersistenceUnavailable` /
+`ShowOperationUnavailable`): CcCard, BnkCard, CshWin, ChqWin, CstCard, CurCard,
+RepCard, MfgWin, OrdWin (JrnWin retains an unused helper - removed in this pass).
+
+## Full button inventory (before)
+
+| Tab | Group | Button | Key | Target (before) | Status (before) |
+|---|---|---|---|---|---|
+| TabFile | FileOperations | New | `Menu.New` | MainShVM system action | COMPLETE |
+| TabFile | FileOperations | Open | `Menu.Open` | MainShVM system action | COMPLETE |
+| TabFile | FileOperations | Import data | `Menu.Import` | ? | COMPLETE |
+| TabFile | FileOperations | Export data | `Menu.Export` | ? | COMPLETE |
+| TabFile | FileBackup | Backup | `Tools.Backup` | MainShVM system action | COMPLETE |
+| TabFile | FileBackup | Restore backup | `RestoreCompany.Restore` | ? | COMPLETE |
+| TabFile | FileExit | Exit | `Menu.Exit` | MainShVM system action | COMPLETE |
+| TabInventory | InventoryCards | Material card | `Inventory.MaterialCard` | ? | COMPLETE |
+| TabInventory | InventoryCards | Category card | `Inventory.CategoryCard` | ? | COMPLETE |
+| TabInventory | InventoryCards | Warehouse card | `Inventory.WarehouseCard` | ? | COMPLETE |
+| TabInventory | InventoryCards | مجموعات المواد | `Inventory.MaterialGroups` | ? | COMPLETE |
+| TabInventory | InventoryBarcode | Generate barcode | `Inventory.GenerateBarcode` | BcdGenWin | COMPLETE |
+| TabInventory | InventoryBarcode | Design and print barcode | `Inventory.DesignBarcode` | BcdDesWin | COMPLETE |
+| TabInventory | InventoryBarcode | Create barcode | `Inventory.CreateBarcode` | BarWin | COMPLETE |
+| TabInventory | InventoryMovements | Price list | `Inventory.PriceList` | PriceListWin | COMPLETE |
+| TabInventory | InventoryMovements | End of period stock | `Inventory.EndOfPeriod` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInventory | InventoryMovements | Shortage list | `Inventory.ShortageList` | ShortListWin | COMPLETE |
+| TabInventory | InventoryMovements | Transfer material movement | `Inventory.TransferMaterial` | MWin key case (options/adjustment/merge) | COMPLETE |
+| TabInventory | InventoryMovements | Inventory adjustment | `Inventory.InventoryAdjustment` | MWin key case (options/adjustment/merge) | COMPLETE |
+| TabInventory | InventoryMaterialReports | دليل المواد | `Inventory.MaterialTree` | ? | COMPLETE |
+| TabInventory | InventoryMaterialReports | Search materials | `Inventory.SearchMaterial` | MatListWin | COMPLETE |
+| TabInventory | InventoryMaterialReports | Warehouse inventory | `Inventory.WarehouseInventory` | StkBalWin | COMPLETE |
+| TabInventory | InventoryMaterialReports | Material movement | `Inventory.MaterialMovement` | MatMoveWin | COMPLETE |
+| TabInventory | InventoryMaterialReports | Material movement chart | `Inventory.MaterialMovementChart` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInventory | InventoryMaterialReports | Expired materials | `Inventory.ExpiredMaterials` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInventory | InventoryMaterialReports | Invoice aging | `Inventory.InvoiceAge` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInventory | InventoryMaterialReports | Material profits | `Inventory.MaterialProfits` | RibbonReportRouter (dead code — never called) | UNWIRED |
+| TabInventory | InventoryMaterialReports | Material price history | `Inventory.MaterialPriceHistory` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInventory | InventoryMaterialReports | Service materials reports | `Inventory.ServiceMaterials` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInventory | InventoryMaterialReports | Material statistics | `Inventory.MaterialStatistics` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInventory | InventoryMaterialReports | Stagnant materials | `Inventory.StagnantMaterials` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInventory | InventoryMaterialReports | Most active materials | `Inventory.MostActiveMaterials` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInventory | InventoryMaterialReports | Material comparison | `Inventory.MaterialComparison` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInventory | InventoryMaterialReports | Material list | `Inventory.MaterialList` | MatListWin | COMPLETE |
+| TabInventory | InventoryMaterialReports | Material and group movement report | `Inventory.MaterialGroupMovementReport` | RibbonReportRouter (dead code — never called) | UNWIRED |
+| TabInventory | InventoryMaterialReports | Negative output | `Inventory.NegativeOutput` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInventory | InventoryOther | Customers and material intersection | `Inventory.Customers` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInventory | InventoryOther | Serial numbers report | `Inventory.SerialNumbersReport` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInventory | InventoryOther | Edit serial number | `Inventory.EditSerialNumber` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInventory | InventoryOther | Branch materials | `Inventory.BranchMaterials` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInventory | InventoryOther | Sales report | `Inventory.SalesReport` | RibbonReportRouter (dead code — never called) | UNWIRED |
+| TabInventory | InventoryOther | Edit material specs | `Inventory.EditMaterialSpecs` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInventory | InventoryOther | Material discounts | `Inventory.MaterialDiscounts` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabAccounts | AccountsGeneral | Chart of accounts | `Accounts.ChartOfAccounts` | ? | COMPLETE |
+| TabAccounts | AccountsGeneral | Account card | `AccountCard` | ? | COMPLETE |
+| TabAccounts | AccountsGeneral | Cost center | `Accounts.CostCenter` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabAccounts | AccountsGeneral | Cost center card | `Accounts.CostCenterCard` | CcCard | PLACEHOLDER |
+| TabAccounts | AccountsGeneral | Link to accounts | `Accounts.LinkWithAccounts` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabAccounts | AccountsGeneral | Fixed assets | `Assets.Assets` | AssetWin | COMPLETE |
+| TabAccounts | AccountsGeneral | Cost center report | `Accounts.CostCenterReport` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabAccounts | AccountsGeneral | Cost center material movement | `Accounts.CostCenterMaterialMovement` | MatMoveWin | COMPLETE |
+| TabAccounts | AccountsGeneral | Cost center trial balance | `Accounts.CostCenterBalance` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabAccounts | AccountsCurrencies | Define currency | `Accounts.DefineCurrency` | CurCard | PLACEHOLDER |
+| TabAccounts | AccountsCurrencies | Currency rates bulletin | `Accounts.CurrencyRates` | CurCard | PLACEHOLDER |
+| TabAccounts | AccountsCurrencies | Average currency rates | `Accounts.AverageCurrencyRate` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabAccounts | AccountsCurrencies | Exchange rate differences | `Accounts.ExchangeRateDifferences` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabAccounts | AccountsReports | General ledger | `Accounts.Ledger` | AccStmtWin | COMPLETE |
+| TabAccounts | AccountsReports | Customer statement | `Accounts.CustomerStatement` | AccStmtWin | COMPLETE |
+| TabAccounts | AccountsReports | General journal | `Accounts.GeneralJournal` | JrnListWin | COMPLETE |
+| TabAccounts | AccountsReports | Daily report | `Accounts.DailyReport` | RibbonReportRouter (dead code — never called) | UNWIRED |
+| TabAccounts | AccountsReports | Account movement chart | `Accounts.AccountMovementChart` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabAccounts | AccountsReports | Account balance | `Accounts.AccountBalance` | AccBalWin | COMPLETE |
+| TabAccounts | AccountsReports | Branch account movement | `Accounts.BranchAccountMovement` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabAccounts | AccountsReports | Trial balance | `Accounts.TrialBalance` | TrialBalanceWin | COMPLETE |
+| TabAccounts | AccountsClosingAccounts | Operations | `Accounts.Operations` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabAccounts | AccountsClosingAccounts | Trading | `Accounts.Trading` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabAccounts | AccountsClosingAccounts | Profit and loss | `Accounts.ProfitLoss` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabAccounts | AccountsFinancialStatements | Balance sheet | `Accounts.BalanceSheet` | BalSheetWin | COMPLETE |
+| TabAccounts | AccountsFinancialStatements | Income statement | `Accounts.IncomeStatement` | IncStmtWin | COMPLETE |
+| TabAccounts | AccountsFinancialStatements | Cash flow statement | `Accounts.CashFlowStatement` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabAccounts | AccountsAnalysis | Inactive accounts | `Accounts.DormantAccounts` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabAccounts | AccountsAnalysis | Receivables aging | `Accounts.AgingReceivables` | RibbonReportRouter (dead code — never called) | UNWIRED |
+| TabAccounts | AccountsAnalysis | Payment reconciliation | `Accounts.PaymentReconciliation` | PayRecWin | COMPLETE |
+| TabAccounts | AccountsAnalysis | Collection ratios | `Accounts.CollectionRates` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabAccounts | AccountsAnalysis | Account comparison | `Accounts.AccountComparison` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabAccounts | AccountsAnalysis | Local financial analysis | `Accounts.FinancialAnalysis` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabAccounts | AccountsAnalysis | AI financial analysis | `Accounts.FinancialAnalysis` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabBonds | BondsVouchers | Journal voucher | `Bonds.JournalVoucher` | JrnWin | COMPLETE |
+| TabBonds | BondsVouchers | Receipt voucher | `Bonds.ReceiptVoucher` | CshWin | PLACEHOLDER |
+| TabBonds | BondsVouchers | Payment voucher | `Bonds.PaymentVoucher` | CshWin | PLACEHOLDER |
+| TabBonds | BondsVouchers | Daily voucher | `Bonds.JournalVoucher` | JrnWin | COMPLETE |
+| TabBonds | BondsVouchers | Cash journal | `Bonds.CashJournal` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabBonds | BondsVouchers | Define voucher patterns | `Bonds.DefineVoucherTypes` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabBonds | BondsInstallments | Installments | `Bonds.Installment` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabBonds | BondsInstallments | Search installments | `Bonds.SearchInstallment` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabBonds | BondsNegotiableInstruments | Incoming check | `Bonds.ReceiptCheque` | ChqWin | PLACEHOLDER |
+| TabBonds | BondsNegotiableInstruments | Outgoing check | `Bonds.PaymentCheque` | ChqWin | PLACEHOLDER |
+| TabBonds | BondsNegotiableInstruments | Define negotiable instruments | `Bonds.DefineSecurities` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabBonds | BondsNegotiableInstruments | Search negotiable instruments | `Bonds.SearchSecurities` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabBonds | BondsPayments | Payment patterns | `Bonds.PaymentTypes` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabBonds | BondsPayments | Define payment patterns | `Bonds.DefinePaymentTypes` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabBonds | BondsMonitoring | Monitor and edit vouchers | `Bonds.MonitorVouchers` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInvoices | InvoicesInvoices | Transfer | `Invoices.Transfer` | InvoiceWin | COMPLETE |
+| TabInvoices | InvoicesInvoices | Opening stock invoice | `Invoices.OpeningStock` | InvoiceWin | COMPLETE |
+| TabInvoices | InvoicesInvoices | Material in invoice | `Invoices.MaterialEntry` | InvoiceWin | COMPLETE |
+| TabInvoices | InvoicesInvoices | Material out invoice | `Invoices.MaterialExit` | InvoiceWin | COMPLETE |
+| TabInvoices | InvoicesPurchasing | Purchase invoice | `Invoices.PurchaseInvoice` | InvoiceWin | COMPLETE |
+| TabInvoices | InvoicesPurchasing | Purchase return invoice | `Invoices.PurchaseReturn` | InvoiceWin | COMPLETE |
+| TabInvoices | InvoicesSales | Sales invoice | `Invoices.SalesInvoice` | InvoiceWin | COMPLETE |
+| TabInvoices | InvoicesSales | Sales return invoice | `Invoices.SalesReturn` | InvoiceWin | COMPLETE |
+| TabInvoices | InvoicesSales | Inventory count invoice | `Invoices.InventoryCount` | InvoiceWin | COMPLETE |
+| TabInvoices | InvoicesSales | Print Barcode | `Invoices.PrintBarcode` | BarWin | COMPLETE |
+| TabInvoices | InvoicesGeneral | Define invoices | `Invoices.DefineInvoices` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInvoices | InvoicesGeneral | Search invoices | `Invoices.SearchInvoices` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInvoices | InvoicesGeneral | Cash sales invoices | `Invoices.CashSales` | ? | COMPLETE |
+| TabInvoices | InvoicesGeneral | Close cash register | `Invoices.CloseCash` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInvoices | InvoicesGeneral | Quotation | `Invoices.Quotation` | InvoiceWin | COMPLETE |
+| TabInvoices | InvoicesGeneral | Search quotations | `Invoices.SearchQuotations` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInvoices | InvoicesGeneral | Invoice profits | `Invoices.InvoiceProfits` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInvoices | InvoicesGeneral | Packing list | `Invoices.PackingList` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInvoices | InvoicesOtherTools | Compress invoices | `Invoices.CompressInvoices` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabInvoices | InvoicesOtherTools | Repost invoices | `Invoices.RepostInvoices` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabPOS | POSSales | Open POS Cashier | `POS.OpenCashier` | ? | COMPLETE |
+| TabPOS | POSAdministration | Points | `POS.Points` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabPOS | POSAdministration | Define POS | `POS.DefinePOS` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabPOS | POSAdministration | POS cash report | `POS.POSCashReport` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabPOS | POSAdministration | POS discounts | `POS.POSDiscounts` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabPOS | POSAdministration | POS sync | `POS.SyncPOS` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabPOS | POSReports | Edit material price | `POS.AdjustPrice` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabPOS | POSReports | Edit material quantity | `POS.AdjustQuantity` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabPOS | POSReports | Delete material | `POS.DeleteMaterial` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabOrders | OrdersOrders | Purchase order | `Orders.PurchaseOrder` | OrdWin | PLACEHOLDER |
+| TabOrders | OrdersOrders | Sales order | `Orders.SalesOrder` | OrdWin | PLACEHOLDER |
+| TabOrders | OrdersGeneral | Projects | `Projects.Projects` | ProjWin | COMPLETE |
+| TabOrders | OrdersGeneral | Define orders | `Orders.DefineOrders` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabOrders | OrdersGeneral | Order receive/deliver invoices | `Orders.OrderReceiptDelivery` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabOrders | OrdersGeneral | Order tracking | `Orders.TrackOrders` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabOrders | OrdersGeneral | Order payments | `Orders.OrderPayments` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabOrders | OrdersGeneral | Search orders | `Orders.SearchOrders` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabCustomers | CustomersCards | Customer card | `Customers.CustomerCard` | CstCard | PLACEHOLDER |
+| TabCustomers | CustomersCards | Customer prices | `Customers.CustomerPrices` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabCustomers | CustomersCards | Customer discounts | `Customers.CustomerDiscounts` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabCustomers | CustomersCards | Regions | `Customers.Areas` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabCustomers | CustomersTargets | Assign customer targets | `Customers.AssignTargets` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabCustomers | CustomersTargets | Customer targets report | `Customers.TargetsReport` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabCustomers | CustomersFollowUp | Search customers | `Customers.SearchCustomers` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabCustomers | CustomersFollowUp | Customer due | `Customers.CustomerDue` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabCustomers | CustomersFollowUp | Link customer payments | `Customers.LinkPayments` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabCustomers | CustomersFollowUp | Search dues | `Customers.SearchDues` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabCustomers | CustomersReports | Customer balances | `Customers.CustomerBalance` | CustBalWin | COMPLETE |
+| TabCustomers | CustomersReports | Settle customer accounts | `Customers.BalanceAccounts` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabCustomers | CustomersReports | Edit customers | `Customers.EditCustomers` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabCustomers | CustomersReports | Customer groups | `Customers.CustomerGroups` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabCustomers | CustomersReports | Customer reports | `Customers.CustomerReports` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabSalesRep | SalesRepCards | Sales rep card | `SalesRep.SalesRepCard` | RepCard | PLACEHOLDER |
+| TabSalesRep | SalesRepCards | Sales rep groups | `SalesRep.SalesRepGroups` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabSalesRep | SalesRepTargets | Assign sales rep targets | `SalesRep.AssignSalesRepTargets` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabSalesRep | SalesRepTargets | Sales rep targets report | `SalesRep.SalesRepTargetsReport` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabSalesRep | SalesRepFollowUp | Search customers | `SalesRep.SearchCustomers` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabSalesRep | SalesRepFollowUp | Sales rep movement | `SalesRep.SalesRepMovement` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabSalesRep | SalesRepFollowUp | Sales rep collections | `SalesRep.SalesRepCollections` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabSalesRep | SalesRepHandheldDevices | Handheld device cards | `SalesRep.HandheldDevices` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabSalesRep | SalesRepHandheldDevices | Handheld device routes | `SalesRep.DeviceRoutes` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabManufacturing | ManufacturingAdministration | Manufacturing templates | `Manufacturing.ManufacturingModels` | MfgWin | PLACEHOLDER |
+| TabManufacturing | ManufacturingAdministration | Manufacturing operation | `Manufacturing.ManufacturingProcess` | MfgWin | PLACEHOLDER |
+| TabManufacturing | ManufacturingAdministration | Manufacturing capability | `Manufacturing.ManufacturingFeasibility` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabManufacturing | ManufacturingAdministration | Search manufacturing | `Manufacturing.SearchManufacturing` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabManufacturing | ManufacturingCostVariances | Finished goods cost variance | `Manufacturing.ManufacturingCostVariance` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabManufacturing | ManufacturingCostVariances | Raw material cost variance | `Manufacturing.RawMaterialCostVariance` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabManufacturing | ManufacturingCostVariances | Overhead cost variance | `Manufacturing.AdditionalCostVariance` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabManufacturing | ManufacturingCostVariances | Finished goods overhead variance | `Manufacturing.ManufacturedMaterialCostVariance` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabManufacturing | ManufacturingReports | Manufactured materials costs | `Manufacturing.ManufacturedMaterialCosts` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabManufacturing | ManufacturingReports | Repost manufacturing operations | `Manufacturing.RepostManufacturing` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabBanks | BanksAdministration | Define banks | `Banks.DefineBanks` | BnkCard | PLACEHOLDER |
+| TabBanks | BanksAdministration | Estimated bank statement | `Banks.BankEstimate` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabBanks | BanksAdministration | Bank reconciliation | `Banks.BankReconciliation` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabBanks | BanksAdministration | Bank balances | `Banks.BankBalances` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabReports | ReportsFinancial | Trial balance | `Accounts.TrialBalance` | TrialBalanceWin | COMPLETE |
+| TabReports | ReportsFinancial | Account statement | `Reports.AccountStatement` | AccStmtWin | COMPLETE |
+| TabReports | ReportsFinancial | General journal | `Accounts.GeneralJournal` | JrnListWin | COMPLETE |
+| TabReports | ReportsFinancial | Customer aging | `Reports.CustomerAging` | CustAgingWin | COMPLETE |
+| TabReports | ReportsFinancial | Supplier aging | `Reports.SupplierAging` | SupAgingWin | COMPLETE |
+| TabReports | ReportsInventory | Stock balances | `Reports.StockBalances` | StkBalWin | COMPLETE |
+| TabReports | ReportsInventory | Material movements | `Reports.MaterialMoves` | MatMoveWin | COMPLETE |
+| TabReports | ReportsInventory | Stock movements | `Reports.StockAdjustment` | StkAdjRptWin | COMPLETE |
+| TabReports | ReportsInventory | Item profitability | `Reports.ItemProfitability` | ItemProfitWin | COMPLETE |
+| TabReports | ReportsParties | Customer balances | `Customers.CustomerBalance` | CustBalWin | COMPLETE |
+| TabReports | ReportsParties | Supplier balances | `Reports.SupplierBalances` | SupBalWin | COMPLETE |
+| TabReports | ReportsParties | Sales invoices | `Reports.SalesInvoiceList` | SalListWin | COMPLETE |
+| TabReports | ReportsParties | Purchase invoices | `Reports.PurchaseInvoiceList` | PurListWin | COMPLETE |
+| TabReports | ReportsReports | Statistics | `Reports.Statistics` | TrialBalanceWin | COMPLETE |
+| TabReports | ReportsReports | Custom reports | `Reports.CustomReports` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabReports | ReportsReports | Customize reports | `Reports.CustomizeReports` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabTools | ToolsTools | Calculator | `Tools.Calculator` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabTools | ToolsTools | Keyboard | `Tools.Keyboard` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabTools | ToolsTools | Options | `Tools.Options` | MWin key case (options/adjustment/merge) | COMPLETE |
+| TabTools | ToolsTools | Maintenance wizard | `Tools.MaintenanceWizard` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabTools | ToolsTools | Backup | `Tools.Backup` | MainShVM system action | COMPLETE |
+| TabTools | ToolsLanguage | Arabic | `Tools.Arabic` | OnLanguageArabicClick | COMPLETE |
+| TabTools | ToolsLanguage | English | `Tools.English` | OnLanguageEnglishClick | COMPLETE |
+| TabTools | ToolsLanguage | Français | `Tools.French` | OnLanguageFrenchClick | COMPLETE |
+| TabTools | ToolsLanguage | Türkçe | `Tools.Turkish` | OnLanguageTurkishClick | COMPLETE |
+| TabTools | ToolsSecurity | Change password | `Tools.ChangePassword` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabTools | ToolsSecurity | Activity log | `Tools.ActivityLog` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabTools | ToolsAdvanced | Program add-ons | `Tools.Addons` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabTools | ToolsAdvanced | Artificial intelligence | `Tools.AI` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabOtherTools | OtherToolsAdministration | Rollover | `OtherTools.Rotation` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabOtherTools | OtherToolsAdministration | Permissions | `OtherTools.Permissions` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabOtherTools | OtherToolsAdministration | Permission templates | `OtherTools.PermissionTemplates` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabOtherTools | OtherToolsAdministration | Custom fields | `OtherTools.CustomFields` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabOtherTools | OtherToolsAdministration | Restore company | `RestoreCompany.Restore` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabOtherTools | OtherToolsDefinitions | Define units of measure | `OtherTools.UnitsOfMeasure` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabOtherTools | OtherToolsDefinitions | Define payment methods | `OtherTools.PaymentMethods` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabOtherTools | OtherToolsDefinitions | Define material specs | `OtherTools.MaterialSpecs` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabOtherTools | OtherToolsDelivery | Driver card | `OtherTools.DriverCard` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabOtherTools | OtherToolsDelivery | Delivery prices | `OtherTools.DeliveryPrices` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabOtherTools | OtherToolsDelivery | Receipt requests | `OtherTools.PickupRequests` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabOtherTools | OtherToolsDelivery | Search delivery | `OtherTools.SearchDelivery` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabOtherTools | OtherToolsDelivery | Close driver cash | `OtherTools.CloseDriverCash` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabView | ViewTrees | Account tree | `View.ChartOfAccounts` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabView | ViewTrees | Material tree | `View.MaterialTree` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabView | ViewTrees | Manufacturing tree | `View.ManufacturingTree` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabView | ViewTrees | Cost center tree | `View.CostCenterTree` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabView | ViewInformation | Info window | `View.InfoWindow` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabView | ViewInformation | Define payment methods | `View.PaymentMethods` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabView | ViewInformation | Company info | `View.CompanyInfo` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabView | ViewInformation | Export data | `View.ExportData` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabExit | ExitExit | Lock screen | `Exit.ScreenSaver` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabExit | ExitExit | Switch company | `Exit.SwitchCompany` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabExit | ExitExit | Exit | `Exit.Title` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabExit | ExitExit | Exit and shutdown | `Exit.ExitAndShutdown` | MainShVM system action | COMPLETE |
+| TabHelp | HelpUpdates | Check for updates | `Help.CheckUpdates` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabHelp | HelpUpdates | Update from file | `Help.UpdateFromFile` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabHelp | HelpSupport | Help documentation | `Help.Instructions` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabHelp | HelpSupport | Technical support | `Help.TechnicalSupport` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabHelp | HelpSupport | Feedback | `Help.Suggestions` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabHelp | HelpLicense | Renew license | `Help.RenewLicense` | ModuleWorkspaceView placeholder (no window) | UNWIRED |
+| TabHelp | HelpLicense | About | `Help.About` | MainShVM system action | COMPLETE |
+
+
+## Reference specs (research-first, owner directive 2026-11-17)
+
+Method: ERPNext (docs.frappe.io + DocType atlas) and Odoo (odoo.com/documentation
++ doc mirrors) are source-cited. Al-Ameen V10 / Phenix ERP v10 publish almost no
+field-level English documentation; their parts are marked **pattern-based**
+(vendor feature pages + established regional patterns: bilingual voucher/card
+windows, bottom totals on schedules, cost center on every voucher line, cheque
+portfolios, document cycles). Full research file: `~/workspace/research/erp-window-specs.md`
+(440 lines, 6 deep specs) — reconciled into the sections below.
+
+### RS-1 Cost Centers — CcCard + new CcListWin (Accounts.CostCenter, Accounts.LinkWithAccounts, View.CostCenterTree)
+
+- **Purpose.** ERPNext: tree `Cost Center` DocType (per company, NestedSet);
+  group nodes organize, only leaves post. Odoo: analytic accounts inside
+  analytic plans; line-level analytic distribution by % (each plan Σ=100%).
+  Al-Ameen/Phenix (pattern-based): cost-center card + tree, cost-center column
+  on every voucher/invoice line, cost-center statement + trial balance reports.
+- **Fields (adopted).** Code (req, unique per company), NameEn (req), NameAr,
+  ParentId (tree, groups as parents), IsGroup, IsActive (default on), Level,
+  Notes + audit columns. Card adds: computed Debit/Credit/Balance from journal
+  lines for the selected center.
+- **Grid (manager).** Tree-flattened list: Code | Name | Parent | Group? |
+  Active | Balance (roll-up for groups). Footer: count + total balance.
+- **Actions.** New, New Child, Save, Delete (soft; blocked when referenced by
+  journal lines — disable instead), Statement (opens AccStmtWin pattern via
+  cost-center report), Print tree.
+- **Workflow/validation.** Masters: Active/Inactive only. Leaf-only posting
+  enforced in the card (group flag) and in CshWin line validation. Company
+  scoping on every query. Allocation rules (ERPNext Cost Center Allocation:
+  main center + rows of center+%, Σ=100%, Valid From) are stored
+  (`cost_center_allocations` + lines) and validated in the manager;
+  posting-time application is **deliberately deferred** (journal engine change;
+  noted as phase-2 in the research file itself).
+- **Deviation (documented).** Transaction lines keep the existing
+  `cost_center` **code** column (journal_entry_lines, voucher/invoice lines)
+  instead of a new `CostCenterId` FK: the entire codebase resolves dimensions
+  by code (accounts included); codes are unique per company and validated
+  against `cost_centers` at save time in the new windows.
+
+### RS-2 Payment Methods & Cards — definition set (OtherTools.PaymentMethods, View.PaymentMethods, POS.DefinePOS tenders)
+
+- **Purpose.** ERPNext `Mode of Payment`: name + Type (Cash/Bank/General) +
+  per-company default account; POS Profile lists accepted modes. Odoo: POS
+  Payment Method = Name + Journal (Cash journal = cash, Bank journal = card) +
+  Identify Customer + terminal. Al-Ameen/Phenix (pattern-based): each card
+  type carries **bank commission %** and **settlement bank**, because card
+  receipts are a bank receivable until settlement.
+- **Fields (adopted, table `payment_methods`).** Code, NameEn, NameAr, Kind
+  (Cash|BankTransfer|Cheque|Card|Other), GlAccountCode (req — clearing/cash/
+  bank account money posts to), SettlementBankCode (cards), CommissionPercent
+  (cards, default 0), CommissionAccountCode, RequiresReference, IsPosEnabled,
+  PosSortOrder, IsActive.
+- **Actions/states.** Definition manager (New/Edit/Activate/Delete-guarded);
+  Enabled/Disabled only. Seeds: Cash, Bank Transfer, Cheque, Visa, Mastercard,
+  mada, American Express.
+- **Left out.** POS tender posting changes (PosWin already persists sales);
+  settlement batch posting (clearing → bank net of commission) — the master
+  carries the data; settlement is a voucher the accountant posts. Reason:
+  scope control; the definition layer is what the ribbon entries open.
+
+### RS-3 Cash Vouchers — CshWin (Bonds.ReceiptVoucher, Bonds.PaymentVoucher, Bonds.CashJournal)
+
+- **Purpose.** ERPNext `Payment Entry`: one document, Payment Type
+  Receive/Pay/Internal Transfer; Paid From/To accounts derived by type;
+  References child table allocates against invoices; **Difference Amount must
+  be 0 to submit**; unallocated remainder stays as advance. Odoo
+  `account.payment`: journal + method line, outstanding accounts, group
+  payments. Al-Ameen/Phenix (pattern-based): receipt/payment سند pair over one
+  engine; header amount must equal Σ lines; amount-in-words on print.
+- **Fields (adopted — existing window shape kept).** Header: Doc No (auto per
+  kind), Date, Treasury/Box account code (req), Party name, Amount, Currency,
+  Rate, Ref No, Cost Center, Memo. Lines: Account Code/Name, Amount, Cost
+  Center (leaf-validated), Invoice Ref, Memo.
+- **Actions.** New, Save Draft, Post, Print (formal voucher with
+  **amount-in-words**), Delete draft, Load by document number.
+- **Workflow/validation.** Draft → Posted → (reversed via journal reversal,
+  never edited/deleted). **Post blocked while header Amount ≠ Σ lines**
+  (difference shown in the footer; zero-tolerance rule from ERPNext adopted).
+  Posting writes a balanced journal entry through JournalService in one
+  transaction (Receipt: Dr Box / Cr lines; Payment mirrored). Fiscal-period
+  and account-existence checks come from the journal engine.
+- **Left out.** The ERPNext outstanding-invoice allocation picker inside the
+  voucher — ShouTech already has the dedicated Payment Reconciliation window
+  (Phase 3) for allocation; voucher lines keep the Invoice Ref link. Reason:
+  avoid two allocation engines writing `payment_allocations`.
+
+### RS-4 Cheques — ChqWin + ChqListWin (Bonds.ReceiptCheque, Bonds.PaymentCheque, Bonds.SearchSecurities)
+
+- **Purpose.** ERPNext/Odoo have **no cheque master** (cheque = Payment Entry
+  reference no/date; clearance date at bank reconciliation) — the regional
+  portfolio pattern (Al-Ameen/Phenix, pattern-based) is adopted instead:
+  a received cheque is not money until it clears.
+- **Fields (adopted, table `cheques`).** Direction (Incoming|Outgoing),
+  Cheque No (req; **unique per company+bank+drawer** — fraud control), Bank
+  Name (req), Branch, Drawer, Party Account Code, Amount (req > 0), Currency,
+  Rate, Issue Date, Due Date (req), Status, Portfolio/Bank GL account codes,
+  Deposit Date/Bank, Clearance Date, Endorsed-To account, Bounce
+  Date/Reason/Fees, Journal Entry Id, Notes.
+- **Lifecycle + posting map (adopted).** Incoming: Save → **InPortfolio**
+  (Dr Portfolio/Box, Cr Party). **Deposit** (sets bank + date; no GL — funds
+  still in portfolio account). **Clear** (Dr Bank GL, Cr Portfolio).
+  **Bounce** (reverse receipt entry; status Bounced; fee fields recorded).
+  **Endorse** (Dr Endorsed-To account, Cr Portfolio; one-way). Outgoing:
+  Save → **Issued** (Dr Party, Cr Bank/Under-Payment account = header box).
+  **Clear** = status + date (GL already moved). **Cancel** = reversal entry.
+  All transitions transactional via JournalService, status order enforced.
+- **Grid (register).** Cheque No | Direction | Party/Drawer | Bank | Amount |
+  Due Date | Status | Days-to-due. Footer totals per status. Filters: status
+  tabs + due-soon.
+- **Left out.** Cheque-paper printing layouts per bank (register print only);
+  batch deposit slips. Reason: bank-specific paper layouts need physical
+  printer calibration data we do not have.
+
+### RS-5 Orders + Convert-to-Invoice — OrdWin (Orders.SalesOrder, Orders.PurchaseOrder, Orders.* search/track/payments)
+
+- **Purpose.** ERPNext Sales/Purchase Order: commitment document, **posts no
+  GL and no stock**; tracks Per Delivered/Received and Per Billed; statuses
+  Draft → To Deliver and Bill → To Deliver | To Bill → Completed, plus
+  On Hold / Closed / Cancelled. Conversions copy only **remaining**
+  quantities and write back progress in the same transaction. Odoo mirrors
+  this (delivered/invoiced qty per line; bill on ordered vs received policy).
+  Al-Ameen/Phenix (pattern-based): order → invoice joining is a marketed
+  capability; grid carries item, unit, qty, price, discount, tax, warehouse,
+  cost center, line total.
+- **Deviation (documented, schema-forced).** The research recommends new
+  `orders`/`order_lines` tables. ShouTech already has a commercial-document
+  engine — `sales_documents`/`purchase_documents` (migration 010) with
+  doc_kind SO/PO/QUO/DLV/SAL/RCV/PUR, `document_links` (024), fulfilled-qty
+  computation and a tested SalesChainService (QUO→SO→DLV→SAL). Building a
+  parallel orders engine would fork stock/ledger posting. **Adopted
+  instead:** the ERPNext *semantics* on the existing engine — per-line
+  fulfilled/billed quantities computed from posted linked documents,
+  progress % on the order window, Close/Cancel states, conversion copying
+  remaining unbilled qty only, all in one transaction.
+- **Fields (adopted).** Existing header (doc no, date, party, warehouse,
+  notes) + migration 032 adds `delivery_date` and `valid_till` to both
+  document tables. Lines: item, description, unit, qty, price, discount %,
+  tax rate, warehouse, cost center + read-only Fulfilled / Billed / Remaining
+  progress columns. Footer: Σ qty, total, tax, grand total.
+- **Actions.** New, Save Draft, Post, Close, Cancel (reversal-free: orders
+  post nothing; cancel is a status with audit), Print, **Convert to Invoice**
+  (SO→SAL, PO→PUR — new; the existing chain lacked both), Convert via chain
+  (SO→DLV where applicable), Track (fulfilment view).
+- **Validation.** Delivery date ≥ order date; qty > 0; cannot edit a posted
+  order (cancel + re-create); cannot convert more than remaining qty;
+  conversion blocked for Closed/Cancelled/expired-quotation sources.
+
+### RS-6 Quotation — InvoiceWin(Quotation) + search (Invoices.SearchQuotations, Orders.DefineOrders chain)
+
+- **Purpose.** ERPNext `Quotation`: distinct submittable document, Quotation
+  To (Customer/Lead), **Valid Till** (default +30d), statuses Draft / Open /
+  Ordered / Lost / Expired / Cancelled; conversion copies quoted rates (never
+  re-fetched). Odoo: quotation = draft sale.order with Expiration. Regional
+  (pattern-based): عرض سعر → طلب → فاتورة chain; expired quotes printable but
+  blocked from conversion.
+- **Adoption on existing engine.** Quotations already exist as
+  `sales_documents` doc_kind QUO in InvoiceWin with QUO→SO conversion in
+  SalesChainService. Migration 032 adds `valid_till`. Derived status:
+  Ordered (SO link exists), Expired (valid_till < today, not ordered), Lost
+  (explicit status set from the document search window), else Draft/Open.
+  Conversion of an expired quotation is blocked in the service (audited
+  validity extension = edit while Draft). Win-rate reporting comes free from
+  `document_links`.
+
+### RS-7 Master cards — BnkCard, CstCard, CurCard, RepCard (+ searches/managers)
+
+- **ERPNext Bank Account:** account_name (req), bank (req, Bank master),
+  account (link → GL Account of type Bank; one Bank Account per ledger),
+  account_type/subtype, IBAN, branch_code, bank_account_no, company,
+  is_company_account. **Adopted fields:** code, name, branch, account no,
+  IBAN, currency, GL account code; balance computed live from the GL account.
+- **ERPNext Customer:** customer_group (tree; supplies default price list,
+  payment terms, credit limit), territory, default_currency,
+  default_price_list, credit limit rows per company (block when exceeded),
+  default receivable account. **Adopted:** existing CstCard field set (code,
+  names, type, group → new `party_groups`, tax no, CR no, credit limit,
+  credit days, price tier, GL account, contacts) persisted to new `parties`
+  table (kind Customer|Supplier); balance from `party_ledger`; Statement
+  button opens the account-statement report. Credit-limit *enforcement* at
+  invoice posting is **left out** (InvoiceWin posting path is shared and
+  heavily tested; the card stores the limit and the customer-balances report
+  flags over-limit parties). Reason documented here per directive.
+- **Currencies (ERPNext Currency + Currency Exchange; Odoo res.currency):**
+  code, names, symbol, fraction (minor unit) name, enabled; dated rates
+  (from/to currency, date, rate, min/max band) in `currency_rates`. Base
+  currency rate = 1 enforced.
+- **Sales reps (regional pattern + ERPNext Sales Person tree):** code, name,
+  phone, commission %, target; groups via `sales_rep_groups`; movement and
+  collections reports read invoice/ledger data by rep name (documents already
+  carry `sales_rep_name`, migration 023).
+
+### RS-8 Manufacturing orders — MfgWin + MfgListWin (Manufacturing.*)
+
+- **ERPNext Work Order:** BOM drives production item + required items
+  (required qty = BOM qty × order qty); source / WIP / FG / scrap warehouses;
+  produced qty; statuses Draft → Not Started → In Process → Completed;
+  Stopped; cancel refused once produced > 0; stock moves only via stock
+  entries. **Adopted:** `mfg_orders` + `mfg_order_lines` (migration 034);
+  Post consumes raw materials and produces the finished item via
+  `stock_movements` in one transaction with unit-cost snapshot per order
+  (feeds the four variance reports); BOM lines editable on the order
+  (ShouTech has no BOM master — the order carries its own lines, matching
+  the existing window's shape). Variance reports compare snapshot standard
+  vs actual line costs.
+
+### RS-9 Bank reconciliation & balances — Banks.* (BankRecWin)
+
+- **ERPNext Bank Reconciliation Tool:** statement lines matched to payment
+  entries/journal entries; **clearance dates** recorded on the transactions;
+  semi-automatic matching by amount/date/reference. **Adopted (migration
+  035):** `bank_reconciliation_marks` (journal line ↔ statement date/ref,
+  cleared flag) + BankRecWin: pick bank GL account, list uncleared lines,
+  mark cleared with statement date, totals (book balance, cleared, uncleared,
+  difference). Statement *file import* (CSV/OFX) is **left out** — no import
+  framework exists in the app yet; manual marking is the Al-Ameen/Phenix
+  baseline pattern. Bank Balances report = GL balances of bank-flagged
+  accounts; Bank Estimate = balances projected by cheque due dates
+  (cheques table) — both real queries, no new tables.
+
+### RS-10 Definition sets — Bonds/Invoices/Orders/POS/Customers/SalesRep/OtherTools definition entries
+
+- Pattern (all four ERPs agree): small masters = code + bilingual names +
+  active flag + a few set-specific fields, managed in a list+editor window,
+  delete-guarded once referenced. One generic engine
+  (`DefinitionRepository` + `DefManagerWin` configured per set) serves:
+  voucher types, securities types, payment types, invoice definitions, order
+  definitions, POS terminals, areas, targets, discount rules, customer
+  prices, loyalty accounts, handheld devices, device routes, drivers,
+  delivery prices, delivery requests, driver settlements, custom fields,
+  installments + schedules, units of measure (existing table), material
+  specs (existing `material_attributes`). Migration 036 creates the backing
+  tables in one pass. Installment collection posts a `party_ledger` credit
+  in the same transaction (regional pattern: installment = scheduled
+  receivable with a collection voucher trail).
+
+### RS-11 Reports family — Inventory/Accounts/Customers/SalesRep/Manufacturing/Banks report entries
+
+- Pattern: Al-Ameen schedules (strong header, sortable/resizable columns,
+  totals pinned at bottom, print/export) over the Phase-3 `RptBase`
+  framework; ERPNext/Odoo equivalents are the standard stock ledger, aging,
+  price-history, dormant-account and ratio reports. Every report below is a
+  real query over existing tables (documents, lines, stock_movements,
+  journal, party_ledger, materials) — no new tables except where RS-8/RS-10
+  provide them. ~25 new `RptBase` windows + `RptQuery` methods (see build
+  results). Closing/Trading/Profit-and-Loss/Cash-Flow reuse the existing
+  financial-statement queries with the Al-Ameen closing-accounts layout.
+
+### RS-12 System & tool windows — Tools.* / OtherTools.* / View.* / Help.* / Exit.*
+
+- Calculator (in-app, keyboard support), on-screen keyboard launcher,
+  Change Password (existing auth service policy: min 12 + symbol + deny
+  list), Activity Log (`security_audit_log` + `journal_audit_events`
+  viewers), Maintenance wizard (`DatabaseHealth` checks + VACUUM/backup
+  shortcuts), fiscal Roll-over (`FYearSvc` Create/Close), POS sync
+  (outbox `outbound_messages` viewer + retry), POS cash closing
+  (`pos_cash_closings`, migration 037), invoice compression (audited purge
+  of soft-deleted drafts), repost (transactional recompute of document
+  totals from lines with preview), financial analysis (ratios computed
+  from trial-balance data), custom reports (existing `ReportRepo` /
+  ReportDefinition store + designer host), updates (version + configured
+  update source; honest "not configured" state — no fake downloads),
+  help (renders the shipped English manual), support tickets
+  (`support_tickets`, migration 037), license info (existing license
+  service), addons (licensed module list, read-only), screen saver =
+  lock screen (LogWin), info window = About.
+
+## Build plan & conventions (all chunks)
+
+- Migrations (BOTH sqlite + postgresql, `dba/mig/`): **031** master cards
+  (cost_centers, cost_center_allocations(+lines), banks, currencies,
+  currency_rates, parties, party_groups, sales_reps, sales_rep_groups);
+  **032** documents: delivery_date + valid_till; **033** cheques;
+  **034** mfg_orders(+lines); **035** bank_reconciliation_marks;
+  **036** definitions (doc_type_definitions, pos_terminals, areas, targets,
+  discount_rules, customer_prices, loyalty_accounts(+entries),
+  handheld_devices, device_routes, drivers, delivery_prices,
+  delivery_requests, driver_settlements, custom_field_definitions(+values),
+  installments(+schedule), payment_methods — RS-2);
+  **037** operations (pos_cash_closings, support_tickets);
+  **038** permissions seed for all new codes.
+- Layers follow Phase 3 exactly: Domain entities + interfaces,
+  Infrastructure repositories (provider-neutral, parameterized, company
+  scoping, single-transaction writes), Application services (validation),
+  App windows on BaseWin with bottom command bars, AppHost +
+  AppServiceHost wiring, PermCat constants, Lang keys in all 4 catalogs.
+- Tests: `tests/Kern.Tests` per new service (compile-green; execution needs
+  Windows — noted).
+
+## Build results
+
+_(Filled in at completion — see the final section appended by the integration commit.)_
