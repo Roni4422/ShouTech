@@ -567,4 +567,64 @@ portfolios, document cycles). Full research file: `~/workspace/research/erp-wind
 
 ## Build results
 
-_(Filled in at completion — see the final section appended by the integration commit.)_
+## Completion results (2026-11-17, branch `feat/ribbon-windows-complete`)
+
+### Counts: before → after
+
+| Status | Before | After |
+|---|---|---|
+| COMPLETE | 74 | **228** |
+| PLACEHOLDER | 14 | 0 |
+| UNWIRED | 140 | 0 |
+| **Total** | **228** | **228** |
+
+After-state verified mechanically: every action key in the inventory table is
+referenced by routing code (MWin named cases / dedicated handlers /
+RibbonReportRouter / RibbonNav / RptNav / MainShVM); zero
+`ShowOperationUnavailable` / `ShowPersistenceUnavailable` call sites remain in
+Views; the only `ModuleWorkspaceView` mention left in routing code is a doc
+comment stating no button may fall through to it.
+
+### Verification (verbatim results)
+
+- MainApp build (`-p:EnableWindowsTargeting=true`): **0 Error(s), 48 Warning(s)** (analyzer warnings only).
+- Kern.Tests build: **0 Error(s), 3 Warning(s)** (incl. the 2 known pre-existing CS1998 in SalesChain tests).
+- SqlMigrator on fresh SQLite: all migrations through 038 applied; second run **37 SKIP** + "Migration run completed successfully" (idempotent). Table count **48 → 83**. Permissions rows: **285**, including `SALES.ORDER.CONVERT`, `PURCH.ORDER.CONVERT`, `SYS.CUSTOM_FIELDS.MANAGE`.
+- Order-engine smoke harness (real SQLite, migrations applied, OrderService + repositories): **10 passed, 0 failed** — create/reload with delivery date + totals, draft edit persists, post flips status, convert creates posted invoice SAL-1001, progress 100% billed, party ledger Dr 300 written, double-convert blocked, quotation→order conversion, expired quotation blocked, NextDocNo PO-1001.
+- Chunk-level service smokes (agents' reflection/console harnesses on real SQLite): MasterCardServiceTests 10/10, ChequeMfgServiceTests 13/13, OperationsServiceTests 8/8 scenarios PASS.
+- Lang resource sweep: **525 distinct T() keys used in app code, 0 missing in En**; 621 chunk keys + order/doc-search keys merged into all 4 catalogs (En/Ar/Fr/Tr).
+- Kern.Tests execution still requires Windows (testhost targets net8.0-windows); PostgreSQL migrations written in matching pairs but not live-run — both flagged for the Windows/PG verification pass.
+
+### Per-window built summary
+
+| Area | Windows | Migrations / tables | Repository / service | Permissions |
+|---|---|---|---|---|
+| Master cards (B) | CcCard, BnkCard, CurCard, RepCard, CstCard rewritten; CcListWin, PartySearchWin, PartyManagerWin new | 031: cost_centers, cost_center_allocations(+lines), banks, currencies, currency_rates, parties, party_groups, sales_reps, sales_rep_groups | MasterCardRepository/Service | existing card codes + 038 |
+| Orders (D) | OrdWin rewritten; DocSearchWin, OrderTrackWin, GroupManagerWin new | 032: delivery_date/valid_till on sales/purchase_documents + indexes (documents engine + document_links 024 reused — documented deviation from new orders tables) | OrderDocumentRepository, OrderService (convert in ONE transaction, remaining-qty only, party ledger + link) | SALES.ORDER.CONVERT, PURCH.ORDER.CONVERT (038) |
+| Vouchers/cheques/mfg (C) | CshWin rewritten (post blocked while header ≠ Σ lines, amount-in-words print); ChqWin + ChqListWin; MfgWin + MfgListWin | 033: cheques (full lifecycle); 034: mfg_orders(+lines) | ChequeService (legal-transition table + posting map), Manufacturing service | existing voucher/cheque codes |
+| Reports (E) | ~30 new RptBase windows in Views/Reports/ | — (~35 additive RptQuery methods) | RptQuery | existing report codes |
+| Definitions (F1) | DefManagerWin (21 sets), InstallmentsWin, LoyaltyWin, DeliveryDeskWin | 036: 19 tables incl. payment_methods (7 global seed rows) | DefinitionRepository/Service + DefSets | SYS.CUSTOM_FIELDS.MANAGE (038) + existing |
+| Operations/tools (F2) | BankRecWin, CloseCashWin, PosSyncWin, CalculatorWin, ChangePasswordWin, ActivityLogWin, MaintenanceWin, RolloverWin, CompressInvoicesWin, RepostWin, FinancialAnalysisWin, CustomReportsWin, UpdatesWin, HelpWin, SupportWin, LicenseWin, AddonsWin | 035: bank_reconciliation_marks (key = journal_entry_line_id); 037: pos_cash_closings, support_tickets | OperationsRepository/Service | existing ops codes |
+
+### Shell-context compliance (owner directive 2026-11-17)
+
+Every window built/rewritten in this pass: **language/company/theme/prefs = central** —
+strings and direction only via Lang/BaseWin; company resolved at open/query time
+from `AppState.CurrentCompanyCode` (print headers use
+`AppState.CurrentCompanyDisplayName`, e.g. OrdWin, MfgWin); styling only via the
+central VisuId tokens; currency defaults from `UsrPref.Load().CurrencyCode`
+(verified: zero `"SAR"` literals remain in the new/rewritten windows — the
+PosWin pattern); RBAC + audit stamps from AppHost.Session/Auth/Permissions.
+No window hardcodes language, direction, company, currency, or formats.
+
+### Deliberate limitations (with reasons)
+
+- **CshWin draft delete disabled** with an honest in-window note: JournalService exposes no draft-delete API; no fake delete was shipped.
+- **CompressInvoicesWin** purges only soft-deleted Draft documents (posted documents can never match) transactionally with an audit row; hard purge of posted history is blocked by FKs from document_links/party_ledger by design.
+- **LicenseWin Renew disabled**: ILicenSvc has no renewal/key-entry API — shown disabled with an explanation rather than faked.
+- **AddonsWin read-only**: PluginManager exposes no enable/disable API.
+- **UpdatesWin**: no update source is configured in shipped config (ActivationServer empty) — honest "not configured" state; when configured it performs a real version-file check. From-file path verifies + hashes + audits but does not install.
+- **Credit-limit enforcement** is not wired into InvoiceWin posting (party credit limits persist via chunk B; enforcement hook is a follow-up).
+- **Cheque-paper print layouts** and **bank statement file import** were not built (no paper-layout spec / file-format spec exists yet); cheque lifecycle + posting are complete.
+- **Cost-center allocation** application at posting time is deferred; allocations persist and balances report from posted journal lines by cost-center code.
+- Report simplifications documented inline per window (no batch expiry dates in schema → ExpiredWin uses has_expiry + last movement; cash/bank accounts identified by name heuristic — no flag column; CashFlowWin is a labeled indirect approximation; BankEstimateWin aggregates due cheques — cheques carry no GL link).
