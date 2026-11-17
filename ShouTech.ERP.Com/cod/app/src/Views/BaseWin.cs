@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -162,6 +163,34 @@ public abstract class BaseWin : Window
             Margin = FormLabelMargin
         };
         label.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
+        Grid.SetRow(label, row);
+        Grid.SetColumn(label, pair * 2);
+        grid.Children.Add(label);
+        PlaceFormControl(grid, row, pair, control, spanPairs);
+    }
+
+    /// <summary>
+    /// List-registered variant of
+    /// <see cref="AddFormField(Grid, int, int, string, UIElement, int)"/> for
+    /// windows that localize through a label registry (the ProjWin pattern):
+    /// the side label is added to <paramref name="labels"/> so the window's
+    /// ApplyLocalizedText can set its text from the key, exactly as the old
+    /// per-window Labeled helpers did.
+    /// </summary>
+    protected void AddFormField(
+        List<(TextBlock Label, string Key)> labels,
+        Grid grid, int row, int pair, string key, UIElement control, int spanPairs = 1)
+    {
+        EnsureFormRow(grid, row);
+        var label = new TextBlock
+        {
+            Text = T(key),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = FormLabelMargin
+        };
+        label.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
+        labels.Add((label, key));
         Grid.SetRow(label, row);
         Grid.SetColumn(label, pair * 2);
         grid.Children.Add(label);

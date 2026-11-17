@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -34,7 +34,7 @@ public sealed class DefManagerWin : BaseWin
     private readonly List<(DefColumn Column, Control Editor)> _editors = new();
 
     private readonly DataGrid _grid = new();
-    private readonly StackPanel _editorPanel = new();
+    private readonly Grid _editorPanel = CreateFormGrid(1);
     private readonly CheckBox _isActive = new();
     private readonly TextBlock _header = new();
     private readonly TextBlock _statusBar = new();
@@ -178,28 +178,24 @@ public sealed class DefManagerWin : BaseWin
         Grid.SetColumn(listPanel, 0);
         content.Children.Add(listPanel);
 
-        // Editor generated from the descriptor columns.
+        // Editor generated from the descriptor columns, as rows of the
+        // one-pair form grid (side labels, aligned edges — Phenix rule).
+        // Editor heights come from the central styles via AddFormField.
+        var editorRow = 0;
         foreach (var column in _set.Columns)
         {
             Control editor = column.Type switch
             {
-                DefColumnType.Bool => new CheckBox { VerticalAlignment = VerticalAlignment.Center, MinHeight = 26 },
-                DefColumnType.Date => new DatePicker { MinHeight = 26 },
-                _ => new TextBox { MinHeight = 26 }
+                DefColumnType.Bool => new CheckBox { VerticalAlignment = VerticalAlignment.Center },
+                DefColumnType.Date => new DatePicker(),
+                _ => new TextBox()
             };
             _editors.Add((column, editor));
-            _editorPanel.Children.Add(Labeled($"Definitions.Field.{column.Name}", editor, 300));
+            AddFormField(_labels, _editorPanel, editorRow++, 0, $"Definitions.Field.{column.Name}", editor);
         }
         if (_set.HasActive)
         {
-            _isActive.Margin = new Thickness(0, 6, 0, 0);
-            var activeLabel = new TextBlock { Margin = new Thickness(0, 0, 0, 4) };
-            activeLabel.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
-            _labels.Add((activeLabel, "Definitions.IsActive"));
-            var activePanel = new StackPanel { Margin = new Thickness(0, 0, 10, 8) };
-            activePanel.Children.Add(activeLabel);
-            activePanel.Children.Add(_isActive);
-            _editorPanel.Children.Add(activePanel);
+            AddFormField(_labels, _editorPanel, editorRow, 0, "Definitions.IsActive", _isActive);
             _isActive.IsChecked = true;
         }
         var editorScroll = new ScrollViewer { Content = _editorPanel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
@@ -420,25 +416,13 @@ public sealed class DefManagerWin : BaseWin
         Setters = { new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Center) }
     };
 
-    private StackPanel Labeled(string key, Control control, double width = 0)
-    {
-        var panel = new StackPanel { Margin = new Thickness(0, 0, 10, 8) };
-        if (width > 0)
-            panel.Width = width;
-        var label = new TextBlock { Margin = new Thickness(0, 0, 0, 4) };
-        label.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
-        _labels.Add((label, key));
-        panel.Children.Add(label);
-        panel.Children.Add(control);
-        return panel;
-    }
 
     private static void StyleButton(Button button, string key)
     {
         button.Tag = key;
-        button.MinWidth = 92;
-        button.MinHeight = 32;
-        button.Margin = new Thickness(6, 0, 0, 0);
-        button.Padding = new Thickness(12, 3, 12, 3);
+        button.MinWidth = VisuId.ButtonMinWidth;
+        button.MinHeight = VisuId.ControlHeight;
+        button.Margin = new Thickness(8, 0, 0, 0);
+        button.Padding = new Thickness(14, 0, 14, 0);
     }
 }

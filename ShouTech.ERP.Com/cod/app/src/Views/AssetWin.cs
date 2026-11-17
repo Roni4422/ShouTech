@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -143,30 +143,22 @@ public sealed class AssetWin : BaseWin
         Grid.SetColumn(listPanel, 0);
         content.Children.Add(listPanel);
 
-        var editor = new StackPanel();
-        var row1 = new WrapPanel();
-        row1.Children.Add(Labeled("Assets.Code", _code, 140));
-        row1.Children.Add(Labeled("Assets.Status", _status, 150));
-        editor.Children.Add(row1);
-        editor.Children.Add(Labeled("Assets.Name", _name, 300));
-        var row2 = new WrapPanel();
-        row2.Children.Add(Labeled("Assets.Category", _category, 140));
-        row2.Children.Add(Labeled("Assets.Location", _location, 150));
-        editor.Children.Add(row2);
-        editor.Children.Add(Labeled("Assets.PurchaseDate", _purchase, 160));
-        var row3 = new WrapPanel();
-        row3.Children.Add(Labeled("Assets.Cost", _cost, 140));
-        row3.Children.Add(Labeled("Assets.Salvage", _salvage, 140));
-        editor.Children.Add(row3);
-        var row4 = new WrapPanel();
-        row4.Children.Add(Labeled("Assets.LifeYears", _life, 120));
-        row4.Children.Add(Labeled("Assets.Method", _method, 170));
-        editor.Children.Add(row4);
-        var row5 = new WrapPanel();
-        row5.Children.Add(Labeled("Assets.Accumulated", _accumulated, 140));
-        row5.Children.Add(Labeled("Assets.BookValue", _bookValue, 140));
-        editor.Children.Add(row5);
-        editor.Children.Add(Labeled("Assets.Notes", _notes, 300));
+        // Editor = a one-pair form grid: side labels, fields stretch to
+        // the panel width, edges aligned down the whole editor (Phenix rule).
+        var editor = CreateFormGrid(1);
+        AddFormField(_labels, editor, 0, 0, "Assets.Code", _code);
+        AddFormField(_labels, editor, 1, 0, "Assets.Status", _status);
+        AddFormField(_labels, editor, 2, 0, "Assets.Name", _name);
+        AddFormField(_labels, editor, 3, 0, "Assets.Category", _category);
+        AddFormField(_labels, editor, 4, 0, "Assets.Location", _location);
+        AddFormField(_labels, editor, 5, 0, "Assets.PurchaseDate", _purchase);
+        AddFormField(_labels, editor, 6, 0, "Assets.Cost", _cost);
+        AddFormField(_labels, editor, 7, 0, "Assets.Salvage", _salvage);
+        AddFormField(_labels, editor, 8, 0, "Assets.LifeYears", _life);
+        AddFormField(_labels, editor, 9, 0, "Assets.Method", _method);
+        AddFormField(_labels, editor, 10, 0, "Assets.Accumulated", _accumulated);
+        AddFormField(_labels, editor, 11, 0, "Assets.BookValue", _bookValue);
+        AddFormField(_labels, editor, 12, 0, "Assets.Notes", _notes);
         _accumulated.IsReadOnly = true;
         _bookValue.IsReadOnly = true;
         _method.ItemsSource = DepreciationMethods.All;
@@ -394,26 +386,14 @@ public sealed class AssetWin : BaseWin
         Setters = { new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Center) }
     };
 
-    private StackPanel Labeled(string key, Control control, double width = 0)
-    {
-        var panel = new StackPanel { Margin = new Thickness(0, 0, 10, 8) };
-        if (width > 0)
-            panel.Width = width;
-        var label = new TextBlock { Margin = new Thickness(0, 0, 0, 4) };
-        label.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
-        _labels.Add((label, key));
-        panel.Children.Add(label);
-        panel.Children.Add(control);
-        return panel;
-    }
 
     private static void StyleButton(Button button, string key)
     {
         button.Tag = key;
-        button.MinWidth = 92;
-        button.MinHeight = 32;
-        button.Margin = new Thickness(6, 0, 0, 0);
-        button.Padding = new Thickness(12, 3, 12, 3);
+        button.MinWidth = VisuId.ButtonMinWidth;
+        button.MinHeight = VisuId.ControlHeight;
+        button.Margin = new Thickness(8, 0, 0, 0);
+        button.Padding = new Thickness(14, 0, 14, 0);
     }
 
     private static string? NullIfBlank(string? value)

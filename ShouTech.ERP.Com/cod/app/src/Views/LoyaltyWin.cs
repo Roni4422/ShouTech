@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -123,11 +123,13 @@ public sealed class LoyaltyWin : BaseWin
         Grid.SetColumn(listPanel, 0);
         content.Children.Add(listPanel);
 
-        var editor = new StackPanel();
-        editor.Children.Add(Labeled("Loyalty.PartyCode", _party, 290));
-        editor.Children.Add(Labeled("Loyalty.Points", _points, 140));
-        editor.Children.Add(Labeled("Loyalty.DocRef", _docRef, 290));
-        editor.Children.Add(Labeled("Loyalty.Notes", _notes, 290));
+        // Editor = a one-pair form grid: side labels, aligned edges
+        // down the whole editor (Phenix rule).
+        var editor = CreateFormGrid(1);
+        AddFormField(_labels, editor, 0, 0, "Loyalty.PartyCode", _party);
+        AddFormField(_labels, editor, 1, 0, "Loyalty.Points", _points);
+        AddFormField(_labels, editor, 2, 0, "Loyalty.DocRef", _docRef);
+        AddFormField(_labels, editor, 3, 0, "Loyalty.Notes", _notes);
         Grid.SetRow(editor, 0);
         Grid.SetColumn(editor, 1);
         content.Children.Add(editor);
@@ -285,26 +287,14 @@ public sealed class LoyaltyWin : BaseWin
         Setters = { new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Center) }
     };
 
-    private StackPanel Labeled(string key, Control control, double width = 0)
-    {
-        var panel = new StackPanel { Margin = new Thickness(0, 0, 10, 8) };
-        if (width > 0)
-            panel.Width = width;
-        var label = new TextBlock { Margin = new Thickness(0, 0, 0, 4) };
-        label.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
-        _labels.Add((label, key));
-        panel.Children.Add(label);
-        panel.Children.Add(control);
-        return panel;
-    }
 
     private static void StyleButton(Button button, string key)
     {
         button.Tag = key;
-        button.MinWidth = 92;
-        button.MinHeight = 32;
-        button.Margin = new Thickness(6, 0, 0, 0);
-        button.Padding = new Thickness(12, 3, 12, 3);
+        button.MinWidth = VisuId.ButtonMinWidth;
+        button.MinHeight = VisuId.ControlHeight;
+        button.Margin = new Thickness(8, 0, 0, 0);
+        button.Padding = new Thickness(14, 0, 14, 0);
     }
 
     private static string? NullIfBlank(string? value)
