@@ -534,7 +534,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
             var invoiceId = await InsertDocumentAsync(connection, transaction, side, invoiceDraft, CommercialDocumentStatus.Posted, userId, cancellationToken).ConfigureAwait(false);
 
-            ComputeTotals(invoiceLines, out _, out _, out var grandTotal);
+            ComputeTotals(invoiceLines, out var invoiceSubtotal, out var invoiceTax, out var grandTotal);
 
             // Credit-limit gate (ACC-5006): the converted invoice is created
             // already posted and its ledger row is written below, so the
@@ -576,6 +576,36 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 Add(link, "@targetId", invoiceId);
                 Add(link, "@actor", userId.Trim());
                 await link.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            // Real GL posting (Step 3, J-2): the converted invoice is
+            // created already-Posted, so its balanced journal entry is
+            // written in this same transaction (sales: Dr Receivable /
+            // Cr Revenue; purchase: Dr Purchases / Cr Payable; tax split
+            // only when a postable VAT account is configured).
+            if (grandTotal > 0)
+            {
+                var splitTax = invoiceTax > 0 && GlPosting.TryResolveAccount(connection, transaction, _provider,
+                    order.CompanyId, side == CommercialDocSide.Sales ? GlAccounts.OutputVat : GlAccounts.InputVat) is not null;
+                var glLines = new List<GlLineRequest>();
+                if (side == CommercialDocSide.Sales)
+                {
+                    glLines.Add(new GlLineRequest(GlAccounts.Receivable, grandTotal, 0m));
+                    glLines.Add(new GlLineRequest(GlAccounts.SalesRevenue, 0m, splitTax ? invoiceSubtotal : grandTotal, order.CostCenter));
+                    if (splitTax) glLines.Add(new GlLineRequest(GlAccounts.OutputVat, 0m, invoiceTax));
+                }
+                else
+                {
+                    glLines.Add(new GlLineRequest(GlAccounts.Purchases, splitTax ? invoiceSubtotal : grandTotal, 0m, order.CostCenter));
+                    if (splitTax) glLines.Add(new GlLineRequest(GlAccounts.InputVat, invoiceTax, 0m));
+                    glLines.Add(new GlLineRequest(GlAccounts.Payable, 0m, grandTotal));
+                }
+                GlPosting.PostInTransaction(connection, transaction, _provider,
+                    new GlDocumentRequest(order.CompanyId, invoiceDate,
+                        $"{invoiceKind} {invoiceDocNo.Trim()} from order {order.DocNo}",
+                        invoiceKind, invoiceId.ToString(CultureInfo.InvariantCulture), invoiceDocNo.Trim(),
+                        order.CurrencyCode, order.ExchangeRate, glLines),
+                    userId);
             }
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
