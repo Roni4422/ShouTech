@@ -3110,10 +3110,16 @@
                                     Effect="{StaticResource FlyoutShadowEffect}"
                                     Padding="4"
                                     SnapsToDevicePixels="True">
+                                <!-- No IsItemsHost here: ToolBar wires PART_ToolBarOverflowPanel
+                                     itself. Declaring IsItemsHost="True" steals the items-host
+                                     slot from PART_ToolBarPanel and makes ToolBarPanel.
+                                     GenerateChildren() throw InvalidOperationException
+                                     ("Cannot explicitly modify Children collection of Panel
+                                     used as ItemsPanel") on first layout. Matches the
+                                     framework's own ToolBar template. -->
                                 <ToolBarOverflowPanel x:Name="PART_ToolBarOverflowPanel"
                                                       Margin="2"
                                                       Focusable="True"
-                                                      IsItemsHost="True"
                                                       KeyboardNavigation.DirectionalNavigation="Contained"
                                                       KeyboardNavigation.TabNavigation="Local"/>
                             </Border>
