@@ -44,8 +44,6 @@ public partial class BkpWin : Window
         };
     }
 
-    private static string Lang => App.CurrentLanguageCode ?? "en";
-
     private static string CompanyCode => AppState.CurrentCompanyCode?.Trim() ?? string.Empty;
 
     /// <summary>Localized string from Resources/Lang/*.json under Backup.*</summary>
@@ -63,9 +61,10 @@ public partial class BkpWin : Window
 
     private void ApplyLanguage()
     {
-        var isAr = Lang.StartsWith("ar", StringComparison.OrdinalIgnoreCase);
-        FlowDirection = isAr ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
-
+        // Direction comes from the central mechanism (VisuId.ApplyWindow in
+        // the constructor applies LangDirSv with the current language, the
+        // App Loaded class handler re-applies it, and a live language switch
+        // sweeps all open windows). This method only refreshes texts.
         Title = L("Title", "Backup");
         txtTitle.Text = Title;
         txtCompany.Text = Lf("CompanyLine", "Company: {0}  |  Code: {1}",

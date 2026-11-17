@@ -94,12 +94,9 @@ private void ApplySizeFromOwner()
 
 private void ApplyDirection()
 {
-    var lang = App.CurrentLanguageCode ?? "en";
-
-    FlowDirection =
-        lang.StartsWith("ar", StringComparison.OrdinalIgnoreCase)
-            ? FlowDirection.RightToLeft
-            : FlowDirection.LeftToRight;
+    // Central direction mechanism (also applied by BaseWin); no local
+    // language-prefix checks.
+    LangDirSv.ApplyToWindow(this, App.CurrentLanguageCode);
 
     Title = Loc.Get(
         "Inventory.MaterialTree",

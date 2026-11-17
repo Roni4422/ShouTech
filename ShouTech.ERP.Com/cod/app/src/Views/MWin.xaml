@@ -91,7 +91,6 @@
                       Height="28"
                       HorizontalAlignment="Stretch"
                       Background="{DynamicResource ChromeBackgroundBrush}"
-                      FlowDirection="LeftToRight"
                       shell:WindowChrome.IsHitTestVisibleInChrome="True"
                       MouseLeftButtonDown="OnTitleBarMouseLeftButtonDown">
                     <Grid.ColumnDefinitions>
@@ -719,25 +718,21 @@
             <StatusBar x:Name="MainStatusBar" Grid.Row="6"
                        Background="{DynamicResource ShellStatusBarBackgroundBrush}"
                        Foreground="{DynamicResource ShellStatusBarForegroundBrush}"
-                       Height="26"
-					   FlowDirection="LeftToRight">
+                       Height="26">
                 <StatusBarItem>
-                    <StackPanel Orientation="Horizontal"
-								FlowDirection="LeftToRight">
+                    <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Company: " Opacity="0.78" Margin="0,0,3,0"/>
                         <TextBlock Text="{Binding CompanyName}" FontWeight="SemiBold"/>
                     </StackPanel>
                 </StatusBarItem>
                 <StatusBarItem>
-                    <StackPanel Orientation="Horizontal"
-								FlowDirection="LeftToRight">
+                    <StackPanel Orientation="Horizontal">
                         <TextBlock Text="User: " Opacity="0.78" Margin="0,0,3,0"/>
                         <TextBlock Text="{Binding CurrentUser}" FontWeight="SemiBold"/>
                     </StackPanel>
                 </StatusBarItem>
                 <StatusBarItem>
-                    <StackPanel Orientation="Horizontal"
-								FlowDirection="LeftToRight">
+                    <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Database: " Opacity="0.78" Margin="0,0,3,0"/>
                         <TextBlock Text="{Binding CurrentDatabase}" FontWeight="SemiBold"/>
                     </StackPanel>

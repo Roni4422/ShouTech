@@ -136,7 +136,11 @@
                     </TreeView.Resources>
 
                     <TreeView.ContextMenu>
-                        <ContextMenu FlowDirection="RightToLeft">
+                        <!-- Direction synced from the window in code-behind
+                             (TreeContextMenu_Opened): a ContextMenu lives in a
+                             popup and does not inherit the window FlowDirection,
+                             so it must never be pinned to one language here. -->
+                        <ContextMenu Opened="TreeContextMenu_Opened">
                             <MenuItem Header="Account card" ToolTip="ToolTip" Click="OpenAccount_Click"/>
                             <MenuItem Header="Header" ToolTip="ToolTip" Click="AddChild_Click"/>
                             <Separator/>

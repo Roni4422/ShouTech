@@ -797,30 +797,13 @@ namespace ShouTech.App.Views
 
             UpdateStepTitle(lang);
             UpdateFiscalHint();
-            ApplyNavigationButtonOrder(lang);
-        }
 
-        private void ApplyNavigationButtonOrder(string lang)
-        {
-            if (navigationButtons == null)
-                return;
-
-            // Force LTR strip so the programmed order is physical left→right.
-            // In RTL the strip is aligned to the start edge (physical left in WPF RTL terms = visual start).
-            navigationButtons.FlowDirection = FlowDirection.LeftToRight;
-            navigationButtons.HorizontalAlignment = LangDirSv.IsRtl(lang)
-                ? HorizontalAlignment.Left
-                : HorizontalAlignment.Right;
-            navigationButtons.Children.Clear();
-
-            // RTL: primary action (Next/Finish) sits at the visual start (right side of strip when strip is LTR-ordered for RTL UX).
-            // Order chosen so Cancel stays farthest from the primary action.
-            var orderedButtons = LangDirSv.IsRtl(lang)
-                ? new UIElement[] { btnFinish, btnNext, btnBack, btnCancel }
-                : new UIElement[] { btnCancel, btnBack, btnNext, btnFinish };
-
-            foreach (var button in orderedButtons)
-                navigationButtons.Children.Add(button);
+            // Navigation strip: no local direction handling. The strip
+            // inherits the window FlowDirection (central LangDirSv), so under
+            // RTL the StackPanel mirrors the declared XAML order
+            // (Cancel, Back, Next, Finish) and aligns to the reading-start
+            // edge — the primary action lands exactly where the previous
+            // hand-rolled reorder logic put it, in both directions.
         }
 
         private void UpdateStepTitle(string lang)

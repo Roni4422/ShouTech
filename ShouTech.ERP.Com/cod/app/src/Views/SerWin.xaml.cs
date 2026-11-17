@@ -159,12 +159,8 @@ public partial class SerWin : BaseWin
     {
         try
         {
-            var lang = App.CurrentLanguageCode ?? "ar";
-            bool isRtl = lang.StartsWith("ar", StringComparison.OrdinalIgnoreCase);
-
-            FlowDirection = isRtl
-                ? FlowDirection.RightToLeft
-                : FlowDirection.LeftToRight;
+            // Central direction mechanism (also applied by BaseWin).
+            LangDirSv.ApplyToWindow(this, App.CurrentLanguageCode);
 
             BtnOk.Content     = Loc.Get("SerWin.Ok",     "OK");
             BtnCancel.Content = Loc.Get("SerWin.Cancel", "Cancel");

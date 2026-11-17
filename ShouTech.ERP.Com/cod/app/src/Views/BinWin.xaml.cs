@@ -40,8 +40,6 @@ public partial class BinWin : Window
         }
     }
 
-    private static bool IsArabic => (App.CurrentLanguageCode ?? "en").StartsWith("ar", StringComparison.OrdinalIgnoreCase);
-
     /// <summary>
     /// Formats a localized pattern using a cached CompositeFormat
     /// to avoid re-parsing the format string on every call (CA1863).
@@ -60,7 +58,9 @@ public partial class BinWin : Window
 
     private void ApplyLanguage()
     {
-        FlowDirection = IsArabic ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
+        // Direction is applied centrally (LangDirSv.ApplyToWindow in the
+        // constructor + the App Loaded class handler + live-switch sweep);
+        // this method only refreshes texts.
         Title = Loc.Get("RecycleBin.Title", "Recycle Bin");
         TitleText.Text = Title;
         HintText.Text = Loc.Get("RecycleBin.Description",

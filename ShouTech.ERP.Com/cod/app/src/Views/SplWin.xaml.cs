@@ -244,9 +244,10 @@ namespace ShouTech.App.Views
         {
             try
             {
-                FlowDirection = FlowDirection.LeftToRight;
-                if (progressBarContainer != null)
-                    progressBarContainer.FlowDirection = FlowDirection.LeftToRight;
+                // Direction follows the active language through the central
+                // service (RTL for Arabic). No local LTR pins: the splash
+                // layout mirrors like every other window.
+                LangDirSv.ApplyToWindow(this, App.CurrentLanguageCode);
                 Title = "ShouTech ERP - Starting";
             }
             catch { }

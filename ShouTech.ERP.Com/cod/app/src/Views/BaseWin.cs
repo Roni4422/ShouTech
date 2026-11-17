@@ -91,18 +91,12 @@ public abstract class BaseWin : Window
     /// <summary>Applies RTL/LTR according to the active language code.</summary>
     protected void ApplyFlowDirection()
     {
+        // Single central mechanism: LangDirSv decides direction from the
+        // language (IsRtl covers ar/he/fa/ur/...). Do not re-derive it here —
+        // a local "ar"-only check would silently override the service for
+        // any other RTL language.
         var code = LocSvc?.GetCurrentLanguage() ?? App.CurrentLanguageCode;
         LangDirSv.ApplyToWindow(this, code);
-        
-        // Apply Arabic RTL or other LTR based on language
-        if (code != null && code.StartsWith("ar", StringComparison.OrdinalIgnoreCase))
-        {
-            FlowDirection = FlowDirection.RightToLeft;
-        }
-        else
-        {
-            FlowDirection = FlowDirection.LeftToRight;
-        }
     }
 
     private void OnBaseLoaded(object sender, RoutedEventArgs e)

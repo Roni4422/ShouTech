@@ -213,21 +213,17 @@ namespace ShouTech.App.Views
             }
 
             editBtnBar.Visibility = Visibility.Collapsed;
-            rootDock.FlowDirection = FlowDirection.LeftToRight;
-            contentGrid.FlowDirection = IsArabicUi() ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
 
-            if (IsArabicUi())
-            {
-                DockPanel.SetDock(mgmtPanel, Dock.Right);
-                mgmtPanel.Margin = new Thickness(12, 0, 0, 0);
-                mgmtPanel.FlowDirection = FlowDirection.RightToLeft;
-            }
-            else
-            {
-                DockPanel.SetDock(mgmtPanel, Dock.Left);
-                mgmtPanel.Margin = new Thickness(0, 0, 12, 0);
-                mgmtPanel.FlowDirection = FlowDirection.LeftToRight;
-            }
+            // Direction is inherited from the window (central LangDirSv via
+            // ApplyWindowDirection / the App class handler). DockPanel mirrors
+            // Dock.Left to the visual right under RTL, so the management panel
+            // always sits at the reading-start edge without any local
+            // FlowDirection pins. Only the physical gap margin differs:
+            // the gap must face the content area in both directions.
+            DockPanel.SetDock(mgmtPanel, Dock.Left);
+            mgmtPanel.Margin = IsArabicUi()
+                ? new Thickness(12, 0, 0, 0)
+                : new Thickness(0, 0, 12, 0);
         }
 
         private void OnLanguageChanged(object? sender, EventArgs e)
