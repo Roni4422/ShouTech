@@ -18,30 +18,9 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class JrnWin : BaseWin
 {
-    /// <summary>Logs unavailable operations instead of reporting a false success.</summary>
-    private void ShowOperationUnavailable(string operation)
-    {
-        const string errorCode = "APP-2011";
-        var context = $"Operation={operation} is not implemented in window {GetType().Name}.";
-        var definition = ShouTech.App.Localization.ErrorCatalog.Resolve(errorCode);
-        var exception = new NotSupportedException(context);
-
-        ShouTech.App.Services.AppHost.Logging?.LogError(
-            "WindowOperation",
-            $"[{definition.Code}] {definition.Name} | Window={GetType().Name} | {context}",
-            exception);
-        ShouTech.App.Services.AppHost.Logging?.LogOperation(
-            "WindowOperation",
-            "OperationUnavailable",
-            $"Code={definition.Code} | Window={GetType().Name} | {context}");
-
-        MessageBox.Show(
-            this,
-            $"[{definition.Code}] {definition.Message}\n{context}",
-            ShouTech.App.Localization.Loc.Get("Common.OperationUnavailable", "Operation unavailable"),
-            MessageBoxButton.OK,
-            MessageBoxImage.Warning);
-    }
+    // Note: the former ShowOperationUnavailable helper was removed — every
+    // JrnWin operation (New/Load/Save/Post/Reverse/Print) is implemented;
+    // no placeholder operations remain in this window.
 
     private readonly TextBox _txtDocNo = new() { Width = 110, Height = 26 };
     private readonly DatePicker _dtDate = new() { Width = 120, Height = 26, SelectedDate = DateTime.Today };

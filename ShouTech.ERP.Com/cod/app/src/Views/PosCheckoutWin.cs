@@ -238,6 +238,7 @@ public sealed class PosCheckoutWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Logging?.LogError("PosCheckoutWin", $"CompleteSale failed | DocNo={_doc.DocNo}", ex);
             MessageBox.Show(this, ex.Message, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
             _complete.IsEnabled = true;
         }

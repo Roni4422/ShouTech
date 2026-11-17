@@ -1,4 +1,4 @@
-﻿// ========================================================================
+// ========================================================================
 // FILE: Services/Inventory.cs
 // PROJECT: SHOUTECH ERP - Inventory & Material master
 // Merged: InventoryModels, IInvServ, InvServ, InvRepo, InventoryRepositoryFactory, MatRepo
@@ -1789,7 +1789,7 @@ internal static class MatRepo
 			}
 			catch
 			{
-				try { tx.Rollback(); } catch { /* ignored */ }
+				try { tx.Rollback(); } catch (Exception rollbackEx) { LogWarehouseError("Rollback", rollbackEx); }
 				throw;
 			}
 		}
@@ -1892,7 +1892,7 @@ internal static class MatRepo
 			}
 			catch
 			{
-				try { tx.Rollback(); } catch { /* ignored */ }
+				try { tx.Rollback(); } catch (Exception rollbackEx) { LogWarehouseError("Rollback", rollbackEx); }
 				throw;
 			}
 		}

@@ -751,7 +751,11 @@ public sealed class InvoiceWin : BaseWin
         if (_btnReverse.IsEnabled)
         {
             try { _btnReverse.IsEnabled = !InvRepo.HasCompletedReversal(doc.DocId, doc.Kind); }
-            catch { _btnReverse.IsEnabled = false; }
+            catch (Exception ex)
+            {
+                AppHost.Logging?.LogError("InvoiceWin", $"HasCompletedReversal check failed | DocId={doc.DocId}", ex);
+                _btnReverse.IsEnabled = false;
+            }
         }
         _btnPost.IsEnabled = !locked;
         _grid.IsReadOnly = locked;
@@ -805,6 +809,7 @@ public sealed class InvoiceWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Logging?.LogError("InvoiceWin", "OpenVoucher failed", ex);
             MessageBox.Show(this,
                 Tf("Invoice.VoucherOpenFailed", "Could not open the journal voucher.") + " " + ex.Message,
                 Tf("Common.Error", "Error"),
@@ -832,6 +837,7 @@ public sealed class InvoiceWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Logging?.LogError("InvoiceWin", "OpenOriginal failed", ex);
             MessageBox.Show(this,
                 Tf("Invoice.OriginalOpenFailed", "Could not open the original invoice.") + " " + ex.Message,
                 Tf("Common.Error", "Error"),
@@ -854,6 +860,7 @@ public sealed class InvoiceWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Logging?.LogError("InvoiceWin", "SaveDraft failed", ex);
             MessageBox.Show(this, ex.Message, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -884,6 +891,7 @@ public sealed class InvoiceWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Logging?.LogError("InvoiceWin", "PostDoc failed", ex);
             MessageBox.Show(this, ex.Message, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -905,6 +913,7 @@ public sealed class InvoiceWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Logging?.LogError("InvoiceWin", "ReverseCurrentDocument failed", ex);
             MessageBox.Show(this, ex.Message, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

@@ -384,8 +384,9 @@ public sealed class BarWin : BaseWin
                 ? fallback
                 : s;
         }
-        catch
+        catch (Exception ex)
         {
+            AppHost.Logging?.LogError("BarWin", $"Localization lookup failed | Key={key}", ex);
             return fallback;
         }
     }

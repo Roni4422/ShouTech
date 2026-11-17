@@ -330,8 +330,11 @@ public static class CardStore
             var balance = GetDec(reader, 0);
             return balance != 0 ? balance : GetDec(reader, 1) - GetDec(reader, 2);
         }
-        catch
+        catch (Exception ex)
         {
+            // Error-reporting rule: no silent catches — a failed balance
+            // lookup reports centrally, then falls back to 0 for display.
+            AppHost.Logging?.LogError("CardStore", $"BankBookBalance failed | GL={glAccountCode}", ex);
             return 0;
         }
     }
@@ -934,8 +937,9 @@ public static class CardStore
             if (!reader.Read()) return null;
             return (GetLong(reader, 0), GetText(reader, 1));
         }
-        catch
+        catch (Exception ex)
         {
+            AppHost.Logging?.LogError("CardStore", $"ResolveMaterial failed | Code={code}", ex);
             return null;
         }
     }
@@ -975,8 +979,9 @@ public static class CardStore
             var value = cmd.ExecuteScalar();
             return value is null or DBNull ? null : Convert.ToInt64(value, CultureInfo.InvariantCulture);
         }
-        catch
+        catch (Exception ex)
         {
+            AppHost.Logging?.LogError("CardStore", $"ResolveWarehouseId failed | CodeOrName={codeOrName}", ex);
             return null;
         }
     }

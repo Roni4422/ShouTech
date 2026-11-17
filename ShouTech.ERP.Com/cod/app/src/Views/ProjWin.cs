@@ -249,6 +249,7 @@ public sealed class ProjWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Logging?.LogError("ProjWin", "RefreshAsync failed", ex);
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -285,6 +286,7 @@ public sealed class ProjWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Logging?.LogError("ProjWin", "LoadTasksAsync failed", ex);
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
         UpdateStatusBar();
@@ -331,6 +333,7 @@ public sealed class ProjWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Logging?.LogError("ProjWin", "SaveAsync failed", ex);
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -353,6 +356,7 @@ public sealed class ProjWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Logging?.LogError("ProjWin", "DeleteAsync failed", ex);
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -381,6 +385,7 @@ public sealed class ProjWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Logging?.LogError("ProjWin", "SaveTaskAsync failed", ex);
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -401,6 +406,7 @@ public sealed class ProjWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Logging?.LogError("ProjWin", "DeleteTaskAsync failed", ex);
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

@@ -861,6 +861,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Logging?.LogError("CatWin", "SaveCurrent failed", ex);
                 ShowToast(false, L("NotSaved", "Item was not saved."), ErrSaveFailed, ex.Message);
             }
             finally

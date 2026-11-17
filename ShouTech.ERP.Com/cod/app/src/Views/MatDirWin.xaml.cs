@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -230,6 +230,7 @@ private void Reload()
     }
     catch (Exception ex)
     {
+        AppHost.Logging?.LogError("MatDirWin", "Reload failed", ex);
         MessageBox.Show(
             this,
             ex.Message,
@@ -310,9 +311,10 @@ private void LoadGroups()
             });
         }
     }
-    catch
+    catch (Exception ex)
     {
-        // Groups are optional.
+        // Groups are optional in the filter, but the failure is reported.
+        AppHost.Logging?.LogError("MatDirWin", "LoadGroups failed", ex);
     }
 }
 
@@ -498,6 +500,7 @@ private void Remove_Click(
     }
     catch (Exception ex)
     {
+        AppHost.Logging?.LogError("MatDirWin", "Remove material failed", ex);
         MessageBox.Show(
             this,
             ex.Message,
@@ -511,6 +514,8 @@ private void Print_Click(
     object sender,
     RoutedEventArgs e)
 {
+  try
+  {
     // Real list print (was a fake handler that only showed the row count
     // in a message box). Same FlowDocument pattern as CoaWin's print.
     var dialog = new PrintDialog();
@@ -551,6 +556,12 @@ private void Print_Click(
     dialog.PrintDocument(
         ((IDocumentPaginatorSource)document).DocumentPaginator,
         Title);
+  }
+  catch (Exception ex)
+  {
+    AppHost.Logging?.LogError("MatDirWin", "Print failed", ex);
+    MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+  }
 }
 
 private void Ctx_Opened(
@@ -655,6 +666,7 @@ x => x != null);
 }
 catch (Exception ex)
 {
+    AppHost.Logging?.LogError("MatDirWin", "Open material groups failed", ex);
     MessageBox.Show(
         this,
         ex.Message,

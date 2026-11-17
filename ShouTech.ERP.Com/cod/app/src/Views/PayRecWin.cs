@@ -220,6 +220,7 @@ public sealed class PayRecWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Logging?.LogError("PayRecWin", "RefreshAsync failed", ex);
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -257,6 +258,7 @@ public sealed class PayRecWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Logging?.LogError("PayRecWin", "AllocateAsync failed", ex);
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
