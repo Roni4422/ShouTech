@@ -91,12 +91,13 @@ public abstract class BaseWin : Window
     /// <summary>Applies RTL/LTR according to the active language code.</summary>
     protected void ApplyFlowDirection()
     {
-        // Single central mechanism: LangDirSv decides direction from the
-        // language (IsRtl covers ar/he/fa/ur/...). Do not re-derive it here —
-        // a local "ar"-only check would silently override the service for
-        // any other RTL language.
-        var code = LocSvc?.GetCurrentLanguage() ?? App.CurrentLanguageCode;
-        LangDirSv.ApplyToWindow(this, code);
+        // Single central mechanism: ShellContext applies the shell's live
+        // context (direction via LangDirSv, which covers ar/he/fa/ur/...,
+        // plus the context stamps), resolved at call time from the central
+        // holders. Do not re-derive direction here — a local "ar"-only
+        // check would silently override the service for any other RTL
+        // language.
+        ShellContext.ApplyToWindow(this);
     }
 
     private void OnBaseLoaded(object sender, RoutedEventArgs e)

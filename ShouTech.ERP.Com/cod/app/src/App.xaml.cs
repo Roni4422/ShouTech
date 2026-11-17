@@ -552,7 +552,12 @@ namespace ShouTech.App
                 if (sender is Window window)
                 {
                     ApplyWesternDigitPresentation(window);
-                    LangDirSv.ApplyToWindow(window, CurrentLanguageCode);
+                    // THE shell-context application point: every window —
+                    // BaseWin-derived or Window-derived — receives the
+                    // shell's CURRENT language/direction + context stamps
+                    // here, resolved at open time from the central holders
+                    // (see Services/ShellContext.cs).
+                    ShellContext.ApplyToWindow(window);
 
                     AppHost.Logging.LogLifecycle(
                         "Window loaded",
@@ -560,22 +565,24 @@ namespace ShouTech.App
                         $"Title={window.Title}; " +
                         $"Main={ReferenceEquals(window, Current?.MainWindow)}; " +
                         $"Flow={window.FlowDirection}; " +
-                        $"Lang={CurrentLanguageCode}");
+                        $"Lang={CurrentLanguageCode}; " +
+                        $"Context={ShellContext.Describe(window)}");
 
                     if (window is not SplWin)
                         ApplyCustomTitleBarColor(window);
 
-                    // Re-apply direction once the visual tree is fully built.
-                    // This is what makes the custom chrome (VisuWindowStyle)
-                    // adopt the correct direction even when the window was
-                    // already created before the language changed.
+                    // Re-apply the shell context once the visual tree is
+                    // fully built. This is what makes the custom chrome
+                    // (VisuWindowStyle) adopt the correct direction even
+                    // when the window was already created before the
+                    // language changed.
                     window.Dispatcher.BeginInvoke(
                         DispatcherPriority.Loaded,
                         new Action(() =>
                         {
                             try
                             {
-                                LangDirSv.ApplyToWindow(window, CurrentLanguageCode);
+                                ShellContext.ApplyToWindow(window);
                             }
                             catch { }
                         }));
