@@ -101,7 +101,7 @@
                  ============================================================ -->
             <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource VisuAccentButtonStyle}">
                 <Setter Property="Effect" Value="{x:Null}"/>
-                <Setter Property="Padding" Value="18,8"/>
+                <Setter Property="Padding" Value="16,0"/>
                 <Setter Property="Height" Value="{DynamicResource PrimaryButtonHeight}"/>
                 <Setter Property="MinWidth" Value="{DynamicResource PrimaryButtonMinWidth}"/>
             </Style>

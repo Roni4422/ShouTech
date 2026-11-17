@@ -60,6 +60,42 @@ namespace ShouTech.App.Services
             System.Windows.Application.Current?.TryFindResource(key) as Brush
             ?? new SolidColorBrush((Color)ColorConverter.ConvertFromString(fallbackHex));
 
+        // ============================================================
+        // PROPORTION STANDARD (docs/WINDOW_PROPORTIONS.md)
+        // Code-built windows read every size from these accessors so a
+        // size lives in exactly one place: the tokens in
+        // Themes/VisuId.xaml. Never hardcode a control height, a button
+        // width, or a field width in a window again.
+        // ============================================================
+
+        /// <summary>Resolves a Double size token from the central theme.</summary>
+        public static double ResolveMetric(string key, double fallback) =>
+            System.Windows.Application.Current?.TryFindResource(key) is double configured
+                ? configured
+                : fallback;
+
+        /// <summary>The one standard height for every input and button (32).</summary>
+        public static double ControlHeight => ResolveMetric("ControlHeight", 32);
+
+        /// <summary>Standard minimum width of a command-bar button (88).</summary>
+        public static double ButtonMinWidth => ResolveMetric("ButtonMinWidth", 88);
+
+        /// <summary>Minimum width of the primary action (Save/Post/OK) (100).</summary>
+        public static double PrimaryButtonMinWidth => ResolveMetric("PrimaryButtonMinWidth", 100);
+
+        /// <summary>Width of the side-label column in every form grid (120).</summary>
+        public static double FormLabelWidth => ResolveMetric("FormLabelWidth", 120);
+
+        /// <summary>Non-grid field width classes (filter bars, search boxes).</summary>
+        public static double FieldWidthTiny => ResolveMetric("FieldWidthTiny", 80);
+        public static double FieldWidthShort => ResolveMetric("FieldWidthShort", 120);
+        public static double FieldWidthMedium => ResolveMetric("FieldWidthMedium", 180);
+        public static double FieldWidthLong => ResolveMetric("FieldWidthLong", 240);
+        public static double FieldWidthWide => ResolveMetric("FieldWidthWide", 400);
+
+        /// <summary>Standard height of a multi-line (notes/address) field (64).</summary>
+        public static double MultilineFieldHeight => ResolveMetric("MultilineFieldHeight", 64);
+
         private string _accentKey = "gray";
 
         // ============================================================

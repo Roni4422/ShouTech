@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using ShouTech.App.Services;
 using WpfApp = System.Windows.Application;
@@ -101,6 +102,128 @@ public abstract class BaseWin : Window
     /// again automatically whenever the shell language changes at runtime.
     /// </summary>
     protected abstract void ApplyLocalizedText();
+
+    // ================================================================
+    // FORM PROPORTIONS — the Phenix layout rule (docs/WINDOW_PROPORTIONS.md)
+    //
+    // Every form is ONE shared column grid: a fixed side-label column
+    // beside each field column, field columns star-sized. Field edges
+    // therefore align vertically across ALL rows of the form, a row
+    // with fewer fields subdivides the same total width by column
+    // spans (full / half / third / quarter), and every group in the
+    // window repeats the same span scheme. Labels sit BESIDE their
+    // field — never above it. Under RTL the grid mirrors as a whole,
+    // so the label stays beside its field.
+    //
+    // Build a form with CreateFormGrid(pairs) where "pairs" is the
+    // largest number of label+field pairs in any row, then place each
+    // field with AddFormField. Fields carry NO Width/Height of their
+    // own: height comes from the central control styles (32) and width
+    // from the column they sit in.
+    // ================================================================
+
+    /// <summary>Margin of a field inside a form grid (gap to the next pair + row gap).</summary>
+    protected static readonly Thickness FormFieldMargin = new(0, 0, 12, 8);
+
+    /// <summary>Margin of a side label inside a form grid.</summary>
+    protected static readonly Thickness FormLabelMargin = new(0, 0, 8, 8);
+
+    /// <summary>
+    /// Creates the one shared column grid of a form: <paramref name="pairs"/>
+    /// repetitions of (label column = FormLabelWidth, field column = *).
+    /// </summary>
+    protected static Grid CreateFormGrid(int pairs)
+    {
+        var grid = new Grid();
+        for (var i = 0; i < pairs; i++)
+        {
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(VisuId.FormLabelWidth) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        }
+        return grid;
+    }
+
+    /// <summary>
+    /// Places a side label (localized by <paramref name="key"/>, re-localized
+    /// by the windows' Tag tree-walk) and its field into the form grid.
+    /// <paramref name="spanPairs"/> &gt; 1 makes the field span that many
+    /// pairs, so a wide field (name, address, memo) still ends exactly on
+    /// the shared column edges of the rows above and below it.
+    /// </summary>
+    protected static void AddFormField(Grid grid, int row, int pair, string key, UIElement control, int spanPairs = 1)
+    {
+        EnsureFormRow(grid, row);
+        var label = new TextBlock
+        {
+            Text = T(key),
+            Tag = key,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = FormLabelMargin
+        };
+        label.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
+        Grid.SetRow(label, row);
+        Grid.SetColumn(label, pair * 2);
+        grid.Children.Add(label);
+        PlaceFormControl(grid, row, pair, control, spanPairs);
+    }
+
+    /// <summary>
+    /// Places a control that carries its own caption (a CheckBox) or needs
+    /// no label into the field cell of the form grid, leaving the label
+    /// cell empty so the column edges stay aligned.
+    /// </summary>
+    protected static void AddFormElement(Grid grid, int row, int pair, UIElement control, int spanPairs = 1)
+    {
+        EnsureFormRow(grid, row);
+        PlaceFormControl(grid, row, pair, control, spanPairs);
+    }
+
+    private static void EnsureFormRow(Grid grid, int row)
+    {
+        while (grid.RowDefinitions.Count <= row)
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+    }
+
+    private static void PlaceFormControl(Grid grid, int row, int pair, UIElement control, int spanPairs)
+    {
+        ApplyFieldStyle(control);
+        if (control is FrameworkElement fe)
+        {
+            fe.Margin = FormFieldMargin;
+            if (control is CheckBox or RadioButton)
+                fe.VerticalAlignment = VerticalAlignment.Center;
+        }
+        Grid.SetRow(control, row);
+        Grid.SetColumn(control, pair * 2 + 1);
+        if (spanPairs > 1)
+            Grid.SetColumnSpan(control, spanPairs * 2 - 1);
+        grid.Children.Add(control);
+    }
+
+    /// <summary>
+    /// Applies the central input style for the control type, so every field
+    /// in every form carries the standard height (ControlHeight = 32) from
+    /// the theme instead of a local size.
+    /// </summary>
+    protected static void ApplyFieldStyle(UIElement control)
+    {
+        switch (control)
+        {
+            case TextBox textBox:
+                textBox.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
+                break;
+            case ComboBox comboBox:
+                comboBox.SetResourceReference(StyleProperty, "VisuComboBoxStyle");
+                break;
+            case DatePicker datePicker:
+                datePicker.SetResourceReference(StyleProperty, "Win11DatePickerStyle");
+                break;
+            case PasswordBox passwordBox:
+                passwordBox.SetResourceReference(StyleProperty, "VisuPasswordBoxStyle");
+                break;
+        }
+    }
 
     /// <summary>Applies RTL/LTR according to the active language code.</summary>
     protected void ApplyFlowDirection()

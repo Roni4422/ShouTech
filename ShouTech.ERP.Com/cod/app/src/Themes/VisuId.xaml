@@ -226,14 +226,38 @@
     <CornerRadius x:Key="CardCornerRadius">8</CornerRadius>
     <CornerRadius x:Key="Win11WindowCornerRadius">8</CornerRadius>
 
-    <!-- Shared control metrics. Keep control sizing here, not duplicated in App.xaml. -->
-    <System:Double x:Key="PrimaryButtonHeight">38</System:Double>
+    <!-- Shared control metrics. Keep control sizing here, not duplicated in App.xaml.
+         PROPORTION STANDARD (docs/WINDOW_PROPORTIONS.md): ONE height for every
+         input and button = ControlHeight (32, Fluent standard). The button and
+         text-input height tokens below are pinned to that same value on
+         purpose — they exist as semantic aliases, never as divergent sizes. -->
+    <System:Double x:Key="PrimaryButtonHeight">32</System:Double>
     <System:Double x:Key="PrimaryButtonMinWidth">100</System:Double>
-    <System:Double x:Key="SecondaryButtonHeight">34</System:Double>
-    <System:Double x:Key="SecondaryButtonMinWidth">80</System:Double>
+    <System:Double x:Key="SecondaryButtonHeight">32</System:Double>
+    <System:Double x:Key="SecondaryButtonMinWidth">88</System:Double>
+    <System:Double x:Key="ButtonMinWidth">88</System:Double>
     <System:Double x:Key="IconButtonSize">32</System:Double>
-    <System:Double x:Key="AppTextInputHeight">36</System:Double>
+    <System:Double x:Key="AppTextInputHeight">32</System:Double>
     <System:Double x:Key="AppComboBoxHeight">32</System:Double>
+
+    <!-- FORM PROPORTIONS (Phenix layout rule): every form is ONE shared column
+         grid — a fixed label column beside each field column, field columns
+         star-sized so field edges align vertically across all rows and a row
+         with fewer fields subdivides the same total width by column spans
+         (full / half / third / quarter). FormLabelWidth is the one label
+         column width for a window's forms. The FieldWidth* classes are ONLY
+         for the rare non-grid contexts (filter bars, search boxes); inside a
+         form grid, fields stretch to their column and carry no width. -->
+    <System:Double x:Key="FormLabelWidth">120</System:Double>
+    <GridLength x:Key="FormLabelColumnWidth">120</GridLength>
+    <System:Double x:Key="FieldWidthTiny">80</System:Double>
+    <System:Double x:Key="FieldWidthShort">120</System:Double>
+    <System:Double x:Key="FieldWidthMedium">180</System:Double>
+    <System:Double x:Key="FieldWidthLong">240</System:Double>
+    <System:Double x:Key="FieldWidthWide">400</System:Double>
+    <System:Double x:Key="MultilineFieldHeight">64</System:Double>
+    <Thickness x:Key="MarginFormLabel">0,0,8,8</Thickness>
+    <Thickness x:Key="MarginFormField">0,0,12,8</Thickness>
     <System:Double x:Key="WindowChromeButtonHeight">34</System:Double>
     <System:Double x:Key="WindowChromeButtonFontSize">14</System:Double>
     <System:Double x:Key="IconButtonFontSize">14</System:Double>
