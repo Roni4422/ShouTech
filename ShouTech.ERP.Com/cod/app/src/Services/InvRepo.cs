@@ -382,6 +382,54 @@ public static class InvRepo
             Add(led, "$cur", doc.CurrencyCode);
             Add(led, "$note", "Auto post");
             led.ExecuteNonQuery();
+
+            // Settlement at posting (Step 4, sweep B-03): money collected
+            // on the document itself (paid_amount — POS cash sales carry
+            // the full total) is a real party_ledger settlement entry in
+            // this same transaction, pre-allocated to this document, so
+            // the party balance falls by exactly the collected amount and
+            // PayRecWin never sees it as an unallocated payment. The GL
+            // cash/bank leg for the same money was posted by Step 3's
+            // GlPosting above — the two stay consistent because both are
+            // driven by the same paid_amount in the same transaction.
+            // Returns are not payments and never take this path.
+            if (doc.PaidAmount > 0m && kind is InvDocKind.SalesInvoice or InvDocKind.PurchaseInvoice or InvDocKind.PosSale)
+            {
+                var settled = Math.Min(doc.PaidAmount, doc.GrandTotal);
+                if (settled > 0m)
+                {
+                    var (payDebit, payCredit) = PartyLedger.SettlementSides(partyKind, settled);
+                    var paymentLedgerId = PartyLedger.WriteEntry(
+                        connection, tx,
+                        DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite",
+                        Company, partyKind, partyId,
+                        isSales ? "RCV" : "PAY", docId, doc.DocNo,
+                        doc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                        payDebit, payCredit, doc.CurrencyCode,
+                        "Collected at document posting");
+
+                    using var alloc = connection.CreateCommand();
+                    alloc.Transaction = tx;
+                    alloc.CommandText = """
+                        INSERT INTO payment_allocations
+                            (allocation_id, company_id, party_kind, party_id, payment_ledger_id, doc_table, doc_id, doc_no, amount, allocated_by, note)
+                        VALUES
+                            ($id, $company, $pk, $pid, $payment, $table, $did, $dno, $amount, $user, $note);
+                        """;
+                    Add(alloc, "$id", Guid.NewGuid().ToString("D"));
+                    Add(alloc, "$company", Company);
+                    Add(alloc, "$pk", partyKind);
+                    Add(alloc, "$pid", partyId);
+                    Add(alloc, "$payment", paymentLedgerId);
+                    Add(alloc, "$table", isSales ? "SALES" : "PURCHASE");
+                    Add(alloc, "$did", docId);
+                    Add(alloc, "$dno", doc.DocNo);
+                    Add(alloc, "$amount", settled);
+                    Add(alloc, "$user", userId);
+                    Add(alloc, "$note", "Collected at document posting");
+                    alloc.ExecuteNonQuery();
+                }
+            }
         }
 
         // Inventory effects (same transaction as ledger + status).

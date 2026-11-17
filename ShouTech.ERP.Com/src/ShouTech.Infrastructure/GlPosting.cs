@@ -333,6 +333,15 @@ public static class GlPosting
 
         AddAudit(connection, transaction, prov, journalEntryId, 3, userId, details ?? $"Reversed by journal {reversalId:D}");
         AddAudit(connection, transaction, prov, reversalId, 2, userId, $"Reversal of journal {journalEntryId:D}");
+
+        // Step 4 settlement symmetry: a cash voucher's party_ledger
+        // settlement rows carry the journal entry id (migration 061);
+        // reversing the voucher mirrors them in this same transaction so
+        // the party balance restores exactly. Documents that reverse via
+        // return documents have no journal-linked rows and are untouched.
+        PartyLedger.MirrorForJournalReversal(connection, transaction, prov,
+            companyId, journalEntryId, reversalId,
+            entryDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         return reversalId;
     }
 

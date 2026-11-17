@@ -437,6 +437,47 @@ public sealed class JournalRepository : IJournalRepository
                     throw new InvalidOperationException("Journal entry was not found or is not in draft status.");
             }
             await AddAuditAsync(connection, transaction, journalEntryId, 2, userId, "Journal posted", cancellationToken).ConfigureAwait(false);
+
+            // Step 4 settlement (sweep B-03): a cash voucher saved with a
+            // resolved party carries a voucher_party_links row (migration
+            // 061). Posting the voucher writes the party_ledger settlement
+            // entry INSIDE this transaction — credit for a customer, debit
+            // for a supplier — linked back to this journal entry so the
+            // shared reversal core can mirror it symmetrically.
+            if (PartyLedger.TableExists(connection, transaction, _provider, "voucher_party_links"))
+            {
+                string? linkCompany = null, linkKind = null, linkDocKind = null, linkDocNo = null, linkCurrency = null;
+                long linkParty = 0;
+                decimal linkAmount = 0m;
+                await using (var link = CreateCommand(connection, transaction,
+                    "SELECT company_id, party_kind, party_id, doc_kind, doc_no, amount, currency_code FROM voucher_party_links WHERE journal_entry_id = @id"))
+                {
+                    Add(link, "@id", FormatGuid(journalEntryId));
+                    await using var reader = await link.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                    if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    {
+                        linkCompany = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture);
+                        linkKind = Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture);
+                        linkParty = Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture);
+                        linkDocKind = Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture);
+                        linkDocNo = Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture);
+                        linkAmount = Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture);
+                        linkCurrency = reader.IsDBNull(6) ? "SAR" : Convert.ToString(reader.GetValue(6), CultureInfo.InvariantCulture);
+                    }
+                }
+
+                if (linkCompany is not null && linkKind is not null && linkAmount > 0)
+                {
+                    var (debit, credit) = PartyLedger.SettlementSides(linkKind, linkAmount);
+                    PartyLedger.WriteEntry(connection, transaction, _provider,
+                        linkCompany, linkKind, linkParty, linkDocKind, null, linkDocNo,
+                        entryDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                        debit, credit, linkCurrency ?? "SAR",
+                        "Cash voucher settlement",
+                        journalEntryId.ToString("D"));
+                }
+            }
+
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch
