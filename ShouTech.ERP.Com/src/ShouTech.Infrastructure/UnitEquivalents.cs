@@ -35,7 +35,7 @@ public static class UnitEquivalents
     /// delivery-note / order-chain convention).
     /// </summary>
     public static async Task<decimal> ResolveAsync(
-        DbConnection connection, DbTransaction transaction, string? companyId,
+        DbConnection connection, DbTransaction? transaction, string? companyId,
         long materialId, string? unitName, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(unitName)) return 1m;

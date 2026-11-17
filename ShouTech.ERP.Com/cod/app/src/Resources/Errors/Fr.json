@@ -458,5 +458,41 @@
     "name": "CrmLostReasonRequired",
     "message": "Un motif de perte est requis lorsque l'opportunité '{0}' est marquée perdue.",
     "hint": "Choisissez un motif de perte (configurez les motifs dans la fenêtre du pipeline si la liste est vide)."
+  },
+  "MFG-1001": {
+    "code": "MFG-1001",
+    "name": "BomCycleDetected",
+    "message": "La nomenclature de '{0}' se reference elle-meme, directement ou via d'autres nomenclatures ; le cycle doit etre supprime avant utilisation.",
+    "hint": "Ouvrez la nomenclature et retirez le composant qui produit (transitivement) l'article fini lui-meme."
+  },
+  "MFG-1002": {
+    "code": "MFG-1002",
+    "name": "BomNotFoundOrInactive",
+    "message": "La nomenclature '{0}' est introuvable ou inactive pour cette societe.",
+    "hint": "Activez la version de la nomenclature dans la fenetre des nomenclatures ou choisissez une autre version."
+  },
+  "MFG-1003": {
+    "code": "MFG-1003",
+    "name": "MfgOrderStageInvalid",
+    "message": "L'ordre de fabrication '{0}' ne peut pas effectuer cette action dans le statut '{1}'.",
+    "hint": "Suivez le flux par etapes : Brouillon, Confirme, En cours, Termine, Clos (ou Annule)."
+  },
+  "MFG-1004": {
+    "code": "MFG-1004",
+    "name": "MfgIssueExceedsRequired",
+    "message": "Sortir {1} de '{0}' depasserait la quantite requise sur l'ordre.",
+    "hint": "Sortez au maximum la quantite requise restante, ou modifiez d'abord les lignes du brouillon."
+  },
+  "MFG-1005": {
+    "code": "MFG-1005",
+    "name": "MfgFinishExceedsPlanned",
+    "message": "Recevoir {1} de '{0}' depasserait la quantite de production planifiee.",
+    "hint": "Recevez au maximum la quantite planifiee restante."
+  },
+  "MFG-1006": {
+    "code": "MFG-1006",
+    "name": "PlanningConversionInvalid",
+    "message": "La ligne de planification '{0}' ne peut pas etre convertie dans le statut '{1}'.",
+    "hint": "Seuls les ordres planifies et les suggestions d'achat peuvent etre convertis, une seule fois."
   }
 }

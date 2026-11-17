@@ -458,5 +458,41 @@
     "name": "CrmLostReasonRequired",
     "message": "A lost reason is required when opportunity '{0}' is marked lost.",
     "hint": "Choose a lost reason (configure reasons in the pipeline window if the list is empty)."
+  },
+  "MFG-1001": {
+    "code": "MFG-1001",
+    "name": "BomCycleDetected",
+    "message": "Bill of materials for '{0}' references itself directly or through other bills of materials; the cycle must be removed before the BOM can be used.",
+    "hint": "Open the BOM and remove the component that (transitively) produces the finished material itself."
+  },
+  "MFG-1002": {
+    "code": "MFG-1002",
+    "name": "BomNotFoundOrInactive",
+    "message": "Bill of materials '{0}' was not found or is not active for this company.",
+    "hint": "Activate the BOM version in the BOM window or choose another version."
+  },
+  "MFG-1003": {
+    "code": "MFG-1003",
+    "name": "MfgOrderStageInvalid",
+    "message": "Manufacturing order '{0}' cannot perform this action in status '{1}'.",
+    "hint": "Follow the staged workflow: Draft, Confirmed, In Process, Completed, Closed (or Cancelled)."
+  },
+  "MFG-1004": {
+    "code": "MFG-1004",
+    "name": "MfgIssueExceedsRequired",
+    "message": "Issuing {1} of '{0}' would exceed the required quantity on the order.",
+    "hint": "Issue at most the remaining required quantity, or edit the draft order lines first."
+  },
+  "MFG-1005": {
+    "code": "MFG-1005",
+    "name": "MfgFinishExceedsPlanned",
+    "message": "Receiving {1} of '{0}' would exceed the planned production quantity.",
+    "hint": "Receive at most the remaining planned quantity."
+  },
+  "MFG-1006": {
+    "code": "MFG-1006",
+    "name": "PlanningConversionInvalid",
+    "message": "Planning row '{0}' cannot be converted in status '{1}'.",
+    "hint": "Only Planned orders and Suggested purchase rows can be converted, exactly once."
   }
 }

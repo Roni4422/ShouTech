@@ -27,6 +27,16 @@ public static class GlAccounts
     public const string Purchases = "402";
     public const string PurchaseReturns = "403";
     public const string DepreciationExpense = "505";
+    // Manufacturing (Build 058): carried by the industrial / job-orders /
+    // continuous-inventory templates. The staged manufacturing posting
+    // resolves each with TryResolveAccount and falls back to Inventory
+    // (WIP / finished) or COGS (variance / applied overhead) on charts
+    // that carry no postable account under the manufacturing code —
+    // the same optional-leg pattern as the tax legs.
+    public const string WorkInProgress = "1211";
+    public const string FinishedGoods = "1212";
+    public const string ManufacturingVariance = "406";
+    public const string AppliedManufacturingOverhead = "409";
 }
 
 /// <summary>

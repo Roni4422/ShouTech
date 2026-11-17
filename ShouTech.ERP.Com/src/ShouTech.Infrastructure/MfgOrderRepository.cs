@@ -2,6 +2,7 @@
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Npgsql;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
 
@@ -18,7 +19,11 @@ namespace ShouTech.Infrastructure;
 /// </summary>
 public sealed class MfgOrderRepository : IMfgOrderRepository
 {
-    private const int ListLimit = 1000;
+    /// <summary>All mfg_orders columns in ReadOrder ordinal order
+    /// (034 base + 058 staged-workflow columns).</summary>
+    private const string OrderColumns =
+        "id, doc_no, doc_date, item_code, item_name, qty, unit_code, warehouse_code, overhead_amount, standard_unit_cost, total_cost, unit_cost, status, notes, " +
+        "bom_id, bom_version, planned_start_date, planned_end_date, sales_order_doc_id, sales_order_no, cost_center, source_warehouse_code, wip_warehouse_code, target_warehouse_code, scrap_warehouse_code, produced_qty, accumulated_cost, wip_balance, variance_amount, standard_variance";
 
     private readonly string _provider;
     private readonly string _connectionString;
@@ -46,7 +51,7 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var command = CreateCommand(connection, null,
-            $"SELECT id, doc_no, doc_date, item_code, item_name, qty, unit_code, warehouse_code, overhead_amount, standard_unit_cost, total_cost, unit_cost, status, notes FROM mfg_orders WHERE company_id = @company AND {NotDeleted} ORDER BY doc_no DESC LIMIT {ListLimit}");
+            $"SELECT {OrderColumns} FROM mfg_orders WHERE company_id = @company AND {NotDeleted} ORDER BY doc_no DESC");
         Add(command, "@company", companyId.Trim());
         var result = new List<MfgOrder>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -63,7 +68,7 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var command = CreateCommand(connection, null,
-            $"SELECT id, doc_no, doc_date, item_code, item_name, qty, unit_code, warehouse_code, overhead_amount, standard_unit_cost, total_cost, unit_cost, status, notes FROM mfg_orders WHERE company_id = @company AND doc_no = @doc AND {NotDeleted}");
+            $"SELECT {OrderColumns} FROM mfg_orders WHERE company_id = @company AND doc_no = @doc AND {NotDeleted}");
         Add(command, "@company", companyId.Trim());
         Add(command, "@doc", docNo);
         MfgOrder? order = null;
@@ -134,14 +139,14 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
             if (existingStatus is null)
             {
                 await using var insert = CreateCommand(connection, transaction,
-                    "INSERT INTO mfg_orders (id, company_id, doc_no, doc_date, item_code, item_name, qty, unit_code, warehouse_code, overhead_amount, standard_unit_cost, total_cost, unit_cost, status, notes, created_by) VALUES (@id, @company, @doc, @date, @item, @itemName, @qty, @unit, @warehouse, @overhead, @std, @total, @unitCost, @status, @notes, @user)");
+                    "INSERT INTO mfg_orders (id, company_id, doc_no, doc_date, item_code, item_name, qty, unit_code, warehouse_code, overhead_amount, standard_unit_cost, total_cost, unit_cost, status, notes, bom_id, bom_version, planned_start_date, planned_end_date, sales_order_doc_id, sales_order_no, cost_center, source_warehouse_code, wip_warehouse_code, target_warehouse_code, scrap_warehouse_code, produced_qty, accumulated_cost, wip_balance, variance_amount, standard_variance, created_by) VALUES (@id, @company, @doc, @date, @item, @itemName, @qty, @unit, @warehouse, @overhead, @std, @total, @unitCost, @status, @notes, @bomId, @bomVersion, @plannedStart, @plannedEnd, @soDocId, @soNo, @costCenter, @srcWhs, @wipWhs, @tgtWhs, @scrWhs, @producedQty, @accumulated, @wipBalance, @variance, @stdVariance, @user)");
                 BindOrder(insert, companyId, order, userId);
                 await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
             else
             {
                 await using var update = CreateCommand(connection, transaction,
-                    $"UPDATE mfg_orders SET doc_no = @doc, doc_date = @date, item_code = @item, item_name = @itemName, qty = @qty, unit_code = @unit, warehouse_code = @warehouse, overhead_amount = @overhead, standard_unit_cost = @std, total_cost = @total, unit_cost = @unitCost, notes = @notes, updated_by = @user, updated_at = {NowExpr} WHERE company_id = @company AND id = @id AND status = 'Draft' AND {NotDeleted}");
+                    $"UPDATE mfg_orders SET doc_no = @doc, doc_date = @date, item_code = @item, item_name = @itemName, qty = @qty, unit_code = @unit, warehouse_code = @warehouse, overhead_amount = @overhead, standard_unit_cost = @std, total_cost = @total, unit_cost = @unitCost, notes = @notes, bom_id = @bomId, bom_version = @bomVersion, planned_start_date = @plannedStart, planned_end_date = @plannedEnd, sales_order_doc_id = @soDocId, sales_order_no = @soNo, cost_center = @costCenter, source_warehouse_code = @srcWhs, wip_warehouse_code = @wipWhs, target_warehouse_code = @tgtWhs, scrap_warehouse_code = @scrWhs, produced_qty = @producedQty, accumulated_cost = @accumulated, wip_balance = @wipBalance, variance_amount = @variance, standard_variance = @stdVariance, updated_by = @user, updated_at = {NowExpr} WHERE company_id = @company AND id = @id AND status = 'Draft' AND {NotDeleted}");
                 BindOrder(update, companyId, order, userId);
                 if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
                     throw new InvalidOperationException("Manufacturing order could not be updated (missing, deleted, or no longer draft).");
@@ -151,15 +156,18 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 await deleteLines.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
+            var lineNo = 0;
             foreach (var line in order.Lines)
             {
                 line.OrderId = order.Id;
+                line.LineNo = ++lineNo;
                 if (line.Id == Guid.Empty) line.Id = Guid.NewGuid();
                 line.Amount = decimal.Round(line.Qty * line.UnitCost, 2);
                 await using var insertLine = CreateCommand(connection, transaction,
-                    "INSERT INTO mfg_order_lines (id, order_id, line_kind, item_code, item_name, qty, unit_code, unit_cost, standard_unit_cost, amount) VALUES (@id, @order, @kind, @item, @itemName, @qty, @unit, @cost, @std, @amount)");
+                    "INSERT INTO mfg_order_lines (id, order_id, line_no, line_kind, item_code, item_name, qty, unit_code, unit_cost, standard_unit_cost, amount, consumed_qty, produced_qty, warehouse_code, cost_share_pct) VALUES (@id, @order, @lineNo, @kind, @item, @itemName, @qty, @unit, @cost, @std, @amount, @consumed, @produced, @warehouse, @share)");
                 Add(insertLine, "@id", FormatGuid(line.Id));
                 Add(insertLine, "@order", FormatGuid(order.Id));
+                Add(insertLine, "@lineNo", line.LineNo);
                 Add(insertLine, "@kind", line.LineKind);
                 Add(insertLine, "@item", line.ItemCode.Trim());
                 Add(insertLine, "@itemName", (object?)NullIfBlank(line.ItemName) ?? DBNull.Value);
@@ -168,6 +176,10 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 Add(insertLine, "@cost", line.UnitCost);
                 Add(insertLine, "@std", line.StandardUnitCost);
                 Add(insertLine, "@amount", line.Amount);
+                Add(insertLine, "@consumed", line.ConsumedQty);
+                Add(insertLine, "@produced", line.ProducedQty);
+                Add(insertLine, "@warehouse", (object?)NullIfBlank(line.WarehouseCode) ?? DBNull.Value);
+                Add(insertLine, "@share", line.CostSharePct);
                 await insertLine.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
@@ -380,6 +392,102 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 ?? throw new InvalidOperationException("Manufacturing order was not found for this company.");
             if (order.Status == MfgOrderStatuses.Cancelled)
                 throw new InvalidOperationException("Manufacturing order is already cancelled.");
+            if (order.Status == MfgOrderStatuses.Closed)
+                throw StageError(order, "cancel");
+
+            // Staged orders (058): reverse exactly what the stages
+            // posted — produced finished goods and by-products out,
+            // consumed raw materials back in at their original rates
+            // and into their original batches/serials, then every
+            // staged GL entry reversed through the shared path. Scrap
+            // receipts are NOT reversed: scrap is zero-value waste and
+            // its record stands (the Cancel event notes it).
+            if (order.Status is MfgOrderStatuses.Confirmed or MfgOrderStatuses.InProcess or MfgOrderStatuses.Completed)
+            {
+                var cancelDocNo = $"MO-{order.DocNo}";
+                var cancelDate = DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                var targetWarehouseId = await ResolveWarehouseIdAsync(connection, transaction, companyId, order.EffectiveTargetWarehouse, cancellationToken).ConfigureAwait(false);
+
+                if (order.ProducedQty > 0)
+                {
+                    var finishedId = await ResolveMaterialIdAsync(connection, transaction, companyId, order.ItemCode, cancellationToken).ConfigureAwait(false);
+                    if (await IsStockableAsync(connection, transaction, companyId, finishedId, cancellationToken).ConfigureAwait(false))
+                    {
+                        var finishedEquivalent = await UnitEquivalents.ResolveAsync(connection, transaction, companyId, finishedId, order.UnitCode, cancellationToken).ConfigureAwait(false);
+                        var finishedBaseQty = order.ProducedQty * finishedEquivalent;
+                        var produceWarehouseId = targetWarehouseId;
+                        var onHand = await GetOnHandAsync(connection, transaction, companyId, produceWarehouseId, finishedId, cancellationToken).ConfigureAwait(false);
+                        if (onHand < finishedBaseQty)
+                        {
+                            // QC-quarantined output sits in quarantine.
+                            var qcProfile = QualityGate.LoadProfile(connection, transaction, _provider, companyId.Trim(), finishedId);
+                            var quarantineId = qcProfile.QualityCheckRequired
+                                ? QualityGate.EnsureQuarantineWarehouse(connection, transaction, _provider, companyId.Trim())
+                                : 0;
+                            if (quarantineId > 0 && await GetOnHandAsync(connection, transaction, companyId, quarantineId, finishedId, cancellationToken).ConfigureAwait(false) >= finishedBaseQty)
+                                produceWarehouseId = quarantineId;
+                            else
+                                throw new InvalidOperationException(
+                                    $"Cannot cancel: produced quantity of '{order.ItemCode.Trim()}' is no longer fully on hand (required {finishedBaseQty} base units, on hand {onHand}).");
+                        }
+                        StockValuationEngine.Apply(connection, transaction, _provider,
+                            new StockMovementRequest(companyId.Trim(), produceWarehouseId, finishedId, cancelDate,
+                                "MFG_PRODUCE_REV", cancelDocNo, QtyIn: 0m, QtyOut: finishedBaseQty,
+                                Note: $"Manufacturing order {cancelDocNo} cancellation",
+                                AutoAllocateSerials: true, Actor: userId));
+                    }
+                }
+
+                foreach (var line in order.Lines.Where(l => l.LineKind == MfgLineKinds.ByProduct && l.ProducedQty > 0))
+                {
+                    var materialId = await ResolveMaterialIdAsync(connection, transaction, companyId, line.ItemCode, cancellationToken).ConfigureAwait(false);
+                    if (!await IsStockableAsync(connection, transaction, companyId, materialId, cancellationToken).ConfigureAwait(false))
+                        continue;
+                    var equivalent = await UnitEquivalents.ResolveAsync(connection, transaction, companyId, materialId, line.UnitCode, cancellationToken).ConfigureAwait(false);
+                    var baseQty = line.ProducedQty * equivalent;
+                    var onHand = await GetOnHandAsync(connection, transaction, companyId, targetWarehouseId, materialId, cancellationToken).ConfigureAwait(false);
+                    if (onHand < baseQty)
+                        throw new InvalidOperationException(
+                            $"Cannot cancel: produced by-product '{line.ItemCode.Trim()}' is no longer fully on hand (required {baseQty} base units, on hand {onHand}).");
+                    StockValuationEngine.Apply(connection, transaction, _provider,
+                        new StockMovementRequest(companyId.Trim(), targetWarehouseId, materialId, cancelDate,
+                            "MFG_PRODUCE_REV", cancelDocNo, QtyIn: 0m, QtyOut: baseQty,
+                            Note: $"Manufacturing order {cancelDocNo} cancellation (by-product)",
+                            AutoAllocateSerials: true, Actor: userId));
+                }
+
+                foreach (var line in order.Lines.Where(l => l.LineKind == MfgLineKinds.Raw && l.ConsumedQty > 0))
+                {
+                    var materialId = await ResolveMaterialIdAsync(connection, transaction, companyId, line.ItemCode, cancellationToken).ConfigureAwait(false);
+                    if (!await IsStockableAsync(connection, transaction, companyId, materialId, cancellationToken).ConfigureAwait(false))
+                        continue;
+                    var warehouseId = await ResolveWarehouseIdAsync(connection, transaction, companyId,
+                        line.WarehouseCode ?? order.EffectiveSourceWarehouse, cancellationToken).ConfigureAwait(false);
+                    var equivalent = await UnitEquivalents.ResolveAsync(connection, transaction, companyId, materialId, line.UnitCode, cancellationToken).ConfigureAwait(false);
+                    var baseQty = line.ConsumedQty * equivalent;
+                    var originalRate = OriginalIssueRate(connection, transaction, companyId, $"{cancelDocNo}-I", materialId, warehouseId);
+                    var (batches, serials) = RebuildIssueAllocations(connection, transaction, companyId, $"{cancelDocNo}-I", materialId);
+                    StockValuationEngine.Apply(connection, transaction, _provider,
+                        new StockMovementRequest(companyId.Trim(), warehouseId, materialId, cancelDate,
+                            "MFG_CONSUME_REV", cancelDocNo, QtyIn: baseQty, QtyOut: 0m,
+                            ReceiptUnitCost: line.UnitCost, LinkedRate: originalRate,
+                            Note: $"Manufacturing order {cancelDocNo} cancellation",
+                            BatchAllocations: batches, Serials: serials, Actor: userId));
+                }
+
+                var companyGuid = ResolveCompanyGuid(connection, transaction, companyId);
+                ReverseStagedGl(connection, transaction, companyGuid, order, userId);
+                order.WipBalance = 0m;
+                await using (var zeroWip = CreateCommand(connection, transaction,
+                    "UPDATE mfg_orders SET wip_balance = 0 WHERE company_id = @company AND id = @id"))
+                {
+                    Add(zeroWip, "@company", companyId.Trim());
+                    Add(zeroWip, "@id", FormatGuid(order.Id));
+                    await zeroWip.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                }
+                await InsertEventAsync(connection, transaction, companyId, order, "Cancel", DateOnly.FromDateTime(DateTime.Today), order.ProducedQty, 0m, null,
+                    "Staged cancel: stock + GL reversed; scrap receipts stand (zero-value waste).", userId, cancellationToken).ConfigureAwait(false);
+            }
 
             if (order.Status == MfgOrderStatuses.Posted)
             {
@@ -467,6 +575,662 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    // ==================================================================
+    // Staged workflow (migration 058): Confirm -> Issue -> Finish ->
+    // Close, WIP + variance GL through GlPosting. Every stage is ONE
+    // transaction. GL mapping (canonical template codes, GlAccounts):
+    //   Issue : Dr WIP (1211, fallback Inventory 1203)
+    //           / Cr Inventory (per component acc_inventory, fallback 1203)
+    //           service-line costs ride the same entry as
+    //           Cr Applied Overhead (409, fallback COGS 401).
+    //   Finish: overhead absorption Dr WIP / Cr Applied Overhead (409->401);
+    //           receipt Dr Finished Goods (1212 -> material acc_inventory
+    //           -> 1203) + Dr by-product inventory / Cr WIP at the pool.
+    //   Close : remaining WIP settled Dr/Cr Variance (406 -> 401) vs WIP.
+    // ==================================================================
+
+    public async Task<MfgStageResult> ConfirmAsync(string companyId, Guid orderId, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        if (orderId == Guid.Empty) throw new ArgumentException("Order is required.", nameof(orderId));
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var order = await LoadOrderAsync(connection, transaction, companyId, orderId, cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("Manufacturing order was not found for this company.");
+            if (order.Status != MfgOrderStatuses.Draft)
+                throw StageError(order, "confirm");
+            if (order.Lines.Count == 0)
+                throw new InvalidOperationException("A manufacturing order requires at least one raw-material line.");
+
+            await UpdateOrderStageAsync(connection, transaction, companyId, order, MfgOrderStatuses.Confirmed, userId, cancellationToken).ConfigureAwait(false);
+            await InsertEventAsync(connection, transaction, companyId, order, "Confirm", order.DocDate, 0m, 0m, null, null, userId, cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return new MfgStageResult(order.Id, MfgOrderStatuses.Confirmed, 0m, null, order.WipBalance, order.ProducedQty);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    public async Task<MfgStageResult> IssueAsync(string companyId, Guid orderId, IReadOnlyList<MfgIssueLine> issues, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        if (orderId == Guid.Empty) throw new ArgumentException("Order is required.", nameof(orderId));
+        ArgumentNullException.ThrowIfNull(issues);
+        if (issues.Count == 0) throw new InvalidOperationException("At least one issue line is required.");
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var order = await LoadOrderAsync(connection, transaction, companyId, orderId, cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("Manufacturing order was not found for this company.");
+            if (order.Status is not (MfgOrderStatuses.Confirmed or MfgOrderStatuses.InProcess))
+                throw StageError(order, "issue materials");
+            var seq = await NextEventSeqAsync(connection, transaction, order.Id, cancellationToken).ConfigureAwait(false);
+            var documentNo = $"MO-{order.DocNo}";
+            var issueDocNo = $"{documentNo}-I{seq}";
+            var dateText = order.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var companyGuid = ResolveCompanyGuid(connection, transaction, companyId);
+            var wipAccount = PickAccount(connection, transaction, companyGuid, GlAccounts.WorkInProgress, GlAccounts.Inventory);
+            var overheadAccount = PickAccount(connection, transaction, companyGuid, GlAccounts.AppliedManufacturingOverhead, GlAccounts.Cogs);
+
+            var stockCost = 0m;
+            var serviceCost = 0m;
+            var glLines = new List<GlLineRequest>();
+            var issuedQtyTotal = 0m;
+            foreach (var issue in issues)
+            {
+                if (issue.Qty <= 0)
+                    throw new InvalidOperationException("Issue quantities must be greater than zero.");
+                var line = order.Lines.FirstOrDefault(l => l.Id == issue.LineId)
+                    ?? throw new InvalidOperationException("An issue line does not belong to this order.");
+                if (line.LineKind != MfgLineKinds.Raw)
+                    throw new InvalidOperationException($"Only raw-material lines can be issued ('{line.ItemCode}' is {line.LineKind}).");
+                if (issue.Qty > line.RemainingToIssue)
+                    throw new AppError(ErrorCodes.MfgIssueExceedsRequired,
+                        $"Issuing {issue.Qty} of '{line.ItemCode.Trim()}' exceeds the remaining required quantity {line.RemainingToIssue}.",
+                        line.ItemCode.Trim(), issue.Qty.ToString(CultureInfo.InvariantCulture));
+                var materialId = await ResolveMaterialIdAsync(connection, transaction, companyId, line.ItemCode, cancellationToken).ConfigureAwait(false);
+                issuedQtyTotal += issue.Qty;
+                if (!await IsStockableAsync(connection, transaction, companyId, materialId, cancellationToken).ConfigureAwait(false))
+                {
+                    // Service material: cost enters WIP at its entered
+                    // rate with no stock movement (owner service rule);
+                    // its GL leg credits Applied Overhead in this entry.
+                    var entered = decimal.Round(issue.Qty * line.UnitCost, 2);
+                    serviceCost += entered;
+                    line.ConsumedQty += issue.Qty;
+                    continue;
+                }
+                var warehouseId = await ResolveWarehouseIdAsync(connection, transaction, companyId,
+                    line.WarehouseCode ?? order.EffectiveSourceWarehouse, cancellationToken).ConfigureAwait(false);
+                var equivalent = await UnitEquivalents.ResolveAsync(connection, transaction, companyId, materialId, line.UnitCode, cancellationToken).ConfigureAwait(false);
+                var baseQty = issue.Qty * equivalent;
+                var onHand = await GetOnHandAsync(connection, transaction, companyId, warehouseId, materialId, cancellationToken).ConfigureAwait(false);
+                if (onHand < baseQty)
+                    throw new InvalidOperationException(
+                        $"Insufficient stock for material '{line.ItemCode.Trim()}': required {baseQty} (base units), on hand {onHand} in warehouse {warehouseId}.");
+                // 054: batch issues auto-allocate FEFO/FIFO inside the
+                // engine; serial issues auto-pick in-stock serials. The
+                // allocations written are the genealogy link.
+                var consumed = StockValuationEngine.Apply(connection, transaction, _provider,
+                    new StockMovementRequest(companyId.Trim(), warehouseId, materialId, dateText,
+                        "MFG_CONSUME", issueDocNo, QtyIn: 0m, QtyOut: baseQty,
+                        Note: $"Manufacturing order {documentNo} issue {seq}",
+                        AutoAllocateSerials: true, Actor: userId));
+                var cost = -consumed.CostAmount;
+                stockCost += cost;
+                glLines.Add(new GlLineRequest(
+                    MaterialInventoryAccount(connection, transaction, companyId, line.ItemCode), 0m, decimal.Round(cost, 2)));
+                line.ConsumedQty += issue.Qty;
+            }
+
+            var total = decimal.Round(stockCost + serviceCost, 2);
+            string? journalDocNo = null;
+            if (total > 0)
+            {
+                var lines = new List<GlLineRequest>
+                {
+                    new(wipAccount, total, 0m, NullIfBlank(order.CostCenter))
+                };
+                lines.AddRange(glLines);
+                if (serviceCost > 0)
+                    lines.Add(new GlLineRequest(overheadAccount, 0m, decimal.Round(serviceCost, 2)));
+                var posted = GlPosting.PostInTransaction(connection, transaction, _provider,
+                    new GlDocumentRequest(companyGuid, order.DocDate,
+                        $"MFG issue {issueDocNo}", "MFG-ISSUE", order.Id.ToString("D") + "#" + seq, issueDocNo,
+                        "SAR", 1m, lines),
+                    userId);
+                journalDocNo = posted.DocumentNumber;
+            }
+
+            foreach (var issue in issues)
+            {
+                var line = order.Lines.First(l => l.Id == issue.LineId);
+                await UpdateLineActualAsync(connection, transaction, line, cancellationToken).ConfigureAwait(false);
+            }
+            order.AccumulatedCost = decimal.Round(order.AccumulatedCost + total, 2);
+            order.WipBalance = decimal.Round(order.WipBalance + total, 2);
+            order.Status = MfgOrderStatuses.InProcess;
+            await UpdateOrderStageAsync(connection, transaction, companyId, order, order.Status, userId, cancellationToken).ConfigureAwait(false);
+            await InsertEventAsync(connection, transaction, companyId, order, "Issue", order.DocDate, issuedQtyTotal, total, journalDocNo, issueDocNo, userId, cancellationToken, seq).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return new MfgStageResult(order.Id, order.Status, total, journalDocNo, order.WipBalance, order.ProducedQty);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    public async Task<MfgStageResult> FinishAsync(string companyId, Guid orderId, decimal finishedQty, IReadOnlyList<MfgReceiptLine> receipts, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        if (orderId == Guid.Empty) throw new ArgumentException("Order is required.", nameof(orderId));
+        receipts ??= Array.Empty<MfgReceiptLine>();
+        if (finishedQty <= 0) throw new InvalidOperationException("The finished quantity must be greater than zero.");
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var order = await LoadOrderAsync(connection, transaction, companyId, orderId, cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("Manufacturing order was not found for this company.");
+            if (order.Status != MfgOrderStatuses.InProcess)
+                throw StageError(order, "finish production");
+            var remainingPlanned = order.Qty - order.ProducedQty;
+            if (finishedQty > remainingPlanned)
+                throw new AppError(ErrorCodes.MfgFinishExceedsPlanned,
+                    $"Receiving {finishedQty} of '{order.ItemCode.Trim()}' exceeds the remaining planned quantity {remainingPlanned}.",
+                    order.ItemCode.Trim(), finishedQty.ToString(CultureInfo.InvariantCulture));
+
+            var receiptLines = new List<(MfgOrderLine Line, decimal Qty)>();
+            foreach (var receipt in receipts)
+            {
+                if (receipt.Qty <= 0)
+                    throw new InvalidOperationException("Receipt quantities must be greater than zero.");
+                var line = order.Lines.FirstOrDefault(l => l.Id == receipt.LineId)
+                    ?? throw new InvalidOperationException("A receipt line does not belong to this order.");
+                if (line.LineKind is not (MfgLineKinds.ByProduct or MfgLineKinds.Scrap))
+                    throw new InvalidOperationException($"Only by-product / scrap lines can be received at finish ('{line.ItemCode}' is {line.LineKind}).");
+                if (line.ProducedQty + receipt.Qty > line.Qty)
+                    throw new AppError(ErrorCodes.MfgFinishExceedsPlanned,
+                        $"Receiving {receipt.Qty} of '{line.ItemCode.Trim()}' exceeds the line's planned quantity {line.Qty}.",
+                        line.ItemCode.Trim(), receipt.Qty.ToString(CultureInfo.InvariantCulture));
+                receiptLines.Add((line, receipt.Qty));
+            }
+
+            var seq = await NextEventSeqAsync(connection, transaction, order.Id, cancellationToken).ConfigureAwait(false);
+            var documentNo = $"MO-{order.DocNo}";
+            var finishDocNo = $"{documentNo}-F{seq}";
+            var dateText = order.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var companyGuid = ResolveCompanyGuid(connection, transaction, companyId);
+            var wipAccount = PickAccount(connection, transaction, companyGuid, GlAccounts.WorkInProgress, GlAccounts.Inventory);
+            var overheadAccount = PickAccount(connection, transaction, companyGuid, GlAccounts.AppliedManufacturingOverhead, GlAccounts.Cogs);
+            var fgAccount = FinishedGoodsAccount(connection, transaction, companyGuid, companyId, order.ItemCode);
+
+            // Overhead absorption: header overhead + COST lines are
+            // absorbed pro-rata to production; the completing receipt
+            // takes the exact remainder so absorption is exact in total.
+            var absorbable = decimal.Round(order.OverheadAmount + order.Lines
+                .Where(l => l.LineKind == MfgLineKinds.Cost).Sum(l => l.Amount), 2);
+            var issuedTotal = await SumEventAmountsAsync(connection, transaction, order.Id, "Issue", cancellationToken).ConfigureAwait(false);
+            var absorbedBefore = decimal.Round(order.AccumulatedCost - issuedTotal, 2);
+            var completesOrder = order.ProducedQty + finishedQty == order.Qty;
+            var overheadShare = absorbable <= 0 ? 0m
+                : completesOrder ? decimal.Round(absorbable - absorbedBefore, 2)
+                : decimal.Round(absorbable * finishedQty / order.Qty, 2);
+            if (overheadShare < 0) overheadShare = 0m;
+
+            string? journalDocNo = null;
+            if (overheadShare > 0)
+            {
+                var posted = GlPosting.PostInTransaction(connection, transaction, _provider,
+                    new GlDocumentRequest(companyGuid, order.DocDate,
+                        $"MFG overhead {finishDocNo}", "MFG-OVHD", order.Id.ToString("D") + "#" + seq, finishDocNo,
+                        "SAR", 1m, new GlLineRequest[]
+                        {
+                            new(wipAccount, overheadShare, 0m, NullIfBlank(order.CostCenter)),
+                            new(overheadAccount, 0m, overheadShare)
+                        }),
+                    userId);
+                journalDocNo = posted.DocumentNumber;
+            }
+
+            // The receipt pool: WIP on hand plus this receipt's absorbed
+            // overhead. The completing receipt takes the whole pool.
+            var pool = decimal.Round(order.WipBalance + overheadShare, 2);
+            var fgPool = completesOrder ? pool
+                : decimal.Round(pool * finishedQty / remainingPlanned, 2);
+
+            // By-products take their cost share out of the pool
+            // (ERPNext model); the finished good keeps the remainder, so
+            // FG unit cost = (materials + overhead - by-product share)
+            // / qty for the receipt.
+            var byProducts = receiptLines.Where(r => r.Line.LineKind == MfgLineKinds.ByProduct).ToList();
+            var sharePct = byProducts.Sum(r => r.Line.CostSharePct);
+            if (sharePct > 100m)
+                throw new InvalidOperationException("By-product cost shares cannot exceed 100% in one receipt.");
+            var bpTotal = decimal.Round(fgPool * sharePct / 100m, 2);
+            var bpValues = new List<decimal>();
+            var bpValueByLine = new Dictionary<Guid, decimal>();
+            var bpAssigned = 0m;
+            for (var i = 0; i < byProducts.Count; i++)
+            {
+                var value = i == byProducts.Count - 1
+                    ? bpTotal - bpAssigned
+                    : decimal.Round(fgPool * byProducts[i].Line.CostSharePct / 100m, 2);
+                bpValues.Add(value);
+                bpValueByLine[byProducts[i].Line.Id] = value;
+                bpAssigned += value;
+            }
+            var fgValue = decimal.Round(fgPool - bpTotal, 2);
+
+            var targetWarehouseId = await ResolveWarehouseIdAsync(connection, transaction, companyId,
+                order.EffectiveTargetWarehouse, cancellationToken).ConfigureAwait(false);
+
+            // ---- Stock: finished good receipt at the exact pool value.
+            var finishedId = await ResolveMaterialIdAsync(connection, transaction, companyId, order.ItemCode, cancellationToken).ConfigureAwait(false);
+            if (await IsStockableAsync(connection, transaction, companyId, finishedId, cancellationToken).ConfigureAwait(false))
+            {
+                var finishedEquivalent = await UnitEquivalents.ResolveAsync(connection, transaction, companyId, finishedId, order.UnitCode, cancellationToken).ConfigureAwait(false);
+                var finishedBaseQty = finishedQty * finishedEquivalent;
+                var finishedTracking = BatchSerialCapture.LoadTracking(
+                    connection, transaction, _provider, companyId.Trim(), finishedId);
+                IReadOnlyList<BatchAllocationRequest>? finishedBatches = null;
+                IReadOnlyList<SerialSelection>? finishedSerials = null;
+                if (finishedTracking.HasBatch)
+                    finishedBatches = new[] { new BatchAllocationRequest(documentNo, finishedBaseQty) };
+                if (finishedTracking.HasSerial)
+                {
+                    if (finishedBaseQty != decimal.Truncate(finishedBaseQty))
+                        throw new InvalidOperationException(
+                            $"Finished material '{order.ItemCode.Trim()}' is serial-tracked: the produced quantity must be a whole number of units.");
+                    var producedBaseBefore = order.ProducedQty * finishedEquivalent;
+                    finishedSerials = Enumerable.Range(1, (int)finishedBaseQty)
+                        .Select(i => new SerialSelection($"{documentNo}-{(int)producedBaseBefore + i}"))
+                        .ToList();
+                }
+                // Quality gate (056): QC-required output is produced
+                // into quarantine, exactly like the one-step Post.
+                var qcProfile = QualityGate.LoadProfile(connection, transaction, _provider, companyId.Trim(), finishedId);
+                var produceWarehouseId = targetWarehouseId;
+                long? quarantineId = null;
+                if (qcProfile.QualityCheckRequired)
+                {
+                    var q = QualityGate.EnsureQuarantineWarehouse(connection, transaction, _provider, companyId.Trim());
+                    if (q > 0) { quarantineId = q; produceWarehouseId = q; }
+                }
+                var produced = StockValuationEngine.Apply(connection, transaction, _provider,
+                    new StockMovementRequest(companyId.Trim(), produceWarehouseId, finishedId, dateText,
+                        "MFG_PRODUCE", finishDocNo, QtyIn: finishedBaseQty, QtyOut: 0m,
+                        ReceiptCostAmount: fgValue,
+                        Note: $"Manufacturing order {documentNo} finish {seq}",
+                        BatchAllocations: finishedBatches,
+                        Serials: finishedSerials, Actor: userId));
+                if (quarantineId is not null)
+                {
+                    var batchId = produced.AllocationRecords.FirstOrDefault(a => a.BatchId is not null)?.BatchId;
+                    QualityGate.EnsureInspection(connection, transaction, _provider, companyId.Trim(),
+                        QualityInspectionTypes.InProcess, "MFG", order.Id.ToString("D"), finishDocNo,
+                        finishedId, batchId, targetWarehouseId, quarantineId, null,
+                        finishedBaseQty, dateText, userId);
+                }
+            }
+
+            // ---- Stock: by-product receipts at their share value, and
+            // scrap receipts at zero value into the scrap warehouse.
+            for (var i = 0; i < receiptLines.Count; i++)
+            {
+                var (line, qty) = receiptLines[i];
+                var materialId = await ResolveMaterialIdAsync(connection, transaction, companyId, line.ItemCode, cancellationToken).ConfigureAwait(false);
+                if (!await IsStockableAsync(connection, transaction, companyId, materialId, cancellationToken).ConfigureAwait(false))
+                {
+                    line.ProducedQty += qty;
+                    continue;
+                }
+                var equivalent = await UnitEquivalents.ResolveAsync(connection, transaction, companyId, materialId, line.UnitCode, cancellationToken).ConfigureAwait(false);
+                var baseQty = qty * equivalent;
+                var isScrap = line.LineKind == MfgLineKinds.Scrap;
+                var warehouseId = isScrap
+                    ? await ResolveWarehouseIdAsync(connection, transaction, companyId, order.EffectiveScrapWarehouse, cancellationToken).ConfigureAwait(false)
+                    : targetWarehouseId;
+                var tracking = BatchSerialCapture.LoadTracking(connection, transaction, _provider, companyId.Trim(), materialId);
+                IReadOnlyList<BatchAllocationRequest>? batches = null;
+                IReadOnlyList<SerialSelection>? serials = null;
+                if (tracking.HasBatch)
+                    batches = new[] { new BatchAllocationRequest(finishDocNo, baseQty) };
+                if (tracking.HasSerial)
+                {
+                    if (baseQty != decimal.Truncate(baseQty))
+                        throw new InvalidOperationException(
+                            $"Material '{line.ItemCode.Trim()}' is serial-tracked: the received quantity must be a whole number of units.");
+                    serials = Enumerable.Range(1, (int)baseQty)
+                        .Select(n => new SerialSelection($"{finishDocNo}-{line.ItemCode.Trim()}-{n}"))
+                        .ToList();
+                }
+                var value = isScrap ? 0m : bpValueByLine.GetValueOrDefault(line.Id);
+                StockValuationEngine.Apply(connection, transaction, _provider,
+                    new StockMovementRequest(companyId.Trim(), warehouseId, materialId, dateText,
+                        isScrap ? "MFG_SCRAP" : "MFG_PRODUCE", finishDocNo, QtyIn: baseQty, QtyOut: 0m,
+                        ReceiptCostAmount: value,
+                        Note: $"Manufacturing order {documentNo} {(isScrap ? "scrap" : "by-product")} {seq}",
+                        BatchAllocations: batches, Serials: serials, Actor: userId));
+                line.ProducedQty += qty;
+            }
+
+            // ---- GL: receipt entry Dr FG (+ Dr by-products) / Cr WIP.
+            if (fgPool > 0)
+            {
+                var glLines = new List<GlLineRequest>();
+                if (fgValue > 0) glLines.Add(new GlLineRequest(fgAccount, fgValue, 0m));
+                for (var i = 0; i < byProducts.Count; i++)
+                {
+                    if (bpValues[i] <= 0) continue;
+                    glLines.Add(new GlLineRequest(
+                        MaterialInventoryAccount(connection, transaction, companyId, byProducts[i].Line.ItemCode),
+                        bpValues[i], 0m));
+                }
+                glLines.Add(new GlLineRequest(wipAccount, 0m, fgPool, NullIfBlank(order.CostCenter)));
+                var posted = GlPosting.PostInTransaction(connection, transaction, _provider,
+                    new GlDocumentRequest(companyGuid, order.DocDate,
+                        $"MFG finish {finishDocNo}", "MFG-FINISH", order.Id.ToString("D") + "#" + seq, finishDocNo,
+                        "SAR", 1m, glLines),
+                    userId);
+                journalDocNo = posted.DocumentNumber;
+            }
+
+            foreach (var (line, _) in receiptLines)
+                await UpdateLineActualAsync(connection, transaction, line, cancellationToken).ConfigureAwait(false);
+            order.ProducedQty += finishedQty;
+            order.AccumulatedCost = decimal.Round(order.AccumulatedCost + overheadShare, 2);
+            order.WipBalance = decimal.Round(pool - fgPool, 2);
+            order.TotalCost = decimal.Round(order.TotalCost + fgValue, 2);
+            order.UnitCost = order.ProducedQty > 0
+                ? decimal.Round(order.TotalCost / order.ProducedQty, 4, MidpointRounding.AwayFromZero)
+                : 0m;
+            order.Status = order.ProducedQty >= order.Qty ? MfgOrderStatuses.Completed : MfgOrderStatuses.InProcess;
+            await UpdateOrderStageAsync(connection, transaction, companyId, order, order.Status, userId, cancellationToken).ConfigureAwait(false);
+            await InsertEventAsync(connection, transaction, companyId, order, "Finish", order.DocDate, finishedQty, fgPool, journalDocNo, finishDocNo, userId, cancellationToken, seq).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return new MfgStageResult(order.Id, order.Status, fgPool, journalDocNo, order.WipBalance, order.ProducedQty);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    public async Task<MfgStageResult> CloseAsync(string companyId, Guid orderId, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        if (orderId == Guid.Empty) throw new ArgumentException("Order is required.", nameof(orderId));
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var order = await LoadOrderAsync(connection, transaction, companyId, orderId, cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("Manufacturing order was not found for this company.");
+            if (order.Status is not (MfgOrderStatuses.InProcess or MfgOrderStatuses.Completed))
+                throw StageError(order, "close");
+            var seq = await NextEventSeqAsync(connection, transaction, order.Id, cancellationToken).ConfigureAwait(false);
+            var documentNo = $"MO-{order.DocNo}";
+            var closeDocNo = $"{documentNo}-C{seq}";
+            var companyGuid = ResolveCompanyGuid(connection, transaction, companyId);
+            var wipAccount = PickAccount(connection, transaction, companyGuid, GlAccounts.WorkInProgress, GlAccounts.Inventory);
+            var varianceAccount = PickAccount(connection, transaction, companyGuid, GlAccounts.ManufacturingVariance, GlAccounts.Cogs);
+
+            var variance = decimal.Round(order.WipBalance, 2);
+            var standardVariance = order.StandardUnitCost > 0
+                ? decimal.Round(order.TotalCost - order.ProducedQty * order.StandardUnitCost, 2)
+                : 0m;
+            string? journalDocNo = null;
+            if (variance != 0m)
+            {
+                var amount = Math.Abs(variance);
+                var lines = variance > 0
+                    ? new GlLineRequest[]
+                    {
+                        new(varianceAccount, amount, 0m, NullIfBlank(order.CostCenter)),
+                        new(wipAccount, 0m, amount)
+                    }
+                    : new GlLineRequest[]
+                    {
+                        new(wipAccount, amount, 0m, NullIfBlank(order.CostCenter)),
+                        new(varianceAccount, 0m, amount)
+                    };
+                var posted = GlPosting.PostInTransaction(connection, transaction, _provider,
+                    new GlDocumentRequest(companyGuid, order.DocDate,
+                        $"MFG close {closeDocNo}", "MFG-CLOSE", order.Id.ToString("D") + "#" + seq, closeDocNo,
+                        "SAR", 1m, lines),
+                    userId);
+                journalDocNo = posted.DocumentNumber;
+            }
+
+            order.VarianceAmount = variance;
+            order.StandardVariance = standardVariance;
+            order.WipBalance = 0m;
+            order.Status = MfgOrderStatuses.Closed;
+            await UpdateOrderStageAsync(connection, transaction, companyId, order, order.Status, userId, cancellationToken).ConfigureAwait(false);
+            await InsertEventAsync(connection, transaction, companyId, order, "Close", order.DocDate, order.ProducedQty, variance, journalDocNo, closeDocNo, userId, cancellationToken, seq).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return new MfgStageResult(order.Id, order.Status, variance, journalDocNo, 0m, order.ProducedQty);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    public async Task<IReadOnlyList<MfgProductionEvent>> GetEventsAsync(string companyId, Guid orderId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = CreateCommand(connection, null,
+            "SELECT id, order_id, event_type, event_date, seq, qty, amount, journal_doc_no, notes, created_by FROM mfg_production_events WHERE company_id = @company AND order_id = @order ORDER BY seq");
+        Add(command, "@company", companyId.Trim());
+        Add(command, "@order", FormatGuid(orderId));
+        var result = new List<MfgProductionEvent>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            result.Add(new MfgProductionEvent(
+                ReadGuid(reader, 0), ReadGuid(reader, 1),
+                ReadString(reader, 2) ?? string.Empty, ReadString(reader, 3) ?? string.Empty,
+                Convert.ToInt32(reader.GetValue(4), CultureInfo.InvariantCulture),
+                ReadDecimal(reader, 5), ReadDecimal(reader, 6),
+                ReadString(reader, 7), ReadString(reader, 8), ReadString(reader, 9)));
+        }
+        return result;
+    }
+
+    // ------------------------------------------------------------------
+    // Staged helpers
+    // ------------------------------------------------------------------
+    private static AppError StageError(MfgOrder order, string action)
+        => new(ErrorCodes.MfgOrderStageInvalid,
+            $"Manufacturing order {order.DocNo} cannot {action} in status '{order.Status}'.",
+            order.DocNo.ToString(CultureInfo.InvariantCulture), order.Status);
+
+    /// <summary>Step-3 optional-leg account pick: the manufacturing code
+    /// when the company's chart carries it postable, else the fallback.</summary>
+    private string PickAccount(DbConnection connection, DbTransaction transaction, Guid companyGuid, string preferred, string fallback)
+        => GlPosting.TryResolveAccount(connection, transaction, _provider, companyGuid, preferred) is not null
+            ? preferred
+            : fallback;
+
+    /// <summary>The finished-goods account for an order: the finished
+    /// material's own acc_inventory when postable, else Finished Goods
+    /// 1212, else the canonical Inventory 1203.</summary>
+    private string FinishedGoodsAccount(DbConnection connection, DbTransaction transaction, Guid companyGuid, string companyId, string itemCode)
+    {
+        var configured = MaterialInventoryAccount(connection, transaction, companyId, itemCode);
+        if (!string.Equals(configured, GlAccounts.Inventory, StringComparison.OrdinalIgnoreCase)
+            && GlPosting.TryResolveAccount(connection, transaction, _provider, companyGuid, configured) is not null)
+            return configured;
+        return PickAccount(connection, transaction, companyGuid, GlAccounts.FinishedGoods, GlAccounts.Inventory);
+    }
+
+    private async Task<int> NextEventSeqAsync(DbConnection connection, DbTransaction transaction, Guid orderId, CancellationToken cancellationToken)
+    {
+        await using var command = CreateCommand(connection, transaction,
+            "SELECT COALESCE(MAX(seq), 0) + 1 FROM mfg_production_events WHERE order_id = @order");
+        Add(command, "@order", FormatGuid(orderId));
+        return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+    }
+
+    private async Task<decimal> SumEventAmountsAsync(DbConnection connection, DbTransaction transaction, Guid orderId, string eventType, CancellationToken cancellationToken)
+    {
+        await using var command = CreateCommand(connection, transaction,
+            "SELECT COALESCE(SUM(amount), 0) FROM mfg_production_events WHERE order_id = @order AND event_type = @type");
+        Add(command, "@order", FormatGuid(orderId));
+        Add(command, "@type", eventType);
+        return Convert.ToDecimal(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+    }
+
+    private async Task InsertEventAsync(DbConnection connection, DbTransaction transaction, string companyId, MfgOrder order,
+        string eventType, DateOnly eventDate, decimal qty, decimal amount, string? journalDocNo, string? notes,
+        string userId, CancellationToken cancellationToken, int? seqOverride = null)
+    {
+        var seq = seqOverride ?? await NextEventSeqAsync(connection, transaction, order.Id, cancellationToken).ConfigureAwait(false);
+        await using var command = CreateCommand(connection, transaction,
+            "INSERT INTO mfg_production_events (id, company_id, order_id, event_type, event_date, seq, qty, amount, journal_doc_no, notes, created_by) VALUES (@id, @company, @order, @type, @date, @seq, @qty, @amount, @journal, @notes, @user)");
+        Add(command, "@id", FormatGuid(Guid.NewGuid()));
+        Add(command, "@company", companyId.Trim());
+        Add(command, "@order", FormatGuid(order.Id));
+        Add(command, "@type", eventType);
+        Add(command, "@date", eventDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        Add(command, "@seq", seq);
+        Add(command, "@qty", qty);
+        Add(command, "@amount", amount);
+        Add(command, "@journal", (object?)journalDocNo ?? DBNull.Value);
+        Add(command, "@notes", (object?)notes ?? DBNull.Value);
+        Add(command, "@user", userId);
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Persists the stage-owned header fields (status, produced,
+    /// accumulated, WIP, totals, variance) with a status CAS guard.</summary>
+    private async Task UpdateOrderStageAsync(DbConnection connection, DbTransaction transaction, string companyId, MfgOrder order, string newStatus, string userId, CancellationToken cancellationToken)
+    {
+        await using var command = CreateCommand(connection, transaction,
+            $"UPDATE mfg_orders SET status = @status, produced_qty = @produced, accumulated_cost = @accumulated, wip_balance = @wip, total_cost = @total, unit_cost = @unitCost, variance_amount = @variance, standard_variance = @stdVariance, updated_by = @user, updated_at = {NowExpr} WHERE company_id = @company AND id = @id AND {NotDeleted}");
+        Add(command, "@status", newStatus);
+        Add(command, "@produced", order.ProducedQty);
+        Add(command, "@accumulated", order.AccumulatedCost);
+        Add(command, "@wip", order.WipBalance);
+        Add(command, "@total", order.TotalCost);
+        Add(command, "@unitCost", order.UnitCost);
+        Add(command, "@variance", order.VarianceAmount);
+        Add(command, "@stdVariance", order.StandardVariance);
+        Add(command, "@user", userId);
+        Add(command, "@company", companyId.Trim());
+        Add(command, "@id", FormatGuid(order.Id));
+        if (await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+            throw new InvalidOperationException("Manufacturing order changed while applying the stage action.");
+        order.Status = newStatus;
+    }
+
+    private async Task UpdateLineActualAsync(DbConnection connection, DbTransaction transaction, MfgOrderLine line, CancellationToken cancellationToken)
+    {
+        await using var command = CreateCommand(connection, transaction,
+            "UPDATE mfg_order_lines SET consumed_qty = @consumed, produced_qty = @produced WHERE id = @id");
+        Add(command, "@consumed", line.ConsumedQty);
+        Add(command, "@produced", line.ProducedQty);
+        Add(command, "@id", FormatGuid(line.Id));
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Reverses every staged GL entry of an order (issue /
+    /// finish / overhead / close) through the shared Reverse path.
+    /// Called by Cancel for staged orders, inside the cancel
+    /// transaction, after the stock reversals.</summary>
+    private void ReverseStagedGl(DbConnection connection, DbTransaction transaction, Guid companyGuid, MfgOrder order, string userId)
+    {
+        var ids = new List<Guid>();
+        using (var find = CreateCommand(connection, transaction,
+            "SELECT journal_entry_id FROM journal_entries WHERE company_id = @company AND source_doc_type IN ('MFG-ISSUE','MFG-FINISH','MFG-OVHD','MFG-CLOSE') AND source_doc_id LIKE @prefix AND reversal_of_entry_id IS NULL AND status = 1"))
+        {
+            Add(find, "@company", _provider == "PostgreSQL" ? (object)companyGuid : companyGuid.ToString("D"));
+            Add(find, "@prefix", order.Id.ToString("D") + "#%");
+            using var reader = find.ExecuteReader();
+            while (reader.Read())
+                ids.Add(Guid.Parse(Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture)!));
+        }
+        foreach (var id in ids)
+            GlPosting.ReverseInTransaction(connection, transaction, _provider, id, userId,
+                $"Manufacturing order {order.DocNo} cancelled");
+    }
+
+    /// <summary>The original consumption rate of one material across all
+    /// of the order's issue documents (for cancel re-entry at the
+    /// original rate, the Step-6 return rule).</summary>
+    private decimal? OriginalIssueRate(DbConnection connection, DbTransaction transaction, string companyId, string docPrefix, long materialId, long warehouseId)
+    {
+        using var command = CreateCommand(connection, transaction, $"""
+            SELECT COALESCE(SUM(ABS(COALESCE(cost_amount, 0))), 0), COALESCE(SUM(qty_out), 0)
+            FROM material_stock_movements
+            WHERE company_id = @c AND document_no LIKE @prefix AND material_id = @m
+              AND warehouse_id = @w AND qty_out > 0 AND is_deleted = {(_provider == "PostgreSQL" ? "FALSE" : "0")}
+            """);
+        Add(command, "@c", companyId.Trim());
+        Add(command, "@prefix", docPrefix + "%");
+        Add(command, "@m", materialId);
+        Add(command, "@w", warehouseId);
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) return null;
+        var amount = Convert.ToDecimal(reader.GetValue(0), CultureInfo.InvariantCulture);
+        var qty = Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
+        return qty > 0 ? decimal.Round(amount / qty, 6, MidpointRounding.AwayFromZero) : null;
+    }
+
+    /// <summary>Rebuilds the batch / serial allocations a cancel
+    /// re-entry must carry so raw materials return to their ORIGINAL
+    /// batches and serials (054 genealogy): aggregates the order's
+    /// issue allocations for one material.</summary>
+    private (IReadOnlyList<BatchAllocationRequest>? Batches, IReadOnlyList<SerialSelection>? Serials)
+        RebuildIssueAllocations(DbConnection connection, DbTransaction transaction, string companyId, string docPrefix, long materialId)
+    {
+        var batches = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        var serials = new List<string>();
+        using var command = CreateCommand(connection, transaction, $"""
+            SELECT b.batch_no, a.qty, s.serial_no
+            FROM stock_movement_allocations a
+            JOIN material_stock_movements m ON m.stock_movement_id = a.stock_movement_id
+            LEFT JOIN stock_batches b ON b.batch_id = a.batch_id
+            LEFT JOIN stock_serials s ON s.serial_id = a.serial_id
+            WHERE m.company_id = @c AND m.material_id = @mat AND m.document_no LIKE @prefix
+              AND m.qty_out > 0 AND m.is_deleted = {(_provider == "PostgreSQL" ? "FALSE" : "0")}
+            """);
+        Add(command, "@c", companyId.Trim());
+        Add(command, "@mat", materialId);
+        Add(command, "@prefix", docPrefix + "%");
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            var batchNo = reader.IsDBNull(0) ? null : reader.GetString(0);
+            var qty = Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
+            var serialNo = reader.IsDBNull(2) ? null : reader.GetString(2);
+            if (batchNo is not null)
+                batches[batchNo] = batches.GetValueOrDefault(batchNo) + Math.Abs(qty);
+            if (serialNo is not null && !serials.Contains(serialNo))
+                serials.Add(serialNo);
+        }
+        return (batches.Count > 0 ? batches.Select(kv => new BatchAllocationRequest(kv.Key, kv.Value)).ToList() : null,
+                serials.Count > 0 ? serials.Select(s => new SerialSelection(s)).ToList() : null);
     }
 
     // ------------------------------------------------------------------
@@ -563,7 +1327,7 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
     {
         MfgOrder? order = null;
         await using (var command = CreateCommand(connection, transaction,
-            $"SELECT id, doc_no, doc_date, item_code, item_name, qty, unit_code, warehouse_code, overhead_amount, standard_unit_cost, total_cost, unit_cost, status, notes FROM mfg_orders WHERE company_id = @company AND id = @id AND {NotDeleted}"))
+            $"SELECT {OrderColumns} FROM mfg_orders WHERE company_id = @company AND id = @id AND {NotDeleted}"))
         {
             Add(command, "@company", companyId.Trim());
             Add(command, "@id", FormatGuid(orderId));
@@ -579,7 +1343,7 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
     private async Task<List<MfgOrderLine>> ReadLinesAsync(DbConnection connection, Guid orderId, CancellationToken cancellationToken, DbTransaction? transaction = null)
     {
         await using var command = CreateCommand(connection, transaction,
-            "SELECT id, order_id, line_kind, item_code, item_name, qty, unit_code, unit_cost, standard_unit_cost, amount FROM mfg_order_lines WHERE order_id = @order ORDER BY item_code");
+            "SELECT id, order_id, line_kind, item_code, item_name, qty, unit_code, unit_cost, standard_unit_cost, amount, line_no, consumed_qty, produced_qty, warehouse_code, cost_share_pct FROM mfg_order_lines WHERE order_id = @order ORDER BY line_no, item_code");
         Add(command, "@order", FormatGuid(orderId));
         var result = new List<MfgOrderLine>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -596,7 +1360,12 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 UnitCode = ReadString(reader, 6),
                 UnitCost = ReadDecimal(reader, 7),
                 StandardUnitCost = ReadDecimal(reader, 8),
-                Amount = ReadDecimal(reader, 9)
+                Amount = ReadDecimal(reader, 9),
+                LineNo = reader.IsDBNull(10) ? 0 : Convert.ToInt32(reader.GetValue(10), CultureInfo.InvariantCulture),
+                ConsumedQty = ReadDecimal(reader, 11),
+                ProducedQty = ReadDecimal(reader, 12),
+                WarehouseCode = ReadString(reader, 13),
+                CostSharePct = ReadDecimal(reader, 14)
             });
         }
         return result;
@@ -627,6 +1396,22 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
         Add(command, "@unitCost", order.UnitCost);
         Add(command, "@status", MfgOrderStatuses.Draft);
         Add(command, "@notes", (object?)NullIfBlank(order.Notes) ?? DBNull.Value);
+        Add(command, "@bomId", order.BomId is { } bomId ? FormatGuid(bomId) : DBNull.Value);
+        Add(command, "@bomVersion", (object?)order.BomVersion ?? DBNull.Value);
+        Add(command, "@plannedStart", (object?)order.PlannedStartDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? DBNull.Value);
+        Add(command, "@plannedEnd", (object?)order.PlannedEndDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? DBNull.Value);
+        Add(command, "@soDocId", (object?)order.SalesOrderDocId ?? DBNull.Value);
+        Add(command, "@soNo", (object?)NullIfBlank(order.SalesOrderNo) ?? DBNull.Value);
+        Add(command, "@costCenter", (object?)NullIfBlank(order.CostCenter) ?? DBNull.Value);
+        Add(command, "@srcWhs", (object?)NullIfBlank(order.SourceWarehouseCode) ?? DBNull.Value);
+        Add(command, "@wipWhs", (object?)NullIfBlank(order.WipWarehouseCode) ?? DBNull.Value);
+        Add(command, "@tgtWhs", (object?)NullIfBlank(order.TargetWarehouseCode) ?? DBNull.Value);
+        Add(command, "@scrWhs", (object?)NullIfBlank(order.ScrapWarehouseCode) ?? DBNull.Value);
+        Add(command, "@producedQty", order.ProducedQty);
+        Add(command, "@accumulated", order.AccumulatedCost);
+        Add(command, "@wipBalance", order.WipBalance);
+        Add(command, "@variance", order.VarianceAmount);
+        Add(command, "@stdVariance", order.StandardVariance);
         Add(command, "@user", userId);
     }
 
@@ -645,7 +1430,23 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
         TotalCost = ReadDecimal(reader, 10),
         UnitCost = ReadDecimal(reader, 11),
         Status = ReadString(reader, 12) ?? MfgOrderStatuses.Draft,
-        Notes = ReadString(reader, 13)
+        Notes = ReadString(reader, 13),
+        BomId = reader.IsDBNull(14) ? null : ReadGuid(reader, 14),
+        BomVersion = reader.IsDBNull(15) ? null : Convert.ToInt32(reader.GetValue(15), CultureInfo.InvariantCulture),
+        PlannedStartDate = ReadDate(reader, 16),
+        PlannedEndDate = ReadDate(reader, 17),
+        SalesOrderDocId = reader.IsDBNull(18) ? null : Convert.ToInt64(reader.GetValue(18), CultureInfo.InvariantCulture),
+        SalesOrderNo = ReadString(reader, 19),
+        CostCenter = ReadString(reader, 20),
+        SourceWarehouseCode = ReadString(reader, 21),
+        WipWarehouseCode = ReadString(reader, 22),
+        TargetWarehouseCode = ReadString(reader, 23),
+        ScrapWarehouseCode = ReadString(reader, 24),
+        ProducedQty = ReadDecimal(reader, 25),
+        AccumulatedCost = ReadDecimal(reader, 26),
+        WipBalance = ReadDecimal(reader, 27),
+        VarianceAmount = ReadDecimal(reader, 28),
+        StandardVariance = ReadDecimal(reader, 29)
     };
 
     private static void RequireCompany(string companyId)

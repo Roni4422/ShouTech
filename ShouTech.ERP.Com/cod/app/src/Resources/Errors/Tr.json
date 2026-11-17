@@ -458,5 +458,41 @@
     "name": "CrmLostReasonRequired",
     "message": "'{0}' fırsatı kayıp olarak işaretlenirken kayıp nedeni gereklidir.",
     "hint": "Bir kayıp nedeni seçin (liste boşsa nedenleri süreç penceresinde yapılandırın)."
+  },
+  "MFG-1001": {
+    "code": "MFG-1001",
+    "name": "BomCycleDetected",
+    "message": "'{0}' urun agaci dogrudan veya diger urun agaclari uzerinden kendisine referans veriyor; dongu kaldirilmadan urun agaci kullanilamaz.",
+    "hint": "Urun agacini acin ve bitmis urunun kendisini (dolayli olarak) ureten bileseni kaldirin."
+  },
+  "MFG-1002": {
+    "code": "MFG-1002",
+    "name": "BomNotFoundOrInactive",
+    "message": "'{0}' urun agaci bulunamadi veya bu sirket icin aktif degil.",
+    "hint": "Urun agaci penceresinde surumu etkinlestirin veya baska bir surum secin."
+  },
+  "MFG-1003": {
+    "code": "MFG-1003",
+    "name": "MfgOrderStageInvalid",
+    "message": "'{0}' uretim emri '{1}' durumunda bu islemi gerceklestiremez.",
+    "hint": "Asamali is akisini izleyin: Taslak, Onaylandi, Islemde, Tamamlandi, Kapatildi (veya Iptal)."
+  },
+  "MFG-1004": {
+    "code": "MFG-1004",
+    "name": "MfgIssueExceedsRequired",
+    "message": "'{0}' icin {1} cikis yapmak emirdeki gerekli miktari asar.",
+    "hint": "En fazla kalan gerekli miktar kadar cikis yapin veya once taslak satirlarini duzenleyin."
+  },
+  "MFG-1005": {
+    "code": "MFG-1005",
+    "name": "MfgFinishExceedsPlanned",
+    "message": "'{0}' icin {1} giris yapmak planlanan uretim miktarini asar.",
+    "hint": "En fazla kalan planlanan miktar kadar giris yapin."
+  },
+  "MFG-1006": {
+    "code": "MFG-1006",
+    "name": "PlanningConversionInvalid",
+    "message": "'{0}' planlama satiri '{1}' durumunda donusturulemez.",
+    "hint": "Yalnizca Planlanan emirler ve Onerilen satin alma satirlari, tam bir kez donusturulebilir."
   }
 }

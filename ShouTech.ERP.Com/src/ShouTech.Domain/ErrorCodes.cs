@@ -134,4 +134,14 @@ public static class ErrorCodes
     public const string CrmQuotationPartyMissing = "CRM-9004";
     public const string CrmActivityTargetInvalid = "CRM-9005";
     public const string CrmLostReasonRequired = "CRM-9006";
+
+    // ---- MFG 1001-1999 (manufacturing build-out, migration 058) --------
+    // The manufacturing module takes its own prefix block. Codes are
+    // immutable once assigned, like every other range above.
+    public const string BomCycleDetected = "MFG-1001";
+    public const string BomNotFoundOrInactive = "MFG-1002";
+    public const string MfgOrderStageInvalid = "MFG-1003";
+    public const string MfgIssueExceedsRequired = "MFG-1004";
+    public const string MfgFinishExceedsPlanned = "MFG-1005";
+    public const string PlanningConversionInvalid = "MFG-1006";
 }
