@@ -668,9 +668,9 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="{StaticResource PrimaryButtonMinWidth}"/>
+                        <ColumnDefinition Width="{StaticResource PrimaryButtonColumnWidth}"/>
                         <ColumnDefinition Width="8"/>
-                        <ColumnDefinition Width="{StaticResource PrimaryButtonMinWidth}"/>
+                        <ColumnDefinition Width="{StaticResource PrimaryButtonColumnWidth}"/>
                     </Grid.ColumnDefinitions>
 
                     <Button x:Name="btnSetupWizard"

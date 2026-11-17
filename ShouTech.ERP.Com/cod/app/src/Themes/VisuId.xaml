@@ -250,6 +250,10 @@
          form grid, fields stretch to their column and carry no width. -->
     <System:Double x:Key="FormLabelWidth">120</System:Double>
     <GridLength x:Key="FormLabelColumnWidth">120</GridLength>
+    <!-- GridLength twin of PrimaryButtonMinWidth (100): ColumnDefinition.Width
+         requires a GridLength value; referencing the Double token there compiles
+         but throws at runtime when the window loads. Keep the two in sync. -->
+    <GridLength x:Key="PrimaryButtonColumnWidth">100</GridLength>
     <System:Double x:Key="FieldWidthTiny">80</System:Double>
     <System:Double x:Key="FieldWidthShort">120</System:Double>
     <System:Double x:Key="FieldWidthMedium">180</System:Double>
