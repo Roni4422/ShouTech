@@ -367,7 +367,7 @@ public sealed class QualityRepository : IQualityRepository
         FROM quality_inspections i
         LEFT JOIN materials m ON m.material_id = i.material_id AND m.company_id = i.company_id
         LEFT JOIN stock_batches b ON b.batch_id = i.batch_id
-        """;
+        """ + " ";
 
     public async Task<IReadOnlyList<QualityInspection>> GetInspectionsAsync(string companyId, bool pendingOnly = false, CancellationToken cancellationToken = default)
     {
