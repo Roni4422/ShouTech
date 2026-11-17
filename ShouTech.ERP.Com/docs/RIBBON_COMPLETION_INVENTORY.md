@@ -57,7 +57,7 @@ RepCard, MfgWin, OrdWin (JrnWin retains an unused helper - removed in this pass)
 | TabInventory | InventoryCards | Material card | `Inventory.MaterialCard` | ? | COMPLETE |
 | TabInventory | InventoryCards | Category card | `Inventory.CategoryCard` | ? | COMPLETE |
 | TabInventory | InventoryCards | Warehouse card | `Inventory.WarehouseCard` | ? | COMPLETE |
-| TabInventory | InventoryCards | مجموعات المواد | `Inventory.MaterialGroups` | ? | COMPLETE |
+| TabInventory | InventoryCards | Material Groups | `Inventory.MaterialGroups` | ? | COMPLETE |
 | TabInventory | InventoryBarcode | Generate barcode | `Inventory.GenerateBarcode` | BcdGenWin | COMPLETE |
 | TabInventory | InventoryBarcode | Design and print barcode | `Inventory.DesignBarcode` | BcdDesWin | COMPLETE |
 | TabInventory | InventoryBarcode | Create barcode | `Inventory.CreateBarcode` | BarWin | COMPLETE |
@@ -66,7 +66,7 @@ RepCard, MfgWin, OrdWin (JrnWin retains an unused helper - removed in this pass)
 | TabInventory | InventoryMovements | Shortage list | `Inventory.ShortageList` | ShortListWin | COMPLETE |
 | TabInventory | InventoryMovements | Transfer material movement | `Inventory.TransferMaterial` | MWin key case (options/adjustment/merge) | COMPLETE |
 | TabInventory | InventoryMovements | Inventory adjustment | `Inventory.InventoryAdjustment` | MWin key case (options/adjustment/merge) | COMPLETE |
-| TabInventory | InventoryMaterialReports | دليل المواد | `Inventory.MaterialTree` | ? | COMPLETE |
+| TabInventory | InventoryMaterialReports | Material Directory | `Inventory.MaterialTree` | ? | COMPLETE |
 | TabInventory | InventoryMaterialReports | Search materials | `Inventory.SearchMaterial` | MatListWin | COMPLETE |
 | TabInventory | InventoryMaterialReports | Warehouse inventory | `Inventory.WarehouseInventory` | StkBalWin | COMPLETE |
 | TabInventory | InventoryMaterialReports | Material movement | `Inventory.MaterialMovement` | MatMoveWin | COMPLETE |
@@ -344,7 +344,7 @@ portfolios, document cycles). Full research file: `~/workspace/research/erp-wind
   References child table allocates against invoices; **Difference Amount must
   be 0 to submit**; unallocated remainder stays as advance. Odoo
   `account.payment`: journal + method line, outstanding accounts, group
-  payments. Al-Ameen/Phenix (pattern-based): receipt/payment سند pair over one
+  payments. Al-Ameen/Phenix (pattern-based): receipt/payment voucher pair over one
   engine; header amount must equal Σ lines; amount-in-words on print.
 - **Fields (adopted — existing window shape kept).** Header: Doc No (auto per
   kind), Date, Treasury/Box account code (req), Party name, Amount, Currency,
@@ -430,7 +430,7 @@ portfolios, document cycles). Full research file: `~/workspace/research/erp-wind
   To (Customer/Lead), **Valid Till** (default +30d), statuses Draft / Open /
   Ordered / Lost / Expired / Cancelled; conversion copies quoted rates (never
   re-fetched). Odoo: quotation = draft sale.order with Expiration. Regional
-  (pattern-based): عرض سعر → طلب → فاتورة chain; expired quotes printable but
+  (pattern-based): Quotation → Order → Invoice chain; expired quotes printable but
   blocked from conversion.
 - **Adoption on existing engine.** Quotations already exist as
   `sales_documents` doc_kind QUO in InvoiceWin with QUO→SO conversion in
