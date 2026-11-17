@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -22,6 +22,7 @@ using ShouTech.Domain.Interfaces;
 using ShouTech.App.Services;
 using WpfApp = System.Windows.Application;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views
 {
     public enum ComWinMode
@@ -194,7 +195,10 @@ namespace ShouTech.App.Views
 				SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
 					SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
             }
-            catch { }
+            catch (Exception exL197)
+            {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL197, "ComWin.xaml.StripNativeCaption");
+            }
         }
 
         private void ApplyLayoutForMode()
@@ -289,7 +293,8 @@ namespace ShouTech.App.Views
 
         private void ApplyWindowDirection()
         {
-            try { LangDirSv.ApplyToWindow(this, ShouTech.App.App.CurrentLanguageCode); } catch { }
+            try { LangDirSv.ApplyToWindow(this, ShouTech.App.App.CurrentLanguageCode); } catch (Exception exL292) {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL292, "ComWin.xaml.ApplyWindowDirection"); }
         }
 
         private void ApplyButtonOrder()
@@ -300,7 +305,10 @@ namespace ShouTech.App.Views
                 Grid.SetColumn(btnOk, 2);
                 Grid.SetColumn(btnCancel, 4);
             }
-            catch { }
+            catch (Exception exL303)
+            {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL303, "ComWin.xaml.ApplyButtonOrder");
+            }
         }
 
         private void OnPreviewKeyDown(object sender, KeyEventArgs e)
@@ -366,6 +374,8 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.CompanyLoadFailed, ex, "ComWin.LoadCompaniesAsync");
+
                 MessageBox.Show(
                     $"{Loc.Get("CompanySelection.LoadErrorMessage", "Failed to load companies")}:\n{ex.Message}",
                     Loc.Get("Application.Error", "Error"),
@@ -380,7 +390,8 @@ namespace ShouTech.App.Views
                         if (!pref.CompanySetupComplete)
                             OpenSetupWizard();
                     }
-                    catch { OpenSetupWizard(); }
+                    catch (Exception exL385) {
+                        AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL385, "ComWin.xaml.LoadCompaniesAsync"); OpenSetupWizard(); }
                 }
             }
         }
@@ -421,8 +432,9 @@ namespace ShouTech.App.Views
                 }
                 return result;
             }
-            catch
+            catch (Exception exL426)
             {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL426, "ComWin.xaml.TryLoadCachedIndex");
                 return new List<CompanyIndexEntry>();
             }
         }
@@ -433,7 +445,10 @@ namespace ShouTech.App.Views
             {
                 await CoRegSvc.RebuildCompanyIndexAsync().ConfigureAwait(false);
             }
-            catch { }
+            catch (Exception exL438)
+            {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL438, "ComWin.xaml.TryRefreshIndexInBackgroundAsync");
+            }
         }
 
         private void PopulateCompanies(IReadOnlyList<CompanyIndexEntry> entries)
@@ -491,7 +506,8 @@ namespace ShouTech.App.Views
             {
                 if (_mode == ComWinMode.Startup)
                 {
-                    try { WpfApp.Current?.Shutdown(); } catch { }
+                    try { WpfApp.Current?.Shutdown(); } catch (Exception exL496) {
+                        AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL496, "ComWin.xaml.OpenSetupWizard"); }
                 }
                 return;
             }
@@ -502,7 +518,10 @@ namespace ShouTech.App.Views
                 pref.CompanySetupComplete = true;
                 pref.Save();
             }
-            catch { }
+            catch (Exception exL507)
+            {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL507, "ComWin.xaml.OpenSetupWizard");
+            }
 
             _ = LoadCompaniesAsync();
         }
@@ -543,7 +562,10 @@ namespace ShouTech.App.Views
                     }
                 }
             }
-            catch { }
+            catch (Exception exL548)
+            {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL548, "ComWin.xaml.SafeCloseOrShutdown");
+            }
 
             if (hasShell)
             {
@@ -551,7 +573,8 @@ namespace ShouTech.App.Views
                 return;
             }
 
-            try { WpfApp.Current.Shutdown(); } catch { Close(); }
+            try { WpfApp.Current.Shutdown(); } catch (Exception exL556) {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL556, "ComWin.xaml.SafeCloseOrShutdown"); Close(); }
         }
 
         private async void BtnContinue_Click(object sender, RoutedEventArgs e) => await ContinueToLoginAsync();
@@ -571,6 +594,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, ex, "ComWin.xaml.BtnMgmtOpen_Click");
                 MessageBox.Show(
                     ex.Message,
                     Loc.Get("CompanySelection.OpenFailed", "Unable to open company"),
@@ -609,7 +633,7 @@ namespace ShouTech.App.Views
                 string.Equals(c.Code, company.Code, StringComparison.OrdinalIgnoreCase));
 
             if (record == null)
-                throw new InvalidOperationException(Loc.Get(
+                throw new AppError(ErrorCodes.CompanyRecordNotFound, Loc.Get(
                           "CompanySelection.LocalRecordNotFound",
                     "The local company record required to open this company was not found."));
 
@@ -696,7 +720,7 @@ namespace ShouTech.App.Views
             if (DatabaseRuntime.IsSqlite(provider))
             {
                 if (string.IsNullOrWhiteSpace(record.DbPath))
-                    throw new InvalidOperationException(Loc.Get(
+                    throw new AppError(ErrorCodes.CompanyDatabasePathMissing, Loc.Get(
                         "CompanySelection.SqlitePathMissing",
                         "SQLite database path is not configured."));
 
@@ -711,7 +735,7 @@ namespace ShouTech.App.Views
             {
                 var current = defaultConnection.ConnectionString;
                 if (string.IsNullOrWhiteSpace(current))
-                    throw new InvalidOperationException(Loc.Get(
+                    throw new AppError(ErrorCodes.PostgresConnectionMissing, Loc.Get(
                         "CompanySelection.PgConnectionMissing",
                         "Current PostgreSQL connection is not available."));
 
@@ -726,7 +750,7 @@ namespace ShouTech.App.Views
                 return;
             }
 
-            throw new InvalidOperationException(
+            throw new AppError(ErrorCodes.UnsupportedDatabaseProvider,
                 Loc.Get("CompanySelection.UnsupportedProvider",
                     "Unsupported database provider.") + $" ({provider})");
         }
@@ -738,7 +762,8 @@ namespace ShouTech.App.Views
                 if (ReferenceEquals(window, this) || window is MWin)
                     continue;
 
-                try { window.Close(); } catch { }
+                try { window.Close(); } catch (Exception exL743) {
+                    AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL743, "ComWin.xaml.CloseSecondaryWindowsExceptShell"); }
             }
         }
 
@@ -807,6 +832,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, ex, "ComWin.xaml.EnterEditModeAsync");
                 MessageBox.Show(ex.Message,
                     Loc.Get("Common.Error", "Error"),
                     MessageBoxButton.OK,
@@ -945,6 +971,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, ex, "ComWin.xaml.BtnEditSave_Click");
                 MessageBox.Show(ex.Message,
                     Loc.Get("Common.Error", "Error"),
                     MessageBoxButton.OK,
@@ -994,6 +1021,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, ex, "ComWin.xaml.BtnDeleteFromIndex_Click");
                 MessageBox.Show(ex.Message,
                     Loc.Get("Common.Delete", "Delete"),
                     MessageBoxButton.OK,
@@ -1027,6 +1055,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, ex, "ComWin.xaml.BtnDeleteFully_Click");
                 MessageBox.Show(ex.Message,
                     Loc.Get("CompanyManagement.PermanentDeleteTitle", "Permanent Delete"),
                     MessageBoxButton.OK,
@@ -1045,6 +1074,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, ex, "ComWin.xaml.BtnMgmtReindex_Click");
                 MessageBox.Show(ex.Message,
                     Loc.Get("CompanyManagement.Reindex", "Reindex"),
                     MessageBoxButton.OK,
@@ -1087,7 +1117,7 @@ namespace ShouTech.App.Views
                     string.Equals(c.Code, SelectedCompany.Code, StringComparison.OrdinalIgnoreCase) && c.Enabled);
 
                 if (record == null)
-                    throw new InvalidOperationException(Loc.Get(
+                    throw new AppError(ErrorCodes.CompanyRecordNotFound, Loc.Get(
                         "CompanySelection.LocalRecordNotFound",
                         "The local company record could not be found."));
 
@@ -1107,6 +1137,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, ex, "ComWin.xaml.ContinueToLoginAsync");
                 MessageBox.Show(
                     $"{Loc.Get("CompanySelection.OpenLoginFailed", "Failed to open login")}:\n{ex.Message}",
                     Loc.Get("Application.Error", "Error"),
@@ -1121,16 +1152,15 @@ namespace ShouTech.App.Views
             if (DatabaseRuntime.IsSqlite(provider))
             {
                 if (string.IsNullOrWhiteSpace(record.DbPath))
-                    throw new InvalidOperationException(Loc.Get(
+                    throw new AppError(ErrorCodes.CompanyDatabasePathMissing, Loc.Get(
                         "CompanySelection.SqlitePathMissing",
                         "Company database path is not set."));
 
                 var connectionString = DatabaseRuntime.NormalizeSqliteConnectionString(record.DbPath);
                 var dataSource = DatabaseRuntime.GetSqliteDataSource(connectionString);
                 if (string.IsNullOrWhiteSpace(dataSource) || !File.Exists(dataSource))
-                    throw new FileNotFoundException(
-                        Loc.Get("CompanySelection.DatabaseFileMissing", "Company database file not found."),
-                        dataSource);
+                    throw new AppError(ErrorCodes.DatabaseFileMissing,
+                        Loc.Get("CompanySelection.DatabaseFileMissing", "Company database file not found."));
 
                 await using var connection = new Microsoft.Data.Sqlite.SqliteConnection(connectionString);
                 await connection.OpenAsync();
@@ -1138,7 +1168,7 @@ namespace ShouTech.App.Views
                 command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='companies'";
                 var count = Convert.ToInt32(await command.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture);
                 if (count != 1)
-                    throw new InvalidDataException(Loc.Get(
+                    throw new AppError(ErrorCodes.DatabaseNotInitialized, Loc.Get(
                         "CompanySelection.DatabaseNotInitialized",
                         "Company database file is not properly initialized."));
                 return;
@@ -1147,13 +1177,13 @@ namespace ShouTech.App.Views
             if (DatabaseRuntime.IsPostgreSql(provider))
             {
                 if (string.IsNullOrWhiteSpace(record.DbPath))
-                    throw new InvalidOperationException(Loc.Get(
+                    throw new AppError(ErrorCodes.PostgresDatabaseNameMissing, Loc.Get(
                         "CompanySelection.PgDatabaseMissing",
                         "PostgreSQL database name is not set."));
                 return;
             }
 
-            throw new InvalidOperationException(
+            throw new AppError(ErrorCodes.UnsupportedDatabaseProvider,
                 Loc.Get("CompanySelection.UnsupportedProvider",
                     "Unsupported database provider.") + $" ({record.DatabaseProvider})");
         }

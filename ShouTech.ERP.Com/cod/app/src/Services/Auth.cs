@@ -1,4 +1,4 @@
-﻿// ========================================================================
+// ========================================================================
 // FILE: Services/Auth.cs
 // PROJECT: SHOUTECH ERP — Authentication, session, password hashing
 // Merged: UsrAccLvl, IAuthSvc, UsrSession, SessionManager, PwdHash, AuthServ
@@ -18,6 +18,7 @@ using Npgsql;
 using ShouTech.App.Common;
 using ShouTech.App.Configuration;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services
 {
 
@@ -44,6 +45,14 @@ public interface IAuthSvc
         public string Message { get; set; } = string.Empty;
         public UserInfo? User { get; set; }
         public string? Token { get; set; }
+
+        /// <summary>
+        /// Catalog error code for a failed sign-in (AUTH-2xxx). Carried
+        /// for coded logging only: the user-facing message deliberately
+        /// stays the generic invalid-credentials text for every failure,
+        /// so the code never leaks whether an account exists or is locked.
+        /// </summary>
+        public string? ErrorCode { get; set; }
     }
 
     public class UserInfo
@@ -287,16 +296,19 @@ public interface IAuthSvc
                     storedHash,
                     storedSalt);
             }
-            catch (FormatException)
+            catch (FormatException exL298)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL298, "Auth.Verify");
                 return false;
             }
-            catch (CryptographicException)
+            catch (CryptographicException exL302)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL302, "Auth.Verify");
                 return false;
             }
-            catch (ArgumentException)
+            catch (ArgumentException exL306)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL306, "Auth.Verify");
                 return false;
             }
         }
@@ -413,8 +425,9 @@ public interface IAuthSvc
             {
                 expectedHash = Convert.FromBase64String(parts[3]);
             }
-            catch (FormatException)
+            catch (FormatException exL424)
             {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL424, "Auth.TryParseVersionedHash");
                 return false;
             }
 
@@ -733,12 +746,12 @@ public sealed class AuthServ : IAuthSvc
                     await SecurityAuditLog.WriteAsync(companyCode, attempt.UserId, normalizedUser,
                         SecurityAuditLog.LoginLocked, "Sign-in refused: account is locked.");
                     AuditSecurityViolation("LoginLocked", $"Locked account sign-in attempt | user={normalizedUser} | company={companyCode}", normalizedUser);
-                    return Failed();
+                    return Failed(ErrorCodes.AccountLocked);
                 case DbLoginKind.LockedNow:
                     await SecurityAuditLog.WriteAsync(companyCode, attempt.UserId, normalizedUser,
                         SecurityAuditLog.AccountLocked, "Account locked after repeated failed sign-ins.");
                     AuditSecurityViolation("AccountLocked", $"Account locked after repeated failed sign-ins | user={normalizedUser} | company={companyCode}", normalizedUser);
-                    return Failed();
+                    return Failed(ErrorCodes.AccountLockedNow);
                 default:
                     await SecurityAuditLog.WriteAsync(companyCode, attempt.UserId, normalizedUser,
                         SecurityAuditLog.LoginFailure,
@@ -766,7 +779,7 @@ public sealed class AuthServ : IAuthSvc
                 case DbLoginKind.Locked:
                     await SecurityAuditLog.WriteAsync(companyCode, attempt.UserId, "(passcode)",
                         SecurityAuditLog.LoginLocked, "Passcode sign-in refused: matched account is locked.");
-                    return Failed();
+                    return Failed(ErrorCodes.AccountLocked);
                 default:
                     // Passcode failures cannot be attributed to one account, so no
                     // per-account counter is incremented on this path; the event
@@ -802,7 +815,10 @@ public sealed class AuthServ : IAuthSvc
             if (AppHost.Audit is { } audit)
                 _ = audit.LogSecurityViolationAsync(eventType, details, username);
         }
-        catch { /* audit forwarding must never change an auth outcome */ }
+        catch (Exception exL813)
+        {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL813, "Auth.AuditSecurityViolation");
+        }
     }
 
     private static AuthResult Succeed(UserInfo user)
@@ -811,10 +827,11 @@ public sealed class AuthServ : IAuthSvc
         return new AuthResult { Success = true, Message = "Login succeeded", User = user };
     }
 
-    private static AuthResult Failed() => new()
+    private static AuthResult Failed(string errorCode = ErrorCodes.InvalidCredentials) => new()
     {
         Success = false,
-        Message = "The username or password is incorrect"
+        Message = "The username or password is incorrect",
+        ErrorCode = errorCode
     };
 
     private static UserInfo BuildCompanyAdminUser(string username, StoredCoRec company) => new()

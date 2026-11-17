@@ -16,6 +16,7 @@ using ShouTech.App.Services;
 using ShouTech.App.ViewModels;
 using WpfApp = System.Windows.Application;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views
 {
     public partial class MWin : RibbonWindow
@@ -70,8 +71,9 @@ namespace ShouTech.App.Views
                 {
                     LangDirSv.ApplyToWindow(this);
                 }
-                catch
+                catch (Exception exL73)
                 {
+                    AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, exL73, "MWin.xaml.MWin");
                     // Non-fatal.
                 }
 
@@ -80,8 +82,9 @@ namespace ShouTech.App.Views
                 {
                     UiLoczr.ApplyToWindow(this);
                 }
-                catch
+                catch (Exception exL83)
                 {
+                    AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, exL83, "MWin.xaml.MWin");
                     // Non-fatal.
                 }
 
@@ -112,6 +115,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, ex, "MWin.xaml.MWin");
                 MessageBox.Show(
                     $"Error: {ex.Message}",
                     "ShouTech ERP",
@@ -234,8 +238,9 @@ namespace ShouTech.App.Views
             {
                 LangDirSv.ApplyToWindow(this);
             }
-            catch
+            catch (Exception exL237)
             {
+                AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, exL237, "MWin.xaml.OnLanguageChanged");
                 // Non-fatal.
             }
 
@@ -246,8 +251,9 @@ namespace ShouTech.App.Views
             {
                 UiLoczr.ApplyToWindow(this);
             }
-            catch
+            catch (Exception exL249)
             {
+                AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, exL249, "MWin.xaml.OnLanguageChanged");
                 // Non-fatal.
             }
         }
@@ -358,6 +364,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, ex, "MWin.xaml.OnRecycleBinClick");
                 MessageBox.Show(
                     this,
                     ex.Message,
@@ -392,8 +399,9 @@ namespace ShouTech.App.Views
                     RecycleBinCornerButton.ToolTip = tooltip;
 
             }
-            catch
+            catch (Exception exL395)
             {
+                AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, exL395, "MWin.xaml.RefreshRecycleBinBadgeAsync");
                 // Badge refresh must never interrupt the shell.
             }
         }
@@ -465,8 +473,9 @@ namespace ShouTech.App.Views
             {
                 DragMove();
             }
-            catch (InvalidOperationException)
+            catch (InvalidOperationException exL468)
             {
+                AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, exL468, "MWin.xaml.OnTitleBarMouseLeftButtonDown");
                 // DragMove can fail during shutdown
                 // or a state transition.
             }
@@ -911,8 +920,9 @@ namespace ShouTech.App.Views
 
                 pref.ApplyToWindow(this);
             }
-            catch
+            catch (Exception exL914)
             {
+                AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, exL914, "MWin.xaml.ApplyWindowPreferences");
                 // Non-fatal.
             }
         }
@@ -929,8 +939,9 @@ namespace ShouTech.App.Views
                 pref.SaveFromWindow(this);
                 pref.Save();
             }
-            catch
+            catch (Exception exL932)
             {
+                AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, exL932, "MWin.xaml.OnClosed");
                 // Non-fatal.
             }
 
@@ -969,8 +980,9 @@ namespace ShouTech.App.Views
                             SetForegroundWindow(handle);
                         }
                     }
-                    catch
+                    catch (Exception exL972)
                     {
+                        AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, exL972, "MWin.xaml.ActivateMainWindow");
                         // Foreground activation is best-effort.
                     }
                 }));
@@ -1446,6 +1458,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, ex, "MWin.xaml.OpenMaterialCard");
                 MessageBox.Show(
                     this,
                     "Couldn't Open Materials card:\n" +
@@ -1491,6 +1504,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, ex, "MWin.xaml.OpenCategoryCard");
                 MessageBox.Show(
                     this,
                     ex.Message,
@@ -1740,8 +1754,9 @@ namespace ShouTech.App.Views
 
                     pref.Save();
                 }
-                catch
+                catch (Exception exL1743)
                 {
+                    AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, exL1743, "MWin.xaml.SwitchLanguage");
                     // Preference saving is non-critical.
                 }
 
@@ -1754,6 +1769,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, ex, "MWin.xaml.SwitchLanguage");
                 MessageBox.Show(
                     $"Could not switch language: {ex.Message}",
                     "ShouTech ERP",

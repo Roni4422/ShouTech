@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using ShouTech.App.Services;
 using WpfApp = System.Windows.Application;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views
 {
     /// <summary>
@@ -39,8 +40,9 @@ namespace ShouTech.App.Views
                 ApplyWindowDirection("en");
                 cmbLanguage?.Focus();
             }
-            catch
+            catch (Exception exL42)
             {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, exL42, "Lang.xaml.OnLoaded");
                 Selected = "en";
             }
         }
@@ -53,8 +55,9 @@ namespace ShouTech.App.Views
                 Selected = code;
                 ApplyWindowDirection(code);
             }
-            catch
+            catch (Exception exL56)
             {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, exL56, "Lang.xaml.OnLanguageSelectionChanged");
                 // non-fatal
             }
         }
@@ -80,8 +83,9 @@ namespace ShouTech.App.Views
                 if (btnCancel != null)
                     Grid.SetColumn(btnCancel, 2);
             }
-            catch
+            catch (Exception exL83)
             {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, exL83, "Lang.xaml.ApplyWindowDirection");
                 // non-fatal
             }
         }
@@ -98,8 +102,9 @@ namespace ShouTech.App.Views
             {
                 App.SetApplicationLanguage(Selected);
             }
-            catch
+            catch (Exception exL101)
             {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, exL101, "Lang.xaml.OnOk");
                 // The startup pipeline will apply the language again after the
                 // dialog closes; do not block first-run setup on a UI refresh.
             }
@@ -133,20 +138,24 @@ namespace ShouTech.App.Views
                     _ => "en"
                 };
             }
-            catch
+            catch (Exception exL136)
             {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, exL136, "Lang.xaml.ReadSelectedCode");
                 return "en";
             }
         }
 
         private void SafeClose(bool dialogResult)
         {
-            try { DialogResult = dialogResult; } catch { /* not a dialog */ }
-            try { Close(); } catch { }
+            try { DialogResult = dialogResult; } catch (Exception exL144) {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, exL144, "Lang.xaml.SafeClose"); /* not a dialog */ }
+            try { Close(); } catch (Exception exL145) {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, exL145, "Lang.xaml.SafeClose"); }
 
             if (!dialogResult)
             {
-                try { WpfApp.Current?.Shutdown(); } catch { }
+                try { WpfApp.Current?.Shutdown(); } catch (Exception exL149) {
+                    AppHost.Errors.Report(ErrorCodes.StartupFailed, exL149, "Lang.xaml.SafeClose"); }
             }
         }
     }

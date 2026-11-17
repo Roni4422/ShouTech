@@ -1,4 +1,4 @@
-﻿// ========================================================================
+// ========================================================================
 // FILE: Services/Company.cs
 // PROJECT: SHOUTECH ERP — Company registry & creation
 // Merged: CoModels + CoLocalStore + CoRegSvc + CoCreateSvc
@@ -21,6 +21,7 @@ using NpgsqlTypes;
 using ShouTech.App.Common;
 using ShouTech.App.Configuration;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Services
 {
 
@@ -67,6 +68,9 @@ public sealed class NewCoReq
     {
         public bool Success { get; init; }
         public string Message { get; init; } = string.Empty;
+
+        /// <summary>Catalog error code (AUTH-2xxx) when creation is refused.</summary>
+        public string? ErrorCode { get; init; }
         public string CompanyCode { get; init; } = string.Empty;
         public string CompanyNameAr { get; init; } = string.Empty;
         public bool SavedToDatabase { get; init; }
@@ -155,8 +159,9 @@ public static class CoLocalStore
                 var file = JsonSerializer.Deserialize<StoredCoFile>(json, JsonDefs.AppSetngRead);
                 return file?.Companies?.ToList() ?? new List<StoredCoRec>();
             }
-            catch
+            catch (Exception exL161)
             {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL161, "Company.LoadAllAsync");
                 return new List<StoredCoRec>();
             }
         }
@@ -179,8 +184,9 @@ public static class CoLocalStore
                     var json = await File.ReadAllTextAsync(StorePath);
                     file = JsonSerializer.Deserialize<StoredCoFile>(json, JsonDefs.AppSetngRead) ?? new StoredCoFile();
                 }
-                catch
+                catch (Exception exL185)
                 {
+                    AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL185, "Company.SaveCompanyAsync");
                     file = new StoredCoFile();
                 }
             }
@@ -293,7 +299,10 @@ public static class CoLocalStore
         private static async Task PersistLocalAdminStateAsync(List<StoredCoRec> companies)
         {
             try { await ReplaceIndexAsync(companies); }
-            catch { /* lockout persistence must not break sign-in */ }
+            catch (Exception exL299)
+            {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL299, "Company.PersistLocalAdminStateAsync");
+            }
         }
 
         public static async Task<StoredCoRec?> FindPasswordOwnerAsync(string password)
@@ -342,8 +351,9 @@ public static class CoLocalStore
                     var json = await File.ReadAllTextAsync(StorePath);
                     file = JsonSerializer.Deserialize<StoredCoFile>(json, JsonDefs.AppSetngRead) ?? new StoredCoFile();
                 }
-                catch
+                catch (Exception exL348)
                 {
+                    AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL348, "Company.RemoveFromIndexAsync");
                     file = new StoredCoFile();
                 }
             }
@@ -539,8 +549,9 @@ public static class CoLocalStore
                     return await cmd.ExecuteNonQueryAsync() > 0;
                 }
             }
-            catch
+            catch (Exception exL545)
             {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL545, "Company.TrySoftDeleteInDatabaseAsync");
                 return false;
             }
 
@@ -617,8 +628,9 @@ public static class CoLocalStore
                     }
                 }
             }
-            catch
+            catch (Exception exL623)
             {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL623, "Company.GetDeletedCompaniesAsync");
                 // continue with local disabled entries
             }
 
@@ -639,8 +651,9 @@ public static class CoLocalStore
                     };
                 }
             }
-            catch
+            catch (Exception exL645)
             {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL645, "Company.GetDeletedCompaniesAsync");
             }
 
             return merged.Values
@@ -698,8 +711,9 @@ public static class CoLocalStore
                     return await cmd.ExecuteNonQueryAsync() > 0;
                 }
             }
-            catch
+            catch (Exception exL704)
             {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL704, "Company.TryRestoreInDatabaseAsync");
                 return false;
             }
 
@@ -939,8 +953,9 @@ private static string? ResolveConnectionString()
             {
                 return DatabaseRuntime.GetConnectionString();
             }
-            catch
+            catch (Exception exL945)
             {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL945, "Company.ResolveConnectionString");
                 var connectionString = AppCfgSvc.Current?.ConnectionStrings?
                     .FirstOrDefault(kvp => kvp.Key.Equals("Default", StringComparison.OrdinalIgnoreCase)).Value?.ConnectionString;
                 if (string.IsNullOrWhiteSpace(connectionString))
@@ -965,8 +980,9 @@ private static string? ResolveConnectionString()
                 if (DatabaseRuntime.IsPostgreSql(provider))
                     return await LoadFromPostgreSqlAsync(connectionString);
             }
-            catch
+            catch (Exception exL971)
             {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL971, "Company.LoadFromDatabaseAsync");
                 return result;
             }
 
@@ -1002,8 +1018,9 @@ private static string? ResolveConnectionString()
                     });
                 }
             }
-            catch
+            catch (Exception exL1008)
             {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL1008, "Company.LoadFromPostgreSqlAsync");
             }
             return result;
         }
@@ -1036,8 +1053,9 @@ private static string? ResolveConnectionString()
                     });
                 }
             }
-            catch
+            catch (Exception exL1042)
             {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL1042, "Company.LoadFromSqliteAsync");
             }
             return result;
         }
@@ -1058,6 +1076,7 @@ public sealed class CoCreateSvc : ICoCreateSvc
                     Success = false,
                     Message = "Administrator password does not meet the password policy: " +
                               string.Join(" ", policyErrors),
+                    ErrorCode = ErrorCodes.PasswordPolicyViolation,
                     CompanyCode = string.Empty,
                     SavedToDatabase = false,
                     SavedLocally = false
@@ -1121,7 +1140,10 @@ public sealed class CoCreateSvc : ICoCreateSvc
                             Directory.CreateDirectory(dir);
                     }
                 }
-                catch { /* path helpers must not block migration attempt */ }
+                catch (Exception exL1128)
+                {
+                    AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL1128, "Company.CreateAsync");
+                }
             }
 
             var migration = await SchemaMigrator.ApplyAllAsync(provider, migrateCs);
@@ -1344,8 +1366,9 @@ public sealed class CoCreateSvc : ICoCreateSvc
                 var max = value is int i ? i : value is decimal d ? (int)d : 0;
                 return (max + 1).ToString("000", CultureInfo.InvariantCulture);
             }
-            catch
+            catch (Exception exL1351)
             {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL1351, "Company.TryGenerateDbCodeAsync");
                 return null;
             }
         }
@@ -1634,8 +1657,9 @@ public sealed class CoCreateSvc : ICoCreateSvc
             {
                 return DatabaseRuntime.GetConnectionString();
             }
-            catch
+            catch (Exception exL1641)
             {
+                AppHost.Errors.Report(ErrorCodes.CompanyOpenFailed, exL1641, "Company.ResolveConnectionString");
                 return null;
             }
         }

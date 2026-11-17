@@ -8,6 +8,7 @@ using ShouTech.App.Configuration;
 using ShouTech.App.Localization;
 using ShouTech.App.Services;
 using ShouTech.App.Views;
+using ShouTech.Domain;
 using WpfApp = System.Windows.Application;
 
 namespace ShouTech.App.ViewModels
@@ -183,6 +184,13 @@ namespace ShouTech.App.ViewModels
                 }
                 else
                 {
+                    // Coded for the log only; the status text stays the
+                    // generic invalid-credentials message by design.
+                    AppHost.Errors.Report(
+                        result.ErrorCode ?? ErrorCodes.InvalidCredentials,
+                        null,
+                        "LogWinVM.LoginAsync");
+
                     StatusMessage = Loc.Get("Login.InvalidCredentials");
                     IsStatusError = true;
 

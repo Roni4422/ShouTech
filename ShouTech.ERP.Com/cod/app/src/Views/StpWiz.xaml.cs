@@ -16,6 +16,7 @@ using ShouTech.App.Common;
 using ShouTech.App.Configuration;
 using ShouTech.App.Services;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views
 {
     public enum StpWizMode
@@ -219,8 +220,9 @@ namespace ShouTech.App.Views
                     return;
                 }
             }
-            catch
+            catch (Exception exL222)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL222, "StpWiz.xaml.ApplyCustomTitleBarColor");
                 // Native title bar styling is optional.
             }
         }
@@ -304,8 +306,9 @@ namespace ShouTech.App.Views
                         });
                     }
                 }
-                catch
+                catch (Exception exL307)
                 {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL307, "StpWiz.xaml.FromDisk");
                     // Fall through to empty list; a minimal fallback is added below.
                 }
 
@@ -516,8 +519,9 @@ namespace ShouTech.App.Views
                 // explicitly changes the language selector.
                 _langUserTouched = false;
             }
-            catch
+            catch (Exception exL519)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL519, "StpWiz.xaml.SyncLanguageComboWithApp");
             }
         }
 
@@ -610,8 +614,9 @@ namespace ShouTech.App.Views
                         return NormalizeLang(tag);
                     }
                 }
-                catch
+                catch (Exception exL613)
                 {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL613, "StpWiz.xaml.ResolveWizardLanguage");
                 }
             }
 
@@ -620,8 +625,9 @@ namespace ShouTech.App.Views
                 return NormalizeLang(
                     ShouTech.App.App.CurrentLanguageCode);
             }
-            catch
+            catch (Exception exL623)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL623, "StpWiz.xaml.ResolveWizardLanguage");
                 return "ar";
             }
         }
@@ -664,8 +670,9 @@ namespace ShouTech.App.Views
                 // buttons, chrome content) flips with the language.
                 LangDirSv.ApplyToWindow(this, lang);
             }
-            catch
+            catch (Exception exL667)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL667, "StpWiz.xaml.ApplyWizardLocalization");
             }
 
             // Keep the root layout flowing with the window (defensive if a parent overrides).
@@ -674,8 +681,9 @@ namespace ShouTech.App.Views
                 if (rootLayout != null)
                     rootLayout.FlowDirection = LangDirSv.GetFlowDirection(lang);
             }
-            catch
+            catch (Exception exL677)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL677, "StpWiz.xaml.ApplyWizardLocalization");
             }
 
             Title = W(_mode == StpWizMode.NewCompany ? "Title.NewCompany" : "Title.Setup", _mode == StpWizMode.NewCompany ? "New company — ShouTech ERP" : "Company setup — ShouTech ERP");
@@ -791,8 +799,9 @@ namespace ShouTech.App.Views
                     chkAutoBackup.Content = W("Fields.EnableAutoBackup", "Enable automatic backup");
                 }
             }
-            catch
+            catch (Exception exL794)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL794, "StpWiz.xaml.ApplyWizardLocalization");
             }
 
             UpdateStepTitle(lang);
@@ -850,8 +859,9 @@ namespace ShouTech.App.Views
 
                 textBlock.Text = W($"Fields.{controlName}", englishFallback);
             }
-            catch
+            catch (Exception exL853)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL853, "StpWiz.xaml.SetText");
             }
         }
 
@@ -1794,8 +1804,9 @@ namespace ShouTech.App.Views
 
                 return Path.IsPathRooted(fullPath);
             }
-            catch
+            catch (Exception exL1797)
             {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL1797, "StpWiz.xaml.IsValidPath");
                 return false;
             }
         }

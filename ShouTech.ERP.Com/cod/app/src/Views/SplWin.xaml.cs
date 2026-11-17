@@ -10,6 +10,7 @@ using ShouTech.App.Configuration;
 using ShouTech.App.Services;
 using WpfApp = System.Windows.Application;
 
+using ShouTech.Domain;
 namespace ShouTech.App.Views
 {
     public partial class SplWin : Window
@@ -40,6 +41,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, ex, "SplWin.xaml.OnLoaded");
                 SetStatus($"Startup warning: {ex.Message}");
                 await SafeDelay(200);
             }
@@ -51,6 +53,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, ex, "SplWin.xaml.OnLoaded");
                 SetStatus($"Company check warning: {ex.Message}");
                 _hasCompaniesAtStartup = false;
             }
@@ -68,12 +71,14 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, ex, "SplWin.xaml.OnLoaded");
                 MessageBox.Show(
                     $"Unable to open company selection:\n{ex.Message}",
                     "ShouTech ERP",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
-                try { WpfApp.Current?.Shutdown(1); } catch { }
+                try { WpfApp.Current?.Shutdown(1); } catch (Exception exL76) {
+                    AppHost.Errors.Report(ErrorCodes.StartupFailed, exL76, "SplWin.xaml.OnLoaded"); }
                 return;
             }
         }
@@ -107,6 +112,7 @@ namespace ShouTech.App.Views
             }
             catch (Exception ex)
             {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, ex, "SplWin.xaml.RunStepAsync");
                 SetStatus($"{message} (warning: {Truncate(ex.Message, 60)})");
                 await SafeDelay(80);
             }
@@ -168,7 +174,8 @@ namespace ShouTech.App.Views
             {
                 string[] hits;
                 try { hits = Directory.GetFiles(baseDir, pattern, SearchOption.TopDirectoryOnly); }
-                catch { continue; }
+                catch (Exception exL171) {
+                    AppHost.Errors.Report(ErrorCodes.StartupFailed, exL171, "SplWin.xaml.ScanUnauthorizedModificationsAsync"); continue; }
 
                 if (hits.Length > 0)
                     throw new InvalidOperationException("Suspicious files detected near the application.");
@@ -186,14 +193,20 @@ namespace ShouTech.App.Views
                 {
                 }
             }
-            catch { }
+            catch (Exception exL189)
+            {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, exL189, "SplWin.xaml.ValidateConfigAndUserFilesAsync");
+            }
 
             try
             {
                 var pref = UsrPref.Load();
                 _ = pref.Lang;
             }
-            catch { }
+            catch (Exception exL196)
+            {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, exL196, "SplWin.xaml.ValidateConfigAndUserFilesAsync");
+            }
 
             return Task.CompletedTask;
         }
@@ -204,7 +217,10 @@ namespace ShouTech.App.Views
             {
                 AppHost.DeviceInfo?.Collect();
             }
-            catch { }
+            catch (Exception exL207)
+            {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, exL207, "SplWin.xaml.CheckDeviceAndDongleAsync");
+            }
 
             return Task.CompletedTask;
         }
@@ -216,7 +232,10 @@ namespace ShouTech.App.Views
                 if (AppHost.License != null)
                     await AppHost.License.InitializeAsync();
             }
-            catch { }
+            catch (Exception exL219)
+            {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, exL219, "SplWin.xaml.CheckLicenseAsync");
+            }
         }
 
         private static async Task PrepareUserDataAsync()
@@ -226,7 +245,10 @@ namespace ShouTech.App.Views
                 if (AppHost.Sync != null)
                     await AppHost.Sync.SnapshotLocalUserDataAsync();
             }
-            catch { }
+            catch (Exception exL229)
+            {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, exL229, "SplWin.xaml.PrepareUserDataAsync");
+            }
         }
 
         private static Task StartBackgroundServicesAsync()
@@ -235,7 +257,10 @@ namespace ShouTech.App.Views
             {
                 AppHost.OnlineCoordinator?.Start();
             }
-            catch { }
+            catch (Exception exL238)
+            {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, exL238, "SplWin.xaml.StartBackgroundServicesAsync");
+            }
 
             return Task.CompletedTask;
         }
@@ -249,7 +274,10 @@ namespace ShouTech.App.Views
                     progressBarContainer.FlowDirection = FlowDirection.LeftToRight;
                 Title = "ShouTech ERP - Starting";
             }
-            catch { }
+            catch (Exception exL252)
+            {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, exL252, "SplWin.xaml.ApplyLocalization");
+            }
         }
 
         private void ApplyConfigTexts()
@@ -272,7 +300,10 @@ namespace ShouTech.App.Views
                 if (!string.IsNullOrWhiteSpace(settings.Application.Copyright))
                     txtCopyright.Text = settings.Application.Copyright;
             }
-            catch { }
+            catch (Exception exL275)
+            {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, exL275, "SplWin.xaml.ApplyConfigTexts");
+            }
         }
 
         private void SetStatus(string text)
@@ -287,7 +318,10 @@ namespace ShouTech.App.Views
 
                 txtStatus.Text = text;
             }
-            catch { }
+            catch (Exception exL290)
+            {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, exL290, "SplWin.xaml.SetStatus");
+            }
         }
 
         private int _lastProgressValue;
@@ -307,7 +341,10 @@ namespace ShouTech.App.Views
 
                 UpdateProgressBarWidth(value);
             }
-            catch { }
+            catch (Exception exL310)
+            {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, exL310, "SplWin.xaml.SetProgress");
+            }
         }
 
         private void UpdateProgressBarWidth(int value)
@@ -320,7 +357,10 @@ namespace ShouTech.App.Views
                 progressBarIndicator.Width = width * value / 100.0;
                 progressBarIndicator.HorizontalAlignment = HorizontalAlignment.Left;
             }
-            catch { }
+            catch (Exception exL323)
+            {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, exL323, "SplWin.xaml.UpdateProgressBarWidth");
+            }
         }
 
         private void OnProgressBarContainerSizeChanged(object sender, SizeChangedEventArgs e)
@@ -330,7 +370,8 @@ namespace ShouTech.App.Views
 
         private static async Task SafeDelay(int ms)
         {
-            try { await Task.Delay(Math.Max(0, ms)); } catch { }
+            try { await Task.Delay(Math.Max(0, ms)); } catch (Exception exL333) {
+                AppHost.Errors.Report(ErrorCodes.StartupFailed, exL333, "SplWin.xaml.SafeDelay"); }
         }
 
         private static string Truncate(string value, int max)
