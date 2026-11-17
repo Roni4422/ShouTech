@@ -16,12 +16,19 @@
         UseLayoutRounding="True"
         SnapsToDevicePixels="True">
     <Grid Margin="14">
+        <!-- Row sizing is load-bearing: the DETAIL panel (row 2) takes the
+             flexible space so a long content list (dataset export) scrolls
+             INSIDE its panel. When this row was Auto, the dataset ListBox
+             sized to every item, pushed the format strip, activity panel
+             and the bottom command bar off the window, and the export
+             button became unreachable. The activity panel (row 4) is
+             fixed-height instead (see ResultTextBox Height). -->
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
@@ -219,7 +226,7 @@
                     <TextBlock x:Name="ResultStatusText" FontWeight="SemiBold" Text="Ready"/>
                     <ProgressBar x:Name="OperationProgress" Width="150" Height="8" Margin="14,0,0,0" VerticalAlignment="Center" Minimum="0" Maximum="100" Visibility="Collapsed"/>
                 </StackPanel>
-                <TextBox x:Name="ResultTextBox" Grid.Row="2" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" BorderThickness="0" Background="Transparent" Padding="0"/>
+                <TextBox x:Name="ResultTextBox" Grid.Row="2" Height="84" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" BorderThickness="0" Background="Transparent" Padding="0"/>
             </Grid>
         </Border>
 
