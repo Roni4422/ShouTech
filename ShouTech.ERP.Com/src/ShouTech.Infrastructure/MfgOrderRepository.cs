@@ -282,13 +282,39 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                         .Select(i => new SerialSelection($"{documentNo}-{i}"))
                         .ToList();
                 }
-                StockValuationEngine.Apply(connection, transaction, _provider,
-                    new StockMovementRequest(companyId.Trim(), warehouseId, finishedId, dateText,
+                // Quality gate (Phase B 056): a QC-required finished
+                // item is produced INTO the quarantine warehouse, not
+                // sellable stock, and an InProcess inspection is
+                // created against the order in this transaction;
+                // completion releases it to the order warehouse.
+                var qcProfile = QualityGate.LoadProfile(connection, transaction, _provider, companyId.Trim(), finishedId);
+                var produceWarehouseId = warehouseId;
+                long? quarantineId = null;
+                if (qcProfile.QualityCheckRequired)
+                {
+                    var q = QualityGate.EnsureQuarantineWarehouse(connection, transaction, _provider, companyId.Trim());
+                    if (q > 0)
+                    {
+                        quarantineId = q;
+                        produceWarehouseId = q;
+                    }
+                }
+                var produced = StockValuationEngine.Apply(connection, transaction, _provider,
+                    new StockMovementRequest(companyId.Trim(), produceWarehouseId, finishedId, dateText,
                         "MFG_PRODUCE", documentNo, QtyIn: finishedBaseQty, QtyOut: 0m,
                         ReceiptUnitCost: finishedBaseUnitCost,
                         Note: $"Manufacturing order {documentNo} production",
                         BatchAllocations: finishedBatches,
                         Serials: finishedSerials, Actor: userId));
+                if (quarantineId is not null)
+                {
+                    var batchId = produced.AllocationRecords
+                        .FirstOrDefault(a => a.BatchId is not null)?.BatchId;
+                    QualityGate.EnsureInspection(connection, transaction, _provider, companyId.Trim(),
+                        QualityInspectionTypes.InProcess, "MFG", order.Id.ToString("D"), documentNo,
+                        finishedId, batchId, warehouseId, quarantineId, null,
+                        finishedBaseQty, dateText, userId);
+                }
             }
 
             // 3) Persist computed costs + status (compare-and-swap on Draft).

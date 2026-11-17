@@ -7,6 +7,7 @@ using Npgsql;
 using ShouTech.App.Reporting.Invoices;
 using ShouTech.App.Views;
 using ShouTech.Domain;
+using ShouTech.Domain.Entities;
 using ShouTech.Infrastructure;
 
 namespace ShouTech.App.Services;
@@ -115,10 +116,49 @@ public static class StkPost
                 ? line.UnitPrice
                 : decimal.Round(line.UnitPrice / equivalent, 6, MidpointRounding.AwayFromZero);
 
+            // Quality gate (Phase B 056): the material's QC profile
+            // decides diversion (incoming), the outgoing check, and
+            // whether a sale may draw from quarantine. A pre-056
+            // database disables the gate (all-off profile).
+            var qcProfile = QualityGate.LoadProfile(connection, tx, ProviderName, company, productId.Value);
+            var actor = AppState.CurrentUser?.Username ?? string.Empty;
+            var dateText = doc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+            // Outgoing gate (decision Q4): a delivery/sale of an
+            // outgoing-required material needs an accepted outgoing
+            // inspection (Stop refuses, Warn posts + raises it; a
+            // Rejected inspection blocks in both modes).
+            if (qtyOut > 0 && qcProfile.OutgoingRequired
+                && doc.Kind is InvDocKind.SalesInvoice or InvDocKind.PosSale or InvDocKind.StockOut)
+            {
+                QualityGate.CheckOutgoing(connection, tx, ProviderName, company,
+                    moveType, doc.DocId.ToString(CultureInfo.InvariantCulture), doc.DocNo ?? string.Empty,
+                    productId.Value, warehouseId, doc.PartyId, dateText, actor);
+            }
+
+            // Sale gate: stock that exists only in quarantine is not
+            // sellable. PlanQuarantineDraw returns the Warn-mode
+            // shortfall the sale may draw from quarantine (0 = no
+            // draw) and throws INV-6012 in Stop mode. Explicit batch
+            // captures are honored exactly, so the draw applies only
+            // to lines without them.
+            var quarantineDraw = 0m;
+            long quarantineWarehouseId = 0;
+            if (qtyOut > 0 && line.BatchAllocations.Count == 0 && line.Serials.Count == 0
+                && doc.Kind is InvDocKind.SalesInvoice or InvDocKind.PosSale or InvDocKind.StockOut)
+            {
+                quarantineDraw = QualityGate.PlanQuarantineDraw(connection, tx, ProviderName,
+                    company, warehouseId, productId.Value, qtyOut, doc.DocNo ?? string.Empty, actor);
+                if (quarantineDraw > 0)
+                    quarantineWarehouseId = QualityGate.FindQuarantineWarehouse(connection, tx, ProviderName, company) ?? 0;
+            }
+
             // Availability guard (unchanged message/behaviour): the
             // engine carries the same check as a backstop (INV-6002),
             // but this path has always failed with this exact error.
-            if (qtyOut > 0 && !allowNegative)
+            // A Warn-mode quarantine draw covers its shortfall from the
+            // quarantine warehouse instead (two movements below).
+            if (qtyOut > 0 && !allowNegative && quarantineDraw == 0)
             {
                 var available = ReadAvailableQty(connection, tx, company, warehouseId, productId.Value);
                 if (available - qtyOut < 0)
@@ -164,9 +204,59 @@ public static class StkPost
             IReadOnlyList<SerialSelection>? serials =
                 line.Serials.Count > 0 ? line.Serials : null;
 
-            StockValuationEngine.Apply(connection, tx, ProviderName,
+            // Incoming diversion (Phase B 056, decision Q2): a receipt
+            // of a QC-required material lands in the QUARANTINE
+            // warehouse — not in sellable stock — and a Draft
+            // inspection is created against the receipt below, in this
+            // same transaction. Completion releases it (QualityGate).
+            var effectiveWarehouseId = warehouseId;
+            var diverted = false;
+            if (qtyIn > 0 && qcProfile.QualityCheckRequired)
+            {
+                var quarantineId = QualityGate.EnsureQuarantineWarehouse(connection, tx, ProviderName, company);
+                if (quarantineId > 0)
+                {
+                    effectiveWarehouseId = quarantineId;
+                    diverted = true;
+                }
+            }
+
+            if (quarantineDraw > 0)
+            {
+                // Warn-mode sale split: the sellable part leaves the
+                // document warehouse; the shortfall leaves quarantine
+                // (the gate already recorded its GateWarning alert).
+                var sellablePart = qtyOut - quarantineDraw;
+                if (sellablePart > 0)
+                {
+                    StockValuationEngine.Apply(connection, tx, ProviderName,
+                        new StockMovementRequest(
+                            company, warehouseId, productId.Value, dateText,
+                            moveType, doc.DocNo ?? string.Empty,
+                            0m, sellablePart,
+                            Note: line.Description,
+                            BatchAllocations: batchAllocs,
+                            Serials: serials,
+                            OriginalDocumentNo: originalDocNo,
+                            AllowExpiredBatchIssue: line.AllowExpiredBatchIssue,
+                            PartyId: doc.PartyId,
+                            Actor: actor));
+                }
+                StockValuationEngine.Apply(connection, tx, ProviderName,
+                    new StockMovementRequest(
+                        company, quarantineWarehouseId, productId.Value, dateText,
+                        moveType, doc.DocNo ?? string.Empty,
+                        0m, quarantineDraw,
+                        Note: $"{line.Description} (QC quarantine draw, Warn gate)".Trim(),
+                        AutoAllocateSerials: true,
+                        PartyId: doc.PartyId,
+                        Actor: actor));
+                continue;
+            }
+
+            var movement = StockValuationEngine.Apply(connection, tx, ProviderName,
                 new StockMovementRequest(
-                    company, warehouseId, productId.Value,
+                    company, effectiveWarehouseId, productId.Value,
                     doc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                     moveType, doc.DocNo ?? string.Empty,
                     qtyIn, qtyOut,
@@ -179,6 +269,17 @@ public static class StkPost
                     AllowExpiredBatchIssue: line.AllowExpiredBatchIssue,
                     PartyId: doc.PartyId,
                     Actor: AppState.CurrentUser?.Username));
+
+            if (diverted)
+            {
+                var batchId = movement.AllocationRecords
+                    .FirstOrDefault(a => a.BatchId is not null)?.BatchId;
+                QualityGate.EnsureInspection(connection, tx, ProviderName, company,
+                    QualityInspectionTypes.Incoming, moveType,
+                    doc.DocId.ToString(CultureInfo.InvariantCulture), doc.DocNo ?? string.Empty,
+                    productId.Value, batchId, warehouseId, effectiveWarehouseId,
+                    doc.PartyId, qtyIn, dateText, actor);
+            }
         }
     }
 

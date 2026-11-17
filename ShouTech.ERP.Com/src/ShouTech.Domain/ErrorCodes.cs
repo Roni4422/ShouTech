@@ -103,6 +103,15 @@ public static class ErrorCodes
     public const string SerialDuplicate = "INV-6008";
     public const string BatchAllocationMismatch = "INV-6009";
     public const string BatchExpired = "INV-6010";
+    // Phase B 056 (Quality): the QC gate and inspection lifecycle take
+    // the next free INV codes. INV is the design's family for the gate
+    // ("coded error (INV range)").
+    public const string QualityGateBlocked = "INV-6011";
+    public const string QualityQuarantinedSale = "INV-6012";
+    public const string QualityOutgoingInspectionRequired = "INV-6013";
+    public const string QualityInspectionStateInvalid = "INV-6014";
+    public const string QualityInspectionQtyMismatch = "INV-6015";
+    public const string QualityTemplateInvalid = "INV-6016";
 
     // ---- UI 7000-7999 --------------------------------------------------
     public const string WindowOperationFailed = "UI-7001";

@@ -330,6 +330,22 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                     // same rule StkPost applies to invoice documents.
                     var baseQty = qty * await ResolveUnitEquivalentAsync(
                         connection, transaction, materialId, lineUnit, cancellationToken).ConfigureAwait(false);
+                    // Outgoing quality gate (Phase B 056, decision Q4):
+                    // a delivery of an outgoing-required material needs
+                    // an accepted outgoing inspection — Stop refuses
+                    // (INV-6013), Warn posts and raises the pending
+                    // inspection; a Rejected inspection blocks in both
+                    // modes (INV-6011). The gate keys the company by
+                    // CODE (the stock world), resolved from this
+                    // repository's Guid key.
+                    var qcCompany = PartyLedger.ResolveCompanyCode(connection, transaction, _provider, companyId);
+                    var qcProfile = QualityGate.LoadProfile(connection, transaction, _provider, qcCompany, materialId);
+                    if (qcProfile.OutgoingRequired)
+                    {
+                        QualityGate.CheckOutgoing(connection, transaction, _provider, qcCompany,
+                            "DLV", docId.ToString(CultureInfo.InvariantCulture), docNo,
+                            materialId, lineWarehouse, partyId, docDate, userId);
+                    }
                     // Valuation (Step 6, Phase B 053): the delivery note
                     // is valued by the ONE StockValuationEngine at the
                     // material's cost method — the pre-engine code wrote
