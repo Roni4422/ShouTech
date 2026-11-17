@@ -609,6 +609,8 @@ public static class SecurityAuditLog
     public const string LoginLocked = "LOGIN_LOCKED";
     public const string DataExport = "DATA_EXPORT";
     public const string DataExportDenied = "DATA_EXPORT_DENIED";
+    public const string DataImport = "DATA_IMPORT";
+    public const string DataImportDenied = "DATA_IMPORT_DENIED";
 
     public static async Task WriteAsync(string? companyCode, object? userId, string username, string eventType, string? details = null)
     {

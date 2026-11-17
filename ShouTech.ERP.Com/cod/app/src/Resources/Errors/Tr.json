@@ -320,5 +320,23 @@
     "code": "UI-7004",
     "name": "NavigationFailed",
     "message": "Gezinme tamamlanamadı."
+  },
+  "DATA-4004": {
+    "code": "DATA-4004",
+    "name": "ImportPermissionDenied",
+    "message": "Veri içe aktarma izniniz yok (DATA.IMPORT).",
+    "hint": "Yöneticiden DATA.IMPORT iznini vermesini isteyin."
+  },
+  "DATA-4005": {
+    "code": "DATA-4005",
+    "name": "BalanceImportNotAllowed",
+    "message": "Bakiyeler ve stok miktarları bir elektronik tablodan içe aktarılamaz. Yalnızca muhasebeleştirilmiş stok hareketleriyle değişirler.",
+    "hint": "Bunun yerine bir açılış stoğu veya düzeltme belgesi muhasebeleştirin ya da bir .stei paketini geri yükleyin."
+  },
+  "DATA-4006": {
+    "code": "DATA-4006",
+    "name": "DocumentImportRequiresPackage",
+    "message": "Belgeler ve yevmiye kayıtları bir elektronik tablodan içe aktarılamaz. Bunları şifreli bir .stei veri paketi olarak değişin.",
+    "hint": "Veri kümesini .stei paketi olarak dışa aktarın ve onun yerine o paketi içe aktarın."
   }
 }

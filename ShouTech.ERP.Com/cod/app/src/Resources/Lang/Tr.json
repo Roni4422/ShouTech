@@ -865,6 +865,7 @@
     "UpsertedRows": "Yazılan satırlar",
     "Title": "Veri İçe/Dışa Aktarma",
     "Import": "Veri İçe Aktar",
+    "ImportNotPermitted": "Veri içe aktarma izniniz yok (DATA.IMPORT).",
     "Export": "Veri Dışa Aktar",
     "ImportFile": "İçe aktarma dosyası",
     "ExportFile": "Dışa aktarma dosyası",

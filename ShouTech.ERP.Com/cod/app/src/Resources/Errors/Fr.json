@@ -320,5 +320,23 @@
     "code": "UI-7004",
     "name": "NavigationFailed",
     "message": "La navigation n'a pas pu être terminée."
+  },
+  "DATA-4004": {
+    "code": "DATA-4004",
+    "name": "ImportPermissionDenied",
+    "message": "Vous n'avez pas l'autorisation d'importer des données (DATA.IMPORT).",
+    "hint": "Demandez à un administrateur d'accorder l'autorisation DATA.IMPORT."
+  },
+  "DATA-4005": {
+    "code": "DATA-4005",
+    "name": "BalanceImportNotAllowed",
+    "message": "Les soldes et les quantités de stock ne peuvent pas être importés depuis un tableur. Ils ne changent que par des mouvements de stock comptabilisés.",
+    "hint": "Comptabilisez plutôt un document de stock initial ou d'ajustement, ou restaurez un package .stei."
+  },
+  "DATA-4006": {
+    "code": "DATA-4006",
+    "name": "DocumentImportRequiresPackage",
+    "message": "Les documents et les écritures de journal ne peuvent pas être importés depuis un tableur. Échangez-les sous forme de package de données .stei chiffré.",
+    "hint": "Exportez le jeu de données en package .stei et importez ce package à la place."
   }
 }

@@ -338,6 +338,7 @@
     "FailedTables": "Failed tables",
     "FileExists": "The file already exists. Choose another name or replace it from the save dialog.",
     "Import": "Import Data",
+    "ImportNotPermitted": "You do not have permission to import data (DATA.IMPORT).",
     "ImportFile": "Import file",
     "ImportResult": "Import result",
     "InputFile": "Source file",

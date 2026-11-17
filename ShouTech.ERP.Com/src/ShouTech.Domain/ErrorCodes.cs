@@ -63,6 +63,9 @@ public static class ErrorCodes
     public const string ExportPermissionDenied = "DATA-4001";
     public const string ExportFailed = "DATA-4002";
     public const string ImportFailed = "DATA-4003";
+    public const string ImportPermissionDenied = "DATA-4004";
+    public const string BalanceImportNotAllowed = "DATA-4005";
+    public const string DocumentImportRequiresPackage = "DATA-4006";
 
     // ---- ACC 5000-5999 -------------------------------------------------
     public const string JournalNotBalanced = "ACC-5001";

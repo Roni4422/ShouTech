@@ -320,5 +320,23 @@
     "code": "UI-7004",
     "name": "NavigationFailed",
     "message": "تعذر إكمال التنقل."
+  },
+  "DATA-4004": {
+    "code": "DATA-4004",
+    "name": "ImportPermissionDenied",
+    "message": "ليس لديك إذن لاستيراد البيانات (DATA.IMPORT).",
+    "hint": "اطلب من المسؤول منح إذن DATA.IMPORT."
+  },
+  "DATA-4005": {
+    "code": "DATA-4005",
+    "name": "BalanceImportNotAllowed",
+    "message": "لا يمكن استيراد الأرصدة وكميات المخزون من جدول بيانات. فهي تتغير فقط عبر حركات مخزون مرحّلة.",
+    "hint": "رحّل مستند مخزون افتتاحي أو تسوية بدلاً من ذلك، أو استعد حزمة .stei."
+  },
+  "DATA-4006": {
+    "code": "DATA-4006",
+    "name": "DocumentImportRequiresPackage",
+    "message": "لا يمكن استيراد المستندات والقيود من جدول بيانات. تبادلها كحزمة بيانات .stei مشفرة.",
+    "hint": "صدّر مجموعة البيانات كحزمة .stei واستورد تلك الحزمة بدلاً من ذلك."
   }
 }

@@ -847,6 +847,7 @@
     "UpsertedRows": "Lignes écrites",
     "Title": "Importation et exportation des données",
     "Import": "Importer les données",
+    "ImportNotPermitted": "Vous n'avez pas l'autorisation d'importer des données (DATA.IMPORT).",
     "Export": "Exporter les données",
     "ImportFile": "Fichier d’importation",
     "ExportFile": "Fichier d’exportation",

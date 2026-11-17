@@ -320,5 +320,23 @@
     "code": "UI-7004",
     "name": "NavigationFailed",
     "message": "Navigation could not be completed."
+  },
+  "DATA-4004": {
+    "code": "DATA-4004",
+    "name": "ImportPermissionDenied",
+    "message": "You do not have permission to import data (DATA.IMPORT).",
+    "hint": "Ask an administrator to grant the DATA.IMPORT permission."
+  },
+  "DATA-4005": {
+    "code": "DATA-4005",
+    "name": "BalanceImportNotAllowed",
+    "message": "Balances and stock quantities cannot be imported from a spreadsheet. They change only through posted stock movements.",
+    "hint": "Post an opening-stock or adjustment document instead, or restore a .stei package."
+  },
+  "DATA-4006": {
+    "code": "DATA-4006",
+    "name": "DocumentImportRequiresPackage",
+    "message": "Documents and journal entries cannot be imported from a spreadsheet. Exchange them as an encrypted .stei dataset package.",
+    "hint": "Export the dataset as a .stei package and import that package instead."
   }
 }

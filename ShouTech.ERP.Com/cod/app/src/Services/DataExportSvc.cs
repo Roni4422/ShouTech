@@ -21,14 +21,53 @@ public sealed record DataExportOption(
     string DisplayName,
     string TableName,
     DataExportFilter Filter = DataExportFilter.None,
-    bool IsSystemInfo = false);
+    bool IsSystemInfo = false,
+    DatasetImportPolicy Policy = DatasetImportPolicy.Master);
+
+/// <summary>
+/// How a dataset may be imported (Step 10). Export is always allowed
+/// (subject to DATA.EXPORT at the window); import is classified because
+/// a spreadsheet upsert bypasses every posting engine:
+/// <list type="bullet">
+/// <item><see cref="Master"/> — master data: Excel upsert allowed, but
+/// live balance columns are stripped and reported, never written.</item>
+/// <item><see cref="PackageOnly"/> — transactional data (documents,
+/// journal entries, movements, cheques, production orders): Excel
+/// import refused with DATA-4006; exchange happens through the .stei
+/// dataset package, whose insert-ignore semantics never overwrite.</item>
+/// <item><see cref="EngineOwned"/> — balance/layer state owned by the
+/// stock valuation engine: Excel import refused with DATA-4005;
+/// balances change only through posted movements. A .stei package
+/// restore (insert-ignore) remains allowed.</item>
+/// </list>
+/// </summary>
+public enum DatasetImportPolicy
+{
+    Master,
+    PackageOnly,
+    EngineOwned
+}
 
 public enum DataExportFilter
 {
     None,
     Sales,
     Returns,
-    OpeningStock
+    OpeningStock,
+    CustomerParties,
+    SupplierParties,
+    CustomerGroups,
+    SupplierGroups,
+    SalesDocuments,
+    SalesReturnDocuments,
+    PurchaseDocuments,
+    PurchaseReturnDocuments,
+    SalesLines,
+    SalesReturnLines,
+    PurchaseLines,
+    PurchaseReturnLines,
+    JournalEntryLines,
+    ProductionOrderLines
 }
 
 /// <summary>
@@ -47,6 +86,11 @@ public sealed record ExcelImportResult(
     public IReadOnlyList<string> MatchedColumns { get; init; } = [];
     public IReadOnlyList<string> SkippedColumns { get; init; } = [];
     public bool FollowedWorkbookIdentity { get; init; }
+    /// <summary>
+    /// Balance columns present in the workbook but deliberately NOT
+    /// written (Step 10): live balances change only through posting.
+    /// </summary>
+    public IReadOnlyList<string> RejectedBalanceColumns { get; init; } = [];
 }
 
 /// <summary>Read-only look at an .xlsx before any database write.</summary>
@@ -113,74 +157,110 @@ public static class DataExportSvc
         string Key,
         string EnglishName,
         string[] TableCandidates,
-        DataExportFilter Filter = DataExportFilter.None);
+        DataExportFilter Filter = DataExportFilter.None,
+        DatasetImportPolicy Policy = DatasetImportPolicy.Master);
 
+    // Step 10 catalog repair (sweep DX-02): every seed below resolves to
+    // a table that EXISTS in the current schema (post Steps 2/4/8) and
+    // carries a company scope — its own company_id column, a parent
+    // document join for line tables, or the companies row itself.
+    // Removed seeds (table does not exist; see docs/FIX_PHASE_STEP10.md
+    // for the per-seed reconciliation): Branches, AccountTypes,
+    // ProductClassAttributes, ProductUnits, CustomerContacts,
+    // CustomerAddresses, SupplierContacts, Employees, Departments,
+    // JobTitles, WarehouseLocations, WarehouseZones, WarehouseTypes,
+    // TaxCodes, StockAdjustments, StockAdjustmentLines,
+    // StockReservations, Batches, SerialNumbers, ValuationMethods,
+    // ProductValuation, ValuationHistory, WorkCenters, ReceiptVouchers,
+    // PaymentVouchers, PosSessions — and BankAccounts (Step 8).
+    // Customers/Suppliers (and their groups) now read the ONE canonical
+    // party master (parties / party_groups, Step 4) split by kind;
+    // documents read the real document tables (sales_documents /
+    // purchase_documents) split by doc_kind; production orders read the
+    // repository-canonical mfg_orders family.
     private static readonly DatasetSeed[] Catalog =
     [
-        new("Company", "Company data", ["companies", "Companies"]),
-        new("Branches", "Branches", ["branches", "Branches"]),
-        new("Accounts", "Chart of accounts", ["chart_of_accounts", "Accounts"]),
-        new("AccountTypes", "Account types", ["account_types", "AccountTypes"]),
-        new("Products", "Product cards and directory", ["materials", "products", "Products"]),
-        new("ProductClasses", "Product classes", ["product_categories", "product_classes", "ProductClasses", "Categories"]),
-        new("Brands", "Brands", ["brands", "Brands"]),
-        new("ProductAttributes", "Product attributes", ["material_attributes", "product_attributes", "ProductAttributes"]),
-        new("ProductClassAttributes", "Product class attributes", ["product_class_attributes", "ProductClassAttributes"]),
-        new("ProductSuppliers", "Product suppliers", ["material_suppliers", "product_suppliers", "ProductSuppliers"]),
-        new("ProductBarcodes", "Product barcodes", ["material_extra_barcodes", "product_barcodes", "ProductBarcodes"]),
-        new("ProductUnits", "Product units and barcodes", ["product_units", "ProductUnits"]),
-        new("Customers", "Customer cards", ["parties", "Customers"]),
-        new("CustomerGroups", "Customer groups", ["customer_groups", "CustomerGroups"]),
-        new("CustomerContacts", "Customer contacts", ["customer_contacts", "CustomerContacts"]),
-        new("CustomerAddresses", "Customer addresses", ["customer_addresses", "CustomerAddresses"]),
-        new("Suppliers", "Supplier cards", ["parties", "Suppliers", "Vendors"]),
-        new("SupplierGroups", "Supplier groups", ["supplier_groups", "SupplierGroups", "VendorGroups"]),
-        new("SupplierContacts", "Supplier contacts", ["supplier_contacts", "SupplierContacts"]),
-        new("SalesRepresentatives", "Sales representatives", ["sales_reps", "SalesReps"]),
-        new("SalesRepresentativeTargets", "Sales representative targets", ["sales_rep_targets", "SalesRepTargets"]),
-        new("Employees", "Employee cards", ["employees", "Employees"]),
-        new("Departments", "Departments", ["departments", "Departments"]),
-        new("JobTitles", "Job titles", ["job_titles", "JobTitles"]),
-        new("Warehouses", "Warehouses", ["warehouses", "Warehouses"]),
-        new("WarehouseLocations", "Warehouse locations", ["warehouse_locations", "WarehouseBins"]),
-        new("WarehouseZones", "Warehouse zones", ["warehouse_zones", "WarehouseZones"]),
-        new("WarehouseTypes", "Warehouse types", ["warehouse_types", "WarehouseTypes"]),
-        new("Units", "Units of measure", ["units_of_measure", "UnitsOfMeasure"]),
-        new("FiscalYears", "Fiscal years", ["fiscal_years", "FiscalYears"]),
-        new("Currencies", "Currencies and rates", ["currencies", "Currencies"]),
-        new("CurrencyRates", "Currency exchange rates", ["currency_rates", "CurrencyRates"]),
-        new("Banks", "Banks and bank accounts", ["banks", "Banks"]),
-        // Step 8 (BNKC-01): the "BankAccounts" dataset over the dead
-        // migration-050 bank_accounts table was removed — bank accounts
-        // export through the canonical "Banks" dataset (banks, 031).
-        new("TaxCodes", "Tax codes", ["tax_codes", "TaxCodes"]),
-        new("Sales", "Sales invoices", ["sales_invoices", "SalesInvoices", "pos_transactions"], DataExportFilter.Sales),
-        new("SalesLines", "Sales invoice details", ["sales_invoice_lines", "SalesInvoiceLines", "pos_transaction_items"], DataExportFilter.Sales),
-        new("SalesReturns", "Sales returns", ["sales_returns", "SalesReturns", "pos_transactions"], DataExportFilter.Returns),
-        new("SalesReturnLines", "Sales return details", ["sales_return_lines", "SalesReturnLines", "pos_transaction_items"], DataExportFilter.Returns),
-        new("Purchases", "Purchase invoices", ["purchase_invoices", "PurchaseInvoices"]),
-        new("PurchaseLines", "Purchase invoice details", ["purchase_invoice_lines", "PurchaseInvoiceLines"]),
-        new("PurchaseReturns", "Purchase returns", ["purchase_returns", "PurchaseReturns"]),
-        new("PurchaseReturnLines", "Purchase return details", ["purchase_return_lines", "PurchaseReturnLines"]),
-        new("OpeningStock", "Opening stock and balances", ["opening_stock", "opening_stocks", "stock_balances", "StockBalances"], DataExportFilter.OpeningStock),
-        new("StockMovements", "Inventory movements", ["material_stock_movements", "stock_movements", "StockMovements"]),
-        new("StockAdjustments", "Inventory adjustments", ["stock_adjustments", "StockAdjustments"]),
-        new("StockAdjustmentLines", "Inventory adjustment details", ["stock_adjustment_items", "StockAdjustmentLines"]),
-        new("StockReservations", "Inventory reservations", ["stock_reservations", "StockReservations"]),
-        new("Batches", "Product batches", ["batches", "ProductBatches"]),
-        new("SerialNumbers", "Product serial numbers", ["serial_numbers", "ProductSerials"]),
-        new("ValuationMethods", "Inventory valuation methods", ["valuation_methods", "ValuationMethods"]),
-        new("ProductValuation", "Product valuation", ["product_valuation", "ProductValuation"]),
-        new("CostLayers", "Inventory cost layers", ["cost_layers", "CostLayers"]),
-        new("ValuationHistory", "Inventory valuation history", ["valuation_history", "ValuationHistory"]),
-        new("ProductionOrders", "Production orders", ["production_orders", "ProductionOrders"]),
-        new("ProductionOrderLines", "Production order details", ["production_order_lines", "ProductionOrderLines"]),
-        new("WorkCenters", "Work centers", ["work_centers", "WorkCenters"]),
-        new("ReceiptVouchers", "Receipt vouchers", ["receipt_vouchers", "ReceiptVouchers"]),
-        new("PaymentVouchers", "Payment vouchers", ["payment_vouchers", "PaymentVouchers"]),
-        new("PosTerminals", "POS terminals", ["pos_terminals", "POSTerminals"]),
-        new("PosSessions", "POS sessions", ["pos_sessions", "POSSessions"])
+        new("Company", "Company data", ["companies"], Policy: DatasetImportPolicy.PackageOnly),
+        new("Accounts", "Chart of accounts", ["chart_of_accounts"]),
+        new("Products", "Product cards and directory", ["materials"]),
+        new("ProductClasses", "Product classes", ["product_categories"]),
+        new("Brands", "Brands", ["brands"]),
+        new("ProductAttributes", "Product attributes", ["material_attributes"]),
+        new("ProductSuppliers", "Product suppliers", ["material_suppliers"]),
+        new("ProductBarcodes", "Product barcodes", ["material_extra_barcodes"]),
+        new("Customers", "Customer cards", ["parties"], DataExportFilter.CustomerParties),
+        new("CustomerGroups", "Customer groups", ["party_groups"], DataExportFilter.CustomerGroups),
+        new("Suppliers", "Supplier cards", ["parties"], DataExportFilter.SupplierParties),
+        new("SupplierGroups", "Supplier groups", ["party_groups"], DataExportFilter.SupplierGroups),
+        new("SalesRepresentatives", "Sales representatives", ["sales_reps"]),
+        new("SalesRepresentativeTargets", "Sales representative targets", ["sales_rep_targets"]),
+        new("Warehouses", "Warehouses", ["warehouses"]),
+        new("Units", "Units of measure", ["units_of_measure"]),
+        new("FiscalYears", "Fiscal years", ["fiscal_years"]),
+        new("Currencies", "Currencies and rates", ["currencies"]),
+        new("CurrencyRates", "Currency exchange rates", ["currency_rates"]),
+        new("Banks", "Banks and bank accounts", ["banks"]),
+        new("Sales", "Sales invoices", ["sales_documents"], DataExportFilter.SalesDocuments, DatasetImportPolicy.PackageOnly),
+        new("SalesLines", "Sales invoice details", ["sales_document_lines"], DataExportFilter.SalesLines, DatasetImportPolicy.PackageOnly),
+        new("SalesReturns", "Sales returns", ["sales_documents"], DataExportFilter.SalesReturnDocuments, DatasetImportPolicy.PackageOnly),
+        new("SalesReturnLines", "Sales return details", ["sales_document_lines"], DataExportFilter.SalesReturnLines, DatasetImportPolicy.PackageOnly),
+        new("Purchases", "Purchase invoices", ["purchase_documents"], DataExportFilter.PurchaseDocuments, DatasetImportPolicy.PackageOnly),
+        new("PurchaseLines", "Purchase invoice details", ["purchase_document_lines"], DataExportFilter.PurchaseLines, DatasetImportPolicy.PackageOnly),
+        new("PurchaseReturns", "Purchase returns", ["purchase_documents"], DataExportFilter.PurchaseReturnDocuments, DatasetImportPolicy.PackageOnly),
+        new("PurchaseReturnLines", "Purchase return details", ["purchase_document_lines"], DataExportFilter.PurchaseReturnLines, DatasetImportPolicy.PackageOnly),
+        new("OpeningStock", "Opening stock and balances", ["material_stock_balances"], Policy: DatasetImportPolicy.EngineOwned),
+        new("StockMovements", "Inventory movements", ["material_stock_movements"], Policy: DatasetImportPolicy.PackageOnly),
+        new("CostLayers", "Inventory cost layers", ["stock_cost_layers"], Policy: DatasetImportPolicy.EngineOwned),
+        new("ProductionOrders", "Production orders", ["mfg_orders"], Policy: DatasetImportPolicy.PackageOnly),
+        new("ProductionOrderLines", "Production order details", ["mfg_order_lines"], DataExportFilter.ProductionOrderLines, DatasetImportPolicy.PackageOnly),
+        new("PosTerminals", "POS terminals", ["pos_terminals"]),
+        new("JournalEntries", "Journal entries", ["journal_entries"], Policy: DatasetImportPolicy.PackageOnly),
+        new("JournalEntryLines", "Journal entry details", ["journal_entry_lines"], DataExportFilter.JournalEntryLines, DatasetImportPolicy.PackageOnly),
+        new("Cheques", "Cheques", ["cheques"], Policy: DatasetImportPolicy.PackageOnly)
     ];
+
+    /// <summary>
+    /// Live balance columns per table (Step 10): values the posting /
+    /// valuation engines own. An Excel import of a Master dataset has
+    /// these columns stripped and reported — the workbook may carry
+    /// them (exports do), but importing never writes them, so a stale
+    /// spreadsheet cannot overwrite a live balance (sweep DX-04).
+    /// chart_of_accounts needs no entry: migration 059 dropped the
+    /// cached balance/debit/credit columns — balances are computed
+    /// from posted journal lines and exist nowhere as stored columns.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> BalanceColumnsByTable =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["materials"] = ["qty_on_hand", "avg_cost"],
+            ["sales_rep_targets"] = ["actual_sales", "commission_earned"]
+        };
+
+    /// <summary>
+    /// Tables whose company_id stores the company's internal Guid
+    /// (companies.company_id) — exactly the catalog tables whose schema
+    /// declares FOREIGN KEY (company_id) REFERENCES companies. Every
+    /// other catalog table stores the company CODE. Export scoping
+    /// matches BOTH keys, so it is correct for either family; import
+    /// forcing must pick the family's own shape (Step 9 dual-key rule).
+    /// </summary>
+    private static readonly HashSet<string> GuidCompanyTables =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "chart_of_accounts", "fiscal_years", "brands", "product_categories", "units_of_measure"
+        };
+
+    /// <summary>Parent scope for line tables that carry no company_id of their own.</summary>
+    private sealed record ParentScope(string ParentTable, string ParentKey, string ChildKey);
+
+    private static readonly Dictionary<string, ParentScope> ParentScopeByTable =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["sales_document_lines"] = new("sales_documents", "doc_id", "doc_id"),
+            ["purchase_document_lines"] = new("purchase_documents", "doc_id", "doc_id"),
+            ["journal_entry_lines"] = new("journal_entries", "journal_entry_id", "journal_entry_id"),
+            ["mfg_order_lines"] = new("mfg_orders", "id", "order_id")
+        };
 
     private static readonly string[] MaterialCardExportFields =
     [
@@ -216,7 +296,7 @@ public static class DataExportSvc
 
             var display = AppServiceHost.Localization.GetString(
                 $"DataExchange.Datasets.{seed.Key}", seed.EnglishName);
-            options.Add(new DataExportOption(seed.Key, display, table, seed.Filter));
+            options.Add(new DataExportOption(seed.Key, display, table, seed.Filter, Policy: seed.Policy));
         }
 
         options.Insert(0, new DataExportOption(
@@ -266,9 +346,22 @@ public static class DataExportSvc
         // Phase 4: defense in depth — beyond the static catalog check above, the
         // table must exist in the live schema before its name is interpolated.
         await SqlIdentifier.RequireTableAsync(connection, option.TableName, ct);
-        var sql = $"SELECT * FROM {QuoteIdentifier(option.TableName)}{BuildFilter(option)}";
+        // Step 10 (DX-01): EVERY dataset export is scoped to the active
+        // company. The scope matches the company's OWN keys (its code and
+        // its internal Guid — the schema's dual-key reality, Steps 4/9),
+        // never another company's, and fails closed when the company
+        // cannot be resolved: an unscoped SELECT * is not a fallback.
+        var tableColumns = await GetColumnNamesAsync(connection, option.TableName, ct);
+        var (sql, scopeParameters) = await BuildScopedExportQueryAsync(connection, option, tableColumns, companyCode, ct);
         await using var command = connection.CreateCommand();
         command.CommandText = sql;
+        foreach (var (name, value) in scopeParameters)
+        {
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = name;
+            parameter.Value = value;
+            command.Parameters.Add(parameter);
+        }
         await using var reader = await command.ExecuteReaderAsync(ct);
 
         var fields = Enumerable.Range(0, reader.FieldCount)
@@ -322,7 +415,7 @@ public static class DataExportSvc
                 $"{rows.Count.ToString("N0", CultureInfo.CurrentCulture)} records | User: {generatedBy} | Company: {companyCode} | At: {DateTime.Now:yyyy-MM-dd HH:mm:ss}",
             Columns = columns,
             Rows = rows,
-            Rtl = true,
+            Rtl = LangDirSv.IsRtl(App.CurrentLanguageCode),
             Translate = key => translatedHeaders.TryGetValue(key, out var label) ? label : key,
             DatasetIdentityHeader = CreateDatasetIdentityHeader(option, columns, translatedHeaders)
         };
@@ -401,6 +494,12 @@ public static class DataExportSvc
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(option);
+        // Step 10 (DX-03): service-layer DATA.IMPORT gate — before any
+        // file or database work. The dataset policy (PackageOnly /
+        // EngineOwned refusal) is enforced in ImportRowsAsync against
+        // the FINAL dataset, which can differ from the selection when a
+        // marked workbook's identity is followed.
+        DataExchangeGuard.RequireImportPermission("Excel dataset import");
         try
         {
             if (option.IsSystemInfo || !Catalog.Any(x => x.Key == option.Key && x.Filter == option.Filter &&
@@ -452,17 +551,23 @@ public static class DataExportSvc
                 plainSkipped = skipped;
             }
 
-            var result = await ImportRowsAsync(
-                sheet, identity, option, companyCode, identityColumnIndex, replaceMode, ct) with
+            var rowsResult = await ImportRowsAsync(
+                sheet, identity, option, companyCode, identityColumnIndex, replaceMode, ct);
+            var result = rowsResult with
             {
                 DataRows = sheet.Rows.Count(row => row.Any(cell => !string.IsNullOrWhiteSpace(cell))),
                 MatchedColumns = identity.Fields,
-                SkippedColumns = plainSkipped,
+                SkippedColumns = plainSkipped
+                    .Concat(rowsResult.RejectedBalanceColumns.Select(c => $"{c} (balance - not imported)"))
+                    .ToArray(),
                 FollowedWorkbookIdentity = markerIndexes.Length == 1 &&
                     !string.Equals(identity.Key, selectedKey, StringComparison.Ordinal)
             };
             LogOp("ImportExcel",
                 $"key={option.Key} | table={option.TableName} | mode={(replaceMode ? "Replace" : "Upsert")} | upserted={result.UpsertedRows} | deleted={result.DeletedRows} | company={companyCode} | file={path}");
+            // Step 10 (DX-06): durable security-audit row for the import.
+            await DataExchangeGuard.WriteImportAuditAsync(
+                $"operation=Excel dataset import | dataset={option.Key} | table={option.TableName} | mode={(replaceMode ? "Replace" : "Upsert")} | upserted={result.UpsertedRows} | deleted={result.DeletedRows} | company={companyCode} | file={Path.GetFileName(path)} | rejectedBalanceColumns={(result.RejectedBalanceColumns.Count == 0 ? "-" : string.Join(",", result.RejectedBalanceColumns))}");
             return result;
         }
         catch (Exception ex)
@@ -481,6 +586,9 @@ public static class DataExportSvc
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(option);
+        // Step 10 (DX-03): the .shx path is an import like any other —
+        // same DATA.IMPORT gate, same dataset policy, same audit.
+        DataExchangeGuard.RequireImportPermission("Encrypted dataset import");
         if (option.IsSystemInfo || !Catalog.Any(x => x.Key == option.Key && x.Filter == option.Filter &&
                 x.TableCandidates.Contains(option.TableName, StringComparer.OrdinalIgnoreCase)))
             throw new InvalidOperationException("The selected dataset cannot be imported.");
@@ -522,6 +630,8 @@ public static class DataExportSvc
         }
 
         var encResult = await ImportRowsAsync(new ExcelSheet(headers, rows), identity, option, companyCode, -1, replaceMode: false, ct);
+        await DataExchangeGuard.WriteImportAuditAsync(
+            $"operation=Encrypted dataset import | dataset={option.Key} | table={option.TableName} | mode=Upsert | upserted={encResult.UpsertedRows} | deleted=0 | company={companyCode} | file={Path.GetFileName(path)} | rejectedBalanceColumns={(encResult.RejectedBalanceColumns.Count == 0 ? "-" : string.Join(",", encResult.RejectedBalanceColumns))}");
         return encResult.UpsertedRows;
     }
 
@@ -566,26 +676,11 @@ public static class DataExportSvc
     }
 
     public static string GetDatasetPackageFileName(DataExportOption option)
-        => $"{option.Key switch
-        {
-            "Sales" => "inv",
-            "SalesLines" => "inv-lines",
-            "SalesReturns" => "return",
-            "SalesReturnLines" => "return-lines",
-            "Purchases" => "pur",
-            "PurchaseLines" => "pur-lines",
-            "PurchaseReturns" => "pur-return",
-            "PurchaseReturnLines" => "pur-return-lines",
-            "Products" or "ProductClasses" or "ProductAttributes" or "ProductClassAttributes" or "ProductSuppliers" or "ProductBarcodes" or "ProductUnits" or "Brands" => "items",
-            "Customers" or "CustomerGroups" or "CustomerContacts" or "CustomerAddresses" => "customers",
-            "Accounts" or "AccountTypes" => "accounts",
-            "SalesRepresentatives" or "SalesRepresentativeTargets" => "reps",
-            "Employees" or "Departments" or "JobTitles" => "employees",
-            "Company" or "Branches" => "company",
-            "Suppliers" or "SupplierGroups" or "SupplierContacts" => "suppliers",
-            "Warehouses" or "WarehouseLocations" or "WarehouseZones" or "WarehouseTypes" => "warehouse",
-            _ => option.Key.ToLowerInvariant()
-        }}.stei";
+        // Step 10: every dataset gets its OWN package file name — the
+        // previous family mapping collapsed distinct datasets onto one
+        // name (all product-family datasets -> items.stei), inviting
+        // accidental overwrites of a different dataset's package (DX-18).
+        => $"{option.Key.ToLowerInvariant()}.stei";
 
     private static string NormalizeEncryptedType(string? type)
         => type switch
@@ -605,6 +700,32 @@ public static class DataExportSvc
         bool replaceMode,
         CancellationToken ct)
     {
+        // Step 10 dataset policy — the single choke point every
+        // spreadsheet import flows through (Excel and .shx alike), so a
+        // workbook whose identity redirects to another dataset cannot
+        // bypass it. Transactional datasets exchange as .stei packages
+        // (DATA-4006); engine-owned balance state changes only through
+        // posted movements (DATA-4005). Replace mode inherits the same
+        // rule: it is only ever offered to Master datasets.
+        if (option.Policy == DatasetImportPolicy.PackageOnly)
+        {
+            AppHost.Errors.Report(ErrorCodes.DocumentImportRequiresPackage, null,
+                $"DataExportSvc.ImportRowsAsync | dataset={option.Key} | table={option.TableName}");
+            throw new AppError(
+                ErrorCodes.DocumentImportRequiresPackage,
+                "Documents and journal entries cannot be imported from a spreadsheet. Exchange them as an encrypted .stei dataset package.");
+        }
+        if (option.Policy == DatasetImportPolicy.EngineOwned)
+        {
+            AppHost.Errors.Report(ErrorCodes.BalanceImportNotAllowed, null,
+                $"DataExportSvc.ImportRowsAsync | dataset={option.Key} | table={option.TableName}");
+            throw new AppError(
+                ErrorCodes.BalanceImportNotAllowed,
+                "Balances and stock quantities cannot be imported from a spreadsheet. They change only through posted stock movements.");
+        }
+        if (replaceMode && option.Policy != DatasetImportPolicy.Master)
+            throw new InvalidOperationException("Replace mode is only available for master-data datasets.");
+
         if (identity.Headers.Length == 0 ||
             identity.Headers.Length != identity.Fields.Length ||
             identity.Headers.Length != identity.Types.Length ||
@@ -660,6 +781,10 @@ public static class DataExportSvc
             .Select((header, index) => (header, index))
             .Where(x => x.index != identityColumnIndex)
             .ToDictionary(x => x.header, x => x.index, StringComparer.Ordinal);
+        var balanceColumns = BalanceColumnsByTable.TryGetValue(option.TableName, out var tableBalanceColumns)
+            ? tableBalanceColumns
+            : [];
+        var rejectedBalanceColumns = new List<string>();
         await using var transaction = await connection.BeginTransactionAsync(ct);
         try
         {
@@ -685,6 +810,23 @@ public static class DataExportSvc
 
                 if (companyColumn != null)
                     values[companyColumn] = companyScopeValue!;
+
+                // Party datasets are split by kind: a Customers import
+                // can only ever write customer rows (Step 10 — before,
+                // Customers and Suppliers were the same unfiltered
+                // parties table on both the export and import sides).
+                var forcedKind = PartyKindFor(option.Filter);
+                if (forcedKind != null && columns.Contains("kind", StringComparer.OrdinalIgnoreCase))
+                    values["kind"] = forcedKind;
+
+                // Step 10 (DX-04): live balance columns are stripped —
+                // reported, never written. The rest of the row (the
+                // master data) still imports.
+                foreach (var balanceColumn in balanceColumns)
+                {
+                    if (values.Remove(balanceColumn) && !rejectedBalanceColumns.Contains(balanceColumn))
+                        rejectedBalanceColumns.Add(balanceColumn);
+                }
 
                 try
                 {
@@ -713,7 +855,10 @@ public static class DataExportSvc
             }
 
             await transaction.CommitAsync(ct);
-            return new ExcelImportResult(processed, deleted, replaceMode, option.Key, option.TableName);
+            return new ExcelImportResult(processed, deleted, replaceMode, option.Key, option.TableName)
+            {
+                RejectedBalanceColumns = rejectedBalanceColumns
+            };
         }
         catch
         {
@@ -871,6 +1016,27 @@ public static class DataExportSvc
             if (!string.IsNullOrWhiteSpace(type) && !IsOpeningStockType(type))
                 throw new InvalidDataException("This movement is not an opening-stock record.");
         }
+
+        // Step 10: a row must belong to the dataset's own slice — a
+        // sales-returns workbook cannot carry a sales-invoice row, and a
+        // Customers workbook cannot carry a supplier row.
+        var docKinds = DocKindsFor(option.Filter);
+        if (docKinds.Length > 0)
+        {
+            var docKind = GetRowValue(row, "doc_kind")?.ToString() ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(docKind) &&
+                !docKinds.Contains(docKind.Trim(), StringComparer.OrdinalIgnoreCase))
+                throw new InvalidDataException("This row's document kind does not match the selected dataset.");
+        }
+
+        var partyKind = PartyKindFor(option.Filter);
+        if (partyKind != null)
+        {
+            var kind = GetRowValue(row, "kind")?.ToString() ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(kind) &&
+                !kind.Trim().Equals(partyKind, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("This row's party kind does not match the selected dataset.");
+        }
     }
 
     private static object? GetRowValue(IReadOnlyDictionary<string, object?> row, string column)
@@ -962,7 +1128,7 @@ public static class DataExportSvc
             FilterSummary = "1 record",
             Columns = columns,
             Rows = [row],
-            Rtl = true,
+            Rtl = LangDirSv.IsRtl(App.CurrentLanguageCode),
             Translate = key => labels.TryGetValue(key, out var label) ? label : key
         };
     }
@@ -1389,20 +1555,13 @@ public static class DataExportSvc
 
     private static bool IsCompanyCodeScopedTable(string tableName)
     {
-        // Must stay aligned with the legacy company_id convention in RecycleBinSvc.
-        // Unknown tables default to internal-ID mapping (fail-closed when unresolved).
-        return tableName.Equals("sales_documents", StringComparison.OrdinalIgnoreCase)
-            || tableName.Equals("purchase_documents", StringComparison.OrdinalIgnoreCase)
-            || tableName.Equals("materials", StringComparison.OrdinalIgnoreCase)
-            || tableName.Equals("material_groups", StringComparison.OrdinalIgnoreCase)
-            || tableName.Equals("parties", StringComparison.OrdinalIgnoreCase)
-            || tableName.Equals("chart_of_accounts", StringComparison.OrdinalIgnoreCase)
-            || tableName.Equals("branches", StringComparison.OrdinalIgnoreCase)
-            || tableName.Equals("warehouses", StringComparison.OrdinalIgnoreCase)
-            || tableName.Equals("brands", StringComparison.OrdinalIgnoreCase)
-            || tableName.Equals("product_categories", StringComparison.OrdinalIgnoreCase)
-            || tableName.Equals("units_of_measure", StringComparison.OrdinalIgnoreCase)
-            || tableName.Equals("employees", StringComparison.OrdinalIgnoreCase);
+        // Step 10: the company-key shape is decided by GuidCompanyTables
+        // (the FK-declaring tables store the internal Guid; every other
+        // catalog table stores the company CODE). The previous list put
+        // chart_of_accounts / brands / product_categories /
+        // units_of_measure in the CODE family, so an Accounts import
+        // wrote a company code into a Guid-keyed FK column.
+        return !GuidCompanyTables.Contains(tableName);
     }
 
     private static async Task<object?> FindCompanyIdAsync(DbConnection connection, string companyCode, CancellationToken ct)
@@ -1440,47 +1599,127 @@ public static class DataExportSvc
         return value;
     }
 
-    private static string BuildFilter(DataExportOption option)
+    /// <summary>Document kinds a document/line dataset contains (Step 10).</summary>
+    private static string[] DocKindsFor(DataExportFilter filter) => filter switch
     {
-        if (string.Equals(option.TableName, "pos_transactions", StringComparison.OrdinalIgnoreCase))
+        DataExportFilter.SalesDocuments or DataExportFilter.SalesLines => ["SAL", "POS"],
+        DataExportFilter.SalesReturnDocuments or DataExportFilter.SalesReturnLines => ["SRT"],
+        DataExportFilter.PurchaseDocuments or DataExportFilter.PurchaseLines => ["PUR"],
+        DataExportFilter.PurchaseReturnDocuments or DataExportFilter.PurchaseReturnLines => ["PRT"],
+        _ => []
+    };
+
+    /// <summary>Party kind ('C'/'S') a party/group dataset contains, if any.</summary>
+    private static string? PartyKindFor(DataExportFilter filter) => filter switch
+    {
+        DataExportFilter.CustomerParties or DataExportFilter.CustomerGroups => "C",
+        DataExportFilter.SupplierParties or DataExportFilter.SupplierGroups => "S",
+        _ => null
+    };
+
+    /// <summary>
+    /// Builds the company-scoped export query for a catalog dataset
+    /// (Step 10, DX-01). The predicate matches the company's OWN keys —
+    /// its code and its internal Guid — because the schema stores
+    /// company_id in both shapes (Steps 4/9); it can therefore never
+    /// match another company's rows, whichever shape a table uses.
+    /// Line tables without a company_id are scoped through their parent
+    /// document. A dataset that cannot be scoped is refused, never
+    /// exported unfiltered.
+    /// </summary>
+    private static async Task<(string Sql, List<(string Name, object Value)> Parameters)> BuildScopedExportQueryAsync(
+        DbConnection connection,
+        DataExportOption option,
+        IReadOnlyList<string> columns,
+        string companyCode,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(companyCode))
+            throw new InvalidOperationException("The active company could not be determined, so the dataset was not exported.");
+
+        var parameters = new List<(string Name, object Value)>();
+        var keyValues = new List<string>();
+        void AddKey(string? value)
         {
-            return option.Filter switch
+            if (!string.IsNullOrWhiteSpace(value) && !keyValues.Contains(value.Trim(), StringComparer.OrdinalIgnoreCase))
+                keyValues.Add(value.Trim());
+        }
+        AddKey(companyCode);
+        var internalId = await FindCompanyIdAsync(connection, companyCode, ct);
+        AddKey(internalId?.ToString());
+        if (keyValues.Count == 0)
+            throw new InvalidOperationException("The active company could not be matched to the current database, so the dataset was not exported.");
+
+        string CompanyPredicate(string alias)
+        {
+            var parts = new List<string>();
+            for (var i = 0; i < keyValues.Count; i++)
             {
-                DataExportFilter.Sales => " WHERE " + TransactionTypeFilter(returns: false),
-                DataExportFilter.Returns => " WHERE " + TransactionTypeFilter(returns: true),
-                _ => string.Empty
-            };
+                var name = $"@scope{i}";
+                parameters.Add((name, keyValues[i]));
+                parts.Add($"CAST({alias}{QuoteIdentifier("company_id")} AS TEXT) = {name}");
+            }
+            return "(" + string.Join(" OR ", parts) + ")";
         }
 
-        if (string.Equals(option.TableName, "pos_transaction_items", StringComparison.OrdinalIgnoreCase))
+        string ExtraPredicates(string alias, IReadOnlyList<string> scopeColumns)
         {
-            return option.Filter switch
+            var extra = string.Empty;
+            var kinds = DocKindsFor(option.Filter);
+            if (kinds.Length > 0 && scopeColumns.Contains("doc_kind", StringComparer.OrdinalIgnoreCase))
             {
-                DataExportFilter.Sales => " WHERE pos_transaction_id IN (SELECT pos_transaction_id FROM pos_transactions WHERE " + TransactionTypeFilter(returns: false) + ")",
-                DataExportFilter.Returns => " WHERE pos_transaction_id IN (SELECT pos_transaction_id FROM pos_transactions WHERE " + TransactionTypeFilter(returns: true) + ")",
-                _ => string.Empty
-            };
+                var names = new List<string>();
+                for (var i = 0; i < kinds.Length; i++)
+                {
+                    var name = $"@kind{i}";
+                    parameters.Add((name, kinds[i]));
+                    names.Add(name);
+                }
+                extra += $" AND {alias}{QuoteIdentifier("doc_kind")} IN ({string.Join(", ", names)})";
+            }
+            var partyKind = PartyKindFor(option.Filter);
+            if (partyKind != null && scopeColumns.Contains("kind", StringComparer.OrdinalIgnoreCase))
+            {
+                parameters.Add(("@partyKind", partyKind));
+                extra += $" AND {alias}{QuoteIdentifier("kind")} = @partyKind";
+            }
+            return extra;
         }
 
-        if (option.Filter == DataExportFilter.OpeningStock &&
-            (string.Equals(option.TableName, "stock_movements", StringComparison.OrdinalIgnoreCase) ||
-             string.Equals(option.TableName, "material_stock_movements", StringComparison.OrdinalIgnoreCase)))
-            return " WHERE LOWER(CAST(movement_type AS TEXT)) LIKE '%open%'";
+        var table = QuoteIdentifier(option.TableName);
+        if (ParentScopeByTable.TryGetValue(option.TableName, out var parent))
+        {
+            var parentColumns = await GetColumnNamesAsync(connection, parent.ParentTable, ct);
+            if (!parentColumns.Contains("company_id", StringComparer.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"The dataset '{option.Key}' cannot be safely restricted to the active company, so it was not exported.");
+            var sql =
+                $"SELECT l.* FROM {table} l JOIN {QuoteIdentifier(parent.ParentTable)} p " +
+                $"ON p.{QuoteIdentifier(parent.ParentKey)} = l.{QuoteIdentifier(parent.ChildKey)} " +
+                $"WHERE {CompanyPredicate("p.")}{ExtraPredicates("p.", parentColumns)}";
+            return (sql, parameters);
+        }
 
-        return string.Empty;
+        if (option.TableName.Equals("companies", StringComparison.OrdinalIgnoreCase))
+        {
+            parameters.Add(("@scopeCode", companyCode.Trim()));
+            var byId = CompanyPredicate(string.Empty);
+            return ($"SELECT * FROM {table} WHERE {QuoteIdentifier("company_code")} = @scopeCode OR {byId}", parameters);
+        }
+
+        if (!columns.Contains("company_id", StringComparer.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"The dataset '{option.Key}' cannot be safely restricted to the active company, so it was not exported.");
+
+        return ($"SELECT * FROM {table} WHERE {CompanyPredicate(string.Empty)}{ExtraPredicates(string.Empty, columns)}", parameters);
     }
 
     private static bool IsCompanyIndependent(string tableName)
-        => tableName.Equals("companies", StringComparison.OrdinalIgnoreCase)
-            || tableName.Equals("currencies", StringComparison.OrdinalIgnoreCase)
-            || tableName.Equals("account_types", StringComparison.OrdinalIgnoreCase)
-            || tableName.Equals("units_of_measure", StringComparison.OrdinalIgnoreCase)
-            || tableName.Equals("tax_codes", StringComparison.OrdinalIgnoreCase);
-
-    private static string TransactionTypeFilter(bool returns)
-        => returns
-            ? "(LOWER(CAST(transaction_type AS TEXT)) LIKE '%return%' OR LOWER(CAST(transaction_type AS TEXT)) LIKE '%refund%')"
-            : "(LOWER(CAST(transaction_type AS TEXT)) NOT LIKE '%return%' AND LOWER(CAST(transaction_type AS TEXT)) NOT LIKE '%refund%')";
+        // Step 10: after the catalog repair, NO catalog dataset is
+        // company-independent. currencies and units_of_measure carry a
+        // NOT NULL company_id (031 / 001) and are company-scoped like
+        // everything else; account_types / tax_codes no longer exist.
+        // The companies dataset is handled by its own branch in
+        // ImportRowsAsync (its company_id is its own primary key).
+        => tableName.Equals("companies", StringComparison.OrdinalIgnoreCase);
 
     // Phase 4: identifier quoting is centralized in SqlIdentifier, which rejects
     // any identifier outside [A-Za-z_][A-Za-z0-9_]* instead of merely escaping it.
