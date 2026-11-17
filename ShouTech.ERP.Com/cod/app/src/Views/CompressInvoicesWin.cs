@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -31,6 +34,10 @@ public sealed class CompressInvoicesWin : BaseWin
 
     private int _total;
 
+    // CA1863: cache CompositeFormat instances for repeatedly used format strings.
+    private static readonly ConcurrentDictionary<string, CompositeFormat> CompositeFormats =
+        new(StringComparer.Ordinal);
+
     public CompressInvoicesWin()
     {
         _service = AppHost.Operations;
@@ -40,6 +47,23 @@ public sealed class CompressInvoicesWin : BaseWin
         MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
+    }
+
+    /// <summary>
+    /// Formats a localized pattern using a cached CompositeFormat
+    /// to avoid re-parsing the format string on every call (CA1863),
+    /// with the current UI culture applied explicitly (CA1305).
+    /// </summary>
+    private static string FormatLocalized(string pattern, params object?[] args)
+    {
+        if (string.IsNullOrEmpty(pattern))
+            return string.Empty;
+
+        var compositeFormat = CompositeFormats.GetOrAdd(
+            pattern,
+            static value => CompositeFormat.Parse(value));
+
+        return string.Format(CultureInfo.CurrentCulture, compositeFormat, args);
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -130,12 +154,12 @@ public sealed class CompressInvoicesWin : BaseWin
                 throw new InvalidOperationException(T("Compress.ServiceUnavailable"));
             if (_total <= 0)
                 throw new InvalidOperationException(T("Compress.NothingToCompress"));
-            var confirm = string.Format(System.Globalization.CultureInfo.CurrentCulture, T("Compress.Confirm"), _total);
+            var confirm = FormatLocalized(T("Compress.Confirm"), _total);
             if (MessageBox.Show(this, confirm, Title, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
                 return;
             var deleted = await _service.CompressDeletedDraftsAsync(CurrentCompanyCode, CurrentUserId);
             MessageBox.Show(this,
-                string.Format(System.Globalization.CultureInfo.CurrentCulture, T("Compress.Done"), deleted),
+                FormatLocalized(T("Compress.Done"), deleted),
                 Title, MessageBoxButton.OK, MessageBoxImage.Information);
             await RefreshAsync();
         }

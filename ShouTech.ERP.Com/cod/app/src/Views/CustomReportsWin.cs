@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -37,6 +40,10 @@ public sealed class CustomReportsWin : BaseWin
         "SupplierBalances", "SalesInvoices", "PurchaseInvoices", "StockBalances"
     };
 
+    // CA1863: cache CompositeFormat instances for repeatedly used format strings.
+    private static readonly ConcurrentDictionary<string, CompositeFormat> CompositeFormats =
+        new(StringComparer.Ordinal);
+
     private readonly List<ReportDefinition> _definitions = new();
     private readonly List<(TextBlock Label, string Key)> _labels = new();
     private readonly List<(DataGridColumn Column, string Key)> _headers = new();
@@ -69,7 +76,24 @@ public sealed class CustomReportsWin : BaseWin
         Loaded += OnLoaded;
     }
 
-    private int UserId => int.TryParse(AppState.CurrentUser?.Id, out var id) ? id : 0;
+    /// <summary>
+    /// Formats a localized pattern using a cached CompositeFormat
+    /// to avoid re-parsing the format string on every call (CA1863),
+    /// with the current UI culture applied explicitly (CA1305).
+    /// </summary>
+    private static string FormatLocalized(string pattern, params object?[] args)
+    {
+        if (string.IsNullOrEmpty(pattern))
+            return string.Empty;
+
+        var compositeFormat = CompositeFormats.GetOrAdd(
+            pattern,
+            static value => CompositeFormat.Parse(value));
+
+        return string.Format(CultureInfo.CurrentCulture, compositeFormat, args);
+    }
+
+    private static int UserId => int.TryParse(AppState.CurrentUser?.Id, out var id) ? id : 0;
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
@@ -282,7 +306,7 @@ public sealed class CustomReportsWin : BaseWin
             if (def.Columns.Count == 0)
             {
                 var rows = await ExecuteSourceAsync(def.DataSourceKey, CancellationToken.None);
-                var fields = rows.Count > 0
+                var fields = rows is { Count: > 0 }
                     ? rows[0].Keys.ToList()
                     : new List<string> { "Code", "Name" };
                 var order = 0;
@@ -328,7 +352,7 @@ public sealed class CustomReportsWin : BaseWin
             var rows = await ExecuteSourceAsync(loaded.DataSourceKey, cts.Token);
             if (rows is null)
             {
-                _statusBar.Text = string.Format(System.Globalization.CultureInfo.CurrentCulture,
+                _statusBar.Text = FormatLocalized(
                     T("CustomReports.SourceNotRunnable"), loaded.DataSourceKey);
                 _runGrid.ItemsSource = null;
                 return;
@@ -380,7 +404,7 @@ public sealed class CustomReportsWin : BaseWin
         };
     }
 
-    private async Task<Guid> ResolveCompanyGuidAsync()
+    private static async Task<Guid> ResolveCompanyGuidAsync()
     {
         try
         {

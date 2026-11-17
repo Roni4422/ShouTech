@@ -245,7 +245,7 @@ namespace Kern.Tests
                 delivery,
                 validTill);
 
-        private static async Task<(OrderService Service, OrderDocumentRepository Orders, Guid CompanyId, string ConnectionString, Action Cleanup)> CreateAsync()
+        private static Task<(OrderService Service, OrderDocumentRepository Orders, Guid CompanyId, string ConnectionString, Action Cleanup)> CreateAsync()
         {
             var databasePath = Path.Combine(Path.GetTempPath(), $"shoutech-orders-{Guid.NewGuid():N}.sqlite3");
             var connectionString = $"Data Source={databasePath};";
@@ -267,7 +267,7 @@ namespace Kern.Tests
                     if (File.Exists(sidecar)) File.Delete(sidecar);
                 }
             };
-            return (service, orders, companyId, connectionString, cleanup);
+            return Task.FromResult<(OrderService Service, OrderDocumentRepository Orders, Guid CompanyId, string ConnectionString, Action Cleanup)>((service, orders, companyId, connectionString, cleanup));
         }
 
         private static void ApplySqliteMigrations(string databasePath)

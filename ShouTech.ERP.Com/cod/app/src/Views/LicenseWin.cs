@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -96,9 +97,9 @@ public sealed class LicenseWin : BaseWin
         _info.Items.Add($"{T("License.IsValid")}: {license.IsValid}");
         _info.Items.Add($"{T("License.Key")}: {MaskKey(info.LicenseKey)}");
         _info.Items.Add($"{T("License.HardwareId")}: {info.HardwareId}");
-        _info.Items.Add($"{T("License.Expiry")}: {(info.ExpiryDate == DateTime.MaxValue ? "-" : info.ExpiryDate.ToString("yyyy-MM-dd"))}");
-        _info.Items.Add($"{T("License.ActivatedAt")}: {(info.ActivatedAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")}");
-        _info.Items.Add($"{T("License.LastCheck")}: {(info.LastOnlineCheck?.ToString("yyyy-MM-dd HH:mm") ?? "-")}");
+        _info.Items.Add($"{T("License.Expiry")}: {(info.ExpiryDate == DateTime.MaxValue ? "-" : info.ExpiryDate.ToString("yyyy-MM-dd", CultureInfo.CurrentCulture))}");
+        _info.Items.Add($"{T("License.ActivatedAt")}: {(info.ActivatedAt?.ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture) ?? "-")}");
+        _info.Items.Add($"{T("License.LastCheck")}: {(info.LastOnlineCheck?.ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture) ?? "-")}");
         _info.Items.Add($"{T("License.OfflineMode")}: {info.IsOfflineMode}");
         _info.Items.Add($"{T("License.AllowsOffline")}: {license.AllowsOfflineOperation}");
         if (device is not null)

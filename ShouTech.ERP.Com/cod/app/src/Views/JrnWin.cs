@@ -365,7 +365,7 @@ public sealed class JrnWin : BaseWin
 
             MessageBox.Show(
                 this,
-                string.Format(T("Vouchers.EntryLoaded"), snapshot.Status, snapshot.Id.ToString("D")),
+                FormatLocalized(T("Vouchers.EntryLoaded"), snapshot.Status, snapshot.Id.ToString("D")),
                 T("Vouchers.EntryLoadedTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
@@ -509,7 +509,7 @@ public sealed class JrnWin : BaseWin
             _btnPost.IsEnabled = true;
             _btnReverse.IsEnabled = false;
             SetVoucherReadOnly(true);
-            MessageBox.Show(this, string.Format(T("Vouchers.EntryDraftSaved"), id.ToString("D")), T("Vouchers.Saved"), MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, FormatLocalized(T("Vouchers.EntryDraftSaved"), id.ToString("D")), T("Vouchers.Saved"), MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
@@ -627,7 +627,7 @@ public sealed class JrnWin : BaseWin
             $"Code={definition.Code}; {context}; Error={exception.Message}");
         MessageBox.Show(
             this,
-            string.Format(T("Vouchers.SaveFailedMsg"), definition.Code, exception.Message),
+            FormatLocalized(T("Vouchers.SaveFailedMsg"), definition.Code, exception.Message),
             T("Vouchers.SaveFailedTitle"),
             MessageBoxButton.OK,
             MessageBoxImage.Error);

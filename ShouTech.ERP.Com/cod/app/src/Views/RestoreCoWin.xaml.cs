@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using ShouTech.App.Configuration;
@@ -18,6 +20,10 @@ namespace ShouTech.App.Views
     {
         private readonly ObservableCollection<DeletedCompanyItem> _items = new();
 
+        // CA1863: cache CompositeFormat instances for repeatedly used format strings.
+        private static readonly ConcurrentDictionary<string, CompositeFormat> CompositeFormats =
+            new(StringComparer.Ordinal);
+
         public RestoreCoWin()
         {
             InitializeComponent();
@@ -25,6 +31,23 @@ namespace ShouTech.App.Views
             lstDeleted.ItemsSource = _items;
             ApplyLanguage();
             Loaded += async (_, _) => await ReloadAsync();
+        }
+
+        /// <summary>
+        /// Formats a localized pattern using a cached CompositeFormat
+        /// to avoid re-parsing the format string on every call (CA1863),
+        /// with the current UI culture applied explicitly (CA1305).
+        /// </summary>
+        private static string FormatLocalized(string pattern, params object?[] args)
+        {
+            if (string.IsNullOrEmpty(pattern))
+                return string.Empty;
+
+            var compositeFormat = CompositeFormats.GetOrAdd(
+                pattern,
+                static value => CompositeFormat.Parse(value));
+
+            return string.Format(CultureInfo.CurrentCulture, compositeFormat, args);
         }
 
         private void ApplyLanguage()
@@ -99,7 +122,7 @@ namespace ShouTech.App.Views
                 }
 
                 MessageBox.Show(
-                    string.Format(CultureInfo.CurrentCulture, ShouTech.App.Localization.Loc.Get("RestoreCompany.RestoreOk", "\u201C{0}\u201D was restored and reindexed."), item.DisplayName),
+                    FormatLocalized(ShouTech.App.Localization.Loc.Get("RestoreCompany.RestoreOk", "\u201C{0}\u201D was restored and reindexed."), item.DisplayName),
                     Title,
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);

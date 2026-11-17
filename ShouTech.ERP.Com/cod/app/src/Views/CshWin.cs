@@ -271,7 +271,7 @@ public sealed class CshWin : BaseWin
         _lblStatus.Text = $"{T("Invoice.Status")}: {(_isPosted ? T("Invoice.StatusPosted") : T("Invoice.StatusDraft"))} · {T("CashVoucher.DeleteUnavailable")}";
     }
 
-    private (JournalService Journal, JournalRepository Store, Guid CompanyId, string Actor) RequireJournalContext()
+    private static (JournalService Journal, JournalRepository Store, Guid CompanyId, string Actor) RequireJournalContext()
     {
         if (string.IsNullOrWhiteSpace(CurrentCompanyCode))
             throw new InvalidOperationException(T("CashVoucher.NoCompany"));

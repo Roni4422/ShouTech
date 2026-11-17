@@ -153,7 +153,7 @@ namespace Kern.Tests
                 new CommercialLineDraft(42, "MAT-42", "Chain test item", "PCS", qty, price)
             });
 
-        private static async Task<(SalesChainService Service, ShouTech.Infrastructure.CommercialDocumentRepository Repository, Guid CompanyId, string ConnectionString, Action Cleanup)> CreateAsync()
+        private static Task<(SalesChainService Service, ShouTech.Infrastructure.CommercialDocumentRepository Repository, Guid CompanyId, string ConnectionString, Action Cleanup)> CreateAsync()
         {
             var databasePath = Path.Combine(Path.GetTempPath(), $"shoutech-sales-chain-{Guid.NewGuid():N}.sqlite3");
             DbPath = databasePath;
@@ -174,7 +174,7 @@ namespace Kern.Tests
                     if (File.Exists(sidecar)) File.Delete(sidecar);
                 }
             };
-            return (service, repository, companyId, connectionString, cleanup);
+            return Task.FromResult<(SalesChainService Service, ShouTech.Infrastructure.CommercialDocumentRepository Repository, Guid CompanyId, string ConnectionString, Action Cleanup)>((service, repository, companyId, connectionString, cleanup));
         }
 
         private static void ApplySqliteMigrations(string databasePath)

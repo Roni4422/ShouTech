@@ -148,7 +148,7 @@ namespace Kern.Tests
 
     internal sealed class ChainTests
     {
-        public static async Task<(SalesChainService Service, ShouTech.Infrastructure.CommercialDocumentRepository Repository, Guid CompanyId, string ConnectionString, Action Cleanup)> CreateAsync()
+        public static Task<(SalesChainService Service, ShouTech.Infrastructure.CommercialDocumentRepository Repository, Guid CompanyId, string ConnectionString, Action Cleanup)> CreateAsync()
         {
             var databasePath = Path.Combine(Path.GetTempPath(), $"shoutech-sales-posting-{Guid.NewGuid():N}.sqlite3");
             var connectionString = $"Data Source={databasePath};";
@@ -168,7 +168,7 @@ namespace Kern.Tests
                     if (File.Exists(sidecar)) File.Delete(sidecar);
                 }
             };
-            return (service, repository, companyId, connectionString, cleanup);
+            return Task.FromResult<(SalesChainService Service, ShouTech.Infrastructure.CommercialDocumentRepository Repository, Guid CompanyId, string ConnectionString, Action Cleanup)>((service, repository, companyId, connectionString, cleanup));
         }
 
         private static void ApplySqliteMigrations(string databasePath)

@@ -28,7 +28,7 @@ public static class NumWords
 
     private static readonly (string Major, string Minor) DefaultUnits = ("", "Minor");
 
-    private static readonly IReadOnlyDictionary<string, (string Major, string Minor)> Units =
+    private static readonly Dictionary<string, (string Major, string Minor)> Units =
         new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase)
         {
             ["SAR"] = ("Riyal", "Halala"),
