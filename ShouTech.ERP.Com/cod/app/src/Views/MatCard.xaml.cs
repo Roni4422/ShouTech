@@ -338,6 +338,26 @@ public partial class MatCard : BaseWin
         }
     }
 
+    /// <summary>
+    /// Opens the card at a specific material (used by MatDirWin's
+    /// Open/double-click — previously the selection was discarded and the
+    /// card always showed the first material in the cache).
+    /// </summary>
+    public void OpenMaterial(long materialId)
+    {
+        var idx = _cache.FindIndex(x => x.Id == materialId);
+        if (idx < 0)
+        {
+            ReloadCache();
+            idx = _cache.FindIndex(x => x.Id == materialId);
+        }
+        if (idx >= 0)
+        {
+            _index = idx;
+            LoadCurrent();
+        }
+    }
+
     // ================================================================
     //  Restore owner window when this dialog closes
     // ================================================================
@@ -1197,6 +1217,10 @@ public partial class MatCard : BaseWin
             Description = src.Description,
             InternalNotes = src.InternalNotes, SpecSheet = src.SpecSheet,
             LabelText = src.LabelText, UnitsJson = src.UnitsJson,
+            // QtyOnHand is stock-maintained and read-only in this window, but
+            // MatRepo.Save binds it — omitting it here made every card save
+            // overwrite materials.qty_on_hand with 0 (data loss).
+            QtyOnHand = src.QtyOnHand,
             PricesJson = src.PricesJson, AttributesJson = src.AttributesJson,
             ExtraBarcodes = src.ExtraBarcodes?.ToList() ?? new(),
             PriceLines = src.PriceLines?.ToList() ?? new(),

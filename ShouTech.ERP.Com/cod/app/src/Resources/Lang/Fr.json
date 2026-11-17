@@ -1470,7 +1470,8 @@
     "AllocatedOk": "Paiement affecté avec succès.",
     "SelectBoth": "Sélectionnez d'abord un document ouvert et un paiement.",
     "ServiceUnavailable": "Le service de rapprochement est indisponible (aucune connexion à la base de données).",
-    "PermissionDenied": "Vous n'avez pas l'autorisation d'affecter des paiements (ACC.PAYREC.ALLOCATE)."
+    "PermissionDenied": "Vous n'avez pas l'autorisation d'affecter des paiements (ACC.PAYREC.ALLOCATE).",
+    "Note": "Note"
   },
   "Projects": {
     "Title": "Projets",

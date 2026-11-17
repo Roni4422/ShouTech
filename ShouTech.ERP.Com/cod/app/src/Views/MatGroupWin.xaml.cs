@@ -18,6 +18,7 @@ public partial class MatGroupWin : BaseWin
     private readonly ObservableCollection<GroupMaterialRow> _rows = new();
     private ICollectionView? _view;
     private bool _loading;
+    private long? _preferredGroupId;
     private bool _saving;
     private bool _isDirty;
     private long? _loadedGroupId;
@@ -59,7 +60,18 @@ public partial class MatGroupWin : BaseWin
     private void OnWindowLoaded(object sender, RoutedEventArgs e)
     {
         Loaded -= OnWindowLoaded;
-        ReloadGroups();
+        ReloadGroups(_preferredGroupId);
+    }
+
+    /// <summary>Focuses the window on a specific group (used by MatDirWin's
+    /// Open — previously the selection was discarded and the first group
+    /// was always shown). Safe to call before Show: the preference is
+    /// applied by the Loaded handler.</summary>
+    public void SelectGroup(long groupId)
+    {
+        _preferredGroupId = groupId;
+        if (IsLoaded)
+            ReloadGroups(groupId);
     }
 
     private void ReloadGroups(long? preferredGroupId = null)

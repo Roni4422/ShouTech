@@ -325,8 +325,10 @@ public partial class CoaWin : BaseWin
         RefreshChart();
     }
 
-    private void Statement_Click(object sender, RoutedEventArgs e) => ShowAction("Account Statement");
-    private void Ledger_Click(object sender, RoutedEventArgs e) => ShowAction("Ledger");
+    // Opens the real account statement report (was a placeholder
+    // "Action: ..." message box via ShowAction).
+    private void Statement_Click(object sender, RoutedEventArgs e) => RptNav.OpenAccountStatement(this);
+    private void Ledger_Click(object sender, RoutedEventArgs e) => RptNav.OpenAccountStatement(this);
     private void Print_Click(object sender, RoutedEventArgs e) => ExportPdf();
 
     private void CopyCode_Click(object sender, RoutedEventArgs e)
@@ -866,12 +868,47 @@ public partial class CoaWin : BaseWin
             }
         }
 
-        _allRoots.Clear();
-        foreach (var node in nodes.Values.Where(n => n.Parent == null).OrderBy(n => n.Code, StringComparer.OrdinalIgnoreCase))
-            _allRoots.Add(node);
+        // Persist the import. Previously this method only rebuilt the
+        // in-memory tree and the callers showed "imported successfully"
+        // while nothing reached the database — the chart silently reverted
+        // on Refresh/close. Now every imported account is upserted by code
+        // through AccRepo (parents first: a parent code is a prefix of its
+        // children, so ordering by code length is a valid topological order).
+        // Existing accounts keep their balances, flags and tax settings —
+        // the file formats carry only code/parent/names/type.
+        var existing = AccRepo.LoadAll()
+            .ToDictionary(a => a.Code, StringComparer.OrdinalIgnoreCase);
+        foreach (var row in accounts.OrderBy(x => x.Code.Length))
+        {
+            var postingMode = string.Equals(row.Type, "Group", StringComparison.OrdinalIgnoreCase)
+                ? "Summary"
+                : "Postable";
+            var parentCode = string.IsNullOrWhiteSpace(row.ParentCode) ? null : row.ParentCode;
+            if (existing.TryGetValue(row.Code, out var current))
+            {
+                var updated = current with
+                {
+                    ParentCode = parentCode,
+                    Name = string.IsNullOrWhiteSpace(row.Name) ? current.Name : row.Name,
+                    NameEn = string.IsNullOrWhiteSpace(row.NameEn) ? current.NameEn : row.NameEn,
+                    PostingMode = postingMode
+                };
+                AccRepo.Save(current, updated, renumberDescendants: false);
+            }
+            else
+            {
+                var created = new AccRepo.AccRec(
+                    0, row.Code, parentCode,
+                    row.Name ?? string.Empty, row.NameEn ?? string.Empty,
+                    postingMode, "Active", "Low", "Unspecified",
+                    false, false, false, false, false, false,
+                    0m, string.Empty, 0m, 0m, 0m);
+                AccRepo.Save(null, created, renumberDescendants: false);
+            }
+        }
 
-        RebindTree(_allRoots);
-        SizeToLongestAccountName();
+        // Reload from the database so the tree shows the persisted truth.
+        LoadChart();
     }
 
     private static IEnumerable<List<string>> ParseDelimited(string text, char delimiter)
@@ -1054,7 +1091,14 @@ public sealed class AccountNode
     public string Name { get; init; } = string.Empty;
     public string NameEn { get; init; } = string.Empty;
     public string TypeLabel { get; init; } = string.Empty;
-    public string DisplayName => !string.IsNullOrWhiteSpace(NameEn) ? NameEn : Name;
+    // The tree template binds DisplayCode — the property did not exist, so
+    // the code column rendered blank for every account.
+    public string DisplayCode => Code;
+    // Language-aware like CoaWin.GetDisplayName: Arabic UI shows Name,
+    // other languages prefer NameEn. (Was NameEn-first in all languages.)
+    public string DisplayName => string.Equals(App.CurrentLanguageCode, "ar", StringComparison.OrdinalIgnoreCase)
+        ? (!string.IsNullOrWhiteSpace(Name) ? Name : NameEn)
+        : (!string.IsNullOrWhiteSpace(NameEn) ? NameEn : Name);
     public string ToolTipText => $"{Code} - {Name}\n{NameEn}\nType: {TypeLabel}\n{(Children.Count > 0 ? $"Child accounts: {Children.Count}" : "Postable account")}";
     public bool IsExpanded { get; set; }
     public AccountNode? Parent { get; set; }

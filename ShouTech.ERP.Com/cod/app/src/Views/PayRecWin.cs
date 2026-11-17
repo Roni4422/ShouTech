@@ -33,6 +33,7 @@ public sealed class PayRecWin : BaseWin
     private readonly DataGrid _docGrid = new();
     private readonly DataGrid _payGrid = new();
     private readonly TextBox _amount = new();
+    private readonly TextBox _note = new();
     private readonly TextBlock _docsHeader = new();
     private readonly TextBlock _paysHeader = new();
     private readonly TextBlock _statusBar = new();
@@ -120,6 +121,16 @@ public sealed class PayRecWin : BaseWin
         _amount.Width = 140;
         amountPanel.Children.Add(_amount);
         selectorRow.Children.Add(amountPanel);
+        // Allocation note — payment_allocations.note exists in the schema and
+        // the service accepts it, but the window never collected it.
+        var notePanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(24, 0, 0, 0) };
+        var noteLabel = new TextBlock { Margin = new Thickness(0, 4, 8, 0) };
+        noteLabel.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
+        _labels.Add((noteLabel, "PaymentReconciliation.Note"));
+        notePanel.Children.Add(noteLabel);
+        _note.Width = 220;
+        notePanel.Children.Add(_note);
+        selectorRow.Children.Add(notePanel);
         DockPanel.SetDock(selectorRow, Dock.Top);
         content.Children.Add(selectorRow);
 
@@ -233,7 +244,9 @@ public sealed class PayRecWin : BaseWin
             _allocateButton.IsEnabled = false;
             try
             {
-                await _service.AllocateAsync(CurrentCompanyCode, PartyKind, pay.LedgerId, doc.DocTable, doc.DocId, amount, CurrentUserId);
+                await _service.AllocateAsync(CurrentCompanyCode, PartyKind, pay.LedgerId, doc.DocTable, doc.DocId, amount, CurrentUserId,
+                    string.IsNullOrWhiteSpace(_note.Text) ? null : _note.Text.Trim());
+                _note.Clear();
             }
             finally
             {

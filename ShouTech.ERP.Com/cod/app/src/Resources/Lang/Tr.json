@@ -1487,7 +1487,8 @@
     "AllocatedOk": "Ödeme başarıyla dağıtıldı.",
     "SelectBoth": "Önce açık bir belge ve bir ödeme seçin.",
     "ServiceUnavailable": "Ödeme mutabakatı hizmeti kullanılamıyor (veritabanı bağlantısı yok).",
-    "PermissionDenied": "Ödeme dağıtma izniniz yok (ACC.PAYREC.ALLOCATE)."
+    "PermissionDenied": "Ödeme dağıtma izniniz yok (ACC.PAYREC.ALLOCATE).",
+    "Note": "Not"
   },
   "Projects": {
     "Title": "Projeler",

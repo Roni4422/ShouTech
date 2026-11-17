@@ -287,7 +287,10 @@ namespace ShouTech.App.Views
             _items.Clear();
             try
             {
-                var list = MatRepo.LoadWarehouses();
+                // Master list must include inactive warehouses: the consumer
+                // loader filters is_active = 1, which hid deactivated rows
+                // from this window forever (no way to reactivate them).
+                var list = MatRepo.LoadAllWarehouses();
                 if (list != null)
                 {
                     _items.AddRange(list

@@ -1970,7 +1970,8 @@
     "AllocatedOk": "تم تخصيص الدفعة بنجاح.",
     "SelectBoth": "اختر مستنداً مفتوحاً ودفعة أولاً.",
     "ServiceUnavailable": "خدمة تسوية المدفوعات غير متاحة (لا يوجد اتصال بقاعدة البيانات).",
-    "PermissionDenied": "ليس لديك صلاحية تخصيص المدفوعات (ACC.PAYREC.ALLOCATE)."
+    "PermissionDenied": "ليس لديك صلاحية تخصيص المدفوعات (ACC.PAYREC.ALLOCATE).",
+    "Note": "ملاحظة"
   },
   "Projects": {
     "Title": "المشاريع",

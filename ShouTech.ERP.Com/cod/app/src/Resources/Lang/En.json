@@ -1828,7 +1828,8 @@
     "AllocatedOk": "Payment allocated successfully.",
     "SelectBoth": "Select an open document and a payment first.",
     "ServiceUnavailable": "Payment reconciliation service is unavailable (no database connection).",
-    "PermissionDenied": "You do not have permission to allocate payments (ACC.PAYREC.ALLOCATE)."
+    "PermissionDenied": "You do not have permission to allocate payments (ACC.PAYREC.ALLOCATE).",
+    "Note": "Note"
   },
   "Projects": {
     "Title": "Projects",
