@@ -167,6 +167,11 @@ public class SteiRoundTripTests
         Exec(db, "INSERT INTO accounts (account_id, company_id, account_code, name_ar, name_en, posting_mode, status, risk, cost_center, allow_reconcile, taxable, foreign_currency, cost_required, budget, is_default, tax_rate, description, balance, debit, credit, is_deleted, created_at, updated_at) " +
                  "VALUES (100,'C1','1100','الحساب الرئيسي','Main Account','Postable','Active','Low','CC1',1,1,0,0,0,0,15.5,'desc',1234.56,2000.00,765.44,0,'2026-01-01T08:00:00',NULL)");
         // A table holding ONLY another company's rows: must not be exported.
+        // The C2 company itself is seeded so the brands.company_id foreign key
+        // (migration 014) holds with ForeignKeys=true; the scenario under test
+        // is the export company filter, not an orphaned row.
+        Exec(db, "INSERT INTO companies (company_id, company_code, company_name_ar, company_name_en, currency_code, language_code, is_active, is_deleted, created_at) " +
+                 "VALUES ('C2','C2','شركة أخرى','Other Co','SAR','en',1,0,'2026-01-01T00:00:00')");
         Exec(db, "INSERT INTO brands (brand_id, company_id, brand_code, brand_name_ar, brand_name_en) " +
                  "VALUES (1,'C2','BR-C2','علامة شركة أخرى','OtherCo Brand')");
         Exec(db, "INSERT INTO warehouses (warehouse_id, company_id, card_no, warehouse_code, warehouse_name_ar, warehouse_name_en, is_default, is_active, is_deleted) " +
