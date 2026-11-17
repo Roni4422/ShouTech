@@ -732,7 +732,7 @@ public sealed class AuthServ : IAuthSvc
             {
                 await SecurityAuditLog.WriteAsync(companyCode, null, normalizedUser,
                     SecurityAuditLog.LoginSuccess, "Local company administrator sign-in.");
-                return Succeed(BuildCompanyAdminUser(normalizedUser, localCompany));
+                return await SucceedAsync(BuildCompanyAdminUser(normalizedUser, localCompany));
             }
 
             var attempt = await TryLoginFromDatabaseAsync(companyCode, normalizedUser, password);
@@ -741,7 +741,7 @@ public sealed class AuthServ : IAuthSvc
                 case DbLoginKind.Success:
                     await SecurityAuditLog.WriteAsync(companyCode, attempt.UserId, normalizedUser,
                         SecurityAuditLog.LoginSuccess, "Database sign-in.");
-                    return Succeed(attempt.User!);
+                    return await SucceedAsync(attempt.User!);
                 case DbLoginKind.Locked:
                     await SecurityAuditLog.WriteAsync(companyCode, attempt.UserId, normalizedUser,
                         SecurityAuditLog.LoginLocked, "Sign-in refused: account is locked.");
@@ -766,7 +766,7 @@ public sealed class AuthServ : IAuthSvc
             {
                 await SecurityAuditLog.WriteAsync(companyCode, null, localCompany.AdminUsername.Trim(),
                     SecurityAuditLog.LoginSuccess, "Local company administrator passcode sign-in.");
-                return Succeed(BuildCompanyAdminUser(localCompany.AdminUsername.Trim(), localCompany));
+                return await SucceedAsync(BuildCompanyAdminUser(localCompany.AdminUsername.Trim(), localCompany));
             }
 
             var attempt = await TryLoginFromDatabaseByPasscodeAsync(companyCode, password);
@@ -775,7 +775,7 @@ public sealed class AuthServ : IAuthSvc
                 case DbLoginKind.Success:
                     await SecurityAuditLog.WriteAsync(companyCode, attempt.UserId, attempt.User!.Username,
                         SecurityAuditLog.LoginSuccess, "Database passcode sign-in.");
-                    return Succeed(attempt.User!);
+                    return await SucceedAsync(attempt.User!);
                 case DbLoginKind.Locked:
                     await SecurityAuditLog.WriteAsync(companyCode, attempt.UserId, "(passcode)",
                         SecurityAuditLog.LoginLocked, "Passcode sign-in refused: matched account is locked.");
@@ -797,6 +797,11 @@ public sealed class AuthServ : IAuthSvc
         _currentUser = null;
         UsrSession.Clear();
         AppState.CurrentUser = null;
+        // Permissions are per company database: leaving a session must
+        // drop the loaded set, or the next company session would inherit
+        // the previous company's grants (company switch routes through
+        // this method via ComWin).
+        AppHost.Permissions.Clear();
         return Task.CompletedTask;
     }
 
@@ -806,6 +811,7 @@ public sealed class AuthServ : IAuthSvc
     {
         _currentUser = user ?? throw new ArgumentNullException(nameof(user));
         SyncSession(user);
+        _ = LoadPermissionsForSessionAsync(user);
     }
 
     private static void AuditSecurityViolation(string eventType, string details, string? username)
@@ -821,10 +827,54 @@ public sealed class AuthServ : IAuthSvc
         }
     }
 
-    private static AuthResult Succeed(UserInfo user)
+    private static async Task<AuthResult> SucceedAsync(UserInfo user)
     {
         SyncSession(user);
+        await LoadPermissionsForSessionAsync(user).ConfigureAwait(false);
         return new AuthResult { Success = true, Message = "Login succeeded", User = user };
+    }
+
+    /// <summary>
+    /// Session-lifecycle wiring for RBAC: after a successful sign-in the
+    /// user's effective permissions are loaded into
+    /// <see cref="AppHost.Permissions"/> so every window/action guard
+    /// consults the real set for the whole session. (Before this wiring
+    /// existed, PermServ.LoadForUserAsync had no callers and every
+    /// guarded window deny-closed for every user.)
+    ///
+    /// Failure policy: a load failure is reported with AUTH-2006 and
+    /// never fails the sign-in itself. A non-administrator continues
+    /// with an empty set (fail closed — guarded windows deny). An
+    /// administrator falls back to the full catalog
+    /// (<see cref="IPermServ.GrantAllCatalogPermissions"/>) so a loader
+    /// or seed failure can never lock the company administrator out of
+    /// the permission administration needed to repair it.
+    /// Internal (not private) so Kern.Tests can pin this policy.
+    /// </summary>
+    internal static async Task LoadPermissionsForSessionAsync(UserInfo user)
+    {
+        try
+        {
+            await AppHost.Permissions.LoadForUserAsync(user.Username).ConfigureAwait(false);
+            user.Permissions = AppHost.Permissions.GetCurrentPermissions().ToArray();
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.PermissionLoadFailed, ex,
+                $"Auth.LoadPermissionsForSessionAsync user={user.Username}");
+            if (user.IsAdministrator)
+            {
+                AppHost.Permissions.GrantAllCatalogPermissions(user.Username);
+                user.Permissions = AppHost.Permissions.GetCurrentPermissions().ToArray();
+                AppHost.Logging?.LogWarning("AuthServ",
+                    $"Permission load failed for administrator '{user.Username}'; full catalog granted as fallback.");
+            }
+            else
+            {
+                AppHost.Permissions.Clear();
+                user.Permissions = Array.Empty<string>();
+            }
+        }
     }
 
     private static AuthResult Failed(string errorCode = ErrorCodes.InvalidCredentials) => new()
