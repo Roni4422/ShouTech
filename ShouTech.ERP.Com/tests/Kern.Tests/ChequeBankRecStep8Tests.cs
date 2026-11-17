@@ -78,7 +78,7 @@ public class ChequeBankRecStep8Tests
         Assert.Equal(10m, after.Single(r => r.Id == ids[1]).FeesAmount);
         Assert.All(after.Where(r => r.Id != ids[1]), r => Assert.Equal(ChequeStatuses.InPortfolio, r.Status));
         Assert.Equal(2L, db.ScalarLong(
-            "SELECT COUNT(*) FROM journal_entries WHERE status = 1 AND source_doc_type = 'CHQ-ISSUE'"));
+            "SELECT COUNT(*) FROM journal_entries WHERE status = 1 AND reversal_of_entry_id IS NULL AND source_doc_type = 'CHQ-ISSUE'"));
         Assert.Equal(1L, db.ScalarLong(
             "SELECT COUNT(*) FROM journal_entries WHERE status = 2 AND source_doc_type = 'CHQ-ISSUE'"));
         // The fee was POSTED (CHQ-07): Dr Party / Cr Portfolio 10.
@@ -136,6 +136,8 @@ public class ChequeBankRecStep8Tests
         var second = NewCheque("7002", 300m);
         first.JournalEntryId = shared.JournalEntryId;
         second.JournalEntryId = shared.JournalEntryId;
+        first.PortfolioAccountCode = Portfolio;
+        second.PortfolioAccountCode = Portfolio;
         first.Status = ChequeStatuses.InPortfolio;
         second.Status = ChequeStatuses.InPortfolio;
         await db.ChequeRepo().InsertBatchAsync(CompanyCode, new List<Cheque> { first, second }, Actor);
