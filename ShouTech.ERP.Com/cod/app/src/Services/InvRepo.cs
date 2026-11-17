@@ -330,6 +330,20 @@ public static class InvRepo
                     "InvRepo.Post");
         }
 
+        // Step 7 (J-5): resolve the document's effective exchange rate
+        // ONCE, through the one path (FxRates): the stored document rate
+        // first, the currency_rates master where the document carries
+        // none (stored rate <= 0), 1 for base-currency documents — and a
+        // foreign-currency document with no rate anywhere fails here
+        // with ACC-5015, before stock, GL, or ledger writes. Every
+        // consumer below (GL via GlPosting's own resolution of the same
+        // inputs, the party ledger, the credit guard) uses this rate,
+        // so the document can never post at face value in one ledger
+        // and converted in another.
+        var fxProvider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+        var fx = FxRates.ResolveByCompanyCode(connection, tx, fxProvider,
+            Company, doc.CurrencyCode, DateOnly.FromDateTime(doc.DocDate), doc.ExchangeRate);
+
         // Inventory effects FIRST (Step 6): the valuation engine writes
         // the document's movements inside this transaction, and the GL
         // COGS legs below are built from those movements' cost_amount —
@@ -346,7 +360,7 @@ public static class InvRepo
         // returned by the posting engine. Kinds with no GL effect
         // (quotation, opening stock) build no lines and keep an empty
         // journal number.
-        var glLines = effects.Gl ? BuildGlLines(connection, tx, doc) : new List<ShouTech.Domain.Entities.GlLineRequest>();
+        var glLines = effects.Gl ? BuildGlLines(connection, tx, doc, fx.Rate) : new List<ShouTech.Domain.Entities.GlLineRequest>();
         string journalNo = string.Empty;
         if (glLines.Count > 0)
         {
@@ -419,17 +433,32 @@ public static class InvRepo
             // violation aborts the whole posting transaction. The guard is
             // fed the SAME stored total that is about to post (Step 5) —
             // before, it received the recomputed lines-only figure.
+            // Step 7: the guard compares in BASE currency (it sums
+            // base_debit/base_credit), so it is fed the document's base
+            // exposure — stored total x the effective rate resolved
+            // above — never the raw foreign total.
             var exposureIncrease = effects.CreditGuard ? (partyKind == "C" ? debit : credit) : 0m;
             PartyCreditGuard.EnsureWithinLimit(
                 connection, tx,
                 DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite",
                 Company, partyKind, partyId,
                 string.IsNullOrWhiteSpace(doc.PartyCode) ? null : doc.PartyCode,
-                exposureIncrease, "$");
+                FxRates.ToBase(exposureIncrease, fx.Rate), "$");
 
+            // Step 7: the ledger row carries its base amounts alongside
+            // the transaction amounts (migration 062), at the same
+            // effective rate the GL used.
+            var ledgerHasBase = PartyLedger.ColumnExists(connection, tx, fxProvider, "party_ledger", "base_debit");
             using var led = connection.CreateCommand();
             led.Transaction = tx;
-            led.CommandText = """
+            led.CommandText = ledgerHasBase
+                ? """
+                INSERT INTO party_ledger
+                (company_id, party_kind, party_id, doc_kind, doc_id, doc_no, entry_date, debit, credit, currency_code, note, base_debit, base_credit, exchange_rate)
+                VALUES
+                ($company, $pk, $pid, $dk, $did, $dno, $date, $debit, $credit, $cur, $note, $baseDebit, $baseCredit, $rate);
+                """
+                : """
                 INSERT INTO party_ledger
                 (company_id, party_kind, party_id, doc_kind, doc_id, doc_no, entry_date, debit, credit, currency_code, note)
                 VALUES
@@ -446,6 +475,12 @@ public static class InvRepo
             Add(led, "$credit", credit);
             Add(led, "$cur", doc.CurrencyCode);
             Add(led, "$note", "Auto post");
+            if (ledgerHasBase)
+            {
+                Add(led, "$baseDebit", FxRates.ToBase(debit, fx.Rate));
+                Add(led, "$baseCredit", FxRates.ToBase(credit, fx.Rate));
+                Add(led, "$rate", fx.Rate);
+            }
             led.ExecuteNonQuery();
 
             // Settlement at posting (Step 4, sweep B-03): money collected
@@ -471,7 +506,8 @@ public static class InvRepo
                         isSales ? "RCV" : "PAY", docId, doc.DocNo,
                         doc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                         payDebit, payCredit, doc.CurrencyCode,
-                        "Collected at document posting");
+                        "Collected at document posting",
+                        exchangeRate: fx.Rate);
 
                     using var alloc = connection.CreateCommand();
                     alloc.Transaction = tx;
@@ -863,12 +899,15 @@ public static class InvRepo
             && PartyLedger.TableExists(connection, tx, provider, "party_ledger"))
         {
             var partyKind = original.IsSalesSide ? "C" : "S";
-            var settlements = new List<(decimal Debit, decimal Credit, string Currency)>();
+            var hasBase = PartyLedger.ColumnExists(connection, tx, provider, "party_ledger", "base_debit");
+            var settlements = new List<(decimal Debit, decimal Credit, string Currency, decimal? BaseDebit, decimal? BaseCredit, decimal Rate)>();
             using (var find = connection.CreateCommand())
             {
                 find.Transaction = tx;
                 find.CommandText = """
-                    SELECT debit, credit, currency_code FROM party_ledger
+                    SELECT debit, credit, currency_code
+                    """ + (hasBase ? ", base_debit, base_credit, exchange_rate" : "") + """
+                    FROM party_ledger
                     WHERE company_id=$company AND party_id=$pid AND doc_id=$orig
                       AND doc_kind IN ('RCV', 'PAY');
                     """;
@@ -881,19 +920,28 @@ public static class InvRepo
                     settlements.Add((
                         Convert.ToDecimal(reader.GetValue(0), CultureInfo.InvariantCulture),
                         Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture),
-                        reader.IsDBNull(2) ? original.CurrencyCode : reader.GetString(2)));
+                        reader.IsDBNull(2) ? original.CurrencyCode : reader.GetString(2),
+                        hasBase && !reader.IsDBNull(3) ? Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture) : null,
+                        hasBase && !reader.IsDBNull(4) ? Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture) : null,
+                        hasBase && !reader.IsDBNull(5) ? Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture) : 0m));
                 }
             }
 
-            foreach (var (debit, credit, currency) in settlements)
+            foreach (var (debit, credit, currency, baseDebit, baseCredit, rate) in settlements)
             {
+                // Step 7: mirror swaps the STORED base amounts, so the
+                // settlement nets to zero in base exactly (rate moves
+                // since the original posting do not leak in).
                 PartyLedger.WriteEntry(
                     connection, tx, provider,
                     Company, partyKind, partyId,
                     reversal.KindCode, reversal.DocId, reversal.DocNo,
                     DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                     credit, debit, currency,
-                    $"Reversal of settlement collected at posting for {original.DocNo}");
+                    $"Reversal of settlement collected at posting for {original.DocNo}",
+                    exchangeRate: rate,
+                    baseDebit: baseCredit,
+                    baseCredit: baseDebit);
             }
         }
 
@@ -1070,7 +1118,7 @@ public static class InvRepo
     private static string CodeOr(string? configured, string fallback)
         => string.IsNullOrWhiteSpace(configured) ? fallback : configured.Trim();
 
-    private static List<ShouTech.Domain.Entities.GlLineRequest> BuildGlLines(DbConnection connection, DbTransaction tx, InvDoc doc)
+    private static List<ShouTech.Domain.Entities.GlLineRequest> BuildGlLines(DbConnection connection, DbTransaction tx, InvDoc doc, decimal effectiveRate = 1m)
     {
         var lines = new List<ShouTech.Domain.Entities.GlLineRequest>();
         if (doc.Kind is InvDocKind.Quotation or InvDocKind.StockTransfer or InvDocKind.OpeningStock or InvDocKind.InventoryCount)
@@ -1214,6 +1262,19 @@ public static class InvRepo
                 }
                 else continue;
                 if (cost <= 0) continue;
+                // Step 7: the engine's cost_amount is denominated in
+                // BASE currency (stock values are base-currency, Step 6),
+                // while GlLineRequest amounts are TRANSACTION currency —
+                // GlPosting converts every line back to base at the
+                // document's effective rate. Dividing the base cost by
+                // the rate here makes the COGS leg's base amount land
+                // EXACTLY on the engine's cost (rate 1 documents are
+                // unchanged), instead of inflating COGS by the rate.
+                if (effectiveRate != 1m)
+                {
+                    cost = decimal.Round(cost / effectiveRate, 4, MidpointRounding.AwayFromZero);
+                    if (cost <= 0) continue;
+                }
                 var cogs = CodeOr(info.AccCogs, GlAccounts.Cogs);
                 var inventory = CodeOr(info.AccInventory, GlAccounts.Inventory);
                 if (reverse) { Add(inventory, cost, 0); Add(cogs, 0, cost); }

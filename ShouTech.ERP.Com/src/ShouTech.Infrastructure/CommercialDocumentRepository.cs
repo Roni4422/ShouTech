@@ -178,7 +178,12 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             Add(insertHeader, "@partyName", (object?)draft.PartyName ?? DBNull.Value);
             Add(insertHeader, "@warehouse", (object?)draft.WarehouseId ?? DBNull.Value);
             Add(insertHeader, "@currency", string.IsNullOrWhiteSpace(draft.CurrencyCode) ? "SAR" : draft.CurrencyCode.Trim());
-            Add(insertHeader, "@rate", draft.ExchangeRate <= 0m ? 1m : draft.ExchangeRate);
+            // Step 7: the stored rate is the DOCUMENT rate as given —
+            // 0 stays 0 ("no document rate"), so posting can fall back
+            // to the currency_rates master or fail with ACC-5015. The
+            // pre-Step-7 coercion to 1 fabricated a rate that was never
+            // entered and made the master table unreachable.
+            Add(insertHeader, "@rate", draft.ExchangeRate < 0m ? 0m : draft.ExchangeRate);
             Add(insertHeader, "@subtotal", decimal.Round(subtotal, 2));
             Add(insertHeader, "@discount", 0m);
             Add(insertHeader, "@tax", decimal.Round(taxAmount, 2));
@@ -278,8 +283,11 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                 subtotal = reader.IsDBNull(10) ? 0m : Convert.ToDecimal(reader.GetValue(10), CultureInfo.InvariantCulture);
                 taxAmount = reader.IsDBNull(11) ? 0m : Convert.ToDecimal(reader.GetValue(11), CultureInfo.InvariantCulture);
                 costCenter = reader.IsDBNull(12) ? null : reader.GetString(12);
-                exchangeRate = reader.IsDBNull(13) || Convert.ToDecimal(reader.GetValue(13), CultureInfo.InvariantCulture) == 0m
-                    ? 1m : Convert.ToDecimal(reader.GetValue(13), CultureInfo.InvariantCulture);
+                // Step 7: a stored rate of 0 means "no document rate" —
+                // it is NOT coerced to 1 here. Posting resolves the
+                // effective rate through FxRates (document rate, else
+                // currency_rates master, else ACC-5015).
+                exchangeRate = reader.IsDBNull(13) ? 0m : Convert.ToDecimal(reader.GetValue(13), CultureInfo.InvariantCulture);
             }
 
             if (status != CommercialDocumentStatus.Draft)
@@ -335,11 +343,22 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             }
             else if (docKind == CommercialDocKinds.SalesInvoice && partyId is not null)
             {
+                // Step 7 (J-5): resolve the effective rate ONCE through
+                // FxRates (document rate, else master, else ACC-5015);
+                // the guard and the ledger both consume BASE amounts at
+                // this rate, and GlPosting below resolves identically
+                // from the same stored inputs.
+                var fx = FxRates.Resolve(connection, transaction, _provider,
+                    Guid.Parse(companyId), currencyCode,
+                    DateOnly.Parse(docDate, CultureInfo.InvariantCulture), exchangeRate);
+
                 // Credit-limit gate (ACC-5006): the ledger debit below must
                 // not push the customer over the limit on their party card.
+                // Step 7: the guard sums base amounts, so it is fed the
+                // document's BASE total, not the raw foreign total.
                 await PartyCreditGuard.EnsureWithinLimitAsync(
                     connection, transaction, _provider, companyId, "C", partyId.Value, partyCode,
-                    grandTotal, "@", cancellationToken).ConfigureAwait(false);
+                    FxRates.ToBase(grandTotal, fx.Rate), "@", cancellationToken).ConfigureAwait(false);
 
                 // Step 4 (B-06): party_ledger.company_id is the company
                 // CODE; this repository's documents key the company by
@@ -348,21 +367,15 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                 var ledgerCompany = await PartyLedger.ResolveCompanyCodeAsync(
                     connection, transaction, _provider, companyId, cancellationToken).ConfigureAwait(false);
 
-                await using var ledger = CreateCommand(connection, transaction, """
-                    INSERT INTO party_ledger
-                        (company_id, party_kind, party_id, doc_kind, doc_id, doc_no, entry_date, debit, credit, currency_code, note)
-                    VALUES (@company, 'C', @party, @kind, @doc, @docNo, @date, @debit, 0, @currency, @note)
-                    """);
-                Add(ledger, "@company", ledgerCompany);
-                Add(ledger, "@party", partyId.Value);
-                Add(ledger, "@kind", CommercialDocKinds.SalesInvoice);
-                Add(ledger, "@doc", docId);
-                Add(ledger, "@docNo", docNo);
-                Add(ledger, "@date", docDate);
-                Add(ledger, "@debit", grandTotal);
-                Add(ledger, "@currency", currencyCode);
-                Add(ledger, "@note", $"Sales invoice {docNo} posting");
-                await ledger.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                // Step 7: written through PartyLedger.WriteEntry so the
+                // row carries base_debit/base_credit + the effective
+                // rate alongside the transaction amounts.
+                PartyLedger.WriteEntry(connection, transaction, _provider,
+                    ledgerCompany, "C", partyId.Value,
+                    CommercialDocKinds.SalesInvoice, docId, docNo, docDate,
+                    grandTotal, 0m, currencyCode,
+                    $"Sales invoice {docNo} posting",
+                    exchangeRate: fx.Rate);
             }
 
             // Real GL posting (Step 3, J-2): a posted chain SALES INVOICE

@@ -99,13 +99,31 @@ public sealed class ChequeService
         var companyGuid = await _repository.ResolveCompanyGuidAsync(companyId, cancellationToken).ConfigureAwait(false);
         var boxId = await _repository.ResolveAccountIdAsync(companyGuid, boxAccountCode, cancellationToken).ConfigureAwait(false);
 
-        var total = cheques.Sum(c => c.Amount * c.ExchangeRate);
+        // Step 7 (J-5 / cash-payments cheque BLOCKER): a batch whose
+        // cheques share ONE currency and ONE rate now posts as a proper
+        // transaction-currency journal entry — header currency + rate
+        // are the batch's, lines carry the RAW cheque amounts, and
+        // JournalRepository derives the base amounts (migration 062).
+        // Before, lines were pre-multiplied by each cheque's rate while
+        // the header claimed rate 1, so transaction amounts and base
+        // amounts were conflated in the same columns. A batch mixing
+        // currencies/rates cannot be represented by the one-rate-per-
+        // entry journal model; it keeps the legacy pre-converted shape
+        // (lines in base, header rate 1) — flagged in FIX_PHASE_STEP7
+        // as an owner decision, not silently "fixed" into wrong money.
+        var uniform = cheques.All(c =>
+            string.Equals(c.CurrencyCode, cheques[0].CurrencyCode, StringComparison.OrdinalIgnoreCase)
+            && c.ExchangeRate == cheques[0].ExchangeRate);
+        var total = uniform
+            ? cheques.Sum(c => c.Amount)
+            : cheques.Sum(c => c.Amount * c.ExchangeRate);
+        decimal LineAmount(Cheque c) => uniform ? c.Amount : c.Amount * c.ExchangeRate;
         var entry = new JournalEntry(
             journalDate,
             string.IsNullOrWhiteSpace(description) ? $"Cheque batch ({direction})" : description.Trim(),
             referenceNumber: null,
             currencyCode: cheques[0].CurrencyCode,
-            exchangeRate: 1m,
+            exchangeRate: uniform ? cheques[0].ExchangeRate : 1m,
             documentNumber: ($"CHQ-{journalDate:yyyyMMdd}-{Guid.NewGuid():N}")[..36]);
         if (direction == ChequeDirections.In)
         {
@@ -113,7 +131,7 @@ public sealed class ChequeService
             foreach (var cheque in cheques)
             {
                 var partyId = await _repository.ResolveAccountIdAsync(companyGuid, cheque.PartyAccountCode!, cancellationToken).ConfigureAwait(false);
-                entry.AddLine(partyId, 0m, cheque.Amount * cheque.ExchangeRate, $"Cheque {cheque.ChequeNo.Trim()}");
+                entry.AddLine(partyId, 0m, LineAmount(cheque), $"Cheque {cheque.ChequeNo.Trim()}");
             }
         }
         else
@@ -121,7 +139,7 @@ public sealed class ChequeService
             foreach (var cheque in cheques)
             {
                 var partyId = await _repository.ResolveAccountIdAsync(companyGuid, cheque.PartyAccountCode!, cancellationToken).ConfigureAwait(false);
-                entry.AddLine(partyId, cheque.Amount * cheque.ExchangeRate, 0m, $"Cheque {cheque.ChequeNo.Trim()}");
+                entry.AddLine(partyId, LineAmount(cheque), 0m, $"Cheque {cheque.ChequeNo.Trim()}");
             }
             entry.AddLine(boxId, 0m, total, "Cheques issued");
         }
@@ -244,8 +262,11 @@ public sealed class ChequeService
         var companyGuid = await _repository.ResolveCompanyGuidAsync(companyId, cancellationToken).ConfigureAwait(false);
         var debitId = await _repository.ResolveAccountIdAsync(companyGuid, debitCode, cancellationToken).ConfigureAwait(false);
         var creditId = await _repository.ResolveAccountIdAsync(companyGuid, creditCode, cancellationToken).ConfigureAwait(false);
-        var amount = cheque.Amount * cheque.ExchangeRate;
-        var entry = new JournalEntry(entryDate, description, null, cheque.CurrencyCode, 1m,
+        // Step 7: a single-cheque entry is uniform by construction —
+        // raw amount as the transaction amount, the cheque's own rate
+        // on the header, base derived by JournalRepository.
+        var amount = cheque.Amount;
+        var entry = new JournalEntry(entryDate, description, null, cheque.CurrencyCode, cheque.ExchangeRate,
             ($"CHQ-{cheque.ChequeNo.Trim()}-{Guid.NewGuid():N}")[..36]);
         entry.AddLine(debitId, amount, 0m, description);
         entry.AddLine(creditId, 0m, amount, description);

@@ -221,7 +221,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 Add(update, "@warehouse", (object?)draft.WarehouseId ?? DBNull.Value);
                 Add(update, "@warehouseName", (object?)draft.WarehouseName ?? DBNull.Value);
                 Add(update, "@currency", string.IsNullOrWhiteSpace(draft.CurrencyCode) ? "SAR" : draft.CurrencyCode.Trim());
-                Add(update, "@rate", draft.ExchangeRate <= 0m ? 1m : draft.ExchangeRate);
+                Add(update, "@rate", draft.ExchangeRate < 0m ? 0m : draft.ExchangeRate); // Step 7: 0 = no document rate (master fallback / ACC-5015 at posting), never fabricated to 1
                 Add(update, "@subtotal", subtotal);
                 Add(update, "@tax", taxAmount);
                 Add(update, "@total", grandTotal);
@@ -536,36 +536,37 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
             ComputeTotals(invoiceLines, out var invoiceSubtotal, out var invoiceTax, out var grandTotal);
 
+            // Step 7 (J-5): resolve the order's effective rate ONCE
+            // through FxRates (document rate, else master, else
+            // ACC-5015); guard + ledger consume BASE amounts at it, and
+            // GlPosting below resolves identically from the same inputs.
+            var fx = FxRates.Resolve(connection, transaction, _provider,
+                order.CompanyId, order.CurrencyCode, invoiceDate, order.ExchangeRate);
+
             // Credit-limit gate (ACC-5006): the converted invoice is created
             // already posted and its ledger row is written below, so the
-            // party's limit is enforced before that row lands.
+            // party's limit is enforced before that row lands. Step 7:
+            // the guard sums base amounts — it is fed the BASE total.
             await PartyCreditGuard.EnsureWithinLimitAsync(
                 connection, transaction, _provider, order.CompanyId.ToString("D"),
                 side == CommercialDocSide.Sales ? "C" : "S", order.PartyId.Value,
-                order.PartyCode, grandTotal, "@", cancellationToken).ConfigureAwait(false);
+                order.PartyCode, FxRates.ToBase(grandTotal, fx.Rate), "@", cancellationToken).ConfigureAwait(false);
 
-            await using (var ledger = CreateCommand(connection, transaction, """
-                INSERT INTO party_ledger
-                    (company_id, party_kind, party_id, doc_kind, doc_id, doc_no, entry_date, debit, credit, currency_code, note)
-                VALUES (@company, @partyKind, @party, @kind, @doc, @docNo, @date, @debit, @credit, @currency, @note)
-                """))
-            {
-                // Step 4 (B-06): party_ledger.company_id is the company
-                // CODE, not the Guid this repository keys documents by.
-                Add(ledger, "@company", await PartyLedger.ResolveCompanyCodeAsync(
-                    connection, transaction, _provider, order.CompanyId.ToString("D"), cancellationToken).ConfigureAwait(false));
-                Add(ledger, "@partyKind", side == CommercialDocSide.Sales ? "C" : "S");
-                Add(ledger, "@party", order.PartyId.Value);
-                Add(ledger, "@kind", invoiceKind);
-                Add(ledger, "@doc", invoiceId);
-                Add(ledger, "@docNo", invoiceDocNo.Trim());
-                Add(ledger, "@date", invoiceDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-                Add(ledger, "@debit", side == CommercialDocSide.Sales ? grandTotal : 0m);
-                Add(ledger, "@credit", side == CommercialDocSide.Purchase ? grandTotal : 0m);
-                Add(ledger, "@currency", order.CurrencyCode);
-                Add(ledger, "@note", $"Invoice {invoiceDocNo.Trim()} from order {order.DocNo}");
-                await ledger.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-            }
+            // Step 4 (B-06): party_ledger.company_id is the company
+            // CODE, not the Guid this repository keys documents by.
+            // Step 7: written through PartyLedger.WriteEntry so the row
+            // carries base amounts + the effective rate.
+            PartyLedger.WriteEntry(connection, transaction, _provider,
+                await PartyLedger.ResolveCompanyCodeAsync(
+                    connection, transaction, _provider, order.CompanyId.ToString("D"), cancellationToken).ConfigureAwait(false),
+                side == CommercialDocSide.Sales ? "C" : "S", order.PartyId.Value,
+                invoiceKind, invoiceId, invoiceDocNo.Trim(),
+                invoiceDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                side == CommercialDocSide.Sales ? grandTotal : 0m,
+                side == CommercialDocSide.Purchase ? grandTotal : 0m,
+                order.CurrencyCode,
+                $"Invoice {invoiceDocNo.Trim()} from order {order.DocNo}",
+                exchangeRate: fx.Rate);
 
             await using (var link = CreateCommand(connection, transaction, """
                 INSERT INTO document_links (company_id, source_doc_kind, source_doc_id, target_doc_kind, target_doc_id, created_by)
@@ -705,7 +706,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             Add(insertHeader, "@partyName", (object?)draft.PartyName ?? DBNull.Value);
             Add(insertHeader, "@warehouse", (object?)draft.WarehouseId ?? DBNull.Value);
             Add(insertHeader, "@currency", string.IsNullOrWhiteSpace(draft.CurrencyCode) ? "SAR" : draft.CurrencyCode.Trim());
-            Add(insertHeader, "@rate", draft.ExchangeRate <= 0m ? 1m : draft.ExchangeRate);
+            Add(insertHeader, "@rate", draft.ExchangeRate < 0m ? 0m : draft.ExchangeRate); // Step 7: as above
             Add(insertHeader, "@subtotal", subtotal);
             Add(insertHeader, "@discount", 0m);
             Add(insertHeader, "@tax", taxAmount);

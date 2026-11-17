@@ -530,9 +530,21 @@ public sealed class DefinitionRepository : IDefinitionRepository
                     throw new InvalidOperationException("Installment schedule row could not be updated.");
             }
 
+            // Step 7: installment collections are SAR-denominated plan
+            // amounts (the plan's own currency); the row carries base
+            // amounts at the SAR effective rate resolved through FxRates
+            // (1 when SAR is the base currency), like every other
+            // party_ledger writer.
+            var insHasBase = PartyLedger.ColumnExists(connection, transaction, _provider, "party_ledger", "base_debit");
+            var insRate = insHasBase
+                ? FxRates.ResolveByCompanyCode(connection, transaction, _provider, companyId, "SAR", paidDate, 1m).Rate
+                : 1m;
             await using (var ledger = CreateCommand(connection, transaction,
-                @"INSERT INTO party_ledger (company_id, party_kind, party_id, doc_kind, doc_id, doc_no, entry_date, debit, credit, currency_code, note)
-                  VALUES (@company, 'C', @party, 'INS', NULL, @docNo, @date, 0, @credit, 'SAR', @note)"))
+                insHasBase
+                    ? @"INSERT INTO party_ledger (company_id, party_kind, party_id, doc_kind, doc_id, doc_no, entry_date, debit, credit, currency_code, note, base_debit, base_credit, exchange_rate)
+                        VALUES (@company, 'C', @party, 'INS', NULL, @docNo, @date, 0, @credit, 'SAR', @note, 0, @baseCredit, @rate)"
+                    : @"INSERT INTO party_ledger (company_id, party_kind, party_id, doc_kind, doc_id, doc_no, entry_date, debit, credit, currency_code, note)
+                        VALUES (@company, 'C', @party, 'INS', NULL, @docNo, @date, 0, @credit, 'SAR', @note)"))
             {
                 Add(ledger, "@company", companyId.Trim());
                 Add(ledger, "@party", partyId);
@@ -540,6 +552,11 @@ public sealed class DefinitionRepository : IDefinitionRepository
                 Add(ledger, "@date", FormatDate(paidDate));
                 Add(ledger, "@credit", amount);
                 Add(ledger, "@note", $"Installment collection seq {row.Seq} for plan {installmentId}");
+                if (insHasBase)
+                {
+                    Add(ledger, "@baseCredit", FxRates.ToBase(amount, insRate));
+                    Add(ledger, "@rate", insRate);
+                }
                 await ledger.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
