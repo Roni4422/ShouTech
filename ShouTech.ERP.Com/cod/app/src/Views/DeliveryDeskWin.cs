@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -150,18 +150,16 @@ public sealed class DeliveryDeskWin : BaseWin
         Grid.SetColumn(listPanel, 0);
         content.Children.Add(listPanel);
 
-        var editor = new StackPanel();
-        editor.Children.Add(Labeled("Delivery.PartyCode", _party, 290));
-        editor.Children.Add(Labeled("Delivery.Address", _address, 290));
-        var rowA = new WrapPanel();
-        rowA.Children.Add(Labeled("Delivery.AreaCode", _area, 140));
-        rowA.Children.Add(Labeled("Delivery.DriverCode", _driver, 140));
-        editor.Children.Add(rowA);
-        var rowB = new WrapPanel();
-        rowB.Children.Add(Labeled("Delivery.RequestDate", _requestDate, 140));
-        rowB.Children.Add(Labeled("Delivery.Amount", _amount, 140));
-        editor.Children.Add(rowB);
-        editor.Children.Add(Labeled("Delivery.Notes", _notes, 290));
+        // Editor = a one-pair form grid: side labels, aligned edges
+        // down the whole editor (Phenix rule).
+        var editor = CreateFormGrid(1);
+        AddFormField(_labels, editor, 0, 0, "Delivery.PartyCode", _party);
+        AddFormField(_labels, editor, 1, 0, "Delivery.Address", _address);
+        AddFormField(_labels, editor, 2, 0, "Delivery.AreaCode", _area);
+        AddFormField(_labels, editor, 3, 0, "Delivery.DriverCode", _driver);
+        AddFormField(_labels, editor, 4, 0, "Delivery.RequestDate", _requestDate);
+        AddFormField(_labels, editor, 5, 0, "Delivery.Amount", _amount);
+        AddFormField(_labels, editor, 6, 0, "Delivery.Notes", _notes);
         _requestDate.SelectedDate = DateTime.Today;
         Grid.SetColumn(editor, 1);
         content.Children.Add(editor);
@@ -205,13 +203,11 @@ public sealed class DeliveryDeskWin : BaseWin
         Grid.SetColumn(settleList, 0);
         settleContent.Children.Add(settleList);
 
-        var settleEditor = new StackPanel();
-        settleEditor.Children.Add(Labeled("Delivery.DriverCode", _settleDriver, 290));
-        settleEditor.Children.Add(Labeled("Delivery.SettleDate", _settleDate, 160));
-        var rowC = new WrapPanel();
-        rowC.Children.Add(Labeled("Delivery.Collected", _collected, 140));
-        rowC.Children.Add(Labeled("Delivery.Fees", _fees, 140));
-        settleEditor.Children.Add(rowC);
+        var settleEditor = CreateFormGrid(1);
+        AddFormField(_labels, settleEditor, 0, 0, "Delivery.DriverCode", _settleDriver);
+        AddFormField(_labels, settleEditor, 1, 0, "Delivery.SettleDate", _settleDate);
+        AddFormField(_labels, settleEditor, 2, 0, "Delivery.Collected", _collected);
+        AddFormField(_labels, settleEditor, 3, 0, "Delivery.Fees", _fees);
         _settleDate.SelectedDate = DateTime.Today;
         Grid.SetColumn(settleEditor, 1);
         settleContent.Children.Add(settleEditor);
@@ -448,26 +444,14 @@ public sealed class DeliveryDeskWin : BaseWin
         Setters = { new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Center) }
     };
 
-    private StackPanel Labeled(string key, Control control, double width = 0)
-    {
-        var panel = new StackPanel { Margin = new Thickness(0, 0, 10, 8) };
-        if (width > 0)
-            panel.Width = width;
-        var label = new TextBlock { Margin = new Thickness(0, 0, 0, 4) };
-        label.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
-        _labels.Add((label, key));
-        panel.Children.Add(label);
-        panel.Children.Add(control);
-        return panel;
-    }
 
     private static void StyleButton(Button button, string key)
     {
         button.Tag = key;
-        button.MinWidth = 92;
-        button.MinHeight = 32;
-        button.Margin = new Thickness(6, 0, 0, 0);
-        button.Padding = new Thickness(12, 3, 12, 3);
+        button.MinWidth = VisuId.ButtonMinWidth;
+        button.MinHeight = VisuId.ControlHeight;
+        button.Margin = new Thickness(8, 0, 0, 0);
+        button.Padding = new Thickness(14, 0, 14, 0);
     }
 
     private static string? NullIfBlank(string? value)

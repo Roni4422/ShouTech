@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
@@ -25,7 +25,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class BcdGenWin : BaseWin
 {
-    private readonly TextBox _txtPrefix = new() { Width = 90, Text = "628" };
+    private readonly TextBox _txtPrefix = new() { Width = VisuId.FieldWidthTiny, Text = "628" };
     private readonly Button _btnGenerateMissing = new();
     private readonly Button _btnGenerateAll = new();
     private readonly Button _btnSave = new();
@@ -515,9 +515,8 @@ public sealed class BcdGenWin : BaseWin
     private static void StyleButton(Button btn, string text)
     {
         btn.Content = text;
-        btn.Margin = new Thickness(10, 0, 0, 0);
-        btn.Padding = new Thickness(10, 4, 10, 4);
-        btn.Height = 28;
+        btn.Margin = new Thickness(8, 0, 0, 0);
+        btn.MinWidth = VisuId.ButtonMinWidth;
         btn.SetResourceReference(StyleProperty, "VisuButtonStyle");
     }
 

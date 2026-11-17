@@ -70,9 +70,10 @@ public sealed class ActivityLogWin : BaseWin
         root.Children.Add(F2Ui.BottomBar(_refreshButton, _closeButton));
 
         var content = new DockPanel();
-        var filter = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
-        filter.Children.Add(F2Ui.Labeled(_labels, "ActivityLog.From", _from, 150));
-        filter.Children.Add(F2Ui.Labeled(_labels, "ActivityLog.To", _to, 150));
+        var filter = F2Ui.CreateFormGrid(2);
+        filter.Margin = new Thickness(0, 0, 0, 8);
+        F2Ui.AddField(_labels, filter, 0, 0, "ActivityLog.From", _from);
+        F2Ui.AddField(_labels, filter, 0, 1, "ActivityLog.To", _to);
         DockPanel.SetDock(filter, Dock.Top);
         content.Children.Add(filter);
 

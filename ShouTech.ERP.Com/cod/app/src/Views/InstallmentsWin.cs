@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -123,16 +123,21 @@ public sealed class InstallmentsWin : BaseWin
         DockPanel.SetDock(barBorder, Dock.Bottom);
         root.Children.Add(barBorder);
 
-        // Search bar (search mode for the SearchInstallment ribbon entry).
-        var searchBar = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
-        searchBar.Children.Add(Labeled("Installments.PartyCode", _filterParty, 160));
-        searchBar.Children.Add(Labeled("Installments.Status", _filterStatus, 150));
+        // Search bar (search mode for the SearchInstallment ribbon entry):
+        // a 2-pair form grid + the search button docked beside its row.
+        var searchForm = CreateFormGrid(2);
+        AddFormField(_labels, searchForm, 0, 0, "Installments.PartyCode", _filterParty);
+        AddFormField(_labels, searchForm, 0, 1, "Installments.Status", _filterStatus);
         _filterStatus.ItemsSource = new[] { string.Empty }.Concat(InstallmentStatuses.All).ToList();
         _filterStatus.SelectedIndex = 0;
         StyleButton(_searchButton, "Installments.Search");
-        _searchButton.Margin = new Thickness(6, 18, 0, 8);
+        _searchButton.Margin = new Thickness(8, 0, 0, 0);
+        _searchButton.VerticalAlignment = VerticalAlignment.Top;
         _searchButton.Click += async (_, _) => await RefreshAsync();
+        var searchBar = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+        DockPanel.SetDock(_searchButton, Dock.Right);
         searchBar.Children.Add(_searchButton);
+        searchBar.Children.Add(searchForm);
         DockPanel.SetDock(searchBar, Dock.Top);
         root.Children.Add(searchBar);
 
@@ -163,18 +168,16 @@ public sealed class InstallmentsWin : BaseWin
         Grid.SetColumn(listPanel, 0);
         content.Children.Add(listPanel);
 
-        var editor = new StackPanel();
-        editor.Children.Add(Labeled("Installments.PartyCode", _party, 300));
-        editor.Children.Add(Labeled("Installments.DocRef", _docRef, 300));
-        var rowA = new WrapPanel();
-        rowA.Children.Add(Labeled("Installments.Total", _total, 140));
-        rowA.Children.Add(Labeled("Installments.DownPayment", _downPayment, 140));
-        editor.Children.Add(rowA);
-        var rowB = new WrapPanel();
-        rowB.Children.Add(Labeled("Installments.Count", _count, 140));
-        rowB.Children.Add(Labeled("Installments.StartDate", _startDate, 140));
-        editor.Children.Add(rowB);
-        editor.Children.Add(Labeled("Installments.Notes", _notes, 300));
+        // Editor = a one-pair form grid: side labels, aligned edges
+        // down the whole editor (Phenix rule).
+        var editor = CreateFormGrid(1);
+        AddFormField(_labels, editor, 0, 0, "Installments.PartyCode", _party);
+        AddFormField(_labels, editor, 1, 0, "Installments.DocRef", _docRef);
+        AddFormField(_labels, editor, 2, 0, "Installments.Total", _total);
+        AddFormField(_labels, editor, 3, 0, "Installments.DownPayment", _downPayment);
+        AddFormField(_labels, editor, 4, 0, "Installments.Count", _count);
+        AddFormField(_labels, editor, 5, 0, "Installments.StartDate", _startDate);
+        AddFormField(_labels, editor, 6, 0, "Installments.Notes", _notes);
         _startDate.SelectedDate = DateTime.Today;
         var editorScroll = new ScrollViewer { Content = editor, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Grid.SetRow(editorScroll, 0);
@@ -203,11 +206,9 @@ public sealed class InstallmentsWin : BaseWin
         scheduleHost.Children.Add(_scheduleGrid);
         Grid.SetColumn(scheduleHost, 0);
         schedulePanel.Children.Add(scheduleHost);
-        var collectEditor = new StackPanel();
-        var collectRow = new WrapPanel();
-        collectRow.Children.Add(Labeled("Installments.CollectAmount", _collectAmount, 140));
-        collectRow.Children.Add(Labeled("Installments.PaidDate", _collectDate, 140));
-        collectEditor.Children.Add(collectRow);
+        var collectEditor = CreateFormGrid(1);
+        AddFormField(_labels, collectEditor, 0, 0, "Installments.CollectAmount", _collectAmount);
+        AddFormField(_labels, collectEditor, 1, 0, "Installments.PaidDate", _collectDate);
         _collectDate.SelectedDate = DateTime.Today;
         Grid.SetColumn(collectEditor, 1);
         schedulePanel.Children.Add(collectEditor);
@@ -446,26 +447,14 @@ public sealed class InstallmentsWin : BaseWin
         Setters = { new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Center) }
     };
 
-    private StackPanel Labeled(string key, Control control, double width = 0)
-    {
-        var panel = new StackPanel { Margin = new Thickness(0, 0, 10, 8) };
-        if (width > 0)
-            panel.Width = width;
-        var label = new TextBlock { Margin = new Thickness(0, 0, 0, 4) };
-        label.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
-        _labels.Add((label, key));
-        panel.Children.Add(label);
-        panel.Children.Add(control);
-        return panel;
-    }
 
     private static void StyleButton(Button button, string key)
     {
         button.Tag = key;
-        button.MinWidth = 92;
-        button.MinHeight = 32;
-        button.Margin = new Thickness(6, 0, 0, 0);
-        button.Padding = new Thickness(12, 3, 12, 3);
+        button.MinWidth = VisuId.ButtonMinWidth;
+        button.MinHeight = VisuId.ControlHeight;
+        button.Margin = new Thickness(8, 0, 0, 0);
+        button.Padding = new Thickness(14, 0, 14, 0);
     }
 
     private static string? NullIfBlank(string? value)

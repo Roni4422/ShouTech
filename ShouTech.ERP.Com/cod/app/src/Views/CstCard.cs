@@ -24,24 +24,27 @@ public sealed class CstCard : BaseWin
 {
     protected override string? ScheduleTintName => "Rose";
 
-    private readonly TextBox _txtCode = new() { Width = 130, Height = 26 };
-    private readonly TextBox _txtNameAr = new() { Width = 240, Height = 26 };
-    private readonly TextBox _txtNameEn = new() { Width = 240, Height = 26 };
-    private readonly ComboBox _cbType = new() { Width = 130, Height = 26 };
-    private readonly ComboBox _cbGroup = new() { Width = 180, Height = 26 };
-    private readonly TextBox _txtTaxNo = new() { Width = 170, Height = 26 };
-    private readonly TextBox _txtCrNo = new() { Width = 170, Height = 26 };
+    // Field sizes are NOT set here: height comes from the central styles
+    // (ControlHeight 32) and width from the form-grid column the field sits
+    // in (see BuildUi / docs/WINDOW_PROPORTIONS.md).
+    private readonly TextBox _txtCode = new();
+    private readonly TextBox _txtNameAr = new();
+    private readonly TextBox _txtNameEn = new();
+    private readonly ComboBox _cbType = new();
+    private readonly ComboBox _cbGroup = new();
+    private readonly TextBox _txtTaxNo = new();
+    private readonly TextBox _txtCrNo = new();
 
-    private readonly TextBox _txtCreditLimit = new() { Width = 130, Height = 26, Text = "0.00" };
-    private readonly TextBox _txtCreditDays = new() { Width = 100, Height = 26, Text = "30" };
-    private readonly ComboBox _cbPriceTier = new() { Width = 130, Height = 26 };
-    private readonly TextBox _txtGlAcc = new() { Width = 160, Height = 26 };
+    private readonly TextBox _txtCreditLimit = new() { Text = "0.00" };
+    private readonly TextBox _txtCreditDays = new() { Text = "30" };
+    private readonly ComboBox _cbPriceTier = new();
+    private readonly TextBox _txtGlAcc = new();
 
-    private readonly TextBox _txtPhone = new() { Width = 130, Height = 26 };
-    private readonly TextBox _txtMobile = new() { Width = 130, Height = 26 };
-    private readonly TextBox _txtEmail = new() { Width = 240, Height = 26 };
-    private readonly TextBox _txtAddress = new() { Width = 390, Height = 26 };
-    private readonly TextBox _txtNotes = new() { Width = 390, Height = 26 };
+    private readonly TextBox _txtPhone = new();
+    private readonly TextBox _txtMobile = new();
+    private readonly TextBox _txtEmail = new();
+    private readonly TextBox _txtAddress = new();
+    private readonly TextBox _txtNotes = new();
     private readonly CheckBox _chkActive = new() { VerticalAlignment = VerticalAlignment.Center, IsChecked = true };
 
     private readonly TextBlock _lblCurBal = new();
@@ -160,7 +163,7 @@ public sealed class CstCard : BaseWin
 
         var metricsBorder = new Border
         {
-            Margin = new Thickness(0, 10, 0, 0),
+            Margin = new Thickness(0, 8, 0, 0),
             Padding = new Thickness(12, 8, 12, 8),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(6)
@@ -168,11 +171,11 @@ public sealed class CstCard : BaseWin
         metricsBorder.SetResourceReference(Border.BackgroundProperty, "SurfaceSecondaryBrush");
         metricsBorder.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
 
+        _lblTotDr.Margin = new Thickness(24, 0, 0, 0);
+        _lblTotCr.Margin = new Thickness(24, 0, 0, 0);
         var metricsPanel = new StackPanel { Orientation = Orientation.Horizontal };
         metricsPanel.Children.Add(_lblCurBal);
-        metricsPanel.Children.Add(new TextBlock { Width = 30 });
         metricsPanel.Children.Add(_lblTotDr);
-        metricsPanel.Children.Add(new TextBlock { Width = 30 });
         metricsPanel.Children.Add(_lblTotCr);
         metricsBorder.Child = metricsPanel;
 
@@ -183,64 +186,43 @@ public sealed class CstCard : BaseWin
         var tabs = new TabControl();
         tabs.SetResourceReference(StyleProperty, "VisuTabControlStyle");
 
+        // All three tabs share ONE span scheme (3 label+field pairs), so field
+        // edges align across every group of the window (Phenix rule).
         var tabGen = new TabItem { Header = new TextBlock { Text = T("Ser.Tab.General"), Tag = "Ser.Tab.General" } };
-        var panelGen = new StackPanel { Margin = new Thickness(8) };
-        var row1 = new WrapPanel();
-        row1.Children.Add(Labeled("CustCard.Code", _txtCode));
-        row1.Children.Add(Labeled("CustCard.Type", _cbType));
-        row1.Children.Add(Labeled("CustCard.Group", _cbGroup));
-        panelGen.Children.Add(row1);
-
-        var row2 = new WrapPanel();
-        row2.Children.Add(Labeled("CustCard.NameAr", _txtNameAr));
-        row2.Children.Add(Labeled("CustCard.NameEn", _txtNameEn));
-        panelGen.Children.Add(row2);
-
-        var row3 = new WrapPanel();
-        row3.Children.Add(Labeled("CustCard.TaxNumber", _txtTaxNo));
-        row3.Children.Add(Labeled("CustCard.CommercialReg", _txtCrNo));
-        var activePanel = new StackPanel { Margin = new Thickness(0, 20, 10, 6) };
+        var formGen = CreateFormGrid(3);
+        formGen.Margin = new Thickness(16);
+        AddFormField(formGen, 0, 0, "CustCard.Code", _txtCode);
+        AddFormField(formGen, 0, 1, "CustCard.Type", _cbType);
+        AddFormField(formGen, 0, 2, "CustCard.Group", _cbGroup);
+        AddFormField(formGen, 1, 0, "CustCard.NameAr", _txtNameAr);
+        AddFormField(formGen, 1, 1, "CustCard.NameEn", _txtNameEn, spanPairs: 2);
+        AddFormField(formGen, 2, 0, "CustCard.TaxNumber", _txtTaxNo);
+        AddFormField(formGen, 2, 1, "CustCard.CommercialReg", _txtCrNo);
         _chkActive.Content = T("MasterCards.Active");
         _chkActive.Tag = "MasterCards.Active";
-        activePanel.Children.Add(_chkActive);
-        row3.Children.Add(activePanel);
-        panelGen.Children.Add(row3);
-        tabGen.Content = panelGen;
+        AddFormElement(formGen, 2, 2, _chkActive);
+        tabGen.Content = formGen;
         tabs.Items.Add(tabGen);
 
         var tabFin = new TabItem { Header = new TextBlock { Text = T("Whs.TabAccounts"), Tag = "Whs.TabAccounts" } };
-        var panelFin = new StackPanel { Margin = new Thickness(8) };
-        var finRow1 = new WrapPanel();
-        finRow1.Children.Add(Labeled("CustCard.CreditLimit", _txtCreditLimit));
-        finRow1.Children.Add(Labeled("CustCard.CreditDays", _txtCreditDays));
-        finRow1.Children.Add(Labeled("CustCard.PriceTier", _cbPriceTier));
-        panelFin.Children.Add(finRow1);
-
-        var finRow2 = new WrapPanel();
-        finRow2.Children.Add(Labeled("CustCard.AccountLink", _txtGlAcc));
-        panelFin.Children.Add(finRow2);
-        tabFin.Content = panelFin;
+        var formFin = CreateFormGrid(3);
+        formFin.Margin = new Thickness(16);
+        AddFormField(formFin, 0, 0, "CustCard.CreditLimit", _txtCreditLimit);
+        AddFormField(formFin, 0, 1, "CustCard.CreditDays", _txtCreditDays);
+        AddFormField(formFin, 0, 2, "CustCard.PriceTier", _cbPriceTier);
+        AddFormField(formFin, 1, 0, "CustCard.AccountLink", _txtGlAcc);
+        tabFin.Content = formFin;
         tabs.Items.Add(tabFin);
 
         var tabCont = new TabItem { Header = new TextBlock { Text = T("CustCard.Address"), Tag = "CustCard.Address" } };
-        var panelCont = new StackPanel { Margin = new Thickness(8) };
-        var contRow1 = new WrapPanel();
-        contRow1.Children.Add(Labeled("CustCard.Phone", _txtPhone));
-        contRow1.Children.Add(Labeled("CustCard.Mobile", _txtMobile));
-        panelCont.Children.Add(contRow1);
-
-        var contRow2 = new WrapPanel();
-        contRow2.Children.Add(Labeled("CustCard.Email", _txtEmail));
-        panelCont.Children.Add(contRow2);
-
-        var contRow3 = new WrapPanel();
-        contRow3.Children.Add(Labeled("CustCard.Address", _txtAddress));
-        panelCont.Children.Add(contRow3);
-
-        var contRow4 = new WrapPanel();
-        contRow4.Children.Add(Labeled("MasterCards.Notes", _txtNotes));
-        panelCont.Children.Add(contRow4);
-        tabCont.Content = panelCont;
+        var formCont = CreateFormGrid(3);
+        formCont.Margin = new Thickness(16);
+        AddFormField(formCont, 0, 0, "CustCard.Phone", _txtPhone);
+        AddFormField(formCont, 0, 1, "CustCard.Mobile", _txtMobile);
+        AddFormField(formCont, 1, 0, "CustCard.Email", _txtEmail, spanPairs: 2);
+        AddFormField(formCont, 2, 0, "CustCard.Address", _txtAddress, spanPairs: 3);
+        AddFormField(formCont, 3, 0, "MasterCards.Notes", _txtNotes, spanPairs: 3);
+        tabCont.Content = formCont;
         tabs.Items.Add(tabCont);
 
         root.Children.Add(tabs);
@@ -459,25 +441,11 @@ public sealed class CstCard : BaseWin
             RefreshLocalizedContent(VisualTreeHelper.GetChild(parent, i));
     }
 
-    private static StackPanel Labeled(string key, UIElement control)
-    {
-        var sp = new StackPanel { Margin = new Thickness(0, 0, 10, 6) };
-        sp.Children.Add(new TextBlock { Text = T(key), Tag = key, Margin = new Thickness(0, 0, 0, 2), Opacity = 0.85 });
-        if (control is TextBox textBox)
-            textBox.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
-        if (control is ComboBox comboBox)
-            comboBox.SetResourceReference(StyleProperty, "VisuComboBoxStyle");
-        sp.Children.Add(control);
-        return sp;
-    }
-
     private static void StyleButton(Button btn, string key)
     {
         btn.Content = T(key);
-        btn.Margin = new Thickness(0, 0, 5, 0);
-        btn.Padding = new Thickness(9, 3, 9, 3);
-        btn.MinWidth = 76;
-        btn.Height = 28;
+        btn.Margin = new Thickness(0, 0, 8, 0);
+        btn.MinWidth = VisuId.ButtonMinWidth;
         btn.Tag = key;
         btn.SetResourceReference(StyleProperty, "VisuButtonStyle");
     }

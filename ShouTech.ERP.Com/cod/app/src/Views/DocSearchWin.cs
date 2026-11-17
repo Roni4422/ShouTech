@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Threading.Tasks;
@@ -30,10 +30,10 @@ public sealed class DocSearchWin : BaseWin
     }
 
     private readonly DocSearchMode _mode;
-    private readonly ComboBox _cmbStatus = new() { Width = 130, Height = 26 };
-    private readonly TextBox _txtSearch = new() { Width = 200, Height = 26 };
-    private readonly DatePicker _dtFrom = new() { Width = 120, Height = 26 };
-    private readonly DatePicker _dtTo = new() { Width = 120, Height = 26 };
+    private readonly ComboBox _cmbStatus = new();
+    private readonly TextBox _txtSearch = new();
+    private readonly DatePicker _dtFrom = new();
+    private readonly DatePicker _dtTo = new();
     private readonly Button _btnSearch = new();
     private readonly Button _btnOpen = new();
     private readonly Button _btnSetLost = new();
@@ -101,13 +101,16 @@ public sealed class DocSearchWin : BaseWin
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        var filters = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+        // Filter bar = one shared column grid (4 pairs), side labels,
+        // equal quarters aligned to one grid (Phenix rule).
+        var filters = CreateFormGrid(4);
+        filters.Margin = new Thickness(0, 0, 0, 8);
         _cmbStatus.ItemsSource = new[] { "", CommercialDocumentStatus.Draft, CommercialDocumentStatus.Posted, CommercialDocumentStatus.Closed, CommercialDocumentStatus.Cancelled, CommercialDocumentStatus.Lost };
         _cmbStatus.SelectedIndex = 0;
-        filters.Children.Add(Labeled("DocSearch.Status", _cmbStatus));
-        filters.Children.Add(Labeled("DocSearch.Search", _txtSearch));
-        filters.Children.Add(Labeled("DocSearch.From", _dtFrom));
-        filters.Children.Add(Labeled("DocSearch.To", _dtTo));
+        AddFormField(filters, 0, 0, "DocSearch.Status", _cmbStatus);
+        AddFormField(filters, 0, 1, "DocSearch.Search", _txtSearch);
+        AddFormField(filters, 0, 2, "DocSearch.From", _dtFrom);
+        AddFormField(filters, 0, 3, "DocSearch.To", _dtTo);
         Grid.SetRow(filters, 0);
         body.Children.Add(filters);
 
@@ -289,23 +292,12 @@ public sealed class DocSearchWin : BaseWin
             RefreshLocalizedContent(System.Windows.Media.VisualTreeHelper.GetChild(parent, i));
     }
 
-    private static StackPanel Labeled(string key, UIElement control)
-    {
-        var sp = new StackPanel { Margin = new Thickness(0, 0, 8, 4) };
-        sp.Children.Add(new TextBlock { Text = T(key), Tag = key, Margin = new Thickness(0, 0, 0, 2), Opacity = 0.85 });
-        if (control is TextBox textBox)
-            textBox.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
-        sp.Children.Add(control);
-        return sp;
-    }
 
     private static void StyleButton(Button btn, string key)
     {
         btn.Content = T(key);
-        btn.Margin = new Thickness(0, 0, 5, 0);
-        btn.Padding = new Thickness(9, 3, 9, 3);
-        btn.MinWidth = 76;
-        btn.Height = 28;
+        btn.Margin = new Thickness(0, 0, 8, 0);
+        btn.MinWidth = VisuId.ButtonMinWidth;
         btn.Tag = key;
         btn.SetResourceReference(StyleProperty, "VisuButtonStyle");
     }

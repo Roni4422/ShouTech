@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -105,35 +105,19 @@ public sealed class PayRecWin : BaseWin
 
         var content = new DockPanel();
 
-        var selectorRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
-        var kindLabel = new TextBlock { Margin = new Thickness(0, 4, 8, 0) };
-        kindLabel.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
-        _labels.Add((kindLabel, "PaymentReconciliation.PartyKind"));
-        selectorRow.Children.Add(kindLabel);
-        _partyKind.Width = 180;
+        // Selector = one shared column grid (3 pairs), side labels,
+        // aligned edges (Phenix rule).
+        var selectorRow = CreateFormGrid(3);
+        selectorRow.Margin = new Thickness(0, 0, 0, 8);
         _partyKind.Items.Add(new ComboBoxItem { Tag = "C" });
         _partyKind.Items.Add(new ComboBoxItem { Tag = "S" });
         _partyKind.SelectedIndex = 0;
         _partyKind.SelectionChanged += async (_, _) => await RefreshAsync();
-        selectorRow.Children.Add(_partyKind);
-        var amountPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(24, 0, 0, 0) };
-        var amountLabel = new TextBlock { Margin = new Thickness(0, 4, 8, 0) };
-        amountLabel.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
-        _labels.Add((amountLabel, "PaymentReconciliation.AllocationAmount"));
-        amountPanel.Children.Add(amountLabel);
-        _amount.Width = 140;
-        amountPanel.Children.Add(_amount);
-        selectorRow.Children.Add(amountPanel);
+        AddFormField(_labels, selectorRow, 0, 0, "PaymentReconciliation.PartyKind", _partyKind);
+        AddFormField(_labels, selectorRow, 0, 1, "PaymentReconciliation.AllocationAmount", _amount);
         // Allocation note — payment_allocations.note exists in the schema and
         // the service accepts it, but the window never collected it.
-        var notePanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(24, 0, 0, 0) };
-        var noteLabel = new TextBlock { Margin = new Thickness(0, 4, 8, 0) };
-        noteLabel.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
-        _labels.Add((noteLabel, "PaymentReconciliation.Note"));
-        notePanel.Children.Add(noteLabel);
-        _note.Width = 220;
-        notePanel.Children.Add(_note);
-        selectorRow.Children.Add(notePanel);
+        AddFormField(_labels, selectorRow, 0, 2, "PaymentReconciliation.Note", _note);
         DockPanel.SetDock(selectorRow, Dock.Top);
         content.Children.Add(selectorRow);
 
@@ -318,10 +302,10 @@ public sealed class PayRecWin : BaseWin
     private static void StyleButton(Button button, string key)
     {
         button.Tag = key;
-        button.MinWidth = 92;
-        button.MinHeight = 32;
-        button.Margin = new Thickness(6, 0, 0, 0);
-        button.Padding = new Thickness(12, 3, 12, 3);
+        button.MinWidth = VisuId.ButtonMinWidth;
+        button.MinHeight = VisuId.ControlHeight;
+        button.Margin = new Thickness(8, 0, 0, 0);
+        button.Padding = new Thickness(14, 0, 14, 0);
     }
 
     private static decimal ParseDecimal(string text)

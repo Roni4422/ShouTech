@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -20,12 +20,12 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class CcCard : BaseWin
 {
-    private readonly TextBox _txtCode = new() { Width = 130, Height = 26 };
-    private readonly ComboBox _cbParent = new() { Width = 230, Height = 26 };
-    private readonly TextBox _txtNameAr = new() { Width = 230, Height = 26 };
-    private readonly TextBox _txtNameEn = new() { Width = 230, Height = 26 };
-    private readonly TextBox _txtLevel = new() { Width = 80, Height = 26, Text = "1", IsReadOnly = true };
-    private readonly TextBox _txtNotes = new() { Width = 470, Height = 26 };
+    private readonly TextBox _txtCode = new();
+    private readonly ComboBox _cbParent = new();
+    private readonly TextBox _txtNameAr = new();
+    private readonly TextBox _txtNameEn = new();
+    private readonly TextBox _txtLevel = new() { Text = "1", IsReadOnly = true };
+    private readonly TextBox _txtNotes = new();
     private readonly CheckBox _chkGroup = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly CheckBox _chkActive = new() { VerticalAlignment = VerticalAlignment.Center, IsChecked = true };
 
@@ -141,11 +141,11 @@ public sealed class CcCard : BaseWin
         metricsBorder.SetResourceReference(Border.BackgroundProperty, "SurfaceSecondaryBrush");
         metricsBorder.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
 
+        _lblCr.Margin = new Thickness(24, 0, 0, 0);
+        _lblBal.Margin = new Thickness(24, 0, 0, 0);
         var metricsPanel = new StackPanel { Orientation = Orientation.Horizontal };
         metricsPanel.Children.Add(_lblDr);
-        metricsPanel.Children.Add(new TextBlock { Width = 25 });
         metricsPanel.Children.Add(_lblCr);
-        metricsPanel.Children.Add(new TextBlock { Width = 25 });
         metricsPanel.Children.Add(_lblBal);
         metricsBorder.Child = metricsPanel;
 
@@ -153,33 +153,24 @@ public sealed class CcCard : BaseWin
         root.Children.Add(metricsBorder);
         root.Children.Add(actionBar);
 
-        var formPanel = new StackPanel { Margin = new Thickness(4) };
-
-        var r1 = new WrapPanel();
-        r1.Children.Add(Labeled("CostCenter.Code", _txtCode));
-        r1.Children.Add(Labeled("CostCenter.ParentCode", _cbParent));
-        r1.Children.Add(Labeled("CostCenter.Level", _txtLevel));
-        formPanel.Children.Add(r1);
-
-        var r2 = new WrapPanel();
-        r2.Children.Add(Labeled("CostCenter.NameAr", _txtNameAr));
-        r2.Children.Add(Labeled("CostCenter.NameEn", _txtNameEn));
-        formPanel.Children.Add(r2);
-
-        var r3 = new WrapPanel { Margin = new Thickness(0, 2, 0, 0) };
+        // One shared column grid for the whole form (3 pairs), side labels,
+        // field edges aligned across rows (Phenix rule).
+        var form = CreateFormGrid(3);
+        form.Margin = new Thickness(16);
+        AddFormField(form, 0, 0, "CostCenter.Code", _txtCode);
+        AddFormField(form, 0, 1, "CostCenter.ParentCode", _cbParent);
+        AddFormField(form, 0, 2, "CostCenter.Level", _txtLevel);
+        AddFormField(form, 1, 0, "CostCenter.NameAr", _txtNameAr);
+        AddFormField(form, 1, 1, "CostCenter.NameEn", _txtNameEn, spanPairs: 2);
         _chkGroup.Content = T("MasterCards.IsGroup");
         _chkGroup.Tag = "MasterCards.IsGroup";
         _chkActive.Content = T("MasterCards.Active");
         _chkActive.Tag = "MasterCards.Active";
-        r3.Children.Add(new StackPanel { Margin = new Thickness(0, 14, 16, 6), Children = { _chkGroup } });
-        r3.Children.Add(new StackPanel { Margin = new Thickness(0, 14, 16, 6), Children = { _chkActive } });
-        formPanel.Children.Add(r3);
+        AddFormElement(form, 2, 0, _chkGroup);
+        AddFormElement(form, 2, 1, _chkActive);
+        AddFormField(form, 3, 0, "CostCenter.Notes", _txtNotes, spanPairs: 3);
 
-        var r4 = new WrapPanel();
-        r4.Children.Add(Labeled("CostCenter.Notes", _txtNotes));
-        formPanel.Children.Add(r4);
-
-        root.Children.Add(formPanel);
+        root.Children.Add(form);
         Content = root;
     }
 
@@ -337,25 +328,12 @@ public sealed class CcCard : BaseWin
             RefreshLocalizedContent(VisualTreeHelper.GetChild(parent, i));
     }
 
-    private static StackPanel Labeled(string key, UIElement control)
-    {
-        var sp = new StackPanel { Margin = new Thickness(0, 0, 10, 6) };
-        sp.Children.Add(new TextBlock { Text = T(key), Tag = key, Margin = new Thickness(0, 0, 0, 2), Opacity = 0.85 });
-        if (control is TextBox textBox)
-            textBox.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
-        if (control is ComboBox comboBox)
-            comboBox.SetResourceReference(StyleProperty, "VisuComboBoxStyle");
-        sp.Children.Add(control);
-        return sp;
-    }
 
     private static void StyleButton(Button btn, string key)
     {
         btn.Content = T(key);
-        btn.Margin = new Thickness(0, 0, 5, 0);
-        btn.Padding = new Thickness(9, 3, 9, 3);
-        btn.MinWidth = 76;
-        btn.Height = 28;
+        btn.Margin = new Thickness(0, 0, 8, 0);
+        btn.MinWidth = VisuId.ButtonMinWidth;
         btn.Tag = key;
         btn.SetResourceReference(StyleProperty, "VisuButtonStyle");
     }

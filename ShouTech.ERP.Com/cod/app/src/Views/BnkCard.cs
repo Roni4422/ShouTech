@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.Threading.Tasks;
 using System.Windows;
@@ -18,15 +18,15 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class BnkCard : BaseWin
 {
-    private readonly TextBox _txtCode = new() { Width = 120, Height = 26 };
-    private readonly TextBox _txtNameEn = new() { Width = 230, Height = 26 };
-    private readonly TextBox _txtNameAr = new() { Width = 230, Height = 26 };
-    private readonly TextBox _txtBranch = new() { Width = 150, Height = 26 };
-    private readonly TextBox _txtAccNo = new() { Width = 180, Height = 26 };
-    private readonly TextBox _txtIban = new() { Width = 260, Height = 26 };
-    private readonly TextBox _txtCur = new() { Width = 70, Height = 26, Text = UsrPref.Load().CurrencyCode };
-    private readonly TextBox _txtGlAcc = new() { Width = 140, Height = 26 };
-    private readonly TextBox _txtNotes = new() { Width = 470, Height = 26 };
+    private readonly TextBox _txtCode = new();
+    private readonly TextBox _txtNameEn = new();
+    private readonly TextBox _txtNameAr = new();
+    private readonly TextBox _txtBranch = new();
+    private readonly TextBox _txtAccNo = new();
+    private readonly TextBox _txtIban = new();
+    private readonly TextBox _txtCur = new() { Text = UsrPref.Load().CurrencyCode };
+    private readonly TextBox _txtGlAcc = new();
+    private readonly TextBox _txtNotes = new();
     private readonly CheckBox _chkActive = new() { VerticalAlignment = VerticalAlignment.Center, IsChecked = true };
 
     private readonly TextBlock _lblBal = new();
@@ -132,38 +132,24 @@ public sealed class BnkCard : BaseWin
         root.Children.Add(metricsBorder);
         root.Children.Add(actionBar);
 
-        var formPanel = new StackPanel { Margin = new Thickness(4) };
-
-        var r1 = new WrapPanel();
-        r1.Children.Add(Labeled("BankCard.Code", _txtCode));
-        r1.Children.Add(Labeled("BankCard.Name", _txtNameEn));
-        r1.Children.Add(Labeled("BankCard.Branch", _txtBranch));
-        formPanel.Children.Add(r1);
-
-        var r2 = new WrapPanel();
-        r2.Children.Add(Labeled("MasterCards.NameAr", _txtNameAr));
-        r2.Children.Add(Labeled("BankCard.AccountNo", _txtAccNo));
-        formPanel.Children.Add(r2);
-
-        var r3 = new WrapPanel();
-        r3.Children.Add(Labeled("BankCard.Iban", _txtIban));
-        formPanel.Children.Add(r3);
-
-        var r4 = new WrapPanel();
-        r4.Children.Add(Labeled("BankCard.Currency", _txtCur));
-        r4.Children.Add(Labeled("BankCard.GlAccount", _txtGlAcc));
-        var activePanel = new StackPanel { Margin = new Thickness(0, 20, 10, 6) };
+        // One shared column grid for the whole form (3 pairs): field edges
+        // align across all rows; wider fields span pairs (Phenix rule).
+        var form = CreateFormGrid(3);
+        form.Margin = new Thickness(16);
+        AddFormField(form, 0, 0, "BankCard.Code", _txtCode);
+        AddFormField(form, 0, 1, "BankCard.Name", _txtNameEn);
+        AddFormField(form, 0, 2, "BankCard.Branch", _txtBranch);
+        AddFormField(form, 1, 0, "MasterCards.NameAr", _txtNameAr, spanPairs: 2);
+        AddFormField(form, 1, 2, "BankCard.AccountNo", _txtAccNo);
+        AddFormField(form, 2, 0, "BankCard.Iban", _txtIban, spanPairs: 2);
+        AddFormField(form, 3, 0, "BankCard.Currency", _txtCur);
+        AddFormField(form, 3, 1, "BankCard.GlAccount", _txtGlAcc);
         _chkActive.Content = T("MasterCards.Active");
         _chkActive.Tag = "MasterCards.Active";
-        activePanel.Children.Add(_chkActive);
-        r4.Children.Add(activePanel);
-        formPanel.Children.Add(r4);
+        AddFormElement(form, 3, 2, _chkActive);
+        AddFormField(form, 4, 0, "MasterCards.Notes", _txtNotes, spanPairs: 3);
 
-        var r5 = new WrapPanel();
-        r5.Children.Add(Labeled("MasterCards.Notes", _txtNotes));
-        formPanel.Children.Add(r5);
-
-        root.Children.Add(formPanel);
+        root.Children.Add(form);
         Content = root;
     }
 
@@ -285,23 +271,11 @@ public sealed class BnkCard : BaseWin
             RefreshLocalizedContent(VisualTreeHelper.GetChild(parent, i));
     }
 
-    private static StackPanel Labeled(string key, UIElement control)
-    {
-        var sp = new StackPanel { Margin = new Thickness(0, 0, 10, 6) };
-        sp.Children.Add(new TextBlock { Text = T(key), Tag = key, Margin = new Thickness(0, 0, 0, 2), Opacity = 0.85 });
-        if (control is TextBox textBox)
-            textBox.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
-        sp.Children.Add(control);
-        return sp;
-    }
-
     private static void StyleButton(Button btn, string key)
     {
         btn.Content = T(key);
-        btn.Margin = new Thickness(0, 0, 5, 0);
-        btn.Padding = new Thickness(9, 3, 9, 3);
-        btn.MinWidth = 76;
-        btn.Height = 28;
+        btn.Margin = new Thickness(0, 0, 8, 0);
+        btn.MinWidth = VisuId.ButtonMinWidth;
         btn.Tag = key;
         btn.SetResourceReference(StyleProperty, "VisuButtonStyle");
     }

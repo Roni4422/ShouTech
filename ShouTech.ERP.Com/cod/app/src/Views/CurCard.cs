@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -21,15 +21,15 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class CurCard : BaseWin
 {
-    private readonly TextBox _txtCode = new() { Width = 90, Height = 26 };
-    private readonly TextBox _txtNameAr = new() { Width = 150, Height = 26 };
-    private readonly TextBox _txtNameEn = new() { Width = 150, Height = 26 };
-    private readonly TextBox _txtSymbol = new() { Width = 70, Height = 26 };
-    private readonly TextBox _txtFraction = new() { Width = 120, Height = 26 };
-    private readonly TextBox _txtRate = new() { Width = 90, Height = 26 };
-    private readonly TextBox _txtMinRate = new() { Width = 90, Height = 26 };
-    private readonly TextBox _txtMaxRate = new() { Width = 90, Height = 26 };
-    private readonly DatePicker _rateDate = new() { Width = 140, Height = 26 };
+    private readonly TextBox _txtCode = new();
+    private readonly TextBox _txtNameAr = new();
+    private readonly TextBox _txtNameEn = new();
+    private readonly TextBox _txtSymbol = new();
+    private readonly TextBox _txtFraction = new();
+    private readonly TextBox _txtRate = new();
+    private readonly TextBox _txtMinRate = new();
+    private readonly TextBox _txtMaxRate = new();
+    private readonly DatePicker _rateDate = new();
     private readonly CheckBox _chkActive = new() { VerticalAlignment = VerticalAlignment.Center, IsChecked = true };
 
     private readonly Button _btnLoad = new();
@@ -138,28 +138,23 @@ public sealed class CurCard : BaseWin
         leftCard.SetResourceReference(Border.BackgroundProperty, "SurfaceSecondaryBrush");
         leftCard.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
 
-        var cardPanel = new StackPanel();
-        var cr1 = new WrapPanel();
-        cr1.Children.Add(Labeled("CurrencyCard.Code", _txtCode));
-        cr1.Children.Add(Labeled("CurrencyCard.Symbol", _txtSymbol));
-        cardPanel.Children.Add(cr1);
-
-        cardPanel.Children.Add(Labeled("CurrencyCard.NameAr", _txtNameAr));
-        cardPanel.Children.Add(Labeled("CurrencyCard.NameEn", _txtNameEn));
-        cardPanel.Children.Add(Labeled("CurrencyCard.Fraction", _txtFraction));
-
+        // Side card = a one-pair form grid: side labels, fields stretch to
+        // the card width, edges aligned down the whole card (Phenix rule).
+        var cardForm = CreateFormGrid(1);
+        AddFormField(cardForm, 0, 0, "CurrencyCard.Code", _txtCode);
+        AddFormField(cardForm, 1, 0, "CurrencyCard.Symbol", _txtSymbol);
+        AddFormField(cardForm, 2, 0, "CurrencyCard.NameAr", _txtNameAr);
+        AddFormField(cardForm, 3, 0, "CurrencyCard.NameEn", _txtNameEn);
+        AddFormField(cardForm, 4, 0, "CurrencyCard.Fraction", _txtFraction);
         _chkActive.Content = T("MasterCards.Active");
         _chkActive.Tag = "MasterCards.Active";
-        cardPanel.Children.Add(new StackPanel { Margin = new Thickness(0, 4, 0, 8), Children = { _chkActive } });
+        AddFormElement(cardForm, 5, 0, _chkActive);
+        AddFormField(cardForm, 6, 0, "MasterCards.RateDate", _rateDate);
+        AddFormField(cardForm, 7, 0, "CurrencyCard.Rate", _txtRate);
+        AddFormField(cardForm, 8, 0, "CurrencyCard.MinRate", _txtMinRate);
+        AddFormField(cardForm, 9, 0, "CurrencyCard.MaxRate", _txtMaxRate);
 
-        cardPanel.Children.Add(Labeled("MasterCards.RateDate", _rateDate));
-        var cr2 = new WrapPanel();
-        cr2.Children.Add(Labeled("CurrencyCard.Rate", _txtRate));
-        cr2.Children.Add(Labeled("CurrencyCard.MinRate", _txtMinRate));
-        cr2.Children.Add(Labeled("CurrencyCard.MaxRate", _txtMaxRate));
-        cardPanel.Children.Add(cr2);
-
-        leftCard.Child = cardPanel;
+        leftCard.Child = cardForm;
         Grid.SetColumn(leftCard, 0);
         gridRoot.Children.Add(leftCard);
 
@@ -336,23 +331,11 @@ public sealed class CurCard : BaseWin
             RefreshLocalizedContent(VisualTreeHelper.GetChild(parent, i));
     }
 
-    private static StackPanel Labeled(string key, UIElement control)
-    {
-        var sp = new StackPanel { Margin = new Thickness(0, 0, 8, 5) };
-        sp.Children.Add(new TextBlock { Text = T(key), Tag = key, Margin = new Thickness(0, 0, 0, 2), Opacity = 0.85 });
-        if (control is TextBox textBox)
-            textBox.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
-        sp.Children.Add(control);
-        return sp;
-    }
-
     private static void StyleButton(Button btn, string key)
     {
         btn.Content = T(key);
-        btn.Margin = new Thickness(0, 0, 5, 0);
-        btn.Padding = new Thickness(9, 3, 9, 3);
-        btn.MinWidth = 76;
-        btn.Height = 28;
+        btn.Margin = new Thickness(0, 0, 8, 0);
+        btn.MinWidth = VisuId.ButtonMinWidth;
         btn.Tag = key;
         btn.SetResourceReference(StyleProperty, "VisuButtonStyle");
     }

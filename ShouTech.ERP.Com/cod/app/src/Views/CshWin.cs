@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
@@ -40,16 +40,16 @@ public sealed class CshWin : BaseWin
 
     private readonly CshKind _kind;
 
-    private readonly TextBox _txtDocNo = new() { Width = 150, Height = 26 };
-    private readonly DatePicker _dtDate = new() { Width = 120, Height = 26, SelectedDate = DateTime.Today };
-    private readonly TextBox _txtBox = new() { Width = 150, Height = 26 };
-    private readonly TextBox _txtParty = new() { Width = 220, Height = 26 };
-    private readonly TextBox _txtAmount = new() { Width = 110, Height = 26, Text = "0.00" };
-    private readonly TextBox _txtCur = new() { Width = 70, Height = 26, Text = UsrPref.Load().CurrencyCode };
-    private readonly TextBox _txtRate = new() { Width = 70, Height = 26, Text = "1.00" };
-    private readonly TextBox _txtRefNo = new() { Width = 110, Height = 26 };
-    private readonly TextBox _txtCc = new() { Width = 110, Height = 26 };
-    private readonly TextBox _txtMemo = new() { Width = 400, Height = 26 };
+    private readonly TextBox _txtDocNo = new();
+    private readonly DatePicker _dtDate = new() { SelectedDate = DateTime.Today };
+    private readonly TextBox _txtBox = new();
+    private readonly TextBox _txtParty = new();
+    private readonly TextBox _txtAmount = new() { Text = "0.00" };
+    private readonly TextBox _txtCur = new() { Text = UsrPref.Load().CurrencyCode };
+    private readonly TextBox _txtRate = new() { Text = "1.00" };
+    private readonly TextBox _txtRefNo = new();
+    private readonly TextBox _txtCc = new();
+    private readonly TextBox _txtMemo = new();
 
     private readonly Button _btnNew = new();
     private readonly Button _btnLoad = new();
@@ -170,19 +170,23 @@ public sealed class CshWin : BaseWin
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        var headerPanel = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
-        headerPanel.Children.Add(Labeled("Vouchers.VoucherNo", _txtDocNo));
-        headerPanel.Children.Add(Labeled("Vouchers.Date", _dtDate));
-        headerPanel.Children.Add(Labeled("Vouchers.Treasury", _txtBox));
-        headerPanel.Children.Add(Labeled(_kind == CshKind.Receipt ? "Vouchers.ReceivedFrom" : "Vouchers.PaidTo", _txtParty));
-        headerPanel.Children.Add(Labeled("Invoice.Total", _txtAmount));
-        headerPanel.Children.Add(Labeled("Vouchers.Currency", _txtCur));
-        headerPanel.Children.Add(Labeled("Vouchers.ExchangeRate", _txtRate));
-        headerPanel.Children.Add(Labeled("Vouchers.RefNo", _txtRefNo));
-        headerPanel.Children.Add(Labeled("Vouchers.CostCenter", _txtCc));
-        headerPanel.Children.Add(Labeled("Vouchers.Memo", _txtMemo));
-        Grid.SetRow(headerPanel, 0);
-        body.Children.Add(headerPanel);
+        // Header = one shared column grid (4 pairs), side labels, edges
+        // aligned across rows; the memo spans the last three pairs
+        // (Phenix rule).
+        var headerForm = CreateFormGrid(4);
+        headerForm.Margin = new Thickness(0, 0, 0, 8);
+        AddFormField(headerForm, 0, 0, "Vouchers.VoucherNo", _txtDocNo);
+        AddFormField(headerForm, 0, 1, "Vouchers.Date", _dtDate);
+        AddFormField(headerForm, 0, 2, "Vouchers.Treasury", _txtBox);
+        AddFormField(headerForm, 0, 3, _kind == CshKind.Receipt ? "Vouchers.ReceivedFrom" : "Vouchers.PaidTo", _txtParty);
+        AddFormField(headerForm, 1, 0, "Invoice.Total", _txtAmount);
+        AddFormField(headerForm, 1, 1, "Vouchers.Currency", _txtCur);
+        AddFormField(headerForm, 1, 2, "Vouchers.ExchangeRate", _txtRate);
+        AddFormField(headerForm, 1, 3, "Vouchers.RefNo", _txtRefNo);
+        AddFormField(headerForm, 2, 0, "Vouchers.CostCenter", _txtCc);
+        AddFormField(headerForm, 2, 1, "Vouchers.Memo", _txtMemo, spanPairs: 3);
+        Grid.SetRow(headerForm, 0);
+        body.Children.Add(headerForm);
 
         _grid.AutoGenerateColumns = false;
         _grid.CanUserAddRows = false;
@@ -641,23 +645,12 @@ public sealed class CshWin : BaseWin
             RefreshLocalizedContent(VisualTreeHelper.GetChild(parent, i));
     }
 
-    private static StackPanel Labeled(string key, UIElement control)
-    {
-        var sp = new StackPanel { Margin = new Thickness(0, 0, 8, 3) };
-        sp.Children.Add(new TextBlock { Text = T(key), Tag = key, Margin = new Thickness(0, 0, 0, 1), Opacity = 0.85 });
-        if (control is TextBox textBox)
-            textBox.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
-        sp.Children.Add(control);
-        return sp;
-    }
 
     private static void StyleButton(Button btn, string key)
     {
         btn.Content = T(key);
-        btn.Margin = new Thickness(0, 0, 5, 0);
-        btn.Padding = new Thickness(9, 3, 9, 3);
-        btn.MinWidth = 76;
-        btn.Height = 28;
+        btn.Margin = new Thickness(0, 0, 8, 0);
+        btn.MinWidth = VisuId.ButtonMinWidth;
         btn.Tag = key;
         btn.SetResourceReference(StyleProperty, "VisuButtonStyle");
     }

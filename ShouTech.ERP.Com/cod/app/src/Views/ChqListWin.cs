@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -121,26 +121,19 @@ public sealed class ChqListWin : BaseWin
         root.Children.Add(barBorder);
 
         var content = new DockPanel();
-        var filters = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
-        _statusFilter.Width = 150;
+        var filters = CreateFormGrid(3);
+        filters.Margin = new Thickness(0, 0, 0, 8);
         _statusFilter.ItemsSource = new[] { string.Empty }.Concat(ChequeStatuses.All).ToArray();
         _statusFilter.SelectedIndex = 0;
         _statusFilter.SelectionChanged += async (_, _) => await RefreshAsync();
-        _directionFilter.Width = 120;
         _directionFilter.ItemsSource = new[] { string.Empty, ChequeDirections.In, ChequeDirections.Out };
         _directionFilter.SelectedIndex = 0;
         _directionFilter.SelectionChanged += async (_, _) => await RefreshAsync();
-        _dueSoon.Margin = new Thickness(4, 4, 0, 0);
         _dueSoon.Checked += async (_, _) => await RefreshAsync();
         _dueSoon.Unchecked += async (_, _) => await RefreshAsync();
-        filters.Children.Add(Labeled("Vouchers.Status", _statusFilter));
-        filters.Children.Add(Labeled("Cheques.Direction", _directionFilter));
-        var dueSoonLabel = new TextBlock { Margin = new Thickness(0, 0, 0, 4) };
-        _labels.Add((dueSoonLabel, "Cheques.DueSoon"));
-        var dueSoonPanel = new StackPanel { Margin = new Thickness(0, 0, 10, 8) };
-        dueSoonPanel.Children.Add(dueSoonLabel);
-        dueSoonPanel.Children.Add(_dueSoon);
-        filters.Children.Add(dueSoonPanel);
+        AddFormField(_labels, filters, 0, 0, "Vouchers.Status", _statusFilter);
+        AddFormField(_labels, filters, 0, 1, "Cheques.Direction", _directionFilter);
+        AddFormField(_labels, filters, 0, 2, "Cheques.DueSoon", _dueSoon);
         DockPanel.SetDock(filters, Dock.Top);
         content.Children.Add(filters);
 
@@ -435,23 +428,13 @@ public sealed class ChqListWin : BaseWin
         Setters = { new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Center) }
     };
 
-    private StackPanel Labeled(string key, Control control)
-    {
-        var panel = new StackPanel { Margin = new Thickness(0, 0, 10, 8) };
-        var label = new TextBlock { Margin = new Thickness(0, 0, 0, 4) };
-        label.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
-        _labels.Add((label, key));
-        panel.Children.Add(label);
-        panel.Children.Add(control);
-        return panel;
-    }
 
     private static void StyleButton(Button button, string key)
     {
         button.Tag = key;
-        button.MinWidth = 92;
-        button.MinHeight = 32;
-        button.Margin = new Thickness(6, 0, 0, 0);
-        button.Padding = new Thickness(12, 3, 12, 3);
+        button.MinWidth = VisuId.ButtonMinWidth;
+        button.MinHeight = VisuId.ControlHeight;
+        button.Margin = new Thickness(8, 0, 0, 0);
+        button.Padding = new Thickness(14, 0, 14, 0);
     }
 }

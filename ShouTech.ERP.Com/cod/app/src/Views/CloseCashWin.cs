@@ -76,12 +76,13 @@ public sealed class CloseCashWin : BaseWin
         root.Children.Add(F2Ui.BottomBar(_saveButton, _refreshButton, _closeButton));
 
         var content = new DockPanel();
-        var form = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
-        form.Children.Add(F2Ui.Labeled(_labels, "CloseCash.Terminal", _terminal, 160));
-        form.Children.Add(F2Ui.Labeled(_labels, "CloseCash.BusinessDate", _date, 150));
-        form.Children.Add(F2Ui.Labeled(_labels, "CloseCash.Opening", _opening, 130));
-        form.Children.Add(F2Ui.Labeled(_labels, "CloseCash.Counted", _counted, 130));
-        form.Children.Add(F2Ui.Labeled(_labels, "CloseCash.Notes", _notes, 240));
+        var form = F2Ui.CreateFormGrid(4);
+        form.Margin = new Thickness(0, 0, 0, 4);
+        F2Ui.AddField(_labels, form, 0, 0, "CloseCash.Terminal", _terminal);
+        F2Ui.AddField(_labels, form, 0, 1, "CloseCash.BusinessDate", _date);
+        F2Ui.AddField(_labels, form, 0, 2, "CloseCash.Opening", _opening);
+        F2Ui.AddField(_labels, form, 0, 3, "CloseCash.Counted", _counted);
+        F2Ui.AddField(_labels, form, 1, 0, "CloseCash.Notes", _notes, spanPairs: 2);
         DockPanel.SetDock(form, Dock.Top);
         content.Children.Add(form);
 

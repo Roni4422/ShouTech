@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -119,7 +119,7 @@ public sealed class ProjWin : BaseWin
         var barBorder = new Border
         {
             Child = bar,
-            Padding = new Thickness(4),
+            Padding = new Thickness(0, 8, 0, 0),
             Margin = new Thickness(0, 8, 0, 0),
             BorderThickness = new Thickness(0, 1, 0, 0)
         };
@@ -154,22 +154,18 @@ public sealed class ProjWin : BaseWin
         Grid.SetColumn(listPanel, 0);
         content.Children.Add(listPanel);
 
-        var editor = new StackPanel();
-        var row1 = new WrapPanel();
-        row1.Children.Add(Labeled("Projects.Code", _code, 140));
-        row1.Children.Add(Labeled("Projects.Status", _status, 150));
-        editor.Children.Add(row1);
-        editor.Children.Add(Labeled("Projects.Name", _name, 300));
-        var row2 = new WrapPanel();
-        row2.Children.Add(Labeled("Projects.CustomerId", _customerId, 110));
-        row2.Children.Add(Labeled("Projects.Customer", _customerName, 180));
-        editor.Children.Add(row2);
-        var row3 = new WrapPanel();
-        row3.Children.Add(Labeled("Projects.StartDate", _start, 140));
-        row3.Children.Add(Labeled("Projects.EndDate", _end, 140));
-        editor.Children.Add(row3);
-        editor.Children.Add(Labeled("Projects.Budget", _budget, 140));
-        editor.Children.Add(Labeled("Projects.Notes", _notes, 300));
+        // Editor = a one-pair form grid: side labels, fields stretch to
+        // the panel width, edges aligned down the whole editor (Phenix rule).
+        var editor = CreateFormGrid(1);
+        AddFormField(_labels, editor, 0, 0, "Projects.Code", _code);
+        AddFormField(_labels, editor, 1, 0, "Projects.Status", _status);
+        AddFormField(_labels, editor, 2, 0, "Projects.Name", _name);
+        AddFormField(_labels, editor, 3, 0, "Projects.CustomerId", _customerId);
+        AddFormField(_labels, editor, 4, 0, "Projects.Customer", _customerName);
+        AddFormField(_labels, editor, 5, 0, "Projects.StartDate", _start);
+        AddFormField(_labels, editor, 6, 0, "Projects.EndDate", _end);
+        AddFormField(_labels, editor, 7, 0, "Projects.Budget", _budget);
+        AddFormField(_labels, editor, 8, 0, "Projects.Notes", _notes);
         _status.ItemsSource = ProjectStatuses.All;
         _status.SelectedItem = ProjectStatuses.Planned;
         var editorScroll = new ScrollViewer { Content = editor, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
@@ -196,16 +192,14 @@ public sealed class ProjWin : BaseWin
         taskGridHost.Children.Add(_taskGrid);
         Grid.SetColumn(taskGridHost, 0);
         taskPanel.Children.Add(taskGridHost);
-        var taskEditor = new StackPanel();
-        taskEditor.Children.Add(Labeled("Projects.TaskName", _taskName, 300));
-        var taskRow = new WrapPanel();
-        taskRow.Children.Add(Labeled("Projects.Status", _taskStatus, 140));
-        taskRow.Children.Add(Labeled("Projects.DueDate", _taskDue, 140));
-        taskEditor.Children.Add(taskRow);
-        taskEditor.Children.Add(Labeled("Projects.AssignedTo", _taskAssigned, 200));
+        var taskEditor = CreateFormGrid(1);
+        AddFormField(_labels, taskEditor, 0, 0, "Projects.TaskName", _taskName);
+        AddFormField(_labels, taskEditor, 1, 0, "Projects.Status", _taskStatus);
+        AddFormField(_labels, taskEditor, 2, 0, "Projects.DueDate", _taskDue);
+        AddFormField(_labels, taskEditor, 3, 0, "Projects.AssignedTo", _taskAssigned);
         // Task notes — project_tasks.notes + repo support existed, but the
         // window never collected it (tasks always saved with null notes).
-        taskEditor.Children.Add(Labeled("Projects.Notes", _taskNotes, 300));
+        AddFormField(_labels, taskEditor, 4, 0, "Projects.Notes", _taskNotes);
         _taskStatus.ItemsSource = ProjectTaskStatuses.All;
         _taskStatus.SelectedItem = ProjectTaskStatuses.ToDo;
         Grid.SetColumn(taskEditor, 1);
@@ -492,26 +486,14 @@ public sealed class ProjWin : BaseWin
         Setters = { new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Center) }
     };
 
-    private StackPanel Labeled(string key, Control control, double width = 0)
-    {
-        var panel = new StackPanel { Margin = new Thickness(0, 0, 10, 8) };
-        if (width > 0)
-            panel.Width = width;
-        var label = new TextBlock { Margin = new Thickness(0, 0, 0, 4) };
-        label.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
-        _labels.Add((label, key));
-        panel.Children.Add(label);
-        panel.Children.Add(control);
-        return panel;
-    }
 
     private static void StyleButton(Button button, string key)
     {
         button.Tag = key;
-        button.MinWidth = 92;
-        button.MinHeight = 32;
-        button.Margin = new Thickness(6, 0, 0, 0);
-        button.Padding = new Thickness(12, 3, 12, 3);
+        button.MinWidth = VisuId.ButtonMinWidth;
+        button.MinHeight = VisuId.ControlHeight;
+        button.Margin = new Thickness(8, 0, 0, 0);
+        button.Padding = new Thickness(14, 0, 14, 0);
     }
 
     private static DateOnly? ToDateOnly(DateTime? value)

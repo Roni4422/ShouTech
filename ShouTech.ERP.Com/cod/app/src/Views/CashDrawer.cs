@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -10,10 +10,10 @@ namespace ShouTech.App.Views;
 /// <summary>Choose the Windows receipt printer connected to the POS cash drawer.</summary>
 public sealed class CashDrawerOptionsWin : BaseWin
 {
-    private readonly ComboBox _printers = new() { MinWidth = 380, Height = 34, Margin = new Thickness(0, 8, 0, 14) };
+    private readonly ComboBox _printers = new() { Margin = new Thickness(0, 8, 0, 14) };
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0) };
-    private readonly Button _save = new() { Content = "Save", MinWidth = 100, Height = 36, Margin = new Thickness(0, 0, 8, 0) };
-    private readonly Button _test = new() { Content = "Test / Open drawer", MinWidth = 150, Height = 36, Margin = new Thickness(0, 0, 8, 0) };
+    private readonly Button _save = new() { Content = "Save", MinWidth = ShouTech.App.Services.VisuId.PrimaryButtonMinWidth, Margin = new Thickness(0, 0, 8, 0) };
+    private readonly Button _test = new() { Content = "Test / Open drawer", MinWidth = ShouTech.App.Services.VisuId.ButtonMinWidth, Margin = new Thickness(0, 0, 8, 0) };
 
     public CashDrawerOptionsWin()
     {
@@ -27,7 +27,7 @@ public sealed class CashDrawerOptionsWin : BaseWin
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         _test.Click += (_, _) => { var ok = CashDrawerService.TryOpenDrawer(out var message); _status.Text = message; _status.Foreground = ShouTech.App.Services.VisuId.ResolveBrushResource(ok ? "SuccessBrush" : "ErrorBrush", ok ? "#198754" : "#C0392B"); };
         _save.Click += (_, _) => { CashDrawerService.SavePrinter(_printers.SelectedItem as string); _status.Text = "Cash drawer printer setting saved."; _status.Foreground = ShouTech.App.Services.VisuId.ResolveBrushResource("SuccessBrush", "#198754"); };
-        var close = new Button { Content = "Close", MinWidth = 80, Height = 36 };
+        var close = new Button { Content = "Close", MinWidth = ShouTech.App.Services.VisuId.ButtonMinWidth };
         close.Click += (_, _) => Close();
         buttons.Children.Add(_test); buttons.Children.Add(_save); buttons.Children.Add(close);
         root.Children.Add(buttons); root.Children.Add(_status);

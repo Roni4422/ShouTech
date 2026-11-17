@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -32,13 +32,13 @@ public sealed class JrnWin : BaseWin
     private static readonly ConcurrentDictionary<string, CompositeFormat> CompositeFormats =
         new(StringComparer.Ordinal);
 
-    private readonly TextBox _txtDocNo = new() { Width = 110, Height = 26 };
-    private readonly DatePicker _dtDate = new() { Width = 120, Height = 26, SelectedDate = DateTime.Today };
-    private readonly TextBox _txtRefNo = new() { Width = 110, Height = 26 };
-    private readonly TextBox _txtCur = new() { Width = 70, Height = 26, Text = UsrPref.Load().CurrencyCode };
-    private readonly TextBox _txtRate = new() { Width = 70, Height = 26, Text = "1.00" };
-    private readonly TextBox _txtCc = new() { Width = 110, Height = 26 };
-    private readonly TextBox _txtMemo = new() { Width = 400, Height = 26 };
+    private readonly TextBox _txtDocNo = new();
+    private readonly DatePicker _dtDate = new() { SelectedDate = DateTime.Today };
+    private readonly TextBox _txtRefNo = new();
+    private readonly TextBox _txtCur = new() { Text = UsrPref.Load().CurrencyCode };
+    private readonly TextBox _txtRate = new() { Text = "1.00" };
+    private readonly TextBox _txtCc = new();
+    private readonly TextBox _txtMemo = new();
 
     private readonly Button _btnNew = new();
     private readonly Button _btnLoad = new();
@@ -149,8 +149,8 @@ public sealed class JrnWin : BaseWin
 
         var footerContent = new DockPanel();
         var leftSummary = new StackPanel { Orientation = Orientation.Horizontal };
+        _lblTotCr.Margin = new Thickness(24, 0, 0, 0);
         leftSummary.Children.Add(_lblTotDr);
-        leftSummary.Children.Add(new TextBlock { Width = 20 });
         leftSummary.Children.Add(_lblTotCr);
         DockPanel.SetDock(leftSummary, Dock.Left);
         footerContent.Children.Add(leftSummary);
@@ -173,17 +173,21 @@ public sealed class JrnWin : BaseWin
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        var headerPanel = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
-        headerPanel.Children.Add(Labeled("Vouchers.VoucherNo", _txtDocNo));
-        headerPanel.Children.Add(Labeled("Vouchers.Date", _dtDate));
-        headerPanel.Children.Add(Labeled("Vouchers.RefNo", _txtRefNo));
-        headerPanel.Children.Add(Labeled("Vouchers.Currency", _txtCur));
-        headerPanel.Children.Add(Labeled("Vouchers.ExchangeRate", _txtRate));
-        headerPanel.Children.Add(Labeled("Vouchers.CostCenter", _txtCc));
-        headerPanel.Children.Add(Labeled("Vouchers.Memo", _txtMemo));
+        // Header = one shared column grid (4 pairs), side labels, edges
+        // aligned across both rows; the memo spans the last two pairs
+        // (Phenix rule).
+        var headerForm = CreateFormGrid(4);
+        headerForm.Margin = new Thickness(0, 0, 0, 8);
+        AddFormField(headerForm, 0, 0, "Vouchers.VoucherNo", _txtDocNo);
+        AddFormField(headerForm, 0, 1, "Vouchers.Date", _dtDate);
+        AddFormField(headerForm, 0, 2, "Vouchers.RefNo", _txtRefNo);
+        AddFormField(headerForm, 0, 3, "Vouchers.Currency", _txtCur);
+        AddFormField(headerForm, 1, 0, "Vouchers.ExchangeRate", _txtRate);
+        AddFormField(headerForm, 1, 1, "Vouchers.CostCenter", _txtCc);
+        AddFormField(headerForm, 1, 2, "Vouchers.Memo", _txtMemo, spanPairs: 2);
 
-        Grid.SetRow(headerPanel, 0);
-        body.Children.Add(headerPanel);
+        Grid.SetRow(headerForm, 0);
+        body.Children.Add(headerForm);
 
         // Setup DataGrid
         _grid.AutoGenerateColumns = false;
@@ -661,23 +665,12 @@ public sealed class JrnWin : BaseWin
             RefreshLocalizedContent(VisualTreeHelper.GetChild(parent, i));
     }
 
-    private static StackPanel Labeled(string key, UIElement control)
-    {
-        var sp = new StackPanel { Margin = new Thickness(0, 0, 8, 3) };
-        sp.Children.Add(new TextBlock { Text = T(key), Tag = key, Margin = new Thickness(0, 0, 0, 1), Opacity = 0.85 });
-        if (control is TextBox textBox)
-            textBox.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
-        sp.Children.Add(control);
-        return sp;
-    }
 
     private static void StyleButton(Button btn, string key)
     {
         btn.Content = T(key);
-        btn.Margin = new Thickness(0, 0, 5, 0);
-        btn.Padding = new Thickness(9, 3, 9, 3);
-        btn.MinWidth = 76;
-        btn.Height = 28;
+        btn.Margin = new Thickness(0, 0, 8, 0);
+        btn.MinWidth = VisuId.ButtonMinWidth;
         btn.Tag = key;
         btn.SetResourceReference(StyleProperty, "VisuButtonStyle");
     }

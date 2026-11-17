@@ -91,13 +91,13 @@ public sealed class BankRecWin : BaseWin
         root.Children.Add(totalsBorder);
 
         var content = new DockPanel();
-        var selector = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+        var selector = F2Ui.CreateFormGrid(3);
+        selector.Margin = new Thickness(0, 0, 0, 8);
         _account.IsEditable = true;
-        _account.Width = 300;
         _account.SelectionChanged += async (_, _) => await RefreshAsync();
-        selector.Children.Add(F2Ui.Labeled(_labels, "BankRec.Account", _account, 310));
-        selector.Children.Add(F2Ui.Labeled(_labels, "BankRec.StatementDate", _statementDate, 150));
-        selector.Children.Add(F2Ui.Labeled(_labels, "BankRec.StatementRef", _statementRef, 200));
+        F2Ui.AddField(_labels, selector, 0, 0, "BankRec.Account", _account);
+        F2Ui.AddField(_labels, selector, 0, 1, "BankRec.StatementDate", _statementDate);
+        F2Ui.AddField(_labels, selector, 0, 2, "BankRec.StatementRef", _statementRef);
         DockPanel.SetDock(selector, Dock.Top);
         content.Children.Add(selector);
 

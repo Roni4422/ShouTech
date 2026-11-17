@@ -68,13 +68,17 @@ public sealed class ChangePasswordWin : BaseWin
         _closeButton.Click += (_, _) => Close();
         root.Children.Add(F2Ui.BottomBar(_changeButton, _closeButton));
 
-        var form = new StackPanel();
+        // One-pair form grid: side labels, fields stretch, edges aligned
+        // down the form (Phenix rule).
+        var form = F2Ui.CreateFormGrid(1);
         _userInfo.FontWeight = FontWeights.SemiBold;
         _userInfo.Margin = new Thickness(0, 0, 0, 12);
+        Grid.SetRow(_userInfo, 0);
+        Grid.SetColumnSpan(_userInfo, 2);
         form.Children.Add(_userInfo);
-        form.Children.Add(F2Ui.Labeled(_labels, "ChangePassword.Current", _current, 320));
-        form.Children.Add(F2Ui.Labeled(_labels, "ChangePassword.New", _new, 320));
-        form.Children.Add(F2Ui.Labeled(_labels, "ChangePassword.Confirm", _confirm, 320));
+        F2Ui.AddField(_labels, form, 1, 0, "ChangePassword.Current", _current);
+        F2Ui.AddField(_labels, form, 2, 0, "ChangePassword.New", _new);
+        F2Ui.AddField(_labels, form, 3, 0, "ChangePassword.Confirm", _confirm);
         root.Children.Add(form);
 
         Content = root;

@@ -1,4 +1,4 @@
-<views:BaseWin x:Class="ShouTech.App.Views.MatGroupWin"
+﻿<views:BaseWin x:Class="ShouTech.App.Views.MatGroupWin"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:ShouTech.App.Views"
@@ -36,20 +36,20 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <TextBlock x:Name="LblGroup" VerticalAlignment="Center" Margin="0,0,8,0"/>
-            <ComboBox x:Name="CmbGroup" Grid.Column="1" Height="32"
+            <ComboBox x:Name="CmbGroup" Grid.Column="1"
                       DisplayMemberPath="DisplayName"
                       SelectionChanged="CmbGroup_SelectionChanged"
                       Style="{DynamicResource VisuComboBoxStyle}"/>
             <TextBlock x:Name="LblSearch" Grid.Column="2" VerticalAlignment="Center"
                        Margin="16,0,8,0"/>
-            <TextBox x:Name="TxtSearch" Grid.Column="3" Height="32"
+            <TextBox x:Name="TxtSearch" Grid.Column="3"
                      VerticalContentAlignment="Center"
                      TextChanged="TxtSearch_TextChanged"
                      Style="{DynamicResource VisuTextBoxStyle}"/>
-            <Button x:Name="BtnSelectVisible" Grid.Column="4" MinWidth="112"
+            <Button x:Name="BtnSelectVisible" Grid.Column="4" MinWidth="{StaticResource ButtonMinWidth}"
                     Margin="8,0,0,0" Click="BtnSelectVisible_Click"
                     Style="{DynamicResource VisuButtonStyle}"/>
-            <Button x:Name="BtnClearVisible" Grid.Column="5" MinWidth="112"
+            <Button x:Name="BtnClearVisible" Grid.Column="5" MinWidth="{StaticResource ButtonMinWidth}"
                     Margin="8,0,0,0" Click="BtnClearVisible_Click"
                     Style="{DynamicResource VisuButtonStyle}"/>
         </Grid>
@@ -97,16 +97,16 @@
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal"
                         VerticalAlignment="Center">
-                <Button x:Name="BtnManageGroups" MinWidth="150" Margin="4"
+                <Button x:Name="BtnManageGroups" MinWidth="{StaticResource ButtonMinWidth}" Margin="4"
                         Click="BtnManageGroups_Click"
                         Style="{DynamicResource VisuButtonStyle}"/>
-                <Button x:Name="BtnRefresh" MinWidth="92" Margin="4"
+                <Button x:Name="BtnRefresh" MinWidth="{StaticResource ButtonMinWidth}" Margin="4"
                         Click="BtnRefresh_Click"
                         Style="{DynamicResource VisuButtonStyle}"/>
-                <Button x:Name="BtnSave" MinWidth="112" Margin="4"
+                <Button x:Name="BtnSave" MinWidth="{StaticResource ButtonMinWidth}" Margin="4"
                         Click="BtnSave_Click"
                         Style="{DynamicResource VisuAccentButtonStyle}"/>
-                <Button x:Name="BtnClose" MinWidth="92" Margin="4"
+                <Button x:Name="BtnClose" MinWidth="{StaticResource ButtonMinWidth}" Margin="4"
                         Click="BtnClose_Click"
                         Style="{DynamicResource VisuButtonStyle}"/>
             </StackPanel>

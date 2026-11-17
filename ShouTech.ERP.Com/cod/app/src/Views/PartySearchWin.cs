@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Windows;
@@ -18,8 +18,8 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class PartySearchWin : BaseWin
 {
-    private readonly TextBox _txtQuery = new() { Width = 320, Height = 26 };
-    private readonly ComboBox _cbKind = new() { Width = 150, Height = 26 };
+    private readonly TextBox _txtQuery = new();
+    private readonly ComboBox _cbKind = new();
     private readonly DataGrid _grid = new();
     private readonly TextBlock _statusBar = new();
     private readonly Button _searchButton = new();
@@ -92,13 +92,17 @@ public sealed class PartySearchWin : BaseWin
         DockPanel.SetDock(barBorder, Dock.Bottom);
         root.Children.Add(barBorder);
 
-        var searchPanel = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
-        searchPanel.Children.Add(Labeled("MasterCards.Search", _txtQuery));
-        searchPanel.Children.Add(Labeled("MasterCards.Kind", _cbKind));
+        var searchForm = CreateFormGrid(2);
+        AddFormField(searchForm, 0, 0, "MasterCards.Search", _txtQuery);
+        AddFormField(searchForm, 0, 1, "MasterCards.Kind", _cbKind);
         StyleButton(_searchButton, "MasterCards.Search");
-        _searchButton.Margin = new Thickness(0, 18, 0, 0);
+        _searchButton.Margin = new Thickness(8, 0, 0, 0);
+        _searchButton.VerticalAlignment = VerticalAlignment.Top;
         _searchButton.Click += async (_, _) => await SearchAsync();
+        var searchPanel = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+        DockPanel.SetDock(_searchButton, Dock.Right);
         searchPanel.Children.Add(_searchButton);
+        searchPanel.Children.Add(searchForm);
         _txtQuery.KeyDown += async (_, args) =>
         {
             if (args.Key == System.Windows.Input.Key.Enter)
@@ -212,25 +216,14 @@ public sealed class PartySearchWin : BaseWin
         Setters = { new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Center) }
     };
 
-    private static StackPanel Labeled(string key, UIElement control)
-    {
-        var sp = new StackPanel { Margin = new Thickness(0, 0, 10, 6) };
-        sp.Children.Add(new TextBlock { Text = T(key), Tag = key, Margin = new Thickness(0, 0, 0, 2), Opacity = 0.85 });
-        if (control is TextBox textBox)
-            textBox.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
-        if (control is ComboBox comboBox)
-            comboBox.SetResourceReference(StyleProperty, "VisuComboBoxStyle");
-        sp.Children.Add(control);
-        return sp;
-    }
 
     private static void StyleButton(Button button, string key)
     {
         button.Tag = key;
         button.Content = T(key);
-        button.MinWidth = 92;
-        button.MinHeight = 32;
-        button.Margin = new Thickness(6, 0, 0, 0);
-        button.Padding = new Thickness(12, 3, 12, 3);
+        button.MinWidth = VisuId.ButtonMinWidth;
+        button.MinHeight = VisuId.ControlHeight;
+        button.Margin = new Thickness(8, 0, 0, 0);
+        button.Padding = new Thickness(14, 0, 14, 0);
     }
 }

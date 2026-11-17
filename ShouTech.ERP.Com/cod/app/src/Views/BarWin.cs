@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -16,14 +16,14 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class BarWin : BaseWin
 {
-    private readonly TextBox _txtItemCode = new() { Width = 130, Height = 26 };
-    private readonly TextBox _txtItemName = new() { Width = 230, Height = 26 };
-    private readonly TextBox _txtBarcode = new() { Width = 180, Height = 26 };
-    private readonly TextBox _txtPrice = new() { Width = 100, Height = 26, Text = "0.00" };
-    private readonly ComboBox _cbType = new() { Width = 120, Height = 26 };
+    private readonly TextBox _txtItemCode = new();
+    private readonly TextBox _txtItemName = new();
+    private readonly TextBox _txtBarcode = new();
+    private readonly TextBox _txtPrice = new() { Text = "0.00" };
+    private readonly ComboBox _cbType = new();
     private readonly CheckBox _chkIncludePrice = new() { IsChecked = true, Margin = new Thickness(0, 4, 10, 4) };
     private readonly CheckBox _chkIncludeName = new() { IsChecked = true, Margin = new Thickness(0, 4, 10, 4) };
-    private readonly TextBox _txtCopies = new() { Width = 70, Height = 26, Text = "1" };
+    private readonly TextBox _txtCopies = new() { Text = "1" };
 
     private readonly Button _btnGen = new();
     private readonly Button _btnPrint = new();
@@ -100,28 +100,18 @@ public sealed class BarWin : BaseWin
         splitGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
         splitGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        var formPanel = new StackPanel { Margin = new Thickness(2) };
-
-        var r1 = new WrapPanel();
-        r1.Children.Add(Labeled("Invoice.Col.Code", _txtItemCode));
-        r1.Children.Add(Labeled("BarcodeTool.Type", _cbType));
-        formPanel.Children.Add(r1);
-
-        formPanel.Children.Add(Labeled("Invoice.Col.Description", _txtItemName));
-
-        var r2 = new WrapPanel();
-        r2.Children.Add(Labeled("BarcodeTool.Value", _txtBarcode));
-        r2.Children.Add(Labeled("Invoice.Col.SalePrice", _txtPrice));
-        formPanel.Children.Add(r2);
-
-        var r3 = new StackPanel { Margin = new Thickness(0, 6, 0, 6) };
-        r3.Children.Add(_chkIncludeName);
-        r3.Children.Add(_chkIncludePrice);
-        formPanel.Children.Add(r3);
-
-        var r4 = new WrapPanel();
-        r4.Children.Add(Labeled("BarcodeTool.Copies", _txtCopies));
-        formPanel.Children.Add(r4);
+        // Left panel = a one-pair form grid: side labels, fields stretch to
+        // the panel width, edges aligned down the whole panel (Phenix rule).
+        var formPanel = CreateFormGrid(1);
+        formPanel.Margin = new Thickness(2);
+        AddFormField(formPanel, 0, 0, "Invoice.Col.Code", _txtItemCode);
+        AddFormField(formPanel, 1, 0, "BarcodeTool.Type", _cbType);
+        AddFormField(formPanel, 2, 0, "Invoice.Col.Description", _txtItemName);
+        AddFormField(formPanel, 3, 0, "BarcodeTool.Value", _txtBarcode);
+        AddFormField(formPanel, 4, 0, "Invoice.Col.SalePrice", _txtPrice);
+        AddFormElement(formPanel, 5, 0, _chkIncludeName);
+        AddFormElement(formPanel, 6, 0, _chkIncludePrice);
+        AddFormField(formPanel, 7, 0, "BarcodeTool.Copies", _txtCopies);
 
         _txtItemName.TextChanged += (_, _) => UpdatePreview();
         _txtBarcode.TextChanged += (_, _) => UpdatePreview();
@@ -402,25 +392,12 @@ public sealed class BarWin : BaseWin
             RefreshLocalizedContent(VisualTreeHelper.GetChild(parent, i));
     }
 
-    private static StackPanel Labeled(string key, UIElement control)
-    {
-        var sp = new StackPanel { Margin = new Thickness(0, 0, 10, 6) };
-        sp.Children.Add(new TextBlock { Text = T(key), Tag = key, Margin = new Thickness(0, 0, 0, 2), Opacity = 0.85 });
-        if (control is TextBox textBox)
-            textBox.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
-        else if (control is ComboBox comboBox)
-            comboBox.SetResourceReference(StyleProperty, "VisuComboBoxStyle");
-        sp.Children.Add(control);
-        return sp;
-    }
 
     private static void StyleButton(Button btn, string key)
     {
         btn.Content = T(key);
-        btn.Margin = new Thickness(0, 0, 5, 0);
-        btn.Padding = new Thickness(9, 3, 9, 3);
-        btn.MinWidth = 76;
-        btn.Height = 28;
+        btn.Margin = new Thickness(0, 0, 8, 0);
+        btn.MinWidth = VisuId.ButtonMinWidth;
         btn.Tag = key;
         btn.SetResourceReference(StyleProperty, "VisuButtonStyle");
     }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Windows;
@@ -19,7 +19,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class PartyManagerWin : BaseWin
 {
-    private readonly ComboBox _cbKind = new() { Width = 160, Height = 26 };
+    private readonly ComboBox _cbKind = new();
     private readonly DataGrid _grid = new();
     private readonly TextBlock _statusBar = new();
     private readonly Button _newButton = new();
@@ -101,8 +101,9 @@ public sealed class PartyManagerWin : BaseWin
         DockPanel.SetDock(barBorder, Dock.Bottom);
         root.Children.Add(barBorder);
 
-        var filterPanel = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
-        filterPanel.Children.Add(Labeled("MasterCards.Kind", _cbKind));
+        var filterPanel = CreateFormGrid(1);
+        filterPanel.Margin = new Thickness(0, 0, 0, 8);
+        AddFormField(filterPanel, 0, 0, "MasterCards.Kind", _cbKind);
         _cbKind.SelectionChanged += async (_, _) => await RefreshAsync();
         DockPanel.SetDock(filterPanel, Dock.Top);
         root.Children.Add(filterPanel);
@@ -267,23 +268,14 @@ public sealed class PartyManagerWin : BaseWin
         Setters = { new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Center) }
     };
 
-    private static StackPanel Labeled(string key, UIElement control)
-    {
-        var sp = new StackPanel { Margin = new Thickness(0, 0, 10, 6) };
-        sp.Children.Add(new TextBlock { Text = T(key), Tag = key, Margin = new Thickness(0, 0, 0, 2), Opacity = 0.85 });
-        if (control is ComboBox comboBox)
-            comboBox.SetResourceReference(StyleProperty, "VisuComboBoxStyle");
-        sp.Children.Add(control);
-        return sp;
-    }
 
     private static void StyleButton(Button button, string key)
     {
         button.Tag = key;
-        button.MinWidth = 92;
-        button.MinHeight = 32;
-        button.Margin = new Thickness(6, 0, 0, 0);
-        button.Padding = new Thickness(12, 3, 12, 3);
+        button.MinWidth = VisuId.ButtonMinWidth;
+        button.MinHeight = VisuId.ControlHeight;
+        button.Margin = new Thickness(8, 0, 0, 0);
+        button.Padding = new Thickness(14, 0, 14, 0);
     }
 
     /// <summary>One party row with its live ledger balance.</summary>

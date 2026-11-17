@@ -112,26 +112,26 @@
 
                         <Button x:Name="btnMgmtOpen"
                                 Content="Open"
-                                Height="32"
+                               
                                 Margin="0,0,0,6"
-                                Padding="8,3"
+                               
                                 HorizontalAlignment="Stretch"
                                 Click="BtnMgmtOpen_Click"
                                 Style="{DynamicResource PrimaryButtonStyle}"/>
 
                         <Button x:Name="btnMgmtEdit"
                                 Content="Edit"
-                                Height="32"
+                               
                                 Margin="0,0,0,6"
-                                Padding="8,3"
+                               
                                 HorizontalAlignment="Stretch"
                                 Click="BtnMgmtEdit_Click"
                                 Style="{DynamicResource SecondaryButtonStyle}"/>
 
                         <Button x:Name="btnMgmtDelete"
-                                Height="32"
+                               
                                 Margin="0,0,0,6"
-                                Padding="8,3"
+                               
                                 HorizontalAlignment="Stretch"
                                 Click="BtnMgmtDeleteMenu_Click"
                                 Style="{DynamicResource SecondaryButtonStyle}"
@@ -170,9 +170,9 @@
 
                         <Button x:Name="btnMgmtReindex"
                                 Content="Content"
-                                Height="32"
+                               
                                 Margin="0,0,0,6"
-                                Padding="8,3"
+                               
                                 HorizontalAlignment="Stretch"
                                 Click="BtnMgmtReindex_Click"
                                 Style="{DynamicResource SecondaryButtonStyle}"/>
@@ -182,9 +182,9 @@
                     <Button x:Name="btnMgmtClose"
                             Content="Close"
                             DockPanel.Dock="Bottom"
-                            Height="32"
+                           
                             Margin="0,14,0,0"
-                            Padding="8,3"
+                           
                             HorizontalAlignment="Stretch"
                             VerticalAlignment="Bottom"
                             Click="BtnMgmtClose_Click"
@@ -262,9 +262,9 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="145"/>
+                                <ColumnDefinition Width="{StaticResource FormLabelColumnWidth}"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="145"/>
+                                <ColumnDefinition Width="{StaticResource FormLabelColumnWidth}"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
 
@@ -533,7 +533,7 @@
                                      Grid.Row="10"
                                      Grid.Column="1"
                                      Grid.ColumnSpan="3"
-                                     MinHeight="48"
+                                     MinHeight="{StaticResource MultilineFieldHeight}"
                                      AcceptsReturn="True"
                                      TextWrapping="Wrap"
                                      VerticalScrollBarVisibility="Auto"
@@ -668,15 +668,15 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="100"/>
-                        <ColumnDefinition Width="10"/>
-                        <ColumnDefinition Width="100"/>
+                        <ColumnDefinition Width="{StaticResource PrimaryButtonMinWidth}"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="{StaticResource PrimaryButtonMinWidth}"/>
                     </Grid.ColumnDefinitions>
 
                     <Button x:Name="btnSetupWizard"
                             Grid.Column="0"
                             Content="Content"
-                            Height="36"
+                           
                             Padding="10,0"
                             FontWeight="SemiBold"
                             Click="BtnSetupWizard_Click"
@@ -686,7 +686,7 @@
                             Grid.Column="2"
                             Content="OK"
                             loc:LocProps.Key="CompanySelection.Ok"
-                            Height="36"
+                           
                             FontWeight="SemiBold"
                             Click="BtnContinue_Click"
                             IsDefault="True"
@@ -696,7 +696,7 @@
                             Grid.Column="4"
                             Content="Cancel"
                             loc:LocProps.Key="Buttons.Cancel"
-                            Height="36"
+                           
                             Click="BtnCancel_Click"
                             IsCancel="True"
                             Style="{DynamicResource SecondaryButtonStyle}"/>
@@ -712,14 +712,14 @@
                         <Button x:Name="btnEditSave"
                                 Content="Save"
                                 Width="100"
-                                Height="36"
+                               
                                 Margin="0,0,8,0"
                                 Click="BtnEditSave_Click"
                                 Style="{DynamicResource PrimaryButtonStyle}"/>
                         <Button x:Name="btnEditCancel"
                                 Content="Cancel"
                                 Width="100"
-                                Height="36"
+                               
                                 Click="BtnEditCancel_Click"
                                 Style="{DynamicResource SecondaryButtonStyle}"/>
                     </StackPanel>

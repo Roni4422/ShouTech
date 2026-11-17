@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using ShouTech.App.Interaction;
+using ShouTech.App.Services;
 
 namespace ShouTech.App.Views;
 
@@ -61,28 +62,96 @@ internal static class F2Ui
         return column;
     }
 
-    public static StackPanel Labeled(
-        List<(TextBlock Label, string Key)> labels,
-        string key, Control control, double width = 0)
+    // ================================================================
+    // FORM PROPORTIONS — the Phenix layout rule (docs/WINDOW_PROPORTIONS.md),
+    // shared with BaseWin.CreateFormGrid/AddFormField: one shared column
+    // grid per form, labels BESIDE their fields in the FormLabelWidth
+    // label column, star field columns, spans keep every field edge on
+    // the shared grid. Labels register in the window's label list so
+    // ApplyTexts localizes them exactly as before.
+    // ================================================================
+
+    /// <summary>Creates the one shared column grid of a form (label + field pairs).</summary>
+    public static Grid CreateFormGrid(int pairs)
     {
-        var panel = new StackPanel { Margin = new Thickness(0, 0, 10, 8) };
-        if (width > 0)
-            panel.Width = width;
-        var label = new TextBlock { Margin = new Thickness(0, 0, 0, 4) };
+        var grid = new Grid();
+        for (var i = 0; i < pairs; i++)
+        {
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(VisuId.FormLabelWidth) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        }
+        return grid;
+    }
+
+    /// <summary>Places a registered side label and its field into the form grid.</summary>
+    public static void AddField(
+        List<(TextBlock Label, string Key)> labels,
+        Grid grid, int row, int pair, string key, Control control, int spanPairs = 1)
+    {
+        while (grid.RowDefinitions.Count <= row)
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var label = new TextBlock
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 8, 8)
+        };
         label.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
         labels.Add((label, key));
-        panel.Children.Add(label);
-        panel.Children.Add(control);
-        return panel;
+        Grid.SetRow(label, row);
+        Grid.SetColumn(label, pair * 2);
+        grid.Children.Add(label);
+        PlaceControl(grid, row, pair, control, spanPairs);
+    }
+
+    /// <summary>Places a self-captioned control (CheckBox) into a field cell.</summary>
+    public static void AddElement(Grid grid, int row, int pair, Control control, int spanPairs = 1)
+    {
+        while (grid.RowDefinitions.Count <= row)
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        PlaceControl(grid, row, pair, control, spanPairs);
+    }
+
+    private static void PlaceControl(Grid grid, int row, int pair, Control control, int spanPairs)
+    {
+        ApplyFieldStyle(control);
+        control.Margin = new Thickness(0, 0, 12, 8);
+        if (control is CheckBox or RadioButton)
+            control.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetRow(control, row);
+        Grid.SetColumn(control, pair * 2 + 1);
+        if (spanPairs > 1)
+            Grid.SetColumnSpan(control, spanPairs * 2 - 1);
+        grid.Children.Add(control);
+    }
+
+    /// <summary>Applies the central input style for the control type (height 32).</summary>
+    public static void ApplyFieldStyle(Control control)
+    {
+        switch (control)
+        {
+            case TextBox textBox:
+                textBox.SetResourceReference(FrameworkElement.StyleProperty, "VisuTextBoxStyle");
+                break;
+            case ComboBox comboBox:
+                comboBox.SetResourceReference(FrameworkElement.StyleProperty, "VisuComboBoxStyle");
+                break;
+            case DatePicker datePicker:
+                datePicker.SetResourceReference(FrameworkElement.StyleProperty, "Win11DatePickerStyle");
+                break;
+            case PasswordBox passwordBox:
+                passwordBox.SetResourceReference(FrameworkElement.StyleProperty, "VisuPasswordBoxStyle");
+                break;
+        }
     }
 
     public static void StyleButton(Button button, string key)
     {
         button.Tag = key;
-        button.MinWidth = 92;
-        button.MinHeight = 32;
-        button.Margin = new Thickness(6, 0, 0, 0);
-        button.Padding = new Thickness(12, 3, 12, 3);
+        button.MinWidth = VisuId.ButtonMinWidth;
+        button.MinHeight = VisuId.ControlHeight;
+        button.Margin = new Thickness(8, 0, 0, 0);
+        button.Padding = new Thickness(14, 0, 14, 0);
     }
 
     /// <summary>Explorer-style bottom command bar (flat, top divider), docked bottom.</summary>
@@ -94,7 +163,7 @@ internal static class F2Ui
         var border = new Border
         {
             Child = bar,
-            Padding = new Thickness(4),
+            Padding = new Thickness(0, 8, 0, 0),
             Margin = new Thickness(0, 8, 0, 0),
             BorderThickness = new Thickness(0, 1, 0, 0)
         };
@@ -109,7 +178,7 @@ internal static class F2Ui
         var border = new Border
         {
             Child = statusBar,
-            Padding = new Thickness(2, 5, 2, 0),
+            Padding = new Thickness(2, 4, 2, 0),
             BorderThickness = new Thickness(0, 1, 0, 0)
         };
         border.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");

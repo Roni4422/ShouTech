@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using System.Windows;
@@ -27,9 +27,9 @@ public sealed class GroupManagerWin : BaseWin
     private readonly GroupKind _kind;
     private readonly DataGrid _grid = new();
     private readonly ObservableCollection<GroupRow> _rows = new();
-    private readonly TextBox _txtCode = new() { Width = 130, Height = 26 };
-    private readonly TextBox _txtNameEn = new() { Width = 220, Height = 26 };
-    private readonly TextBox _txtNameAr = new() { Width = 220, Height = 26 };
+    private readonly TextBox _txtCode = new();
+    private readonly TextBox _txtNameEn = new();
+    private readonly TextBox _txtNameAr = new();
     private readonly CheckBox _chkActive = new() { IsChecked = true };
     private readonly Button _btnNew = new();
     private readonly Button _btnSave = new();
@@ -95,14 +95,14 @@ public sealed class GroupManagerWin : BaseWin
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        var editor = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
-        editor.Children.Add(Labeled("MasterCards.Code", _txtCode));
-        editor.Children.Add(Labeled("MasterCards.NameEn", _txtNameEn));
-        editor.Children.Add(Labeled("MasterCards.NameAr", _txtNameAr));
-        var activePanel = new StackPanel { Margin = new Thickness(0, 0, 8, 4) };
-        activePanel.Children.Add(new TextBlock { Text = T("MasterCards.Active"), Tag = "MasterCards.Active", Margin = new Thickness(0, 0, 0, 2), Opacity = 0.85 });
-        activePanel.Children.Add(_chkActive);
-        editor.Children.Add(activePanel);
+        // Editor = one shared column grid (3 pairs + the Active field),
+        // side labels, edges aligned (Phenix rule).
+        var editor = CreateFormGrid(4);
+        editor.Margin = new Thickness(0, 0, 0, 8);
+        AddFormField(editor, 0, 0, "MasterCards.Code", _txtCode);
+        AddFormField(editor, 0, 1, "MasterCards.NameEn", _txtNameEn);
+        AddFormField(editor, 0, 2, "MasterCards.NameAr", _txtNameAr);
+        AddFormField(editor, 0, 3, "MasterCards.Active", _chkActive);
         Grid.SetRow(editor, 0);
         body.Children.Add(editor);
 
@@ -265,23 +265,12 @@ public sealed class GroupManagerWin : BaseWin
             RefreshLocalizedContent(System.Windows.Media.VisualTreeHelper.GetChild(parent, i));
     }
 
-    private static StackPanel Labeled(string key, UIElement control)
-    {
-        var sp = new StackPanel { Margin = new Thickness(0, 0, 8, 4) };
-        sp.Children.Add(new TextBlock { Text = T(key), Tag = key, Margin = new Thickness(0, 0, 0, 2), Opacity = 0.85 });
-        if (control is TextBox textBox)
-            textBox.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
-        sp.Children.Add(control);
-        return sp;
-    }
 
     private static void StyleButton(Button btn, string key)
     {
         btn.Content = T(key);
-        btn.Margin = new Thickness(0, 0, 5, 0);
-        btn.Padding = new Thickness(9, 3, 9, 3);
-        btn.MinWidth = 76;
-        btn.Height = 28;
+        btn.Margin = new Thickness(0, 0, 8, 0);
+        btn.MinWidth = VisuId.ButtonMinWidth;
         btn.Tag = key;
         btn.SetResourceReference(StyleProperty, "VisuButtonStyle");
     }

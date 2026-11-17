@@ -38,7 +38,7 @@
                TargetType="TextBox"
                BasedOn="{StaticResource AppTextBoxStyle}">
 
-            <Setter Property="Height" Value="30"/>
+            <Setter Property="Height" Value="{StaticResource ControlHeight}"/>
             <Setter Property="Padding" Value="8,0"/>
             <Setter Property="FontSize" Value="{DynamicResource FontSize12}"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -76,7 +76,7 @@
                TargetType="ComboBox"
                BasedOn="{StaticResource AppComboBoxStyle}">
 
-            <Setter Property="Height" Value="30"/>
+            <Setter Property="Height" Value="{StaticResource ControlHeight}"/>
             <Setter Property="FontSize" Value="{DynamicResource FontSize12}"/>
 
             <Setter Property="Margin" Value="0,2,0,2"/>
@@ -510,8 +510,8 @@
 
                         <Button Grid.Column="1"
                                 Content="🔎"
-                                Width="28"
-                                Height="23"
+                                Width="{StaticResource ControlHeight}"
+                                Height="{StaticResource ControlHeight}"
                                 Click="Goto_Click"
                                 Margin="4,0,0,0"
                                 Background="{DynamicResource FieldBackgroundBrush}"
@@ -552,8 +552,8 @@
 
                         <Button Grid.Column="1"
                                 Content="..."
-                                Width="28"
-                                Height="23"
+                                Width="{StaticResource ControlHeight}"
+                                Height="{StaticResource ControlHeight}"
                                 Click="BrowseImage_Click"
                                 Margin="4,0,0,0"
                                 Background="{DynamicResource FieldBackgroundBrush}"
@@ -630,7 +630,6 @@
                             <ComboBox x:Name="CmbColor"
                                       Grid.Column="1"
                                       Style="{StaticResource FieldCombo}"
-                                      Height="22"
                                       Margin="0"
                                       SelectionChanged="Color_SelectionChanged"
                                       HorizontalContentAlignment="Stretch"/>
@@ -700,9 +699,9 @@
                         <Grid Grid.Column="0">
 
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="{StaticResource FormLabelColumnWidth}"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="{StaticResource FormLabelColumnWidth}"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
@@ -840,8 +839,8 @@
 
                             <Button x:Name="BtnNavFirst"
                                     Content="|◀"
-                                    Width="28"
-                                    Height="23"
+                                    Width="{StaticResource ControlHeight}"
+                                    Height="{StaticResource ControlHeight}"
                                     Margin="1"
                                     Click="NavFirst_Click"
                                     Cursor="Hand"
@@ -850,8 +849,8 @@
 
                             <Button x:Name="BtnNavPrev"
                                     Content="◀"
-                                    Width="28"
-                                    Height="23"
+                                    Width="{StaticResource ControlHeight}"
+                                    Height="{StaticResource ControlHeight}"
                                     Margin="1"
                                     Click="NavPrev_Click"
                                     Cursor="Hand"
@@ -867,8 +866,8 @@
 
                             <Button x:Name="BtnNavNext"
                                     Content="▶"
-                                    Width="28"
-                                    Height="23"
+                                    Width="{StaticResource ControlHeight}"
+                                    Height="{StaticResource ControlHeight}"
                                     Margin="1"
                                     Click="NavNext_Click"
                                     Cursor="Hand"
@@ -877,8 +876,8 @@
 
                             <Button x:Name="BtnNavLast"
                                     Content="▶|"
-                                    Width="28"
-                                    Height="23"
+                                    Width="{StaticResource ControlHeight}"
+                                    Height="{StaticResource ControlHeight}"
                                     Margin="1"
                                     Click="NavLast_Click"
                                     Cursor="Hand"
@@ -1162,7 +1161,7 @@
                                      AcceptsReturn="True"
                                      TextWrapping="Wrap"
                                      VerticalScrollBarVisibility="Auto"
-                                     Height="50"
+                                     Height="{StaticResource MultilineFieldHeight}"
                                      Margin="0,2,0,2"
                                      Background="{DynamicResource FieldBackgroundBrush}"
                                      BorderBrush="{DynamicResource FieldBorder}"
@@ -1366,8 +1365,8 @@
                                     <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
                                         <Button x:Name="BtnUnitAdd"
                                                 Content="+"
-                                                Width="32"
-                                                Height="28"
+                                                Width="{StaticResource ControlHeight}"
+                                                Height="{StaticResource ControlHeight}"
                                                 Margin="0,0,4,0"
                                                 Style="{StaticResource IconButtonStyle}"
                                                 ToolTip="Add unit row"
@@ -1375,8 +1374,8 @@
                                                 Click="AddUnit_Click"/>
                                         <Button x:Name="BtnUnitRemove"
                                                 Content="−"
-                                                Width="32"
-                                                Height="28"
+                                                Width="{StaticResource ControlHeight}"
+                                                Height="{StaticResource ControlHeight}"
                                                 Style="{StaticResource IconButtonStyle}"
                                                 ToolTip="Remove selected unit row"
                                                 loc:LocProps.ToolTipKey="Buttons.Delete"

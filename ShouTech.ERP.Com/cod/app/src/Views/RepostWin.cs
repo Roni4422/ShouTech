@@ -71,13 +71,13 @@ public sealed class RepostWin : BaseWin
         root.Children.Add(F2Ui.BottomBar(_loadButton, _applyButton, _closeButton));
 
         var content = new DockPanel();
-        var selector = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
-        _entity.Width = 210;
+        var selector = F2Ui.CreateFormGrid(2);
+        selector.Margin = new Thickness(0, 0, 0, 8);
         _entity.Items.Add(new ComboBoxItem { Tag = "sales" });
         _entity.Items.Add(new ComboBoxItem { Tag = "purchase" });
         _entity.Items.Add(new ComboBoxItem { Tag = "mfg" });
-        selector.Children.Add(F2Ui.Labeled(_labels, "Repost.Entity", _entity, 220));
-        selector.Children.Add(F2Ui.Labeled(_labels, "Repost.DocNo", _docNo, 180));
+        F2Ui.AddField(_labels, selector, 0, 0, "Repost.Entity", _entity);
+        F2Ui.AddField(_labels, selector, 0, 1, "Repost.DocNo", _docNo);
         DockPanel.SetDock(selector, Dock.Top);
         content.Children.Add(selector);
 
