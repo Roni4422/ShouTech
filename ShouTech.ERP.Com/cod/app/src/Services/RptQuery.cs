@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Npgsql;
 using ShouTech.App.Views;
+using ShouTech.App.Views.Reports;
 using ShouTech.Domain;
 
 namespace ShouTech.App.Services;
@@ -1622,13 +1623,47 @@ public static class RptQuery
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> MfgVarianceAsync(
         string mode, CancellationToken ct)
     {
-        // mode: Total (all lines) / Raw / Overhead / Finished — filtered by
-        // line_kind families; variance = actual amount − standard amount.
+        // Step 11 (sweep MFG-1 / MFG-4): re-sourced to the REAL migration
+        // 034 schema. mfg_orders is keyed by `id` (there is no order_id
+        // column) and mfg_order_lines carries NO company_id — company
+        // scoping flows through the parent order. The pre-Step-11 SQL
+        // joined o.order_id = l.order_id AND o.company_id = l.company_id
+        // and filtered l.company_id, so every variance mode crashed on
+        // open ("no such column").
+        //
+        // Mode semantics, against the kinds the domain actually allows
+        // (MfgLineKinds: RAW and COST only — the old filters hunted
+        // OVERHEAD/LABOR/FINISHED line kinds that can never exist):
+        //   Total    — every order line (RAW + COST).
+        //   Raw      — RAW lines only (materials consumed).
+        //   Overhead — COST lines only (the additional-cost lines; the
+        //              order's lump overhead_amount is a header figure
+        //              with no standard, so it has no line variance).
+        //   Finished — header-level per order: actual total_cost vs
+        //              qty × standard_unit_cost (the MfgCosts figure),
+        //              because finished goods are not order lines.
+        // Variance = actual amount − qty × standard unit cost throughout.
+        if (string.Equals(mode, "Finished", StringComparison.Ordinal))
+        {
+            const string finishedSql = """
+                SELECT o.doc_no AS DocNo,
+                       o.item_code AS ItemCode,
+                       'FINISHED' AS LineKind,
+                       COALESCE(o.qty, 0) AS Qty,
+                       COALESCE(o.total_cost, 0) AS Amount,
+                       COALESCE(o.qty, 0) * COALESCE(o.standard_unit_cost, 0) AS StandardAmount,
+                       COALESCE(o.total_cost, 0) - COALESCE(o.qty, 0) * COALESCE(o.standard_unit_cost, 0) AS Variance
+                FROM mfg_orders o
+                WHERE o.company_id = $company
+                ORDER BY o.doc_no;
+                """;
+            return await QueryAsync(finishedSql, ct, ("$company", Company));
+        }
+
         var kindFilter = mode switch
         {
-            "Raw" => "AND l.line_kind IN ('RAW', 'MATERIAL', 'RAW_MATERIAL')",
-            "Overhead" => "AND l.line_kind IN ('OVERHEAD', 'ADDITIONAL', 'LABOR', 'OTHER')",
-            "Finished" => "AND l.line_kind IN ('FINISHED', 'OUTPUT', 'PRODUCT')",
+            "Raw" => "AND l.line_kind = 'RAW'",
+            "Overhead" => "AND l.line_kind = 'COST'",
             _ => ""
         };
         var sql = $"""
@@ -1640,8 +1675,8 @@ public static class RptQuery
                    COALESCE(SUM(l.qty * l.standard_unit_cost), 0) AS StandardAmount,
                    COALESCE(SUM(l.amount - l.qty * l.standard_unit_cost), 0) AS Variance
             FROM mfg_order_lines l
-            INNER JOIN mfg_orders o ON o.order_id = l.order_id AND o.company_id = l.company_id
-            WHERE l.company_id = $company {kindFilter}
+            INNER JOIN mfg_orders o ON o.id = l.order_id
+            WHERE o.company_id = $company {kindFilter}
             GROUP BY o.doc_no, l.item_code, l.line_kind
             ORDER BY o.doc_no, l.line_kind, l.item_code;
             """;
@@ -1652,21 +1687,81 @@ public static class RptQuery
         CancellationToken ct)
     {
         DocSchema.Ensure(); MatRepo.EnsureSchema();
+        // Step 11 (sweep MFG-1): same 034 re-sourcing as MfgVarianceAsync
+        // (join on o.id, company through the order, RAW lines only — the
+        // only lines that consume stock). Required is restated in BASE
+        // units below (line qty × unit equivalent, the StkPost rule),
+        // because OnHand (material_stock_balances) is a base-unit figure;
+        // comparing a display-unit requirement against it understated or
+        // overstated shortages for every non-base-unit line.
         var sql = PgBoolFix("""
             SELECT o.doc_no AS DocNo,
                    o.item_code AS ItemCode,
                    l.item_code AS LineItemCode,
-                   COALESCE(l.qty, 0) AS Required,
+                   COALESCE(l.qty, 0) AS RequiredQty,
+                   COALESCE(l.unit_code, '') AS Unit,
+                   m2.material_id AS LineMaterialId,
                    COALESCE((SELECT SUM(b.available_qty) FROM material_stock_balances b
                      INNER JOIN materials m ON m.company_id = b.company_id AND m.material_id = b.material_id
-                     WHERE b.company_id = l.company_id AND m.code = l.item_code AND b.is_deleted = 0), 0) AS OnHand
+                     WHERE b.company_id = o.company_id AND m.code = l.item_code AND b.is_deleted = 0), 0) AS OnHand
             FROM mfg_orders o
-            INNER JOIN mfg_order_lines l ON l.order_id = o.order_id AND l.company_id = o.company_id
+            INNER JOIN mfg_order_lines l ON l.order_id = o.id
+            LEFT JOIN materials m2 ON m2.company_id = o.company_id AND m2.code = l.item_code AND m2.is_deleted = 0
             WHERE o.company_id = $company AND o.status = 'Draft'
-              AND l.line_kind NOT IN ('FINISHED', 'OUTPUT', 'PRODUCT')
+              AND l.line_kind = 'RAW'
             ORDER BY o.doc_no, l.item_code;
             """);
-        return await QueryAsync(sql, ct, ("$company", Company));
+        var raw = await QueryAsync(sql, ct, ("$company", Company));
+        if (raw.Count == 0)
+            return raw;
+
+        var cs = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(cs))
+            throw new AppError(ErrorCodes.DatabaseNotInitialized,
+                "No database connection is configured for reports.");
+        try
+        {
+            await using var connection = Open(cs);
+            await connection.OpenAsync(ct);
+            await using var tx = await connection.BeginTransactionAsync(ct);
+            var rows = new List<IReadOnlyDictionary<string, object?>>(raw.Count);
+            foreach (var r in raw)
+            {
+                var requiredQty = RptWinUtil.Dec(r.GetValueOrDefault("RequiredQty"));
+                var unit = Convert.ToString(r.GetValueOrDefault("Unit"), CultureInfo.InvariantCulture);
+                var materialIdValue = r.GetValueOrDefault("LineMaterialId");
+                var required = requiredQty;
+                if (materialIdValue is not null && !string.IsNullOrWhiteSpace(unit))
+                {
+                    var materialId = Convert.ToInt64(materialIdValue, CultureInfo.InvariantCulture);
+                    required = StkPost.ToBaseUnits(connection, tx, materialId, unit, requiredQty, 0m).BaseQty;
+                }
+                rows.Add(new Dictionary<string, object?>
+                {
+                    ["DocNo"] = r.GetValueOrDefault("DocNo"),
+                    ["ItemCode"] = r.GetValueOrDefault("ItemCode"),
+                    ["LineItemCode"] = r.GetValueOrDefault("LineItemCode"),
+                    ["Required"] = required,
+                    ["OnHand"] = r.GetValueOrDefault("OnHand")
+                });
+            }
+            await tx.RollbackAsync(CancellationToken.None);
+            return rows;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (AppError)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.DatabaseQueryFailed, ex, "RptQuery.MfgFeasibilityAsync");
+            throw new AppError(ErrorCodes.DatabaseQueryFailed,
+                "A database operation failed.", ex);
+        }
     }
 
     // ---------------- Banks ----------------
