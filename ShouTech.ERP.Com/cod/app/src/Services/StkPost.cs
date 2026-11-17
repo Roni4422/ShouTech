@@ -1106,7 +1106,7 @@ public static class StkPost
         var active = postgres ? "is_deleted=FALSE" : "is_deleted=0";
         var codeFilter = string.IsNullOrWhiteSpace(materialCode) ? "" : "AND code=$code";
         command.CommandText = $"""
-            SELECT is_stocked, is_service, allow_negative
+            SELECT is_stocked, is_service, allow_negative, item_type
             FROM materials
             WHERE company_id=$c AND material_id=$m AND {active}
               {codeFilter};
@@ -1121,8 +1121,15 @@ public static class StkPost
             throw new InvalidOperationException(
                 $"Material '{materialCode ?? materialId.ToString(CultureInfo.InvariantCulture)}' does not exist in the current company.");
 
+        // Service-material rule (owner, 2026-11-17): a service material is
+        // non-stock and must never move stock. The card keeps the type and
+        // the flags in agreement, but a legacy or imported row may carry
+        // the Service TYPE with inconsistent flags — honor any of the
+        // three views here so such a row still cannot post stock.
+        var itemType = reader.IsDBNull(3) ? null : reader.GetValue(3)?.ToString();
         if (!Convert.ToBoolean(reader.GetValue(0), CultureInfo.InvariantCulture) ||
-            Convert.ToBoolean(reader.GetValue(1), CultureInfo.InvariantCulture))
+            Convert.ToBoolean(reader.GetValue(1), CultureInfo.InvariantCulture) ||
+            string.Equals(itemType, "Service", StringComparison.OrdinalIgnoreCase))
         {
             allowNegative = false;
             return false;

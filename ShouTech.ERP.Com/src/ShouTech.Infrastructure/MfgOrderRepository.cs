@@ -205,10 +205,14 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
 
             ComputeTotals(order);
 
-            // 1) Validate + consume every RAW line.
+            // 1) Validate + consume every RAW line. A non-stockable line
+            //    (service material — owner rule, 2026-11-17) contributes its
+            //    cost to the order totals but never moves stock.
             foreach (var line in order.Lines.Where(l => l.LineKind == MfgLineKinds.Raw))
             {
                 var materialId = await ResolveMaterialIdAsync(connection, transaction, companyId, line.ItemCode, cancellationToken).ConfigureAwait(false);
+                if (!await IsStockableAsync(connection, transaction, companyId, materialId, cancellationToken).ConfigureAwait(false))
+                    continue;
                 var onHand = await GetOnHandAsync(connection, transaction, companyId, warehouseId, materialId, cancellationToken).ConfigureAwait(false);
                 if (onHand < line.Qty)
                     throw new InvalidOperationException(
@@ -219,12 +223,17 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 await AdjustBalanceAsync(connection, transaction, companyId, warehouseId, materialId, delta: -line.Qty, unitCost: line.UnitCost, cancellationToken).ConfigureAwait(false);
             }
 
-            // 2) Produce the finished item at the computed unit cost.
+            // 2) Produce the finished item at the computed unit cost — unless
+            //    the finished item itself is non-stock (a service): the order
+            //    still posts its costs and status, but nothing enters stock.
             var finishedId = await ResolveMaterialIdAsync(connection, transaction, companyId, order.ItemCode, cancellationToken).ConfigureAwait(false);
-            await InsertMovementAsync(connection, transaction, companyId, warehouseId, finishedId, dateText,
-                "MFG_PRODUCE", documentNo, qtyIn: order.Qty, qtyOut: 0m, unitCost: order.UnitCost,
-                note: $"Manufacturing order {documentNo} production", cancellationToken).ConfigureAwait(false);
-            await AdjustBalanceAsync(connection, transaction, companyId, warehouseId, finishedId, delta: order.Qty, unitCost: order.UnitCost, cancellationToken).ConfigureAwait(false);
+            if (await IsStockableAsync(connection, transaction, companyId, finishedId, cancellationToken).ConfigureAwait(false))
+            {
+                await InsertMovementAsync(connection, transaction, companyId, warehouseId, finishedId, dateText,
+                    "MFG_PRODUCE", documentNo, qtyIn: order.Qty, qtyOut: 0m, unitCost: order.UnitCost,
+                    note: $"Manufacturing order {documentNo} production", cancellationToken).ConfigureAwait(false);
+                await AdjustBalanceAsync(connection, transaction, companyId, warehouseId, finishedId, delta: order.Qty, unitCost: order.UnitCost, cancellationToken).ConfigureAwait(false);
+            }
 
             // 3) Persist computed costs + status (compare-and-swap on Draft).
             await using var update = CreateCommand(connection, transaction,
@@ -271,19 +280,26 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 var dateText = DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
                 // The produced quantity must still be on hand to reverse out.
+                // Non-stockable items (services) were never moved by Post,
+                // so there is nothing to reverse for them either.
                 var finishedId = await ResolveMaterialIdAsync(connection, transaction, companyId, order.ItemCode, cancellationToken).ConfigureAwait(false);
-                var finishedOnHand = await GetOnHandAsync(connection, transaction, companyId, warehouseId, finishedId, cancellationToken).ConfigureAwait(false);
-                if (finishedOnHand < order.Qty)
-                    throw new InvalidOperationException(
-                        $"Cannot cancel: produced quantity of '{order.ItemCode.Trim()}' is no longer fully on hand (required {order.Qty}, on hand {finishedOnHand}).");
-                await InsertMovementAsync(connection, transaction, companyId, warehouseId, finishedId, dateText,
-                    "MFG_PRODUCE_REV", documentNo, qtyIn: 0m, qtyOut: order.Qty, unitCost: order.UnitCost,
-                    note: $"Manufacturing order {documentNo} cancellation", cancellationToken).ConfigureAwait(false);
-                await AdjustBalanceAsync(connection, transaction, companyId, warehouseId, finishedId, delta: -order.Qty, unitCost: order.UnitCost, cancellationToken).ConfigureAwait(false);
+                if (await IsStockableAsync(connection, transaction, companyId, finishedId, cancellationToken).ConfigureAwait(false))
+                {
+                    var finishedOnHand = await GetOnHandAsync(connection, transaction, companyId, warehouseId, finishedId, cancellationToken).ConfigureAwait(false);
+                    if (finishedOnHand < order.Qty)
+                        throw new InvalidOperationException(
+                            $"Cannot cancel: produced quantity of '{order.ItemCode.Trim()}' is no longer fully on hand (required {order.Qty}, on hand {finishedOnHand}).");
+                    await InsertMovementAsync(connection, transaction, companyId, warehouseId, finishedId, dateText,
+                        "MFG_PRODUCE_REV", documentNo, qtyIn: 0m, qtyOut: order.Qty, unitCost: order.UnitCost,
+                        note: $"Manufacturing order {documentNo} cancellation", cancellationToken).ConfigureAwait(false);
+                    await AdjustBalanceAsync(connection, transaction, companyId, warehouseId, finishedId, delta: -order.Qty, unitCost: order.UnitCost, cancellationToken).ConfigureAwait(false);
+                }
 
                 foreach (var line in order.Lines.Where(l => l.LineKind == MfgLineKinds.Raw))
                 {
                     var materialId = await ResolveMaterialIdAsync(connection, transaction, companyId, line.ItemCode, cancellationToken).ConfigureAwait(false);
+                    if (!await IsStockableAsync(connection, transaction, companyId, materialId, cancellationToken).ConfigureAwait(false))
+                        continue;
                     await InsertMovementAsync(connection, transaction, companyId, warehouseId, materialId, dateText,
                         "MFG_CONSUME_REV", documentNo, qtyIn: line.Qty, qtyOut: 0m, unitCost: line.UnitCost,
                         note: $"Manufacturing order {documentNo} cancellation", cancellationToken).ConfigureAwait(false);
@@ -312,6 +328,30 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
     // ------------------------------------------------------------------
     // Stock helpers (StkPost convention)
     // ------------------------------------------------------------------
+    /// <summary>
+    /// Whether the material is stock-tracked, mirroring the guard the
+    /// invoice posting applies: not stocked, flagged as a service, or
+    /// typed as a Service (any one of the three views the material card
+    /// keeps in agreement) means non-stock. Service materials contribute
+    /// cost to an order but never move stock (owner rule, 2026-11-17).
+    /// </summary>
+    private async Task<bool> IsStockableAsync(DbConnection connection, DbTransaction transaction, string companyId, long materialId, CancellationToken cancellationToken)
+    {
+        await using var command = CreateCommand(connection, transaction,
+            $"SELECT is_stocked, is_service, item_type FROM materials WHERE company_id = @company AND material_id = @material AND {NotDeleted} LIMIT 1");
+        Add(command, "@company", companyId.Trim());
+        Add(command, "@material", materialId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) return false;
+
+        var isStocked = !reader.IsDBNull(0) && Convert.ToBoolean(reader.GetValue(0), CultureInfo.InvariantCulture);
+        var isService = !reader.IsDBNull(1) && Convert.ToBoolean(reader.GetValue(1), CultureInfo.InvariantCulture);
+        var itemType = reader.IsDBNull(2) ? null : reader.GetValue(2)?.ToString();
+        return isStocked
+               && !isService
+               && !string.Equals(itemType, "Service", StringComparison.OrdinalIgnoreCase);
+    }
+
     private async Task<long> ResolveMaterialIdAsync(DbConnection connection, DbTransaction transaction, string companyId, string itemCode, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(itemCode))

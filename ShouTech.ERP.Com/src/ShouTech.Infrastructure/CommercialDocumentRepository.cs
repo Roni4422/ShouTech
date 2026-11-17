@@ -302,6 +302,13 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
 
                 foreach (var (materialId, qty, lineWarehouse, lineUnit) in pending)
                 {
+                    // Service-material rule (owner, 2026-11-17): a service
+                    // material is non-stock — a delivery note for it creates
+                    // no movement and no balance change. (A material with no
+                    // card row keeps the historical behavior and posts.)
+                    if (!await IsStockableAsync(connection, transaction, materialId, cancellationToken).ConfigureAwait(false))
+                        continue;
+
                     // Unit equivalence (owner definition, 2026-11-17): stock is
                     // kept in the material's first (base) unit, so a delivery in
                     // another unit deducts qty x equivalent(chosen unit) — the
@@ -554,6 +561,34 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
     {
         public string? UnitName { get; set; }
         public decimal? Factor { get; set; }
+    }
+
+    /// <summary>
+    /// Whether the material is stock-tracked, mirroring the guard StkPost
+    /// applies to invoice documents: not stocked, flagged as a service, or
+    /// typed as a Service (any one of the three views the material card
+    /// keeps in agreement) means non-stock. A material with no card row
+    /// keeps the historical chain behavior and is treated as stockable.
+    /// </summary>
+    private static async Task<bool> IsStockableAsync(
+        DbConnection connection, DbTransaction transaction, long materialId,
+        CancellationToken cancellationToken)
+    {
+        await using var cmd = CreateCommand(connection, transaction, """
+            SELECT is_stocked, is_service, item_type
+            FROM materials
+            WHERE material_id = @material
+            """);
+        Add(cmd, "@material", materialId);
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) return true;
+
+        var isStocked = !reader.IsDBNull(0) && Convert.ToBoolean(reader.GetValue(0), CultureInfo.InvariantCulture);
+        var isService = !reader.IsDBNull(1) && Convert.ToBoolean(reader.GetValue(1), CultureInfo.InvariantCulture);
+        var itemType = reader.IsDBNull(2) ? null : reader.GetValue(2)?.ToString();
+        return isStocked
+               && !isService
+               && !string.Equals(itemType, "Service", StringComparison.OrdinalIgnoreCase);
     }
 
     private static DbCommand CreateCommand(DbConnection connection, DbTransaction transaction, string sql)

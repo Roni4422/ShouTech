@@ -850,6 +850,7 @@ internal static class MatRepo
               AND m.is_deleted = 0
               AND m.is_stocked = 1
               AND m.is_service = 0
+              AND LOWER(COALESCE(m.item_type, '')) <> 'service'
             ORDER BY m.code;
             """;
         if (DatabaseRuntime.IsPostgreSql())
