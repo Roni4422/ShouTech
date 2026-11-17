@@ -57,9 +57,9 @@ public sealed class InvoiceWin : BaseWin
     private readonly Button _btnAddLine = new();
     private readonly Button _btnRemoveLine = new();
     private readonly Button _btnFindMaterial = new();
-    /// <summary>Phenix «السند» — journal voucher after post.</summary>
+    /// <summary>Phenix "voucher" - journal voucher after post.</summary>
     private readonly Button _btnVoucher = new();
-    /// <summary>Phenix «الأصل» — original invoice when opened from a linked document.</summary>
+    /// <summary>Phenix "original" - original invoice when opened from a linked document.</summary>
     private readonly Button _btnOriginal = new();
 
     // ---- Footer totals (Phenix-style three columns) ----
@@ -137,12 +137,12 @@ public sealed class InvoiceWin : BaseWin
 
     private static string WindowTitleFor(InvDocKind kind) => kind switch
     {
-        InvDocKind.PurchaseInvoice => "فاتورة مشتريات",
-        InvDocKind.PurchaseReturn => "مرتجع مشتريات",
-        InvDocKind.SalesInvoice => "فاتورة مبيعات",
-        InvDocKind.SalesReturn => "مرتجع مبيعات",
-        InvDocKind.Quotation => "عرض سعر",
-        _ => "فاتورة"
+        InvDocKind.PurchaseInvoice => Tf("Invoice.PurchaseTitle", "Purchase Invoice"),
+        InvDocKind.PurchaseReturn => Tf("Invoice.PurchaseReturnTitle", "Purchase Return"),
+        InvDocKind.SalesInvoice => Tf("Invoice.SalesTitle", "Sales Invoice"),
+        InvDocKind.SalesReturn => Tf("Invoice.SalesReturnTitle", "Sales Return"),
+        InvDocKind.Quotation => Tf("Invoices.Quotation", "Quotation"),
+        _ => Tf("Invoices.Invoice", "Invoice")
     };
 
     private void WireEvents()
@@ -165,7 +165,7 @@ public sealed class InvoiceWin : BaseWin
         _txtPaid.TextChanged += OnFooterEdit;
         _txtPaymentValue.TextChanged += (_, _) =>
         {
-            // قيمة الدفعة mirrors المدفوع when user edits either.
+            // Payment value mirrors the paid amount when the user edits either.
             if (_txtPaymentValue.IsFocused)
                 _txtPaid.Text = _txtPaymentValue.Text;
             RefreshTotalsFromFooterInputs();
@@ -191,7 +191,7 @@ public sealed class InvoiceWin : BaseWin
                 _txtPartyAccount.Text = InvDoc.DefaultCashAccountName();
                 break;
             case InvPaymentMethod.Credit:
-                // تفريغ حساب العميل؛ عند اختيار العميل يُملأ باسمه
+                // Clears the customer account; when a customer is selected it is filled with their name
                 _txtPartyAccount.Text = string.IsNullOrWhiteSpace(_txtPartyName.Text)
                     ? string.Empty
                     : _txtPartyName.Text.Trim();
@@ -296,7 +296,7 @@ public sealed class InvoiceWin : BaseWin
         Grid.SetRow(gridHost, 1);
         root.Children.Add(gridHost);
 
-        // ---- Bottom 30%: totals + notes + السند/الأصل ----
+        // ---- Bottom 30%: totals + notes + voucher/original ----
         var bottom = new Grid { Margin = new Thickness(0) };
         bottom.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         bottom.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -315,8 +315,8 @@ public sealed class InvoiceWin : BaseWin
         };
         StyleButton(_btnVoucher, "Invoice.Voucher");
         StyleButton(_btnOriginal, "Invoice.Original");
-        _btnVoucher.Content = Tf("Invoice.Voucher", "السند");
-        _btnOriginal.Content = Tf("Invoice.Original", "الأصل");
+        _btnVoucher.Content = Tf("Invoice.Voucher", "Voucher");
+        _btnOriginal.Content = Tf("Invoice.Original", "Original");
         _btnVoucher.IsEnabled = false;
         _btnOriginal.IsEnabled = false;
         _btnVoucher.Click += (_, _) => OpenVoucher();
@@ -338,7 +338,7 @@ public sealed class InvoiceWin : BaseWin
         var notesPanel = new StackPanel { Margin = new Thickness(0, 2, 0, 0) };
         notesPanel.Children.Add(new TextBlock
         {
-            Text = Tf("Invoice.Notes", "البيان / ملاحظات"),
+            Text = Tf("Invoice.Notes", "Notes"),
             FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(11),
             Margin = new Thickness(0, 0, 0, 1)
         });
@@ -409,31 +409,31 @@ public sealed class InvoiceWin : BaseWin
         var payment = new Grid { Margin = new Thickness(gap) };
         for (var i = 0; i < 8; i++)
             payment.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        AddLabeledCell(payment, 0, Tf("Invoice.PaymentMethod", "طريقة الدفع"), _cmbPayment);
-        AddLabeledCell(payment, 1, Tf("Invoice.DocNo", "رقم الفاتورة"), _txtDocNo);
-        AddLabeledCell(payment, 2, Tf("Invoice.Date", "التاريخ"), _dtDate);
-        AddLabeledCell(payment, 3, Tf("Invoice.Currency", "العملة"), _txtCurrency);
-        AddLabeledCell(payment, 4, Tf("Invoice.TaxRate", "الضريبة %"), _txtTaxRate);
-        AddLabeledCell(payment, 5, Tf("Invoice.ReceiptNo", "رقم الإيصال"), _txtReceiptNo);
-        AddLabeledCell(payment, 6, Tf("Invoice.Reference", "المرجع"), _txtReference);
-        AddLabeledCell(payment, 7, Tf("Invoice.Branch", "الفرع"), _txtBranch);
+        AddLabeledCell(payment, 0, Tf("Invoice.PaymentMethod", "Payment method"), _cmbPayment);
+        AddLabeledCell(payment, 1, Tf("Invoice.DocNo", "Invoice No."), _txtDocNo);
+        AddLabeledCell(payment, 2, Tf("Invoice.Date", "Date"), _dtDate);
+        AddLabeledCell(payment, 3, Tf("Invoice.Currency", "Currency"), _txtCurrency);
+        AddLabeledCell(payment, 4, Tf("Invoice.TaxRate", "Tax %"), _txtTaxRate);
+        AddLabeledCell(payment, 5, Tf("Invoice.ReceiptNo", "Receipt no."), _txtReceiptNo);
+        AddLabeledCell(payment, 6, Tf("Invoice.Reference", "Reference"), _txtReference);
+        AddLabeledCell(payment, 7, Tf("Invoice.Branch", "Branch"), _txtBranch);
 
         // Party / warehouse column
         var party = new Grid { Margin = new Thickness(gap) };
         for (var i = 0; i < 4; i++)
             party.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        AddLabeledCell(party, 0, Tf(PartyCodeKey(), "رمز المورد"), _txtPartyCode);
-        AddLabeledCell(party, 1, Tf(PartyNameKey(), "المورد"), _txtPartyName);
-        AddLabeledCell(party, 2, Tf("Invoice.SalesRep", "اسم المندوب"), _txtSalesRep);
-        AddLabeledCell(party, 3, Tf("Invoice.Warehouse", "المستودع"), _txtWarehouse);
+        AddLabeledCell(party, 0, Tf(PartyCodeKey(), "Supplier code"), _txtPartyCode);
+        AddLabeledCell(party, 1, Tf(PartyNameKey(), "Supplier"), _txtPartyName);
+        AddLabeledCell(party, 2, Tf("Invoice.SalesRep", "Sales rep"), _txtSalesRep);
+        AddLabeledCell(party, 3, Tf("Invoice.Warehouse", "Warehouse"), _txtWarehouse);
 
         // Accounts column
         var accounts = new Grid { Margin = new Thickness(gap) };
         for (var i = 0; i < 3; i++)
             accounts.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        AddLabeledCell(accounts, 0, Tf("Invoice.CostCenter", "مركز الكلفة"), _txtCostCenter);
-        AddLabeledCell(accounts, 1, Tf(PartyAccountLabelKey(), "حساب المورد"), _txtPartyAccount);
-        AddLabeledCell(accounts, 2, Tf("Invoice.GoodsAccount", "حساب البضاعة"), _txtGoodsAccount);
+        AddLabeledCell(accounts, 0, Tf("Invoice.CostCenter", "Cost center"), _txtCostCenter);
+        AddLabeledCell(accounts, 1, Tf(PartyAccountLabelKey(), "Supplier account"), _txtPartyAccount);
+        AddLabeledCell(accounts, 2, Tf("Invoice.GoodsAccount", "Goods account"), _txtGoodsAccount);
 
         Grid.SetColumn(accounts, 0);
         Grid.SetColumn(party, 1);
@@ -465,9 +465,9 @@ public sealed class InvoiceWin : BaseWin
     {
         var idx = _cmbPayment.SelectedIndex;
         _cmbPayment.Items.Clear();
-        _cmbPayment.Items.Add(new ComboBoxItem { Content = Tf("Invoice.PaymentCash", "نقداً"), Tag = "Cash" });
-        _cmbPayment.Items.Add(new ComboBoxItem { Content = Tf("Invoice.PaymentCredit", "آجل"), Tag = "Credit" });
-        _cmbPayment.Items.Add(new ComboBoxItem { Content = Tf("Invoice.PaymentChecks", "شيكات"), Tag = "Checks" });
+        _cmbPayment.Items.Add(new ComboBoxItem { Content = Tf("Invoice.PaymentCash", "Cash"), Tag = "Cash" });
+        _cmbPayment.Items.Add(new ComboBoxItem { Content = Tf("Invoice.PaymentCredit", "Credit"), Tag = "Credit" });
+        _cmbPayment.Items.Add(new ComboBoxItem { Content = Tf("Invoice.PaymentChecks", "Checks"), Tag = "Checks" });
         _cmbPayment.SelectedIndex = idx >= 0 && idx < 3 ? idx : 0;
     }
 
@@ -496,22 +496,22 @@ public sealed class InvoiceWin : BaseWin
         var colExtra = new Grid { Margin = new Thickness(2, 0, 2, 0) };
         colExtra.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         colExtra.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        AddLabeledCell(colExtra, 0, Tf("Invoice.LinesExtra", "إضافي الأقلام"), _txtLinesExtra);
-        AddLabeledCell(colExtra, 1, Tf("Invoice.Net", "الصافي"), _txtNet);
+        AddLabeledCell(colExtra, 0, Tf("Invoice.LinesExtra", "Lines extra"), _txtLinesExtra);
+        AddLabeledCell(colExtra, 1, Tf("Invoice.Net", "Net"), _txtNet);
 
         var colDisc = new Grid { Margin = new Thickness(2, 0, 2, 0) };
         for (var i = 0; i < 3; i++)
             colDisc.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        AddLabeledCell(colDisc, 0, Tf("Invoice.LinesDiscount", "حسم الأقلام"), _txtLinesDiscount);
-        AddLabeledCell(colDisc, 1, Tf("Invoice.PaymentValue", "قيمة الدفعة"), _txtPaymentValue);
-        AddLabeledCell(colDisc, 2, Tf("Invoice.Remaining", "الباقي"), _txtRemaining);
+        AddLabeledCell(colDisc, 0, Tf("Invoice.LinesDiscount", "Lines discount"), _txtLinesDiscount);
+        AddLabeledCell(colDisc, 1, Tf("Invoice.PaymentValue", "Payment amount"), _txtPaymentValue);
+        AddLabeledCell(colDisc, 2, Tf("Invoice.Remaining", "Remaining"), _txtRemaining);
 
         var colTotals = new Grid { Margin = new Thickness(2, 0, 2, 0) };
         for (var i = 0; i < 3; i++)
             colTotals.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        AddLabeledCell(colTotals, 0, Tf("Invoice.LinesTotal", "مجموع الأقلام"), _txtLinesTotal);
-        AddLabeledCell(colTotals, 1, Tf("Invoice.InvoiceValue", "قيمة الفاتورة"), _txtInvoiceValue);
-        AddLabeledCell(colTotals, 2, Tf("Invoice.Paid", "إجمالي المدفوع"), _txtPaid);
+        AddLabeledCell(colTotals, 0, Tf("Invoice.LinesTotal", "Lines total"), _txtLinesTotal);
+        AddLabeledCell(colTotals, 1, Tf("Invoice.InvoiceValue", "Invoice value"), _txtInvoiceValue);
+        AddLabeledCell(colTotals, 2, Tf("Invoice.Paid", "Total paid"), _txtPaid);
 
         Grid.SetColumn(colExtra, 0);
         Grid.SetColumn(colDisc, 1);
@@ -547,21 +547,21 @@ public sealed class InvoiceWin : BaseWin
 
         _grid.ItemsSource = _lines;
         _grid.Columns.Clear();
-        _grid.Columns.Add(TextCol(nameof(LineVm.MaterialCode), 80, Tf("Invoice.ColCode", "الرمز")));
-        _grid.Columns.Add(TextCol(nameof(LineVm.Description), 180, Tf("Invoice.ColMaterial", "المادة")));
-        _grid.Columns.Add(TextCol(nameof(LineVm.QtyText), 70, Tf("Invoice.ColQty", "الكمية")));
-        _grid.Columns.Add(TextCol(nameof(LineVm.Unit), 60, Tf("Invoice.ColUnit", "الوحدة")));
-        _grid.Columns.Add(TextCol(nameof(LineVm.UnitPriceText), 80, Tf("Invoice.ColUnitPrice", "الإفرادي")));
-        _grid.Columns.Add(TextCol(nameof(LineVm.DiscountPctText), 60, Tf("Invoice.ColDiscount", "حسم%")));
-        _grid.Columns.Add(TextCol(nameof(LineVm.TaxRateText), 60, Tf("Invoice.ColTax", "ضريبة%")));
+        _grid.Columns.Add(TextCol(nameof(LineVm.MaterialCode), 80, Tf("Invoice.ColCode", "Code")));
+        _grid.Columns.Add(TextCol(nameof(LineVm.Description), 180, Tf("Invoice.ColMaterial", "Material")));
+        _grid.Columns.Add(TextCol(nameof(LineVm.QtyText), 70, Tf("Invoice.ColQty", "Qty")));
+        _grid.Columns.Add(TextCol(nameof(LineVm.Unit), 60, Tf("Invoice.ColUnit", "Unit")));
+        _grid.Columns.Add(TextCol(nameof(LineVm.UnitPriceText), 80, Tf("Invoice.ColUnitPrice", "Unit price")));
+        _grid.Columns.Add(TextCol(nameof(LineVm.DiscountPctText), 60, Tf("Invoice.ColDiscount", "Disc %")));
+        _grid.Columns.Add(TextCol(nameof(LineVm.TaxRateText), 60, Tf("Invoice.ColTax", "Tax %")));
         _grid.Columns.Add(new DataGridTextColumn
         {
-            Header = Tf("Invoice.ColLineTotal", "الإجمالي"),
+            Header = Tf("Invoice.ColLineTotal", "Line total"),
             Binding = new Binding(nameof(LineVm.LineTotalText)) { Mode = BindingMode.OneWay },
             Width = 90,
             IsReadOnly = true
         });
-        _grid.Columns.Add(TextCol(nameof(LineVm.WarehouseName), 110, Tf("Invoice.ColWarehouse", "المستودع")));
+        _grid.Columns.Add(TextCol(nameof(LineVm.WarehouseName), 110, Tf("Invoice.ColWarehouse", "Warehouse")));
 
         _grid.CellEditEnding += OnCellEditEnding;
     }
@@ -617,9 +617,9 @@ public sealed class InvoiceWin : BaseWin
 
         _lblStatus.Text = _doc.Status switch
         {
-            InvDocStatus.Posted => Tf("Invoice.StatusPosted", "مرحّلة"),
-            InvDocStatus.Cancelled => Tf("Invoice.StatusCancelled", "ملغاة"),
-            _ => Tf("Invoice.StatusDraft", "مسودة")
+            InvDocStatus.Posted => Tf("Invoice.StatusPosted", "Posted"),
+            InvDocStatus.Cancelled => Tf("Invoice.StatusCancelled", "Cancelled"),
+            _ => Tf("Invoice.StatusDraft", "Draft")
         };
     }
 
@@ -749,8 +749,8 @@ public sealed class InvoiceWin : BaseWin
     }
 
     /// <summary>
-    /// السند: enabled only after the invoice is posted (journal voucher exists).
-    /// الأصل: enabled only when this window was opened from a linked document
+    /// Voucher: enabled only after the invoice is posted (journal voucher exists).
+    /// Original: enabled only when this window was opened from a linked document
     /// (return / drill-down) that points to an original invoice; disabled for a primary open.
     /// </summary>
     private void UpdateVoucherOriginalButtons()
@@ -795,8 +795,8 @@ public sealed class InvoiceWin : BaseWin
         catch (Exception ex)
         {
             MessageBox.Show(this,
-                Tf("Invoice.VoucherOpenFailed", "تعذر فتح سند القيد:") + " " + ex.Message,
-                Tf("Common.Error", "خطأ"),
+                Tf("Invoice.VoucherOpenFailed", "Could not open the journal voucher.") + " " + ex.Message,
+                Tf("Common.Error", "Error"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
         }
@@ -822,8 +822,8 @@ public sealed class InvoiceWin : BaseWin
         catch (Exception ex)
         {
             MessageBox.Show(this,
-                Tf("Invoice.OriginalOpenFailed", "تعذر فتح الفاتورة الأصلية:") + " " + ex.Message,
-                Tf("Common.Error", "خطأ"),
+                Tf("Invoice.OriginalOpenFailed", "Could not open the original invoice.") + " " + ex.Message,
+                Tf("Common.Error", "Error"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
         }
@@ -857,7 +857,7 @@ public sealed class InvoiceWin : BaseWin
             if (doc.DocId <= 0) InvRepo.SaveDraft(doc);
             InvRepo.Post(doc.DocId, doc.Kind, AppState.CurrentUser?.Username ?? Environment.UserName);
             doc.Status = InvDocStatus.Posted;
-            // Reload so JournalDocNo assigned during post is visible to «السند».
+            // Reload so JournalDocNo assigned during post is visible to the voucher button.
             var reloaded = InvRepo.Load(doc.DocId, doc.Kind);
             if (reloaded is not null)
             {
@@ -992,7 +992,7 @@ public sealed class InvoiceWin : BaseWin
     }
 
     /// <summary>
-    /// Translate with optional Arabic/English fallback when the key is still missing from Lang JSON.
+    /// Translate with an optional English fallback when the key is still missing from Lang JSON.
     /// Does not hide BaseWin.T(string).
     /// </summary>
     private static string Tf(string key, string? fallback = null)
@@ -1026,8 +1026,8 @@ public sealed class InvoiceWin : BaseWin
                 btn.Content = Tf(key, btn.Content?.ToString());
         }
 
-        _btnVoucher.Content = Tf("Invoice.Voucher", "السند");
-        _btnOriginal.Content = Tf("Invoice.Original", "الأصل");
+        _btnVoucher.Content = Tf("Invoice.Voucher", "Voucher");
+        _btnOriginal.Content = Tf("Invoice.Original", "Original");
 
         // Rebuild payment combo captions without losing selection
         var payIdx = _cmbPayment.SelectedIndex;
@@ -1037,15 +1037,15 @@ public sealed class InvoiceWin : BaseWin
 
         if (_grid.Columns.Count >= 9)
         {
-            _grid.Columns[0].Header = Tf("Invoice.ColCode", "الرمز");
-            _grid.Columns[1].Header = Tf("Invoice.ColMaterial", "المادة");
-            _grid.Columns[2].Header = Tf("Invoice.ColQty", "الكمية");
-            _grid.Columns[3].Header = Tf("Invoice.ColUnit", "الوحدة");
-            _grid.Columns[4].Header = Tf("Invoice.ColUnitPrice", "الإفرادي");
-            _grid.Columns[5].Header = Tf("Invoice.ColDiscount", "الحسم %");
-            _grid.Columns[6].Header = Tf("Invoice.ColTax", "الضريبة %");
-            _grid.Columns[7].Header = Tf("Invoice.ColLineTotal", "الإجمالي");
-            _grid.Columns[8].Header = Tf("Invoice.ColWarehouse", "المستودع");
+            _grid.Columns[0].Header = Tf("Invoice.ColCode", "Code");
+            _grid.Columns[1].Header = Tf("Invoice.ColMaterial", "Material");
+            _grid.Columns[2].Header = Tf("Invoice.ColQty", "Qty");
+            _grid.Columns[3].Header = Tf("Invoice.ColUnit", "Unit");
+            _grid.Columns[4].Header = Tf("Invoice.ColUnitPrice", "Unit price");
+            _grid.Columns[5].Header = Tf("Invoice.ColDiscount", "Disc %");
+            _grid.Columns[6].Header = Tf("Invoice.ColTax", "Tax %");
+            _grid.Columns[7].Header = Tf("Invoice.ColLineTotal", "Line total");
+            _grid.Columns[8].Header = Tf("Invoice.ColWarehouse", "Warehouse");
         }
 
         RefreshTotals();

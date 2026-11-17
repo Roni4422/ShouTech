@@ -8,17 +8,17 @@ namespace ShouTech.Domain.Enums;
 public static class ModKey
 {
     // ===== Core (always present in paid Core license) =====
-    public const string Acc = "ACC";          // المحاسبة المالية
-    public const string Inv = "INV";          // المستودعات
-    public const string Sales = "SALES";      // المبيعات الأساسية
-    public const string Purch = "PURCH";      // المشتريات الأساسية
+    public const string Acc = "ACC";          // Financial accounting
+    public const string Inv = "INV";          // Inventory
+    public const string Sales = "SALES";      // Core sales
+    public const string Purch = "PURCH";      // Core purchasing
 
     // ===== Optional paid modules =====
-    public const string Hr = "HR";            // الموارد البشرية
-    public const string Mfg = "MFG";          // التصنيع
-    public const string Pos = "POS";          // نقطة البيع
-    public const string Ai = "AI";            // الذكاء الاصطناعي
-    public const string AdvRpt = "ADV_RPT";   // تقارير متقدمة
-    public const string MultiCur = "MULTI_CUR"; // عملات متعددة متقدمة
-    public const string WhiteLabel = "WL";    // تخصيص الهوية
+    public const string Hr = "HR";            // Human resources
+    public const string Mfg = "MFG";          // Manufacturing
+    public const string Pos = "POS";          // Point of sale
+    public const string Ai = "AI";            // Artificial intelligence
+    public const string AdvRpt = "ADV_RPT";   // Advanced reports
+    public const string MultiCur = "MULTI_CUR"; // Advanced multi-currency
+    public const string WhiteLabel = "WL";    // White-label branding
 }

@@ -33,11 +33,11 @@ public enum InvDocStatus
 /// </summary>
 public enum InvPaymentMethod
 {
-    /// <summary>نقداً — party account defaults to cash box.</summary>
+    /// <summary>Cash - party account defaults to cash box.</summary>
     Cash = 0,
-    /// <summary>آجل — party account cleared until party is chosen, then follows party AR/AP account.</summary>
+    /// <summary>Credit - party account cleared until party is chosen, then follows party AR/AP account.</summary>
     Credit = 1,
-    /// <summary>شيكات — party account defaults to bank; still editable.</summary>
+    /// <summary>Checks - party account defaults to bank; still editable.</summary>
     Checks = 2
 }
 
@@ -104,18 +104,18 @@ public sealed class InvDoc
     public string SalesRepName { get; set; } = string.Empty;
     public string CostCenter { get; set; } = string.Empty;
 
-    /// <summary>حساب العميل / المورد / الصندوق / البنك — editable, driven by payment method.</summary>
+    /// <summary>Customer / supplier / cash / bank account - editable, driven by payment method.</summary>
     public string PartyAccountName { get; set; } = string.Empty;
     public long? PartyAccountId { get; set; }
 
-    /// <summary>حساب البضاعة / المبيعات / المشتريات / المرتجعات — default by document kind.</summary>
+    /// <summary>Goods / sales / purchases / returns account - default by document kind.</summary>
     public string GoodsAccountName { get; set; } = string.Empty;
     public long? GoodsAccountId { get; set; }
 
     /// <summary>
     /// When this document was opened/created from another invoice (return, copy, drill-down),
     /// these point at the original. Empty for a primary invoice opened directly.
-    /// Phenix «الأصل» is enabled only when OriginalDocId is set.
+    /// Phenix "original" is enabled only when OriginalDocId is set.
     /// </summary>
     public long? OriginalDocId { get; set; }
     public InvDocKind? OriginalDocKind { get; set; }
@@ -123,16 +123,16 @@ public sealed class InvDoc
 
     /// <summary>
     /// Journal voucher number created when the invoice is posted.
-    /// Phenix «السند» opens this voucher after posting.
+    /// Phenix "voucher" opens this voucher after posting.
     /// </summary>
     public string JournalDocNo { get; set; } = string.Empty;
 
     // ---- Phenix-style footer amounts ----
-    /// <summary>حسم الأقلام (absolute amount deducted from lines subtotal).</summary>
+    /// <summary>Lines discount (absolute amount deducted from lines subtotal).</summary>
     public decimal LinesDiscountAmount { get; set; }
-    /// <summary>إضافي الأقلام (absolute amount added).</summary>
+    /// <summary>Lines extra (absolute amount added).</summary>
     public decimal LinesExtraAmount { get; set; }
-    /// <summary>قيمة الدفعة / المدفوع on this document.</summary>
+    /// <summary>Payment value / paid amount on this document.</summary>
     public decimal PaidAmount { get; set; }
 
     public string KindCode => Kind switch
@@ -157,18 +157,18 @@ public sealed class InvDoc
     public decimal Subtotal => Lines.Sum(l => l.LineSubtotal);
     public decimal TaxAmount => Lines.Sum(l => l.LineTax);
 
-    /// <summary>مجموع الأقلام — lines subtotal before header discount/extra.</summary>
+    /// <summary>Lines total - lines subtotal before header discount/extra.</summary>
     public decimal LinesTotal => Subtotal;
 
-    /// <summary>قيمة الفاتورة = مجموع الأقلام − حسم + إضافي + ضريبة.</summary>
+    /// <summary>Invoice value = lines total - discount + extra + tax.</summary>
     public decimal InvoiceValue =>
         decimal.Round(Subtotal - LinesDiscountAmount + LinesExtraAmount + TaxAmount, 4, MidpointRounding.AwayFromZero);
 
-    /// <summary>الصافي بعد الحسم والإضافي (بدون فصل الضريبة إن دُمجت في قيمة الفاتورة).</summary>
+    /// <summary>Net after discount and extra (without separating tax if it is merged into the invoice value).</summary>
     public decimal NetAmount =>
         decimal.Round(Subtotal - LinesDiscountAmount + LinesExtraAmount, 4, MidpointRounding.AwayFromZero);
 
-    /// <summary>الباقي = قيمة الفاتورة − المدفوع.</summary>
+    /// <summary>Remaining = invoice value - paid.</summary>
     public decimal RemainingAmount =>
         decimal.Round(InvoiceValue - PaidAmount, 4, MidpointRounding.AwayFromZero);
 
@@ -177,26 +177,26 @@ public sealed class InvDoc
 
     /// <summary>
     /// Default goods / stock account caption by document kind
-    /// (حساب المشتريات، مرتجع المشتريات، المبيعات، …).
+    /// (purchases account, purchase returns, sales, ...).
     /// </summary>
     public static string DefaultGoodsAccountName(InvDocKind kind) => kind switch
     {
-        InvDocKind.PurchaseInvoice => "حساب المشتريات",
-        InvDocKind.PurchaseReturn => "حساب مرتجع المشتريات",
-        InvDocKind.SalesInvoice => "حساب المبيعات",
-        InvDocKind.SalesReturn => "حساب مرتجع المبيعات",
-        InvDocKind.PosSale => "حساب مبيعات نقاط البيع",
-        InvDocKind.Quotation => "حساب المبيعات",
-        InvDocKind.StockIn => "حساب المخزون",
-        InvDocKind.StockOut => "حساب المخزون",
-        InvDocKind.StockTransfer => "حساب المخزون",
-        InvDocKind.OpeningStock => "حساب بضاعة أول المدة",
-        _ => "حساب البضاعة"
+        InvDocKind.PurchaseInvoice => "Purchases Account",
+        InvDocKind.PurchaseReturn => "Purchase Returns Account",
+        InvDocKind.SalesInvoice => "Sales Account",
+        InvDocKind.SalesReturn => "Sales Returns Account",
+        InvDocKind.PosSale => "POS Sales Account",
+        InvDocKind.Quotation => "Sales Account",
+        InvDocKind.StockIn => "Inventory Account",
+        InvDocKind.StockOut => "Inventory Account",
+        InvDocKind.StockTransfer => "Inventory Account",
+        InvDocKind.OpeningStock => "Opening Inventory Account",
+        _ => "Goods Account"
     };
 
-    public static string DefaultCashAccountName() => "حساب الصندوق";
-    public static string DefaultBankAccountName() => "حساب البنك";
-    public static string DefaultWarehouseName() => "المستودع العام";
+    public static string DefaultCashAccountName() => "Cash Account";
+    public static string DefaultBankAccountName() => "Bank Account";
+    public static string DefaultWarehouseName() => "Main Warehouse";
 
     public void RenumberLines()
     {

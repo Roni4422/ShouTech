@@ -113,7 +113,7 @@ namespace ShouTech.App.Views
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    $"خطأ: {ex.Message}",
+                    $"Error: {ex.Message}",
                     "ShouTech ERP",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
@@ -536,8 +536,8 @@ namespace ShouTech.App.Views
 
             MaximizeButton.ToolTip =
                 maximized
-                    ? "استعادة"
-                    : "تكبير";
+                    ? "Restore"
+                    : "Maximize";
         }
 
         private void RefreshLocalizedText()
@@ -552,103 +552,103 @@ namespace ShouTech.App.Views
             if (MenuFile != null)
             {
                 MenuFile.Header =
-                    L("File", "ملف");
+                    L("File", "File");
             }
 
             if (MenuInventory != null)
             {
                 MenuInventory.Header =
-                    L("Inventory", "مستودعات");
+                    L("Inventory", "Inventory");
             }
 
             if (MenuAccounts != null)
             {
                 MenuAccounts.Header =
-                    L("Accounts", "حسابات");
+                    L("Accounts", "Accounts");
             }
 
             if (MenuBonds != null)
             {
                 MenuBonds.Header =
-                    L("Bonds", "سندات");
+                    L("Bonds", "Vouchers");
             }
 
             if (MenuInvoices != null)
             {
                 MenuInvoices.Header =
-                    L("Invoices", "فواتير");
+                    L("Invoices", "Invoices");
             }
 
             if (MenuPOS != null)
             {
                 MenuPOS.Header =
-                    L("POS", "نقاط بيع");
+                    L("POS", "POS");
             }
 
             if (MenuOrders != null)
             {
                 MenuOrders.Header =
-                    L("Orders", "طلبيات");
+                    L("Orders", "Orders");
             }
 
             if (MenuCustomers != null)
             {
                 MenuCustomers.Header =
-                    L("Customers", "عملاء");
+                    L("Customers", "Customers");
             }
 
             if (MenuSalesRep != null)
             {
                 MenuSalesRep.Header =
-                    L("SalesRep", "مندوب");
+                    L("SalesRep", "Sales Representatives");
             }
 
             if (MenuManufacturing != null)
             {
                 MenuManufacturing.Header =
-                    L("Manufacturing", "تصنيع");
+                    L("Manufacturing", "Manufacturing");
             }
 
             if (MenuBanks != null)
             {
                 MenuBanks.Header =
-                    L("Banks", "بنوك");
+                    L("Banks", "Banks");
             }
 
             if (MenuReports != null)
             {
                 MenuReports.Header =
-                    L("Reports", "تقارير");
+                    L("Reports", "Reports");
             }
 
             if (MenuTools != null)
             {
                 MenuTools.Header =
-                    L("Tools", "أدوات");
+                    L("Tools", "Tools");
             }
 
             if (MenuOtherTools != null)
             {
                 MenuOtherTools.Header =
-                    L("OtherTools", "أدوات أخرى");
+                    L("OtherTools", "Other Tools");
             }
 
             if (MenuView != null)
             {
                 MenuView.Header =
-                    L("View", "عرض");
+                    L("View", "View");
             }
 
             if (MenuExit != null)
             {
                 MenuExit.Header =
-                    L("Exit", "خروج");
+                    L("Exit", "Exit");
             }
 
             if (MenuHelp != null)
             {
                 MenuHelp.Header =
-                    L("Help", "مساعدة");
+                    L("Help", "Help");
             }
 
             if (RibbonImportDataButton != null)
@@ -656,7 +656,7 @@ namespace ShouTech.App.Views
                 RibbonImportDataButton.Label =
                     AppServiceHost.Localization.GetString(
                         "Menu.Import",
-                        "استيراد بيانات");
+                        "Import Data");
             }
 
             if (RibbonExportDataButton != null)
@@ -664,7 +664,7 @@ namespace ShouTech.App.Views
                 RibbonExportDataButton.Label =
                     AppServiceHost.Localization.GetString(
                         "Menu.Export",
-                        "تصدير بيانات");
+                        "Export Data");
             }
         }
 
@@ -1755,7 +1755,7 @@ namespace ShouTech.App.Views
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    $"تعذر تبديل اللغة: {ex.Message}",
+                    $"Could not switch language: {ex.Message}",
                     "ShouTech ERP",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);

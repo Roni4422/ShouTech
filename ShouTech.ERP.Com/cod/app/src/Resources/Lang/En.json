@@ -184,6 +184,8 @@
     "CreateFailed": "Could not create the item."
   },
   "Common": {
+    "OperationUnavailable": "Operation unavailable",
+    "NoDataSaved": "No data was saved.",
     "Close": "Close",
     "Delete": "Delete",
     "Edit": "Edit",
@@ -685,6 +687,7 @@
     "ItemType.Kit": "Kit"
   },
   "Menu": {
+    "General": "General",
     "Accounts": "Accounts",
     "Banks": "Banks",
     "Bonds": "Vouchers",
@@ -920,6 +923,31 @@
     "PermanentlyDeleted": "Company permanently deleted."
   },
   "CompanyEdit": {
+    "License": "License",
+    "Website": "Website",
+    "Address2": "Address line 2",
+    "DecimalPlaces": "Decimal places",
+    "Calendar": "Calendar",
+    "NumberGrouping": "Number grouping",
+    "CompanyLanguage": "Company language",
+    "ChartOfAccounts": "Chart of accounts",
+    "DefaultWarehouse": "Default warehouse",
+    "FiscalYearStart": "Fiscal year start",
+    "FiscalYearEnd": "Fiscal year end",
+    "Notes": "Notes",
+    "AdminUsername": "Administrator username",
+    "AdminName": "Administrator name",
+    "DbProvider": "Database provider",
+    "DbPath": "Database path",
+    "AltDbPath": "Alternate database path",
+    "BackupPath": "Backup path",
+    "AltBackupPath": "Alternate backup path",
+    "BackupSchedule": "Backup schedule",
+    "BackupTime": "Backup time",
+    "EnableAutoBackup": "Enable automatic backup",
+    "DecimalPlacesInvalid": "Decimal places must be a number from 0 to 6.",
+    "FiscalDatesInvalid": "Enter both fiscal year dates and make sure the end date is not before the start date.",
+    "SavedLocallyDbFailed": "Company details were saved locally, but the database could not be updated.",
     "NameAr": "Name (AR)",
     "NameEn": "Name (EN)",
     "Tax": "Tax / Registration",
@@ -1145,6 +1173,7 @@
     "Failed": "Export failed."
   },
   "Invoice": {
+    "ReverseReason": "User requested reversal from invoice window",
     "SalesTitle": "Sales Invoice",
     "PurchaseTitle": "Purchase Invoice",
     "PointOfSaleTitle": "Point of Sale Invoice",
@@ -1833,5 +1862,30 @@
     "Deleted": "Asset deleted.",
     "PermissionDenied": "You do not have permission to perform this asset action.",
     "ServiceUnavailable": "Fixed assets service is unavailable (no database connection)."
+  },
+  "RecycleBin": {
+    "Description": "Soft-deleted master data for the active company. Restore returns items to working lists. Permanent delete cannot be undone.",
+    "Title": "Recycle Bin",
+    "Dataset": "Dataset",
+    "Label": "Label",
+    "Table": "Table",
+    "DeletedAt": "Deleted at",
+    "DeletedBy": "Deleted by",
+    "Refresh": "Refresh",
+    "RestoreSelected": "Restore selected",
+    "DeletePermanently": "Delete permanently",
+    "Close": "Close",
+    "Loading": "Loading…",
+    "NoActiveCompany": "No active company. Open a company session first.",
+    "Empty": "The recycle bin is empty for this company.",
+    "ItemCount": "{0:N0} item(s) in the recycle bin for company {1}.",
+    "LoadFailed": "Failed to load the recycle bin.",
+    "SelectToRestore": "Select one or more rows to restore.",
+    "Restored": "Restored {0:N0} item(s).",
+    "RestoredPartial": "Restored {0:N0} item(s). {1:N0} failed.{2}{3}",
+    "SelectToPurge": "Select one or more rows to delete permanently.",
+    "ConfirmPurge": "Selected items will be permanently deleted and cannot be restored.\n\nContinue?",
+    "Purged": "Permanently deleted {0:N0} item(s).",
+    "PurgedPartial": "Permanently deleted {0:N0} item(s). {1:N0} failed.{2}{3}"
   }
 }

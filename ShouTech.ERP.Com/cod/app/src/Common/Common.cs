@@ -57,10 +57,10 @@ public sealed class AppLang
 
         public static IReadOnlyList<AppLang> All { get; } =
         [
-            new() { Code = "ar-SY", Name = "العربية (سوريا)" },
-            new() { Code = "ar-SA", Name = "العربية (السعودية)" },
-            new() { Code = "ar-AE", Name = "العربية (الإمارات)" },
-            new() { Code = "ar-EG", Name = "العربية (مصر)" },
+            new() { Code = "ar-SY", Name = "Arabic (Syria)" },
+            new() { Code = "ar-SA", Name = "Arabic (Saudi Arabia)" },
+            new() { Code = "ar-AE", Name = "Arabic (UAE)" },
+            new() { Code = "ar-EG", Name = "Arabic (Egypt)" },
             new() { Code = "en-US", Name = "English (US)" },
         ];
     }
@@ -76,25 +76,25 @@ public sealed class ArabCountry
 
         public static IReadOnlyList<ArabCountry> All { get; } =
         [
-            new() { Code = "SY", Name = "سوريا", NameEn = "Syria" },
-            new() { Code = "SA", Name = "المملكة العربية السعودية", NameEn = "Saudi Arabia" },
-            new() { Code = "AE", Name = "الإمارات العربية المتحدة", NameEn = "United Arab Emirates" },
-            new() { Code = "KW", Name = "الكويت", NameEn = "Kuwait" },
-            new() { Code = "QA", Name = "قطر", NameEn = "Qatar" },
-            new() { Code = "BH", Name = "البحرين", NameEn = "Bahrain" },
-            new() { Code = "OM", Name = "عُمان", NameEn = "Oman" },
-            new() { Code = "JO", Name = "الأردن", NameEn = "Jordan" },
-            new() { Code = "EG", Name = "مصر", NameEn = "Egypt" },
-            new() { Code = "IQ", Name = "العراق", NameEn = "Iraq" },
-            new() { Code = "LB", Name = "لبنان", NameEn = "Lebanon" },
-            new() { Code = "MA", Name = "المغرب", NameEn = "Morocco" },
-            new() { Code = "TN", Name = "تونس", NameEn = "Tunisia" },
-            new() { Code = "DZ", Name = "الجزائر", NameEn = "Algeria" },
-            new() { Code = "YE", Name = "اليمن", NameEn = "Yemen" },
-            new() { Code = "LY", Name = "ليبيا", NameEn = "Libya" },
-            new() { Code = "SD", Name = "السودان", NameEn = "Sudan" },
-            new() { Code = "PS", Name = "فلسطين", NameEn = "Palestine" },
-            new() { Code = "TR", Name = "تركيا", NameEn = "Turkey" },
+            new() { Code = "SY", Name = "Syria", NameEn = "Syria" },
+            new() { Code = "SA", Name = "Saudi Arabia", NameEn = "Saudi Arabia" },
+            new() { Code = "AE", Name = "United Arab Emirates", NameEn = "United Arab Emirates" },
+            new() { Code = "KW", Name = "Kuwait", NameEn = "Kuwait" },
+            new() { Code = "QA", Name = "Qatar", NameEn = "Qatar" },
+            new() { Code = "BH", Name = "Bahrain", NameEn = "Bahrain" },
+            new() { Code = "OM", Name = "Oman", NameEn = "Oman" },
+            new() { Code = "JO", Name = "Jordan", NameEn = "Jordan" },
+            new() { Code = "EG", Name = "Egypt", NameEn = "Egypt" },
+            new() { Code = "IQ", Name = "Iraq", NameEn = "Iraq" },
+            new() { Code = "LB", Name = "Lebanon", NameEn = "Lebanon" },
+            new() { Code = "MA", Name = "Morocco", NameEn = "Morocco" },
+            new() { Code = "TN", Name = "Tunisia", NameEn = "Tunisia" },
+            new() { Code = "DZ", Name = "Algeria", NameEn = "Algeria" },
+            new() { Code = "YE", Name = "Yemen", NameEn = "Yemen" },
+            new() { Code = "LY", Name = "Libya", NameEn = "Libya" },
+            new() { Code = "SD", Name = "Sudan", NameEn = "Sudan" },
+            new() { Code = "PS", Name = "Palestine", NameEn = "Palestine" },
+            new() { Code = "TR", Name = "Turkey", NameEn = "Turkey" },
         ];
     }
 
@@ -109,24 +109,24 @@ public sealed class ArabCurr
 
         public static IReadOnlyList<ArabCurr> All { get; } =
         [
-            new() { Code = "SYP", Name = "ليرة سورية", Symbol = "ل.س" },
-            new() { Code = "SAR", Name = "ريال سعودي", Symbol = "ر.س" },
-            new() { Code = "AED", Name = "درهم إماراتي", Symbol = "د.إ" },
-            new() { Code = "KWD", Name = "دينار كويتي", Symbol = "د.ك" },
-            new() { Code = "QAR", Name = "ريال قطري", Symbol = "ر.ق" },
-            new() { Code = "BHD", Name = "دينار بحريني", Symbol = "د.ب" },
-            new() { Code = "OMR", Name = "ريال عماني", Symbol = "ر.ع" },
-            new() { Code = "JOD", Name = "دينار أردني", Symbol = "د.أ" },
-            new() { Code = "EGP", Name = "جنيه مصري", Symbol = "ج.م" },
-            new() { Code = "IQD", Name = "دينار عراقي", Symbol = "د.ع" },
-            new() { Code = "LBP", Name = "ليرة لبنانية", Symbol = "ل.ل" },
-            new() { Code = "MAD", Name = "درهم مغربي", Symbol = "د.م" },
-            new() { Code = "TND", Name = "دينار تونسي", Symbol = "د.ت" },
-            new() { Code = "DZD", Name = "دينار جزائري", Symbol = "د.ج" },
-            new() { Code = "YER", Name = "ريال يمني", Symbol = "ر.ي" },
-            new() { Code = "LYD", Name = "دينار ليبي", Symbol = "د.ل" },
-            new() { Code = "SDG", Name = "جنيه سوداني", Symbol = "ج.س" },
-            new() { Code = "TRY", Name = "ليرة تركية", Symbol = "₺" },
+            new() { Code = "SYP", Name = "Syrian Pound", Symbol = "SYP" },
+            new() { Code = "SAR", Name = "Saudi Riyal", Symbol = "SAR" },
+            new() { Code = "AED", Name = "UAE Dirham", Symbol = "AED" },
+            new() { Code = "KWD", Name = "Kuwaiti Dinar", Symbol = "KWD" },
+            new() { Code = "QAR", Name = "Qatari Riyal", Symbol = "QAR" },
+            new() { Code = "BHD", Name = "Bahraini Dinar", Symbol = "BHD" },
+            new() { Code = "OMR", Name = "Omani Rial", Symbol = "OMR" },
+            new() { Code = "JOD", Name = "Jordanian Dinar", Symbol = "JOD" },
+            new() { Code = "EGP", Name = "Egyptian Pound", Symbol = "EGP" },
+            new() { Code = "IQD", Name = "Iraqi Dinar", Symbol = "IQD" },
+            new() { Code = "LBP", Name = "Lebanese Pound", Symbol = "LBP" },
+            new() { Code = "MAD", Name = "Moroccan Dirham", Symbol = "MAD" },
+            new() { Code = "TND", Name = "Tunisian Dinar", Symbol = "TND" },
+            new() { Code = "DZD", Name = "Algerian Dinar", Symbol = "DZD" },
+            new() { Code = "YER", Name = "Yemeni Rial", Symbol = "YER" },
+            new() { Code = "LYD", Name = "Libyan Dinar", Symbol = "LYD" },
+            new() { Code = "SDG", Name = "Sudanese Pound", Symbol = "SDG" },
+            new() { Code = "TRY", Name = "Turkish Lira", Symbol = "₺" },
         ];
     }
 
@@ -322,7 +322,7 @@ internal static class JsonDefs
 
         public static void Dock(Window window, MainShVM viewModel)
         {
-            var title = string.IsNullOrWhiteSpace(window.Title) ? "نافذة" : window.Title;
+            var title = string.IsNullOrWhiteSpace(window.Title) ? "Window" : window.Title;
 
             window.WindowState = WindowState.Normal;
             window.ShowInTaskbar = false;

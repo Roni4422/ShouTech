@@ -31,7 +31,7 @@ public partial class CoaWin : BaseWin
             var m = postingMode.Trim();
             return m.Equals("Summary", StringComparison.OrdinalIgnoreCase)
                 || m.Equals("Group", StringComparison.OrdinalIgnoreCase)
-                || m.Equals("تجميعي", StringComparison.Ordinal);
+                || m.Equals("Summary", StringComparison.Ordinal);
         }
 
 
@@ -109,33 +109,33 @@ public partial class CoaWin : BaseWin
     {
         var data = new (string Code, string? Parent, string Ar, string En, string Mode)[]
         {
-            ("1", null, "الأصول", "Assets", "Summary"), ("11", "1", "الأصول الثابتة", "Fixed Assets", "Summary"),
-            ("111", "11", "الأراضي", "Land", "Postable"), ("112", "11", "المباني والعقارات", "Buildings", "Postable"),
-            ("113", "11", "الآلات والمعدات", "Machinery & Equipment", "Postable"), ("114", "11", "السيارات ووسائل النقل", "Vehicles", "Postable"),
-            ("115", "11", "الأثاث والتجهيزات", "Furniture & Fixtures", "Postable"), ("116", "11", "الأجهزة المكتبية والحاسوب", "Office Equipment & Computers", "Postable"),
-            ("12", "1", "الأصول المتداولة", "Current Assets", "Summary"), ("121", "12", "المخزون", "Inventory", "Postable"),
-            ("122", "12", "المصروفات المدفوعة مقدمًا", "Prepaid Expenses", "Postable"), ("123", "12", "دفعات مقدمة", "Advances", "Postable"),
-            ("13", "1", "النقدية وما في حكمها", "Cash & Cash Equivalents", "Summary"), ("131", "13", "الصندوق", "Cash", "Postable"),
-            ("132", "13", "البنوك", "Banks", "Postable"), ("133", "13", "شيكات وأوراق قبض", "Checks & Receivables", "Postable"),
-            ("14", "1", "العملاء", "Customers", "Summary"), ("1401", "14", "العميل الأول", "Customer 1", "Postable"),
-            ("15", "1", "ذمم مدينة", "Other Receivables", "Summary"), ("151", "15", "ذمم مدينة أخرى", "Other Receivables", "Postable"),
-            ("2", null, "الخصوم", "Liabilities", "Summary"), ("21", "2", "الالتزامات المتداولة", "Current Liabilities", "Summary"),
-            ("211", "21", "الموردون", "Suppliers", "Postable"), ("212", "21", "مصروفات مستحقة", "Accrued Expenses", "Postable"),
-            ("213", "21", "ضرائب مستحقة", "Taxes Payable", "Postable"), ("22", "2", "الالتزامات طويلة الأجل", "Long-term Liabilities", "Summary"),
-            ("221", "22", "القروض طويلة الأجل", "Long-term Loans", "Postable"), ("3", null, "حقوق الملكية", "Equity", "Summary"),
-            ("31", "3", "رأس المال", "Capital", "Postable"), ("32", "3", "الأرباح المحتجزة", "Retained Earnings", "Postable"),
-            ("33", "3", "صافي الربح أو الخسارة", "Net Profit or Loss", "Postable"), ("4", null, "المشتريات", "Purchases", "Summary"),
-            ("41", "4", "المشتريات", "Purchases", "Postable"), ("42", "4", "مردودات المشتريات", "Purchase Returns", "Postable"),
-            ("5", null, "الإيرادات", "Revenue", "Summary"), ("51", "5", "المبيعات", "Sales", "Postable"),
-            ("52", "5", "مردودات المبيعات", "Sales Returns", "Postable"), ("53", "5", "إيرادات أخرى", "Other Revenue", "Postable"),
-            ("6", null, "المصروفات", "Expenses", "Summary"), ("61", "6", "الرواتب والأجور", "Salaries & Wages", "Postable"),
-            ("62", "6", "الإيجارات", "Rent", "Postable"), ("63", "6", "الكهرباء والمياه", "Utilities", "Postable"),
-            ("64", "6", "الاتصالات", "Telecommunications", "Postable"), ("65", "6", "الصيانة", "Maintenance", "Postable"),
-            ("66", "6", "القرطاسية والمستلزمات المكتبية", "Office Supplies", "Postable")
+            (1, null, "Assets", "Assets", "Summary"), (11, "1", "Fixed Assets", "Fixed Assets", "Summary"),
+            (111, "11", "Land", "Land", "Postable"), (112, "11", "Buildings", "Buildings", "Postable"),
+            (113, "11", "Machinery & Equipment", "Machinery & Equipment", "Postable"), (114, "11", "Vehicles", "Vehicles", "Postable"),
+            (115, "11", "Furniture & Fixtures", "Furniture & Fixtures", "Postable"), (116, "11", "Office Equipment & Computers", "Office Equipment & Computers", "Postable"),
+            (12, "1", "Current Assets", "Current Assets", "Summary"), (121, "12", "Inventory", "Inventory", "Postable"),
+            (122, "12", "Prepaid Expenses", "Prepaid Expenses", "Postable"), (123, "12", "Advances", "Advances", "Postable"),
+            (13, "1", "Cash & Cash Equivalents", "Cash & Cash Equivalents", "Summary"), (131, "13", "Cash", "Cash", "Postable"),
+            (132, "13", "Banks", "Banks", "Postable"), (133, "13", "Checks & Receivables", "Checks & Receivables", "Postable"),
+            (14, "1", "Customers", "Customers", "Summary"), (1401, "14", "Customer 1", "Customer 1", "Postable"),
+            (15, "1", "Other Receivables", "Other Receivables", "Summary"), (151, "15", "Other Receivables", "Other Receivables", "Postable"),
+            (2, null, "Liabilities", "Liabilities", "Summary"), (21, "2", "Current Liabilities", "Current Liabilities", "Summary"),
+            (211, "21", "Suppliers", "Suppliers", "Postable"), (212, "21", "Accrued Expenses", "Accrued Expenses", "Postable"),
+            (213, "21", "Taxes Payable", "Taxes Payable", "Postable"), (22, "2", "Long-term Liabilities", "Long-term Liabilities", "Summary"),
+            (221, "22", "Long-term Loans", "Long-term Loans", "Postable"), (3, null, "Equity", "Equity", "Summary"),
+            (31, "3", "Capital", "Capital", "Postable"), (32, "3", "Retained Earnings", "Retained Earnings", "Postable"),
+            (33, "3", "Net Profit or Loss", "Net Profit or Loss", "Postable"), (4, null, "Purchases", "Purchases", "Summary"),
+            (41, "4", "Purchases", "Purchases", "Postable"), (42, "4", "Purchase Returns", "Purchase Returns", "Postable"),
+            (5, null, "Revenue", "Revenue", "Summary"), (51, "5", "Sales", "Sales", "Postable"),
+            (52, "5", "Sales Returns", "Sales Returns", "Postable"), (53, "5", "Other Revenue", "Other Revenue", "Postable"),
+            (6, null, "Expenses", "Expenses", "Summary"), (61, "6", "Salaries & Wages", "Salaries & Wages", "Postable"),
+            (62, "6", "Rent", "Rent", "Postable"), (63, "6", "Utilities", "Utilities", "Postable"),
+            (64, "6", "Telecommunications", "Telecommunications", "Postable"), (65, "6", "Maintenance", "Maintenance", "Postable"),
+            (66, "6", "Office Supplies", "Office Supplies", "Postable")
         };
         foreach (var item in data)
         {
-            var rec = new AccRepo.AccRec(0, item.Code, item.Parent, item.Ar, item.En, item.Mode, "فعال", "منخفض", "غير محدد", false, false, false, false, false, false, 0, string.Empty, 0, 0, 0);
+            var rec = new AccRepo.AccRec(0, item.Code, item.Parent, item.Ar, item.En, item.Mode, "Active", "Low", "Unspecified", false, false, false, false, false, false, 0, string.Empty, 0, 0, 0);
             AccRepo.Save(null, rec, false);
         }
     }
@@ -157,7 +157,7 @@ public partial class CoaWin : BaseWin
     private void RebindTree(IEnumerable<AccountNode> roots)
     {
         TvAccounts.ItemsSource = roots.ToList();
-        TxtCount.Text = $"عدد الحسابات: {CountNodes(_allRoots)}";
+        TxtCount.Text = $"Accounts: {CountNodes(_allRoots)}";
     }
 
     private static int CountNodes(IEnumerable<AccountNode> nodes) => nodes.Sum(n => 1 + CountNodes(n.Children));
@@ -257,8 +257,8 @@ public partial class CoaWin : BaseWin
     {
         _selected = e.NewValue as AccountNode;
         TxtSelected.Text = _selected == null
-            ? "لم يتم اختيار حساب"
-            : $"الحساب المحدد: {_selected.Code} - {_selected.Name}";
+            ? "No account selected"
+            : $"Selected account: {_selected.Code} - {_selected.Name}";
     }
 
     private void OpenAccount_Click(object sender, RoutedEventArgs e)
@@ -325,8 +325,8 @@ public partial class CoaWin : BaseWin
         RefreshChart();
     }
 
-    private void Statement_Click(object sender, RoutedEventArgs e) => ShowAction("كشف الحساب");
-    private void Ledger_Click(object sender, RoutedEventArgs e) => ShowAction("دفتر الأستاذ");
+    private void Statement_Click(object sender, RoutedEventArgs e) => ShowAction("Account Statement");
+    private void Ledger_Click(object sender, RoutedEventArgs e) => ShowAction("Ledger");
     private void Print_Click(object sender, RoutedEventArgs e) => ExportPdf();
 
     private void CopyCode_Click(object sender, RoutedEventArgs e)
@@ -345,7 +345,7 @@ public partial class CoaWin : BaseWin
             return;
 
         _selected = _selected.Parent;
-        TxtSelected.Text = $"الحساب المحدد: {_selected.Code} - {_selected.Name}";
+        TxtSelected.Text = $"Selected account: {_selected.Code} - {_selected.Name}";
         SelectTreeNode(_selected);
     }
 
@@ -384,7 +384,7 @@ public partial class CoaWin : BaseWin
             if (node != null)
             {
                 _selected = node;
-                TxtSelected.Text = $"الحساب المحدد: {node.Code} - {node.Name}";
+                TxtSelected.Text = $"Selected account: {node.Code} - {node.Name}";
                 SelectTreeNode(node);
             }
         }
@@ -437,20 +437,20 @@ public partial class CoaWin : BaseWin
     private void ExportMenu_Click(object sender, RoutedEventArgs e)
     {
         var menu = new ContextMenu { FlowDirection = FlowDirection };
-        menu.Items.Add(CreateMenuItem("Excel", "تصدير Chart of accounts إلى Excel (.xlsx)", (_, _) => ExportExcel()));
-        menu.Items.Add(CreateMenuItem("CSV", "تصدير Chart of accounts إلى CSV", (_, _) => ExportCsv()));
-        menu.Items.Add(CreateMenuItem("PDF", "طباعة أو حفظ Chart of accounts بصيغة PDF", (_, _) => ExportPdf()));
+        menu.Items.Add(CreateMenuItem("Excel", "Export Chart of accounts to Excel (.xlsx)", (_, _) => ExportExcel()));
+        menu.Items.Add(CreateMenuItem("CSV", "Export Chart of accounts to CSV", (_, _) => ExportCsv()));
+        menu.Items.Add(CreateMenuItem("PDF", "Print or save Chart of accounts as PDF", (_, _) => ExportPdf()));
         menu.Items.Add(new Separator());
-        menu.Items.Add(CreateMenuItem("ملف ShouTech مشفر (.sta)", "حفظ Chart of accounts كـ JSON مشفر بصيغة ShouTech (.sta)", (_, _) => ExportEncrypted()));
+        menu.Items.Add(CreateMenuItem("Encrypted ShouTech file (.sta)", "Save Chart of accounts as encrypted ShouTech JSON (.sta)", (_, _) => ExportEncrypted()));
         menu.IsOpen = true;
     }
 
     private void ImportMenu_Click(object sender, RoutedEventArgs e)
     {
         var menu = new ContextMenu { FlowDirection = FlowDirection };
-        menu.Items.Add(CreateMenuItem("Excel", "استيراد Chart of accounts من Excel (.xlsx)", (_, _) => ImportFile("Excel Workbook (*.xlsx)|*.xlsx")));
-        menu.Items.Add(CreateMenuItem("CSV", "استيراد Chart of accounts من CSV", (_, _) => ImportFile("CSV Files (*.csv)|*.csv")));
-        menu.Items.Add(CreateMenuItem("ملف ShouTech مشفر (.sta)", "استعادة Chart of accounts من ملف JSON مشفر بصيغة ShouTech (.sta)", (_, _) => ImportEncrypted()));
+        menu.Items.Add(CreateMenuItem("Excel", "Import Chart of accounts from Excel (.xlsx)", (_, _) => ImportFile("Excel Workbook (*.xlsx)|*.xlsx")));
+        menu.Items.Add(CreateMenuItem("CSV", "Import Chart of accounts from CSV", (_, _) => ImportFile("CSV Files (*.csv)|*.csv")));
+        menu.Items.Add(CreateMenuItem("Encrypted ShouTech file (.sta)", "Restore Chart of accounts from an encrypted ShouTech JSON file (.sta)", (_, _) => ImportEncrypted()));
         menu.IsOpen = true;
     }
 
@@ -468,7 +468,7 @@ public partial class CoaWin : BaseWin
             Filter = "CSV Files (*.csv)|*.csv",
             DefaultExt = ".csv",
             FileName = "ChartOfAccounts.csv",
-            Title = "تصدير Chart of accounts إلى CSV"
+            Title = "Export Chart of accounts to CSV"
         };
         if (dlg.ShowDialog(this) != true)
             return;
@@ -476,11 +476,11 @@ public partial class CoaWin : BaseWin
         try
         {
             File.WriteAllText(dlg.FileName, BuildDelimitedContent(','), new UTF8Encoding(true));
-            ShowInfoMsg("تم تصدير Chart of accounts إلى ملف CSV بنجاح.");
+            ShowInfoMsg("Chart of accounts exported to a CSV file successfully.");
         }
         catch (Exception ex)
         {
-            ShowErrorMsg($"تعذر تصدير CSV.\n{ex.Message}");
+            ShowErrorMsg($"Could not export CSV.\n{ex.Message}");
         }
     }
 
@@ -491,7 +491,7 @@ public partial class CoaWin : BaseWin
             Filter = "Excel Workbook (*.xlsx)|*.xlsx",
             DefaultExt = ".xlsx",
             FileName = "ChartOfAccounts.xlsx",
-            Title = "تصدير Chart of accounts إلى Excel"
+            Title = "Export Chart of accounts to Excel"
         };
         if (dlg.ShowDialog(this) != true)
             return;
@@ -505,11 +505,11 @@ public partial class CoaWin : BaseWin
             WriteZipText(archive, "xl/workbook.xml", BuildXlsxWorkbook());
             WriteZipText(archive, "xl/_rels/workbook.xml.rels", BuildXlsxWorkbookRels());
             WriteZipText(archive, "xl/worksheets/sheet1.xml", BuildXlsxSheet());
-            ShowInfoMsg("تم تصدير Chart of accounts إلى ملف Excel بنجاح.");
+            ShowInfoMsg("Chart of accounts exported to an Excel file successfully.");
         }
         catch (Exception ex)
         {
-            ShowErrorMsg($"تعذر تصدير Excel.\n{ex.Message}");
+            ShowErrorMsg($"Could not export Excel.\n{ex.Message}");
         }
     }
 
@@ -595,12 +595,12 @@ public partial class CoaWin : BaseWin
             Filter = "ShouTech Account File (*.sta)|*.sta",
             DefaultExt = ".sta",
             FileName = "ShouTechCrtOfAcc.sta",
-            Title = "تصدير Chart of accounts كملف ShouTech مشفر"
+            Title = "Export Chart of accounts as an encrypted ShouTech file"
         };
         if (dlg.ShowDialog(this) != true)
             return;
 
-        var password = AskPassword("كلمة مرور ملف Chart of accounts");
+        var password = AskPassword("Chart of accounts file password");
         if (password == null)
             return;
 
@@ -635,11 +635,11 @@ public partial class CoaWin : BaseWin
             WriteBytes(bw, tag);
             WriteBytes(bw, cipher);
 
-            ShowInfoMsg("تم إنشاء ShouTechCrtOfAcc.sta بنجاح. الملف يحتوي على JSON مشفر ويمكن استعادته من خلال الاستيراد.");
+            ShowInfoMsg("ShouTechCrtOfAcc.sta was created successfully. The file contains encrypted JSON and can be restored through import.");
         }
         catch (Exception ex)
         {
-            ShowErrorMsg($"تعذر إنشاء ملف .sta.\n{ex.Message}");
+            ShowErrorMsg($"Could not create the .sta file.\n{ex.Message}");
         }
     }
 
@@ -660,7 +660,7 @@ public partial class CoaWin : BaseWin
 
     private void ImportFile(string filter)
     {
-        var dlg = new OpenFileDialog { Filter = filter, Title = "استيراد Chart of accounts" };
+        var dlg = new OpenFileDialog { Filter = filter, Title = "Import Chart of accounts" };
         if (dlg.ShowDialog(this) != true)
             return;
 
@@ -671,11 +671,11 @@ public partial class CoaWin : BaseWin
             else
                 ImportDelimitedContent(File.ReadAllText(dlg.FileName, Encoding.UTF8).TrimStart('\uFEFF'), ',');
 
-            ShowInfoMsg("تم استيراد Chart of accounts بنجاح.");
+            ShowInfoMsg("Chart of accounts imported successfully.");
         }
         catch (Exception ex)
         {
-            ShowErrorMsg($"تعذر استيراد الملف.\n{ex.Message}");
+            ShowErrorMsg($"Could not import the file.\n{ex.Message}");
         }
     }
 
@@ -683,7 +683,7 @@ public partial class CoaWin : BaseWin
     {
         using var archive = ZipFile.OpenRead(fileName);
         var entry = archive.GetEntry("xl/worksheets/sheet1.xml")
-            ?? throw new InvalidDataException("ملف Excel لا يحتوي على ورقة الحسابات.");
+            ?? throw new InvalidDataException("The Excel file does not contain the accounts sheet.");
         using var stream = entry.Open();
         var doc = XDocument.Load(stream);
         XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -712,12 +712,12 @@ public partial class CoaWin : BaseWin
         var dlg = new OpenFileDialog
         {
             Filter = "ShouTech Account File (*.sta)|*.sta",
-            Title = "استيراد ملف ShouTech المشفر"
+            Title = "Import encrypted ShouTech file"
         };
         if (dlg.ShowDialog(this) != true)
             return;
 
-        var password = AskPassword("كلمة مرور ملف Chart of accounts");
+        var password = AskPassword("Chart of accounts file password");
         if (password == null)
             return;
 
@@ -749,7 +749,7 @@ public partial class CoaWin : BaseWin
                 throw new InvalidDataException("Unsupported .sta JSON structure.");
 
             ImportAccounts(payload.Accounts);
-            ShowInfoMsg("تم فك تشفير واستعادة Chart of accounts من ShouTechCrtOfAcc.sta بنجاح.");
+            ShowInfoMsg("Chart of accounts was decrypted and restored from ShouTechCrtOfAcc.sta successfully.");
         }
         catch (CryptographicException)
         {
@@ -831,7 +831,7 @@ public partial class CoaWin : BaseWin
             if (string.IsNullOrWhiteSpace(row.Code) || !unique.Add(row.Code))
                 throw new InvalidDataException("A missing or duplicate account number was found.");
             if (string.IsNullOrWhiteSpace(row.Name) && string.IsNullOrWhiteSpace(row.NameEn))
-                throw new InvalidDataException($"الحساب {row.Code} has no name.");
+                throw new InvalidDataException($"Account {row.Code} has no name.");
         }
 
         var byCode = accounts.ToDictionary(x => x.Code, StringComparer.OrdinalIgnoreCase);
@@ -851,7 +851,7 @@ public partial class CoaWin : BaseWin
 
             var parent = nodes[row.ParentCode];
             if (string.Equals(parent.Code, node.Code, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException($"الحساب {node.Code} cannot be its own parent.");
+                throw new InvalidDataException($"Account {node.Code} cannot be its own parent.");
             node.Parent = parent;
             parent.Children.Add(node);
         }
@@ -941,7 +941,7 @@ public partial class CoaWin : BaseWin
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 14, 0, 0) };
         var ok = new Button { Content = "OK", MinWidth = 80, IsDefault = true, Margin = new Thickness(0, 0, 6, 0), ToolTip = "Confirm password" };
-        var cancel = new Button { Content = "Cancel", MinWidth = 80, IsCancel = true, ToolTip = "Cancel العملية" };
+        var cancel = new Button { Content = "Cancel", MinWidth = 80, IsCancel = true, ToolTip = "Cancel the operation" };
         ok.Click += (_, _) => { if (!string.IsNullOrWhiteSpace(box.Password)) dialog.DialogResult = true; };
         buttons.Children.Add(ok);
         buttons.Children.Add(cancel);

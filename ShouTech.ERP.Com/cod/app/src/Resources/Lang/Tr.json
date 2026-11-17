@@ -11,6 +11,7 @@
     "Info": "Bilgi"
   },
   "Menu": {
+    "General": "Genel",
     "File": "Dosya",
     "New": "Yeni",
     "Open": "Aç",
@@ -491,6 +492,8 @@
     "RequiredField": "Bu alan zorunludur"
   },
   "Common": {
+    "OperationUnavailable": "İşlem kullanılamıyor",
+    "NoDataSaved": "Hiçbir veri kaydedilmedi.",
     "Other": "Diğer",
     "New": "Yeni",
     "Edit": "Düzenle",
@@ -583,6 +586,31 @@
     "PermanentlyDeleted": "Şirket kalıcı olarak silindi."
   },
   "CompanyEdit": {
+    "License": "Lisans",
+    "Website": "Web sitesi",
+    "Address2": "Adres satırı 2",
+    "DecimalPlaces": "Ondalık basamaklar",
+    "Calendar": "Takvim",
+    "NumberGrouping": "Sayı gruplama",
+    "CompanyLanguage": "Şirket dili",
+    "ChartOfAccounts": "Hesap planı",
+    "DefaultWarehouse": "Varsayılan depo",
+    "FiscalYearStart": "Mali yıl başlangıcı",
+    "FiscalYearEnd": "Mali yıl sonu",
+    "Notes": "Notlar",
+    "AdminUsername": "Yönetici kullanıcı adı",
+    "AdminName": "Yönetici adı",
+    "DbProvider": "Veritabanı sağlayıcısı",
+    "DbPath": "Veritabanı yolu",
+    "AltDbPath": "Yedek veritabanı yolu",
+    "BackupPath": "Yedekleme yolu",
+    "AltBackupPath": "Yedek yedekleme yolu",
+    "BackupSchedule": "Yedekleme zamanlaması",
+    "BackupTime": "Yedekleme saati",
+    "EnableAutoBackup": "Otomatik yedeklemeyi etkinleştir",
+    "DecimalPlacesInvalid": "Ondalık basamaklar 0 ile 6 arasında bir sayı olmalıdır.",
+    "FiscalDatesInvalid": "Her iki mali yıl tarihini de girin ve bitiş tarihinin başlangıç tarihinden önce olmadığından emin olun.",
+    "SavedLocallyDbFailed": "Şirket bilgileri yerel olarak kaydedildi ancak veritabanı güncellenemedi.",
     "NameAr": "Ad (AR)",
     "NameEn": "Ad (EN)",
     "Tax": "Vergi / Sicil",
@@ -1138,6 +1166,7 @@
     "Failed": "Dışa aktarma başarısız."
   },
   "Invoice": {
+    "ReverseReason": "Kullanıcı fatura penceresinden ters kayıt istedi",
     "SalesTitle": "Satış faturası",
     "PurchaseTitle": "Alış faturası",
     "PointOfSaleTitle": "Satış noktası faturası",
@@ -1497,5 +1526,30 @@
     "Deleted": "Sabit kıymet silindi.",
     "PermissionDenied": "Bu sabit kıymet işlemini yapma izniniz yok.",
     "ServiceUnavailable": "Sabit kıymet hizmeti kullanılamıyor (veritabanı bağlantısı yok)."
+  },
+  "RecycleBin": {
+    "Description": "Aktif şirketin geçici olarak silinmiş ana verileri. Geri yükleme öğeleri listelere döndürür; kalıcı silme geri alınamaz.",
+    "Title": "Geri Dönüşüm Kutusu",
+    "Dataset": "Veri kümesi",
+    "Label": "Ad",
+    "Table": "Tablo",
+    "DeletedAt": "Silinme tarihi",
+    "DeletedBy": "Silen",
+    "Refresh": "Yenile",
+    "RestoreSelected": "Seçileni geri yükle",
+    "DeletePermanently": "Kalıcı olarak sil",
+    "Close": "Kapat",
+    "Loading": "Yükleniyor…",
+    "NoActiveCompany": "Aktif şirket yok. Önce bir şirket oturumu açın.",
+    "Empty": "Bu şirket için geri dönüşüm kutusu boş.",
+    "ItemCount": "{1} şirketi için geri dönüşüm kutusunda {0:N0} öğe.",
+    "LoadFailed": "Geri dönüşüm kutusu yüklenemedi.",
+    "SelectToRestore": "Geri yüklenecek bir veya daha fazla satır seçin.",
+    "Restored": "{0:N0} öğe geri yüklendi.",
+    "RestoredPartial": "{0:N0} öğe geri yüklendi. {1:N0} başarısız.{2}{3}",
+    "SelectToPurge": "Kalıcı olarak silinecek bir veya daha fazla satır seçin.",
+    "ConfirmPurge": "Seçili öğeler kalıcı olarak silinecek ve geri yüklenemeyecek.\n\nDevam edilsin mi?",
+    "Purged": "{0:N0} öğe kalıcı olarak silindi.",
+    "PurgedPartial": "{0:N0} öğe kalıcı olarak silindi. {1:N0} başarısız.{2}{3}"
   }
 }

@@ -280,21 +280,21 @@ public class AppSetng
     // -------------------- Application --------------------
     public class ApplicationSettings
     {
-        public string Name { get; set; } = "شو تيك لإدارة المؤسسات";
+        public string Name { get; set; } = "ShouTech Enterprise Management System";
         public string NameEn { get; set; } = "ShouTech Enterprise Management System";
-        public string ShortName { get; set; } = "شو تيك ERP";
+        public string ShortName { get; set; } = "ShouTech ERP";
         public string ShortNameEn { get; set; } = "ShouTech ERP";
         public string BrandTagline { get; set; } = "Unified Business Intelligence for Regional Growth";
-        public string BrandTaglineAr { get; set; } = "ذكاء أعمال موحد لنمو المؤسسات الإقليمية";
+        public string BrandTaglineAr { get; set; } = "Unified Business Intelligence for Regional Growth";
         public string VisionStatement { get; set; } = "Empower regional enterprises with secure, intelligent, and scalable ERP.";
-        public string VisionStatementAr { get; set; } = "نقوّم المؤسسات الإقليمية بذكاء وأمان وقابلية توسع عالية.";
+        public string VisionStatementAr { get; set; } = "Empower regional enterprises with secure, intelligent, and scalable ERP.";
         public string TargetMarket { get; set; } = "Middle East & North Africa";
         public string PrimaryAudience { get; set; } = "SMB + Corporate + Multi-company groups";
         public string EnterpriseStyle { get; set; } = "Enterprise / Arabic-first / Offline-first";
         public string Version { get; set; } = "10.6.0";
         public string Build { get; set; } = "20260801";
         public DateTime BuildDate { get; set; } = new DateTime(2026, 8, 1);
-        public string Company { get; set; } = "شو تيك للبرمجيات";
+        public string Company { get; set; } = "ShouTech Software";
         public string CompanyEn { get; set; } = "ShouTech Software";
         public string Copyright { get; set; } = "© 2026 ShouTech. All rights reserved.";
         public string Website { get; set; } = "https://www.shoutech.com";
@@ -319,18 +319,18 @@ public class AppSetng
     public class CompanySettings
     {
         public string Id { get; set; } = "ST-COMP-001";
-        public string Name { get; set; } = "شو تيك للبرمجيات";
+        public string Name { get; set; } = "ShouTech Software";
         public string NameEn { get; set; } = "ShouTech Software";
-        public string CommercialName { get; set; } = "شو تيك";
+        public string CommercialName { get; set; } = "ShouTech";
         public string CommercialNameEn { get; set; } = "ShouTech";
         public string BrandSlogan { get; set; } = "Building trust through enterprise automation";
-        public string BrandSloganAr { get; set; } = "نبني الثقة عبر أتمتة مؤسسية متقدمة";
+        public string BrandSloganAr { get; set; } = "Building trust through enterprise automation";
         public string MarketRegion { get; set; } = "Middle East";
         public string OperationCenter { get; set; } = "Damascus - Syria";
         public string TaxId { get; set; } = "";
         public string CommercialRegister { get; set; } = "";
         public string VATNumber { get; set; } = "";
-        public string Address { get; set; } = "دمشق - سوريا";
+        public string Address { get; set; } = "Damascus - Syria";
         public string AddressEn { get; set; } = "Damascus - Syria";
         public string Phone { get; set; } = "";
         public string Mobile { get; set; } = "";
@@ -562,7 +562,7 @@ public class AppSetng
     public class CurrencySettings
     {
         public string DefaultCode { get; set; } = "SYP";
-        public string DefaultSymbol { get; set; } = "ل.س";
+        public string DefaultSymbol { get; set; } = "SYP";
         public CurrencyInfo SystemCurrency { get; set; } = new();
         public List<CurrencyInfo> Available { get; set; } = new();
         public ExchangeRatesSettings ExchangeRates { get; set; } = new();

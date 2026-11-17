@@ -340,7 +340,7 @@ internal static class AccRepo
     {
         var cs = DatabaseRuntime.GetConnectionString();
         if (string.IsNullOrWhiteSpace(cs))
-            throw new InvalidOperationException("لا يوجد اتصال بقاعدة بيانات الشركة الحالية.");
+            throw new InvalidOperationException("There is no connection to the current company database.");
         EnsureSchema();
         using var connection = Open(cs);
         using var transaction = connection.BeginTransaction();
@@ -348,7 +348,7 @@ internal static class AccRepo
         {
             if (current is not null
                 && !string.Equals(current.Status, value.Status, StringComparison.OrdinalIgnoreCase)
-                && string.Equals(value.Status, "معطل", StringComparison.OrdinalIgnoreCase))
+                && string.Equals(value.Status, "Disabled", StringComparison.OrdinalIgnoreCase))
             {
                 var guard = CheckLifecycleOnConnection(connection, transaction, current);
                 if (!guard.CanDisable)
@@ -358,7 +358,7 @@ internal static class AccRepo
             if (current is null)
             {
                 if (CodeExistsOnConnection(connection, transaction, value.Code, null))
-                    throw new InvalidOperationException("رقم الحساب مستخدم مسبقًا.");
+                    throw new InvalidOperationException("The account number is already in use.");
                 using var insert = connection.CreateCommand();
                 insert.Transaction = transaction;
                 insert.CommandText = InsertSql();
@@ -371,7 +371,7 @@ internal static class AccRepo
 
             if (!string.Equals(current.Code, value.Code, StringComparison.OrdinalIgnoreCase)
                 && CodeExistsOnConnection(connection, transaction, value.Code, current.Id))
-                throw new InvalidOperationException("رقم الحساب الجديد مستخدم مسبقًا.");
+                throw new InvalidOperationException("The new account number is already in use.");
 
             using var update = connection.CreateCommand();
             update.Transaction = transaction;
@@ -406,7 +406,7 @@ internal static class AccRepo
     {
         var cs = DatabaseRuntime.GetConnectionString();
         if (string.IsNullOrWhiteSpace(cs))
-            throw new InvalidOperationException("لا يوجد اتصال بقاعدة بيانات الشركة الحالية.");
+            throw new InvalidOperationException("There is no connection to the current company database.");
 
         EnsureSchema();
         using var connection = Open(cs);
@@ -420,11 +420,11 @@ internal static class AccRepo
     public static void Delete(AccRec account)
     {
         if (account.Id <= 0)
-            throw new InvalidOperationException("الحساب غير صالح للحذف.");
+            throw new InvalidOperationException("The account is not eligible for deletion.");
 
         var cs = DatabaseRuntime.GetConnectionString();
         if (string.IsNullOrWhiteSpace(cs))
-            throw new InvalidOperationException("لا يوجد اتصال بقاعدة بيانات الشركة الحالية.");
+            throw new InvalidOperationException("There is no connection to the current company database.");
 
         EnsureSchema();
         using var connection = Open(cs);
@@ -436,7 +436,7 @@ internal static class AccRepo
                 throw new InvalidOperationException(string.Join(Environment.NewLine, guard.Reasons));
 
             if (HasChildrenOnConnection(connection, transaction, account.Code))
-                throw new InvalidOperationException("لا يمكن حذف الحساب لأنه يحتوي على حسابات فرعية. احذف الحسابات الفرعية أولًا.");
+                throw new InvalidOperationException("The account cannot be deleted because it has child accounts. Delete the child accounts first.");
 
             using var command = connection.CreateCommand();
             command.Transaction = transaction;
@@ -451,7 +451,7 @@ internal static class AccRepo
             Add(command, "$id", account.Id);
             Add(command, "$deletedBy", AppState.CurrentUser?.Username);
             if (command.ExecuteNonQuery() != 1)
-                throw new InvalidOperationException("تعذر نقل الحساب إلى سلة المحذوفات لأنه لم يعد موجودًا في الشركة الحالية.");
+                throw new InvalidOperationException("The account could not be moved to the recycle bin because it no longer exists in the current company.");
 
             transaction.Commit();
         }
@@ -467,10 +467,10 @@ internal static class AccRepo
         var reasons = new List<string>();
 
         if (account.Balance != 0 || account.Debit != 0 || account.Credit != 0)
-            reasons.Add("الحساب يحتوي على رصيد أو حركة مالية.");
+            reasons.Add("The account has a balance or financial activity.");
 
         if (HasChildrenOnConnection(connection, transaction, account.Code))
-            reasons.Add("الحساب يحتوي على حسابات فرعية.");
+            reasons.Add("The account has child accounts.");
 
         foreach (var reference in FindAccountReferences(connection, transaction, account))
         {
@@ -502,8 +502,8 @@ internal static class AccRepo
                                    || column.Contains("customer", StringComparison.OrdinalIgnoreCase)
                                    || column.Contains("client", StringComparison.OrdinalIgnoreCase);
                 references.Add(customerLike
-                    ? "الحساب مرتبط ببطاقة عميل. يجب إزالة ارتباط الحساب من بطاقة العميل أولًا."
-                    : $"الحساب مرتبط ببيانات أو عمليات في {tableName} ({columnName}).");
+                    ? "The account is linked to a customer card. Remove the account link from the customer card first."
+                    : $"The account is linked to data or operations in {tableName} ({columnName}).");
             }
         }
 
@@ -668,10 +668,10 @@ internal static class AccRepo
             foreach (var child in children)
             {
                 if (!visited.Add(child.Id))
-                    throw new InvalidOperationException("تعذر إعادة ترقيم الحسابات بسبب وجود دورة في شجرة الحسابات.");
+                    throw new InvalidOperationException("Accounts could not be renumbered because there is a cycle in the account tree.");
 
                 if (!child.Code.StartsWith(oldPrefix, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException($"الحساب التابع {child.Code} لا يتبع بنية الحساب الأب {oldPrefix}.");
+                    throw new InvalidOperationException($"The child account {child.Code} does not follow the parent account structure {oldPrefix}.");
 
                 descendants.Add(child);
                 queue.Enqueue(child.Code);
@@ -689,7 +689,7 @@ internal static class AccRepo
         foreach (var item in mapping)
         {
             if (!targetCodes.Add(item.New))
-                throw new InvalidOperationException("إعادة ترقيم الحسابات التابعة ستنتج أرقامًا مكررة.");
+                throw new InvalidOperationException("Renumbering the child accounts would produce duplicate numbers.");
         }
 
         foreach (var item in mapping)
@@ -701,7 +701,7 @@ internal static class AccRepo
             Add(check, "$code", item.New);
             Add(check, "$id", item.Id);
             if (Convert.ToInt64(check.ExecuteScalar(), CultureInfo.InvariantCulture) > 0)
-                throw new InvalidOperationException($"لا يمكن إعادة الترقيم لأن الرقم {item.New} مستخدم بالفعل.");
+                throw new InvalidOperationException($"Cannot renumber because the number {item.New} is already in use.");
         }
 
         foreach (var item in mapping)
@@ -831,7 +831,7 @@ internal static class AccRepo
     {
         var value = code.Trim();
         if (value.Length == 0 || value.Any(c => !char.IsDigit(c)))
-            throw new ArgumentException("رقم الحساب يجب أن يتكون من أرقام فقط.", nameof(code));
+            throw new ArgumentException("The account number must consist of digits only.", nameof(code));
         return value;
     }
 

@@ -11,6 +11,7 @@
     "Info": "Information"
   },
   "Menu": {
+    "General": "Général",
     "File": "Fichier",
     "New": "Nouveau",
     "Open": "Ouvrir",
@@ -491,6 +492,8 @@
     "RequiredField": "Ce champ est requis"
   },
   "Common": {
+    "OperationUnavailable": "Opération indisponible",
+    "NoDataSaved": "Aucune donnée n'a été enregistrée.",
     "Other": "Autres",
     "New": "Nouveau",
     "Edit": "Modifier",
@@ -566,6 +569,31 @@
     "OpenLoginFailed": "Échec de l'ouverture de la fenêtre de connexion"
   },
   "CompanyEdit": {
+    "License": "Licence",
+    "Website": "Site web",
+    "Address2": "Adresse ligne 2",
+    "DecimalPlaces": "Décimales",
+    "Calendar": "Calendrier",
+    "NumberGrouping": "Regroupement des nombres",
+    "CompanyLanguage": "Langue de la société",
+    "ChartOfAccounts": "Plan comptable",
+    "DefaultWarehouse": "Entrepôt par défaut",
+    "FiscalYearStart": "Début de l'exercice",
+    "FiscalYearEnd": "Fin de l'exercice",
+    "Notes": "Notes",
+    "AdminUsername": "Nom d'utilisateur administrateur",
+    "AdminName": "Nom de l'administrateur",
+    "DbProvider": "Fournisseur de base de données",
+    "DbPath": "Chemin de la base de données",
+    "AltDbPath": "Chemin de base de données secondaire",
+    "BackupPath": "Chemin de sauvegarde",
+    "AltBackupPath": "Chemin de sauvegarde secondaire",
+    "BackupSchedule": "Planification de sauvegarde",
+    "BackupTime": "Heure de sauvegarde",
+    "EnableAutoBackup": "Activer la sauvegarde automatique",
+    "DecimalPlacesInvalid": "Les décimales doivent être un nombre de 0 à 6.",
+    "FiscalDatesInvalid": "Saisissez les deux dates de l'exercice et vérifiez que la date de fin n'est pas antérieure à la date de début.",
+    "SavedLocallyDbFailed": "Les données de la société ont été enregistrées localement, mais la base de données n'a pas pu être mise à jour.",
     "NameAr": "Nom (AR)",
     "NameEn": "Nom (EN)",
     "Tax": "Taxe / RC",
@@ -1121,6 +1149,7 @@
     "Failed": "Échec de l'exportation."
   },
   "Invoice": {
+    "ReverseReason": "L'utilisateur a demandé l'extourne depuis la fenêtre de facture",
     "SalesTitle": "Facture de vente",
     "PurchaseTitle": "Facture d'achat",
     "PointOfSaleTitle": "Facture de point de vente",
@@ -1480,5 +1509,30 @@
     "Deleted": "Immobilisation supprimée.",
     "PermissionDenied": "Vous n'avez pas l'autorisation d'effectuer cette action sur les immobilisations.",
     "ServiceUnavailable": "Le service des immobilisations est indisponible (aucune connexion à la base de données)."
+  },
+  "RecycleBin": {
+    "Description": "Données de base supprimées (logiquement) de la société active. La restauration remet les éléments dans les listes ; la suppression définitive est irréversible.",
+    "Title": "Corbeille",
+    "Dataset": "Jeu de données",
+    "Label": "Libellé",
+    "Table": "Table",
+    "DeletedAt": "Supprimé le",
+    "DeletedBy": "Supprimé par",
+    "Refresh": "Actualiser",
+    "RestoreSelected": "Restaurer la sélection",
+    "DeletePermanently": "Supprimer définitivement",
+    "Close": "Fermer",
+    "Loading": "Chargement…",
+    "NoActiveCompany": "Aucune société active. Ouvrez d'abord une session de société.",
+    "Empty": "La corbeille est vide pour cette société.",
+    "ItemCount": "{0:N0} élément(s) dans la corbeille pour la société {1}.",
+    "LoadFailed": "Échec du chargement de la corbeille.",
+    "SelectToRestore": "Sélectionnez une ou plusieurs lignes à restaurer.",
+    "Restored": "{0:N0} élément(s) restauré(s).",
+    "RestoredPartial": "{0:N0} élément(s) restauré(s). {1:N0} échec(s).{2}{3}",
+    "SelectToPurge": "Sélectionnez une ou plusieurs lignes à supprimer définitivement.",
+    "ConfirmPurge": "Les éléments sélectionnés seront supprimés définitivement et ne pourront pas être restaurés.\n\nContinuer ?",
+    "Purged": "{0:N0} élément(s) supprimé(s) définitivement.",
+    "PurgedPartial": "{0:N0} élément(s) supprimé(s) définitivement. {1:N0} échec(s).{2}{3}"
   }
 }

@@ -42,7 +42,7 @@ public sealed class OrdWin : BaseWin
         MessageBox.Show(
             this,
             $"[{definition.Code}] {definition.Message}\n{context}",
-            "العملية غير متاحة",
+            ShouTech.App.Localization.Loc.Get("Common.OperationUnavailable", "Operation unavailable"),
             MessageBoxButton.OK,
             MessageBoxImage.Warning);
     }
@@ -71,8 +71,8 @@ public sealed class OrdWin : BaseWin
 
         MessageBox.Show(
             this,
-            $"[{definition.Code}] {definition.Message}\n{context}\nلم يتم حفظ أي بيانات.",
-            "العملية غير متاحة",
+            $"[{definition.Code}] {definition.Message}\n{context}\n{ShouTech.App.Localization.Loc.Get("Common.NoDataSaved", "No data was saved.")}",
+            ShouTech.App.Localization.Loc.Get("Common.OperationUnavailable", "Operation unavailable"),
             MessageBoxButton.OK,
             MessageBoxImage.Warning);
     }

@@ -1084,27 +1084,27 @@ internal static class SqliteSchemaBootstrapper
         // Permission groups
         var groups = new (string Code, string Ar, string En, int Order)[]
         {
-            ("SYSTEM", "النظام", "System", 1),
-            ("COMPANY", "الشركات", "Companies", 2),
-            ("INVENTORY", "المخزون", "Inventory", 3),
-            ("ACCOUNTING", "المحاسبة", "Accounting", 4),
-            ("VOUCHERS", "السندات", "Vouchers", 5),
-            ("SALES", "المبيعات", "Sales", 6),
-            ("PURCHASING", "المشتريات", "Purchasing", 7),
-            ("POS", "نقاط البيع", "Point of Sale", 8),
-            ("CUSTOMERS", "العملاء", "Customers", 9),
-            ("REPRESENTATIVES", "المندوبون", "Representatives", 10),
-            ("MANUFACTURING", "التصنيع", "Manufacturing", 11),
-            ("BANKING", "البنوك", "Banking", 12),
-            ("DELIVERY", "التوصيل", "Delivery", 13),
-            ("REPORTING", "التقارير", "Reports", 14),
-            ("DATA", "البيانات", "Data", 15),
-            ("BACKUP", "النسخ الاحتياطي", "Backup", 16),
-            ("AUDIT", "التدقيق", "Audit", 17),
-            ("LICENSING", "الترخيص", "Licensing", 18),
-            ("UPDATES", "التحديثات", "Updates", 19),
-            ("AI", "الذكاء الاصطناعي", "AI", 20),
-            ("HELP", "المساعدة", "Help", 21)
+            ("SYSTEM", "System", "System", 1),
+            ("COMPANY", "Companies", "Companies", 2),
+            ("INVENTORY", "Inventory", "Inventory", 3),
+            ("ACCOUNTING", "Accounting", "Accounting", 4),
+            ("VOUCHERS", "Vouchers", "Vouchers", 5),
+            ("SALES", "Sales", "Sales", 6),
+            ("PURCHASING", "Purchasing", "Purchasing", 7),
+            ("POS", "Point of Sale", "Point of Sale", 8),
+            ("CUSTOMERS", "Customers", "Customers", 9),
+            ("REPRESENTATIVES", "Representatives", "Representatives", 10),
+            ("MANUFACTURING", "Manufacturing", "Manufacturing", 11),
+            ("BANKING", "Banking", "Banking", 12),
+            ("DELIVERY", "Delivery", "Delivery", 13),
+            ("REPORTING", "Reports", "Reports", 14),
+            ("DATA", "Data", "Data", 15),
+            ("BACKUP", "Backup", "Backup", 16),
+            ("AUDIT", "Audit", "Audit", 17),
+            ("LICENSING", "Licensing", "Licensing", 18),
+            ("UPDATES", "Updates", "Updates", 19),
+            ("AI", "AI", "AI", 20),
+            ("HELP", "Help", "Help", 21)
         };
 
         foreach (var g in groups)

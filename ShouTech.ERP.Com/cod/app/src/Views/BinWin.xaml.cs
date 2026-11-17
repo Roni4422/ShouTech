@@ -40,7 +40,6 @@ public partial class BinWin : Window
     }
 
     private static bool IsArabic => (App.CurrentLanguageCode ?? "en").StartsWith("ar", StringComparison.OrdinalIgnoreCase);
-    private static string L(string en, string ar) => IsArabic ? ar : en;
 
     /// <summary>
     /// Formats a localized pattern using a cached CompositeFormat
@@ -61,19 +60,19 @@ public partial class BinWin : Window
     private void ApplyLanguage()
     {
         FlowDirection = IsArabic ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
-        Title = L("Recycle Bin", "سلة المحذوفات");
+        Title = Loc.Get("RecycleBin.Title", "Recycle Bin");
         TitleText.Text = Title;
-        HintText.Text = L("Soft-deleted master data for the active company. Restore returns items to working lists. Permanent delete cannot be undone.",
-            "البيانات الرئيسية المحذوفة للشركة الحالية. تعيد الاستعادة العناصر إلى القوائم، ولا يمكن التراجع عن الحذف النهائي.");
-        DatasetColumn.Header = L("Dataset", "مجموعة البيانات");
-        LabelColumn.Header = L("Label", "الاسم");
-        TableColumn.Header = L("Table", "الجدول");
-        DeletedAtColumn.Header = L("Deleted at", "تاريخ الحذف");
-        DeletedByColumn.Header = L("Deleted by", "حُذف بواسطة");
-        RefreshButton.Content = L("Refresh", "تحديث");
-        RestoreButton.Content = L("Restore selected", "استعادة المحدد");
-        PurgeButton.Content = L("Delete permanently", "حذف نهائي");
-        CloseButton.Content = L("Close", "إغلاق");
+        HintText.Text = Loc.Get("RecycleBin.Description",
+            "Soft-deleted master data for the active company. Restore returns items to working lists. Permanent delete cannot be undone.");
+        DatasetColumn.Header = Loc.Get("RecycleBin.Dataset", "Dataset");
+        LabelColumn.Header = Loc.Get("RecycleBin.Label", "Label");
+        TableColumn.Header = Loc.Get("RecycleBin.Table", "Table");
+        DeletedAtColumn.Header = Loc.Get("RecycleBin.DeletedAt", "Deleted at");
+        DeletedByColumn.Header = Loc.Get("RecycleBin.DeletedBy", "Deleted by");
+        RefreshButton.Content = Loc.Get("RecycleBin.Refresh", "Refresh");
+        RestoreButton.Content = Loc.Get("RecycleBin.RestoreSelected", "Restore selected");
+        PurgeButton.Content = Loc.Get("RecycleBin.DeletePermanently", "Delete permanently");
+        CloseButton.Content = Loc.Get("RecycleBin.Close", "Close");
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -90,28 +89,28 @@ public partial class BinWin : Window
         SetBusy(true);
         try
         {
-            StatusText.Text = L("Loading…", "جارٍ التحميل…");
+            StatusText.Text = Loc.Get("RecycleBin.Loading", "Loading…");
             var companyCode = AppState.CurrentCompanyCode ?? string.Empty;
             if (string.IsNullOrWhiteSpace(companyCode))
             {
                 ItemsGrid.ItemsSource = Array.Empty<RecycleBinItem>();
-                StatusText.Text = L("No active company. Open a company session first.", "لا توجد شركة نشطة. افتح جلسة شركة أولاً.");
+                StatusText.Text = Loc.Get("RecycleBin.NoActiveCompany", "No active company. Open a company session first.");
                 return;
             }
 
             var items = await RecycleBinSvc.ListAsync(companyCode).ConfigureAwait(true);
             ItemsGrid.ItemsSource = items;
             StatusText.Text = items.Count == 0
-                ? L("The recycle bin is empty for this company.", "سلة المحذوفات فارغة لهذه الشركة.")
+                ? Loc.Get("RecycleBin.Empty", "The recycle bin is empty for this company.")
                 : FormatLocalized(
-                    L("{0:N0} item(s) in the recycle bin for company {1}.", "عدد العناصر في سلة المحذوفات: {0:N0}، الشركة: {1}."),
+                    Loc.Get("RecycleBin.ItemCount", "{0:N0} item(s) in the recycle bin for company {1}."),
                     items.Count,
                     companyCode);
         }
         catch (Exception ex)
         {
             ItemsGrid.ItemsSource = Array.Empty<RecycleBinItem>();
-            StatusText.Text = L("Failed to load the recycle bin.", "تعذر تحميل سلة المحذوفات.");
+            StatusText.Text = Loc.Get("RecycleBin.LoadFailed", "Failed to load the recycle bin.");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
@@ -128,7 +127,7 @@ public partial class BinWin : Window
         var selected = GetSelectedItems();
         if (selected.Count == 0)
         {
-            MessageBox.Show(this, L("Select one or more rows to restore.", "حدد صفاً واحداً أو أكثر لاستعادتها."), Title,
+            MessageBox.Show(this, Loc.Get("RecycleBin.SelectToRestore", "Select one or more rows to restore."), Title,
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -143,7 +142,7 @@ public partial class BinWin : Window
             if (failed == 0)
             {
                 MessageBox.Show(this,
-                    FormatLocalized(L("Restored {0:N0} item(s).", "تمت استعادة {0:N0} عنصر."), restored),
+                    FormatLocalized(Loc.Get("RecycleBin.Restored", "Restored {0:N0} item(s)."), restored),
                     Title, MessageBoxButton.OK, MessageBoxImage.Information);
             }
             else
@@ -151,7 +150,7 @@ public partial class BinWin : Window
                 var firstError = results.FirstOrDefault(result => !result.Succeeded)?.ErrorMessage;
                 MessageBox.Show(this,
                     FormatLocalized(
-                        L("Restored {0:N0} item(s). {1:N0} failed.{2}{3}", "تمت استعادة {0:N0} عنصر، وفشلت استعادة {1:N0}.{2}{3}"),
+                        Loc.Get("RecycleBin.RestoredPartial", "Restored {0:N0} item(s). {1:N0} failed.{2}{3}"),
                         restored, failed, Environment.NewLine, firstError ?? string.Empty),
                     Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             }
@@ -172,13 +171,13 @@ public partial class BinWin : Window
         var selected = GetSelectedItems();
         if (selected.Count == 0)
         {
-            MessageBox.Show(this, L("Select one or more rows to delete permanently.", "حدد صفاً واحداً أو أكثر للحذف النهائي."), Title,
+            MessageBox.Show(this, Loc.Get("RecycleBin.SelectToPurge", "Select one or more rows to delete permanently."), Title,
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
         var confirm = MessageBox.Show(this,
-            L("Selected items will be permanently deleted and cannot be restored.\n\nContinue?", "سيتم حذف العناصر المحددة نهائياً ولن يمكن استعادتها.\n\nهل تريد المتابعة؟"),
+            Loc.Get("RecycleBin.ConfirmPurge", "Selected items will be permanently deleted and cannot be restored.\n\nContinue?"),
             Title, MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
         if (confirm != MessageBoxResult.Yes)
             return;
@@ -204,14 +203,14 @@ public partial class BinWin : Window
             if (failed == 0)
             {
                 MessageBox.Show(this,
-                    FormatLocalized(L("Permanently deleted {0:N0} item(s).", "تم حذف {0:N0} عنصر نهائياً."), purged),
+                    FormatLocalized(Loc.Get("RecycleBin.Purged", "Permanently deleted {0:N0} item(s)."), purged),
                     Title, MessageBoxButton.OK, MessageBoxImage.Information);
             }
             else
             {
                 MessageBox.Show(this,
                     FormatLocalized(
-                        L("Permanently deleted {0:N0} item(s). {1:N0} failed.{2}{3}", "تم حذف {0:N0} عنصر نهائياً، وفشل حذف {1:N0}.{2}{3}"),
+                        Loc.Get("RecycleBin.PurgedPartial", "Permanently deleted {0:N0} item(s). {1:N0} failed.{2}{3}"),
                         purged, failed, Environment.NewLine, firstError ?? string.Empty),
                     Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             }

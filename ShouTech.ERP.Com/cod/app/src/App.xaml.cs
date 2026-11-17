@@ -339,14 +339,14 @@ namespace ShouTech.App
                 TaskScheduler_UnobservedTaskException;
 
             // ═══════════════════════════════════════════════════════════════
-            // 1) اقرأ التفضيلات واعتمد اللغة **قبل** أي تهيئة أخرى.
+            // 1) Read the preferences and adopt the language **before** any other initialization.
             //
-            //    هذا يضمن أن App.CurrentLanguageCode صحيح قبل:
-            //      • بناء SchemaBootstrapper
+            //    This ensures App.CurrentLanguageCode is correct before:
+            //      - building the SchemaBootstrapper
             //      • AppHost.Initialize
-            //      • فتح أي نافذة (Splash / StpWiz / ComWin / LogWin / MWin)
+            //      - opening any window (Splash / StpWiz / ComWin / LogWin / MWin)
             //
-            //    أي نافذة تُفتح لاحقاً سترث الاتجاه الصحيح عبر
+            //    Any window opened later inherits the correct direction via
             //    GlobalWindowLoaded + LangDirSv + VisuId.ApplyWindow.
             // ═══════════════════════════════════════════════════════════════
             UsrPref pref;
@@ -369,9 +369,9 @@ namespace ShouTech.App
                 };
             }
 
-            // اعتمد اللغة فوراً (قبل أي نافذة).
-            // SetApplicationLanguage تضبط CurrentLanguageCode + Culture +
-            // Localization.SetLanguage (يُطلق LanguageChanged) + ApplyToAllWindows.
+            // Adopt the language immediately (before any window).
+            // SetApplicationLanguage sets CurrentLanguageCode + Culture +
+            // Localization.SetLanguage (raises LanguageChanged) + ApplyToAllWindows.
             SetApplicationLanguage(pref.Lang);
 
             // ---------- Dependency Injection ----------
@@ -431,7 +431,7 @@ namespace ShouTech.App
             catch { }
 
             // ---------- Run startup sequence ----------
-            // نمرّر pref حتى لا نقرأ الملف مرة أخرى، ونحافظ على اتساق اللغة.
+            // Pass pref so the file is not read again and the language stays consistent.
             RunStartupSequence(pref);
         }
 
@@ -679,8 +679,8 @@ namespace ShouTech.App
         // ====================================================================
         private void RunStartupSequence(UsrPref pref)
         {
-            // اللغة عُيّنت مسبقاً في OnStartup (SetApplicationLanguage).
-            // هنا نتعامل فقط مع حالة عدم وجود لغة محفوظة (FirstRun).
+            // The language was already set in OnStartup (SetApplicationLanguage).
+            // Only the no-saved-language case (FirstRun) is handled here.
             if (!pref.LangSet)
             {
                 bool accepted = false;
@@ -715,7 +715,7 @@ namespace ShouTech.App
 
                 try { pref.Save(); } catch { }
             }
-            // else: اللغة معتمدة بالفعل في OnStartup — لا حاجة لإعادة ضبطها.
+            // else: the language is already adopted in OnStartup - no need to set it again.
 
             try
             {
@@ -823,7 +823,7 @@ namespace ShouTech.App
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    "تعذّر تجهيز قاعدة بيانات الشركة:\n\n" + ex.Message,
+                    "Could not prepare the company database:\n\n" + ex.Message,
                     "ShouTech ERP",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
@@ -869,7 +869,7 @@ namespace ShouTech.App
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    "تعذّر تجهيز قاعدة بيانات الشركة:\n\n" + ex.Message,
+                    "Could not prepare the company database:\n\n" + ex.Message,
                     "ShouTech ERP",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
@@ -916,7 +916,7 @@ namespace ShouTech.App
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    "تعذّر إعادة تهيئة المخطط:\n\n" + ex.Message,
+                    "Could not reinitialize the schema:\n\n" + ex.Message,
                     "ShouTech ERP",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);

@@ -52,10 +52,10 @@ public partial class AccCard : BaseWin
             .OrderBy(x => x.Code, StringComparer.Ordinal)
             .Select(x => x.Code + " - " + x.Name)
             .ToList();
-        CmbStatus.ItemsSource = new[] { "فعال", "معطل" };
-        CmbRisk.ItemsSource = new[] { "منخفض", "متوسط", "عالي" };
-        CmbPostingMode.ItemsSource = new[] { "قابل للترحيل", "تجميعي" };
-        CmbCostCenter.ItemsSource = new[] { "غير محدد", "إلزامي", "اختياري" };
+        CmbStatus.ItemsSource = new[] { "Active", "Disabled" };
+        CmbRisk.ItemsSource = new[] { "Low", "Medium", "High" };
+        CmbPostingMode.ItemsSource = new[] { "Postable", "Summary" };
+        CmbCostCenter.ItemsSource = new[] { "Unspecified", "Required", "Optional" };
     }
 
     private void LoadRecord()
@@ -69,10 +69,10 @@ public partial class AccCard : BaseWin
             TxtNameEn.Clear();
             TxtDescription.Clear();
             TxtTaxRate.Text = "0";
-            CmbStatus.SelectedItem = "فعال";
-            CmbRisk.SelectedItem = "منخفض";
-            CmbPostingMode.SelectedItem = "قابل للترحيل";
-            CmbCostCenter.SelectedItem = "غير محدد";
+            CmbStatus.SelectedItem = "Active";
+            CmbRisk.SelectedItem = "Low";
+            CmbPostingMode.SelectedItem = "Postable";
+            CmbCostCenter.SelectedItem = "Unspecified";
             ChkReconcile.IsChecked = false;
             ChkTaxable.IsChecked = false;
             ChkForeign.IsChecked = false;
@@ -134,7 +134,7 @@ public partial class AccCard : BaseWin
     private void GenerateNextCode(string parentCode)
     {
         try { TxtCode.Text = AccRepo.NextChildCode(parentCode); }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, "ترقيم الحساب", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Account Numbering", MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
 
     private void CmbRisk_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -145,11 +145,11 @@ public partial class AccCard : BaseWin
     private void UpdateRiskIndicator()
     {
         if (RiskIndicator == null || CmbRisk.SelectedItem == null) return;
-        var risk = CmbRisk.SelectedItem.ToString() ?? "منخفض";
+        var risk = CmbRisk.SelectedItem.ToString() ?? "Low";
         RiskIndicator.Fill = risk switch
         {
-            "متوسط" => ShouTech.App.Services.VisuId.ResolveBrushResource("InfoBrush", "#2878B5"),
-            "عالي" => ShouTech.App.Services.VisuId.ResolveBrushResource("ErrorBrush", "#C0392B"),
+            "Medium" => ShouTech.App.Services.VisuId.ResolveBrushResource("InfoBrush", "#2878B5"),
+            "High" => ShouTech.App.Services.VisuId.ResolveBrushResource("ErrorBrush", "#C0392B"),
             _ => ShouTech.App.Services.VisuId.ResolveBrushResource("SuccessBrush", "#198754")
         };
         var bg = TryGetBrushColor("BackgroundBrush");
@@ -215,7 +215,7 @@ public partial class AccCard : BaseWin
     {
         if (!_isNew && !_isEditing)
         {
-            MessageBox.Show(this, "اضغط تعديل قبل تغيير بيانات الحساب.", "بطاقة الحساب", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, "Click Edit before changing the account data.", "Account Card", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -223,40 +223,40 @@ public partial class AccCard : BaseWin
         var nameAr = TxtNameAr.Text.Trim();
         if (code.Length == 0 || nameAr.Length == 0)
         {
-            MessageBox.Show(this, "يجب إدخال اسم الحساب واختيار الحساب الأب.", "بيانات ناقصة", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "You must enter the account name and choose the parent account.", "Missing Data", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         if (code.Any(c => !char.IsDigit(c)))
         {
-            MessageBox.Show(this, "رقم الحساب يجب أن يتكون من أرقام فقط.", "رقم الحساب", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "The account number must consist of digits only.", "Account Number", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         var parent = SelectedParentCode();
         if (parent != null && code == parent)
         {
-            MessageBox.Show(this, "لا يجوز أن يكون الحساب أبًا لنفسه.", "رقم الحساب", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "An account cannot be a parent of itself.", "Account Number", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         if (parent != null && !code.StartsWith(parent, StringComparison.OrdinalIgnoreCase))
         {
-            MessageBox.Show(this, $"رقم الحساب يجب أن يبدأ برقم الحساب الأب {parent}.", "رقم الحساب", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, $"The account number must start with the parent account number {parent}.", "Account Number", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         if (!decimal.TryParse(TxtTaxRate.Text.Trim(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var taxRate) || taxRate < 0 || taxRate > 100)
         {
-            MessageBox.Show(this, "نسبة الضريبة يجب أن تكون بين 0 و100.", "نسبة الضريبة", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "The tax rate must be between 0 and 100.", "Tax Rate", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         var value = new AccRepo.AccRec(
             _current?.Id ?? 0, code, parent, nameAr, TxtNameEn.Text.Trim(),
-            CmbPostingMode.SelectedItem?.ToString() ?? "قابل للترحيل",
-            CmbStatus.SelectedItem?.ToString() ?? "فعال", CmbRisk.SelectedItem?.ToString() ?? "منخفض",
-            CmbCostCenter.SelectedItem?.ToString() ?? "غير محدد", ChkReconcile.IsChecked == true,
+            CmbPostingMode.SelectedItem?.ToString() ?? "Postable",
+            CmbStatus.SelectedItem?.ToString() ?? "Active", CmbRisk.SelectedItem?.ToString() ?? "Low",
+            CmbCostCenter.SelectedItem?.ToString() ?? "Unspecified", ChkReconcile.IsChecked == true,
             ChkTaxable.IsChecked == true, ChkForeign.IsChecked == true, ChkCostRequired.IsChecked == true,
             ChkBudget.IsChecked == true, ChkDefault.IsChecked == true, taxRate, TxtDescription.Text.Trim(),
             ParseAmount(TxtBalance.Text), ParseAmount(TxtDebit.Text), ParseAmount(TxtCredit.Text));
@@ -266,8 +266,8 @@ public partial class AccCard : BaseWin
         if (codeChanged && AccRepo.HasChildren(_current!.Code))
         {
             var answer = MessageBox.Show(this,
-                $"تم تغيير رقم الحساب الأب من {_current.Code} إلى {code}.\n\nهل تريد إعادة ترقيم جميع الحسابات التابعة له وفق الرقم الجديد؟",
-                "إعادة ترقيم الحسابات التابعة", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                $"The parent account number changed from {_current.Code} to {code}.\n\nDo you want to renumber all its child accounts according to the new number?",
+                "Renumber Child Accounts", MessageBoxButton.YesNo, MessageBoxImage.Question);
             renumber = answer == MessageBoxResult.Yes;
         }
 
@@ -280,12 +280,12 @@ public partial class AccCard : BaseWin
             TxtCode.IsReadOnly = true;
             TxtSerial.Text = id.ToString("D6", CultureInfo.InvariantCulture);
             Saved?.Invoke(this, EventArgs.Empty);
-            MessageBox.Show(this, "تم حفظ الحساب بنجاح.", "ShouTech ERP", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, "The account was saved successfully.", "ShouTech ERP", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
             AppHost.Logging?.LogError("AccountCard", $"Failed to save account | AccountCode={code}", ex);
-            MessageBox.Show(this, $"تعذر حفظ الحساب.\n{ex.Message}", "حفظ الحساب", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(this, $"Could not save the account.\n{ex.Message}", "Save Account", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -309,21 +309,21 @@ public partial class AccCard : BaseWin
             if (!guard.CanDisable)
             {
                 MessageBox.Show(this,
-                    "لا يمكن تعطيل الحساب للأسباب التالية:\n\n" + string.Join(Environment.NewLine, guard.Reasons.Select(x => "• " + x)),
-                    "تعطيل الحساب", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    "The account cannot be disabled for the following reasons:\n\n" + string.Join(Environment.NewLine, guard.Reasons.Select(x => "• " + x)),
+                    "Disable Account", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            if (MessageBox.Show(this, "هل تريد تعطيل هذا الحساب؟ لن يتم حذف سجله المحاسبي.", "تعطيل الحساب", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            if (MessageBox.Show(this, "Do you want to disable this account? Its accounting record will not be deleted.", "Disable Account", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 
-            CmbStatus.SelectedItem = "معطل";
+            CmbStatus.SelectedItem = "Disabled";
             _isEditing = true;
             Save_Click(sender, e);
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, $"تعذر التحقق من حالة الحساب.\n{ex.Message}", "تعطيل الحساب", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(this, $"Could not verify the account status.\n{ex.Message}", "Disable Account", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -337,14 +337,14 @@ public partial class AccCard : BaseWin
             if (!guard.CanDelete)
             {
                 MessageBox.Show(this,
-                    "لا يمكن حذف الحساب لأنه ليس خاليًا بالكامل:\n\n" + string.Join(Environment.NewLine, guard.Reasons.Select(x => "• " + x)),
-                    "حذف الحساب", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    "The account cannot be deleted because it is not completely empty:\n\n" + string.Join(Environment.NewLine, guard.Reasons.Select(x => "• " + x)),
+                    "Delete Account", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
             var confirmation = MessageBox.Show(this,
-                $"سيتم حذف الحساب نهائيًا:\n\n{_current.Code} - {_current.Name}\n\nلا يمكن التراجع عن هذه العملية. هل تريد المتابعة؟",
-                "تأكيد حذف الحساب", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+                $"The account will be permanently deleted:\n\n{_current.Code} - {_current.Name}\n\nThis operation cannot be undone. Do you want to continue?",
+                "Confirm Account Deletion", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
             if (confirmation != MessageBoxResult.Yes) return;
 
             AccRepo.Delete(_current);
@@ -353,12 +353,12 @@ public partial class AccCard : BaseWin
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, $"تعذر حذف الحساب.\n{ex.Message}", "حذف الحساب", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(this, $"Could not delete the account.\n{ex.Message}", "Delete Account", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
-    private void Statement_Click(object sender, RoutedEventArgs e) => MessageBox.Show(this, "سيتم فتح كشف الحساب من هنا عند ربط حركة الأستاذ العام.", "كشف الحساب", MessageBoxButton.OK, MessageBoxImage.Information);
-    private void Ledger_Click(object sender, RoutedEventArgs e) => MessageBox.Show(this, "سيتم فتح دفتر الأستاذ من هنا عند ربط حركة الأستاذ العام.", "دفتر الأستاذ", MessageBoxButton.OK, MessageBoxImage.Information);
+    private void Statement_Click(object sender, RoutedEventArgs e) => MessageBox.Show(this, "The account statement will open here once general ledger activity is linked.", "Account Statement", MessageBoxButton.OK, MessageBoxImage.Information);
+    private void Ledger_Click(object sender, RoutedEventArgs e) => MessageBox.Show(this, "The ledger will open here once general ledger activity is linked.", "Ledger", MessageBoxButton.OK, MessageBoxImage.Information);
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
     protected override void ApplyLocalizedText()
     {

@@ -829,41 +829,38 @@ namespace ShouTech.App.Views
             lblEditName.Text = Loc.Get("CompanyEdit.Name", "Name");
             lblEditNameEn.Text = Loc.Get("CompanyEdit.NameEn", "Name (EN)");
             lblEditTax.Text = Loc.Get("CompanyEdit.Tax", "Tax / Registration");
-            lblEditLicense.Text = EditLabel("License", "الترخيص");
+            lblEditLicense.Text = Loc.Get("CompanyEdit.License", "License");
             lblEditEmail.Text = Loc.Get("CompanyEdit.Email", "Email");
-            lblEditWebsite.Text = EditLabel("Website", "الموقع الإلكتروني");
+            lblEditWebsite.Text = Loc.Get("CompanyEdit.Website", "Website");
             lblEditPhone.Text = Loc.Get("CompanyEdit.Phone", "Phone");
             lblEditMobile.Text = Loc.Get("CompanyEdit.Mobile", "Mobile");
             lblEditAddress.Text = Loc.Get("CompanyEdit.Address", "Address");
-            lblEditAddress2.Text = EditLabel("Address line 2", "العنوان 2");
+            lblEditAddress2.Text = Loc.Get("CompanyEdit.Address2", "Address line 2");
             lblEditCity.Text = Loc.Get("CompanyEdit.City", "City");
             lblEditCountry.Text = Loc.Get("CompanyEdit.Country", "Country");
             lblEditCurrency.Text = Loc.Get("CompanyEdit.Currency", "Currency");
-            lblEditDecimalPlaces.Text = EditLabel("Decimal places", "المنازل العشرية");
-            lblEditCalendar.Text = EditLabel("Calendar", "التقويم");
-            lblEditGrouping.Text = EditLabel("Number grouping", "تجميع الأرقام");
-            lblEditLanguage.Text = EditLabel("Company language", "لغة الشركة");
-            lblEditCoa.Text = EditLabel("Chart of accounts", "قالب دليل الحسابات");
-            lblEditWarehouse.Text = EditLabel("Default warehouse", "المستودع الافتراضي");
-            lblEditFiscalStart.Text = EditLabel("Fiscal year start", "بداية السنة المالية");
-            lblEditFiscalEnd.Text = EditLabel("Fiscal year end", "نهاية السنة المالية");
-            lblEditNotes.Text = EditLabel("Notes", "ملاحظات");
-            lblEditAdminUser.Text = EditLabel("Administrator username", "اسم المستخدم الإداري");
-            lblEditAdminName.Text = EditLabel("Administrator name", "اسم المدير");
-            lblEditDbProvider.Text = EditLabel("Database provider", "مزود قاعدة البيانات");
-            lblEditDbPath.Text = EditLabel("Database path", "مسار قاعدة البيانات");
-            lblEditAltDbPath.Text = EditLabel("Alternate database path", "مسار قاعدة البيانات البديل");
-            lblEditBackupPath.Text = EditLabel("Backup path", "مسار النسخ الاحتياطي");
-            lblEditAltBackupPath.Text = EditLabel("Alternate backup path", "مسار النسخ الاحتياطي البديل");
-            lblEditBackupSchedule.Text = EditLabel("Backup schedule", "جدولة النسخ الاحتياطي");
-            lblEditBackupTime.Text = EditLabel("Backup time", "وقت النسخ الاحتياطي");
-            chkEditAutoBackup.Content = EditLabel("Enable automatic backup", "تفعيل النسخ الاحتياطي التلقائي");
+            lblEditDecimalPlaces.Text = Loc.Get("CompanyEdit.DecimalPlaces", "Decimal places");
+            lblEditCalendar.Text = Loc.Get("CompanyEdit.Calendar", "Calendar");
+            lblEditGrouping.Text = Loc.Get("CompanyEdit.NumberGrouping", "Number grouping");
+            lblEditLanguage.Text = Loc.Get("CompanyEdit.CompanyLanguage", "Company language");
+            lblEditCoa.Text = Loc.Get("CompanyEdit.ChartOfAccounts", "Chart of accounts");
+            lblEditWarehouse.Text = Loc.Get("CompanyEdit.DefaultWarehouse", "Default warehouse");
+            lblEditFiscalStart.Text = Loc.Get("CompanyEdit.FiscalYearStart", "Fiscal year start");
+            lblEditFiscalEnd.Text = Loc.Get("CompanyEdit.FiscalYearEnd", "Fiscal year end");
+            lblEditNotes.Text = Loc.Get("CompanyEdit.Notes", "Notes");
+            lblEditAdminUser.Text = Loc.Get("CompanyEdit.AdminUsername", "Administrator username");
+            lblEditAdminName.Text = Loc.Get("CompanyEdit.AdminName", "Administrator name");
+            lblEditDbProvider.Text = Loc.Get("CompanyEdit.DbProvider", "Database provider");
+            lblEditDbPath.Text = Loc.Get("CompanyEdit.DbPath", "Database path");
+            lblEditAltDbPath.Text = Loc.Get("CompanyEdit.AltDbPath", "Alternate database path");
+            lblEditBackupPath.Text = Loc.Get("CompanyEdit.BackupPath", "Backup path");
+            lblEditAltBackupPath.Text = Loc.Get("CompanyEdit.AltBackupPath", "Alternate backup path");
+            lblEditBackupSchedule.Text = Loc.Get("CompanyEdit.BackupSchedule", "Backup schedule");
+            lblEditBackupTime.Text = Loc.Get("CompanyEdit.BackupTime", "Backup time");
+            chkEditAutoBackup.Content = Loc.Get("CompanyEdit.EnableAutoBackup", "Enable automatic backup");
             btnEditSave.Content = Loc.Get("Common.Save", "Save");
             btnEditCancel.Content = Loc.Get("Common.Cancel", "Cancel");
         }
-
-        private static string EditLabel(string english, string arabic)
-            => IsArabicUi() ? arabic : english;
 
         private async void BtnEditSave_Click(object sender, RoutedEventArgs e)
         {
@@ -884,9 +881,7 @@ namespace ShouTech.App.Views
             if (!int.TryParse(txtEditDecimalPlaces.Text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var decimalPlaces)
                 || decimalPlaces < 0 || decimalPlaces > 6)
             {
-                ShowNotice(EditLabel(
-                    "Decimal places must be a number from 0 to 6.",
-                    "يجب أن يكون عدد المنازل العشرية رقمًا من 0 إلى 6."));
+                ShowNotice(Loc.Get("CompanyEdit.DecimalPlacesInvalid", "Decimal places must be a number from 0 to 6."));
                 return;
             }
 
@@ -895,9 +890,7 @@ namespace ShouTech.App.Views
                 dpEditFiscalEnd.SelectedDate is DateTime fiscalEnd &&
                 fiscalEnd.Date < fiscalStart.Date)
             {
-                ShowNotice(EditLabel(
-                    "Enter both fiscal year dates and make sure the end date is not before the start date.",
-                    "أدخل تاريخي السنة المالية مع التأكد من أن تاريخ النهاية ليس قبل تاريخ البداية."));
+                ShowNotice(Loc.Get("CompanyEdit.FiscalDatesInvalid", "Enter both fiscal year dates and make sure the end date is not before the start date."));
                 return;
             }
 
@@ -943,9 +936,7 @@ namespace ShouTech.App.Views
 
                 ShowNotice(databaseUpdated
                     ? Loc.Get("CompanyEdit.Saved", "Company details saved.")
-                    : EditLabel(
-                        "Company details were saved locally, but the database could not be updated.",
-                        "تم حفظ بيانات الشركة محليًا، لكن تعذّر تحديث قاعدة البيانات."));
+                    : Loc.Get("CompanyEdit.SavedLocallyDbFailed", "Company details were saved locally, but the database could not be updated."));
                 ExitEditMode();
                 await LoadCompaniesAsync();
 
