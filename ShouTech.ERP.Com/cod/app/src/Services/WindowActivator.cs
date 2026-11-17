@@ -94,15 +94,15 @@ public static class WindowActivator
             var open = System.Windows.Application.Current.Windows
                 .Cast<Window>()
                 .Where(w => w.IsVisible)
-                .Select(w => (Window: w, w.GetType(), ModeKey: WindowModePolicy.ModeKeyOf(w)))
+                .Select(w => (Window: w, Type: w.GetType(), ModeKey: WindowModePolicy.ModeKeyOf(w)))
                 .ToList();
             var requestedMode = WindowModePolicy.ModeKeyOf(window);
             if (WindowModePolicy.Decide(
-                    open.Select(o => (o.GetType(), o.ModeKey)), window.GetType(), requestedMode)
+                    open.Select(o => (o.Type, o.ModeKey)), window.GetType(), requestedMode)
                 == WindowActivationDecision.ReactivateExisting)
             {
                 var existing = open.First(o =>
-                    WindowModePolicy.IsMatch(o.GetType(), o.ModeKey, window.GetType(), requestedMode)).Window;
+                    WindowModePolicy.IsMatch(o.Type, o.ModeKey, window.GetType(), requestedMode)).Window;
                 existing.Activate();
                 if (existing.WindowState == WindowState.Minimized)
                     existing.WindowState = WindowState.Normal;
