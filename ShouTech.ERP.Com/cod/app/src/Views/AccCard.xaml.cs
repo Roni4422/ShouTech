@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -6,6 +6,7 @@ using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Globalization;
 using ShouTech.App.Services;
+using ShouTech.App.Localization;
 
 using ShouTech.Domain;
 namespace ShouTech.App.Views;
@@ -54,6 +55,34 @@ public partial class AccCard : BaseWin
         UpdateNavigationState();
     }
 
+    /// <summary>
+    /// One combo option: the canonical value that is stored in the
+    /// database and compared in code (always the English token the
+    /// schema has always used) plus its localized display text. The
+    /// combo renders <see cref="Display"/> through ToString, while all
+    /// persistence keeps using <see cref="Value"/> — display language
+    /// can therefore never leak into stored data.
+    /// </summary>
+    private sealed class AccOption
+    {
+        public AccOption(string value, string display) { Value = value; Display = display; }
+        public string Value { get; }
+        public string Display { get; }
+        public override string ToString() => Display;
+    }
+
+    private static AccOption[] Options(params (string Value, string Key)[] items)
+        => items.Select(x => new AccOption(x.Value, T(x.Key))).ToArray();
+
+    private static string? SelectedValue(ComboBox combo)
+        => (combo.SelectedItem as AccOption)?.Value;
+
+    private static void SelectValue(ComboBox combo, string? value)
+    {
+        combo.SelectedItem = combo.Items.Cast<object>()
+            .FirstOrDefault(x => x is AccOption o && string.Equals(o.Value, value, StringComparison.OrdinalIgnoreCase));
+    }
+
     private void InitializeLists()
     {
         var rows = AccRepo.LoadAll();
@@ -61,10 +90,24 @@ public partial class AccCard : BaseWin
             .OrderBy(x => x.Code, StringComparer.Ordinal)
             .Select(x => x.Code + " - " + x.Name)
             .ToList();
-        CmbStatus.ItemsSource = new[] { "Active", "Disabled" };
-        CmbRisk.ItemsSource = new[] { "Low", "Medium", "High" };
-        CmbPostingMode.ItemsSource = new[] { "Postable", "Summary" };
-        CmbCostCenter.ItemsSource = new[] { "Unspecified", "Required", "Optional" };
+        RefreshOptionLists();
+    }
+
+    /// <summary>Rebuilds the four value lists in the active language, preserving each selection by canonical value.</summary>
+    private void RefreshOptionLists()
+    {
+        var status = SelectedValue(CmbStatus);
+        var risk = SelectedValue(CmbRisk);
+        var posting = SelectedValue(CmbPostingMode);
+        var cost = SelectedValue(CmbCostCenter);
+        CmbStatus.ItemsSource = Options(("Active", "AccCard.StatusActive"), ("Disabled", "AccCard.StatusDisabled"));
+        CmbRisk.ItemsSource = Options(("Low", "AccCard.RiskLow"), ("Medium", "AccCard.RiskMedium"), ("High", "AccCard.RiskHigh"));
+        CmbPostingMode.ItemsSource = Options(("Postable", "AccCard.PostingPostable"), ("Summary", "AccCard.PostingSummary"));
+        CmbCostCenter.ItemsSource = Options(("Unspecified", "AccCard.CostUnspecified"), ("Required", "AccCard.CostRequiredOption"), ("Optional", "AccCard.CostOptional"));
+        if (status != null) SelectValue(CmbStatus, status);
+        if (risk != null) SelectValue(CmbRisk, risk);
+        if (posting != null) SelectValue(CmbPostingMode, posting);
+        if (cost != null) SelectValue(CmbCostCenter, cost);
     }
 
     private void LoadRecord()
@@ -78,10 +121,10 @@ public partial class AccCard : BaseWin
             TxtNameEn.Clear();
             TxtDescription.Clear();
             TxtTaxRate.Text = "0";
-            CmbStatus.SelectedItem = "Active";
-            CmbRisk.SelectedItem = "Low";
-            CmbPostingMode.SelectedItem = "Postable";
-            CmbCostCenter.SelectedItem = "Unspecified";
+            SelectValue(CmbStatus, "Active");
+            SelectValue(CmbRisk, "Low");
+            SelectValue(CmbPostingMode, "Postable");
+            SelectValue(CmbCostCenter, "Unspecified");
             ChkReconcile.IsChecked = false;
             ChkTaxable.IsChecked = false;
             ChkForeign.IsChecked = false;
@@ -100,10 +143,10 @@ public partial class AccCard : BaseWin
         TxtNameAr.Text = _current.Name;
         TxtNameEn.Text = _current.NameEn;
         SelectParent(_current.ParentCode);
-        CmbStatus.SelectedItem = _current.Status;
-        CmbRisk.SelectedItem = _current.Risk;
-        CmbPostingMode.SelectedItem = _current.PostingMode;
-        CmbCostCenter.SelectedItem = _current.CostCenter;
+        SelectValue(CmbStatus, _current.Status);
+        SelectValue(CmbRisk, _current.Risk);
+        SelectValue(CmbPostingMode, _current.PostingMode);
+        SelectValue(CmbCostCenter, _current.CostCenter);
         ChkReconcile.IsChecked = _current.Reconcile;
         ChkTaxable.IsChecked = _current.Taxable;
         ChkForeign.IsChecked = _current.ForeignCurrency;
@@ -144,7 +187,7 @@ public partial class AccCard : BaseWin
     {
         try { TxtCode.Text = AccRepo.NextChildCode(parentCode); }
         catch (Exception ex) {
-            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "AccCard.xaml.GenerateNextCode"); MessageBox.Show(this, ex.Message, "Account Numbering", MessageBoxButton.OK, MessageBoxImage.Warning); }
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "AccCard.xaml.GenerateNextCode"); MessageBox.Show(this, ex.Message, T("AccCard.AccountNumberingTitle"), MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
 
     private void CmbRisk_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -155,7 +198,7 @@ public partial class AccCard : BaseWin
     private void UpdateRiskIndicator()
     {
         if (RiskIndicator == null || CmbRisk.SelectedItem == null) return;
-        var risk = CmbRisk.SelectedItem.ToString() ?? "Low";
+        var risk = SelectedValue(CmbRisk) ?? "Low";
         RiskIndicator.Fill = risk switch
         {
             "Medium" => ShouTech.App.Services.VisuId.ResolveBrushResource("InfoBrush", "#2878B5"),
@@ -225,7 +268,7 @@ public partial class AccCard : BaseWin
     {
         if (!_isNew && !_isEditing)
         {
-            MessageBox.Show(this, "Click Edit before changing the account data.", "Account Card", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, T("AccCard.MsgEditFirst"), T("AccountCard"), MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -233,40 +276,40 @@ public partial class AccCard : BaseWin
         var nameAr = TxtNameAr.Text.Trim();
         if (code.Length == 0 || nameAr.Length == 0)
         {
-            MessageBox.Show(this, "You must enter the account name and choose the parent account.", "Missing Data", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, T("AccCard.MsgMissingData"), T("AccCard.MissingDataTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         if (code.Any(c => !char.IsDigit(c)))
         {
-            MessageBox.Show(this, "The account number must consist of digits only.", "Account Number", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, T("AccCard.MsgDigitsOnly"), T("AccCard.AccountNumberTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         var parent = SelectedParentCode();
         if (parent != null && code == parent)
         {
-            MessageBox.Show(this, "An account cannot be a parent of itself.", "Account Number", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, T("AccCard.MsgOwnParent"), T("AccCard.AccountNumberTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         if (parent != null && !code.StartsWith(parent, StringComparison.OrdinalIgnoreCase))
         {
-            MessageBox.Show(this, $"The account number must start with the parent account number {parent}.", "Account Number", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, Tf("AccCard.MsgMustStartWithParent", parent), T("AccCard.AccountNumberTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         if (!decimal.TryParse(TxtTaxRate.Text.Trim(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var taxRate) || taxRate < 0 || taxRate > 100)
         {
-            MessageBox.Show(this, "The tax rate must be between 0 and 100.", "Tax Rate", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, T("AccCard.MsgTaxRange"), T("AccCard.TaxRateTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         var value = new AccRepo.AccRec(
             _current?.Id ?? string.Empty, code, parent, nameAr, TxtNameEn.Text.Trim(),
-            CmbPostingMode.SelectedItem?.ToString() ?? "Postable",
-            CmbStatus.SelectedItem?.ToString() ?? "Active", CmbRisk.SelectedItem?.ToString() ?? "Low",
-            CmbCostCenter.SelectedItem?.ToString() ?? "Unspecified", ChkReconcile.IsChecked == true,
+            SelectedValue(CmbPostingMode) ?? "Postable",
+            SelectedValue(CmbStatus) ?? "Active", SelectedValue(CmbRisk) ?? "Low",
+            SelectedValue(CmbCostCenter) ?? "Unspecified", ChkReconcile.IsChecked == true,
             ChkTaxable.IsChecked == true, ChkForeign.IsChecked == true, ChkCostRequired.IsChecked == true,
             ChkBudget.IsChecked == true, ChkDefault.IsChecked == true, taxRate, TxtDescription.Text.Trim(),
             ParseAmount(TxtBalance.Text), ParseAmount(TxtDebit.Text), ParseAmount(TxtCredit.Text));
@@ -276,8 +319,8 @@ public partial class AccCard : BaseWin
         if (codeChanged && AccRepo.HasChildren(_current!.Code))
         {
             var answer = MessageBox.Show(this,
-                $"The parent account number changed from {_current.Code} to {code}.\n\nDo you want to renumber all its child accounts according to the new number?",
-                "Renumber Child Accounts", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                Tf("AccCard.MsgRenumber", _current.Code, code),
+                T("AccCard.RenumberTitle"), MessageBoxButton.YesNo, MessageBoxImage.Question);
             renumber = answer == MessageBoxResult.Yes;
         }
 
@@ -290,12 +333,12 @@ public partial class AccCard : BaseWin
             TxtCode.IsReadOnly = true;
             TxtSerial.Text = SerialText(id);
             Saved?.Invoke(this, EventArgs.Empty);
-            MessageBox.Show(this, "The account was saved successfully.", "ShouTech ERP", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, T("AccCard.MsgSaved"), "ShouTech ERP", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
             AppHost.Logging?.LogError("AccountCard", $"Failed to save account | AccountCode={code}", ex);
-            MessageBox.Show(this, $"Could not save the account.\n{ex.Message}", "Save Account", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(this, Tf("AccCard.MsgSaveFailed", ex.Message), T("AccCard.SaveAccountTitle"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -319,22 +362,22 @@ public partial class AccCard : BaseWin
             if (!guard.CanDisable)
             {
                 MessageBox.Show(this,
-                    "The account cannot be disabled for the following reasons:\n\n" + string.Join(Environment.NewLine, guard.Reasons.Select(x => "• " + x)),
-                    "Disable Account", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    Tf("AccCard.MsgCannotDisable", string.Join(Environment.NewLine, guard.Reasons.Select(x => "• " + x))),
+                    T("AccCard.DisableTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            if (MessageBox.Show(this, "Do you want to disable this account? Its accounting record will not be deleted.", "Disable Account", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            if (MessageBox.Show(this, T("AccCard.MsgConfirmDisable"), T("AccCard.DisableTitle"), MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 
-            CmbStatus.SelectedItem = "Disabled";
+            SelectValue(CmbStatus, "Disabled");
             _isEditing = true;
             Save_Click(sender, e);
         }
         catch (Exception ex)
         {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "AccCard.xaml.Disable_Click");
-            MessageBox.Show(this, $"Could not verify the account status.\n{ex.Message}", "Disable Account", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(this, Tf("AccCard.MsgDisableFailed", ex.Message), T("AccCard.DisableTitle"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -348,14 +391,14 @@ public partial class AccCard : BaseWin
             if (!guard.CanDelete)
             {
                 MessageBox.Show(this,
-                    "The account cannot be deleted because it is not completely empty:\n\n" + string.Join(Environment.NewLine, guard.Reasons.Select(x => "• " + x)),
-                    "Delete Account", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    Tf("AccCard.MsgCannotDelete", string.Join(Environment.NewLine, guard.Reasons.Select(x => "• " + x))),
+                    T("AccCard.DeleteTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
             var confirmation = MessageBox.Show(this,
-                $"The account will be permanently deleted:\n\n{_current.Code} - {_current.Name}\n\nThis operation cannot be undone. Do you want to continue?",
-                "Confirm Account Deletion", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+                Tf("AccCard.MsgConfirmDelete", _current.Code, _current.Name),
+                T("AccCard.ConfirmDeleteTitle"), MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
             if (confirmation != MessageBoxResult.Yes) return;
 
             AccRepo.Delete(_current);
@@ -365,7 +408,7 @@ public partial class AccCard : BaseWin
         catch (Exception ex)
         {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "AccCard.xaml.Delete_Click");
-            MessageBox.Show(this, $"Could not delete the account.\n{ex.Message}", "Delete Account", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(this, Tf("AccCard.MsgDeleteFailed", ex.Message), T("AccCard.DeleteTitle"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -377,7 +420,17 @@ public partial class AccCard : BaseWin
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
     protected override void ApplyLocalizedText()
     {
-        // Captions applied via existing control text and future Loc keys.
+        // Static captions resolve through the LocProps keys in the XAML
+        // via the central UiLoczr walk. The combo lists are rebuilt so
+        // their display text follows the language while the stored
+        // canonical values never change.
+        try { UiLoczr.ApplyToWindow(this); }
+        catch (Exception exLoc)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exLoc, "AccCard.ApplyLocalizedText");
+        }
+        RefreshOptionLists();
+        UpdateRiskIndicator();
     }
 
 }

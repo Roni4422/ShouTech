@@ -1,7 +1,9 @@
-﻿<local:BaseWin x:Class="ShouTech.App.Views.AccCard"
+<local:BaseWin x:Class="ShouTech.App.Views.AccCard"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:ShouTech.App.Views"
+        xmlns:loc="clr-namespace:ShouTech.App.Localization"
+        loc:LocProps.WindowKey="AccountCard"
         Title="Account card"
         Width="700" Height="560"
         MinWidth="660" MinHeight="360"
@@ -73,7 +75,7 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <TextBlock Grid.Row="0" Grid.Column="1" Text="Account card" FontSize="{DynamicResource FontSize18}" FontWeight="SemiBold"
+            <TextBlock Grid.Row="0" Grid.Column="1" Text="Account card" loc:LocProps.Key="AccountCard" FontSize="{DynamicResource FontSize18}" FontWeight="SemiBold"
                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
 
             <!-- Record navigation: inherits the window FlowDirection, so the
@@ -82,13 +84,13 @@
                  numeric text and needs no direction pin. -->
             <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal"
                         HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,5,0,0">
-                <Button x:Name="BtnFirst" Click="First_Click" Style="{StaticResource NavArrowStyle}" ToolTip="ToolTip" Margin="0,0,10,0">
+                <Button x:Name="BtnFirst" Click="First_Click" Style="{StaticResource NavArrowStyle}" loc:LocProps.ToolTipKey="Common.First" Margin="0,0,10,0">
                     <Path Width="30" Stretch="Uniform" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                           StrokeThickness="3.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
                           Data="M 18,3 L 10,14 L 18,25 M 11,3 L 3,14 L 11,25"/>
                 </Button>
 
-                <Button x:Name="BtnPrevious" Click="Previous_Click" Style="{StaticResource NavArrowStyle}" ToolTip="ToolTip" Margin="0,0,10,0">
+                <Button x:Name="BtnPrevious" Click="Previous_Click" Style="{StaticResource NavArrowStyle}" loc:LocProps.ToolTipKey="Common.Prev" Margin="0,0,10,0">
                     <Path Width="25" Height="25" Stretch="Uniform" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                           StrokeThickness="3.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
                           Data="M 21,3 L 11,13 L 21,23"/>
@@ -97,15 +99,15 @@
                 <TextBox x:Name="TxtSerial" Width="{StaticResource FieldWidthShort}"
                          FontSize="{DynamicResource FontSize16}" FontWeight="SemiBold" TextAlignment="Center"
                          VerticalContentAlignment="Center" IsReadOnly="True"
-                         Background="{DynamicResource BackgroundBrush}" ToolTip="ToolTip"/>
+                         Background="{DynamicResource BackgroundBrush}" loc:LocProps.ToolTipKey="AccCard.SerialToolTip"/>
 
-                <Button x:Name="BtnNext" Click="Next_Click" Style="{StaticResource NavArrowStyle}" ToolTip="ToolTip" Margin="10,0,0,0">
+                <Button x:Name="BtnNext" Click="Next_Click" Style="{StaticResource NavArrowStyle}" loc:LocProps.ToolTipKey="Common.Next" Margin="10,0,0,0">
                     <Path Width="25" Height="25" Stretch="Uniform" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                           StrokeThickness="3.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
                           Data="M 11,3 L 21,13 L 11,23"/>
                 </Button>
 
-                <Button x:Name="BtnLast" Click="Last_Click" Style="{StaticResource NavArrowStyle}" ToolTip="ToolTip" Margin="10,0,0,0">
+                <Button x:Name="BtnLast" Click="Last_Click" Style="{StaticResource NavArrowStyle}" loc:LocProps.ToolTipKey="Common.Last" Margin="10,0,0,0">
                     <Path Width="30" Stretch="Uniform" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                           StrokeThickness="3.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
                           Data="M 12,3 L 20,14 L 12,25 M 19,3 L 27,14 L 19,25"/>
@@ -121,11 +123,11 @@
                     <ColumnDefinition Width="{StaticResource FormLabelColumnWidth}"/><ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="{StaticResource FormLabelColumnWidth}"/><ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Text" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                <TextBlock Grid.Column="0" Text="Code" loc:LocProps.Key="AccCard.Code" VerticalAlignment="Center" FontWeight="SemiBold"/>
                 <TextBox x:Name="TxtCode" Grid.Column="1" Margin="0,0,12,0"/>
-                <TextBlock Grid.Column="2" Text="Status" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                <TextBlock Grid.Column="2" Text="Status" loc:LocProps.Key="AccCard.Status" VerticalAlignment="Center" FontWeight="SemiBold"/>
                 <ComboBox x:Name="CmbStatus" Grid.Column="3" Margin="0,0,12,0"/>
-                <TextBlock Grid.Column="4" Text="Text" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                <TextBlock Grid.Column="4" Text="Risk level" loc:LocProps.Key="AccCard.Risk" VerticalAlignment="Center" FontWeight="SemiBold"/>
                 <Grid Grid.Column="5" Margin="5,0,0,0">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <Ellipse x:Name="RiskIndicator" Width="9" Height="9" HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -147,43 +149,43 @@
                         <ColumnDefinition Width="{StaticResource FormLabelColumnWidth}"/><ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Text" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Name" loc:LocProps.Key="AccCard.Name" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <TextBox x:Name="TxtNameAr" Grid.Row="0" Grid.Column="1" Margin="{StaticResource MarginFormField}"/>
-                    <TextBlock Grid.Row="0" Grid.Column="2" Text="English Name" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Row="0" Grid.Column="2" Text="English Name" loc:LocProps.Key="AccCard.EnglishName" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <TextBox x:Name="TxtNameEn" Grid.Row="0" Grid.Column="3" Margin="{StaticResource MarginFormField}" FlowDirection="LeftToRight"/>
 
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Text" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Parent account" loc:LocProps.Key="AccCard.ParentAccount" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <ComboBox x:Name="CmbParent" Grid.Row="1" Grid.Column="1" Margin="{StaticResource MarginFormField}" SelectionChanged="CmbParent_SelectionChanged"/>
-                    <TextBlock Grid.Row="1" Grid.Column="2" Text="Text" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Row="1" Grid.Column="2" Text="Posting mode" loc:LocProps.Key="AccCard.PostingMode" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <ComboBox x:Name="CmbPostingMode" Grid.Row="1" Grid.Column="3" Margin="{StaticResource MarginFormField}"/>
 
-                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Text" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Cost center" loc:LocProps.Key="AccCard.CostCenterMode" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <ComboBox x:Name="CmbCostCenter" Grid.Row="2" Grid.Column="1" Margin="{StaticResource MarginFormField}"/>
-                    <CheckBox x:Name="ChkReconcile" Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="2" Content="Content" VerticalAlignment="Center" Margin="0,0,0,5"/>
+                    <CheckBox x:Name="ChkReconcile" Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="2" Content="Allow reconciliation" loc:LocProps.Key="AccCard.Reconcile" VerticalAlignment="Center" Margin="0,0,0,5"/>
 
-                    <CheckBox x:Name="ChkTaxable" Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Content="Content" VerticalAlignment="Center" Margin="0,0,12,5"/>
-                    <CheckBox x:Name="ChkForeign" Grid.Row="3" Grid.Column="2" Grid.ColumnSpan="2" Content="Content" VerticalAlignment="Center" Margin="0,0,0,5"/>
+                    <CheckBox x:Name="ChkTaxable" Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Content="Taxable" loc:LocProps.Key="AccCard.Taxable" VerticalAlignment="Center" Margin="0,0,12,5"/>
+                    <CheckBox x:Name="ChkForeign" Grid.Row="3" Grid.Column="2" Grid.ColumnSpan="2" Content="Foreign currency" loc:LocProps.Key="AccCard.ForeignCurrency" VerticalAlignment="Center" Margin="0,0,0,5"/>
 
-                    <CheckBox x:Name="ChkCostRequired" Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2" Content="Content" VerticalAlignment="Center" Margin="0,0,12,5"/>
-                    <CheckBox x:Name="ChkBudget" Grid.Row="4" Grid.Column="2" Grid.ColumnSpan="2" Content="Content" VerticalAlignment="Center" Margin="0,0,0,5"/>
+                    <CheckBox x:Name="ChkCostRequired" Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2" Content="Cost center required" loc:LocProps.Key="AccCard.CostRequired" VerticalAlignment="Center" Margin="0,0,12,5"/>
+                    <CheckBox x:Name="ChkBudget" Grid.Row="4" Grid.Column="2" Grid.ColumnSpan="2" Content="Budget controlled" loc:LocProps.Key="AccCard.Budget" VerticalAlignment="Center" Margin="0,0,0,5"/>
 
-                    <CheckBox x:Name="ChkDefault" Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" Content="Content" VerticalAlignment="Center" Margin="0,0,12,5"/>
-                    <TextBlock Grid.Row="5" Grid.Column="2" Text="Text" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <CheckBox x:Name="ChkDefault" Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" Content="Default account" loc:LocProps.Key="AccCard.DefaultAccount" VerticalAlignment="Center" Margin="0,0,12,5"/>
+                    <TextBlock Grid.Row="5" Grid.Column="2" Text="Tax rate (%)" loc:LocProps.Key="AccCard.TaxRate" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <TextBox x:Name="TxtTaxRate" Grid.Row="5" Grid.Column="3" Margin="{StaticResource MarginFormField}" Text="0"/>
 
-                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Description" FontWeight="SemiBold" VerticalAlignment="Top" Margin="0,4,0,5"/>
+                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Description" loc:LocProps.Key="AccCard.Description" FontWeight="SemiBold" VerticalAlignment="Top" Margin="0,4,0,5"/>
                     <TextBox x:Name="TxtDescription" Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="3" Height="{StaticResource MultilineFieldHeight}" Margin="{StaticResource MarginFormField}" AcceptsReturn="True" TextWrapping="Wrap"/>
 
                     <Grid Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="4" Margin="0,3,0,0">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                         <Border Grid.Column="0" Margin="0,0,4,0" Padding="7" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="5">
-                            <StackPanel><TextBlock Text="Balance" Foreground="{DynamicResource TextSecondaryBrush}"/><TextBlock x:Name="TxtBalance" Text="0.00" FontSize="{DynamicResource FontSize15}" FontWeight="SemiBold"/></StackPanel>
+                            <StackPanel><TextBlock Text="Balance" loc:LocProps.Key="AccCard.Balance" Foreground="{DynamicResource TextSecondaryBrush}"/><TextBlock x:Name="TxtBalance" Text="0.00" FontSize="{DynamicResource FontSize15}" FontWeight="SemiBold"/></StackPanel>
                         </Border>
                         <Border Grid.Column="1" Margin="2,0" Padding="7" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="5">
-                            <StackPanel><TextBlock Text="Text" Foreground="{DynamicResource TextSecondaryBrush}"/><TextBlock x:Name="TxtDebit" Text="0.00" FontSize="{DynamicResource FontSize15}" FontWeight="SemiBold"/></StackPanel>
+                            <StackPanel><TextBlock Text="Debit" loc:LocProps.Key="AccCard.Debit" Foreground="{DynamicResource TextSecondaryBrush}"/><TextBlock x:Name="TxtDebit" Text="0.00" FontSize="{DynamicResource FontSize15}" FontWeight="SemiBold"/></StackPanel>
                         </Border>
                         <Border Grid.Column="2" Margin="4,0,0,0" Padding="7" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="5">
-                            <StackPanel><TextBlock Text="Text" Foreground="{DynamicResource TextSecondaryBrush}"/><TextBlock x:Name="TxtCredit" Text="0.00" FontSize="{DynamicResource FontSize15}" FontWeight="SemiBold"/></StackPanel>
+                            <StackPanel><TextBlock Text="Credit" loc:LocProps.Key="AccCard.Credit" Foreground="{DynamicResource TextSecondaryBrush}"/><TextBlock x:Name="TxtCredit" Text="0.00" FontSize="{DynamicResource FontSize15}" FontWeight="SemiBold"/></StackPanel>
                         </Border>
                     </Grid>
                 </Grid>
@@ -197,14 +199,14 @@
              flow on one row when there is room and wrap to a second row
              at the 660 minimum — every action stays reachable. -->
         <WrapPanel Grid.Row="3" Margin="0,7,0,0" HorizontalAlignment="Right">
-            <Button Content="New" Click="New_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
-            <Button Content="Save" Click="Save_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0" FontWeight="SemiBold"/>
-            <Button Content="Edit" Click="Edit_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
-            <Button Content="Content" Click="Disable_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
-            <Button Content="Delete" Click="Delete_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
-            <Button Content="Content" Click="Statement_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
-            <Button Content="Content" Click="Ledger_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
-            <Button Content="Close" Click="Close_Click" MinWidth="62" Padding="8,4" Margin="8,0,0,0"/>
+            <Button Content="New" loc:LocProps.Key="Common.New" Click="New_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
+            <Button Content="Save" loc:LocProps.Key="Common.Save" Click="Save_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0" FontWeight="SemiBold"/>
+            <Button Content="Edit" loc:LocProps.Key="Common.Edit" Click="Edit_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
+            <Button Content="Disable" loc:LocProps.Key="AccCard.Disable" Click="Disable_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
+            <Button Content="Delete" loc:LocProps.Key="Common.Delete" Click="Delete_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
+            <Button Content="Statement" loc:LocProps.Key="AccCard.Statement" Click="Statement_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
+            <Button Content="Ledger" loc:LocProps.Key="AccCard.Ledger" Click="Ledger_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
+            <Button Content="Close" loc:LocProps.Key="Common.Close" Click="Close_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
         </WrapPanel>
     </Grid>
 </local:BaseWin>

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -16,6 +16,7 @@ using System.Windows.Media;
 using System.Xml.Linq;
 using Microsoft.Win32;
 using ShouTech.App.Services;
+using ShouTech.App.Localization;
 
 using ShouTech.Domain;
 namespace ShouTech.App.Views;
@@ -83,7 +84,7 @@ public partial class CoaWin : BaseWin
         catch (Exception ex)
         {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "CoaWin.xaml.LoadChart");
-            MessageBox.Show(this, $"Could not load the chart of accounts from the database.\n{ex.Message}", "Chart of accounts", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(this, Tf("CoaWin.LoadFailed", ex.Message), T("CoaWin.Title"), MessageBoxButton.OK, MessageBoxImage.Error);
             _allRoots.Clear();
             RebindTree(_allRoots);
         }
@@ -161,7 +162,7 @@ public partial class CoaWin : BaseWin
     private void RebindTree(IEnumerable<AccountNode> roots)
     {
         TvAccounts.ItemsSource = roots.ToList();
-        TxtCount.Text = $"Accounts: {CountNodes(_allRoots)}";
+        TxtCount.Text = Tf("CoaWin.AccountsCount", CountNodes(_allRoots));
     }
 
     private static int CountNodes(IEnumerable<AccountNode> nodes) => nodes.Sum(n => 1 + CountNodes(n.Children));
@@ -265,9 +266,7 @@ public partial class CoaWin : BaseWin
     private void TvAccounts_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
         _selected = e.NewValue as AccountNode;
-        TxtSelected.Text = _selected == null
-            ? "No account selected"
-            : $"Selected account: {_selected.Code} - {_selected.Name}";
+        UpdateSelectedText();
     }
 
     private void OpenAccount_Click(object sender, RoutedEventArgs e)
@@ -356,7 +355,7 @@ public partial class CoaWin : BaseWin
             return;
 
         _selected = _selected.Parent;
-        TxtSelected.Text = $"Selected account: {_selected.Code} - {_selected.Name}";
+        UpdateSelectedText();
         SelectTreeNode(_selected);
     }
 
@@ -395,7 +394,7 @@ public partial class CoaWin : BaseWin
             if (node != null)
             {
                 _selected = node;
-                TxtSelected.Text = $"Selected account: {node.Code} - {node.Name}";
+                UpdateSelectedText();
                 SelectTreeNode(node);
             }
         }
@@ -445,6 +444,13 @@ public partial class CoaWin : BaseWin
             SetExpandedRecursive(child, expanded);
     }
 
+    private void UpdateSelectedText()
+    {
+        TxtSelected.Text = _selected == null
+            ? T("CoaWin.NoSelection")
+            : Tf("CoaWin.SelectedAccount", _selected.Code, _selected.Name);
+    }
+
     // The XAML-declared TreeView context menu lives in a popup and does not
     // inherit the window FlowDirection; sync it from the window every time it
     // opens (same pattern as the code-created menus below).
@@ -457,20 +463,20 @@ public partial class CoaWin : BaseWin
     private void ExportMenu_Click(object sender, RoutedEventArgs e)
     {
         var menu = new ContextMenu { FlowDirection = FlowDirection };
-        menu.Items.Add(CreateMenuItem("Excel", "Export Chart of accounts to Excel (.xlsx)", (_, _) => ExportExcel()));
-        menu.Items.Add(CreateMenuItem("CSV", "Export Chart of accounts to CSV", (_, _) => ExportCsv()));
-        menu.Items.Add(CreateMenuItem("PDF", "Print or save Chart of accounts as PDF", (_, _) => ExportPdf()));
+        menu.Items.Add(CreateMenuItem("Excel", T("CoaWin.ExpExcelTip"), (_, _) => ExportExcel()));
+        menu.Items.Add(CreateMenuItem("CSV", T("CoaWin.ExpCsvTip"), (_, _) => ExportCsv()));
+        menu.Items.Add(CreateMenuItem("PDF", T("CoaWin.ExpPdfTip"), (_, _) => ExportPdf()));
         menu.Items.Add(new Separator());
-        menu.Items.Add(CreateMenuItem("Encrypted ShouTech file (.sta)", "Save Chart of accounts as encrypted ShouTech JSON (.sta)", (_, _) => ExportEncrypted()));
+        menu.Items.Add(CreateMenuItem(T("CoaWin.ExpSta"), T("CoaWin.ExpStaTip"), (_, _) => ExportEncrypted()));
         menu.IsOpen = true;
     }
 
     private void ImportMenu_Click(object sender, RoutedEventArgs e)
     {
         var menu = new ContextMenu { FlowDirection = FlowDirection };
-        menu.Items.Add(CreateMenuItem("Excel", "Import Chart of accounts from Excel (.xlsx)", (_, _) => ImportFile("Excel Workbook (*.xlsx)|*.xlsx")));
-        menu.Items.Add(CreateMenuItem("CSV", "Import Chart of accounts from CSV", (_, _) => ImportFile("CSV Files (*.csv)|*.csv")));
-        menu.Items.Add(CreateMenuItem("Encrypted ShouTech file (.sta)", "Restore Chart of accounts from an encrypted ShouTech JSON file (.sta)", (_, _) => ImportEncrypted()));
+        menu.Items.Add(CreateMenuItem("Excel", T("CoaWin.ImpExcelTip"), (_, _) => ImportFile(T("CoaWin.ExcelFilter"))));
+        menu.Items.Add(CreateMenuItem("CSV", T("CoaWin.ImpCsvTip"), (_, _) => ImportFile(T("CoaWin.CsvFilter"))));
+        menu.Items.Add(CreateMenuItem(T("CoaWin.ExpSta"), T("CoaWin.ImpStaTip"), (_, _) => ImportEncrypted()));
         menu.IsOpen = true;
     }
 
@@ -485,10 +491,10 @@ public partial class CoaWin : BaseWin
     {
         var dlg = new SaveFileDialog
         {
-            Filter = "CSV Files (*.csv)|*.csv",
+            Filter = T("CoaWin.CsvFilter"),
             DefaultExt = ".csv",
             FileName = "ChartOfAccounts.csv",
-            Title = "Export Chart of accounts to CSV"
+            Title = T("CoaWin.ExportCsvTitle")
         };
         if (dlg.ShowDialog(this) != true)
             return;
@@ -496,12 +502,12 @@ public partial class CoaWin : BaseWin
         try
         {
             File.WriteAllText(dlg.FileName, BuildDelimitedContent(','), new UTF8Encoding(true));
-            ShowInfoMsg("Chart of accounts exported to a CSV file successfully.");
+            ShowInfoMsg(T("CoaWin.ExportCsvOk"));
         }
         catch (Exception ex)
         {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "CoaWin.xaml.ExportCsv");
-            ShowErrorMsg($"Could not export CSV.\n{ex.Message}");
+            ShowErrorMsg(Tf("CoaWin.ExportCsvFailed", ex.Message));
         }
     }
 
@@ -509,10 +515,10 @@ public partial class CoaWin : BaseWin
     {
         var dlg = new SaveFileDialog
         {
-            Filter = "Excel Workbook (*.xlsx)|*.xlsx",
+            Filter = T("CoaWin.ExcelFilter"),
             DefaultExt = ".xlsx",
             FileName = "ChartOfAccounts.xlsx",
-            Title = "Export Chart of accounts to Excel"
+            Title = T("CoaWin.ExportExcelTitle")
         };
         if (dlg.ShowDialog(this) != true)
             return;
@@ -526,12 +532,12 @@ public partial class CoaWin : BaseWin
             WriteZipText(archive, "xl/workbook.xml", BuildXlsxWorkbook());
             WriteZipText(archive, "xl/_rels/workbook.xml.rels", BuildXlsxWorkbookRels());
             WriteZipText(archive, "xl/worksheets/sheet1.xml", BuildXlsxSheet());
-            ShowInfoMsg("Chart of accounts exported to an Excel file successfully.");
+            ShowInfoMsg(T("CoaWin.ExportExcelOk"));
         }
         catch (Exception ex)
         {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "CoaWin.xaml.ExportExcel");
-            ShowErrorMsg($"Could not export Excel.\n{ex.Message}");
+            ShowErrorMsg(Tf("CoaWin.ExportExcelFailed", ex.Message));
         }
     }
 
@@ -614,15 +620,15 @@ public partial class CoaWin : BaseWin
     {
         var dlg = new SaveFileDialog
         {
-            Filter = "ShouTech Account File (*.sta)|*.sta",
+            Filter = T("CoaWin.StaFilter"),
             DefaultExt = ".sta",
             FileName = "ShouTechCrtOfAcc.sta",
-            Title = "Export Chart of accounts as an encrypted ShouTech file"
+            Title = T("CoaWin.ExportStaTitle")
         };
         if (dlg.ShowDialog(this) != true)
             return;
 
-        var password = AskPassword("Chart of accounts file password");
+        var password = AskPassword(T("CoaWin.PasswordTitle"));
         if (password == null)
             return;
 
@@ -657,12 +663,12 @@ public partial class CoaWin : BaseWin
             WriteBytes(bw, tag);
             WriteBytes(bw, cipher);
 
-            ShowInfoMsg("ShouTechCrtOfAcc.sta was created successfully. The file contains encrypted JSON and can be restored through import.");
+            ShowInfoMsg(T("CoaWin.ExportStaOk"));
         }
         catch (Exception ex)
         {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "CoaWin.xaml.ExportEncrypted");
-            ShowErrorMsg($"Could not create the .sta file.\n{ex.Message}");
+            ShowErrorMsg(Tf("CoaWin.ExportStaFailed", ex.Message));
         }
     }
 
@@ -683,7 +689,7 @@ public partial class CoaWin : BaseWin
 
     private void ImportFile(string filter)
     {
-        var dlg = new OpenFileDialog { Filter = filter, Title = "Import Chart of accounts" };
+        var dlg = new OpenFileDialog { Filter = filter, Title = T("CoaWin.ImportTitle") };
         if (dlg.ShowDialog(this) != true)
             return;
 
@@ -694,12 +700,12 @@ public partial class CoaWin : BaseWin
             else
                 ImportDelimitedContent(File.ReadAllText(dlg.FileName, Encoding.UTF8).TrimStart('\uFEFF'), ',');
 
-            ShowInfoMsg("Chart of accounts imported successfully.");
+            ShowInfoMsg(T("CoaWin.ImportOk"));
         }
         catch (Exception ex)
         {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "CoaWin.xaml.ImportFile");
-            ShowErrorMsg($"Could not import the file.\n{ex.Message}");
+            ShowErrorMsg(Tf("CoaWin.ImportFailed", ex.Message));
         }
     }
 
@@ -707,7 +713,7 @@ public partial class CoaWin : BaseWin
     {
         using var archive = ZipFile.OpenRead(fileName);
         var entry = archive.GetEntry("xl/worksheets/sheet1.xml")
-            ?? throw new InvalidDataException("The Excel file does not contain the accounts sheet.");
+            ?? throw new InvalidDataException(T("CoaWin.ValExcelSheetMissing"));
         using var stream = entry.Open();
         var doc = XDocument.Load(stream);
         XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -735,13 +741,13 @@ public partial class CoaWin : BaseWin
     {
         var dlg = new OpenFileDialog
         {
-            Filter = "ShouTech Account File (*.sta)|*.sta",
-            Title = "Import encrypted ShouTech file"
+            Filter = T("CoaWin.StaFilter"),
+            Title = T("CoaWin.ImportStaTitle")
         };
         if (dlg.ShowDialog(this) != true)
             return;
 
-        var password = AskPassword("Chart of accounts file password");
+        var password = AskPassword(T("CoaWin.PasswordTitle"));
         if (password == null)
             return;
 
@@ -750,11 +756,11 @@ public partial class CoaWin : BaseWin
             using var fs = File.OpenRead(dlg.FileName);
             using var br = new BinaryReader(fs, Encoding.UTF8, leaveOpen: false);
             if (br.ReadString() != EncryptedMagic)
-                throw new InvalidDataException("Invalid .sta file or not a ShouTech package.");
+                throw new InvalidDataException(T("CoaWin.ValStaInvalid"));
 
             var version = br.ReadInt32();
             if (version != EncryptionVersion)
-                throw new InvalidDataException($"Unsupported .sta file version: {version}.");
+                throw new InvalidDataException(Tf("CoaWin.ValStaVersion", version));
 
             var iterations = br.ReadInt32();
             var salt = ReadBytes(br, 64);
@@ -768,22 +774,22 @@ public partial class CoaWin : BaseWin
                 aes.Decrypt(nonce, cipher, tag, plain);
 
             var payload = JsonSerializer.Deserialize<StaPayload>(Encoding.UTF8.GetString(plain))
-                ?? throw new InvalidDataException("Encrypted JSON payload is empty.");
+                ?? throw new InvalidDataException(T("CoaWin.ValStaEmpty"));
             if (!string.Equals(payload.Format, "STCOA", StringComparison.Ordinal) || payload.SchemaVersion != 1)
-                throw new InvalidDataException("Unsupported .sta JSON structure.");
+                throw new InvalidDataException(T("CoaWin.ValStaStructure"));
 
             ImportAccounts(payload.Accounts);
-            ShowInfoMsg("Chart of accounts was decrypted and restored from ShouTechCrtOfAcc.sta successfully.");
+            ShowInfoMsg(T("CoaWin.ImportStaOk"));
         }
         catch (CryptographicException exL754)
         {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL754, "CoaWin.xaml.ImportEncrypted");
-            ShowErrorMsg("Could not decrypt the .sta file. Check the password and file integrity.");
+            ShowErrorMsg(T("CoaWin.DecryptFailed"));
         }
         catch (Exception ex)
         {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "CoaWin.xaml.ImportEncrypted");
-            ShowErrorMsg($"Could not import the .sta file.\n{ex.Message}");
+            ShowErrorMsg(Tf("CoaWin.ImportStaFailed", ex.Message));
         }
     }
 
@@ -791,10 +797,10 @@ public partial class CoaWin : BaseWin
     {
         var length = reader.ReadInt32();
         if (length <= 0 || length > maxLength)
-            throw new InvalidDataException("Invalid .sta chunk size.");
+            throw new InvalidDataException(T("CoaWin.ValStaChunk"));
         var bytes = reader.ReadBytes(length);
         if (bytes.Length != length)
-            throw new InvalidDataException("Incomplete .sta file.");
+            throw new InvalidDataException(T("CoaWin.ValStaIncomplete"));
         return bytes;
     }
 
@@ -829,7 +835,7 @@ public partial class CoaWin : BaseWin
     {
         var rows = ParseDelimited(text, delimiter).ToList();
         if (rows.Count <= 1)
-            throw new InvalidDataException("The file contains no accounts.");
+            throw new InvalidDataException(T("CoaWin.ValNoAccounts"));
 
         var data = rows.Skip(1)
             .Where(r => r.Count >= 5 && !string.IsNullOrWhiteSpace(r[0]))
@@ -849,20 +855,20 @@ public partial class CoaWin : BaseWin
     private void ImportAccounts(IReadOnlyCollection<StaAccount> accounts)
     {
         if (accounts.Count == 0)
-            throw new InvalidDataException("No valid accounts were found.");
+            throw new InvalidDataException(T("CoaWin.ValNoValid"));
 
         var unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var row in accounts)
         {
             if (string.IsNullOrWhiteSpace(row.Code) || !unique.Add(row.Code))
-                throw new InvalidDataException("A missing or duplicate account number was found.");
+                throw new InvalidDataException(T("CoaWin.ValMissingOrDupCode"));
             if (string.IsNullOrWhiteSpace(row.Name) && string.IsNullOrWhiteSpace(row.NameEn))
-                throw new InvalidDataException($"Account {row.Code} has no name.");
+                throw new InvalidDataException(Tf("CoaWin.ValAccountNoName", row.Code));
         }
 
         var byCode = accounts.ToDictionary(x => x.Code, StringComparer.OrdinalIgnoreCase);
         if (accounts.Any(x => !string.IsNullOrWhiteSpace(x.ParentCode) && !byCode.ContainsKey(x.ParentCode)))
-            throw new InvalidDataException("A parent account is missing from the file.");
+            throw new InvalidDataException(T("CoaWin.ValParentMissing"));
 
         var nodes = accounts.ToDictionary(
             x => x.Code,
@@ -877,7 +883,7 @@ public partial class CoaWin : BaseWin
 
             var parent = nodes[row.ParentCode];
             if (string.Equals(parent.Code, node.Code, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException($"Account {node.Code} cannot be its own parent.");
+                throw new InvalidDataException(Tf("CoaWin.ValOwnParent", node.Code));
             node.Parent = parent;
             parent.Children.Add(node);
         }
@@ -888,7 +894,7 @@ public partial class CoaWin : BaseWin
             for (var current = node; current != null; current = current.Parent)
             {
                 if (!visited.Add(current.Code))
-                    throw new InvalidDataException("A cycle was detected in the account structure.");
+                    throw new InvalidDataException(T("CoaWin.ValCycle"));
             }
         }
 
@@ -995,17 +1001,42 @@ public partial class CoaWin : BaseWin
             Foreground = TryFindResource("TextBrush") as Brush ?? Brushes.Black
         };
 
-        var panel = new StackPanel { Margin = new Thickness(18) };
-        panel.Children.Add(new TextBlock { Text = "Enter password:", Margin = new Thickness(0, 0, 0, 8) });
-        var box = new PasswordBox { MinHeight = 30 };
+        // Label BESIDE its field on the central form grid (the
+        // label-above layout this dialog used is banned by
+        // docs/WINDOW_PROPORTIONS.md \u00a71.4); sizes come from the
+        // central tokens, not literals.
+        var panel = new Grid { Margin = new Thickness(18) };
+        panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(VisuId.FormLabelWidth) });
+        panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var prompt = new TextBlock
+        {
+            Text = T("CoaWin.PasswordPrompt"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = FormLabelMargin
+        };
+        prompt.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
+        Grid.SetRow(prompt, 0);
+        Grid.SetColumn(prompt, 0);
+        panel.Children.Add(prompt);
+
+        var box = new PasswordBox { Height = VisuId.ControlHeight };
+        box.SetResourceReference(StyleProperty, "VisuPasswordBoxStyle");
+        Grid.SetRow(box, 0);
+        Grid.SetColumn(box, 1);
         panel.Children.Add(box);
 
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 14, 0, 0) };
-        var ok = new Button { Content = "OK", MinWidth = 80, IsDefault = true, Margin = new Thickness(0, 0, 6, 0), ToolTip = "Confirm password" };
-        var cancel = new Button { Content = "Cancel", MinWidth = 80, IsCancel = true, ToolTip = "Cancel the operation" };
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0) };
+        var ok = new Button { Content = T("Common.OK"), MinWidth = VisuId.ButtonMinWidth, IsDefault = true, Margin = new Thickness(0, 0, 6, 0), ToolTip = T("CoaWin.PasswordOkTip") };
+        var cancel = new Button { Content = T("Common.Cancel"), MinWidth = VisuId.ButtonMinWidth, IsCancel = true, ToolTip = T("CoaWin.PasswordCancelTip") };
         ok.Click += (_, _) => { if (!string.IsNullOrWhiteSpace(box.Password)) dialog.DialogResult = true; };
         buttons.Children.Add(ok);
         buttons.Children.Add(cancel);
+        Grid.SetRow(buttons, 1);
+        Grid.SetColumn(buttons, 0);
+        Grid.SetColumnSpan(buttons, 2);
         panel.Children.Add(buttons);
         dialog.Content = panel;
         dialog.Loaded += (_, _) => box.Focus();
@@ -1025,8 +1056,8 @@ public partial class CoaWin : BaseWin
             FontFamily = ShouTech.App.Services.VisuId.ResolveFontFamily("ApplicationFontFamily", "Segoe UI"),
             FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(11)
         };
-        document.Blocks.Add(new Paragraph(new Run("Chart of accounts")) { FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(20), FontWeight = FontWeights.Bold, TextAlignment = TextAlignment.Center });
-        document.Blocks.Add(new Paragraph(new Run($"Export date: {DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}")) { TextAlignment = TextAlignment.Right });
+        document.Blocks.Add(new Paragraph(new Run(T("CoaWin.Title"))) { FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(20), FontWeight = FontWeights.Bold, TextAlignment = TextAlignment.Center });
+        document.Blocks.Add(new Paragraph(new Run(Tf("CoaWin.ExportDate", DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)))) { TextAlignment = TextAlignment.Right });
 
         foreach (var node in _allRoots.SelectMany(Flatten))
         {
@@ -1039,7 +1070,7 @@ public partial class CoaWin : BaseWin
             });
         }
 
-        dialog.PrintDocument(((IDocumentPaginatorSource)document).DocumentPaginator, "ShouTech - Chart of Accounts");
+        dialog.PrintDocument(((IDocumentPaginatorSource)document).DocumentPaginator, T("CoaWin.PrintJobName"));
     }
 
     private static int GetDepth(AccountNode node)
@@ -1054,17 +1085,6 @@ public partial class CoaWin : BaseWin
 
     private void ShowInfoMsg(string message) => MessageBox.Show(this, message, "ShouTech ERP", MessageBoxButton.OK, MessageBoxImage.Information);
     private void ShowErrorMsg(string message) => MessageBox.Show(this, message, "ShouTech ERP", MessageBoxButton.OK, MessageBoxImage.Error);
-
-    private void ShowAction(string action)
-    {
-        if (_selected == null)
-        {
-            ShowErrorMsg("Please select an account first.");
-            return;
-        }
-
-        ShowInfoMsg($"Action: {action}.\nAccount: {_selected.Code} - {_selected.Name}");
-    }
 
     private sealed class ImportedAccount
     {
@@ -1102,7 +1122,43 @@ public partial class CoaWin : BaseWin
     }
     protected override void ApplyLocalizedText()
     {
-        // Localized via existing load path; extend with T() keys as needed.
+        // Static captions resolve through the LocProps keys in the XAML
+        // via the central UiLoczr walk; the dynamic surfaces (status
+        // readouts, tree node display/tooltips, the popup context menu
+        // the walk cannot reach) are refreshed here so the window
+        // relocalizes live on a language switch.
+        try { UiLoczr.ApplyToWindow(this); }
+        catch (Exception exLoc)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exLoc, "CoaWin.ApplyLocalizedText");
+        }
+        TxtCount.Text = Tf("CoaWin.AccountsCount", CountNodes(_allRoots));
+        UpdateSelectedText();
+        LocalizeContextMenu();
+        // Node display text and tooltips are binding-evaluated; rebind
+        // so they re-resolve in the new language.
+        var items = TvAccounts.ItemsSource;
+        TvAccounts.ItemsSource = null;
+        TvAccounts.ItemsSource = items;
+    }
+
+    private void LocalizeContextMenu()
+    {
+        if (TvAccounts.ContextMenu is not ContextMenu menu)
+            return;
+        menu.FlowDirection = FlowDirection;
+        foreach (var obj in menu.Items)
+        {
+            if (obj is MenuItem item)
+            {
+                var key = LocProps.GetKey(item);
+                if (!string.IsNullOrWhiteSpace(key))
+                    item.Header = T(key);
+                var tipKey = LocProps.GetToolTipKey(item);
+                if (!string.IsNullOrWhiteSpace(tipKey))
+                    item.ToolTip = T(tipKey);
+            }
+        }
     }
 
 }
@@ -1123,7 +1179,24 @@ public sealed class AccountNode
     public string DisplayName => string.Equals(App.CurrentLanguageCode, "ar", StringComparison.OrdinalIgnoreCase)
         ? (!string.IsNullOrWhiteSpace(Name) ? Name : NameEn)
         : (!string.IsNullOrWhiteSpace(NameEn) ? NameEn : Name);
-    public string ToolTipText => $"{Code} - {Name}\n{NameEn}\nType: {TypeLabel}\n{(Children.Count > 0 ? $"Child accounts: {Children.Count}" : "Postable account")}";
+    // Localized rendering of the canonical TypeLabel ("Group"/"Account");
+    // TypeLabel itself stays canonical because it is the export file's
+    // Type column value.
+    public string TypeDisplay => string.Equals(TypeLabel, "Group", StringComparison.OrdinalIgnoreCase)
+        ? AppHost.Localization.GetString("CoaWin.TypeGroup", "Group")
+        : AppHost.Localization.GetString("CoaWin.TypeAccount", "Account");
+    // CA1863: cache CompositeFormat instances for the tooltip patterns.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, System.Text.CompositeFormat> NodeFormats = new();
+
+    private static string NodeFormat(string key, string fallback, object? arg)
+    {
+        var format = NodeFormats.GetOrAdd(
+            AppHost.Localization.GetString(key, fallback),
+            static value => System.Text.CompositeFormat.Parse(value));
+        return string.Format(System.Globalization.CultureInfo.CurrentCulture, format, arg);
+    }
+
+    public string ToolTipText => $"{Code} - {Name}\n{NameEn}\n{NodeFormat("CoaWin.NodeTypeLine", "Type: {0}", TypeDisplay)}\n{(Children.Count > 0 ? NodeFormat("CoaWin.NodeChildren", "Child accounts: {0}", Children.Count) : AppHost.Localization.GetString("CoaWin.NodePostable", "Postable account"))}";
     public bool IsExpanded { get; set; }
     public AccountNode? Parent { get; set; }
     public ObservableCollection<AccountNode> Children { get; } = new();
