@@ -260,8 +260,11 @@ public static class StockValuationEngine
         StockMovementRequest request, string method, MaterialInfo material, ValuationState state)
     {
         if (request.LinkedRate is decimal linked) return linked;
-        if (method == ValuationMath.Standard) return material.StandardCost;
+        // Keep the actual acquisition cost on receipts. Standard costing is
+        // applied to issues; the difference remains visible as inventory
+        // value variance until the related quantity is consumed.
         if (request.ReceiptUnitCost is decimal actual && actual > 0) return actual;
+        if (method == ValuationMath.Standard) return material.StandardCost;
         // Unlinked return / count surplus / zero-cost receipt: enter at
         // the current rate; the caller's cost is only the last resort
         // when no current rate exists at all.
