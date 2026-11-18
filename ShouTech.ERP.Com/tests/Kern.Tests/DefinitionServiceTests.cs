@@ -374,7 +374,22 @@ public class DefinitionServiceTests
         var databasePath = Path.Combine(Path.GetTempPath(), $"shoutech-definitions-{Guid.NewGuid():N}.sqlite3");
         var connectionString = $"Data Source={databasePath};";
         ApplySqliteMigrations(databasePath);
-        await Task.CompletedTask;
+        await using (var connection = new SqliteConnection(connectionString))
+        {
+            await connection.OpenAsync();
+            await using var seed = connection.CreateCommand();
+            seed.CommandText = """
+                INSERT INTO companies (company_id, company_code, company_name_ar, company_name_en)
+                VALUES ($companyId, $companyCode, 'Definition test company', 'Definition test company');
+
+                INSERT INTO parties (id, company_id, kind, code, name_en, ledger_id)
+                VALUES ($partyId, $companyCode, 'C', '501', 'Installment customer', 501);
+                """;
+            seed.Parameters.AddWithValue("$companyId", Guid.NewGuid().ToString("D"));
+            seed.Parameters.AddWithValue("$companyCode", Company);
+            seed.Parameters.AddWithValue("$partyId", Guid.NewGuid().ToString("D"));
+            await seed.ExecuteNonQueryAsync();
+        }
         var repository = new DefinitionRepository("SQLite", connectionString);
         var service = new DefinitionService(repository);
         Action cleanup = () =>
