@@ -34,7 +34,7 @@ namespace Kern.Tests
 
                 Assert.Equal(10m, Scalar(connection,
                     "SELECT qty_out FROM material_stock_movements WHERE document_no = 'DLV-7001' AND material_id = 42"));
-                Assert.Equal(-10m, Scalar(connection,
+                Assert.Equal(990m, Scalar(connection,
                     "SELECT available_qty FROM material_stock_balances WHERE material_id = 42 AND warehouse_id = 1"));
                 Assert.Equal(0, (int)Scalar(connection,
                     "SELECT COUNT(*) FROM party_ledger"));
@@ -52,26 +52,20 @@ namespace Kern.Tests
             try
             {
                 // Material 42 is stocked in BOX (base unit); the draft line's
-                // unit PCS is its second unit with equivalent 0.25, so
-                // delivering 10 PCS must deduct exactly 2.5 BOX.
+                // unit PCS is its second unit with equivalent 0.25.
                 await using (var seed = new SqliteConnection(connectionString))
                 {
                     await seed.OpenAsync();
-                    await using var insert = seed.CreateCommand();
-                    insert.CommandText = """
-                        INSERT INTO materials
-                          (material_id, company_id, code, name_ar, name_en,
-                           unit1, unit1_factor, unit2, unit2_factor, units_json)
-                        VALUES
-                          (42, $company, 'MAT-42', 'Posting test item', 'Posting test item',
-                           'BOX', 1, 'PCS', 0.25,
-                           '[{"UnitName":"BOX","Factor":1},{"UnitName":"PCS","Factor":0.25}]');
+                    await using var update = seed.CreateCommand();
+                    update.CommandText = """
+                        UPDATE materials
+                        SET unit1 = 'BOX', unit1_factor = 1, unit2 = 'PCS',
+                            unit2_factor = 0.25,
+                            units_json = '[{"UnitName":"BOX","Factor":1},{"UnitName":"PCS","Factor":0.25}]'
+                        WHERE company_id = $company AND material_id = 42;
                         """;
-                    var companyParam = insert.CreateParameter();
-                    companyParam.ParameterName = "$company";
-                    companyParam.Value = companyId.ToString();
-                    insert.Parameters.Add(companyParam);
-                    await insert.ExecuteNonQueryAsync();
+                    update.Parameters.AddWithValue("$company", companyId.ToString("D"));
+                    Assert.Equal(1, await update.ExecuteNonQueryAsync());
                 }
 
                 var quotationId = await service.CreateQuotationAsync(Draft(companyId, "QT-7004"), "posting-test");
@@ -86,7 +80,7 @@ namespace Kern.Tests
 
                 Assert.Equal(2.5m, Scalar(connection,
                     "SELECT qty_out FROM material_stock_movements WHERE document_no = 'DLV-7004' AND material_id = 42"));
-                Assert.Equal(-2.5m, Scalar(connection,
+                Assert.Equal(997.5m, Scalar(connection,
                     "SELECT available_qty FROM material_stock_balances WHERE material_id = 42 AND warehouse_id = 1"));
             }
             finally
@@ -101,25 +95,18 @@ namespace Kern.Tests
             var (service, _, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
             try
             {
-                // Material 42 is a SERVICE material (non-stock): delivering
-                // it must not move stock, even though the line carries qty.
+                // A service material must not create stock movements.
                 await using (var seed = new SqliteConnection(connectionString))
                 {
                     await seed.OpenAsync();
-                    await using var insert = seed.CreateCommand();
-                    insert.CommandText = """
-                        INSERT INTO materials
-                          (material_id, company_id, code, name_ar, name_en,
-                           is_stocked, is_service, item_type, unit1, unit1_factor)
-                        VALUES
-                          (42, $company, 'MAT-42', 'Posting test item', 'Posting test item',
-                           0, 1, 'Service', 'PCS', 1);
+                    await using var update = seed.CreateCommand();
+                    update.CommandText = """
+                        UPDATE materials
+                        SET is_stocked = 0, is_service = 1, item_type = 'Service'
+                        WHERE company_id = $company AND material_id = 42;
                         """;
-                    var companyParam = insert.CreateParameter();
-                    companyParam.ParameterName = "$company";
-                    companyParam.Value = companyId.ToString();
-                    insert.Parameters.Add(companyParam);
-                    await insert.ExecuteNonQueryAsync();
+                    update.Parameters.AddWithValue("$company", companyId.ToString("D"));
+                    Assert.Equal(1, await update.ExecuteNonQueryAsync());
                 }
 
                 var quotationId = await service.CreateQuotationAsync(Draft(companyId, "QT-7005"), "posting-test");
@@ -134,8 +121,8 @@ namespace Kern.Tests
 
                 Assert.Equal(0, (int)Scalar(connection,
                     "SELECT COUNT(*) FROM material_stock_movements WHERE material_id = 42"));
-                Assert.Equal(0, (int)Scalar(connection,
-                    "SELECT COUNT(*) FROM material_stock_balances WHERE material_id = 42"));
+                Assert.Equal(1000m, Scalar(connection,
+                    "SELECT available_qty FROM material_stock_balances WHERE material_id = 42 AND warehouse_id = 1"));
             }
             finally
             {
@@ -254,6 +241,7 @@ namespace Kern.Tests
 
             ApplySqliteMigrations(databasePath);
             SeedGlCompany(connectionString, companyId, "CHAIN-GL");
+            SeedInventory(connectionString, companyId);
 
             var repository = new ShouTech.Infrastructure.CommercialDocumentRepository("SQLite", connectionString);
             var service = new SalesChainService(repository);
@@ -270,6 +258,28 @@ namespace Kern.Tests
             return Task.FromResult<(SalesChainService Service, ShouTech.Infrastructure.CommercialDocumentRepository Repository, Guid CompanyId, string ConnectionString, Action Cleanup)>((service, repository, companyId, connectionString, cleanup));
         }
 
+
+        private static void SeedInventory(string connectionString, Guid companyId)
+        {
+            using var connection = new SqliteConnection(connectionString);
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                INSERT INTO warehouses
+                    (warehouse_id, company_id, warehouse_code, warehouse_name_ar, warehouse_name_en, is_active, is_deleted)
+                VALUES (1, $companyId, 1, 'Main', 'Main', 1, 0);
+
+                INSERT INTO materials
+                    (material_id, company_id, code, name_ar, name_en, is_stocked, is_deleted, allow_negative, unit1, unit1_factor)
+                VALUES (42, $companyId, 'MAT-42', 'Posting test item', 'Posting test item', 1, 0, 0, 'PCS', 1);
+
+                INSERT INTO material_stock_balances
+                    (company_id, warehouse_id, material_id, available_qty, average_cost, last_cost)
+                VALUES ($companyId, 1, 42, 1000, 40, 40);
+                """;
+            command.Parameters.AddWithValue("$companyId", companyId.ToString("D"));
+            command.ExecuteNonQuery();
+        }
 
         /// <summary>Step 3: document posting now creates real GL entries,
         /// so the fixture company must exist in companies with an open
