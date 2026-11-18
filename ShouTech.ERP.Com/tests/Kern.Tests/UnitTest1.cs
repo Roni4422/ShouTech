@@ -556,6 +556,17 @@ namespace Kern.Tests
                     insertCompany.Parameters.AddWithValue("$id", companyId.ToString("D"));
                     insertCompany.Parameters.AddWithValue("$code", companyCode);
                     await insertCompany.ExecuteNonQueryAsync();
+
+                    using var insertCenters = connection.CreateCommand();
+                    insertCenters.CommandText = """
+                        INSERT INTO cost_centers (id, company_id, code, name_en, is_group, is_active, is_deleted)
+                        VALUES ($id1, $company, 'CC-10', 'Center 10', 0, 1, 0),
+                               ($id2, $company, 'CC-20', 'Center 20', 0, 1, 0);
+                        """;
+                    insertCenters.Parameters.AddWithValue("$id1", Guid.NewGuid().ToString("D"));
+                    insertCenters.Parameters.AddWithValue("$id2", Guid.NewGuid().ToString("D"));
+                    insertCenters.Parameters.AddWithValue("$company", companyId.ToString("D"));
+                    await insertCenters.ExecuteNonQueryAsync();
                 }
 
                 var structure = new ShouTech.Infrastructure.AccountingStructureRepository("SQLite", connectionString);
