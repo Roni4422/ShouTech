@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -398,7 +398,6 @@ namespace ShouTech.App.Views
             SafeSet(TxtNameEn, _current.NameEn);
             SafeSet(TxtSpecs, _current.GeneralSpecs);
             SelectWarehouse(_current.Warehouse);
-            FillParentCombo(_current.ParentCode);
             LoadImagePreview(_current.ImagePath);
             SafeSet(TxtMode, L("ModeView", "View"));
 
@@ -423,7 +422,6 @@ namespace ShouTech.App.Views
             SafeSet(TxtNameEn, "");
             SafeSet(TxtSpecs, "");
             SelectDefaultWarehouse();
-            FillParentCombo(null);
             ClearImagePreview();
             SafeSet(TxtMode, L("ModeNew", "New"));
 
@@ -537,70 +535,13 @@ namespace ShouTech.App.Views
                 ?? _warehouses[0];
         }
 
-        private sealed class ParentOption
-        {
-            public string Code { get; init; } = string.Empty;
-            public string Display { get; init; } = string.Empty;
-        }
-
-        /// <summary>
-        /// Fills the parent-category selector. material_groups.parent_code
-        /// previously had NO UI at all: the tree was display-only and every
-        /// new category was created as a root. The current category and its
-        /// descendants are excluded so a cycle can never be created here.
-        /// </summary>
-        private void FillParentCombo(string? selectedParentCode)
-        {
-            if (CmbParent == null) return;
-
-            var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (_current != null && !string.IsNullOrWhiteSpace(_current.Code))
-            {
-                excluded.Add(_current.Code);
-                // Fixpoint sweep: anything whose parent chain reaches the
-                // current category is its descendant.
-                var grew = true;
-                while (grew)
-                {
-                    grew = false;
-                    foreach (var item in _items)
-                    {
-                        if (!string.IsNullOrWhiteSpace(item.ParentCode)
-                            && excluded.Contains(item.ParentCode)
-                            && excluded.Add(item.Code))
-                            grew = true;
-                    }
-                }
-            }
-
-            var isArabic = string.Equals(
-                App.CurrentLanguageCode, "ar", StringComparison.OrdinalIgnoreCase);
-            var options = new List<ParentOption>
-            {
-                new() { Code = string.Empty, Display = L("NoParent", "(No parent)") }
-            };
-            options.AddRange(_items
-                .Where(item => !excluded.Contains(item.Code))
-                .OrderBy(item => item.Code, StringComparer.OrdinalIgnoreCase)
-                .Select(item => new ParentOption
-                {
-                    Code = item.Code,
-                    Display = item.Code + " — " + (isArabic
-                        ? (string.IsNullOrWhiteSpace(item.Name) ? item.NameEn : item.Name)
-                        : (string.IsNullOrWhiteSpace(item.NameEn) ? item.Name : item.NameEn))
-                }));
-
-            CmbParent.ItemsSource = options;
-            CmbParent.SelectedValue = string.IsNullOrWhiteSpace(selectedParentCode)
-                ? string.Empty
-                : selectedParentCode;
-            if (CmbParent.SelectedItem == null)
-                CmbParent.SelectedIndex = 0;
-        }
-
+        // NOTE (merge of PR #18): the Parent Category picker (CmbParent) was
+        // removed from CatWin.xaml, so there is no control to fill or read.
+        // The stored parent is preserved on save (existing children are never
+        // silently unparented); new categories are created as roots.
         private string? GetSelectedParentCode()
         {
-            var value = CmbParent?.SelectedValue as string;
+            var value = _current?.ParentCode;
             return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
         }
 
@@ -635,7 +576,6 @@ namespace ShouTech.App.Views
                 if (TxtName != null) TxtName.IsEnabled = enabled && _repoAvailable;
                 if (TxtNameEn != null) TxtNameEn.IsEnabled = enabled && _repoAvailable;
                 if (CmbWarehouse != null) CmbWarehouse.IsEnabled = enabled && _repoAvailable;
-                if (CmbParent != null) CmbParent.IsEnabled = enabled && _repoAvailable;
                 if (TxtSpecs != null) TxtSpecs.IsEnabled = enabled && _repoAvailable;
                 if (BtnPickImage != null) BtnPickImage.IsEnabled = enabled && _repoAvailable;
                 if (BtnClearImage != null) BtnClearImage.IsEnabled = enabled && _repoAvailable;
