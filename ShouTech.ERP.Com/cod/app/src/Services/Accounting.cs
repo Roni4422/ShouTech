@@ -488,19 +488,22 @@ internal static class AccRepo
                 && CodeExistsOnConnection(connection, transaction, companyGuid, value.Code, current.Id))
                 throw new InvalidOperationException("The new account number is already in use.");
 
-            using var update = connection.CreateCommand();
-            update.Transaction = transaction;
-            update.CommandText = UpdateSql();
-            Bind(update, value, current.Id, companyGuid, parentId);
-            if (update.ExecuteNonQuery() != 1)
-                throw new InvalidOperationException("The account could not be saved because it no longer exists in the current company.");
-
+            // Descendants are discovered through their current parent
+            // code. Renumber them before changing this parent's code, or
+            // the old prefix will no longer match the linked child rows.
             if (!string.Equals(current.Code, value.Code, StringComparison.OrdinalIgnoreCase)
                 && renumberDescendants
                 && HasChildrenOnConnection(connection, transaction, current.Id))
             {
                 RenumberDescendants(connection, transaction, companyGuid, current.Code, value.Code);
             }
+
+            using var update = connection.CreateCommand();
+            update.Transaction = transaction;
+            update.CommandText = UpdateSql();
+            Bind(update, value, current.Id, companyGuid, parentId);
+            if (update.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException("The account could not be saved because it no longer exists in the current company.");
             // When the code changes WITHOUT renumbering, children keep their
             // codes but stay linked: parentage is parent_account_id (this
             // row's Guid, unchanged), so there is nothing to re-point. The
