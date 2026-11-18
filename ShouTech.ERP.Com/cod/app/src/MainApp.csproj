@@ -117,8 +117,6 @@
 
     <!-- Application Source -->
     <Compile Include="**\*.cs" Exclude="obj\**\*;bin\**\*;ViewModels\MainWnVM.cs" />
-	<Compile Include="../../../cfg/AppSettings.cs" Condition="Exists('../../../cfg/AppSettings.cs')" />
-    <Compile Include="../../../cfg/CompanyInfo.cs" Condition="Exists('../../../cfg/CompanyInfo.cs')" />
 
   </ItemGroup>
 
