@@ -5,10 +5,10 @@
         xmlns:loc="clr-namespace:ShouTech.App.Localization"
         Title="Category Card"
         loc:LocProps.WindowKey="CatWin.Title"
-        Width="880"
-        Height="620"
-        MinWidth="760"
-        MinHeight="520"
+        Width="760"
+        Height="540"
+        MinWidth="700"
+        MinHeight="490"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResizeWithGrip"
         Background="{DynamicResource BackgroundBrush}"
@@ -246,9 +246,9 @@
              ========================================================= -->
         <Grid Grid.Row="1" Margin="12,10">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="1.1*" MinWidth="320"/>
+                <ColumnDefinition Width="1.1*" MinWidth="300"/>
                 <ColumnDefinition Width="10"/>
-                <ColumnDefinition Width="1*" MinWidth="280"/>
+                <ColumnDefinition Width="1*" MinWidth="260"/>
             </Grid.ColumnDefinitions>
 
             <!-- LEFT COLUMN: form -->
