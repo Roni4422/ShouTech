@@ -236,7 +236,7 @@ public sealed class InvPostCorrectnessTests
         {
             connection.Open();
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = $"INSERT INTO warehouses (warehouse_id, company_id, warehouse_code, name, is_deleted) VALUES (2, '{CompanyCode}', 2, 'Second', 0);";
+            cmd.CommandText = $"INSERT INTO warehouses (warehouse_id, company_id, warehouse_code, warehouse_name_ar, warehouse_name_en, is_deleted) VALUES (2, '{CompanyCode}', 2, 'Second', 'Second', 0);";
             cmd.ExecuteNonQuery();
         }
         var doc = BuildDoc(InvDocKind.StockTransfer, null, "", qty: 3m, price: 10m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
