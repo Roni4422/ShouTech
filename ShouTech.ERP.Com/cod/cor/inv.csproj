@@ -15,6 +15,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\ShouTech.Domain\ShouTech.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Domain\Domain.csproj" />
   </ItemGroup>
 </Project>
