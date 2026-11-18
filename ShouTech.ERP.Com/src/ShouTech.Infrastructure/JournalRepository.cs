@@ -140,11 +140,13 @@ public sealed class JournalRepository : IJournalRepository
             throw new InvalidOperationException($"The saved journal has an unknown status value '{statusValue}'.");
 
         var linesResult = new List<JournalEntryLineSnapshot>();
+        var hasLineBase = PartyLedger.ColumnExists(connection, null, _provider, "journal_entry_lines", "base_debit");
         await using (var lines = connection.CreateCommand())
         {
             lines.CommandText = """
                 SELECT l.line_number, l.account_id, a.account_code, a.account_name,
                        l.debit, l.credit, l.cost_center, l.note
+                """ + (hasLineBase ? ", l.base_debit, l.base_credit, l.exchange_rate" : "") + """
                 FROM journal_entry_lines l
                 LEFT JOIN chart_of_accounts a
                   ON a.account_id = l.account_id AND a.company_id = @company
@@ -172,7 +174,18 @@ public sealed class JournalRepository : IJournalRepository
                     Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture),
                     Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture),
                     reader.IsDBNull(6) ? null : reader.GetString(6),
-                    reader.IsDBNull(7) ? null : reader.GetString(7)));
+                    reader.IsDBNull(7) ? null : reader.GetString(7),
+                    // Step 7: base amounts as stored (migration 062
+                    // backfill guarantees them on migrated databases);
+                    // a NULL on an unmigrated fixture falls back to the
+                    // header rate so the snapshot is never base-blind.
+                    hasLineBase
+                        ? reader.IsDBNull(8) ? FxRates.ToBase(Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture), exchangeRate) : Convert.ToDecimal(reader.GetValue(8), CultureInfo.InvariantCulture)
+                        : FxRates.ToBase(Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture), exchangeRate),
+                    hasLineBase
+                        ? reader.IsDBNull(9) ? FxRates.ToBase(Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture), exchangeRate) : Convert.ToDecimal(reader.GetValue(9), CultureInfo.InvariantCulture)
+                        : FxRates.ToBase(Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture), exchangeRate),
+                    hasLineBase && !reader.IsDBNull(10) ? Convert.ToDecimal(reader.GetValue(10), CultureInfo.InvariantCulture) : exchangeRate));
             }
         }
 
@@ -230,8 +243,19 @@ public sealed class JournalRepository : IJournalRepository
                     throw new InvalidOperationException($"Account '{line.AccountId}' is missing, inactive, deleted, or not postable for this company.");
             }
 
+            // Step 7 (J-5): resolve the effective rate ONCE (the entry's
+            // own rate is explicit here — JournalEntry requires > 0 —
+            // base-currency entries resolve to 1) and write every line's
+            // base-currency amounts alongside its transaction amounts.
+            var fx = FxRates.Resolve(connection, transaction, _provider, companyId,
+                entry.CurrencyCode, entry.EntryDate, entry.ExchangeRate);
+            var hasLineBase = PartyLedger.ColumnExists(connection, transaction, _provider, "journal_entry_lines", "base_debit");
+            var hasHeaderBase = PartyLedger.ColumnExists(connection, transaction, _provider, "journal_entries", "base_currency_code");
+
             await using (var command = CreateCommand(connection, transaction,
-                "INSERT INTO journal_entries (journal_entry_id, company_id, entry_date, description, status, created_by, fiscal_period_id, reference_number, currency_code, exchange_rate, document_number) VALUES (@id, @company, @date, @description, @status, @actor, @period, @reference, @currency, @rate, @documentNumber)"))
+                hasHeaderBase
+                    ? "INSERT INTO journal_entries (journal_entry_id, company_id, entry_date, description, status, created_by, fiscal_period_id, reference_number, currency_code, exchange_rate, document_number, base_currency_code) VALUES (@id, @company, @date, @description, @status, @actor, @period, @reference, @currency, @rate, @documentNumber, @baseCurrency)"
+                    : "INSERT INTO journal_entries (journal_entry_id, company_id, entry_date, description, status, created_by, fiscal_period_id, reference_number, currency_code, exchange_rate, document_number) VALUES (@id, @company, @date, @description, @status, @actor, @period, @reference, @currency, @rate, @documentNumber)"))
             {
                 Add(command, "@id", FormatGuid(entry.Id));
                 Add(command, "@company", FormatGuid(companyId));
@@ -242,16 +266,22 @@ public sealed class JournalRepository : IJournalRepository
                 Add(command, "@period", _provider == "PostgreSQL" ? (object)Guid.Parse(periodId) : periodId);
                 Add(command, "@reference", (object?)entry.ReferenceNumber ?? DBNull.Value);
                 Add(command, "@currency", entry.CurrencyCode);
-                Add(command, "@rate", entry.ExchangeRate);
+                Add(command, "@rate", fx.Rate);
                 Add(command, "@documentNumber", (object?)entry.DocumentNumber ?? DBNull.Value);
+                if (hasHeaderBase)
+                    Add(command, "@baseCurrency", (object?)fx.BaseCurrency ?? DBNull.Value);
                 await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
+            var baseAmounts = FxRates.ConvertBalanced(
+                entry.Lines.Select(l => (l.Debit, l.Credit)).ToList(), fx.Rate);
             var lineNumber = 0;
             foreach (var line in entry.Lines)
             {
                 await using var command = CreateCommand(connection, transaction,
-                    "INSERT INTO journal_entry_lines (journal_entry_id, line_number, account_id, debit, credit, cost_center, note) VALUES (@id, @line, @account, @debit, @credit, @costCenter, @note)");
+                    hasLineBase
+                        ? "INSERT INTO journal_entry_lines (journal_entry_id, line_number, account_id, debit, credit, cost_center, note, base_debit, base_credit, exchange_rate) VALUES (@id, @line, @account, @debit, @credit, @costCenter, @note, @baseDebit, @baseCredit, @rate)"
+                        : "INSERT INTO journal_entry_lines (journal_entry_id, line_number, account_id, debit, credit, cost_center, note) VALUES (@id, @line, @account, @debit, @credit, @costCenter, @note)");
                 Add(command, "@id", FormatGuid(entry.Id));
                 Add(command, "@line", ++lineNumber);
                 Add(command, "@account", FormatGuid(line.AccountId));
@@ -259,6 +289,12 @@ public sealed class JournalRepository : IJournalRepository
                 Add(command, "@credit", line.Credit);
                 Add(command, "@costCenter", (object?)line.CostCenter ?? DBNull.Value);
                 Add(command, "@note", (object?)line.Note ?? DBNull.Value);
+                if (hasLineBase)
+                {
+                    Add(command, "@baseDebit", baseAmounts[lineNumber - 1].BaseDebit);
+                    Add(command, "@baseCredit", baseAmounts[lineNumber - 1].BaseCredit);
+                    Add(command, "@rate", fx.Rate);
+                }
                 await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
@@ -332,17 +368,29 @@ public sealed class JournalRepository : IJournalRepository
                     throw new InvalidOperationException($"Account '{line.AccountId}' is missing, inactive, deleted, or not postable for this company.");
             }
 
+            // Step 7 (J-5): same rate resolution + dual amounts as
+            // SaveDraftAsync — an edited draft's lines are rewritten with
+            // base amounts at the entry's (possibly changed) rate.
+            var fx = FxRates.Resolve(connection, transaction, _provider, companyId,
+                entry.CurrencyCode, entry.EntryDate, entry.ExchangeRate);
+            var hasLineBase = PartyLedger.ColumnExists(connection, transaction, _provider, "journal_entry_lines", "base_debit");
+            var hasHeaderBase = PartyLedger.ColumnExists(connection, transaction, _provider, "journal_entries", "base_currency_code");
+
             // The document number is the entry's identity (windows load by
             // it) and is deliberately NOT updated.
             await using (var update = CreateCommand(connection, transaction,
-                "UPDATE journal_entries SET entry_date = @date, description = @description, reference_number = @reference, currency_code = @currency, exchange_rate = @rate, fiscal_period_id = @period WHERE journal_entry_id = @id AND company_id = @company AND status = @draft"))
+                hasHeaderBase
+                    ? "UPDATE journal_entries SET entry_date = @date, description = @description, reference_number = @reference, currency_code = @currency, exchange_rate = @rate, fiscal_period_id = @period, base_currency_code = @baseCurrency WHERE journal_entry_id = @id AND company_id = @company AND status = @draft"
+                    : "UPDATE journal_entries SET entry_date = @date, description = @description, reference_number = @reference, currency_code = @currency, exchange_rate = @rate, fiscal_period_id = @period WHERE journal_entry_id = @id AND company_id = @company AND status = @draft"))
             {
                 Add(update, "@date", entryDateValue);
                 Add(update, "@description", entry.Description);
                 Add(update, "@reference", (object?)entry.ReferenceNumber ?? DBNull.Value);
                 Add(update, "@currency", entry.CurrencyCode);
-                Add(update, "@rate", entry.ExchangeRate);
+                Add(update, "@rate", fx.Rate);
                 Add(update, "@period", _provider == "PostgreSQL" ? (object)Guid.Parse(periodId) : periodId);
+                if (hasHeaderBase)
+                    Add(update, "@baseCurrency", (object?)fx.BaseCurrency ?? DBNull.Value);
                 Add(update, "@id", FormatGuid(journalEntryId));
                 Add(update, "@company", FormatGuid(companyId));
                 Add(update, "@draft", (int)JournalEntryStatus.Draft);
@@ -357,11 +405,15 @@ public sealed class JournalRepository : IJournalRepository
                 await deleteLines.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
+            var baseAmounts = FxRates.ConvertBalanced(
+                entry.Lines.Select(l => (l.Debit, l.Credit)).ToList(), fx.Rate);
             var lineNumber = 0;
             foreach (var line in entry.Lines)
             {
                 await using var command = CreateCommand(connection, transaction,
-                    "INSERT INTO journal_entry_lines (journal_entry_id, line_number, account_id, debit, credit, cost_center, note) VALUES (@id, @line, @account, @debit, @credit, @costCenter, @note)");
+                    hasLineBase
+                        ? "INSERT INTO journal_entry_lines (journal_entry_id, line_number, account_id, debit, credit, cost_center, note, base_debit, base_credit, exchange_rate) VALUES (@id, @line, @account, @debit, @credit, @costCenter, @note, @baseDebit, @baseCredit, @rate)"
+                        : "INSERT INTO journal_entry_lines (journal_entry_id, line_number, account_id, debit, credit, cost_center, note) VALUES (@id, @line, @account, @debit, @credit, @costCenter, @note)");
                 Add(command, "@id", FormatGuid(journalEntryId));
                 Add(command, "@line", ++lineNumber);
                 Add(command, "@account", FormatGuid(line.AccountId));
@@ -369,6 +421,12 @@ public sealed class JournalRepository : IJournalRepository
                 Add(command, "@credit", line.Credit);
                 Add(command, "@costCenter", (object?)line.CostCenter ?? DBNull.Value);
                 Add(command, "@note", (object?)line.Note ?? DBNull.Value);
+                if (hasLineBase)
+                {
+                    Add(command, "@baseDebit", baseAmounts[lineNumber - 1].BaseDebit);
+                    Add(command, "@baseCredit", baseAmounts[lineNumber - 1].BaseCredit);
+                    Add(command, "@rate", fx.Rate);
+                }
                 await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
@@ -382,19 +440,26 @@ public sealed class JournalRepository : IJournalRepository
         }
     }
 
-    public async Task PostAsync(Guid journalEntryId, string userId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<BudgetWarning>> PostAsync(Guid journalEntryId, string userId, CancellationToken cancellationToken = default)
     {
         if (journalEntryId == Guid.Empty) throw new ArgumentException("Journal entry is required.", nameof(journalEntryId));
         if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        // Phase B 055: BudgetGuard fills this sink with Stop violations
+        // before throwing; the Blocked events are recorded after the
+        // rollback below (an in-transaction row would roll back too).
+        var budgetBlocked = new List<BudgetViolation>();
+        IReadOnlyList<BudgetWarning> budgetWarnings = Array.Empty<BudgetWarning>();
+        Guid companyId = Guid.Empty;
         try
         {
-            Guid companyId;
             DateOnly entryDate;
+            string entryCurrency = "SAR";
+            decimal entryRate = 1m;
             await using (var header = CreateCommand(connection, transaction,
-                "SELECT company_id, entry_date FROM journal_entries WHERE journal_entry_id = @id"))
+                "SELECT company_id, entry_date, currency_code, exchange_rate FROM journal_entries WHERE journal_entry_id = @id"))
             {
                 Add(header, "@id", FormatGuid(journalEntryId));
                 await using var reader = await header.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -404,6 +469,8 @@ public sealed class JournalRepository : IJournalRepository
                 entryDate = _provider == "PostgreSQL"
                     ? reader.GetFieldValue<DateOnly>(1)
                     : DateOnly.Parse(Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture)!, CultureInfo.InvariantCulture);
+                if (!reader.IsDBNull(2)) entryCurrency = reader.GetString(2);
+                if (!reader.IsDBNull(3)) entryRate = Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture);
             }
 
             await using (var check = CreateCommand(connection, transaction,
@@ -419,12 +486,65 @@ public sealed class JournalRepository : IJournalRepository
                     throw new InvalidOperationException("Only a balanced journal entry with at least two lines can be posted.");
             }
 
+            // Step 7 (J-5): balance must ALSO hold in base currency.
+            // Lines written by the current save paths always carry base
+            // amounts; a legacy draft whose lines still lack them is
+            // healed here from the header rate (the same conversion the
+            // 062 backfill applies), inside the posting transaction.
+            // A stored base imbalance (e.g. lines converted at mixed
+            // rates that do not net) fails the posting with ACC-5001 —
+            // mixed-rate entries must balance in base, by definition.
+            if (PartyLedger.ColumnExists(connection, transaction, _provider, "journal_entry_lines", "base_debit"))
+            {
+                long missingBase;
+                await using (var missing = CreateCommand(connection, transaction,
+                    "SELECT COUNT(*) FROM journal_entry_lines WHERE journal_entry_id = @id AND base_debit IS NULL"))
+                {
+                    Add(missing, "@id", FormatGuid(journalEntryId));
+                    missingBase = Convert.ToInt64(await missing.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+                }
+                if (missingBase > 0)
+                {
+                    var fx = FxRates.Resolve(connection, transaction, _provider, companyId, entryCurrency, entryDate, entryRate);
+                    var stored = await LoadCostLinesAsync(connection, transaction, companyId, journalEntryId, cancellationToken).ConfigureAwait(false);
+                    var healed = FxRates.ConvertBalanced(stored.Select(l => (l.Debit, l.Credit)).ToList(), fx.Rate);
+                    for (var i = 0; i < stored.Count; i++)
+                    {
+                        await using var heal = CreateCommand(connection, transaction,
+                            "UPDATE journal_entry_lines SET base_debit = @bd, base_credit = @bc, exchange_rate = @rate WHERE journal_entry_id = @id AND line_number = @line");
+                        Add(heal, "@bd", healed[i].BaseDebit);
+                        Add(heal, "@bc", healed[i].BaseCredit);
+                        Add(heal, "@rate", fx.Rate);
+                        Add(heal, "@id", FormatGuid(journalEntryId));
+                        Add(heal, "@line", stored[i].LineNumber);
+                        await heal.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                }
+                await using var baseCheck = CreateCommand(connection, transaction,
+                    "SELECT COALESCE(SUM(base_debit), 0), COALESCE(SUM(base_credit), 0) FROM journal_entry_lines WHERE journal_entry_id = @id");
+                Add(baseCheck, "@id", FormatGuid(journalEntryId));
+                await using var baseReader = await baseCheck.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (!await baseReader.ReadAsync(cancellationToken).ConfigureAwait(false)) throw new InvalidOperationException("Unable to validate journal base amounts.");
+                var baseDebit = Convert.ToDecimal(baseReader.GetValue(0), CultureInfo.InvariantCulture);
+                var baseCredit = Convert.ToDecimal(baseReader.GetValue(1), CultureInfo.InvariantCulture);
+                if (baseDebit <= 0 || baseDebit != baseCredit)
+                    throw new AppError(ErrorCodes.JournalNotBalanced,
+                        "Journal entry debit and credit totals must balance in base currency.");
+            }
+
             // J-3 (Step 3): cost-center validation is shared with document
             // postings (GlPosting.ApplyCostCenters): unknown cost centers
             // fail with ACC-5009 and cost_required accounts without a
             // center fail with ACC-5010, inside the posting transaction.
             var postLines = await LoadCostLinesAsync(connection, transaction, companyId, journalEntryId, cancellationToken).ConfigureAwait(false);
             GlPosting.ApplyCostCenters(connection, transaction, _provider, companyId, journalEntryId, entryDate, postLines, enforceValidation: true);
+
+            // Phase B 055: BudgetGuard, beside the cost splits it reads —
+            // a Stop (ACC-5018/5019) throws here and the whole posting
+            // rolls back, leaving the entry Draft; Warn warnings are
+            // returned to the caller after the commit.
+            budgetWarnings = BudgetGuard.Check(connection, transaction, _provider,
+                companyId, journalEntryId, userId, budgetBlocked);
 
             await using (var update = CreateCommand(connection, transaction,
                 "UPDATE journal_entries SET status = @posted, posted_by = @actor, posted_at = CURRENT_TIMESTAMP WHERE journal_entry_id = @id AND status = @draft"))
@@ -437,11 +557,60 @@ public sealed class JournalRepository : IJournalRepository
                     throw new InvalidOperationException("Journal entry was not found or is not in draft status.");
             }
             await AddAuditAsync(connection, transaction, journalEntryId, 2, userId, "Journal posted", cancellationToken).ConfigureAwait(false);
+
+            // Step 4 settlement (sweep B-03): a cash voucher saved with a
+            // resolved party carries a voucher_party_links row (migration
+            // 061). Posting the voucher writes the party_ledger settlement
+            // entry INSIDE this transaction — credit for a customer, debit
+            // for a supplier — linked back to this journal entry so the
+            // shared reversal core can mirror it symmetrically.
+            if (PartyLedger.TableExists(connection, transaction, _provider, "voucher_party_links"))
+            {
+                string? linkCompany = null, linkKind = null, linkDocKind = null, linkDocNo = null, linkCurrency = null;
+                long linkParty = 0;
+                decimal linkAmount = 0m;
+                await using (var link = CreateCommand(connection, transaction,
+                    "SELECT company_id, party_kind, party_id, doc_kind, doc_no, amount, currency_code FROM voucher_party_links WHERE journal_entry_id = @id"))
+                {
+                    Add(link, "@id", FormatGuid(journalEntryId));
+                    await using var reader = await link.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                    if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    {
+                        linkCompany = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture);
+                        linkKind = Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture);
+                        linkParty = Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture);
+                        linkDocKind = Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture);
+                        linkDocNo = Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture);
+                        linkAmount = Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture);
+                        linkCurrency = reader.IsDBNull(6) ? "SAR" : Convert.ToString(reader.GetValue(6), CultureInfo.InvariantCulture);
+                    }
+                }
+
+                if (linkCompany is not null && linkKind is not null && linkAmount > 0)
+                {
+                    var (debit, credit) = PartyLedger.SettlementSides(linkKind, linkAmount);
+                    // Step 7: the settlement inherits the voucher's own
+                    // currency + header rate, so its base amount is the
+                    // converted amount, never the raw foreign sum.
+                    PartyLedger.WriteEntry(connection, transaction, _provider,
+                        linkCompany, linkKind, linkParty, linkDocKind, null, linkDocNo,
+                        entryDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                        debit, credit, linkCurrency ?? entryCurrency,
+                        "Cash voucher settlement",
+                        journalEntryId.ToString("D"),
+                        exchangeRate: entryRate);
+                }
+            }
+
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return budgetWarnings;
         }
-        catch
+        catch (Exception ex)
         {
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            var recordFailure = await TryRecordBudgetBlockedAsync(connection, companyId, userId, budgetBlocked).ConfigureAwait(false);
+            if (recordFailure is not null && ex is AppError appError)
+                throw new AppError(appError.Code, appError.Message, recordFailure, appError.Args.ToArray());
             throw;
         }
     }
@@ -486,16 +655,54 @@ public sealed class JournalRepository : IJournalRepository
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var budgetBlocked = new List<BudgetViolation>();
         try
         {
-            var result = GlPosting.PostInTransaction(connection, transaction, _provider, request, userId);
+            var result = GlPosting.PostInTransaction(connection, transaction, _provider, request, userId, budgetBlocked);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return result;
         }
-        catch
+        catch (Exception ex)
         {
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            var recordFailure = await TryRecordBudgetBlockedAsync(connection, request.CompanyId, userId, budgetBlocked).ConfigureAwait(false);
+            if (recordFailure is not null && ex is AppError appError)
+                throw new AppError(appError.Code, appError.Message, recordFailure, appError.Args.ToArray());
             throw;
+        }
+    }
+
+    /// <summary>Phase B 055: records BudgetGuard Blocked events after a
+    /// refused posting rolled back (the events table is the audit of
+    /// every block; an in-transaction row would have rolled back with
+    /// the posting). Returns the recording failure, if any, instead of
+    /// throwing it: the caller attaches it to the refusal's AppError as
+    /// the inner exception, so a failed audit write never masks the
+    /// refusal itself.</summary>
+    private async Task<Exception?> TryRecordBudgetBlockedAsync(
+        DbConnection connection, Guid companyId, string userId,
+        List<BudgetViolation> violations)
+    {
+        if (violations.Count == 0 || companyId == Guid.Empty)
+            return null;
+        try
+        {
+            await using var eventsTx = await connection.BeginTransactionAsync(CancellationToken.None).ConfigureAwait(false);
+            try
+            {
+                BudgetGuard.RecordBlockedEvents(connection, eventsTx, _provider, companyId, userId, violations);
+                await eventsTx.CommitAsync(CancellationToken.None).ConfigureAwait(false);
+                return null;
+            }
+            catch
+            {
+                await eventsTx.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                throw;
+            }
+        }
+        catch (Exception recordEx)
+        {
+            return recordEx;
         }
     }
 

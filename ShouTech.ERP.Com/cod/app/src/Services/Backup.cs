@@ -234,6 +234,13 @@ internal static class SteiSvc
             ct.ThrowIfCancellationRequested();
             if (Excluded.Contains(table))
                 continue;
+            // Step 10: a database that still carries a dropped legacy
+            // table (pre-059/061/063, not yet migrated) must not export
+            // it — the rows belong to a store the current schema
+            // replaced, and re-importing them elsewhere would recreate
+            // an orphan legacy table (Step 2 flag F-3).
+            if (DataExchangeGuard.IsLegacyDroppedTable(table))
+                continue;
             var columns = await GetColumnsAsync(db, provider, table, ct);
             if (columns.Count == 0)
                 continue;
@@ -334,7 +341,7 @@ internal static class SteiSvc
         bool simulation = false,
         IProgress<(long done, long total)>? progress = null,
         CancellationToken ct = default)
-        => ImportCoreAsync(inputPath, password, simulation, datasetKey, tableName, progress, ct);
+        => ImportCoreAsync(inputPath, password, simulation, datasetKey, tableName, enforceImportGate: true, progress, ct);
 
     public static Task<SteiResult> ImportAsync(
         string inputPath,
@@ -342,7 +349,20 @@ internal static class SteiSvc
         bool simulation,
         IProgress<(long done, long total)>? progress = null,
         CancellationToken ct = default)
-        => ImportCoreAsync(inputPath, password, simulation, null, null, progress, ct);
+        => ImportCoreAsync(inputPath, password, simulation, null, null, enforceImportGate: true, progress, ct);
+
+    /// <summary>
+    /// Backup-restore entry point (Step 10): identical engine, but the
+    /// governing permission is BACKUP.RESTORE, enforced by BkpServ
+    /// before it calls here — NOT DATA.IMPORT. A simulation run never
+    /// writes, so it is ungated on every entry point.
+    /// </summary>
+    internal static Task<SteiResult> ImportForRestoreAsync(
+        string inputPath,
+        string password,
+        IProgress<(long done, long total)>? progress = null,
+        CancellationToken ct = default)
+        => ImportCoreAsync(inputPath, password, simulation: false, null, null, enforceImportGate: false, progress, ct);
 
     private static async Task<SteiResult> ImportCoreAsync(
         string inputPath,
@@ -350,11 +370,18 @@ internal static class SteiSvc
         bool simulation,
         string? expectedDatasetKey,
         string? expectedTableName,
+        bool enforceImportGate,
         IProgress<(long done, long total)>? progress = null,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(password))
             throw new ArgumentException("A package password is required.", nameof(password));
+        // Step 10 (DX-03): service-layer DATA.IMPORT gate — runs before
+        // the container is even opened, so a denied import writes
+        // nothing and reads nothing.
+        if (!simulation && enforceImportGate)
+            DataExchangeGuard.RequireImportPermission(
+                expectedDatasetKey == null ? "STEI full package" : $"STEI dataset package '{expectedDatasetKey}'");
         var container = await ReadContainerAsync(inputPath, ct);
         var manifest = container.Manifest;
         ValidateManifest(manifest);
@@ -385,6 +412,20 @@ internal static class SteiSvc
                  !tables.ContainsKey(expectedTableName))
         {
             throw new InvalidDataException("The encrypted package does not match the selected dataset type.");
+        }
+
+        // Step 10 (Step 2 flag F-3): govern the package against the
+        // current schema. Tables dropped by the unification migrations
+        // (accounts / customers / suppliers / bank_accounts) are SKIPPED
+        // — never recreated, never counted as failures — and named in
+        // the result message and the import audit row. Any other table
+        // the target does not have keeps the honest failure behavior
+        // below (the whole import rolls back).
+        var skippedLegacyTables = new List<string>();
+        foreach (var legacyName in tables.Keys.Where(DataExchangeGuard.IsLegacyDroppedTable).ToList())
+        {
+            skippedLegacyTables.Add($"{legacyName} ({tables[legacyName].Count} rows)");
+            tables.Remove(legacyName);
         }
 
         var provider = DatabaseRuntime.GetProvider();
@@ -425,7 +466,10 @@ internal static class SteiSvc
                 }
             }
             var partialSim = failedRows > 0 || failedTables > 0;
-            return new SteiResult(!partialSim, partialSim, total, failedRows, tables.Count, failedTables, errors, partialSim ? "Simulation found issues." : "Simulation completed successfully.");
+            var simMessage = partialSim ? "Simulation found issues." : "Simulation completed successfully.";
+            if (skippedLegacyTables.Count > 0)
+                simMessage += $" Legacy tables skipped (dropped by the current schema): {string.Join(", ", skippedLegacyTables)}.";
+            return new SteiResult(!partialSim, partialSim, total, failedRows, tables.Count, failedTables, errors, simMessage);
         }
 
         // FK-safe insertion order: parents before children, derived from the
@@ -542,9 +586,29 @@ internal static class SteiSvc
             }
 
             if (failedRows > 0 || failedTables > 0)
+            {
                 await tx.RollbackAsync(ct);
+            }
             else
+            {
+                // Step 10 (DX-10): PostgreSQL identity sequences are not
+                // advanced by explicit-id inserts, so the next ordinary
+                // insert into an imported table could collide with an
+                // imported id. Advance every imported table's sequence
+                // past its max id, inside the same transaction. A repair
+                // failure is reported, never silently swallowed, and does
+                // not roll back an otherwise-valid import.
+                if (DatabaseRuntime.IsPostgreSql(provider))
+                {
+                    try { await RepairPostgresSequencesAsync(db, tx, orderedTables, ct); }
+                    catch (Exception exSeq)
+                    {
+                        AppHost.Errors.Report(ErrorCodes.ImportFailed, exSeq, "SteiSvc.RepairPostgresSequencesAsync");
+                        errors.Add($"Sequence repair failed: {exSeq.Message}");
+                    }
+                }
                 await tx.CommitAsync(ct);
+            }
         }
         catch
         {
@@ -558,6 +622,12 @@ internal static class SteiSvc
             : skippedDuplicates > 0
                 ? $"Import completed successfully. {skippedDuplicates} row(s) already existed and were skipped — import never overwrites existing rows."
                 : "Import completed successfully.";
+        if (skippedLegacyTables.Count > 0)
+            message += $" Legacy tables skipped (dropped by the current schema): {string.Join(", ", skippedLegacyTables)}.";
+        // Step 10 (DX-06): durable security-audit row for every import —
+        // who, which package scope, honest counts, legacy skips.
+        await DataExchangeGuard.WriteImportAuditAsync(
+            $"operation={(expectedDatasetKey == null ? "STEI full package" : $"STEI dataset package '{expectedDatasetKey}'")} | sourceCompany={manifest.SourceCompanyCode} | tables={tables.Count} | inserted={(partial ? 0 : insertedRows)} | skippedDuplicates={skippedDuplicates} | failedRows={failedRows} | failedTables={failedTables} | legacySkipped={(skippedLegacyTables.Count == 0 ? "-" : string.Join(", ", skippedLegacyTables))} | partial={partial}");
         // Rows reports rows actually inserted by THIS import (0 when the
         // transaction rolled back) — never the package's row count.
         return new SteiResult(!partial, partial, partial ? 0 : insertedRows, failedRows, tables.Count, failedTables, errors, message, skippedDuplicates);
@@ -851,7 +921,91 @@ internal static class SteiSvc
         // a cross-company data leak that also made the package unimportable
         // (the leaked rows reference a company that does not exist in the
         // target database and fail its foreign keys).
+        if (!hasCompanyId)
+        {
+            // Step 10: child tables without a company_id of their own
+            // (document lines, journal lines, order lines, project
+            // tasks, ...) are scoped THROUGH their parent: a line row
+            // travels only when its parent document belongs to the
+            // active company. Before, these tables traveled whole — the
+            // other companies' lines leaked into the package and then
+            // failed their foreign keys on import (their parents are
+            // company-filtered out), rolling the whole import back.
+            // Tables with no company-scoped parent are global reference
+            // data and still travel whole.
+            var childWhere = await BuildChildScopeWhereAsync(db, provider, table, guidValue, codeValue, ct);
+            if (childWhere != null)
+                where = childWhere;
+        }
         return await ExecuteSelectRowsAsync(db, qtable, where, guidValue, codeValue, progress, done, ct);
+    }
+
+    /// <summary>
+    /// Builds a WHERE clause scoping a company-less child table through
+    /// every single-column foreign key whose parent table carries a
+    /// company_id. Returns null when the table has no such parent (a
+    /// genuinely global table). The parameter names match
+    /// <see cref="ExecuteSelectRowsAsync"/>'s binding convention.
+    /// </summary>
+    private static async Task<string?> BuildChildScopeWhereAsync(DbConnection db, string provider, string table, string? guidValue, string? codeValue, CancellationToken ct)
+    {
+        var foreignKeys = new List<(string From, string ParentTable, string ParentKey)>();
+        if (DatabaseRuntime.IsSqlite(provider))
+        {
+            await using var cmd = db.CreateCommand();
+            cmd.CommandText = $"PRAGMA foreign_key_list({Quote(table)});";
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            var byId = new Dictionary<long, List<(string From, string ParentTable, string ParentKey)>>();
+            while (await reader.ReadAsync(ct))
+            {
+                var id = reader.GetInt64(0);
+                if (!byId.TryGetValue(id, out var group))
+                    byId[id] = group = new List<(string, string, string)>();
+                group.Add((reader.GetString(3), reader.GetString(2), reader.IsDBNull(4) ? "" : reader.GetString(4)));
+            }
+            foreach (var group in byId.Values)
+                if (group.Count == 1 && !string.IsNullOrWhiteSpace(group[0].ParentKey))
+                    foreignKeys.Add(group[0]);
+        }
+        else if (DatabaseRuntime.IsPostgreSql(provider))
+        {
+            await using var cmd = db.CreateCommand();
+            cmd.CommandText = """
+                SELECT kcu.column_name, ccu.table_name, ccu.column_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                  ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+                JOIN information_schema.constraint_column_usage ccu
+                  ON ccu.constraint_schema = tc.constraint_schema AND ccu.constraint_name = tc.constraint_name
+                WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = 'public' AND tc.table_name = @table;
+                """;
+            AddParameter(cmd, "@table", table);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+                foreignKeys.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2)));
+        }
+
+        var predicates = new List<string>();
+        foreach (var (from, parentTable, parentKey) in foreignKeys)
+        {
+            if (string.Equals(parentTable, table, StringComparison.OrdinalIgnoreCase))
+                continue;
+            var parentColumns = await GetColumnsAsync(db, provider, parentTable, ct);
+            if (!parentColumns.Contains("company_id", StringComparer.OrdinalIgnoreCase))
+                continue;
+            var parentPredicate = "";
+            if (!string.IsNullOrWhiteSpace(codeValue) && !string.IsNullOrWhiteSpace(guidValue) &&
+                !string.Equals(codeValue, guidValue, StringComparison.OrdinalIgnoreCase))
+                parentPredicate = "(CAST(company_id AS TEXT)=@companyCode OR CAST(company_id AS TEXT)=@companyGuid)";
+            else if (!string.IsNullOrWhiteSpace(codeValue))
+                parentPredicate = "CAST(company_id AS TEXT)=@companyCode";
+            else if (!string.IsNullOrWhiteSpace(guidValue))
+                parentPredicate = "CAST(company_id AS TEXT)=@companyGuid";
+            if (parentPredicate.Length == 0)
+                continue;
+            predicates.Add($"CAST({Quote(from)} AS TEXT) IN (SELECT CAST({Quote(parentKey)} AS TEXT) FROM {Quote(parentTable)} WHERE {parentPredicate})");
+        }
+        return predicates.Count == 0 ? null : " WHERE " + string.Join(" AND ", predicates);
     }
 
     private static async Task<List<Dictionary<string, JsonElement>>> ExecuteSelectRowsAsync(
@@ -894,6 +1048,47 @@ internal static class SteiSvc
             return;
         if (string.Equals(row[key].GetString(), sourceCompanyId, StringComparison.OrdinalIgnoreCase))
             row[key] = JsonSerializer.SerializeToElement(targetCompanyId);
+    }
+
+    /// <summary>
+    /// Advances PostgreSQL identity sequences past the ids an import just
+    /// inserted (DX-10). For every imported table, each column whose
+    /// default is a sequence (identity / serial) is set to
+    /// GREATEST(current sequence value, max(id), 1). Tables without a
+    /// sequence-backed column are untouched. PostgreSQL only.
+    /// </summary>
+    private static async Task RepairPostgresSequencesAsync(DbConnection db, DbTransaction tx, List<string> importedTables, CancellationToken ct)
+    {
+        foreach (var table in importedTables)
+        {
+            ct.ThrowIfCancellationRequested();
+            var sequenceColumns = new List<string>();
+            await using (var probe = db.CreateCommand())
+            {
+                probe.Transaction = tx;
+                probe.CommandText = """
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = @table
+                      AND column_default LIKE 'nextval(%'
+                    """;
+                AddParameter(probe, "@table", table);
+                await using var reader = await probe.ExecuteReaderAsync(ct);
+                while (await reader.ReadAsync(ct))
+                    sequenceColumns.Add(reader.GetString(0));
+            }
+            foreach (var column in sequenceColumns)
+            {
+                await using var fix = db.CreateCommand();
+                fix.Transaction = tx;
+                fix.CommandText = $"""
+                    SELECT setval(pg_get_serial_sequence(@table, @column),
+                                  GREATEST((SELECT COALESCE(MAX({Quote(column)}), 1) FROM {Quote(table)}), 1))
+                    """;
+                AddParameter(fix, "@table", table);
+                AddParameter(fix, "@column", column);
+                await fix.ExecuteScalarAsync(ct);
+            }
+        }
     }
 
     /// <summary>
@@ -1188,7 +1383,9 @@ internal static class SteiSvc
           
             var password = BackupKeyProvider.GetPackagePassword();
 
-            var result = await SteiSvc.ImportAsync(backupFilePath, password, simulation: false, progress: null, ct);
+            // Step 10: restore is governed by BACKUP.RESTORE (checked
+            // above), not DATA.IMPORT — use the engine's restore entry.
+            var result = await SteiSvc.ImportForRestoreAsync(backupFilePath, password, progress: null, ct);
             if (!result.Success)
             {
                 _log.LogError("Backup",

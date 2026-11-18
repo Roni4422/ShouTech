@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -24,6 +24,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class CcListWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Orchid";
     private readonly DataGrid _grid = new();
     private readonly TextBlock _statusBar = new();
     private readonly Button _newButton = new();
@@ -44,8 +45,8 @@ public sealed class CcListWin : BaseWin
     {
         Width = 1020;
         Height = 640;
-        MinWidth = 820;
-        MinHeight = 480;
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         BuildUi();
         Loaded += OnLoaded;

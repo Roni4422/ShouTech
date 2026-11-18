@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Threading.Tasks;
@@ -19,6 +19,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class OrderTrackWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Cyan";
     private readonly ComboBox _cmbKind = new();
     private readonly Button _btnRefresh = new();
     private readonly Button _btnOpen = new();
@@ -32,8 +33,8 @@ public sealed class OrderTrackWin : BaseWin
     {
         Width = 920;
         Height = 540;
-        MinWidth = 780;
-        MinHeight = 420;
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         BuildUi();
         ApplyLocalizedText();

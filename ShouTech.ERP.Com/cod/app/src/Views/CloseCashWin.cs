@@ -18,6 +18,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class CloseCashWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Coral";
     private readonly OperationsService? _service;
     private readonly List<PosCashClosing> _closings = new();
     private readonly List<(TextBlock Label, string Key)> _labels = new();
@@ -44,8 +45,8 @@ public sealed class CloseCashWin : BaseWin
         _service = AppHost.Operations;
         Width = 980;
         Height = 640;
-        MinWidth = 820;
-        MinHeight = 520;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

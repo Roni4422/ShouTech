@@ -178,7 +178,12 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             Add(insertHeader, "@partyName", (object?)draft.PartyName ?? DBNull.Value);
             Add(insertHeader, "@warehouse", (object?)draft.WarehouseId ?? DBNull.Value);
             Add(insertHeader, "@currency", string.IsNullOrWhiteSpace(draft.CurrencyCode) ? "SAR" : draft.CurrencyCode.Trim());
-            Add(insertHeader, "@rate", draft.ExchangeRate <= 0m ? 1m : draft.ExchangeRate);
+            // Step 7: the stored rate is the DOCUMENT rate as given —
+            // 0 stays 0 ("no document rate"), so posting can fall back
+            // to the currency_rates master or fail with ACC-5015. The
+            // pre-Step-7 coercion to 1 fabricated a rate that was never
+            // entered and made the master table unreachable.
+            Add(insertHeader, "@rate", draft.ExchangeRate < 0m ? 0m : draft.ExchangeRate);
             Add(insertHeader, "@subtotal", decimal.Round(subtotal, 2));
             Add(insertHeader, "@discount", 0m);
             Add(insertHeader, "@tax", decimal.Round(taxAmount, 2));
@@ -278,8 +283,11 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                 subtotal = reader.IsDBNull(10) ? 0m : Convert.ToDecimal(reader.GetValue(10), CultureInfo.InvariantCulture);
                 taxAmount = reader.IsDBNull(11) ? 0m : Convert.ToDecimal(reader.GetValue(11), CultureInfo.InvariantCulture);
                 costCenter = reader.IsDBNull(12) ? null : reader.GetString(12);
-                exchangeRate = reader.IsDBNull(13) || Convert.ToDecimal(reader.GetValue(13), CultureInfo.InvariantCulture) == 0m
-                    ? 1m : Convert.ToDecimal(reader.GetValue(13), CultureInfo.InvariantCulture);
+                // Step 7: a stored rate of 0 means "no document rate" —
+                // it is NOT coerced to 1 here. Posting resolves the
+                // effective rate through FxRates (document rate, else
+                // currency_rates master, else ACC-5015).
+                exchangeRate = reader.IsDBNull(13) ? 0m : Convert.ToDecimal(reader.GetValue(13), CultureInfo.InvariantCulture);
             }
 
             if (status != CommercialDocumentStatus.Draft)
@@ -322,58 +330,75 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                     // same rule StkPost applies to invoice documents.
                     var baseQty = qty * await ResolveUnitEquivalentAsync(
                         connection, transaction, materialId, lineUnit, cancellationToken).ConfigureAwait(false);
-                    await using var movement = CreateCommand(connection, transaction, """
-                        INSERT INTO material_stock_movements
-                            (company_id, warehouse_id, material_id, movement_date, movement_type, document_no, qty_in, qty_out, unit_cost, note)
-                        VALUES (@company, @warehouse, @material, @date, @type, @docNo, 0, @qty, 0, @note)
-                        """);
-                    Add(movement, "@company", companyId);
-                    Add(movement, "@warehouse", lineWarehouse);
-                    Add(movement, "@material", materialId);
-                    Add(movement, "@date", docDate);
-                    Add(movement, "@type", "DLV");
-                    Add(movement, "@docNo", docNo);
-                    Add(movement, "@qty", baseQty);
-                    Add(movement, "@note", $"Delivery note {docNo} posting");
-                    await movement.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-
-                    await using var balance = CreateCommand(connection, transaction, """
-                        INSERT INTO material_stock_balances (company_id, warehouse_id, material_id, available_qty)
-                        VALUES (@company, @warehouse, @material, -@qty)
-                        ON CONFLICT (company_id, warehouse_id, material_id)
-                        DO UPDATE SET available_qty = material_stock_balances.available_qty - @qty,
-                                      last_updated = CURRENT_TIMESTAMP
-                        """);
-                    Add(balance, "@company", companyId);
-                    Add(balance, "@warehouse", lineWarehouse);
-                    Add(balance, "@material", materialId);
-                    Add(balance, "@qty", baseQty);
-                    await balance.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                    // Outgoing quality gate (Phase B 056, decision Q4):
+                    // a delivery of an outgoing-required material needs
+                    // an accepted outgoing inspection — Stop refuses
+                    // (INV-6013), Warn posts and raises the pending
+                    // inspection; a Rejected inspection blocks in both
+                    // modes (INV-6011). The gate keys the company by
+                    // CODE (the stock world), resolved from this
+                    // repository's Guid key.
+                    var qcCompany = PartyLedger.ResolveCompanyCode(connection, transaction, _provider, companyId);
+                    var qcProfile = QualityGate.LoadProfile(connection, transaction, _provider, qcCompany, materialId);
+                    if (qcProfile.OutgoingRequired)
+                    {
+                        QualityGate.CheckOutgoing(connection, transaction, _provider, qcCompany,
+                            "DLV", docId.ToString(CultureInfo.InvariantCulture), docNo,
+                            materialId, lineWarehouse, partyId, docDate, userId);
+                    }
+                    // Valuation (Step 6, Phase B 053): the delivery note
+                    // is valued by the ONE StockValuationEngine at the
+                    // material's cost method — the pre-engine code wrote
+                    // unit_cost = 0 and never touched average_cost, so
+                    // chain deliveries carried no cost at all (RC-1).
+                    // Batch/serial (Phase B 054): batch issues
+                    // auto-allocate FEFO/FIFO inside the engine; the
+                    // chain has no serial capture UI, so serial-tracked
+                    // lines auto-pick the oldest in-stock serials
+                    // (AutoAllocateSerials) — recorded either way in
+                    // stock_movement_allocations.
+                    StockValuationEngine.Apply(connection, transaction, _provider,
+                        new StockMovementRequest(companyId, lineWarehouse, materialId,
+                            docDate, "DLV", docNo, QtyIn: 0m, QtyOut: baseQty,
+                            Note: $"Delivery note {docNo} posting",
+                            AutoAllocateSerials: true));
                 }
             }
             else if (docKind == CommercialDocKinds.SalesInvoice && partyId is not null)
             {
+                // Step 7 (J-5): resolve the effective rate ONCE through
+                // FxRates (document rate, else master, else ACC-5015);
+                // the guard and the ledger both consume BASE amounts at
+                // this rate, and GlPosting below resolves identically
+                // from the same stored inputs.
+                var fx = FxRates.Resolve(connection, transaction, _provider,
+                    Guid.Parse(companyId), currencyCode,
+                    DateOnly.Parse(docDate, CultureInfo.InvariantCulture), exchangeRate);
+
                 // Credit-limit gate (ACC-5006): the ledger debit below must
                 // not push the customer over the limit on their party card.
+                // Step 7: the guard sums base amounts, so it is fed the
+                // document's BASE total, not the raw foreign total.
                 await PartyCreditGuard.EnsureWithinLimitAsync(
                     connection, transaction, _provider, companyId, "C", partyId.Value, partyCode,
-                    grandTotal, "@", cancellationToken).ConfigureAwait(false);
+                    FxRates.ToBase(grandTotal, fx.Rate), "@", cancellationToken).ConfigureAwait(false);
 
-                await using var ledger = CreateCommand(connection, transaction, """
-                    INSERT INTO party_ledger
-                        (company_id, party_kind, party_id, doc_kind, doc_id, doc_no, entry_date, debit, credit, currency_code, note)
-                    VALUES (@company, 'C', @party, @kind, @doc, @docNo, @date, @debit, 0, @currency, @note)
-                    """);
-                Add(ledger, "@company", companyId);
-                Add(ledger, "@party", partyId.Value);
-                Add(ledger, "@kind", CommercialDocKinds.SalesInvoice);
-                Add(ledger, "@doc", docId);
-                Add(ledger, "@docNo", docNo);
-                Add(ledger, "@date", docDate);
-                Add(ledger, "@debit", grandTotal);
-                Add(ledger, "@currency", currencyCode);
-                Add(ledger, "@note", $"Sales invoice {docNo} posting");
-                await ledger.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                // Step 4 (B-06): party_ledger.company_id is the company
+                // CODE; this repository's documents key the company by
+                // Guid, so resolve before writing (the guard above accepts
+                // both of the company's own keys).
+                var ledgerCompany = await PartyLedger.ResolveCompanyCodeAsync(
+                    connection, transaction, _provider, companyId, cancellationToken).ConfigureAwait(false);
+
+                // Step 7: written through PartyLedger.WriteEntry so the
+                // row carries base_debit/base_credit + the effective
+                // rate alongside the transaction amounts.
+                PartyLedger.WriteEntry(connection, transaction, _provider,
+                    ledgerCompany, "C", partyId.Value,
+                    CommercialDocKinds.SalesInvoice, docId, docNo, docDate,
+                    grandTotal, 0m, currencyCode,
+                    $"Sales invoice {docNo} posting",
+                    exchangeRate: fx.Rate);
             }
 
             // Real GL posting (Step 3, J-2): a posted chain SALES INVOICE
@@ -527,75 +552,13 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
     /// resolve to 1. The connection is already scoped to one company's
     /// database, so the lookup keys on material_id alone.
     /// </summary>
-    private static async Task<decimal> ResolveUnitEquivalentAsync(
+    private static Task<decimal> ResolveUnitEquivalentAsync(
         DbConnection connection, DbTransaction transaction, long materialId, string? unitName,
         CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(unitName)) return 1m;
-        var wanted = unitName.Trim();
-
-        var units = new List<(string Name, decimal Factor)>();
-        await using (var cmd = CreateCommand(connection, transaction, """
-            SELECT unit1, unit1_factor, unit2, unit2_factor, unit3, unit3_factor,
-                   unit4, unit4_factor, unit5, unit5_factor, units_json
-            FROM materials
-            WHERE material_id = @material
-            """))
-        {
-            Add(cmd, "@material", materialId);
-            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) return 1m;
-
-            var json = reader.IsDBNull(10) ? null : reader.GetValue(10)?.ToString();
-            if (!string.IsNullOrWhiteSpace(json) && json.Trim() != "[]")
-            {
-                try
-                {
-                    var rows = System.Text.Json.JsonSerializer.Deserialize<List<UnitFactorRow>>(json)
-                               ?? new List<UnitFactorRow>();
-                    foreach (var row in rows)
-                        if (!string.IsNullOrWhiteSpace(row.UnitName))
-                            units.Add((row.UnitName.Trim(), row.Factor ?? 0m));
-                }
-                catch (System.Text.Json.JsonException)
-                {
-                    // Malformed legacy JSON: fall back to the column pairs.
-                    units.Clear();
-                }
-            }
-
-            if (units.Count == 0)
-            {
-                for (var i = 0; i < 5; i++)
-                {
-                    var name = reader.IsDBNull(i * 2) ? null : reader.GetValue(i * 2)?.ToString();
-                    if (string.IsNullOrWhiteSpace(name)) continue;
-                    var factor = reader.IsDBNull(i * 2 + 1)
-                        ? 0m
-                        : Convert.ToDecimal(reader.GetValue(i * 2 + 1), CultureInfo.InvariantCulture);
-                    units.Add((name.Trim(), factor));
-                }
-            }
-        }
-
-        if (units.Count == 0) return 1m;
-
-        // The first unit is the base unit: its equivalent is 1 by definition.
-        if (string.Equals(wanted, units[0].Name, StringComparison.OrdinalIgnoreCase)) return 1m;
-
-        foreach (var (name, factor) in units)
-            if (string.Equals(wanted, name, StringComparison.OrdinalIgnoreCase))
-                return factor > 0 ? factor : 1m;
-
-        return 1m;
-    }
-
-    /// <summary>One unit row as serialized into materials.units_json by the material card.</summary>
-    private sealed class UnitFactorRow
-    {
-        public string? UnitName { get; set; }
-        public decimal? Factor { get; set; }
-    }
+        // Step 11: the rule lives ONCE in UnitEquivalents (shared with
+        // MfgOrderRepository and OrderDocumentRepository); this wrapper
+        // keeps the chain repository's material_id-only scoping.
+        => UnitEquivalents.ResolveAsync(connection, transaction, null, materialId, unitName, cancellationToken);
 
     /// <summary>
     /// Whether the material is stock-tracked, mirroring the guard StkPost

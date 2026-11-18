@@ -7,13 +7,19 @@ using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Npgsql;
 using ShouTech.App.Views;
+using ShouTech.App.Views.Reports;
+using ShouTech.Domain;
 
 namespace ShouTech.App.Services;
 
 /// <summary>
 /// Shared, company-scoped query surface for standard report windows.
-/// Failures never crash the UI: empty result sets are returned when schema
-/// or connection is unavailable so reports remain usable during setup.
+/// Failures SURFACE (Step 6, sweep RC-5): a failed report query is
+/// reported through the central error mechanism (DB-1005) and thrown
+/// as a cataloged AppError — never silently swallowed into an empty
+/// result set that looks like "no data". Report windows handle the
+/// error through RptBase, which reports it and shows the load-failed
+/// status; a genuinely empty result still renders as 0 rows.
 ///
 /// GL BASIS (Fix Phase Step 2, migration 059): every general-ledger report
 /// below computes from POSTED journal_entry_lines (journal_entries.status
@@ -23,6 +29,16 @@ namespace ShouTech.App.Services;
 /// CODE; journal tables carry the company Guid). No GL report reads stored
 /// account balances — the legacy accounts.balance/debit/credit columns
 /// were never maintained (sweep C-2) and their table no longer exists.
+///
+/// BASE-CURRENCY BASIS (Fix Phase Step 7, migration 062, sweep J-5):
+/// every GL total below sums the lines' BASE amounts
+/// (COALESCE(base_debit, debit) / COALESCE(base_credit, credit) — the
+/// fallback keeps rows written before the 062 backfill honest), and
+/// every party-balance total sums party_ledger's base amounts, so a
+/// foreign-currency entry reports at its converted value, never at
+/// face value. Document-list reports (invoice lists, price history,
+/// targets) still show DOCUMENT amounts in the document's own
+/// currency — they are transaction-currency views by design.
 /// </summary>
 public static class RptQuery
 {
@@ -52,7 +68,7 @@ public static class RptQuery
             FROM chart_of_accounts a
             INNER JOIN companies co ON co.company_id = a.company_id
             LEFT JOIN (
-                SELECT l.account_id AS aid, l.debit AS debit, l.credit AS credit
+                SELECT l.account_id AS aid, COALESCE(l.base_debit, l.debit) AS debit, COALESCE(l.base_credit, l.credit) AS credit
                 FROM journal_entry_lines l
                 INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
                 WHERE j.status = 1 AND j.entry_date >= $from AND j.entry_date < $to
@@ -78,8 +94,8 @@ public static class RptQuery
                    COALESCE(a.name_ar, a.account_name) AS Name,
                    a.account_name AS NameEn,
                    CASE WHEN a.account_type IN ('LIABILITY', 'EQUITY')
-                        THEN SUM(COALESCE(l.credit, 0) - COALESCE(l.debit, 0))
-                        ELSE SUM(COALESCE(l.debit, 0) - COALESCE(l.credit, 0))
+                        THEN SUM(COALESCE(COALESCE(l.base_credit, l.credit), 0) - COALESCE(COALESCE(l.base_debit, l.debit), 0))
+                        ELSE SUM(COALESCE(COALESCE(l.base_debit, l.debit), 0) - COALESCE(COALESCE(l.base_credit, l.credit), 0))
                    END AS Amount
             FROM chart_of_accounts a
             INNER JOIN companies co ON co.company_id = a.company_id
@@ -101,7 +117,7 @@ public static class RptQuery
                     AND child.is_deleted = 0
               )
             GROUP BY a.account_id, a.account_code, a.name_ar, a.account_name, a.account_type
-            HAVING ABS(SUM(COALESCE(l.debit, 0) - COALESCE(l.credit, 0))) > 0.0001
+            HAVING ABS(SUM(COALESCE(COALESCE(l.base_debit, l.debit), 0) - COALESCE(COALESCE(l.base_credit, l.credit), 0))) > 0.0001
             ORDER BY a.account_code;
             """;
         if (DatabaseRuntime.IsPostgreSql())
@@ -121,8 +137,8 @@ public static class RptQuery
                    COALESCE(a.name_ar, a.account_name) AS Name,
                    a.account_name AS NameEn,
                    CASE WHEN a.account_type = 'REVENUE'
-                        THEN SUM(COALESCE(l.credit, 0) - COALESCE(l.debit, 0))
-                        ELSE SUM(COALESCE(l.debit, 0) - COALESCE(l.credit, 0))
+                        THEN SUM(COALESCE(COALESCE(l.base_credit, l.credit), 0) - COALESCE(COALESCE(l.base_debit, l.debit), 0))
+                        ELSE SUM(COALESCE(COALESCE(l.base_debit, l.debit), 0) - COALESCE(COALESCE(l.base_credit, l.credit), 0))
                    END AS Amount
             FROM chart_of_accounts a
             INNER JOIN companies co ON co.company_id = a.company_id
@@ -145,7 +161,7 @@ public static class RptQuery
                     AND child.is_deleted = 0
               )
             GROUP BY a.account_id, a.account_code, a.name_ar, a.account_name, a.account_type
-            HAVING ABS(SUM(COALESCE(l.debit, 0) - COALESCE(l.credit, 0))) > 0.0001
+            HAVING ABS(SUM(COALESCE(COALESCE(l.base_debit, l.debit), 0) - COALESCE(COALESCE(l.base_credit, l.credit), 0))) > 0.0001
             ORDER BY a.account_code;
             """;
         if (DatabaseRuntime.IsPostgreSql())
@@ -165,8 +181,8 @@ public static class RptQuery
             SELECT j.entry_date AS EntryDate,
                    COALESCE(j.document_number, CAST(j.journal_entry_id AS TEXT)) AS DocNo,
                    COALESCE(j.description, '') AS Description,
-                   COALESCE(l.debit, 0) AS Debit,
-                   COALESCE(l.credit, 0) AS Credit,
+                   COALESCE(COALESCE(l.base_debit, l.debit), 0) AS Debit,
+                   COALESCE(COALESCE(l.base_credit, l.credit), 0) AS Credit,
                    COALESCE(l.note, '') AS Note
             FROM journal_entry_lines l
             INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
@@ -195,8 +211,8 @@ public static class RptQuery
                    COALESCE(j.document_number, CAST(j.journal_entry_id AS TEXT)) AS DocNo,
                    COALESCE(j.description, '') AS Description,
                    CASE j.status WHEN 0 THEN 'Draft' WHEN 1 THEN 'Posted' ELSE 'Reversed' END AS Status,
-                   COALESCE((SELECT SUM(debit) FROM journal_entry_lines x WHERE x.journal_entry_id = j.journal_entry_id), 0) AS Debit,
-                   COALESCE((SELECT SUM(credit) FROM journal_entry_lines x WHERE x.journal_entry_id = j.journal_entry_id), 0) AS Credit,
+                   COALESCE((SELECT SUM(COALESCE(base_debit, debit)) FROM journal_entry_lines x WHERE x.journal_entry_id = j.journal_entry_id), 0) AS Debit,
+                   COALESCE((SELECT SUM(COALESCE(base_credit, credit)) FROM journal_entry_lines x WHERE x.journal_entry_id = j.journal_entry_id), 0) AS Credit,
                    COALESCE(j.created_by, '') AS CreatedBy
             FROM journal_entries j
             INNER JOIN companies co ON co.company_id = j.company_id
@@ -231,7 +247,8 @@ public static class RptQuery
                    COALESCE(s.available_qty, 0) + COALESCE(s.reserved_qty, 0) AS OnHand,
                    COALESCE(m.min_qty, 0) AS MinQty,
                    COALESCE(s.average_cost, 0) AS AvgCost,
-                   COALESCE(s.available_qty, 0) * COALESCE(s.average_cost, 0) AS Value
+                   CASE WHEN COALESCE(s.stock_value, 0) <> 0 THEN s.stock_value
+                        ELSE COALESCE(s.available_qty, 0) * COALESCE(s.average_cost, 0) END AS Value
             FROM material_stock_balances s
             LEFT JOIN warehouses w
               ON w.company_id = s.company_id AND w.warehouse_id = s.warehouse_id
@@ -253,6 +270,11 @@ public static class RptQuery
             """;
         if (DatabaseRuntime.IsPostgreSql())
             sql = sql.Replace("s.is_deleted = 0", "s.is_deleted = FALSE", StringComparison.Ordinal);
+        // Step 6: a STOCK report excludes service and non-stocked
+        // materials (sweep finding — they inflated the stock value).
+        sql += DatabaseRuntime.IsPostgreSql()
+            ? " AND (m.is_service IS NULL OR m.is_service = FALSE) AND (m.is_stocked IS NULL OR m.is_stocked = TRUE)"
+            : " AND COALESCE(m.is_service, 0) = 0 AND COALESCE(m.is_stocked, 1) = 1";
         if (!string.IsNullOrWhiteSpace(warehouseId))
             sql += " AND CAST(s.warehouse_id AS TEXT) = $wh";
         sql += " ORDER BY Warehouse, MaterialCode;";
@@ -297,6 +319,9 @@ public static class RptQuery
                        COALESCE(sm.qty_in, 0) AS QtyIn,
                        COALESCE(sm.qty_out, 0) AS QtyOut,
                        COALESCE(sm.unit_cost, 0) AS UnitCost,
+                       COALESCE(sm.cost_amount, (COALESCE(sm.qty_in, 0) - COALESCE(sm.qty_out, 0)) * COALESCE(sm.unit_cost, 0)) AS CostAmount,
+                       COALESCE(sm.valuation_rate, sm.unit_cost, 0) AS ValuationRate,
+                       COALESCE(sm.stock_value_after, 0) AS StockValueAfter,
                        COALESCE(sm.note, '') AS Note,
                        SUM(COALESCE(sm.qty_in, 0) - COALESCE(sm.qty_out, 0))
                            OVER (
@@ -324,7 +349,9 @@ public static class RptQuery
                    QtyIn AS "QtyIn",
                    QtyOut AS "QtyOut",
                    UnitCost AS "UnitCost",
-                   (QtyIn - QtyOut) * UnitCost AS "MoveValue",
+                   CostAmount AS "MoveValue",
+                   ValuationRate AS "ValuationRate",
+                   StockValueAfter AS "BalanceValue",
                    Balance AS "Balance",
                    Note AS "Note"
             FROM ledger
@@ -353,21 +380,24 @@ public static class RptQuery
         CancellationToken ct)
     {
         DocSchema.Ensure();
+        // Step 4: parties is the ONE master (migration 061); the ledger
+        // joins on the party's ledger_id in this company + kind. Name is
+        // the English name with the Arabic name as fallback (RP-5).
         const string sql = """
-            SELECT c.customer_code AS Code,
-                   c.customer_name_ar AS Name,
-                   COALESCE(c.customer_name_en, '') AS NameEn,
+            SELECT c.code AS Code,
+                   COALESCE(NULLIF(c.name_en, ''), c.name_ar, '') AS Name,
+                   COALESCE(c.name_en, '') AS NameEn,
                    COALESCE(c.phone, '') AS Phone,
                    COALESCE(bal.balance, 0) AS Balance
-            FROM customers c
+            FROM parties c
             LEFT JOIN (
-                SELECT party_id, SUM(debit - credit) AS balance
+                SELECT party_id, SUM(COALESCE(base_debit, debit) - COALESCE(base_credit, credit)) AS balance
                 FROM party_ledger
                 WHERE company_id = $company AND party_kind = 'C'
                 GROUP BY party_id
-            ) bal ON bal.party_id = c.customer_id
-            WHERE c.company_id = $company AND c.is_deleted = 0 AND c.is_active = 1
-            ORDER BY c.customer_code;
+            ) bal ON bal.party_id = c.ledger_id
+            WHERE c.company_id = $company AND c.kind = 'C' AND c.is_deleted = 0 AND c.is_active = 1
+            ORDER BY c.code;
             """;
         return await QueryAsync(sql, ct, ("$company", Company));
     }
@@ -376,21 +406,23 @@ public static class RptQuery
         CancellationToken ct)
     {
         DocSchema.Ensure();
+        // Supplier balances are amounts OWED: credit - debit (RP-2 — the
+        // pre-unification report printed payables negative).
         const string sql = """
-            SELECT s.supplier_code AS Code,
-                   s.supplier_name_ar AS Name,
-                   COALESCE(s.supplier_name_en, '') AS NameEn,
+            SELECT s.code AS Code,
+                   COALESCE(NULLIF(s.name_en, ''), s.name_ar, '') AS Name,
+                   COALESCE(s.name_en, '') AS NameEn,
                    COALESCE(s.phone, '') AS Phone,
                    COALESCE(bal.balance, 0) AS Balance
-            FROM suppliers s
+            FROM parties s
             LEFT JOIN (
-                SELECT party_id, SUM(debit - credit) AS balance
+                SELECT party_id, SUM(COALESCE(base_credit, credit) - COALESCE(base_debit, debit)) AS balance
                 FROM party_ledger
                 WHERE company_id = $company AND party_kind = 'S'
                 GROUP BY party_id
-            ) bal ON bal.party_id = s.supplier_id
-            WHERE s.company_id = $company AND s.is_deleted = 0 AND s.is_active = 1
-            ORDER BY s.supplier_code;
+            ) bal ON bal.party_id = s.ledger_id
+            WHERE s.company_id = $company AND s.kind = 'S' AND s.is_deleted = 0 AND s.is_active = 1
+            ORDER BY s.code;
             """;
         return await QueryAsync(sql, ct, ("$company", Company));
     }
@@ -403,15 +435,15 @@ public static class RptQuery
             SELECT d.doc_date AS DocDate,
                    d.doc_no AS DocNo,
                    d.doc_kind AS Kind,
-                   COALESCE(c.customer_code, '') AS PartyCode,
-                   COALESCE(c.customer_name_ar, d.party_name) AS PartyName,
+                   COALESCE(c.code, '') AS PartyCode,
+                   COALESCE(NULLIF(c.name_en, ''), c.name_ar, d.party_name) AS PartyName,
                    COALESCE(d.subtotal, 0) AS Subtotal,
                    COALESCE(d.tax_amount, 0) AS Tax,
                    COALESCE(d.grand_total, 0) AS Total,
                    COALESCE(d.status, 'Draft') AS Status,
                    COALESCE(d.currency_code, 'SAR') AS Currency
             FROM sales_documents d
-            LEFT JOIN customers c ON c.customer_id = d.party_id
+            LEFT JOIN parties c ON c.ledger_id = d.party_id AND c.company_id = d.company_id AND c.kind = 'C'
             WHERE d.company_id = $company
               AND d.doc_date >= $from
               AND d.doc_date <= $to
@@ -432,15 +464,15 @@ public static class RptQuery
             SELECT d.doc_date AS DocDate,
                    d.doc_no AS DocNo,
                    d.doc_kind AS Kind,
-                   COALESCE(s.supplier_code, '') AS PartyCode,
-                   COALESCE(s.supplier_name_ar, d.party_name) AS PartyName,
+                   COALESCE(s.code, '') AS PartyCode,
+                   COALESCE(NULLIF(s.name_en, ''), s.name_ar, d.party_name) AS PartyName,
                    COALESCE(d.subtotal, 0) AS Subtotal,
                    COALESCE(d.tax_amount, 0) AS Tax,
                    COALESCE(d.grand_total, 0) AS Total,
                    COALESCE(d.status, 'Draft') AS Status,
                    COALESCE(d.currency_code, 'SAR') AS Currency
             FROM purchase_documents d
-            LEFT JOIN suppliers s ON s.supplier_id = d.party_id
+            LEFT JOIN parties s ON s.ledger_id = d.party_id AND s.company_id = d.company_id AND s.kind = 'S'
             WHERE d.company_id = $company
               AND d.doc_date >= $from
               AND d.doc_date <= $to
@@ -459,25 +491,31 @@ public static class RptQuery
     {
         DocSchema.Ensure();
         var partyKind = customers ? "C" : "S";
-        var table = customers ? "customers" : "suppliers";
-        var idCol = customers ? "customer_id" : "supplier_id";
-        var codeCol = customers ? "customer_code" : "supplier_code";
-        var nameCol = customers ? "customer_name_ar" : "supplier_name_ar";
+        // Step 4: canonical parties store, joined on ledger_id; the aged
+        // amount is oriented per kind (suppliers age their payables,
+        // credit - debit — RP-2). Day difference is provider-aware
+        // (julianday is SQLite-only — report-family R-5).
+        // Step 7: aging buckets are BASE amounts — a foreign invoice
+        // ages at its converted value, not its face value.
+        var amount = customers ? "COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit)" : "COALESCE(l.base_credit, l.credit) - COALESCE(l.base_debit, l.debit)";
+        var ageDays = DatabaseRuntime.IsPostgreSql()
+            ? "(CURRENT_DATE - CAST(l.entry_date AS DATE))"
+            : "(julianday('now') - julianday(l.entry_date))";
         var sql = $"""
-            SELECT p.{codeCol} AS Code,
-                   p.{nameCol} AS Name,
-                   COALESCE(SUM(CASE WHEN julianday('now') - julianday(l.entry_date) <= 30 THEN l.debit - l.credit ELSE 0 END), 0) AS Bucket0_30,
-                   COALESCE(SUM(CASE WHEN julianday('now') - julianday(l.entry_date) > 30 AND julianday('now') - julianday(l.entry_date) <= 60 THEN l.debit - l.credit ELSE 0 END), 0) AS Bucket31_60,
-                   COALESCE(SUM(CASE WHEN julianday('now') - julianday(l.entry_date) > 60 AND julianday('now') - julianday(l.entry_date) <= 90 THEN l.debit - l.credit ELSE 0 END), 0) AS Bucket61_90,
-                   COALESCE(SUM(CASE WHEN julianday('now') - julianday(l.entry_date) > 90 THEN l.debit - l.credit ELSE 0 END), 0) AS Bucket90Plus,
-                   COALESCE(SUM(l.debit - l.credit), 0) AS Balance
-            FROM {table} p
+            SELECT p.code AS Code,
+                   COALESCE(NULLIF(p.name_en, ''), p.name_ar, '') AS Name,
+                   COALESCE(SUM(CASE WHEN {ageDays} <= 30 THEN {amount} ELSE 0 END), 0) AS Bucket0_30,
+                   COALESCE(SUM(CASE WHEN {ageDays} > 30 AND {ageDays} <= 60 THEN {amount} ELSE 0 END), 0) AS Bucket31_60,
+                   COALESCE(SUM(CASE WHEN {ageDays} > 60 AND {ageDays} <= 90 THEN {amount} ELSE 0 END), 0) AS Bucket61_90,
+                   COALESCE(SUM(CASE WHEN {ageDays} > 90 THEN {amount} ELSE 0 END), 0) AS Bucket90Plus,
+                   COALESCE(SUM({amount}), 0) AS Balance
+            FROM parties p
             LEFT JOIN party_ledger l
-              ON l.party_id = p.{idCol} AND l.company_id = p.company_id AND l.party_kind = $pk
-            WHERE p.company_id = $company AND p.is_deleted = 0 AND p.is_active = 1
-            GROUP BY p.{codeCol}, p.{nameCol}
-            HAVING ABS(COALESCE(SUM(l.debit - l.credit), 0)) > 0.0001
-            ORDER BY p.{codeCol};
+              ON l.party_id = p.ledger_id AND l.company_id = p.company_id AND l.party_kind = $pk
+            WHERE p.company_id = $company AND p.kind = $pk AND p.is_deleted = 0 AND p.is_active = 1
+            GROUP BY p.code, p.name_en, p.name_ar
+            HAVING ABS(COALESCE(SUM({amount}), 0)) > 0.0001
+            ORDER BY p.code;
             """;
         return await QueryAsync(sql, ct, ("$company", Company), ("$pk", partyKind));
     }
@@ -486,27 +524,53 @@ public static class RptQuery
         DateTime from, DateTime to, CancellationToken ct)
     {
         DocSchema.Ensure();
-        const string sql = """
-            SELECT COALESCE(l.material_code, '') AS MaterialCode,
-                   COALESCE(l.description, '') AS MaterialName,
-                   COALESCE(SUM(l.qty), 0) AS QtySold,
-                   COALESCE(SUM(l.line_subtotal), 0) AS Revenue,
-                   COALESCE(SUM(l.line_tax), 0) AS Tax,
-                   COALESCE(SUM(l.line_total), 0) AS Total
-            FROM sales_document_lines l
-            INNER JOIN sales_documents d ON d.doc_id = l.doc_id
-            WHERE d.company_id = $company
-              AND d.is_deleted = 0
-              AND d.status = 'Posted'
-              AND d.doc_kind IN ('SAL','POS')
-              AND d.doc_date >= $from AND d.doc_date <= $to
-            GROUP BY l.material_code, l.description
+        // Step 6: Cost/Profit/MarginPct added — cost is the engine's
+        // movement cost_amount per material (net of returns), so this
+        // report finally shows profitability instead of revenue only.
+        // Sales returns net against qty/revenue/cost.
+        var sql = PgBoolFix("""
+            SELECT agg.MaterialCode AS MaterialCode,
+                   agg.MaterialName AS MaterialName,
+                   agg.QtySold AS QtySold,
+                   agg.Revenue AS Revenue,
+                   agg.Tax AS Tax,
+                   agg.Total AS Total,
+                   COALESCE(c.Cost, 0) AS Cost,
+                   agg.Revenue - COALESCE(c.Cost, 0) AS Profit,
+                   CASE WHEN agg.Revenue = 0 THEN 0
+                        ELSE (agg.Revenue - COALESCE(c.Cost, 0)) / agg.Revenue END AS MarginPct
+            FROM (
+                SELECT COALESCE(l.material_code, '') AS MaterialCode,
+                       COALESCE(l.description, '') AS MaterialName,
+                       COALESCE(SUM(CASE WHEN d.doc_kind = 'SRT' THEN -l.qty ELSE l.qty END), 0) AS QtySold,
+                       COALESCE(SUM(CASE WHEN d.doc_kind = 'SRT' THEN -l.line_subtotal ELSE l.line_subtotal END), 0) AS Revenue,
+                       COALESCE(SUM(CASE WHEN d.doc_kind = 'SRT' THEN -l.line_tax ELSE l.line_tax END), 0) AS Tax,
+                       COALESCE(SUM(CASE WHEN d.doc_kind = 'SRT' THEN -l.line_total ELSE l.line_total END), 0) AS Total
+                FROM sales_document_lines l
+                INNER JOIN sales_documents d ON d.doc_id = l.doc_id
+                WHERE d.company_id = $company
+                  AND d.is_deleted = 0
+                  AND d.status = 'Posted'
+                  AND d.doc_kind IN ('SAL','POS','SRT')
+                  AND d.doc_date >= $from AND d.doc_date <= $to
+                GROUP BY l.material_code, l.description
+            ) agg
+            LEFT JOIN (
+                SELECT mm.code AS code, -SUM(mv.cost_amount) AS Cost
+                FROM material_stock_movements mv
+                INNER JOIN materials mm ON mm.company_id = mv.company_id AND mm.material_id = mv.material_id
+                WHERE mv.company_id = $company AND mv.is_deleted = 0
+                  AND mv.movement_type IN ('SAL', 'POS', 'SRT')
+                  AND mv.movement_date >= $from AND mv.movement_date < $toEx
+                GROUP BY mm.code
+            ) c ON c.code = agg.MaterialCode
             ORDER BY Revenue DESC;
-            """;
+            """);
         return await QueryAsync(sql, ct,
             ("$company", Company),
             ("$from", from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
-            ("$to", to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+            ("$to", to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
+            ("$toEx", DateEndExclusive(to)));
     }
 
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> StockAdjustmentsAsync(
@@ -647,16 +711,22 @@ public static class RptQuery
                    COALESCE(SUM(sm.qty_out), 0) AS QtyOut,
                    COALESCE(SUM(sm.qty_in - sm.qty_out), 0) AS Balance,
                    CASE WHEN SUM(sm.qty_in - sm.qty_out) = 0 THEN 0
-                        ELSE SUM((sm.qty_in - sm.qty_out) * sm.unit_cost) / SUM(sm.qty_in - sm.qty_out) END AS AvgCost,
-                   COALESCE(SUM((sm.qty_in - sm.qty_out) * sm.unit_cost), 0) AS Value
+                        ELSE SUM(COALESCE(sm.cost_amount, (sm.qty_in - sm.qty_out) * sm.unit_cost)) / SUM(sm.qty_in - sm.qty_out) END AS AvgCost,
+                   COALESCE(SUM(COALESCE(sm.cost_amount, (sm.qty_in - sm.qty_out) * sm.unit_cost)), 0) AS Value
             FROM material_stock_movements sm
             LEFT JOIN materials m ON m.company_id = sm.company_id AND m.material_id = sm.material_id
             LEFT JOIN warehouses w ON w.company_id = sm.company_id AND w.warehouse_id = sm.warehouse_id
-            WHERE sm.company_id = $company AND sm.is_deleted = 0 AND sm.movement_date <= $asof
+            WHERE sm.company_id = $company AND sm.is_deleted = 0 AND sm.movement_date < $asof
             GROUP BY sm.warehouse_id, w.warehouse_code, m.code, m.name_ar, m.default_unit
             ORDER BY Warehouse, MaterialCode;
             """);
-        return await QueryAsync(sql, ct, ("$company", Company), ("$asof", FmtDate(asOf)));
+        // Step 6: Value is the sum of the engine's signed cost_amount
+        // (legacy rows fall back to qty x recorded unit_cost), and the
+        // as-of boundary is end-exclusive like every other report here —
+        // the old '<= date' form dropped same-day movements whose
+        // timestamps carried a time component on PostgreSQL, which is
+        // how this report disagreed with Stock Balances (70 vs 40).
+        return await QueryAsync(sql, ct, ("$company", Company), ("$asof", DateEndExclusive(asOf)));
     }
 
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> MaterialMovementChartAsync(
@@ -685,26 +755,124 @@ public static class RptQuery
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> ExpiredMaterialsAsync(
         CancellationToken ct)
     {
-        // Schema fact: there is NO batch/lot expiry-date table. Materials only
-        // carry has_expiry / shelf_life_days / alert_before_expiry_days, so the
-        // report lists flagged materials with their last movement date and the
-        // window derives an honest note from shelf life + last movement.
+        // Phase B 054: REAL batch expiry. Rows are batches with stock on
+        // hand whose stock_batches.expiry_date is past, or within the
+        // material's alert_before_expiry_days of today — the same rule
+        // BatchSerialService.GetExpiredBatches implements for the
+        // headless proof. The pre-054 inference (last movement + shelf
+        // life) is gone: no date is ever fabricated here.
         DocSchema.Ensure(); MatRepo.EnsureSchema();
         var sql = PgBoolFix("""
             SELECT m.code AS MaterialCode,
                    m.name_ar AS MaterialName,
                    COALESCE(m.default_unit, '') AS Unit,
-                   COALESCE(m.shelf_life_days, 0) AS ShelfLifeDays,
+                   b.batch_no AS BatchNo,
+                   COALESCE(w.warehouse_code, CAST(bb.warehouse_id AS TEXT)) AS Warehouse,
+                   b.expiry_date AS ExpiryDate,
                    COALESCE(m.alert_before_expiry_days, 0) AS AlertDays,
-                   (SELECT MAX(x.movement_date) FROM material_stock_movements x
-                     WHERE x.company_id = m.company_id AND x.material_id = m.material_id AND x.is_deleted = 0) AS LastMoveDate,
-                   COALESCE((SELECT SUM(b.available_qty) FROM material_stock_balances b
-                     WHERE b.company_id = m.company_id AND b.material_id = m.material_id AND b.is_deleted = 0), 0) AS OnHand
-            FROM materials m
-            WHERE m.company_id = $company AND m.is_deleted = 0 AND m.has_expiry = 1
-            ORDER BY m.code;
+                   bb.qty_on_hand AS OnHand
+            FROM stock_batch_balances bb
+            INNER JOIN stock_batches b ON b.batch_id = bb.batch_id
+            INNER JOIN materials m ON m.company_id = b.company_id AND m.material_id = b.material_id
+            LEFT JOIN warehouses w ON w.company_id = bb.company_id AND w.warehouse_id = bb.warehouse_id
+            WHERE bb.company_id = $company AND bb.qty_on_hand > 0
+              AND b.is_deleted = 0 AND m.is_deleted = 0
+              AND b.expiry_date IS NOT NULL AND b.expiry_date <> ''
+            ORDER BY b.expiry_date, m.code, b.batch_no;
+            """);
+        var rows = await QueryAsync(sql, ct, ("$company", Company));
+        var today = DateTime.Today;
+        var kept = new List<IReadOnlyDictionary<string, object?>>();
+        foreach (var row in rows)
+        {
+            var expiryText = Convert.ToString(row.GetValueOrDefault("ExpiryDate"), CultureInfo.InvariantCulture);
+            if (!DateTime.TryParseExact(expiryText, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var expiry))
+                continue;
+            var alertDays = (int)RptWinUtil.Dec(row.GetValueOrDefault("AlertDays"));
+            var daysRemaining = (expiry.Date - today).Days;
+            if (daysRemaining >= 0 && daysRemaining > alertDays)
+                continue;
+            var copy = new Dictionary<string, object?>(row)
+            {
+                ["DaysRemaining"] = daysRemaining,
+                ["IsExpired"] = daysRemaining < 0 ? 1 : 0
+            };
+            kept.Add(copy);
+        }
+        return kept;
+    }
+
+    /// <summary>Stock by batch x warehouse (Phase B 054): every batch
+    /// balance row with its batch master data — the BatchBalWin source.</summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> BatchBalancesAsync(
+        CancellationToken ct)
+    {
+        DocSchema.Ensure(); MatRepo.EnsureSchema();
+        var sql = PgBoolFix("""
+            SELECT m.code AS MaterialCode,
+                   m.name_ar AS MaterialName,
+                   COALESCE(m.default_unit, '') AS Unit,
+                   b.batch_no AS BatchNo,
+                   COALESCE(b.supplier_batch_no, '') AS SupplierBatchNo,
+                   b.mfg_date AS MfgDate,
+                   b.expiry_date AS ExpiryDate,
+                   b.status AS BatchStatus,
+                   COALESCE(w.warehouse_code, CAST(bb.warehouse_id AS TEXT)) AS Warehouse,
+                   bb.qty_on_hand AS OnHand
+            FROM stock_batch_balances bb
+            INNER JOIN stock_batches b ON b.batch_id = bb.batch_id
+            INNER JOIN materials m ON m.company_id = b.company_id AND m.material_id = b.material_id
+            LEFT JOIN warehouses w ON w.company_id = bb.company_id AND w.warehouse_id = bb.warehouse_id
+            WHERE bb.company_id = $company AND b.is_deleted = 0 AND m.is_deleted = 0
+            ORDER BY m.code, b.batch_no, Warehouse;
             """);
         return await QueryAsync(sql, ct, ("$company", Company));
+    }
+
+    /// <summary>Budget vs actual (Phase B 055): one row per budget line
+    /// with the annual and accumulated-monthly budget/actual pairs. The
+    /// computation is delegated to BudgetRepository, whose actuals are
+    /// the BudgetGuard's own — the report can never disagree with the
+    /// posting guard. Budgets live in the journal world, so the shell's
+    /// company CODE is first resolved to the companies Guid.</summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> BudgetVarianceAsync(
+        CancellationToken ct)
+    {
+        var cs = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(cs))
+            throw new AppError(ErrorCodes.DatabaseNotInitialized,
+                "No database connection is configured for reports.");
+        var companyRows = await QueryAsync(
+            "SELECT company_id AS CompanyId FROM companies WHERE company_code = $company", ct,
+            ("$company", Company));
+        if (companyRows.Count == 0 ||
+            !Guid.TryParse(Convert.ToString(companyRows[0]["CompanyId"], CultureInfo.InvariantCulture), out var companyId))
+            return Array.Empty<IReadOnlyDictionary<string, object?>>();
+
+        var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+        var repository = new ShouTech.Infrastructure.BudgetRepository(provider, cs);
+        var variance = await repository.GetVarianceAsync(companyId, ct);
+        var result = new List<IReadOnlyDictionary<string, object?>>();
+        foreach (var row in variance)
+        {
+            result.Add(new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["Budget"] = row.BudgetName,
+                ["FiscalYear"] = row.FiscalYearLabel,
+                ["Account"] = string.IsNullOrWhiteSpace(row.AccountName)
+                    ? row.AccountCode
+                    : $"{row.AccountCode} — {row.AccountName}",
+                ["Dimension"] = row.DimensionCode ?? string.Empty,
+                ["AnnualBudget"] = row.AnnualBudget,
+                ["AnnualActual"] = row.AnnualActual,
+                ["Remaining"] = row.AnnualRemaining,
+                ["Percent"] = row.PercentConsumed,
+                ["MonthlyBudget"] = row.MonthlyBudgetToDate,
+                ["MonthlyActual"] = row.MonthlyActualToDate
+            });
+        }
+        return result;
     }
 
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> InvoiceAgeInvoicesAsync(
@@ -791,6 +959,11 @@ public static class RptQuery
         DateTime from, DateTime to, CancellationToken ct)
     {
         DocSchema.Ensure(); MatRepo.EnsureSchema();
+        // Step 6: Cost comes from the engine's movement cost_amount
+        // (per material, net of sales returns), and sales/purchase
+        // aggregates net their returns (SRT/PRT) instead of ignoring
+        // them. The old Cost multiplied raw line qty by the card's
+        // avg_cost — a figure no posting path maintained.
         var sql = PgBoolFix("""
             SELECT m.code AS MaterialCode,
                    m.name_ar AS MaterialName,
@@ -798,30 +971,43 @@ public static class RptQuery
                    COALESCE(s.Revenue, 0) AS Revenue,
                    COALESCE(p.QtyPurchased, 0) AS QtyPurchased,
                    COALESCE(p.PurchaseAmount, 0) AS PurchaseAmount,
-                   COALESCE(s.QtySold, 0) * COALESCE(NULLIF(m.avg_cost, 0), m.cost, 0) AS Cost,
-                   COALESCE(s.Revenue, 0) - COALESCE(s.QtySold, 0) * COALESCE(NULLIF(m.avg_cost, 0), m.cost, 0) AS Margin,
+                   COALESCE(c.Cost, 0) AS Cost,
+                   COALESCE(s.Revenue, 0) - COALESCE(c.Cost, 0) AS Margin,
                    CASE WHEN COALESCE(s.Revenue, 0) = 0 THEN 0
-                        ELSE (COALESCE(s.Revenue, 0) - COALESCE(s.QtySold, 0) * COALESCE(NULLIF(m.avg_cost, 0), m.cost, 0)) / s.Revenue END AS MarginPct
+                        ELSE (COALESCE(s.Revenue, 0) - COALESCE(c.Cost, 0)) / s.Revenue END AS MarginPct
             FROM materials m
             LEFT JOIN (
-                SELECT l.material_code AS code, SUM(l.qty) AS QtySold, SUM(l.line_total) AS Revenue
+                SELECT l.material_code AS code,
+                       SUM(CASE WHEN d.doc_kind = 'SRT' THEN -l.qty ELSE l.qty END) AS QtySold,
+                       SUM(CASE WHEN d.doc_kind = 'SRT' THEN -l.line_total ELSE l.line_total END) AS Revenue
                 FROM sales_document_lines l INNER JOIN sales_documents d ON d.doc_id = l.doc_id
                 WHERE d.company_id = $company AND d.is_deleted = 0 AND d.status = 'Posted'
-                  AND d.doc_kind IN ('SAL', 'POS') AND d.doc_date >= $from AND d.doc_date <= $to
+                  AND d.doc_kind IN ('SAL', 'POS', 'SRT') AND d.doc_date >= $from AND d.doc_date <= $to
                 GROUP BY l.material_code
             ) s ON s.code = m.code
             LEFT JOIN (
-                SELECT l.material_code AS code, SUM(l.qty) AS QtyPurchased, SUM(l.line_total) AS PurchaseAmount
+                SELECT l.material_code AS code,
+                       SUM(CASE WHEN d.doc_kind = 'PRT' THEN -l.qty ELSE l.qty END) AS QtyPurchased,
+                       SUM(CASE WHEN d.doc_kind = 'PRT' THEN -l.line_total ELSE l.line_total END) AS PurchaseAmount
                 FROM purchase_document_lines l INNER JOIN purchase_documents d ON d.doc_id = l.doc_id
                 WHERE d.company_id = $company AND d.is_deleted = 0 AND d.status = 'Posted'
-                  AND d.doc_kind IN ('PUR') AND d.doc_date >= $from AND d.doc_date <= $to
+                  AND d.doc_kind IN ('PUR', 'PRT') AND d.doc_date >= $from AND d.doc_date <= $to
                 GROUP BY l.material_code
             ) p ON p.code = m.code
+            LEFT JOIN (
+                SELECT mv.material_id AS mid, -SUM(mv.cost_amount) AS Cost
+                FROM material_stock_movements mv
+                WHERE mv.company_id = $company AND mv.is_deleted = 0
+                  AND mv.movement_type IN ('SAL', 'POS', 'SRT')
+                  AND mv.movement_date >= $from AND mv.movement_date < $toEx
+                GROUP BY mv.material_id
+            ) c ON c.mid = m.material_id
             WHERE m.company_id = $company AND m.is_deleted = 0
               AND (COALESCE(s.QtySold, 0) <> 0 OR COALESCE(p.QtyPurchased, 0) <> 0)
             ORDER BY Revenue DESC;
             """);
-        return await QueryAsync(sql, ct, ("$company", Company), ("$from", FmtDate(from)), ("$to", FmtDate(to)));
+        return await QueryAsync(sql, ct, ("$company", Company), ("$from", FmtDate(from)), ("$to", FmtDate(to)),
+            ("$toEx", DateEndExclusive(to)));
     }
 
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> StagnantMaterialsAsync(
@@ -835,7 +1021,8 @@ public static class RptQuery
                    COALESCE(m.name_ar, '') AS MaterialName,
                    COALESCE(b.available_qty, 0) AS OnHand,
                    COALESCE(b.average_cost, 0) AS AvgCost,
-                   COALESCE(b.available_qty, 0) * COALESCE(b.average_cost, 0) AS Value,
+                   CASE WHEN COALESCE(b.stock_value, 0) <> 0 THEN b.stock_value
+                        ELSE COALESCE(b.available_qty, 0) * COALESCE(b.average_cost, 0) END AS Value,
                    (SELECT MAX(x.movement_date) FROM material_stock_movements x
                      WHERE x.company_id = b.company_id AND x.warehouse_id = b.warehouse_id
                        AND x.material_id = b.material_id AND x.is_deleted = 0 AND x.qty_out > 0) AS LastOutDate
@@ -864,7 +1051,7 @@ public static class RptQuery
                    COALESCE(SUM(sm.qty_in), 0) AS QtyIn,
                    COALESCE(SUM(sm.qty_out), 0) AS QtyOut,
                    COALESCE(SUM(sm.qty_in + sm.qty_out), 0) AS TotalQty,
-                   COALESCE(SUM((sm.qty_in + sm.qty_out) * sm.unit_cost), 0) AS Value
+                   COALESCE(SUM(ABS(COALESCE(sm.cost_amount, (sm.qty_in - sm.qty_out) * sm.unit_cost))), 0) AS Value
             FROM material_stock_movements sm
             LEFT JOIN materials m ON m.company_id = sm.company_id AND m.material_id = sm.material_id
             WHERE sm.company_id = $company AND sm.is_deleted = 0
@@ -885,13 +1072,13 @@ public static class RptQuery
             SELECT COALESCE(m.code, '') AS MaterialCode,
                    COALESCE(m.name_ar, '') AS MaterialName,
                    COALESCE(SUM(CASE WHEN sm.movement_date >= $f1 AND sm.movement_date <= $t1 THEN sm.qty_in - sm.qty_out ELSE 0 END), 0) AS Qty1,
-                   COALESCE(SUM(CASE WHEN sm.movement_date >= $f1 AND sm.movement_date <= $t1 THEN (sm.qty_in - sm.qty_out) * sm.unit_cost ELSE 0 END), 0) AS Value1,
+                   COALESCE(SUM(CASE WHEN sm.movement_date >= $f1 AND sm.movement_date <= $t1 THEN COALESCE(sm.cost_amount, (sm.qty_in - sm.qty_out) * sm.unit_cost) ELSE 0 END), 0) AS Value1,
                    COALESCE(SUM(CASE WHEN sm.movement_date >= $f2 AND sm.movement_date <= $t2 THEN sm.qty_in - sm.qty_out ELSE 0 END), 0) AS Qty2,
-                   COALESCE(SUM(CASE WHEN sm.movement_date >= $f2 AND sm.movement_date <= $t2 THEN (sm.qty_in - sm.qty_out) * sm.unit_cost ELSE 0 END), 0) AS Value2,
+                   COALESCE(SUM(CASE WHEN sm.movement_date >= $f2 AND sm.movement_date <= $t2 THEN COALESCE(sm.cost_amount, (sm.qty_in - sm.qty_out) * sm.unit_cost) ELSE 0 END), 0) AS Value2,
                    COALESCE(SUM(CASE WHEN sm.movement_date >= $f2 AND sm.movement_date <= $t2 THEN sm.qty_in - sm.qty_out ELSE 0 END), 0)
                      - COALESCE(SUM(CASE WHEN sm.movement_date >= $f1 AND sm.movement_date <= $t1 THEN sm.qty_in - sm.qty_out ELSE 0 END), 0) AS QtyDiff,
-                   COALESCE(SUM(CASE WHEN sm.movement_date >= $f2 AND sm.movement_date <= $t2 THEN (sm.qty_in - sm.qty_out) * sm.unit_cost ELSE 0 END), 0)
-                     - COALESCE(SUM(CASE WHEN sm.movement_date >= $f1 AND sm.movement_date <= $t1 THEN (sm.qty_in - sm.qty_out) * sm.unit_cost ELSE 0 END), 0) AS ValueDiff
+                   COALESCE(SUM(CASE WHEN sm.movement_date >= $f2 AND sm.movement_date <= $t2 THEN COALESCE(sm.cost_amount, (sm.qty_in - sm.qty_out) * sm.unit_cost) ELSE 0 END), 0)
+                     - COALESCE(SUM(CASE WHEN sm.movement_date >= $f1 AND sm.movement_date <= $t1 THEN COALESCE(sm.cost_amount, (sm.qty_in - sm.qty_out) * sm.unit_cost) ELSE 0 END), 0) AS ValueDiff
             FROM material_stock_movements sm
             LEFT JOIN materials m ON m.company_id = sm.company_id AND m.material_id = sm.material_id
             WHERE sm.company_id = $company AND sm.is_deleted = 0
@@ -907,20 +1094,22 @@ public static class RptQuery
         CancellationToken ct)
     {
         DocSchema.Ensure(); MatRepo.EnsureSchema();
+        // Step 6: read from the balances (the valuation of record), so
+        // this report agrees with Stock Balances' NEGATIVE filter by
+        // construction — the old movement-sum version could disagree
+        // with it whenever the two derivations diverged.
         var sql = PgBoolFix("""
-            SELECT COALESCE(w.warehouse_code, CAST(sm.warehouse_id AS TEXT)) AS Warehouse,
+            SELECT COALESCE(w.warehouse_code, CAST(b.warehouse_id AS TEXT)) AS Warehouse,
                    COALESCE(m.code, '') AS MaterialCode,
                    COALESCE(m.name_ar, '') AS MaterialName,
-                   COALESCE(SUM(sm.qty_in - sm.qty_out), 0) AS Balance,
-                   CASE WHEN SUM(sm.qty_in - sm.qty_out) = 0 THEN 0
-                        ELSE SUM((sm.qty_in - sm.qty_out) * sm.unit_cost) / SUM(sm.qty_in - sm.qty_out) END AS AvgCost,
-                   COALESCE(SUM((sm.qty_in - sm.qty_out) * sm.unit_cost), 0) AS Value
-            FROM material_stock_movements sm
-            LEFT JOIN materials m ON m.company_id = sm.company_id AND m.material_id = sm.material_id
-            LEFT JOIN warehouses w ON w.company_id = sm.company_id AND w.warehouse_id = sm.warehouse_id
-            WHERE sm.company_id = $company AND sm.is_deleted = 0
-            GROUP BY sm.warehouse_id, w.warehouse_code, m.code, m.name_ar
-            HAVING SUM(sm.qty_in - sm.qty_out) < -0.0001
+                   COALESCE(b.available_qty, 0) AS Balance,
+                   COALESCE(b.average_cost, 0) AS AvgCost,
+                   CASE WHEN COALESCE(b.stock_value, 0) <> 0 THEN b.stock_value
+                        ELSE COALESCE(b.available_qty, 0) * COALESCE(b.average_cost, 0) END AS Value
+            FROM material_stock_balances b
+            LEFT JOIN materials m ON m.company_id = b.company_id AND m.material_id = b.material_id
+            LEFT JOIN warehouses w ON w.company_id = b.company_id AND w.warehouse_id = b.warehouse_id
+            WHERE b.company_id = $company AND b.is_deleted = 0 AND COALESCE(b.available_qty, 0) < -0.0001
             ORDER BY Balance;
             """);
         return await QueryAsync(sql, ct, ("$company", Company));
@@ -958,7 +1147,8 @@ public static class RptQuery
                    COALESCE(m.name_ar, '') AS MaterialName,
                    COALESCE(b.available_qty, 0) AS Qty,
                    COALESCE(b.average_cost, 0) AS AvgCost,
-                   COALESCE(b.available_qty, 0) * COALESCE(b.average_cost, 0) AS Value
+                   CASE WHEN COALESCE(b.stock_value, 0) <> 0 THEN b.stock_value
+                        ELSE COALESCE(b.available_qty, 0) * COALESCE(b.average_cost, 0) END AS Value
             FROM material_stock_balances b
             LEFT JOIN materials m ON m.company_id = b.company_id AND m.material_id = b.material_id
             LEFT JOIN warehouses w ON w.company_id = b.company_id AND w.warehouse_id = b.warehouse_id
@@ -976,9 +1166,9 @@ public static class RptQuery
         DocSchema.Ensure();
         const string sql = """
             SELECT COALESCE(NULLIF(l.cost_center, ''), '-') AS CostCenter,
-                   COALESCE(SUM(l.debit), 0) AS Debit,
-                   COALESCE(SUM(l.credit), 0) AS Credit,
-                   COALESCE(SUM(l.debit - l.credit), 0) AS Balance,
+                   COALESCE(SUM(COALESCE(l.base_debit, l.debit)), 0) AS Debit,
+                   COALESCE(SUM(COALESCE(l.base_credit, l.credit)), 0) AS Credit,
+                   COALESCE(SUM(COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit)), 0) AS Balance,
                    COUNT(*) AS LineCount
             FROM journal_entry_lines l
             INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
@@ -999,9 +1189,9 @@ public static class RptQuery
             SELECT a.account_code AS AccountCode,
                    a.name_ar AS AccountName,
                    COALESCE(NULLIF(l.cost_center, ''), '-') AS CostCenter,
-                   COALESCE(SUM(l.debit), 0) AS Debit,
-                   COALESCE(SUM(l.credit), 0) AS Credit,
-                   COALESCE(SUM(l.debit - l.credit), 0) AS Balance
+                   COALESCE(SUM(COALESCE(l.base_debit, l.debit)), 0) AS Debit,
+                   COALESCE(SUM(COALESCE(l.base_credit, l.credit)), 0) AS Credit,
+                   COALESCE(SUM(COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit)), 0) AS Balance
             FROM journal_entry_lines l
             INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
             INNER JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = j.company_id
@@ -1030,7 +1220,7 @@ public static class RptQuery
             FROM journal_entries j
             INNER JOIN companies co ON co.company_id = j.company_id
             LEFT JOIN (
-                SELECT journal_entry_id, SUM(debit) AS TotalDebit
+                SELECT journal_entry_id, SUM(COALESCE(base_debit, debit)) AS TotalDebit
                 FROM journal_entry_lines GROUP BY journal_entry_id
             ) t ON t.journal_entry_id = j.journal_entry_id
             WHERE co.company_code = $company AND j.status = 1
@@ -1044,8 +1234,12 @@ public static class RptQuery
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> ExchangeRateDifferencesAsync(
         DateTime from, DateTime to, CancellationToken ct)
     {
-        // Entry amounts are recorded in the entry currency; BaseDebit restates
-        // them at the entry rate and Difference is the effect vs. a rate of 1.
+        // Step 7: BaseDebit is the lines' STORED base amount (migration
+        // 062 — converted at posting at the effective rate), and
+        // Difference is base minus transaction. Before, both were
+        // derived by multiplying the unconverted sums by the header
+        // rate at report time, which disagreed with the posted lines
+        // whenever a line's effective rate came from the master table.
         DocSchema.Ensure();
         const string sql = """
             SELECT j.entry_date AS DocDate,
@@ -1054,8 +1248,8 @@ public static class RptQuery
                    COALESCE(j.exchange_rate, 1) AS Rate,
                    COALESCE(SUM(l.debit), 0) AS Debit,
                    COALESCE(SUM(l.credit), 0) AS Credit,
-                   COALESCE(SUM(l.debit), 0) * COALESCE(j.exchange_rate, 1) AS BaseDebit,
-                   COALESCE(SUM(l.debit), 0) * (COALESCE(j.exchange_rate, 1) - 1) AS Difference
+                   COALESCE(SUM(COALESCE(l.base_debit, l.debit)), 0) AS BaseDebit,
+                   COALESCE(SUM(COALESCE(l.base_debit, l.debit)), 0) - COALESCE(SUM(l.debit), 0) AS Difference
             FROM journal_entries j
             INNER JOIN companies co ON co.company_id = j.company_id
             INNER JOIN journal_entry_lines l ON l.journal_entry_id = j.journal_entry_id
@@ -1076,9 +1270,9 @@ public static class RptQuery
             SELECT a.account_code AS AccountCode,
                    a.name_ar AS AccountName,
                    substr(j.entry_date, 1, 7) AS Month,
-                   COALESCE(SUM(l.debit), 0) AS Debit,
-                   COALESCE(SUM(l.credit), 0) AS Credit,
-                   COALESCE(SUM(l.debit - l.credit), 0) AS Balance
+                   COALESCE(SUM(COALESCE(l.base_debit, l.debit)), 0) AS Debit,
+                   COALESCE(SUM(COALESCE(l.base_credit, l.credit)), 0) AS Credit,
+                   COALESCE(SUM(COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit)), 0) AS Balance
             FROM journal_entry_lines l
             INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
             INNER JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = j.company_id
@@ -1133,7 +1327,7 @@ public static class RptQuery
                      WHEN cp.Code LIKE '15%' OR cp.Code LIKE '16%' THEN 'Investing'
                      WHEN cp.Code LIKE '3%' OR cp.Code LIKE '23%' THEN 'Financing'
                      ELSE 'Operating' END AS Section,
-                   COALESCE(SUM(l.debit - l.credit), 0) AS Amount
+                   COALESCE(SUM(COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit)), 0) AS Amount
             FROM journal_entry_lines l
             INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
             INNER JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = j.company_id
@@ -1162,7 +1356,7 @@ public static class RptQuery
     {
         DocSchema.Ensure();
         var sql = PgBoolFix($"""
-            SELECT COALESCE(SUM(l.debit - l.credit), 0) AS Balance
+            SELECT COALESCE(SUM(COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit)), 0) AS Balance
             FROM journal_entry_lines l
             INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
             INNER JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = j.company_id
@@ -1189,7 +1383,7 @@ public static class RptQuery
             FROM chart_of_accounts a
             INNER JOIN companies co ON co.company_id = a.company_id
             LEFT JOIN (
-                SELECT l.account_id AS aid, l.debit AS debit, l.credit AS credit, j.entry_date AS entry_date
+                SELECT l.account_id AS aid, COALESCE(l.base_debit, l.debit) AS debit, COALESCE(l.base_credit, l.credit) AS credit, j.entry_date AS entry_date
                 FROM journal_entry_lines l
                 INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
                 WHERE j.status = 1
@@ -1208,17 +1402,17 @@ public static class RptQuery
     {
         DocSchema.Ensure();
         const string sql = """
-            SELECT COALESCE(c.customer_code, CAST(pl.party_id AS TEXT)) AS PartyCode,
-                   COALESCE(c.customer_name_ar, '') AS PartyName,
-                   COALESCE(SUM(pl.debit), 0) AS Invoiced,
-                   COALESCE(SUM(pl.credit), 0) AS Collected,
-                   COALESCE(SUM(pl.debit - pl.credit), 0) AS Balance,
-                   CASE WHEN SUM(pl.debit) = 0 THEN 0 ELSE SUM(pl.credit) / SUM(pl.debit) END AS CollectionPct
+            SELECT COALESCE(c.code, CAST(pl.party_id AS TEXT)) AS PartyCode,
+                   COALESCE(NULLIF(c.name_en, ''), c.name_ar, '') AS PartyName,
+                   COALESCE(SUM(COALESCE(pl.base_debit, pl.debit)), 0) AS Invoiced,
+                   COALESCE(SUM(COALESCE(pl.base_credit, pl.credit)), 0) AS Collected,
+                   COALESCE(SUM(COALESCE(pl.base_debit, pl.debit) - COALESCE(pl.base_credit, pl.credit)), 0) AS Balance,
+                   CASE WHEN SUM(COALESCE(pl.base_debit, pl.debit)) = 0 THEN 0 ELSE SUM(COALESCE(pl.base_credit, pl.credit)) / SUM(COALESCE(pl.base_debit, pl.debit)) END AS CollectionPct
             FROM party_ledger pl
-            LEFT JOIN customers c ON c.customer_id = pl.party_id AND c.company_id = pl.company_id
+            LEFT JOIN parties c ON c.ledger_id = pl.party_id AND c.company_id = pl.company_id AND c.kind = 'C'
             WHERE pl.company_id = $company AND pl.party_kind = 'C'
-            GROUP BY pl.party_id, c.customer_code, c.customer_name_ar
-            HAVING ABS(COALESCE(SUM(pl.debit), 0)) > 0.0001
+            GROUP BY pl.party_id, c.code, c.name_en, c.name_ar
+            HAVING ABS(COALESCE(SUM(COALESCE(pl.base_debit, pl.debit)), 0)) > 0.0001
             ORDER BY PartyCode;
             """;
         return await QueryAsync(sql, ct, ("$company", Company));
@@ -1231,14 +1425,14 @@ public static class RptQuery
         var sql = PgBoolFix("""
             SELECT a.account_code AS AccountCode,
                    a.name_ar AS AccountName,
-                   COALESCE(SUM(CASE WHEN j.entry_date >= $f1 AND j.entry_date <= $t1 THEN l.debit ELSE 0 END), 0) AS Debit1,
-                   COALESCE(SUM(CASE WHEN j.entry_date >= $f1 AND j.entry_date <= $t1 THEN l.credit ELSE 0 END), 0) AS Credit1,
-                   COALESCE(SUM(CASE WHEN j.entry_date >= $f1 AND j.entry_date <= $t1 THEN l.debit - l.credit ELSE 0 END), 0) AS Balance1,
-                   COALESCE(SUM(CASE WHEN j.entry_date >= $f2 AND j.entry_date <= $t2 THEN l.debit ELSE 0 END), 0) AS Debit2,
-                   COALESCE(SUM(CASE WHEN j.entry_date >= $f2 AND j.entry_date <= $t2 THEN l.credit ELSE 0 END), 0) AS Credit2,
-                   COALESCE(SUM(CASE WHEN j.entry_date >= $f2 AND j.entry_date <= $t2 THEN l.debit - l.credit ELSE 0 END), 0) AS Balance2,
-                   COALESCE(SUM(CASE WHEN j.entry_date >= $f2 AND j.entry_date <= $t2 THEN l.debit - l.credit ELSE 0 END), 0)
-                     - COALESCE(SUM(CASE WHEN j.entry_date >= $f1 AND j.entry_date <= $t1 THEN l.debit - l.credit ELSE 0 END), 0) AS Diff
+                   COALESCE(SUM(CASE WHEN j.entry_date >= $f1 AND j.entry_date <= $t1 THEN COALESCE(l.base_debit, l.debit) ELSE 0 END), 0) AS Debit1,
+                   COALESCE(SUM(CASE WHEN j.entry_date >= $f1 AND j.entry_date <= $t1 THEN COALESCE(l.base_credit, l.credit) ELSE 0 END), 0) AS Credit1,
+                   COALESCE(SUM(CASE WHEN j.entry_date >= $f1 AND j.entry_date <= $t1 THEN COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit) ELSE 0 END), 0) AS Balance1,
+                   COALESCE(SUM(CASE WHEN j.entry_date >= $f2 AND j.entry_date <= $t2 THEN COALESCE(l.base_debit, l.debit) ELSE 0 END), 0) AS Debit2,
+                   COALESCE(SUM(CASE WHEN j.entry_date >= $f2 AND j.entry_date <= $t2 THEN COALESCE(l.base_credit, l.credit) ELSE 0 END), 0) AS Credit2,
+                   COALESCE(SUM(CASE WHEN j.entry_date >= $f2 AND j.entry_date <= $t2 THEN COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit) ELSE 0 END), 0) AS Balance2,
+                   COALESCE(SUM(CASE WHEN j.entry_date >= $f2 AND j.entry_date <= $t2 THEN COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit) ELSE 0 END), 0)
+                     - COALESCE(SUM(CASE WHEN j.entry_date >= $f1 AND j.entry_date <= $t1 THEN COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit) ELSE 0 END), 0) AS Diff
             FROM journal_entry_lines l
             INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
             INNER JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = j.company_id
@@ -1263,8 +1457,8 @@ public static class RptQuery
                    COALESCE(j.document_number, j.journal_entry_id) AS DocNo,
                    COALESCE(j.description, '') AS Description,
                    COALESCE(j.reference_number, '') AS Reference,
-                   COALESCE(SUM(l.debit), 0) AS Debit,
-                   COALESCE(SUM(l.credit), 0) AS Credit,
+                   COALESCE(SUM(COALESCE(l.base_debit, l.debit)), 0) AS Debit,
+                   COALESCE(SUM(COALESCE(l.base_credit, l.credit)), 0) AS Credit,
                    CASE j.status WHEN 0 THEN 'Draft' WHEN 1 THEN 'Posted' ELSE 'Reversed' END AS Status
             FROM journal_entries j
             INNER JOIN journal_entry_lines l ON l.journal_entry_id = j.journal_entry_id
@@ -1284,21 +1478,45 @@ public static class RptQuery
         DateTime from, DateTime to, CancellationToken ct)
     {
         DocSchema.Ensure(); MatRepo.EnsureSchema();
+        // Step 6: Cost is the valuation engine's signed cost_amount for
+        // the document's own movements — valued per cost_method, in
+        // base units, at posting time. The old formula (line qty in the
+        // CHOSEN unit x the card's avg_cost, which no posting path ever
+        // updated) reported a margin of 235 on a true profit of 100 in
+        // the sweep case. Sales returns are included, netted: their
+        // revenue and their re-entry cost both reverse.
         var sql = PgBoolFix("""
             SELECT d.doc_date AS DocDate,
                    d.doc_no AS DocNo,
                    COALESCE(d.party_name, '') AS PartyName,
-                   COALESCE(SUM(l.line_total), 0) AS Revenue,
-                   COALESCE(SUM(l.qty * COALESCE(NULLIF(m.avg_cost, 0), m.cost, 0)), 0) AS Cost,
-                   COALESCE(SUM(l.line_total), 0) - COALESCE(SUM(l.qty * COALESCE(NULLIF(m.avg_cost, 0), m.cost, 0)), 0) AS Profit,
+                   CASE WHEN d.doc_kind = 'SRT' THEN -COALESCE(SUM(l.line_total), 0)
+                        ELSE COALESCE(SUM(l.line_total), 0) END AS Revenue,
+                   -COALESCE((
+                       SELECT SUM(mv.cost_amount) FROM material_stock_movements mv
+                       WHERE mv.company_id = d.company_id AND mv.document_no = d.doc_no
+                         AND mv.movement_type IN ('SAL', 'POS', 'SRT') AND mv.is_deleted = 0
+                   ), 0) AS Cost,
+                   (CASE WHEN d.doc_kind = 'SRT' THEN -COALESCE(SUM(l.line_total), 0)
+                         ELSE COALESCE(SUM(l.line_total), 0) END)
+                   + COALESCE((
+                       SELECT SUM(mv.cost_amount) FROM material_stock_movements mv
+                       WHERE mv.company_id = d.company_id AND mv.document_no = d.doc_no
+                         AND mv.movement_type IN ('SAL', 'POS', 'SRT') AND mv.is_deleted = 0
+                   ), 0) AS Profit,
                    CASE WHEN SUM(l.line_total) = 0 THEN 0
-                        ELSE (SUM(l.line_total) - SUM(l.qty * COALESCE(NULLIF(m.avg_cost, 0), m.cost, 0))) / SUM(l.line_total) END AS MarginPct
+                        ELSE ((CASE WHEN d.doc_kind = 'SRT' THEN -COALESCE(SUM(l.line_total), 0)
+                                    ELSE COALESCE(SUM(l.line_total), 0) END)
+                              + COALESCE((
+                                  SELECT SUM(mv.cost_amount) FROM material_stock_movements mv
+                                  WHERE mv.company_id = d.company_id AND mv.document_no = d.doc_no
+                                    AND mv.movement_type IN ('SAL', 'POS', 'SRT') AND mv.is_deleted = 0
+                              ), 0))
+                             / (CASE WHEN d.doc_kind = 'SRT' THEN -SUM(l.line_total) ELSE SUM(l.line_total) END) END AS MarginPct
             FROM sales_documents d
             INNER JOIN sales_document_lines l ON l.doc_id = d.doc_id
-            LEFT JOIN materials m ON m.company_id = d.company_id AND m.code = l.material_code
             WHERE d.company_id = $company AND d.is_deleted = 0 AND d.status = 'Posted'
-              AND d.doc_kind IN ('SAL', 'POS') AND d.doc_date >= $from AND d.doc_date <= $to
-            GROUP BY d.doc_id, d.doc_date, d.doc_no, d.party_name
+              AND d.doc_kind IN ('SAL', 'POS', 'SRT') AND d.doc_date >= $from AND d.doc_date <= $to
+            GROUP BY d.doc_id, d.doc_date, d.doc_no, d.party_name, d.doc_kind
             ORDER BY d.doc_date DESC, d.doc_no DESC;
             """);
         return await QueryAsync(sql, ct, ("$company", Company), ("$from", FmtDate(from)), ("$to", FmtDate(to)));
@@ -1359,22 +1577,22 @@ public static class RptQuery
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> CustomerDueAsync(
         CancellationToken ct)
     {
-        // Written against party_ledger + customers only, so it keeps working
-        // whether or not the parallel parties table (031) exists.
+        // Written against party_ledger + the canonical parties master
+        // (migration 061) — the only party store that exists now.
         DocSchema.Ensure();
         const string sql = """
-            SELECT COALESCE(c.customer_code, CAST(pl.party_id AS TEXT)) AS PartyCode,
-                   COALESCE(c.customer_name_ar, '') AS PartyName,
+            SELECT COALESCE(c.code, CAST(pl.party_id AS TEXT)) AS PartyCode,
+                   COALESCE(NULLIF(c.name_en, ''), c.name_ar, '') AS PartyName,
                    COALESCE(c.phone, '') AS Phone,
-                   COALESCE(SUM(pl.debit), 0) AS Invoiced,
-                   COALESCE(SUM(pl.credit), 0) AS Collected,
-                   COALESCE(SUM(pl.debit - pl.credit), 0) AS Balance,
+                   COALESCE(SUM(COALESCE(pl.base_debit, pl.debit)), 0) AS Invoiced,
+                   COALESCE(SUM(COALESCE(pl.base_credit, pl.credit)), 0) AS Collected,
+                   COALESCE(SUM(COALESCE(pl.base_debit, pl.debit) - COALESCE(pl.base_credit, pl.credit)), 0) AS Balance,
                    MIN(pl.entry_date) AS OldestDate
             FROM party_ledger pl
-            LEFT JOIN customers c ON c.customer_id = pl.party_id AND c.company_id = pl.company_id
+            LEFT JOIN parties c ON c.ledger_id = pl.party_id AND c.company_id = pl.company_id AND c.kind = 'C'
             WHERE pl.company_id = $company AND pl.party_kind = 'C'
-            GROUP BY pl.party_id, c.customer_code, c.customer_name_ar, c.phone
-            HAVING COALESCE(SUM(pl.debit - pl.credit), 0) > 0.0001
+            GROUP BY pl.party_id, c.code, c.name_en, c.name_ar, c.phone
+            HAVING COALESCE(SUM(COALESCE(pl.base_debit, pl.debit) - COALESCE(pl.base_credit, pl.credit)), 0) > 0.0001
             ORDER BY OldestDate, Balance DESC;
             """;
         return await QueryAsync(sql, ct, ("$company", Company));
@@ -1390,17 +1608,17 @@ public static class RptQuery
         DocSchema.Ensure();
         const string sql = """
             SELECT t.owner_code AS PartyCode,
-                   COALESCE(c.customer_name_ar, t.owner_code) AS PartyName,
+                   COALESCE(NULLIF(c.name_en, ''), c.name_ar, t.owner_code) AS PartyName,
                    COALESCE(SUM(t.target_amount), 0) AS Target,
                    COALESCE((SELECT SUM(d.grand_total) FROM sales_documents d
                      WHERE d.company_id = $company AND d.is_deleted = 0 AND d.status = 'Posted'
                        AND d.doc_kind IN ('SAL', 'POS') AND d.party_code = t.owner_code
                        AND d.doc_date >= $from AND d.doc_date <= $to), 0) AS Actual
             FROM targets t
-            LEFT JOIN customers c ON c.company_id = t.company_id AND c.customer_code = t.owner_code
+            LEFT JOIN parties c ON c.company_id = t.company_id AND c.kind = 'C' AND c.code = t.owner_code
             WHERE t.company_id = $company AND t.owner_kind = 'PARTY'
               AND t.period_start >= $from AND t.period_start <= $to
-            GROUP BY t.owner_code, c.customer_name_ar
+            GROUP BY t.owner_code, c.name_en, c.name_ar
             UNION ALL
             SELECT d.party_code, COALESCE(MAX(d.party_name), d.party_code), 0,
                    COALESCE(SUM(d.grand_total), 0)
@@ -1503,13 +1721,47 @@ public static class RptQuery
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> MfgVarianceAsync(
         string mode, CancellationToken ct)
     {
-        // mode: Total (all lines) / Raw / Overhead / Finished — filtered by
-        // line_kind families; variance = actual amount − standard amount.
+        // Step 11 (sweep MFG-1 / MFG-4): re-sourced to the REAL migration
+        // 034 schema. mfg_orders is keyed by `id` (there is no order_id
+        // column) and mfg_order_lines carries NO company_id — company
+        // scoping flows through the parent order. The pre-Step-11 SQL
+        // joined o.order_id = l.order_id AND o.company_id = l.company_id
+        // and filtered l.company_id, so every variance mode crashed on
+        // open ("no such column").
+        //
+        // Mode semantics, against the kinds the domain actually allows
+        // (MfgLineKinds: RAW and COST only — the old filters hunted
+        // OVERHEAD/LABOR/FINISHED line kinds that can never exist):
+        //   Total    — every order line (RAW + COST).
+        //   Raw      — RAW lines only (materials consumed).
+        //   Overhead — COST lines only (the additional-cost lines; the
+        //              order's lump overhead_amount is a header figure
+        //              with no standard, so it has no line variance).
+        //   Finished — header-level per order: actual total_cost vs
+        //              qty × standard_unit_cost (the MfgCosts figure),
+        //              because finished goods are not order lines.
+        // Variance = actual amount − qty × standard unit cost throughout.
+        if (string.Equals(mode, "Finished", StringComparison.Ordinal))
+        {
+            const string finishedSql = """
+                SELECT o.doc_no AS DocNo,
+                       o.item_code AS ItemCode,
+                       'FINISHED' AS LineKind,
+                       COALESCE(o.qty, 0) AS Qty,
+                       COALESCE(o.total_cost, 0) AS Amount,
+                       COALESCE(o.qty, 0) * COALESCE(o.standard_unit_cost, 0) AS StandardAmount,
+                       COALESCE(o.total_cost, 0) - COALESCE(o.qty, 0) * COALESCE(o.standard_unit_cost, 0) AS Variance
+                FROM mfg_orders o
+                WHERE o.company_id = $company
+                ORDER BY o.doc_no;
+                """;
+            return await QueryAsync(finishedSql, ct, ("$company", Company));
+        }
+
         var kindFilter = mode switch
         {
-            "Raw" => "AND l.line_kind IN ('RAW', 'MATERIAL', 'RAW_MATERIAL')",
-            "Overhead" => "AND l.line_kind IN ('OVERHEAD', 'ADDITIONAL', 'LABOR', 'OTHER')",
-            "Finished" => "AND l.line_kind IN ('FINISHED', 'OUTPUT', 'PRODUCT')",
+            "Raw" => "AND l.line_kind = 'RAW'",
+            "Overhead" => "AND l.line_kind = 'COST'",
             _ => ""
         };
         var sql = $"""
@@ -1521,8 +1773,8 @@ public static class RptQuery
                    COALESCE(SUM(l.qty * l.standard_unit_cost), 0) AS StandardAmount,
                    COALESCE(SUM(l.amount - l.qty * l.standard_unit_cost), 0) AS Variance
             FROM mfg_order_lines l
-            INNER JOIN mfg_orders o ON o.order_id = l.order_id AND o.company_id = l.company_id
-            WHERE l.company_id = $company {kindFilter}
+            INNER JOIN mfg_orders o ON o.id = l.order_id
+            WHERE o.company_id = $company {kindFilter}
             GROUP BY o.doc_no, l.item_code, l.line_kind
             ORDER BY o.doc_no, l.line_kind, l.item_code;
             """;
@@ -1533,21 +1785,81 @@ public static class RptQuery
         CancellationToken ct)
     {
         DocSchema.Ensure(); MatRepo.EnsureSchema();
+        // Step 11 (sweep MFG-1): same 034 re-sourcing as MfgVarianceAsync
+        // (join on o.id, company through the order, RAW lines only — the
+        // only lines that consume stock). Required is restated in BASE
+        // units below (line qty × unit equivalent, the StkPost rule),
+        // because OnHand (material_stock_balances) is a base-unit figure;
+        // comparing a display-unit requirement against it understated or
+        // overstated shortages for every non-base-unit line.
         var sql = PgBoolFix("""
             SELECT o.doc_no AS DocNo,
                    o.item_code AS ItemCode,
                    l.item_code AS LineItemCode,
-                   COALESCE(l.qty, 0) AS Required,
+                   COALESCE(l.qty, 0) AS RequiredQty,
+                   COALESCE(l.unit_code, '') AS Unit,
+                   m2.material_id AS LineMaterialId,
                    COALESCE((SELECT SUM(b.available_qty) FROM material_stock_balances b
                      INNER JOIN materials m ON m.company_id = b.company_id AND m.material_id = b.material_id
-                     WHERE b.company_id = l.company_id AND m.code = l.item_code AND b.is_deleted = 0), 0) AS OnHand
+                     WHERE b.company_id = o.company_id AND m.code = l.item_code AND b.is_deleted = 0), 0) AS OnHand
             FROM mfg_orders o
-            INNER JOIN mfg_order_lines l ON l.order_id = o.order_id AND l.company_id = o.company_id
+            INNER JOIN mfg_order_lines l ON l.order_id = o.id
+            LEFT JOIN materials m2 ON m2.company_id = o.company_id AND m2.code = l.item_code AND m2.is_deleted = 0
             WHERE o.company_id = $company AND o.status = 'Draft'
-              AND l.line_kind NOT IN ('FINISHED', 'OUTPUT', 'PRODUCT')
+              AND l.line_kind = 'RAW'
             ORDER BY o.doc_no, l.item_code;
             """);
-        return await QueryAsync(sql, ct, ("$company", Company));
+        var raw = await QueryAsync(sql, ct, ("$company", Company));
+        if (raw.Count == 0)
+            return raw;
+
+        var cs = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(cs))
+            throw new AppError(ErrorCodes.DatabaseNotInitialized,
+                "No database connection is configured for reports.");
+        try
+        {
+            await using var connection = Open(cs);
+            await connection.OpenAsync(ct);
+            await using var tx = await connection.BeginTransactionAsync(ct);
+            var rows = new List<IReadOnlyDictionary<string, object?>>(raw.Count);
+            foreach (var r in raw)
+            {
+                var requiredQty = RptWinUtil.Dec(r.GetValueOrDefault("RequiredQty"));
+                var unit = Convert.ToString(r.GetValueOrDefault("Unit"), CultureInfo.InvariantCulture);
+                var materialIdValue = r.GetValueOrDefault("LineMaterialId");
+                var required = requiredQty;
+                if (materialIdValue is not null && !string.IsNullOrWhiteSpace(unit))
+                {
+                    var materialId = Convert.ToInt64(materialIdValue, CultureInfo.InvariantCulture);
+                    required = StkPost.ToBaseUnits(connection, tx, materialId, unit, requiredQty, 0m).BaseQty;
+                }
+                rows.Add(new Dictionary<string, object?>
+                {
+                    ["DocNo"] = r.GetValueOrDefault("DocNo"),
+                    ["ItemCode"] = r.GetValueOrDefault("ItemCode"),
+                    ["LineItemCode"] = r.GetValueOrDefault("LineItemCode"),
+                    ["Required"] = required,
+                    ["OnHand"] = r.GetValueOrDefault("OnHand")
+                });
+            }
+            await tx.RollbackAsync(CancellationToken.None);
+            return rows;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (AppError)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.DatabaseQueryFailed, ex, "RptQuery.MfgFeasibilityAsync");
+            throw new AppError(ErrorCodes.DatabaseQueryFailed,
+                "A database operation failed.", ex);
+        }
     }
 
     // ---------------- Banks ----------------
@@ -1568,7 +1880,7 @@ public static class RptQuery
             INNER JOIN companies co ON co.company_code = b.company_id
             INNER JOIN chart_of_accounts a ON a.company_id = co.company_id AND a.account_code = b.gl_account_code
             LEFT JOIN (
-                SELECT l.account_id AS aid, l.debit AS debit, l.credit AS credit
+                SELECT l.account_id AS aid, COALESCE(l.base_debit, l.debit) AS debit, COALESCE(l.base_credit, l.credit) AS credit
                 FROM journal_entry_lines l
                 INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
                 WHERE j.status = 1
@@ -1593,7 +1905,7 @@ public static class RptQuery
             FROM chart_of_accounts a
             INNER JOIN companies co ON co.company_id = a.company_id
             LEFT JOIN (
-                SELECT l.account_id AS aid, l.debit AS debit, l.credit AS credit
+                SELECT l.account_id AS aid, COALESCE(l.base_debit, l.debit) AS debit, COALESCE(l.base_credit, l.credit) AS credit
                 FROM journal_entry_lines l
                 INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
                 WHERE j.status = 1
@@ -1673,7 +1985,8 @@ public static class RptQuery
     {
         var cs = DatabaseRuntime.GetConnectionString();
         if (string.IsNullOrWhiteSpace(cs))
-            return Array.Empty<IReadOnlyDictionary<string, object?>>();
+            throw new AppError(ErrorCodes.DatabaseNotInitialized,
+                "No database connection is configured for reports.");
 
         try
         {
@@ -1702,10 +2015,21 @@ public static class RptQuery
             }
             return result;
         }
-        catch
+        catch (OperationCanceledException)
         {
-            // Reports must never throw into the UI for missing optional tables.
-            return Array.Empty<IReadOnlyDictionary<string, object?>>();
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Sweep RC-5: this catch used to return an empty result set
+            // for EVERY failure, so any SQL/schema/provider error
+            // rendered as "0 rows" with a normal status line. Now the
+            // failure is reported centrally (error catalog + LogServ via
+            // AppHost.Errors) and thrown as a cataloged AppError; the
+            // report window surfaces it instead of faking emptiness.
+            AppHost.Errors.Report(ErrorCodes.DatabaseQueryFailed, ex, "RptQuery.QueryAsync");
+            throw new AppError(ErrorCodes.DatabaseQueryFailed,
+                "A database operation failed.", ex);
         }
     }
 

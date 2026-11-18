@@ -7,9 +7,14 @@ using ShouTech.Domain;
 
 namespace ShouTech.App.Views;
 
-public partial class PrmWin : Window
+public partial class PrmWin : Window, IWindowMode
 {
     private readonly PrmWinVM _vm;
+
+    /// <summary>Step 11 router identity (IWindowMode): the user whose
+    /// permissions this window edits — an editor open for one user must
+    /// never be reactivated for a request to edit another.</summary>
+    public string ModeKey => _vm.UserId;
 
     public PrmWin(string userId)
     {

@@ -15,7 +15,9 @@ namespace Kern.Tests
     /// Order engine tests (ribbon completion, RS-5/RS-6): order drafts persist
     /// with scheduling fields, posting is a status flip with no side effects,
     /// convert-to-invoice copies only the remaining unbilled quantities and
-    /// writes the party ledger + document link atomically, progress is
+    /// writes the party ledger + document link atomically (Step 9: plus the
+    /// stock movement through the valuation engine and the COGS GL legs —
+    /// proven in OrderChainStep9Tests), progress is
     /// computed from document_links, and expired quotations cannot convert.
     /// </summary>
     public class OrderServiceTests
@@ -254,6 +256,7 @@ namespace Kern.Tests
 
             ApplySqliteMigrations(databasePath);
             SeedGlCompany(connectionString, companyId, "ORDER-GL");
+            SeedStock(connectionString, "ORDER-GL");
 
             var orders = new OrderDocumentRepository("SQLite", connectionString);
             var chain = new CommercialDocumentRepository("SQLite", connectionString);
@@ -271,6 +274,30 @@ namespace Kern.Tests
             return Task.FromResult<(OrderService Service, OrderDocumentRepository Orders, Guid CompanyId, string ConnectionString, Action Cleanup)>((service, orders, companyId, connectionString, cleanup));
         }
 
+
+        /// <summary>Step 9: order conversion now moves stock through the
+        /// valuation engine (company-CODE keyed, like StkPost), so the
+        /// fixture carries the order tests' material (42) as a stocked
+        /// card, one active warehouse, and an opening balance of
+        /// 1,000 @ 10.00 in that warehouse.</summary>
+        private static void SeedStock(string connectionString, string companyCode)
+        {
+            using var connection = new SqliteConnection(connectionString);
+            connection.Open();
+            void Exec(string sql, params (string Name, object Value)[] ps)
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = sql;
+                foreach (var (n, v) in ps) cmd.Parameters.AddWithValue(n, v);
+                cmd.ExecuteNonQuery();
+            }
+            Exec("INSERT INTO warehouses (warehouse_id, company_id, warehouse_code, warehouse_name_ar, warehouse_name_en, is_active, is_deleted) VALUES (1, $code, 'WH-01', 'Main', 'Main', 1, 0);",
+                ("$code", companyCode));
+            Exec("INSERT INTO materials (material_id, company_id, code, name_ar, name_en, is_stocked, is_service, cost_method, allow_negative, is_deleted) VALUES (42, $code, 'MAT-42', 'Order test item', 'Order test item', 1, 0, 'WeightedAvg', 0, 0);",
+                ("$code", companyCode));
+            Exec("INSERT INTO material_stock_balances (company_id, warehouse_id, material_id, available_qty, reserved_qty, average_cost, last_cost, stock_value, is_deleted) VALUES ($code, 1, 42, 1000, 0, 10, 10, 10000, 0);",
+                ("$code", companyCode));
+        }
 
         /// <summary>Step 3: document posting now creates real GL entries,
         /// so the fixture company must exist in companies with an open

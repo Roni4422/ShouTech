@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -19,6 +20,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class PartyManagerWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Blush";
     private readonly ComboBox _cbKind = new();
     private readonly DataGrid _grid = new();
     private readonly TextBlock _statusBar = new();
@@ -35,8 +37,8 @@ public sealed class PartyManagerWin : BaseWin
     {
         Width = 1040;
         Height = 620;
-        MinWidth = 840;
-        MinHeight = 460;
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         BuildUi();
         Loaded += OnLoaded;
@@ -174,7 +176,10 @@ public sealed class PartyManagerWin : BaseWin
                     NameEn = party.NameEn,
                     Phone = party.Phone ?? party.Mobile ?? string.Empty,
                     CreditLimit = party.CreditLimit,
-                    Balance = balance.Balance,
+                    // Oriented per kind (C-3): suppliers show what is
+                    // owed to them (credit - debit), customers what they
+                    // owe (debit - credit).
+                    Balance = party.Kind == PartyKinds.Supplier ? balance.Credit - balance.Debit : balance.Balance,
                     IsActive = party.IsActive
                 });
             }
@@ -220,10 +225,11 @@ public sealed class PartyManagerWin : BaseWin
 
     private void UpdateStatusBar()
     {
-        decimal total = 0;
-        foreach (var row in _rows)
-            total += row.Balance;
-        _statusBar.Text = $"{_rows.Count} · {T("CustCard.Balance")}: {total:N2}";
+        // Totals are kept per kind (M-1): a single sum across customers
+        // and suppliers mixes receivables with payables and means nothing.
+        var customers = _rows.Where(r => r.Kind == PartyKinds.Customer).Sum(r => r.Balance);
+        var suppliers = _rows.Where(r => r.Kind == PartyKinds.Supplier).Sum(r => r.Balance);
+        _statusBar.Text = $"{_rows.Count} · {T("CustCard.Customer")}: {customers:N2} · {T("CustCard.Supplier")}: {suppliers:N2}";
     }
 
     private static void ConfigureGrid(DataGrid grid)

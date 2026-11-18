@@ -32,7 +32,8 @@ namespace ShouTech.App.Services
 /// company database (the connection string resolved by
 /// <see cref="DatabaseRuntime"/> already targets the selected company).
 /// Semantics:
-///   customers         = rows in `customers` (soft-deleted rows excluded
+///   customers         = customer rows in the canonical `parties` master
+///                       (migration 061; soft-deleted rows excluded
 ///                       when an is_deleted column exists)
 ///   products          = rows in `products` (soft-deleted rows excluded
 ///                       the same way)
@@ -47,7 +48,7 @@ namespace ShouTech.App.Services
 public sealed class DataServ : IDataServ
     {
         public Task<int> GetTotalCustomersAsync()
-            => Task.FromResult(CountRows("customers", excludeSoftDeleted: true));
+            => Task.FromResult(CountRows("parties", excludeSoftDeleted: true, extraPredicate: "kind = 'C'"));
 
         public Task<int> GetTotalProductsAsync()
             => Task.FromResult(CountRows("products", excludeSoftDeleted: true));
@@ -194,11 +195,11 @@ public sealed class DataServ : IDataServ
             }
         }
 
-        // customers / products store is_deleted as a boolean on PostgreSQL and
+        // parties / products store is_deleted as a boolean on PostgreSQL and
         // as an integer flag on SQLite; the commercial-document tables use an
         // integer flag on both providers and are handled separately above.
         private static string NotDeletedPredicate(string table)
-            => DatabaseRuntime.IsPostgreSql() && table is "customers" or "products"
+            => DatabaseRuntime.IsPostgreSql() && table is "parties" or "products"
                 ? "is_deleted = FALSE"
                 : "is_deleted = 0";
 

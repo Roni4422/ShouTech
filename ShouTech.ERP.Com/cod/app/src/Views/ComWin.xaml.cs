@@ -31,9 +31,16 @@ namespace ShouTech.App.Views
         Management
     }
 
-    public partial class ComWin : Window, INotifyPropertyChanged
+    public partial class ComWin : Window, INotifyPropertyChanged, IWindowMode
     {
         private readonly ComWinMode _mode;
+
+        /// <summary>The mode this window was opened in (Step 11 router
+        /// identity: Startup company picker vs Management — the two are
+        /// different surfaces and must never reactivate each other).</summary>
+        public ComWinMode Mode => _mode;
+        public string ModeKey => _mode.ToString();
+
         private ObservableCollection<CompanyItem> _companies = new();
         private CompanyItem? _selectedCompany;
         private StoredCoRec? _editingCompanyRecord;

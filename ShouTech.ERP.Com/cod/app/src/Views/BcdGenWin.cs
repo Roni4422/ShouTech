@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
@@ -25,6 +25,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class BcdGenWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Lagoon";
     private readonly TextBox _txtPrefix = new() { Width = VisuId.FieldWidthTiny, Text = "628" };
     private readonly Button _btnGenerateMissing = new();
     private readonly Button _btnGenerateAll = new();
@@ -53,7 +54,7 @@ public sealed class BcdGenWin : BaseWin
         Width = 860;
         Height = 560;
         MinWidth = 660;
-        MinHeight = 430;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
         BuildUi();

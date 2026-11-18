@@ -14,6 +14,7 @@ using Microsoft.Data.Sqlite;
 using Npgsql;
 using ShouTech.App.Reporting;
 using ShouTech.App.Services;
+using ShouTech.Domain;
 
 namespace ShouTech.App.Views;
 
@@ -34,6 +35,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class CustomReportsWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Violet";
     private static readonly string[] DataSources =
     {
         "TrialBalance", "BalanceSheet", "IncomeStatement", "CustomerBalances",
@@ -70,8 +72,8 @@ public sealed class CustomReportsWin : BaseWin
     {
         Width = 1180;
         Height = 720;
-        MinWidth = 980;
-        MinHeight = 580;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }
@@ -131,10 +133,16 @@ public sealed class CustomReportsWin : BaseWin
         root.Children.Add(F2Ui.BottomBar(_runButton, _newButton, _editButton, _saveButton, _refreshButton, _closeButton));
 
         var content = new Grid();
-        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(190) });
-        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(330) });
+        // Step 12 screen-fit: the run-results row was a fixed 190 DIP
+        // and the designer column a fixed 330 — at the 660x360 minimum
+        // the designer form (taller than the remaining star row) clipped.
+        // Star proportions now (1.4* / 1* rows, results MinHeight 80;
+        // 2.5* / 1* designer column, MinWidth 240) + a scrollable
+        // designer host below.
+        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1.4, GridUnitType.Star) });
+        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 80 });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2.5, GridUnitType.Star) });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 240 });
 
         var listPanel = new DockPanel { Margin = new Thickness(0, 0, 12, 0) };
         var keyRow = F2Ui.CreateFormGrid(1);
@@ -167,9 +175,10 @@ public sealed class CustomReportsWin : BaseWin
         _columnsInfo.Height = 90;
         _columnsInfo.TextWrapping = TextWrapping.Wrap;
         F2Ui.AddField(_labels, designer, 4, 0, "CustomReports.Columns", _columnsInfo);
-        Grid.SetRow(designer, 0);
-        Grid.SetColumn(designer, 1);
-        content.Children.Add(designer);
+        var designerScroll = new ScrollViewer { Content = designer, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        Grid.SetRow(designerScroll, 0);
+        Grid.SetColumn(designerScroll, 1);
+        content.Children.Add(designerScroll);
 
         _runGrid.AutoGenerateColumns = true;
         _runGrid.IsReadOnly = true;
@@ -201,9 +210,14 @@ public sealed class CustomReportsWin : BaseWin
             if (keys.Count > 0)
                 _reportKey.SelectedIndex = 0;
         }
-        catch
+        catch (Exception ex)
         {
-            // The definitions store may not exist yet; listing then reports it.
+            // Step 6 (report-layer swallow inventory): this catch used to
+            // be silent, so a broken definitions store looked like "no
+            // custom reports exist". The failure is now reported through
+            // the central mechanism; the window still opens with an
+            // empty key list, and listing then surfaces the problem.
+            AppHost.Errors.Report(ErrorCodes.DatabaseQueryFailed, ex, "CustomReportsWin.LoadKeysAsync");
         }
     }
 
@@ -211,7 +225,11 @@ public sealed class CustomReportsWin : BaseWin
     {
         var cs = DatabaseRuntime.GetConnectionString();
         if (string.IsNullOrWhiteSpace(cs))
-            return Array.Empty<string>();
+            // Step 6: no connection string is a configuration failure,
+            // not "no report keys" — surface it cataloged (DB-1004);
+            // LoadKeysAsync reports it through the central mechanism.
+            throw new AppError(ErrorCodes.DatabaseNotInitialized,
+                "No database connection is configured for reports.");
         var isPg = DatabaseRuntime.IsPostgreSql();
         await using var connection = isPg
             ? (DbConnection)new NpgsqlConnection(cs)
@@ -413,8 +431,13 @@ public sealed class CustomReportsWin : BaseWin
             var companies = await CoLocalStore.LoadAsync();
             return companies.FirstOrDefault(c => string.Equals(c.Code, CurrentCompanyCode, StringComparison.OrdinalIgnoreCase))?.CompanyId ?? Guid.Empty;
         }
-        catch
+        catch (Exception ex)
         {
+            // Step 6 (report-layer swallow inventory): a failed company
+            // lookup used to silently become Guid.Empty, so custom
+            // reports ran against no company and returned nothing. The
+            // failure is now reported centrally before the fallback.
+            AppHost.Errors.Report(ErrorCodes.DatabaseQueryFailed, ex, "CustomReportsWin.ResolveCompanyGuidAsync");
             return Guid.Empty;
         }
     }

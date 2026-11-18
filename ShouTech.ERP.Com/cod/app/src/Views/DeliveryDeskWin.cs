@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -23,6 +23,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class DeliveryDeskWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Lime";
     private readonly DefinitionService? _service;
     private readonly List<DeliveryRequest> _requests = new();
     private readonly List<DriverSettlement> _settlements = new();
@@ -64,8 +65,8 @@ public sealed class DeliveryDeskWin : BaseWin
         _service = AppHost.Definitions;
         Width = 1180;
         Height = 740;
-        MinWidth = 980;
-        MinHeight = 600;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

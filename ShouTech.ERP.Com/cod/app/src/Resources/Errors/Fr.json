@@ -68,6 +68,36 @@
     "message": "Le document « {0} » possède déjà une écriture comptable comptabilisée et ne peut pas être comptabilisé deux fois.",
     "hint": "Extournez l'écriture existante avant de comptabiliser à nouveau le document."
   },
+  "ACC-5013": {
+    "code": "ACC-5013",
+    "name": "DocumentTotalMismatch",
+    "message": "Le total enregistré du document « {0} » ({1}) ne correspond pas au total recalculé depuis ses lignes ({2}) ; la comptabilisation utilise le total enregistré.",
+    "hint": "Vérifiez la remise d'en-tête et les frais supplémentaires du document ; corrigez le document enregistré si le total enregistré est faux."
+  },
+  "ACC-5014": {
+    "code": "ACC-5014",
+    "name": "DocumentKindNotPostable",
+    "message": "Le type de document « {0} » ne peut pas être comptabilisé par le chemin de comptabilisation des factures.",
+    "hint": "Utilisez la fenêtre dédiée à ce type de document (les transferts et inventaires de stock passent par les moteurs d'entrepôt), ou vérifiez le type de document."
+  },
+  "ACC-5015": {
+    "code": "ACC-5015",
+    "name": "ExchangeRateMissing",
+    "message": "Aucun taux de change n'est disponible pour la devise '{0}' : le document ne porte aucun taux et aucun taux maître n'existe au {1} ou avant.",
+    "hint": "Saisissez un taux sur le document, ou maintenez un taux daté pour la devise dans la fiche devise, puis validez à nouveau."
+  },
+  "ACC-5016": {
+    "code": "ACC-5016",
+    "name": "BankStatementNotReconciled",
+    "message": "Le relevé bancaire ne peut pas être clôturé tant que sa différence n'est pas nulle.",
+    "hint": "Rapprochez les lignes restantes du relevé avec les lignes comptables (ou comptabilisez les écritures manquantes) jusqu'à ce que la différence soit nulle."
+  },
+  "ACC-5017": {
+    "code": "ACC-5017",
+    "name": "StatementLineAlreadyMatched",
+    "message": "La ligne du relevé est déjà rapprochée d'une ligne comptable.",
+    "hint": "Annulez le rapprochement de la ligne avant de la rapprocher d'une autre ligne comptable."
+  },
   "AUTH-2001": {
     "code": "AUTH-2001",
     "name": "InvalidCredentials",
@@ -196,6 +226,60 @@
     "name": "InventoryOperationFailed",
     "message": "L'opération d'inventaire n'a pas pu être terminée."
   },
+  "INV-6002": {
+    "code": "INV-6002",
+    "name": "StockValuationFailed",
+    "message": "L'évaluation du stock a échoué pour l'article « {0} ».",
+    "hint": "Vérifiez la méthode de coût et le solde de stock de l'article, puis comptabilisez à nouveau."
+  },
+  "INV-6003": {
+    "code": "INV-6003",
+    "name": "RecalculationFailed",
+    "message": "Le travail de recalcul des coûts a échoué.",
+    "hint": "Consultez l'enregistrement du travail dans stock_revaluation_jobs pour l'erreur, corrigez la cause, puis relancez le travail."
+  },
+  "INV-6004": {
+    "code": "INV-6004",
+    "name": "RecalculationClosedPeriod",
+    "message": "Le recalcul des coûts ne peut pas réécrire les mouvements d'une période fiscale clôturée (à partir du '{0}').",
+    "hint": "Choisissez une date de début dans une période fiscale ouverte."
+  },
+  "INV-6005": {
+    "code": "INV-6005",
+    "name": "BatchSerialRequired",
+    "message": "Les données de lot ou les numéros de série sont requis pour comptabiliser l'article '{0}'.",
+    "hint": "Saisissez le lot (avec sa date d'expiration) ou les numéros de série de la ligne, puis comptabilisez à nouveau."
+  },
+  "INV-6006": {
+    "code": "INV-6006",
+    "name": "BatchStockInsufficient",
+    "message": "Le lot '{0}' ne contient pas assez de stock pour l'article '{1}'.",
+    "hint": "Choisissez un autre lot ou réduisez la quantité, puis comptabilisez à nouveau."
+  },
+  "INV-6007": {
+    "code": "INV-6007",
+    "name": "SerialUnavailable",
+    "message": "Le numéro de série '{0}' n'est pas disponible en stock pour l'article '{1}'.",
+    "hint": "Seuls les numéros de série en stock dans l'entrepôt du document peuvent être émis ; vérifiez le statut et l'entrepôt."
+  },
+  "INV-6008": {
+    "code": "INV-6008",
+    "name": "SerialDuplicate",
+    "message": "Le numéro de série '{0}' existe déjà pour l'article '{1}'.",
+    "hint": "Les numéros de série sont uniques par article ; corrigez le numéro et comptabilisez à nouveau."
+  },
+  "INV-6009": {
+    "code": "INV-6009",
+    "name": "BatchAllocationMismatch",
+    "message": "Les allocations de lots/séries ne correspondent pas à la quantité du mouvement pour l'article '{0}'.",
+    "hint": "Allouez exactement la quantité de la ligne entre les lots, ou exactement un numéro de série par unité."
+  },
+  "INV-6010": {
+    "code": "INV-6010",
+    "name": "BatchExpired",
+    "message": "Le lot '{0}' de l'article '{1}' a expiré le {2} et ne peut pas être émis.",
+    "hint": "Choisissez un lot non expiré, ou comptabilisez avec l'autorisation de dérogation pour lot expiré (la dérogation est enregistrée)."
+  },
   "LIC-8001": {
     "code": "LIC-8001",
     "name": "LicenseCheckFailed",
@@ -272,5 +356,263 @@
     "code": "UI-7004",
     "name": "NavigationFailed",
     "message": "La navigation n'a pas pu être terminée."
+  },
+  "DATA-4004": {
+    "code": "DATA-4004",
+    "name": "ImportPermissionDenied",
+    "message": "Vous n'avez pas l'autorisation d'importer des données (DATA.IMPORT).",
+    "hint": "Demandez à un administrateur d'accorder l'autorisation DATA.IMPORT."
+  },
+  "DATA-4005": {
+    "code": "DATA-4005",
+    "name": "BalanceImportNotAllowed",
+    "message": "Les soldes et les quantités de stock ne peuvent pas être importés depuis un tableur. Ils ne changent que par des mouvements de stock comptabilisés.",
+    "hint": "Comptabilisez plutôt un document de stock initial ou d'ajustement, ou restaurez un package .stei."
+  },
+  "DATA-4006": {
+    "code": "DATA-4006",
+    "name": "DocumentImportRequiresPackage",
+    "message": "Les documents et les écritures de journal ne peuvent pas être importés depuis un tableur. Échangez-les sous forme de package de données .stei chiffré.",
+    "hint": "Exportez le jeu de données en package .stei et importez ce package à la place."
+  },
+  "ACC-5018": {
+    "code": "ACC-5018",
+    "name": "BudgetExceededAnnual",
+    "message": "La comptabilisation de cette écriture dépasserait le budget annuel '{0}'. Limite : {1} ; réel avant cette écriture : {2} ; cette écriture : {3} ; dépassement : {4}.",
+    "hint": "Réduisez l'écriture, affectez le montant à un autre compte ou centre de coûts, ou relevez la ligne budgétaire dans la fenêtre Budgets."
+  },
+  "ACC-5019": {
+    "code": "ACC-5019",
+    "name": "BudgetExceededMonthly",
+    "message": "La comptabilisation de cette écriture dépasserait le budget mensuel cumulé '{0}' jusqu'à ce mois. Limite : {1} ; réel avant cette écriture : {2} ; cette écriture : {3} ; dépassement : {4}.",
+    "hint": "Réduisez l'écriture, comptabilisez-la un mois plus tard, ou ajustez la répartition mensuelle dans la fenêtre Budgets."
+  },
+  "INV-6011": {
+    "code": "INV-6011",
+    "name": "QualityGateBlocked",
+    "message": "Une inspection qualité rejetée bloque le document '{1}' pour l'article '{0}'.",
+    "hint": "Traitez l'alerte de l'inspection échouée (cause racine et action corrective) ou terminez une nouvelle inspection avant la comptabilisation."
+  },
+  "INV-6012": {
+    "code": "INV-6012",
+    "name": "QualityQuarantinedSale",
+    "message": "L'article '{0}' est en quarantaine en attente d'inspection qualité et ne peut pas être vendu en mode Stop (document '{1}').",
+    "hint": "Terminez l'inspection qualité en attente pour libérer le stock, ou passez le mode de contrôle QC de la société sur Warn."
+  },
+  "INV-6013": {
+    "code": "INV-6013",
+    "name": "QualityOutgoingInspectionRequired",
+    "message": "L'article '{0}' exige une inspection qualité sortante acceptée avant la livraison du document '{1}' (mode Stop).",
+    "hint": "Créez et terminez une inspection sortante pour le document, ou passez le mode de contrôle QC de la société sur Warn."
+  },
+  "INV-6014": {
+    "code": "INV-6014",
+    "name": "QualityInspectionStateInvalid",
+    "message": "L'inspection qualité du document '{0}' ne peut pas changer d'état depuis '{1}'.",
+    "hint": "Actualisez la liste des inspections ; seule une inspection au brouillon peut être modifiée ou terminée."
+  },
+  "INV-6015": {
+    "code": "INV-6015",
+    "name": "QualityInspectionQtyMismatch",
+    "message": "Les quantités acceptées et rejetées du document '{0}' ne totalisent pas la quantité inspectée, ou la disposition est manquante.",
+    "hint": "Saisissez des quantités acceptées et rejetées dont la somme égale la quantité inspectée et choisissez une disposition pour la partie rejetée."
+  },
+  "INV-6016": {
+    "code": "INV-6016",
+    "name": "QualityTemplateInvalid",
+    "message": "Le modèle qualité '{0}' est invalide.",
+    "hint": "Vérifiez les lignes du modèle : les paramètres numériques exigent une plage, les paramètres de valeur une valeur acceptée, et un paramètre ne peut apparaître qu'une fois."
+  },
+  "CRM-9001": {
+    "code": "CRM-9001",
+    "name": "CrmLeadAlreadyConverted",
+    "message": "Le prospect '{0}' a déjà été converti.",
+    "hint": "Un prospect converti conserve ses liens de tiers et d'opportunité ; créez un nouveau prospect ou travaillez avec le tiers converti."
+  },
+  "CRM-9002": {
+    "code": "CRM-9002",
+    "name": "CrmLeadStateInvalid",
+    "message": "L'état du prospect '{0}' ne peut pas être modifié comme demandé.",
+    "hint": "Les prospects non qualifiés ne peuvent pas être convertis, et un prospect ne devient Converti que par conversion."
+  },
+  "CRM-9003": {
+    "code": "CRM-9003",
+    "name": "CrmOpportunityStageInvalid",
+    "message": "L'étape d'opportunité '{0}' est invalide.",
+    "hint": "Configurez les étapes du pipeline pour la société, puis réessayez."
+  },
+  "CRM-9004": {
+    "code": "CRM-9004",
+    "name": "CrmQuotationPartyMissing",
+    "message": "Impossible de créer un devis pour '{0}'.",
+    "hint": "Liez l'opportunité à un tiers client (ou convertissez son prospect) et vérifiez que la société se résout avant de créer un devis."
+  },
+  "CRM-9005": {
+    "code": "CRM-9005",
+    "name": "CrmActivityTargetInvalid",
+    "message": "L'activité '{0}' doit cibler exactement un prospect, une opportunité ou un tiers.",
+    "hint": "Choisissez exactement une cible pour l'activité."
+  },
+  "CRM-9006": {
+    "code": "CRM-9006",
+    "name": "CrmLostReasonRequired",
+    "message": "Un motif de perte est requis lorsque l'opportunité '{0}' est marquée perdue.",
+    "hint": "Choisissez un motif de perte (configurez les motifs dans la fenêtre du pipeline si la liste est vide)."
+  },
+  "MFG-1001": {
+    "code": "MFG-1001",
+    "name": "BomCycleDetected",
+    "message": "La nomenclature de '{0}' se reference elle-meme, directement ou via d'autres nomenclatures ; le cycle doit etre supprime avant utilisation.",
+    "hint": "Ouvrez la nomenclature et retirez le composant qui produit (transitivement) l'article fini lui-meme."
+  },
+  "MFG-1002": {
+    "code": "MFG-1002",
+    "name": "BomNotFoundOrInactive",
+    "message": "La nomenclature '{0}' est introuvable ou inactive pour cette societe.",
+    "hint": "Activez la version de la nomenclature dans la fenetre des nomenclatures ou choisissez une autre version."
+  },
+  "MFG-1003": {
+    "code": "MFG-1003",
+    "name": "MfgOrderStageInvalid",
+    "message": "L'ordre de fabrication '{0}' ne peut pas effectuer cette action dans le statut '{1}'.",
+    "hint": "Suivez le flux par etapes : Brouillon, Confirme, En cours, Termine, Clos (ou Annule)."
+  },
+  "MFG-1004": {
+    "code": "MFG-1004",
+    "name": "MfgIssueExceedsRequired",
+    "message": "Sortir {1} de '{0}' depasserait la quantite requise sur l'ordre.",
+    "hint": "Sortez au maximum la quantite requise restante, ou modifiez d'abord les lignes du brouillon."
+  },
+  "MFG-1005": {
+    "code": "MFG-1005",
+    "name": "MfgFinishExceedsPlanned",
+    "message": "Recevoir {1} de '{0}' depasserait la quantite de production planifiee.",
+    "hint": "Recevez au maximum la quantite planifiee restante."
+  },
+  "MFG-1006": {
+    "code": "MFG-1006",
+    "name": "PlanningConversionInvalid",
+    "message": "La ligne de planification '{0}' ne peut pas etre convertie dans le statut '{1}'.",
+    "hint": "Seuls les ordres planifies et les suggestions d'achat peuvent etre convertis, une seule fois."
+  },
+  "HR-1001": {
+    "code": "HR-1001",
+    "name": "HrEmployeeCodeDuplicate",
+    "message": "Le code employe '{0}' existe deja pour cette societe.",
+    "hint": "Choisissez un autre code employe."
+  },
+  "HR-1002": {
+    "code": "HR-1002",
+    "name": "HrEmployeeInvalid",
+    "message": "Les donnees de l'employe '{0}' sont invalides et ne peuvent pas etre enregistrees.",
+    "hint": "Verifiez les champs de la fiche employe et reessayez."
+  },
+  "HR-1003": {
+    "code": "HR-1003",
+    "name": "HrLeaveBalanceInsufficient",
+    "message": "Solde de conges insuffisant pour '{0}' : les jours demandes depassent le solde disponible.",
+    "hint": "Allouez plus de jours, reduisez la demande, ou approuvez avec l'autorisation de depassement."
+  },
+  "HR-1004": {
+    "code": "HR-1004",
+    "name": "HrLeaveStateInvalid",
+    "message": "La demande de conge ne peut pas changer d'etat depuis '{0}'.",
+    "hint": "Actualisez la liste et verifiez le statut de la demande."
+  },
+  "HR-1005": {
+    "code": "HR-1005",
+    "name": "HrPayrollAlreadyPosted",
+    "message": "Le cycle de paie '{0}' est deja comptabilise.",
+    "hint": "Extournez le cycle avant de le regenerer ou de le modifier."
+  },
+  "HR-1006": {
+    "code": "HR-1006",
+    "name": "HrPayrollStateInvalid",
+    "message": "Le cycle de paie '{0}' n'est pas dans un etat permettant cette operation.",
+    "hint": "Actualisez la liste et verifiez le statut du cycle."
+  },
+  "HR-1007": {
+    "code": "HR-1007",
+    "name": "HrSalaryStructureInvalid",
+    "message": "La structure salariale '{0}' est invalide.",
+    "hint": "Verifiez les lignes, composants et comptes de la structure."
+  },
+  "HR-1008": {
+    "code": "HR-1008",
+    "name": "HrMasterInUse",
+    "message": "Cet enregistrement est encore reference par d'autres donnees et ne peut pas etre supprime.",
+    "hint": "Retirez d'abord les references, ou desactivez l'enregistrement."
+  },
+  "HR-1009": {
+    "code": "HR-1009",
+    "name": "HrEmployeeNotPayable",
+    "message": "L'employe '{0}' est parti et ne peut pas recevoir d'affectation salariale ni de paie.",
+    "hint": "Reactivez d'abord l'employe s'il s'agit d'une correction."
+  },
+  "HR-1010": {
+    "code": "HR-1010",
+    "name": "HrMasterCodeDuplicate",
+    "message": "Le code '{0}' existe deja pour cette societe.",
+    "hint": "Choisissez un autre code."
+  },
+  "POS-1001": {
+    "code": "POS-1001",
+    "name": "PosNoOpenSession",
+    "message": "Aucune session PDV n'est ouverte pour cette vente.",
+    "hint": "Ouvrez une session sur le terminal, ou activez la vente sans session avec le droit de dérogation."
+  },
+  "POS-1002": {
+    "code": "POS-1002",
+    "name": "PosSessionAlreadyOpen",
+    "message": "Le terminal '{0}' a déjà une session ouverte.",
+    "hint": "Fermez la session ouverte avant d'en ouvrir une autre sur le même terminal."
+  },
+  "POS-1003": {
+    "code": "POS-1003",
+    "name": "PosSessionStateInvalid",
+    "message": "L'état de la session PDV ne permet pas cette opération.",
+    "hint": "Vérifiez que la session est ouverte (pour fermer, les espèces comptées sont requises et non négatives)."
+  },
+  "POS-1004": {
+    "code": "POS-1004",
+    "name": "PosTenderMismatch",
+    "message": "Les paiements ne soldent pas exactement la facture.",
+    "hint": "Ajustez espèces, carte et crédit pour égaler le total ; le surplus d'espèces est la monnaie."
+  },
+  "POS-1005": {
+    "code": "POS-1005",
+    "name": "PosTenderInvalid",
+    "message": "Un paiement est invalide.",
+    "hint": "Vérifiez types et montants : la carte ne peut pas dépasser, le crédit exige un client nommé, les montants ne sont pas négatifs."
+  },
+  "POS-1006": {
+    "code": "POS-1006",
+    "name": "PosReturnExceedsSold",
+    "message": "La quantité de retour dépasse le retournable de la facture d'origine.",
+    "hint": "Réduisez la quantité au vendu moins le déjà retourné."
+  },
+  "POS-1007": {
+    "code": "POS-1007",
+    "name": "PosReturnOriginalInvalid",
+    "message": "La facture PDV d'origine est invalide ou introuvable.",
+    "hint": "Chargez une facture PDV validée de cette société avant le retour."
+  },
+  "POS-1008": {
+    "code": "POS-1008",
+    "name": "PosHeldBillNotFound",
+    "message": "La facture en attente est introuvable.",
+    "hint": "Actualisez la liste des attentes et choisissez à nouveau."
+  },
+  "POS-1009": {
+    "code": "POS-1009",
+    "name": "PosHeldBillStateInvalid",
+    "message": "L'état de la facture en attente ne permet pas cette opération.",
+    "hint": "Seule une facture encore en attente peut être rappelée ou annulée."
+  },
+  "POS-1010": {
+    "code": "POS-1010",
+    "name": "PosSessionlessNotAllowed",
+    "message": "La vente sans session est active mais cet utilisateur ne peut pas déroger.",
+    "hint": "Demandez le droit POS.SESSION.BYPASS à un administrateur, ou ouvrez une session."
   }
 }

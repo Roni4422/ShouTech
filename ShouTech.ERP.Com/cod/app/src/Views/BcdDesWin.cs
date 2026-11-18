@@ -59,8 +59,8 @@ public sealed class BcdDesWin : BaseWin
     {
         Width = 880;
         Height = 620;
-        MinWidth = 720;
-        MinHeight = 500;
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
         BuildUi();

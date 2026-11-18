@@ -214,6 +214,12 @@ namespace ShouTech.App.Services
             public const string SerialView = "INV.SERIAL.VIEW";
             public const string SerialUpdate = "INV.SERIAL.UPDATE";
 
+            // Phase B 054 batch/serial (migration 054 seeds).
+            public const string BatchView = "INV.BATCH.VIEW";
+            public const string BatchManage = "INV.BATCH.MANAGE";
+            public const string SerialTraceView = "INV.SERIAL.VIEW";
+            public const string BatchExpiredOverride = "INV.BATCH.EXPIREDOVERRIDE";
+
             public const string ExpiryView = "INV.EXPIRY.VIEW";
 
             public const string ItemDiscountView = "INV.DISCOUNT.VIEW";
@@ -264,6 +270,75 @@ namespace ShouTech.App.Services
 
             public const string PaymentReconciliationView = "ACC.PAYREC.VIEW";
             public const string PaymentReconciliationAllocate = "ACC.PAYREC.ALLOCATE";
+
+            // Phase B 055 budgets (migration 055 seeds).
+            public const string BudgetView = "ACC.BUDGET.VIEW";
+            public const string BudgetEdit = "ACC.BUDGET.EDIT";
+            public const string BudgetActivate = "ACC.BUDGET.ACTIVATE";
+        }
+
+        // =====================================================================
+        // QUALITY (Phase B 056, migration 056 seeds)
+        // =====================================================================
+
+        public static class Quality
+        {
+            public const string ParamView = "QUALITY.PARAM.VIEW";
+            public const string ParamEdit = "QUALITY.PARAM.EDIT";
+            public const string TemplateView = "QUALITY.TEMPLATE.VIEW";
+            public const string TemplateEdit = "QUALITY.TEMPLATE.EDIT";
+            public const string InspectView = "QUALITY.INSPECT.VIEW";
+            public const string InspectEdit = "QUALITY.INSPECT.EDIT";
+            public const string InspectComplete = "QUALITY.INSPECT.COMPLETE";
+            public const string AlertView = "QUALITY.ALERT.VIEW";
+            public const string AlertEdit = "QUALITY.ALERT.EDIT";
+        }
+
+        // =====================================================================
+        // CRM (Phase B 057, migration 057 seeds). NOTE: the older
+        // PermCat.Customers class below also uses the CRM. prefix for
+        // CUSTOMER-master permissions (CRM.CUSTOMER.*) — those are the
+        // core customer-card permissions and stay untouched; the
+        // pipeline permissions here are CRM.LEAD/OPP/ACTIVITY/STAGE.*.
+        // No entitlement gate: licensing is postponed by the owner.
+        // =====================================================================
+
+        // =====================================================================
+        // HR / PAYROLL (Build HR, migration 065 seeds). Leave approval
+        // (LeaveApprove) and the negative-balance override
+        // (LeaveOverride, sensitive) are separate from leave editing;
+        // payroll posting (PayrollPost, sensitive) is separate from
+        // payroll editing/generation — the step-1 separation pattern.
+        // =====================================================================
+
+        public static class Hr
+        {
+            public const string EmployeeView = "HR.EMPLOYEE.VIEW";
+            public const string EmployeeEdit = "HR.EMPLOYEE.EDIT";
+            public const string OrgView = "HR.ORG.VIEW";
+            public const string OrgEdit = "HR.ORG.EDIT";
+            public const string AttendanceView = "HR.ATTENDANCE.VIEW";
+            public const string AttendanceEdit = "HR.ATTENDANCE.EDIT";
+            public const string LeaveView = "HR.LEAVE.VIEW";
+            public const string LeaveEdit = "HR.LEAVE.EDIT";
+            public const string LeaveApprove = "HR.LEAVE.APPROVE";
+            public const string LeaveOverride = "HR.LEAVE.OVERRIDE";
+            public const string PayrollView = "HR.PAYROLL.VIEW";
+            public const string PayrollEdit = "HR.PAYROLL.EDIT";
+            public const string PayrollPost = "HR.PAYROLL.POST";
+            public const string ReportView = "HR.REPORT.VIEW";
+        }
+
+        public static class Crm
+        {
+            public const string LeadView = "CRM.LEAD.VIEW";
+            public const string LeadEdit = "CRM.LEAD.EDIT";
+            public const string LeadConvert = "CRM.LEAD.CONVERT";
+            public const string OppView = "CRM.OPP.VIEW";
+            public const string OppEdit = "CRM.OPP.EDIT";
+            public const string ActivityView = "CRM.ACTIVITY.VIEW";
+            public const string ActivityEdit = "CRM.ACTIVITY.EDIT";
+            public const string StageEdit = "CRM.STAGE.EDIT";
         }
 
         // =====================================================================
@@ -404,6 +479,14 @@ namespace ShouTech.App.Services
 
             public const string DiscountManage = "POS.DISCOUNT.MANAGE";
 
+            // Build POS 066 (migration 066 seeds): applying a discount
+            // at the till is a sensitive override, separate from
+            // managing discount definitions; holding bills and the
+            // session-less bypass are their own rights.
+            public const string DiscountOverride = "POS.DISCOUNT.OVERRIDE";
+            public const string HoldManage = "POS.HOLD.MANAGE";
+            public const string SessionBypass = "POS.SESSION.BYPASS";
+
             public const string SyncExecute = "POS.SYNC.EXECUTE";
             public const string ReportsView = "POS.REPORTS.VIEW";
         }
@@ -467,6 +550,9 @@ namespace ShouTech.App.Services
         {
             public const string BomView = "MFG.BOM.VIEW";
             public const string BomManage = "MFG.BOM.MANAGE";
+            public const string PlanningView = "MFG.PLANNING.VIEW";
+            public const string PlanningRun = "MFG.PLANNING.RUN";
+            public const string PlanningConvert = "MFG.PLANNING.CONVERT";
 
             public const string OrderView = "MFG.ORDER.VIEW";
             public const string OrderCreate = "MFG.ORDER.CREATE";

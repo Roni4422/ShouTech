@@ -49,7 +49,7 @@ public class OperationsServiceTests : IDisposable
         Assert.False(line.IsCleared);
         Assert.Equal(500m, line.Amount);
 
-        var totalsBefore = OperationsService.ComputeTotals(lines);
+        var totalsBefore = OperationsService.ComputeTotals(lines, null);
         Assert.Equal(500m, totalsBefore.BookBalance);
         Assert.Equal(0m, totalsBefore.ClearedTotal);
         Assert.Equal(500m, totalsBefore.UnclearedTotal);
@@ -71,10 +71,13 @@ public class OperationsServiceTests : IDisposable
         Assert.Single(after);
         Assert.True(after[0].IsCleared);
         Assert.Equal("STMT-1", after[0].StatementRef);
-        var totalsAfter = OperationsService.ComputeTotals(after);
+        var totalsAfter = OperationsService.ComputeTotals(after, null);
         Assert.Equal(500m, totalsAfter.ClearedTotal);
         Assert.Equal(0m, totalsAfter.UnclearedTotal);
-        Assert.Equal(0m, totalsAfter.Difference);
+        // NOTE (Step 8): the old assertion `Difference == 0` here was
+        // the BNK-01 tautology (Book - Cleared - Uncleared is zero for
+        // EVERY dataset). Difference is now computed against a real
+        // bank statement and is asserted in ChequeBankRecStep8Tests.
 
         await _service.UnmarkBankLinesAsync("C1", new[] { line.LineKey }, "u1");
         var unmarked = await _service.GetBankJournalLinesAsync("C1", "1110");

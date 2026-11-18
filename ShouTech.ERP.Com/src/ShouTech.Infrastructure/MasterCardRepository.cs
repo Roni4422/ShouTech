@@ -18,9 +18,10 @@ namespace ShouTech.Infrastructure;
 ///   only posted journal entries (status = Posted) count toward balances.
 /// - Bank balances come from the bank's GL account code, resolved through
 ///   chart_of_accounts to journal_entry_lines.account_id (posted only).
-/// - party_ledger.party_id is the legacy numeric customer/supplier id, so a
-///   party code is resolved through the legacy customers/suppliers tables
-///   (when present) and through a numeric code before the ledger is queried.
+/// - party_ledger.party_id is THIS party's ledger_id (migration 061): a
+///   party resolves to exactly one ledger id through (company, kind, code)
+///   against the canonical parties store — never through the code parsed
+///   as a number and never through a second party master (sweep C-1/C-2).
 /// </summary>
 public sealed class MasterCardRepository : IMasterCardRepository
 {
@@ -702,7 +703,7 @@ public sealed class MasterCardRepository : IMasterCardRepository
 
     // ----------------------------------------------------------------- Parties
 
-    private const string PartyColumns = "id, kind, code, name_en, name_ar, party_group_id, tax_no, commercial_reg_no, credit_limit, credit_days, price_tier, gl_account_code, phone, mobile, email, address, is_active, notes";
+    private const string PartyColumns = "id, kind, code, name_en, name_ar, party_group_id, tax_no, commercial_reg_no, credit_limit, credit_days, price_tier, gl_account_code, phone, mobile, email, address, is_active, notes, ledger_id";
 
     public async Task<IReadOnlyList<Party>> GetPartiesAsync(string companyId, string? kind = null, CancellationToken cancellationToken = default)
     {
@@ -790,8 +791,14 @@ public sealed class MasterCardRepository : IMasterCardRepository
             var exists = await ExistsByIdAsync(connection, transaction, "parties", companyId, party.Id, cancellationToken).ConfigureAwait(false);
             if (!exists)
             {
+                // Step 4: every canonical party owns ONE stable ledger_id,
+                // assigned here inside the save transaction above every
+                // identity already in use (existing parties AND orphan
+                // party_ledger rows), so a new party can never inherit a
+                // stranger's balance.
+                party.LedgerId = await NextLedgerIdAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
                 await using var insert = CreateCommand(connection, transaction,
-                    "INSERT INTO parties (id, company_id, kind, code, name_en, name_ar, party_group_id, tax_no, commercial_reg_no, credit_limit, credit_days, price_tier, gl_account_code, phone, mobile, email, address, is_active, notes, created_by) VALUES (@id, @company, @kind, @code, @nameEn, @nameAr, @group, @taxNo, @regNo, @creditLimit, @creditDays, @priceTier, @gl, @phone, @mobile, @email, @address, @isActive, @notes, @user)");
+                    "INSERT INTO parties (id, company_id, kind, code, name_en, name_ar, party_group_id, tax_no, commercial_reg_no, credit_limit, credit_days, price_tier, gl_account_code, phone, mobile, email, address, is_active, notes, created_by, ledger_id) VALUES (@id, @company, @kind, @code, @nameEn, @nameAr, @group, @taxNo, @regNo, @creditLimit, @creditDays, @priceTier, @gl, @phone, @mobile, @email, @address, @isActive, @notes, @user, @ledgerId)");
                 BindParty(insert, companyId, party, userId);
                 await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
@@ -820,16 +827,14 @@ public sealed class MasterCardRepository : IMasterCardRepository
         RequireCompany(companyId);
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        var ids = await ResolvePartyLedgerIdsAsync(connection, null, companyId, kind, code, cancellationToken).ConfigureAwait(false);
-        if (ids.Count == 0)
+        var ledgerId = await ResolveOwnLedgerIdAsync(connection, null, companyId, kind, code, cancellationToken).ConfigureAwait(false);
+        if (ledgerId is null)
             return 0;
-        var (inClause, parameters) = BuildInClause(ids);
         await using var command = CreateCommand(connection, null,
-            $"SELECT COUNT(*) FROM party_ledger WHERE company_id = @company AND party_kind = @kind AND party_id IN ({inClause})");
+            "SELECT COUNT(*) FROM party_ledger WHERE company_id = @company AND party_kind = @kind AND party_id = @party");
         Add(command, "@company", companyId.Trim());
         Add(command, "@kind", kind.Trim().ToUpperInvariant());
-        foreach (var (name, value) in parameters)
-            Add(command, name, value);
+        Add(command, "@party", ledgerId.Value);
         return (int)Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
     }
 
@@ -841,16 +846,14 @@ public sealed class MasterCardRepository : IMasterCardRepository
             return balance;
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        var ids = await ResolvePartyLedgerIdsAsync(connection, null, companyId, kind, code, cancellationToken).ConfigureAwait(false);
-        if (ids.Count == 0)
+        var ledgerId = await ResolveOwnLedgerIdAsync(connection, null, companyId, kind, code, cancellationToken).ConfigureAwait(false);
+        if (ledgerId is null)
             return balance;
-        var (inClause, parameters) = BuildInClause(ids);
         await using var command = CreateCommand(connection, null,
-            $"SELECT COALESCE(SUM(debit), 0), COALESCE(SUM(credit), 0) FROM party_ledger WHERE company_id = @company AND party_kind = @kind AND party_id IN ({inClause})");
+            "SELECT COALESCE(SUM(debit), 0), COALESCE(SUM(credit), 0) FROM party_ledger WHERE company_id = @company AND party_kind = @kind AND party_id = @party");
         Add(command, "@company", companyId.Trim());
         Add(command, "@kind", kind.Trim().ToUpperInvariant());
-        foreach (var (name, value) in parameters)
-            Add(command, name, value);
+        Add(command, "@party", ledgerId.Value);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -861,38 +864,34 @@ public sealed class MasterCardRepository : IMasterCardRepository
     }
 
     /// <summary>
-    /// party_ledger.party_id is the legacy numeric customer/supplier id (see
-    /// migration 010 and RptQuery.CustomerBalancesAsync). A party code resolves
-    /// to ledger ids through the legacy master table of its kind when that
-    /// table exists, and directly when the code itself is numeric.
+    /// The party's OWN ledger id (migration 061): the single
+    /// <c>parties.ledger_id</c> of the live party matched by
+    /// (company, kind, code). This replaces the pre-unification resolution
+    /// that parsed the code as a number and consulted a second party
+    /// master — code "1" could inherit another party's balance (C-2).
     /// </summary>
-    private async Task<List<long>> ResolvePartyLedgerIdsAsync(DbConnection connection, DbTransaction? transaction, string companyId, string kind, string code, CancellationToken cancellationToken)
+    private async Task<long?> ResolveOwnLedgerIdAsync(DbConnection connection, DbTransaction? transaction, string companyId, string kind, string code, CancellationToken cancellationToken)
     {
-        var ids = new List<long>();
         if (string.IsNullOrWhiteSpace(kind) || string.IsNullOrWhiteSpace(code))
-            return ids;
-        if (long.TryParse(code.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var numeric))
-            ids.Add(numeric);
+            return null;
+        return await PartyLedger.ResolveLedgerIdAsync(connection, transaction, _provider, companyId, kind, code, cancellationToken).ConfigureAwait(false);
+    }
 
-        var isCustomer = string.Equals(kind.Trim(), PartyKinds.Customer, StringComparison.OrdinalIgnoreCase);
-        var table = isCustomer ? "customers" : "suppliers";
-        var idColumn = isCustomer ? "customer_id" : "supplier_id";
-        var codeColumn = isCustomer ? "customer_code" : "supplier_code";
-        if (!await TableExistsAsync(connection, transaction, table, cancellationToken).ConfigureAwait(false))
-            return ids;
-
-        await using var command = CreateCommand(connection, transaction,
-            $"SELECT {idColumn} FROM {table} WHERE company_id = @company AND {codeColumn} = @code AND {NotDeleted}");
-        Add(command, "@company", companyId.Trim());
-        Add(command, "@code", code.Trim());
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+    private async Task<long> NextLedgerIdAsync(DbConnection connection, DbTransaction transaction, CancellationToken cancellationToken)
+    {
+        long maxParty = 0, maxLedger = 0;
+        await using (var parties = CreateCommand(connection, transaction,
+            "SELECT COALESCE(MAX(ledger_id), 0) FROM parties"))
         {
-            var id = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture);
-            if (!ids.Contains(id))
-                ids.Add(id);
+            maxParty = Convert.ToInt64(await parties.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
         }
-        return ids;
+        if (await TableExistsAsync(connection, transaction, "party_ledger", cancellationToken).ConfigureAwait(false))
+        {
+            await using var ledger = CreateCommand(connection, transaction,
+                "SELECT COALESCE(MAX(party_id), 0) FROM party_ledger");
+            maxLedger = Convert.ToInt64(await ledger.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+        }
+        return Math.Max(maxParty, maxLedger) + 1;
     }
 
     private async Task<bool> TableExistsAsync(DbConnection connection, DbTransaction? transaction, string table, CancellationToken cancellationToken)
@@ -903,19 +902,6 @@ public sealed class MasterCardRepository : IMasterCardRepository
         await using var command = CreateCommand(connection, transaction, sql);
         Add(command, "@name", table);
         return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture) > 0;
-    }
-
-    private static (string Clause, List<(string Name, object Value)> Parameters) BuildInClause(IReadOnlyList<long> ids)
-    {
-        var parameters = new List<(string, object)>();
-        var names = new List<string>();
-        for (var i = 0; i < ids.Count; i++)
-        {
-            var name = $"@pid{i}";
-            names.Add(name);
-            parameters.Add((name, ids[i]));
-        }
-        return (string.Join(", ", names), parameters);
     }
 
     private void BindParty(DbCommand command, string companyId, Party party, string userId)
@@ -940,6 +926,7 @@ public sealed class MasterCardRepository : IMasterCardRepository
         Add(command, "@isActive", DbBool(party.IsActive));
         Add(command, "@notes", (object?)NullIfBlank(party.Notes) ?? DBNull.Value);
         Add(command, "@user", userId);
+        Add(command, "@ledgerId", party.LedgerId);
     }
 
     private static Party MapParty(DbDataReader reader) => new()
@@ -961,7 +948,8 @@ public sealed class MasterCardRepository : IMasterCardRepository
         Email = ReadString(reader, 14),
         Address = ReadString(reader, 15),
         IsActive = ReadBool(reader, 16),
-        Notes = ReadString(reader, 17)
+        Notes = ReadString(reader, 17),
+        LedgerId = reader.IsDBNull(18) ? 0 : Convert.ToInt64(reader.GetValue(18), CultureInfo.InvariantCulture)
     };
 
     // ------------------------------------------------------------ Party groups
@@ -1347,16 +1335,14 @@ public sealed class MasterCardRepository : IMasterCardRepository
                     kind = ReadString(reader, 0);
                     code = ReadString(reader, 1);
                 }
-                var ids = await ResolvePartyLedgerIdsAsync(connection, transaction, companyId, kind!, code!, cancellationToken).ConfigureAwait(false);
-                if (ids.Count > 0)
+                var ownLedgerId = await ResolveOwnLedgerIdAsync(connection, transaction, companyId, kind!, code!, cancellationToken).ConfigureAwait(false);
+                if (ownLedgerId is not null)
                 {
-                    var (inClause, parameters) = BuildInClause(ids);
                     await using var refs = CreateCommand(connection, transaction,
-                        $"SELECT COUNT(*) FROM party_ledger WHERE company_id = @company AND party_kind = @kind AND party_id IN ({inClause})");
+                        "SELECT COUNT(*) FROM party_ledger WHERE company_id = @company AND party_kind = @kind AND party_id = @party");
                     Add(refs, "@company", companyId.Trim());
                     Add(refs, "@kind", kind!.Trim().ToUpperInvariant());
-                    foreach (var (name, value) in parameters)
-                        Add(refs, name, value);
+                    Add(refs, "@party", ownLedgerId.Value);
                     if (Convert.ToInt64(await refs.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture) > 0)
                         throw new InvalidOperationException($"Party '{code}' cannot be deleted because party ledger entries reference it. Deactivate it instead.");
                 }

@@ -58,6 +58,18 @@ public sealed class InvLine
     public int? WarehouseId { get; set; }
     public string WarehouseName { get; set; } = string.Empty;
 
+    // ---- Batch/serial capture (Phase B 054) ---------------------------
+    // Captured at posting time by the batch/serial picker (quantities in
+    // the line's chosen unit for batches — StkPost restates them per
+    // base unit exactly like the line quantity; serials are per unit and
+    // unit-independent). Transient by design: the persisted record of a
+    // posting is stock_movement_allocations, written by the engine.
+    public List<ShouTech.Infrastructure.BatchAllocationRequest> BatchAllocations { get; set; } = new();
+    public List<ShouTech.Infrastructure.SerialSelection> Serials { get; set; } = new();
+    /// <summary>Holder of the INV.BATCH.EXPIREDOVERRIDE permission
+    /// confirmed the expired-batch override for this line at capture.</summary>
+    public bool AllowExpiredBatchIssue { get; set; }
+
     public decimal LineSubtotal
     {
         get
@@ -73,6 +85,14 @@ public sealed class InvLine
 
     public decimal LineTotal => LineSubtotal + LineTax;
 }
+
+/// <summary>Batch/serial capture for one document line, keyed by line
+/// number into <see cref="InvRepo"/> posting: what the picker collected
+/// at posting time (Phase B 054).</summary>
+public sealed record LineBatchSerialCapture(
+    List<ShouTech.Infrastructure.BatchAllocationRequest> Batches,
+    List<ShouTech.Infrastructure.SerialSelection> Serials,
+    bool AllowExpiredBatchIssue);
 
 /// <summary>
 /// Full commercial document model (sales or purchase).
@@ -90,6 +110,7 @@ public sealed class InvDoc
     public int? WarehouseId { get; set; }
     public string WarehouseName { get; set; } = string.Empty;
     public int? TargetWarehouseId { get; set; }
+    public string TargetWarehouseName { get; set; } = string.Empty;
     public string CurrencyCode { get; set; } = "SAR";
     public decimal ExchangeRate { get; set; } = 1m;
     public string? TaxCode { get; set; }
@@ -137,6 +158,17 @@ public sealed class InvDoc
     /// <summary>Payment value / paid amount on this document.</summary>
     public decimal PaidAmount { get; set; }
 
+    // ---- POS split tenders (Build POS 066, transient) ------------------
+    // When a POS sale / POS return is settled by MORE THAN ONE tender,
+    // the single PaymentMethod cannot express the GL settlement legs.
+    // PosPosting fills these two magnitudes (cash part / card part of
+    // PaidAmount; the remainder of the total is the receivable leg) and
+    // InvRepo.BuildGlLines posts Cash 131 / Bank 132 accordingly. Null
+    // on every non-POS document and on single-tender POS documents,
+    // where the legacy PaymentMethod leg is already exact.
+    public decimal? PosCashApplied { get; set; }
+    public decimal? PosCardApplied { get; set; }
+
     public string KindCode => Kind switch
     {
         InvDocKind.SalesInvoice => "SAL",
@@ -174,8 +206,35 @@ public sealed class InvDoc
     public decimal RemainingAmount =>
         decimal.Round(InvoiceValue - PaidAmount, 4, MidpointRounding.AwayFromZero);
 
-    /// <summary>Legacy grand total alias.</summary>
+    /// <summary>Legacy grand total alias (recomputed from the in-memory lines).</summary>
     public decimal GrandTotal => InvoiceValue;
+
+    // ---- Stored totals (Fix Phase Step 5) ----
+    // The header row persisted by SaveDraft carries subtotal / tax_amount /
+    // grand_total computed AT SAVE TIME from the lines + header discount /
+    // extra. When a document is reloaded for POSTING, those stored figures
+    // are the amounts of record: posting (GL, party_ledger, credit guard)
+    // must use them exactly, never a recomputation that can drop the
+    // header discount/extra (sweep I-1: a document storing 1,050 was
+    // debited 1,150). Null in memory-built documents (drafts not yet
+    // saved), where the recomputed value is the only one that exists.
+    public decimal? StoredSubtotal { get; set; }
+    public decimal? StoredTaxAmount { get; set; }
+    public decimal? StoredGrandTotal { get; set; }
+
+    /// <summary>Subtotal that posting must use: the stored figure when present.</summary>
+    public decimal PostingSubtotal => StoredSubtotal ?? Subtotal;
+
+    /// <summary>Tax amount that posting must use: the stored figure when present.</summary>
+    public decimal PostingTaxAmount => StoredTaxAmount ?? TaxAmount;
+
+    /// <summary>
+    /// THE amount posting must use everywhere (GL control legs,
+    /// party_ledger, credit guard, settlement cap): the stored
+    /// grand_total when the document was loaded from storage; the
+    /// recomputed invoice value only for a never-saved in-memory draft.
+    /// </summary>
+    public decimal PostingTotal => StoredGrandTotal ?? GrandTotal;
 
     /// <summary>
     /// Default goods / stock account caption by document kind

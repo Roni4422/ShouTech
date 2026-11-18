@@ -22,6 +22,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class FinancialAnalysisWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Plum";
     public sealed class RatioRow
     {
         public string Ratio { get; set; } = string.Empty;
@@ -45,8 +46,8 @@ public sealed class FinancialAnalysisWin : BaseWin
     {
         Width = 1060;
         Height = 620;
-        MinWidth = 860;
-        MinHeight = 480;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

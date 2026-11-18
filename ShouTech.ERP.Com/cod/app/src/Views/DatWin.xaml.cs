@@ -16,10 +16,18 @@ namespace ShouTech.App.Views;
 /// Compact ShouTech data exchange window.
 /// The UI deliberately does not claim a successful import/export until the data engine completes it.
 /// </summary>
-public partial class DatWin : BaseWin
+public partial class DatWin : BaseWin, IWindowMode
 {
     private enum ExchangeMode { Import, Export, StructuredExport }
     private ExchangeMode _mode = ExchangeMode.Import;
+
+    /// <summary>Step 11 router identity (IWindowMode): the CURRENT
+    /// exchange mode. DatWin is the one mode-ful window that can switch
+    /// mode live (its mode cards do exactly this), so the key tracks
+    /// the current mode: a request for the mode the user already
+    /// switched to reactivates this window, and a request for another
+    /// mode opens a second instance in that mode (sweep S-3).</summary>
+    public string ModeKey => _mode.ToString();
     private string _lastDetails = string.Empty;
     private string _structuredExportFormat = "xlsx";
     private const string LogCategory = "DataExchange";
@@ -431,8 +439,10 @@ public partial class DatWin : BaseWin
         // Phase 4 export governance: every export mode (full .stei package and
         // structured dataset export) requires the DATA.EXPORT permission, and
         // each completed export is written to the durable security audit log.
-        // Imports keep their existing flow (DATA.IMPORT is enforced by the
-        // data-exchange service catalog for dataset imports).
+        // Step 10 import governance: every import mode requires DATA.IMPORT —
+        // pre-checked here for a clear message, and enforced again in the
+        // service layer (DataExchangeGuard) on every import path, where the
+        // denial is audit-logged and thrown as DATA-4004.
         if (_mode != ExchangeMode.Import &&
             !AppHost.Permissions.Has(PermCat.Data.Export))
         {
@@ -562,6 +572,18 @@ public partial class DatWin : BaseWin
 
             if (_mode == ExchangeMode.Import)
             {
+                if (!AppHost.Permissions.Has(PermCat.Data.Import))
+                {
+                    await SecurityAuditLog.WriteAsync(
+                        GetCurrentCompanyCode(), null, GetCurrentUserName(),
+                        SecurityAuditLog.DataImportDenied,
+                        $"mode=Import | user lacks DATA.IMPORT");
+                    MessageBox.Show(
+                        L("ImportNotPermitted", "You do not have permission to import data (DATA.IMPORT)."),
+                        Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
                 var path = ImportPathBox.Text.Trim();
                 var password = ImportPasswordBox.Password;
                 if (string.IsNullOrWhiteSpace(path))

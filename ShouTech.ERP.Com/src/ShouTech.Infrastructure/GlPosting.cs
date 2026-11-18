@@ -27,6 +27,16 @@ public static class GlAccounts
     public const string Purchases = "402";
     public const string PurchaseReturns = "403";
     public const string DepreciationExpense = "505";
+    // Manufacturing (Build 058): carried by the industrial / job-orders /
+    // continuous-inventory templates. The staged manufacturing posting
+    // resolves each with TryResolveAccount and falls back to Inventory
+    // (WIP / finished) or COGS (variance / applied overhead) on charts
+    // that carry no postable account under the manufacturing code —
+    // the same optional-leg pattern as the tax legs.
+    public const string WorkInProgress = "1211";
+    public const string FinishedGoods = "1212";
+    public const string ManufacturingVariance = "406";
+    public const string AppliedManufacturingOverhead = "409";
 }
 
 /// <summary>
@@ -56,7 +66,8 @@ public static class GlPosting
     /// transaction scope without changing their commit boundary.</summary>
     public static GlPostingResult PostInTransaction(
         DbConnection connection, DbTransaction transaction, string provider,
-        GlDocumentRequest request, string userId)
+        GlDocumentRequest request, string userId,
+        List<BudgetViolation>? budgetBlockedSink = null)
     {
         ArgumentNullException.ThrowIfNull(connection);
         ArgumentNullException.ThrowIfNull(transaction);
@@ -76,6 +87,19 @@ public static class GlPosting
             throw new AppError(ErrorCodes.JournalNotBalanced, "Journal entry debit and credit totals must balance.");
         if (totalDebit == 0)
             throw new AppError(ErrorCodes.JournalZeroAmount, "A journal entry must have a non-zero amount.");
+
+        // Step 7 (J-5): the effective exchange rate is resolved ONCE for
+        // the entry — document rate first, currency_rates master where
+        // the document carries none, 1 for base-currency documents — and
+        // a foreign-currency document with no rate anywhere fails here
+        // with ACC-5015, before anything is written. Every line below
+        // carries BOTH its transaction amount and its base amount
+        // (transaction x effective rate, migration 062).
+        var fx = FxRates.Resolve(connection, transaction, prov, request.CompanyId,
+            string.IsNullOrWhiteSpace(request.CurrencyCode) ? "SAR" : request.CurrencyCode,
+            request.EntryDate, request.ExchangeRate);
+        var hasLineBase = PartyLedger.ColumnExists(connection, transaction, prov, "journal_entry_lines", "base_debit");
+        var hasHeaderBase = PartyLedger.ColumnExists(connection, transaction, prov, "journal_entries", "base_currency_code");
 
         // Duplicate guard: one live GL entry per source document.
         using (var dup = CreateCommand(connection, transaction,
@@ -117,7 +141,9 @@ public static class GlPosting
             : request.EntryDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
         using (var insert = CreateCommand(connection, transaction,
-            "INSERT INTO journal_entries (journal_entry_id, company_id, entry_date, description, status, created_by, fiscal_period_id, reference_number, currency_code, exchange_rate, document_number, source_doc_type, source_doc_id, source_doc_no) VALUES (@id, @company, @date, @description, 0, @actor, @period, @reference, @currency, @rate, @documentNumber, @sourceType, @sourceId, @sourceNo)"))
+            hasHeaderBase
+                ? "INSERT INTO journal_entries (journal_entry_id, company_id, entry_date, description, status, created_by, fiscal_period_id, reference_number, currency_code, exchange_rate, document_number, source_doc_type, source_doc_id, source_doc_no, base_currency_code) VALUES (@id, @company, @date, @description, 0, @actor, @period, @reference, @currency, @rate, @documentNumber, @sourceType, @sourceId, @sourceNo, @baseCurrency)"
+                : "INSERT INTO journal_entries (journal_entry_id, company_id, entry_date, description, status, created_by, fiscal_period_id, reference_number, currency_code, exchange_rate, document_number, source_doc_type, source_doc_id, source_doc_no) VALUES (@id, @company, @date, @description, 0, @actor, @period, @reference, @currency, @rate, @documentNumber, @sourceType, @sourceId, @sourceNo)"))
         {
             Add(insert, "@id", FormatGuid(prov, entryId));
             Add(insert, "@company", FormatGuid(prov, request.CompanyId));
@@ -127,21 +153,30 @@ public static class GlPosting
             Add(insert, "@period", prov == "PostgreSQL" ? (object)Guid.Parse(periodId) : periodId);
             Add(insert, "@reference", request.SourceDocNo.Trim());
             Add(insert, "@currency", string.IsNullOrWhiteSpace(request.CurrencyCode) ? "SAR" : request.CurrencyCode.Trim().ToUpperInvariant());
-            Add(insert, "@rate", request.ExchangeRate <= 0 ? 1m : request.ExchangeRate);
+            // The header stores the EFFECTIVE rate (post-resolution), so
+            // the header, the lines, and the reports can never disagree
+            // about which rate was applied.
+            Add(insert, "@rate", fx.Rate);
             Add(insert, "@documentNumber", documentNumber);
             Add(insert, "@sourceType", request.SourceDocType.Trim());
             Add(insert, "@sourceId", request.SourceDocId.Trim());
             Add(insert, "@sourceNo", request.SourceDocNo.Trim());
+            if (hasHeaderBase)
+                Add(insert, "@baseCurrency", (object?)fx.BaseCurrency ?? DBNull.Value);
             insert.ExecuteNonQuery();
         }
 
         var snapshots = new List<CostLine>();
+        var baseAmounts = FxRates.ConvertBalanced(
+            resolved.Select(l => (l.Debit, l.Credit)).ToList(), fx.Rate);
         var lineNumber = 0;
         foreach (var line in resolved)
         {
             lineNumber++;
             using var command = CreateCommand(connection, transaction,
-                "INSERT INTO journal_entry_lines (journal_entry_id, line_number, account_id, debit, credit, cost_center, note) VALUES (@id, @line, @account, @debit, @credit, @costCenter, @note)");
+                hasLineBase
+                    ? "INSERT INTO journal_entry_lines (journal_entry_id, line_number, account_id, debit, credit, cost_center, note, base_debit, base_credit, exchange_rate) VALUES (@id, @line, @account, @debit, @credit, @costCenter, @note, @baseDebit, @baseCredit, @rate)"
+                    : "INSERT INTO journal_entry_lines (journal_entry_id, line_number, account_id, debit, credit, cost_center, note) VALUES (@id, @line, @account, @debit, @credit, @costCenter, @note)");
             Add(command, "@id", FormatGuid(prov, entryId));
             Add(command, "@line", lineNumber);
             Add(command, "@account", FormatGuid(prov, line.AccountId));
@@ -149,12 +184,27 @@ public static class GlPosting
             Add(command, "@credit", line.Credit);
             Add(command, "@costCenter", (object?)line.CostCenter ?? DBNull.Value);
             Add(command, "@note", (object?)line.Note ?? DBNull.Value);
+            if (hasLineBase)
+            {
+                Add(command, "@baseDebit", baseAmounts[lineNumber - 1].BaseDebit);
+                Add(command, "@baseCredit", baseAmounts[lineNumber - 1].BaseCredit);
+                Add(command, "@rate", fx.Rate);
+            }
             command.ExecuteNonQuery();
             snapshots.Add(new CostLine(lineNumber, line.AccountId, line.AccountCode, line.Debit, line.Credit, line.CostCenter, line.CostRequired));
         }
 
         ApplyCostCenters(connection, transaction, prov, request.CompanyId, entryId, request.EntryDate,
             snapshots, enforceValidation: true);
+
+        // Phase B 055: the budget guard runs in the shared posting core
+        // (after the cost splits exist, before the entry flips to
+        // Posted), so document postings are guarded exactly like manual
+        // journals. A Stop throws ACC-5018/5019 and the caller's whole
+        // transaction (document + entry) rolls back; Warn warnings ride
+        // back on the result.
+        var budgetWarnings = BudgetGuard.Check(connection, transaction, prov,
+            request.CompanyId, entryId, userId, budgetBlockedSink);
 
         using (var post = CreateCommand(connection, transaction,
             "UPDATE journal_entries SET status = 1, posted_by = @actor, posted_at = CURRENT_TIMESTAMP WHERE journal_entry_id = @id AND status = 0"))
@@ -166,7 +216,7 @@ public static class GlPosting
         }
         AddAudit(connection, transaction, prov, entryId, 1, userId, "Document posting created");
         AddAudit(connection, transaction, prov, entryId, 2, userId, $"Posted from {request.SourceDocType} {request.SourceDocNo}");
-        return new GlPostingResult(entryId, documentNumber);
+        return new GlPostingResult(entryId, documentNumber) { BudgetWarnings = budgetWarnings };
     }
 
     /// <summary>Finds the live (posted, non-reversal) GL entry created for
@@ -201,6 +251,8 @@ public static class GlPosting
         Guid journalEntryId, string userId, string? details = null)
     {
         var prov = NormalizeProvider(provider);
+        var hasLineBase = PartyLedger.ColumnExists(connection, transaction, prov, "journal_entry_lines", "base_debit");
+        var hasHeaderBase = PartyLedger.ColumnExists(connection, transaction, prov, "journal_entries", "base_currency_code");
         string companyIdText;
         DateOnly entryDate;
         string description;
@@ -210,8 +262,11 @@ public static class GlPosting
         decimal exchangeRate;
         int status;
         string? sourceType, sourceId, sourceNo;
+        string? baseCurrencyCode = null;
         using (var header = CreateCommand(connection, transaction,
-            "SELECT company_id, entry_date, description, status, fiscal_period_id, reference_number, currency_code, exchange_rate, source_doc_type, source_doc_id, source_doc_no FROM journal_entries WHERE journal_entry_id = @id"))
+            "SELECT company_id, entry_date, description, status, fiscal_period_id, reference_number, currency_code, exchange_rate, source_doc_type, source_doc_id, source_doc_no"
+            + (hasHeaderBase ? ", base_currency_code" : "")
+            + " FROM journal_entries WHERE journal_entry_id = @id"))
         {
             Add(header, "@id", FormatGuid(prov, journalEntryId));
             using var reader = header.ExecuteReader();
@@ -230,6 +285,8 @@ public static class GlPosting
             sourceType = reader.IsDBNull(8) ? null : reader.GetString(8);
             sourceId = reader.IsDBNull(9) ? null : reader.GetString(9);
             sourceNo = reader.IsDBNull(10) ? null : reader.GetString(10);
+            if (hasHeaderBase)
+                baseCurrencyCode = reader.IsDBNull(11) ? null : reader.GetString(11);
         }
         if (status != 1)
             throw new InvalidOperationException("Only an existing posted journal entry can be reversed.");
@@ -247,8 +304,11 @@ public static class GlPosting
         }
 
         var sourceLines = new List<CostLine>();
+        var sourceBase = new List<(decimal BaseDebit, decimal BaseCredit)>();
         using (var lines = CreateCommand(connection, transaction,
-            "SELECT l.line_number, l.account_id, a.account_code, l.debit, l.credit, l.cost_center, l.note, COALESCE(a.cost_required, 0) FROM journal_entry_lines l LEFT JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = @company WHERE l.journal_entry_id = @id ORDER BY l.line_number"))
+            "SELECT l.line_number, l.account_id, a.account_code, l.debit, l.credit, l.cost_center, l.note, COALESCE(a.cost_required, 0)"
+            + (hasLineBase ? ", l.base_debit, l.base_credit" : "")
+            + " FROM journal_entry_lines l LEFT JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = @company WHERE l.journal_entry_id = @id ORDER BY l.line_number"))
         {
             Add(lines, "@company", FormatGuid(prov, companyId));
             Add(lines, "@id", FormatGuid(prov, journalEntryId));
@@ -265,6 +325,19 @@ public static class GlPosting
                     Convert.ToBoolean(reader.GetValue(7), CultureInfo.InvariantCulture)));
                 // note (index 6) is not needed for the reversal lines beyond mirroring; read below via second pass is avoided — note is mirrored from this reader:
                 sourceLines[^1] = sourceLines[^1] with { Note = reader.IsDBNull(6) ? null : reader.GetString(6) };
+                // Step 7: the reversal mirrors the STORED base amounts
+                // (swapped), never a recomputation at today's rate — the
+                // pair nets to zero in base exactly, even if the master
+                // rate has moved since the original posting. Legacy rows
+                // the 062 backfill could not reach fall back to the
+                // header rate.
+                if (hasLineBase)
+                {
+                    var line = sourceLines[^1];
+                    sourceBase.Add((
+                        reader.IsDBNull(8) ? FxRates.ToBase(line.Debit, exchangeRate) : Convert.ToDecimal(reader.GetValue(8), CultureInfo.InvariantCulture),
+                        reader.IsDBNull(9) ? FxRates.ToBase(line.Credit, exchangeRate) : Convert.ToDecimal(reader.GetValue(9), CultureInfo.InvariantCulture)));
+                }
             }
         }
         if (sourceLines.Count < 2 || sourceLines.Sum(x => x.Debit) <= 0 || sourceLines.Sum(x => x.Debit) != sourceLines.Sum(x => x.Credit))
@@ -274,7 +347,9 @@ public static class GlPosting
         var reversalDescription = $"Reversal: {description}";
         if (reversalDescription.Length > 500) reversalDescription = reversalDescription[..500];
         using (var insert = CreateCommand(connection, transaction,
-            "INSERT INTO journal_entries (journal_entry_id, company_id, entry_date, description, status, created_by, reversal_of_entry_id, fiscal_period_id, reference_number, currency_code, exchange_rate, document_number, source_doc_type, source_doc_id, source_doc_no) VALUES (@id, @company, @date, @description, 0, @actor, @source, @period, @reference, @currency, @rate, @documentNumber, @sourceType, @sourceId, @sourceNo)"))
+            hasHeaderBase
+                ? "INSERT INTO journal_entries (journal_entry_id, company_id, entry_date, description, status, created_by, reversal_of_entry_id, fiscal_period_id, reference_number, currency_code, exchange_rate, document_number, source_doc_type, source_doc_id, source_doc_no, base_currency_code) VALUES (@id, @company, @date, @description, 0, @actor, @source, @period, @reference, @currency, @rate, @documentNumber, @sourceType, @sourceId, @sourceNo, @baseCurrency)"
+                : "INSERT INTO journal_entries (journal_entry_id, company_id, entry_date, description, status, created_by, reversal_of_entry_id, fiscal_period_id, reference_number, currency_code, exchange_rate, document_number, source_doc_type, source_doc_id, source_doc_no) VALUES (@id, @company, @date, @description, 0, @actor, @source, @period, @reference, @currency, @rate, @documentNumber, @sourceType, @sourceId, @sourceNo)"))
         {
             Add(insert, "@id", FormatGuid(prov, reversalId));
             Add(insert, "@company", prov == "PostgreSQL" ? (object)companyId : companyIdText);
@@ -290,6 +365,8 @@ public static class GlPosting
             Add(insert, "@sourceType", (object?)sourceType ?? DBNull.Value);
             Add(insert, "@sourceId", (object?)sourceId ?? DBNull.Value);
             Add(insert, "@sourceNo", (object?)sourceNo ?? DBNull.Value);
+            if (hasHeaderBase)
+                Add(insert, "@baseCurrency", (object?)baseCurrencyCode ?? DBNull.Value);
             insert.ExecuteNonQuery();
         }
 
@@ -299,7 +376,9 @@ public static class GlPosting
         {
             lineNumber++;
             using var insertLine = CreateCommand(connection, transaction,
-                "INSERT INTO journal_entry_lines (journal_entry_id, line_number, account_id, debit, credit, cost_center, note) VALUES (@id, @line, @account, @debit, @credit, @costCenter, @note)");
+                hasLineBase
+                    ? "INSERT INTO journal_entry_lines (journal_entry_id, line_number, account_id, debit, credit, cost_center, note, base_debit, base_credit, exchange_rate) VALUES (@id, @line, @account, @debit, @credit, @costCenter, @note, @baseDebit, @baseCredit, @rate)"
+                    : "INSERT INTO journal_entry_lines (journal_entry_id, line_number, account_id, debit, credit, cost_center, note) VALUES (@id, @line, @account, @debit, @credit, @costCenter, @note)");
             Add(insertLine, "@id", FormatGuid(prov, reversalId));
             Add(insertLine, "@line", lineNumber);
             Add(insertLine, "@account", FormatGuid(prov, line.AccountId));
@@ -307,6 +386,13 @@ public static class GlPosting
             Add(insertLine, "@credit", line.Debit);
             Add(insertLine, "@costCenter", (object?)line.CostCenter ?? DBNull.Value);
             Add(insertLine, "@note", (object?)line.Note ?? DBNull.Value);
+            if (hasLineBase)
+            {
+                var source = sourceBase[lineNumber - 1];
+                Add(insertLine, "@baseDebit", source.BaseCredit);
+                Add(insertLine, "@baseCredit", source.BaseDebit);
+                Add(insertLine, "@rate", exchangeRate);
+            }
             insertLine.ExecuteNonQuery();
             reversalSnapshots.Add(new CostLine(lineNumber, line.AccountId, line.AccountCode, line.Credit, line.Debit, line.CostCenter, line.CostRequired));
         }
@@ -333,6 +419,15 @@ public static class GlPosting
 
         AddAudit(connection, transaction, prov, journalEntryId, 3, userId, details ?? $"Reversed by journal {reversalId:D}");
         AddAudit(connection, transaction, prov, reversalId, 2, userId, $"Reversal of journal {journalEntryId:D}");
+
+        // Step 4 settlement symmetry: a cash voucher's party_ledger
+        // settlement rows carry the journal entry id (migration 061);
+        // reversing the voucher mirrors them in this same transaction so
+        // the party balance restores exactly. Documents that reverse via
+        // return documents have no journal-linked rows and are untouched.
+        PartyLedger.MirrorForJournalReversal(connection, transaction, prov,
+            companyId, journalEntryId, reversalId,
+            entryDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         return reversalId;
     }
 

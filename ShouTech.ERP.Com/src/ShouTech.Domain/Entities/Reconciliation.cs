@@ -34,7 +34,9 @@ public sealed record UnallocatedPaymentRow(
     long PartyId,
     string? Note,
     decimal Amount,
-    decimal Allocated)
+    decimal Allocated,
+    string? PartyName = null,
+    string CurrencyCode = "SAR")
 {
     public decimal Available => Amount - Allocated;
 }

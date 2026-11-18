@@ -84,6 +84,16 @@ public static class TaxSvc
         return list;
     }
 
+    /// <summary>
+    /// Resolves a party code against the ONE canonical party master
+    /// (parties, migration 061) in the current company. The returned Id is
+    /// the party's ledger_id — the identity party_ledger and the document
+    /// party_id columns carry. Inactive parties do not resolve (sweep
+    /// L-8: they must not keep accruing postings), and the display name
+    /// follows the card's English name with the Arabic name as fallback
+    /// (sweep RP-5). A code is matched exactly; it is never parsed as a
+    /// number (sweep C-2).
+    /// </summary>
     public static (long? Id, string Name)? ResolveParty(string code, bool customer)
     {
         if (string.IsNullOrWhiteSpace(code)) return null;
@@ -95,24 +105,20 @@ public static class TaxSvc
         {
             using var connection = Open(cs);
             using var cmd = connection.CreateCommand();
-            if (customer)
-            {
-                cmd.CommandText = """
-                    SELECT customer_id, customer_name_ar FROM customers
-                    WHERE company_id=$c AND customer_code=$code AND is_deleted=0 LIMIT 1;
-                    """;
-            }
-            else
-            {
-                cmd.CommandText = """
-                    SELECT supplier_id, supplier_name_ar FROM suppliers
-                    WHERE company_id=$c AND supplier_code=$code AND is_deleted=0 LIMIT 1;
-                    """;
-            }
+            var deletedPredicate = DatabaseRuntime.IsPostgreSql() ? "is_deleted = FALSE" : "is_deleted = 0";
+            var activePredicate = DatabaseRuntime.IsPostgreSql() ? "is_active = TRUE" : "is_active = 1";
+            cmd.CommandText = $"""
+                SELECT ledger_id, COALESCE(NULLIF(name_en, ''), name_ar, '')
+                FROM parties
+                WHERE company_id=$c AND kind=$kind AND code=$code AND {deletedPredicate} AND {activePredicate}
+                LIMIT 1;
+                """;
             Add(cmd, "$c", company);
+            Add(cmd, "$kind", customer ? "C" : "S");
             Add(cmd, "$code", code.Trim());
             using var reader = cmd.ExecuteReader();
             if (!reader.Read()) return null;
+            if (reader.IsDBNull(0)) return null;
             return (Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
                     Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? "");
         }

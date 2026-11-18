@@ -53,6 +53,29 @@ public sealed class Cheque
     public DateOnly? BounceDate { get; set; }
     public string? BounceReason { get; set; }
     public decimal FeesAmount { get; set; }
+    /// <summary>The cheque's OWN issue journal entry (Step 8: one entry
+    /// per cheque, linked via migration-060 source columns with
+    /// source_doc_type CHQ-ISSUE and source_doc_id = this cheque's id).
+    /// Pre-Step-8 rows may still carry a batch entry shared with sibling
+    /// cheques; ChequeService detects that sharing before reversing.</summary>
     public Guid? JournalEntryId { get; set; }
     public string? Notes { get; set; }
+    /// <summary>The batch voucher number shown in ChqWin (migration 063;
+    /// CHQ-05: previously displayed but never persisted).</summary>
+    public string? BatchDocNo { get; set; }
+    /// <summary>Stop-payment note recorded when an outgoing cheque is
+    /// cancelled (migration 063).</summary>
+    public string? CancelReason { get; set; }
+}
+
+/// <summary>Journal source-document types for cheque postings (migration
+/// 060 link columns). One live entry per (type, cheque id).</summary>
+public static class ChequeSourceTypes
+{
+    public const string Issue = "CHQ-ISSUE";
+    public const string Clear = "CHQ-CLEAR";
+    public const string Bounce = "CHQ-BOUNCE";
+    public const string Endorse = "CHQ-ENDORSE";
+    public const string Cancel = "CHQ-CANCEL";
+    public const string Fee = "CHQ-FEE";
 }

@@ -68,6 +68,36 @@
     "message": "Document '{0}' already has a posted general-ledger entry and cannot be posted twice.",
     "hint": "Reverse the existing journal entry before posting the document again."
   },
+  "ACC-5013": {
+    "code": "ACC-5013",
+    "name": "DocumentTotalMismatch",
+    "message": "Document '{0}' stored total {1} does not match the total recomputed from its lines ({2}); posting uses the stored total.",
+    "hint": "Check the document's header discount and extra charges; correct the stored document if the stored total is wrong."
+  },
+  "ACC-5014": {
+    "code": "ACC-5014",
+    "name": "DocumentKindNotPostable",
+    "message": "Document kind '{0}' cannot be posted through the invoice posting path.",
+    "hint": "Use the dedicated window for this document kind (stock transfers and stock counts post through the warehouse engines), or check the document kind."
+  },
+  "ACC-5015": {
+    "code": "ACC-5015",
+    "name": "ExchangeRateMissing",
+    "message": "No exchange rate is available for currency '{0}': the document carries no rate and no master rate exists on or before {1}.",
+    "hint": "Enter a rate on the document, or maintain a dated rate for the currency in the currency card, then post again."
+  },
+  "ACC-5016": {
+    "code": "ACC-5016",
+    "name": "BankStatementNotReconciled",
+    "message": "The bank statement cannot be closed while its difference is not zero.",
+    "hint": "Match the remaining statement lines to book lines (or post the missing book entries) until the difference is zero."
+  },
+  "ACC-5017": {
+    "code": "ACC-5017",
+    "name": "StatementLineAlreadyMatched",
+    "message": "The statement line is already matched to a book line.",
+    "hint": "Unmatch the statement line before matching it to a different book line."
+  },
   "AUTH-2001": {
     "code": "AUTH-2001",
     "name": "InvalidCredentials",
@@ -196,6 +226,60 @@
     "name": "InventoryOperationFailed",
     "message": "The inventory operation could not be completed."
   },
+  "INV-6002": {
+    "code": "INV-6002",
+    "name": "StockValuationFailed",
+    "message": "Stock valuation failed for material '{0}'.",
+    "hint": "Check the material cost method and stock balance, then post again."
+  },
+  "INV-6003": {
+    "code": "INV-6003",
+    "name": "RecalculationFailed",
+    "message": "The Recalculate Costs job failed.",
+    "hint": "See the job record in stock_revaluation_jobs for the error, fix the cause, and run the job again."
+  },
+  "INV-6004": {
+    "code": "INV-6004",
+    "name": "RecalculationClosedPeriod",
+    "message": "Recalculate Costs cannot rewrite movements in a closed fiscal period (from date '{0}').",
+    "hint": "Choose a from date inside an open fiscal period."
+  },
+  "INV-6005": {
+    "code": "INV-6005",
+    "name": "BatchSerialRequired",
+    "message": "Batch or serial data is required to post material '{0}'.",
+    "hint": "Capture the batch (with expiry) or the serial numbers for the line, then post again."
+  },
+  "INV-6006": {
+    "code": "INV-6006",
+    "name": "BatchStockInsufficient",
+    "message": "Batch '{0}' does not hold enough stock for material '{1}'.",
+    "hint": "Choose another batch or reduce the quantity, then post again."
+  },
+  "INV-6007": {
+    "code": "INV-6007",
+    "name": "SerialUnavailable",
+    "message": "Serial '{0}' is not available in stock for material '{1}'.",
+    "hint": "Only serials in stock at the document warehouse can be issued; check the serial status and warehouse."
+  },
+  "INV-6008": {
+    "code": "INV-6008",
+    "name": "SerialDuplicate",
+    "message": "Serial '{0}' already exists for material '{1}'.",
+    "hint": "Serial numbers are unique per material; correct the number and post again."
+  },
+  "INV-6009": {
+    "code": "INV-6009",
+    "name": "BatchAllocationMismatch",
+    "message": "The batch/serial allocations do not match the movement quantity for material '{0}'.",
+    "hint": "Allocate exactly the line quantity across batches, or exactly one serial per unit."
+  },
+  "INV-6010": {
+    "code": "INV-6010",
+    "name": "BatchExpired",
+    "message": "Batch '{0}' for material '{1}' expired on {2} and cannot be issued.",
+    "hint": "Choose a batch that has not expired, or post with the expired-batch override permission (the override is recorded)."
+  },
   "LIC-8001": {
     "code": "LIC-8001",
     "name": "LicenseCheckFailed",
@@ -272,5 +356,263 @@
     "code": "UI-7004",
     "name": "NavigationFailed",
     "message": "Navigation could not be completed."
+  },
+  "DATA-4004": {
+    "code": "DATA-4004",
+    "name": "ImportPermissionDenied",
+    "message": "You do not have permission to import data (DATA.IMPORT).",
+    "hint": "Ask an administrator to grant the DATA.IMPORT permission."
+  },
+  "DATA-4005": {
+    "code": "DATA-4005",
+    "name": "BalanceImportNotAllowed",
+    "message": "Balances and stock quantities cannot be imported from a spreadsheet. They change only through posted stock movements.",
+    "hint": "Post an opening-stock or adjustment document instead, or restore a .stei package."
+  },
+  "DATA-4006": {
+    "code": "DATA-4006",
+    "name": "DocumentImportRequiresPackage",
+    "message": "Documents and journal entries cannot be imported from a spreadsheet. Exchange them as an encrypted .stei dataset package.",
+    "hint": "Export the dataset as a .stei package and import that package instead."
+  },
+  "ACC-5018": {
+    "code": "ACC-5018",
+    "name": "BudgetExceededAnnual",
+    "message": "Posting this entry would exceed the annual budget '{0}'. Limit: {1}; actual before this entry: {2}; this entry: {3}; overage: {4}.",
+    "hint": "Reduce the entry, move the amount to another account or cost center, or raise the budget line in the Budgets window."
+  },
+  "ACC-5019": {
+    "code": "ACC-5019",
+    "name": "BudgetExceededMonthly",
+    "message": "Posting this entry would exceed the accumulated monthly budget '{0}' through this month. Limit: {1}; actual before this entry: {2}; this entry: {3}; overage: {4}.",
+    "hint": "Reduce the entry, post it in a later month, or adjust the monthly distribution in the Budgets window."
+  },
+  "INV-6011": {
+    "code": "INV-6011",
+    "name": "QualityGateBlocked",
+    "message": "A rejected quality inspection blocks document '{1}' for material '{0}'.",
+    "hint": "Resolve the failed inspection's alert (root cause and corrective action) or complete a new inspection before posting."
+  },
+  "INV-6012": {
+    "code": "INV-6012",
+    "name": "QualityQuarantinedSale",
+    "message": "Material '{0}' is in quarantine awaiting quality inspection and cannot be sold in Stop gate mode (document '{1}').",
+    "hint": "Complete the pending quality inspection to release the stock, or switch the company QC gate mode to Warn."
+  },
+  "INV-6013": {
+    "code": "INV-6013",
+    "name": "QualityOutgoingInspectionRequired",
+    "message": "Material '{0}' requires an accepted outgoing quality inspection before document '{1}' can be delivered (Stop gate mode).",
+    "hint": "Create and complete an outgoing inspection for the document, or switch the company QC gate mode to Warn."
+  },
+  "INV-6014": {
+    "code": "INV-6014",
+    "name": "QualityInspectionStateInvalid",
+    "message": "The quality inspection for document '{0}' cannot change state from '{1}'.",
+    "hint": "Refresh the inspection list; only a Draft inspection can be edited or completed."
+  },
+  "INV-6015": {
+    "code": "INV-6015",
+    "name": "QualityInspectionQtyMismatch",
+    "message": "Accepted and rejected quantities for document '{0}' do not add up to the inspected quantity, or the disposition is missing.",
+    "hint": "Enter accepted and rejected quantities that sum to the inspected quantity and choose a disposition for the rejected part."
+  },
+  "INV-6016": {
+    "code": "INV-6016",
+    "name": "QualityTemplateInvalid",
+    "message": "Quality template '{0}' is invalid.",
+    "hint": "Check the template lines: numeric parameters need a band, value parameters need an accepted value, and a parameter may appear only once."
+  },
+  "CRM-9001": {
+    "code": "CRM-9001",
+    "name": "CrmLeadAlreadyConverted",
+    "message": "Lead '{0}' has already been converted.",
+    "hint": "A converted lead keeps its party and opportunity links; create a new lead or work with the converted party."
+  },
+  "CRM-9002": {
+    "code": "CRM-9002",
+    "name": "CrmLeadStateInvalid",
+    "message": "Lead '{0}' cannot change state as requested.",
+    "hint": "Unqualified leads cannot be converted, and a lead becomes Converted only through conversion."
+  },
+  "CRM-9003": {
+    "code": "CRM-9003",
+    "name": "CrmOpportunityStageInvalid",
+    "message": "Opportunity stage '{0}' is invalid.",
+    "hint": "Configure the pipeline stages for the company, then retry the move."
+  },
+  "CRM-9004": {
+    "code": "CRM-9004",
+    "name": "CrmQuotationPartyMissing",
+    "message": "A quotation cannot be created for '{0}'.",
+    "hint": "Link the opportunity to a customer party (or convert its lead) and make sure the company record resolves before creating a quotation."
+  },
+  "CRM-9005": {
+    "code": "CRM-9005",
+    "name": "CrmActivityTargetInvalid",
+    "message": "Activity '{0}' must target exactly one of a lead, an opportunity or a party.",
+    "hint": "Pick exactly one target for the activity."
+  },
+  "CRM-9006": {
+    "code": "CRM-9006",
+    "name": "CrmLostReasonRequired",
+    "message": "A lost reason is required when opportunity '{0}' is marked lost.",
+    "hint": "Choose a lost reason (configure reasons in the pipeline window if the list is empty)."
+  },
+  "MFG-1001": {
+    "code": "MFG-1001",
+    "name": "BomCycleDetected",
+    "message": "Bill of materials for '{0}' references itself directly or through other bills of materials; the cycle must be removed before the BOM can be used.",
+    "hint": "Open the BOM and remove the component that (transitively) produces the finished material itself."
+  },
+  "MFG-1002": {
+    "code": "MFG-1002",
+    "name": "BomNotFoundOrInactive",
+    "message": "Bill of materials '{0}' was not found or is not active for this company.",
+    "hint": "Activate the BOM version in the BOM window or choose another version."
+  },
+  "MFG-1003": {
+    "code": "MFG-1003",
+    "name": "MfgOrderStageInvalid",
+    "message": "Manufacturing order '{0}' cannot perform this action in status '{1}'.",
+    "hint": "Follow the staged workflow: Draft, Confirmed, In Process, Completed, Closed (or Cancelled)."
+  },
+  "MFG-1004": {
+    "code": "MFG-1004",
+    "name": "MfgIssueExceedsRequired",
+    "message": "Issuing {1} of '{0}' would exceed the required quantity on the order.",
+    "hint": "Issue at most the remaining required quantity, or edit the draft order lines first."
+  },
+  "MFG-1005": {
+    "code": "MFG-1005",
+    "name": "MfgFinishExceedsPlanned",
+    "message": "Receiving {1} of '{0}' would exceed the planned production quantity.",
+    "hint": "Receive at most the remaining planned quantity."
+  },
+  "MFG-1006": {
+    "code": "MFG-1006",
+    "name": "PlanningConversionInvalid",
+    "message": "Planning row '{0}' cannot be converted in status '{1}'.",
+    "hint": "Only Planned orders and Suggested purchase rows can be converted, exactly once."
+  },
+  "HR-1001": {
+    "code": "HR-1001",
+    "name": "HrEmployeeCodeDuplicate",
+    "message": "Employee code '{0}' already exists for this company.",
+    "hint": "Choose a different employee code."
+  },
+  "HR-1002": {
+    "code": "HR-1002",
+    "name": "HrEmployeeInvalid",
+    "message": "Employee '{0}' has invalid data and cannot be saved.",
+    "hint": "Check the employee card fields and save again."
+  },
+  "HR-1003": {
+    "code": "HR-1003",
+    "name": "HrLeaveBalanceInsufficient",
+    "message": "Leave balance is insufficient for '{0}': the requested days exceed the available balance.",
+    "hint": "Allocate more days, reduce the request, or approve with the balance-override permission."
+  },
+  "HR-1004": {
+    "code": "HR-1004",
+    "name": "HrLeaveStateInvalid",
+    "message": "The leave application cannot change state from '{0}'.",
+    "hint": "Refresh the list and check the application status."
+  },
+  "HR-1005": {
+    "code": "HR-1005",
+    "name": "HrPayrollAlreadyPosted",
+    "message": "Payroll run '{0}' is already posted.",
+    "hint": "Reverse the run before regenerating or editing it."
+  },
+  "HR-1006": {
+    "code": "HR-1006",
+    "name": "HrPayrollStateInvalid",
+    "message": "Payroll run '{0}' is not in a state that allows this operation.",
+    "hint": "Refresh the run list and check the run status."
+  },
+  "HR-1007": {
+    "code": "HR-1007",
+    "name": "HrSalaryStructureInvalid",
+    "message": "Salary structure '{0}' is invalid.",
+    "hint": "Check the structure lines, components and accounts."
+  },
+  "HR-1008": {
+    "code": "HR-1008",
+    "name": "HrMasterInUse",
+    "message": "This record is still referenced by other data and cannot be deleted.",
+    "hint": "Remove the references first, or deactivate the record instead."
+  },
+  "HR-1009": {
+    "code": "HR-1009",
+    "name": "HrEmployeeNotPayable",
+    "message": "Employee '{0}' is terminated and cannot receive a salary assignment or payroll.",
+    "hint": "Re-activate the employee first if this is a correction."
+  },
+  "HR-1010": {
+    "code": "HR-1010",
+    "name": "HrMasterCodeDuplicate",
+    "message": "Code '{0}' already exists for this company.",
+    "hint": "Choose a different code."
+  },
+  "POS-1001": {
+    "code": "POS-1001",
+    "name": "PosNoOpenSession",
+    "message": "No POS session is open for this sale.",
+    "hint": "Open a session on the terminal, or enable session-less selling in POS settings with the bypass permission."
+  },
+  "POS-1002": {
+    "code": "POS-1002",
+    "name": "PosSessionAlreadyOpen",
+    "message": "Terminal '{0}' already has an open session.",
+    "hint": "Close the open session before opening another on the same terminal."
+  },
+  "POS-1003": {
+    "code": "POS-1003",
+    "name": "PosSessionStateInvalid",
+    "message": "The POS session state does not allow this operation.",
+    "hint": "Check the session is open (for closing, counted cash is required and cannot be negative)."
+  },
+  "POS-1004": {
+    "code": "POS-1004",
+    "name": "PosTenderMismatch",
+    "message": "The tenders do not settle the bill exactly.",
+    "hint": "Adjust cash, card and on-account amounts so the applied tenders equal the bill total; over-tendered cash is change."
+  },
+  "POS-1005": {
+    "code": "POS-1005",
+    "name": "PosTenderInvalid",
+    "message": "A tender is invalid.",
+    "hint": "Check tender types and amounts: card cannot over-tender, on-account needs a named customer, amounts cannot be negative."
+  },
+  "POS-1006": {
+    "code": "POS-1006",
+    "name": "PosReturnExceedsSold",
+    "message": "The return quantity exceeds what the original bill still has returnable.",
+    "hint": "Reduce the return quantity to the sold minus already-returned quantity."
+  },
+  "POS-1007": {
+    "code": "POS-1007",
+    "name": "PosReturnOriginalInvalid",
+    "message": "The original POS bill for this return is invalid or was not found.",
+    "hint": "Load a posted POS bill of the current company before returning against it."
+  },
+  "POS-1008": {
+    "code": "POS-1008",
+    "name": "PosHeldBillNotFound",
+    "message": "The held bill was not found.",
+    "hint": "Refresh the held bills list and pick the bill again."
+  },
+  "POS-1009": {
+    "code": "POS-1009",
+    "name": "PosHeldBillStateInvalid",
+    "message": "The held bill is not in a state that allows this operation.",
+    "hint": "Only a bill still in Held state can be recalled or cancelled."
+  },
+  "POS-1010": {
+    "code": "POS-1010",
+    "name": "PosSessionlessNotAllowed",
+    "message": "Session-less selling is enabled but this user may not bypass sessions.",
+    "hint": "Ask an administrator for the POS.SESSION.BYPASS permission, or open a session."
   }
 }

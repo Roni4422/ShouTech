@@ -115,8 +115,15 @@ public static class RptNav
             case "Accounts.PaymentVoucher":
             case "Vouchers.PaymentTitle":
                 OpenPaymentVoucher(owner); return true;
+            // Step 8 (CHQ-01): incoming and outgoing cheques are
+            // DIFFERENT documents with inverse GL. The outgoing key
+            // must open the outgoing window — before this fix both
+            // keys opened an incoming window and issuing a cheque
+            // posted Dr Box / Cr Party (the exact inverse).
             case "Bonds.ReceiptCheque":
+                OpenIncomingChequeVoucher(owner); return true;
             case "Bonds.PaymentCheque":
+                OpenOutgoingChequeVoucher(owner); return true;
             case "Accounts.ChequeVoucher":
             case "Vouchers.ChequeTitle":
                 OpenChequeVoucher(owner); return true;
@@ -144,6 +151,11 @@ public static class RptNav
             case "Assets.Assets":
                 OpenAssets(owner); return true;
             case "Manufacturing.ManufacturingModels":
+                // MFG-6 FIX: the ribbon's BOM entry opens the BOM master
+                // (BomWin), not a blank production order.
+                OpenBom(owner); return true;
+            case "Manufacturing.Planning":
+                OpenPlanning(owner); return true;
             case "Manufacturing.ManufacturingProcess":
             case "MfgOrder.Title":
                 OpenMfgOrder(owner); return true;
@@ -208,7 +220,14 @@ public static class RptNav
     public static void OpenJournalVoucher(Window? owner = null) => Show(new JrnWin(), owner);
     public static void OpenReceiptVoucher(Window? owner = null) => Show(new CshWin(CshKind.Receipt), owner);
     public static void OpenPaymentVoucher(Window? owner = null) => Show(new CshWin(CshKind.Payment), owner);
-    public static void OpenChequeVoucher(Window? owner = null) => Show(new ChqWin(), owner);
+    public static void OpenChequeVoucher(Window? owner = null) => OpenIncomingChequeVoucher(owner);
+    public static void OpenIncomingChequeVoucher(Window? owner = null) => Show(new ChqWin(ChqKind.Incoming), owner);
+    public static void OpenOutgoingChequeVoucher(Window? owner = null) => Show(new ChqWin(ChqKind.Outgoing), owner);
+
+    // Step 8's kind-aware ShowCheque dedupe is retired: Step 11
+    // generalized its (type, kind) rule into WindowActivator, which
+    // Show() below now applies to EVERY window this router opens —
+    // cheques keep exactly the Step-8 behaviour through ChqWin.ModeKey.
 
     public static void OpenCustCard(Window? owner = null) => Show(new CstCard(), owner);
     public static void OpenCostCenterCard(Window? owner = null) => Show(new CcCard(), owner);
@@ -217,6 +236,15 @@ public static class RptNav
     public static void OpenSalesRepCard(Window? owner = null) => Show(new RepCard(), owner);
 
     public static void OpenMfgOrder(Window? owner = null) => Show(new MfgWin(), owner);
+    public static void OpenBom(Window? owner = null) => Show(new BomWin(), owner);
+    public static void OpenPlanning(Window? owner = null) => Show(new MfgPlanWin(), owner);
+    public static void OpenHrEmployees(Window? owner = null) => Show(new HrEmployeeWin(), owner);
+    public static void OpenHrDepartments(Window? owner = null) => Show(new HrDeptWin(), owner);
+    public static void OpenHrDesignations(Window? owner = null) => Show(new HrDesigWin(), owner);
+    public static void OpenHrAttendance(Window? owner = null) => Show(new HrAttendanceWin(), owner);
+    public static void OpenHrLeave(Window? owner = null) => Show(new HrLeaveWin(), owner);
+    public static void OpenHrStructures(Window? owner = null) => Show(new HrStructureWin(), owner);
+    public static void OpenHrPayroll(Window? owner = null) => Show(new HrPayrollWin(), owner);
     public static void OpenSalesOrder(Window? owner = null) => Show(new OrdWin(OrdKind.Sales), owner);
     public static void OpenPurchaseOrder(Window? owner = null) => Show(new OrdWin(OrdKind.Purchase), owner);
     public static void OpenBarcodeTool(Window? owner = null) => Show(new BarWin(), owner);
@@ -230,26 +258,10 @@ public static class RptNav
     public static void OpenItemProfitability(Window? owner = null) => Show(new ItemProfitWin(), owner);
     public static void OpenStockAdjustment(Window? owner = null) => Show(new StkAdjRptWin(), owner);
 
-    private static void Show(Window win, Window? owner)
-    {
-        try
-        {
-            foreach (Window w in System.Windows.Application.Current.Windows)
-            {
-                if (w.GetType() == win.GetType() && w.IsVisible)
-                {
-                    w.Activate();
-                    if (w.WindowState == WindowState.Minimized)
-                        w.WindowState = WindowState.Normal;
-                    return;
-                }
-            }
-            win.Owner = owner ?? System.Windows.Application.Current?.MainWindow;
-        }
-        catch (Exception exL248)
-        {
-            AppHost.Errors.Report(ErrorCodes.NavigationFailed, exL248, "RptNav.Show");
-        }
-        win.Show();
-    }
+    /// <summary>Step 11: all activation goes through the ONE central
+    /// policy (WindowActivator — same type AND same mode reactivates;
+    /// a different mode opens a second instance). The type-only dedupe
+    /// that used to live here was the router mode-stickiness defect
+    /// (sweep S-2).</summary>
+    private static void Show(Window win, Window? owner) => WindowActivator.Show(win, owner);
 }

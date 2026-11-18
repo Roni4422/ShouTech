@@ -23,6 +23,11 @@ public sealed class ItemProfitWin : RptBase
             new() { Key = "Revenue", HeaderTextKey = "Reports.Col.Subtotal", Type = RptColType.Money, Width = 110, Format = "N2" },
             new() { Key = "Tax", HeaderTextKey = "Reports.Col.Tax", Type = RptColType.Money, Width = 90, Format = "N2" },
             new() { Key = "Total", HeaderTextKey = "Reports.Col.Total", Type = RptColType.Money, Width = 110, Format = "N2" },
+            // Step 6: the profitability columns this report's name
+            // promises — cost from the valuation engine's movements.
+            new() { Key = "Cost", HeaderTextKey = "Reports.Col.Cost", Type = RptColType.Money, Width = 110, Format = "N2" },
+            new() { Key = "Profit", HeaderTextKey = "Reports.Col.Profit", Type = RptColType.Money, Width = 110, Format = "N2" },
+            new() { Key = "MarginPct", HeaderTextKey = "Reports.Col.MarginPct", Type = RptColType.Percent, Width = 90, Format = "P1" },
         },
         Filters = new RptFlt[]
         {
@@ -44,7 +49,12 @@ public sealed class ItemProfitWin : RptBase
             ["Revenue"] = Dec(r.GetValueOrDefault("Revenue")),
             ["Tax"] = Dec(r.GetValueOrDefault("Tax")),
             ["Total"] = Dec(r.GetValueOrDefault("Total")),
+            ["Cost"] = Dec(r.GetValueOrDefault("Cost")),
+            ["Profit"] = Dec(r.GetValueOrDefault("Profit")),
+            ["MarginPct"] = Dec(r.GetValueOrDefault("MarginPct")),
         }).ToList();
+        var totalRevenue = rows.Sum(x => Dec(x["Revenue"]));
+        var totalProfit = rows.Sum(x => Dec(x["Profit"]));
         return new RptData
         {
             Columns = BuildDefinition().Columns,
@@ -53,9 +63,12 @@ public sealed class ItemProfitWin : RptBase
             {
                 ["MaterialName"] = T("Reports.Totals"),
                 ["QtySold"] = rows.Sum(x => Dec(x["QtySold"])),
-                ["Revenue"] = rows.Sum(x => Dec(x["Revenue"])),
+                ["Revenue"] = totalRevenue,
                 ["Tax"] = rows.Sum(x => Dec(x["Tax"])),
                 ["Total"] = rows.Sum(x => Dec(x["Total"])),
+                ["Cost"] = rows.Sum(x => Dec(x["Cost"])),
+                ["Profit"] = totalProfit,
+                ["MarginPct"] = totalRevenue == 0 ? 0m : totalProfit / totalRevenue,
             }
         };
     }

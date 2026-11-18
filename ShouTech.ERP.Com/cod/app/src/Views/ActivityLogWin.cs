@@ -17,6 +17,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class ActivityLogWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Olive";
     private readonly OperationsService? _service;
     private readonly List<SecurityAuditRow> _security = new();
     private readonly List<JournalAuditRow> _journal = new();
@@ -39,8 +40,8 @@ public sealed class ActivityLogWin : BaseWin
         _service = AppHost.Operations;
         Width = 1120;
         Height = 640;
-        MinWidth = 900;
-        MinHeight = 500;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

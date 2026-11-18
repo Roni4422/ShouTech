@@ -2,6 +2,7 @@
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Npgsql;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
 
@@ -162,8 +163,10 @@ public sealed class OperationsRepository : IOperationsRepository
               ON m.company_id = @company AND m.journal_line_key = CAST(l.journal_entry_line_id AS TEXT)
             WHERE CAST(j.company_id AS TEXT) = @companyGuid AND j.status = 1 AND CAST(l.account_id AS TEXT) IN ({inList})
             ORDER BY j.entry_date, l.line_number
-            LIMIT {ListLimit}
             """;
+        // No row cap (BNK-03: the old LIMIT 1000 silently truncated the
+        // book side, so every total — and any difference computed from
+        // it — was wrong for accounts with more posted lines).
         await using var command = CreateCommand(connection, null, sql);
         Add(command, "@company", companyId.Trim());
         Add(command, "@companyGuid", chartCompany);
@@ -262,6 +265,354 @@ public sealed class OperationsRepository : IOperationsRepository
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    // ------------------------------------------------------------ Bank statements (063)
+
+    public async Task<Guid> SaveBankStatementAsync(string companyId, BankStatement statement, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        ArgumentNullException.ThrowIfNull(statement);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using (var update = CreateCommand(connection, transaction, """
+                UPDATE bank_statements SET account_code = @code, statement_date = @sdate, statement_ref = @sref,
+                    period_from = @from, period_to = @to, opening_balance = @opening, closing_balance = @closing,
+                    status = @status, updated_by = @user, updated_at = CURRENT_TIMESTAMP
+                WHERE company_id = @company AND id = @id AND is_deleted = 0
+                """))
+            {
+                BindStatement(update, companyId, statement, userId);
+                if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) == 1)
+                {
+                    await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                    return statement.Id;
+                }
+            }
+            await using var insert = CreateCommand(connection, transaction, """
+                INSERT INTO bank_statements
+                    (id, company_id, account_code, statement_date, statement_ref, period_from, period_to,
+                     opening_balance, closing_balance, status, created_by)
+                VALUES (@id, @company, @code, @sdate, @sref, @from, @to, @opening, @closing, @status, @user)
+                """);
+            BindStatement(insert, companyId, statement, userId);
+            await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return statement.Id;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private void BindStatement(DbCommand command, string companyId, BankStatement statement, string userId)
+    {
+        Add(command, "@id", FormatGuid(statement.Id));
+        Add(command, "@company", companyId.Trim());
+        Add(command, "@code", statement.AccountCode.Trim());
+        Add(command, "@sdate", statement.StatementDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        Add(command, "@sref", (object?)NullIfBlank(statement.StatementRef) ?? DBNull.Value);
+        Add(command, "@from", (object?)statement.PeriodFrom?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? DBNull.Value);
+        Add(command, "@to", (object?)statement.PeriodTo?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? DBNull.Value);
+        Add(command, "@opening", statement.OpeningBalance);
+        Add(command, "@closing", statement.ClosingBalance);
+        Add(command, "@status", string.IsNullOrWhiteSpace(statement.Status) ? BankStatementStatuses.Open : statement.Status);
+        Add(command, "@user", userId);
+    }
+
+    public async Task<IReadOnlyList<BankStatement>> GetBankStatementsAsync(string companyId, string accountCode, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var cmd = CreateCommand(connection, null, """
+            SELECT id, account_code, statement_date, statement_ref, period_from, period_to, opening_balance, closing_balance, status
+            FROM bank_statements WHERE company_id = @company AND account_code = @code AND is_deleted = 0
+            ORDER BY statement_date DESC, created_at DESC
+            """);
+        Add(cmd, "@company", companyId.Trim());
+        Add(cmd, "@code", accountCode.Trim());
+        var result = new List<BankStatement>();
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            result.Add(ReadStatement(reader));
+        return result;
+    }
+
+    public async Task<BankStatement?> GetBankStatementAsync(string companyId, Guid statementId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var cmd = CreateCommand(connection, null, """
+            SELECT id, account_code, statement_date, statement_ref, period_from, period_to, opening_balance, closing_balance, status
+            FROM bank_statements WHERE company_id = @company AND id = @id AND is_deleted = 0
+            """);
+        Add(cmd, "@company", companyId.Trim());
+        Add(cmd, "@id", FormatGuid(statementId));
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        return await reader.ReadAsync(cancellationToken).ConfigureAwait(false) ? ReadStatement(reader) : null;
+    }
+
+    private static BankStatement ReadStatement(DbDataReader reader) => new()
+    {
+        Id = ReadGuid(reader, 0),
+        AccountCode = ReadString(reader, 1) ?? string.Empty,
+        StatementDate = ReadDate(reader, 2) ?? DateOnly.MinValue,
+        StatementRef = ReadString(reader, 3),
+        PeriodFrom = ReadDate(reader, 4),
+        PeriodTo = ReadDate(reader, 5),
+        OpeningBalance = ReadDecimal(reader, 6),
+        ClosingBalance = ReadDecimal(reader, 7),
+        Status = ReadString(reader, 8) ?? BankStatementStatuses.Open
+    };
+
+    public async Task<Guid> AddBankStatementLineAsync(string companyId, BankStatementLine line, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        ArgumentNullException.ThrowIfNull(line);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await EnsureStatementOpenAsync(connection, transaction, companyId, line.StatementId, cancellationToken).ConfigureAwait(false);
+            await using var cmd = CreateCommand(connection, transaction, """
+                INSERT INTO bank_statement_lines
+                    (id, statement_id, company_id, account_code, line_date, reference, description, amount, matched_journal_line_key, created_by)
+                VALUES (@id, @statement, @company, @code, @date, @ref, @desc, @amount, NULL, @user)
+                """);
+            Add(cmd, "@id", FormatGuid(line.Id));
+            Add(cmd, "@statement", FormatGuid(line.StatementId));
+            Add(cmd, "@company", companyId.Trim());
+            Add(cmd, "@code", line.AccountCode.Trim());
+            Add(cmd, "@date", line.LineDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            Add(cmd, "@ref", (object?)NullIfBlank(line.Reference) ?? DBNull.Value);
+            Add(cmd, "@desc", (object?)NullIfBlank(line.Description) ?? DBNull.Value);
+            Add(cmd, "@amount", line.Amount);
+            Add(cmd, "@user", userId);
+            await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return line.Id;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    public async Task<IReadOnlyList<BankStatementLine>> GetBankStatementLinesAsync(string companyId, Guid statementId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var cmd = CreateCommand(connection, null, """
+            SELECT id, statement_id, account_code, line_date, reference, description, amount, matched_journal_line_key
+            FROM bank_statement_lines WHERE company_id = @company AND statement_id = @statement AND is_deleted = 0
+            ORDER BY line_date, created_at
+            """);
+        Add(cmd, "@company", companyId.Trim());
+        Add(cmd, "@statement", FormatGuid(statementId));
+        var result = new List<BankStatementLine>();
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            result.Add(new BankStatementLine
+            {
+                Id = ReadGuid(reader, 0),
+                StatementId = ReadGuid(reader, 1),
+                AccountCode = ReadString(reader, 2) ?? string.Empty,
+                LineDate = ReadDate(reader, 3) ?? DateOnly.MinValue,
+                Reference = ReadString(reader, 4),
+                Description = ReadString(reader, 5),
+                Amount = ReadDecimal(reader, 6),
+                MatchedJournalLineKey = ReadString(reader, 7)
+            });
+        }
+        return result;
+    }
+
+    public async Task RemoveBankStatementLineAsync(string companyId, Guid lineId, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var cmd = CreateCommand(connection, null, """
+            UPDATE bank_statement_lines SET is_deleted = 1, updated_by = @user, updated_at = CURRENT_TIMESTAMP
+            WHERE company_id = @company AND id = @id AND is_deleted = 0 AND matched_journal_line_key IS NULL
+            """);
+        Add(cmd, "@company", companyId.Trim());
+        Add(cmd, "@id", FormatGuid(lineId));
+        Add(cmd, "@user", userId);
+        if (await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+            throw new InvalidOperationException("Statement line was not found, already removed, or is matched (unmatch it first).");
+    }
+
+    public async Task MatchBankLineAsync(string companyId, Guid statementLineId, BankReconciliationMark mark, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        ArgumentNullException.ThrowIfNull(mark);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            // The statement line must exist, belong to an OPEN statement,
+            // and be currently unmatched.
+            Guid statementId;
+            string? existingMatch;
+            await using (var check = CreateCommand(connection, transaction, """
+                SELECT CAST(statement_id AS TEXT), matched_journal_line_key FROM bank_statement_lines
+                WHERE company_id = @company AND id = @id AND is_deleted = 0
+                """))
+            {
+                Add(check, "@company", companyId.Trim());
+                Add(check, "@id", FormatGuid(statementLineId));
+                await using var reader = await check.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    throw new InvalidOperationException("Statement line was not found for this company.");
+                statementId = ReadGuid(reader, 0);
+                existingMatch = ReadString(reader, 1);
+            }
+            if (!string.IsNullOrWhiteSpace(existingMatch))
+                throw new AppError(ErrorCodes.StatementLineAlreadyMatched,
+                    "The statement line is already matched to a book line; unmatch it first.", statementLineId.ToString("D"));
+            await EnsureStatementOpenAsync(connection, transaction, companyId, statementId, cancellationToken).ConfigureAwait(false);
+
+            await using (var upsert = CreateCommand(connection, transaction, """
+                INSERT INTO bank_reconciliation_marks
+                    (id, company_id, journal_entry_id, journal_line_key, account_code, statement_date, statement_ref, cleared_amount, is_cleared, statement_id, statement_line_id, created_by)
+                VALUES (@id, @company, @entry, @key, @code, @sdate, @sref, @amount, 1, @statement, @sline, @user)
+                ON CONFLICT (company_id, journal_line_key) DO UPDATE SET
+                    statement_date = EXCLUDED.statement_date,
+                    statement_ref = EXCLUDED.statement_ref,
+                    cleared_amount = EXCLUDED.cleared_amount,
+                    is_cleared = 1,
+                    statement_id = EXCLUDED.statement_id,
+                    statement_line_id = EXCLUDED.statement_line_id,
+                    updated_by = EXCLUDED.created_by,
+                    updated_at = CURRENT_TIMESTAMP
+                """))
+            {
+                Add(upsert, "@id", FormatGuid(mark.Id));
+                Add(upsert, "@company", companyId.Trim());
+                Add(upsert, "@entry", mark.JournalEntryId);
+                Add(upsert, "@key", mark.JournalLineKey);
+                Add(upsert, "@code", mark.AccountCode.Trim());
+                Add(upsert, "@sdate", mark.StatementDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                Add(upsert, "@sref", (object?)NullIfBlank(mark.StatementRef) ?? DBNull.Value);
+                Add(upsert, "@amount", mark.ClearedAmount);
+                Add(upsert, "@statement", FormatGuid(statementId));
+                Add(upsert, "@sline", FormatGuid(statementLineId));
+                Add(upsert, "@user", userId);
+                await upsert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            await using var link = CreateCommand(connection, transaction, """
+                UPDATE bank_statement_lines SET matched_journal_line_key = @key, updated_by = @user, updated_at = CURRENT_TIMESTAMP
+                WHERE company_id = @company AND id = @id AND matched_journal_line_key IS NULL AND is_deleted = 0
+                """);
+            Add(link, "@key", mark.JournalLineKey);
+            Add(link, "@user", userId);
+            Add(link, "@company", companyId.Trim());
+            Add(link, "@id", FormatGuid(statementLineId));
+            if (await link.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+                throw new InvalidOperationException("Statement line changed while matching; refresh and retry.");
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    public async Task UnmatchBankLineAsync(string companyId, Guid statementLineId, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            string? matchedKey;
+            Guid statementId;
+            await using (var check = CreateCommand(connection, transaction, """
+                SELECT CAST(statement_id AS TEXT), matched_journal_line_key FROM bank_statement_lines
+                WHERE company_id = @company AND id = @id AND is_deleted = 0
+                """))
+            {
+                Add(check, "@company", companyId.Trim());
+                Add(check, "@id", FormatGuid(statementLineId));
+                await using var reader = await check.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    throw new InvalidOperationException("Statement line was not found for this company.");
+                statementId = ReadGuid(reader, 0);
+                matchedKey = ReadString(reader, 1);
+            }
+            if (string.IsNullOrWhiteSpace(matchedKey))
+                throw new InvalidOperationException("Statement line is not matched.");
+            await EnsureStatementOpenAsync(connection, transaction, companyId, statementId, cancellationToken).ConfigureAwait(false);
+
+            await using (var del = CreateCommand(connection, transaction,
+                "DELETE FROM bank_reconciliation_marks WHERE company_id = @company AND journal_line_key = @key AND statement_line_id = @sline"))
+            {
+                Add(del, "@company", companyId.Trim());
+                Add(del, "@key", matchedKey);
+                Add(del, "@sline", FormatGuid(statementLineId));
+                await del.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            await using var unlink = CreateCommand(connection, transaction, """
+                UPDATE bank_statement_lines SET matched_journal_line_key = NULL, updated_by = @user, updated_at = CURRENT_TIMESTAMP
+                WHERE company_id = @company AND id = @id AND is_deleted = 0
+                """);
+            Add(unlink, "@user", userId);
+            Add(unlink, "@company", companyId.Trim());
+            Add(unlink, "@id", FormatGuid(statementLineId));
+            if (await unlink.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+                throw new InvalidOperationException("Statement line changed while unmatching; refresh and retry.");
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    public async Task CloseBankStatementAsync(string companyId, Guid statementId, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var cmd = CreateCommand(connection, null, """
+            UPDATE bank_statements SET status = 'Closed', updated_by = @user, updated_at = CURRENT_TIMESTAMP
+            WHERE company_id = @company AND id = @id AND status = 'Open' AND is_deleted = 0
+            """);
+        Add(cmd, "@company", companyId.Trim());
+        Add(cmd, "@id", FormatGuid(statementId));
+        Add(cmd, "@user", userId);
+        if (await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+            throw new InvalidOperationException("Statement was not found or is already closed.");
+    }
+
+    private async Task EnsureStatementOpenAsync(DbConnection connection, DbTransaction transaction, string companyId, Guid statementId, CancellationToken ct)
+    {
+        await using var cmd = CreateCommand(connection, transaction,
+            "SELECT status FROM bank_statements WHERE company_id = @company AND id = @id AND is_deleted = 0");
+        Add(cmd, "@company", companyId.Trim());
+        Add(cmd, "@id", FormatGuid(statementId));
+        var status = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        if (status is null or DBNull)
+            throw new InvalidOperationException("Bank statement was not found for this company.");
+        if (!string.Equals(Convert.ToString(status, CultureInfo.InvariantCulture), BankStatementStatuses.Open, StringComparison.Ordinal))
+            throw new InvalidOperationException("Bank statement is closed; its lines can no longer change.");
     }
 
     // ------------------------------------------------------------ POS closing

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -24,6 +24,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class InstallmentsWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Quartz";
     private readonly DefinitionService? _service;
     private readonly List<InstallmentPlan> _plans = new();
     private readonly List<InstallmentScheduleRow> _schedule = new();
@@ -62,8 +63,8 @@ public sealed class InstallmentsWin : BaseWin
         _service = AppHost.Definitions;
         Width = 1180;
         Height = 760;
-        MinWidth = 980;
-        MinHeight = 620;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

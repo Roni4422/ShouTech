@@ -21,6 +21,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class RolloverWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Cedar";
     private readonly OperationsService? _service;
     private readonly List<FiscalYearRow> _years = new();
     private readonly List<(TextBlock Label, string Key)> _labels = new();
@@ -39,8 +40,8 @@ public sealed class RolloverWin : BaseWin
         _service = AppHost.Operations;
         Width = 920;
         Height = 560;
-        MinWidth = 760;
-        MinHeight = 440;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

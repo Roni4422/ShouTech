@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
@@ -17,8 +17,9 @@ namespace ShouTech.App.Views;
 /// Company recycle bin for soft-deleted master data.
 /// Restore returns rows to working sets; permanent delete is irreversible.
 /// </summary>
-public partial class BinWin : Window
+public partial class BinWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Bronze";
     private bool _busy;
 
     // CA1863: cache CompositeFormat instances for repeatedly used format strings.
@@ -28,19 +29,20 @@ public partial class BinWin : Window
     public BinWin()
     {
         InitializeComponent();
-        Win11Chrome.Apply(this);
+        // Step 12: BinWin derives from BaseWin like every other window,
+        // so the central policy reaches it — Win11 chrome, shell context
+        // (language/direction/company/theme), geometry persistence and
+        // the work-area clamp are all applied by the base class. The old
+        // hand-rolled Win11Chrome.Apply + LangDirSv calls are gone: they
+        // were the local copies of exactly what BaseWin does centrally.
         ApplyLanguage();
         Loaded += OnLoaded;
-        try
-        {
-            LangDirSv.ApplyToWindow(this);
-        }
-        catch (Exception exL37)
-        {
-            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL37, "BinWin.xaml.BinWin");
-            // Direction helpers must not block the window.
-        }
     }
+
+    /// <summary>BaseWin relocalization hook: the base class calls this
+    /// on load and again on every live language switch, so the recycle
+    /// bin now follows the shell language like every other window.</summary>
+    protected override void ApplyLocalizedText() => ApplyLanguage();
 
     /// <summary>
     /// Formats a localized pattern using a cached CompositeFormat
@@ -60,9 +62,9 @@ public partial class BinWin : Window
 
     private void ApplyLanguage()
     {
-        // Direction is applied centrally (LangDirSv.ApplyToWindow in the
-        // constructor + the App Loaded class handler + live-switch sweep);
-        // this method only refreshes texts.
+        // Direction is applied centrally by BaseWin (ShellContext via
+        // the base Loaded path + the App Loaded class handler + the
+        // live-switch sweep); this method only refreshes texts.
         Title = Loc.Get("RecycleBin.Title", "Recycle Bin");
         TitleText.Text = Title;
         HintText.Text = Loc.Get("RecycleBin.Description",

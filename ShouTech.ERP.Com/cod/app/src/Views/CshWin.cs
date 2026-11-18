@@ -34,16 +34,24 @@ public enum CshKind
 /// drafts cannot be deleted (the journal engine has no draft delete) — the
 /// Delete button stays disabled with an honest explanation in the status bar.
 /// </summary>
-public sealed class CshWin : BaseWin
+public sealed class CshWin : BaseWin, IWindowMode
 {
     protected override string? ScheduleTintName => "Teal";
 
     private readonly CshKind _kind;
 
+    /// <summary>The voucher kind this window was opened with (Step 11:
+    /// the router's mode identity — Receipt and Payment are different
+    /// documents and must never reactivate each other).</summary>
+    public CshKind Kind => _kind;
+    public string ModeKey => _kind.ToString();
+
     private readonly TextBox _txtDocNo = new();
     private readonly DatePicker _dtDate = new() { SelectedDate = DateTime.Today };
     private readonly TextBox _txtBox = new();
     private readonly TextBox _txtParty = new();
+    private readonly TextBox _txtPartyCode = new();
+    private readonly ComboBox _cbPartyKind = new();
     private readonly TextBox _txtAmount = new() { Text = "0.00" };
     private readonly TextBox _txtCur = new() { Text = UsrPref.Load().CurrencyCode };
     private readonly TextBox _txtRate = new() { Text = "1.00" };
@@ -55,6 +63,7 @@ public sealed class CshWin : BaseWin
     private readonly Button _btnLoad = new();
     private readonly Button _btnSave = new();
     private readonly Button _btnPost = new();
+    private readonly Button _btnReverse = new();
     private readonly Button _btnDelete = new();
     private readonly Button _btnPrint = new();
     private readonly Button _btnAddLine = new();
@@ -74,8 +83,8 @@ public sealed class CshWin : BaseWin
         _kind = kind;
         Width = 920;
         Height = 580;
-        MinWidth = 760;
-        MinHeight = 440;
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
         BuildUi();
@@ -102,6 +111,7 @@ public sealed class CshWin : BaseWin
         StyleButton(_btnLoad, "Vouchers.Load");
         StyleButton(_btnSave, "Common.Save");
         StyleButton(_btnPost, "Vouchers.Post");
+        StyleButton(_btnReverse, "Vouchers.Reverse");
         StyleButton(_btnDelete, "Common.Delete");
         StyleButton(_btnPrint, "Invoice.Print");
         StyleButton(_btnAddLine, "Invoice.AddLine");
@@ -112,6 +122,7 @@ public sealed class CshWin : BaseWin
         _btnLoad.Click += async (_, _) => await LoadVoucherAsync();
         _btnSave.Click += async (_, _) => await SaveVoucherAsync();
         _btnPost.Click += async (_, _) => await PostVoucherAsync();
+        _btnReverse.Click += async (_, _) => await ReverseVoucherAsync();
         _btnPrint.Click += (_, _) => PrintVoucher();
         _btnAddLine.Click += (_, _) =>
         {
@@ -131,7 +142,7 @@ public sealed class CshWin : BaseWin
         };
         _txtAmount.TextChanged += (_, _) => RefreshCalculations();
 
-        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnDelete, _btnPrint, _btnAddLine, _btnRemoveLine })
+        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnReverse, _btnDelete, _btnPrint, _btnAddLine, _btnRemoveLine })
             toolbar.Children.Add(b);
 
         var actionBar = new Border
@@ -185,6 +196,14 @@ public sealed class CshWin : BaseWin
         AddFormField(headerForm, 1, 3, "Vouchers.RefNo", _txtRefNo);
         AddFormField(headerForm, 2, 0, "Vouchers.CostCenter", _txtCc);
         AddFormField(headerForm, 2, 1, "Vouchers.Memo", _txtMemo, spanPairs: 3);
+        // Step 4: the party is a real lookup against the canonical party
+        // master (code + kind), not free text — a resolved party makes the
+        // voucher settle party_ledger at posting (see PartyLedgerSvc).
+        _cbPartyKind.Items.Add(new ComboBoxItem { Tag = "C" });
+        _cbPartyKind.Items.Add(new ComboBoxItem { Tag = "S" });
+        _cbPartyKind.SelectedIndex = _kind == CshKind.Receipt ? 0 : 1;
+        AddFormField(headerForm, 3, 0, "Vouchers.PartyCode", _txtPartyCode);
+        AddFormField(headerForm, 3, 1, "Vouchers.PartyKind", _cbPartyKind);
         Grid.SetRow(headerForm, 0);
         body.Children.Add(headerForm);
 
@@ -228,6 +247,9 @@ public sealed class CshWin : BaseWin
         _txtDocNo.IsReadOnly = false;
         _dtDate.SelectedDate = DateTime.Today;
         _txtParty.Text = string.Empty;
+        _txtPartyCode.Text = string.Empty;
+        _cbPartyKind.SelectedIndex = _kind == CshKind.Receipt ? 0 : 1;
+        _btnReverse.IsEnabled = false;
         _txtAmount.Text = "0.00";
         _txtRefNo.Text = string.Empty;
         _txtCc.Text = string.Empty;
@@ -246,6 +268,8 @@ public sealed class CshWin : BaseWin
         _dtDate.IsEnabled = !readOnly;
         _txtBox.IsReadOnly = readOnly;
         _txtParty.IsReadOnly = readOnly;
+        _txtPartyCode.IsReadOnly = readOnly;
+        _cbPartyKind.IsEnabled = !readOnly;
         _txtAmount.IsReadOnly = readOnly;
         _txtCur.IsReadOnly = readOnly;
         _txtRate.IsReadOnly = readOnly;
@@ -347,6 +371,22 @@ public sealed class CshWin : BaseWin
                 ? new JournalLineRequest(boxId, total, 0m, boxNote, _txtCc.Text.Trim())
                 : new JournalLineRequest(boxId, 0m, total, boxNote, _txtCc.Text.Trim()));
 
+            // Step 4: a party code, when given, must resolve against the
+            // canonical party master BEFORE anything is saved — an
+            // unresolved code blocks the voucher instead of silently
+            // posting a GL-only entry with a free-text name (B-03/L-7).
+            PartyLedgerSvc.VoucherPartyLink? partyLink = null;
+            if (!string.IsNullOrWhiteSpace(_txtPartyCode.Text))
+            {
+                var resolved = PartyLedgerSvc.ResolveParty(_txtPartyCode.Text.Trim(), PartyKind)
+                    ?? throw new InvalidOperationException($"{T("CashVoucher.PartyNotFound")}: {_txtPartyCode.Text.Trim()}");
+                partyLink = new PartyLedgerSvc.VoucherPartyLink(
+                    PartyKind, resolved.LedgerId, _txtPartyCode.Text.Trim(),
+                    _kind == CshKind.Receipt ? "RCV" : "PAY", _txtDocNo.Text.Trim(), total, currency);
+                if (string.IsNullOrWhiteSpace(_txtParty.Text))
+                    _txtParty.Text = resolved.Name;
+            }
+
             var description = string.IsNullOrWhiteSpace(_txtMemo.Text)
                 ? $"{(_kind == CshKind.Receipt ? T("Vouchers.ReceiptTitle") : T("Vouchers.PaymentTitle"))} — {_txtParty.Text.Trim()}"
                 : _txtMemo.Text.Trim();
@@ -355,6 +395,8 @@ public sealed class CshWin : BaseWin
                 referenceNumber: string.IsNullOrWhiteSpace(_txtRefNo.Text) ? null : _txtRefNo.Text.Trim(),
                 currencyCode: currency, exchangeRate: rate,
                 documentNumber: _txtDocNo.Text.Trim());
+            if (partyLink is not null)
+                PartyLedgerSvc.SaveVoucherLink(id, partyLink.DocKind, partyLink.DocNo, partyLink.Amount, currency, partyLink, actor);
             _currentJournalId = id;
             _btnSave.IsEnabled = false;
             SetReadOnly(true);
@@ -396,16 +438,58 @@ public sealed class CshWin : BaseWin
             if (string.IsNullOrWhiteSpace(CurrentUserId))
                 throw new InvalidOperationException(T("CashVoucher.NoUser"));
             if (!AskConfirm("Vouchers.ConfirmPost")) return;
-            await journal.PostAsync(_currentJournalId.Value, CurrentUserId);
+            var budgetWarnings = await journal.PostAsync(_currentJournalId.Value, CurrentUserId);
             _isPosted = true;
             _btnPost.IsEnabled = false;
+            _btnReverse.IsEnabled = true;
             SetReadOnly(true);
             RefreshCalculations();
-            MessageBox.Show(this, T("Vouchers.Posted"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            if (budgetWarnings.Count > 0)
+            {
+                // Phase B 055: Warn-mode budget overruns (see JrnWin).
+                var warningText = string.Join(Environment.NewLine, budgetWarnings.Select(w =>
+                    Tf("Budget.WarningLine", w.BudgetName, w.Horizon, w.Overage)));
+                MessageBox.Show(this, warningText, T("Budget.WarningTitle"),
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            else
+            {
+                MessageBox.Show(this, T("Vouchers.Posted"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            }
         }
         catch (Exception ex)
         {
             ReportFailure("Post", ex);
+        }
+    }
+
+    private async Task ReverseVoucherAsync()
+    {
+        if (!_currentJournalId.HasValue || !_isPosted) return;
+        if (!AppHost.Permissions.Has(PermCat.Vouchers.Post))
+        {
+            MessageBox.Show(this, T("CashVoucher.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        try
+        {
+            if (AppHost.Journal is not { } journal)
+                throw new InvalidOperationException(T("CashVoucher.ServiceUnavailable"));
+            if (string.IsNullOrWhiteSpace(CurrentUserId))
+                throw new InvalidOperationException(T("CashVoucher.NoUser"));
+            if (!AskConfirm("Vouchers.ConfirmReverse")) return;
+            // The shared reversal core mirrors the voucher's party_ledger
+            // settlement in the same transaction (migration 061 link), so
+            // the party balance restores with the GL.
+            await journal.ReverseAsync(_currentJournalId.Value, CurrentUserId);
+            _btnReverse.IsEnabled = false;
+            _btnPost.IsEnabled = false;
+            RefreshCalculations();
+            MessageBox.Show(this, T("Vouchers.Reversed"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            ReportFailure("Reverse", ex);
         }
     }
 
@@ -425,6 +509,13 @@ public sealed class CshWin : BaseWin
                 ?? throw new InvalidOperationException($"{T("CashVoucher.NotFound")}: {documentNumber}");
             _currentJournalId = snapshot.Id;
             _isPosted = snapshot.Status != JournalEntryStatus.Draft;
+            var link = PartyLedgerSvc.LoadVoucherLink(snapshot.Id);
+            if (link is not null)
+            {
+                _txtPartyCode.Text = link.PartyCode;
+                _cbPartyKind.SelectedIndex = link.PartyKind == "S" ? 1 : 0;
+            }
+            _btnReverse.IsEnabled = _isPosted && snapshot.Status == JournalEntryStatus.Posted;
             _dtDate.SelectedDate = snapshot.EntryDate.ToDateTime(TimeOnly.MinValue);
             _txtRefNo.Text = snapshot.ReferenceNumber ?? string.Empty;
             _txtCur.Text = snapshot.CurrencyCode;
@@ -630,9 +721,16 @@ public sealed class CshWin : BaseWin
             _grid.Columns[5].Header = T("Vouchers.RefNo");
             _grid.Columns[6].Header = T("Vouchers.Memo");
         }
+        if (_cbPartyKind.Items.Count == 2)
+        {
+            if (_cbPartyKind.Items[0] is ComboBoxItem customer) customer.Content = T("CustCard.Customer");
+            if (_cbPartyKind.Items[1] is ComboBoxItem supplier) supplier.Content = T("CustCard.Supplier");
+        }
         RefreshLocalizedContent(Content as DependencyObject);
         RefreshCalculations();
     }
+
+    private string PartyKind => _cbPartyKind.SelectedIndex == 1 ? "S" : "C";
 
     private static void RefreshLocalizedContent(DependencyObject? parent)
     {

@@ -24,4 +24,10 @@ public sealed record JournalEntryLineSnapshot(
     decimal Debit,
     decimal Credit,
     string? CostCenter,
-    string? Note);
+    string? Note,
+    // Step 7 (migration 062): base-currency counterparts of Debit/Credit
+    // at the line's effective exchange rate. Defaulted so pre-062 read
+    // paths and test doubles keep constructing snapshots unchanged.
+    decimal BaseDebit = 0m,
+    decimal BaseCredit = 0m,
+    decimal? ExchangeRate = null);

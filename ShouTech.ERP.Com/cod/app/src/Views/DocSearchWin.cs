@@ -1,12 +1,14 @@
-﻿using System;
+using System;
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using ShouTech.App.Reporting.Invoices;
 using ShouTech.App.Services;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
 
@@ -16,12 +18,16 @@ namespace ShouTech.App.Views;
 /// Commercial document search (RS-5/RS-6): one window serves invoice,
 /// quotation and order searches from the ribbon. Filters by kind, status,
 /// free text and date range over sales_documents / purchase_documents;
-/// Open loads the document into its owning window (InvoiceWin for
-/// invoices/quotations, OrdWin for orders). Quotations can be marked Lost
-/// here (real status write through OrderService).
+/// Open loads THE selected document into its owning window — the row's
+/// database id flows through (InvoiceWin(docId, kind) for
+/// invoices/quotations, OrdWin.LoadOrderAsync for orders); Step 9 closed
+/// the sweep defect (ORD-07 / I-8) where Open built a blank new
+/// InvoiceWin and discarded the id. Quotations can be marked Lost and
+/// converted to a sales order here (real writes through OrderService).
 /// </summary>
-public sealed class DocSearchWin : BaseWin
+public sealed class DocSearchWin : BaseWin, IWindowMode
 {
+    protected override string? ScheduleTintName => "Denim";
     public enum DocSearchMode
     {
         Invoices,
@@ -30,6 +36,12 @@ public sealed class DocSearchWin : BaseWin
     }
 
     private readonly DocSearchMode _mode;
+
+    /// <summary>The search mode this window was opened with (Step 11
+    /// router identity: Invoices / Quotations / Orders).</summary>
+    public DocSearchMode Mode => _mode;
+    public string ModeKey => _mode.ToString();
+
     private readonly ComboBox _cmbStatus = new();
     private readonly TextBox _txtSearch = new();
     private readonly DatePicker _dtFrom = new();
@@ -37,6 +49,7 @@ public sealed class DocSearchWin : BaseWin
     private readonly Button _btnSearch = new();
     private readonly Button _btnOpen = new();
     private readonly Button _btnSetLost = new();
+    private readonly Button _btnConvertOrder = new();
     private readonly Button _btnClose = new();
     private readonly DataGrid _grid = new();
     private readonly TextBlock _lblStatus = new();
@@ -48,8 +61,8 @@ public sealed class DocSearchWin : BaseWin
         _mode = mode;
         Width = 900;
         Height = 540;
-        MinWidth = 760;
-        MinHeight = 420;
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         BuildUi();
         ApplyLocalizedText();
@@ -64,14 +77,17 @@ public sealed class DocSearchWin : BaseWin
         StyleButton(_btnSearch, "Common.Search");
         StyleButton(_btnOpen, "DocSearch.Open");
         StyleButton(_btnSetLost, "DocSearch.SetLost");
+        StyleButton(_btnConvertOrder, "DocSearch.ConvertToOrder");
         StyleButton(_btnClose, "Common.Close");
         _btnSearch.Click += async (_, _) => await SearchAsync();
         _btnOpen.Click += (_, _) => OpenSelected();
         _btnSetLost.Click += async (_, _) => await SetLostAsync();
+        _btnConvertOrder.Click += async (_, _) => await ConvertToOrderAsync();
         _btnClose.Click += (_, _) => Close();
-        foreach (var b in new[] { _btnSearch, _btnOpen, _btnSetLost, _btnClose })
+        foreach (var b in new[] { _btnSearch, _btnOpen, _btnSetLost, _btnConvertOrder, _btnClose })
             toolbar.Children.Add(b);
         _btnSetLost.Visibility = _mode == DocSearchMode.Quotations ? Visibility.Visible : Visibility.Collapsed;
+        _btnConvertOrder.Visibility = _mode == DocSearchMode.Quotations ? Visibility.Visible : Visibility.Collapsed;
 
         var actionBar = new Border
         {
@@ -148,8 +164,11 @@ public sealed class DocSearchWin : BaseWin
             {
                 _companyId = await AppHost.JournalStore.ResolveCompanyIdAsync(CurrentCompanyCode);
             }
-            catch
+            catch (Exception ex)
             {
+                // Step 9 (sweep ORD-13 pattern): company resolution
+                // failures are reported centrally, never swallowed.
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "DocSearchWin.OnLoaded");
                 _companyId = Guid.Empty;
             }
         }
@@ -217,6 +236,7 @@ public sealed class DocSearchWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "DocSearchWin.Search");
             _lblStatus.Text = ex.Message;
         }
     }
@@ -224,24 +244,95 @@ public sealed class DocSearchWin : BaseWin
     private void OpenSelected()
     {
         if (_grid.SelectedItem is not DocRow row) return;
-        Window win;
-        if (row.DocKind is CommercialDocKinds.SalesOrder or CommercialDocKinds.PurchaseOrder)
+        try
         {
-            var ord = new OrdWin(row.DocKind == CommercialDocKinds.SalesOrder ? OrdKind.Sales : OrdKind.Purchase);
-            win = ord;
+            if (row.DocKind is CommercialDocKinds.SalesOrder or CommercialDocKinds.PurchaseOrder)
+            {
+                var ord = new OrdWin(row.DocKind == CommercialDocKinds.SalesOrder ? OrdKind.Sales : OrdKind.Purchase)
+                { Owner = this };
+                ord.Show();
+                _ = ord.LoadOrderAsync(row.DocId);
+                return;
+            }
+            // Step 9 (ORD-07 / I-8): the selected document's id flows
+            // into InvoiceWin's loading constructor — the window shows
+            // THAT document, loaded from the database. Kinds with no
+            // InvoiceWin surface (chain delivery/receipt notes) refuse
+            // honestly instead of falling through to a blank sales
+            // invoice, which is what the old switch did for every
+            // unmapped kind.
+            var invoiceKind = row.DocKind switch
+            {
+                CommercialDocKinds.SalesInvoice => (InvDocKind?)InvDocKind.SalesInvoice,
+                CommercialDocKinds.PurchaseInvoice => (InvDocKind?)InvDocKind.PurchaseInvoice,
+                CommercialDocKinds.SalesQuotation => (InvDocKind?)InvDocKind.Quotation,
+                "SRT" => (InvDocKind?)InvDocKind.SalesReturn,
+                "PRT" => (InvDocKind?)InvDocKind.PurchaseReturn,
+                _ => null
+            };
+            if (invoiceKind is null)
+            {
+                AppHost.Errors.Report(ErrorCodes.NavigationFailed,
+                    new InvalidOperationException($"Document kind '{row.DocKind}' cannot be opened from search."),
+                    "DocSearchWin.OpenSelected");
+                _lblStatus.Text = $"{T("DocSearch.OpenUnsupported")}: {row.DocNo}";
+                return;
+            }
+            var win = new InvoiceWin(row.DocId, invoiceKind.Value) { Owner = this };
+            if (win.LoadedDocumentId != row.DocId)
+            {
+                // Defensive: the loading constructor already throws
+                // when the document is missing, so this can only trip
+                // if a future load path regresses to a blank fallback.
+                win.Close();
+                AppHost.Errors.Report(ErrorCodes.NavigationFailed,
+                    new InvalidOperationException($"Document {row.DocId} did not load into the invoice window."),
+                    "DocSearchWin.OpenSelected");
+                _lblStatus.Text = $"{T("DocSearch.OpenUnsupported")}: {row.DocNo}";
+                return;
+            }
             win.Show();
-            _ = ord.LoadOrderAsync(row.DocId);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.NavigationFailed, ex, "DocSearchWin.OpenSelected");
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    /// <summary>
+    /// Step 9 (sweep DS-02): the quotation → sales-order link of the
+    /// chain, wired to the existing OrderService.ConvertQuotationToOrderAsync
+    /// (posted, unexpired quotations only; the created order is a DRAFT
+    /// the user posts from OrdWin). Before this, the service had no UI
+    /// caller anywhere and a quotation could never become an order.
+    /// </summary>
+    private async Task ConvertToOrderAsync()
+    {
+        if (_grid.SelectedItem is not DocRow row || AppHost.Orders is null) return;
+        if (!AppHost.Permissions.Has(PermCat.Sales.QuotationConvert))
+        {
+            MessageBox.Show(this, T("OrderDoc.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
-        var invoiceKind = row.DocKind switch
+        try
         {
-            CommercialDocKinds.SalesInvoice => InvDocKind.SalesInvoice,
-            CommercialDocKinds.PurchaseInvoice => InvDocKind.PurchaseInvoice,
-            CommercialDocKinds.SalesQuotation => InvDocKind.Quotation,
-            _ => InvDocKind.SalesInvoice
-        };
-        win = new InvoiceWin(invoiceKind);
-        win.Show();
+            var orderId = await AppHost.Orders.ConvertQuotationToOrderAsync(
+                row.DocId, DateOnly.FromDateTime(DateTime.Today), CurrentUserId);
+            _lblStatus.Text = $"{T("DocSearch.ConvertedToOrder")}: {orderId}";
+            await SearchAsync();
+        }
+        catch (AppError ex)
+        {
+            AppHost.Errors.Report(ex.Code, ex, "DocSearchWin.ConvertToOrder");
+            var info = AppHost.Errors.Resolve(ex.Code, ex.Args.ToArray());
+            MessageBox.Show(this, $"{info.Message} (Error {info.Code})", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "DocSearchWin.ConvertToOrder");
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private async Task SetLostAsync()
@@ -256,6 +347,7 @@ public sealed class DocSearchWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "DocSearchWin.SetLost");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }

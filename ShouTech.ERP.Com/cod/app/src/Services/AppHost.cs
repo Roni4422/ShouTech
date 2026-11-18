@@ -40,12 +40,19 @@ namespace ShouTech.App.Services
         public static IAuditService Audit { get; private set; } = null!;
         public static JournalService? Journal { get; private set; }
         public static JournalRepository? JournalStore { get; private set; }
+        public static BudgetService? Budgets { get; private set; }
+        public static QualityService? Quality { get; private set; }
+        public static CrmService? Crm { get; private set; }
+        public static HrService? Hr { get; private set; }
+        public static PosService? Pos { get; private set; }
         public static ProjectService? Projects { get; private set; }
         public static AssetService? Assets { get; private set; }
         public static ReconciliationService? Reconciliation { get; private set; }
         public static MasterCardService? MasterCards { get; private set; }
         public static ChequeService? Cheques { get; private set; }
         public static MfgOrderService? Manufacturing { get; private set; }
+        public static BomService? Boms { get; private set; }
+        public static PlanningService? Planning { get; private set; }
         public static OrderService? Orders { get; private set; }
         public static DefinitionService? Definitions { get; private set; }
         public static OperationsService? Operations { get; private set; }
@@ -93,12 +100,19 @@ namespace ShouTech.App.Services
             Permissions = new PermServ();
 
             Journal = CreateJournalService();
+            Budgets = CreatePhase3Service((provider, connection) => new BudgetService(new BudgetRepository(provider, connection)), "Budgets");
+            Quality = CreatePhase3Service((provider, connection) => new QualityService(new QualityRepository(provider, connection)), "Quality");
+            Crm = CreatePhase3Service((provider, connection) => new CrmService(new CrmRepository(provider, connection)), "CRM");
+            Hr = CreatePhase3Service((provider, connection) => new HrService(new HrRepository(provider, connection)), "HR");
+            Pos = CreatePhase3Service((provider, connection) => new PosService(new PosRepository(provider, connection)), "POS");
             Projects = CreatePhase3Service((provider, connection) => new ProjectService(new ProjectRepository(provider, connection)), "Projects");
             Assets = CreatePhase3Service((provider, connection) => new AssetService(new AssetRepository(provider, connection)), "Fixed Assets");
             Reconciliation = CreatePhase3Service((provider, connection) => new ReconciliationService(new ReconciliationRepository(provider, connection)), "Payment Reconciliation");
             MasterCards = CreatePhase3Service((provider, connection) => new MasterCardService(new MasterCardRepository(provider, connection)), "Master Cards");
             Cheques = CreatePhase3Service((provider, connection) => new ChequeService(new ChequeRepository(provider, connection), JournalStore), "Cheques");
             Manufacturing = CreatePhase3Service((provider, connection) => new MfgOrderService(new MfgOrderRepository(provider, connection)), "Manufacturing Orders");
+            Boms = CreatePhase3Service((provider, connection) => new BomService(new BomRepository(provider, connection)), "Bills of Materials");
+            Planning = CreatePhase3Service((provider, connection) => new PlanningService(new PlanningRepository(provider, connection)), "Manufacturing Planning");
             Orders = CreatePhase3Service((provider, connection) => new OrderService(new OrderDocumentRepository(provider, connection), new CommercialDocumentRepository(provider, connection)), "Orders");
             Definitions = CreatePhase3Service((provider, connection) => new DefinitionService(new DefinitionRepository(provider, connection)), "Definitions");
             Operations = CreatePhase3Service((provider, connection) => new OperationsService(new OperationsRepository(provider, connection)), "Operations");
@@ -168,9 +182,17 @@ namespace ShouTech.App.Services
             try
             {
                 Journal = CreateJournalService();
+                Budgets = CreatePhase3Service((provider, connection) => new BudgetService(new BudgetRepository(provider, connection)), "Budgets");
+                Quality = CreatePhase3Service((provider, connection) => new QualityService(new QualityRepository(provider, connection)), "Quality");
+                Crm = CreatePhase3Service((provider, connection) => new CrmService(new CrmRepository(provider, connection)), "CRM");
+            Hr = CreatePhase3Service((provider, connection) => new HrService(new HrRepository(provider, connection)), "HR");
+            Pos = CreatePhase3Service((provider, connection) => new PosService(new PosRepository(provider, connection)), "POS");
                 Projects = CreatePhase3Service((provider, connection) => new ProjectService(new ProjectRepository(provider, connection)), "Projects");
                 Assets = CreatePhase3Service((provider, connection) => new AssetService(new AssetRepository(provider, connection)), "Fixed Assets");
                 Reconciliation = CreatePhase3Service((provider, connection) => new ReconciliationService(new ReconciliationRepository(provider, connection)), "Payment Reconciliation");
+                Manufacturing = CreatePhase3Service((provider, connection) => new MfgOrderService(new MfgOrderRepository(provider, connection)), "Manufacturing Orders");
+                Boms = CreatePhase3Service((provider, connection) => new BomService(new BomRepository(provider, connection)), "Bills of Materials");
+                Planning = CreatePhase3Service((provider, connection) => new PlanningService(new PlanningRepository(provider, connection)), "Manufacturing Planning");
                 AccountingStructure = CreateAccountingStructureRepository();
                 DatabaseHealth = CreateDatabaseHealth();
 
@@ -330,12 +352,19 @@ namespace ShouTech.App.Services
         public static ISessionManager Session => AppHost.Session;
         public static IAuditService Audit => AppHost.Audit;
         public static JournalService? Journal => AppHost.Journal;
+        public static BudgetService? Budgets => AppHost.Budgets;
+        public static QualityService? Quality => AppHost.Quality;
+        public static CrmService? Crm => AppHost.Crm;
+        public static HrService? Hr => AppHost.Hr;
+        public static PosService? Pos => AppHost.Pos;
         public static ProjectService? Projects => AppHost.Projects;
         public static AssetService? Assets => AppHost.Assets;
         public static ReconciliationService? Reconciliation => AppHost.Reconciliation;
         public static MasterCardService? MasterCards => AppHost.MasterCards;
         public static ChequeService? Cheques => AppHost.Cheques;
         public static MfgOrderService? Manufacturing => AppHost.Manufacturing;
+        public static BomService? Boms => AppHost.Boms;
+        public static PlanningService? Planning => AppHost.Planning;
         public static OrderService? Orders => AppHost.Orders;
         public static DefinitionService? Definitions => AppHost.Definitions;
         public static OperationsService? Operations => AppHost.Operations;

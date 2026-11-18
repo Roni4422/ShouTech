@@ -270,7 +270,7 @@
     <System:Double x:Key="TableFontSize">12</System:Double>
     <System:Double x:Key="CompactFontSize">12</System:Double>
     <System:Double x:Key="WindowChromeFontSize">12</System:Double>
-    <FontFamily x:Key="ShellChromeFontFamily">Tahoma</FontFamily>
+    <FontFamily x:Key="ShellChromeFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
     <FontFamily x:Key="WindowChromeSymbolFontFamily">Segoe UI Symbol</FontFamily>
     <FontFamily x:Key="MonospaceFontFamily">Consolas</FontFamily>
 
@@ -538,6 +538,40 @@
     <SolidColorBrush x:Key="ScheduleTintSlateBrush" Color="#EBEFF4"/>
     <SolidColorBrush x:Key="ScheduleTintStoneBrush" Color="#F2EFE9"/>
     <SolidColorBrush x:Key="ScheduleTintSilverBrush" Color="#EFF2F0"/>
+    <!-- Step-13 extension: the original 16-token palette (Peach spare
+         included) could not give every schedule-bearing window the
+         audits named as tint-less a UNIQUE tint, so the palette grows
+         in the same lightness band and pastel register. -->
+    <SolidColorBrush x:Key="ScheduleTintCoralBrush" Color="#F9E3D8"/>
+    <SolidColorBrush x:Key="ScheduleTintBlushBrush" Color="#F9E3EC"/>
+    <SolidColorBrush x:Key="ScheduleTintPlumBrush" Color="#F3E2F2"/>
+    <SolidColorBrush x:Key="ScheduleTintVioletBrush" Color="#E3DCF7"/>
+    <SolidColorBrush x:Key="ScheduleTintIndigoBrush" Color="#DCE4F9"/>
+    <SolidColorBrush x:Key="ScheduleTintDenimBrush" Color="#DEEBF5"/>
+    <SolidColorBrush x:Key="ScheduleTintCyanBrush" Color="#D8EFEF"/>
+    <SolidColorBrush x:Key="ScheduleTintJadeBrush" Color="#DFF2E4"/>
+    <SolidColorBrush x:Key="ScheduleTintFernBrush" Color="#E4F0DC"/>
+    <SolidColorBrush x:Key="ScheduleTintSageBrush" Color="#E6F0E2"/>
+    <SolidColorBrush x:Key="ScheduleTintLimeBrush" Color="#EDF5D8"/>
+    <SolidColorBrush x:Key="ScheduleTintOliveBrush" Color="#F1F2DC"/>
+    <SolidColorBrush x:Key="ScheduleTintHoneyBrush" Color="#F8EDCB"/>
+    <SolidColorBrush x:Key="ScheduleTintBronzeBrush" Color="#EFE3D3"/>
+    <SolidColorBrush x:Key="ScheduleTintMauveBrush" Color="#F2E4EA"/>
+    <SolidColorBrush x:Key="ScheduleTintWheatBrush" Color="#F7EFDB"/>
+    <SolidColorBrush x:Key="ScheduleTintLagoonBrush" Color="#DDEEEA"/>
+    <SolidColorBrush x:Key="ScheduleTintOrchidBrush" Color="#F0E4F5"/>
+    <SolidColorBrush x:Key="ScheduleTintPeridotBrush" Color="#EAF2D2"/>
+    <SolidColorBrush x:Key="ScheduleTintTopazBrush" Color="#F9ECD4"/>
+    <SolidColorBrush x:Key="ScheduleTintQuartzBrush" Color="#F3E9E4"/>
+    <SolidColorBrush x:Key="ScheduleTintGarnetBrush" Color="#F5DDE1"/>
+    <SolidColorBrush x:Key="ScheduleTintCobaltBrush" Color="#DFE8F8"/>
+    <SolidColorBrush x:Key="ScheduleTintCedarBrush" Color="#EEE4D6"/>
+    <SolidColorBrush x:Key="ScheduleTintOnyxBrush" Color="#E7EAED"/>
+    <SolidColorBrush x:Key="ScheduleTintEmberBrush" Color="#F8E4D6"/>
+    <SolidColorBrush x:Key="ScheduleTintWillowBrush" Color="#E7F0DA"/>
+    <!-- Phase B 055 extension: BudgetWin claims Copper (the 43-token
+         palette was fully claimed after Step 13). -->
+    <SolidColorBrush x:Key="ScheduleTintCopperBrush" Color="#F7E8DC"/>
 
     <SolidColorBrush
         x:Key="TableHeaderSalesBrush"

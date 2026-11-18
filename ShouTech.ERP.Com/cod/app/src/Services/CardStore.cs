@@ -1,19 +1,22 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Npgsql;
 using ShouTech.App.Views;
+using ShouTech.Infrastructure;
 
 namespace ShouTech.App.Services;
 
 /// <summary>
-/// Persistence for the master-data card windows (CstCard, BnkCard, CurCard,
+/// Persistence for the master-data card windows (CurCard,
 /// RepCard) and the manufacturing order window (MfgWin), backed by the
-/// tables created in migration 050 (customers, suppliers, bank_accounts,
-/// currencies, currency_rates, sales_reps, sales_rep_targets,
-/// manufacturing_orders, manufacturing_order_lines).
+/// tables created in migration 050 (currencies, currency_rates,
+/// sales_reps, sales_rep_targets, manufacturing_orders,
+/// manufacturing_order_lines). Party cards live in the canonical
+/// parties store (migration 061, MasterCardRepository); bank cards
+/// live in the canonical banks store (migration 031, Step 8).
 ///
 /// Every write is parameterized and transactional: a card header and its
 /// child rows (currency rates, rep targets, manufacturing lines) are saved
@@ -28,16 +31,6 @@ public static class CardStore
     // Records (one per window field set — every UI field has a property)
     // ------------------------------------------------------------------
 
-    public sealed record PartyCard(
-        long Id, string Kind, string Code, string NameAr, string NameEn, string Group,
-        string TaxNumber, string CommercialReg, decimal CreditLimit, int CreditDays,
-        string PriceTier, string GlAccountCode, string Phone, string Mobile,
-        string Email, string Address);
-
-    public sealed record BankCardRec(
-        long Id, string Code, string Name, string Branch, string AccountNo,
-        string Iban, string CurrencyCode, string GlAccountCode);
-
     public sealed record MfgLineRec(
         int LineNo, long? MaterialId, string MaterialCode, string MaterialName,
         string UnitCode, decimal Quantity, decimal UnitCost);
@@ -48,287 +41,21 @@ public static class CardStore
         string UnitCode, long? WarehouseId, string WarehouseCode, decimal OverheadCost,
         decimal TotalCost, decimal UnitCost, string Status, IReadOnlyList<MfgLineRec> Lines);
 
-    // ------------------------------------------------------------------
-    // Parties (customers / suppliers) — CstCard
-    // ------------------------------------------------------------------
-
-    /// <summary>
-    /// Loads a party card by code. A code present in both tables yields
-    /// Kind="B" (both); customers win the field values in that case.
-    /// </summary>
-    public static PartyCard? LoadParty(string code)
-    {
-        if (string.IsNullOrWhiteSpace(code)) return null;
-        var cust = LoadPartyFrom("customers", "customer", "C", code.Trim());
-        var supp = LoadPartyFrom("suppliers", "supplier", "S", code.Trim());
-        if (cust is not null && supp is not null)
-            return cust with { Kind = "B" };
-        return cust ?? supp;
-    }
-
-    private static PartyCard? LoadPartyFrom(string table, string prefix, string kind, string code)
-    {
-        var cs = ConnectionString();
-        if (cs is null) return null;
-        using var connection = Open(cs);
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = $"""
-            SELECT {prefix}_id, {prefix}_code, {prefix}_name_ar, {prefix}_name_en,
-                   party_group, tax_number, commercial_reg, credit_limit, credit_days,
-                   price_tier, gl_account_code, phone, mobile, email, address
-            FROM {table}
-            WHERE company_id=$c AND {prefix}_code=$code AND is_deleted=0
-            LIMIT 1;
-            """;
-        Add(cmd, "$c", Company());
-        Add(cmd, "$code", code);
-        using var reader = cmd.ExecuteReader();
-        if (!reader.Read()) return null;
-        return new PartyCard(
-            GetLong(reader, 0), kind, GetText(reader, 1), GetText(reader, 2), GetText(reader, 3),
-            GetText(reader, 4), GetText(reader, 5), GetText(reader, 6), GetDec(reader, 7),
-            (int)GetDec(reader, 8), GetText(reader, 9), GetText(reader, 10), GetText(reader, 11),
-            GetText(reader, 12), GetText(reader, 13), GetText(reader, 14));
-    }
-
-    /// <summary>
-    /// Upserts the party into the table(s) selected by Kind ("C", "S", "B")
-    /// in one transaction. Returns the customers/suppliers id.
-    /// </summary>
-    public static long SaveParty(PartyCard card, string actor)
-    {
-        var cs = ConnectionString() ?? throw new InvalidOperationException("No database connection is configured.");
-        using var connection = Open(cs);
-        using var tx = connection.BeginTransaction();
-        long id = 0;
-        if (card.Kind is "C" or "B")
-            id = UpsertParty(connection, tx, "customers", "customer", card, actor);
-        if (card.Kind is "S" or "B")
-            id = UpsertParty(connection, tx, "suppliers", "supplier", card, actor);
-        tx.Commit();
-        return id;
-    }
-
-    private static long UpsertParty(DbConnection connection, DbTransaction tx,
-        string table, string prefix, PartyCard card, string actor)
-    {
-        long? existing = null;
-        using (var find = connection.CreateCommand())
-        {
-            find.Transaction = tx;
-            find.CommandText = $"SELECT {prefix}_id FROM {table} WHERE company_id=$c AND {prefix}_code=$code AND is_deleted=0 LIMIT 1;";
-            Add(find, "$c", Company());
-            Add(find, "$code", card.Code);
-            var found = find.ExecuteScalar();
-            if (found is not null and not DBNull) existing = Convert.ToInt64(found, CultureInfo.InvariantCulture);
-        }
-
-        using var cmd = connection.CreateCommand();
-        cmd.Transaction = tx;
-        if (existing.HasValue)
-        {
-            cmd.CommandText = $"""
-                UPDATE {table} SET
-                    {prefix}_name_ar=$nameAr, {prefix}_name_en=$nameEn, party_group=$grp,
-                    tax_number=$tax, commercial_reg=$reg, credit_limit=$climit, credit_days=$cdays,
-                    price_tier=$tier, gl_account_code=$gl, phone=$phone, mobile=$mobile,
-                    email=$email, address=$addr, updated_by=$actor, updated_at={Now()}
-                WHERE company_id=$c AND {prefix}_id=$id AND is_deleted=0;
-                """;
-            Add(cmd, "$id", existing.Value);
-        }
-        else
-        {
-            cmd.CommandText = $"""
-                INSERT INTO {table}
-                    (company_id, {prefix}_code, {prefix}_name_ar, {prefix}_name_en, party_group,
-                     tax_number, commercial_reg, credit_limit, credit_days, price_tier,
-                     gl_account_code, phone, mobile, email, address, created_by, updated_by)
-                VALUES
-                    ($c, $code, $nameAr, $nameEn, $grp, $tax, $reg, $climit, $cdays, $tier,
-                     $gl, $phone, $mobile, $email, $addr, $actor, $actor)
-                RETURNING {prefix}_id;
-                """;
-            Add(cmd, "$code", card.Code);
-        }
-        Add(cmd, "$c", Company());
-        Add(cmd, "$nameAr", card.NameAr);
-        Add(cmd, "$nameEn", card.NameEn);
-        Add(cmd, "$grp", card.Group);
-        Add(cmd, "$tax", card.TaxNumber);
-        Add(cmd, "$reg", card.CommercialReg);
-        Add(cmd, "$climit", card.CreditLimit);
-        Add(cmd, "$cdays", card.CreditDays);
-        Add(cmd, "$tier", card.PriceTier);
-        Add(cmd, "$gl", card.GlAccountCode);
-        Add(cmd, "$phone", card.Phone);
-        Add(cmd, "$mobile", card.Mobile);
-        Add(cmd, "$email", card.Email);
-        Add(cmd, "$addr", card.Address);
-        Add(cmd, "$actor", actor);
-
-        if (existing.HasValue)
-        {
-            cmd.ExecuteNonQuery();
-            return existing.Value;
-        }
-        return Convert.ToInt64(cmd.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
-    }
-
-    public static bool SoftDeleteParty(string code, string kind, string actor)
-    {
-        var cs = ConnectionString() ?? throw new InvalidOperationException("No database connection is configured.");
-        using var connection = Open(cs);
-        using var tx = connection.BeginTransaction();
-        var affected = 0;
-        if (kind is "C" or "B")
-            affected += SoftDelete(connection, tx, "customers", "customer_code", code, actor);
-        if (kind is "S" or "B")
-            affected += SoftDelete(connection, tx, "suppliers", "supplier_code", code, actor);
-        tx.Commit();
-        return affected > 0;
-    }
-
-    /// <summary>Total debit/credit for a party from the party ledger (CstCard metrics bar).</summary>
-    public static (decimal Debit, decimal Credit) PartyTotals(long partyId, string kind)
-    {
-        var cs = ConnectionString();
-        if (cs is null || partyId <= 0) return (0, 0);
-        var ledgerKind = kind == "S" ? "S" : "C";
-        using var connection = Open(cs);
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT COALESCE(SUM(debit), 0), COALESCE(SUM(credit), 0)
-            FROM party_ledger
-            WHERE company_id=$c AND party_kind=$k AND party_id=$id;
-            """;
-        Add(cmd, "$c", Company());
-        Add(cmd, "$k", ledgerKind);
-        Add(cmd, "$id", partyId);
-        using var reader = cmd.ExecuteReader();
-        return reader.Read() ? (GetDec(reader, 0), GetDec(reader, 1)) : (0, 0);
-    }
+    // Parties: the canonical party master is `parties` (migration 061),
+    // served by MasterCardRepository / MasterCardService. The pre-unification
+    // CardStore party methods wrote the legacy customers/suppliers tables and
+    // had no callers (sweep R-3); they were removed in Step 4 rather than
+    // dual-written.
 
     // ------------------------------------------------------------------
-    // Bank accounts — BnkCard
+    // Banks: the canonical bank-account store is `banks` (migration
+    // 031), served by MasterCardRepository / MasterCardService and used
+    // by BnkCard and BankRecWin. The pre-Step-8 CardStore bank path
+    // wrote the migration-050 `bank_accounts` table and had zero
+    // callers (sweep BNKC-01); it was removed in Step 8 rather than
+    // dual-written, and migration 063 copied any legacy rows into
+    // `banks`. Do not re-add a second bank store here.
     // ------------------------------------------------------------------
-
-    public static BankCardRec? LoadBank(string code)
-    {
-        if (string.IsNullOrWhiteSpace(code)) return null;
-        var cs = ConnectionString();
-        if (cs is null) return null;
-        using var connection = Open(cs);
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT bank_id, bank_code, bank_name, branch, account_no, iban, currency_code, gl_account_code
-            FROM bank_accounts
-            WHERE company_id=$c AND bank_code=$code AND is_deleted=0
-            LIMIT 1;
-            """;
-        Add(cmd, "$c", Company());
-        Add(cmd, "$code", code.Trim());
-        using var reader = cmd.ExecuteReader();
-        if (!reader.Read()) return null;
-        return new BankCardRec(GetLong(reader, 0), GetText(reader, 1), GetText(reader, 2),
-            GetText(reader, 3), GetText(reader, 4), GetText(reader, 5), GetText(reader, 6), GetText(reader, 7));
-    }
-
-    public static long SaveBank(BankCardRec rec, string actor)
-    {
-        var cs = ConnectionString() ?? throw new InvalidOperationException("No database connection is configured.");
-        using var connection = Open(cs);
-        using var tx = connection.BeginTransaction();
-        long? existing = FindId(connection, tx, "bank_accounts", "bank_id", "bank_code", rec.Code);
-        using var cmd = connection.CreateCommand();
-        cmd.Transaction = tx;
-        if (existing.HasValue)
-        {
-            cmd.CommandText = $"""
-                UPDATE bank_accounts SET bank_name=$name, branch=$branch, account_no=$acc,
-                    iban=$iban, currency_code=$cur, gl_account_code=$gl,
-                    updated_by=$actor, updated_at={Now()}
-                WHERE company_id=$c AND bank_id=$id AND is_deleted=0;
-                """;
-            Add(cmd, "$id", existing.Value);
-        }
-        else
-        {
-            cmd.CommandText = """
-                INSERT INTO bank_accounts
-                    (company_id, bank_code, bank_name, branch, account_no, iban, currency_code,
-                     gl_account_code, created_by, updated_by)
-                VALUES ($c, $code, $name, $branch, $acc, $iban, $cur, $gl, $actor, $actor)
-                RETURNING bank_id;
-                """;
-            Add(cmd, "$code", rec.Code);
-        }
-        Add(cmd, "$c", Company());
-        Add(cmd, "$name", rec.Name);
-        Add(cmd, "$branch", rec.Branch);
-        Add(cmd, "$acc", rec.AccountNo);
-        Add(cmd, "$iban", rec.Iban);
-        Add(cmd, "$cur", rec.CurrencyCode);
-        Add(cmd, "$gl", rec.GlAccountCode);
-        Add(cmd, "$actor", actor);
-        long id;
-        if (existing.HasValue) { cmd.ExecuteNonQuery(); id = existing.Value; }
-        else id = Convert.ToInt64(cmd.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
-        tx.Commit();
-        return id;
-    }
-
-    public static bool SoftDeleteBank(string code, string actor)
-    {
-        var cs = ConnectionString() ?? throw new InvalidOperationException("No database connection is configured.");
-        using var connection = Open(cs);
-        using var tx = connection.BeginTransaction();
-        var affected = SoftDelete(connection, tx, "bank_accounts", "bank_code", code, actor);
-        tx.Commit();
-        return affected > 0;
-    }
-
-    /// <summary>
-    /// Book balance of a bank card = posted journal movement on its linked
-    /// GL account in the canonical chart (chart_of_accounts, migration 059),
-    /// computed from journal_entry_lines — never from a stored balance
-    /// column (the legacy accounts.balance was never maintained, C-2).
-    /// </summary>
-    public static decimal BankBookBalance(string glAccountCode)
-    {
-        if (string.IsNullOrWhiteSpace(glAccountCode)) return 0;
-        var cs = ConnectionString();
-        if (cs is null) return 0;
-        try
-        {
-            using var connection = Open(cs);
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
-                SELECT COALESCE(SUM(m.debit - m.credit), 0)
-                FROM chart_of_accounts a
-                INNER JOIN companies co ON co.company_id = a.company_id
-                LEFT JOIN (
-                    SELECT l.account_id AS aid, l.debit AS debit, l.credit AS credit
-                    FROM journal_entry_lines l
-                    INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
-                    WHERE j.status = 1
-                ) m ON m.aid = a.account_id
-                WHERE co.company_code=$c AND a.account_code=$code AND a.is_deleted=0;
-                """;
-            Add(cmd, "$c", Company());
-            Add(cmd, "$code", glAccountCode.Trim());
-            using var reader = cmd.ExecuteReader();
-            if (!reader.Read()) return 0;
-            return GetDec(reader, 0);
-        }
-        catch (Exception ex)
-        {
-            // Error-reporting rule: no silent catches — a failed balance
-            // lookup reports centrally, then falls back to 0 for display.
-            AppHost.Logging?.LogError("CardStore", $"BankBookBalance failed | GL={glAccountCode}", ex);
-            return 0;
-        }
-    }
 
     // ------------------------------------------------------------------
     // Manufacturing orders — MfgWin
@@ -492,9 +219,9 @@ public static class CardStore
     /// <summary>
     /// Posts a saved draft order in ONE transaction: consumes the raw
     /// materials (qty_out) and receives the finished good (qty_in at the
-    /// computed unit cost) in material_stock_movements, updates
-    /// material_stock_balances with the same weighted-average rule as
-    /// StkPost, then flips the order to Posted.
+    /// computed unit cost) through the ONE StockValuationEngine
+    /// (Step 6, Phase B 053 — this class's private weighted-average copy
+    /// is gone), then flips the order to Posted.
     /// </summary>
     public static void PostOrder(long orderId, string actor)
     {
@@ -510,23 +237,53 @@ public static class CardStore
         var cs = ConnectionString() ?? throw new InvalidOperationException("No database connection is configured.");
         using var connection = Open(cs);
         using var tx = connection.BeginTransaction();
-        var date = order.OrderDate;
+        var dateText = order.OrderDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
 
+        // Unit equivalents (Step 11, sweep MFG-2): stock moves in BASE
+        // units, converted by the SAME StkPost.ToBaseUnits the invoice
+        // path uses — a line in a non-base unit moves qty × equivalent,
+        // and the finished receipt credits the base quantity at the
+        // total cost restated per base unit.
         foreach (var line in order.Lines)
         {
             if (line.MaterialId is null || line.Quantity <= 0) continue;
-            InsertMovement(connection, tx, order, line.MaterialId.Value, date,
-                "MFG-OUT", qtyIn: 0, qtyOut: line.Quantity, unitCost: line.UnitCost,
-                note: line.MaterialName);
-            ApplyBalance(connection, tx, order.WarehouseId.Value, line.MaterialId.Value,
-                qtyDelta: -line.Quantity, movementCost: line.UnitCost);
+            var (baseQty, _) = StkPost.ToBaseUnits(connection, tx, line.MaterialId.Value,
+                line.UnitCode, line.Quantity, line.UnitCost);
+            // Batch/serial (054): raw batches auto-allocate FEFO/FIFO;
+            // serials auto-pick (no capture UI on this path).
+            StockValuationEngine.Apply(connection, tx, provider,
+                new StockMovementRequest(Company(), order.WarehouseId.Value, line.MaterialId.Value,
+                    dateText, "MFG-OUT", order.OrderNo,
+                    QtyIn: 0m, QtyOut: baseQty, Note: line.MaterialName,
+                    AutoAllocateSerials: true));
         }
 
-        InsertMovement(connection, tx, order, order.FinishedMaterialId.Value, date,
-            "MFG-IN", qtyIn: order.Quantity, qtyOut: 0, unitCost: order.UnitCost,
-            note: order.FinishedMaterialName);
-        ApplyBalance(connection, tx, order.WarehouseId.Value, order.FinishedMaterialId.Value,
-            qtyDelta: order.Quantity, movementCost: order.UnitCost);
+        var (finishedBaseQty, finishedBaseCost) = StkPost.ToBaseUnits(connection, tx,
+            order.FinishedMaterialId.Value, order.UnitCode, order.Quantity, order.UnitCost);
+        // Batch/serial (054): finished batch named after the order;
+        // finished serials system-generated, mirroring MfgOrderRepository.
+        var finishedTracking = BatchSerialCapture.LoadTracking(connection, tx, provider,
+            Company(), order.FinishedMaterialId.Value);
+        IReadOnlyList<BatchAllocationRequest>? finishedBatches = null;
+        IReadOnlyList<SerialSelection>? finishedSerials = null;
+        if (finishedTracking.HasBatch)
+            finishedBatches = new[] { new BatchAllocationRequest(order.OrderNo, finishedBaseQty) };
+        if (finishedTracking.HasSerial)
+        {
+            if (finishedBaseQty != decimal.Truncate(finishedBaseQty))
+                throw new InvalidOperationException(
+                    "The finished material is serial-tracked: the produced quantity must be a whole number of units.");
+            finishedSerials = Enumerable.Range(1, (int)finishedBaseQty)
+                .Select(i => new SerialSelection($"{order.OrderNo}-{i}"))
+                .ToList();
+        }
+        StockValuationEngine.Apply(connection, tx, provider,
+            new StockMovementRequest(Company(), order.WarehouseId.Value, order.FinishedMaterialId.Value,
+                dateText, "MFG-IN", order.OrderNo,
+                QtyIn: finishedBaseQty, QtyOut: 0m, ReceiptUnitCost: finishedBaseCost,
+                Note: order.FinishedMaterialName,
+                BatchAllocations: finishedBatches, Serials: finishedSerials));
 
         using (var cmd = connection.CreateCommand())
         {
@@ -558,100 +315,6 @@ public static class CardStore
             if (value is not null and not DBNull) orderNo = Convert.ToString(value, CultureInfo.InvariantCulture);
         }
         return orderNo is null ? null : LoadOrder(orderNo);
-    }
-
-    private static void InsertMovement(DbConnection connection, DbTransaction tx, MfgOrderRec order,
-        long materialId, DateTime date, string type, decimal qtyIn, decimal qtyOut, decimal unitCost, string note)
-    {
-        using var cmd = connection.CreateCommand();
-        cmd.Transaction = tx;
-        cmd.CommandText = """
-            INSERT INTO material_stock_movements
-                (company_id, warehouse_id, material_id, movement_date, movement_type, document_no,
-                 qty_in, qty_out, unit_cost, note)
-            VALUES ($c, $w, $m, $d, $t, $doc, $qin, $qout, $cost, $note);
-            """;
-        Add(cmd, "$c", Company());
-        Add(cmd, "$w", order.WarehouseId!.Value);
-        Add(cmd, "$m", materialId);
-        Add(cmd, "$d", DatabaseRuntime.IsPostgreSql()
-            ? (object)DateTime.SpecifyKind(date.Date, DateTimeKind.Utc)
-            : date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-        Add(cmd, "$t", type);
-        Add(cmd, "$doc", order.OrderNo);
-        Add(cmd, "$qin", qtyIn);
-        Add(cmd, "$qout", qtyOut);
-        Add(cmd, "$cost", unitCost);
-        Add(cmd, "$note", note);
-        cmd.ExecuteNonQuery();
-    }
-
-    /// <summary>
-    /// Mirrors the StkPost balance rule: inbound quantity re-weights the
-    /// average cost; outbound quantity leaves the average unchanged.
-    /// </summary>
-    private static void ApplyBalance(DbConnection connection, DbTransaction tx,
-        long warehouseId, long materialId, decimal qtyDelta, decimal movementCost)
-    {
-        long? balanceId = null;
-        var available = 0m;
-        var average = 0m;
-        using (var cmd = connection.CreateCommand())
-        {
-            cmd.Transaction = tx;
-            cmd.CommandText = """
-                SELECT stock_balance_id, available_qty, average_cost
-                FROM material_stock_balances
-                WHERE company_id=$c AND warehouse_id=$w AND material_id=$m AND is_deleted=0
-                LIMIT 1;
-                """;
-            Add(cmd, "$c", Company());
-            Add(cmd, "$w", warehouseId);
-            Add(cmd, "$m", materialId);
-            using var reader = cmd.ExecuteReader();
-            if (reader.Read())
-            {
-                balanceId = GetLong(reader, 0);
-                available = GetDec(reader, 1);
-                average = GetDec(reader, 2);
-            }
-        }
-
-        var newQty = available + qtyDelta;
-        var newAverage = average;
-        if (qtyDelta > 0)
-        {
-            newAverage = newQty > 0
-                ? ((available * average) + (qtyDelta * movementCost)) / newQty
-                : movementCost;
-        }
-
-        using var up = connection.CreateCommand();
-        up.Transaction = tx;
-        if (balanceId.HasValue)
-        {
-            up.CommandText = $"""
-                UPDATE material_stock_balances
-                SET available_qty=$qty, average_cost=$avg, last_cost=$cost, last_updated={Now()}
-                WHERE stock_balance_id=$id;
-                """;
-            Add(up, "$id", balanceId.Value);
-        }
-        else
-        {
-            up.CommandText = """
-                INSERT INTO material_stock_balances
-                    (company_id, warehouse_id, material_id, available_qty, reserved_qty, average_cost, last_cost)
-                VALUES ($c, $w, $m, $qty, 0, $avg, $cost);
-                """;
-            Add(up, "$c", Company());
-            Add(up, "$w", warehouseId);
-            Add(up, "$m", materialId);
-        }
-        Add(up, "$qty", newQty);
-        Add(up, "$avg", newAverage);
-        Add(up, "$cost", movementCost);
-        up.ExecuteNonQuery();
     }
 
     /// <summary>Resolves a material code to (id, name) in the active company; null when unknown.</summary>
@@ -765,22 +428,6 @@ public static class CardStore
         Add(cmd, "$code", code);
         var value = cmd.ExecuteScalar();
         return value is null or DBNull ? null : Convert.ToInt64(value, CultureInfo.InvariantCulture);
-    }
-
-    private static int SoftDelete(DbConnection connection, DbTransaction tx,
-        string table, string codeColumn, string code, string actor)
-    {
-        using var cmd = connection.CreateCommand();
-        cmd.Transaction = tx;
-        cmd.CommandText = $"""
-            UPDATE {table} SET is_deleted=1, deleted_at={Now()}, deleted_by=$actor,
-                updated_by=$actor, updated_at={Now()}
-            WHERE company_id=$c AND {codeColumn}=$code AND is_deleted=0;
-            """;
-        Add(cmd, "$c", Company());
-        Add(cmd, "$code", code.Trim());
-        Add(cmd, "$actor", actor);
-        return cmd.ExecuteNonQuery();
     }
 
     private static string GetText(DbDataReader reader, int i)

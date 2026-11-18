@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -1167,8 +1167,8 @@ namespace ShouTech.App.Views
                 {
                     Width = 980,
                     Height = 560,
-                    MinWidth = 760,
-                    MinHeight = 420,
+                    MinWidth = 660,
+                    MinHeight = 360,
                     WindowStartupLocation = WindowStartupLocation.CenterOwner,
                     ResizeMode = ResizeMode.CanResize
                 };
@@ -1500,6 +1500,8 @@ namespace ShouTech.App.Views
 
             protected override string PrefKey => "StockCountWin";
 
+            protected override string? ScheduleTintName => "Sage";
+
             public StockCountDialog(Window? owner)
             {
                 Owner = owner ?? System.Windows.Application.Current?.MainWindow;
@@ -1695,6 +1697,8 @@ namespace ShouTech.App.Views
 
                 public sealed class MatMergeWin : BaseWin
                 {
+                    protected override string? ScheduleTintName => "Willow";
+
                     private const string ErrLoad = "INV-TRF-003";
                     private const string ErrPost = "INV-TRF-005";
 

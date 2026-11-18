@@ -72,8 +72,8 @@ public sealed class JrnWin : BaseWin
     {
         Width = 920;
         Height = 580;
-        MinWidth = 800;
-        MinHeight = 450;
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
         BuildUi();
@@ -546,13 +546,27 @@ public sealed class JrnWin : BaseWin
             if (ShouTech.App.Services.AppHost.Journal is not { } journal)
                 throw new InvalidOperationException("The journal posting service is not initialized.");
 
-            await journal.PostAsync(_currentJournalId.Value, actor);
+            var budgetWarnings = await journal.PostAsync(_currentJournalId.Value, actor);
             _journalPosted = true;
             _btnSave.IsEnabled = false;
             _btnPost.IsEnabled = false;
             _btnReverse.IsEnabled = true;
             SetVoucherReadOnly(true);
-            MessageBox.Show(this, T("Vouchers.EntryPosted"), T("Vouchers.Posted"), MessageBoxButton.OK, MessageBoxImage.Information);
+            if (budgetWarnings.Count > 0)
+            {
+                // Phase B 055: Warn-mode budget overruns post with the
+                // entry and are shown to the poster (the durable record
+                // is the budget_control_events row the guard wrote).
+                var warningText = string.Join(Environment.NewLine, budgetWarnings.Select(w =>
+                    Tf("Budget.WarningLine", w.BudgetName, w.Horizon, w.Overage)));
+                MessageBox.Show(this,
+                    T("Vouchers.EntryPosted") + Environment.NewLine + Environment.NewLine + warningText,
+                    T("Budget.WarningTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            else
+            {
+                MessageBox.Show(this, T("Vouchers.EntryPosted"), T("Vouchers.Posted"), MessageBoxButton.OK, MessageBoxImage.Information);
+            }
         }
         catch (Exception ex)
         {

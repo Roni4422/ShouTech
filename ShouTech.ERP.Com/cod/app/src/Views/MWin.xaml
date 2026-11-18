@@ -56,14 +56,6 @@
             </Style.Triggers>
         </Style>
 
-        <Style x:Key="RadioPanelVisibility" TargetType="StackPanel">
-            <Setter Property="Visibility" Value="Collapsed"/>
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Minimized">
-                    <Setter Property="Visibility" Value="Visible"/>
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
     </ribbon:RibbonWindow.Resources>
 
     <Border x:Name="RootBorder"
@@ -122,13 +114,6 @@
 								Background="{DynamicResource ChromeBackgroundBrush}"
 								Foreground="{DynamicResource ChromeForegroundBrush}"
 								Click="OnMaximizeClick"/>
-						<!-- Radio panel shown only when window is minimized -->
-						<StackPanel x:Name="RadioPanel" Orientation="Horizontal" Margin="5"
-									Style="{StaticResource RadioPanelVisibility}">
-							<RadioButton Content="Option 1"/>
-							<RadioButton Content="Option 2"/>
-							<RadioButton Content="Option 3"/>
-						</StackPanel>
 						<Button x:Name="CloseButton"
 								shell:WindowChrome.IsHitTestVisibleInChrome="True"
 								Style="{StaticResource WindowChromeCloseButtonStyle}"
@@ -150,7 +135,7 @@
                   ClipToBounds="True">
                 <Menu.Resources>
                     <Style TargetType="{x:Type MenuItem}">
-                        <Setter Property="FontFamily" Value="Tahoma"/>
+                        <Setter Property="FontFamily" Value="{DynamicResource ShellChromeFontFamily}"/>
                         <Setter Property="FontWeight" Value="SemiBold"/>
                         <Setter Property="FontSize" Value="{DynamicResource FontSize12}"/>
                         <Setter Property="Padding" Value="6,4"/>
@@ -184,6 +169,7 @@
                 <MenuItem x:Name="MenuCustomers" Header="Customers" Click="OnMenuCustomersClick"/>
                 <MenuItem x:Name="MenuSalesRep" Header="Sales Representative" Click="OnMenuSalesRepClick"/>
                 <MenuItem x:Name="MenuManufacturing" Header="Manufacturing" Click="OnMenuManufacturingClick"/>
+                <MenuItem x:Name="MenuHR" Header="HR" Click="OnMenuHRClick"/>
                 <MenuItem x:Name="MenuBanks" Header="Banks" Click="OnMenuBanksClick"/>
                 <MenuItem x:Name="MenuReports" Header="Reports" Click="OnMenuReportsClick"/>
                 <MenuItem x:Name="MenuTools" Header="Tools" Click="OnMenuToolsClick"/>
@@ -380,6 +366,8 @@
                 <ribbon:RibbonTab x:Name="TabPOS" Header="Point of Sale" Visibility="Collapsed">
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.POSSales" Header="Sales">
                         <ribbon:RibbonButton loc:LocProps.Key="POS.OpenCashier" Label="Open POS Cashier" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="POS.Sessions" Label="POS sessions" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="POS.ZReport" Label="Session Z report" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.POSAdministration" Header="Administration">
                         <ribbon:RibbonButton loc:LocProps.Key="POS.Points" Label="Points" Click="OnRibbonButtonClick"/>
@@ -426,6 +414,10 @@
                         <ribbon:RibbonButton loc:LocProps.Key="Customers.CustomerDue" Label="Customer due" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Customers.LinkPayments" Label="Link customer payments" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Customers.SearchDues" Label="Search dues" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="CRM.Leads" Label="CRM leads" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="CRM.Pipeline" Label="CRM pipeline" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="CRM.Opportunities" Label="CRM opportunities" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="CRM.Activities" Label="CRM activities" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.CustomersReports" Header="Reports">
                         <ribbon:RibbonButton loc:LocProps.Key="Customers.CustomerBalance" Label="Customer balances" Click="OnRibbonButtonClick"/>
@@ -460,6 +452,7 @@
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.ManufacturingAdministration" Header="Administration">
                         <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.ManufacturingModels" Label="Manufacturing templates" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.ManufacturingProcess" Label="Manufacturing operation" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.Planning" Label="Production planning" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.ManufacturingFeasibility" Label="Manufacturing capability" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.SearchManufacturing" Label="Search manufacturing" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
@@ -472,6 +465,28 @@
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.ManufacturingReports" Header="Reports">
                         <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.ManufacturedMaterialCosts" Label="Manufactured materials costs" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.RepostManufacturing" Label="Repost manufacturing operations" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                </ribbon:RibbonTab>
+
+                <ribbon:RibbonTab x:Name="TabHR" Header="HR" Visibility="Collapsed">
+                    <ribbon:RibbonGroup loc:LocProps.Key="HR.GroupCards" Header="Cards">
+                        <ribbon:RibbonButton loc:LocProps.Key="HR.Employees" Label="Employees" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="HR.Departments" Label="Departments" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="HR.Designations" Label="Designations" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="HR.GroupAttendanceLeave" Header="Attendance &amp; Leave">
+                        <ribbon:RibbonButton loc:LocProps.Key="HR.Attendance" Label="Attendance" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="HR.Leave" Label="Leave" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="HR.GroupPayroll" Header="Payroll">
+                        <ribbon:RibbonButton loc:LocProps.Key="HR.Structures" Label="Salary structures" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="HR.Payroll" Label="Payroll runs" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="HR.GroupReports" Header="Reports">
+                        <ribbon:RibbonButton loc:LocProps.Key="HR.PayrollSummary" Label="Payroll summary" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="HR.PayslipReport" Label="Payslip" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="HR.AttendanceSummary" Label="Attendance summary" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="HR.LeaveBalances" Label="Leave balances" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
                 </ribbon:RibbonTab>
 

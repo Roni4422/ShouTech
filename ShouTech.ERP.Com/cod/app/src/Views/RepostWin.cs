@@ -40,7 +40,7 @@ public sealed class RepostWin : BaseWin
         Width = 720;
         Height = 520;
         MinWidth = 620;
-        MinHeight = 420;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

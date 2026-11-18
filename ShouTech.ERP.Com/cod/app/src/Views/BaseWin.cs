@@ -1,9 +1,14 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Collections.Concurrent;
+using System.Globalization;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using ShouTech.App.Services;
+using ShouTech.App.Localization;
 using WpfApp = System.Windows.Application;
 
 using ShouTech.Domain;
@@ -81,6 +86,22 @@ public abstract class BaseWin : Window
 
     /// <summary>Translates a resource key using the active language.</summary>
     protected static string T(string key) => LocSvc?.GetString(key) ?? key;
+
+    // CA1863: cache CompositeFormat instances for repeatedly used
+    // localized format patterns (the BinWin/BcdGenWin pattern, held
+    // centrally here so every window formats the same way).
+    private static readonly ConcurrentDictionary<string, CompositeFormat> CompositeFormats = new();
+
+    /// <summary>
+    /// Translates a resource key and formats it with the supplied
+    /// arguments in the current culture — the one sanctioned way to
+    /// build a localized message with placeholders.
+    /// </summary>
+    protected static string Tf(string key, params object?[] args)
+    {
+        var format = CompositeFormats.GetOrAdd(T(key), static value => CompositeFormat.Parse(value));
+        return string.Format(CultureInfo.CurrentCulture, format, args);
+    }
 
     /// <summary>Localized caption of the active company (empty before login).</summary>
     protected static string CurrentCompanyDisplay => AppState.CurrentCompanyDisplayName;
@@ -281,9 +302,101 @@ public abstract class BaseWin : Window
         ApplyFlowDirection();
         ApplyScheduleTint();
         ApplyLocalizedText();
+        ApplyPrimaryButtonConvention();
         HookLanguageChanged();
         WireGeometryPersistence();
         ClampToWorkArea();
+    }
+
+    // ================================================================
+    // ACCENTED-PRIMARY CONVENTION (docs/WINDOW_PROPORTIONS.md §2.2)
+    //
+    // The primary action of a window's bottom command bar carries the
+    // central accent treatment (VisuAccentButtonStyle +
+    // PrimaryButtonMinWidth); every other action stays on the plain
+    // button style. Windows used to apply this by hand, so most bars
+    // shipped with no primary distinction at all (acceptance sweep,
+    // visual audits: "no primary-button distinction anywhere").
+    //
+    // The convention is now applied centrally, here, from the one
+    // signal every button already carries: its localization key
+    // (LocProps.Key in XAML, or the Tag the code-built StyleButton
+    // helpers store the key in). Priority: a Post action outranks a
+    // Save action (posting is the culminating act of a document
+    // window); at most ONE button per window is accented. A window
+    // that already accents a button itself (DatWin's Start, WhsWin's
+    // Post, …) is respected untouched.
+    // ================================================================
+
+    private static readonly string[] PrimaryKeySegments = { "Post", "Save" };
+
+    private void ApplyPrimaryButtonConvention()
+    {
+        try
+        {
+            var buttons = new List<Button>();
+            CollectButtons(this, buttons);
+            if (buttons.Count == 0)
+                return;
+
+            if (TryFindResource("VisuAccentButtonStyle") is not Style accentStyle)
+                return;
+            var primaryStyle = TryFindResource("PrimaryButtonStyle") as Style;
+
+            // Respect a window's own accent choice.
+            foreach (var button in buttons)
+            {
+                if (StyleChainContains(button.Style, accentStyle) ||
+                    (primaryStyle != null && StyleChainContains(button.Style, primaryStyle)))
+                    return;
+            }
+
+            foreach (var segment in PrimaryKeySegments)
+            {
+                var candidate = buttons.FirstOrDefault(b => PrimarySegment(b) == segment);
+                if (candidate == null)
+                    continue;
+                candidate.SetResourceReference(StyleProperty, "VisuAccentButtonStyle");
+                if (candidate.MinWidth < VisuId.PrimaryButtonMinWidth)
+                    candidate.MinWidth = VisuId.PrimaryButtonMinWidth;
+                return;
+            }
+        }
+        catch (Exception exPrimary)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exPrimary, "BaseWin.ApplyPrimaryButtonConvention");
+        }
+    }
+
+    private static string? PrimarySegment(Button button)
+    {
+        var key = LocProps.GetKey(button) ?? button.Tag as string;
+        if (string.IsNullOrWhiteSpace(key))
+            return null;
+        var dot = key.LastIndexOf('.');
+        return dot >= 0 ? key[(dot + 1)..] : key;
+    }
+
+    private static bool StyleChainContains(Style? style, Style target)
+    {
+        for (var current = style; current != null; current = current.BasedOn)
+        {
+            if (ReferenceEquals(current, target))
+                return true;
+        }
+        return false;
+    }
+
+    private static void CollectButtons(DependencyObject root, List<Button> into)
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(root))
+        {
+            if (child is not DependencyObject node)
+                continue;
+            if (node is Button button)
+                into.Add(button);
+            CollectButtons(node, into);
+        }
     }
 
     /// <summary>

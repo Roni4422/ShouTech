@@ -28,7 +28,7 @@ public sealed class CalculatorWin : BaseWin
         Width = 360;
         Height = 480;
         MinWidth = 320;
-        MinHeight = 430;
+        MinHeight = 360;
         BuildUi();
         Loaded += (_, _) => _display.Focus();
     }
@@ -68,7 +68,7 @@ public sealed class CalculatorWin : BaseWin
                 Content = key == "Back" ? "⌫" : key,
                 Tag = key,
                 Margin = new Thickness(3),
-                MinHeight = 48,
+                MinHeight = 36, // Step 12: the pad compresses to the 360-DIP window minimum (was 48, which clipped)
                 FontSize = 16
             };
             var captured = key;

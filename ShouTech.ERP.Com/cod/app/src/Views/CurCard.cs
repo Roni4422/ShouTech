@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -21,6 +21,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class CurCard : BaseWin
 {
+    protected override string? ScheduleTintName => "Peridot";
     private readonly TextBox _txtCode = new();
     private readonly TextBox _txtNameAr = new();
     private readonly TextBox _txtNameEn = new();
@@ -48,8 +49,8 @@ public sealed class CurCard : BaseWin
     {
         Width = 860;
         Height = 500;
-        MinWidth = 740;
-        MinHeight = 420;
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
         BuildUi();
@@ -125,9 +126,12 @@ public sealed class CurCard : BaseWin
         root.Children.Add(actionBar);
 
         var gridRoot = new Grid();
-        gridRoot.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(330) });
+        // Step 12 screen-fit: star-proportioned split (was a fixed
+        // 330-DIP card column) so the card and the rates grid share the
+        // 660-wide minimum proportionally; the card form scrolls (below).
+        gridRoot.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 240 });
         gridRoot.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
-        gridRoot.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        gridRoot.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.5, GridUnitType.Star) });
 
         var leftCard = new Border
         {
@@ -154,7 +158,7 @@ public sealed class CurCard : BaseWin
         AddFormField(cardForm, 8, 0, "CurrencyCard.MinRate", _txtMinRate);
         AddFormField(cardForm, 9, 0, "CurrencyCard.MaxRate", _txtMaxRate);
 
-        leftCard.Child = cardForm;
+        leftCard.Child = new ScrollViewer { Content = cardForm, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Grid.SetColumn(leftCard, 0);
         gridRoot.Children.Add(leftCard);
 

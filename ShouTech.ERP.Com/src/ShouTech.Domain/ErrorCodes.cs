@@ -16,6 +16,7 @@ namespace ShouTech.Domain;
 ///   INV  6000-6999  inventory / orders
 ///   UI   7000-7999  windows / shell
 ///   LIC  8000-8999  licensing
+///   CRM  9000-9999  customer relationship management
 ///
 /// RULE: codes are immutable once assigned. A retired code is never
 /// reused; a changed meaning gets a new code.
@@ -63,6 +64,9 @@ public static class ErrorCodes
     public const string ExportPermissionDenied = "DATA-4001";
     public const string ExportFailed = "DATA-4002";
     public const string ImportFailed = "DATA-4003";
+    public const string ImportPermissionDenied = "DATA-4004";
+    public const string BalanceImportNotAllowed = "DATA-4005";
+    public const string DocumentImportRequiresPackage = "DATA-4006";
 
     // ---- ACC 5000-5999 -------------------------------------------------
     public const string JournalNotBalanced = "ACC-5001";
@@ -77,9 +81,38 @@ public static class ErrorCodes
     public const string CostCenterRequired = "ACC-5010";
     public const string DocumentPostingAccountMissing = "ACC-5011";
     public const string DocumentAlreadyPostedToGl = "ACC-5012";
+    public const string DocumentTotalMismatch = "ACC-5013";
+    public const string DocumentKindNotPostable = "ACC-5014";
+    public const string ExchangeRateMissing = "ACC-5015";
+    public const string BankStatementNotReconciled = "ACC-5016";
+    public const string StatementLineAlreadyMatched = "ACC-5017";
+    // Phase B 055 (Budgets): the design proposed ACC-5009/5010 for the
+    // budget guard, but Fix Phase Step 3 consumed those two codes for
+    // cost-center validation (CostCenterUnknown / CostCenterRequired),
+    // so the guard takes the next free ACC codes instead.
+    public const string BudgetExceededAnnual = "ACC-5018";
+    public const string BudgetExceededMonthly = "ACC-5019";
 
     // ---- INV 6000-6999 -------------------------------------------------
     public const string InventoryOperationFailed = "INV-6001";
+    public const string StockValuationFailed = "INV-6002";
+    public const string RecalculationFailed = "INV-6003";
+    public const string RecalculationClosedPeriod = "INV-6004";
+    public const string BatchSerialRequired = "INV-6005";
+    public const string BatchStockInsufficient = "INV-6006";
+    public const string SerialUnavailable = "INV-6007";
+    public const string SerialDuplicate = "INV-6008";
+    public const string BatchAllocationMismatch = "INV-6009";
+    public const string BatchExpired = "INV-6010";
+    // Phase B 056 (Quality): the QC gate and inspection lifecycle take
+    // the next free INV codes. INV is the design's family for the gate
+    // ("coded error (INV range)").
+    public const string QualityGateBlocked = "INV-6011";
+    public const string QualityQuarantinedSale = "INV-6012";
+    public const string QualityOutgoingInspectionRequired = "INV-6013";
+    public const string QualityInspectionStateInvalid = "INV-6014";
+    public const string QualityInspectionQtyMismatch = "INV-6015";
+    public const string QualityTemplateInvalid = "INV-6016";
 
     // ---- UI 7000-7999 --------------------------------------------------
     public const string WindowOperationFailed = "UI-7001";
@@ -89,4 +122,54 @@ public static class ErrorCodes
 
     // ---- LIC 8000-8999 -------------------------------------------------
     public const string LicenseCheckFailed = "LIC-8001";
+
+    // ---- CRM 9000-9999 -------------------------------------------------
+    // Phase B 057 (CRM): conversion / pipeline / activity state
+    // violations. The design asked for "a small CRM error range
+    // registered in ErrorCodes.cs (precedent: LIC range)"; CRM takes
+    // the next free prefix block, 9000-9999.
+    public const string CrmLeadAlreadyConverted = "CRM-9001";
+    public const string CrmLeadStateInvalid = "CRM-9002";
+    public const string CrmOpportunityStageInvalid = "CRM-9003";
+    public const string CrmQuotationPartyMissing = "CRM-9004";
+    public const string CrmActivityTargetInvalid = "CRM-9005";
+    public const string CrmLostReasonRequired = "CRM-9006";
+
+    // ---- MFG 1001-1999 (manufacturing build-out, migration 058) --------
+    // The manufacturing module takes its own prefix block. Codes are
+    // immutable once assigned, like every other range above.
+    public const string BomCycleDetected = "MFG-1001";
+    public const string BomNotFoundOrInactive = "MFG-1002";
+    public const string MfgOrderStageInvalid = "MFG-1003";
+    public const string MfgIssueExceedsRequired = "MFG-1004";
+    public const string MfgFinishExceedsPlanned = "MFG-1005";
+    public const string PlanningConversionInvalid = "MFG-1006";
+
+    // ---- HR 1001-1999 (HR/Payroll build, migration 065) ----------------
+    // The HR module takes its own prefix block, like MFG. (The legacy
+    // catalog promises "Leave Balance Insufficient" etc. predate the
+    // module; HR-1003 is that promise kept under the module's codes.)
+    public const string HrEmployeeCodeDuplicate = "HR-1001";
+    public const string HrEmployeeInvalid = "HR-1002";
+    public const string HrLeaveBalanceInsufficient = "HR-1003";
+    public const string HrLeaveStateInvalid = "HR-1004";
+    public const string HrPayrollAlreadyPosted = "HR-1005";
+    public const string HrPayrollStateInvalid = "HR-1006";
+    public const string HrSalaryStructureInvalid = "HR-1007";
+    public const string HrMasterInUse = "HR-1008";
+    public const string HrEmployeeNotPayable = "HR-1009";
+    public const string HrMasterCodeDuplicate = "HR-1010";
+
+    // ---- POS 1001-1999 (POS full build, migration 066) ------------------
+    // The POS module takes its own prefix block, like MFG / HR.
+    public const string PosNoOpenSession = "POS-1001";
+    public const string PosSessionAlreadyOpen = "POS-1002";
+    public const string PosSessionStateInvalid = "POS-1003";
+    public const string PosTenderMismatch = "POS-1004";
+    public const string PosTenderInvalid = "POS-1005";
+    public const string PosReturnExceedsSold = "POS-1006";
+    public const string PosReturnOriginalInvalid = "POS-1007";
+    public const string PosHeldBillNotFound = "POS-1008";
+    public const string PosHeldBillStateInvalid = "POS-1009";
+    public const string PosSessionlessNotAllowed = "POS-1010";
 }

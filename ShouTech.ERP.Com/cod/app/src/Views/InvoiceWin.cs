@@ -22,7 +22,7 @@ namespace ShouTech.App.Views;
 /// right payment & document fields, middle party/rep/warehouse, left cost centre & accounts,
 /// footer totals (lines total, invoice value, paid / discount, payment, remaining / extra, net).
 /// </summary>
-public sealed class InvoiceWin : BaseWin
+public sealed class InvoiceWin : BaseWin, IWindowMode
 {
     protected override string? ScheduleTintName => "Mint";
 
@@ -44,6 +44,10 @@ public sealed class InvoiceWin : BaseWin
     private readonly TextBox _txtPartyName = new();
     private readonly TextBox _txtSalesRep = new();
     private readonly TextBox _txtWarehouse = new();
+    /// <summary>Step 9: destination warehouse — StockTransfer mode only.
+    /// Persisted on the document (migration 064) and consumed by
+    /// StkPost.PostTransfer when the transfer posts.</summary>
+    private readonly TextBox _txtTargetWarehouse = new();
 
     // ---- Left header (accounts) ----
     private readonly TextBox _txtCostCenter = new();
@@ -99,8 +103,8 @@ public sealed class InvoiceWin : BaseWin
 
         Width = 1100;
         Height = 700;
-        MinWidth = 960;
-        MinHeight = 560;
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Title = WindowTitleFor(kind);
 
@@ -120,11 +124,32 @@ public sealed class InvoiceWin : BaseWin
         RefreshTotals();
     }
 
+    /// <summary>
+    /// Opens an EXISTING document by id (Step 9, sweep ORD-07 / I-8).
+    /// The document is loaded from the database; when it cannot be
+    /// found in the current company this constructor THROWS instead of
+    /// silently presenting a blank new document under a fresh number —
+    /// the failure mode that made DocSearch results open empty.
+    /// </summary>
     public InvoiceWin(long docId, InvDocKind kind = InvDocKind.SalesInvoice) : this(kind)
     {
-        var loaded = InvRepo.Load(docId, kind);
-        if (loaded is not null) ApplyDoc(loaded);
+        var loaded = InvRepo.Load(docId, kind)
+            ?? throw new InvalidOperationException($"Document {docId} ({kind}) was not found in the current company.");
+        ApplyDoc(loaded);
     }
+
+    /// <summary>The database id of the document this window actually
+    /// loaded, or null for a new-document window. Lets an opener
+    /// (DocSearch) prove the requested document is what opened.</summary>
+    public long? LoadedDocumentId { get; private set; }
+
+    /// <summary>Step 11 router identity (IWindowMode): the document kind
+    /// plus the loaded document's identity — a window showing saved
+    /// document 5 is not "the SalesInvoice window" for a request to open
+    /// a NEW sales invoice, and a new-document window is not document 5.
+    /// (A save updates LoadedDocumentId, so a saved window stops matching
+    /// new-document requests and the next request opens a fresh form.)</summary>
+    public string ModeKey => $"{_doc.Kind}:{(LoadedDocumentId?.ToString(CultureInfo.InvariantCulture) ?? "new")}";
 
     private void ApplyLanguageDirection()
     {
@@ -212,11 +237,18 @@ public sealed class InvoiceWin : BaseWin
 
     private void BuildUi()
     {
-        // Root: three proportional bands 30% / 40% / 30% + action bar at the BOTTOM (layout rule)
+        // Root: three star bands + action bar at the BOTTOM (layout rule).
+        // Step 12 screen-fit: the old fixed 30% / 40% / 30% bands clipped
+        // the header's payment column at EVERY size (its 8 rows need more
+        // than 30% of any window) with no way to scroll. The header and
+        // bottom bands are now scrollable star bands (3* / 2.5* / 2.5*):
+        // at a large size everything shows at once; squeezed to the
+        // 660x360 minimum, each band scrolls internally and the lines
+        // grid keeps its own scrollbars — nothing is ever clipped.
         var root = new Grid { Margin = new Thickness(4) };
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(3, GridUnitType.Star) }); // top 30%
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(4, GridUnitType.Star) }); // grid 40%
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(3, GridUnitType.Star) }); // bottom 30%
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(3, GridUnitType.Star) }); // header band (scrollable)
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(2.5, GridUnitType.Star) }); // lines grid
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(2.5, GridUnitType.Star) }); // bottom band (scrollable)
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // action bar
 
         // ---- Toolbar ----
@@ -275,7 +307,7 @@ public sealed class InvoiceWin : BaseWin
         // ---- Top 30%: header fields (compact, no large gaps) ----
         var headerHost = new Border
         {
-            Child = BuildHeaderPanel(),
+            Child = new ScrollViewer { Content = BuildHeaderPanel(), VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled },
             Padding = new Thickness(2),
             Margin = new Thickness(0, 0, 0, 2),
             BorderThickness = new Thickness(1),
@@ -362,7 +394,7 @@ public sealed class InvoiceWin : BaseWin
 
         var bottomHost = new Border
         {
-            Child = bottom,
+            Child = new ScrollViewer { Content = bottom, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled },
             Padding = new Thickness(2),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(3)
@@ -407,6 +439,7 @@ public sealed class InvoiceWin : BaseWin
         Size(_txtPartyName);
         Size(_txtSalesRep);
         Size(_txtWarehouse);
+        Size(_txtTargetWarehouse);
         Size(_txtCostCenter);
         Size(_txtPartyAccount);
         Size(_txtGoodsAccount);
@@ -438,15 +471,19 @@ public sealed class InvoiceWin : BaseWin
         AddLabeledCell(party, 0, Tf(PartyCodeKey(), "Supplier code"), _txtPartyCode);
         AddLabeledCell(party, 1, Tf(PartyNameKey(), "Supplier"), _txtPartyName);
         AddLabeledCell(party, 2, Tf("Invoice.SalesRep", "Sales rep"), _txtSalesRep);
-        AddLabeledCell(party, 3, Tf("Invoice.Warehouse", "Warehouse"), _txtWarehouse);
+        AddLabeledCell(party, 3, Tf(_doc.Kind == InvDocKind.StockTransfer ? "Invoice.SourceWarehouse" : "Invoice.Warehouse", "Warehouse"), _txtWarehouse);
 
-        // Accounts column
+        // Accounts column — a StockTransfer document carries a fourth
+        // row: its destination warehouse (Step 9).
         var accounts = new Grid { Margin = new Thickness(gap) };
-        for (var i = 0; i < 3; i++)
+        var accountRows = _doc.Kind == InvDocKind.StockTransfer ? 4 : 3;
+        for (var i = 0; i < accountRows; i++)
             accounts.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         AddLabeledCell(accounts, 0, Tf("Invoice.CostCenter", "Cost center"), _txtCostCenter);
         AddLabeledCell(accounts, 1, Tf(PartyAccountLabelKey(), "Supplier account"), _txtPartyAccount);
         AddLabeledCell(accounts, 2, Tf("Invoice.GoodsAccount", "Goods account"), _txtGoodsAccount);
+        if (_doc.Kind == InvDocKind.StockTransfer)
+            AddLabeledCell(accounts, 3, Tf("Invoice.TargetWarehouse", "Destination Warehouse"), _txtTargetWarehouse);
 
         Grid.SetColumn(accounts, 0);
         Grid.SetColumn(party, 1);
@@ -689,6 +726,16 @@ public sealed class InvoiceWin : BaseWin
         // The visible code/name is the source of truth; a previously loaded id
         // is only the fallback when the text no longer resolves.
         _doc.WarehouseId = (int?)CardStore.ResolveWarehouseId(_doc.WarehouseName) ?? _doc.WarehouseId;
+        // Step 9: a transfer's destination resolves the same way and
+        // persists with the document (migration 064); clearing the
+        // field clears the destination instead of keeping a stale id.
+        if (_doc.Kind == InvDocKind.StockTransfer)
+        {
+            _doc.TargetWarehouseName = _txtTargetWarehouse.Text.Trim();
+            _doc.TargetWarehouseId = string.IsNullOrWhiteSpace(_doc.TargetWarehouseName)
+                ? null
+                : (int?)CardStore.ResolveWarehouseId(_doc.TargetWarehouseName) ?? _doc.TargetWarehouseId;
+        }
         foreach (var line in _doc.Lines)
         {
             line.MaterialId = CardStore.ResolveMaterial(line.MaterialCode)?.Id ?? line.MaterialId;
@@ -700,8 +747,11 @@ public sealed class InvoiceWin : BaseWin
 
     private void ApplyDoc(InvDoc doc)
     {
+        LoadedDocumentId = doc.DocId;
         _doc.DocId = doc.DocId;
         _doc.Kind = doc.Kind;
+        _doc.TargetWarehouseId = doc.TargetWarehouseId;
+        _doc.TargetWarehouseName = doc.TargetWarehouseName;
         _doc.DocNo = doc.DocNo;
         _doc.DocDate = doc.DocDate;
         _doc.PartyId = doc.PartyId;
@@ -745,6 +795,7 @@ public sealed class InvoiceWin : BaseWin
         _txtBranch.Text = doc.BranchName;
         _txtSalesRep.Text = doc.SalesRepName;
         _txtWarehouse.Text = _doc.WarehouseName;
+        _txtTargetWarehouse.Text = doc.TargetWarehouseName;
         _txtCostCenter.Text = doc.CostCenter;
         _txtPartyAccount.Text = doc.PartyAccountName;
         _txtGoodsAccount.Text = _doc.GoodsAccountName;
@@ -899,7 +950,12 @@ public sealed class InvoiceWin : BaseWin
             ResolveParty();
             var doc = CaptureDoc();
             if (doc.DocId <= 0) InvRepo.SaveDraft(doc);
-            InvRepo.Post(doc.DocId, doc.Kind, AppState.CurrentUser?.Username ?? Environment.UserName);
+            // Batch/serial capture (Phase B 054): tracked lines are
+            // captured in the picker before posting; cancelling the
+            // picker aborts the post and keeps the draft.
+            var captures = BatchSerialCaptureSvc.CaptureForPosting(doc, this);
+            if (captures is null) return;
+            InvRepo.Post(doc.DocId, doc.Kind, AppState.CurrentUser?.Username ?? Environment.UserName, captures);
             doc.Status = InvDocStatus.Posted;
             // Reload so JournalDocNo assigned during post is visible to the voucher button.
             var reloaded = InvRepo.Load(doc.DocId, doc.Kind);
@@ -926,6 +982,19 @@ public sealed class InvoiceWin : BaseWin
                 body += $"{Environment.NewLine}{Environment.NewLine}{info.Hint}";
             body += $"{Environment.NewLine}{Environment.NewLine}(Error {info.Code})";
             MessageBox.Show(this, body, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        catch (StkPost.StockTransferException ex)
+        {
+            // Step 9: transfer-engine blocks (INV-TRF-*) get the same
+            // localized captions WhsWin uses for the same codes.
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "InvoiceWin.PostDoc");
+            var key = ex.ErrorCode switch
+            {
+                "INV-TRF-004" => "Inventory.TransferInsufficientStock",
+                "INV-TRF-002" => "Inventory.TransferFailed",
+                _ => "Inventory.TransferInvalid"
+            };
+            MessageBox.Show(this, $"{Tf(key, ex.Message)}\n[{ex.ErrorCode}]", T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
         catch (Exception ex)
         {

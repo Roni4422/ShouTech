@@ -163,6 +163,103 @@ public static class InvPrn
         return root;
     }
 
+    // ---------------------------------------------------------------
+    // POS receipt (Build POS 066): the till's thermal-width receipt —
+    // store, bill, cashier/session, lines, totals, every tender and
+    // the change. Direction follows the active language (LangDirSv),
+    // so an Arabic till prints a fully RTL receipt. Labels come from
+    // the POS.* language keys, never literals.
+    // ---------------------------------------------------------------
+
+    public static void PrintPosReceipt(
+        InvDoc doc, IReadOnlyList<ShouTech.Domain.Entities.PosTender> tenders,
+        decimal change, string companyName, string? sessionNo, string? cashier)
+    {
+        ArgumentNullException.ThrowIfNull(doc);
+        ArgumentNullException.ThrowIfNull(tenders);
+        var visual = BuildReceiptPage(doc, tenders, change, companyName, sessionNo, cashier);
+        var paginator = new InvDocumentPaginator(visual) { PageSize = new Size(302, 1123) };
+        var dlg = new PrintDialog();
+        if (dlg.ShowDialog() == true)
+            dlg.PrintDocument(paginator, doc.DocNo);
+    }
+
+    private static string L(string key, string fallback)
+    {
+        var value = AppHost.Localization.GetString("POS." + key);
+        return string.IsNullOrWhiteSpace(value) || value == "POS." + key ? fallback : value;
+    }
+
+    private static Border BuildReceiptPage(
+        InvDoc doc, IReadOnlyList<ShouTech.Domain.Entities.PosTender> tenders,
+        decimal change, string companyName, string? sessionNo, string? cashier)
+    {
+        var root = new Border
+        {
+            Background = Brushes.White,
+            Padding = new Thickness(14),
+            Width = 302,
+            FlowDirection = LangDirSv.GetFlowDirection(AppHost.Localization.GetCurrentLanguage())
+        };
+        var stack = new StackPanel();
+        root.Child = stack;
+
+        void Line(string text, double size = 11, bool bold = false, bool center = false)
+            => stack.Children.Add(new TextBlock
+            {
+                Text = text,
+                FontSize = size,
+                FontWeight = bold ? FontWeights.Bold : FontWeights.Normal,
+                TextWrapping = TextWrapping.Wrap,
+                HorizontalAlignment = center ? HorizontalAlignment.Center : HorizontalAlignment.Stretch,
+                Margin = new Thickness(0, 1, 0, 1)
+            });
+        void Rule() => stack.Children.Add(new Border { Height = 1, Background = Brushes.Gray, Margin = new Thickness(0, 5, 0, 5) });
+        string Money(decimal value) => value.ToString("N2", CultureInfo.InvariantCulture) + " " + doc.CurrencyCode;
+
+        Line(companyName, 15, bold: true, center: true);
+        Line(doc.Kind == InvDocKind.SalesReturn ? L("ReceiptReturnTitle", "POS RETURN") : L("ReceiptTitle", "POS RECEIPT"), 11, bold: true, center: true);
+        Rule();
+        Line($"{L("ReceiptNo", "Receipt")}: {doc.DocNo}");
+        Line($"{L("ReceiptDate", "Date")}: {doc.DocDate:yyyy-MM-dd} {DateTime.Now:HH:mm}");
+        if (!string.IsNullOrWhiteSpace(sessionNo)) Line($"{L("SessionNo", "Session")}: {sessionNo}");
+        if (!string.IsNullOrWhiteSpace(cashier)) Line($"{L("Cashier", "Cashier")}: {cashier}");
+        if (!string.IsNullOrWhiteSpace(doc.PartyName)) Line($"{L("ReceiptCustomer", "Customer")}: {doc.PartyCode} {doc.PartyName}");
+        Rule();
+        foreach (var line in doc.Lines)
+        {
+            Line($"{line.Description}", 11, bold: true);
+            var discount = line.DiscountPct > 0 ? $"  -{line.DiscountPct:N1}%" : string.Empty;
+            Line($"{line.Qty:N3} {line.Unit} x {line.UnitPrice:N2}{discount}    {line.LineTotal:N2}");
+        }
+        Rule();
+        Line($"{L("Subtotal", "Subtotal")}: {Money(doc.Subtotal)}");
+        if (doc.LinesDiscountAmount > 0) Line($"{L("ReceiptDiscount", "Discount")}: -{Money(doc.LinesDiscountAmount)}");
+        if (doc.LinesExtraAmount > 0) Line($"{L("ReceiptExtra", "Extra")}: {Money(doc.LinesExtraAmount)}");
+        Line($"{L("Tax", "Tax")}: {Money(doc.TaxAmount)}");
+        Line($"{L("ReceiptTotal", "TOTAL")}: {Money(doc.GrandTotal)}", 13, bold: true);
+        Rule();
+        foreach (var tender in tenders)
+        {
+            var label = tender.TenderType switch
+            {
+                ShouTech.Domain.Entities.PosTenderTypes.Card => L("Card", "Card"),
+                ShouTech.Domain.Entities.PosTenderTypes.OnAccount => L("OnAccount", "On account"),
+                _ => L("Cash", "Cash")
+            };
+            var amount = tender.Amount < 0 ? -tender.Amount : tender.Amount;
+            Line($"{label}: {Money(amount)}");
+            if (tender.TenderedAmount is decimal handed && tender.TenderType == ShouTech.Domain.Entities.PosTenderTypes.Cash)
+                Line($"{L("ReceiptTendered", "Tendered")}: {Money(handed)}");
+            if (!string.IsNullOrWhiteSpace(tender.CardRef))
+                Line($"{L("ReceiptCardRef", "Card ref")}: {tender.CardRef}");
+        }
+        if (change > 0) Line($"{L("ReceiptChange", "Change")}: {Money(change)}", 12, bold: true);
+        Rule();
+        Line(L("ReceiptThanks", "Thank you"), 11, bold: true, center: true);
+        return root;
+    }
+
     private sealed class InvDocumentPaginator : DocumentPaginator
     {
         private readonly FrameworkElement _page;

@@ -64,6 +64,10 @@ public class SteiRoundTripTests
 
             AppState.CurrentUser = new UserInfo { Id = "u1", Username = "admin", FullName = "Admin", CompanyId = "C1" };
             AppState.SetCompany("C1", "Sham Trading Co", "Sham Trading Co");
+            // Step 10: STEI imports are gated on DATA.IMPORT in the
+            // service layer — the test session holds the full catalog,
+            // like a signed-in administrator.
+            AppHost.Permissions.GrantAllCatalogPermissions("u1");
 
             PointAppAt(srcPath);
             var export = await SteiSvc.ExportAsync(pkgPath, "password123");
@@ -109,6 +113,7 @@ public class SteiRoundTripTests
         }
         finally
         {
+            AppHost.Permissions.Clear();
             AppState.CurrentUser = previousUser;
             AppState.CurrentCompanyCode = previousCompany;
             try { Directory.Delete(root, recursive: true); } catch (Exception cleanupEx) { Console.WriteLine($"Temp cleanup failed: {cleanupEx.Message}"); }

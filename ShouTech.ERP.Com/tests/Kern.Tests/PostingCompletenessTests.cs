@@ -152,9 +152,9 @@ namespace Kern.Tests
             var (service, companyId, connectionString, cleanup) = await CreateChainContextAsync();
             try
             {
-                // Legacy customers card for ledger party 7: limit 100 < 250 total.
+                // Canonical party card for ledger party 7: limit 100 < 250 total.
                 await ExecAsync(connectionString,
-                    $"INSERT INTO customers (customer_id, company_id, customer_code, customer_name_ar, customer_name_en, credit_limit) VALUES (7, '{companyId:D}', 'CUST-7', 'Chain Customer', 'Chain Customer', 100)");
+                    $"INSERT INTO parties (id, company_id, kind, code, name_en, credit_limit, ledger_id) VALUES ('{Guid.NewGuid():D}', '{companyId:D}', 'C', 'CUST-7', 'Chain Customer', 100, 7)");
 
                 var invoiceId = await BuildChainInvoiceAsync(service, companyId, "PC4");
 
@@ -184,7 +184,7 @@ namespace Kern.Tests
             try
             {
                 await ExecAsync(connectionString,
-                    $"INSERT INTO customers (customer_id, company_id, customer_code, customer_name_ar, customer_name_en, credit_limit) VALUES (7, '{companyId:D}', 'CUST-7', 'Chain Customer', 'Chain Customer', 1000)");
+                    $"INSERT INTO parties (id, company_id, kind, code, name_en, credit_limit, ledger_id) VALUES ('{Guid.NewGuid():D}', '{companyId:D}', 'C', 'CUST-7', 'Chain Customer', 1000, 7)");
 
                 var invoiceId = await BuildChainInvoiceAsync(service, companyId, "PC5");
                 await service.PostAsync(invoiceId, Actor);
@@ -208,7 +208,7 @@ namespace Kern.Tests
             {
                 // 031 parties card for code CUST-1: limit 100 < 250 total.
                 await ExecAsync(connectionString,
-                    $"INSERT INTO parties (id, company_id, kind, code, name_en, credit_limit) VALUES ('{Guid.NewGuid():D}', '{companyId:D}', 'C', 'CUST-1', 'Test Party', 100)");
+                    $"INSERT INTO parties (id, company_id, kind, code, name_en, credit_limit, ledger_id) VALUES ('{Guid.NewGuid():D}', '{companyId:D}', 'C', 'CUST-1', 'Test Party', 100, 7)");
 
                 var orderId = await service.CreateOrderAsync(OrderDraft(companyId, "SO-PC6", 10m, 25m), Actor);
                 await service.PostOrderAsync(CommercialDocSide.Sales, orderId, Actor);

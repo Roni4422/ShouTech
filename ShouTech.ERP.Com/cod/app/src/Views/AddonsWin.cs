@@ -18,6 +18,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class AddonsWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Wheat";
     public sealed class AddonRow
     {
         public string Id { get; set; } = string.Empty;
@@ -41,8 +42,8 @@ public sealed class AddonsWin : BaseWin
     {
         Width = 860;
         Height = 540;
-        MinWidth = 700;
-        MinHeight = 420;
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Windows;
 using ShouTech.App.Views;
 using ShouTech.App.Views.Reports;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 
 namespace ShouTech.App.Services;
@@ -27,6 +28,7 @@ public static class RibbonNav
             case "Inventory.EndOfPeriod": Show(new EndOfPeriodWin(), owner); return true;
             case "Inventory.MaterialMovementChart": Show(new MatMoveChartWin(), owner); return true;
             case "Inventory.ExpiredMaterials": Show(new ExpiredWin(), owner); return true;
+            case "Inventory.BatchBalances": Show(new BatchBalWin(), owner); return true;
             case "Inventory.InvoiceAge": Show(new InvoiceAgeWin(), owner); return true;
             case "Inventory.MaterialPriceHistory": Show(new PriceHistoryWin(), owner); return true;
             case "Inventory.ServiceMaterials": Show(new ServiceMatWin(), owner); return true;
@@ -41,10 +43,35 @@ public static class RibbonNav
             case "Inventory.EditMaterialSpecs": ShowDef(DefSets.MaterialSpecs, owner); return true;
             case "Inventory.SerialNumbersReport":
             case "Inventory.EditSerialNumber": Show(new SerWin(), owner); return true;
+            case "Inventory.QualityInspections": Show(new QcInspectWin(), owner); return true;
+            case "Inventory.QualityTemplates": Show(new QcTemplateWin(), owner); return true;
+            case "Inventory.QualityAlerts": Show(new QcAlertWin(), owner); return true;
+            case "Inventory.QualitySummary": Show(new QcSummaryWin(), owner); return true;
+
+            // ------------------------------------------------ CRM (Phase B 057; CRM.* prefix per design section 4.2 — RBAC only, entitlement gating postponed)
+            case "CRM.Leads": Show(new CrmLeadWin(), owner); return true;
+            case "CRM.Pipeline": Show(new CrmPipelineWin(), owner); return true;
+            case "CRM.Opportunities": Show(new CrmOppWin(), owner); return true;
+            case "CRM.Activities": Show(new CrmActivitiesWin(), owner); return true;
+
+            // ------------------------------------------------ HR / Payroll (Build HR 065; HR.* keys, HR.* RBAC)
+            case "HR.Employees": Show(new HrEmployeeWin(), owner); return true;
+            case "HR.Departments": Show(new HrDeptWin(), owner); return true;
+            case "HR.Designations": Show(new HrDesigWin(), owner); return true;
+            case "HR.Attendance": Show(new HrAttendanceWin(), owner); return true;
+            case "HR.Leave": Show(new HrLeaveWin(), owner); return true;
+            case "HR.Structures": Show(new HrStructureWin(), owner); return true;
+            case "HR.Payroll": Show(new HrPayrollWin(), owner); return true;
+            case "HR.PayrollSummary": Show(new HrPayrollSummaryWin(), owner); return true;
+            case "HR.PayslipReport": Show(new HrPayslipWin(), owner); return true;
+            case "HR.AttendanceSummary": Show(new HrAttendanceSummaryWin(), owner); return true;
+            case "HR.LeaveBalances": Show(new HrLeaveBalanceWin(), owner); return true;
 
             // ------------------------------------------------ Accounts reports & cards
             case "Accounts.CostCenter":
             case "Accounts.LinkWithAccounts": Show(new CcListWin(), owner); return true;
+            case "Accounts.Budgets": Show(new BudgetWin(), owner); return true;
+            case "Accounts.BudgetVariance": Show(new BudgetVarWin(), owner); return true;
             case "Accounts.CostCenterReport": Show(new CostCenterRptWin(), owner); return true;
             case "Accounts.CostCenterBalance": Show(new CostCenterTrialWin(), owner); return true;
             case "Accounts.AverageCurrencyRate": Show(new AvgRateWin(), owner); return true;
@@ -85,6 +112,8 @@ public static class RibbonNav
             case "POS.Points": Show(new LoyaltyWin(), owner); return true;
             case "POS.DefinePOS": ShowDef(DefSets.PosTerminals, owner); return true;
             case "POS.POSCashReport": Show(new PosCashRptWin(), owner); return true;
+            case "POS.Sessions": Show(new PosSessionWin(), owner); return true;
+            case "POS.ZReport": Show(new PosZReportWin(), owner); return true;
             case "POS.POSDiscounts": ShowDef(DefSets.PosDiscounts, owner); return true;
             case "POS.SyncPOS": Show(new PosSyncWin(), owner); return true;
             case "POS.AdjustPrice": RptNav.OpenPriceList(owner); return true;
@@ -200,38 +229,18 @@ public static class RibbonNav
 
     private static void ShowDef(string setKey, Window? owner)
     {
-        foreach (Window w in System.Windows.Application.Current.Windows)
-        {
-            if (w is DefManagerWin existing && existing.SetKey == setKey && w.IsVisible)
-            {
-                w.Activate();
-                if (w.WindowState == WindowState.Minimized)
-                    w.WindowState = WindowState.Normal;
-                return;
-            }
-        }
+        // DefManagerWin's ModeKey IS its SetKey, so the central policy
+        // gives this the mode-aware matching ShowDef always did by hand.
         Show(DefManagerWin.For(setKey), owner);
     }
 
-    private static void Show(Window win, Window? owner)
-    {
-        try
-        {
-            foreach (Window w in System.Windows.Application.Current.Windows)
-            {
-                if (w.GetType() == win.GetType() && w.IsVisible)
-                {
-                    w.Activate();
-                    if (w.WindowState == WindowState.Minimized)
-                        w.WindowState = WindowState.Normal;
-                    return;
-                }
-            }
-            win.Owner = owner ?? System.Windows.Application.Current?.MainWindow;
-        }
-        catch { }
-        win.Show();
-    }
+    /// <summary>Step 11: all activation goes through the ONE central
+    /// policy (WindowActivator — same type AND same mode reactivates;
+    /// a different mode opens a second instance). The type-only dedupe
+    /// that used to live here was the router mode-stickiness defect
+    /// (sweep S-2), and its empty catch silently swallowed activation
+    /// failures (sweep S-7) — WindowActivator reports them centrally.</summary>
+    private static void Show(Window win, Window? owner) => WindowActivator.Show(win, owner);
 
     private static void LaunchOnScreenKeyboard(Window? owner)
     {
@@ -251,7 +260,13 @@ public static class RibbonNav
         {
             Process.Start(new ProcessStartInfo("rundll32.exe", "user32.dll,LockWorkStation") { UseShellExecute = true });
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // Step 11 (sweep S-7): was a silent catch — lock failures now
+            // report through the central mechanism like every other
+            // shell operation.
+            AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, ex, "RibbonNav.LockWorkStation");
+        }
     }
 
     private static void ShowAbout(Window? owner)
