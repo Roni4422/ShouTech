@@ -143,10 +143,12 @@ public sealed class JournalRepository : IJournalRepository
         var hasLineBase = PartyLedger.ColumnExists(connection, null, _provider, "journal_entry_lines", "base_debit");
         await using (var lines = connection.CreateCommand())
         {
-            lines.CommandText = """
+            var baseAmountColumns = hasLineBase
+                ? ", l.base_debit, l.base_credit, l.exchange_rate"
+                : string.Empty;
+            lines.CommandText = $"""
                 SELECT l.line_number, l.account_id, a.account_code, a.account_name,
-                       l.debit, l.credit, l.cost_center, l.note
-                """ + (hasLineBase ? ", l.base_debit, l.base_credit, l.exchange_rate" : "") + """
+                       l.debit, l.credit, l.cost_center, l.note{baseAmountColumns}
                 FROM journal_entry_lines l
                 LEFT JOIN chart_of_accounts a
                   ON a.account_id = l.account_id AND a.company_id = @company
