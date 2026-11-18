@@ -1,4 +1,4 @@
-﻿<!-- shoutech_erp_v0.1.6/src/ShouTech.Application/ShouTech.Application.csproj -->
+﻿<!-- ShouTech ERP Application project -->
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
