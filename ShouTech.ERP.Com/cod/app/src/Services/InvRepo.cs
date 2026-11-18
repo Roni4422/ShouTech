@@ -433,7 +433,7 @@ public static class InvRepo
                     docId.ToString(CultureInfo.InvariantCulture),
                     doc.DocNo ?? docId.ToString(CultureInfo.InvariantCulture),
                     doc.CurrencyCode,
-                    doc.ExchangeRate <= 0 ? 1m : doc.ExchangeRate,
+                    fx.Rate,
                     glLines),
                 userId);
             journalNo = glResult.DocumentNumber;
