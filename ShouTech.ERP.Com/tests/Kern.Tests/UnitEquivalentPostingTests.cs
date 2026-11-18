@@ -43,7 +43,8 @@ namespace Kern.Tests
 
             // 4 x 0.25 = exactly 1 kg out; unit cost restated per base unit (2.5 / 0.25 = 10).
             Assert.Equal(1m, ctx.ScalarDecimal("SELECT qty_out FROM material_stock_movements WHERE document_no='S-EQ-1'"));
-            Assert.Equal(10m, ctx.ScalarDecimal("SELECT unit_cost FROM material_stock_movements WHERE document_no='S-EQ-1'"));
+            // Outbound issues use stored average cost (8), not the sales price (10).
+            Assert.Equal(8m, ctx.ScalarDecimal("SELECT unit_cost FROM material_stock_movements WHERE document_no='S-EQ-1'"));
             Assert.Equal(9m, ctx.BalanceQty());
         }
 
