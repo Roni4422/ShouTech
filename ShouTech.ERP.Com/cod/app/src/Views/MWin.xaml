@@ -169,6 +169,7 @@
                 <MenuItem x:Name="MenuCustomers" Header="Customers" Click="OnMenuCustomersClick"/>
                 <MenuItem x:Name="MenuSalesRep" Header="Sales Representative" Click="OnMenuSalesRepClick"/>
                 <MenuItem x:Name="MenuManufacturing" Header="Manufacturing" Click="OnMenuManufacturingClick"/>
+                <MenuItem x:Name="MenuHR" Header="HR" Click="OnMenuHRClick"/>
                 <MenuItem x:Name="MenuBanks" Header="Banks" Click="OnMenuBanksClick"/>
                 <MenuItem x:Name="MenuReports" Header="Reports" Click="OnMenuReportsClick"/>
                 <MenuItem x:Name="MenuTools" Header="Tools" Click="OnMenuToolsClick"/>
@@ -462,6 +463,28 @@
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.ManufacturingReports" Header="Reports">
                         <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.ManufacturedMaterialCosts" Label="Manufactured materials costs" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.RepostManufacturing" Label="Repost manufacturing operations" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                </ribbon:RibbonTab>
+
+                <ribbon:RibbonTab x:Name="TabHR" Header="HR" Visibility="Collapsed">
+                    <ribbon:RibbonGroup loc:LocProps.Key="HR.GroupCards" Header="Cards">
+                        <ribbon:RibbonButton loc:LocProps.Key="HR.Employees" Label="Employees" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="HR.Departments" Label="Departments" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="HR.Designations" Label="Designations" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="HR.GroupAttendanceLeave" Header="Attendance &amp; Leave">
+                        <ribbon:RibbonButton loc:LocProps.Key="HR.Attendance" Label="Attendance" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="HR.Leave" Label="Leave" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="HR.GroupPayroll" Header="Payroll">
+                        <ribbon:RibbonButton loc:LocProps.Key="HR.Structures" Label="Salary structures" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="HR.Payroll" Label="Payroll runs" Click="OnRibbonButtonClick"/>
+                    </ribbon:RibbonGroup>
+                    <ribbon:RibbonGroup loc:LocProps.Key="HR.GroupReports" Header="Reports">
+                        <ribbon:RibbonButton loc:LocProps.Key="HR.PayrollSummary" Label="Payroll summary" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="HR.PayslipReport" Label="Payslip" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="HR.AttendanceSummary" Label="Attendance summary" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="HR.LeaveBalances" Label="Leave balances" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
                 </ribbon:RibbonTab>
 

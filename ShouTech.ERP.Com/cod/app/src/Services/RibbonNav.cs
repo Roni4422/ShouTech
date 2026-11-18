@@ -54,6 +54,19 @@ public static class RibbonNav
             case "CRM.Opportunities": Show(new CrmOppWin(), owner); return true;
             case "CRM.Activities": Show(new CrmActivitiesWin(), owner); return true;
 
+            // ------------------------------------------------ HR / Payroll (Build HR 065; HR.* keys, HR.* RBAC)
+            case "HR.Employees": Show(new HrEmployeeWin(), owner); return true;
+            case "HR.Departments": Show(new HrDeptWin(), owner); return true;
+            case "HR.Designations": Show(new HrDesigWin(), owner); return true;
+            case "HR.Attendance": Show(new HrAttendanceWin(), owner); return true;
+            case "HR.Leave": Show(new HrLeaveWin(), owner); return true;
+            case "HR.Structures": Show(new HrStructureWin(), owner); return true;
+            case "HR.Payroll": Show(new HrPayrollWin(), owner); return true;
+            case "HR.PayrollSummary": Show(new HrPayrollSummaryWin(), owner); return true;
+            case "HR.PayslipReport": Show(new HrPayslipWin(), owner); return true;
+            case "HR.AttendanceSummary": Show(new HrAttendanceSummaryWin(), owner); return true;
+            case "HR.LeaveBalances": Show(new HrLeaveBalanceWin(), owner); return true;
+
             // ------------------------------------------------ Accounts reports & cards
             case "Accounts.CostCenter":
             case "Accounts.LinkWithAccounts": Show(new CcListWin(), owner); return true;

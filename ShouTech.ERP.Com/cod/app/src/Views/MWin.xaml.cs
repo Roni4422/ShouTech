@@ -1299,6 +1299,11 @@ namespace ShouTech.App.Views
             RoutedEventArgs e) =>
             ShowRibbonTab("TabManufacturing");
 
+        private void OnMenuHRClick(
+            object sender,
+            RoutedEventArgs e) =>
+            ShowRibbonTab("TabHR");
+
         private void OnMenuBanksClick(
             object sender,
             RoutedEventArgs e) =>

@@ -238,6 +238,13 @@ public static class RptNav
     public static void OpenMfgOrder(Window? owner = null) => Show(new MfgWin(), owner);
     public static void OpenBom(Window? owner = null) => Show(new BomWin(), owner);
     public static void OpenPlanning(Window? owner = null) => Show(new MfgPlanWin(), owner);
+    public static void OpenHrEmployees(Window? owner = null) => Show(new HrEmployeeWin(), owner);
+    public static void OpenHrDepartments(Window? owner = null) => Show(new HrDeptWin(), owner);
+    public static void OpenHrDesignations(Window? owner = null) => Show(new HrDesigWin(), owner);
+    public static void OpenHrAttendance(Window? owner = null) => Show(new HrAttendanceWin(), owner);
+    public static void OpenHrLeave(Window? owner = null) => Show(new HrLeaveWin(), owner);
+    public static void OpenHrStructures(Window? owner = null) => Show(new HrStructureWin(), owner);
+    public static void OpenHrPayroll(Window? owner = null) => Show(new HrPayrollWin(), owner);
     public static void OpenSalesOrder(Window? owner = null) => Show(new OrdWin(OrdKind.Sales), owner);
     public static void OpenPurchaseOrder(Window? owner = null) => Show(new OrdWin(OrdKind.Purchase), owner);
     public static void OpenBarcodeTool(Window? owner = null) => Show(new BarWin(), owner);
