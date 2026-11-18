@@ -702,7 +702,7 @@ public static class GlPosting
         return order.Select(k => map[k]).ToList();
     }
 
-    private static string ResolveOpenPeriod(
+    public static string ResolveOpenPeriod(
         DbConnection connection, DbTransaction transaction, string prov, Guid companyId, DateOnly entryDate)
     {
         object entryDateValue = prov == "PostgreSQL"
