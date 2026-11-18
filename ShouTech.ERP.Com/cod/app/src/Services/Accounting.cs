@@ -371,7 +371,7 @@ internal static class AccRepo
             WHERE j.status = 1
             GROUP BY l.account_id
         ) bal ON bal.aid = a.account_id
-        """;
+        """ + Environment.NewLine;
 
     public static List<AccRec> LoadAll()
     {
