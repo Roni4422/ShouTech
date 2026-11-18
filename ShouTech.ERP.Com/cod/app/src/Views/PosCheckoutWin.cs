@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -8,62 +8,69 @@ using System.Windows.Media;
 using ShouTech.App.Configuration;
 using ShouTech.App.Reporting.Invoices;
 using ShouTech.App.Services;
+using ShouTech.Domain.Entities;
 
 using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
-/// <summary>POS-specific tender review and document posting.</summary>
+/// <summary>
+/// POS checkout (Build POS 066): split-tender settlement of one bill.
+/// Cash (applied + handed-over, change computed), card, and on-account
+/// tenders combine freely; the applied amounts must equal the bill
+/// total exactly (PosTenderMath, POS-1004) and on-account requires the
+/// named customer PosWin resolved (its credit guard runs inside
+/// InvRepo.Post). Posting goes through PosPosting.CompleteSale — the
+/// verified InvRepo path with the session context — and a posted sale
+/// prints its receipt through InvPrn.PrintPosReceipt.
+/// </summary>
 public sealed class PosCheckoutWin : BaseWin
 {
     private readonly InvDoc _doc;
-    private readonly string _paymentMethod;
-    private readonly TextBox _customerCode = new();
-    private readonly TextBox _customerName = new() { IsReadOnly = true };
+    private readonly Guid? _sessionId;
+    private readonly string? _sessionNo;
     private readonly TextBlock _docNo = new();
     private readonly TextBlock _date = new();
+    private readonly TextBlock _customer = new();
+    private readonly TextBlock _session = new();
     private readonly TextBlock _total = new() { FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(26), FontWeight = FontWeights.Bold };
-    private readonly TextBlock _payment = new();
+    private readonly TextBox _cashApplied = new() { Text = "0" };
+    private readonly TextBox _cashTendered = new() { Text = "0" };
+    private readonly TextBox _cardApplied = new() { Text = "0" };
+    private readonly TextBox _cardRef = new();
+    private readonly TextBox _onAccount = new() { Text = "0" };
+    private readonly TextBlock _change = new() { FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(18), FontWeight = FontWeights.Bold };
+    private readonly TextBlock _remaining = new();
     private readonly Button _complete = new();
     private readonly Button _cancel = new();
 
-    public PosCheckoutWin(IEnumerable<InvLine> lines, string paymentMethod, string? notes)
+    /// <summary>The posted document and its change, for the caller.</summary>
+    public InvDoc? PostedDoc { get; private set; }
+    public decimal ChangeDue { get; private set; }
+
+    public PosCheckoutWin(InvDoc doc, Guid? sessionId, string? sessionNo, string defaultTender)
     {
-        ArgumentNullException.ThrowIfNull(lines);
-        if (string.IsNullOrWhiteSpace(paymentMethod))
-            throw new ArgumentException("A payment method is required.", nameof(paymentMethod));
-
-        _paymentMethod = paymentMethod.Trim();
-        _doc = new InvDoc
-        {
-            Kind = InvDocKind.PosSale,
-            DocNo = InvRepo.NextDocNo(InvDocKind.PosSale),
-            DocDate = DateTime.Today,
-            CurrencyCode = UsrPref.Load().CurrencyCode,
-            PaymentMethod = MapPaymentMethod(paymentMethod),
-            DefaultTaxRate = TaxSvc.GetDefaultRate(),
-            Notes = notes,
-            Lines = lines.Select(line => new InvLine
-            {
-                LineNo = line.LineNo,
-                MaterialId = line.MaterialId,
-                MaterialCode = line.MaterialCode,
-                Description = line.Description,
-                Unit = line.Unit,
-                Qty = line.Qty,
-                UnitPrice = line.UnitPrice,
-                DiscountPct = line.DiscountPct,
-                TaxRate = line.TaxRate,
-                WarehouseId = line.WarehouseId
-            }).ToList()
-        };
-
-        Width = 560;
-        Height = 440;
-        MinWidth = 500;
-        MinHeight = 360;
+        _doc = doc ?? throw new ArgumentNullException(nameof(doc));
+        _sessionId = sessionId;
+        _sessionNo = sessionNo;
+        Width = 620;
+        Height = 560;
+        MinWidth = 540;
+        MinHeight = 420;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
+        // The cashier's pre-selected tender pre-fills its box.
+        var total = doc.GrandTotal;
+        switch (defaultTender)
+        {
+            case "Card": case "K-Net": case "Visa": _cardApplied.Text = total.ToString("N2", CultureInfo.InvariantCulture); break;
+            case "Credit": _onAccount.Text = total.ToString("N2", CultureInfo.InvariantCulture); break;
+            default:
+                _cashApplied.Text = total.ToString("N2", CultureInfo.InvariantCulture);
+                _cashTendered.Text = total.ToString("N2", CultureInfo.InvariantCulture);
+                break;
+        }
         BuildUi();
+        UpdateTenderMath();
     }
 
     private void BuildUi()
@@ -74,63 +81,40 @@ public sealed class PosCheckoutWin : BaseWin
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         var header = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
-        var title = new TextBlock
-        {
-            Text = T("POS.CheckoutTitle"),
-            FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(19),
-            FontWeight = FontWeights.SemiBold
-        };
+        var title = new TextBlock { Text = T("POS.CheckoutTitle"), FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(19), FontWeight = FontWeights.SemiBold };
         title.Tag = "POS.CheckoutTitle";
         header.Children.Add(title);
         var document = CreateFormGrid(2);
         AddFormField(document, 0, 0, "Invoice.DocNo", _docNo);
         AddFormField(document, 0, 1, "Invoice.Date", _date);
+        AddFormField(document, 1, 0, "Invoice.CustomerName", _customer);
+        AddFormField(document, 1, 1, "POS.SessionNo", _session);
         header.Children.Add(document);
         Grid.SetRow(header, 0);
         root.Children.Add(header);
 
         var content = new StackPanel();
-        var customer = CreateFormGrid(2);
-        customer.Margin = new Thickness(0, 0, 0, 8);
-        AddFormField(customer, 0, 0, "Invoice.CustomerCode", _customerCode);
-        AddFormField(customer, 0, 1, "Invoice.CustomerName", _customerName);
-        content.Children.Add(customer);
-
-        var payment = CreateFormGrid(1);
-        payment.Margin = new Thickness(0, 0, 0, 8);
-        _payment.SetResourceReference(TextBlock.ForegroundProperty, "AccentBrush");
-        _payment.FontWeight = FontWeights.SemiBold;
-        AddFormField(payment, 0, 0, "POS.PaymentMethod", _payment);
-        content.Children.Add(payment);
-
-        var totalPanel = new Border
-        {
-            CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(12),
-            Margin = new Thickness(0, 2, 0, 8)
-        };
+        var totalPanel = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(12), Margin = new Thickness(0, 2, 0, 10) };
         totalPanel.SetResourceReference(Border.BackgroundProperty, "SurfaceSecondaryBrush");
         _total.SetResourceReference(TextBlock.ForegroundProperty, "AccentBrush");
         totalPanel.Child = _total;
         content.Children.Add(totalPanel);
 
-        var paymentNotice = new TextBlock
-        {
-            Text = T("POS.PaymentPostingNotice"),
-            TextWrapping = TextWrapping.Wrap,
-            Opacity = 0.8
-        };
-        paymentNotice.Tag = "POS.PaymentPostingNotice";
-        content.Children.Add(paymentNotice);
+        var tenders = CreateFormGrid(2);
+        AddTenderField(tenders, 0, 0, "POS.TenderCash", _cashApplied);
+        AddTenderField(tenders, 0, 1, "POS.TenderCashGiven", _cashTendered);
+        AddTenderField(tenders, 1, 0, "POS.TenderCard", _cardApplied);
+        AddTenderField(tenders, 1, 1, "POS.CardRef", _cardRef);
+        AddTenderField(tenders, 2, 0, "POS.TenderOnAccount", _onAccount);
+        content.Children.Add(tenders);
+
+        _change.Margin = new Thickness(0, 10, 0, 0);
+        content.Children.Add(_change);
+        content.Children.Add(_remaining);
         Grid.SetRow(content, 1);
         root.Children.Add(content);
 
-        var actions = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0)
-        };
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
         ConfigureButton(_cancel, "Common.Cancel");
         ConfigureButton(_complete, "POS.CompleteSale");
         _complete.MinWidth = ShouTech.App.Services.VisuId.PrimaryButtonMinWidth;
@@ -145,9 +129,16 @@ public sealed class PosCheckoutWin : BaseWin
         Content = root;
         _docNo.Text = _doc.DocNo;
         _date.Text = _doc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-        _payment.Text = T("POS.PaymentMethod") + ": " + T(PaymentMethodKey());
+        _customer.Text = string.IsNullOrWhiteSpace(_doc.PartyName) ? T("POS.WalkIn") : $"{_doc.PartyCode} {_doc.PartyName}".Trim();
+        _session.Text = _sessionNo ?? T("POS.Sessionless");
         _total.Text = T("Invoice.Total") + ": " + _doc.GrandTotal.ToString("N2", CultureInfo.InvariantCulture) + " " + _doc.CurrencyCode;
-        _customerCode.LostFocus += (_, _) => ResolveCustomer();
+        foreach (var box in new[] { _cashApplied, _cashTendered, _cardApplied, _onAccount })
+            box.TextChanged += (_, _) => UpdateTenderMath();
+    }
+
+    private static void AddTenderField(Grid grid, int row, int pair, string labelKey, Control control)
+    {
+        AddFormField(grid, row, pair, labelKey, control);
     }
 
     private static void ConfigureButton(Button button, string key)
@@ -159,78 +150,77 @@ public sealed class PosCheckoutWin : BaseWin
         button.SetResourceReference(StyleProperty, "VisuButtonStyle");
     }
 
-    private void ResolveCustomer()
-    {
-        var found = TaxSvc.ResolveParty(_customerCode.Text, customer: true);
-        if (found is null)
-        {
-            _doc.PartyId = null;
-            _doc.PartyCode = _customerCode.Text.Trim();
-            _doc.PartyName = string.Empty;
-            _customerName.Clear();
-            return;
-        }
+    private static decimal Parse(TextBox box)
+        => decimal.TryParse(box.Text, NumberStyles.Number, CultureInfo.CurrentCulture, out var value) ? value : 0m;
 
-        _doc.PartyId = found.Value.Id;
-        _doc.PartyCode = _customerCode.Text.Trim();
-        _doc.PartyName = found.Value.Name;
-        _customerName.Text = found.Value.Name;
+    private List<PosTender> BuildTenders()
+    {
+        var tenders = new List<PosTender>();
+        var cash = Parse(_cashApplied);
+        var card = Parse(_cardApplied);
+        var account = Parse(_onAccount);
+        if (cash > 0 || Parse(_cashTendered) > 0)
+            tenders.Add(new PosTender
+            {
+                TenderType = PosTenderTypes.Cash, Amount = cash,
+                TenderedAmount = Parse(_cashTendered) > 0 ? Parse(_cashTendered) : cash
+            });
+        if (card > 0)
+            tenders.Add(new PosTender { TenderType = PosTenderTypes.Card, Amount = card, CardRef = _cardRef.Text.Trim() });
+        if (account > 0)
+            tenders.Add(new PosTender { TenderType = PosTenderTypes.OnAccount, Amount = account });
+        return tenders;
     }
 
-    private string PaymentMethodKey()
-        => "POS." + (_paymentMethod.Equals("K-Net", StringComparison.OrdinalIgnoreCase) ? "KNet" : _paymentMethod);
-
-    /// <summary>Maps the POS tender label onto the persisted payment-method enum.
-    /// Card networks (K-Net, Visa) post as Card, never silently as Cash.</summary>
-    private static InvPaymentMethod MapPaymentMethod(string method)
+    private void UpdateTenderMath()
     {
-        if (method.Equals("Credit", StringComparison.OrdinalIgnoreCase))
-            return InvPaymentMethod.Credit;
-        if (method.Equals("K-Net", StringComparison.OrdinalIgnoreCase)
-            || method.Equals("Visa", StringComparison.OrdinalIgnoreCase)
-            || method.Equals("Card", StringComparison.OrdinalIgnoreCase))
-            return InvPaymentMethod.Card;
-        return InvPaymentMethod.Cash;
+        var applied = Parse(_cashApplied) + Parse(_cardApplied) + Parse(_onAccount);
+        var change = Math.Max(0m, Parse(_cashTendered) - Parse(_cashApplied));
+        ChangeDue = change;
+        _change.Text = $"{T("POS.Change")}: {change:N2} {_doc.CurrencyCode}";
+        var remaining = _doc.GrandTotal - applied;
+        _remaining.Text = remaining == 0m
+            ? T("POS.TendersBalanced")
+            : $"{T("POS.TendersRemaining")}: {remaining:N2} {_doc.CurrencyCode}";
     }
 
     private void CompleteSale()
     {
-        if (_doc.Lines.Count == 0)
+        if (_doc.Lines.Count == 0) { ShowWarn("Invoice.NeedLines"); return; }
+        var tenders = BuildTenders();
+        try
         {
-            ShowWarn("Invoice.NeedLines");
+            PosTenderMath.ValidateSaleTenders(_doc.GrandTotal, tenders, _doc.PartyId is not null);
+        }
+        catch (AppError ex)
+        {
+            AppHost.Errors.Report(ex.Code, ex, "PosCheckoutWin.CompleteSale");
+            MessageBox.Show(this, ex.Message, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
             return;
         }
-
-        ResolveCustomer();
-        if (_customerCode.Text.Length > 0 && _doc.PartyId is null)
-        {
-            ShowWarn("POS.CustomerNotFound");
-            return;
-        }
-        if (_paymentMethod.Equals("Credit", StringComparison.OrdinalIgnoreCase) && _doc.PartyId is null)
-        {
-            ShowWarn("POS.CreditNeedsCustomer");
-            return;
-        }
-        if (!AskConfirm("POS.ConfirmSale"))
-            return;
+        if (!AskConfirm("POS.ConfirmSale")) return;
 
         _complete.IsEnabled = false;
         try
         {
-            // A completed POS sale is settled in full unless it is on credit.
-            _doc.PaidAmount = _doc.PaymentMethod == InvPaymentMethod.Credit ? 0m : _doc.GrandTotal;
-            InvRepo.SaveDraft(_doc);
-            // Batch/serial capture (Phase B 054, decision B2): serial
-            // capture is required at POS exactly as on invoices.
-            var captures = BatchSerialCaptureSvc.CaptureForPosting(_doc, this);
-            if (captures is null)
+            var posted = PosPosting.CompleteSale(_doc, _sessionId, tenders, CurrentUserId,
+                doc => BatchSerialCaptureSvc.CaptureForPosting(doc, this));
+            if (posted.Status != InvDocStatus.Posted)
             {
+                // Batch/serial capture was cancelled; the draft stands.
                 _complete.IsEnabled = true;
                 return;
             }
-            InvRepo.Post(_doc.DocId, _doc.Kind, AppState.CurrentUser?.Username ?? Environment.UserName, captures);
+            PostedDoc = posted;
             ShowInfo("POS.SalePosted");
+            try
+            {
+                InvPrn.PrintPosReceipt(posted, tenders, ChangeDue, CurrentCompanyDisplay, _sessionNo, CurrentUserDisplay);
+            }
+            catch (Exception printEx)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, printEx, "PosCheckoutWin.PrintReceipt");
+            }
             DialogResult = true;
         }
         catch (Exception ex)
@@ -245,8 +235,10 @@ public sealed class PosCheckoutWin : BaseWin
     {
         Title = T("POS.CheckoutTitle");
         RefreshLocalizedText(Content as DependencyObject);
-        _payment.Text = T("POS.PaymentMethod") + ": " + T(PaymentMethodKey());
         _total.Text = T("Invoice.Total") + ": " + _doc.GrandTotal.ToString("N2", CultureInfo.InvariantCulture) + " " + _doc.CurrencyCode;
+        _customer.Text = string.IsNullOrWhiteSpace(_doc.PartyName) ? T("POS.WalkIn") : $"{_doc.PartyCode} {_doc.PartyName}".Trim();
+        _session.Text = _sessionNo ?? T("POS.Sessionless");
+        UpdateTenderMath();
     }
 
     private static void RefreshLocalizedText(DependencyObject? parent)
@@ -255,8 +247,7 @@ public sealed class PosCheckoutWin : BaseWin
             button.Content = T(buttonKey);
         if (parent is TextBlock textBlock && textBlock.Tag is string textKey)
             textBlock.Text = T(textKey);
-        if (parent == null)
-            return;
+        if (parent == null) return;
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
             RefreshLocalizedText(VisualTreeHelper.GetChild(parent, i));
     }

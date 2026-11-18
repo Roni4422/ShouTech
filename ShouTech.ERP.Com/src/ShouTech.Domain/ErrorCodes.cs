@@ -159,4 +159,17 @@ public static class ErrorCodes
     public const string HrMasterInUse = "HR-1008";
     public const string HrEmployeeNotPayable = "HR-1009";
     public const string HrMasterCodeDuplicate = "HR-1010";
+
+    // ---- POS 1001-1999 (POS full build, migration 066) ------------------
+    // The POS module takes its own prefix block, like MFG / HR.
+    public const string PosNoOpenSession = "POS-1001";
+    public const string PosSessionAlreadyOpen = "POS-1002";
+    public const string PosSessionStateInvalid = "POS-1003";
+    public const string PosTenderMismatch = "POS-1004";
+    public const string PosTenderInvalid = "POS-1005";
+    public const string PosReturnExceedsSold = "POS-1006";
+    public const string PosReturnOriginalInvalid = "POS-1007";
+    public const string PosHeldBillNotFound = "POS-1008";
+    public const string PosHeldBillStateInvalid = "POS-1009";
+    public const string PosSessionlessNotAllowed = "POS-1010";
 }

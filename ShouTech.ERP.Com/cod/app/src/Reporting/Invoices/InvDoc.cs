@@ -158,6 +158,17 @@ public sealed class InvDoc
     /// <summary>Payment value / paid amount on this document.</summary>
     public decimal PaidAmount { get; set; }
 
+    // ---- POS split tenders (Build POS 066, transient) ------------------
+    // When a POS sale / POS return is settled by MORE THAN ONE tender,
+    // the single PaymentMethod cannot express the GL settlement legs.
+    // PosPosting fills these two magnitudes (cash part / card part of
+    // PaidAmount; the remainder of the total is the receivable leg) and
+    // InvRepo.BuildGlLines posts Cash 131 / Bank 132 accordingly. Null
+    // on every non-POS document and on single-tender POS documents,
+    // where the legacy PaymentMethod leg is already exact.
+    public decimal? PosCashApplied { get; set; }
+    public decimal? PosCardApplied { get; set; }
+
     public string KindCode => Kind switch
     {
         InvDocKind.SalesInvoice => "SAL",

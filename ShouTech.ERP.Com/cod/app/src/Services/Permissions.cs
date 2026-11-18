@@ -479,6 +479,14 @@ namespace ShouTech.App.Services
 
             public const string DiscountManage = "POS.DISCOUNT.MANAGE";
 
+            // Build POS 066 (migration 066 seeds): applying a discount
+            // at the till is a sensitive override, separate from
+            // managing discount definitions; holding bills and the
+            // session-less bypass are their own rights.
+            public const string DiscountOverride = "POS.DISCOUNT.OVERRIDE";
+            public const string HoldManage = "POS.HOLD.MANAGE";
+            public const string SessionBypass = "POS.SESSION.BYPASS";
+
             public const string SyncExecute = "POS.SYNC.EXECUTE";
             public const string ReportsView = "POS.REPORTS.VIEW";
         }

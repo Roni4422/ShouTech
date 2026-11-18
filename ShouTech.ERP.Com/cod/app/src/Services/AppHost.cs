@@ -44,6 +44,7 @@ namespace ShouTech.App.Services
         public static QualityService? Quality { get; private set; }
         public static CrmService? Crm { get; private set; }
         public static HrService? Hr { get; private set; }
+        public static PosService? Pos { get; private set; }
         public static ProjectService? Projects { get; private set; }
         public static AssetService? Assets { get; private set; }
         public static ReconciliationService? Reconciliation { get; private set; }
@@ -103,6 +104,7 @@ namespace ShouTech.App.Services
             Quality = CreatePhase3Service((provider, connection) => new QualityService(new QualityRepository(provider, connection)), "Quality");
             Crm = CreatePhase3Service((provider, connection) => new CrmService(new CrmRepository(provider, connection)), "CRM");
             Hr = CreatePhase3Service((provider, connection) => new HrService(new HrRepository(provider, connection)), "HR");
+            Pos = CreatePhase3Service((provider, connection) => new PosService(new PosRepository(provider, connection)), "POS");
             Projects = CreatePhase3Service((provider, connection) => new ProjectService(new ProjectRepository(provider, connection)), "Projects");
             Assets = CreatePhase3Service((provider, connection) => new AssetService(new AssetRepository(provider, connection)), "Fixed Assets");
             Reconciliation = CreatePhase3Service((provider, connection) => new ReconciliationService(new ReconciliationRepository(provider, connection)), "Payment Reconciliation");
@@ -184,6 +186,7 @@ namespace ShouTech.App.Services
                 Quality = CreatePhase3Service((provider, connection) => new QualityService(new QualityRepository(provider, connection)), "Quality");
                 Crm = CreatePhase3Service((provider, connection) => new CrmService(new CrmRepository(provider, connection)), "CRM");
             Hr = CreatePhase3Service((provider, connection) => new HrService(new HrRepository(provider, connection)), "HR");
+            Pos = CreatePhase3Service((provider, connection) => new PosService(new PosRepository(provider, connection)), "POS");
                 Projects = CreatePhase3Service((provider, connection) => new ProjectService(new ProjectRepository(provider, connection)), "Projects");
                 Assets = CreatePhase3Service((provider, connection) => new AssetService(new AssetRepository(provider, connection)), "Fixed Assets");
                 Reconciliation = CreatePhase3Service((provider, connection) => new ReconciliationService(new ReconciliationRepository(provider, connection)), "Payment Reconciliation");
@@ -353,6 +356,7 @@ namespace ShouTech.App.Services
         public static QualityService? Quality => AppHost.Quality;
         public static CrmService? Crm => AppHost.Crm;
         public static HrService? Hr => AppHost.Hr;
+        public static PosService? Pos => AppHost.Pos;
         public static ProjectService? Projects => AppHost.Projects;
         public static AssetService? Assets => AppHost.Assets;
         public static ReconciliationService? Reconciliation => AppHost.Reconciliation;

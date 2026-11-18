@@ -213,7 +213,8 @@ public static class InvRepo
     }
 
     public static void Post(long docId, InvDocKind kind, string userId,
-        IReadOnlyDictionary<int, LineBatchSerialCapture>? batchSerialByLine = null)
+        IReadOnlyDictionary<int, LineBatchSerialCapture>? batchSerialByLine = null,
+        PosPostingContext? pos = null)
     {
         DocSchema.Ensure();
         MatRepo.EnsureSchema();
@@ -306,6 +307,20 @@ public static class InvRepo
                 ErrorCodes.DocumentKindNotPostable,
                 $"Document kind '{kind}' cannot be posted through the invoice posting path.",
                 kind.ToString());
+
+        // POS session / tender gate (Build POS 066): when the caller
+        // supplies a POS context (the PosWin / PosCheckoutWin /
+        // PosReturnWin path — the only till path), the sale or return
+        // must belong to an OPEN session, or to an explicitly enabled
+        // session-less mode, and its tenders must settle the stored
+        // total exactly. The check runs INSIDE the posting transaction,
+        // before stock / GL / ledger writes, so a refused sale posts
+        // nothing at all (POS-1001 / POS-1004). Direct InvRepo posts
+        // without a context keep the pre-066 engine behaviour — the
+        // session rule binds the till, and PosService refuses earlier
+        // still; see docs/BUILD_POS.md §2.
+        if (pos is not null)
+            ValidatePosContext(connection, tx, doc, pos);
 
         // Load lines for inventory posting within this connection/transaction.
         {
@@ -449,6 +464,15 @@ public static class InvRepo
                 throw new InvalidOperationException("Post failed — document may already be posted.");
         }
 
+        // POS tenders + session link (Build POS 066): written in THIS
+        // transaction, so a posted POS document and its tenders commit
+        // or roll back together — there is no posted-but-tenderless
+        // state. Refund rows of a return already carry negative
+        // amounts (PosPosting), which is what makes the session's
+        // expected cash a plain SUM in the Z report.
+        if (pos is not null)
+            WritePosTenders(connection, tx, doc, pos, userId);
+
         // Party ledger: sales increase receivable (debit customer),
         // purchases increase payable — ONLY for kinds whose policy carries
         // a party-ledger effect (Step 5). Before this gate the block ran
@@ -581,6 +605,126 @@ public static class InvRepo
         // Step 6 ordering, so COGS reads the engine's movement costs.)
 
         tx.Commit();
+    }
+
+    // ---------------------------------------------------------------
+    // Build POS 066: session / tender gate + tender writes
+    // ---------------------------------------------------------------
+
+    /// <summary>Validates the POS context inside the posting
+    /// transaction: the session must exist and be Open for this
+    /// company (or session-less mode must be explicitly enabled), and
+    /// the tenders must settle the document's STORED total exactly.
+    /// Also stamps the transient split onto the loaded document so
+    /// BuildGlLines posts the cash/card settlement legs honestly.</summary>
+    private static void ValidatePosContext(DbConnection connection, DbTransaction tx, InvDoc doc, PosPostingContext pos)
+    {
+        var notDeleted = DatabaseRuntime.IsPostgreSql() ? "is_deleted = false" : "is_deleted = 0";
+        if (pos.SessionId is Guid sessionId)
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = $"SELECT status FROM pos_sessions WHERE company_id=$company AND id=$id AND {notDeleted};";
+            Add(cmd, "$company", Company);
+            Add(cmd, "$id", sessionId.ToString("D"));
+            var status = cmd.ExecuteScalar();
+            if (status is null or DBNull)
+                throw new AppError(ErrorCodes.PosNoOpenSession,
+                    "The POS session for this sale was not found for the current company.", sessionId.ToString("D"));
+            if (!string.Equals(Convert.ToString(status, CultureInfo.InvariantCulture), "Open", StringComparison.Ordinal))
+                throw new AppError(ErrorCodes.PosNoOpenSession,
+                    "The POS session for this sale is not open; no sale can post outside an open session.", sessionId.ToString("D"));
+        }
+        else
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = "SELECT allow_sessionless FROM pos_settings WHERE company_id=$company;";
+            Add(cmd, "$company", Company);
+            var allowed = cmd.ExecuteScalar();
+            var isAllowed = allowed is not null and not DBNull && Convert.ToBoolean(allowed, CultureInfo.InvariantCulture);
+            if (!isAllowed)
+                throw new AppError(ErrorCodes.PosNoOpenSession,
+                    "No POS session is open and this company has not enabled session-less selling.");
+        }
+
+        if (doc.Kind == InvDocKind.PosSale)
+        {
+            ShouTech.Domain.Entities.PosTenderMath.ValidateSaleTenders(doc.PostingTotal, pos.Tenders, doc.PartyId is not null);
+            var collected = ShouTech.Domain.Entities.PosTenderMath.CollectedAmount(pos.Tenders);
+            if (ShouTech.Domain.Entities.PosTenderMath.Round(doc.PaidAmount) != ShouTech.Domain.Entities.PosTenderMath.Round(collected))
+                throw new AppError(ErrorCodes.PosTenderMismatch,
+                    $"The document paid_amount {doc.PaidAmount} does not equal the collected tenders {collected} (cash + card).");
+            doc.PosCashApplied = ShouTech.Domain.Entities.PosTenderMath.CashApplied(pos.Tenders);
+            doc.PosCardApplied = ShouTech.Domain.Entities.PosTenderMath.CardApplied(pos.Tenders);
+        }
+        else if (doc.Kind == InvDocKind.SalesReturn)
+        {
+            // Refund rows carry NEGATIVE amounts; their magnitudes must
+            // settle the return total, and the collected refund must
+            // equal the return document's paid_amount (its GL mirror).
+            foreach (var tender in pos.Tenders)
+                if (tender.Amount > 0)
+                    throw new AppError(ErrorCodes.PosTenderInvalid,
+                        "A POS return tender is a refund and must carry a negative amount.");
+            var total = -pos.Tenders.Sum(t => t.Amount);
+            var collected = -(ShouTech.Domain.Entities.PosTenderMath.CashApplied(pos.Tenders) + ShouTech.Domain.Entities.PosTenderMath.CardApplied(pos.Tenders));
+            if (ShouTech.Domain.Entities.PosTenderMath.Round(total) != ShouTech.Domain.Entities.PosTenderMath.Round(doc.PostingTotal))
+                throw new AppError(ErrorCodes.PosTenderMismatch,
+                    $"Refund tenders {total} do not settle the return total {doc.PostingTotal}.");
+            if (ShouTech.Domain.Entities.PosTenderMath.Round(collected) != ShouTech.Domain.Entities.PosTenderMath.Round(doc.PaidAmount))
+                throw new AppError(ErrorCodes.PosTenderMismatch,
+                    $"The return paid_amount {doc.PaidAmount} does not equal the refunded cash + card {collected}.");
+            doc.PosCashApplied = -ShouTech.Domain.Entities.PosTenderMath.CashApplied(pos.Tenders);
+            doc.PosCardApplied = -ShouTech.Domain.Entities.PosTenderMath.CardApplied(pos.Tenders);
+        }
+    }
+
+    /// <summary>Writes the context's tender rows and the document's
+    /// session link inside the posting transaction (the PosRepository
+    /// INSERT shape — one shape, two writers, indistinguishable rows).</summary>
+    private static void WritePosTenders(DbConnection connection, DbTransaction tx, InvDoc doc, PosPostingContext pos, string userId)
+    {
+        foreach (var tender in pos.Tenders)
+        {
+            if (tender.Amount == 0m && tender.TenderType != ShouTech.Domain.Entities.PosTenderTypes.Cash) continue;
+            using var cmd = connection.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = """
+                INSERT INTO pos_sale_tenders
+                    (id, company_id, session_id, doc_id, doc_no, doc_kind, tender_type,
+                     amount, tendered_amount, change_amount, card_ref, created_by)
+                VALUES ($id, $company, $session, $doc, $docno, $kind, $type,
+                        $amount, $tendered, $change, $ref, $user);
+                """;
+            Add(cmd, "$id", Guid.NewGuid().ToString("D"));
+            Add(cmd, "$company", Company);
+            Add(cmd, "$session", pos.SessionId?.ToString("D"));
+            Add(cmd, "$doc", doc.DocId);
+            Add(cmd, "$docno", doc.DocNo);
+            Add(cmd, "$kind", doc.KindCode);
+            Add(cmd, "$type", tender.TenderType);
+            Add(cmd, "$amount", tender.Amount);
+            Add(cmd, "$tendered", tender.TenderedAmount);
+            Add(cmd, "$change", tender.ChangeAmount);
+            Add(cmd, "$ref", string.IsNullOrWhiteSpace(tender.CardRef) ? null : tender.CardRef.Trim());
+            Add(cmd, "$user", userId);
+            cmd.ExecuteNonQuery();
+        }
+        if (pos.SessionId is Guid sessionId)
+        {
+            using var link = connection.CreateCommand();
+            link.Transaction = tx;
+            link.CommandText = """
+                UPDATE sales_documents SET pos_session_id=$session
+                WHERE doc_id=$id AND (company_id=$company OR company_id=$guid);
+                """;
+            Add(link, "$session", sessionId.ToString("D"));
+            Add(link, "$id", doc.DocId);
+            Add(link, "$company", Company);
+            Add(link, "$guid", ResolveCompanyGuidOrNull(connection, tx)?.ToString("D") ?? Company);
+            link.ExecuteNonQuery();
+        }
     }
 
     // ---------------------------------------------------------------
@@ -1628,7 +1772,21 @@ public static class InvRepo
             case InvDocKind.PosSale:
             {
                 var paid = Math.Min(Math.Max(doc.PaidAmount, 0m), grand);
-                if (doc.Kind == InvDocKind.PosSale || paid > 0)
+                if (doc.Kind == InvDocKind.PosSale
+                    && doc.PosCashApplied is decimal splitCash && doc.PosCardApplied is decimal splitCard)
+                {
+                    // Split tender (Build POS 066): the collected part
+                    // settles through Cash 131 for the cash tender and
+                    // Bank 132 for the card tender; only the on-account
+                    // remainder rides on Receivable — the same total the
+                    // single-tender leg below carries, split honestly.
+                    var cashLeg = Math.Min(Math.Max(splitCash, 0m), grand);
+                    var cardLeg = Math.Min(Math.Max(splitCard, 0m), grand - cashLeg);
+                    Add(GlAccounts.Cash, cashLeg, 0);
+                    Add(GlAccounts.Bank, cardLeg, 0);
+                    Add(GlAccounts.Receivable, grand - cashLeg - cardLeg, 0);
+                }
+                else if (doc.Kind == InvDocKind.PosSale || paid > 0)
                 {
                     Add(settleAccount, paid, 0);
                     Add(GlAccounts.Receivable, grand - paid, 0);
@@ -1651,8 +1809,23 @@ public static class InvRepo
                 // the unpaid remainder to Receivable — so invoice + return
                 // net to zero on EVERY account, cash/bank included.
                 var paid = Math.Min(Math.Max(doc.PaidAmount, 0m), grand);
-                Add(settleAccount, 0, paid);
-                Add(GlAccounts.Receivable, 0, grand - paid);
+                if (doc.PosCashApplied is decimal refundCash && doc.PosCardApplied is decimal refundCard)
+                {
+                    // POS return split refund (Build POS 066): money
+                    // goes back out through the same accounts it came
+                    // in — cash refunds credit Cash, card refunds
+                    // credit Bank, the on-account part off Receivable.
+                    var cashLeg = Math.Min(Math.Max(refundCash, 0m), grand);
+                    var cardLeg = Math.Min(Math.Max(refundCard, 0m), grand - cashLeg);
+                    Add(GlAccounts.Cash, 0, cashLeg);
+                    Add(GlAccounts.Bank, 0, cardLeg);
+                    Add(GlAccounts.Receivable, 0, grand - cashLeg - cardLeg);
+                }
+                else
+                {
+                    Add(settleAccount, 0, paid);
+                    Add(GlAccounts.Receivable, 0, grand - paid);
+                }
                 AddCogs(reverse: true);
                 break;
             }
@@ -1851,6 +2024,18 @@ internal static class InvDocKindExt
 ///   in place the block is gone and the kinds simply have no
 ///   GL / party-ledger / generic-stock effect of their own.
 /// </summary>
+/// <summary>
+/// The POS context of one posting (Build POS 066): the session the
+/// document belongs to (null = an explicitly enabled session-less
+/// sale) and the tenders that settle it. Sales carry positive applied
+/// amounts summing to the bill total; returns carry NEGATIVE refund
+/// amounts summing to the return total. Supplied by PosPosting — the
+/// till path — and enforced by InvRepo.Post inside its transaction.
+/// </summary>
+public sealed record PosPostingContext(
+    Guid? SessionId,
+    IReadOnlyList<ShouTech.Domain.Entities.PosTender> Tenders);
+
 public static class InvPostingPolicy
 {
     public sealed record Effects(

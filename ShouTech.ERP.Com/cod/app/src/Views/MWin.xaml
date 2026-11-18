@@ -366,6 +366,8 @@
                 <ribbon:RibbonTab x:Name="TabPOS" Header="Point of Sale" Visibility="Collapsed">
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.POSSales" Header="Sales">
                         <ribbon:RibbonButton loc:LocProps.Key="POS.OpenCashier" Label="Open POS Cashier" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="POS.Sessions" Label="POS sessions" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="POS.ZReport" Label="Session Z report" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.POSAdministration" Header="Administration">
                         <ribbon:RibbonButton loc:LocProps.Key="POS.Points" Label="Points" Click="OnRibbonButtonClick"/>
