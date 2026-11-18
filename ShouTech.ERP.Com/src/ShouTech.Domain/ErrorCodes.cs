@@ -144,4 +144,19 @@ public static class ErrorCodes
     public const string MfgIssueExceedsRequired = "MFG-1004";
     public const string MfgFinishExceedsPlanned = "MFG-1005";
     public const string PlanningConversionInvalid = "MFG-1006";
+
+    // ---- HR 1001-1999 (HR/Payroll build, migration 065) ----------------
+    // The HR module takes its own prefix block, like MFG. (The legacy
+    // catalog promises "Leave Balance Insufficient" etc. predate the
+    // module; HR-1003 is that promise kept under the module's codes.)
+    public const string HrEmployeeCodeDuplicate = "HR-1001";
+    public const string HrEmployeeInvalid = "HR-1002";
+    public const string HrLeaveBalanceInsufficient = "HR-1003";
+    public const string HrLeaveStateInvalid = "HR-1004";
+    public const string HrPayrollAlreadyPosted = "HR-1005";
+    public const string HrPayrollStateInvalid = "HR-1006";
+    public const string HrSalaryStructureInvalid = "HR-1007";
+    public const string HrMasterInUse = "HR-1008";
+    public const string HrEmployeeNotPayable = "HR-1009";
+    public const string HrMasterCodeDuplicate = "HR-1010";
 }

@@ -494,5 +494,65 @@
     "name": "PlanningConversionInvalid",
     "message": "Planning row '{0}' cannot be converted in status '{1}'.",
     "hint": "Only Planned orders and Suggested purchase rows can be converted, exactly once."
+  },
+  "HR-1001": {
+    "code": "HR-1001",
+    "name": "HrEmployeeCodeDuplicate",
+    "message": "Employee code '{0}' already exists for this company.",
+    "hint": "Choose a different employee code."
+  },
+  "HR-1002": {
+    "code": "HR-1002",
+    "name": "HrEmployeeInvalid",
+    "message": "Employee '{0}' has invalid data and cannot be saved.",
+    "hint": "Check the employee card fields and save again."
+  },
+  "HR-1003": {
+    "code": "HR-1003",
+    "name": "HrLeaveBalanceInsufficient",
+    "message": "Leave balance is insufficient for '{0}': the requested days exceed the available balance.",
+    "hint": "Allocate more days, reduce the request, or approve with the balance-override permission."
+  },
+  "HR-1004": {
+    "code": "HR-1004",
+    "name": "HrLeaveStateInvalid",
+    "message": "The leave application cannot change state from '{0}'.",
+    "hint": "Refresh the list and check the application status."
+  },
+  "HR-1005": {
+    "code": "HR-1005",
+    "name": "HrPayrollAlreadyPosted",
+    "message": "Payroll run '{0}' is already posted.",
+    "hint": "Reverse the run before regenerating or editing it."
+  },
+  "HR-1006": {
+    "code": "HR-1006",
+    "name": "HrPayrollStateInvalid",
+    "message": "Payroll run '{0}' is not in a state that allows this operation.",
+    "hint": "Refresh the run list and check the run status."
+  },
+  "HR-1007": {
+    "code": "HR-1007",
+    "name": "HrSalaryStructureInvalid",
+    "message": "Salary structure '{0}' is invalid.",
+    "hint": "Check the structure lines, components and accounts."
+  },
+  "HR-1008": {
+    "code": "HR-1008",
+    "name": "HrMasterInUse",
+    "message": "This record is still referenced by other data and cannot be deleted.",
+    "hint": "Remove the references first, or deactivate the record instead."
+  },
+  "HR-1009": {
+    "code": "HR-1009",
+    "name": "HrEmployeeNotPayable",
+    "message": "Employee '{0}' is terminated and cannot receive a salary assignment or payroll.",
+    "hint": "Re-activate the employee first if this is a correction."
+  },
+  "HR-1010": {
+    "code": "HR-1010",
+    "name": "HrMasterCodeDuplicate",
+    "message": "Code '{0}' already exists for this company.",
+    "hint": "Choose a different code."
   }
 }

@@ -494,5 +494,65 @@
     "name": "PlanningConversionInvalid",
     "message": "La ligne de planification '{0}' ne peut pas etre convertie dans le statut '{1}'.",
     "hint": "Seuls les ordres planifies et les suggestions d'achat peuvent etre convertis, une seule fois."
+  },
+  "HR-1001": {
+    "code": "HR-1001",
+    "name": "HrEmployeeCodeDuplicate",
+    "message": "Le code employe '{0}' existe deja pour cette societe.",
+    "hint": "Choisissez un autre code employe."
+  },
+  "HR-1002": {
+    "code": "HR-1002",
+    "name": "HrEmployeeInvalid",
+    "message": "Les donnees de l'employe '{0}' sont invalides et ne peuvent pas etre enregistrees.",
+    "hint": "Verifiez les champs de la fiche employe et reessayez."
+  },
+  "HR-1003": {
+    "code": "HR-1003",
+    "name": "HrLeaveBalanceInsufficient",
+    "message": "Solde de conges insuffisant pour '{0}' : les jours demandes depassent le solde disponible.",
+    "hint": "Allouez plus de jours, reduisez la demande, ou approuvez avec l'autorisation de depassement."
+  },
+  "HR-1004": {
+    "code": "HR-1004",
+    "name": "HrLeaveStateInvalid",
+    "message": "La demande de conge ne peut pas changer d'etat depuis '{0}'.",
+    "hint": "Actualisez la liste et verifiez le statut de la demande."
+  },
+  "HR-1005": {
+    "code": "HR-1005",
+    "name": "HrPayrollAlreadyPosted",
+    "message": "Le cycle de paie '{0}' est deja comptabilise.",
+    "hint": "Extournez le cycle avant de le regenerer ou de le modifier."
+  },
+  "HR-1006": {
+    "code": "HR-1006",
+    "name": "HrPayrollStateInvalid",
+    "message": "Le cycle de paie '{0}' n'est pas dans un etat permettant cette operation.",
+    "hint": "Actualisez la liste et verifiez le statut du cycle."
+  },
+  "HR-1007": {
+    "code": "HR-1007",
+    "name": "HrSalaryStructureInvalid",
+    "message": "La structure salariale '{0}' est invalide.",
+    "hint": "Verifiez les lignes, composants et comptes de la structure."
+  },
+  "HR-1008": {
+    "code": "HR-1008",
+    "name": "HrMasterInUse",
+    "message": "Cet enregistrement est encore reference par d'autres donnees et ne peut pas etre supprime.",
+    "hint": "Retirez d'abord les references, ou desactivez l'enregistrement."
+  },
+  "HR-1009": {
+    "code": "HR-1009",
+    "name": "HrEmployeeNotPayable",
+    "message": "L'employe '{0}' est parti et ne peut pas recevoir d'affectation salariale ni de paie.",
+    "hint": "Reactivez d'abord l'employe s'il s'agit d'une correction."
+  },
+  "HR-1010": {
+    "code": "HR-1010",
+    "name": "HrMasterCodeDuplicate",
+    "message": "Le code '{0}' existe deja pour cette societe.",
+    "hint": "Choisissez un autre code."
   }
 }

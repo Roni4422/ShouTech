@@ -494,5 +494,65 @@
     "name": "PlanningConversionInvalid",
     "message": "'{0}' planlama satiri '{1}' durumunda donusturulemez.",
     "hint": "Yalnizca Planlanan emirler ve Onerilen satin alma satirlari, tam bir kez donusturulebilir."
+  },
+  "HR-1001": {
+    "code": "HR-1001",
+    "name": "HrEmployeeCodeDuplicate",
+    "message": "'{0}' calisan kodu bu sirket icin zaten mevcut.",
+    "hint": "Farkli bir calisan kodu secin."
+  },
+  "HR-1002": {
+    "code": "HR-1002",
+    "name": "HrEmployeeInvalid",
+    "message": "'{0}' calisaninin verileri gecersiz ve kaydedilemiyor.",
+    "hint": "Calisan karti alanlarini kontrol edip tekrar kaydedin."
+  },
+  "HR-1003": {
+    "code": "HR-1003",
+    "name": "HrLeaveBalanceInsufficient",
+    "message": "'{0}' icin izin bakiyesi yetersiz: istenen gunler mevcut bakiyeyi asiyor.",
+    "hint": "Daha fazla gun tahsis edin, talebi azaltin veya bakiye asma izniyle onaylayin."
+  },
+  "HR-1004": {
+    "code": "HR-1004",
+    "name": "HrLeaveStateInvalid",
+    "message": "Izin basvurusu '{0}' durumundan degistirilemez.",
+    "hint": "Listeyi yenileyin ve basvuru durumunu kontrol edin."
+  },
+  "HR-1005": {
+    "code": "HR-1005",
+    "name": "HrPayrollAlreadyPosted",
+    "message": "'{0}' bordro donemi zaten muhasebelestirildi.",
+    "hint": "Yeniden olusturmadan veya duzenlemeden once donemi ters cevirin."
+  },
+  "HR-1006": {
+    "code": "HR-1006",
+    "name": "HrPayrollStateInvalid",
+    "message": "'{0}' bordro donemi bu isleme izin veren durumda degil.",
+    "hint": "Donem listesini yenileyin ve durumu kontrol edin."
+  },
+  "HR-1007": {
+    "code": "HR-1007",
+    "name": "HrSalaryStructureInvalid",
+    "message": "'{0}' maas yapisi gecersiz.",
+    "hint": "Yapi satirlarini, bilesenleri ve hesaplari kontrol edin."
+  },
+  "HR-1008": {
+    "code": "HR-1008",
+    "name": "HrMasterInUse",
+    "message": "Bu kayit baska veriler tarafindan kullaniliyor ve silinemez.",
+    "hint": "Once referanslari kaldirin veya kaydi pasif yapin."
+  },
+  "HR-1009": {
+    "code": "HR-1009",
+    "name": "HrEmployeeNotPayable",
+    "message": "'{0}' calisani isten ayrildi; maas atamasi veya bordro alamaz.",
+    "hint": "Bu bir duzeltme ise once calisani yeniden aktif yapin."
+  },
+  "HR-1010": {
+    "code": "HR-1010",
+    "name": "HrMasterCodeDuplicate",
+    "message": "'{0}' kodu bu sirket icin zaten mevcut.",
+    "hint": "Farkli bir kod secin."
   }
 }

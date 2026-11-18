@@ -303,6 +303,32 @@ namespace ShouTech.App.Services
         // No entitlement gate: licensing is postponed by the owner.
         // =====================================================================
 
+        // =====================================================================
+        // HR / PAYROLL (Build HR, migration 065 seeds). Leave approval
+        // (LeaveApprove) and the negative-balance override
+        // (LeaveOverride, sensitive) are separate from leave editing;
+        // payroll posting (PayrollPost, sensitive) is separate from
+        // payroll editing/generation — the step-1 separation pattern.
+        // =====================================================================
+
+        public static class Hr
+        {
+            public const string EmployeeView = "HR.EMPLOYEE.VIEW";
+            public const string EmployeeEdit = "HR.EMPLOYEE.EDIT";
+            public const string OrgView = "HR.ORG.VIEW";
+            public const string OrgEdit = "HR.ORG.EDIT";
+            public const string AttendanceView = "HR.ATTENDANCE.VIEW";
+            public const string AttendanceEdit = "HR.ATTENDANCE.EDIT";
+            public const string LeaveView = "HR.LEAVE.VIEW";
+            public const string LeaveEdit = "HR.LEAVE.EDIT";
+            public const string LeaveApprove = "HR.LEAVE.APPROVE";
+            public const string LeaveOverride = "HR.LEAVE.OVERRIDE";
+            public const string PayrollView = "HR.PAYROLL.VIEW";
+            public const string PayrollEdit = "HR.PAYROLL.EDIT";
+            public const string PayrollPost = "HR.PAYROLL.POST";
+            public const string ReportView = "HR.REPORT.VIEW";
+        }
+
         public static class Crm
         {
             public const string LeadView = "CRM.LEAD.VIEW";
