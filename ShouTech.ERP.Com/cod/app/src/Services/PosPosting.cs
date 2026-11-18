@@ -167,7 +167,7 @@ public static class PosPosting
     /// this rewrites the stored line_no values to the original bill's
     /// line numbers (same order — the return was built in original
     /// line order), inside one transaction.</summary>
-    private static void RestoreOriginalLineNumbers(long docId, IReadOnlyList<int> originalLineNos)
+    private static void RestoreOriginalLineNumbers(long docId, List<int> originalLineNos)
     {
         var cs = DatabaseRuntime.GetConnectionString()
             ?? throw new InvalidOperationException("No database connection.");
