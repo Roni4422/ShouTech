@@ -228,3 +228,34 @@ These are target folders, not permission to move all files in one batch. The fir
 - [ ] Remaining modules migrated in bounded waves.
 - [ ] All routes and windows covered by automated or documented manual smoke tests.
 - [ ] Final Debug/Release, database, and end-to-end regression matrix passed.
+
+
+## First bounded migration wave: Material Card
+
+**Status:** Source relocation committed; runtime verification pending.
+
+| Item | Result |
+|---|---|
+| Previous XAML | `cod/app/src/Views/MatCard.xaml` |
+| New XAML | `cod/app/src/Views/Inventory/MatCard.xaml` |
+| Previous code-behind | `cod/app/src/Views/MatCard.xaml.cs` |
+| New code-behind | `cod/app/src/Views/Inventory/MatCard.xaml.cs` |
+| Type and namespace | `ShouTech.App.Views.MatCard` preserved |
+| XAML class | `ShouTech.App.Views.MatCard` preserved |
+| Main-window route | `MWin.xaml.cs` -> `OpenMaterialCard()` -> `new MatCard` preserved |
+| Ribbon entry | Material Card button in `MWin.xaml` preserved |
+| Localization | Existing `Inventory.MaterialCard` and `MatCard.*` keys preserved |
+| Project inclusion | Recursive Compile and Page globs include the new subdirectory |
+| Source splitting | None; both original files moved intact |
+
+**Checks still required:** Windows CI build and test results for the move commit; runtime XAML resource loading; open/close/reopen; create/edit/search/delete behavior; SQLite persistence; PostgreSQL parity if supported by this card workflow. No runtime pass is claimed yet.
+
+## Current migration status
+
+- [x] Source inventory generated.
+- [x] First bounded XAML/code-behind pair moved together.
+- [ ] First move passes Windows Debug/Release build and automated tests.
+- [ ] Material Card runtime smoke test and persistence verification.
+- [ ] Remaining windows mapped and moved in bounded waves.
+- [ ] All Ribbon/menu routes verified.
+- [ ] Final full regression matrix passed.
