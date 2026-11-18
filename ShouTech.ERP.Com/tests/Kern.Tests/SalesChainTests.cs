@@ -162,6 +162,34 @@ namespace Kern.Tests
 
             ApplySqliteMigrations(databasePath);
 
+            // The delivery-note posting path uses the real stock valuation
+            // engine, so this fixture must contain the same company-scoped
+            // material, warehouse, and opening balance as a usable company.
+            using (var seed = new SqliteConnection(connectionString))
+            {
+                seed.Open();
+                using var command = seed.CreateCommand();
+                command.CommandText = """
+                    INSERT INTO companies
+                        (company_id, company_code, company_name_ar, company_name_en)
+                    VALUES ($companyId, 'SC-TEST', 'Sales Chain Test', 'Sales Chain Test');
+
+                    INSERT INTO warehouses
+                        (warehouse_id, company_id, warehouse_code, warehouse_name_ar, warehouse_name_en, is_active, is_deleted)
+                    VALUES (1, $companyId, 1, 'Main', 'Main', 1, 0);
+
+                    INSERT INTO materials
+                        (material_id, company_id, code, name_ar, name_en, is_stocked, is_deleted)
+                    VALUES (42, $companyId, 'MAT-42', 'Chain test item', 'Chain test item', 1, 0);
+
+                    INSERT INTO material_stock_balances
+                        (company_id, warehouse_id, material_id, available_qty, average_cost, last_cost)
+                    VALUES ($companyId, 1, 42, 1000, 40, 40);
+                    """;
+                command.Parameters.AddWithValue("$companyId", companyId.ToString("D"));
+                command.ExecuteNonQuery();
+            }
+
             var repository = new ShouTech.Infrastructure.CommercialDocumentRepository("SQLite", connectionString);
             var service = new SalesChainService(repository);
             Action cleanup = () =>
