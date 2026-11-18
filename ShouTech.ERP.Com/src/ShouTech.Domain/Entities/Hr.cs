@@ -510,7 +510,7 @@ public static class PayrollCalculator
             var v = Round(dailyRate * unpaidLeaveDays);
             deductions += v;
             Add(UnpaidLeaveComponentCode, "Unpaid Leave Deduction", HrComponentKinds.Deduction,
-                HrCalcTypes.Fixed, v, true, HrGlAccounts.SalariesPayable,
+                HrCalcTypes.Fixed, v, true, null,
                 $"{unpaidLeaveDays} day(s) x {Round(dailyRate)}");
         }
         if (absentDays > 0)
@@ -518,7 +518,7 @@ public static class PayrollCalculator
             var v = Round(dailyRate * absentDays);
             deductions += v;
             Add(AbsenceComponentCode, "Absence Deduction", HrComponentKinds.Deduction,
-                HrCalcTypes.Fixed, v, true, HrGlAccounts.SalariesPayable,
+                HrCalcTypes.Fixed, v, true, null,
                 $"{absentDays} day(s) x {Round(dailyRate)}");
         }
 

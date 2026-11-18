@@ -1614,14 +1614,26 @@ public sealed class HrRepository : IHrRepository
             // Salaries Payable. A negative net (deductions above gross)
             // becomes a Dr to Salaries Payable (amount owed back), which
             // keeps the entry balanced and explicit.
+            // Deductions WITHOUT an account mapping are the never-owed
+            // amounts (the UNPAID_LEAVE / ABSENCE system lines): nobody
+            // is owed them, so they are not a payable — they reduce the
+            // salary-expense debit instead (the amount was never
+            // earned). Crediting them to Salaries Payable would
+            // overstate the payable by exactly the unpaid amount.
             var glLines = new List<GlLineRequest>();
+            var unowedDeductions = 0m;
             foreach (var slip in run.Payslips)
             {
                 foreach (var line in slip.Lines)
                 {
                     if (line.Amount == 0) continue;
+                    if (line.Kind == HrComponentKinds.Deduction && string.IsNullOrWhiteSpace(line.AccountCode))
+                    {
+                        unowedDeductions += line.Amount;
+                        continue;
+                    }
                     var account = string.IsNullOrWhiteSpace(line.AccountCode)
-                        ? (line.Kind == HrComponentKinds.Deduction ? HrGlAccounts.SalariesPayable : HrGlAccounts.SalaryExpense)
+                        ? HrGlAccounts.SalaryExpense
                         : line.AccountCode.Trim();
                     if (line.Kind == HrComponentKinds.Deduction)
                         glLines.Add(new GlLineRequest(account, 0m, line.Amount, null, $"{slip.EmployeeCode} {line.ComponentCode}"));
@@ -1630,6 +1642,30 @@ public sealed class HrRepository : IHrRepository
                             string.IsNullOrWhiteSpace(slip.CostCenter) ? null : slip.CostCenter,
                             $"{slip.EmployeeCode} {line.ComponentCode}"));
                 }
+            }
+            if (unowedDeductions > 0)
+            {
+                // Absorb into expense debits: the salary expense account
+                // first, then the remaining debits largest-first.
+                var order = glLines
+                    .Select((line, index) => (line, index))
+                    .Where(x => x.line.Debit > 0)
+                    .OrderBy(x => x.line.AccountCode == HrGlAccounts.SalaryExpense ? 0 : 1)
+                    .ThenByDescending(x => x.line.Debit)
+                    .ToList();
+                var remaining = unowedDeductions;
+                foreach (var (line, index) in order)
+                {
+                    if (remaining <= 0) break;
+                    var reduce = Math.Min(line.Debit, remaining);
+                    remaining -= reduce;
+                    glLines[index] = new GlLineRequest(line.AccountCode, line.Debit - reduce, line.Credit,
+                        line.CostCenter, $"{line.Note} (net of unpaid-leave/absence deductions)");
+                }
+                glLines.RemoveAll(l => l.Debit == 0 && l.Credit == 0);
+                if (remaining > 0)
+                    throw new AppError(ErrorCodes.HrPayrollStateInvalid,
+                        $"Payroll run {run.RunNo}: unpaid deductions exceed the expense debits and cannot be absorbed.", run.RunNo);
             }
             if (run.TotalNet > 0)
                 glLines.Add(new GlLineRequest(HrGlAccounts.SalariesPayable, 0m, run.TotalNet, null, $"Net pay {run.RunNo}"));

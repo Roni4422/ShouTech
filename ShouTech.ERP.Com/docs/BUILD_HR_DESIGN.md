@@ -310,8 +310,17 @@ Posting a run (ONE transaction: run + payslips finalize + journal):
     (one leg: net pay is owed to employees collectively until paid);
   - Cr each Deduction line's payable account (its `account_code`;
     lines mapped to `2204` merge into the net leg by aggregation,
-    which is arithmetically identical: Dr gross+employer =
-    Cr net + Σ deductions + Σ employer).
+    which is arithmetically identical).
+  - **Never-owed deductions carry NO account** (the `UNPAID_LEAVE` /
+    `ABSENCE` system lines): nobody is owed them — the amount was
+    never earned — so they are **not** a payable. They reduce the
+    salary-expense debit instead (absorbed into the `501` debit
+    first, then the remaining expense debits largest-first). The
+    balanced identity is therefore: Dr (gross + employer −
+    never-owed) = Cr net + Σ mapped deductions + Σ employer.
+    Crediting them to `2204` would overstate the payable by exactly
+    the unpaid amount (caught by the headless proof, scenario (d):
+    payable must equal the run net to the cent).
 - The entry is balanced by construction (net = gross − deductions);
   `GlPosting` re-validates and throws `ACC-5001` if not.
 - Account codes `501` / `2204` exist postable in **every** seeded
