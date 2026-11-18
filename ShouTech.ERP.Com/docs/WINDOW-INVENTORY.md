@@ -1,26 +1,27 @@
 # WPF Window and View Inventory
 
 **Branch:** `work/full-app-stabilization-2026-11-18`  
-**Inventory snapshot:** 2026-11-18  
-**Purpose:** Establish evidence before moving WPF windows. This is a source-file inventory, not a claim that every type is an independently navigable window.
+**Inventory snapshot:** 2026-11-18
+
+This is a source-file inventory, not a claim that every type is an independently navigable window. XAML code-behind files are detected using the `.xaml.cs` suffix.
 
 ## Inventory summary
 
-- View type/file basenames: 182
+- Unique view/source basenames: 182
 - XAML + code-behind pairs: 0
-- C#-only view/source basenames: 159
-- XAML files without a same-basename C# code-behind: 23
-- Report view basenames: 63
-- Files under the existing Modules view folder are retained in place during the first migration wave.
+- C#-only basenames: 159
+- XAML without same-basename code-behind: 23
+- Report basenames: 63
+- Existing Modules basenames: 7
 
-A C#-only file may be a programmatic WPF window, helper, base class, view model, or other support type. It must be classified by inspecting its declared types and callers before relocation.
+A C#-only file may be a programmatic WPF window, helper, base class, view model, or support type. Inspect declared types and callers before treating it as a window or moving it.
 
 ## Main views and non-report views
 
-| Basename | C# | XAML |
+| Basename | C# / code-behind | XAML |
 |---|---:|---:|
+| `AccCar` | Yes | No |
 | `AccCard` | No | Yes |
-| `AccCard.xaml` | Yes | No |
 | `ActivityLogWin` | Yes | No |
 | `AddonsWin` | Yes | No |
 | `AppState` | Yes | No |
@@ -31,29 +32,29 @@ A C#-only file may be a programmatic WPF window, helper, base class, view model,
 | `BatchSerialPickerWin` | Yes | No |
 | `BcdDesWin` | Yes | No |
 | `BcdGenWin` | Yes | No |
+| `BinWi` | Yes | No |
 | `BinWin` | No | Yes |
-| `BinWin.xaml` | Yes | No |
+| `BkpWi` | Yes | No |
 | `BkpWin` | No | Yes |
-| `BkpWin.xaml` | Yes | No |
 | `BnkCard` | Yes | No |
 | `BomWin` | Yes | No |
 | `BudgetWin` | Yes | No |
 | `CalculatorWin` | Yes | No |
 | `CashDrawer` | Yes | No |
+| `CatWi` | Yes | No |
 | `CatWin` | No | Yes |
-| `CatWin.xaml` | Yes | No |
 | `CcCard` | Yes | No |
 | `CcListWin` | Yes | No |
 | `ChangePasswordWin` | Yes | No |
 | `ChqListWin` | Yes | No |
 | `ChqWin` | Yes | No |
 | `CloseCashWin` | Yes | No |
+| `CoaWi` | Yes | No |
 | `CoaWin` | No | Yes |
-| `CoaWin.xaml` | Yes | No |
+| `ColChsWi` | Yes | No |
 | `ColChsWin` | No | Yes |
-| `ColChsWin.xaml` | Yes | No |
+| `ComWi` | Yes | No |
 | `ComWin` | No | Yes |
-| `ComWin.xaml` | Yes | No |
 | `CompressInvoicesWin` | Yes | No |
 | `CrmActivitiesWin` | Yes | No |
 | `CrmLeadWin` | Yes | No |
@@ -63,8 +64,8 @@ A C#-only file may be a programmatic WPF window, helper, base class, view model,
 | `CstCard` | Yes | No |
 | `CurCard` | Yes | No |
 | `CustomReportsWin` | Yes | No |
+| `DatWi` | Yes | No |
 | `DatWin` | No | Yes |
-| `DatWin.xaml` | Yes | No |
 | `DefManagerWin` | Yes | No |
 | `DeliveryDeskWin` | Yes | No |
 | `DocSearchWin` | Yes | No |
@@ -81,21 +82,21 @@ A C#-only file may be a programmatic WPF window, helper, base class, view model,
 | `InstallmentsWin` | Yes | No |
 | `InvoiceWin` | Yes | No |
 | `JrnWin` | Yes | No |
+| `Lan` | Yes | No |
 | `Lang` | No | Yes |
-| `Lang.xaml` | Yes | No |
 | `LicenseWin` | Yes | No |
+| `LogWi` | Yes | No |
 | `LogWin` | No | Yes |
-| `LogWin.xaml` | Yes | No |
 | `LoyaltyWin` | Yes | No |
+| `MWi` | Yes | No |
 | `MWin` | No | Yes |
-| `MWin.xaml` | Yes | No |
 | `MaintenanceWin` | Yes | No |
+| `MatCar` | Yes | No |
 | `MatCard` | No | Yes |
-| `MatCard.xaml` | Yes | No |
+| `MatDirWi` | Yes | No |
 | `MatDirWin` | No | Yes |
-| `MatDirWin.xaml` | Yes | No |
+| `MatGroupWi` | Yes | No |
 | `MatGroupWin` | No | Yes |
-| `MatGroupWin.xaml` | Yes | No |
 | `MfgListWin` | Yes | No |
 | `MfgPlanWin` | Yes | No |
 | `MfgWin` | Yes | No |
@@ -109,32 +110,32 @@ A C#-only file may be a programmatic WPF window, helper, base class, view model,
 | `PosSessionWin` | Yes | No |
 | `PosSyncWin` | Yes | No |
 | `PosWin` | Yes | No |
+| `PrmWi` | Yes | No |
 | `PrmWin` | No | Yes |
-| `PrmWin.xaml` | Yes | No |
 | `ProjWin` | Yes | No |
 | `QcAlertWin` | Yes | No |
 | `QcInspectWin` | Yes | No |
 | `QcTemplateWin` | Yes | No |
 | `RepCard` | Yes | No |
 | `RepostWin` | Yes | No |
+| `RestoreCoWi` | Yes | No |
 | `RestoreCoWin` | No | Yes |
-| `RestoreCoWin.xaml` | Yes | No |
 | `RolloverWin` | Yes | No |
 | `RptBase` | Yes | No |
+| `SerWi` | Yes | No |
 | `SerWin` | No | Yes |
-| `SerWin.xaml` | Yes | No |
+| `SplWi` | Yes | No |
 | `SplWin` | No | Yes |
-| `SplWin.xaml` | Yes | No |
+| `StpWi` | Yes | No |
 | `StpWiz` | No | Yes |
-| `StpWiz.xaml` | Yes | No |
 | `SupportWin` | Yes | No |
 | `UpdatesWin` | Yes | No |
+| `WhsWi` | Yes | No |
 | `WhsWin` | No | Yes |
-| `WhsWin.xaml` | Yes | No |
 
 ## Report views
 
-| Basename | C# | XAML |
+| Basename | C# / code-behind | XAML |
 |---|---:|---:|
 | `Reports/AccBalWin` | Yes | No |
 | `Reports/AccCompareWin` | Yes | No |
@@ -202,32 +203,32 @@ A C#-only file may be a programmatic WPF window, helper, base class, view model,
 
 ## Existing Modules views
 
-| Basename | C# | XAML |
+| Basename | C# / code-behind | XAML |
 |---|---:|---:|
+| `Modules/DashV` | Yes | No |
 | `Modules/DashVw` | No | Yes |
-| `Modules/DashVw.xaml` | Yes | No |
 | `Modules/LangVM` | Yes | No |
+| `Modules/ModuleWorkspaceVie` | Yes | No |
 | `Modules/ModuleWorkspaceView` | No | Yes |
-| `Modules/ModuleWorkspaceView.xaml` | Yes | No |
+| `Modules/ReportGridV` | Yes | No |
 | `Modules/ReportGridVw` | No | Yes |
-| `Modules/ReportGridVw.xaml` | Yes | No |
 
 ## Mandatory checks before moving a view
 
-1. Inspect its declared window/view type, namespace, constructor dependencies and public entry points.
-2. Find every construction, Show/ShowDialog, navigation route, Ribbon action key, menu click handler, reflection lookup and DI registration.
-3. Map its service/repository dependencies and the tables/queries it reads or writes.
+1. Inspect declared window/view types, namespaces, constructors, dependencies and public entry points.
+2. Find every construction, Show/ShowDialog call, navigation route, Ribbon action key, menu click handler, reflection lookup and DI registration.
+3. Map service/repository dependencies and the tables/queries each view reads or writes.
 4. Check localization keys, language dictionaries, styles, merged resource dictionaries, icons, templates and dynamic resource references.
-5. Check XAML x:Class, StartupUri, ResourceDictionary Source, relative paths, pack URIs, component resource references and any code that uses file paths.
-6. Check MainApp.csproj item rules and all build/publish scripts. The current WPF project disables SDK default compile/page discovery and uses recursive **\*.cs and **\*.xaml includes. A move can change resource URIs even if compilation still succeeds.
+5. Check x:Class, StartupUri, ResourceDictionary Source, relative paths, pack URIs, component resource references and runtime file paths.
+6. Check MainApp.csproj and build/publish scripts. The WPF project disables SDK default compile/page discovery and uses recursive **\\*.cs and **\\*.xaml includes; resource URIs may change after a move even when compilation succeeds.
 7. Move each existing XAML/code-behind pair together. Do not split large code-behind files merely to reduce line count.
 8. Preserve public types, namespaces and runtime behavior unless a separately reviewed compatibility change is required.
 9. Build Debug and Release after each bounded move; run focused tests and launch/navigation smoke tests before proceeding.
-10. Update this inventory with old path, new path, route, dependencies, migration commit and verification evidence.
+10. Record old path, new path, route, dependencies, migration commit and verification evidence here.
 
 ## Proposed destination layout
 
-Keep the existing cohesive files intact. Organize by business capability, not by file size:
+Keep cohesive source files intact. Organize by business capability, not file size:
 
 - Views/Platform/: main shell, company, users, roles, permissions, settings, backup, restore, licensing and diagnostics.
 - Views/Inventory/: item/material cards, categories, warehouses, barcode, transfers, counts, adjustments, batch/serial and inventory operations.
@@ -237,7 +238,7 @@ Keep the existing cohesive files intact. Organize by business capability, not by
 - Views/Manufacturing/: BOM, production orders, planning, routing and quality.
 - Views/HR/: employees, organization, attendance, leave and payroll.
 - Views/CRM/: leads, opportunities, pipeline and activities.
-- Views/Reports/<module>/: reports grouped by their owning module, preserving each report class/file intact.
+- Views/Reports/<module>/: reports grouped by owning module, preserving each report class/file intact.
 
 These are target folders, not permission to move all files in one batch. The first actual move must be a small, fully traced slice with all XAML/resource references checked.
 
