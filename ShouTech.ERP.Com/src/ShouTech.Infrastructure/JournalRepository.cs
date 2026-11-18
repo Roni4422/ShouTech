@@ -143,10 +143,12 @@ public sealed class JournalRepository : IJournalRepository
         var hasLineBase = PartyLedger.ColumnExists(connection, null, _provider, "journal_entry_lines", "base_debit");
         await using (var lines = connection.CreateCommand())
         {
-            lines.CommandText = """
+            var baseAmountColumns = hasLineBase
+                ? ", l.base_debit, l.base_credit, l.exchange_rate"
+                : string.Empty;
+            lines.CommandText = $"""
                 SELECT l.line_number, l.account_id, a.account_code, a.account_name,
-                       l.debit, l.credit, l.cost_center, l.note
-                """ + (hasLineBase ? ", l.base_debit, l.base_credit, l.exchange_rate" : "") + """
+                       l.debit, l.credit, l.cost_center, l.note{baseAmountColumns}
                 FROM journal_entry_lines l
                 LEFT JOIN chart_of_accounts a
                   ON a.account_id = l.account_id AND a.company_id = @company
@@ -458,8 +460,9 @@ public sealed class JournalRepository : IJournalRepository
             DateOnly entryDate;
             string entryCurrency = "SAR";
             decimal entryRate = 1m;
+            string storedPeriodId;
             await using (var header = CreateCommand(connection, transaction,
-                "SELECT company_id, entry_date, currency_code, exchange_rate FROM journal_entries WHERE journal_entry_id = @id"))
+                "SELECT company_id, entry_date, currency_code, exchange_rate, fiscal_period_id FROM journal_entries WHERE journal_entry_id = @id"))
             {
                 Add(header, "@id", FormatGuid(journalEntryId));
                 await using var reader = await header.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -471,7 +474,19 @@ public sealed class JournalRepository : IJournalRepository
                     : DateOnly.Parse(Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture)!, CultureInfo.InvariantCulture);
                 if (!reader.IsDBNull(2)) entryCurrency = reader.GetString(2);
                 if (!reader.IsDBNull(3)) entryRate = Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture);
+                storedPeriodId = reader.IsDBNull(4) ? string.Empty : Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture)!;
             }
+
+            // Revalidate the fiscal period at the moment of posting, not only
+            // when the draft was saved. This uses the same resolver as
+            // document-to-GL posting and rejects drafts whose period closed
+            // or no longer matches the journal date.
+            if (string.IsNullOrWhiteSpace(storedPeriodId))
+                throw new InvalidOperationException("Journal entry has no assigned fiscal period.");
+            var openPeriodId = GlPosting.ResolveOpenPeriod(
+                connection, transaction, _provider, companyId, entryDate);
+            if (Guid.Parse(openPeriodId) != Guid.Parse(storedPeriodId))
+                throw new InvalidOperationException("The journal fiscal period is no longer open for its entry date.");
 
             await using (var check = CreateCommand(connection, transaction,
                 "SELECT COUNT(*), COALESCE(SUM(debit), 0), COALESCE(SUM(credit), 0) FROM journal_entry_lines WHERE journal_entry_id = @id"))
