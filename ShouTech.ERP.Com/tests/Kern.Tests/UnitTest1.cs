@@ -832,10 +832,10 @@ namespace Kern.Tests
                           ('OTHER-COMPANY', 1, 1, '2024-01-04', 'SAL', 'OTHER-1', 0, 1, 8, 'Other company');
                         INSERT INTO material_stock_balances
                           (company_id, warehouse_id, material_id, available_qty, reserved_qty,
-                           average_cost, last_cost, is_deleted)
+                           average_cost, last_cost, stock_value, is_deleted)
                         VALUES
-                          ('TEST-MERGE', 1, 1, 4, 2, 3, 3, 0),
-                          ('TEST-MERGE', 1, 2, 6, 1, 5, 5, 0);
+                          ('TEST-MERGE', 1, 1, 4, 2, 3, 3, 12, 0),
+                          ('TEST-MERGE', 1, 2, 6, 1, 5, 5, 30, 0);
                         """);
                 }
 
