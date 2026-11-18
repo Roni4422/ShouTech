@@ -1747,7 +1747,11 @@ public static class InvRepo
                 // unchanged), instead of inflating COGS by the rate.
                 if (effectiveRate != 1m)
                 {
-                    cost = decimal.Round(cost / effectiveRate, 4, MidpointRounding.AwayFromZero);
+                    // Retain precision in this bridge conversion. GlPosting
+                    // converts the line back to base currency at 4dp; a
+                    // 4dp intermediate can create a one-unit rounding loss
+                    // (for example 80 / 3.75 * 3.75 = 79.9999).
+                    cost = decimal.Round(cost / effectiveRate, 8, MidpointRounding.AwayFromZero);
                     if (cost <= 0) continue;
                 }
                 var cogs = CodeOr(info.AccCogs, GlAccounts.Cogs);
