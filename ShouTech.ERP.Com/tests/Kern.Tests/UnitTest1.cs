@@ -108,9 +108,12 @@ namespace Kern.Tests
                     BindingFlags.NonPublic | BindingFlags.Static);
                 Assert.NotNull(saveMethod);
 
+                var template = CoaTemplatesSvc.LoadDefault();
+                Assert.NotNull(template);
+
                 var saveTask = (Task<bool>)saveMethod!.Invoke(
                     null,
-                    new object[] { record, request })!;
+                    new object[] { record, request, template })!;
                 Assert.True(await saveTask);
 
                 await using var connection = new SqliteConnection($"Data Source={databasePath};");
