@@ -238,3 +238,16 @@ Naming rules for subsequent work:
 - Do not shorten public type names, database table names, migration IDs, API routes or serialized field names as part of a filesystem rename; those are compatibility contracts.
 - Keep namespaces and assembly names stable until a separate compatibility review approves a change.
 - Rename a file only after checking project globs, XAML/resource pack URIs, reflection, scripts, CI paths, docs and packaging references.
+
+## 12. Large-file preservation policy
+
+Large, established source files are valuable project assets and are not refactoring targets merely because of their line count. Keep files such as the inventory, repository, company, reporting and HR implementation units intact unless a concrete defect or dependency-boundary problem requires a narrowly scoped change.
+
+- Do not split a large file into many smaller files for stylistic reasons or to meet an arbitrary line-count target.
+- Prefer improving the existing file in place: clarify method flow, remove proven duplication, strengthen validation and transactions, improve naming, document non-obvious invariants, and add focused tests.
+- Add a new source file only when it represents a genuinely distinct responsibility, has a clear owner, and materially improves maintainability without multiplying navigation overhead.
+- Preserve public types, established call paths and compatibility behavior unless a tested migration is included.
+- Before any structural change, inspect the complete file, its callers, project inclusion rules, XAML/resource references and tests. Make one bounded change at a time.
+- File size alone is never evidence that code is dead, poorly designed or should be deleted.
+
+**Decision:** ShouTech will favor cohesive, well-organized implementation files over artificial fragmentation. Refactoring quality is measured by correctness, cohesion, testability and ease of safe change—not by the number or average size of files.
