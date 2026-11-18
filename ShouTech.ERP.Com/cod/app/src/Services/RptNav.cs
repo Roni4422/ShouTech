@@ -151,6 +151,11 @@ public static class RptNav
             case "Assets.Assets":
                 OpenAssets(owner); return true;
             case "Manufacturing.ManufacturingModels":
+                // MFG-6 FIX: the ribbon's BOM entry opens the BOM master
+                // (BomWin), not a blank production order.
+                OpenBom(owner); return true;
+            case "Manufacturing.Planning":
+                OpenPlanning(owner); return true;
             case "Manufacturing.ManufacturingProcess":
             case "MfgOrder.Title":
                 OpenMfgOrder(owner); return true;
@@ -231,6 +236,8 @@ public static class RptNav
     public static void OpenSalesRepCard(Window? owner = null) => Show(new RepCard(), owner);
 
     public static void OpenMfgOrder(Window? owner = null) => Show(new MfgWin(), owner);
+    public static void OpenBom(Window? owner = null) => Show(new BomWin(), owner);
+    public static void OpenPlanning(Window? owner = null) => Show(new MfgPlanWin(), owner);
     public static void OpenSalesOrder(Window? owner = null) => Show(new OrdWin(OrdKind.Sales), owner);
     public static void OpenPurchaseOrder(Window? owner = null) => Show(new OrdWin(OrdKind.Purchase), owner);
     public static void OpenBarcodeTool(Window? owner = null) => Show(new BarWin(), owner);

@@ -11,18 +11,25 @@ using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Media;
 using ShouTech.App.Services;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 
 namespace ShouTech.App.Views;
 
 /// <summary>
-/// Manufacturing order (RS-8): the order carries its own raw-material lines
-/// (ShouTech has no BOM master). Save persists a draft through
-/// MfgOrderService; Post consumes the raw lines and produces the finished
-/// item through material_stock_movements in one repository transaction,
-/// computing TotalCost = sum of raw amounts + overhead and
-/// UnitCost = TotalCost / Qty. Posted orders are read-only; Cancel of a
-/// posted order reverses its stock movements. Print follows the JrnWin
+/// Manufacturing order (RS-8 + staged workflow, migration 058). The
+/// header links a BOM (Fetch explodes it into the lines), planned
+/// start/end dates, a sales order, a cost center and split warehouses
+/// (source / WIP / target / scrap, defaulting from the header
+/// warehouse); the finished item and line items are picked from the
+/// material master, not free-typed. Lines carry required vs consumed /
+/// produced quantities, a per-line source warehouse, a BOUND standard
+/// unit cost column (sweep MFG-4) and by-product lines with a cost
+/// share. Workflow: Save (Draft) → Confirm → Issue (partial, repeated)
+/// → Finish (partial receipts, by-products, scrap) → Close (variance
+/// settled), or Cancel (full symmetric reversal). The legacy one-step
+/// Post remains for simple Draft orders and shares the same valuation
+/// engine + GlPosting as the staged path. Print follows the JrnWin
 /// A4 pattern.
 /// </summary>
 public sealed class MfgWin : BaseWin
@@ -31,7 +38,7 @@ public sealed class MfgWin : BaseWin
 
     private readonly TextBox _txtDocNo = new();
     private readonly DatePicker _dtDate = new() { SelectedDate = DateTime.Today };
-    private readonly TextBox _txtItem = new();
+    private readonly ComboBox _txtItem = new() { IsEditable = true };
     private readonly TextBox _txtItemName = new();
     private readonly TextBox _txtQty = new() { Text = "1" };
     private readonly TextBox _txtUnit = new() { Text = "PCS" };
@@ -39,6 +46,16 @@ public sealed class MfgWin : BaseWin
     private readonly TextBox _txtOverheads = new() { Text = "0.00" };
     private readonly TextBox _txtStdCost = new() { Text = "0.00" };
     private readonly TextBox _txtNotes = new();
+    private readonly ComboBox _cmbBom = new() { IsEditable = true };
+    private readonly DatePicker _dtPlannedStart = new();
+    private readonly DatePicker _dtPlannedEnd = new();
+    private readonly TextBox _txtSalesOrder = new();
+    private readonly TextBox _txtCostCenter = new();
+    private readonly TextBox _txtSourceWhs = new();
+    private readonly TextBox _txtWipWhs = new();
+    private readonly TextBox _txtTargetWhs = new();
+    private readonly TextBox _txtScrapWhs = new();
+    private readonly TextBox _txtFinishQty = new() { Text = "0" };
 
     private readonly Button _btnNew = new();
     private readonly Button _btnSave = new();
@@ -47,6 +64,16 @@ public sealed class MfgWin : BaseWin
     private readonly Button _btnAddItem = new();
     private readonly Button _btnRemItem = new();
     private readonly Button _btnPrint = new();
+    private readonly Button _btnFetchBom = new();
+    private readonly Button _btnConfirm = new();
+    private readonly Button _btnIssue = new();
+    private readonly Button _btnFinish = new();
+    private readonly Button _btnCloseOrder = new();
+
+    private readonly List<Bom> _bomOptions = new();
+    private readonly List<MfgMaterialOption> _materialOptions = new();
+    private Guid? _bomId;
+    private int? _bomVersion;
 
     private readonly TextBlock _lblTotCost = new();
     private readonly TextBlock _lblUnitCost = new();
@@ -78,8 +105,32 @@ public sealed class MfgWin : BaseWin
             Close();
             return;
         }
+        await RefreshShellOptionsAsync();
         if (!_currentId.HasValue)
             await RefreshNextDocNoAsync();
+    }
+
+    /// <summary>Loads the material + BOM pickers from the shell's live
+    /// company context (BomService reads the current company's data).</summary>
+    private async Task RefreshShellOptionsAsync()
+    {
+        try
+        {
+            if (AppHost.Boms is not { } boms || string.IsNullOrWhiteSpace(CurrentCompanyCode))
+                return;
+            var materials = await boms.GetMaterialOptionsAsync(CurrentCompanyCode);
+            _materialOptions.Clear();
+            _materialOptions.AddRange(materials);
+            _txtItem.ItemsSource = _materialOptions.Select(m => m.Code).ToList();
+            var bomList = await boms.GetAllAsync(CurrentCompanyCode);
+            _bomOptions.Clear();
+            _bomOptions.AddRange(bomList);
+            _cmbBom.ItemsSource = _bomOptions.Select(b => $"{b.MaterialCode} v{b.Version}").ToList();
+        }
+        catch (Exception ex)
+        {
+            ReportFailure("LoadPickers", ex);
+        }
     }
 
     private async Task RefreshNextDocNoAsync()
@@ -89,7 +140,13 @@ public sealed class MfgWin : BaseWin
             if (AppHost.Manufacturing is { } service && !string.IsNullOrWhiteSpace(CurrentCompanyCode))
                 _txtDocNo.Text = (await service.GetNextDocNoAsync(CurrentCompanyCode)).ToString(CultureInfo.InvariantCulture);
         }
-        catch { /* the service validates again on save; a stale number is corrected there */ }
+        catch (Exception ex)
+        {
+            // MFG-10a FIX: no silent catch — the failure is reported
+            // through the central mechanism (the service still validates
+            // again on save; a stale number is corrected there).
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "MfgWin.RefreshNextDocNo");
+        }
     }
 
     /// <summary>Loads an existing order by its per-company document number (used by MfgListWin).</summary>
@@ -113,24 +170,40 @@ public sealed class MfgWin : BaseWin
             _txtOverheads.Text = order.OverheadAmount.ToString("0.00", CultureInfo.InvariantCulture);
             _txtStdCost.Text = order.StandardUnitCost.ToString("0.00", CultureInfo.InvariantCulture);
             _txtNotes.Text = order.Notes ?? string.Empty;
+            _bomId = order.BomId;
+            _bomVersion = order.BomVersion;
+            _cmbBom.Text = order.BomId is Guid
+                ? $"{order.ItemCode} v{order.BomVersion}"
+                : string.Empty;
+            _dtPlannedStart.SelectedDate = order.PlannedStartDate?.ToDateTime(TimeOnly.MinValue);
+            _dtPlannedEnd.SelectedDate = order.PlannedEndDate?.ToDateTime(TimeOnly.MinValue);
+            _txtSalesOrder.Text = order.SalesOrderNo ?? string.Empty;
+            _txtCostCenter.Text = order.CostCenter ?? string.Empty;
+            _txtSourceWhs.Text = order.SourceWarehouseCode ?? string.Empty;
+            _txtWipWhs.Text = order.WipWarehouseCode ?? string.Empty;
+            _txtTargetWhs.Text = order.TargetWarehouseCode ?? string.Empty;
+            _txtScrapWhs.Text = order.ScrapWarehouseCode ?? string.Empty;
+            _txtFinishQty.Text = Math.Max(0m, order.Qty - order.ProducedQty).ToString("0.###", CultureInfo.InvariantCulture);
             _items.Clear();
             var lineNo = 0;
             foreach (var line in order.Lines)
                 _items.Add(new MfgItemVm
                 {
+                    Id = line.Id,
                     LineNo = ++lineNo,
+                    LineKind = line.LineKind,
                     ItemCode = line.ItemCode,
                     ItemName = line.ItemName ?? string.Empty,
                     Unit = line.UnitCode ?? string.Empty,
                     Qty = line.Qty,
+                    ConsumedQty = line.ConsumedQty,
+                    ProducedQty = line.ProducedQty,
                     UnitCost = line.UnitCost,
-                    StandardUnitCost = line.StandardUnitCost
+                    StandardUnitCost = line.StandardUnitCost,
+                    Warehouse = line.WarehouseCode ?? string.Empty,
+                    CostSharePct = line.CostSharePct
                 });
-            var readOnly = _status != MfgOrderStatuses.Draft;
-            _btnSave.IsEnabled = !readOnly;
-            _btnPost.IsEnabled = _status == MfgOrderStatuses.Draft;
-            _btnCancelOrder.IsEnabled = _status != MfgOrderStatuses.Cancelled;
-            _grid.IsReadOnly = readOnly;
+            RefreshStageButtons();
             CalculateCost();
         }
         catch (Exception ex)
@@ -151,12 +224,22 @@ public sealed class MfgWin : BaseWin
         StyleButton(_btnAddItem, "Invoice.AddLine");
         StyleButton(_btnRemItem, "Invoice.RemoveLine");
         StyleButton(_btnPrint, "Invoice.Print");
+        StyleButton(_btnFetchBom, "MfgOrder.FetchBom");
+        StyleButton(_btnConfirm, "MfgOrder.Confirm");
+        StyleButton(_btnIssue, "MfgOrder.Issue");
+        StyleButton(_btnFinish, "MfgOrder.Finish");
+        StyleButton(_btnCloseOrder, "MfgOrder.CloseOrder");
 
         _btnNew.Click += (_, _) => { ResetOrder(); _ = RefreshNextDocNoAsync(); };
         _btnSave.Click += async (_, _) => await SaveOrderAsync();
         _btnPost.Click += async (_, _) => await PostOrderAsync();
         _btnCancelOrder.Click += async (_, _) => await CancelOrderAsync();
         _btnPrint.Click += (_, _) => PrintOrder();
+        _btnFetchBom.Click += async (_, _) => await FetchBomAsync();
+        _btnConfirm.Click += async (_, _) => await ConfirmOrderAsync();
+        _btnIssue.Click += async (_, _) => await IssueOrderAsync();
+        _btnFinish.Click += async (_, _) => await FinishOrderAsync();
+        _btnCloseOrder.Click += async (_, _) => await CloseOrderAsync();
         _btnAddItem.Click += (_, _) =>
         {
             var item = new MfgItemVm { LineNo = _items.Count + 1, Unit = "KG", Qty = 1, UnitCost = 0 };
@@ -175,7 +258,7 @@ public sealed class MfgWin : BaseWin
             }
         };
 
-        foreach (var b in new[] { _btnNew, _btnSave, _btnPost, _btnCancelOrder, _btnAddItem, _btnRemItem, _btnPrint })
+        foreach (var b in new[] { _btnNew, _btnSave, _btnPost, _btnCancelOrder, _btnAddItem, _btnRemItem, _btnPrint, _btnFetchBom, _btnConfirm, _btnIssue, _btnFinish, _btnCloseOrder })
             toolbar.Children.Add(b);
 
         var actionBar = new Border
@@ -229,6 +312,18 @@ public sealed class MfgWin : BaseWin
         AddFormField(headerForm, 1, 3, "MfgOrder.ExtraCosts", _txtOverheads);
         AddFormField(headerForm, 2, 0, "MfgOrders.StandardUnitCost", _txtStdCost);
         AddFormField(headerForm, 2, 1, "Vouchers.Memo", _txtNotes, spanPairs: 3);
+        AddFormField(headerForm, 3, 0, "MfgOrder.Bom", _cmbBom);
+        AddFormField(headerForm, 3, 1, "MfgOrder.PlannedStart", _dtPlannedStart);
+        AddFormField(headerForm, 3, 2, "MfgOrder.PlannedEnd", _dtPlannedEnd);
+        AddFormField(headerForm, 3, 3, "MfgOrder.SalesOrder", _txtSalesOrder);
+        AddFormField(headerForm, 4, 0, "MfgOrder.CostCenter", _txtCostCenter);
+        AddFormField(headerForm, 4, 1, "MfgOrder.SourceWarehouse", _txtSourceWhs);
+        AddFormField(headerForm, 4, 2, "MfgOrder.WipWarehouse", _txtWipWhs);
+        AddFormField(headerForm, 4, 3, "MfgOrder.TargetWarehouse", _txtTargetWhs);
+        AddFormField(headerForm, 5, 0, "MfgOrder.ScrapWarehouse", _txtScrapWhs);
+        AddFormField(headerForm, 5, 1, "MfgOrder.FinishQty", _txtFinishQty);
+        _cmbBom.SelectionChanged += (_, _) => OnBomSelectionChanged();
+        _txtItem.SelectionChanged += (_, _) => SyncFinishedItemName();
         Grid.SetRow(headerForm, 0);
         body.Children.Add(headerForm);
 
@@ -243,11 +338,19 @@ public sealed class MfgWin : BaseWin
         _grid.SetResourceReference(DataGrid.AlternatingRowBackgroundProperty, "TableAlternateRowBrush");
         _grid.ItemsSource = _items;
         _grid.Columns.Add(TextCol(nameof(MfgItemVm.LineNo), 45, readOnly: true));
+        _grid.Columns.Add(TextCol(nameof(MfgItemVm.LineKind), 80));
         _grid.Columns.Add(TextCol(nameof(MfgItemVm.ItemCode), 120));
         _grid.Columns.Add(TextCol(nameof(MfgItemVm.ItemName), 230));
         _grid.Columns.Add(TextCol(nameof(MfgItemVm.Unit), 70));
         _grid.Columns.Add(TextCol(nameof(MfgItemVm.QtyText), 90));
+        _grid.Columns.Add(TextCol(nameof(MfgItemVm.ConsumedText), 90, readOnly: true));
+        _grid.Columns.Add(TextCol(nameof(MfgItemVm.StageQtyText), 90));
         _grid.Columns.Add(TextCol(nameof(MfgItemVm.CostText), 100));
+        // MFG-4 FIX: the standard unit cost column is BOUND (the VM
+        // property existed for releases with no column binding it).
+        _grid.Columns.Add(TextCol(nameof(MfgItemVm.StdCostText), 100));
+        _grid.Columns.Add(TextCol(nameof(MfgItemVm.Warehouse), 90));
+        _grid.Columns.Add(TextCol(nameof(MfgItemVm.ShareText), 70));
         _grid.Columns.Add(new DataGridTextColumn
         {
             Binding = new Binding(nameof(MfgItemVm.TotalCostText)) { Mode = BindingMode.OneWay },
@@ -274,6 +377,8 @@ public sealed class MfgWin : BaseWin
     {
         _currentId = null;
         _status = MfgOrderStatuses.Draft;
+        _bomId = null;
+        _bomVersion = null;
         _txtDocNo.Text = "0";
         _dtDate.SelectedDate = DateTime.Today;
         _txtItem.Text = string.Empty;
@@ -284,13 +389,42 @@ public sealed class MfgWin : BaseWin
         _txtOverheads.Text = "0.00";
         _txtStdCost.Text = "0.00";
         _txtNotes.Text = string.Empty;
+        _cmbBom.Text = string.Empty;
+        _dtPlannedStart.SelectedDate = null;
+        _dtPlannedEnd.SelectedDate = null;
+        _txtSalesOrder.Text = string.Empty;
+        _txtCostCenter.Text = string.Empty;
+        _txtSourceWhs.Text = string.Empty;
+        _txtWipWhs.Text = string.Empty;
+        _txtTargetWhs.Text = string.Empty;
+        _txtScrapWhs.Text = string.Empty;
+        _txtFinishQty.Text = "0";
         _items.Clear();
         _items.Add(new MfgItemVm { LineNo = 1, Unit = "KG", Qty = 1, UnitCost = 0 });
-        _btnSave.IsEnabled = true;
-        _btnPost.IsEnabled = true;
-        _btnCancelOrder.IsEnabled = false;
         _grid.IsReadOnly = false;
+        RefreshStageButtons();
         CalculateCost();
+    }
+
+    /// <summary>Stage-button enablement follows the persisted status:
+    /// Confirm from Draft; Issue/Finish while In-Process; Close once
+    /// Completed; the legacy one-step Post only from Draft.</summary>
+    private void RefreshStageButtons()
+    {
+        var editable = string.Equals(_status, MfgOrderStatuses.Draft, StringComparison.OrdinalIgnoreCase);
+        _btnSave.IsEnabled = editable;
+        _btnPost.IsEnabled = editable && _currentId.HasValue;
+        _btnFetchBom.IsEnabled = editable;
+        _btnConfirm.IsEnabled = editable && _currentId.HasValue;
+        var inProcess = string.Equals(_status, MfgOrderStatuses.InProcess, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(_status, MfgOrderStatuses.Confirmed, StringComparison.OrdinalIgnoreCase);
+        _btnIssue.IsEnabled = inProcess;
+        _btnFinish.IsEnabled = inProcess;
+        _btnCloseOrder.IsEnabled = string.Equals(_status, MfgOrderStatuses.Completed, StringComparison.OrdinalIgnoreCase);
+        _btnCancelOrder.IsEnabled = _currentId.HasValue
+            && !string.Equals(_status, MfgOrderStatuses.Cancelled, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(_status, MfgOrderStatuses.Closed, StringComparison.OrdinalIgnoreCase);
+        _grid.IsReadOnly = !editable;
     }
 
     private static decimal ParseDecimal(TextBox box)
@@ -326,19 +460,31 @@ public sealed class MfgWin : BaseWin
             OverheadAmount = ParseDecimal(_txtOverheads),
             StandardUnitCost = ParseDecimal(_txtStdCost),
             Notes = string.IsNullOrWhiteSpace(_txtNotes.Text) ? null : _txtNotes.Text.Trim(),
-            Status = _status
+            Status = _status,
+            BomId = _bomId,
+            BomVersion = _bomVersion,
+            PlannedStartDate = _dtPlannedStart.SelectedDate is DateTime ps ? DateOnly.FromDateTime(ps) : null,
+            PlannedEndDate = _dtPlannedEnd.SelectedDate is DateTime pe ? DateOnly.FromDateTime(pe) : null,
+            SalesOrderNo = string.IsNullOrWhiteSpace(_txtSalesOrder.Text) ? null : _txtSalesOrder.Text.Trim(),
+            CostCenter = string.IsNullOrWhiteSpace(_txtCostCenter.Text) ? null : _txtCostCenter.Text.Trim(),
+            SourceWarehouseCode = string.IsNullOrWhiteSpace(_txtSourceWhs.Text) ? null : _txtSourceWhs.Text.Trim(),
+            WipWarehouseCode = string.IsNullOrWhiteSpace(_txtWipWhs.Text) ? null : _txtWipWhs.Text.Trim(),
+            TargetWarehouseCode = string.IsNullOrWhiteSpace(_txtTargetWhs.Text) ? null : _txtTargetWhs.Text.Trim(),
+            ScrapWarehouseCode = string.IsNullOrWhiteSpace(_txtScrapWhs.Text) ? null : _txtScrapWhs.Text.Trim()
         };
         foreach (var item in _items.Where(i => i.Qty > 0 || !string.IsNullOrWhiteSpace(i.ItemCode)))
             order.Lines.Add(new MfgOrderLine
             {
                 OrderId = order.Id,
-                LineKind = MfgLineKinds.Raw,
+                LineKind = string.IsNullOrWhiteSpace(item.LineKind) ? MfgLineKinds.Raw : item.LineKind.Trim().ToUpperInvariant(),
                 ItemCode = item.ItemCode.Trim(),
                 ItemName = string.IsNullOrWhiteSpace(item.ItemName) ? null : item.ItemName.Trim(),
                 Qty = item.Qty,
                 UnitCode = string.IsNullOrWhiteSpace(item.Unit) ? null : item.Unit.Trim(),
                 UnitCost = item.UnitCost,
-                StandardUnitCost = item.StandardUnitCost
+                StandardUnitCost = item.StandardUnitCost,
+                WarehouseCode = string.IsNullOrWhiteSpace(item.Warehouse) ? null : item.Warehouse.Trim(),
+                CostSharePct = item.CostSharePct
             });
         return order;
     }
@@ -392,10 +538,7 @@ public sealed class MfgWin : BaseWin
             if (!AskConfirm("MfgOrders.ConfirmPost")) return;
             await service.PostAsync(CurrentCompanyCode, _currentId.Value, CurrentUserId);
             _status = MfgOrderStatuses.Posted;
-            _btnSave.IsEnabled = false;
-            _btnPost.IsEnabled = false;
-            _btnCancelOrder.IsEnabled = true;
-            _grid.IsReadOnly = true;
+            RefreshStageButtons();
             CalculateCost();
             MessageBox.Show(this, T("MfgOrder.Posted"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
         }
@@ -420,15 +563,197 @@ public sealed class MfgWin : BaseWin
                 throw new InvalidOperationException(T("MfgOrders.ServiceUnavailable"));
             await service.CancelAsync(CurrentCompanyCode, _currentId.Value, CurrentUserId);
             _status = MfgOrderStatuses.Cancelled;
-            _btnSave.IsEnabled = false;
-            _btnPost.IsEnabled = false;
-            _btnCancelOrder.IsEnabled = false;
-            _grid.IsReadOnly = true;
+            RefreshStageButtons();
             CalculateCost();
         }
         catch (Exception ex)
         {
             ReportFailure("Cancel", ex);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // BOM link + staged workflow (migration 058).
+    // ------------------------------------------------------------------
+
+    private void OnBomSelectionChanged()
+    {
+        var index = _cmbBom.SelectedIndex;
+        if (index >= 0 && index < _bomOptions.Count)
+        {
+            _bomId = _bomOptions[index].Id;
+            _bomVersion = _bomOptions[index].Version;
+        }
+    }
+
+    private void SyncFinishedItemName()
+    {
+        var code = _txtItem.Text.Trim();
+        var option = _materialOptions.FirstOrDefault(m => string.Equals(m.Code, code, StringComparison.OrdinalIgnoreCase));
+        if (option is not null)
+            _txtItemName.Text = option.Name ?? string.Empty;
+    }
+
+    /// <summary>Fetch/explode: replaces the Draft lines with the BOM's
+    /// requirements for the order quantity — line costs come from the
+    /// BOM's standard-cost snapshots (MFG-3: never a silent zero).</summary>
+    private async Task FetchBomAsync()
+    {
+        try
+        {
+            if (AppHost.Boms is not { } boms)
+                throw new InvalidOperationException(T("MfgOrders.ServiceUnavailable"));
+            if (!_bomId.HasValue)
+            {
+                OnBomSelectionChanged();
+                if (!_bomId.HasValue)
+                    throw new InvalidOperationException(T("MfgOrder.SelectBom"));
+            }
+            var qty = ParseDecimal(_txtQty);
+            if (qty <= 0)
+                throw new InvalidOperationException(T("MfgOrder.QtyInvalid"));
+            var explosion = await boms.ExplodeAsync(CurrentCompanyCode, _bomId.Value, qty);
+            var bom = _bomOptions.FirstOrDefault(b => b.Id == _bomId.Value);
+            _items.Clear();
+            var lineNo = 0;
+            foreach (var req in explosion.Requirements)
+                _items.Add(new MfgItemVm
+                {
+                    LineNo = ++lineNo,
+                    LineKind = MfgLineKinds.Raw,
+                    ItemCode = req.MaterialCode,
+                    ItemName = req.MaterialName ?? string.Empty,
+                    Unit = req.UnitCode ?? string.Empty,
+                    Qty = req.Qty,
+                    UnitCost = req.StandardUnitCost,
+                    StandardUnitCost = req.StandardUnitCost,
+                    Warehouse = req.WarehouseCode ?? string.Empty
+                });
+            if (bom is not null)
+            {
+                _txtItem.Text = bom.MaterialCode;
+                _txtStdCost.Text = bom.StandardUnitCost.ToString("0.00", CultureInfo.InvariantCulture);
+            }
+            CalculateCost();
+            MessageBox.Show(this, Tf("MfgOrder.BomFetched", explosion.Requirements.Count), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            ReportFailure("FetchBom", ex);
+        }
+    }
+
+    private async Task ConfirmOrderAsync()
+    {
+        if (!_currentId.HasValue) return;
+        if (!AppHost.Permissions.Has(PermCat.Manufacturing.OrderUpdate))
+        {
+            MessageBox.Show(this, T("MfgOrders.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        try
+        {
+            if (AppHost.Manufacturing is not { } service)
+                throw new InvalidOperationException(T("MfgOrders.ServiceUnavailable"));
+            await service.ConfirmAsync(CurrentCompanyCode, _currentId.Value, CurrentUserId);
+            _status = MfgOrderStatuses.Confirmed;
+            RefreshStageButtons();
+            MessageBox.Show(this, T("MfgOrder.Confirmed"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            ReportFailure("Confirm", ex);
+        }
+    }
+
+    private async Task IssueOrderAsync()
+    {
+        if (!_currentId.HasValue) return;
+        if (!AppHost.Permissions.Has(PermCat.Manufacturing.ProductionPost))
+        {
+            MessageBox.Show(this, T("MfgOrders.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        try
+        {
+            _grid.CommitEdit(DataGridEditingUnit.Cell, true);
+            _grid.CommitEdit(DataGridEditingUnit.Row, true);
+            if (AppHost.Manufacturing is not { } service)
+                throw new InvalidOperationException(T("MfgOrders.ServiceUnavailable"));
+            var lines = _items
+                .Where(i => i.Id != Guid.Empty && i.StageQty > 0 && string.Equals(i.LineKind, MfgLineKinds.Raw, StringComparison.OrdinalIgnoreCase))
+                .Select(i => new MfgIssueLine(i.Id, i.StageQty))
+                .ToList();
+            if (lines.Count == 0)
+                throw new InvalidOperationException(T("MfgOrder.NothingToIssue"));
+            var result = await service.IssueAsync(CurrentCompanyCode, _currentId.Value, lines, CurrentUserId);
+            _status = result.Status;
+            RefreshStageButtons();
+            LoadOrder(int.Parse(_txtDocNo.Text, CultureInfo.InvariantCulture));
+            MessageBox.Show(this, Tf("MfgOrder.IssuedLine", result.Amount), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            ReportFailure("Issue", ex);
+        }
+    }
+
+    private async Task FinishOrderAsync()
+    {
+        if (!_currentId.HasValue) return;
+        if (!AppHost.Permissions.Has(PermCat.Manufacturing.ProductionPost))
+        {
+            MessageBox.Show(this, T("MfgOrders.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        try
+        {
+            _grid.CommitEdit(DataGridEditingUnit.Cell, true);
+            _grid.CommitEdit(DataGridEditingUnit.Row, true);
+            if (AppHost.Manufacturing is not { } service)
+                throw new InvalidOperationException(T("MfgOrders.ServiceUnavailable"));
+            var finishQty = ParseDecimal(_txtFinishQty);
+            if (finishQty <= 0)
+                throw new InvalidOperationException(T("MfgOrder.FinishQtyInvalid"));
+            var receipts = _items
+                .Where(i => i.Id != Guid.Empty && i.StageQty > 0
+                    && (string.Equals(i.LineKind, MfgLineKinds.ByProduct, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(i.LineKind, MfgLineKinds.Scrap, StringComparison.OrdinalIgnoreCase)))
+                .Select(i => new MfgReceiptLine(i.Id, i.StageQty))
+                .ToList();
+            var result = await service.FinishAsync(CurrentCompanyCode, _currentId.Value, finishQty, receipts, CurrentUserId);
+            _status = result.Status;
+            RefreshStageButtons();
+            LoadOrder(int.Parse(_txtDocNo.Text, CultureInfo.InvariantCulture));
+            MessageBox.Show(this, Tf("MfgOrder.FinishedLine", result.Amount), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            ReportFailure("Finish", ex);
+        }
+    }
+
+    private async Task CloseOrderAsync()
+    {
+        if (!_currentId.HasValue) return;
+        if (!AppHost.Permissions.Has(PermCat.Manufacturing.ProductionPost))
+        {
+            MessageBox.Show(this, T("MfgOrders.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        if (!AskConfirm("MfgOrder.ConfirmClose")) return;
+        try
+        {
+            if (AppHost.Manufacturing is not { } service)
+                throw new InvalidOperationException(T("MfgOrders.ServiceUnavailable"));
+            var result = await service.CloseAsync(CurrentCompanyCode, _currentId.Value, CurrentUserId);
+            _status = result.Status;
+            RefreshStageButtons();
+            MessageBox.Show(this, Tf("MfgOrder.ClosedLine", result.Amount), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            ReportFailure("Close", ex);
         }
     }
 
@@ -529,15 +854,21 @@ public sealed class MfgWin : BaseWin
     protected override void ApplyLocalizedText()
     {
         Title = T("MfgOrder.Title");
-        if (_grid.Columns.Count >= 7)
+        if (_grid.Columns.Count >= 13)
         {
             _grid.Columns[0].Header = "#";
-            _grid.Columns[1].Header = T("Invoice.Col.Code");
-            _grid.Columns[2].Header = T("Invoice.Col.Description");
-            _grid.Columns[3].Header = T("MfgOrder.Unit");
-            _grid.Columns[4].Header = T("MfgOrder.Quantity");
-            _grid.Columns[5].Header = T("Invoice.Col.PurchasePrice");
-            _grid.Columns[6].Header = T("Invoice.Col.LineTotal");
+            _grid.Columns[1].Header = T("MfgOrder.Col.Kind");
+            _grid.Columns[2].Header = T("Invoice.Col.Code");
+            _grid.Columns[3].Header = T("Invoice.Col.Description");
+            _grid.Columns[4].Header = T("MfgOrder.Unit");
+            _grid.Columns[5].Header = T("MfgOrder.Quantity");
+            _grid.Columns[6].Header = T("MfgOrder.Col.Consumed");
+            _grid.Columns[7].Header = T("MfgOrder.Col.StageQty");
+            _grid.Columns[8].Header = T("Invoice.Col.PurchasePrice");
+            _grid.Columns[9].Header = T("MfgOrders.StandardUnitCost");
+            _grid.Columns[10].Header = T("Invoice.Warehouse");
+            _grid.Columns[11].Header = T("MfgOrder.Col.CostShare");
+            _grid.Columns[12].Header = T("Invoice.Col.LineTotal");
         }
         RefreshLocalizedContent(Content as DependencyObject);
         CalculateCost();
@@ -575,17 +906,24 @@ public sealed class MfgWin : BaseWin
     private sealed class MfgItemVm : INotifyPropertyChanged
     {
         private int _lineNo;
-        private string _itemCode = "", _itemName = "", _unit = "";
-        private decimal _qty = 1, _cost, _stdCost;
+        private string _itemCode = "", _itemName = "", _unit = "", _lineKind = MfgLineKinds.Raw, _warehouse = "";
+        private decimal _qty = 1, _cost, _stdCost, _consumed, _produced, _stageQty, _sharePct;
 
+        public Guid Id { get; set; }
         public int LineNo { get => _lineNo; set { _lineNo = value; OnChanged(); } }
+        public string LineKind { get => _lineKind; set { _lineKind = value; OnChanged(); } }
         public string ItemCode { get => _itemCode; set { _itemCode = value; OnChanged(); } }
         public string ItemName { get => _itemName; set { _itemName = value; OnChanged(); } }
         public string Unit { get => _unit; set { _unit = value; OnChanged(); } }
+        public string Warehouse { get => _warehouse; set { _warehouse = value; OnChanged(); } }
 
         public decimal Qty { get => _qty; set { _qty = value; OnChanged(nameof(QtyText)); OnChanged(nameof(TotalCostText)); } }
         public decimal UnitCost { get => _cost; set { _cost = value; OnChanged(nameof(CostText)); OnChanged(nameof(TotalCostText)); } }
-        public decimal StandardUnitCost { get => _stdCost; set { _stdCost = value; OnChanged(); } }
+        public decimal StandardUnitCost { get => _stdCost; set { _stdCost = value; OnChanged(nameof(StdCostText)); } }
+        public decimal ConsumedQty { get => _consumed; set { _consumed = value; OnChanged(nameof(ConsumedText)); } }
+        public decimal ProducedQty { get => _produced; set { _produced = value; OnChanged(nameof(ConsumedText)); } }
+        public decimal StageQty { get => _stageQty; set { _stageQty = value; OnChanged(nameof(StageQtyText)); } }
+        public decimal CostSharePct { get => _sharePct; set { _sharePct = value; OnChanged(nameof(ShareText)); } }
 
         public decimal TotalCost => _qty * _cost;
         public string TotalCostText => TotalCost.ToString("N2", CultureInfo.InvariantCulture);
@@ -600,6 +938,29 @@ public sealed class MfgWin : BaseWin
         {
             get => _cost.ToString("0.####", CultureInfo.InvariantCulture);
             set { if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)) UnitCost = v; }
+        }
+
+        /// <summary>The BOUND standard-cost text (MFG-4 fix).</summary>
+        public string StdCostText
+        {
+            get => _stdCost.ToString("0.####", CultureInfo.InvariantCulture);
+            set { if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)) StandardUnitCost = v; }
+        }
+
+        public string ConsumedText => string.Equals(_lineKind, MfgLineKinds.Raw, StringComparison.OrdinalIgnoreCase)
+            ? _consumed.ToString("0.###", CultureInfo.InvariantCulture)
+            : _produced.ToString("0.###", CultureInfo.InvariantCulture);
+
+        public string StageQtyText
+        {
+            get => _stageQty.ToString("0.###", CultureInfo.InvariantCulture);
+            set { if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)) StageQty = v; }
+        }
+
+        public string ShareText
+        {
+            get => _sharePct.ToString("0.##", CultureInfo.InvariantCulture);
+            set { if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)) CostSharePct = v; }
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

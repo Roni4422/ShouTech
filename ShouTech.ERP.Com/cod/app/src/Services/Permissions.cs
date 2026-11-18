@@ -516,6 +516,9 @@ namespace ShouTech.App.Services
         {
             public const string BomView = "MFG.BOM.VIEW";
             public const string BomManage = "MFG.BOM.MANAGE";
+            public const string PlanningView = "MFG.PLANNING.VIEW";
+            public const string PlanningRun = "MFG.PLANNING.RUN";
+            public const string PlanningConvert = "MFG.PLANNING.CONVERT";
 
             public const string OrderView = "MFG.ORDER.VIEW";
             public const string OrderCreate = "MFG.ORDER.CREATE";

@@ -449,6 +449,7 @@
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.ManufacturingAdministration" Header="Administration">
                         <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.ManufacturingModels" Label="Manufacturing templates" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.ManufacturingProcess" Label="Manufacturing operation" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.Planning" Label="Production planning" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.ManufacturingFeasibility" Label="Manufacturing capability" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Manufacturing.SearchManufacturing" Label="Search manufacturing" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
