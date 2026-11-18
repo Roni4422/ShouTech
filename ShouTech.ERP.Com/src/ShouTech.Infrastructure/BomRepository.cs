@@ -350,7 +350,7 @@ public sealed class BomRepository : IBomRepository
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var command = CreateCommand(connection, null,
-            $"SELECT warehouse_id, CAST(warehouse_code AS TEXT), name FROM warehouses WHERE company_id = @company AND {NotDeleted} ORDER BY warehouse_id");
+            $"SELECT warehouse_id, CAST(warehouse_code AS TEXT), COALESCE(NULLIF(warehouse_name_en, ''), warehouse_name_ar) FROM warehouses WHERE company_id = @company AND {NotDeleted} ORDER BY warehouse_id");
         Add(command, "@company", companyId.Trim());
         var result = new List<MfgWarehouseOption>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);

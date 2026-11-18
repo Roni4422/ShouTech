@@ -607,6 +607,18 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
             if (order.Lines.Count == 0)
                 throw new InvalidOperationException("A manufacturing order requires at least one raw-material line.");
 
+            // Staged actuals start from zero at Confirm: the header's
+            // TotalCost/UnitCost up to now are the DRAFT ESTIMATE
+            // (lines x entered unit costs + overhead, ComputeTotals),
+            // while the staged flow accumulates ACTUAL finished-goods
+            // value receipt by receipt. Carrying the estimate into the
+            // actuals would corrupt every downstream figure (unit cost,
+            // standard variance at Close).
+            order.TotalCost = 0m;
+            order.UnitCost = 0m;
+            order.AccumulatedCost = 0m;
+            order.WipBalance = 0m;
+            order.ProducedQty = 0m;
             await UpdateOrderStageAsync(connection, transaction, companyId, order, MfgOrderStatuses.Confirmed, userId, cancellationToken).ConfigureAwait(false);
             await InsertEventAsync(connection, transaction, companyId, order, "Confirm", order.DocDate, 0m, 0m, null, null, userId, cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
