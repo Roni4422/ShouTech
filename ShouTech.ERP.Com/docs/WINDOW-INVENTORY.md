@@ -7,12 +7,12 @@ This is a source-file inventory, not a claim that every type is an independently
 
 ## Inventory summary
 
-- Unique view/source basenames: 182
-- XAML + code-behind pairs: 0
-- C#-only basenames: 159
-- XAML without same-basename code-behind: 23
+- Unique view/source basenames: 159
+- XAML + code-behind pairs: 23
+- C#-only basenames: 136
+- XAML without same-basename code-behind: 0
 - Report basenames: 63
-- Existing Modules basenames: 7
+- Existing Modules basenames: 4
 
 A C#-only file may be a programmatic WPF window, helper, base class, view model, or support type. Inspect declared types and callers before treating it as a window or moving it.
 
@@ -20,8 +20,7 @@ A C#-only file may be a programmatic WPF window, helper, base class, view model,
 
 | Basename | C# / code-behind | XAML |
 |---|---:|---:|
-| `AccCar` | Yes | No |
-| `AccCard` | No | Yes |
+| `AccCard` | Yes | Yes |
 | `ActivityLogWin` | Yes | No |
 | `AddonsWin` | Yes | No |
 | `AppState` | Yes | No |
@@ -32,29 +31,23 @@ A C#-only file may be a programmatic WPF window, helper, base class, view model,
 | `BatchSerialPickerWin` | Yes | No |
 | `BcdDesWin` | Yes | No |
 | `BcdGenWin` | Yes | No |
-| `BinWi` | Yes | No |
-| `BinWin` | No | Yes |
-| `BkpWi` | Yes | No |
-| `BkpWin` | No | Yes |
+| `BinWin` | Yes | Yes |
+| `BkpWin` | Yes | Yes |
 | `BnkCard` | Yes | No |
 | `BomWin` | Yes | No |
 | `BudgetWin` | Yes | No |
 | `CalculatorWin` | Yes | No |
 | `CashDrawer` | Yes | No |
-| `CatWi` | Yes | No |
-| `CatWin` | No | Yes |
+| `CatWin` | Yes | Yes |
 | `CcCard` | Yes | No |
 | `CcListWin` | Yes | No |
 | `ChangePasswordWin` | Yes | No |
 | `ChqListWin` | Yes | No |
 | `ChqWin` | Yes | No |
 | `CloseCashWin` | Yes | No |
-| `CoaWi` | Yes | No |
-| `CoaWin` | No | Yes |
-| `ColChsWi` | Yes | No |
-| `ColChsWin` | No | Yes |
-| `ComWi` | Yes | No |
-| `ComWin` | No | Yes |
+| `CoaWin` | Yes | Yes |
+| `ColChsWin` | Yes | Yes |
+| `ComWin` | Yes | Yes |
 | `CompressInvoicesWin` | Yes | No |
 | `CrmActivitiesWin` | Yes | No |
 | `CrmLeadWin` | Yes | No |
@@ -64,8 +57,7 @@ A C#-only file may be a programmatic WPF window, helper, base class, view model,
 | `CstCard` | Yes | No |
 | `CurCard` | Yes | No |
 | `CustomReportsWin` | Yes | No |
-| `DatWi` | Yes | No |
-| `DatWin` | No | Yes |
+| `DatWin` | Yes | Yes |
 | `DefManagerWin` | Yes | No |
 | `DeliveryDeskWin` | Yes | No |
 | `DocSearchWin` | Yes | No |
@@ -82,21 +74,15 @@ A C#-only file may be a programmatic WPF window, helper, base class, view model,
 | `InstallmentsWin` | Yes | No |
 | `InvoiceWin` | Yes | No |
 | `JrnWin` | Yes | No |
-| `Lan` | Yes | No |
-| `Lang` | No | Yes |
+| `Lang` | Yes | Yes |
 | `LicenseWin` | Yes | No |
-| `LogWi` | Yes | No |
-| `LogWin` | No | Yes |
+| `LogWin` | Yes | Yes |
 | `LoyaltyWin` | Yes | No |
-| `MWi` | Yes | No |
-| `MWin` | No | Yes |
+| `MWin` | Yes | Yes |
 | `MaintenanceWin` | Yes | No |
-| `MatCar` | Yes | No |
-| `MatCard` | No | Yes |
-| `MatDirWi` | Yes | No |
-| `MatDirWin` | No | Yes |
-| `MatGroupWi` | Yes | No |
-| `MatGroupWin` | No | Yes |
+| `MatCard` | Yes | Yes |
+| `MatDirWin` | Yes | Yes |
+| `MatGroupWin` | Yes | Yes |
 | `MfgListWin` | Yes | No |
 | `MfgPlanWin` | Yes | No |
 | `MfgWin` | Yes | No |
@@ -110,28 +96,22 @@ A C#-only file may be a programmatic WPF window, helper, base class, view model,
 | `PosSessionWin` | Yes | No |
 | `PosSyncWin` | Yes | No |
 | `PosWin` | Yes | No |
-| `PrmWi` | Yes | No |
-| `PrmWin` | No | Yes |
+| `PrmWin` | Yes | Yes |
 | `ProjWin` | Yes | No |
 | `QcAlertWin` | Yes | No |
 | `QcInspectWin` | Yes | No |
 | `QcTemplateWin` | Yes | No |
 | `RepCard` | Yes | No |
 | `RepostWin` | Yes | No |
-| `RestoreCoWi` | Yes | No |
-| `RestoreCoWin` | No | Yes |
+| `RestoreCoWin` | Yes | Yes |
 | `RolloverWin` | Yes | No |
 | `RptBase` | Yes | No |
-| `SerWi` | Yes | No |
-| `SerWin` | No | Yes |
-| `SplWi` | Yes | No |
-| `SplWin` | No | Yes |
-| `StpWi` | Yes | No |
-| `StpWiz` | No | Yes |
+| `SerWin` | Yes | Yes |
+| `SplWin` | Yes | Yes |
+| `StpWiz` | Yes | Yes |
 | `SupportWin` | Yes | No |
 | `UpdatesWin` | Yes | No |
-| `WhsWi` | Yes | No |
-| `WhsWin` | No | Yes |
+| `WhsWin` | Yes | Yes |
 
 ## Report views
 
@@ -205,13 +185,10 @@ A C#-only file may be a programmatic WPF window, helper, base class, view model,
 
 | Basename | C# / code-behind | XAML |
 |---|---:|---:|
-| `Modules/DashV` | Yes | No |
-| `Modules/DashVw` | No | Yes |
+| `Modules/DashVw` | Yes | Yes |
 | `Modules/LangVM` | Yes | No |
-| `Modules/ModuleWorkspaceVie` | Yes | No |
-| `Modules/ModuleWorkspaceView` | No | Yes |
-| `Modules/ReportGridV` | Yes | No |
-| `Modules/ReportGridVw` | No | Yes |
+| `Modules/ModuleWorkspaceView` | Yes | Yes |
+| `Modules/ReportGridVw` | Yes | Yes |
 
 ## Mandatory checks before moving a view
 
