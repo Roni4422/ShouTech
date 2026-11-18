@@ -554,5 +554,65 @@
     "name": "HrMasterCodeDuplicate",
     "message": "Code '{0}' already exists for this company.",
     "hint": "Choose a different code."
+  },
+  "POS-1001": {
+    "code": "POS-1001",
+    "name": "PosNoOpenSession",
+    "message": "No POS session is open for this sale.",
+    "hint": "Open a session on the terminal, or enable session-less selling in POS settings with the bypass permission."
+  },
+  "POS-1002": {
+    "code": "POS-1002",
+    "name": "PosSessionAlreadyOpen",
+    "message": "Terminal '{0}' already has an open session.",
+    "hint": "Close the open session before opening another on the same terminal."
+  },
+  "POS-1003": {
+    "code": "POS-1003",
+    "name": "PosSessionStateInvalid",
+    "message": "The POS session state does not allow this operation.",
+    "hint": "Check the session is open (for closing, counted cash is required and cannot be negative)."
+  },
+  "POS-1004": {
+    "code": "POS-1004",
+    "name": "PosTenderMismatch",
+    "message": "The tenders do not settle the bill exactly.",
+    "hint": "Adjust cash, card and on-account amounts so the applied tenders equal the bill total; over-tendered cash is change."
+  },
+  "POS-1005": {
+    "code": "POS-1005",
+    "name": "PosTenderInvalid",
+    "message": "A tender is invalid.",
+    "hint": "Check tender types and amounts: card cannot over-tender, on-account needs a named customer, amounts cannot be negative."
+  },
+  "POS-1006": {
+    "code": "POS-1006",
+    "name": "PosReturnExceedsSold",
+    "message": "The return quantity exceeds what the original bill still has returnable.",
+    "hint": "Reduce the return quantity to the sold minus already-returned quantity."
+  },
+  "POS-1007": {
+    "code": "POS-1007",
+    "name": "PosReturnOriginalInvalid",
+    "message": "The original POS bill for this return is invalid or was not found.",
+    "hint": "Load a posted POS bill of the current company before returning against it."
+  },
+  "POS-1008": {
+    "code": "POS-1008",
+    "name": "PosHeldBillNotFound",
+    "message": "The held bill was not found.",
+    "hint": "Refresh the held bills list and pick the bill again."
+  },
+  "POS-1009": {
+    "code": "POS-1009",
+    "name": "PosHeldBillStateInvalid",
+    "message": "The held bill is not in a state that allows this operation.",
+    "hint": "Only a bill still in Held state can be recalled or cancelled."
+  },
+  "POS-1010": {
+    "code": "POS-1010",
+    "name": "PosSessionlessNotAllowed",
+    "message": "Session-less selling is enabled but this user may not bypass sessions.",
+    "hint": "Ask an administrator for the POS.SESSION.BYPASS permission, or open a session."
   }
 }

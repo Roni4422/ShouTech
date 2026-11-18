@@ -554,5 +554,65 @@
     "name": "HrMasterCodeDuplicate",
     "message": "'{0}' kodu bu sirket icin zaten mevcut.",
     "hint": "Farkli bir kod secin."
+  },
+  "POS-1001": {
+    "code": "POS-1001",
+    "name": "PosNoOpenSession",
+    "message": "Bu satış için açık POS oturumu yok.",
+    "hint": "Terminalde oturum açın veya yetkiyle oturumsuz satışı POS ayarlarından etkinleştirin."
+  },
+  "POS-1002": {
+    "code": "POS-1002",
+    "name": "PosSessionAlreadyOpen",
+    "message": "'{0}' terminalinde zaten açık oturum var.",
+    "hint": "Aynı terminalde yeni oturum açmadan önce açık oturumu kapatın."
+  },
+  "POS-1003": {
+    "code": "POS-1003",
+    "name": "PosSessionStateInvalid",
+    "message": "POS oturum durumu bu işleme izin vermiyor.",
+    "hint": "Oturumun açık olduğunu kontrol edin (kapanışta sayılan nakit gerekir ve negatif olamaz)."
+  },
+  "POS-1004": {
+    "code": "POS-1004",
+    "name": "PosTenderMismatch",
+    "message": "Ödemeler faturayı tam karşılamıyor.",
+    "hint": "Nakit, kart ve veresiye tutarlarını fatura toplamına eşit olacak şekilde ayarlayın; fazla nakit para üstüdür."
+  },
+  "POS-1005": {
+    "code": "POS-1005",
+    "name": "PosTenderInvalid",
+    "message": "Bir ödeme geçersiz.",
+    "hint": "Tür ve tutarları kontrol edin: kart fazla veremez, veresiye için isimli müşteri gerekir, tutarlar negatif olamaz."
+  },
+  "POS-1006": {
+    "code": "POS-1006",
+    "name": "PosReturnExceedsSold",
+    "message": "İade miktarı asıl faturada iade edilebilir kalanı aşıyor.",
+    "hint": "İade miktarını satılan eksi daha önce iade edilene düşürün."
+  },
+  "POS-1007": {
+    "code": "POS-1007",
+    "name": "PosReturnOriginalInvalid",
+    "message": "Bu iadenin asıl POS faturası geçersiz veya bulunamadı.",
+    "hint": "İade öncesi bu şirketin kaydedilmiş bir POS faturasını yükleyin."
+  },
+  "POS-1008": {
+    "code": "POS-1008",
+    "name": "PosHeldBillNotFound",
+    "message": "Bekleyen fatura bulunamadı.",
+    "hint": "Bekleyen listesini yenileyip faturayı tekrar seçin."
+  },
+  "POS-1009": {
+    "code": "POS-1009",
+    "name": "PosHeldBillStateInvalid",
+    "message": "Bekleyen faturanın durumu bu işleme izin vermiyor.",
+    "hint": "Yalnızca hâlâ bekleyen bir fatura çağrılabilir veya iptal edilebilir."
+  },
+  "POS-1010": {
+    "code": "POS-1010",
+    "name": "PosSessionlessNotAllowed",
+    "message": "Oturumsuz satış etkin ancak bu kullanıcının atlama yetkisi yok.",
+    "hint": "Yöneticiden POS.SESSION.BYPASS yetkisi isteyin veya oturum açın."
   }
 }

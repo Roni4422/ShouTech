@@ -554,5 +554,65 @@
     "name": "HrMasterCodeDuplicate",
     "message": "Le code '{0}' existe deja pour cette societe.",
     "hint": "Choisissez un autre code."
+  },
+  "POS-1001": {
+    "code": "POS-1001",
+    "name": "PosNoOpenSession",
+    "message": "Aucune session PDV n'est ouverte pour cette vente.",
+    "hint": "Ouvrez une session sur le terminal, ou activez la vente sans session avec le droit de dérogation."
+  },
+  "POS-1002": {
+    "code": "POS-1002",
+    "name": "PosSessionAlreadyOpen",
+    "message": "Le terminal '{0}' a déjà une session ouverte.",
+    "hint": "Fermez la session ouverte avant d'en ouvrir une autre sur le même terminal."
+  },
+  "POS-1003": {
+    "code": "POS-1003",
+    "name": "PosSessionStateInvalid",
+    "message": "L'état de la session PDV ne permet pas cette opération.",
+    "hint": "Vérifiez que la session est ouverte (pour fermer, les espèces comptées sont requises et non négatives)."
+  },
+  "POS-1004": {
+    "code": "POS-1004",
+    "name": "PosTenderMismatch",
+    "message": "Les paiements ne soldent pas exactement la facture.",
+    "hint": "Ajustez espèces, carte et crédit pour égaler le total ; le surplus d'espèces est la monnaie."
+  },
+  "POS-1005": {
+    "code": "POS-1005",
+    "name": "PosTenderInvalid",
+    "message": "Un paiement est invalide.",
+    "hint": "Vérifiez types et montants : la carte ne peut pas dépasser, le crédit exige un client nommé, les montants ne sont pas négatifs."
+  },
+  "POS-1006": {
+    "code": "POS-1006",
+    "name": "PosReturnExceedsSold",
+    "message": "La quantité de retour dépasse le retournable de la facture d'origine.",
+    "hint": "Réduisez la quantité au vendu moins le déjà retourné."
+  },
+  "POS-1007": {
+    "code": "POS-1007",
+    "name": "PosReturnOriginalInvalid",
+    "message": "La facture PDV d'origine est invalide ou introuvable.",
+    "hint": "Chargez une facture PDV validée de cette société avant le retour."
+  },
+  "POS-1008": {
+    "code": "POS-1008",
+    "name": "PosHeldBillNotFound",
+    "message": "La facture en attente est introuvable.",
+    "hint": "Actualisez la liste des attentes et choisissez à nouveau."
+  },
+  "POS-1009": {
+    "code": "POS-1009",
+    "name": "PosHeldBillStateInvalid",
+    "message": "L'état de la facture en attente ne permet pas cette opération.",
+    "hint": "Seule une facture encore en attente peut être rappelée ou annulée."
+  },
+  "POS-1010": {
+    "code": "POS-1010",
+    "name": "PosSessionlessNotAllowed",
+    "message": "La vente sans session est active mais cet utilisateur ne peut pas déroger.",
+    "hint": "Demandez le droit POS.SESSION.BYPASS à un administrateur, ou ouvrez une session."
   }
 }
