@@ -56,9 +56,10 @@ public sealed record ReceiptOutcome(decimal CostAmount, decimal ValuationRate);
 ///     sum of movement cost_amounts always equals the balance value;
 ///   * an issue never values at a selling price: its rate comes from
 ///     the balance / layer queue / the method's fallback chain only;
-///   * a receipt enters at the rate the caller resolved (actual cost,
-///     an original-movement rate for a linked return, the transfer
-///     source rate, or the standard cost under the Standard method).
+///   * a receipt enters at the rate the caller resolved (actual acquisition
+///     cost, an original-movement rate for a linked return, or the transfer
+///     source rate); Standard method applies its standard rate to issues,
+///     leaving acquisition variance visible in the remaining stock value.
 /// </summary>
 public static class ValuationMath
 {
