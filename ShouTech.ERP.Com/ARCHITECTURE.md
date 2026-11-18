@@ -157,4 +157,4 @@ The service polls the outbox and dispatches HTTP(S) webhooks. Email/SMS connecto
 
 ## Architecture refactoring program
 
-The repository is being re-engineered incrementally. The audited target architecture, dependency rules, module boundaries, file-disposition policy and phase exit gates are maintained in [Architecture Refactoring Plan](docs/ARCHITECTURE_REFACTORING_PLAN.md). Do not treat this target as evidence that all legacy paths have already been migrated.
+The repository is being re-engineered incrementally. The audited target architecture, dependency rules, module boundaries, file-disposition policy and phase exit gates are maintained in [Architecture Refactoring Plan](docs/REFACTOR.md). Do not treat this target as evidence that all legacy paths have already been migrated.
