@@ -259,3 +259,22 @@ These are target folders, not permission to move all files in one batch. The fir
 - [ ] Remaining windows mapped and moved in bounded waves.
 - [ ] All Ribbon/menu routes verified.
 - [ ] Final full regression matrix passed.
+
+
+## Test baseline discovered before the first view move
+
+The Windows CI run for the pre-move baseline commit `38b22a8e8ef28cbe77b3d6bb0b8b011330e9c053` completed with a successful restore and build, but the test step failed: **72 failed, 242 passed, 0 skipped (314 total)**. This run predates the Material Card relocation and therefore is not evidence that the relocation caused these failures.
+
+The failure log shows recurring test-fixture/schema and isolation problems that must be triaged independently of the view moves, including:
+
+- Fixture SQL expects `warehouses.name`, while the migrated SQLite schema does not expose that column.
+- Fixture SQL expects `mfg_orders.bom_id`, which is absent in the schema used by the test.
+- SQLite test databases intermittently fail to open.
+- Several fixtures cannot resolve seeded companies, materials, warehouses, accounts, parties or cost centers.
+- Some tests encounter duplicate account numbers during setup.
+- COA tests contain SQL syntax failures near alias `a`.
+- STEI import round-trip lacks the expected `DATA.IMPORT` permission in its test context.
+
+These are observed failure signatures, not yet proven root causes. Fixes must align fixtures with authoritative migrations and isolate each test's database/session/company state; do not weaken production validation to make tests pass.
+
+The Windows CI run for the Material Card move commit `cc9eec898508f7620246ddc94720c26296f7c059` is running separately. Its final restore/build/test result must be recorded before this first relocation is marked verified.
