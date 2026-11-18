@@ -254,7 +254,7 @@ namespace Kern.Tests
                 await using var command = connection.CreateCommand();
                 command.CommandText = """
                     SELECT company_id, company_name_ar, company_name_en,
-                           commercial_registration, currency_code, language_code
+                           tax_number, commercial_registration, currency_code, language_code
                     FROM companies
                     WHERE company_code = @code;
                     """;
@@ -265,8 +265,9 @@ namespace Kern.Tests
                 Assert.Equal(profile.Name, reader.GetString(1));
                 Assert.Equal(profile.NameEn, reader.GetString(2));
                 Assert.Equal(profile.TaxNumber, reader.GetString(3));
-                Assert.Equal(profile.CurrencyCode, reader.GetString(4));
-                Assert.Equal(profile.LanguageCode, reader.GetString(5));
+                Assert.Equal(profile.License, reader.GetString(4));
+                Assert.Equal(profile.CurrencyCode, reader.GetString(5));
+                Assert.Equal(profile.LanguageCode, reader.GetString(6));
             }
             finally
             {
