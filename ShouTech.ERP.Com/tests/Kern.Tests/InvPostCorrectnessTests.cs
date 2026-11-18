@@ -336,7 +336,9 @@ public sealed class InvPostCorrectnessTests
         Assert.NotNull(loaded);
         Assert.Equal(docId, loaded!.DocId);
         Assert.Equal("SAL-CHAIN-1", loaded.DocNo);
-        Assert.Equal(250m, loaded.GrandTotal);
+        // This fixture intentionally has no lines; verify the persisted
+        // header amount rather than the line-derived display total.
+        Assert.Equal(250m, loaded.StoredGrandTotal);
         Assert.Equal(InvDocStatus.Posted, loaded.Status);
     }
 
