@@ -504,7 +504,7 @@ public class ChequeMfgServiceTests
                 }
                 Exec(connection, ReadMigration("034_manufacturing.sql"));
                 // Keep this focused fixture aligned with migration 058, which adds the BOM link.
-                Exec(connection, "ALTER TABLE mfg_orders ADD COLUMN bom_id TEXT;");
+                Exec(connection, "ALTER TABLE mfg_orders ADD COLUMN bom_id TEXT; ALTER TABLE mfg_orders ADD COLUMN bom_version INTEGER;");
                 Exec(connection, """
                     CREATE TABLE materials (material_id INTEGER PRIMARY KEY, company_id TEXT NOT NULL DEFAULT '', code TEXT NOT NULL, name_ar TEXT NOT NULL DEFAULT '', is_deleted INTEGER NOT NULL DEFAULT 0, acc_inventory TEXT);
                     CREATE TABLE warehouses (warehouse_id INTEGER PRIMARY KEY, company_id TEXT NOT NULL DEFAULT '', warehouse_code INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0);
