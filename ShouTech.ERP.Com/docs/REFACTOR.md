@@ -16,11 +16,11 @@ Large implementation files requiring responsibility analysis include:
 | File | Approximate size | Initial concern |
 |---|---:|---|
 | `cod/app/src/Services/Inventory.cs` | 134 KB | Inventory workflows, persistence and domain rules are likely too concentrated |
-| `src/ShouTech.Infrastructure/HrRepository.cs` | 125 KB | Large repository; inspect query/command and aggregate boundaries |
+| `src/Infra/HrRepository.cs` | 125 KB | Large repository; inspect query/command and aggregate boundaries |
 | `cod/app/src/Services/RptQuery.cs` | 112 KB | Report query catalog and execution concerns may be coupled |
 | `cod/app/src/Services/InvRepo.cs` | 111 KB | Persistence and inventory behavior boundary needs review |
 | `cod/app/src/Services/Company.cs` | 105 KB | Company lifecycle and provisioning concerns need separation |
-| `src/ShouTech.Infrastructure/MfgOrderRepository.cs` | 101 KB | Manufacturing persistence responsibilities need decomposition |
+| `src/Infra/MfgOrderRepository.cs` | 101 KB | Manufacturing persistence responsibilities need decomposition |
 | `cod/app/src/Views/WhsWin.xaml.cs` | 98 KB | UI event handling and business logic boundary needs review |
 | `cod/app/src/Views/MatCard.xaml.cs` | 87 KB | UI construction, validation and persistence coupling risk |
 
@@ -225,3 +225,16 @@ References:
 ## 10. Current decision
 
 This commit defines the audited baseline and the safe refactoring sequence. It does not claim the application has already been restructured. Production code movement begins only after the Phase 0 inventory is complete and each change can be built and tested independently.
+
+
+## 11. Short naming convention
+
+Core project directories now use concise, readable names: `src/Domain`, `src/App`, and `src/Infra`. Project filenames are correspondingly `Domain.csproj`, `App.csproj`, and `Infra.csproj`. The C# namespaces and assembly identities remain unchanged in this compatibility step.
+
+Naming rules for subsequent work:
+- Prefer one clear word for a folder: `Domain`, `App`, `Infra`, `Views`, `Reports`, `Tests`, `Migrations`.
+- Use concise but meaningful PascalCase filenames: `Rpt.cs`, `InvRepo.cs`, `Company.cs`; avoid unexplained acronyms and one-letter names.
+- Keep established domain acronyms only when they are common in the ERP codebase (GL, HR, POS, CRM, SQL).
+- Do not shorten public type names, database table names, migration IDs, API routes or serialized field names as part of a filesystem rename; those are compatibility contracts.
+- Keep namespaces and assembly names stable until a separate compatibility review approves a change.
+- Rename a file only after checking project globs, XAML/resource pack URIs, reflection, scripts, CI paths, docs and packaging references.
