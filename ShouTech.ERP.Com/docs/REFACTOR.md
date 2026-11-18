@@ -251,3 +251,41 @@ Large, established source files are valuable project assets and are not refactor
 - File size alone is never evidence that code is dead, poorly designed or should be deleted.
 
 **Decision:** ShouTech will favor cohesive, well-organized implementation files over artificial fragmentation. Refactoring quality is measured by correctness, cohesion, testability and ease of safe change—not by the number or average size of files.
+
+
+## 13. Window inventory and migration
+
+The source-level inventory is maintained in [WINDOW-INVENTORY.md](WINDOW-INVENTORY.md). It is a starting index only: a filename is not proof that a type is a live window, and a C#-only file may be a programmatic window or a support type.
+
+### 13.1 Migration rules
+
+- Do not split large window code-behind files merely to reduce file size or line count.
+- Move an existing XAML/code-behind pair together and preserve its namespace, x:Class, public type and runtime contract unless a separately reviewed compatibility change is necessary.
+- Do not move a file until its type, all callers, Ribbon/menu route keys, constructor dependencies, services, repositories, database tables, permissions, localization keys and resource dependencies are mapped.
+- Check WPF Page/Compile items, pack URIs, merged dictionaries, icons, templates, StartupUri, reflection and runtime file paths before and after every move.
+- Keep the main shell's two-bar structure (menu bar and Ribbon); every visible command must open its intended functional window or be intentionally disabled with an explanation.
+- Do not leave placeholder routes where a real window/use case exists. Do not create duplicate windows to satisfy a route.
+- Move in bounded business-module waves. Do not relocate the entire Views tree in one commit.
+
+### 13.2 Migration waves
+
+1. Platform shell, company, users, roles, permissions, settings, backup and restore.
+2. Inventory cards and operations: materials/items, categories, warehouses, barcode, transfers, counts, adjustments, batches and serials.
+3. Sales and purchasing documents: quotations, orders, invoices, returns and delivery/receipt flows.
+4. Accounting and treasury: chart of accounts, journals, vouchers, receipts, payments, cash, banks and reconciliation.
+5. Manufacturing, HR, CRM, projects and quality.
+6. Reports, import/export, maintenance, licensing and diagnostics.
+
+### 13.3 Completion and verification gate
+
+A window is migrated only when its final path, navigation route, permission, localization/resources, service/repository and database dependencies are recorded; its main workflows remain functional; and its navigation/open/close lifecycle has been tested. For data-entry windows test create, read, update, validation, search and business-rule-compliant delete/cancel. For reports test filters, query execution and empty/error states.
+
+After each wave:
+- Build the WPF application in Debug and Release on Windows.
+- Run unit and integration tests relevant to the wave.
+- Run a navigation smoke test for every affected Ribbon/menu route.
+- Verify SQLite behavior and PostgreSQL behavior where that feature supports both providers.
+- Inspect WPF resource loading at runtime; a successful compile alone is insufficient.
+- Record failures, fixes and rerun evidence in the inventory.
+
+The final window-migration gate requires every inventoried candidate to be classified (window, view, helper, base type, view model, resource or historical), every visible route to have a verified destination, and a complete regression report. Do not claim completion from a file move or build-only result.
