@@ -566,7 +566,8 @@ namespace Kern.Tests
                         """;
                     insertCenters.Parameters.AddWithValue("$id1", Guid.NewGuid().ToString("D"));
                     insertCenters.Parameters.AddWithValue("$id2", Guid.NewGuid().ToString("D"));
-                    insertCenters.Parameters.AddWithValue("$company", companyId.ToString("D"));
+                    // Cost-center masters use the company CODE namespace.
+                    insertCenters.Parameters.AddWithValue("$company", companyCode);
                     await insertCenters.ExecuteNonQueryAsync();
                 }
 
