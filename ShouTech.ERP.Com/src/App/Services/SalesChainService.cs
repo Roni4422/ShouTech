@@ -105,9 +105,8 @@ public sealed class SalesChainService
             $"From {source.DocKind} {source.DocNo}",
             lines);
 
-        var targetDocId = await _repository.CreateSalesDraftAsync(draft, userId, cancellationToken).ConfigureAwait(false);
-        await _repository.AddLinkAsync(source.CompanyId, source.DocKind, sourceDocId, targetKind, targetDocId, userId, cancellationToken).ConfigureAwait(false);
-        return targetDocId;
+        return await _repository.CreateSalesDraftWithLinkAsync(
+            draft, source.DocKind, sourceDocId, userId, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Creates and posts a sales quotation draft; entry point of the chain.</summary>
