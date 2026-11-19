@@ -185,6 +185,55 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task DeliveryFromOrder_AllocatesRepeatedMaterialQuantitiesAcrossSourceLines()
+        {
+            var (service, repository, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                var quotationId = await service.CreateQuotationAsync(new CommercialDocumentDraft(
+                    companyId,
+                    CommercialDocKinds.SalesQuotation,
+                    "QT-DUP-MAT",
+                    new DateOnly(2026, 10, 16),
+                    7,
+                    "Chain Test Customer",
+                    1,
+                    "SAR",
+                    1m,
+                    null,
+                    new[]
+                    {
+                        new CommercialLineDraft(42, "MAT-42", "First line", "PCS", 4m, 25m),
+                        new CommercialLineDraft(42, "MAT-42", "Second line", "PCS", 6m, 25m)
+                    }), "chain-test");
+
+                var orderId = await service.CreateFromSourceAsync(
+                    quotationId, "SO-DUP-MAT", new DateOnly(2026, 10, 20), "chain-test");
+                await service.PostAsync(orderId, "chain-test");
+
+                var firstDeliveryId = await service.CreateFromSourceAsync(
+                    orderId, "DLV-DUP-MAT-1", new DateOnly(2026, 10, 21), "chain-test",
+                    quantityByMaterialId: new Dictionary<long, decimal> { [42] = 5m });
+                var firstDelivery = await repository.FindSalesByIdAsync(firstDeliveryId);
+                Assert.NotNull(firstDelivery);
+                Assert.Equal(new[] { 4m, 1m }, firstDelivery!.Lines.Select(line => line.Qty));
+
+                await service.PostAsync(firstDeliveryId, "chain-test");
+                var secondDeliveryId = await service.CreateFromSourceAsync(
+                    orderId, "DLV-DUP-MAT-2", new DateOnly(2026, 10, 22), "chain-test");
+                var secondDelivery = await repository.FindSalesByIdAsync(secondDeliveryId);
+                Assert.NotNull(secondDelivery);
+                var remainingLine = Assert.Single(secondDelivery!.Lines);
+                Assert.Equal(5m, remainingLine.Qty);
+                Assert.Equal("Second line", remainingLine.Description);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task CreateFromSource_RejectsQuantityOverRemaining()
         {
             var (service, _, companyId, _, cleanup) = await CreateAsync();
