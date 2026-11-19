@@ -614,7 +614,7 @@ public class ChequeMfgServiceTests
         {
             var sql = ReadMigration(fileName);
             var directive = new Regex(
-                @"(?m)^-- @if-column-missing ([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)\s*\r?\n\s*(ALTER TABLE [^;]+;)",
+                @"(?m)^-- @if-column-missing ([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)[ \t]*\r?\n[ \t]*(ALTER TABLE [^;]+;)",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             sql = directive.Replace(sql, match =>
                 HasColumn(connection, match.Groups[1].Value, match.Groups[2].Value)
