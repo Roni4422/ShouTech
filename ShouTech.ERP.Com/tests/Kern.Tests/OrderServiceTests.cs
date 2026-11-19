@@ -144,6 +144,32 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task PostedInvoice_CannotBeCancelledDirectly()
+        {
+            var (service, orders, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.SalesOrder, "SO-9010", 2m, 25m), "order-test");
+                await service.PostOrderAsync(CommercialDocSide.Sales, orderId, "order-test");
+                var (invoiceId, _) = await service.ConvertToInvoiceAsync(
+                    CommercialDocSide.Sales, orderId, new DateOnly(2026, 11, 2), "order-test");
+
+                var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    orders.SetStatusAsync(CommercialDocSide.Sales, invoiceId,
+                        CommercialDocumentStatus.Cancelled, "order-test"));
+                Assert.Contains("return or reverse", error.Message.ToLowerInvariant());
+
+                var invoice = await orders.FindByIdAsync(CommercialDocSide.Sales, invoiceId);
+                Assert.Equal(CommercialDocumentStatus.Posted, invoice!.Status);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task CloseAndCancel_EnforceTransitions()
         {
             var (service, orders, companyId, _, cleanup) = await CreateAsync();

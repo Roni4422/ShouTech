@@ -326,12 +326,23 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             }
             if (newStatus == CommercialDocumentStatus.Lost && kind != CommercialDocKinds.SalesQuotation)
                 throw new InvalidOperationException("Only quotations can be marked as lost.");
-            if (newStatus == CommercialDocumentStatus.Cancelled && status == CommercialDocumentStatus.Posted)
+            if (status == CommercialDocumentStatus.Posted
+                && newStatus is CommercialDocumentStatus.Cancelled or CommercialDocumentStatus.Lost)
             {
-                // A posted commitment cannot be cancelled while a posted
-                // downstream document still depends on it. Cancel/reverse the
-                // child first so delivery/receipt and billing progress remain
-                // traceable instead of leaving orphaned fulfilment.
+                var isCommitment = kind is CommercialDocKinds.SalesOrder
+                    or CommercialDocKinds.PurchaseOrder
+                    or CommercialDocKinds.SalesQuotation
+                    or CommercialDocKinds.RequestForQuotation;
+
+                // Operational documents have already affected stock, GL or
+                // party balances. They must be corrected with a return or a
+                // linked reversal, never by changing their status directly.
+                if (newStatus == CommercialDocumentStatus.Cancelled && !isCommitment)
+                    throw new InvalidOperationException(
+                        "A posted operational document cannot be cancelled directly. Create a return or reverse the posted document.");
+
+                // A posted commitment cannot be cancelled or marked lost
+                // while a posted downstream document still depends on it.
                 await using var downstream = CreateCommand(connection, transaction, $"""
                     SELECT COUNT(*)
                     FROM document_links dl
@@ -354,7 +365,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                     CultureInfo.InvariantCulture);
                 if (linkedCount > 0)
                     throw new InvalidOperationException(
-                        "A posted order cannot be cancelled while posted delivery, receipt or invoice documents are linked. Reverse or cancel the downstream documents first.");
+                        "A posted commitment cannot be cancelled or marked lost while posted downstream documents are linked. Reverse or cancel the downstream documents first.");
             }
 
             if (Array.IndexOf(allowed, status) < 0)
