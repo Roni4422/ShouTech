@@ -417,6 +417,38 @@ namespace Kern.Tests
                 seed.Parameters.AddWithValue("$companyId", companyId.ToString("D"));
                 seed.Parameters.AddWithValue("$companyCode", companyId.ToString("D"));
                 seed.ExecuteNonQuery();
+
+                // The chain's invoice posting now writes a real GL entry.
+                // Keep every test document date in an explicitly open period.
+                using var fiscal = connection.CreateCommand();
+                fiscal.CommandText = """
+                    INSERT INTO fiscal_years
+                        (company_id, fiscal_year, database_name, start_date, end_date, is_current, is_closed)
+                    VALUES ($company, 2026, '', '2026-01-01', '2026-12-31', 1, 0);
+                    SELECT last_insert_rowid();
+                    """;
+                fiscal.Parameters.AddWithValue("$company", companyId.ToString("D"));
+                var yearId = Convert.ToInt64(fiscal.ExecuteScalar(), CultureInfo.InvariantCulture);
+
+                for (var month = 1; month <= 12; month++)
+                {
+                    using var period = connection.CreateCommand();
+                    period.CommandText = """
+                        INSERT INTO fiscal_periods
+                            (fiscal_period_id, company_id, fiscal_year_id, period_number,
+                             period_name, start_date, end_date, status)
+                        VALUES ($id, $company, $year, $number, $name, $start, $end, 'OPEN');
+                        """;
+                    var start = new DateTime(2026, month, 1);
+                    period.Parameters.AddWithValue("$id", Guid.NewGuid().ToString("D"));
+                    period.Parameters.AddWithValue("$company", companyId.ToString("D"));
+                    period.Parameters.AddWithValue("$year", yearId);
+                    period.Parameters.AddWithValue("$number", month);
+                    period.Parameters.AddWithValue("$name", $"2026-{month:D2}");
+                    period.Parameters.AddWithValue("$start", start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                    period.Parameters.AddWithValue("$end", start.AddMonths(1).AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                    period.ExecuteNonQuery();
+                }
             }
             var repository = new ShouTech.Infrastructure.CommercialDocumentRepository("SQLite", connectionString);
             return Task.FromResult<(SalesChainService Service, Guid CompanyId, string ConnectionString, Action Cleanup)>((new SalesChainService(repository), companyId, connectionString, () => CleanupFiles(databasePath)));
