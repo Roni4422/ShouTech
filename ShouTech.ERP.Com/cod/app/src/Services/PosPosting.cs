@@ -222,22 +222,28 @@ public static class PosPosting
             using (var find = connection.CreateCommand())
             {
                 find.Transaction = tx;
+                var hasStoredRate = PartyLedger.ColumnExists(connection, tx, provider, "party_ledger", "exchange_rate");
                 find.CommandText = """
-                    SELECT debit, credit, currency_code FROM party_ledger
+                    SELECT debit, credit, currency_code
+                    """ + (hasStoredRate ? ", exchange_rate" : "") + """
+                    FROM party_ledger
                     WHERE company_id=$company AND party_id=$pid AND doc_id=$orig
                       AND doc_kind IN ('RCV', 'PAY');
                     """;
                 Add(find, "$company", Company);
                 Add(find, "$pid", partyId);
                 Add(find, "$orig", original.DocId);
-                var settlements = new List<(decimal Debit, decimal Credit, string Currency)>();
+                var settlements = new List<(decimal Debit, decimal Credit, string Currency, decimal Rate)>();
                 using (var reader = find.ExecuteReader())
                     while (reader.Read())
                         settlements.Add((
                             Convert.ToDecimal(reader.GetValue(0), CultureInfo.InvariantCulture),
                             Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture),
-                            reader.IsDBNull(2) ? original.CurrencyCode : reader.GetString(2)));
-                foreach (var (debit, credit, currency) in settlements)
+                            reader.IsDBNull(2) ? original.CurrencyCode : reader.GetString(2),
+                            hasStoredRate && !reader.IsDBNull(3)
+                                ? Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture)
+                                : 0m));
+                foreach (var (debit, credit, currency, rate) in settlements)
                 {
                     if (remaining <= 0) break;
                     var settledAmount = Math.Max(debit, credit);
@@ -249,7 +255,8 @@ public static class PosPosting
                         returnDoc.KindCode, returnDoc.DocId, returnDoc.DocNo,
                         DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                         mDebit, mCredit, currency,
-                        $"POS return refund of settlement collected at posting for {original.DocNo}");
+                        $"POS return refund of settlement collected at posting for {original.DocNo}",
+                        exchangeRate: rate);
                     remaining -= mirror;
                 }
             }
