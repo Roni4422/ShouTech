@@ -137,7 +137,7 @@ namespace Kern.Tests
                 Assert.Contains("downstream", error.Message, StringComparison.OrdinalIgnoreCase);
 
                 var order = await service.GetProgressAsync(CommercialDocSide.Sales, orderId);
-                Assert.Equal(30m, order.DeliveredPercent);
+                Assert.Equal(30m, order.PerFulfilled);
             }
             finally
             {
