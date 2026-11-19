@@ -63,22 +63,35 @@ These are evidence of implementation foundations only. A class, table, report or
 | Platform / Security | Auth, Permissions, License, Backup, DataExchangeGuard, SchMig, Localization | Role/permission matrix, MFA option where suitable, encryption at rest/backup, tamper-evident audit, recovery, signed updater, license grace/offline activation, diagnostics | Clean-device install/upgrade/rollback; least-privilege tests; backup restore verified; secrets not stored as plaintext |
 | Multi-company / Multi-branch | Company service and company-scoped repository patterns | Per-company data isolation, branches/warehouses, intercompany transactions, consolidated reporting, separate fiscal years/currencies | Cross-company leakage tests; intercompany balances reconcile; user access scoped to allowed companies/branches |
 
-## 5. Immediate verified blockers from current CI
+## 5. Live correctness gate — execution log (2026-11-19)
 
-Latest inspected workflow run:
-- Run: 44456677597
-- Commit: dd96625861a78d697d78b102a4a7b6bbdf2112b2
-- Result: 302 passed, 12 failed, 314 total.
+The most recent **completed** CI run inspected at this update is:
+- Run: 44466340520 (PR merge ref; branch head at that time: `7c8c6d63fe673ba74fd7d17b130fc9112863fd4a`).
+- Release build: succeeded with **0 warnings / 0 errors**.
+- Tests: **307 passed, 9 failed, 316 total**.
+- Newer branch commit `da3bf2fd024d35dc4cf5687a6084e6948311f69c` adds missing GL accounts to the sales-chain posting fixture; its CI run 44467664452 was still in progress when this log was written.
+- Follow-up commit `ccc3942ea69d3cc9b893fe921e4c9d8e02273e16` corrects the manufacturing test migration executor so conditional ALTER directives are evaluated in migration order, after preceding CREATE statements. Its CI run 44468374819 was queued at this update.
+- Therefore, neither follow-up is marked verified until its own CI run completes.
 
-Failures grouped by root cause:
-1. Party-ledger reversal SQL assumes columns named `debit` / `credit` in the source settlement table; SQLite reports `no such column: debit` in POS refund and invoice reversal paths. Inspect the actual POS settlement schema and the party-ledger schema separately; do not guess or rename columns blindly.
-2. One sales-chain posting fixture lacks active/postable account 1201 for the company.
-3. Manufacturing test fixture has no opening stock for raw material RM-1; seed the test stock through the supported inventory schema, preserving insufficient-stock rollback tests.
-4. Manufacturing fixture expects a `permissions` table that is absent from its minimal migrated database; either run the proper security migration or inject the intended permission provider in the fixture, without bypassing production authorization.
-5. Unit-of-measure legacy round-trip fixture violates a foreign key; repair parent/child seed order and valid company references.
-6. Sales-return GL test expected 40 but actual is 100; investigate source invoice/return quantity and valuation basis before changing the assertion or posting algorithm.
+### Failure classification from run 44466340520
 
-Do not mark the branch green until all 12 failures are classified and fixed, all tests pass on the resulting commit, and Debug/Release builds complete.
+| Failure group | Evidence | Corrective action / state |
+|---|---|---|
+| Manufacturing fixture — duplicate `card_no` | Five MFG tests failed while applying migration 016; the fixture evaluated all conditional-column directives before executing the earlier CREATE TABLE statements in that same migration. | Fixed in `ccc3942`: execute migration segments in order, evaluate each directive against the schema created by preceding segments. CI pending. |
+| Sales-chain GL account 301 | Posting failed because the fixture did not seed an active, postable sales revenue account. | Fixture now seeds 301, 1203 and 401 alongside receivables in `da3bf2f`. CI pending. |
+| POS partial return settlement | `PosPosting.PartiallyUnsettleOriginal` received SQLite `no such column: debit` when reading party-ledger settlement rows. | Open. Confirm the exact schema actually present in the failing test database before changing SQL or adding a compatibility migration. Preserve append-only settlement mirrors and partial-refund arithmetic. |
+| Invoice reversal settlement | `InvRepo.UnsettleOriginalOnReversal` received the same missing-`debit` error in two reversal tests. | Open. Trace migration ownership/order and the exact live table columns; do not mask this with a zero/default balance. |
+| Sales invoice GL test | Sales return test failed through the reversal settlement path above. | Treat as part of the party-ledger schema defect; keep the stock valuation and mirrored GL assertions unchanged. |
+
+The current known blocker is not merely test setup: the party-ledger schema seen by the failing reversal tests does not expose the `debit` column expected by the runtime query, despite the canonical SQLite commercial-document migration defining `debit` and `credit`. This discrepancy must be diagnosed at the database-creation/migration boundary. Add a schema assertion immediately after migration in the relevant fixtures and trace any pre-existing table/bootstrap path that could cause `CREATE TABLE IF NOT EXISTS` to preserve an incompatible table.
+
+### Required evidence before closing Phase A
+
+1. CI on the latest branch commit: Release build 0 warnings/errors and all tests passing.
+2. SQLite schema assertions for `party_ledger`, warehouses and manufacturing tables after clean migration.
+3. Fresh SQLite migration run and upgrade run from a representative pre-existing database.
+4. PostgreSQL migration smoke run, including the same business schemas.
+5. Reversal/partial-refund regression tests proving party ledger, allocations, paid amount, inventory and GL reconcile; do not delete posted financial history.
 
 ## 6. Delivery order
 
