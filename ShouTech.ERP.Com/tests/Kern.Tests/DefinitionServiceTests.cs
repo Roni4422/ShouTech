@@ -188,16 +188,8 @@ public class DefinitionServiceTests
         var (service, connectionString, cleanup) = await CreateAsync();
         try
         {
-            // units_of_measure.company_id has a legacy FK to companies: seed the
-            // company row first, exactly as the real app always has one.
-            await using (var connection = new SqliteConnection(connectionString))
-            {
-                await connection.OpenAsync();
-                await using var seed = connection.CreateCommand();
-                seed.CommandText = "INSERT OR IGNORE INTO companies (company_id, company_code, company_name_ar, company_name_en) VALUES ($id, $id, 'Test', 'Test Company')";
-                seed.Parameters.AddWithValue("$id", Company);
-                await seed.ExecuteNonQueryAsync();
-            }
+            // The public API receives the company code; the repository maps
+            // the legacy UOM foreign key to the canonical company_id.
             var id = await service.SaveAsync(DefSets.UnitsOfMeasure, Company, null,
                 Values(("uom_code", "PCS")), "tester");
             Assert.False(string.IsNullOrWhiteSpace(id));
