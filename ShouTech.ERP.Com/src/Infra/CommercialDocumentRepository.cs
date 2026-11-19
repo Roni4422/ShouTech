@@ -150,81 +150,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var docDateText = draft.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-            decimal subtotal = 0m, taxAmount = 0m, grandTotal = 0m;
-            var computed = new List<(decimal Subtotal, decimal Tax, decimal Total)>();
-            foreach (var line in draft.Lines)
-            {
-                if (line.Qty <= 0m) throw new InvalidOperationException("Document line quantities must be greater than zero.");
-                var lineSubtotal = decimal.Round(line.Qty * line.UnitPrice * (1m - line.DiscountPct / 100m), 2);
-                var lineTax = decimal.Round(lineSubtotal * line.TaxRate / 100m, 2);
-                var lineTotal = lineSubtotal + lineTax;
-                computed.Add((lineSubtotal, lineTax, lineTotal));
-                subtotal += lineSubtotal;
-                taxAmount += lineTax;
-                grandTotal += lineTotal;
-            }
-
-            long docId;
-            var insertHeader = CreateCommand(connection, transaction,
-                "INSERT INTO sales_documents (company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id, currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total, status, notes, created_by, party_code, delivery_date, valid_till, cost_center, branch_name, sales_rep_name, warehouse_name) " +
-                "VALUES (@company, @kind, @no, @date, @party, @partyName, @warehouse, @currency, @rate, @subtotal, @discount, @tax, @total, @status, @notes, @actor, @partyCode, @deliveryDate, @validTill, @costCenter, @branchName, @salesRepName, @warehouseName)" +
-                (_provider == "PostgreSQL" ? " RETURNING doc_id" : "; SELECT last_insert_rowid();"));
-            Add(insertHeader, "@company", draft.CompanyId.ToString("D"));
-            Add(insertHeader, "@kind", draft.DocKind.Trim());
-            Add(insertHeader, "@no", draft.DocNo.Trim());
-            Add(insertHeader, "@date", docDateText);
-            Add(insertHeader, "@party", (object?)draft.PartyId ?? DBNull.Value);
-            Add(insertHeader, "@partyName", (object?)draft.PartyName ?? DBNull.Value);
-            Add(insertHeader, "@warehouse", (object?)draft.WarehouseId ?? DBNull.Value);
-            Add(insertHeader, "@currency", string.IsNullOrWhiteSpace(draft.CurrencyCode) ? "SAR" : draft.CurrencyCode.Trim());
-            // Step 7: the stored rate is the DOCUMENT rate as given —
-            // 0 stays 0 ("no document rate"), so posting can fall back
-            // to the currency_rates master or fail with ACC-5015. The
-            // pre-Step-7 coercion to 1 fabricated a rate that was never
-            // entered and made the master table unreachable.
-            Add(insertHeader, "@rate", draft.ExchangeRate < 0m ? 0m : draft.ExchangeRate);
-            Add(insertHeader, "@subtotal", decimal.Round(subtotal, 2));
-            Add(insertHeader, "@discount", 0m);
-            Add(insertHeader, "@tax", decimal.Round(taxAmount, 2));
-            Add(insertHeader, "@total", decimal.Round(grandTotal, 2));
-            Add(insertHeader, "@status", CommercialDocumentStatus.Draft);
-            Add(insertHeader, "@notes", (object?)draft.Notes ?? DBNull.Value);
-            Add(insertHeader, "@actor", userId.Trim());
-            Add(insertHeader, "@partyCode", (object?)draft.PartyCode ?? DBNull.Value);
-            Add(insertHeader, "@deliveryDate", (object?)draft.DeliveryDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? DBNull.Value);
-            Add(insertHeader, "@validTill", (object?)draft.ValidTill?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? DBNull.Value);
-            Add(insertHeader, "@costCenter", (object?)draft.CostCenter ?? DBNull.Value);
-            Add(insertHeader, "@branchName", (object?)draft.BranchName ?? DBNull.Value);
-            Add(insertHeader, "@salesRepName", (object?)draft.SalesRepName ?? DBNull.Value);
-            Add(insertHeader, "@warehouseName", (object?)draft.WarehouseName ?? DBNull.Value);
-            docId = Convert.ToInt64(await insertHeader.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
-
-            var lineNumber = 0;
-            for (var index = 0; index < draft.Lines.Count; index++)
-            {
-                var line = draft.Lines[index];
-                var totals = computed[index];
-                await using var insertLine = CreateCommand(connection, transaction,
-                    "INSERT INTO sales_document_lines (doc_id, line_no, material_id, material_code, description, unit, qty, unit_price, discount_pct, tax_rate, line_subtotal, line_tax, line_total, warehouse_id) " +
-                    "VALUES (@doc, @line, @material, @materialCode, @description, @unit, @qty, @price, @discount, @taxRate, @subtotal, @tax, @total, @warehouse)");
-                Add(insertLine, "@doc", docId);
-                Add(insertLine, "@line", ++lineNumber);
-                Add(insertLine, "@material", (object?)line.MaterialId ?? DBNull.Value);
-                Add(insertLine, "@materialCode", (object?)line.MaterialCode ?? DBNull.Value);
-                Add(insertLine, "@description", string.IsNullOrWhiteSpace(line.Description) ? line.MaterialCode ?? "Item" : line.Description.Trim());
-                Add(insertLine, "@unit", (object?)line.Unit ?? DBNull.Value);
-                Add(insertLine, "@qty", line.Qty);
-                Add(insertLine, "@price", line.UnitPrice);
-                Add(insertLine, "@discount", line.DiscountPct);
-                Add(insertLine, "@taxRate", line.TaxRate);
-                Add(insertLine, "@subtotal", totals.Subtotal);
-                Add(insertLine, "@tax", totals.Tax);
-                Add(insertLine, "@total", totals.Total);
-                Add(insertLine, "@warehouse", (object?)line.WarehouseId ?? DBNull.Value);
-                await insertLine.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-            }
-
+            var docId = await CreateSalesDraftInTransactionAsync(connection, transaction, draft, userId, cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return docId;
         }
@@ -233,6 +159,136 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    public async Task<long> CreateSalesDraftWithLinkAsync(
+        CommercialDocumentDraft draft,
+        string sourceDocKind,
+        long sourceDocId,
+        string userId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(draft);
+        if (draft.CompanyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(draft));
+        if (string.IsNullOrWhiteSpace(draft.DocKind)) throw new ArgumentException("Document kind is required.", nameof(draft));
+        if (string.IsNullOrWhiteSpace(draft.DocNo)) throw new ArgumentException("Document number is required.", nameof(draft));
+        if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
+        if (draft.Lines.Count == 0) throw new InvalidOperationException("A commercial document requires at least one line.");
+        if (sourceDocId <= 0) throw new ArgumentException("Source document is required.", nameof(sourceDocId));
+        if (string.IsNullOrWhiteSpace(sourceDocKind)) throw new ArgumentException("Source document kind is required.", nameof(sourceDocKind));
+
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var docId = await CreateSalesDraftInTransactionAsync(connection, transaction, draft, userId, cancellationToken).ConfigureAwait(false);
+            await using var link = CreateCommand(connection, transaction, """
+                INSERT INTO document_links
+                    (company_id, source_doc_kind, source_doc_id, target_doc_kind, target_doc_id, created_by)
+                VALUES (@company, @sourceKind, @sourceId, @targetKind, @targetId, @actor)
+                """);
+            Add(link, "@company", draft.CompanyId.ToString("D"));
+            Add(link, "@sourceKind", sourceDocKind.Trim());
+            Add(link, "@sourceId", sourceDocId);
+            Add(link, "@targetKind", draft.DocKind.Trim());
+            Add(link, "@targetId", docId);
+            Add(link, "@actor", userId.Trim());
+            await link.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return docId;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private async Task<long> CreateSalesDraftInTransactionAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        CommercialDocumentDraft draft,
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        var docDateText = draft.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        decimal subtotal = 0m, taxAmount = 0m, grandTotal = 0m;
+        var computed = new List<(decimal Subtotal, decimal Tax, decimal Total)>();
+        foreach (var line in draft.Lines)
+        {
+            if (line.Qty <= 0m) throw new InvalidOperationException("Document line quantities must be greater than zero.");
+            var lineSubtotal = decimal.Round(line.Qty * line.UnitPrice * (1m - line.DiscountPct / 100m), 2);
+            var lineTax = decimal.Round(lineSubtotal * line.TaxRate / 100m, 2);
+            var lineTotal = lineSubtotal + lineTax;
+            computed.Add((lineSubtotal, lineTax, lineTotal));
+            subtotal += lineSubtotal;
+            taxAmount += lineTax;
+            grandTotal += lineTotal;
+        }
+
+        long docId;
+        var insertHeader = CreateCommand(connection, transaction,
+            "INSERT INTO sales_documents (company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id, currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total, status, notes, created_by, party_code, delivery_date, valid_till, cost_center, branch_name, sales_rep_name, warehouse_name) " +
+            "VALUES (@company, @kind, @no, @date, @party, @partyName, @warehouse, @currency, @rate, @subtotal, @discount, @tax, @total, @status, @notes, @actor, @partyCode, @deliveryDate, @validTill, @costCenter, @branchName, @salesRepName, @warehouseName)" +
+            (_provider == "PostgreSQL" ? " RETURNING doc_id" : "; SELECT last_insert_rowid();"));
+        Add(insertHeader, "@company", draft.CompanyId.ToString("D"));
+        Add(insertHeader, "@kind", draft.DocKind.Trim());
+        Add(insertHeader, "@no", draft.DocNo.Trim());
+        Add(insertHeader, "@date", docDateText);
+        Add(insertHeader, "@party", (object?)draft.PartyId ?? DBNull.Value);
+        Add(insertHeader, "@partyName", (object?)draft.PartyName ?? DBNull.Value);
+        Add(insertHeader, "@warehouse", (object?)draft.WarehouseId ?? DBNull.Value);
+        Add(insertHeader, "@currency", string.IsNullOrWhiteSpace(draft.CurrencyCode) ? "SAR" : draft.CurrencyCode.Trim());
+        // Step 7: the stored rate is the DOCUMENT rate as given —
+        // 0 stays 0 ("no document rate"), so posting can fall back
+        // to the currency_rates master or fail with ACC-5015. The
+        // pre-Step-7 coercion to 1 fabricated a rate that was never
+        // entered and made the master table unreachable.
+        Add(insertHeader, "@rate", draft.ExchangeRate < 0m ? 0m : draft.ExchangeRate);
+        Add(insertHeader, "@subtotal", decimal.Round(subtotal, 2));
+        Add(insertHeader, "@discount", 0m);
+        Add(insertHeader, "@tax", decimal.Round(taxAmount, 2));
+        Add(insertHeader, "@total", decimal.Round(grandTotal, 2));
+        Add(insertHeader, "@status", CommercialDocumentStatus.Draft);
+        Add(insertHeader, "@notes", (object?)draft.Notes ?? DBNull.Value);
+        Add(insertHeader, "@actor", userId.Trim());
+        Add(insertHeader, "@partyCode", (object?)draft.PartyCode ?? DBNull.Value);
+        Add(insertHeader, "@deliveryDate", (object?)draft.DeliveryDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? DBNull.Value);
+        Add(insertHeader, "@validTill", (object?)draft.ValidTill?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? DBNull.Value);
+        Add(insertHeader, "@costCenter", (object?)draft.CostCenter ?? DBNull.Value);
+        Add(insertHeader, "@branchName", (object?)draft.BranchName ?? DBNull.Value);
+        Add(insertHeader, "@salesRepName", (object?)draft.SalesRepName ?? DBNull.Value);
+        Add(insertHeader, "@warehouseName", (object?)draft.WarehouseName ?? DBNull.Value);
+        docId = Convert.ToInt64(await insertHeader.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+
+        var lineNumber = 0;
+        for (var index = 0; index < draft.Lines.Count; index++)
+        {
+            var line = draft.Lines[index];
+            var totals = computed[index];
+            await using var insertLine = CreateCommand(connection, transaction,
+                "INSERT INTO sales_document_lines (doc_id, line_no, material_id, material_code, description, unit, qty, unit_price, discount_pct, tax_rate, line_subtotal, line_tax, line_total, warehouse_id) " +
+                "VALUES (@doc, @line, @material, @materialCode, @description, @unit, @qty, @price, @discount, @taxRate, @subtotal, @tax, @total, @warehouse)");
+            Add(insertLine, "@doc", docId);
+            Add(insertLine, "@line", ++lineNumber);
+            Add(insertLine, "@material", (object?)line.MaterialId ?? DBNull.Value);
+            Add(insertLine, "@materialCode", (object?)line.MaterialCode ?? DBNull.Value);
+            Add(insertLine, "@description", string.IsNullOrWhiteSpace(line.Description) ? line.MaterialCode ?? "Item" : line.Description.Trim());
+            Add(insertLine, "@unit", (object?)line.Unit ?? DBNull.Value);
+            Add(insertLine, "@qty", line.Qty);
+            Add(insertLine, "@price", line.UnitPrice);
+            Add(insertLine, "@discount", line.DiscountPct);
+            Add(insertLine, "@taxRate", line.TaxRate);
+            Add(insertLine, "@subtotal", totals.Subtotal);
+            Add(insertLine, "@tax", totals.Tax);
+            Add(insertLine, "@total", totals.Total);
+            Add(insertLine, "@warehouse", (object?)line.WarehouseId ?? DBNull.Value);
+            await insertLine.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return docId;
     }
 
     /// <summary>
