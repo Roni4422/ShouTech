@@ -502,7 +502,9 @@ public class ChequeMfgServiceTests
                     cmd.Parameters.AddWithValue("$company", CompanyGuid.ToString("D"));
                     cmd.ExecuteNonQuery();
                 }
-                Exec(connection, ReadMigration("034_manufacturing.sql"));
+                // The MFG fixture uses the real inventory/RBAC schema rather than
+                // a hand-written subset, so the valuation engine sees the same
+                // columns and stock-ledger tables as the application.
                 Exec(connection, """
                     CREATE TABLE roles (
                         role_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -529,13 +531,12 @@ public class ChequeMfgServiceTests
                         PRIMARY KEY (role_id, permission_id)
                     );
                     """);
+                Exec(connection, ReadMigration("013_inventory_schema.sql"));
+                Exec(connection, ReadMigration("016_material_groups_warehouses.sql"));
+                Exec(connection, ReadMigration("053_valuation_engine.sql"));
+                Exec(connection, ReadMigration("054_batch_serial.sql"));
+                Exec(connection, ReadMigration("034_manufacturing.sql"));
                 Exec(connection, ReadMigration("058_manufacturing_bom_planning.sql"));
-                Exec(connection, """
-                    CREATE TABLE materials (material_id INTEGER PRIMARY KEY, company_id TEXT NOT NULL DEFAULT '', code TEXT NOT NULL, name_ar TEXT NOT NULL DEFAULT '', is_deleted INTEGER NOT NULL DEFAULT 0, acc_inventory TEXT);
-                    CREATE TABLE warehouses (warehouse_id INTEGER PRIMARY KEY, company_id TEXT NOT NULL DEFAULT '', warehouse_code INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0);
-                    CREATE TABLE material_stock_movements (stock_movement_id INTEGER PRIMARY KEY AUTOINCREMENT, company_id TEXT NOT NULL, warehouse_id INTEGER NOT NULL, material_id INTEGER NOT NULL, movement_date TEXT NOT NULL, movement_type TEXT NOT NULL, document_no TEXT NOT NULL, qty_in NUMERIC NOT NULL DEFAULT 0, qty_out NUMERIC NOT NULL DEFAULT 0, unit_cost NUMERIC NOT NULL DEFAULT 0, note TEXT, is_deleted INTEGER NOT NULL DEFAULT 0);
-                    CREATE TABLE material_stock_balances (stock_balance_id INTEGER PRIMARY KEY AUTOINCREMENT, company_id TEXT NOT NULL, warehouse_id INTEGER NOT NULL, material_id INTEGER NOT NULL, available_qty NUMERIC NOT NULL DEFAULT 0, reserved_qty NUMERIC NOT NULL DEFAULT 0, average_cost NUMERIC NOT NULL DEFAULT 0, last_cost NUMERIC NOT NULL DEFAULT 0, last_updated TEXT NOT NULL DEFAULT (datetime('now')), is_deleted INTEGER NOT NULL DEFAULT 0, UNIQUE(company_id, warehouse_id, material_id));
-                    """);
             }
         }
 
