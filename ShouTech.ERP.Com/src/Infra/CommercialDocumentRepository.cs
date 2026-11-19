@@ -182,6 +182,27 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            await using (var source = CreateCommand(connection, transaction, """
+                SELECT status, doc_kind, company_id
+                FROM sales_documents
+                WHERE doc_id = @sourceId AND is_deleted = 0
+                """))
+            {
+                Add(source, "@sourceId", sourceDocId);
+                await using var reader = await source.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    throw new InvalidOperationException("Source sales document was not found.");
+                var sourceStatus = reader.GetString(0);
+                var persistedSourceKind = reader.GetString(1);
+                var persistedCompanyId = reader.GetString(2);
+                if (!string.Equals(sourceStatus, CommercialDocumentStatus.Posted, StringComparison.Ordinal))
+                    throw new InvalidOperationException("Only posted source documents can be linked to a new sales document.");
+                if (!string.Equals(persistedSourceKind, sourceDocKind.Trim(), StringComparison.Ordinal))
+                    throw new InvalidOperationException("The source document kind changed before the linked document was saved.");
+                if (!string.Equals(persistedCompanyId, draft.CompanyId.ToString("D"), StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Source and target documents must belong to the same company.");
+            }
+
             var docId = await CreateSalesDraftInTransactionAsync(connection, transaction, draft, userId, cancellationToken).ConfigureAwait(false);
             await using var link = CreateCommand(connection, transaction, """
                 INSERT INTO document_links
