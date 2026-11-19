@@ -132,11 +132,11 @@ namespace Kern.Tests
 
                 var orders = new ShouTech.Infrastructure.OrderDocumentRepository("SQLite", connectionString);
                 var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                    orders.SetStatusAsync(ShouTech.Domain.Interfaces.CommercialDocSide.Sales, orderId,
+                    orders.SetStatusAsync(global::ShouTech.Domain.Interfaces.CommercialDocSide.Sales, orderId,
                         CommercialDocumentStatus.Cancelled, "chain-test"));
                 Assert.Contains("downstream", error.Message.ToLowerInvariant());
 
-                var order = await orders.GetProgressAsync(ShouTech.Domain.Interfaces.CommercialDocSide.Sales, orderId);
+                var order = await orders.GetProgressAsync(global::ShouTech.Domain.Interfaces.CommercialDocSide.Sales, orderId);
                 Assert.Equal(30m, order.PerFulfilled);
             }
             finally
