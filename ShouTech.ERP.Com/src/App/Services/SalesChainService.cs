@@ -58,24 +58,45 @@ public sealed class SalesChainService
             throw new InvalidOperationException($"Document kind '{source.DocKind}' cannot continue the selling chain.");
 
         var fulfilled = await _repository.GetFulfilledQuantitiesAsync(source.CompanyId, sourceDocId, targetKind, cancellationToken).ConfigureAwait(false);
+        var fulfilledRemaining = new Dictionary<long, decimal>(fulfilled);
+        Dictionary<long, decimal>? requestedRemaining = null;
+        if (quantityByMaterialId is not null)
+        {
+            requestedRemaining = new Dictionary<long, decimal>();
+            foreach (var (materialId, quantity) in quantityByMaterialId)
+            {
+                if (materialId <= 0) throw new ArgumentOutOfRangeException(nameof(quantityByMaterialId), "Material identifiers must be positive.");
+                if (quantity < 0m) throw new ArgumentOutOfRangeException(nameof(quantityByMaterialId), "Requested quantities cannot be negative.");
+                requestedRemaining.Add(materialId, quantity);
+            }
+        }
 
         var lines = new List<CommercialLineDraft>();
         foreach (var line in source.Lines)
         {
-            var fulfilledKey = line.MaterialId ?? -line.LineNo;
-            var alreadyFulfilled = fulfilled.TryGetValue(fulfilledKey, out var value) ? value : 0m;
-            var remaining = line.Qty - alreadyFulfilled;
+            var remaining = line.Qty;
+            if (line.MaterialId is { } materialId &&
+                fulfilledRemaining.TryGetValue(materialId, out var previouslyFulfilled) &&
+                previouslyFulfilled > 0m)
+            {
+                var allocated = Math.Min(remaining, previouslyFulfilled);
+                remaining -= allocated;
+                fulfilledRemaining[materialId] = previouslyFulfilled - allocated;
+            }
+
             if (remaining <= 0m)
                 continue;
 
-            var requested = quantityByMaterialId is not null && line.MaterialId is not null && quantityByMaterialId.TryGetValue(line.MaterialId.Value, out var overrideQty)
-                ? overrideQty
-                : remaining;
+            var requested = remaining;
+            if (requestedRemaining is not null && line.MaterialId is { } requestedMaterialId &&
+                requestedRemaining.TryGetValue(requestedMaterialId, out var requestedForMaterial))
+            {
+                requested = Math.Min(remaining, requestedForMaterial);
+                requestedRemaining[requestedMaterialId] = requestedForMaterial - requested;
+            }
+
             if (requested <= 0m)
                 continue;
-            if (requested > remaining)
-                throw new InvalidOperationException(
-                    $"Requested quantity {requested} for '{line.Description}' exceeds the remaining quantity {remaining} of source document '{source.DocNo}'.");
 
             lines.Add(new CommercialLineDraft(
                 line.MaterialId,
@@ -88,6 +109,12 @@ public sealed class SalesChainService
                 line.TaxRate,
                 warehouseId ?? line.WarehouseId));
         }
+
+        if (fulfilledRemaining.Any(pair => pair.Value > 0m))
+            throw new InvalidOperationException("Previously fulfilled quantities exceed the source document quantities; correct the linked documents before continuing.");
+
+        if (requestedRemaining is not null && requestedRemaining.Any(pair => pair.Value > 0m))
+            throw new InvalidOperationException("Requested quantities exceed the remaining quantities on the source document.");
 
         if (lines.Count == 0)
             throw new InvalidOperationException($"Source document '{source.DocNo}' is already fully fulfilled.");
