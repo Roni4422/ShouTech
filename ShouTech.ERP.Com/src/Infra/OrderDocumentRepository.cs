@@ -313,8 +313,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            string status, kind;
-            await using (var read = CreateCommand(connection, transaction, $"SELECT status, doc_kind FROM {docs} WHERE doc_id = @doc AND is_deleted = 0"))
+            string status, kind, companyId;
+            await using (var read = CreateCommand(connection, transaction, $"SELECT status, doc_kind, company_id FROM {docs} WHERE doc_id = @doc AND is_deleted = 0"))
             {
                 Add(read, "@doc", docId);
                 await using var reader = await read.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -322,9 +322,41 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                     throw new InvalidOperationException("Document was not found.");
                 status = reader.GetString(0);
                 kind = reader.GetString(1);
+                companyId = reader.GetString(2);
             }
             if (newStatus == CommercialDocumentStatus.Lost && kind != CommercialDocKinds.SalesQuotation)
                 throw new InvalidOperationException("Only quotations can be marked as lost.");
+            if (newStatus == CommercialDocumentStatus.Cancelled && status == CommercialDocumentStatus.Posted)
+            {
+                // A posted commitment cannot be cancelled while a posted
+                // downstream document still depends on it. Cancel/reverse the
+                // child first so delivery/receipt and billing progress remain
+                // traceable instead of leaving orphaned fulfilment.
+                await using var downstream = CreateCommand(connection, transaction, $"""
+                    SELECT COUNT(*)
+                    FROM document_links dl
+                    JOIN {docs} target
+                      ON target.company_id = dl.company_id
+                     AND target.doc_id = dl.target_doc_id
+                     AND target.doc_kind = dl.target_doc_kind
+                    WHERE dl.company_id = @company
+                      AND dl.source_doc_kind = @kind
+                      AND dl.source_doc_id = @doc
+                      AND target.status = @posted
+                      AND target.is_deleted = 0
+                    """);
+                Add(downstream, "@company", companyId);
+                Add(downstream, "@kind", kind);
+                Add(downstream, "@doc", docId);
+                Add(downstream, "@posted", CommercialDocumentStatus.Posted);
+                var linkedCount = Convert.ToInt64(
+                    await downstream.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
+                    CultureInfo.InvariantCulture);
+                if (linkedCount > 0)
+                    throw new InvalidOperationException(
+                        "A posted order cannot be cancelled while posted delivery, receipt or invoice documents are linked. Reverse or cancel the downstream documents first.");
+            }
+
             if (Array.IndexOf(allowed, status) < 0)
                 throw new InvalidOperationException($"A document in status '{status}' cannot move to '{newStatus}'.");
 
