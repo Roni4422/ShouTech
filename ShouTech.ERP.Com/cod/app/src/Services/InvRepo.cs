@@ -1004,6 +1004,47 @@ public static class InvRepo
         }
     }
 
+    public static long? FindAdjacentDocumentId(long currentDocId, InvDocKind kind, int offset)
+    {
+        if (offset is not (-10 or -1 or 1 or 10))
+            throw new ArgumentOutOfRangeException(nameof(offset), "Navigation offset must be -10, -1, 1, or 10.");
+
+        var connectionString = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(connectionString))
+            throw new InvalidOperationException("No database connection.");
+
+        var table = kind.IsSales() ? "sales_documents" : "purchase_documents";
+        var order = offset < 0 ? "DESC" : "ASC";
+        var comparison = offset < 0 ? "<" : ">";
+        var skip = Math.Abs(offset) - 1;
+        using var connection = Open(connectionString);
+        var companyGuid = ResolveCompanyGuidOrNull(connection, null)?.ToString("D") ?? Company;
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = currentDocId > 0
+            ? $"""
+                SELECT doc_id FROM {table}
+                WHERE (company_id=$company OR company_id=$guid)
+                  AND doc_kind=$kind AND is_deleted=0 AND doc_id {comparison} $current
+                ORDER BY doc_id {order} LIMIT 1 OFFSET $skip;
+                """
+            : $"""
+                SELECT doc_id FROM {table}
+                WHERE (company_id=$company OR company_id=$guid)
+                  AND doc_kind=$kind AND is_deleted=0
+                ORDER BY doc_id {order} LIMIT 1;
+                """;
+        Add(cmd, "$company", Company);
+        Add(cmd, "$guid", companyGuid);
+        Add(cmd, "$kind", new InvDoc { Kind = kind }.KindCode);
+        if (currentDocId > 0)
+        {
+            Add(cmd, "$current", currentDocId);
+            Add(cmd, "$skip", skip);
+        }
+        var value = cmd.ExecuteScalar();
+        return value is null or DBNull ? null : Convert.ToInt64(value, CultureInfo.InvariantCulture);
+    }
+
     public static InvDoc? Load(long docId, InvDocKind kind)
     {
         DocSchema.Ensure();
