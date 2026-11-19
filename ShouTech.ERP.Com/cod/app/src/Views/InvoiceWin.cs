@@ -428,7 +428,6 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         }
 
         Size(_cmbPayment);
-        Size(_txtDocNo);
         Size(_dtDate);
         Size(_txtCurrency);
         Size(_txtTaxRate);
@@ -453,16 +452,15 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
 
         // Payment / document column
         var payment = new Grid { Margin = new Thickness(gap) };
-        for (var i = 0; i < 8; i++)
+        for (var i = 0; i < 7; i++)
             payment.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         AddLabeledCell(payment, 0, Tf("Invoice.PaymentMethod", "Payment method"), _cmbPayment);
-        AddLabeledCell(payment, 1, Tf("Invoice.DocNo", "Invoice No."), _txtDocNo);
-        AddLabeledCell(payment, 2, Tf("Invoice.Date", "Date"), _dtDate);
-        AddLabeledCell(payment, 3, Tf("Invoice.Currency", "Currency"), _txtCurrency);
-        AddLabeledCell(payment, 4, Tf("Invoice.TaxRate", "Tax %"), _txtTaxRate);
-        AddLabeledCell(payment, 5, Tf("Invoice.ReceiptNo", "Receipt no."), _txtReceiptNo);
-        AddLabeledCell(payment, 6, Tf("Invoice.Reference", "Reference"), _txtReference);
-        AddLabeledCell(payment, 7, Tf("Invoice.Branch", "Branch"), _txtBranch);
+        AddLabeledCell(payment, 1, Tf("Invoice.Date", "Date"), _dtDate);
+        AddLabeledCell(payment, 2, Tf("Invoice.Currency", "Currency"), _txtCurrency);
+        AddLabeledCell(payment, 3, Tf("Invoice.TaxRate", "Tax %"), _txtTaxRate);
+        AddLabeledCell(payment, 4, Tf("Invoice.ReceiptNo", "Receipt no."), _txtReceiptNo);
+        AddLabeledCell(payment, 5, Tf("Invoice.Reference", "Reference"), _txtReference);
+        AddLabeledCell(payment, 6, Tf("Invoice.Branch", "Branch"), _txtBranch);
 
         // Party / warehouse column
         var party = new Grid { Margin = new Thickness(gap) };
@@ -491,7 +489,13 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         grid.Children.Add(accounts);
         grid.Children.Add(party);
         grid.Children.Add(payment);
-        return grid;
+
+        var panel = new DockPanel { LastChildFill = true };
+        var recordBar = CreateRecordNumberBar(_txtDocNo, NavigateDocuments);
+        DockPanel.SetDock(recordBar, Dock.Top);
+        panel.Children.Add(recordBar);
+        panel.Children.Add(grid);
+        return panel;
     }
 
     /// <summary>
@@ -923,6 +927,29 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         }
     }
 
+    private void NavigateDocuments(int offset)
+    {
+        try
+        {
+            if (_doc.DocId <= 0 || _doc.Status == InvDocStatus.Draft)
+            {
+                var answer = MessageBox.Show(this, T("RecordNavigation.DiscardChanges"),
+                    T("RecordNavigation.Title"), MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                if (answer != MessageBoxResult.Yes) return;
+            }
+
+            var targetId = InvRepo.FindAdjacentDocumentId(_doc.DocId, _doc.Kind, offset);
+            if (targetId is not long id) return;
+            var target = InvRepo.Load(id, _doc.Kind);
+            if (target is not null) ApplyDoc(target);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "InvoiceWin.NavigateDocuments");
+            MessageBox.Show(this, ex.Message, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     private void SaveDraft()
     {
         try
@@ -931,6 +958,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             var doc = CaptureDoc();
             if (doc.Lines.Count == 0) { ShowWarn("Invoice.NeedLines"); return; }
             InvRepo.SaveDraft(doc);
+            LoadedDocumentId = doc.DocId;
             _txtDocNo.Text = doc.DocNo;
             ShowInfo("Invoice.Saved");
             RefreshTotals();
