@@ -417,8 +417,18 @@ namespace Kern.Tests
                     INSERT INTO chart_of_accounts
                         (account_id, company_id, account_code, account_name, account_type, is_active, is_deleted, is_postable)
                     VALUES ($accountId, $companyId, '1201', 'Accounts Receivable', 'ASSET', 1, 0, 1);
+
+                    INSERT INTO chart_of_accounts
+                        (account_id, company_id, account_code, account_name, account_type, is_active, is_deleted, is_postable)
+                    VALUES
+                        ($salesAccountId, $companyId, '301', 'Sales Revenue', 'REVENUE', 1, 0, 1),
+                        ($inventoryAccountId, $companyId, '1203', 'Inventory', 'ASSET', 1, 0, 1),
+                        ($cogsAccountId, $companyId, '401', 'Cost of Goods Sold', 'EXPENSE', 1, 0, 1);
                     """;
                 seed.Parameters.AddWithValue("$accountId", Guid.NewGuid().ToString("D"));
+                seed.Parameters.AddWithValue("$salesAccountId", Guid.NewGuid().ToString("D"));
+                seed.Parameters.AddWithValue("$inventoryAccountId", Guid.NewGuid().ToString("D"));
+                seed.Parameters.AddWithValue("$cogsAccountId", Guid.NewGuid().ToString("D"));
                 seed.Parameters.AddWithValue("$companyId", companyId.ToString("D"));
                 seed.Parameters.AddWithValue("$companyCode", companyId.ToString("D"));
                 seed.ExecuteNonQuery();
