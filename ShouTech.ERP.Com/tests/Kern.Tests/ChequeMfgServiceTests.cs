@@ -503,6 +503,32 @@ public class ChequeMfgServiceTests
                     cmd.ExecuteNonQuery();
                 }
                 Exec(connection, ReadMigration("034_manufacturing.sql"));
+                Exec(connection, """
+                    CREATE TABLE roles (
+                        role_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        role_code TEXT NOT NULL UNIQUE,
+                        is_active INTEGER NOT NULL DEFAULT 1
+                    );
+                    CREATE TABLE permissions (
+                        permission_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        permission_code TEXT NOT NULL UNIQUE,
+                        permission_name TEXT NOT NULL,
+                        group_code TEXT NOT NULL DEFAULT 'SYSTEM',
+                        feature_code TEXT NOT NULL DEFAULT '',
+                        operation_code TEXT NOT NULL DEFAULT '',
+                        name_ar TEXT NOT NULL DEFAULT '',
+                        name_en TEXT NOT NULL DEFAULT '',
+                        description TEXT,
+                        display_order INTEGER NOT NULL DEFAULT 0,
+                        is_sensitive INTEGER NOT NULL DEFAULT 0,
+                        is_active INTEGER NOT NULL DEFAULT 1
+                    );
+                    CREATE TABLE role_permissions (
+                        role_id INTEGER NOT NULL,
+                        permission_id INTEGER NOT NULL,
+                        PRIMARY KEY (role_id, permission_id)
+                    );
+                    """);
                 Exec(connection, ReadMigration("058_manufacturing_bom_planning.sql"));
                 Exec(connection, """
                     CREATE TABLE materials (material_id INTEGER PRIMARY KEY, company_id TEXT NOT NULL DEFAULT '', code TEXT NOT NULL, name_ar TEXT NOT NULL DEFAULT '', is_deleted INTEGER NOT NULL DEFAULT 0, acc_inventory TEXT);
