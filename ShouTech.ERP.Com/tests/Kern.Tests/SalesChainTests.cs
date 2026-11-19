@@ -134,7 +134,7 @@ namespace Kern.Tests
                 var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
                     orders.SetStatusAsync(CommercialDocSide.Sales, orderId,
                         CommercialDocumentStatus.Cancelled, "chain-test"));
-                Assert.Contains("downstream", error.Message, StringComparison.OrdinalIgnoreCase);
+                Assert.Contains("downstream", error.Message.ToLowerInvariant());
 
                 var order = await service.GetProgressAsync(CommercialDocSide.Sales, orderId);
                 Assert.Equal(30m, order.PerFulfilled);
