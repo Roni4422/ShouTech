@@ -18,6 +18,9 @@ public interface ICommercialDocumentRepository
     /// <summary>Inserts a sales document draft (header + lines) and returns its database id.</summary>
     Task<long> CreateSalesDraftAsync(CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default);
 
+    /// <summary>Creates a sales draft and its source-document link atomically in one database transaction.</summary>
+    Task<long> CreateSalesDraftWithLinkAsync(CommercialDocumentDraft draft, string sourceDocKind, long sourceDocId, string userId, CancellationToken cancellationToken = default);
+
     /// <summary>Moves a sales document from Draft to Posted; throws when not a draft.</summary>
     Task PostSalesAsync(long docId, string userId, CancellationToken cancellationToken = default);
 
