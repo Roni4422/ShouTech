@@ -14,6 +14,9 @@ This standard applies to every ShouTech desktop data-entry window: sales and pur
 
 ## Number field and toolbar placement
 
+- The shared visual control is owned centrally by `BaseWin` (`CreateRecordNumberBar`). Entry windows supply only their record-specific navigation callback; they must not recreate the field, button sizing, spacing, tooltips, or accessibility labels locally.
+- The strip uses a fixed compact physical order: next 10, next 1, number field, previous 1, previous 10. The four buttons sit immediately beside the field with minimal spacing.
+
 - Every data-entry window has one compact, read-only automatic document-number field at the upper-left of the window.
 - The number is system-generated and cannot be typed, pasted, or changed by users.
 - The field is visually compact and consistent across all windows.
