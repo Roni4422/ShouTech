@@ -616,11 +616,21 @@ public class ChequeMfgServiceTests
             var directive = new Regex(
                 @"(?m)^-- @if-column-missing ([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)[ \t]*\r?\n[ \t]*(ALTER TABLE [^;]+;)",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-            sql = directive.Replace(sql, match =>
-                HasColumn(connection, match.Groups[1].Value, match.Groups[2].Value)
-                    ? string.Empty
-                    : match.Groups[3].Value);
-            Exec(connection, sql);
+
+            // Process conditional ALTERs in migration order. Evaluating every
+            // directive before executing the migration is incorrect when an
+            // earlier CREATE TABLE in the same file already defines the column:
+            // the PRAGMA sees no table yet, keeps the ALTER, then SQLite rejects
+            // the duplicate column after the CREATE runs.
+            var cursor = 0;
+            foreach (Match match in directive.Matches(sql))
+            {
+                Exec(connection, sql[cursor..match.Index]);
+                if (!HasColumn(connection, match.Groups[1].Value, match.Groups[2].Value))
+                    Exec(connection, match.Groups[3].Value);
+                cursor = match.Index + match.Length;
+            }
+            Exec(connection, sql[cursor..]);
         }
 
         private static bool HasColumn(SqliteConnection connection, string table, string column)
