@@ -413,7 +413,12 @@ namespace Kern.Tests
                     INSERT INTO material_stock_balances
                         (company_id, warehouse_id, material_id, available_qty, average_cost, last_cost)
                     VALUES ($companyCode, 1, 42, 1000, 40, 40);
+
+                    INSERT INTO chart_of_accounts
+                        (account_id, company_id, account_code, account_name, is_active, is_deleted, is_postable)
+                    VALUES ($accountId, $companyId, '1201', 'Accounts Receivable', 1, 0, 1);
                     """;
+                seed.Parameters.AddWithValue("$accountId", Guid.NewGuid().ToString("D"));
                 seed.Parameters.AddWithValue("$companyId", companyId.ToString("D"));
                 seed.Parameters.AddWithValue("$companyCode", companyId.ToString("D"));
                 seed.ExecuteNonQuery();
