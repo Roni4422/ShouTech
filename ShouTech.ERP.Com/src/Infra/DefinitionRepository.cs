@@ -45,6 +45,24 @@ public sealed class DefinitionRepository : IDefinitionRepository
     private string ActiveValue(bool active) => IsPg ? (active ? "true" : "false") : (active ? "1" : "0");
     private string NowExpr => IsPg ? "now()" : "datetime('now')";
 
+    private async Task<string> ResolveCompanyScopeAsync(
+        DefSet set, DbConnection connection, string companyId, CancellationToken cancellationToken)
+    {
+        var requested = companyId.Trim();
+        if (!string.Equals(set.Key, DefSets.UnitsOfMeasure, StringComparison.Ordinal))
+            return requested;
+
+        // The legacy units_of_measure table references companies.company_id,
+        // while the rest of the application addresses companies by company_code.
+        await using var command = CreateCommand(connection, null,
+            "SELECT CAST(company_id AS TEXT) FROM companies WHERE company_code = @company LIMIT 1");
+        Add(command, "@company", requested);
+        var value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return value is null or DBNull
+            ? requested
+            : Convert.ToString(value, CultureInfo.InvariantCulture) ?? requested;
+    }
+
     // ------------------------------------------------------------ generic sets
 
     public async Task<IReadOnlyList<DefRow>> ListAsync(DefSet set, string companyId, CancellationToken cancellationToken = default)
@@ -69,8 +87,9 @@ public sealed class DefinitionRepository : IDefinitionRepository
         var sql = $"SELECT {string.Join(", ", select)} FROM {table} WHERE {string.Join(" AND ", where)} ORDER BY {Ident(set, set.OrderByColumn)} LIMIT {ListLimit}";
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var companyScope = await ResolveCompanyScopeAsync(set, connection, companyId, cancellationToken).ConfigureAwait(false);
         await using var command = CreateCommand(connection, null, sql);
-        Add(command, "@company", companyId.Trim());
+        Add(command, "@company", companyScope);
         foreach (var (k, v) in set.FixedValues)
             Add(command, $"@fixed_{k}", v);
         var result = new List<DefRow>();
@@ -101,6 +120,7 @@ public sealed class DefinitionRepository : IDefinitionRepository
         var idCol = Ident(set, set.IdColumn);
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        companyId = await ResolveCompanyScopeAsync(set, connection, companyId, cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -286,6 +306,7 @@ public sealed class DefinitionRepository : IDefinitionRepository
         var table = Ident(set, set.Table);
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        companyId = await ResolveCompanyScopeAsync(set, connection, companyId, cancellationToken).ConfigureAwait(false);
         string sql;
         if (set.HasSoftDelete)
         {
@@ -318,6 +339,7 @@ public sealed class DefinitionRepository : IDefinitionRepository
         var audit = set.HasAuditColumns ? $", updated_by = @actor, updated_at = {NowExpr}" : string.Empty;
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        companyId = await ResolveCompanyScopeAsync(set, connection, companyId, cancellationToken).ConfigureAwait(false);
         await using var command = CreateCommand(connection, null,
             $"UPDATE {table} SET is_active = {ActiveValue(isActive)}{audit} WHERE company_id = @company AND {Ident(set, set.IdColumn)} = @id" + (set.HasSoftDelete ? $" AND {NotDeleted}" : string.Empty));
         Add(command, "@company", companyId.Trim());
