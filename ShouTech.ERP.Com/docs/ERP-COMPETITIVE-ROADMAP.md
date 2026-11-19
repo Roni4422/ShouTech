@@ -127,3 +127,90 @@ ShouTech can be called commercially ready only after:
 4. Security, permissions, audit, backup/restore and clean installation are verified.
 5. No critical data-loss, duplicate-posting, cross-company leakage or untraceable reversal defect remains.
 6. Release package and operator/admin documentation are complete.
+
+
+## 9. Source-level workflow comparison: Odoo 19.0 and ERPNext 15
+
+This review follows executable model/service code, not only product feature lists. The
+purpose is to transfer business invariants into ShouTech's desktop/offline architecture;
+it is not a plan to copy either product's web framework.
+
+### Reference implementation paths
+
+Odoo:
+- `addons/sale/models/sale_order.py` — order confirmation, line-level delivery and invoice progress.
+- `addons/stock/models/stock_move.py` — reservations, move completion and returned-move lineage.
+- `addons/account/models/account_move.py` — posting controls, posted-entry audit state and reversal workflow.
+- `addons/mrp/models/mrp_production.py` — production orders, component consumption and finished output.
+
+ERPNext:
+- `erpnext/selling/doctype/sales_order/sales_order.py` — submit-time validation and per-delivered/per-billed progress.
+- `erpnext/buying/doctype/purchase_order/purchase_order.py` — per-received/per-billed quantities and linked-document status.
+- `erpnext/stock/stock_ledger.py` — immutable stock ledger entries and future-entry reposting after backdated changes.
+- `erpnext/manufacturing/doctype/work_order/work_order.py` — BOM-driven production, material transfer and operation/job-card lifecycle.
+- `erpnext/accounts/doctype/payment_entry/payment_entry.py` and `erpnext/accounts/general_ledger.py` — allocation, outstanding updates and GL posting.
+
+Source links:
+- Odoo sale: https://github.com/odoo/odoo/blob/19.0/addons/sale/models/sale_order.py
+- Odoo stock: https://github.com/odoo/odoo/blob/19.0/addons/stock/models/stock_move.py
+- Odoo accounting: https://github.com/odoo/odoo/blob/19.0/addons/account/models/account_move.py
+- Odoo manufacturing: https://github.com/odoo/odoo/blob/19.0/addons/mrp/models/mrp_production.py
+- ERPNext sales: https://github.com/frappe/erpnext/blob/version-15/erpnext/selling/doctype/sales_order/sales_order.py
+- ERPNext purchasing: https://github.com/frappe/erpnext/blob/version-15/erpnext/buying/doctype/purchase_order/purchase_order.py
+- ERPNext stock ledger: https://github.com/frappe/erpnext/blob/version-15/erpnext/stock/stock_ledger.py
+- ERPNext manufacturing: https://github.com/frappe/erpnext/blob/version-15/erpnext/manufacturing/doctype/work_order/work_order.py
+- ERPNext payments: https://github.com/frappe/erpnext/blob/version-15/erpnext/accounts/doctype/payment_entry/payment_entry.py
+- ERPNext GL: https://github.com/frappe/erpnext/blob/version-15/erpnext/accounts/general_ledger.py
+
+### Business invariants to adopt
+
+1. Every downstream document must retain its source document and source-line identity.
+2. Delivered, received, invoiced and billed quantities are cumulative, line-level values;
+   partial completion must not silently close the remaining quantity.
+3. A posted source order cannot be cancelled while posted downstream delivery, receipt or
+   invoice documents still depend on it. Reverse/cancel the child documents first.
+4. Returns must point to the original movement/document where available and reverse the
+   original cost/tax/settlement effect, not merely create a negative sales line.
+5. Stock is valued from the stock ledger and valuation method; backdated movements must
+   trigger deterministic replay of affected later movements.
+6. Posted financial entries are append-only; correction is by a linked reversal with an
+   auditable actor, reason and timestamp.
+7. Payment allocation, party outstanding, cash/bank movement and GL posting must commit
+   in one transaction or not commit at all.
+
+### ShouTech source assessment
+
+| Area | Verified foundation | Gap to close |
+|---|---|---|
+| Sales | `SalesChainService` supports quotation → order → delivery → invoice, including partial delivery quantities; `OrderDocumentRepository` calculates fulfilment/billing progress. | Surface partial states in the order UI and strengthen linked-document cancellation/closure rules. |
+| Purchasing | `OrderService` supports RFQ/purchase-order workflows and purchase-invoice conversion; progress calculation already recognizes purchase receipts. | No complete purchase-receipt creation/posting service was found. Add PO → partial/full receipt → supplier invoice → payment, including received-not-invoiced (GRNI) accounting and no double stock receipt. |
+| Inventory | `StockValuationEngine` supports weighted average/FIFO/LIFO, stock cost layers and replay; migrations 053/054 add valuation, batch and serial tracking. | Complete warehouse execution: location/bin-level picking and put-away, reservation visibility, replenishment and stock-count variance controls. |
+| Manufacturing | `MfgOrderRepository` supports staged material issue, WIP, finished output, by-products/scrap and close/cancel paths. | Add routings, operation sequence, work centres, capacity/calendar planning, job cards and actual-vs-standard operation time/cost. |
+| Accounting | Shared GL posting, base-currency amounts, FX rates, party ledger, payment allocations, budgets, cost centres and bank reconciliation are present. | Finish reversal/settlement regression coverage and reconcile all posting paths against the same accounting-period, currency and audit rules. |
+| Fixed assets | Asset records and depreciation scheduling/posting are present. | Complete acquisition/capitalisation, transfer, disposal/sale, impairment and revaluation with linked GL entries and audit history. |
+| POS | Sessions, held bills, split tenders, customer-on-account and return flows exist. | Complete cash-up/shift variance, tender reconciliation and return/refund edge-case acceptance tests. |
+
+### Priority order
+
+- **P0 — integrity:** all tests green; SQLite/PostgreSQL migration parity; posting, reversal,
+  settlement, valuation and period-lock invariants.
+- **P1 — purchasing:** implement Purchase Receipt and GRNI end-to-end before adding more
+  purchasing screens; prevent duplicate receipt/invoice stock movements.
+- **P1 — warehouse execution:** bin/location model, reservation and pick/put-away flows,
+  replenishment and controlled cycle counts.
+- **P1 — manufacturing execution:** routings, work centres, operation capacity and job cards.
+- **P2 — fixed assets:** full asset lifecycle and depreciation/disposal/revaluation journals.
+- **P2 — business visibility:** computed partial-delivery/receipt/billing states, source-to-ledger
+  drill-down and exception work queues.
+- **P3 — differentiators:** robust offline-first operation, safe multi-device synchronisation
+  with conflict handling, verified backup/restore drills, keyboard-first workflows and
+  explainable data-health checks.
+
+### Product differentiation rule
+
+ShouTech remains a native desktop ERP with local/offline operation. Odoo and ERPNext are
+used as references for process correctness, auditability and breadth; their server/web
+architecture is not copied. ShouTech should differentiate through reliable offline workflows,
+fast keyboard-oriented entry, compact deployment, local data ownership, predictable recovery,
+and consistent multilingual/RTL-LTR behavior. These differentiators are targets until their
+acceptance tests and release packaging are complete.
