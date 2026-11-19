@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
 using ShouTech.Application.Services;
 using ShouTech.Domain.Entities;
@@ -531,12 +532,12 @@ public class ChequeMfgServiceTests
                         PRIMARY KEY (role_id, permission_id)
                     );
                     """);
-                Exec(connection, ReadMigration("013_inventory_schema.sql"));
-                Exec(connection, ReadMigration("016_material_groups_warehouses.sql"));
-                Exec(connection, ReadMigration("053_valuation_engine.sql"));
-                Exec(connection, ReadMigration("054_batch_serial.sql"));
-                Exec(connection, ReadMigration("034_manufacturing.sql"));
-                Exec(connection, ReadMigration("058_manufacturing_bom_planning.sql"));
+                ExecMigration(connection, "013_inventory_schema.sql");
+                ExecMigration(connection, "016_material_groups_warehouses.sql");
+                ExecMigration(connection, "053_valuation_engine.sql");
+                ExecMigration(connection, "054_batch_serial.sql");
+                ExecMigration(connection, "034_manufacturing.sql");
+                ExecMigration(connection, "058_manufacturing_bom_planning.sql");
             }
         }
 
@@ -607,6 +608,32 @@ public class ChequeMfgServiceTests
             using var cmd = connection.CreateCommand();
             cmd.CommandText = sql;
             cmd.ExecuteNonQuery();
+        }
+
+        private static void ExecMigration(SqliteConnection connection, string fileName)
+        {
+            var sql = ReadMigration(fileName);
+            var directive = new Regex(
+                @"(?m)^-- @if-column-missing ([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)\s*\r?\n\s*(ALTER TABLE [^;]+;)",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            sql = directive.Replace(sql, match =>
+                HasColumn(connection, match.Groups[1].Value, match.Groups[2].Value)
+                    ? string.Empty
+                    : match.Groups[3].Value);
+            Exec(connection, sql);
+        }
+
+        private static bool HasColumn(SqliteConnection connection, string table, string column)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = $"PRAGMA table_info(\"{table}\");";
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
         }
 
         private static string ReadMigration(string fileName)
