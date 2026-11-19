@@ -260,7 +260,7 @@ public static class StkPost
                     doc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                     moveType, doc.DocNo ?? string.Empty,
                     qtyIn, qtyOut,
-                    ReceiptUnitCost: qtyIn > 0 ? unitCost : null,
+                    ReceiptUnitCost: qtyIn > 0 && doc.Kind != InvDocKind.SalesReturn ? unitCost : null,
                     LinkedRate: linkedRate,
                     Note: line.Description,
                     BatchAllocations: batchAllocs,
