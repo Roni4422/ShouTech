@@ -114,6 +114,38 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task PostedOrder_CannotBeCancelledWhilePostedDeliveryIsLinked()
+        {
+            var (service, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var quotationId = await service.CreateQuotationAsync(
+                    Quotation(companyId, "QT-1010", 10m, 25m), "chain-test");
+                var orderId = await service.CreateFromSourceAsync(
+                    quotationId, "SO-2010", new DateOnly(2026, 10, 20), "chain-test");
+                await service.PostAsync(orderId, "chain-test");
+
+                var deliveryId = await service.CreateFromSourceAsync(
+                    orderId, "DLV-3010", new DateOnly(2026, 10, 21), "chain-test",
+                    quantityByMaterialId: new Dictionary<long, decimal> { [42] = 3m });
+                await service.PostAsync(deliveryId, "chain-test");
+
+                var orders = new ShouTech.Infrastructure.OrderDocumentRepository("SQLite", connectionString);
+                var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    orders.SetStatusAsync(CommercialDocSide.Sales, orderId,
+                        CommercialDocumentStatus.Cancelled, "chain-test"));
+                Assert.Contains("downstream", error.Message, StringComparison.OrdinalIgnoreCase);
+
+                var order = await service.GetProgressAsync(CommercialDocSide.Sales, orderId);
+                Assert.Equal(30m, order.DeliveredPercent);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task CreateFromSource_RejectsQuantityOverRemaining()
         {
             var (service, _, companyId, _, cleanup) = await CreateAsync();
