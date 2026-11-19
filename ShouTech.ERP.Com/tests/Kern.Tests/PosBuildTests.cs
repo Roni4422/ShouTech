@@ -405,7 +405,20 @@ public class PosBuildTests
         var companyId = Guid.NewGuid();
         var connectionString = $"Data Source={dbPath};";
 
-        Assert.True((await SchemaMigrator.ApplyAllAsync("SQLite", dbPath)).Success);
+        var migration = await SchemaMigrator.ApplyAllAsync("SQLite", dbPath);
+        Assert.True(migration.Success, migration.Message);
+        using (var schemaProbe = new SqliteConnection(connectionString))
+        {
+            schemaProbe.Open();
+            using var columnsCommand = schemaProbe.CreateCommand();
+            columnsCommand.CommandText = "PRAGMA table_info('party_ledger');";
+            using var columnsReader = columnsCommand.ExecuteReader();
+            var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            while (columnsReader.Read())
+                columns.Add(columnsReader.GetString(1));
+            Assert.Contains("debit", columns);
+            Assert.Contains("credit", columns);
+        }
         PointAppAt(dbPath);
         AppState.SetCompany(CompanyCode, "POS Test Co", "POS Test Co");
 
