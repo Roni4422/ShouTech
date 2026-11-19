@@ -146,6 +146,45 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task CreateFromSource_RollsBackDraftWhenLinkInsertFails()
+        {
+            var (service, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var quotationId = await service.CreateQuotationAsync(
+                    Quotation(companyId, "QT-ATOMIC-1", 2m, 15m), "chain-test");
+
+                using (var connection = new SqliteConnection(connectionString))
+                {
+                    connection.Open();
+                    using var command = connection.CreateCommand();
+                    command.CommandText = """
+                        CREATE TRIGGER reject_document_link
+                        BEFORE INSERT ON document_links
+                        BEGIN
+                            SELECT RAISE(ABORT, 'forced link failure');
+                        END;
+                        """;
+                    command.ExecuteNonQuery();
+                }
+
+                await Assert.ThrowsAsync<SqliteException>(() => service.CreateFromSourceAsync(
+                    quotationId, "SO-ATOMIC-1", new DateOnly(2026, 10, 20), "chain-test"));
+
+                using var verify = new SqliteConnection(connectionString);
+                verify.Open();
+                using var query = verify.CreateCommand();
+                query.CommandText = "SELECT COUNT(*) FROM sales_documents WHERE company_id = $company AND doc_no = 'SO-ATOMIC-1';";
+                query.Parameters.AddWithValue("$company", companyId.ToString("D"));
+                Assert.Equal(0L, Convert.ToInt64(query.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task CreateFromSource_RejectsQuantityOverRemaining()
         {
             var (service, _, companyId, _, cleanup) = await CreateAsync();
