@@ -402,7 +402,8 @@
     "StockOnHand": "Eldeki",
     "StockReserved": "Rezerve",
     "StockAvailable": "Satılabilir",
-    "Stock": "Stok"
+    "Stock": "Stok",
+    "WarehouseRequired": "Oturum açmadan önce bu POS terminali için etkin bir depo yapılandırın."
   },
   "Orders": {
     "Title": "Siparişler",
