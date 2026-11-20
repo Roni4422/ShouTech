@@ -110,3 +110,8 @@ Keep changes reviewable. Do not combine unrelated large refactors with accountin
 ## 9. External references
 
 Use the official sources listed in [Engineering Reference Library](ENGINEERING_REFERENCE_LIBRARY.md). Treat vendor docs as descriptions of intended workflows, not proof of internal implementation. Confirm tax, e-invoicing, payment and privacy obligations against the relevant official jurisdiction authority and current standards.
+
+
+## End-user help and F1 support
+
+Maintain `docs/USER_GUIDE_EN.md` as the operator-facing source of truth. The application Help window loads this guide first, and the main window plus secondary `BaseWin` windows open it with F1. Keep the guide aligned with actual shipped workflows; distinguish configuration-dependent behavior from generally available features, and never document an unimplemented command as available. The WPF project must copy the guide to `docs/USER_GUIDE_EN.md` in build and publish output. Update or add user instructions and tests whenever a user-facing workflow changes.
