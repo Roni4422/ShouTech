@@ -38,7 +38,7 @@ Avoid new parallel accounting, stock, tax, numbering, authorization, or persiste
 - Use transactions for related document, stock, tax, GL, and outbox writes. Define rollback and retry behavior.
 - Avoid provider-specific assumptions about booleans, dates, decimal precision, GUIDs, generated IDs, locking and conflict clauses.
 
-Read [Database Migrations](DATABASE_MIGRATIONS.md) and [DBA Schema Ownership Audit](DBA_SCHEMA_OWNERSHIP_AUDIT.md) before schema work.
+Read [Database Migrations](DATABASE_MIGRATIONS.md) and [DBA Schema Ownership Audit](DBA_SCHEMA_OWNERSHIP_AUDIT.md) before schema work. For numbering invariants and concurrent allocation, follow [Document Numbering](DOCUMENT_NUMBERING.md).
 
 ## 4. Accounting and operational invariants
 
