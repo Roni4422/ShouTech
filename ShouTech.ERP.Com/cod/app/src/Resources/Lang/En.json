@@ -991,7 +991,8 @@
     "StockOnHand": "On hand",
     "StockReserved": "Reserved",
     "StockAvailable": "Available",
-    "Stock": "Stock"
+    "Stock": "Stock",
+    "WarehouseRequired": "Configure an active warehouse for this POS terminal before opening a session."
   },
   "Permissions": {
     "Cancel": "Cancel",
