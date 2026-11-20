@@ -45,6 +45,9 @@ public sealed class PosService
     public Task<PosSession?> GetOpenSessionAsync(string companyId, string terminalCode, CancellationToken cancellationToken = default)
         => _repository.GetOpenSessionAsync(RequireCompany(companyId), terminalCode, cancellationToken);
 
+    public Task<int?> GetTerminalWarehouseIdAsync(string companyId, string terminalCode, CancellationToken cancellationToken = default)
+        => _repository.GetTerminalWarehouseIdAsync(RequireCompany(companyId), terminalCode, cancellationToken);
+
     public Task<PosSession?> GetSessionAsync(string companyId, Guid sessionId, CancellationToken cancellationToken = default)
         => _repository.GetSessionAsync(RequireCompany(companyId), sessionId, cancellationToken);
 
