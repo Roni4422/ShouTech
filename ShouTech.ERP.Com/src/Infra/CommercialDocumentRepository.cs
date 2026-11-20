@@ -156,7 +156,17 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         }
         catch
         {
-            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            // Preserve the original database/business exception. A provider may
+            // already have completed or aborted the transaction; rollback is
+            // best-effort and disposal remains the final cleanup guarantee.
+            try
+            {
+                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException)
+            {
+                // Transaction is already completed; do not mask the root error.
+            }
             throw;
         }
     }
@@ -221,7 +231,17 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         }
         catch
         {
-            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            // Preserve the original database/business exception. A provider may
+            // already have completed or aborted the transaction; rollback is
+            // best-effort and disposal remains the final cleanup guarantee.
+            try
+            {
+                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException)
+            {
+                // Transaction is already completed; do not mask the root error.
+            }
             throw;
         }
     }
@@ -308,7 +328,9 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             await insertLine.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        // The caller owns the transaction boundary. Keeping this method
+        // transaction-neutral ensures the header, lines and optional source
+        // link commit or roll back as one atomic unit.
         return docId;
     }
 
@@ -517,7 +539,17 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         }
         catch
         {
-            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            // Preserve the original database/business exception. A provider may
+            // already have completed or aborted the transaction; rollback is
+            // best-effort and disposal remains the final cleanup guarantee.
+            try
+            {
+                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException)
+            {
+                // Transaction is already completed; do not mask the root error.
+            }
             throw;
         }
     }
