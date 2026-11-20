@@ -1281,6 +1281,15 @@ namespace ShouTech.App.Views
                     "Creating company...");
 
                 var request = BuildRequest();
+                if (request.EnableTaxSystem && string.IsNullOrWhiteSpace(request.TaxCountryCode))
+                {
+                    MessageBox.Show(
+                        W("CompanyWizard.TaxCountryRequired", "Choose a supported country name or ISO code before enabling its tax system."),
+                        W("Messages.WarningTitle", "Tax setup required"),
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    return;
+                }
 
                 AppHost.Logging.LogInfo(
                     "CompanyCreation",
@@ -1437,6 +1446,7 @@ namespace ShouTech.App.Views
                     txtDefaultWarehouse?.Text)
                     ? "Main Warehouse"
                     : txtDefaultWarehouse.Text.Trim();
+            var taxPack = TaxCountryPackCatalog.FindByNameOrCode(txtCountry.Text);
 
             return new NewCoReq
             {
@@ -1475,6 +1485,12 @@ namespace ShouTech.App.Views
 
                 Country =
                     txtCountry.Text.Trim(),
+
+                TaxCountryCode =
+                    taxPack?.CountryCode ?? string.Empty,
+
+                EnableTaxSystem =
+                    chkEnableTaxSystem.IsChecked == true,
 
                 Notes =
                     txtNotes.Text.Trim(),
