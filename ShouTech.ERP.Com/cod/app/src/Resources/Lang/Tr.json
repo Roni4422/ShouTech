@@ -191,7 +191,8 @@
     "FinancialAnalysis": "Finansal Analiz",
     "LocalAnalysis": "Yerel",
     "AIAnalysis": "Yapay Zeka",
-    "TaxConfiguration": "Vergi yapılandırması"
+    "TaxConfiguration": "Vergi yapılandırması",
+    "TaxReport": "Vergi dönem raporu"
   },
   "Bonds": {
     "Title": "Senetler",
@@ -3540,5 +3541,28 @@
     "EffectiveFromRequired": "Başlangıç tarihi gereklidir.",
     "InvalidRate": "Geçerli bir vergi oranı girin.",
     "Saved": "Vergi kuralı kaydedildi."
+  },
+  "TaxReport": {
+    "Title": "Vergi Dönem Raporu",
+    "PermissionDenied": "Vergi raporlarını görüntüleme yetkiniz yok.",
+    "From": "Başlangıç",
+    "To": "Bitiş",
+    "DateRequired": "Dönem için her iki tarihi de seçin.",
+    "PeriodStatus": "Yetki alanı: {0} | Dönem: {1} - {2} | Vergi satırları: {3} | Belge referansları: {4}",
+    "CurrencyTotals": "{0}: Hesaplanan vergi {1:N2} | İndirilebilir girdi {2:N2} | İndirilemeyen girdi {3:N2} | Net ödenecek {4:N2}",
+    "Column": {
+      "TaxCode": "Vergi kodu",
+      "TaxType": "Vergi türü",
+      "Treatment": "Uygulama",
+      "Rate": "Oran (%)",
+      "Direction": "Yön",
+      "IsRecoverable": "İndirilebilir",
+      "CurrencyCode": "Para birimi",
+      "TransactionCount": "Vergi satırları",
+      "DocumentCount": "Belgeler",
+      "TaxableAmount": "Vergi matrahı",
+      "TaxAmount": "Vergi tutarı",
+      "BaseTaxAmount": "Temel para biriminde vergi"
+    }
   }
 }
