@@ -120,7 +120,7 @@
     "code": "AUTH-2004",
     "name": "PasswordPolicyViolation",
     "message": "Yönetici parolası parola politikasını karşılamıyor: {0}",
-    "hint": "Harf, rakam ve bir sembol karışımıyla en az 12 karakter kullanın."
+    "hint": "En az 3 karakter kullanın. Harf, rakam, sembol veya bunların herhangi bir birleşimi kabul edilir."
   },
   "AUTH-2005": {
     "code": "AUTH-2005",
