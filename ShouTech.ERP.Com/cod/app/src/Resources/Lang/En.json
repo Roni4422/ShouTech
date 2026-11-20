@@ -990,7 +990,8 @@
     "StatusPriceDenied": "Price changes need the POS price override permission.",
     "StockOnHand": "On hand",
     "StockReserved": "Reserved",
-    "StockAvailable": "Available"
+    "StockAvailable": "Available",
+    "Stock": "Stock"
   },
   "Permissions": {
     "Cancel": "Cancel",
