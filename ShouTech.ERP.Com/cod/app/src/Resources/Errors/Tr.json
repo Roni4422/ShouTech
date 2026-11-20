@@ -3,7 +3,7 @@
     "code": "ACC-5001",
     "name": "JournalNotBalanced",
     "message": "Yevmiye kaydının borç ve alacak toplamları dengeli olmalıdır.",
-    "hint": "Satırları, toplam borcun toplam alacağa eşit olacağı şekilde ayarlayın."
+    "hint": "En az 3 karakter kullanın. Harf, rakam, sembol veya bunların herhangi bir birleşimi kabul edilir."
   },
   "ACC-5002": {
     "code": "ACC-5002",
