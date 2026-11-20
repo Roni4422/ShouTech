@@ -55,7 +55,7 @@ public sealed class TaxReportWin : BaseWin
             RefreshReport();
     }
 
-    private void ApplyLocalizedNode(DependencyObject node)
+    private static void ApplyLocalizedNode(DependencyObject node)
     {
         if (node is TextBlock text && text.Tag is string textKey)
             text.Text = T(textKey);
@@ -139,8 +139,7 @@ public sealed class TaxReportWin : BaseWin
             _grid.ItemsSource = rows;
             _registerGrid.ItemsSource = TaxReportingSvc.LoadRegister(from, to);
             var settings = TaxSvc.LoadSettings();
-            _status.Text = string.Format(CultureInfo.CurrentCulture,
-                T("TaxReport.PeriodStatus"), settings?.CountryCode ?? string.Empty,
+            _status.Text = Tf("TaxReport.PeriodStatus", settings?.CountryCode ?? string.Empty,
                 from.ToString("d", CultureInfo.CurrentCulture),
                 to.ToString("d", CultureInfo.CurrentCulture),
                 rows.Sum(x => x.TransactionCount),
@@ -151,7 +150,7 @@ public sealed class TaxReportWin : BaseWin
                 var output = group.Where(x => x.Direction == "OUTPUT").Sum(x => x.TaxAmount);
                 var input = group.Where(x => x.Direction == "INPUT" && x.IsRecoverable).Sum(x => x.TaxAmount);
                 var nonRecoverable = group.Where(x => x.Direction == "INPUT" && !x.IsRecoverable).Sum(x => x.TaxAmount);
-                return string.Format(CultureInfo.CurrentCulture, T("TaxReport.CurrencyTotals"),
+                return Tf("TaxReport.CurrencyTotals",
                     group.Key, output, input, nonRecoverable, output - input);
             });
             _totals.Text = string.Join(Environment.NewLine, currencyTotals);
