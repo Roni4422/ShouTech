@@ -21,7 +21,8 @@ public sealed class SchemaMigratorTests
         {
             DataSource = databasePath,
             Mode = SqliteOpenMode.ReadWriteCreate,
-            ForeignKeys = true
+            ForeignKeys = true,
+            Pooling = false
         }.ToString();
 
         try
