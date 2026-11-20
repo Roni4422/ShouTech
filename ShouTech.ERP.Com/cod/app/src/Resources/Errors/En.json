@@ -120,7 +120,7 @@
     "code": "AUTH-2004",
     "name": "PasswordPolicyViolation",
     "message": "Administrator password does not meet the password policy: {0}",
-    "hint": "Use at least 12 characters with a mix of letters, digits, and a symbol."
+    "hint": "Use at least 3 characters. Letters, digits, symbols, or any combination are accepted."
   },
   "AUTH-2005": {
     "code": "AUTH-2005",
