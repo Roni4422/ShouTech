@@ -73,6 +73,12 @@ public class GlPostingTests
         AssertBalanced(entry);
         Assert.Equal(15m, Line(entry, "2205").Credit);
 
+        var purchase = await PostInvoiceAsync(
+            db, InvDocKind.PurchaseInvoice, qty: 1m, price: 100m, taxRate: 15m, taxCode: "VAT15");
+        var purchaseEntry = SingleEntry(db, "PUR", purchase.DocId);
+        AssertBalanced(purchaseEntry);
+        Assert.Equal(15m, Line(purchaseEntry, "1205").Debit);
+
         using var verify = new SqliteConnection(db.ConnectionString);
         verify.Open();
         using var query = verify.CreateCommand();
@@ -94,6 +100,20 @@ public class GlPostingTests
         Assert.Equal("2205", reader.GetString(6));
         Assert.Equal(entry.DocumentNumber, reader.GetString(7));
         Assert.False(reader.Read());
+
+        using var purchaseQuery = verify.CreateCommand();
+        purchaseQuery.CommandText = """
+            SELECT tax_direction, tax_account_code, tax_amount
+            FROM tax_transactions
+            WHERE company_code='GL1' AND source_doc_id=$doc AND line_no=1;
+            """;
+        purchaseQuery.Parameters.AddWithValue("$doc", purchase.DocId);
+        using var purchaseReader = purchaseQuery.ExecuteReader();
+        Assert.True(purchaseReader.Read());
+        Assert.Equal("INPUT", purchaseReader.GetString(0));
+        Assert.Equal("1205", purchaseReader.GetString(1));
+        Assert.Equal(15m, purchaseReader.GetDecimal(2));
+        Assert.False(purchaseReader.Read());
     }
 
     [Fact]
