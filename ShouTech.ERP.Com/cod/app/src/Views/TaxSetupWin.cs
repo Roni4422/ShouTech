@@ -93,6 +93,8 @@ public sealed class TaxSetupWin : BaseWin
         root.Children.Add(top);
 
         _rules.SelectionChanged += (_, _) => LoadSelectedRule();
+        _rules.AutoGeneratingColumn += (_, e) =>
+            e.Column.Header = T("TaxSetup.Column." + e.PropertyName);
 
         var editor = new Grid { Margin = new Thickness(0, 10, 0, 4) };
         for (var i = 0; i < 4; i++)
