@@ -399,7 +399,10 @@
     "HeldTotal": "الإجمالي",
     "Recall": "استرجاع",
     "StatusBillRecalled": "تم استرجاع الفاتورة",
-    "StatusPriceDenied": "تغيير الأسعار يحتاج صلاحية تجاوز أسعار نقاط البيع."
+    "StatusPriceDenied": "تغيير الأسعار يحتاج صلاحية تجاوز أسعار نقاط البيع.",
+    "StockOnHand": "الرصيد الفعلي",
+    "StockReserved": "الكمية المحجوزة",
+    "StockAvailable": "المتاح للبيع"
   },
   "Orders": {
     "Title": "الطلبيات",
