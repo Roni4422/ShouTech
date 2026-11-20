@@ -18,7 +18,7 @@ public static class TaxSvc
     // Tax is opt-in per company. Country selection alone never enables taxation.
     // Country rates are stored as effective-dated company rules, not hard-coded here.
 
-    public sealed record TaxCodeRec(string Code, string Name, decimal Rate, string Country);
+    public sealed record TaxCodeRec(string Code, string Name, decimal Rate, string Country, string CalculationMode);
 
     public sealed record TaxSettingsRec(string CountryCode, bool Enabled, string Scheme, string RegistrationNumber);
 
@@ -431,7 +431,7 @@ public static class TaxSvc
             var activeValue = DatabaseRuntime.IsPostgreSql() ? "TRUE" : "1";
             var asOfExpression = DatabaseRuntime.IsPostgreSql() ? "CAST($asOf AS date)" : "$asOf";
             cmd.CommandText = $"""
-                SELECT r.tax_code, COALESCE(r.tax_name, r.tax_code), COALESCE(r.rate, 0), COALESCE(r.country_code, '')
+                SELECT r.tax_code, COALESCE(r.tax_name, r.tax_code), COALESCE(r.rate, 0), COALESCE(r.country_code, ''), COALESCE(r.calculation_mode, 'Exclusive')
                 FROM company_tax_rules r
                 INNER JOIN company_tax_settings s ON s.company_code = r.company_code
                 WHERE r.company_code = $company
@@ -463,7 +463,8 @@ public static class TaxSvc
                     Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? "",
                     Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? "",
                     Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture),
-                    Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture) ?? ""));
+                    Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture) ?? "",
+                    Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture) ?? "Exclusive"));
             }
         }
         catch (Exception exL77)
