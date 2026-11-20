@@ -2122,19 +2122,22 @@ public static class InvRepo
             registeredTax += amount;
             using var insert = connection.CreateCommand();
             insert.Transaction = tx;
-            insert.CommandText = """
+            var documentDateExpression = DatabaseRuntime.IsPostgreSql()
+                ? "CAST($docDate AS date)" : "$docDate";
+            insert.CommandText = $"""
                 INSERT INTO tax_transactions
                     (company_code, country_code, source_doc_kind, source_doc_id, source_doc_no,
                      line_no, tax_code, tax_type, tax_treatment, tax_rate, taxable_amount,
                      tax_amount, is_recoverable, tax_direction, tax_account_code, currency_code,
-                     exchange_rate, base_tax_amount, journal_doc_no, created_by)
+                     exchange_rate, base_tax_amount, journal_doc_no, created_by, document_date)
                 VALUES
                     ($company, $country, $kind, $docId, $docNo,
                      $lineNo, $taxCode, $taxType, $treatment, $rate, $taxable,
                      $tax, $recoverable, $direction, $account, $currency,
-                     $exchangeRate, $baseTax, $journal, $user)
+                     $exchangeRate, $baseTax, $journal, $user, {documentDateExpression})
                 ON CONFLICT (company_code, source_doc_kind, source_doc_id, line_no, tax_code) DO NOTHING;
                 """;
+            Add(insert, "$docDate", doc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
             Add(insert, "$company", Company);
             Add(insert, "$country", countryCode);
             Add(insert, "$kind", doc.KindCode);
