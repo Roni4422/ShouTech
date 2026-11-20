@@ -22,6 +22,33 @@ public static class InvRepo
     public static string NextDocNo(InvDocKind kind)
     {
         DocSchema.Ensure();
+        var cs = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(cs))
+            throw new InvalidOperationException(
+                "A company database must be connected before allocating a document number.");
+
+        try
+        {
+            using var connection = Open(cs);
+            using var transaction = connection.BeginTransaction();
+            var number = AllocateDocNo(connection, transaction, kind);
+            transaction.Commit();
+            return number;
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, ex, "InvRepo.NextDocNo");
+            throw new InvalidOperationException(
+                "A new document number could not be allocated. Check the database connection and retry.",
+                ex);
+        }
+    }
+
+    private static string AllocateDocNo(
+        DbConnection connection,
+        DbTransaction transaction,
+        InvDocKind kind)
+    {
         var table = kind.IsSales() ? "sales_documents" : "purchase_documents";
         var prefix = kind switch
         {
@@ -38,22 +65,17 @@ public static class InvRepo
             InvDocKind.Quotation => "QUO",
             _ => "DOC"
         };
-        var year = DateTime.Today.Year.ToString(CultureInfo.InvariantCulture);
-        var cs = DatabaseRuntime.GetConnectionString();
-        if (string.IsNullOrWhiteSpace(cs))
-            throw new InvalidOperationException(
-                "A company database must be connected before allocating a document number.");
+        var year = DateTime.Today.Year;
+        var documentPrefix = $"{prefix}-{year}-";
+        var suffixStart = documentPrefix.Length + 1;
+        var numericSuffixPredicate = DatabaseRuntime.IsPostgreSql()
+            ? "SUBSTR(doc_no, $suffixStart) ~ '^[0-9]+$'"
+            : "SUBSTR(doc_no, $suffixStart) GLOB '[0-9]*' AND SUBSTR(doc_no, $suffixStart) NOT GLOB '*[^0-9]*'";
 
-        try
+        using (var maxCommand = connection.CreateCommand())
         {
-            using var connection = Open(cs);
-            using var cmd = connection.CreateCommand();
-            var documentPrefix = $"{prefix}-{year}-";
-            var suffixStart = documentPrefix.Length + 1;
-            var numericSuffixPredicate = DatabaseRuntime.IsPostgreSql()
-                ? "SUBSTR(doc_no, $suffixStart) ~ '^[0-9]+$'"
-                : "SUBSTR(doc_no, $suffixStart) GLOB '[0-9]*' AND SUBSTR(doc_no, $suffixStart) NOT GLOB '*[^0-9]*'";
-            cmd.CommandText = $"""
+            maxCommand.Transaction = transaction;
+            maxCommand.CommandText = $"""
                 SELECT COALESCE(MAX(CAST(SUBSTR(doc_no, $suffixStart) AS BIGINT)), 0)
                 FROM {table}
                 WHERE company_id = $company
@@ -61,21 +83,44 @@ public static class InvRepo
                   AND doc_no LIKE $pattern
                   AND {numericSuffixPredicate};
                 """;
-            Add(cmd, "$company", Company);
-            Add(cmd, "$kind", prefix);
-            Add(cmd, "$pattern", $"{documentPrefix}%");
-            Add(cmd, "$suffixStart", suffixStart);
-            var lastSequence = Convert.ToInt64(cmd.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
-            if (lastSequence >= 99999999)
-                throw new InvalidOperationException("The document number sequence has reached its supported limit.");
-            return $"{documentPrefix}{(lastSequence + 1).ToString("D4", CultureInfo.InvariantCulture)}";
-        }
-        catch (Exception exL58)
-        {
-            AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exL58, "InvRepo.NextDocNo");
-            throw new InvalidOperationException(
-                "A new document number could not be allocated. Check the database connection and retry.",
-                exL58);
+            Add(maxCommand, "$company", Company);
+            Add(maxCommand, "$kind", prefix);
+            Add(maxCommand, "$pattern", $"{documentPrefix}%");
+            Add(maxCommand, "$suffixStart", suffixStart);
+            var maximum = Convert.ToInt64(
+                maxCommand.ExecuteScalar() ?? 0,
+                CultureInfo.InvariantCulture);
+            if (maximum >= 99999999)
+                throw new InvalidOperationException(
+                    "The document number sequence has reached its supported limit.");
+
+            var next = maximum + 1;
+            var advanceExpression = DatabaseRuntime.IsPostgreSql()
+                ? "GREATEST(document_number_sequences.last_value + 1, EXCLUDED.last_value)"
+                : "MAX(document_number_sequences.last_value + 1, excluded.last_value)";
+
+            using var sequenceCommand = connection.CreateCommand();
+            sequenceCommand.Transaction = transaction;
+            sequenceCommand.CommandText = $"""
+                INSERT INTO document_number_sequences
+                    (company_id, doc_kind, doc_year, last_value)
+                VALUES ($company, $kind, $year, $next)
+                ON CONFLICT (company_id, doc_kind, doc_year)
+                DO UPDATE SET last_value = {advanceExpression}
+                RETURNING last_value;
+                """;
+            Add(sequenceCommand, "$company", Company);
+            Add(sequenceCommand, "$kind", prefix);
+            Add(sequenceCommand, "$year", year);
+            Add(sequenceCommand, "$next", next);
+            var allocated = Convert.ToInt64(
+                sequenceCommand.ExecuteScalar() ?? 0,
+                CultureInfo.InvariantCulture);
+            if (allocated <= 0 || allocated > 99999999)
+                throw new InvalidOperationException(
+                    "The document number sequence returned an invalid value.");
+
+            return $"{documentPrefix}{allocated.ToString("D4", CultureInfo.InvariantCulture)}";
         }
     }
 
@@ -102,7 +147,7 @@ public static class InvRepo
         if (docId <= 0)
         {
             if (string.IsNullOrWhiteSpace(doc.DocNo))
-                doc.DocNo = NextDocNo(doc.Kind);
+                doc.DocNo = AllocateDocNo(connection, tx, doc.Kind);
 
             using (var cmd = connection.CreateCommand())
             {
