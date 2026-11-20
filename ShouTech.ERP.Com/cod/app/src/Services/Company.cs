@@ -40,6 +40,8 @@ public sealed class NewCoReq
         public string AddressLine2 { get; set; } = string.Empty;
         public string City { get; set; } = string.Empty;
         public string Country { get; set; } = string.Empty;
+        public string TaxCountryCode { get; set; } = string.Empty;
+        public bool EnableTaxSystem { get; set; }
         public string Notes { get; set; } = string.Empty;
         public DateTime FiscalYearStart { get; set; }
         public DateTime FiscalYearEnd { get; set; }
@@ -92,6 +94,8 @@ public sealed class NewCoReq
         public string AddressLine2 { get; set; } = string.Empty;
         public string City { get; set; } = string.Empty;
         public string Country { get; set; } = string.Empty;
+        public string TaxCountryCode { get; set; } = string.Empty;
+        public bool TaxEnabled { get; set; }
         public string License { get; set; } = string.Empty;
         public string Notes { get; set; } = string.Empty;
         public DateTime FiscalYearStart { get; set; }
@@ -1275,6 +1279,23 @@ public sealed class CoCreateSvc : ICoCreateSvc
                 };
             }
 
+            if (request.EnableTaxSystem)
+            {
+                var selectedPack = TaxCountryPackCatalog.FindByNameOrCode(request.Country);
+                if (selectedPack is null ||
+                    !string.Equals(selectedPack.CountryCode, request.TaxCountryCode, StringComparison.OrdinalIgnoreCase))
+                {
+                    return new CoCreateResult
+                    {
+                        Success = false,
+                        Message = "Tax activation requires a supported country or jurisdiction selected in the company profile.",
+                        CompanyCode = string.Empty,
+                        SavedToDatabase = false,
+                        SavedLocally = false
+                    };
+                }
+            }
+
             var companyId = Guid.NewGuid();
             var code = await ResolveCompanyCodeAsync();
             var pwdHashResult = PwdHash.Create(request.AdminPassword);
@@ -1426,6 +1447,18 @@ public sealed class CoCreateSvc : ICoCreateSvc
             }
 
             var savedToDb = await TrySaveToDatabaseAsync(record, request, template);
+
+            if (record.TaxEnabled && !savedToDb)
+            {
+                return new CoCreateResult
+                {
+                    Success = false,
+                    Message = "The company database could not persist the requested tax activation. The company was not registered.",
+                    CompanyCode = string.Empty,
+                    SavedToDatabase = false,
+                    SavedLocally = false
+                };
+            }
 
             var savedLocally = false;
             try
@@ -1661,6 +1694,20 @@ public sealed class CoCreateSvc : ICoCreateSvc
                         await cmd.ExecuteNonQueryAsync();
                     }
 
+                    if (record.TaxEnabled)
+                    {
+                        const string insertTaxSettings = """
+                            INSERT INTO public.company_tax_settings
+                                (company_code, country_code, tax_enabled, tax_scheme, registration_number)
+                            VALUES (@Code, @CountryCode, TRUE, '', @TaxNumber);
+                            """;
+                        await using var taxCmd = new NpgsqlCommand(insertTaxSettings, connection, transaction);
+                        taxCmd.Parameters.Add("@Code", NpgsqlDbType.Varchar).Value = record.Code;
+                        taxCmd.Parameters.Add("@CountryCode", NpgsqlDbType.Char).Value = record.TaxCountryCode;
+                        taxCmd.Parameters.Add("@TaxNumber", NpgsqlDbType.Varchar).Value = record.TaxNumber ?? string.Empty;
+                        await taxCmd.ExecuteNonQueryAsync();
+                    }
+
                     var fiscalYear = record.FiscalYearStart.Year;
                     var dbName = string.IsNullOrWhiteSpace(record.DbPath)
                         ? $"SHOUTECH_{record.Code}_{fiscalYear}"
@@ -1839,6 +1886,17 @@ public sealed class CoCreateSvc : ICoCreateSvc
                     ("calendar", string.IsNullOrWhiteSpace(record.CalendarType) ? "Gregorian" : record.CalendarType.Trim()),
                     ("grouping", string.IsNullOrWhiteSpace(record.NumberGrouping) ? "3-3-3" : record.NumberGrouping.Trim()),
                     ("coa", string.IsNullOrWhiteSpace(record.CoaTemplateCode) ? "SIMPLE" : record.CoaTemplateCode.Trim()));
+
+                if (record.TaxEnabled)
+                {
+                    await ExecuteSqliteAsync(connection, transaction, """
+                        INSERT INTO company_tax_settings
+                            (company_code, country_code, tax_enabled, tax_scheme, registration_number)
+                        VALUES (@code, @countryCode, 1, '', @taxNumber)
+                        """, ("code", record.Code), ("countryCode", record.TaxCountryCode),
+                        ("taxNumber", record.TaxNumber ?? string.Empty));
+                }
+
                 var fiscalYear = record.FiscalYearStart.Year;
                 await ExecuteSqliteAsync(connection, transaction, """
                     INSERT INTO fiscal_years (company_id, fiscal_year, database_name, start_date, end_date)
