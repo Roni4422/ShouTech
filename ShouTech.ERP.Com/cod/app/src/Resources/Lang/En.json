@@ -1729,8 +1729,7 @@
     "NoOriginal": "There is no original invoice linked to this document.",
     "VoucherOpenFailed": "Could not open the journal voucher.",
     "OriginalOpenFailed": "Could not open the original invoice.",
-    "ReverseReason": "User requested reversal from invoice window"
-  ,
+    "ReverseReason": "User requested reversal from invoice window",
     "TaxSystem": "Tax system",
     "ColTaxCode": "Tax code"
   },
@@ -2183,10 +2182,11 @@
       "Uae": "United Arab Emirates — VAT",
       "Saudi": "Saudi Arabia — VAT",
       "Jordan": "Jordan — Sales tax"
-    }
-  ,
+    },
     "EnableTaxSystem": "Enable the selected country's tax system for this company",
-    "TaxCountryRequired": "Choose a supported country name or ISO code before enabling its tax system."
+    "TaxCountryRequired": "Choose a supported country name or ISO code before enabling its tax system.",
+    "TaxEnableTitle": "Enable tax system?",
+    "TaxEnablePrompt": "Would you like to enable the tax system for {0}? Choose No to keep tax disabled for this company."
   },
   "FiscalHint": {
     "Length": {},
