@@ -1681,6 +1681,7 @@ public static class InvRepo
             Add(taxSettings, "$company", Company);
             taxCountry = Convert.ToString(taxSettings.ExecuteScalar(), CultureInfo.InvariantCulture) ?? string.Empty;
 
+            var hasTaxLineGroups = doc.Lines.Any(line => line.LineTax != 0m);
             foreach (var group in doc.Lines.Where(line => line.LineTax != 0m)
                          .GroupBy(line => line.TaxCode ?? string.Empty, StringComparer.OrdinalIgnoreCase))
             {
@@ -1710,7 +1711,12 @@ public static class InvRepo
                     Add(rule, "$documentDate", doc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
                     var configuredAccount = Convert.ToString(rule.ExecuteScalar(), CultureInfo.InvariantCulture);
                     if (!string.IsNullOrWhiteSpace(configuredAccount))
+                    {
                         account = configuredAccount.Trim();
+                        if (GlPosting.TryResolveAccount(connection, tx, provider, companyGuid, account) is null)
+                            throw new InvalidOperationException(
+                                $"Configured tax account '{account}' for tax code '{group.Key}' is not present in the company's chart of accounts.");
+                    }
                 }
 
                 if (GlPosting.TryResolveAccount(connection, tx, provider, companyGuid, account) is null)
@@ -1722,7 +1728,7 @@ public static class InvRepo
                 taxAccountGroups.Add((account, group.Sum(line => line.LineTax)));
             }
 
-            if (taxAccountGroups.Count == 0)
+            if (!hasTaxLineGroups)
             {
                 canSplitTax = GlPosting.TryResolveAccount(connection, tx, provider, companyGuid, taxAccountCode) is not null;
                 if (canSplitTax) taxAccountGroups.Add((taxAccountCode, tax));
@@ -2068,6 +2074,8 @@ public static class InvRepo
             using (var rule = connection.CreateCommand())
             {
                 rule.Transaction = tx;
+                var documentDateExpression = DatabaseRuntime.IsPostgreSql()
+                    ? "CAST($documentDate AS date)" : "$documentDate";
                 rule.CommandText = $"""
                     SELECT tax_type, tax_treatment, rate, is_recoverable,
                            CASE WHEN $direction = 'OUTPUT' THEN COALESCE(output_account_code, '')
@@ -2077,8 +2085,8 @@ public static class InvRepo
                       AND country_code = $country
                       AND tax_code = $code
                       AND is_active = {enabledValue}
-                      AND effective_from <= $documentDate
-                      AND (effective_to IS NULL OR effective_to >= $documentDate)
+                      AND effective_from <= {documentDateExpression}
+                      AND (effective_to IS NULL OR effective_to >= {documentDateExpression})
                     ORDER BY effective_from DESC
                     LIMIT 1;
                     """;
