@@ -117,6 +117,10 @@ A process remains **not verified** until evidence is recorded. Do not claim full
 | Payroll / HR | General Phenix descriptions mention payroll and human resources | Complete HR/payroll lifecycle with country localization, approvals, accruals, statutory deductions and linked payroll journals | High-level product claim only; verify scope of HR modules and country coverage |
 | Unified ERP | Posts describe sales, warehouses, HR and online-store integrations in one system | Unified master data and transaction services across desktop, mobile, POS, warehouse, accounting and external channels | Positioning claim; verify actual shared data model, licensing and module dependencies |
 
+### Multi-country tax engine
+
+The tax localization requirement is now specified in [MULTI-COUNTRY-TAX-ENGINE-ROADMAP.md](MULTI-COUNTRY-TAX-ENGINE-ROADMAP.md). This is a cross-cutting ERP capability and must be delivered through effective-dated jurisdiction packs, immutable tax snapshots, tax-to-GL/return reconciliation, and country-specific e-invoicing adapters. Saudi Arabia, Jordan, Egypt, the full GCC, Syria, Iraq, Lebanon, EU member states, the United States and additional jurisdictions are explicit coverage targets. A country is not considered supported until its legal rules, official technical specifications and conformance tests have been reviewed and passed.
+
 ### ShouTech architecture implications
 
 1. Build a provider-neutral **Integration Hub**; do not hardwire Salla or any named provider into sales/accounting services. Each connector must be isolated behind a contract and have its own configuration, credential handling, mapping, health state, retry policy and audit.
