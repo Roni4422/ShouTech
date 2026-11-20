@@ -245,7 +245,23 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
                 _doc.TaxCode,
                 _doc.TaxCode + " (historical)",
                 _doc.DefaultTaxRate,
-                string.Empty));
+                string.Empty,
+                "Exclusive"));
+        }
+
+        if (preserveUnknown)
+        {
+            foreach (var line in _lines.Where(x => !string.IsNullOrWhiteSpace(x.TaxCode)))
+            {
+                if (codes.Any(x => string.Equals(x.Code, line.TaxCode, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+                codes.Add(new TaxSvc.TaxCodeRec(
+                    line.TaxCode,
+                    line.TaxCode + " (historical)",
+                    line.TaxRate,
+                    string.Empty,
+                    line.TaxCalculationMode));
+            }
         }
 
         _taxCodes = codes.AsReadOnly();
@@ -276,11 +292,13 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
                 {
                     line.TaxCode = string.Empty;
                     line.TaxRate = 0m;
+                    line.TaxCalculationMode = "Exclusive";
                     line.NotifyTotals();
                 }
                 else
                 {
                     line.TaxRate = selected.Rate;
+                    line.TaxCalculationMode = selected.CalculationMode;
                     line.NotifyTotals();
                 }
             }
@@ -388,6 +406,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             {
                 line.TaxCode = selectedTax.Code;
                 line.TaxRate = selectedTax.Rate;
+                line.TaxCalculationMode = selectedTax.CalculationMode;
             }
             RefreshTotals();
         };
@@ -397,6 +416,8 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             {
                 TaxCode = Convert.ToString(_cmbTaxCode.SelectedValue, CultureInfo.InvariantCulture) ?? string.Empty,
                 TaxRate = ParseDec(_txtTaxRate.Text, TaxSvc.GetDefaultRate()),
+                TaxCalculationMode = _taxCodes.FirstOrDefault(x =>
+                    string.Equals(x.Code, Convert.ToString(_cmbTaxCode.SelectedValue, CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase))?.CalculationMode ?? "Exclusive",
                 WarehouseName = _txtWarehouse.Text.Trim()
             });
             RefreshTotals();
@@ -782,6 +803,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
                     var selectedTax = _taxCodes.FirstOrDefault(x =>
                         string.Equals(x.Code, line.TaxCode, StringComparison.OrdinalIgnoreCase));
                     line.TaxRate = selectedTax?.Rate ?? 0m;
+                    line.TaxCalculationMode = selectedTax?.CalculationMode ?? "Exclusive";
                 }
 
                 line.NotifyTotals();
@@ -1386,6 +1408,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         public string DiscountPctText { get => _discountPctText; set { _discountPctText = value; OnPropertyChanged(); NotifyTotals(); } }
         public string TaxRateText { get => _taxRateText; set { _taxRateText = value; OnPropertyChanged(); NotifyTotals(); } }
         public string TaxCode { get => _taxCode; set { _taxCode = value ?? string.Empty; OnPropertyChanged(); } }
+        public string TaxCalculationMode { get; set; } = "Exclusive";
         public string WarehouseName { get => _warehouseName; set { _warehouseName = value; OnPropertyChanged(); } }
 
         public decimal TaxRate
@@ -1421,6 +1444,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             UnitPrice = ParseDec(UnitPriceText, 0),
             DiscountPct = ParseDec(DiscountPctText, 0),
             TaxCode = TaxCode,
+            TaxCalculationMode = TaxCalculationMode,
             TaxRate = ParseDec(TaxRateText, 0),
             WarehouseId = WarehouseId,
             WarehouseName = WarehouseName
@@ -1436,6 +1460,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             UnitPriceText = line.UnitPrice.ToString("0.####", CultureInfo.InvariantCulture),
             DiscountPctText = line.DiscountPct.ToString("0.##", CultureInfo.InvariantCulture),
             TaxCode = line.TaxCode,
+            TaxCalculationMode = line.TaxCalculationMode,
             TaxRateText = line.TaxRate.ToString("0.##", CultureInfo.InvariantCulture),
             WarehouseId = line.WarehouseId,
             WarehouseName = line.WarehouseName
