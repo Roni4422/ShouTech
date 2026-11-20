@@ -112,12 +112,12 @@ CREATE TABLE IF NOT EXISTS currencies (
     deleted_at TIMESTAMPTZ,
     deleted_by TEXT
 );
--- The core migration may already have created currencies.is_deleted as BOOLEAN,
--- while this legacy module schema uses INT flags. Cast the predicate so this
--- migration remains safe for both existing and freshly created company schemas.
+-- Migration 031 owns the canonical currencies table (code/is_deleted).
+-- Migration 050 must not index the legacy column names from its retired
+-- duplicate table definition.
 CREATE UNIQUE INDEX IF NOT EXISTS ux_currencies_company_code
-    ON currencies(company_id, currency_code)
-    WHERE is_deleted::text IN ('0', 'false');
+    ON currencies(company_id, code)
+    WHERE is_deleted = FALSE;
 
 CREATE TABLE IF NOT EXISTS currency_rates (
     rate_id BIGSERIAL PRIMARY KEY,
