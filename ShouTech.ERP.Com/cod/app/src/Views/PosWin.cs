@@ -420,14 +420,15 @@ public sealed class PosWin : BaseWin
         _ = RefreshLineStockAsync(existing, material.Value.Id, code);
     }
 
-    private async System.Threading.Tasks.Task RefreshLineStockAsync(PosLine line, long materialId, string lookup)
+    private async System.Threading.Tasks.Task RefreshLineStockAsync(PosLine line, long? materialId, string lookup)
     {
         try
         {
+            if (materialId is not long id) return;
             var service = AppHost.Pos;
             if (service is null) return;
             var products = await service.SearchProductsAsync(CurrentCompanyCode, lookup, _activeWarehouseId, 12);
-            var product = products.FirstOrDefault(x => x.MaterialId == materialId);
+            var product = products.FirstOrDefault(x => x.MaterialId == id);
             if (product is null) return;
             line.AvailableQty = product.SellableQty;
             _grid.Items.Refresh();
