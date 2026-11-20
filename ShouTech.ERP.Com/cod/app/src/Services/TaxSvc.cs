@@ -111,16 +111,17 @@ public static class TaxSvc
 
         try
         {
+            if (!IsEnabled) return list;
             using var connection = Open(cs);
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
+            var activeValue = DatabaseRuntime.IsPostgreSql() ? "TRUE" : "1";
+            cmd.CommandText = $"""
                 SELECT tax_code, COALESCE(tax_name, tax_code), COALESCE(rate, 0), COALESCE(country_code, '')
                 FROM company_tax_rules
-                WHERE company_code = $company AND is_active = 1
+                WHERE company_code = $company AND is_active = {activeValue}
                 ORDER BY tax_code;
                 """;
             Add(cmd, "$company", AppState.CurrentCompanyCode ?? "");
-            if (!IsEnabled) return list;
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
@@ -200,7 +201,7 @@ public static class TaxSvc
                 SELECT material_id, COALESCE(NULLIF(pos_name,''), NULLIF(name_ar,''), NULLIF(name_en,''), code),
                        COALESCE(price_retail, price_list, 0),
                        COALESCE(default_unit, unit1, ''),
-                       CASE WHEN EXISTS (SELECT 1 FROM company_tax_settings ts WHERE ts.company_code = materials.company_id AND ts.tax_enabled = 1) THEN COALESCE(tax_rate, 0) ELSE 0 END
+                       COALESCE(tax_rate, 0)
                 FROM materials
                 WHERE company_id=$c
                   AND {activeMaterialPredicate}
@@ -228,7 +229,7 @@ public static class TaxSvc
                 Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? "",
                 Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture),
                 Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture) ?? "",
-                Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture));
+                IsEnabled ? Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture) : 0m);
         }
         catch (Exception exL168)
         {
@@ -244,14 +245,15 @@ public static class TaxSvc
         if (string.IsNullOrWhiteSpace(cs) || string.IsNullOrWhiteSpace(companyCode)) return null;
         using var connection = Open(cs);
         using var command = connection.CreateCommand();
-        command.CommandText = """
+        var activeValue = DatabaseRuntime.IsPostgreSql() ? "TRUE" : "1";
+        command.CommandText = $"""
             SELECT r.rate
             FROM company_tax_rules r
             INNER JOIN company_tax_settings s ON s.company_code = r.company_code
             WHERE r.company_code = $company
-              AND r.is_active = 1
-              AND r.is_default = 1
-              AND s.tax_enabled = 1
+              AND r.is_active = {activeValue}
+              AND r.is_default = {activeValue}
+              AND s.tax_enabled = {activeValue}
               AND r.effective_from <= $today
               AND (r.effective_to IS NULL OR r.effective_to >= $today)
             ORDER BY r.effective_from DESC
