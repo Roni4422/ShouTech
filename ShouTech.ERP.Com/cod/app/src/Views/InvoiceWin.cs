@@ -116,6 +116,12 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _cmbTaxCode.DisplayMemberPath = nameof(TaxSvc.TaxCodeRec.Name);
         _cmbTaxCode.SelectedValuePath = nameof(TaxSvc.TaxCodeRec.Code);
         _cmbTaxCode.IsEnabled = TaxSvc.IsEnabled && _taxCodes.Count > 0;
+        if (TaxSvc.IsEnabled && string.IsNullOrWhiteSpace(_doc.TaxCode) && _taxCodes.Count > 0)
+        {
+            var defaultTax = _taxCodes.FirstOrDefault(x => x.Rate == _doc.DefaultTaxRate) ?? _taxCodes[0];
+            _doc.TaxCode = defaultTax.Code;
+            _doc.DefaultTaxRate = defaultTax.Rate;
+        }
         _cmbTaxCode.SelectedValue = _doc.TaxCode;
         ApplyLanguageDirection();
 
