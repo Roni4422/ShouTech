@@ -46,6 +46,34 @@ public sealed class TaxEngineTests
     }
 
     [Theory]
+    [InlineData("SA")]
+    [InlineData("JO")]
+    [InlineData("EG")]
+    [InlineData("KW")]
+    [InlineData("AE")]
+    [InlineData("QA")]
+    [InlineData("BH")]
+    [InlineData("OM")]
+    [InlineData("SY")]
+    [InlineData("IQ")]
+    [InlineData("LB")]
+    [InlineData("US")]
+    [InlineData("DE")]
+    [InlineData("FR")]
+    [InlineData("GB")]
+    [InlineData("TR")]
+    [InlineData("CA")]
+    [InlineData("AU")]
+    [InlineData("IN")]
+    [InlineData("BR")]
+    [InlineData("ZZ")]
+    public void CountryPackCatalog_IncludesRequestedAndAdditionalJurisdictions(string countryCode)
+    {
+        Assert.True(TaxCountryPackCatalog.TryGet(countryCode, out var pack));
+        Assert.Equal(countryCode, pack.CountryCode);
+    }
+
+    [Theory]
     [InlineData("SA", 15d)]
     [InlineData("JO", 16d)]
     [InlineData("EG", 14d)]
