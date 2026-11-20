@@ -3557,7 +3557,8 @@
       "IsDefault": "Varsayılan",
       "IsActive": "Etkin",
       "DataStatus": "Veri durumu"
-    }
+    },
+    "EnabledNeedsRules": "Vergi {0} ({1}) için etkin, ancak bu yetki alanında tek bir genel başlangıç oranı yok. Vergili belgeleri kaydetmeden önce ulusal, eyalet, yerel veya tarife kurallarını ekleyin."
   },
   "TaxReport": {
     "Title": "Vergi Dönem Raporu",
