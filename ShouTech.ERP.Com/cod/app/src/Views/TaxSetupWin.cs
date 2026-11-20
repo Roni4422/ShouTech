@@ -1,0 +1,339 @@
+using System;
+using System.Globalization;
+using System.Linq;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Media;
+using ShouTech.App.Services;
+using ShouTech.Domain;
+
+namespace ShouTech.App.Views;
+
+/// <summary>
+/// Company tax administration: jurisdiction opt-in, effective-dated tax
+/// rules, recoverability, calculation mode, and GL account mapping.
+/// Posted documents retain their immutable tax snapshots.
+/// </summary>
+public sealed class TaxSetupWin : BaseWin
+{
+    private readonly ComboBox _country = new();
+    private readonly Button _jurisdictionAction = new();
+    private readonly DataGrid _rules = new() { AutoGenerateColumns = true, IsReadOnly = true, CanUserAddRows = false };
+    private readonly TextBlock _status = new();
+    private readonly TextBox _code = new();
+    private readonly TextBox _name = new();
+    private readonly TextBox _type = new();
+    private readonly TextBox _treatment = new();
+    private readonly TextBox _rate = new();
+    private readonly TextBox _outputAccount = new();
+    private readonly TextBox _inputAccount = new();
+    private readonly ComboBox _calculation = new();
+    private readonly DatePicker _effectiveFrom = new() { SelectedDate = DateTime.Today };
+    private readonly DatePicker _effectiveTo = new();
+    private readonly CheckBox _recoverable = new() { IsChecked = true };
+    private readonly CheckBox _compound = new();
+    private readonly CheckBox _default = new();
+    private readonly Button _new = new();
+    private readonly Button _save = new();
+    private readonly Button _refresh = new();
+    private readonly Button _close = new();
+    private bool _loadingCountry;
+
+    public TaxSetupWin()
+    {
+        Title = T("TaxSetup.Title");
+        Width = 1120;
+        Height = 760;
+        MinWidth = 760;
+        MinHeight = 500;
+        BuildUi();
+        Loaded += OnLoaded;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        if (!AppHost.Permissions.Has(PermCat.Accounting.TaxView))
+        {
+            MessageBox.Show(this, T("TaxSetup.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            Close();
+            return;
+        }
+
+        _country.ItemsSource = TaxCountryPackCatalog.All;
+        _country.DisplayMemberPath = nameof(TaxCountryPack.CountryName);
+        _country.SelectedValuePath = nameof(TaxCountryPack.CountryCode);
+        RefreshData();
+    }
+
+    private void BuildUi()
+    {
+        var root = new DockPanel { Margin = new Thickness(12) };
+
+        var top = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(0, 0, 0, 8) };
+        var jurisdiction = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+        jurisdiction.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        jurisdiction.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        jurisdiction.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var countryLabel = new TextBlock { Text = T("TaxSetup.Jurisdiction"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        Grid.SetColumn(countryLabel, 0);
+        _country.MinWidth = 250;
+        Grid.SetColumn(_country, 1);
+        _jurisdictionAction.Content = T("TaxSetup.Enable");
+        _jurisdictionAction.Margin = new Thickness(8, 0, 0, 0);
+        _jurisdictionAction.Click += (_, _) => ChangeJurisdiction();
+        Grid.SetColumn(_jurisdictionAction, 2);
+        jurisdiction.Children.Add(countryLabel);
+        jurisdiction.Children.Add(_country);
+        jurisdiction.Children.Add(_jurisdictionAction);
+        top.Children.Add(jurisdiction);
+        _status.TextWrapping = TextWrapping.Wrap;
+        _status.Margin = new Thickness(0, 0, 0, 4);
+        top.Children.Add(_status);
+        DockPanel.SetDock(top, Dock.Top);
+        root.Children.Add(top);
+
+        _rules.SelectionChanged += (_, _) => LoadSelectedRule();
+        _rules.AutoGeneratingColumn += (_, e) =>
+        {
+            e.Column.Header = T("TaxSetup.Column." + e.PropertyName);
+            if (e.PropertyName is nameof(TaxSvc.TaxRuleRec.SourceUrl))
+                e.Cancel = true;
+        };
+        root.Children.Add(_rules);
+
+        var editor = new Grid { Margin = new Thickness(0, 10, 0, 4) };
+        for (var i = 0; i < 4; i++)
+            editor.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (var i = 0; i < 4; i++)
+            editor.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        AddField(editor, 0, 0, "TaxSetup.Code", _code);
+        AddField(editor, 0, 2, "TaxSetup.Name", _name);
+        AddField(editor, 1, 0, "TaxSetup.Type", _type);
+        AddField(editor, 1, 2, "TaxSetup.Treatment", _treatment);
+        AddField(editor, 2, 0, "TaxSetup.Rate", _rate);
+        AddField(editor, 2, 2, "TaxSetup.Calculation", _calculation);
+        AddField(editor, 3, 0, "TaxSetup.EffectiveFrom", _effectiveFrom);
+        AddField(editor, 3, 2, "TaxSetup.EffectiveTo", _effectiveTo);
+
+        _calculation.ItemsSource = new[] { "Exclusive", "Inclusive" };
+        _calculation.SelectedIndex = 0;
+        _outputAccount.Text = "2205";
+        _inputAccount.Text = "1205";
+
+        var accountPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+        accountPanel.Children.Add(FieldPanel("TaxSetup.OutputAccount", _outputAccount));
+        accountPanel.Children.Add(FieldPanel("TaxSetup.InputAccount", _inputAccount));
+        accountPanel.Children.Add(CheckPanel("TaxSetup.Recoverable", _recoverable));
+        accountPanel.Children.Add(CheckPanel("TaxSetup.Compound", _compound));
+        accountPanel.Children.Add(CheckPanel("TaxSetup.Default", _default));
+
+        var content = new DockPanel();
+        DockPanel.SetDock(accountPanel, Dock.Top);
+        content.Children.Add(accountPanel);
+        content.Children.Add(editor);
+        DockPanel.SetDock(content, Dock.Bottom);
+        root.Children.Add(content);
+
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
+        ConfigureButton(_new, "Common.New");
+        ConfigureButton(_save, "Common.Save");
+        ConfigureButton(_refresh, "Common.Refresh");
+        ConfigureButton(_close, "Common.Close");
+        _new.Click += (_, _) => ClearEditor();
+        _save.Click += (_, _) => SaveRule();
+        _refresh.Click += (_, _) => RefreshData();
+        _close.Click += (_, _) => Close();
+        foreach (var button in new[] { _new, _save, _refresh, _close })
+            actions.Children.Add(button);
+        DockPanel.SetDock(actions, Dock.Bottom);
+        root.Children.Add(actions);
+
+        _country.SelectionChanged += (_, _) =>
+        {
+            if (_loadingCountry || !IsLoaded) return;
+            var selectedCode = _country.SelectedValue?.ToString();
+            var settings = TaxSvc.LoadSettings();
+            if (settings is null || !settings.Enabled || string.Equals(settings.CountryCode, selectedCode, StringComparison.OrdinalIgnoreCase))
+                return;
+            _country.SelectedValue = settings.CountryCode;
+            MessageBox.Show(this, T("TaxSetup.ChangeJurisdictionUseAction"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+        };
+
+        Content = root;
+        RefreshPermissions();
+    }
+
+    private void AddField(Grid grid, int row, int column, string key, Control control)
+    {
+        var panel = new StackPanel { Margin = new Thickness(4) };
+        panel.Children.Add(new TextBlock { Text = T(key), Margin = new Thickness(0, 0, 0, 3) });
+        control.Margin = new Thickness(0, 0, 0, 2);
+        panel.Children.Add(control);
+        Grid.SetRow(panel, row);
+        Grid.SetColumn(panel, column);
+        grid.Children.Add(panel);
+    }
+
+    private StackPanel FieldPanel(string key, Control control)
+    {
+        var panel = new StackPanel { Margin = new Thickness(6, 0, 6, 0), MinWidth = 130 };
+        panel.Children.Add(new TextBlock { Text = T(key) });
+        panel.Children.Add(control);
+        return panel;
+    }
+
+    private StackPanel CheckPanel(string key, CheckBox check)
+    {
+        var panel = new StackPanel { Margin = new Thickness(6, 16, 6, 0) };
+        check.Content = T(key);
+        panel.Children.Add(check);
+        return panel;
+    }
+
+    private void ConfigureButton(Button button, string key)
+    {
+        button.Content = T(key);
+        button.MinWidth = 82;
+        button.Margin = new Thickness(4, 0, 0, 0);
+        button.Padding = new Thickness(10, 5, 10, 5);
+    }
+
+    private void RefreshPermissions()
+    {
+        var canManage = AppHost.Permissions.Has(PermCat.Accounting.TaxManage);
+        _save.IsEnabled = canManage;
+        _new.IsEnabled = canManage;
+        _jurisdictionAction.IsEnabled = canManage;
+    }
+
+    private void RefreshData()
+    {
+        var settings = TaxSvc.LoadSettings();
+        _loadingCountry = true;
+        try
+        {
+            _country.SelectedValue = settings?.CountryCode;
+        }
+        finally
+        {
+            _loadingCountry = false;
+        }
+
+        if (settings is null || !settings.Enabled)
+        {
+            _status.Text = T("TaxSetup.Disabled");
+            _jurisdictionAction.Content = T("TaxSetup.Enable");
+            _rules.ItemsSource = Array.Empty<TaxSvc.TaxRuleRec>();
+            _jurisdictionAction.IsEnabled = AppHost.Permissions.Has(PermCat.Accounting.TaxManage);
+        }
+        else
+        {
+            var pack = TaxCountryPackCatalog.FindByNameOrCode(settings.CountryCode);
+            _status.Text = string.Format(CultureInfo.CurrentCulture,
+                T("TaxSetup.EnabledStatus"), pack?.CountryName ?? settings.CountryCode, settings.Scheme);
+            _jurisdictionAction.Content = T("TaxSetup.Disable");
+            _rules.ItemsSource = TaxSvc.LoadRules();
+            _jurisdictionAction.IsEnabled = AppHost.Permissions.Has(PermCat.Accounting.TaxManage);
+        }
+        RefreshPermissions();
+    }
+
+    private void ChangeJurisdiction()
+    {
+        if (!AppHost.Permissions.Has(PermCat.Accounting.TaxManage))
+        {
+            MessageBox.Show(this, T("TaxSetup.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var settings = TaxSvc.LoadSettings();
+        if (settings is { Enabled: true })
+        {
+            var confirmDisable = MessageBox.Show(this, T("TaxSetup.DisableConfirm"), Title,
+                MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+            if (confirmDisable != MessageBoxResult.Yes) return;
+            TaxSvc.SetTaxEnabled(settings.CountryCode, false, settings.Scheme, settings.RegistrationNumber);
+            RefreshData();
+            return;
+        }
+
+        if (_country.SelectedValue is not string countryCode || string.IsNullOrWhiteSpace(countryCode))
+        {
+            MessageBox.Show(this, T("TaxSetup.SelectCountry"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var pack = TaxCountryPackCatalog.FindByNameOrCode(countryCode);
+        var prompt = string.Format(CultureInfo.CurrentCulture, T("TaxSetup.EnableConfirm"), pack?.CountryName ?? countryCode);
+        var confirmEnable = MessageBox.Show(this, prompt, Title,
+            MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
+        if (confirmEnable != MessageBoxResult.Yes) return;
+
+        TaxSvc.SetTaxEnabled(countryCode, true);
+        RefreshData();
+    }
+
+    private void LoadSelectedRule()
+    {
+        if (_rules.SelectedItem is not TaxSvc.TaxRuleRec rule) return;
+        _code.Text = rule.Code;
+        _name.Text = rule.Name;
+        _type.Text = rule.TaxType;
+        _treatment.Text = rule.Treatment;
+        _rate.Text = rule.Rate.ToString(CultureInfo.InvariantCulture);
+        _calculation.SelectedItem = rule.CalculationMode;
+        _effectiveFrom.SelectedDate = rule.EffectiveFrom;
+        _effectiveTo.SelectedDate = rule.EffectiveTo;
+        _outputAccount.Text = rule.OutputAccountCode;
+        _inputAccount.Text = rule.InputAccountCode;
+        _recoverable.IsChecked = rule.IsRecoverable;
+        _compound.IsChecked = rule.IsCompound;
+        _default.IsChecked = rule.IsDefault;
+    }
+
+    private void ClearEditor()
+    {
+        _rules.SelectedItem = null;
+        _code.Clear();
+        _name.Clear();
+        _type.Text = TaxSvc.LoadSettings()?.Scheme ?? "VAT";
+        _treatment.Text = "Standard";
+        _rate.Clear();
+        _calculation.SelectedItem = "Exclusive";
+        _effectiveFrom.SelectedDate = DateTime.Today;
+        _effectiveTo.SelectedDate = null;
+        _outputAccount.Text = "2205";
+        _inputAccount.Text = "1205";
+        _recoverable.IsChecked = true;
+        _compound.IsChecked = false;
+        _default.IsChecked = false;
+    }
+
+    private void SaveRule()
+    {
+        try
+        {
+            if (_effectiveFrom.SelectedDate is not DateTime from)
+                throw new InvalidOperationException(T("TaxSetup.EffectiveFromRequired"));
+            if (!decimal.TryParse(_rate.Text, NumberStyles.Number, CultureInfo.InvariantCulture, out var rate))
+                throw new InvalidOperationException(T("TaxSetup.InvalidRate"));
+
+            TaxSvc.SaveRule(new TaxSvc.TaxRuleDraft(
+                _code.Text, _name.Text, _type.Text, _treatment.Text, rate,
+                from, _effectiveTo.SelectedDate, _recoverable.IsChecked == true,
+                _compound.IsChecked == true, _default.IsChecked == true,
+                _outputAccount.Text, _inputAccount.Text,
+                _calculation.SelectedItem?.ToString() ?? "Exclusive"));
+
+            _status.Text = T("TaxSetup.Saved");
+            RefreshData();
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "TaxSetupWin.SaveRule");
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+}
