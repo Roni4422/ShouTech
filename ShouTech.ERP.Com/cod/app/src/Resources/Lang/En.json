@@ -3521,7 +3521,7 @@
     "Disable": "Disable tax",
     "ChangeJurisdictionUseAction": "Disable the current tax jurisdiction first, then enable the new jurisdiction.",
     "Disabled": "Tax is disabled for this company. Select a jurisdiction and choose Enable tax to opt in.",
-    "EnabledStatus": "Tax is enabled for {0}. Scheme: {1}. Standard-rate starter rules are loaded; verify local rules and account mapping before posting.",
+    "EnabledStatus": "Tax is enabled for {0}. Scheme: {1}. Starter rules are loaded but cannot post until each rule's rate and account mapping are reviewed and saved.",
     "DisableConfirm": "Disable tax for this company? Existing tax rules and posted tax history will be retained.",
     "EnableConfirm": "Enable the tax system for {0}? The jurisdiction's starter rules will be loaded. Continue?",
     "SelectCountry": "Select a tax jurisdiction first.",
@@ -3556,10 +3556,14 @@
       "EffectiveTo": "Effective to",
       "IsDefault": "Default",
       "IsActive": "Active",
-      "DataStatus": "Data status"
+      "DataStatus": "Data status",
+      "SourceUrl": "Source URL",
+      "SourceReference": "Legal reference"
     },
     "EnabledNeedsRules": "Tax is enabled for {0} ({1}), but this jurisdiction's full rate and classification package has not been loaded. Add and verify the applicable national, state, local, or schedule rules before posting tax documents.",
-    "RegistrationNumber": "Tax registration number"
+    "RegistrationNumber": "Tax registration number",
+    "SourceUrl": "Official source URL",
+    "SourceReference": "Legal reference / notes"
   },
   "TaxReport": {
     "Title": "Tax Period Report",
