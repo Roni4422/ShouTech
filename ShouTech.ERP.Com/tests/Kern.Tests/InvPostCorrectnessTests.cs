@@ -65,7 +65,8 @@ public sealed class InvPostCorrectnessTests
         Assert.Equal(0m, LedgerSum(db, party.LedgerId, "SAL", debit: false));
         var entry = SingleEntry(db, "SAL", doc.DocId);
         Assert.Equal(1050m, entry.Lines.Where(l => l.Code == "1201").Sum(l => l.Debit));
-        Assert.Equal(1050m, entry.Lines.Where(l => l.Code == "301").Sum(l => l.Credit));
+        Assert.Equal(900m, entry.Lines.Where(l => l.Code == "301").Sum(l => l.Credit));
+        Assert.Equal(150m, entry.Lines.Where(l => l.Code == "2205").Sum(l => l.Credit));
         Assert.Equal(entry.Lines.Sum(l => l.Debit), entry.Lines.Sum(l => l.Credit));
     }
 
@@ -84,7 +85,8 @@ public sealed class InvPostCorrectnessTests
 
         Assert.Equal(1050m, LedgerSum(db, party.LedgerId, "PUR", debit: false));
         var entry = SingleEntry(db, "PUR", doc.DocId);
-        Assert.Equal(1050m, entry.Lines.Where(l => l.Code == "402").Sum(l => l.Debit));
+        Assert.Equal(900m, entry.Lines.Where(l => l.Code == "402").Sum(l => l.Debit));
+        Assert.Equal(150m, entry.Lines.Where(l => l.Code == "1205").Sum(l => l.Debit));
         Assert.Equal(1050m, entry.Lines.Where(l => l.Code == "2201").Sum(l => l.Credit));
     }
 
@@ -360,7 +362,7 @@ public sealed class InvPostCorrectnessTests
             LinesExtraAmount = extra,
             PaidAmount = paid,
             PaymentMethod = method,
-            Lines = { new InvLine { LineNo = 1, MaterialId = 42, MaterialCode = "MAT-42", Qty = qty, UnitPrice = price, TaxRate = taxRate, WarehouseId = 1 } }
+            Lines = { new InvLine { LineNo = 1, MaterialId = 42, MaterialCode = "MAT-42", Qty = qty, UnitPrice = price, TaxCode = taxRate > 0m ? "IP5-VAT15" : string.Empty, TaxRate = taxRate, WarehouseId = 1 } }
         };
 
     private static async Task<Party> SavePartyAsync(TestDb db, string kind, string code, decimal creditLimit)
@@ -468,6 +470,19 @@ public sealed class InvPostCorrectnessTests
             cmd.Parameters.AddWithValue("$id", companyId.ToString("D"));
             cmd.Parameters.AddWithValue("$code", CompanyCode);
             cmd.ExecuteNonQuery();
+
+            using var taxSetup = connection.CreateCommand();
+            taxSetup.CommandText = """
+                INSERT INTO company_tax_settings(company_code, country_code, tax_enabled, tax_scheme)
+                VALUES ('IP5', 'SA', 1, 'VAT');
+                INSERT INTO company_tax_rules
+                    (company_code, country_code, tax_code, tax_name, tax_type, tax_treatment,
+                     rate, calculation_mode, is_recoverable, output_account_code, input_account_code,
+                     effective_from, is_default, is_active)
+                VALUES ('IP5', 'SA', 'IP5-VAT15', 'Standard VAT', 'VAT', 'Standard',
+                        15, 'Exclusive', 1, '2205', '1205', '2026-01-01', 1, 1);
+                """;
+            taxSetup.ExecuteNonQuery();
         }
 
         var structure = new AccountingStructureRepository("SQLite", connectionString);
@@ -476,7 +491,7 @@ public sealed class InvPostCorrectnessTests
         foreach (var (code, name) in new[]
         {
             ("131", "Cash"), ("132", "Bank"), ("1201", "Receivable"), ("1203", "Inventory"),
-            ("2201", "Payable"), ("301", "Sales"), ("302", "Sales Returns"), ("401", "COGS"),
+            ("1205", "Input VAT"), ("2201", "Payable"), ("2205", "Output VAT"), ("301", "Sales"), ("302", "Sales Returns"), ("401", "COGS"),
             ("402", "Purchases"), ("403", "Purchase Returns")
         })
         {
