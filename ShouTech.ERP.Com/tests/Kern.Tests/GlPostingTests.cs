@@ -45,6 +45,58 @@ public class GlPostingTests
     private const string CompanyCode = "GL1";
 
     [Fact]
+    public async Task SalesInvoice_Post_UsesCountryTaxAccount_AndWritesImmutableTaxSnapshot()
+    {
+        using var db = await SeededAsync();
+        using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            connection.Open();
+            using var setup = connection.CreateCommand();
+            setup.CommandText = """
+                INSERT INTO company_tax_settings
+                    (company_code, country_code, tax_enabled, tax_scheme)
+                VALUES ('GL1', 'SA', 1, 'VAT');
+                INSERT INTO company_tax_rules
+                    (company_code, country_code, tax_code, tax_name, tax_type, tax_treatment,
+                     rate, calculation_mode, is_recoverable, output_account_code, input_account_code,
+                     effective_from, is_default, is_active)
+                VALUES ('GL1', 'SA', 'VAT15', 'Standard VAT', 'VAT', 'Standard',
+                        15, 'Exclusive', 1, '2205', '1205', '2026-01-01', 1, 1);
+                """;
+            setup.ExecuteNonQuery();
+        }
+
+        var doc = await PostInvoiceAsync(
+            db, InvDocKind.SalesInvoice, qty: 1m, price: 100m, taxRate: 15m, taxCode: "VAT15");
+
+        var entry = SingleEntry(db, "SAL", doc.DocId);
+        AssertBalanced(entry);
+        Assert.Equal(15m, Line(entry, "2205").Credit);
+
+        using var verify = new SqliteConnection(db.ConnectionString);
+        verify.Open();
+        using var query = verify.CreateCommand();
+        query.CommandText = """
+            SELECT country_code, tax_code, tax_rate, taxable_amount, tax_amount,
+                   tax_direction, tax_account_code, journal_doc_no
+            FROM tax_transactions
+            WHERE company_code='GL1' AND source_doc_id=$doc AND line_no=1;
+            """;
+        query.Parameters.AddWithValue("$doc", doc.DocId);
+        using var reader = query.ExecuteReader();
+        Assert.True(reader.Read());
+        Assert.Equal("SA", reader.GetString(0));
+        Assert.Equal("VAT15", reader.GetString(1));
+        Assert.Equal(15m, reader.GetDecimal(2));
+        Assert.Equal(100m, reader.GetDecimal(3));
+        Assert.Equal(15m, reader.GetDecimal(4));
+        Assert.Equal("OUTPUT", reader.GetString(5));
+        Assert.Equal("2205", reader.GetString(6));
+        Assert.Equal(entry.DocumentNumber, reader.GetString(7));
+        Assert.False(reader.Read());
+    }
+
+    [Fact]
     public async Task SalesInvoice_Post_CreatesBalancedLinkedGlEntry_AndStampsRealJournalNumber()
     {
         using var db = await SeededAsync();
@@ -402,7 +454,7 @@ public class GlPostingTests
         => Assert.Equal(entry.Lines.Sum(l => l.Debit), entry.Lines.Sum(l => l.Credit));
 
     private static Task<InvDoc> PostInvoiceAsync(TestDb db, InvDocKind kind, decimal qty, decimal price, decimal taxRate,
-        decimal paid = 0m)
+        decimal paid = 0m, string taxCode = "")
     {
         var doc = new InvDoc
         {
@@ -416,7 +468,7 @@ public class GlPostingTests
             CurrencyCode = "SAR",
             PaidAmount = paid,
             PaymentMethod = kind == InvDocKind.PosSale ? InvPaymentMethod.Cash : InvPaymentMethod.Credit,
-            Lines = { new InvLine { LineNo = 1, MaterialId = 42, MaterialCode = "MAT-42", Qty = qty, UnitPrice = price, TaxRate = taxRate, WarehouseId = 1 } }
+            Lines = { new InvLine { LineNo = 1, MaterialId = 42, MaterialCode = "MAT-42", Qty = qty, UnitPrice = price, TaxCode = taxCode, TaxRate = taxRate, WarehouseId = 1 } }
         };
         InvRepo.SaveDraft(doc);
         InvRepo.Post(doc.DocId, kind, Actor);
@@ -495,7 +547,7 @@ public class GlPostingTests
         foreach (var (code, name) in new[]
         {
             ("131", "Cash"), ("132", "Bank"), ("1201", "Receivable"), ("1203", "Inventory"),
-            ("2201", "Payable"), ("301", "Sales"), ("302", "Sales Returns"), ("401", "COGS"),
+            ("1205", "Input VAT"), ("2201", "Payable"), ("2205", "Output VAT"), ("301", "Sales"), ("302", "Sales Returns"), ("401", "COGS"),
             ("402", "Purchases"), ("403", "Purchase Returns"), ("505", "Depreciation Expense"),
             ("1190", "Accumulated Depreciation"), ("1102", "Buildings")
         })
