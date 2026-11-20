@@ -275,6 +275,10 @@ namespace ShouTech.App.Services
             public const string BudgetView = "ACC.BUDGET.VIEW";
             public const string BudgetEdit = "ACC.BUDGET.EDIT";
             public const string BudgetActivate = "ACC.BUDGET.ACTIVATE";
+
+            public const string TaxView = "ACC.TAX.VIEW";
+            public const string TaxManage = "ACC.TAX.MANAGE";
+            public const string TaxReportView = "ACC.TAX.REPORT.VIEW";
         }
 
         // =====================================================================
