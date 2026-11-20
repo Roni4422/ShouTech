@@ -1678,7 +1678,7 @@ public static class InvRepo
             taxSettings.Transaction = tx;
             taxSettings.CommandText = "SELECT country_code FROM company_tax_settings WHERE company_code=$company AND tax_enabled = " +
                 (DatabaseRuntime.IsPostgreSql() ? "TRUE" : "1") + " LIMIT 1;";
-            Add(taxSettings, "$company", Company);
+            InvRepo.Add(taxSettings, "$company", Company);
             taxCountry = Convert.ToString(taxSettings.ExecuteScalar(), CultureInfo.InvariantCulture) ?? string.Empty;
 
             var hasTaxLineGroups = doc.Lines.Any(line => line.LineTax != 0m);
@@ -1705,10 +1705,10 @@ public static class InvRepo
                         ORDER BY effective_from DESC
                         LIMIT 1;
                         """;
-                    Add(rule, "$company", Company);
-                    Add(rule, "$country", taxCountry);
-                    Add(rule, "$taxCode", group.Key);
-                    Add(rule, "$documentDate", doc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                    InvRepo.Add(rule, "$company", Company);
+                    InvRepo.Add(rule, "$country", taxCountry);
+                    InvRepo.Add(rule, "$taxCode", group.Key);
+                    InvRepo.Add(rule, "$documentDate", doc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
                     var configuredAccount = Convert.ToString(rule.ExecuteScalar(), CultureInfo.InvariantCulture);
                     if (!string.IsNullOrWhiteSpace(configuredAccount))
                     {
