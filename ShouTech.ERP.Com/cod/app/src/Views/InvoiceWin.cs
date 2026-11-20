@@ -555,7 +555,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
     /// <summary>
     /// Phenix-like compact header: 3 columns × tight rows, uniform control size, no large gaps.
     /// </summary>
-    private UIElement BuildHeaderPanel()
+    private DockPanel BuildHeaderPanel()
     {
         const double gap = 4;
 
