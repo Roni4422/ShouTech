@@ -1933,12 +1933,48 @@ public sealed class CoCreateSvc : ICoCreateSvc
 
                 if (record.TaxEnabled)
                 {
+                    var taxScheme = TaxCountryPackCatalog.TryGet(record.TaxCountryCode, out var selectedPack)
+                        ? selectedPack.Regime.ToString()
+                        : string.Empty;
                     await ExecuteSqliteAsync(connection, transaction, """
                         INSERT INTO company_tax_settings
                             (company_code, country_code, tax_enabled, tax_scheme, registration_number)
-                        VALUES (@code, @countryCode, 1, '', @taxNumber)
+                        VALUES (@code, @countryCode, 1, @taxScheme, @taxNumber)
                         """, ("code", record.Code), ("countryCode", record.TaxCountryCode),
-                        ("taxNumber", record.TaxNumber ?? string.Empty));
+                        ("taxScheme", taxScheme), ("taxNumber", record.TaxNumber ?? string.Empty));
+
+                    foreach (var rule in TaxCountryPackCatalog.GetInitialRules(record.TaxCountryCode))
+                    {
+                        await ExecuteSqliteAsync(connection, transaction, """
+                            INSERT INTO company_tax_rules
+                                (company_code, country_code, tax_code, tax_name, tax_type, tax_treatment,
+                                 rate, calculation_mode, is_compound, is_recoverable, output_account_code,
+                                 input_account_code, effective_from, is_default, is_active, created_by,
+                                 source_url, source_reference, verified_on, data_status)
+                            VALUES
+                                (@company, @country, @taxCode, @taxName, @taxType, @treatment,
+                                 @rate, 'Exclusive', 0, @recoverable, @outputAccount, @inputAccount,
+                                 @effectiveFrom, @isDefault, 1, @createdBy,
+                                 @sourceUrl, @sourceReference, @verifiedOn, 'BASELINE_REVIEW_REQUIRED')
+                            ON CONFLICT(company_code, tax_code, effective_from) DO NOTHING
+                            """,
+                            ("company", record.Code),
+                            ("country", record.TaxCountryCode),
+                            ("taxCode", rule.Code),
+                            ("taxName", rule.Name),
+                            ("taxType", rule.TaxType),
+                            ("treatment", rule.Treatment),
+                            ("rate", rule.Rate),
+                            ("recoverable", rule.IsRecoverable ? 1 : 0),
+                            ("outputAccount", rule.OutputAccountCode),
+                            ("inputAccount", rule.InputAccountCode),
+                            ("effectiveFrom", rule.EffectiveFrom),
+                            ("isDefault", rule.IsDefault ? 1 : 0),
+                            ("createdBy", record.AdminUsername),
+                            ("sourceUrl", rule.SourceUrl),
+                            ("sourceReference", rule.SourceReference),
+                            ("verifiedOn", "2026-11-20"));
+                    }
                 }
 
                 var fiscalYear = record.FiscalYearStart.Year;
