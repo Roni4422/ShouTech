@@ -3558,7 +3558,8 @@
       "IsActive": "Actif",
       "DataStatus": "État des données"
     },
-    "EnabledNeedsRules": "La fiscalité est activée pour {0} ({1}), mais cette juridiction n'a pas de taux de base universel. Ajoutez les règles nationales, régionales, locales ou de barème avant toute comptabilisation fiscale."
+    "EnabledNeedsRules": "La fiscalité est activée pour {0} ({1}), mais le jeu complet de taux et de classifications n'est pas chargé. Ajoutez et vérifiez les règles nationales, régionales, locales ou de barème avant comptabilisation.",
+    "RegistrationNumber": "Numéro d'immatriculation fiscale"
   },
   "TaxReport": {
     "Title": "Rapport de période fiscale",
