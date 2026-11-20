@@ -151,8 +151,9 @@ CREATE TABLE IF NOT EXISTS sales_reps (
     deleted_at TIMESTAMPTZ,
     deleted_by TEXT
 );
+-- Migration 031 owns the canonical sales_reps table (code/is_deleted BOOLEAN).
 CREATE UNIQUE INDEX IF NOT EXISTS ux_sales_reps_company_code
-    ON sales_reps(company_id, rep_code) WHERE is_deleted = 0;
+    ON sales_reps(company_id, code) WHERE is_deleted = FALSE;
 
 CREATE TABLE IF NOT EXISTS sales_rep_targets (
     target_id BIGSERIAL PRIMARY KEY,
