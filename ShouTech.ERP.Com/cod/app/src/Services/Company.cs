@@ -1389,6 +1389,10 @@ public sealed class CoCreateSvc : ICoCreateSvc
                 Name = request.CompanyNameAr.Trim(),
                 NameEn = request.CompanyNameEn.Trim(),
                 TaxNumber = request.TaxNumber.Trim(),
+                TaxCountryCode = request.EnableTaxSystem
+                    ? (request.TaxCountryCode ?? string.Empty).Trim().ToUpperInvariant()
+                    : string.Empty,
+                TaxEnabled = request.EnableTaxSystem,
                 Website = request.Website.Trim(),
                 Email = request.Email.Trim(),
                 Phone = request.Phone.Trim(),
