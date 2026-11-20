@@ -2074,6 +2074,7 @@ public static class InvRepo
             string accountCode;
             bool recoverable;
             decimal approvedRate;
+            string dataStatus;
             using (var rule = connection.CreateCommand())
             {
                 rule.Transaction = tx;
@@ -2082,7 +2083,8 @@ public static class InvRepo
                 rule.CommandText = $"""
                     SELECT tax_type, tax_treatment, rate, is_recoverable,
                            CASE WHEN $direction = 'OUTPUT' THEN COALESCE(output_account_code, '')
-                                ELSE COALESCE(input_account_code, '') END
+                                ELSE COALESCE(input_account_code, '') END,
+                           COALESCE(data_status, 'USER_CONFIGURED')
                     FROM company_tax_rules
                     WHERE company_code = $company
                       AND country_code = $country
@@ -2109,7 +2111,12 @@ public static class InvRepo
                     ? flag
                     : Convert.ToInt32(reader.GetValue(3), CultureInfo.InvariantCulture) == 1;
                 accountCode = Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture) ?? string.Empty;
+                dataStatus = Convert.ToString(reader.GetValue(5), CultureInfo.InvariantCulture) ?? "USER_CONFIGURED";
             }
+
+            if (string.Equals(dataStatus, "BASELINE_REVIEW_REQUIRED", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    $"Tax rule '{line.TaxCode}' is a starter rule and has not been reviewed. Open Tax Configuration, review the effective rate and account mapping, then save the rule before posting.");
 
             if (string.IsNullOrWhiteSpace(accountCode))
                 accountCode = direction == "OUTPUT" ? GlAccounts.OutputVat : GlAccounts.InputVat;
