@@ -403,7 +403,8 @@
     "StockOnHand": "الرصيد الفعلي",
     "StockReserved": "الكمية المحجوزة",
     "StockAvailable": "المتاح للبيع",
-    "Stock": "المخزون"
+    "Stock": "المخزون",
+    "WarehouseRequired": "يرجى تعيين مستودع فعّال لطرفية نقطة البيع قبل فتح الجلسة."
   },
   "Orders": {
     "Title": "الطلبيات",
