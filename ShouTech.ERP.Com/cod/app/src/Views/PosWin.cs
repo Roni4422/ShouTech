@@ -43,6 +43,7 @@ public sealed class PosWin : BaseWin
     private ShouTech.Domain.Entities.PosSession? _session;
     private string _terminal = "T1";
     private int? _activeWarehouseId;
+    private string? _productSearchTerm;
     private long? _partyId;
     private string _partyCode = string.Empty;
     private string _partyName = string.Empty;
@@ -532,6 +533,7 @@ public sealed class PosWin : BaseWin
 
     private async System.Threading.Tasks.Task ShowProductsAsync(string? term)
     {
+        _productSearchTerm = term;
         try
         {
             var service = AppHost.Pos;
@@ -1004,6 +1006,8 @@ public sealed class PosWin : BaseWin
             _billDiscount.Text = "0";
             UpdateTotals();
             SetStatus(Local("StatusSalePosted", "POS sale posted."));
+            if (_productCard.Visibility == Visibility.Visible)
+                await ShowProductsAsync(_productSearchTerm);
             _scan.Focus();
         }
     }
