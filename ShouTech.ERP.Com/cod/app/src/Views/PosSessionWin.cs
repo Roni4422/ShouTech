@@ -151,8 +151,16 @@ public sealed class PosSessionWin : BaseWin
         {
             if (!AppHost.Permissions.Has(PermCat.Pos.SessionOpen)) { ShowWarn("POS.PermissionDenied"); return; }
             var service = AppHost.Pos ?? throw new InvalidOperationException(T("POS.ServiceUnavailable"));
+            var settings = await service.GetSettingsAsync(CurrentCompanyCode);
+            var warehouseId = await service.GetTerminalWarehouseIdAsync(CurrentCompanyCode, _terminal.Text.Trim())
+                ?? settings.DefaultWarehouseId;
+            if (warehouseId is null)
+            {
+                ShowWarn("POS.WarehouseRequired");
+                return;
+            }
             _open = await service.OpenSessionAsync(CurrentCompanyCode, _terminal.Text.Trim(), CurrentUserDisplay,
-                null, UsrPref.Load().CurrencyCode, F2Ui.ParseDecimal(_opening.Text), CurrentUserId);
+                warehouseId, UsrPref.Load().CurrencyCode, F2Ui.ParseDecimal(_opening.Text), CurrentUserId);
             UpdateInfo();
             await RefreshAsync();
         }
