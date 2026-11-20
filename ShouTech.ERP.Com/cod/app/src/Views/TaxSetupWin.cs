@@ -66,7 +66,7 @@ public sealed class TaxSetupWin : BaseWin
             RefreshData();
     }
 
-    private void ApplyLocalizedNode(DependencyObject node)
+    private static void ApplyLocalizedNode(DependencyObject node)
     {
         if (node is TextBlock text && text.Tag is string textKey)
             text.Text = T(textKey);
@@ -203,7 +203,7 @@ public sealed class TaxSetupWin : BaseWin
         RefreshPermissions();
     }
 
-    private void AddField(Grid grid, int row, int column, string key, Control control)
+    private static void AddField(Grid grid, int row, int column, string key, Control control)
     {
         var panel = new StackPanel { Margin = new Thickness(4) };
         panel.Children.Add(new TextBlock { Text = T(key), Tag = key, Margin = new Thickness(0, 0, 0, 3) });
@@ -214,7 +214,7 @@ public sealed class TaxSetupWin : BaseWin
         grid.Children.Add(panel);
     }
 
-    private StackPanel FieldPanel(string key, Control control)
+    private static StackPanel FieldPanel(string key, Control control)
     {
         var panel = new StackPanel { Margin = new Thickness(6, 0, 6, 0), MinWidth = 130 };
         panel.Children.Add(new TextBlock { Text = T(key), Tag = key });
@@ -222,7 +222,7 @@ public sealed class TaxSetupWin : BaseWin
         return panel;
     }
 
-    private StackPanel CheckPanel(string key, CheckBox check)
+    private static StackPanel CheckPanel(string key, CheckBox check)
     {
         var panel = new StackPanel { Margin = new Thickness(6, 16, 6, 0) };
         check.Content = T(key);
@@ -231,7 +231,7 @@ public sealed class TaxSetupWin : BaseWin
         return panel;
     }
 
-    private void ConfigureButton(Button button, string key)
+    private static void ConfigureButton(Button button, string key)
     {
         button.Content = T(key);
         button.Tag = key;
@@ -319,7 +319,7 @@ public sealed class TaxSetupWin : BaseWin
         }
 
         var pack = TaxCountryPackCatalog.FindByNameOrCode(countryCode);
-        var prompt = string.Format(CultureInfo.CurrentCulture, T("TaxSetup.EnableConfirm"), pack?.CountryName ?? countryCode);
+        var prompt = Tf("TaxSetup.EnableConfirm", pack?.CountryName ?? countryCode);
         var confirmEnable = MessageBox.Show(this, prompt, Title,
             MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
         if (confirmEnable != MessageBoxResult.Yes) return;
