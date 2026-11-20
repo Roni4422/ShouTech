@@ -42,6 +42,7 @@ public sealed class PosWin : BaseWin
     // the bill discount, and the touch product strip.
     private ShouTech.Domain.Entities.PosSession? _session;
     private string _terminal = "T1";
+    private int? _activeWarehouseId;
     private long? _partyId;
     private string _partyCode = string.Empty;
     private string _partyName = string.Empty;
@@ -441,6 +442,7 @@ public sealed class PosWin : BaseWin
             var settings = await service.GetSettingsAsync(CurrentCompanyCode);
             _terminal = settings.DefaultTerminalCode ?? "T1";
             _session = await service.GetOpenSessionAsync(CurrentCompanyCode, _terminal);
+            _activeWarehouseId = _session?.WarehouseId ?? settings.DefaultWarehouseId;
             _sessionLabel.Text = _session is null
                 ? $"{Local("NoSession", "NO SESSION")} · {_terminal}"
                 : $"{_session.SessionNo} · {_terminal} · {_session.Cashier}";
@@ -508,7 +510,7 @@ public sealed class PosWin : BaseWin
         {
             var service = AppHost.Pos;
             if (service is null) return;
-            var products = await service.SearchProductsAsync(CurrentCompanyCode, term, 48);
+            var products = await service.SearchProductsAsync(CurrentCompanyCode, term, _activeWarehouseId, 48);
             _productStrip.Children.Clear();
             foreach (var product in products)
             {
@@ -527,6 +529,8 @@ public sealed class PosWin : BaseWin
                 }
                 content.Children.Add(new TextBlock { Text = product.Name, FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(12), FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
                 content.Children.Add(new TextBlock { Text = $"{product.Price:N2}", FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(12), Foreground = Muted });
+                content.Children.Add(new TextBlock { Text = $"{Local("StockOnHand", "On hand")}: {product.OnHandQty:N3}  |  {Local("StockReserved", "Reserved")}: {product.ReservedQty:N3}", FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(10), Foreground = Muted, TextWrapping = TextWrapping.Wrap });
+                content.Children.Add(new TextBlock { Text = $"{Local("StockAvailable", "Available")}: {product.SellableQty:N3}", FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(11), FontWeight = FontWeights.Bold, Foreground = product.SellableQty > 0 ? Teal : Brushes.IndianRed });
                 var button = MakeButton("", ShouTech.App.Services.VisuId.ResolveBrushResource("PosButtonBackgroundBrush", "#F4F7F8"), Ink, 140, 96);
                 button.Content = content;
                 button.Margin = new Thickness(0, 0, 8, 8);
