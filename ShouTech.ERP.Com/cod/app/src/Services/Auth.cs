@@ -493,13 +493,11 @@ public interface IAuthSvc
 
     // ========== PwdPolicy.cs (Phase 4) ==========
 /// <summary>
-/// Central password policy enforcement (Phase 4). The policy itself lives in
-/// configuration (SecuritySettings.PasswordPolicy, enterprise defaults:
-/// minimum 12 characters, upper + lower + digit + symbol, common-password
-/// denial). Every password set / create path must validate through here —
-/// currently CoCreateSvc (company + admin creation). Validation returns all
-/// violations so callers can show them at once; it never throws for a weak
-/// password.
+/// Central password policy enforcement. Company administrator passwords
+/// must contain at least three characters; users choose the characters and
+/// may use letters, digits, symbols, or any combination. A maximum length
+/// still protects storage and hashing operations. Validation never throws
+/// for a weak password.
 /// </summary>
 public static class PwdPolicy
 {
@@ -523,26 +521,14 @@ public static class PwdPolicy
             return errors;
         }
 
-        var minLength = Math.Max(1, policy.MinLength);
+        // Three characters is the only composition-independent minimum.
+        // Do not require character classes or reject a user's chosen format.
+        var minLength = Math.Max(3, policy.MinLength);
         var maxLength = Math.Max(minLength, policy.MaxLength);
         if (password.Length < minLength)
             errors.Add($"Password must be at least {minLength} characters long.");
         if (password.Length > maxLength)
             errors.Add($"Password must not exceed {maxLength} characters.");
-        if (policy.RequireUpperCase && !password.Any(char.IsUpper))
-            errors.Add("Password must contain an uppercase letter.");
-        if (policy.RequireLowerCase && !password.Any(char.IsLower))
-            errors.Add("Password must contain a lowercase letter.");
-        if (policy.RequireNumbers && !password.Any(char.IsDigit))
-            errors.Add("Password must contain a digit.");
-        if (policy.RequireSpecialChars && password.All(char.IsLetterOrDigit))
-            errors.Add("Password must contain a symbol (non-alphanumeric character).");
-        if (!policy.AllowCommonPasswords &&
-            CommonPasswords.Contains(password, StringComparer.OrdinalIgnoreCase))
-            errors.Add("Password is too common; choose a less predictable password.");
-        if (!string.IsNullOrWhiteSpace(username) &&
-            string.Equals(password, username, StringComparison.OrdinalIgnoreCase))
-            errors.Add("Password must not equal the username.");
 
         return errors;
     }
