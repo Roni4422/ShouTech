@@ -3,7 +3,7 @@
     "code": "ACC-5001",
     "name": "JournalNotBalanced",
     "message": "Les totaux débit et crédit de l'écriture comptable doivent être équilibrés.",
-    "hint": "Ajustez les lignes pour que le total débit égale le total crédit."
+    "hint": "Utilisez au moins 3 caractères. Les lettres, chiffres, symboles ou toute combinaison sont acceptés."
   },
   "ACC-5002": {
     "code": "ACC-5002",
