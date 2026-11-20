@@ -155,15 +155,26 @@ public class PosBuildTests
     {
         using var db = await SeededAsync();
         var repo = new PosRepository("SQLite", db.ConnectionString);
-        var products = await repo.SearchProductsAsync(CompanyCode, "MAT-42", warehouseId: 1, limit: 10);
+        await using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            await connection.OpenAsync();
+            await using var update = connection.CreateCommand();
+            update.CommandText = "UPDATE material_stock_balances SET reserved_qty = 125 WHERE company_id = $company AND warehouse_id = 1 AND material_id = 42;";
+            update.Parameters.AddWithValue("$company", CompanyCode);
+            Assert.Equal(1, await update.ExecuteNonQueryAsync());
+        }
 
+        var products = await repo.SearchProductsAsync(CompanyCode, "MAT-42", warehouseId: 1, limit: 10);
         var product = Assert.Single(products);
         Assert.Equal(1000m, product.OnHandQty);
-        Assert.Equal(0m, product.ReservedQty);
-        Assert.Equal(1000m, product.SellableQty);
+        Assert.Equal(125m, product.ReservedQty);
+        Assert.Equal(875m, product.SellableQty);
+
+        var otherWarehouse = await repo.SearchProductsAsync(CompanyCode, "MAT-42", warehouseId: 2, limit: 10);
+        Assert.Equal(0m, Assert.Single(otherWarehouse).SellableQty);
 
         var noWarehouse = await repo.SearchProductsAsync(CompanyCode, "MAT-42", warehouseId: null, limit: 10);
-        Assert.Equal(1000m, Assert.Single(noWarehouse).SellableQty);
+        Assert.Equal(875m, Assert.Single(noWarehouse).SellableQty);
 
         var otherCompany = await repo.SearchProductsAsync("OTHER", "MAT-42", warehouseId: 1, limit: 10);
         Assert.Empty(otherCompany);
