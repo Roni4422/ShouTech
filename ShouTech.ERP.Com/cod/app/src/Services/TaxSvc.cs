@@ -441,6 +441,17 @@ public static class TaxSvc
                   AND COALESCE(r.data_status, 'USER_CONFIGURED') IN ('USER_CONFIGURED', 'VERIFIED', 'APPROVED')
                   AND r.effective_from <= {asOfExpression}
                   AND (r.effective_to IS NULL OR r.effective_to >= {asOfExpression})
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM company_tax_rules newer
+                      WHERE newer.company_code = r.company_code
+                        AND newer.country_code = r.country_code
+                        AND newer.tax_code = r.tax_code
+                        AND newer.is_active = {activeValue}
+                        AND newer.effective_from <= {asOfExpression}
+                        AND (newer.effective_to IS NULL OR newer.effective_to >= {asOfExpression})
+                        AND newer.effective_from > r.effective_from
+                  )
                 ORDER BY r.is_default DESC, r.tax_code;
                 """;
             Add(cmd, "$company", AppState.CurrentCompanyCode ?? "");
