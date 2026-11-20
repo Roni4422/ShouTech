@@ -3540,7 +3540,24 @@
     "Default": "Varsayılan oran",
     "EffectiveFromRequired": "Başlangıç tarihi gereklidir.",
     "InvalidRate": "Geçerli bir vergi oranı girin.",
-    "Saved": "Vergi kuralı kaydedildi."
+    "Saved": "Vergi kuralı kaydedildi.",
+    "Column": {
+      "Code": "Kod",
+      "Name": "Ad",
+      "TaxType": "Vergi türü",
+      "Treatment": "Uygulama",
+      "Rate": "Oran (%)",
+      "CalculationMode": "Hesaplama",
+      "IsCompound": "Bileşik",
+      "IsRecoverable": "İndirilebilir",
+      "OutputAccountCode": "Çıktı hesabı",
+      "InputAccountCode": "Girdi hesabı",
+      "EffectiveFrom": "Başlangıç",
+      "EffectiveTo": "Bitiş",
+      "IsDefault": "Varsayılan",
+      "IsActive": "Etkin",
+      "DataStatus": "Veri durumu"
+    }
   },
   "TaxReport": {
     "Title": "Vergi Dönem Raporu",
