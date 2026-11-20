@@ -250,7 +250,8 @@ public static class InvRepo
                 SELECT doc_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id,
                        currency_code, exchange_rate, subtotal, tax_amount, grand_total, status, tax_rate, party_code,
                        discount_amount, extra_amount,
-                       paid_amount, payment_method, cost_center
+                       paid_amount, payment_method, cost_center,
+                       original_doc_id, original_doc_kind, original_doc_no
                 FROM {headerTable}
                 WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND is_deleted=0;
                 """;
@@ -277,6 +278,12 @@ public static class InvRepo
                 PaidAmount = reader.IsDBNull(reader.GetOrdinal("paid_amount")) ? 0m : Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("paid_amount")), CultureInfo.InvariantCulture),
                 PaymentMethod = ParsePaymentMethod(reader.IsDBNull(reader.GetOrdinal("payment_method")) ? null : reader.GetString(reader.GetOrdinal("payment_method"))),
                 CostCenter = reader.IsDBNull(reader.GetOrdinal("cost_center")) ? "" : reader.GetString(reader.GetOrdinal("cost_center")),
+                OriginalDocId = reader.IsDBNull(reader.GetOrdinal("original_doc_id"))
+                    ? null : Convert.ToInt64(reader.GetValue(reader.GetOrdinal("original_doc_id")), CultureInfo.InvariantCulture),
+                OriginalDocKind = ParseDocKind(reader.IsDBNull(reader.GetOrdinal("original_doc_kind"))
+                    ? null : reader.GetString(reader.GetOrdinal("original_doc_kind"))),
+                OriginalDocNo = reader.IsDBNull(reader.GetOrdinal("original_doc_no"))
+                    ? "" : reader.GetString(reader.GetOrdinal("original_doc_no")),
                 // Step 5 (sweep I-1): the STORED header totals are the
                 // amounts of record for posting. Before this fix Post
                 // selected subtotal/tax_amount/grand_total and discarded
