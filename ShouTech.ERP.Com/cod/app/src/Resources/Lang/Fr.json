@@ -401,7 +401,8 @@
     "StatusPriceDenied": "Les prix exigent le droit de dérogation PDV.",
     "StockOnHand": "En stock",
     "StockReserved": "Réservé",
-    "StockAvailable": "Disponible"
+    "StockAvailable": "Disponible",
+    "Stock": "Stock"
   },
   "Orders": {
     "Title": "Commandes",
