@@ -871,15 +871,15 @@
     "MaxLoginAttempts": 5,
     "LockoutDurationMinutes": 15,
     "PasswordPolicy": {
-      "MinLength": 12,
+      "MinLength": 3,
       "MaxLength": 128,
-      "RequireUpperCase": true,
-      "RequireLowerCase": true,
-      "RequireNumbers": true,
-      "RequireSpecialChars": true,
+      "RequireUpperCase": false,
+      "RequireLowerCase": false,
+      "RequireNumbers": false,
+      "RequireSpecialChars": false,
       "ExpirationDays": 90,
       "PreventReuseCount": 5,
-      "AllowCommonPasswords": false
+      "AllowCommonPasswords": true
     },
     "TwoFactorAuth": {
       "Enabled": false,
