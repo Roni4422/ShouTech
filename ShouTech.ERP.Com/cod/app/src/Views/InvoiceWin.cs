@@ -36,7 +36,9 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
     private readonly TextBox _txtCurrency = new();
     private readonly TextBox _txtTaxRate = new();
     private readonly ComboBox _cmbTaxCode = new();
+    private readonly DataGridComboBoxColumn _taxCodeColumn = new();
     private IReadOnlyList<TaxSvc.TaxCodeRec> _taxCodes = Array.Empty<TaxSvc.TaxCodeRec>();
+    private bool _suppressTaxSelectionChanged;
     private readonly TextBox _txtReceiptNo = new();
     private readonly TextBox _txtReference = new();
     private readonly TextBox _txtBranch = new();
@@ -373,6 +375,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _btnPdf.Click += (_, _) => InvPrn.ExportPdf(CaptureDoc(), CurrentCompanyDisplay);
         _cmbTaxCode.SelectionChanged += (_, _) =>
         {
+            if (_suppressTaxSelectionChanged) return;
             var selectedCode = Convert.ToString(_cmbTaxCode.SelectedValue, CultureInfo.InvariantCulture) ?? string.Empty;
             var selectedTax = _taxCodes.FirstOrDefault(x => string.Equals(x.Code, selectedCode, StringComparison.OrdinalIgnoreCase));
             if (selectedTax is null) return;
@@ -740,17 +743,19 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _grid.Columns.Add(TextCol(nameof(LineVm.Unit), 60, Tf("Invoice.ColUnit", "Unit")));
         _grid.Columns.Add(TextCol(nameof(LineVm.UnitPriceText), 80, Tf("Invoice.ColUnitPrice", "Unit price")));
         _grid.Columns.Add(TextCol(nameof(LineVm.DiscountPctText), 60, Tf("Invoice.ColDiscount", "Disc %")));
-        var taxCodeColumn = new DataGridComboBoxColumn
-        {
+        _taxCodeColumn.Header = Tf("Invoice.ColTaxCode", "Tax system");
+        _taxCodeColumn.SelectedValueBinding = new Binding(nameof(LineVm.TaxCode)) { Mode = BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged };
+        _taxCodeColumn.SelectedValuePath = nameof(TaxSvc.TaxCodeRec.Code);
+        _taxCodeColumn.DisplayMemberPath = nameof(TaxSvc.TaxCodeRec.Name);
+        _taxCodeColumn.ItemsSource = _taxCodes;
+        _taxCodeColumn.Width = 125;
+        _taxCodeColumn.IsReadOnly = !TaxSvc.IsEnabled || _taxCodes.Count == 0;
+        /* Keep the tax-code column identity stable: DisplayIndex changes
+           when users reorder columns, so event logic must not depend on it. */
+        /*
             Header = Tf("Invoice.ColTaxCode", "Tax system"),
-            SelectedValueBinding = new Binding(nameof(LineVm.TaxCode)) { Mode = BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged },
-            SelectedValuePath = nameof(TaxSvc.TaxCodeRec.Code),
-            DisplayMemberPath = nameof(TaxSvc.TaxCodeRec.Name),
-            ItemsSource = _taxCodes,
-            Width = 125,
-            IsReadOnly = !TaxSvc.IsEnabled || _taxCodes.Count == 0
-        };
-        _grid.Columns.Add(taxCodeColumn);
+        */
+        _grid.Columns.Add(_taxCodeColumn);
         var taxRateColumn = TextCol(nameof(LineVm.TaxRateText), 60, Tf("Invoice.ColTax", "Tax %"));
         taxRateColumn.IsReadOnly = !TaxSvc.IsEnabled || _taxCodes.Count == 0;
         _grid.Columns.Add(taxRateColumn);
@@ -773,7 +778,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         {
             if (e.Row.Item is LineVm line)
             {
-                if (e.Column.DisplayIndex == 6 && TaxSvc.IsEnabled)
+                if (ReferenceEquals(e.Column, _taxCodeColumn) && TaxSvc.IsEnabled)
                 {
                     var selectedTax = _taxCodes.FirstOrDefault(x =>
                         string.Equals(x.Code, line.TaxCode, StringComparison.OrdinalIgnoreCase));
@@ -989,7 +994,9 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             });
 
         RefreshTaxCodes(doc.DocDate, preserveUnknown: doc.Status != InvDocStatus.Draft);
-        _cmbTaxCode.SelectedValue = _doc.TaxCode;
+        _suppressTaxSelectionChanged = true;
+        try { _cmbTaxCode.SelectedValue = _doc.TaxCode; }
+        finally { _suppressTaxSelectionChanged = false; }
 
         var locked = doc.Status == InvDocStatus.Posted || doc.Status == InvDocStatus.Cancelled;
         _btnSave.IsEnabled = !locked;
