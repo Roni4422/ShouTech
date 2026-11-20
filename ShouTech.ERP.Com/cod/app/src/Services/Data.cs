@@ -748,7 +748,7 @@ internal static class DatabaseRuntime
         // SQLite Error 14 when the migrator tries to open them.
         return Regex.IsMatch(
             trimmed,
-            @"^(?:Data Source|Filename|File Name|Mode|Cache|Foreign Keys|Pooling)\\s*=",
+            @"^(?:Data Source|Filename|File Name|Mode|Cache|Foreign Keys|Pooling)\s*=",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }
 
