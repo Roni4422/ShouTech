@@ -706,17 +706,16 @@ public class AppSetng
 
     public class PasswordPolicySettings
     {
-        // Enterprise defaults (Phase 4): minimum 12 characters with mixed case,
-        // digit and symbol. Enforced by PwdPolicy at every password set/create path.
-        public int MinLength { get; set; } = 12;
+        // User-selected password composition; only a three-character minimum is enforced.
+        public int MinLength { get; set; } = 3;
         public int MaxLength { get; set; } = 128;
-        public bool RequireUpperCase { get; set; } = true;
-        public bool RequireLowerCase { get; set; } = true;
-        public bool RequireNumbers { get; set; } = true;
-        public bool RequireSpecialChars { get; set; } = true;
+        public bool RequireUpperCase { get; set; }
+        public bool RequireLowerCase { get; set; }
+        public bool RequireNumbers { get; set; }
+        public bool RequireSpecialChars { get; set; }
         public int ExpirationDays { get; set; } = 90;
         public int PreventReuseCount { get; set; } = 5;
-        public bool AllowCommonPasswords { get; set; }
+        public bool AllowCommonPasswords { get; set; } = true;
     }
 
     public class TwoFactorAuthSettings
