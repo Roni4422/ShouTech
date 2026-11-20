@@ -22,8 +22,37 @@ public sealed record TaxCountryPack(
     string Authority,
     string RuleDataStatus);
 
+public sealed record TaxPackRuleDefinition(
+    string Code,
+    string Name,
+    string TaxType,
+    string Treatment,
+    decimal Rate,
+    string EffectiveFrom,
+    string SourceUrl,
+    string SourceReference,
+    bool IsDefault = false,
+    bool IsRecoverable = true,
+    string OutputAccountCode = "2205",
+    string InputAccountCode = "1205");
+
 public static class TaxCountryPackCatalog
 {
+    private static readonly IReadOnlyDictionary<string, decimal> StandardRates =
+        new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SA"] = 15m, ["JO"] = 16m, ["EG"] = 14m, ["AE"] = 5m,
+            ["BH"] = 10m, ["OM"] = 5m, ["LB"] = 10m, ["GB"] = 20m,
+            ["TR"] = 20m,
+            ["AT"] = 20m, ["BE"] = 21m, ["BG"] = 20m, ["HR"] = 25m,
+            ["CY"] = 19m, ["CZ"] = 21m, ["DK"] = 25m, ["EE"] = 24m,
+            ["FI"] = 25.5m, ["FR"] = 20m, ["DE"] = 19m, ["GR"] = 24m,
+            ["HU"] = 27m, ["IE"] = 23m, ["IT"] = 22m, ["LV"] = 21m,
+            ["LT"] = 21m, ["LU"] = 17m, ["MT"] = 18m, ["NL"] = 21m,
+            ["PL"] = 23m, ["PT"] = 23m, ["RO"] = 21m, ["SK"] = 23m,
+            ["SI"] = 22m, ["ES"] = 21m, ["SE"] = 25m
+        };
+
     private static readonly IReadOnlyDictionary<string, TaxCountryPack> Packs =
         new ReadOnlyDictionary<string, TaxCountryPack>(Build());
 
@@ -40,6 +69,92 @@ public static class TaxCountryPackCatalog
 
         pack = null!;
         return false;
+    }
+
+    /// <summary>
+    /// Returns the jurisdiction's safe starter rules. These are baseline
+    /// standard-rate rules only; they do not classify products or replace
+    /// reduced-rate, exemption, place-of-supply, or filing rules.
+    /// Jurisdictions without a single general indirect-tax rate deliberately
+    /// return no automatic rate and require local configuration.
+    /// </summary>
+    public static IReadOnlyList<TaxPackRuleDefinition> GetInitialRules(string countryCode)
+    {
+        var code = (countryCode ?? string.Empty).Trim().ToUpperInvariant();
+        if (!StandardRates.TryGetValue(code, out var rate))
+            return Array.Empty<TaxPackRuleDefinition>();
+
+        var (taxType, taxCode, sourceUrl, sourceReference, effectiveFrom) = code switch
+        {
+            "SA" => ("VAT", "VAT15", "https://zatca.gov.sa/en/RulesRegulations/VAT/Pages/About-VAT.aspx",
+                "ZATCA standard VAT rate: 15%; rate increased effective 2020-07-01.", "2020-07-01"),
+            "JO" => ("GST", "GST16", "https://www.istd.gov.jo/EN/Modules/faq",
+                "ISTD General Sales Tax standard rate: 16%; special schedule rates require item classification.", "2009-01-01"),
+            "EG" => ("VAT", "VAT14", "https://www.eta.gov.eg/sites/default/files/2024-02/Law-english-no.67-2016.pdf.pdf",
+                "VAT Law 67/2016 Article 3: standard rate 14% from fiscal year 2017/2018.", "2017-07-01"),
+            "AE" => ("VAT", "VAT5", "https://mof.gov.ae/en/public-finance/tax/value-added-tax-vat/",
+                "UAE Ministry of Finance: standard VAT rate 5%, effective 2018-01-01.", "2018-01-01"),
+            "BH" => ("VAT", "VAT10", "https://www.bahrain.bh/new/en/business-vat_en.html",
+                "Bahrain Government: standard VAT rate 10%, effective 2022-01-01.", "2022-01-01"),
+            "OM" => ("VAT", "VAT5", "https://tms.taxoman.gov.om/portal/tax-rate",
+                "Oman Tax Authority: standard VAT rate 5%, effective 2021-04-16.", "2021-04-16"),
+            "LB" => ("VAT", "VAT10", "https://finance.gov.lb/en-us/Taxation/Individuals/VAT/Pages/Tax-Rate.aspx",
+                "Lebanon Ministry of Finance: standard VAT rate 10%.", "2002-02-01"),
+            "GB" => ("VAT", "VAT20", "https://www.gov.uk/vat-rates",
+                "HMRC standard VAT rate: 20%; reduced and zero rates depend on supply classification.", "2011-01-04"),
+            "TR" => ("VAT", "VAT20", "https://www.gib.gov.tr/",
+                "Turkish Revenue Administration: standard VAT rate baseline; reduced rates depend on supply classification.", "2023-07-10"),
+            _ => ("VAT", "VAT_STD", "https://ec.europa.eu/taxation_customs/tedb/",
+                "EU member-state standard-rate snapshot as of 2026-11-20; verify national authority, territory, and supply classification.", "2026-01-01")
+        };
+
+        var rules = new List<TaxPackRuleDefinition>
+        {
+            new(taxCode, $"Standard {taxType} ({rate.ToString(CultureInfo.InvariantCulture)}%)",
+                taxType, "Standard", rate, effectiveFrom, sourceUrl, sourceReference,
+                IsDefault: true),
+            new("ZERO", "Zero-rated supply (eligibility required)", taxType, "ZeroRated", 0m,
+                effectiveFrom, sourceUrl, "Use only for supplies legally eligible for zero rating; retain input-tax recovery only where permitted.",
+                IsRecoverable: true),
+            new("EXEMPT", "Exempt supply (eligibility required)", taxType, "Exempt", 0m,
+                effectiveFrom, sourceUrl, "Use only for supplies legally exempt; input-tax recovery may be restricted.",
+                IsRecoverable: false)
+        };
+
+        if (code == "JO")
+        {
+            foreach (var reducedRate in new[] { 10m, 5m, 4m, 2m, 1m })
+                rules.Add(new TaxPackRuleDefinition(
+                    $"GST{reducedRate.ToString("0", CultureInfo.InvariantCulture)}",
+                    $"Special schedule GST ({reducedRate.ToString("0", CultureInfo.InvariantCulture)}%)",
+                    "GST", "Schedule", reducedRate, effectiveFrom,
+                    "https://www.istd.gov.jo/EN/List/General__Sales_Tax_Tables",
+                    "Jordan ISTD schedule rates; apply only to the goods/services identified by the official tax tables."));
+        }
+        else if (code == "EG")
+        {
+            rules.Add(new TaxPackRuleDefinition(
+                "VAT5-MACH", "Manufacturing machinery and equipment (5%)",
+                "VAT", "Special", 5m, effectiveFrom, sourceUrl,
+                "Egypt VAT Law 67/2016 Article 3: machinery/equipment used in manufacturing or service provision, subject to statutory exclusions."));
+        }
+        else if (code == "GB")
+        {
+            rules.Add(new TaxPackRuleDefinition(
+                "VAT5", "Reduced VAT (5%)", "VAT", "Reduced", 5m,
+                effectiveFrom, sourceUrl, "HMRC reduced rate; use only for eligible supplies."));
+        }
+        else if (code == "TR")
+        {
+            rules.Add(new TaxPackRuleDefinition(
+                "VAT10", "Reduced VAT (10%)", "VAT", "Reduced", 10m,
+                effectiveFrom, sourceUrl, "Turkish reduced VAT category; confirm current classification."));
+            rules.Add(new TaxPackRuleDefinition(
+                "VAT1", "Reduced VAT (1%)", "VAT", "Reduced", 1m,
+                effectiveFrom, sourceUrl, "Turkish reduced VAT category; confirm current classification."));
+        }
+
+        return rules.AsReadOnly();
     }
 
     public static TaxCountryPack? FindByNameOrCode(string value)
