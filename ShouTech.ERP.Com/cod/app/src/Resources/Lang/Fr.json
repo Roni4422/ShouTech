@@ -191,7 +191,8 @@
     "FinancialAnalysis": "Analyse Financière",
     "LocalAnalysis": "Locale",
     "AIAnalysis": "IA",
-    "TaxConfiguration": "Configuration fiscale"
+    "TaxConfiguration": "Configuration fiscale",
+    "TaxReport": "Rapport de période fiscale"
   },
   "Bonds": {
     "Title": "Obligations",
@@ -3540,5 +3541,28 @@
     "EffectiveFromRequired": "Une date de début est requise.",
     "InvalidRate": "Saisissez un taux valide.",
     "Saved": "Règle fiscale enregistrée."
+  },
+  "TaxReport": {
+    "Title": "Rapport de période fiscale",
+    "PermissionDenied": "Vous n'avez pas l'autorisation d'afficher les rapports fiscaux.",
+    "From": "Du",
+    "To": "Au",
+    "DateRequired": "Sélectionnez les deux dates de la période.",
+    "PeriodStatus": "Juridiction : {0} | Période : {1} à {2} | Lignes fiscales : {3} | Références de documents : {4}",
+    "CurrencyTotals": "{0} : taxe collectée {1:N2} | taxe déductible {2:N2} | taxe non déductible {3:N2} | net à payer {4:N2}",
+    "Column": {
+      "TaxCode": "Code taxe",
+      "TaxType": "Type de taxe",
+      "Treatment": "Traitement",
+      "Rate": "Taux (%)",
+      "Direction": "Sens",
+      "IsRecoverable": "Récupérable",
+      "CurrencyCode": "Devise",
+      "TransactionCount": "Lignes fiscales",
+      "DocumentCount": "Documents",
+      "TaxableAmount": "Base imposable",
+      "TaxAmount": "Montant de taxe",
+      "BaseTaxAmount": "Taxe en devise de base"
+    }
   }
 }
