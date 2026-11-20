@@ -176,4 +176,34 @@ public sealed class TaxEngineTests
                 new List<TaxComponentDefinition> { new("INVALID", -1m) },
                 taxInclusive: false));
     }
+    [Fact]
+    public void TaxCalculator_RejectsNegativeAmounts()
+    {
+        Assert.Throws<System.ArgumentOutOfRangeException>(() =>
+            TaxCalculator.Calculate(
+                -0.01m,
+                new List<TaxComponentDefinition> { new("VAT", 15m) },
+                taxInclusive: false));
+    }
+
+    [Fact]
+    public void TaxCalculator_RejectsNullComponents()
+    {
+        Assert.Throws<System.ArgumentNullException>(() =>
+            TaxCalculator.Calculate(100m, null!, taxInclusive: false));
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(7)]
+    public void TaxCalculator_RejectsUnsupportedCurrencyPrecision(int precision)
+    {
+        Assert.Throws<System.ArgumentOutOfRangeException>(() =>
+            TaxCalculator.Calculate(
+                100m,
+                new List<TaxComponentDefinition> { new("VAT", 15m) },
+                taxInclusive: false,
+                currencyPrecision: precision));
+    }
+
 }
