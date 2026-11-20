@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using ShouTech.App.Services;
 using Xunit;
 
@@ -42,6 +43,43 @@ public sealed class TaxEngineTests
 
         foreach (var code in euCodes)
             Assert.True(TaxCountryPackCatalog.TryGet(code, out _), $"Missing EU jurisdiction {code}.");
+    }
+
+    [Theory]
+    [InlineData("SA", 15d)]
+    [InlineData("JO", 16d)]
+    [InlineData("EG", 14d)]
+    [InlineData("AE", 5d)]
+    [InlineData("BH", 10d)]
+    [InlineData("OM", 5d)]
+    [InlineData("LB", 10d)]
+    [InlineData("GB", 20d)]
+    [InlineData("TR", 20d)]
+    [InlineData("DE", 19d)]
+    [InlineData("FR", 20d)]
+    [InlineData("HU", 27d)]
+    [InlineData("FI", 25.5d)]
+    public void CountryTaxPack_SeedsSourcedStandardRate(string countryCode, double expectedRate)
+    {
+        var rules = TaxCountryPackCatalog.GetInitialRules(countryCode);
+        var standard = rules.Single(x => x.IsDefault);
+
+        Assert.Equal((decimal)expectedRate, standard.Rate);
+        Assert.False(string.IsNullOrWhiteSpace(standard.SourceUrl));
+        Assert.Contains(rules, x => x.Treatment == "ZeroRated" && x.Rate == 0m);
+        Assert.Contains(rules, x => x.Treatment == "Exempt" && x.Rate == 0m);
+    }
+
+    [Theory]
+    [InlineData("US")]
+    [InlineData("KW")]
+    [InlineData("QA")]
+    [InlineData("SY")]
+    [InlineData("IQ")]
+    [InlineData("ZZ")]
+    public void CountryTaxPack_DoesNotInventUniversalRateForLocalSystems(string countryCode)
+    {
+        Assert.Empty(TaxCountryPackCatalog.GetInitialRules(countryCode));
     }
 
     [Fact]
