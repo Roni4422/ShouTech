@@ -191,7 +191,7 @@ public static class TaxSvc
     /// </summary>
     public static void SaveRule(TaxRuleDraft rule)
     {
-        if (rule is null) throw new ArgumentNullException(nameof(rule));
+        ArgumentNullException.ThrowIfNull(rule);
         var code = (rule.Code ?? string.Empty).Trim().ToUpperInvariant();
         var name = (rule.Name ?? string.Empty).Trim();
         var taxType = (rule.TaxType ?? string.Empty).Trim().ToUpperInvariant();
