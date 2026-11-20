@@ -183,10 +183,10 @@ public static class InvRepo
             cmd.CommandText = $"""
                 INSERT INTO {lineTable}
                 (doc_id, line_no, material_id, material_code, description, unit, qty, unit_price,
-                 discount_pct, tax_code, tax_rate, line_subtotal, line_tax, line_total, warehouse_id, warehouse_name)
+                 discount_pct, tax_code, tax_rate, tax_calculation_mode, line_subtotal, line_tax, line_total, warehouse_id, warehouse_name)
                 VALUES
                 ($doc, $no, $mid, $mcode, $desc, $unit, $qty, $price,
-                 $disc, $tcode, $trate, $sub, $ltax, $ltot, $wh, $whname);
+                 $disc, $tcode, $trate, $taxMode, $sub, $ltax, $ltot, $wh, $whname);
                 """;
             Add(cmd, "$doc", docId);
             Add(cmd, "$no", line.LineNo);
@@ -199,6 +199,7 @@ public static class InvRepo
             Add(cmd, "$disc", line.DiscountPct);
             Add(cmd, "$tcode", line.TaxCode ?? string.Empty);
             Add(cmd, "$trate", line.TaxRate);
+            Add(cmd, "$taxMode", line.TaxCalculationMode);
             Add(cmd, "$sub", line.LineSubtotal);
             Add(cmd, "$ltax", line.LineTax);
             Add(cmd, "$ltot", line.LineTotal);
@@ -337,7 +338,7 @@ public static class InvRepo
             lineCmd.Transaction = tx;
             lineCmd.CommandText = $"""
                 SELECT line_no, material_id, material_code, description, unit, qty, unit_price,
-                       discount_pct, tax_code, tax_rate, warehouse_id
+                       discount_pct, tax_code, tax_rate, tax_calculation_mode, warehouse_id
                 FROM {lineTable} WHERE doc_id=$id ORDER BY line_no;
                 """;
             Add(lineCmd, "$id", docId);
@@ -356,7 +357,8 @@ public static class InvRepo
                     DiscountPct = Convert.ToDecimal(lr.GetValue(7), CultureInfo.InvariantCulture),
                     TaxCode = lr.IsDBNull(8) ? string.Empty : Convert.ToString(lr.GetValue(8), CultureInfo.InvariantCulture) ?? string.Empty,
                     TaxRate = Convert.ToDecimal(lr.GetValue(9), CultureInfo.InvariantCulture),
-                    WarehouseId = lr.IsDBNull(10) ? null : Convert.ToInt32(lr.GetValue(10), CultureInfo.InvariantCulture),
+                    TaxCalculationMode = lr.IsDBNull(10) ? "Exclusive" : Convert.ToString(lr.GetValue(10), CultureInfo.InvariantCulture) ?? "Exclusive",
+                    WarehouseId = lr.IsDBNull(11) ? null : Convert.ToInt32(lr.GetValue(11), CultureInfo.InvariantCulture),
                 });
             }
         }
@@ -1138,7 +1140,7 @@ public static class InvRepo
         {
             cmd.CommandText = $"""
                 SELECT line_no, material_id, material_code, description, unit, qty, unit_price,
-                       discount_pct, tax_code, tax_rate, warehouse_id, warehouse_name
+                       discount_pct, tax_code, tax_rate, tax_calculation_mode, warehouse_id, warehouse_name
                 FROM {lineTable} WHERE doc_id=$id ORDER BY line_no;
                 """;
             Add(cmd, "$id", docId);
@@ -1157,8 +1159,9 @@ public static class InvRepo
                     DiscountPct = Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture),
                     TaxCode = reader.IsDBNull(8) ? string.Empty : Convert.ToString(reader.GetValue(8), CultureInfo.InvariantCulture) ?? string.Empty,
                     TaxRate = Convert.ToDecimal(reader.GetValue(9), CultureInfo.InvariantCulture),
-                    WarehouseId = reader.IsDBNull(10) ? null : Convert.ToInt32(reader.GetValue(10), CultureInfo.InvariantCulture),
-                    WarehouseName = reader.FieldCount > 11 && !reader.IsDBNull(11)
+                    TaxCalculationMode = reader.IsDBNull(10) ? "Exclusive" : Convert.ToString(reader.GetValue(10), CultureInfo.InvariantCulture) ?? "Exclusive",
+                    WarehouseId = reader.IsDBNull(11) ? null : Convert.ToInt32(reader.GetValue(11), CultureInfo.InvariantCulture),
+                    WarehouseName = reader.FieldCount > 12 && !reader.IsDBNull(12)
                         ? Convert.ToString(reader.GetValue(11), CultureInfo.InvariantCulture) ?? ""
                         : "",
                 });
@@ -1301,6 +1304,7 @@ public static class InvRepo
                     DiscountPct = line.DiscountPct,
                     TaxCode = line.TaxCode,
                     TaxRate = line.TaxRate,
+                    TaxCalculationMode = line.TaxCalculationMode,
                     WarehouseId = line.WarehouseId,
                     WarehouseName = line.WarehouseName
                 }).ToList()
