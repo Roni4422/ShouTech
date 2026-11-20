@@ -987,7 +987,10 @@
     "HeldTotal": "Total",
     "Recall": "Recall",
     "StatusBillRecalled": "Bill recalled",
-    "StatusPriceDenied": "Price changes need the POS price override permission."
+    "StatusPriceDenied": "Price changes need the POS price override permission.",
+    "StockOnHand": "On hand",
+    "StockReserved": "Reserved",
+    "StockAvailable": "Available"
   },
   "Permissions": {
     "Cancel": "Cancel",
