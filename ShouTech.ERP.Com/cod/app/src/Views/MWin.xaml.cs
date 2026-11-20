@@ -36,6 +36,7 @@ namespace ShouTech.App.Views
             try
             {
                 InitializeComponent();
+                PreviewKeyDown += OnHelpPreviewKeyDown;
                 VisuId.ApplyWindow(this);
                 Win11Chrome.Apply(this);
                 ApplyUiDirection();
@@ -121,6 +122,23 @@ namespace ShouTech.App.Views
                     "ShouTech ERP",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
+            }
+        }
+
+        private void OnHelpPreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.F1 || e.IsRepeat)
+                return;
+
+            e.Handled = true;
+            try
+            {
+                var help = new HelpWin { Owner = this };
+                help.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "MWin.F1Help");
             }
         }
 
