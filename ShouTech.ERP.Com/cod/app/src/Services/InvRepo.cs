@@ -30,7 +30,9 @@ public static class InvRepo
         try
         {
             using var connection = Open(cs);
-            using var transaction = connection.BeginTransaction();
+            using var transaction = connection is SqliteConnection sqliteConnection
+                ? sqliteConnection.BeginTransaction(deferred: false)
+                : connection.BeginTransaction();
             var number = AllocateDocNo(connection, transaction, kind);
             transaction.Commit();
             return number;
@@ -137,7 +139,9 @@ public static class InvRepo
         var cs = DatabaseRuntime.GetConnectionString()
             ?? throw new InvalidOperationException("No database connection.");
         using var connection = Open(cs);
-        using var tx = connection.BeginTransaction();
+        using var tx = connection is SqliteConnection sqliteConnection
+            ? sqliteConnection.BeginTransaction(deferred: false)
+            : connection.BeginTransaction();
 
         var isSales = doc.IsSalesSide;
         var headerTable = isSales ? "sales_documents" : "purchase_documents";
