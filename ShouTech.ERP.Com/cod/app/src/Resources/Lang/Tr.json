@@ -1885,6 +1885,9 @@
       "Saudi": "Suudi Arabistan — KDV",
       "Jordan": "Ürdün — Satış vergisi"
     }
+  ,
+    "EnableTaxSystem": "Bu şirket için seçilen ülkenin vergi sistemini etkinleştir",
+    "TaxCountryRequired": "Vergi sistemini etkinleştirmeden önce desteklenen bir ülke adı veya ISO kodu seçin."
   },
   "FiscalHint": {
     "Length": {},
