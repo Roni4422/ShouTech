@@ -436,7 +436,9 @@ public static class TaxSvc
                 INNER JOIN company_tax_settings s ON s.company_code = r.company_code
                 WHERE r.company_code = $company
                   AND r.country_code = s.country_code
+                  AND s.tax_enabled = {activeValue}
                   AND r.is_active = {activeValue}
+                  AND COALESCE(r.data_status, 'USER_CONFIGURED') IN ('USER_CONFIGURED', 'VERIFIED', 'APPROVED')
                   AND r.effective_from <= {asOfExpression}
                   AND (r.effective_to IS NULL OR r.effective_to >= {asOfExpression})
                 ORDER BY r.is_default DESC, r.tax_code;
@@ -576,6 +578,7 @@ public static class TaxSvc
               AND r.is_default = {activeValue}
               AND s.tax_enabled = {activeValue}
               AND r.country_code = s.country_code
+              AND COALESCE(r.data_status, 'USER_CONFIGURED') IN ('USER_CONFIGURED', 'VERIFIED', 'APPROVED')
               AND r.effective_from <= CURRENT_DATE
               AND (r.effective_to IS NULL OR r.effective_to >= CURRENT_DATE)
             ORDER BY r.effective_from DESC
