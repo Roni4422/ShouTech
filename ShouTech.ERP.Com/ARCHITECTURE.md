@@ -150,6 +150,11 @@ The service polls the outbox and dispatches HTTP(S) webhooks. Email/SMS connecto
 
 ## Further reading
 
+- [Developer Roadmap](docs/DEVELOPER_ROADMAP.md) — canonical phased delivery plan and release gates.
+- [Developer Handbook](docs/DEVELOPER_HANDBOOK.md) — required engineering practices and quality gates.
+- [Module Catalog](docs/MODULE_CATALOG.md) — module responsibilities, dependencies and acceptance evidence.
+- [Engineering Reference Library](docs/ENGINEERING_REFERENCE_LIBRARY.md) — external standards and product references.
+
 - [Developer guide](README.dev.md)
 - [Database migrations](docs/DATABASE_MIGRATIONS.md)
 - [Accounting chart, periods, and year close](docs/ACCOUNTING_CHART_PERIODS_YEAR_CLOSE.md)
