@@ -40,7 +40,9 @@ public static class InvRepo
         };
         var year = DateTime.Today.Year.ToString(CultureInfo.InvariantCulture);
         var cs = DatabaseRuntime.GetConnectionString();
-        if (string.IsNullOrWhiteSpace(cs)) return $"{prefix}-{year}-0001";
+        if (string.IsNullOrWhiteSpace(cs))
+            throw new InvalidOperationException(
+                "A company database must be connected before allocating a document number.");
 
         try
         {
