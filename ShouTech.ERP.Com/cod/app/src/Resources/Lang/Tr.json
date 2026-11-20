@@ -401,7 +401,8 @@
     "StatusPriceDenied": "Fiyat değişiklikleri POS fiyat yetkisi gerektirir.",
     "StockOnHand": "Eldeki",
     "StockReserved": "Rezerve",
-    "StockAvailable": "Satılabilir"
+    "StockAvailable": "Satılabilir",
+    "Stock": "Stok"
   },
   "Orders": {
     "Title": "Siparişler",
