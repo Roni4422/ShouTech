@@ -20,6 +20,23 @@ public static class TaxSvc
 
     public sealed record TaxCodeRec(string Code, string Name, decimal Rate, string Country);
 
+    public sealed record TaxRuleDraft(
+        string Code,
+        string Name,
+        string TaxType,
+        string Treatment,
+        decimal Rate,
+        DateTime EffectiveFrom,
+        DateTime? EffectiveTo,
+        bool IsRecoverable,
+        bool IsCompound,
+        bool IsDefault,
+        string OutputAccountCode,
+        string InputAccountCode,
+        string CalculationMode = "Exclusive",
+        string SourceUrl = "",
+        string SourceReference = "User-configured tax rule");
+
     public static bool IsEnabled
     {
         get
@@ -133,6 +150,145 @@ public static class TaxSvc
                     Add(insert, "$verifiedOn", "2026-11-20");
                     insert.ExecuteNonQuery();
                 }
+            }
+
+            transaction.Commit();
+        }
+        catch
+        {
+            try { transaction.Rollback(); } catch { }
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Saves a company-specific, effective-dated tax rule. This is the
+    /// configuration path for jurisdictions that require state, local,
+    /// schedule, or other non-uniform rates. Posted tax snapshots are never
+    /// rewritten when a rule is changed.
+    /// </summary>
+    public static void SaveRule(TaxRuleDraft rule)
+    {
+        if (rule is null) throw new ArgumentNullException(nameof(rule));
+        var code = (rule.Code ?? string.Empty).Trim().ToUpperInvariant();
+        var name = (rule.Name ?? string.Empty).Trim();
+        var taxType = (rule.TaxType ?? string.Empty).Trim().ToUpperInvariant();
+        var treatment = (rule.Treatment ?? string.Empty).Trim();
+        var outputAccount = (rule.OutputAccountCode ?? string.Empty).Trim();
+        var inputAccount = (rule.InputAccountCode ?? string.Empty).Trim();
+        var calculationMode = (rule.CalculationMode ?? string.Empty).Trim();
+
+        if (code.Length is < 1 or > 50 || name.Length is < 1 or > 200 ||
+            taxType.Length is < 1 or > 40 || treatment.Length is < 1 or > 40)
+            throw new ArgumentException("Tax code, name, type, and treatment are required and must fit the schema.", nameof(rule));
+        if (rule.Rate < 0m || rule.Rate > 100000m)
+            throw new ArgumentOutOfRangeException(nameof(rule), "Tax rate must be between 0 and 100000 percent.");
+        if (calculationMode is not ("Exclusive" or "Inclusive"))
+            throw new ArgumentException("Calculation mode must be Exclusive or Inclusive.", nameof(rule));
+        if (rule.EffectiveTo.HasValue && rule.EffectiveTo.Value.Date < rule.EffectiveFrom.Date)
+            throw new ArgumentException("Tax rule end date cannot precede its effective date.", nameof(rule));
+        if (outputAccount.Length > 50 || inputAccount.Length > 50)
+            throw new ArgumentException("Tax account codes cannot exceed 50 characters.", nameof(rule));
+
+        if (!IsEnabled)
+            throw new InvalidOperationException("Enable the company's tax system before adding tax rules.");
+
+        var companyCode = AppState.CurrentCompanyCode;
+        var cs = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(companyCode) || string.IsNullOrWhiteSpace(cs))
+            throw new InvalidOperationException("An active company database is required to save tax rules.");
+
+        using var connection = Open(cs);
+        using var transaction = connection.BeginTransaction();
+        try
+        {
+            string countryCode;
+            using (var settings = connection.CreateCommand())
+            {
+                settings.Transaction = transaction;
+                settings.CommandText = "SELECT country_code FROM company_tax_settings WHERE company_code=$company AND tax_enabled = " +
+                    (DatabaseRuntime.IsPostgreSql() ? "TRUE" : "1") + " LIMIT 1;";
+                Add(settings, "$company", companyCode);
+                countryCode = Convert.ToString(settings.ExecuteScalar(), CultureInfo.InvariantCulture) ?? string.Empty;
+            }
+            if (string.IsNullOrWhiteSpace(countryCode))
+                throw new InvalidOperationException("The active company has no enabled tax jurisdiction.");
+
+            var dateExpression = DatabaseRuntime.IsPostgreSql() ? "CAST($effectiveFrom AS date)" : "$effectiveFrom";
+            var endExpression = DatabaseRuntime.IsPostgreSql() ? "CAST($effectiveTo AS date)" : "$effectiveTo";
+            var activeValue = DatabaseRuntime.IsPostgreSql() ? "TRUE" : "1";
+            var inactiveValue = DatabaseRuntime.IsPostgreSql() ? "FALSE" : "0";
+
+            if (rule.IsDefault)
+            {
+                using var clearDefault = connection.CreateCommand();
+                clearDefault.Transaction = transaction;
+                clearDefault.CommandText = $"""
+                    UPDATE company_tax_rules
+                    SET is_default = {inactiveValue}
+                    WHERE company_code=$company AND country_code=$country
+                      AND effective_from = {dateExpression}
+                      AND is_default = {activeValue}
+                      AND tax_code <> $taxCode;
+                    """;
+                Add(clearDefault, "$company", companyCode);
+                Add(clearDefault, "$country", countryCode);
+                Add(clearDefault, "$effectiveFrom", rule.EffectiveFrom.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                Add(clearDefault, "$taxCode", code);
+                clearDefault.ExecuteNonQuery();
+            }
+
+            using (var save = connection.CreateCommand())
+            {
+                save.Transaction = transaction;
+                save.CommandText = $"""
+                    INSERT INTO company_tax_rules
+                        (company_code, country_code, tax_code, tax_name, tax_type, tax_treatment,
+                         rate, calculation_mode, is_compound, is_recoverable, output_account_code,
+                         input_account_code, effective_from, effective_to, is_default, is_active,
+                         created_by, source_url, source_reference, verified_on, data_status)
+                    VALUES
+                        ($company, $country, $taxCode, $taxName, $taxType, $treatment,
+                         $rate, $calculationMode, $isCompound, $isRecoverable, $outputAccount,
+                         $inputAccount, {dateExpression}, {endExpression}, $isDefault, {activeValue},
+                         $createdBy, $sourceUrl, $sourceReference, NULL, 'USER_CONFIGURED')
+                    ON CONFLICT(company_code, tax_code, effective_from) DO UPDATE SET
+                        tax_name=excluded.tax_name,
+                        tax_type=excluded.tax_type,
+                        tax_treatment=excluded.tax_treatment,
+                        rate=excluded.rate,
+                        calculation_mode=excluded.calculation_mode,
+                        is_compound=excluded.is_compound,
+                        is_recoverable=excluded.is_recoverable,
+                        output_account_code=excluded.output_account_code,
+                        input_account_code=excluded.input_account_code,
+                        effective_to=excluded.effective_to,
+                        is_default=excluded.is_default,
+                        is_active=excluded.is_active,
+                        created_by=excluded.created_by,
+                        source_url=excluded.source_url,
+                        source_reference=excluded.source_reference,
+                        data_status='USER_CONFIGURED';
+                    """;
+                Add(save, "$company", companyCode);
+                Add(save, "$country", countryCode);
+                Add(save, "$taxCode", code);
+                Add(save, "$taxName", name);
+                Add(save, "$taxType", taxType);
+                Add(save, "$treatment", treatment);
+                Add(save, "$rate", rule.Rate);
+                Add(save, "$calculationMode", calculationMode);
+                Add(save, "$isCompound", rule.IsCompound);
+                Add(save, "$isRecoverable", rule.IsRecoverable);
+                Add(save, "$outputAccount", outputAccount);
+                Add(save, "$inputAccount", inputAccount);
+                Add(save, "$effectiveFrom", rule.EffectiveFrom.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                Add(save, "$effectiveTo", rule.EffectiveTo?.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                Add(save, "$isDefault", rule.IsDefault);
+                Add(save, "$createdBy", Environment.UserName);
+                Add(save, "$sourceUrl", rule.SourceUrl ?? string.Empty);
+                Add(save, "$sourceReference", rule.SourceReference ?? string.Empty);
+                save.ExecuteNonQuery();
             }
 
             transaction.Commit();
