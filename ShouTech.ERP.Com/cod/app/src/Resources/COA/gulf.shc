@@ -333,7 +333,7 @@
       "balSheetId": 0,
       "type": "Asset",
       "balance": "Debit",
-      "posting": false,
+      "posting": true,
       "cardType": null,
       "names": {
         "ar": "Recoverable Input Taxes by Jurisdiction",
@@ -747,7 +747,7 @@
       "balSheetId": 0,
       "type": "Liability",
       "balance": "Credit",
-      "posting": false,
+      "posting": true,
       "cardType": null,
       "names": {
         "ar": "Indirect Taxes Payable by Jurisdiction",
