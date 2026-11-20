@@ -5,6 +5,7 @@ ShouTech supports only SQLite and PostgreSQL. SQL Server, Oracle, and MySQL are 
 - SQLite migrations: `dba/mig/sqlite/`
 - PostgreSQL migrations: `dba/mig/postgresql/`
 - Nested migration folders are discovered recursively.
+- Migration IDs are their paths relative to the provider directory; duplicate IDs are rejected case-insensitively before the migrator opens the database, preventing Windows/Linux path-collision ambiguity.
 - Applied migrations are recorded in `schema_migrations` with SHA-256 checksums. Applied migration files are immutable; add a new migration instead of editing an applied file.
 - Each migration runs in its own transaction.
 - Existing databases without migration history are not modified automatically. Verify their schema and use `--baseline-existing` only after taking a backup and reviewing the migration list.
