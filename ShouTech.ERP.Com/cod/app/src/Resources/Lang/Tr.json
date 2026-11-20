@@ -3509,5 +3509,34 @@
       "Year": "Yil",
       "Month": "Ay"
     }
+  },
+  "TaxSetup": {
+    "Title": "Vergi Yapılandırması",
+    "PermissionDenied": "Vergi yapılandırmasını görüntüleme yetkiniz yok.",
+    "Jurisdiction": "Vergi yetki alanı",
+    "Enable": "Vergiyi etkinleştir",
+    "Disable": "Vergiyi devre dışı bırak",
+    "ChangeJurisdictionUseAction": "Önce mevcut vergi yetki alanını devre dışı bırakın, ardından yenisini etkinleştirin.",
+    "Disabled": "Bu şirket için vergi devre dışı. Devam etmek için bir yetki alanı seçip Vergiyi etkinleştir'i seçin.",
+    "EnabledStatus": "Vergi {0} için etkin. Sistem: {1}. Başlangıç kuralları yüklendi; kayıt öncesinde yerel kuralları ve hesap eşlemesini doğrulayın.",
+    "DisableConfirm": "Bu şirket için vergiyi devre dışı bırakılsın mı? Mevcut kurallar ve kayıtlı vergi geçmişi korunur.",
+    "EnableConfirm": "{0} için vergi sistemi etkinleştirilsin mi? Yetki alanının başlangıç kuralları yüklenecek. Devam edilsin mi?",
+    "SelectCountry": "Önce bir vergi yetki alanı seçin.",
+    "Code": "Vergi kodu",
+    "Name": "Vergi adı",
+    "Type": "Vergi türü",
+    "Treatment": "Vergi uygulaması",
+    "Rate": "Oran (%)",
+    "Calculation": "Hesaplama yöntemi",
+    "EffectiveFrom": "Başlangıç tarihi",
+    "EffectiveTo": "Bitiş tarihi",
+    "OutputAccount": "Hesaplanan vergi hesabı",
+    "InputAccount": "İndirilecek vergi hesabı",
+    "Recoverable": "Girdi vergisi indirilebilir",
+    "Compound": "Bileşik vergi",
+    "Default": "Varsayılan oran",
+    "EffectiveFromRequired": "Başlangıç tarihi gereklidir.",
+    "InvalidRate": "Geçerli bir vergi oranı girin.",
+    "Saved": "Vergi kuralı kaydedildi."
   }
 }
