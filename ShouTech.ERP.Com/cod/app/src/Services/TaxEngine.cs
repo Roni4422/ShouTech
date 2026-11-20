@@ -104,6 +104,7 @@ public static class TaxCountryPackCatalog
 
         Add("GB", "United Kingdom", TaxRegimeKind.Vat, "HM Revenue and Customs", "Post-EU national VAT rules require verification");
         Add("TR", "Türkiye", TaxRegimeKind.Vat, "Revenue Administration", "National VAT rules require verification");
+        Add("ZZ", "Other / Custom jurisdiction", TaxRegimeKind.LocalConfigurationRequired, "User-configured competent authority", "Custom tax rules require manual legal validation");
         return result;
     }
 }
