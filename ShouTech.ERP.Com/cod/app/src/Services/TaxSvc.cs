@@ -116,10 +116,12 @@ public static class TaxSvc
             using var cmd = connection.CreateCommand();
             var activeValue = DatabaseRuntime.IsPostgreSql() ? "TRUE" : "1";
             cmd.CommandText = $"""
-                SELECT tax_code, COALESCE(tax_name, tax_code), COALESCE(rate, 0), COALESCE(country_code, '')
-                FROM company_tax_rules
-                WHERE company_code = $company
-                  AND is_active = {activeValue}
+                SELECT r.tax_code, COALESCE(r.tax_name, r.tax_code), COALESCE(r.rate, 0), COALESCE(r.country_code, '')
+                FROM company_tax_rules r
+                INNER JOIN company_tax_settings s ON s.company_code = r.company_code
+                WHERE r.company_code = $company
+                  AND r.country_code = s.country_code
+                  AND r.is_active = {activeValue}
                   AND effective_from <= CURRENT_DATE
                   AND (effective_to IS NULL OR effective_to >= CURRENT_DATE)
                 ORDER BY tax_code;
