@@ -67,7 +67,7 @@ public sealed class TaxSetupWin : BaseWin
 
     private void BuildUi()
     {
-        var root = new DockPanel { Margin = new Thickness(12) };
+        var root = new DockPanel { Margin = new Thickness(12), LastChildFill = true };
 
         var top = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(0, 0, 0, 8) };
         var jurisdiction = new Grid { Margin = new Thickness(0, 0, 0, 6) };
@@ -93,7 +93,6 @@ public sealed class TaxSetupWin : BaseWin
         root.Children.Add(top);
 
         _rules.SelectionChanged += (_, _) => LoadSelectedRule();
-        root.Children.Add(_rules);
 
         var editor = new Grid { Margin = new Thickness(0, 10, 0, 4) };
         for (var i = 0; i < 4; i++)
@@ -142,6 +141,7 @@ public sealed class TaxSetupWin : BaseWin
             actions.Children.Add(button);
         DockPanel.SetDock(actions, Dock.Bottom);
         root.Children.Add(actions);
+        root.Children.Add(_rules);
 
         _country.SelectionChanged += (_, _) =>
         {
@@ -196,9 +196,11 @@ public sealed class TaxSetupWin : BaseWin
     private void RefreshPermissions()
     {
         var canManage = AppHost.Permissions.Has(PermCat.Accounting.TaxManage);
-        _save.IsEnabled = canManage;
-        _new.IsEnabled = canManage;
+        var taxEnabled = TaxSvc.IsEnabled;
+        _save.IsEnabled = canManage && taxEnabled;
+        _new.IsEnabled = canManage && taxEnabled;
         _jurisdictionAction.IsEnabled = canManage;
+        _country.IsEnabled = canManage;
     }
 
     private void RefreshData()
