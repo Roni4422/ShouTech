@@ -1739,6 +1739,9 @@
     "VoucherOpenFailed": "Yevmiye fişi açılamadı.",
     "OriginalOpenFailed": "Orijinal fatura açılamadı.",
     "ReverseReason": "Kullanıcı fatura penceresinden ters kayıt istedi"
+  ,
+    "TaxSystem": "Vergi sistemi",
+    "ColTaxCode": "Vergi kodu"
   },
   "CompanyWizard": {
     "Title": {
