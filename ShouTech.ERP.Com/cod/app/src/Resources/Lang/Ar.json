@@ -1822,6 +1822,9 @@
     "VoucherOpenFailed": "تعذر فتح سند القيد.",
     "OriginalOpenFailed": "تعذر فتح الفاتورة الأصلية.",
     "ReverseReason": "طلب المستخدم عكس القيد من نافذة الفاتورة"
+  ,
+    "TaxSystem": "النظام الضريبي",
+    "ColTaxCode": "رمز الضريبة"
   },
   "Vouchers": {
     "PartyCode": "رمز الطرف",
