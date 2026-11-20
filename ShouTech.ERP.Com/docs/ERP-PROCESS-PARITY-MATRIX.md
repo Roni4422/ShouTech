@@ -96,3 +96,43 @@ Map each Ribbon action to a process and permission; remove orphan windows; add c
 A ShouTech process is parity-accepted only when its happy path and key exception paths pass automated tests; persisted state and links survive restart; financial and stock ledgers reconcile; cancellation, return, restore and retry are idempotent and auditable; permissions are enforced in services; SQLite and PostgreSQL behave equivalently for supported workflows; and UI, reports, exports and localization represent the same underlying state.
 
 A process remains **not verified** until evidence is recorded. Do not claim full Odoo/ERPNext parity or sale readiness before the relevant gates pass.
+
+
+## 6. Phenix feature evidence — public marketing material supplied by the user
+
+**Evidence boundary:** This section records capabilities explicitly advertised in the Phenix Systems posts supplied on 2026-11-20. Marketing statements are not independent proof of technical implementation, regulatory certification, service-level guarantees, or detailed feature behavior. Validate each item against product documentation, demonstrations, contracts, and country-specific legal requirements before treating it as a benchmark acceptance criterion.
+
+| Phenix-advertised capability | Evidence in supplied posts | ShouTech target capability | Evidence status / next validation |
+|---|---|---|---|
+| Saudi e-invoicing and ZATCA integration | Posts advertise direct/automatic integration with the Saudi e-invoicing platform and ZATCA compliance | Country-specific Saudi e-invoicing connector; invoice validation, signing/sealing where required, clearance/reporting flows, QR/XML payloads as applicable, retries, response archive, audit trail and sandbox/production configuration | Marketing claim only; verify exact ZATCA phase/scope, supported document types, onboarding and certification status |
+| Jordan tax compliance | Post advertises licensing/approval by the Jordan Income and Sales Tax Department | Jordan localization pack with tax rules, electronic invoicing integration where applicable, reporting and versioned regulatory configuration | Marketing claim only; verify license/approval scope and current technical requirements |
+| Egypt e-invoicing | Post advertises support for electronic invoicing and integration with the Egyptian Tax Authority | Egypt localization pack with authority-specific submission, identifiers, signatures, status tracking, credit/debit notes and reconciliation | Marketing claim only; verify actual supported flows and approval status |
+| Third-party integrations | Post names Salla, Rasd and Wasfaty | Integration Hub with provider adapters, API/webhook credentials, mapping, sync queue, retries, idempotency keys, monitoring and audit | Named integrations only; verify direction, objects, depth and availability of each connector |
+| Van Sales mobile application | Posts advertise field sales app connected to central Phenix | Mobile sales app for route/visit plans, customer lookup, price/credit checks, orders, invoices, collections, returns and offline queue/sync | Advertised; verify offline behavior, supported devices, permissions and supported document types |
+| GPS field-force tracking | Post advertises real-time GPS location during customer visits | Consent- and role-controlled location tracking, visit check-in/out, route history, business-hours policy and retention controls | Advertised; verify update frequency, precision, privacy policy and user controls |
+| Mobile document creation | Post advertises configurable documents and issuing documents at customer location | Centrally governed mobile document templates, numbering, pricing/tax rules, validation and server-side posting | Advertised; verify which document types can be issued and whether drafts/posting are supported |
+| POS application | Posts advertise fast sales, payment processing, invoices and central synchronization | POS terminal/session, cash drawer, multi-tender payments, receipt, discounts, returns/refunds, stock/GL posting, offline idempotent sync and shift close | Advertised; verify offline mode, devices, payment integrations and reconciliation |
+| Restaurant e-menu | Post advertises tablet-based digital menu with item images/prices and live synchronization | Menu/catalog publishing, availability, modifiers, table/order flow, kitchen routing and synchronized pricing | Advertised; verify ordering, table management, kitchen display and payment scope |
+| Administrative workflow | Post advertises approval paths for purchase requests, disbursement requests and financial documents | Configurable workflow engine with sequential/parallel approvers, thresholds, delegation, escalation, rejection/resubmission, segregation of duties and immutable decision log | Advertised; verify workflow designer, conditions, notifications, delegation and audit depth |
+| Payroll / HR | General Phenix descriptions mention payroll and human resources | Complete HR/payroll lifecycle with country localization, approvals, accruals, statutory deductions and linked payroll journals | High-level product claim only; verify scope of HR modules and country coverage |
+| Unified ERP | Posts describe sales, warehouses, HR and online-store integrations in one system | Unified master data and transaction services across desktop, mobile, POS, warehouse, accounting and external channels | Positioning claim; verify actual shared data model, licensing and module dependencies |
+
+### ShouTech architecture implications
+
+1. Build a provider-neutral **Integration Hub**; do not hardwire Salla or any named provider into sales/accounting services. Each connector must be isolated behind a contract and have its own configuration, credential handling, mapping, health state, retry policy and audit.
+2. Build **Tax Localization Packs** by jurisdiction and effective date. Tax rates, document schemas and authority endpoints must not be scattered as constants through invoice windows or posting services. A connector must distinguish validation, submission, acceptance, rejection, cancellation and credit/debit correction.
+3. Treat **Van Sales, POS and EMenu** as clients of the same governed catalog, pricing, inventory, customer, document-numbering and posting services. Mobile/POS synchronization must be idempotent and conflict-aware; the client must never independently create authoritative accounting entries.
+4. Implement **Workflow** as a reusable state machine/policy engine, not a collection of approval buttons. Enforce approval authorization in the service layer, preserve every decision, and prevent self-approval where segregation-of-duties rules prohibit it.
+5. Add explicit privacy/security controls for GPS, customer data, payment data and integration credentials: least privilege, retention rules, encryption, access logging and revocation.
+6. Keep country compliance claims separate. ZATCA, Jordanian and Egyptian requirements are distinct localization and certification tracks; passing one does not imply compliance with another.
+
+### Recommended delivery sequence
+
+- **P1 — Foundation first:** stabilize posting, stock, numbering, company isolation, audit and CI; no external connector may bypass these services.
+- **P2 — Workflow and Integration Hub:** establish contracts, durable queue/outbox, idempotency, retries, observability and approval engine.
+- **P3 — Saudi e-invoicing discovery and implementation:** verify current official ZATCA specifications and required onboarding/certification before implementation; test sandbox and production readiness separately.
+- **P4 — POS and Van Sales:** reuse shared sales, inventory, payment and numbering services; add offline sync and device/session controls.
+- **P5 — Restaurant EMenu and kitchen workflow:** publish controlled menu data and route orders through the same stock and sales services.
+- **P6 — Jordan and Egypt localization:** separate regulatory discovery, implementation and acceptance tests for each country.
+
+**Acceptance rule:** A marketing claim is not a ShouTech feature until the end-to-end flow is implemented, tested against the relevant authority/provider sandbox where available, audited, secured, and verified for failure/retry/reversal scenarios.
