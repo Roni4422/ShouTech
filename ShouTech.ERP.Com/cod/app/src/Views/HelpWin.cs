@@ -148,7 +148,13 @@ public sealed class HelpWin : BaseWin
         var dir = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
         for (var depth = 0; depth < 8 && dir is not null; depth++, dir = dir.Parent)
         {
-            var candidate = Path.Combine(dir.FullName, "docs", "SHOUTECH_ERP_EN.md");
+            var candidate = Path.Combine(dir.FullName, "docs", "USER_GUIDE_EN.md");
+            if (File.Exists(candidate))
+                return candidate;
+            candidate = Path.Combine(dir.FullName, "ShouTech.ERP.Com", "docs", "USER_GUIDE_EN.md");
+            if (File.Exists(candidate))
+                return candidate;
+            candidate = Path.Combine(dir.FullName, "docs", "SHOUTECH_ERP_EN.md");
             if (File.Exists(candidate))
                 return candidate;
             candidate = Path.Combine(dir.FullName, "ShouTech.ERP.Com", "docs", "SHOUTECH_ERP_EN.md");
