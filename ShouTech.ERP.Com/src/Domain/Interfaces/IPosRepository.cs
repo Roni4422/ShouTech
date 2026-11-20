@@ -15,6 +15,7 @@ public interface IPosRepository
     /// with POS-1002 when the terminal already has an open session.</summary>
     Task<PosSession> OpenSessionAsync(string companyId, string terminalCode, string cashier, int? warehouseId, string currencyCode, decimal openingCash, string userId, CancellationToken cancellationToken = default);
     Task<PosSession?> GetOpenSessionAsync(string companyId, string terminalCode, CancellationToken cancellationToken = default);
+    Task<int?> GetTerminalWarehouseIdAsync(string companyId, string terminalCode, CancellationToken cancellationToken = default);
     Task<PosSession?> GetSessionAsync(string companyId, Guid sessionId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<PosSession>> GetSessionsAsync(string companyId, CancellationToken cancellationToken = default);
     /// <summary>Closes a session: expected cash and the variance are
