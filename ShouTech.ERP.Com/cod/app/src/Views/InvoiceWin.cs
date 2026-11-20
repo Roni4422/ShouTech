@@ -287,9 +287,11 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         }
 
         _cmbTaxCode.ItemsSource = _taxCodes;
+        _taxCodeColumn.ItemsSource = _taxCodes;
         _cmbTaxCode.SelectedValue = _doc.TaxCode;
         var hasCurrentRules = TaxSvc.IsEnabled && codes.Count > 0 && codes.Any(x => !x.Name.EndsWith(" (historical)", StringComparison.Ordinal));
         _cmbTaxCode.IsEnabled = hasCurrentRules;
+        _taxCodeColumn.IsReadOnly = !hasCurrentRules;
         _txtTaxRate.IsReadOnly = !hasCurrentRules;
         if (!hasCurrentRules && !preserveUnknown)
         {
