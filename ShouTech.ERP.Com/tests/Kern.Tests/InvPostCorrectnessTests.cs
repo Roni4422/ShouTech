@@ -70,6 +70,39 @@ public sealed class InvPostCorrectnessTests
         Assert.Equal($"SAL-{year}-0008", InvRepo.NextDocNo(InvDocKind.SalesInvoice));
     }
 
+    [Fact]
+    public async Task NextDocNo_AllocatesUniqueNumbersForConcurrentCallers()
+    {
+        using var db = await SeededAsync();
+        const int callers = 12;
+
+        var allocated = await Task.WhenAll(
+            Enumerable.Range(0, callers)
+                .Select(_ => Task.Run(() => InvRepo.NextDocNo(InvDocKind.SalesInvoice))));
+
+        var expected = Enumerable.Range(1, callers)
+            .Select(value => $"SAL-{DateTime.Today.Year}-{value:D4}")
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(callers, allocated.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(expected, allocated.OrderBy(value => value, StringComparer.Ordinal).ToArray());
+    }
+
+    [Fact]
+    public async Task SaveDraft_AllocatesMissingNumberWithinItsDatabaseTransaction()
+    {
+        using var db = await SeededAsync();
+        var doc = BuildDoc(InvDocKind.SalesInvoice, null, string.Empty,
+            qty: 1m, price: 25m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        doc.DocNo = string.Empty;
+
+        InvRepo.SaveDraft(doc);
+
+        Assert.Equal($"SAL-{DateTime.Today.Year}-0002", doc.DocNo);
+        Assert.True(doc.DocId > 0);
+    }
+
     // ------------------------------------------------------------ (a)
 
     [Fact]
