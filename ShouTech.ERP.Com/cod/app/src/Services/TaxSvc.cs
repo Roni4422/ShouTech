@@ -122,8 +122,8 @@ public static class TaxSvc
                 WHERE r.company_code = $company
                   AND r.country_code = s.country_code
                   AND r.is_active = {activeValue}
-                  AND effective_from <= CURRENT_DATE
-                  AND (effective_to IS NULL OR effective_to >= CURRENT_DATE)
+                  AND r.effective_from <= CURRENT_DATE
+                  AND (r.effective_to IS NULL OR r.effective_to >= CURRENT_DATE)
                 ORDER BY tax_code;
                 """;
             Add(cmd, "$company", AppState.CurrentCompanyCode ?? "");
@@ -259,6 +259,7 @@ public static class TaxSvc
               AND r.is_active = {activeValue}
               AND r.is_default = {activeValue}
               AND s.tax_enabled = {activeValue}
+              AND r.country_code = s.country_code
               AND r.effective_from <= CURRENT_DATE
               AND (r.effective_to IS NULL OR r.effective_to >= CURRENT_DATE)
             ORDER BY r.effective_from DESC
