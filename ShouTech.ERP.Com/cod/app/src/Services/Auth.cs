@@ -611,6 +611,56 @@ public static class SecurityAuditLog
     public const string DataExportDenied = "DATA_EXPORT_DENIED";
     public const string DataImport = "DATA_IMPORT";
     public const string DataImportDenied = "DATA_IMPORT_DENIED";
+    public const string TaxSettingsEnabled = "TAX_SETTINGS_ENABLED";
+    public const string TaxSettingsDisabled = "TAX_SETTINGS_DISABLED";
+    public const string TaxRuleSaved = "TAX_RULE_SAVED";
+
+    /// <summary>
+    /// Synchronous best-effort audit entry for synchronous business services.
+    /// Call only after the business transaction commits; audit failure must not
+    /// roll back a completed business operation.
+    /// </summary>
+    public static void Write(string? companyCode, object? userId, string username, string eventType, string? details = null)
+    {
+        try
+        {
+            var connectionString = DatabaseRuntime.GetConnectionString();
+            if (string.IsNullOrWhiteSpace(connectionString))
+                return;
+
+            var isPostgreSql = DatabaseRuntime.IsPostgreSql();
+            using DbConnection connection = isPostgreSql
+                ? new NpgsqlConnection(connectionString)
+                : new SqliteConnection(connectionString);
+            connection.Open();
+
+            using (var exists = connection.CreateCommand())
+            {
+                exists.CommandText = isPostgreSql
+                    ? "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'security_audit_log'"
+                    : "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'security_audit_log'";
+                if (Convert.ToInt64(exists.ExecuteScalar(), CultureInfo.InvariantCulture) == 0)
+                    return;
+            }
+
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                INSERT INTO security_audit_log (company_id, user_id, username, event_type, details)
+                VALUES ((SELECT company_id FROM companies WHERE company_code = @code), @uid, @user, @event, @details)
+                """;
+            Add(command, "@code", (object?)companyCode ?? DBNull.Value);
+            Add(command, "@uid", ConvertUserId(userId, isPostgreSql));
+            Add(command, "@user", string.IsNullOrWhiteSpace(username) ? "(unknown)" : username.Trim());
+            Add(command, "@event", eventType);
+            Add(command, "@details", (object?)details ?? DBNull.Value);
+            command.ExecuteNonQuery();
+        }
+        catch (Exception ex)
+        {
+            try { AppHost.Logging.LogWarning("SecurityAudit", $"Security audit write failed ({eventType}): {ex.Message}"); }
+            catch { /* audit logging must never break a committed business operation */ }
+        }
+    }
 
     public static async Task WriteAsync(string? companyCode, object? userId, string username, string eventType, string? details = null)
     {
