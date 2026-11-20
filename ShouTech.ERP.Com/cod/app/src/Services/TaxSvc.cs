@@ -44,7 +44,7 @@ public static class TaxSvc
         string InputAccountCode,
         string CalculationMode = "Exclusive",
         string SourceUrl = "",
-        string SourceReference = "User-configured tax rule");
+        string SourceReference = "");
 
     public static bool IsEnabled
     {
@@ -283,8 +283,8 @@ public static class TaxSvc
                         is_default=excluded.is_default,
                         is_active=excluded.is_active,
                         created_by=excluded.created_by,
-                        source_url=excluded.source_url,
-                        source_reference=excluded.source_reference,
+                        source_url=CASE WHEN excluded.source_url='' THEN company_tax_rules.source_url ELSE excluded.source_url END,
+                        source_reference=CASE WHEN excluded.source_reference='' THEN company_tax_rules.source_reference ELSE excluded.source_reference END,
                         data_status='USER_CONFIGURED';
                     """;
                 Add(save, "$company", companyCode);
