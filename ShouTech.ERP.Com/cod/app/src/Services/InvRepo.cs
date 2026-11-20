@@ -2111,6 +2111,9 @@ public static class InvRepo
                 accountCode = Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture) ?? string.Empty;
             }
 
+            if (string.IsNullOrWhiteSpace(accountCode))
+                accountCode = direction == "OUTPUT" ? GlAccounts.OutputVat : GlAccounts.InputVat;
+
             if (Math.Abs(line.TaxRate - approvedRate) > 0.000001m)
                 throw new InvalidOperationException(
                     $"Tax rate on invoice line {line.LineNo} does not match the approved effective rate for '{line.TaxCode}'. Reload the tax code and recalculate the invoice.");
