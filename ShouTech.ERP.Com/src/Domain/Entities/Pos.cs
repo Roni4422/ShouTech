@@ -139,6 +139,9 @@ public sealed class PosProduct
     public string? ImagePath { get; set; }
     public bool HasBatch { get; set; }
     public bool HasSerial { get; set; }
+    public decimal OnHandQty { get; set; }
+    public decimal ReservedQty { get; set; }
+    public decimal SellableQty => Math.Max(0m, OnHandQty - ReservedQty);
 }
 
 /// <summary>One line of the original bill as a POS return sees it: what
