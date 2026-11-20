@@ -224,3 +224,8 @@ The goal is not to match a marketing checklist. ShouTech should exceed it in the
 - Phenix inventory mobile application: https://phenixsoft.com/index.php/en/app/inventory
 
 The vendor feature article is dated 2023-12-24. Current product pages may describe a broader product suite than the exact Phenix 10 release. Validate edition, regional availability, and licensing with the vendor before treating every listed capability as included in every Phenix 10 installation.
+
+
+## 9. Related benchmark
+
+Manager.io is assessed separately because its strengths are especially relevant to accounting workflows, inventory valuation, advanced/custom reports, batch operations, recurring transactions, API access, and offline desktop usage. See [MANAGER-IO-COMPETITIVE-BENCHMARK.md](MANAGER-IO-COMPETITIVE-BENCHMARK.md) for the feature inventory, ShouTech gap mapping, implementation order, and source-license caution.
