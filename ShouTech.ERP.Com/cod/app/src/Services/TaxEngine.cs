@@ -54,7 +54,7 @@ public static class TaxCountryPackCatalog
             ["SI"] = 22m, ["ES"] = 21m, ["SE"] = 25m
         };
 
-    private static readonly IReadOnlyDictionary<string, TaxCountryPack> Packs =
+    private static readonly ReadOnlyDictionary<string, TaxCountryPack> Packs =
         new ReadOnlyDictionary<string, TaxCountryPack>(Build());
 
     public static IReadOnlyCollection<TaxCountryPack> All =>
