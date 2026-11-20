@@ -120,7 +120,7 @@
     "code": "AUTH-2004",
     "name": "PasswordPolicyViolation",
     "message": "Le mot de passe administrateur ne respecte pas la politique de mot de passe : {0}",
-    "hint": "Utilisez au moins 12 caractères avec des lettres, des chiffres et un symbole."
+    "hint": "Utilisez au moins 3 caractères. Les lettres, chiffres, symboles ou toute combinaison sont acceptés."
   },
   "AUTH-2005": {
     "code": "AUTH-2005",
