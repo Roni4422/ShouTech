@@ -9,12 +9,11 @@ using ShouTech.App.Services;
 namespace ShouTech.App.Views;
 
 /// <summary>
-/// Help window: renders the shipped English manual
-/// (docs/SHOUTECH_ERP_EN.md, located by walking up from the application
-/// base directory) as a readable FlowDocument — headings, paragraphs and
-/// list items — with a section list on the left that scrolls to the
-/// chosen heading. If the manual file is not present in the deployment,
-/// the window says so honestly instead of showing placeholder text.
+/// Help window: renders the shipped English user guide
+/// (docs/USER_GUIDE_EN.md, with docs/SHOUTECH_ERP_EN.md as a legacy fallback)
+/// as a readable FlowDocument. The section list navigates to headings.
+/// If neither manual is present in the deployment, the window reports that
+/// accurately instead of showing placeholder content.
 /// </summary>
 public sealed class HelpWin : BaseWin
 {
