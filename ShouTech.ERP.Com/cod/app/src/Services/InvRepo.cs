@@ -1848,7 +1848,7 @@ public static class InvRepo
                 // account exactly. A customer-initiated commercial return
                 // remains classified in the contra-revenue account.
                 var mirrorsOriginalSales = doc.OriginalDocId is > 0
-                    && doc.OriginalDocKind == InvDocKind.SalesInvoice;
+                    && doc.OriginalDocKind is InvDocKind.SalesInvoice or InvDocKind.PosSale;
                 for (var i = 0; i < doc.Lines.Count; i++)
                 {
                     var revenueAccount = mirrorsOriginalSales
@@ -1901,8 +1901,18 @@ public static class InvRepo
                 var paid = Math.Min(Math.Max(doc.PaidAmount, 0m), grand);
                 Add(GlAccounts.Payable, grand - paid, 0);
                 Add(settleAccount, paid, 0);
+                // A generated full reversal mirrors the original purchase
+                // account. A normal supplier return remains classified in
+                // the purchase-return contra account.
+                var mirrorsOriginalPurchase = doc.OriginalDocId is > 0
+                    && doc.OriginalDocKind == InvDocKind.PurchaseInvoice;
                 for (var i = 0; i < doc.Lines.Count; i++)
-                    Add(CodeOr(infos[i].AccPurchaseReturn, GlAccounts.PurchaseReturns), 0, leg[i], cc);
+                {
+                    var purchaseAccount = mirrorsOriginalPurchase
+                        ? CodeOr(infos[i].AccPurchase, GlAccounts.Purchases)
+                        : CodeOr(infos[i].AccPurchaseReturn, GlAccounts.PurchaseReturns);
+                    Add(purchaseAccount, 0, leg[i], cc);
+                }
                 if (splitTax) Add(taxAccountCode, 0, taxLeg);
                 break;
             }
