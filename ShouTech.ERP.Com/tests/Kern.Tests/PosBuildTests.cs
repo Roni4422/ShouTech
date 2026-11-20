@@ -143,9 +143,13 @@ public class PosBuildTests
         Assert.Equal(ErrorCodes.PosSessionlessNotAllowed, error2.Code);
         Assert.Null(await service.RequireSessionForSaleAsync(CompanyCode, "T1", callerMayBypassSession: true));
 
-        var session = await service.OpenSessionAsync(CompanyCode, "T1", "Cashier", null, "SAR", 200m, Actor);
+        var missingWarehouse = await Assert.ThrowsAsync<AppError>(() =>
+            service.OpenSessionAsync(CompanyCode, "T1", "Cashier", null, "SAR", 200m, Actor));
+        Assert.Equal(ErrorCodes.PosSessionStateInvalid, missingWarehouse.Code);
+
+        var session = await service.OpenSessionAsync(CompanyCode, "T1", "Cashier", 1, "SAR", 200m, Actor);
         var error3 = await Assert.ThrowsAsync<AppError>(() =>
-            service.OpenSessionAsync(CompanyCode, "T1", "Other", null, "SAR", 0m, Actor));
+            service.OpenSessionAsync(CompanyCode, "T1", "Other", 1, "SAR", 0m, Actor));
         Assert.Equal(ErrorCodes.PosSessionAlreadyOpen, error3.Code);
         Assert.Equal(session.Id, (await service.RequireSessionForSaleAsync(CompanyCode, "T1", callerMayBypassSession: false))!.Id);
     }
