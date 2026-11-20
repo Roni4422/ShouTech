@@ -103,7 +103,7 @@ public static class TaxSvc
             (value is bool flag ? flag : Convert.ToInt32(value, CultureInfo.InvariantCulture) == 1);
     }
 
-    public static IReadOnlyList<TaxCodeRec> LoadCodes()
+    public static IReadOnlyList<TaxCodeRec> LoadCodes(DateTime? asOfDate = null)
     {
         var list = new List<TaxCodeRec>();
         var cs = DatabaseRuntime.GetConnectionString();
@@ -115,6 +115,7 @@ public static class TaxSvc
             using var connection = Open(cs);
             using var cmd = connection.CreateCommand();
             var activeValue = DatabaseRuntime.IsPostgreSql() ? "TRUE" : "1";
+            var asOfExpression = DatabaseRuntime.IsPostgreSql() ? "CAST($asOf AS date)" : "$asOf";
             cmd.CommandText = $"""
                 SELECT r.tax_code, COALESCE(r.tax_name, r.tax_code), COALESCE(r.rate, 0), COALESCE(r.country_code, '')
                 FROM company_tax_rules r
@@ -122,11 +123,12 @@ public static class TaxSvc
                 WHERE r.company_code = $company
                   AND r.country_code = s.country_code
                   AND r.is_active = {activeValue}
-                  AND r.effective_from <= CURRENT_DATE
-                  AND (r.effective_to IS NULL OR r.effective_to >= CURRENT_DATE)
+                  AND r.effective_from <= {asOfExpression}
+                  AND (r.effective_to IS NULL OR r.effective_to >= {asOfExpression})
                 ORDER BY r.is_default DESC, r.tax_code;
                 """;
             Add(cmd, "$company", AppState.CurrentCompanyCode ?? "");
+            Add(cmd, "$asOf", (asOfDate ?? DateTime.Today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
