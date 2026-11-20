@@ -282,7 +282,9 @@ public sealed class TaxSetupWin : BaseWin
             MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
         if (confirmEnable != MessageBoxResult.Yes) return;
 
-        TaxSvc.SetTaxEnabled(countryCode, true);
+        var selectedPack = TaxCountryPackCatalog.FindByNameOrCode(countryCode);
+        TaxSvc.SetTaxEnabled(countryCode, true, selectedPack?.Regime.ToString() ?? string.Empty,
+            _registrationNumber.Text.Trim());
         RefreshData();
     }
 
