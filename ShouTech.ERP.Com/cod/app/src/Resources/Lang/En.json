@@ -2181,6 +2181,9 @@
       "Saudi": "Saudi Arabia — VAT",
       "Jordan": "Jordan — Sales tax"
     }
+  ,
+    "EnableTaxSystem": "Enable the selected country's tax system for this company",
+    "TaxCountryRequired": "Choose a supported country name or ISO code before enabling its tax system."
   },
   "FiscalHint": {
     "Length": {},
