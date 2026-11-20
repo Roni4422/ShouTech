@@ -1420,9 +1420,8 @@ public static class InvRepo
             using (var find = connection.CreateCommand())
             {
                 find.Transaction = tx;
-                find.CommandText = """
-                    SELECT debit, credit, currency_code
-                    """ + (hasBase ? ", base_debit, base_credit, exchange_rate" : "") + """
+                find.CommandText = $"""
+                    SELECT debit, credit, currency_code{(hasBase ? ", base_debit, base_credit, exchange_rate" : string.Empty)}
                     FROM party_ledger
                     WHERE company_id=$company AND party_id=$pid AND doc_id=$orig
                       AND doc_kind IN ('RCV', 'PAY');
