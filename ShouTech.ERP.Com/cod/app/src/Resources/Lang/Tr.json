@@ -190,7 +190,8 @@
     "AccountComparison": "Hesap Karşılaştırması",
     "FinancialAnalysis": "Finansal Analiz",
     "LocalAnalysis": "Yerel",
-    "AIAnalysis": "Yapay Zeka"
+    "AIAnalysis": "Yapay Zeka",
+    "TaxConfiguration": "Vergi yapılandırması"
   },
   "Bonds": {
     "Title": "Senetler",
@@ -1334,7 +1335,8 @@
     "HelpUpdates": "Güncellemeler",
     "HelpSupport": "Destek",
     "HelpLicense": "Lisans",
-    "POSSales": "Satışlar"
+    "POSSales": "Satışlar",
+    "AccountsTax": "Vergi"
   },
   "MatCard": {
     "Code": "Kod",
