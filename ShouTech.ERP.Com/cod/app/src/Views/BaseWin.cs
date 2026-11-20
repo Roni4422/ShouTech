@@ -7,6 +7,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Input;
 using ShouTech.App.Services;
 using ShouTech.App.Localization;
 using WpfApp = System.Windows.Application;
@@ -77,8 +78,26 @@ public abstract class BaseWin : Window
             }
         }
 
+        PreviewKeyDown += OnHelpPreviewKeyDown;
         Loaded += OnBaseLoaded;
         Closed += OnBaseClosed;
+    }
+
+    private void OnHelpPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.F1 || e.IsRepeat || this is HelpWin)
+            return;
+
+        e.Handled = true;
+        try
+        {
+            var help = new HelpWin { Owner = this };
+            help.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "BaseWin.F1Help");
+        }
     }
 
     /// <summary>Localization service owned by the application shell.</summary>
