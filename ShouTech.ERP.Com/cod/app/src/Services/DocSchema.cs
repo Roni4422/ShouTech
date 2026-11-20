@@ -33,7 +33,8 @@ public static class DocSchema
                   FROM information_schema.tables
                   WHERE table_schema = current_schema()
                     AND table_name IN ('sales_documents', 'sales_document_lines',
-                      'purchase_documents', 'purchase_document_lines', 'party_ledger', 'stock_movements')
+                      'purchase_documents', 'purchase_document_lines', 'party_ledger', 'stock_movements',
+                      'document_number_sequences')
                   """
                 : """
                   SELECT COUNT(*)
@@ -43,7 +44,7 @@ public static class DocSchema
                       'purchase_documents', 'purchase_document_lines', 'party_ledger', 'stock_movements')
                   """;
             var count = Convert.ToInt32(cmd.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
-            if (count != 6)
+            if (count != 7)
                 throw new InvalidOperationException(
                     "Commercial-document schema is incomplete. Apply the provider migrations under dba/mig before using invoices.");
 
