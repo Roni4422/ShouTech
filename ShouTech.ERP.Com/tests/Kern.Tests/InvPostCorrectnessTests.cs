@@ -47,7 +47,7 @@ public sealed class InvPostCorrectnessTests
     private const string CompanyCode = "IP5";
 
     [Fact]
-    public async Task NextDocNo_UsesHighestExistingSequence_AndDoesNotReuseDeletedNumbers()
+    public async Task NextDocNo_UsesHighestExistingSequenceInsteadOfRowCount()
     {
         using var db = await SeededAsync();
         var year = DateTime.Today.Year.ToString(CultureInfo.InvariantCulture);
