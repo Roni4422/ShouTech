@@ -32,7 +32,7 @@ public interface IPosRepository
     /// barcodes, names) for the touch grid and the search box; exact
     /// code/barcode matches sort first (the TaxSvc.ResolveMaterial
     /// ordering, generalised to a result list).</summary>
-    Task<IReadOnlyList<PosProduct>> SearchProductsAsync(string companyId, string? term, int limit = 60, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<PosProduct>> SearchProductsAsync(string companyId, string? term, int? warehouseId = null, int limit = 60, CancellationToken cancellationToken = default);
 
     // ---- Tenders --------------------------------------------------------------
     Task RecordTendersAsync(string companyId, IReadOnlyList<PosTender> tenders, string userId, CancellationToken cancellationToken = default);
