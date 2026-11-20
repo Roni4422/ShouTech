@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
@@ -51,6 +52,32 @@ public sealed class TaxSetupWin : BaseWin
         Loaded += OnLoaded;
     }
 
+    protected override void ApplyLocalizedText()
+    {
+        Title = T("TaxSetup.Title");
+        if (Content is DependencyObject root)
+            ApplyLocalizedNode(root);
+        foreach (var column in _rules.Columns)
+            if (!string.IsNullOrWhiteSpace(column.SortMemberPath))
+                column.Header = T("TaxSetup.Column." + column.SortMemberPath);
+        if (IsLoaded)
+            RefreshData();
+    }
+
+    private void ApplyLocalizedNode(DependencyObject node)
+    {
+        if (node is TextBlock text && text.Tag is string textKey)
+            text.Text = T(textKey);
+        else if (node is Button button && button.Tag is string buttonKey)
+            button.Content = T(buttonKey);
+        else if (node is CheckBox check && check.Tag is string checkKey)
+            check.Content = T(checkKey);
+
+        foreach (var child in LogicalTreeHelper.GetChildren(node))
+            if (child is DependencyObject dependency)
+                ApplyLocalizedNode(dependency);
+    }
+
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         if (!AppHost.Permissions.Has(PermCat.Accounting.TaxView))
@@ -75,7 +102,7 @@ public sealed class TaxSetupWin : BaseWin
         jurisdiction.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         jurisdiction.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         jurisdiction.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var countryLabel = new TextBlock { Text = T("TaxSetup.Jurisdiction"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        var countryLabel = new TextBlock { Text = T("TaxSetup.Jurisdiction"), Tag = "TaxSetup.Jurisdiction", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
         Grid.SetColumn(countryLabel, 0);
         _country.MinWidth = 250;
         Grid.SetColumn(_country, 1);
@@ -91,6 +118,7 @@ public sealed class TaxSetupWin : BaseWin
         registrationPanel.Children.Add(new TextBlock
         {
             Text = T("TaxSetup.RegistrationNumber"),
+            Tag = "TaxSetup.RegistrationNumber",
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0)
         });
@@ -174,7 +202,7 @@ public sealed class TaxSetupWin : BaseWin
     private void AddField(Grid grid, int row, int column, string key, Control control)
     {
         var panel = new StackPanel { Margin = new Thickness(4) };
-        panel.Children.Add(new TextBlock { Text = T(key), Margin = new Thickness(0, 0, 0, 3) });
+        panel.Children.Add(new TextBlock { Text = T(key), Tag = key, Margin = new Thickness(0, 0, 0, 3) });
         control.Margin = new Thickness(0, 0, 0, 2);
         panel.Children.Add(control);
         Grid.SetRow(panel, row);
@@ -185,7 +213,7 @@ public sealed class TaxSetupWin : BaseWin
     private StackPanel FieldPanel(string key, Control control)
     {
         var panel = new StackPanel { Margin = new Thickness(6, 0, 6, 0), MinWidth = 130 };
-        panel.Children.Add(new TextBlock { Text = T(key) });
+        panel.Children.Add(new TextBlock { Text = T(key), Tag = key });
         panel.Children.Add(control);
         return panel;
     }
@@ -194,6 +222,7 @@ public sealed class TaxSetupWin : BaseWin
     {
         var panel = new StackPanel { Margin = new Thickness(6, 16, 6, 0) };
         check.Content = T(key);
+        check.Tag = key;
         panel.Children.Add(check);
         return panel;
     }
@@ -201,6 +230,7 @@ public sealed class TaxSetupWin : BaseWin
     private void ConfigureButton(Button button, string key)
     {
         button.Content = T(key);
+        button.Tag = key;
         button.MinWidth = 82;
         button.Margin = new Thickness(4, 0, 0, 0);
         button.Padding = new Thickness(10, 5, 10, 5);
