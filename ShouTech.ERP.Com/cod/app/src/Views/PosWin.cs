@@ -208,6 +208,7 @@ public sealed class PosWin : BaseWin
         _grid.SetResourceReference(DataGrid.CellStyleProperty, "VisuDataGridCellStyle");
         _grid.Columns.Add(new DataGridTextColumn { Header = "BARCODE", Binding = new System.Windows.Data.Binding(nameof(PosLine.Code)), IsReadOnly = true, Width = 110 });
         _grid.Columns.Add(new DataGridTextColumn { Header = "PRODUCT", Binding = new System.Windows.Data.Binding(nameof(PosLine.Name)), IsReadOnly = true, Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        _grid.Columns.Add(new DataGridTextColumn { Header = "STOCK", Binding = new System.Windows.Data.Binding(nameof(PosLine.AvailableQty)) { StringFormat = "N3", TargetNullValue = "—" }, IsReadOnly = true, Width = 78 });
         _grid.Columns.Add(new DataGridTextColumn { Header = "QTY", Binding = new System.Windows.Data.Binding(nameof(PosLine.Qty)) { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged, StringFormat = "N3" }, Width = 76 });
         _grid.Columns.Add(new DataGridTextColumn { Header = "PRICE", Binding = new System.Windows.Data.Binding(nameof(PosLine.Price)) { StringFormat = "N2" }, IsReadOnly = true, Width = 90 });
         _grid.Columns.Add(new DataGridTextColumn { Header = "DISC %", Binding = new System.Windows.Data.Binding(nameof(PosLine.DiscountPct)) { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged, StringFormat = "N2" }, Width = 70 });
@@ -410,8 +411,31 @@ public sealed class PosWin : BaseWin
         var existing = _cart.FirstOrDefault(x => x.MaterialId == material.Value.Id
             && string.Equals(x.Unit, material.Value.Unit, StringComparison.OrdinalIgnoreCase));
         if (existing is not null) existing.Qty += 1;
-        else _cart.Add(new PosLine { MaterialId = material.Value.Id, Code = code, Name = material.Value.Name, Unit = material.Value.Unit, Price = material.Value.Price, TaxRate = material.Value.TaxRate > 0 ? material.Value.TaxRate : TaxSvc.GetDefaultRate(), Qty = 1 });
+        else
+        {
+            existing = new PosLine { MaterialId = material.Value.Id, Code = code, Name = material.Value.Name, Unit = material.Value.Unit, Price = material.Value.Price, TaxRate = material.Value.TaxRate > 0 ? material.Value.TaxRate : TaxSvc.GetDefaultRate(), Qty = 1 };
+            _cart.Add(existing);
+        }
         _scan.Clear(); UpdateTotals(); SetStatus($"Added {material.Value.Name} to the sale."); _scan.Focus();
+        _ = RefreshLineStockAsync(existing, material.Value.Id, code);
+    }
+
+    private async System.Threading.Tasks.Task RefreshLineStockAsync(PosLine line, long materialId, string lookup)
+    {
+        try
+        {
+            var service = AppHost.Pos;
+            if (service is null) return;
+            var products = await service.SearchProductsAsync(CurrentCompanyCode, lookup, _activeWarehouseId, 12);
+            var product = products.FirstOrDefault(x => x.MaterialId == materialId);
+            if (product is null) return;
+            line.AvailableQty = product.SellableQty;
+            _grid.Items.Refresh();
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PosWin.RefreshLineStockAsync");
+        }
     }
 
     private decimal BillDiscountValue()
@@ -550,8 +574,8 @@ public sealed class PosWin : BaseWin
     {
         var existing = _cart.FirstOrDefault(x => x.MaterialId == product.MaterialId
             && string.Equals(x.Unit, product.Unit, StringComparison.OrdinalIgnoreCase));
-        if (existing is not null) existing.Qty += 1;
-        else _cart.Add(new PosLine { MaterialId = product.MaterialId, Code = product.Code, Name = product.Name, Unit = product.Unit, Price = product.Price, TaxRate = product.TaxRate > 0 ? product.TaxRate : TaxSvc.GetDefaultRate(), Qty = 1 });
+        if (existing is not null) { existing.Qty += 1; existing.AvailableQty = product.SellableQty; }
+        else _cart.Add(new PosLine { MaterialId = product.MaterialId, Code = product.Code, Name = product.Name, Unit = product.Unit, Price = product.Price, TaxRate = product.TaxRate > 0 ? product.TaxRate : TaxSvc.GetDefaultRate(), Qty = 1, AvailableQty = product.SellableQty });
         UpdateTotals();
         SetStatus($"Added {product.Name} to the sale.");
         _scan.Focus();
@@ -795,7 +819,7 @@ public sealed class PosWin : BaseWin
             ["F2 Scan   ·   F12 Checkout"] = Local("Hotkeys", "F2 Scan   ·   F12 Checkout"),
             ["Add item"] = Local("AddItem", "Add item"), ["Current sale"] = Local("CurrentSale", "Current sale"),
             ["Remove selected"] = Local("RemoveSelected", "Remove selected"), ["BARCODE"] = Local("Barcode", "BARCODE"),
-            ["PRODUCT"] = Local("Product", "PRODUCT"), ["QTY"] = Local("Qty", "QTY"), ["PRICE"] = Local("Price", "PRICE"),
+            ["PRODUCT"] = Local("Product", "PRODUCT"), ["STOCK"] = Local("Stock", "STOCK"), ["QTY"] = Local("Qty", "QTY"), ["PRICE"] = Local("Price", "PRICE"),
             ["TAX"] = Local("Tax", "TAX"), ["LINE TOTAL"] = Local("LineTotal", "LINE TOTAL"),
             ["Order summary"] = Local("OrderSummary", "Order summary"), ["Review totals before checkout"] = Local("ReviewTotals", "Review totals before checkout"),
             ["Subtotal"] = Local("Subtotal", "Subtotal"), ["Tax"] = Local("Tax", "Tax"), ["TOTAL DUE"] = Local("TotalDue", "TOTAL DUE"),
@@ -988,6 +1012,7 @@ public sealed class PosWin : BaseWin
         public decimal Price { get; set; }
         public decimal DiscountPct { get; set; }
         public decimal TaxRate { get; set; }
+        public decimal? AvailableQty { get; set; }
         public decimal Subtotal => Qty * Price * (1m - DiscountPct / 100m);
         public decimal TaxAmount => Subtotal * TaxRate / 100m;
         public decimal Total => Subtotal + TaxAmount;
