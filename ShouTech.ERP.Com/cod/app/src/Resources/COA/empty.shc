@@ -249,6 +249,42 @@
         "ar": "Closing Accounts",
         "en": "Closing Accounts"
       }
+    },
+    {
+      "id": 13,
+      "number": 1205,
+      "code": "1205",
+      "parentId": 3,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": null,
+      "names": {
+        "ar": "Recoverable Input Taxes",
+        "en": "Recoverable Input Taxes"
+      }
+    },
+    {
+      "id": 14,
+      "number": 2205,
+      "code": "2205",
+      "parentId": 7,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": null,
+      "names": {
+        "ar": "Sales Taxes Payable",
+        "en": "Sales Taxes Payable"
+      }
     }
   ],
   "closingAccounts": [],
