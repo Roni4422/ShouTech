@@ -15,6 +15,42 @@ Initial coverage targets:
 
 Country coverage is a delivery target, not a claim that every jurisdiction is legally certified at the same time. Each production pack must be verified against current official legislation, tax authority specifications, effective dates and local professional review before it is marked compliant.
 
+## Automatic country-based tax activation
+
+Selecting the company's country in the company-creation wizard or changing it later must automatically select and activate that country's tax localization pack. This is the default product behavior; users must not need to manually choose a VAT system or enter a generic tax percentage to get started.
+
+The activation workflow must:
+
+1. Normalize and validate the selected country using ISO 3166-1 alpha-2 country codes; do not infer the tax jurisdiction from the UI language, currency or device location.
+2. Resolve the matching country pack and a compatible, versioned rule dataset for the company's accounting start date.
+3. Create or update the company's tax profile transactionally, including country, selected tax regime, default tax currency/rounding policy where applicable, supported tax types, tax codes, posting-profile templates and filing-calendar defaults.
+4. Set that pack as the active default for the company and make its eligible tax codes available automatically to invoices, purchases, credit/debit notes, POS and tax reports.
+5. Preserve company-specific registration state separately. The country pack can be active while registration is pending, not required, exempt, suspended or not yet supplied. Never invent a VAT/TIN number or mark the company registered merely because a country was selected.
+6. Ask for only the jurisdiction-specific details that are legally necessary for the company's declared activity and registration status. Allow setup to be saved as pending configuration where the law permits, but block tax-sensitive posting when a mandatory registration or tax determination input is missing.
+7. Allow multiple registrations and jurisdictions for one company where legally applicable, with an explicit primary establishment and effective dates.
+8. Re-run tax-profile resolution when the country or legal establishment changes, show the impact, and require confirmation before replacing an existing profile. Never silently rewrite posted documents, historical tax snapshots or filed returns.
+9. If a country pack is unavailable or its rules are not verified for the transaction date, show a clear setup/compliance warning and block unsupported tax posting. Do not silently fall back to the Saudi 15% rate or any other country's rate.
+10. Record the selected pack ID/version, activation timestamp, source dataset version and user/action in the audit trail.
+
+### Company setup experience
+
+- Country selection is the trigger for automatic tax-pack activation.
+- The tax setup panel is populated from the selected country pack, not from hard-coded country checks in the company wizard.
+- Display the country's applicable tax regime(s), registration status, required registration fields, default tax treatments and any additional setup steps.
+- Keep legal registration confirmation and evidence under the company's control; do not assume tax registration from country selection.
+- Provide an explicit way to review or change tax configuration, subject to permissions and audit logging.
+
+### Automatic activation acceptance tests
+
+- Selecting each supported country activates exactly the matching pack and expected version.
+- Changing the country before first save updates the pending profile without leaving tax codes from the previous country.
+- Changing the country of an existing company requires confirmation and preserves historical posted tax snapshots and returns.
+- A company without a tax registration number is not falsely marked registered.
+- Multiple registrations and establishments resolve the correct jurisdiction by transaction date and place of supply.
+- An unsupported or out-of-date pack never falls back to an unrelated country's rate.
+- Company setup and pack activation are atomic: failures roll back the profile and tax-code activation together.
+- The selected country pack and activation event are isolated by company and are fully auditable.
+
 ## Current implementation assessment
 
 The existing `TaxSvc` and `tax_codes` path provide only a basic active-rate lookup and a hard-coded country-default dictionary. Invoice lines carry a percentage and the posting engine can split a tax amount to an input/output VAT account. This is a useful foundation but is not a multi-country compliance engine.
