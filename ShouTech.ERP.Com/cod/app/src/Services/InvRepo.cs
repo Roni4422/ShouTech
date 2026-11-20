@@ -1295,6 +1295,7 @@ public static class InvRepo
                     Qty = line.Qty,
                     UnitPrice = line.UnitPrice,
                     DiscountPct = line.DiscountPct,
+                    TaxCode = line.TaxCode,
                     TaxRate = line.TaxRate,
                     WarehouseId = line.WarehouseId,
                     WarehouseName = line.WarehouseName
