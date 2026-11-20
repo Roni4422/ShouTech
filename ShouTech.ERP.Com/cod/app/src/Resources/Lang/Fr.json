@@ -3521,7 +3521,7 @@
     "Disable": "Désactiver la fiscalité",
     "ChangeJurisdictionUseAction": "Désactivez d'abord la juridiction actuelle, puis activez la nouvelle.",
     "Disabled": "La fiscalité est désactivée pour cette société. Sélectionnez une juridiction et activez-la pour continuer.",
-    "EnabledStatus": "Fiscalité activée pour {0}. Régime : {1}. Les règles de base sont chargées ; vérifiez les règles locales et les comptes avant comptabilisation.",
+    "EnabledStatus": "Fiscalité activée pour {0}. Régime : {1}. Les règles initiales sont chargées, mais aucune comptabilisation n'est autorisée avant la vérification et l'enregistrement de chaque taux et compte.",
     "DisableConfirm": "Désactiver la fiscalité de cette société ? Les règles et l'historique fiscal comptabilisé seront conservés.",
     "EnableConfirm": "Activer le système fiscal de {0} ? Les règles de base de cette juridiction seront chargées. Continuer ?",
     "SelectCountry": "Sélectionnez d'abord une juridiction fiscale.",
@@ -3556,10 +3556,14 @@
       "EffectiveTo": "Fin",
       "IsDefault": "Par défaut",
       "IsActive": "Actif",
-      "DataStatus": "État des données"
+      "DataStatus": "État des données",
+      "SourceUrl": "URL source",
+      "SourceReference": "Référence légale"
     },
     "EnabledNeedsRules": "La fiscalité est activée pour {0} ({1}), mais le jeu complet de taux et de classifications n'est pas chargé. Ajoutez et vérifiez les règles nationales, régionales, locales ou de barème avant comptabilisation.",
-    "RegistrationNumber": "Numéro d'immatriculation fiscale"
+    "RegistrationNumber": "Numéro d'immatriculation fiscale",
+    "SourceUrl": "URL de la source officielle",
+    "SourceReference": "Référence légale / notes"
   },
   "TaxReport": {
     "Title": "Rapport de période fiscale",
