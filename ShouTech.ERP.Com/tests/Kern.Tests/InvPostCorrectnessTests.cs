@@ -73,6 +73,43 @@ public sealed class InvPostCorrectnessTests
     }
 
     [Fact]
+    public async Task LoadAndPost_RejectMismatchedStoredDocumentKind()
+    {
+        using var db = await SeededAsync();
+        var beforeStock = StockQty(db);
+        var doc = BuildDoc(InvDocKind.SalesInvoice, null, string.Empty,
+            qty: 2m, price: 10m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        InvRepo.SaveDraft(doc);
+
+        Assert.Throws<InvalidOperationException>(
+            () => InvRepo.Load(doc.DocId, InvDocKind.SalesReturn));
+        Assert.Throws<InvalidOperationException>(
+            () => InvRepo.Post(doc.DocId, InvDocKind.SalesReturn, Actor));
+
+        var original = InvRepo.Load(doc.DocId, InvDocKind.SalesInvoice);
+        Assert.NotNull(original);
+        Assert.Equal(InvDocStatus.Draft, original!.Status);
+        Assert.Equal(beforeStock, StockQty(db));
+        Assert.Equal(0m, Scalar(db, "SELECT COUNT(*) FROM journal_entries;"));
+        Assert.Equal(0m, Scalar(db, $"SELECT COUNT(*) FROM party_ledger WHERE doc_id = {doc.DocId};"));
+    }
+
+    [Fact]
+    public async Task Load_RestoresLineWarehouseNameFromItsStoredColumn()
+    {
+        using var db = await SeededAsync();
+        var doc = BuildDoc(InvDocKind.SalesInvoice, null, string.Empty,
+            qty: 1m, price: 10m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        doc.Lines[0].WarehouseName = "Line Warehouse";
+        InvRepo.SaveDraft(doc);
+
+        var loaded = InvRepo.Load(doc.DocId, InvDocKind.SalesInvoice);
+
+        Assert.NotNull(loaded);
+        Assert.Equal("Line Warehouse", loaded!.Lines.Single().WarehouseName);
+    }
+
+    [Fact]
     public async Task NextDocNo_UsesHighestExistingSequenceInsteadOfRowCount()
     {
         using var db = await SeededAsync();
