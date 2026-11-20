@@ -39,7 +39,7 @@ public sealed record TaxPackRuleDefinition(
 
 public static class TaxCountryPackCatalog
 {
-    private static readonly IReadOnlyDictionary<string, decimal> StandardRates =
+    private static readonly Dictionary<string, decimal> StandardRates =
         new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
         {
             ["SA"] = 15m, ["JO"] = 16m, ["EG"] = 14m, ["AE"] = 5m,
@@ -280,8 +280,8 @@ public static class TaxCalculator
         bool taxInclusive,
         int currencyPrecision = 2)
     {
-        if (amount < 0m) throw new ArgumentOutOfRangeException(nameof(amount));
-        if (components is null) throw new ArgumentNullException(nameof(components));
+        ArgumentOutOfRangeException.ThrowIfLessThan(amount, 0m);
+        ArgumentNullException.ThrowIfNull(components);
         if (currencyPrecision is < 0 or > 6) throw new ArgumentOutOfRangeException(nameof(currencyPrecision));
         if (components.Any(x => string.IsNullOrWhiteSpace(x.Code) || x.Rate < 0m || x.Rate > 100000m))
             throw new ArgumentException("Tax components require a code and a valid non-negative rate.", nameof(components));
