@@ -106,6 +106,32 @@ public sealed class PosRepository : IPosRepository
         return await reader.ReadAsync(cancellationToken).ConfigureAwait(false) ? ReadSession(reader) : null;
     }
 
+    public async Task<int?> GetTerminalWarehouseIdAsync(string companyId, string terminalCode, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        if (string.IsNullOrWhiteSpace(terminalCode)) return null;
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = CreateCommand(connection, null, """
+            SELECT w.warehouse_id
+            FROM pos_terminals t
+            INNER JOIN warehouses w
+                ON w.company_id = t.company_id
+               AND CAST(w.warehouse_code AS TEXT) = t.warehouse_code
+               AND COALESCE(w.is_deleted, 0) = 0
+               AND COALESCE(w.is_active, 1) = 1
+            WHERE t.company_id = @company
+              AND t.code = @terminal
+              AND COALESCE(t.is_deleted, 0) = 0
+              AND COALESCE(t.is_active, 1) = 1
+            LIMIT 1
+            """);
+        Add(command, "@company", companyId.Trim());
+        Add(command, "@terminal", terminalCode.Trim());
+        var value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return value is null or DBNull ? null : Convert.ToInt32(value, CultureInfo.InvariantCulture);
+    }
+
     public async Task<PosSession?> GetSessionAsync(string companyId, Guid sessionId, CancellationToken cancellationToken = default)
     {
         RequireCompany(companyId);
