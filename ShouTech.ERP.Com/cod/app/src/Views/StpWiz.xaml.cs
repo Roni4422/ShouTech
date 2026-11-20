@@ -701,6 +701,7 @@ namespace ShouTech.App.Views
             btnCancel.Content = W("Buttons.Cancel", "Cancel");
             btnBack.Content = W("Buttons.Back", "Back");
             btnNext.Content = W("Buttons.Next", "Next");
+            chkEnableTaxSystem.Content = W("EnableTaxSystem", "Enable the selected country's tax system for this company");
 
             if (!_isSaving)
             {
