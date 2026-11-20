@@ -38,13 +38,13 @@ UPDATE parties p
 SET ledger_id = c.customer_id
 FROM customers c
 WHERE p.kind = 'C' AND p.ledger_id IS NULL
-  AND c.company_id = p.company_id AND c.customer_code = p.code AND c.is_deleted = FALSE;
+  AND c.company_id = p.company_id AND c.customer_code = p.code AND c.is_deleted = 0;
 
 UPDATE parties p
 SET ledger_id = s.supplier_id
 FROM suppliers s
 WHERE p.kind = 'S' AND p.ledger_id IS NULL
-  AND s.company_id = p.company_id AND s.supplier_code = p.code AND s.is_deleted = FALSE;
+  AND s.company_id = p.company_id AND s.supplier_code = p.code AND s.is_deleted = 0;
 
 -- 2) Legacy-only parties are created in the canonical store.
 INSERT INTO parties
