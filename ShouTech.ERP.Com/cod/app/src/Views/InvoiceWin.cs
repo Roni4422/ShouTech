@@ -35,6 +35,8 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
     private readonly DatePicker _dtDate = new() { SelectedDate = DateTime.Today };
     private readonly TextBox _txtCurrency = new();
     private readonly TextBox _txtTaxRate = new();
+    private readonly ComboBox _cmbTaxCode = new();
+    private readonly IReadOnlyList<TaxSvc.TaxCodeRec> _taxCodes = TaxSvc.LoadCodes();
     private readonly TextBox _txtReceiptNo = new();
     private readonly TextBox _txtReference = new();
     private readonly TextBox _txtBranch = new();
@@ -110,6 +112,11 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
 
         BuildUi();
         _txtTaxRate.IsReadOnly = !TaxSvc.IsEnabled;
+        _cmbTaxCode.ItemsSource = _taxCodes;
+        _cmbTaxCode.DisplayMemberPath = nameof(TaxSvc.TaxCodeRec.Name);
+        _cmbTaxCode.SelectedValuePath = nameof(TaxSvc.TaxCodeRec.Code);
+        _cmbTaxCode.IsEnabled = TaxSvc.IsEnabled && _taxCodes.Count > 0;
+        _cmbTaxCode.SelectedValue = _doc.TaxCode;
         ApplyLanguageDirection();
 
         _doc.DocNo = InvRepo.NextDocNo(kind);
@@ -273,10 +280,26 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _btnPost.Click += (_, _) => PostDoc();
         _btnPrint.Click += (_, _) => InvPrn.Print(CaptureDoc(), CurrentCompanyDisplay);
         _btnPdf.Click += (_, _) => InvPrn.ExportPdf(CaptureDoc(), CurrentCompanyDisplay);
+        _cmbTaxCode.SelectionChanged += (_, _) =>
+        {
+            var selectedCode = Convert.ToString(_cmbTaxCode.SelectedValue, CultureInfo.InvariantCulture) ?? string.Empty;
+            var selectedTax = _taxCodes.FirstOrDefault(x => string.Equals(x.Code, selectedCode, StringComparison.OrdinalIgnoreCase));
+            if (selectedTax is null) return;
+            _doc.TaxCode = selectedTax.Code;
+            _doc.DefaultTaxRate = selectedTax.Rate;
+            _txtTaxRate.Text = selectedTax.Rate.ToString("0.##", CultureInfo.InvariantCulture);
+            foreach (var line in _lines)
+            {
+                line.TaxCode = selectedTax.Code;
+                line.TaxRate = selectedTax.Rate;
+            }
+            RefreshTotals();
+        };
         _btnAddLine.Click += (_, _) =>
         {
             _lines.Add(new LineVm
             {
+                TaxCode = Convert.ToString(_cmbTaxCode.SelectedValue, CultureInfo.InvariantCulture) ?? string.Empty,
                 TaxRate = ParseDec(_txtTaxRate.Text, TaxSvc.GetDefaultRate()),
                 WarehouseName = _txtWarehouse.Text.Trim()
             });
@@ -432,6 +455,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         Size(_dtDate);
         Size(_txtCurrency);
         Size(_txtTaxRate);
+        Size(_cmbTaxCode);
         Size(_txtReceiptNo);
         Size(_txtReference);
         Size(_txtBranch);
@@ -453,7 +477,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
 
         // Payment / document column
         var payment = new Grid { Margin = new Thickness(gap) };
-        for (var i = 0; i < 7; i++)
+        for (var i = 0; i < 8; i++)
             payment.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         AddLabeledCell(payment, 0, Tf("Invoice.PaymentMethod", "Payment method"), _cmbPayment);
         AddLabeledCell(payment, 1, Tf("Invoice.Date", "Date"), _dtDate);
@@ -462,6 +486,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         AddLabeledCell(payment, 4, Tf("Invoice.ReceiptNo", "Receipt no."), _txtReceiptNo);
         AddLabeledCell(payment, 5, Tf("Invoice.Reference", "Reference"), _txtReference);
         AddLabeledCell(payment, 6, Tf("Invoice.Branch", "Branch"), _txtBranch);
+        AddLabeledCell(payment, 7, Tf("Invoice.TaxSystem", "Tax system"), _cmbTaxCode);
 
         // Party / warehouse column
         var party = new Grid { Margin = new Thickness(gap) };
@@ -624,6 +649,17 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _grid.Columns.Add(TextCol(nameof(LineVm.Unit), 60, Tf("Invoice.ColUnit", "Unit")));
         _grid.Columns.Add(TextCol(nameof(LineVm.UnitPriceText), 80, Tf("Invoice.ColUnitPrice", "Unit price")));
         _grid.Columns.Add(TextCol(nameof(LineVm.DiscountPctText), 60, Tf("Invoice.ColDiscount", "Disc %")));
+        var taxCodeColumn = new DataGridComboBoxColumn
+        {
+            Header = Tf("Invoice.ColTaxCode", "Tax system"),
+            SelectedValueBinding = new Binding(nameof(LineVm.TaxCode)) { Mode = BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged },
+            SelectedValuePath = nameof(TaxSvc.TaxCodeRec.Code),
+            DisplayMemberPath = nameof(TaxSvc.TaxCodeRec.Name),
+            ItemsSource = _taxCodes,
+            Width = 125,
+            IsReadOnly = !TaxSvc.IsEnabled || _taxCodes.Count == 0
+        };
+        _grid.Columns.Add(taxCodeColumn);
         var taxRateColumn = TextCol(nameof(LineVm.TaxRateText), 60, Tf("Invoice.ColTax", "Tax %"));
         taxRateColumn.IsReadOnly = !TaxSvc.IsEnabled;
         _grid.Columns.Add(taxRateColumn);
@@ -709,6 +745,9 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             ? UsrPref.Load().CurrencyCode
             : _txtCurrency.Text.Trim().ToUpperInvariant();
         var taxEnabled = TaxSvc.IsEnabled;
+        _doc.TaxCode = taxEnabled
+            ? Convert.ToString(_cmbTaxCode.SelectedValue, CultureInfo.InvariantCulture) ?? string.Empty
+            : string.Empty;
         _doc.DefaultTaxRate = taxEnabled
             ? ParseDec(_txtTaxRate.Text, TaxSvc.GetDefaultRate())
             : 0m;
@@ -731,7 +770,11 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _doc.Lines = _lines.Select(l =>
             {
                 var line = l.ToLine();
-                if (!taxEnabled) line.TaxRate = 0m;
+                if (!taxEnabled)
+                {
+                    line.TaxCode = string.Empty;
+                    line.TaxRate = 0m;
+                }
                 return line;
             })
             .Where(l => !string.IsNullOrWhiteSpace(l.Description) || l.Qty != 0)
@@ -1196,9 +1239,10 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             _grid.Columns[3].Header = Tf("Invoice.ColUnit", "Unit");
             _grid.Columns[4].Header = Tf("Invoice.ColUnitPrice", "Unit price");
             _grid.Columns[5].Header = Tf("Invoice.ColDiscount", "Disc %");
-            _grid.Columns[6].Header = Tf("Invoice.ColTax", "Tax %");
-            _grid.Columns[7].Header = Tf("Invoice.ColLineTotal", "Line total");
-            _grid.Columns[8].Header = Tf("Invoice.ColWarehouse", "Warehouse");
+            _grid.Columns[6].Header = Tf("Invoice.ColTaxCode", "Tax system");
+            _grid.Columns[7].Header = Tf("Invoice.ColTax", "Tax %");
+            _grid.Columns[8].Header = Tf("Invoice.ColLineTotal", "Line total");
+            _grid.Columns[9].Header = Tf("Invoice.ColWarehouse", "Warehouse");
         }
 
         RefreshTotals();
@@ -1214,6 +1258,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         private string _unitPriceText = "0";
         private string _discountPctText = "0";
         private string _taxRateText = "0";
+        private string _taxCode = string.Empty;
         private string _warehouseName = string.Empty;
 
         public long? MaterialId { get; set; }
@@ -1225,6 +1270,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         public string UnitPriceText { get => _unitPriceText; set { _unitPriceText = value; OnPropertyChanged(); NotifyTotals(); } }
         public string DiscountPctText { get => _discountPctText; set { _discountPctText = value; OnPropertyChanged(); NotifyTotals(); } }
         public string TaxRateText { get => _taxRateText; set { _taxRateText = value; OnPropertyChanged(); NotifyTotals(); } }
+        public string TaxCode { get => _taxCode; set { _taxCode = value ?? string.Empty; OnPropertyChanged(); } }
         public string WarehouseName { get => _warehouseName; set { _warehouseName = value; OnPropertyChanged(); } }
 
         public decimal TaxRate
@@ -1259,6 +1305,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             Qty = ParseDec(QtyText, 0),
             UnitPrice = ParseDec(UnitPriceText, 0),
             DiscountPct = ParseDec(DiscountPctText, 0),
+            TaxCode = TaxCode,
             TaxRate = ParseDec(TaxRateText, 0),
             WarehouseId = WarehouseId,
             WarehouseName = WarehouseName
@@ -1273,6 +1320,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             QtyText = line.Qty.ToString("0.###", CultureInfo.InvariantCulture),
             UnitPriceText = line.UnitPrice.ToString("0.####", CultureInfo.InvariantCulture),
             DiscountPctText = line.DiscountPct.ToString("0.##", CultureInfo.InvariantCulture),
+            TaxCode = line.TaxCode,
             TaxRateText = line.TaxRate.ToString("0.##", CultureInfo.InvariantCulture),
             WarehouseId = line.WarehouseId,
             WarehouseName = line.WarehouseName
