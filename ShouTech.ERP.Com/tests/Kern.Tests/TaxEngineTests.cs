@@ -23,6 +23,7 @@ public sealed class TaxEngineTests
     [InlineData("FR")]
     [InlineData("GB")]
     [InlineData("TR")]
+    [InlineData("ZZ")]
     public void CountryCatalog_ContainsRequestedJurisdictions(string code)
     {
         Assert.True(TaxCountryPackCatalog.TryGet(code, out var pack));
