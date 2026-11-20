@@ -449,6 +449,10 @@ public static class InvRepo
         }
         doc.JournalDocNo = journalNo;
 
+        // Tax register rows are written in the same transaction as the
+        // journal and document status. A failure rolls back the entire post.
+        WriteTaxTransactions(connection, tx, doc, journalNo, userId, fx.Rate);
+
         using (var upd = connection.CreateCommand())
         {
             upd.Transaction = tx;
@@ -1937,6 +1941,143 @@ public static class InvRepo
                 break;
         }
         return lines;
+    }
+
+
+    /// <summary>
+    /// Writes an immutable, line-level tax snapshot for a posted document.
+    /// The snapshot is transactionally coupled to the GL posting and records
+    /// the exact effective rule used at the document date.
+    /// </summary>
+    private static void WriteTaxTransactions(
+        DbConnection connection, DbTransaction tx, InvDoc doc,
+        string journalNo, string userId, decimal exchangeRate)
+    {
+        var enabledValue = DatabaseRuntime.IsPostgreSql() ? "TRUE" : "1";
+        string countryCode;
+        using (var settings = connection.CreateCommand())
+        {
+            settings.Transaction = tx;
+            settings.CommandText = $"""
+                SELECT country_code
+                FROM company_tax_settings
+                WHERE company_code = $company AND tax_enabled = {enabledValue}
+                LIMIT 1;
+                """;
+            Add(settings, "$company", Company);
+            countryCode = Convert.ToString(settings.ExecuteScalar(), CultureInfo.InvariantCulture) ?? string.Empty;
+        }
+
+        if (string.IsNullOrWhiteSpace(countryCode))
+        {
+            if (doc.PostingTaxAmount != 0m || doc.Lines.Any(line => line.TaxRate != 0m))
+                throw new InvalidOperationException(
+                    "Tax is present on this document, but the company's tax system is not enabled. Enable the correct tax system or remove tax before posting.");
+            return;
+        }
+
+        var isSalesTax = doc.Kind.IsSales() || doc.Kind == InvDocKind.PosSale;
+        var direction = isSalesTax ? "OUTPUT" : "INPUT";
+        var isReturn = doc.Kind is InvDocKind.SalesReturn or InvDocKind.PurchaseReturn;
+        decimal registeredTax = 0m;
+
+        foreach (var line in doc.Lines)
+        {
+            if (string.IsNullOrWhiteSpace(line.TaxCode))
+            {
+                if (line.TaxRate != 0m || line.LineTax != 0m)
+                    throw new InvalidOperationException(
+                        $"Invoice line {line.LineNo} has a tax rate but no tax code. Select a valid tax system code before posting.");
+                continue;
+            }
+
+            string taxType;
+            string treatment;
+            string accountCode;
+            bool recoverable;
+            decimal approvedRate;
+            using (var rule = connection.CreateCommand())
+            {
+                rule.Transaction = tx;
+                rule.CommandText = $"""
+                    SELECT tax_type, tax_treatment, rate, is_recoverable,
+                           CASE WHEN $direction = 'OUTPUT' THEN COALESCE(output_account_code, '')
+                                ELSE COALESCE(input_account_code, '') END
+                    FROM company_tax_rules
+                    WHERE company_code = $company
+                      AND country_code = $country
+                      AND tax_code = $code
+                      AND is_active = {enabledValue}
+                      AND effective_from <= $documentDate
+                      AND (effective_to IS NULL OR effective_to >= $documentDate)
+                    ORDER BY effective_from DESC
+                    LIMIT 1;
+                    """;
+                Add(rule, "$company", Company);
+                Add(rule, "$country", countryCode);
+                Add(rule, "$code", line.TaxCode.Trim());
+                Add(rule, "$direction", direction);
+                Add(rule, "$documentDate", doc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                using var reader = rule.ExecuteReader();
+                if (!reader.Read())
+                    throw new InvalidOperationException(
+                        $"Tax code '{line.TaxCode}' on invoice line {line.LineNo} has no active rule for {countryCode} on {doc.DocDate:yyyy-MM-dd}.");
+                taxType = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty;
+                treatment = Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? "Standard";
+                approvedRate = Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture);
+                recoverable = reader.GetValue(3) is bool flag
+                    ? flag
+                    : Convert.ToInt32(reader.GetValue(3), CultureInfo.InvariantCulture) == 1;
+                accountCode = Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture) ?? string.Empty;
+            }
+
+            if (Math.Abs(line.TaxRate - approvedRate) > 0.000001m)
+                throw new InvalidOperationException(
+                    $"Tax rate on invoice line {line.LineNo} does not match the approved effective rate for '{line.TaxCode}'. Reload the tax code and recalculate the invoice.");
+
+            var amount = isReturn ? -line.LineTax : line.LineTax;
+            registeredTax += amount;
+            using var insert = connection.CreateCommand();
+            insert.Transaction = tx;
+            insert.CommandText = """
+                INSERT INTO tax_transactions
+                    (company_code, country_code, source_doc_kind, source_doc_id, source_doc_no,
+                     line_no, tax_code, tax_type, tax_treatment, tax_rate, taxable_amount,
+                     tax_amount, is_recoverable, tax_direction, tax_account_code, currency_code,
+                     exchange_rate, base_tax_amount, journal_doc_no, created_by)
+                VALUES
+                    ($company, $country, $kind, $docId, $docNo,
+                     $lineNo, $taxCode, $taxType, $treatment, $rate, $taxable,
+                     $tax, $recoverable, $direction, $account, $currency,
+                     $exchangeRate, $baseTax, $journal, $user)
+                ON CONFLICT (company_code, source_doc_kind, source_doc_id, line_no, tax_code) DO NOTHING;
+                """;
+            Add(insert, "$company", Company);
+            Add(insert, "$country", countryCode);
+            Add(insert, "$kind", doc.KindCode);
+            Add(insert, "$docId", doc.DocId);
+            Add(insert, "$docNo", doc.DocNo);
+            Add(insert, "$lineNo", line.LineNo);
+            Add(insert, "$taxCode", line.TaxCode.Trim());
+            Add(insert, "$taxType", taxType);
+            Add(insert, "$treatment", treatment);
+            Add(insert, "$rate", approvedRate);
+            Add(insert, "$taxable", isReturn ? -line.LineSubtotal : line.LineSubtotal);
+            Add(insert, "$tax", amount);
+            Add(insert, "$recoverable", recoverable);
+            Add(insert, "$direction", direction);
+            Add(insert, "$account", accountCode);
+            Add(insert, "$currency", doc.CurrencyCode);
+            Add(insert, "$exchangeRate", exchangeRate);
+            Add(insert, "$baseTax", decimal.Round(amount * exchangeRate, 6, MidpointRounding.AwayFromZero));
+            Add(insert, "$journal", journalNo);
+            Add(insert, "$user", userId);
+            insert.ExecuteNonQuery();
+        }
+
+        if (Math.Abs(registeredTax - (isReturn ? -doc.PostingTaxAmount : doc.PostingTaxAmount)) > 0.0001m)
+            throw new InvalidOperationException(
+                "The invoice tax lines do not reconcile with the stored document tax total. Recalculate the invoice before posting.");
     }
 
     private static void BindHeader(DbCommand cmd, InvDoc doc)
