@@ -151,6 +151,25 @@ public class PosBuildTests
     }
 
     [Fact]
+    public async Task TerminalWarehouse_ResolvesCompanyScopedActiveTerminalDefinition()
+    {
+        using var db = await SeededAsync();
+        await using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            await connection.OpenAsync();
+            await using var insert = connection.CreateCommand();
+            insert.CommandText = "INSERT INTO pos_terminals (id, company_id, code, name_en, warehouse_code, is_active, is_deleted) VALUES ('terminal-1', $company, 'T1', 'Main terminal', '1', 1, 0);";
+            insert.Parameters.AddWithValue("$company", CompanyCode);
+            Assert.Equal(1, await insert.ExecuteNonQueryAsync());
+        }
+
+        var service = new PosService(new PosRepository("SQLite", db.ConnectionString));
+        Assert.Equal(1, await service.GetTerminalWarehouseIdAsync(CompanyCode, "T1"));
+        Assert.Null(await service.GetTerminalWarehouseIdAsync(CompanyCode, "T2"));
+        Assert.Null(await service.GetTerminalWarehouseIdAsync("OTHER", "T1"));
+    }
+
+    [Fact]
     public async Task ProductSearch_ReturnsLiveStockForSelectedWarehouse_AndCompanyOnly()
     {
         using var db = await SeededAsync();
