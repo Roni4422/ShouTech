@@ -84,7 +84,7 @@ public class GlPostingTests
         using var query = verify.CreateCommand();
         query.CommandText = """
             SELECT country_code, tax_code, tax_rate, taxable_amount, tax_amount,
-                   tax_direction, tax_account_code, journal_doc_no
+                   tax_direction, tax_account_code, journal_doc_no, document_date
             FROM tax_transactions
             WHERE company_code='GL1' AND source_doc_id=$doc AND line_no=1;
             """;
@@ -99,6 +99,7 @@ public class GlPostingTests
         Assert.Equal("OUTPUT", reader.GetString(5));
         Assert.Equal("2205", reader.GetString(6));
         Assert.Equal(entry.DocumentNumber, reader.GetString(7));
+        Assert.Equal("2026-03-10", reader.GetString(8));
         Assert.False(reader.Read());
         reader.Close();
 
