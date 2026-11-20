@@ -501,15 +501,6 @@ public interface IAuthSvc
 /// </summary>
 public static class PwdPolicy
 {
-    private static readonly string[] CommonPasswords =
-    {
-        "password", "password1", "password123", "123456", "1234567", "12345678",
-        "123456789", "1234567890", "qwerty", "qwerty123", "admin", "admin123",
-        "administrator", "letmein", "welcome", "welcome1", "changeme", "default",
-        "shoutech", "shoutech123", "erp12345", "11111111", "00000000", "abc12345",
-        "p@ssw0rd", "passw0rd"
-    };
-
     public static IReadOnlyList<string> Validate(string? password, PasswordPolicySettings policy, string? username = null)
     {
         ArgumentNullException.ThrowIfNull(policy);
@@ -523,7 +514,7 @@ public static class PwdPolicy
 
         // Three characters is the only composition-independent minimum.
         // Do not require character classes or reject a user's chosen format.
-        var minLength = Math.Max(3, policy.MinLength);
+        const int minLength = 3;
         var maxLength = Math.Max(minLength, policy.MaxLength);
         if (password.Length < minLength)
             errors.Add($"Password must be at least {minLength} characters long.");
