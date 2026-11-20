@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 """Audit source files for Arabic text outside approved localization resources.
 
-The Arabic translation catalogs under cod/app/src/Resources/Lang and their
-nested localization catalogs are explicitly allowed. All other text files are
-expected to be English-only once the cleanup is complete.
+Arabic lives ONLY in these approved places (Option A, owner decision):
+  - the translation catalogs (Resources/Lang, COA/Lang, Errors);
+  - the immutable migrations (dba/mig) — Arabic seed data (permission /
+    account names) is part of the shipped schema and migrations are
+    never edited;
+  - the intentional STEI round-trip fixture
+    (tests/Kern.Tests/SteiRoundTripTests.cs) — Arabic payloads prove the
+    exchange preserves non-Latin text;
+  - the design docs (docs/) — comparison tables quote Arabic UI terms.
+Everything else (app/library source, XAML, other tests) must be
+English-only; any hit there is a real violation.
 """
 from __future__ import annotations
 import json
@@ -16,6 +24,10 @@ ARABIC = re.compile(r"[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]")
 ALLOWED_PARTS = {
     Path("cod/app/src/Resources/Lang"),
     Path("cod/app/src/Resources/COA/Lang"),
+    Path("cod/app/src/Resources/Errors"),
+    Path("dba/mig"),
+    Path("docs"),
+    Path("tests/Kern.Tests/SteiRoundTripTests.cs"),
 }
 SKIP_DIRS = {".git", "bin", "obj", "node_modules", "packages", "TestResults"}
 TEXT_EXTS = {
