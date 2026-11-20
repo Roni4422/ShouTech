@@ -69,6 +69,7 @@ namespace ShouTech.App.Views
             _mode = mode;
 
             InitializeComponent();
+            InitializeCountryPicker();
             VisuId.ApplyWindow(this);
 
             ConfigureOwnership(owner);
@@ -403,7 +404,9 @@ namespace ShouTech.App.Views
                 txtAddressLine1.Text = string.Empty;
                 txtAddressLine2.Text = string.Empty;
                 txtCity.Text = string.Empty;
-                txtCountry.Text = string.Empty;
+                cmbCountry.SelectedIndex = 0;
+                chkEnableTaxSystem.IsChecked = false;
+                chkEnableTaxSystem.IsEnabled = false;
                 txtLicense.Text = string.Empty;
                 txtNotes.Text = string.Empty;
 
@@ -437,7 +440,9 @@ namespace ShouTech.App.Views
             txtAddressLine1.Text = string.Empty;
             txtAddressLine2.Text = string.Empty;
             txtCity.Text = string.Empty;
-            txtCountry.Text = string.Empty;
+            cmbCountry.SelectedIndex = 0;
+            chkEnableTaxSystem.IsChecked = false;
+            chkEnableTaxSystem.IsEnabled = false;
             txtLicense.Text = string.Empty;
             txtNotes.Text = string.Empty;
 
@@ -1411,6 +1416,34 @@ namespace ShouTech.App.Views
             Close();
         }
 
+        private void InitializeCountryPicker()
+        {
+            cmbCountry.Items.Clear();
+            cmbCountry.Items.Add(new ComboBoxItem { Content = string.Empty, Tag = string.Empty });
+            foreach (var pack in TaxCountryPackCatalog.All)
+            {
+                cmbCountry.Items.Add(new ComboBoxItem
+                {
+                    Content = pack.CountryName,
+                    Tag = pack.CountryCode
+                });
+            }
+
+            cmbCountry.SelectedIndex = 0;
+            chkEnableTaxSystem.IsChecked = false;
+            chkEnableTaxSystem.IsEnabled = false;
+        }
+
+        private void CountrySelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var selected = cmbCountry.SelectedItem as ComboBoxItem;
+            var countryCode = selected?.Tag?.ToString();
+            var hasCountry = !string.IsNullOrWhiteSpace(countryCode);
+            chkEnableTaxSystem.IsEnabled = hasCountry;
+            if (!hasCountry)
+                chkEnableTaxSystem.IsChecked = false;
+        }
+
         private NewCoReq BuildRequest()
         {
             var currency =
@@ -1446,7 +1479,9 @@ namespace ShouTech.App.Views
                     txtDefaultWarehouse?.Text)
                     ? "Main Warehouse"
                     : txtDefaultWarehouse.Text.Trim();
-            var taxPack = TaxCountryPackCatalog.FindByNameOrCode(txtCountry.Text);
+            var selectedCountry = cmbCountry.SelectedItem as ComboBoxItem;
+            var countryName = selectedCountry?.Content?.ToString() ?? string.Empty;
+            var taxCountryCode = selectedCountry?.Tag?.ToString() ?? string.Empty;
 
             return new NewCoReq
             {
@@ -1484,10 +1519,10 @@ namespace ShouTech.App.Views
                     txtCity.Text.Trim(),
 
                 Country =
-                    txtCountry.Text.Trim(),
+                    countryName,
 
                 TaxCountryCode =
-                    taxPack?.CountryCode ?? string.Empty,
+                    taxCountryCode,
 
                 EnableTaxSystem =
                     chkEnableTaxSystem.IsChecked == true,
