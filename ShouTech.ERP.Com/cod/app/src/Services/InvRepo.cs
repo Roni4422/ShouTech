@@ -40,27 +40,42 @@ public static class InvRepo
         };
         var year = DateTime.Today.Year.ToString(CultureInfo.InvariantCulture);
         var cs = DatabaseRuntime.GetConnectionString();
-        if (string.IsNullOrWhiteSpace(cs)) return $"{prefix}-{year}-0001";
+        if (string.IsNullOrWhiteSpace(cs))
+            throw new InvalidOperationException(
+                "A company database must be connected before allocating a document number.");
 
         try
         {
             using var connection = Open(cs);
             using var cmd = connection.CreateCommand();
+            var documentPrefix = $"{prefix}-{year}-";
+            var suffixStart = documentPrefix.Length + 1;
+            var numericSuffixPredicate = DatabaseRuntime.IsPostgreSql()
+                ? "SUBSTR(doc_no, $suffixStart) ~ '^[0-9]+$'"
+                : "SUBSTR(doc_no, $suffixStart) GLOB '[0-9]*' AND SUBSTR(doc_no, $suffixStart) NOT GLOB '*[^0-9]*'";
             cmd.CommandText = $"""
-                SELECT COUNT(1) FROM {table}
-                WHERE company_id = $company AND doc_kind = $kind
-                  AND doc_no LIKE $pattern;
+                SELECT COALESCE(MAX(CAST(SUBSTR(doc_no, $suffixStart) AS BIGINT)), 0)
+                FROM {table}
+                WHERE company_id = $company
+                  AND doc_kind = $kind
+                  AND doc_no LIKE $pattern
+                  AND {numericSuffixPredicate};
                 """;
             Add(cmd, "$company", Company);
             Add(cmd, "$kind", prefix);
-            Add(cmd, "$pattern", $"{prefix}-{year}-%");
-            var count = Convert.ToInt32(cmd.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
-            return $"{prefix}-{year}-{(count + 1).ToString("D4", CultureInfo.InvariantCulture)}";
+            Add(cmd, "$pattern", $"{documentPrefix}%");
+            Add(cmd, "$suffixStart", suffixStart);
+            var lastSequence = Convert.ToInt64(cmd.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
+            if (lastSequence >= 99999999)
+                throw new InvalidOperationException("The document number sequence has reached its supported limit.");
+            return $"{documentPrefix}{(lastSequence + 1).ToString("D4", CultureInfo.InvariantCulture)}";
         }
         catch (Exception exL58)
         {
             AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exL58, "InvRepo.NextDocNo");
-            return $"{prefix}-{year}-0001";
+            throw new InvalidOperationException(
+                "A new document number could not be allocated. Check the database connection and retry.",
+                exL58);
         }
     }
 
