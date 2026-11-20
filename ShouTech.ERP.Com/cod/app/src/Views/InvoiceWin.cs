@@ -752,9 +752,6 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _taxCodeColumn.IsReadOnly = !TaxSvc.IsEnabled || _taxCodes.Count == 0;
         /* Keep the tax-code column identity stable: DisplayIndex changes
            when users reorder columns, so event logic must not depend on it. */
-        /*
-            Header = Tf("Invoice.ColTaxCode", "Tax system"),
-        */
         _grid.Columns.Add(_taxCodeColumn);
         var taxRateColumn = TextCol(nameof(LineVm.TaxRateText), 60, Tf("Invoice.ColTax", "Tax %"));
         taxRateColumn.IsReadOnly = !TaxSvc.IsEnabled || _taxCodes.Count == 0;
