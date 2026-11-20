@@ -1663,15 +1663,19 @@ public static class InvRepo
 
         var infos = doc.Lines.Select(l => LoadMaterialGl(connection, tx, l, doc.WarehouseId)).ToList();
 
-        // Optional tax leg: only when a postable VAT account resolves.
-        var taxAccountCode = doc.Kind.IsSales() || doc.Kind == InvDocKind.PosSale
-            ? GlAccounts.OutputVat : GlAccounts.InputVat;
+        // Tax is split by legal treatment. Output tax is always a liability;
+        // recoverable input tax is an asset; non-recoverable input tax remains
+        // part of the purchase/stock cost instead of being posted as a receivable.
+        var isSalesDocument = doc.Kind.IsSales() || doc.Kind == InvDocKind.PosSale;
+        var taxAccountCode = isSalesDocument ? GlAccounts.OutputVat : GlAccounts.InputVat;
         var materialTaxAccount = infos.Select(i => i.TaxAccount).FirstOrDefault(t => !string.IsNullOrWhiteSpace(t));
         if (!string.IsNullOrWhiteSpace(materialTaxAccount)) taxAccountCode = materialTaxAccount.Trim();
         var companyGuid = ResolveCompanyGuid(connection, tx);
         var taxAccountGroups = new List<(string Account, decimal Amount)>();
+        var nonRecoverableTaxByLine = new decimal[doc.Lines.Count];
         var canSplitTax = tax > 0m;
         var taxCountry = string.Empty;
+        decimal taxAmountRequiringAccount = 0m;
         if (canSplitTax)
         {
             using var taxSettings = connection.CreateCommand();
@@ -1686,6 +1690,7 @@ public static class InvRepo
                          .GroupBy(line => line.TaxCode ?? string.Empty, StringComparer.OrdinalIgnoreCase))
             {
                 var account = taxAccountCode;
+                var recoverable = true;
                 if (!string.IsNullOrWhiteSpace(group.Key) && !string.IsNullOrWhiteSpace(taxCountry))
                 {
                     using var rule = connection.CreateCommand();
@@ -1693,10 +1698,9 @@ public static class InvRepo
                     var activeValue = DatabaseRuntime.IsPostgreSql() ? "TRUE" : "1";
                     var dateExpression = DatabaseRuntime.IsPostgreSql()
                         ? "CAST($documentDate AS date)" : "$documentDate";
-                    var accountColumn = doc.Kind.IsSales() || doc.Kind == InvDocKind.PosSale
-                        ? "output_account_code" : "input_account_code";
+                    var accountColumn = isSalesDocument ? "output_account_code" : "input_account_code";
                     rule.CommandText = $"""
-                        SELECT COALESCE({accountColumn}, '')
+                        SELECT COALESCE({accountColumn}, ''), is_recoverable
                         FROM company_tax_rules
                         WHERE company_code=$company AND country_code=$country
                           AND tax_code=$taxCode AND is_active={activeValue}
@@ -1709,46 +1713,69 @@ public static class InvRepo
                     InvRepo.Add(rule, "$country", taxCountry);
                     InvRepo.Add(rule, "$taxCode", group.Key);
                     InvRepo.Add(rule, "$documentDate", doc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-                    var configuredAccount = Convert.ToString(rule.ExecuteScalar(), CultureInfo.InvariantCulture);
-                    if (!string.IsNullOrWhiteSpace(configuredAccount))
+                    using var ruleReader = rule.ExecuteReader();
+                    if (ruleReader.Read())
                     {
-                        account = configuredAccount.Trim();
-                        if (GlPosting.TryResolveAccount(connection, tx, provider, companyGuid, account) is null)
-                            throw new InvalidOperationException(
-                                $"Configured tax account '{account}' for tax code '{group.Key}' is not present in the company's chart of accounts.");
+                        var configuredAccount = Convert.ToString(ruleReader.GetValue(0), CultureInfo.InvariantCulture);
+                        recoverable = isSalesDocument || (ruleReader.GetValue(1) is bool flag
+                            ? flag
+                            : Convert.ToInt32(ruleReader.GetValue(1), CultureInfo.InvariantCulture) == 1);
+                        if (!string.IsNullOrWhiteSpace(configuredAccount))
+                            account = configuredAccount.Trim();
                     }
                 }
 
+                var groupAmount = group.Sum(line => line.LineTax);
+                if (!isSalesDocument && !recoverable)
+                {
+                    foreach (var line in group)
+                    {
+                        var lineIndex = doc.Lines.IndexOf(line);
+                        if (lineIndex >= 0)
+                            nonRecoverableTaxByLine[lineIndex] += line.LineTax;
+                    }
+                    continue;
+                }
+
+                taxAmountRequiringAccount += groupAmount;
                 if (GlPosting.TryResolveAccount(connection, tx, provider, companyGuid, account) is null)
                 {
                     canSplitTax = false;
                     taxAccountGroups.Clear();
                     break;
                 }
-                taxAccountGroups.Add((account, group.Sum(line => line.LineTax)));
+                taxAccountGroups.Add((account, groupAmount));
             }
 
             if (!hasTaxLineGroups)
             {
+                taxAmountRequiringAccount = tax;
                 canSplitTax = GlPosting.TryResolveAccount(connection, tx, provider, companyGuid, taxAccountCode) is not null;
                 if (canSplitTax) taxAccountGroups.Add((taxAccountCode, tax));
             }
             else if (canSplitTax)
             {
-                var allocatedTax = taxAccountGroups.Sum(group => group.Amount);
+                var allocatedTax = taxAccountGroups.Sum(group => group.Amount) + nonRecoverableTaxByLine.Sum();
                 var residual = tax - allocatedTax;
                 if (residual != 0m)
                 {
-                    var last = taxAccountGroups[^1];
-                    taxAccountGroups[^1] = (last.Account, last.Amount + residual);
+                    if (taxAccountGroups.Count > 0)
+                    {
+                        var last = taxAccountGroups[^1];
+                        taxAccountGroups[^1] = (last.Account, last.Amount + residual);
+                    }
+                    else if (nonRecoverableTaxByLine.Length > 0)
+                    {
+                        nonRecoverableTaxByLine[^1] += residual;
+                    }
                 }
             }
         }
         var splitTax = canSplitTax && taxAccountGroups.Count > 0;
-        if (tax > 0m && !string.IsNullOrWhiteSpace(taxCountry) && !splitTax)
+        if (taxAmountRequiringAccount > 0m && !splitTax)
             throw new InvalidOperationException(
-                "The enabled tax system has no valid posting account. Configure the tax account in the chart of accounts before posting.");
-        var taxLeg = splitTax ? tax : 0m;
+                "The enabled tax system has no valid posting account for recoverable/output tax. Configure the tax account in the chart of accounts before posting.");
+        var taxLeg = splitTax ? taxAccountGroups.Sum(group => group.Amount) : 0m;
 
         // Per-line revenue / purchase / returns leg amounts, adjusted so
         // their sum is EXACTLY (stored grand − tax leg). Before Step 5
@@ -1766,7 +1793,10 @@ public static class InvRepo
         var leg = new decimal[doc.Lines.Count];
         {
             var bases = doc.Lines
-                .Select(l => decimal.Round(l.LineSubtotal + (splitTax ? 0m : l.LineTax), 4, MidpointRounding.AwayFromZero))
+                .Select((line, index) => decimal.Round(
+                    line.LineSubtotal + (isSalesDocument ? 0m :
+                        (splitTax ? nonRecoverableTaxByLine[index] : line.LineTax)),
+                    4, MidpointRounding.AwayFromZero))
                 .ToArray();
             var adjustment = (grand - taxLeg) - bases.Sum();
             if (adjustment != 0m && bases.Length > 0)
