@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
@@ -33,6 +34,30 @@ public sealed class TaxReportWin : BaseWin
         Loaded += OnLoaded;
     }
 
+    protected override void ApplyLocalizedText()
+    {
+        Title = T("TaxReport.Title");
+        if (Content is DependencyObject root)
+            ApplyLocalizedNode(root);
+        foreach (var column in _grid.Columns)
+            if (!string.IsNullOrWhiteSpace(column.SortMemberPath))
+                column.Header = T("TaxReport.Column." + column.SortMemberPath);
+        if (IsLoaded)
+            RefreshReport();
+    }
+
+    private void ApplyLocalizedNode(DependencyObject node)
+    {
+        if (node is TextBlock text && text.Tag is string textKey)
+            text.Text = T(textKey);
+        else if (node is Button button && button.Tag is string buttonKey)
+            button.Content = T(buttonKey);
+
+        foreach (var child in LogicalTreeHelper.GetChildren(node))
+            if (child is DependencyObject dependency)
+                ApplyLocalizedNode(dependency);
+    }
+
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         if (!AppHost.Permissions.Has(PermCat.Accounting.TaxReportView))
@@ -48,13 +73,14 @@ public sealed class TaxReportWin : BaseWin
     {
         var root = new DockPanel { Margin = new Thickness(12) };
         var filters = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        filters.Children.Add(new TextBlock { Text = T("TaxReport.From"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        filters.Children.Add(new TextBlock { Text = T("TaxReport.From"), Tag = "TaxReport.From", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
         _from.Width = 140;
         filters.Children.Add(_from);
-        filters.Children.Add(new TextBlock { Text = T("TaxReport.To"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 6, 0) });
+        filters.Children.Add(new TextBlock { Text = T("TaxReport.To"), Tag = "TaxReport.To", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 6, 0) });
         _to.Width = 140;
         filters.Children.Add(_to);
         _refresh.Content = T("Common.Refresh");
+        _refresh.Tag = "Common.Refresh";
         _refresh.Margin = new Thickness(10, 0, 0, 0);
         _refresh.Click += (_, _) => RefreshReport();
         filters.Children.Add(_refresh);
@@ -72,6 +98,7 @@ public sealed class TaxReportWin : BaseWin
         root.Children.Add(_totals);
 
         _close.Content = T("Common.Close");
+        _close.Tag = "Common.Close";
         _close.MinWidth = 88;
         _close.Margin = new Thickness(0, 4, 0, 0);
         _close.Click += (_, _) => Close();
