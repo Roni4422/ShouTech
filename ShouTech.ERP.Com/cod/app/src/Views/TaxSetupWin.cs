@@ -275,9 +275,17 @@ public sealed class TaxSetupWin : BaseWin
         {
             var pack = TaxCountryPackCatalog.FindByNameOrCode(settings.CountryCode);
             var loadedRules = TaxSvc.LoadRules();
-            var statusKey = loadedRules.Count > 0 ? "TaxSetup.EnabledStatus" : "TaxSetup.EnabledNeedsRules";
+            var pendingReview = loadedRules.Count(rule =>
+                string.Equals(rule.DataStatus, "BASELINE_REVIEW_REQUIRED", StringComparison.OrdinalIgnoreCase));
+            var configuredRules = loadedRules.Count - pendingReview;
+            var statusKey = loadedRules.Count == 0
+                ? "TaxSetup.EnabledNeedsRules"
+                : pendingReview > 0
+                    ? "TaxSetup.EnabledReviewStatus"
+                    : "TaxSetup.EnabledConfiguredStatus";
             _status.Text = string.Format(CultureInfo.CurrentCulture,
-                T(statusKey), pack?.CountryName ?? settings.CountryCode, settings.Scheme);
+                T(statusKey), pack?.CountryName ?? settings.CountryCode, settings.Scheme,
+                pendingReview, configuredRules);
             _jurisdictionAction.Content = T("TaxSetup.Disable");
             _rules.ItemsSource = loadedRules;
             _jurisdictionAction.IsEnabled = AppHost.Permissions.Has(PermCat.Accounting.TaxManage);
