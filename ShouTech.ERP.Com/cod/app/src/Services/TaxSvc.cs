@@ -68,24 +68,80 @@ public static class TaxSvc
             throw new InvalidOperationException("The active company database is unavailable.");
 
         using var connection = Open(cs);
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-            INSERT INTO company_tax_settings
-                (company_code, country_code, tax_enabled, tax_scheme, registration_number, updated_at)
-            VALUES ($company, $country, $enabled, $scheme, $registration, CURRENT_TIMESTAMP)
-            ON CONFLICT(company_code) DO UPDATE SET
-                country_code = excluded.country_code,
-                tax_enabled = excluded.tax_enabled,
-                tax_scheme = excluded.tax_scheme,
-                registration_number = excluded.registration_number,
-                updated_at = CURRENT_TIMESTAMP;
-            """;
-        Add(command, "$company", companyCode);
-        Add(command, "$country", code);
-        Add(command, "$enabled", enabled);
-        Add(command, "$scheme", taxScheme ?? string.Empty);
-        Add(command, "$registration", registrationNumber ?? string.Empty);
-        command.ExecuteNonQuery();
+        using var transaction = connection.BeginTransaction();
+        try
+        {
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = """
+                INSERT INTO company_tax_settings
+                    (company_code, country_code, tax_enabled, tax_scheme, registration_number, updated_at)
+                VALUES ($company, $country, $enabled, $scheme, $registration, CURRENT_TIMESTAMP)
+                ON CONFLICT(company_code) DO UPDATE SET
+                    country_code = excluded.country_code,
+                    tax_enabled = excluded.tax_enabled,
+                    tax_scheme = excluded.tax_scheme,
+                    registration_number = excluded.registration_number,
+                    updated_at = CURRENT_TIMESTAMP;
+                """;
+            Add(command, "$company", companyCode);
+            Add(command, "$country", code);
+            Add(command, "$enabled", enabled);
+            Add(command, "$scheme", string.IsNullOrWhiteSpace(taxScheme) &&
+                TaxCountryPackCatalog.TryGet(code, out var pack) ? pack.Regime.ToString() : taxScheme ?? string.Empty);
+            Add(command, "$registration", registrationNumber ?? string.Empty);
+            command.ExecuteNonQuery();
+
+            if (enabled)
+            {
+                var dateExpression = DatabaseRuntime.IsPostgreSql() ? "CAST($effectiveFrom AS date)" : "$effectiveFrom";
+                var verifiedExpression = DatabaseRuntime.IsPostgreSql() ? "CAST($verifiedOn AS date)" : "$verifiedOn";
+                foreach (var rule in TaxCountryPackCatalog.GetInitialRules(code))
+                {
+                    using var insert = connection.CreateCommand();
+                    insert.Transaction = transaction;
+                    insert.CommandText = $"""
+                        INSERT INTO company_tax_rules
+                            (company_code, country_code, tax_code, tax_name, tax_type, tax_treatment,
+                             rate, calculation_mode, is_compound, is_recoverable, output_account_code,
+                             input_account_code, effective_from, is_default, is_active, created_by,
+                             source_url, source_reference, verified_on, data_status)
+                        VALUES
+                            ($company, $country, $taxCode, $taxName, $taxType, $treatment,
+                             $rate, 'Exclusive', {(DatabaseRuntime.IsPostgreSql() ? "FALSE" : "0")},
+                             $recoverable, $outputAccount, $inputAccount, {dateExpression},
+                             $isDefault, {(DatabaseRuntime.IsPostgreSql() ? "TRUE" : "1")},
+                             $createdBy, $sourceUrl, $sourceReference, {verifiedExpression},
+                             'BASELINE_REVIEW_REQUIRED')
+                        ON CONFLICT(company_code, tax_code, effective_from) DO NOTHING;
+                        """;
+                    Add(insert, "$company", companyCode);
+                    Add(insert, "$country", code);
+                    Add(insert, "$taxCode", rule.Code);
+                    Add(insert, "$taxName", rule.Name);
+                    Add(insert, "$taxType", rule.TaxType);
+                    Add(insert, "$treatment", rule.Treatment);
+                    Add(insert, "$rate", rule.Rate);
+                    Add(insert, "$recoverable", rule.IsRecoverable);
+                    Add(insert, "$outputAccount", rule.OutputAccountCode);
+                    Add(insert, "$inputAccount", rule.InputAccountCode);
+                    Add(insert, "$effectiveFrom", rule.EffectiveFrom);
+                    Add(insert, "$isDefault", rule.IsDefault);
+                    Add(insert, "$createdBy", Environment.UserName);
+                    Add(insert, "$sourceUrl", rule.SourceUrl);
+                    Add(insert, "$sourceReference", rule.SourceReference);
+                    Add(insert, "$verifiedOn", "2026-11-20");
+                    insert.ExecuteNonQuery();
+                }
+            }
+
+            transaction.Commit();
+        }
+        catch
+        {
+            try { transaction.Rollback(); } catch { }
+            throw;
+        }
     }
 
     private static bool ReadTaxEnabled()
