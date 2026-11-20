@@ -176,6 +176,11 @@ public static class TaxSvc
             try { transaction.Rollback(); } catch { }
             throw;
         }
+
+        var user = AppState.CurrentUser;
+        SecurityAuditLog.Write(companyCode, user?.Id, user?.Username ?? Environment.UserName,
+            enabled ? SecurityAuditLog.TaxSettingsEnabled : SecurityAuditLog.TaxSettingsDisabled,
+            $"Country={code}; Scheme={taxScheme ?? string.Empty}");
     }
 
     /// <summary>
@@ -321,6 +326,11 @@ public static class TaxSvc
             try { transaction.Rollback(); } catch { }
             throw;
         }
+
+        var user = AppState.CurrentUser;
+        SecurityAuditLog.Write(companyCode, user?.Id, user?.Username ?? Environment.UserName,
+            SecurityAuditLog.TaxRuleSaved,
+            $"Code={code}; Rate={rule.Rate.ToString(CultureInfo.InvariantCulture)}; Treatment={treatment}; EffectiveFrom={rule.EffectiveFrom:yyyy-MM-dd}");
     }
 
     private static bool ReadTaxEnabled()
