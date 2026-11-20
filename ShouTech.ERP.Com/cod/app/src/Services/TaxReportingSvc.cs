@@ -60,7 +60,7 @@ public static class TaxReportingSvc
         var cs = DatabaseRuntime.GetConnectionString();
         var settings = TaxSvc.LoadSettings();
         if (string.IsNullOrWhiteSpace(company) || string.IsNullOrWhiteSpace(cs) ||
-            settings is null || !settings.Enabled)
+            settings is null)
             return Array.Empty<TaxPeriodRow>();
 
         DbConnection connection = DatabaseRuntime.IsPostgreSql()
@@ -131,7 +131,7 @@ public static class TaxReportingSvc
         var cs = DatabaseRuntime.GetConnectionString();
         var settings = TaxSvc.LoadSettings();
         if (string.IsNullOrWhiteSpace(company) || string.IsNullOrWhiteSpace(cs) ||
-            settings is null || !settings.Enabled)
+            settings is null)
             return Array.Empty<TaxRegisterRow>();
 
         DbConnection connection = DatabaseRuntime.IsPostgreSql()
