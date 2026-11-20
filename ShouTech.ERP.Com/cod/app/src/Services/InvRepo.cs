@@ -51,7 +51,7 @@ public static class InvRepo
             var documentPrefix = $"{prefix}-{year}-";
             var suffixStart = documentPrefix.Length + 1;
             var numericSuffixPredicate = DatabaseRuntime.IsPostgreSql()
-                ? $"SUBSTR(doc_no, $suffixStart) ~ '^[0-9]+
+                ? "SUBSTR(doc_no, $suffixStart) ~ '^[0-9]+
     }
 
     public static long SaveDraft(InvDoc doc)
@@ -2396,7 +2396,7 @@ public static class InvPostingPolicy
     };
 }
 "
-                : $"SUBSTR(doc_no, $suffixStart) GLOB '[0-9]*' AND SUBSTR(doc_no, $suffixStart) NOT GLOB '*[^0-9]*'";
+                : "SUBSTR(doc_no, $suffixStart) GLOB '[0-9]*' AND SUBSTR(doc_no, $suffixStart) NOT GLOB '*[^0-9]*'";
             cmd.CommandText = $"""
                 SELECT COALESCE(MAX(CAST(SUBSTR(doc_no, $suffixStart) AS BIGINT)), 0)
                 FROM {table}
