@@ -104,13 +104,17 @@ public static class TaxSvc
             command.Transaction = transaction;
             command.CommandText = """
                 INSERT INTO company_tax_settings
-                    (company_code, country_code, tax_enabled, tax_scheme, registration_number, updated_at)
-                VALUES ($company, $country, $enabled, $scheme, $registration, CURRENT_TIMESTAMP)
+                    (company_code, country_code, tax_enabled, tax_scheme, registration_number,
+                     effective_from, updated_by, updated_at)
+                VALUES ($company, $country, $enabled, $scheme, $registration,
+                        CURRENT_DATE, $updatedBy, CURRENT_TIMESTAMP)
                 ON CONFLICT(company_code) DO UPDATE SET
                     country_code = excluded.country_code,
                     tax_enabled = excluded.tax_enabled,
                     tax_scheme = excluded.tax_scheme,
                     registration_number = excluded.registration_number,
+                    effective_from = excluded.effective_from,
+                    updated_by = excluded.updated_by,
                     updated_at = CURRENT_TIMESTAMP;
                 """;
             Add(command, "$company", companyCode);
@@ -119,6 +123,7 @@ public static class TaxSvc
             Add(command, "$scheme", string.IsNullOrWhiteSpace(taxScheme) &&
                 TaxCountryPackCatalog.TryGet(code, out var pack) ? pack.Regime.ToString() : taxScheme ?? string.Empty);
             Add(command, "$registration", registrationNumber ?? string.Empty);
+            Add(command, "$updatedBy", AppState.CurrentUser?.Username ?? Environment.UserName);
             command.ExecuteNonQuery();
 
             if (enabled)
