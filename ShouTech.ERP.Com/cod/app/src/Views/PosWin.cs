@@ -467,7 +467,8 @@ public sealed class PosWin : BaseWin
             var settings = await service.GetSettingsAsync(CurrentCompanyCode);
             _terminal = settings.DefaultTerminalCode ?? "T1";
             _session = await service.GetOpenSessionAsync(CurrentCompanyCode, _terminal);
-            _activeWarehouseId = _session?.WarehouseId ?? settings.DefaultWarehouseId;
+            var terminalWarehouseId = await service.GetTerminalWarehouseIdAsync(CurrentCompanyCode, _terminal);
+            _activeWarehouseId = _session?.WarehouseId ?? terminalWarehouseId ?? settings.DefaultWarehouseId;
             _sessionLabel.Text = _session is null
                 ? $"{Local("NoSession", "NO SESSION")} · {_terminal}"
                 : $"{_session.SessionNo} · {_terminal} · {_session.Cashier}";
@@ -967,7 +968,11 @@ public sealed class PosWin : BaseWin
             }
         }
 
-        var warehouseId = _session?.WarehouseId;
+        if (_activeWarehouseId is not int warehouseId)
+        {
+            SetStatus(Local("WarehouseRequired", "Configure a warehouse for this POS terminal before selling."), true);
+            return;
+        }
         var doc = new InvDoc
         {
             Kind = InvDocKind.PosSale,
