@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Data.Common;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.Data.Sqlite;
 using Npgsql;
 
@@ -13,21 +16,29 @@ namespace ShouTech.App.Services;
 public static class DocSchema
 {
     private static readonly object Gate = new();
-    private static bool _validated;
+    private static readonly HashSet<string> ValidatedDatabases = new(StringComparer.Ordinal);
 
     public static void Ensure()
     {
-        if (_validated) return;
+        var cs = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(cs))
+            throw new InvalidOperationException("No database connection is configured.");
+
+        var isPostgreSql = DatabaseRuntime.IsPostgreSql();
+        var normalizedConnectionString = isPostgreSql
+            ? cs
+            : DatabaseRuntime.NormalizeSqliteConnectionString(cs);
+        var provider = isPostgreSql ? "postgresql" : "sqlite";
+        var cacheKey = provider + ":" + Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(normalizedConnectionString)));
+
         lock (Gate)
         {
-            if (_validated) return;
-            var cs = DatabaseRuntime.GetConnectionString();
-            if (string.IsNullOrWhiteSpace(cs))
-                throw new InvalidOperationException("No database connection is configured.");
+            if (ValidatedDatabases.Contains(cacheKey)) return;
 
             using var connection = Open(cs);
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = DatabaseRuntime.IsPostgreSql()
+            cmd.CommandText = isPostgreSql
                 ? """
                   SELECT COUNT(*)
                   FROM information_schema.tables
@@ -49,7 +60,7 @@ public static class DocSchema
                 throw new InvalidOperationException(
                     "Commercial-document schema is incomplete. Apply the provider migrations under dba/mig before using invoices.");
 
-            _validated = true;
+            ValidatedDatabases.Add(cacheKey);
         }
     }
 
