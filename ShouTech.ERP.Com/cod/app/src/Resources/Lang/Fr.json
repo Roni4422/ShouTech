@@ -190,7 +190,8 @@
     "AccountComparison": "Comparaison de Comptes",
     "FinancialAnalysis": "Analyse Financière",
     "LocalAnalysis": "Locale",
-    "AIAnalysis": "IA"
+    "AIAnalysis": "IA",
+    "TaxConfiguration": "Configuration fiscale"
   },
   "Bonds": {
     "Title": "Obligations",
@@ -1334,7 +1335,8 @@
     "HelpUpdates": "Mises à jour",
     "HelpSupport": "Assistance",
     "HelpLicense": "Licence",
-    "POSSales": "Ventes"
+    "POSSales": "Ventes",
+    "AccountsTax": "Fiscalité"
   },
   "MatCard": {
     "Code": "Code",
