@@ -150,7 +150,7 @@ Values are parameterized everywhere in the audited services; identifiers
 3. Provide DB credentials via environment, not cfg files; keep
    cfg/appset.json free of real secrets (it ships with empty secret fields).
 4. Review `Security` settings: MaxLoginAttempts 5, LockoutDurationMinutes 15,
-   password policy minimum 12 with all character classes.
+   password policy: minimum 3 characters, maximum 128, with no character-class requirements.
 5. Apply migrations with tools/SqlMigrator (029 is required for lockout and
    the audit table; the app degrades safely — no lockout, no DB audit — on an
    unmigrated database, so migrate before relying on these controls).
