@@ -327,6 +327,11 @@ public static class InvRepo
             using var reader = cmd.ExecuteReader();
             if (!reader.Read())
                 throw new InvalidOperationException("Document not found.");
+            var storedKind = reader.GetString(reader.GetOrdinal("doc_kind"));
+            var expectedKind = new InvDoc { Kind = kind }.KindCode;
+            if (!string.Equals(storedKind, expectedKind, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    $"Document kind mismatch. The stored document is '{storedKind}', not '{expectedKind}'.");
             if (string.Equals(reader.GetString(reader.GetOrdinal("status")), "Posted", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Document is already posted.");
             doc = new InvDoc
@@ -1159,6 +1164,11 @@ public static class InvRepo
             Add(cmd, "$guid", guidKey);
             using var reader = cmd.ExecuteReader();
             if (!reader.Read()) return null;
+            var storedKind = reader.GetString(reader.GetOrdinal("doc_kind"));
+            var expectedKind = new InvDoc { Kind = kind }.KindCode;
+            if (!string.Equals(storedKind, expectedKind, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    $"Document kind mismatch. The stored document is '{storedKind}', not '{expectedKind}'.");
             doc = new InvDoc
             {
                 DocId = docId,
@@ -1226,7 +1236,7 @@ public static class InvRepo
                     TaxCalculationMode = reader.IsDBNull(10) ? "Exclusive" : Convert.ToString(reader.GetValue(10), CultureInfo.InvariantCulture) ?? "Exclusive",
                     WarehouseId = reader.IsDBNull(11) ? null : Convert.ToInt32(reader.GetValue(11), CultureInfo.InvariantCulture),
                     WarehouseName = reader.FieldCount > 12 && !reader.IsDBNull(12)
-                        ? Convert.ToString(reader.GetValue(11), CultureInfo.InvariantCulture) ?? ""
+                        ? Convert.ToString(reader.GetValue(12), CultureInfo.InvariantCulture) ?? ""
                         : "",
                 });
             }
