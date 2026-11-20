@@ -3509,5 +3509,34 @@
       "Year": "Annee",
       "Month": "Mois"
     }
+  },
+  "TaxSetup": {
+    "Title": "Configuration fiscale",
+    "PermissionDenied": "Vous n'avez pas l'autorisation d'afficher la configuration fiscale.",
+    "Jurisdiction": "Juridiction fiscale",
+    "Enable": "Activer la fiscalité",
+    "Disable": "Désactiver la fiscalité",
+    "ChangeJurisdictionUseAction": "Désactivez d'abord la juridiction actuelle, puis activez la nouvelle.",
+    "Disabled": "La fiscalité est désactivée pour cette société. Sélectionnez une juridiction et activez-la pour continuer.",
+    "EnabledStatus": "Fiscalité activée pour {0}. Régime : {1}. Les règles de base sont chargées ; vérifiez les règles locales et les comptes avant comptabilisation.",
+    "DisableConfirm": "Désactiver la fiscalité de cette société ? Les règles et l'historique fiscal comptabilisé seront conservés.",
+    "EnableConfirm": "Activer le système fiscal de {0} ? Les règles de base de cette juridiction seront chargées. Continuer ?",
+    "SelectCountry": "Sélectionnez d'abord une juridiction fiscale.",
+    "Code": "Code taxe",
+    "Name": "Nom de la taxe",
+    "Type": "Type de taxe",
+    "Treatment": "Traitement fiscal",
+    "Rate": "Taux (%)",
+    "Calculation": "Mode de calcul",
+    "EffectiveFrom": "Date de début",
+    "EffectiveTo": "Date de fin",
+    "OutputAccount": "Compte de taxe collectée",
+    "InputAccount": "Compte de taxe déductible",
+    "Recoverable": "Taxe d'entrée récupérable",
+    "Compound": "Taxe composée",
+    "Default": "Taux par défaut",
+    "EffectiveFromRequired": "Une date de début est requise.",
+    "InvalidRate": "Saisissez un taux valide.",
+    "Saved": "Règle fiscale enregistrée."
   }
 }
