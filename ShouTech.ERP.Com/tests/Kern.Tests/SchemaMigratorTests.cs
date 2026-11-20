@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
 using ShouTech.App.Services;
 using Xunit;
 
@@ -11,17 +12,24 @@ public sealed class SchemaMigratorTests
     [Fact]
     public async Task DesktopMigrator_UsesDbaHistoryAndIsIdempotent()
     {
-        var databasePath = Path.Combine(
+        var databaseDirectory = Path.Combine(
             Path.GetTempPath(),
-            $"shoutech-schema-migrator-{Guid.NewGuid():N}.db");
+            $"shoutech-schema-migrator-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(databaseDirectory);
+        var databasePath = Path.Combine(databaseDirectory, "company.db");
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = databasePath,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            ForeignKeys = true
+        }.ToString();
 
         try
         {
-            var connectionString = $"Data Source={databasePath}";
-
             var first = await SchemaMigrator.ApplyAllAsync("sqlite", connectionString);
             Assert.True(first.Success, first.Message);
             Assert.True(first.AppliedCount > 0);
+            Assert.True(File.Exists(databasePath));
 
             var second = await SchemaMigrator.ApplyAllAsync("sqlite", connectionString);
             Assert.True(second.Success, second.Message);
@@ -30,8 +38,8 @@ public sealed class SchemaMigratorTests
         }
         finally
         {
-            if (File.Exists(databasePath))
-                File.Delete(databasePath);
+            if (Directory.Exists(databaseDirectory))
+                Directory.Delete(databaseDirectory, recursive: true);
         }
     }
 }
