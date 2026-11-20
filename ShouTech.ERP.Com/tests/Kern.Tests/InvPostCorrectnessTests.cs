@@ -46,6 +46,30 @@ public sealed class InvPostCorrectnessTests
     private const string Actor = "invpost-test";
     private const string CompanyCode = "IP5";
 
+    [Fact]
+    public async Task NextDocNo_UsesHighestExistingSequence_AndDoesNotReuseDeletedNumbers()
+    {
+        using var db = await SeededAsync();
+        var year = DateTime.Today.Year.ToString(CultureInfo.InvariantCulture);
+        using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                INSERT INTO sales_documents
+                    (company_id, doc_kind, doc_no, doc_date, status, is_deleted)
+                VALUES
+                    ($company, 'SAL', $number, $date, 'Draft', 0);
+                """;
+            command.Parameters.AddWithValue("$company", CompanyCode);
+            command.Parameters.AddWithValue("$number", $"SAL-{year}-0007");
+            command.Parameters.AddWithValue("$date", DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            command.ExecuteNonQuery();
+        }
+
+        Assert.Equal($"SAL-{year}-0008", InvRepo.NextDocNo(InvDocKind.SalesInvoice));
+    }
+
     // ------------------------------------------------------------ (a)
 
     [Fact]
