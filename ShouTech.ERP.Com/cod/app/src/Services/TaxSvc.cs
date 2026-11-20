@@ -124,7 +124,7 @@ public static class TaxSvc
                   AND r.is_active = {activeValue}
                   AND r.effective_from <= CURRENT_DATE
                   AND (r.effective_to IS NULL OR r.effective_to >= CURRENT_DATE)
-                ORDER BY tax_code;
+                ORDER BY r.is_default DESC, r.tax_code;
                 """;
             Add(cmd, "$company", AppState.CurrentCompanyCode ?? "");
             using var reader = cmd.ExecuteReader();
