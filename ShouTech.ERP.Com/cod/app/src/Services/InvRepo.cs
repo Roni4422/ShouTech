@@ -1745,6 +1745,9 @@ public static class InvRepo
             }
         }
         var splitTax = canSplitTax && taxAccountGroups.Count > 0;
+        if (tax > 0m && !string.IsNullOrWhiteSpace(taxCountry) && !splitTax)
+            throw new InvalidOperationException(
+                "The enabled tax system has no valid posting account. Configure the tax account in the chart of accounts before posting.");
         var taxLeg = splitTax ? tax : 0m;
 
         // Per-line revenue / purchase / returns leg amounts, adjusted so
