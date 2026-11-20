@@ -192,7 +192,8 @@
     "FinancialAnalysis": "تحليل مالي",
     "LocalAnalysis": "محلي",
     "AIAnalysis": "AI",
-    "TaxConfiguration": "إعدادات الضرائب"
+    "TaxConfiguration": "إعدادات الضرائب",
+    "TaxReport": "تقرير الفترة الضريبية"
   },
   "Bonds": {
     "Title": "السندات",
@@ -3632,5 +3633,28 @@
     "EffectiveFromRequired": "تاريخ بداية السريان مطلوب.",
     "InvalidRate": "أدخل نسبة ضريبية صحيحة.",
     "Saved": "تم حفظ القاعدة الضريبية."
+  },
+  "TaxReport": {
+    "Title": "تقرير الفترة الضريبية",
+    "PermissionDenied": "ليست لديك صلاحية عرض التقارير الضريبية.",
+    "From": "من",
+    "To": "إلى",
+    "DateRequired": "حدد تاريخي بداية ونهاية الفترة.",
+    "PeriodStatus": "الاختصاص: {0} | الفترة: {1} إلى {2} | بنود الضريبة: {3} | مراجع المستندات: {4}",
+    "CurrencyTotals": "{0}: ضريبة المخرجات {1:N2} | مدخلات قابلة للاسترداد {2:N2} | مدخلات غير قابلة للاسترداد {3:N2} | صافي المستحق {4:N2}",
+    "Column": {
+      "TaxCode": "رمز الضريبة",
+      "TaxType": "نوع الضريبة",
+      "Treatment": "المعالجة",
+      "Rate": "النسبة (%)",
+      "Direction": "الاتجاه",
+      "IsRecoverable": "قابلة للاسترداد",
+      "CurrencyCode": "العملة",
+      "TransactionCount": "بنود ضريبية",
+      "DocumentCount": "المستندات",
+      "TaxableAmount": "المبلغ الخاضع",
+      "TaxAmount": "مبلغ الضريبة",
+      "BaseTaxAmount": "الضريبة بالعملة الأساسية"
+    }
   }
 }
