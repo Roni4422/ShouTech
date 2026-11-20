@@ -18,6 +18,7 @@ public sealed class TaxReportWin : BaseWin
     private readonly DatePicker _from = new() { SelectedDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1) };
     private readonly DatePicker _to = new() { SelectedDate = DateTime.Today };
     private readonly DataGrid _grid = new() { AutoGenerateColumns = true, IsReadOnly = true, CanUserAddRows = false };
+    private readonly DataGrid _registerGrid = new() { AutoGenerateColumns = true, IsReadOnly = true, CanUserAddRows = false };
     private readonly TextBlock _status = new();
     private readonly TextBlock _totals = new();
     private readonly Button _refresh = new();
@@ -42,6 +43,9 @@ public sealed class TaxReportWin : BaseWin
         foreach (var column in _grid.Columns)
             if (!string.IsNullOrWhiteSpace(column.SortMemberPath))
                 column.Header = T("TaxReport.Column." + column.SortMemberPath);
+        foreach (var column in _registerGrid.Columns)
+            if (!string.IsNullOrWhiteSpace(column.SortMemberPath))
+                column.Header = T("TaxReport.RegisterColumn." + column.SortMemberPath);
         if (IsLoaded)
             RefreshReport();
     }
@@ -106,11 +110,14 @@ public sealed class TaxReportWin : BaseWin
         root.Children.Add(_close);
 
         _grid.AutoGeneratingColumn += (_, e) =>
-        {
-            var key = "TaxReport.Column." + e.PropertyName;
-            e.Column.Header = T(key);
-        };
-        root.Children.Add(_grid);
+            e.Column.Header = T("TaxReport.Column." + e.PropertyName);
+        _registerGrid.AutoGeneratingColumn += (_, e) =>
+            e.Column.Header = T("TaxReport.RegisterColumn." + e.PropertyName);
+
+        var tabs = new TabControl();
+        tabs.Items.Add(new TabItem { Header = T("TaxReport.SummaryTab"), Content = _grid });
+        tabs.Items.Add(new TabItem { Header = T("TaxReport.RegisterTab"), Content = _registerGrid });
+        root.Children.Add(tabs);
         Content = root;
     }
 
@@ -122,6 +129,7 @@ public sealed class TaxReportWin : BaseWin
                 throw new InvalidOperationException(T("TaxReport.DateRequired"));
             var rows = TaxReportingSvc.LoadPeriod(from, to);
             _grid.ItemsSource = rows;
+            _registerGrid.ItemsSource = TaxReportingSvc.LoadRegister(from, to);
             var settings = TaxSvc.LoadSettings();
             _status.Text = string.Format(CultureInfo.CurrentCulture,
                 T("TaxReport.PeriodStatus"), settings?.CountryCode ?? string.Empty,
@@ -145,6 +153,7 @@ public sealed class TaxReportWin : BaseWin
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "TaxReportWin.RefreshReport");
             _status.Text = ex.Message;
             _grid.ItemsSource = Array.Empty<TaxReportingSvc.TaxPeriodRow>();
+            _registerGrid.ItemsSource = Array.Empty<TaxReportingSvc.TaxRegisterRow>();
             _totals.Text = string.Empty;
         }
     }
