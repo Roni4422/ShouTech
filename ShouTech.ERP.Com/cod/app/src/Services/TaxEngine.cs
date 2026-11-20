@@ -42,6 +42,16 @@ public static class TaxCountryPackCatalog
         return false;
     }
 
+    public static TaxCountryPack? FindByNameOrCode(string value)
+    {
+        var key = (value ?? string.Empty).Trim();
+        if (key.Length == 0) return null;
+        if (TryGet(key, out var byCode)) return byCode;
+
+        return Packs.Values.FirstOrDefault(x =>
+            string.Equals(x.CountryName, key, StringComparison.OrdinalIgnoreCase));
+    }
+
     private static Dictionary<string, TaxCountryPack> Build()
     {
         var result = new Dictionary<string, TaxCountryPack>(StringComparer.OrdinalIgnoreCase);
