@@ -111,7 +111,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         Title = WindowTitleFor(kind);
 
         BuildUi();
-        _txtTaxRate.IsReadOnly = !TaxSvc.IsEnabled;
+        _txtTaxRate.IsReadOnly = !TaxSvc.IsEnabled || _taxCodes.Count == 0;
         _cmbTaxCode.ItemsSource = _taxCodes;
         _cmbTaxCode.DisplayMemberPath = nameof(TaxSvc.TaxCodeRec.Name);
         _cmbTaxCode.SelectedValuePath = nameof(TaxSvc.TaxCodeRec.Code);
@@ -672,7 +672,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         };
         _grid.Columns.Add(taxCodeColumn);
         var taxRateColumn = TextCol(nameof(LineVm.TaxRateText), 60, Tf("Invoice.ColTax", "Tax %"));
-        taxRateColumn.IsReadOnly = !TaxSvc.IsEnabled;
+        taxRateColumn.IsReadOnly = !TaxSvc.IsEnabled || _taxCodes.Count == 0;
         _grid.Columns.Add(taxRateColumn);
         _grid.Columns.Add(new DataGridTextColumn
         {
@@ -762,7 +762,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _doc.CurrencyCode = string.IsNullOrWhiteSpace(_txtCurrency.Text)
             ? UsrPref.Load().CurrencyCode
             : _txtCurrency.Text.Trim().ToUpperInvariant();
-        var taxEnabled = TaxSvc.IsEnabled;
+        var taxEnabled = TaxSvc.IsEnabled && _taxCodes.Count > 0;
         _doc.TaxCode = taxEnabled
             ? Convert.ToString(_cmbTaxCode.SelectedValue, CultureInfo.InvariantCulture) ?? string.Empty
             : string.Empty;
