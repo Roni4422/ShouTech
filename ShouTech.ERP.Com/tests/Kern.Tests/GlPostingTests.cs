@@ -136,7 +136,26 @@ public class GlPostingTests
               WHERE e.status = 1 GROUP BY l.account_id
               HAVING ABS(COALESCE(SUM(l.debit),0) - COALESCE(SUM(l.credit),0)) > 0.0001);
             """;
-        Assert.Equal(0L, Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture));
+        var unbalancedAccountCount = Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+        if (unbalancedAccountCount != 0)
+        {
+            using var diagnostic = connection.CreateCommand();
+            diagnostic.CommandText = """
+                SELECT a.account_code || '=' ||
+                       CAST(ROUND(COALESCE(SUM(l.debit),0) - COALESCE(SUM(l.credit),0), 4) AS TEXT)
+                FROM journal_entry_lines l
+                JOIN journal_entries e ON e.journal_entry_id = l.journal_entry_id
+                JOIN chart_of_accounts a ON a.account_id = l.account_id
+                WHERE e.status = 1
+                GROUP BY a.account_code
+                HAVING ABS(COALESCE(SUM(l.debit),0) - COALESCE(SUM(l.credit),0)) > 0.0001
+                ORDER BY a.account_code;
+                """;
+            using var reader = diagnostic.ExecuteReader();
+            var residuals = new List<string>();
+            while (reader.Read()) residuals.Add(reader.GetString(0));
+            Assert.Fail($"Invoice reversal left {unbalancedAccountCount} non-zero GL account balances: {string.Join(", ", residuals)}");
+        }
     }
 
     [Fact]
