@@ -20,6 +20,7 @@ public sealed class TaxSetupWin : BaseWin
     private readonly Button _jurisdictionAction = new();
     private readonly DataGrid _rules = new() { AutoGenerateColumns = true, IsReadOnly = true, CanUserAddRows = false };
     private readonly TextBlock _status = new();
+    private readonly TextBox _registrationNumber = new();
     private readonly TextBox _code = new();
     private readonly TextBox _name = new();
     private readonly TextBox _type = new();
@@ -86,6 +87,16 @@ public sealed class TaxSetupWin : BaseWin
         jurisdiction.Children.Add(_country);
         jurisdiction.Children.Add(_jurisdictionAction);
         top.Children.Add(jurisdiction);
+        var registrationPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+        registrationPanel.Children.Add(new TextBlock
+        {
+            Text = T("TaxSetup.RegistrationNumber"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        });
+        _registrationNumber.MinWidth = 250;
+        registrationPanel.Children.Add(_registrationNumber);
+        top.Children.Add(registrationPanel);
         _status.TextWrapping = TextWrapping.Wrap;
         _status.Margin = new Thickness(0, 0, 0, 4);
         top.Children.Add(_status);
@@ -212,6 +223,7 @@ public sealed class TaxSetupWin : BaseWin
         try
         {
             _country.SelectedValue = settings?.CountryCode;
+            _registrationNumber.Text = settings?.RegistrationNumber ?? string.Empty;
         }
         finally
         {
