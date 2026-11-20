@@ -1730,6 +1730,9 @@
     "VoucherOpenFailed": "Could not open the journal voucher.",
     "OriginalOpenFailed": "Could not open the original invoice.",
     "ReverseReason": "User requested reversal from invoice window"
+  ,
+    "TaxSystem": "Tax system",
+    "ColTaxCode": "Tax code"
   },
   "Vouchers": {
     "PartyCode": "Party Code",
