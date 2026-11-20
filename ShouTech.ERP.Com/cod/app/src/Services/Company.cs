@@ -1747,7 +1747,7 @@ public sealed class CoCreateSvc : ICoCreateSvc
                             ruleCmd.Parameters.Add("@CreatedBy", NpgsqlDbType.Varchar).Value = record.AdminUsername;
                             ruleCmd.Parameters.Add("@SourceUrl", NpgsqlDbType.Text).Value = rule.SourceUrl;
                             ruleCmd.Parameters.Add("@SourceReference", NpgsqlDbType.Text).Value = rule.SourceReference;
-                            ruleCmd.Parameters.Add("@VerifiedOn", NpgsqlDbType.Date).Value = new DateTime(2026, 11, 20);
+                            ruleCmd.Parameters.Add("@VerifiedOn", NpgsqlDbType.Date).Value = DBNull.Value;
                             await ruleCmd.ExecuteNonQueryAsync();
                         }
                     }
@@ -1973,7 +1973,7 @@ public sealed class CoCreateSvc : ICoCreateSvc
                             ("createdBy", record.AdminUsername),
                             ("sourceUrl", rule.SourceUrl),
                             ("sourceReference", rule.SourceReference),
-                            ("verifiedOn", "2026-11-20"));
+                            ("verifiedOn", DBNull.Value));
                     }
                 }
 
