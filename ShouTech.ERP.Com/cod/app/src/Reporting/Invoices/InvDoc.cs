@@ -54,6 +54,7 @@ public sealed class InvLine
     public decimal Qty { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal DiscountPct { get; set; }
+    public string TaxCode { get; set; } = string.Empty;
     public decimal TaxRate { get; set; }
     public int? WarehouseId { get; set; }
     public string WarehouseName { get; set; } = string.Empty;
