@@ -19,6 +19,9 @@ public sealed class TaxReportWin : BaseWin
     private readonly DatePicker _to = new() { SelectedDate = DateTime.Today };
     private readonly DataGrid _grid = new() { AutoGenerateColumns = true, IsReadOnly = true, CanUserAddRows = false };
     private readonly DataGrid _registerGrid = new() { AutoGenerateColumns = true, IsReadOnly = true, CanUserAddRows = false };
+    private readonly TabControl _tabs = new();
+    private readonly TabItem _summaryTab = new();
+    private readonly TabItem _registerTab = new();
     private readonly TextBlock _status = new();
     private readonly TextBlock _totals = new();
     private readonly Button _refresh = new();
@@ -38,6 +41,8 @@ public sealed class TaxReportWin : BaseWin
     protected override void ApplyLocalizedText()
     {
         Title = T("TaxReport.Title");
+        _summaryTab.Header = T("TaxReport.SummaryTab");
+        _registerTab.Header = T("TaxReport.RegisterTab");
         if (Content is DependencyObject root)
             ApplyLocalizedNode(root);
         foreach (var column in _grid.Columns)
@@ -114,10 +119,13 @@ public sealed class TaxReportWin : BaseWin
         _registerGrid.AutoGeneratingColumn += (_, e) =>
             e.Column.Header = T("TaxReport.RegisterColumn." + e.PropertyName);
 
-        var tabs = new TabControl();
-        tabs.Items.Add(new TabItem { Header = T("TaxReport.SummaryTab"), Content = _grid });
-        tabs.Items.Add(new TabItem { Header = T("TaxReport.RegisterTab"), Content = _registerGrid });
-        root.Children.Add(tabs);
+        _summaryTab.Header = T("TaxReport.SummaryTab");
+        _summaryTab.Content = _grid;
+        _registerTab.Header = T("TaxReport.RegisterTab");
+        _registerTab.Content = _registerGrid;
+        _tabs.Items.Add(_summaryTab);
+        _tabs.Items.Add(_registerTab);
+        root.Children.Add(_tabs);
         Content = root;
     }
 
