@@ -3558,7 +3558,8 @@
       "IsActive": "Active",
       "DataStatus": "Data status"
     },
-    "EnabledNeedsRules": "Tax is enabled for {0} ({1}), but this jurisdiction has no universal starter rate. Add the applicable national, state, local, or schedule rules before posting tax documents."
+    "EnabledNeedsRules": "Tax is enabled for {0} ({1}), but this jurisdiction's full rate and classification package has not been loaded. Add and verify the applicable national, state, local, or schedule rules before posting tax documents.",
+    "RegistrationNumber": "Tax registration number"
   },
   "TaxReport": {
     "Title": "Tax Period Report",
