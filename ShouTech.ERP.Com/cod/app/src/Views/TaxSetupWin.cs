@@ -29,6 +29,8 @@ public sealed class TaxSetupWin : BaseWin
     private readonly TextBox _rate = new();
     private readonly TextBox _outputAccount = new();
     private readonly TextBox _inputAccount = new();
+    private readonly TextBox _sourceUrl = new();
+    private readonly TextBox _sourceReference = new();
     private readonly ComboBox _calculation = new();
     private readonly DatePicker _effectiveFrom = new() { SelectedDate = DateTime.Today };
     private readonly DatePicker _effectiveTo = new();
@@ -138,7 +140,7 @@ public sealed class TaxSetupWin : BaseWin
         var editor = new Grid { Margin = new Thickness(0, 10, 0, 4) };
         for (var i = 0; i < 4; i++)
             editor.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        for (var i = 0; i < 4; i++)
+        for (var i = 0; i < 5; i++)
             editor.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         AddField(editor, 0, 0, "TaxSetup.Code", _code);
@@ -149,6 +151,8 @@ public sealed class TaxSetupWin : BaseWin
         AddField(editor, 2, 2, "TaxSetup.Calculation", _calculation);
         AddField(editor, 3, 0, "TaxSetup.EffectiveFrom", _effectiveFrom);
         AddField(editor, 3, 2, "TaxSetup.EffectiveTo", _effectiveTo);
+        AddField(editor, 4, 0, "TaxSetup.SourceUrl", _sourceUrl);
+        AddField(editor, 4, 2, "TaxSetup.SourceReference", _sourceReference);
 
         _calculation.ItemsSource = new[] { "Exclusive", "Inclusive" };
         _calculation.SelectedIndex = 0;
@@ -334,6 +338,8 @@ public sealed class TaxSetupWin : BaseWin
         _recoverable.IsChecked = rule.IsRecoverable;
         _compound.IsChecked = rule.IsCompound;
         _default.IsChecked = rule.IsDefault;
+        _sourceUrl.Text = rule.SourceUrl;
+        _sourceReference.Text = rule.SourceReference;
     }
 
     private void ClearEditor()
@@ -352,6 +358,8 @@ public sealed class TaxSetupWin : BaseWin
         _recoverable.IsChecked = true;
         _compound.IsChecked = false;
         _default.IsChecked = false;
+        _sourceUrl.Clear();
+        _sourceReference.Clear();
     }
 
     private void SaveRule()
@@ -368,7 +376,8 @@ public sealed class TaxSetupWin : BaseWin
                 from, _effectiveTo.SelectedDate, _recoverable.IsChecked == true,
                 _compound.IsChecked == true, _default.IsChecked == true,
                 _outputAccount.Text, _inputAccount.Text,
-                _calculation.SelectedItem?.ToString() ?? "Exclusive"));
+                _calculation.SelectedItem?.ToString() ?? "Exclusive",
+                _sourceUrl.Text.Trim(), _sourceReference.Text.Trim()));
 
             _status.Text = T("TaxSetup.Saved");
             RefreshData();
