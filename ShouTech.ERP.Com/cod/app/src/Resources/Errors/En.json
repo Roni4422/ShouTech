@@ -3,7 +3,7 @@
     "code": "ACC-5001",
     "name": "JournalNotBalanced",
     "message": "Journal entry debit and credit totals must balance.",
-    "hint": "Adjust the lines so total debit equals total credit."
+    "hint": "Use at least 3 characters. Letters, digits, symbols, or any combination are accepted."
   },
   "ACC-5002": {
     "code": "ACC-5002",
