@@ -32,14 +32,20 @@ public class Phase4SecurityTests
         Assert.Empty(errors);
     }
 
+    [Fact]
+    public void Policy_RejectsAnEmptyPasswordAsRequired()
+    {
+        var errors = PwdPolicy.Validate("", EnterprisePolicy(), "alice");
+        Assert.Contains(errors, e => e.Contains("required", StringComparison.OrdinalIgnoreCase));
+    }
+
     [Theory]
-    [InlineData("")]
     [InlineData("a")]
     [InlineData("12")]
-    public void Policy_RejectsPasswordsShorterThanThreeCharacters(string password)
+    public void Policy_RejectsNonEmptyPasswordsShorterThanThreeCharacters(string password)
     {
         var errors = PwdPolicy.Validate(password, EnterprisePolicy(), "alice");
-        Assert.Contains(errors, e => e.Contains("at least 3"));
+        Assert.Contains(errors, e => e.Contains("at least 3", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
