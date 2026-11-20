@@ -87,25 +87,25 @@ public static class TaxCountryPackCatalog
 
         var (taxType, taxCode, sourceUrl, sourceReference, effectiveFrom) = code switch
         {
-            "SA" => ("VAT", "VAT15", "https://zatca.gov.sa/en/RulesRegulations/VAT/Pages/About-VAT.aspx",
+            "SA" => ("VAT", "SA-VAT15", "https://zatca.gov.sa/en/RulesRegulations/VAT/Pages/About-VAT.aspx",
                 "ZATCA standard VAT rate: 15%; rate increased effective 2020-07-01.", "2020-07-01"),
-            "JO" => ("GST", "GST16", "https://www.istd.gov.jo/EN/Modules/faq",
+            "JO" => ("GST", "JO-GST16", "https://www.istd.gov.jo/EN/Modules/faq",
                 "ISTD General Sales Tax standard rate: 16%; special schedule rates require item classification.", "2009-01-01"),
-            "EG" => ("VAT", "VAT14", "https://www.eta.gov.eg/sites/default/files/2024-02/Law-english-no.67-2016.pdf.pdf",
+            "EG" => ("VAT", "EG-VAT14", "https://www.eta.gov.eg/sites/default/files/2024-02/Law-english-no.67-2016.pdf.pdf",
                 "VAT Law 67/2016 Article 3: standard rate 14% from fiscal year 2017/2018.", "2017-07-01"),
-            "AE" => ("VAT", "VAT5", "https://mof.gov.ae/en/public-finance/tax/value-added-tax-vat/",
+            "AE" => ("VAT", "AE-VAT5", "https://mof.gov.ae/en/public-finance/tax/value-added-tax-vat/",
                 "UAE Ministry of Finance: standard VAT rate 5%, effective 2018-01-01.", "2018-01-01"),
-            "BH" => ("VAT", "VAT10", "https://www.bahrain.bh/new/en/business-vat_en.html",
+            "BH" => ("VAT", "BH-VAT10", "https://www.bahrain.bh/new/en/business-vat_en.html",
                 "Bahrain Government: standard VAT rate 10%, effective 2022-01-01.", "2022-01-01"),
-            "OM" => ("VAT", "VAT5", "https://tms.taxoman.gov.om/portal/tax-rate",
+            "OM" => ("VAT", "OM-VAT5", "https://tms.taxoman.gov.om/portal/tax-rate",
                 "Oman Tax Authority: standard VAT rate 5%, effective 2021-04-16.", "2021-04-16"),
-            "LB" => ("VAT", "VAT10", "https://finance.gov.lb/en-us/Taxation/Individuals/VAT/Pages/Tax-Rate.aspx",
+            "LB" => ("VAT", "LB-VAT10", "https://finance.gov.lb/en-us/Taxation/Individuals/VAT/Pages/Tax-Rate.aspx",
                 "Lebanon Ministry of Finance: standard VAT rate 10%.", "2002-02-01"),
-            "GB" => ("VAT", "VAT20", "https://www.gov.uk/vat-rates",
+            "GB" => ("VAT", "GB-VAT20", "https://www.gov.uk/vat-rates",
                 "HMRC standard VAT rate: 20%; reduced and zero rates depend on supply classification.", "2011-01-04"),
-            "TR" => ("VAT", "VAT20", "https://www.gib.gov.tr/",
+            "TR" => ("VAT", "TR-VAT20", "https://www.gib.gov.tr/",
                 "Turkish Revenue Administration: standard VAT rate baseline; reduced rates depend on supply classification.", "2023-07-10"),
-            _ => ("VAT", "VAT_STD", "https://ec.europa.eu/taxation_customs/tedb/",
+            _ => ("VAT", $"{code}-VAT-STD", "https://ec.europa.eu/taxation_customs/tedb/",
                 "EU member-state standard-rate snapshot as of 2026-11-20; verify national authority, territory, and supply classification.", "2026-01-01")
         };
 
@@ -114,10 +114,10 @@ public static class TaxCountryPackCatalog
             new(taxCode, $"Standard {taxType} ({rate.ToString(CultureInfo.InvariantCulture)}%)",
                 taxType, "Standard", rate, effectiveFrom, sourceUrl, sourceReference,
                 IsDefault: true),
-            new("ZERO", "Zero-rated supply (eligibility required)", taxType, "ZeroRated", 0m,
+            new($"{code}-ZERO", "Zero-rated supply (eligibility required)", taxType, "ZeroRated", 0m,
                 effectiveFrom, sourceUrl, "Use only for supplies legally eligible for zero rating; retain input-tax recovery only where permitted.",
                 IsRecoverable: true),
-            new("EXEMPT", "Exempt supply (eligibility required)", taxType, "Exempt", 0m,
+            new($"{code}-EXEMPT", "Exempt supply (eligibility required)", taxType, "Exempt", 0m,
                 effectiveFrom, sourceUrl, "Use only for supplies legally exempt; input-tax recovery may be restricted.",
                 IsRecoverable: false)
         };
@@ -126,7 +126,7 @@ public static class TaxCountryPackCatalog
         {
             foreach (var reducedRate in new[] { 10m, 5m, 4m, 2m, 1m })
                 rules.Add(new TaxPackRuleDefinition(
-                    $"GST{reducedRate.ToString("0", CultureInfo.InvariantCulture)}",
+                    $"JO-GST{reducedRate.ToString("0", CultureInfo.InvariantCulture)}",
                     $"Special schedule GST ({reducedRate.ToString("0", CultureInfo.InvariantCulture)}%)",
                     "GST", "Schedule", reducedRate, effectiveFrom,
                     "https://www.istd.gov.jo/EN/List/General__Sales_Tax_Tables",
@@ -135,23 +135,23 @@ public static class TaxCountryPackCatalog
         else if (code == "EG")
         {
             rules.Add(new TaxPackRuleDefinition(
-                "VAT5-MACH", "Manufacturing machinery and equipment (5%)",
+                "EG-VAT5-MACH", "Manufacturing machinery and equipment (5%)",
                 "VAT", "Special", 5m, effectiveFrom, sourceUrl,
                 "Egypt VAT Law 67/2016 Article 3: machinery/equipment used in manufacturing or service provision, subject to statutory exclusions."));
         }
         else if (code == "GB")
         {
             rules.Add(new TaxPackRuleDefinition(
-                "VAT5", "Reduced VAT (5%)", "VAT", "Reduced", 5m,
+                "GB-VAT5", "Reduced VAT (5%)", "VAT", "Reduced", 5m,
                 effectiveFrom, sourceUrl, "HMRC reduced rate; use only for eligible supplies."));
         }
         else if (code == "TR")
         {
             rules.Add(new TaxPackRuleDefinition(
-                "VAT10", "Reduced VAT (10%)", "VAT", "Reduced", 10m,
+                "TR-VAT10", "Reduced VAT (10%)", "VAT", "Reduced", 10m,
                 effectiveFrom, sourceUrl, "Turkish reduced VAT category; confirm current classification."));
             rules.Add(new TaxPackRuleDefinition(
-                "VAT1", "Reduced VAT (1%)", "VAT", "Reduced", 1m,
+                "TR-VAT1", "Reduced VAT (1%)", "VAT", "Reduced", 1m,
                 effectiveFrom, sourceUrl, "Turkish reduced VAT category; confirm current classification."));
         }
 
