@@ -142,6 +142,8 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         {
             TaxCode = _doc.TaxCode ?? string.Empty,
             TaxRate = _doc.DefaultTaxRate,
+            TaxCalculationMode = _taxCodes.FirstOrDefault(x =>
+                string.Equals(x.Code, _doc.TaxCode, StringComparison.OrdinalIgnoreCase))?.CalculationMode ?? "Exclusive",
             WarehouseName = _doc.WarehouseName
         });
         WireEvents();
@@ -1011,6 +1013,8 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             {
                 TaxCode = doc.TaxCode ?? string.Empty,
                 TaxRate = doc.DefaultTaxRate,
+                TaxCalculationMode = _taxCodes.FirstOrDefault(x =>
+                    string.Equals(x.Code, doc.TaxCode, StringComparison.OrdinalIgnoreCase))?.CalculationMode ?? "Exclusive",
                 WarehouseName = _doc.WarehouseName
             });
 
@@ -1251,7 +1255,13 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         if (_grid.SelectedItem is not LineVm line)
         {
             if (_lines.Count == 0)
-                _lines.Add(new LineVm { TaxRate = ParseDec(_txtTaxRate.Text, TaxSvc.GetDefaultRate()) });
+                _lines.Add(new LineVm
+            {
+                TaxCode = Convert.ToString(_cmbTaxCode.SelectedValue, CultureInfo.InvariantCulture) ?? string.Empty,
+                TaxRate = ParseDec(_txtTaxRate.Text, TaxSvc.GetDefaultRate()),
+                TaxCalculationMode = _taxCodes.FirstOrDefault(x =>
+                    string.Equals(x.Code, Convert.ToString(_cmbTaxCode.SelectedValue, CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase))?.CalculationMode ?? "Exclusive"
+            });
             line = _lines[^1];
             _grid.SelectedItem = line;
         }
