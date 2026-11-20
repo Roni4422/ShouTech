@@ -367,9 +367,9 @@ public static class TaxSvc
         command.CommandText = """
             SELECT tax_code, COALESCE(tax_name, tax_code), COALESCE(tax_type, ''),
                    COALESCE(tax_treatment, ''), COALESCE(rate, 0), COALESCE(calculation_mode, 'Exclusive'),
-                   COALESCE(is_compound, 0), COALESCE(is_recoverable, 1),
+                   is_compound, is_recoverable,
                    COALESCE(output_account_code, ''), COALESCE(input_account_code, ''),
-                   effective_from, effective_to, COALESCE(is_default, 0), COALESCE(is_active, 0),
+                   effective_from, effective_to, is_default, is_active,
                    COALESCE(data_status, 'USER_CONFIGURED')
             FROM company_tax_rules
             WHERE company_code=$company
@@ -405,8 +405,10 @@ public static class TaxSvc
     }
 
     private static bool ToBoolean(object value)
-        => value is bool flag || (value is not null and not DBNull &&
-            Convert.ToInt32(value, CultureInfo.InvariantCulture) == 1);
+        => value is bool flag
+            ? flag
+            : value is not null and not DBNull &&
+              Convert.ToInt32(value, CultureInfo.InvariantCulture) == 1;
 
     public static IReadOnlyList<TaxCodeRec> LoadCodes(DateTime? asOfDate = null)
     {
