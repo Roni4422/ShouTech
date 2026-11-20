@@ -251,7 +251,7 @@ public sealed class PosRepository : IPosRepository
     // Products
     // ==================================================================
 
-    public async Task<IReadOnlyList<PosProduct>> SearchProductsAsync(string companyId, string? term, int limit = 60, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<PosProduct>> SearchProductsAsync(string companyId, string? term, int? warehouseId = null, int limit = 60, CancellationToken cancellationToken = default)
     {
         RequireCompany(companyId);
         if (limit <= 0) limit = 60;
@@ -266,7 +266,15 @@ public sealed class PosRepository : IPosRepository
                    COALESCE(price_retail, price_list, 0),
                    COALESCE(default_unit, unit1, ''),
                    COALESCE(tax_rate, 0), image_path,
-                   COALESCE(has_batch, 0), COALESCE(has_serial, 0)
+                   COALESCE(has_batch, 0), COALESCE(has_serial, 0),
+                   COALESCE((SELECT SUM(sb.available_qty) FROM material_stock_balances sb
+                       WHERE sb.company_id = materials.company_id AND sb.material_id = materials.material_id
+                         AND (@warehouse IS NULL OR sb.warehouse_id = @warehouse)
+                         AND sb.is_deleted = FALSE), 0),
+                   COALESCE((SELECT SUM(sb.reserved_qty) FROM material_stock_balances sb
+                       WHERE sb.company_id = materials.company_id AND sb.material_id = materials.material_id
+                         AND (@warehouse IS NULL OR sb.warehouse_id = @warehouse)
+                         AND sb.is_deleted = FALSE), 0)
             FROM materials
             WHERE company_id = @company AND {deleted}
             """ + (text.Length == 0 ? "" : """
@@ -284,6 +292,7 @@ public sealed class PosRepository : IPosRepository
             """;
         await using var command = CreateCommand(connection, null, sql);
         Add(command, "@company", companyId.Trim());
+        Add(command, "@warehouse", warehouseId.HasValue ? warehouseId.Value : DBNull.Value);
         if (text.Length > 0)
         {
             Add(command, "@like", "%" + text + "%");
@@ -302,7 +311,9 @@ public sealed class PosRepository : IPosRepository
                 TaxRate = ReadDecimal(reader, 5),
                 ImagePath = ReadString(reader, 6),
                 HasBatch = ReadBoolValue(reader.GetValue(7)),
-                HasSerial = ReadBoolValue(reader.GetValue(8))
+                HasSerial = ReadBoolValue(reader.GetValue(8)),
+                OnHandQty = ReadDecimal(reader, 9),
+                ReservedQty = ReadDecimal(reader, 10)
             });
         return result;
     }
