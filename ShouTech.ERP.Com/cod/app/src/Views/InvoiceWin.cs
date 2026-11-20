@@ -708,7 +708,8 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _doc.CurrencyCode = string.IsNullOrWhiteSpace(_txtCurrency.Text)
             ? UsrPref.Load().CurrencyCode
             : _txtCurrency.Text.Trim().ToUpperInvariant();
-        _doc.DefaultTaxRate = TaxSvc.IsEnabled
+        var taxEnabled = TaxSvc.IsEnabled;
+        _doc.DefaultTaxRate = taxEnabled
             ? ParseDec(_txtTaxRate.Text, TaxSvc.GetDefaultRate())
             : 0m;
         _doc.Notes = _txtNotes.Text;
@@ -727,7 +728,12 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _doc.LinesDiscountAmount = ParseDec(_txtLinesDiscount.Text, 0);
         _doc.LinesExtraAmount = ParseDec(_txtLinesExtra.Text, 0);
         _doc.PaidAmount = ParseDec(_txtPaid.Text, 0);
-        _doc.Lines = _lines.Select(l => l.ToLine())
+        _doc.Lines = _lines.Select(l =>
+            {
+                var line = l.ToLine();
+                if (!taxEnabled) line.TaxRate = 0m;
+                return line;
+            })
             .Where(l => !string.IsNullOrWhiteSpace(l.Description) || l.Qty != 0)
             .ToList();
         // Resolve typed codes/names to ids so stock posting and reloads work:
