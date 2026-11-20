@@ -165,7 +165,7 @@ public static class TaxReportingSvc
             while (reader.Read())
             {
                 rows.Add(new TaxRegisterRow(
-                    Convert.ToDateTime(reader.GetValue(0), CultureInfo.InvariantCulture),
+                    ReadDate(reader.GetValue(0)),
                     Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? string.Empty,
                     Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture) ?? string.Empty,
                     Convert.ToInt32(reader.GetValue(3), CultureInfo.InvariantCulture),
@@ -186,6 +186,14 @@ public static class TaxReportingSvc
             return rows.AsReadOnly();
         }
     }
+
+    private static DateTime ReadDate(object value)
+        => value switch
+        {
+            DateOnly date => date.ToDateTime(TimeOnly.MinValue),
+            DateTime dateTime => dateTime,
+            _ => Convert.ToDateTime(value, CultureInfo.InvariantCulture)
+        };
 
     private static bool ToBoolean(object value)
         => value is bool flag
