@@ -38,7 +38,8 @@
     "Title": "Accounts",
     "Trading": "Trading",
     "TrialBalance": "Trial Balance",
-    "TaxConfiguration": "Tax configuration"
+    "TaxConfiguration": "Tax configuration",
+    "TaxReport": "Tax period report"
   },
   "Application": {
     "Error": "Error",
@@ -3540,5 +3541,28 @@
     "EffectiveFromRequired": "An effective-from date is required.",
     "InvalidRate": "Enter a valid tax rate.",
     "Saved": "Tax rule saved."
+  },
+  "TaxReport": {
+    "Title": "Tax Period Report",
+    "PermissionDenied": "You do not have permission to view tax reports.",
+    "From": "From",
+    "To": "To",
+    "DateRequired": "Select both period dates.",
+    "PeriodStatus": "Jurisdiction: {0} | Period: {1} to {2} | Tax lines: {3} | Document references: {4}",
+    "CurrencyTotals": "{0}: Output tax {1:N2} | Recoverable input {2:N2} | Non-recoverable input {3:N2} | Net payable {4:N2}",
+    "Column": {
+      "TaxCode": "Tax code",
+      "TaxType": "Tax type",
+      "Treatment": "Treatment",
+      "Rate": "Rate (%)",
+      "Direction": "Direction",
+      "IsRecoverable": "Recoverable",
+      "CurrencyCode": "Currency",
+      "TransactionCount": "Tax lines",
+      "DocumentCount": "Documents",
+      "TaxableAmount": "Taxable amount",
+      "TaxAmount": "Tax amount",
+      "BaseTaxAmount": "Base tax amount"
+    }
   }
 }
