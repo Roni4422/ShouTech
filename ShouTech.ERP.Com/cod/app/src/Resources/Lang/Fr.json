@@ -402,7 +402,8 @@
     "StockOnHand": "En stock",
     "StockReserved": "Réservé",
     "StockAvailable": "Disponible",
-    "Stock": "Stock"
+    "Stock": "Stock",
+    "WarehouseRequired": "Configurez un entrepôt actif pour ce terminal POS avant d’ouvrir une session."
   },
   "Orders": {
     "Title": "Commandes",
