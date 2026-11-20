@@ -1700,16 +1700,56 @@ public sealed class CoCreateSvc : ICoCreateSvc
 
                     if (record.TaxEnabled)
                     {
+                        var taxScheme = TaxCountryPackCatalog.TryGet(record.TaxCountryCode, out var selectedPack)
+                            ? selectedPack.Regime.ToString()
+                            : string.Empty;
                         const string insertTaxSettings = """
                             INSERT INTO public.company_tax_settings
                                 (company_code, country_code, tax_enabled, tax_scheme, registration_number)
-                            VALUES (@Code, @CountryCode, TRUE, '', @TaxNumber);
+                            VALUES (@Code, @CountryCode, TRUE, @TaxScheme, @TaxNumber);
                             """;
                         await using var taxCmd = new NpgsqlCommand(insertTaxSettings, connection, transaction);
                         taxCmd.Parameters.Add("@Code", NpgsqlDbType.Varchar).Value = record.Code;
                         taxCmd.Parameters.Add("@CountryCode", NpgsqlDbType.Char).Value = record.TaxCountryCode;
+                        taxCmd.Parameters.Add("@TaxScheme", NpgsqlDbType.Varchar).Value = taxScheme;
                         taxCmd.Parameters.Add("@TaxNumber", NpgsqlDbType.Varchar).Value = record.TaxNumber ?? string.Empty;
                         await taxCmd.ExecuteNonQueryAsync();
+
+                        foreach (var rule in TaxCountryPackCatalog.GetInitialRules(record.TaxCountryCode))
+                        {
+                            const string insertTaxRule = """
+                                INSERT INTO public.company_tax_rules
+                                    (company_code, country_code, tax_code, tax_name, tax_type, tax_treatment,
+                                     rate, calculation_mode, is_compound, is_recoverable, output_account_code,
+                                     input_account_code, effective_from, is_default, is_active, created_by,
+                                     source_url, source_reference, verified_on, data_status)
+                                VALUES
+                                    (@Code, @CountryCode, @TaxCode, @TaxName, @TaxType, @Treatment,
+                                     @Rate, 'Exclusive', FALSE, @Recoverable, @OutputAccount, @InputAccount,
+                                     @EffectiveFrom, @IsDefault, TRUE, @CreatedBy,
+                                     @SourceUrl, @SourceReference, @VerifiedOn, 'BASELINE_REVIEW_REQUIRED')
+                                ON CONFLICT (company_code, tax_code, effective_from) DO NOTHING;
+                                """;
+                            await using var ruleCmd = new NpgsqlCommand(insertTaxRule, connection, transaction);
+                            ruleCmd.Parameters.Add("@Code", NpgsqlDbType.Varchar).Value = record.Code;
+                            ruleCmd.Parameters.Add("@CountryCode", NpgsqlDbType.Char).Value = record.TaxCountryCode;
+                            ruleCmd.Parameters.Add("@TaxCode", NpgsqlDbType.Varchar).Value = rule.Code;
+                            ruleCmd.Parameters.Add("@TaxName", NpgsqlDbType.Varchar).Value = rule.Name;
+                            ruleCmd.Parameters.Add("@TaxType", NpgsqlDbType.Varchar).Value = rule.TaxType;
+                            ruleCmd.Parameters.Add("@Treatment", NpgsqlDbType.Varchar).Value = rule.Treatment;
+                            ruleCmd.Parameters.Add("@Rate", NpgsqlDbType.Numeric).Value = rule.Rate;
+                            ruleCmd.Parameters.Add("@Recoverable", NpgsqlDbType.Boolean).Value = rule.IsRecoverable;
+                            ruleCmd.Parameters.Add("@OutputAccount", NpgsqlDbType.Varchar).Value = rule.OutputAccountCode;
+                            ruleCmd.Parameters.Add("@InputAccount", NpgsqlDbType.Varchar).Value = rule.InputAccountCode;
+                            ruleCmd.Parameters.Add("@EffectiveFrom", NpgsqlDbType.Date).Value =
+                                DateTime.ParseExact(rule.EffectiveFrom, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+                            ruleCmd.Parameters.Add("@IsDefault", NpgsqlDbType.Boolean).Value = rule.IsDefault;
+                            ruleCmd.Parameters.Add("@CreatedBy", NpgsqlDbType.Varchar).Value = record.AdminUsername;
+                            ruleCmd.Parameters.Add("@SourceUrl", NpgsqlDbType.Text).Value = rule.SourceUrl;
+                            ruleCmd.Parameters.Add("@SourceReference", NpgsqlDbType.Text).Value = rule.SourceReference;
+                            ruleCmd.Parameters.Add("@VerifiedOn", NpgsqlDbType.Date).Value = new DateTime(2026, 11, 20);
+                            await ruleCmd.ExecuteNonQueryAsync();
+                        }
                     }
 
                     var fiscalYear = record.FiscalYearStart.Year;
