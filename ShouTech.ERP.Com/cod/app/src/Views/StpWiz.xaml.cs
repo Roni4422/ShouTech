@@ -1456,7 +1456,7 @@ namespace ShouTech.App.Views
             _lastTaxPromptCountryCode = countryCode;
             chkEnableTaxSystem.IsChecked = false;
 
-            if (_mode != StpWizMode.NewCompany || !IsLoaded)
+            if (!IsLoaded)
                 return;
 
             var countryName = selected?.Content?.ToString() ?? countryCode;
