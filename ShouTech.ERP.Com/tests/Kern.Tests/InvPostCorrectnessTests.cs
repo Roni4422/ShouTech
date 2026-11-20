@@ -47,6 +47,32 @@ public sealed class InvPostCorrectnessTests
     private const string CompanyCode = "IP5";
 
     [Fact]
+    public async Task DocSchema_ValidatesEachCompanyDatabaseIndependently()
+    {
+        using var validDb = await SeededAsync();
+        DocSchema.Ensure();
+
+        var root = Path.Combine(Path.GetTempPath(), "doc-schema-tests-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var incompletePath = Path.Combine(root, "incomplete.db");
+        try
+        {
+            using (var connection = new SqliteConnection($"Data Source={incompletePath};"))
+                connection.Open();
+
+            PointAppAt(incompletePath);
+            var error = Assert.Throws<InvalidOperationException>(() => DocSchema.Ensure());
+            Assert.Contains("schema is incomplete", error.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            PointAppAt(validDb.DbPath);
+            SqliteConnection.ClearAllPools();
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task NextDocNo_UsesHighestExistingSequenceInsteadOfRowCount()
     {
         using var db = await SeededAsync();
