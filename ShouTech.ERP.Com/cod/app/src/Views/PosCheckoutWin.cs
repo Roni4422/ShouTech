@@ -32,13 +32,13 @@ public sealed class PosCheckoutWin : BaseWin
     private readonly TextBlock _date = new();
     private readonly TextBlock _customer = new();
     private readonly TextBlock _session = new();
-    private readonly TextBlock _total = new() { FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(26), FontWeight = FontWeights.Bold };
+    private readonly TextBlock _total = new() { FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(20), FontWeight = FontWeights.Bold };
     private readonly TextBox _cashApplied = new() { Text = "0" };
     private readonly TextBox _cashTendered = new() { Text = "0" };
     private readonly TextBox _cardApplied = new() { Text = "0" };
     private readonly TextBox _cardRef = new();
     private readonly TextBox _onAccount = new() { Text = "0" };
-    private readonly TextBlock _change = new() { FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(18), FontWeight = FontWeights.Bold };
+    private readonly TextBlock _change = new() { FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(16), FontWeight = FontWeights.Bold };
     private readonly TextBlock _remaining = new();
     private readonly Button _complete = new();
     private readonly Button _cancel = new();
@@ -55,7 +55,11 @@ public sealed class PosCheckoutWin : BaseWin
         Width = 620;
         Height = 560;
         MinWidth = 540;
-        MinHeight = 420;
+        // Honest content height after the 2026-11-20 compaction below is
+        // ~374 DIP (see FIX_POSCHECKOUT_MINIMUM.md); 372 leaves the middle
+        // band a few DIP of scroll at the minimum instead of clipping.
+        // Must stay <= 684x384 (verify_screenfit.py cap).
+        MinHeight = 372;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
         // The cashier's pre-selected tender pre-fills its box.
@@ -75,13 +79,13 @@ public sealed class PosCheckoutWin : BaseWin
 
     private void BuildUi()
     {
-        var root = new Grid { Margin = new Thickness(16) };
+        var root = new Grid { Margin = new Thickness(10) };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        var header = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
-        var title = new TextBlock { Text = T("POS.CheckoutTitle"), FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(19), FontWeight = FontWeights.SemiBold };
+        var header = new StackPanel { Margin = new Thickness(0, 0, 0, 6) };
+        var title = new TextBlock { Text = T("POS.CheckoutTitle"), FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(16), FontWeight = FontWeights.SemiBold };
         title.Tag = "POS.CheckoutTitle";
         header.Children.Add(title);
         var document = CreateFormGrid(2);
@@ -94,7 +98,7 @@ public sealed class PosCheckoutWin : BaseWin
         root.Children.Add(header);
 
         var content = new StackPanel();
-        var totalPanel = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(12), Margin = new Thickness(0, 2, 0, 10) };
+        var totalPanel = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(8), Margin = new Thickness(0, 2, 0, 6) };
         totalPanel.SetResourceReference(Border.BackgroundProperty, "SurfaceSecondaryBrush");
         _total.SetResourceReference(TextBlock.ForegroundProperty, "AccentBrush");
         totalPanel.Child = _total;
@@ -108,13 +112,23 @@ public sealed class PosCheckoutWin : BaseWin
         AddTenderField(tenders, 2, 0, "POS.TenderOnAccount", _onAccount);
         content.Children.Add(tenders);
 
-        _change.Margin = new Thickness(0, 10, 0, 0);
+        _change.Margin = new Thickness(0, 4, 0, 0);
         content.Children.Add(_change);
         content.Children.Add(_remaining);
-        Grid.SetRow(content, 1);
-        root.Children.Add(content);
+        // The middle band scrolls vertically: at the 372 minimum the
+        // compacted content is ~374 DIP, so a few DIP of font-metric
+        // variance degrades to a tiny scroll instead of clipping, and
+        // the Complete/Cancel buttons (row 2) stay visible regardless.
+        var contentScroll = new ScrollViewer
+        {
+            Content = content,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+        Grid.SetRow(contentScroll, 1);
+        root.Children.Add(contentScroll);
 
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 0) };
         ConfigureButton(_cancel, "Common.Cancel");
         ConfigureButton(_complete, "POS.CompleteSale");
         _complete.MinWidth = ShouTech.App.Services.VisuId.PrimaryButtonMinWidth;

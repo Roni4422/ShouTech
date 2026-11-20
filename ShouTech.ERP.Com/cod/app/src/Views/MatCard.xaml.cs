@@ -745,7 +745,7 @@ public partial class MatCard : BaseWin
 	{
 		preferredValue ??= GetComboKey(CmbCategory);
 
-		// Owner semantics (2026-11-17): the Category (الصنف) combo lists the
+		// Owner semantics (2026-11-17): the Category combo lists the
 		// categories managed through the Category Card window (CatWin). The
 		// trace showed CatWin's cards live in material_groups — the
 		// product_categories table behind the old source is orphaned (its
@@ -896,7 +896,7 @@ public partial class MatCard : BaseWin
 
     private void InitGroups(string? preferredValue = null)
     {
-        // Owner semantics (2026-11-17): the Group (المجموعة) combo lists the
+        // Owner semantics (2026-11-17): the Group combo lists the
         // operational material groups managed through the Material Groups
         // window (MatGroupWin) — MatRepo.LoadGroups(). The old wholesale
         // "[Auto]" fallback (every distinct materials.group_code as a
