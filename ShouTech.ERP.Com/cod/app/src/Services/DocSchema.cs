@@ -41,7 +41,8 @@ public static class DocSchema
                   FROM sqlite_master
                   WHERE type = 'table'
                     AND name IN ('sales_documents', 'sales_document_lines',
-                      'purchase_documents', 'purchase_document_lines', 'party_ledger', 'stock_movements')
+                      'purchase_documents', 'purchase_document_lines', 'party_ledger', 'stock_movements',
+                      'document_number_sequences')
                   """;
             var count = Convert.ToInt32(cmd.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
             if (count != 7)
