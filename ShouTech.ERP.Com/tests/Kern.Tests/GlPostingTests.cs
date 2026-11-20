@@ -118,6 +118,7 @@ public class GlPostingTests
         Assert.Equal("1205", purchaseReader.GetString(1));
         Assert.Equal(15m, purchaseReader.GetDecimal(2));
         Assert.False(purchaseReader.Read());
+        purchaseReader.Close();
 
         using var mutation = verify.CreateCommand();
         mutation.CommandText = """
