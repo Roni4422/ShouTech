@@ -687,6 +687,13 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         {
             if (e.Row.Item is LineVm line)
             {
+                if (e.Column.DisplayIndex == 6 && TaxSvc.IsEnabled)
+                {
+                    var selectedTax = _taxCodes.FirstOrDefault(x =>
+                        string.Equals(x.Code, line.TaxCode, StringComparison.OrdinalIgnoreCase));
+                    line.TaxRate = selectedTax?.Rate ?? 0m;
+                }
+
                 line.NotifyTotals();
                 RefreshTotals();
             }
