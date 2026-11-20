@@ -56,7 +56,8 @@ public static class TaxReportingSvc
             command.CommandText = $"""
                 SELECT tax_code, tax_type, tax_treatment, tax_rate, tax_direction,
                        is_recoverable, currency_code, COUNT(*),
-                       COUNT(DISTINCT source_doc_id), COALESCE(SUM(taxable_amount), 0),
+                       COUNT(DISTINCT source_doc_kind || ':' || CAST(source_doc_id AS TEXT)),
+                       COALESCE(SUM(taxable_amount), 0),
                        COALESCE(SUM(tax_amount), 0), COALESCE(SUM(base_tax_amount), 0)
                 FROM tax_transactions
                 WHERE company_code=$company
