@@ -183,10 +183,10 @@ public static class InvRepo
             cmd.CommandText = $"""
                 INSERT INTO {lineTable}
                 (doc_id, line_no, material_id, material_code, description, unit, qty, unit_price,
-                 discount_pct, tax_rate, line_subtotal, line_tax, line_total, warehouse_id, warehouse_name)
+                 discount_pct, tax_code, tax_rate, line_subtotal, line_tax, line_total, warehouse_id, warehouse_name)
                 VALUES
                 ($doc, $no, $mid, $mcode, $desc, $unit, $qty, $price,
-                 $disc, $trate, $sub, $ltax, $ltot, $wh, $whname);
+                 $disc, $tcode, $trate, $sub, $ltax, $ltot, $wh, $whname);
                 """;
             Add(cmd, "$doc", docId);
             Add(cmd, "$no", line.LineNo);
@@ -197,6 +197,7 @@ public static class InvRepo
             Add(cmd, "$qty", line.Qty);
             Add(cmd, "$price", line.UnitPrice);
             Add(cmd, "$disc", line.DiscountPct);
+            Add(cmd, "$tcode", line.TaxCode ?? string.Empty);
             Add(cmd, "$trate", line.TaxRate);
             Add(cmd, "$sub", line.LineSubtotal);
             Add(cmd, "$ltax", line.LineTax);
@@ -336,7 +337,7 @@ public static class InvRepo
             lineCmd.Transaction = tx;
             lineCmd.CommandText = $"""
                 SELECT line_no, material_id, material_code, description, unit, qty, unit_price,
-                       discount_pct, tax_rate, warehouse_id
+                       discount_pct, tax_code, tax_rate, warehouse_id
                 FROM {lineTable} WHERE doc_id=$id ORDER BY line_no;
                 """;
             Add(lineCmd, "$id", docId);
@@ -353,8 +354,9 @@ public static class InvRepo
                     Qty = Convert.ToDecimal(lr.GetValue(5), CultureInfo.InvariantCulture),
                     UnitPrice = Convert.ToDecimal(lr.GetValue(6), CultureInfo.InvariantCulture),
                     DiscountPct = Convert.ToDecimal(lr.GetValue(7), CultureInfo.InvariantCulture),
-                    TaxRate = Convert.ToDecimal(lr.GetValue(8), CultureInfo.InvariantCulture),
-                    WarehouseId = lr.IsDBNull(9) ? null : Convert.ToInt32(lr.GetValue(9), CultureInfo.InvariantCulture),
+                    TaxCode = lr.IsDBNull(8) ? string.Empty : Convert.ToString(lr.GetValue(8), CultureInfo.InvariantCulture) ?? string.Empty,
+                    TaxRate = Convert.ToDecimal(lr.GetValue(9), CultureInfo.InvariantCulture),
+                    WarehouseId = lr.IsDBNull(10) ? null : Convert.ToInt32(lr.GetValue(10), CultureInfo.InvariantCulture),
                 });
             }
         }
@@ -1132,7 +1134,7 @@ public static class InvRepo
         {
             cmd.CommandText = $"""
                 SELECT line_no, material_id, material_code, description, unit, qty, unit_price,
-                       discount_pct, tax_rate, warehouse_id, warehouse_name
+                       discount_pct, tax_code, tax_rate, warehouse_id, warehouse_name
                 FROM {lineTable} WHERE doc_id=$id ORDER BY line_no;
                 """;
             Add(cmd, "$id", docId);
@@ -1149,10 +1151,11 @@ public static class InvRepo
                     Qty = Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture),
                     UnitPrice = Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture),
                     DiscountPct = Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture),
-                    TaxRate = Convert.ToDecimal(reader.GetValue(8), CultureInfo.InvariantCulture),
-                    WarehouseId = reader.IsDBNull(9) ? null : Convert.ToInt32(reader.GetValue(9), CultureInfo.InvariantCulture),
-                    WarehouseName = reader.FieldCount > 10 && !reader.IsDBNull(10)
-                        ? Convert.ToString(reader.GetValue(10), CultureInfo.InvariantCulture) ?? ""
+                    TaxCode = reader.IsDBNull(8) ? string.Empty : Convert.ToString(reader.GetValue(8), CultureInfo.InvariantCulture) ?? string.Empty,
+                    TaxRate = Convert.ToDecimal(reader.GetValue(9), CultureInfo.InvariantCulture),
+                    WarehouseId = reader.IsDBNull(10) ? null : Convert.ToInt32(reader.GetValue(10), CultureInfo.InvariantCulture),
+                    WarehouseName = reader.FieldCount > 11 && !reader.IsDBNull(11)
+                        ? Convert.ToString(reader.GetValue(11), CultureInfo.InvariantCulture) ?? ""
                         : "",
                 });
             }
