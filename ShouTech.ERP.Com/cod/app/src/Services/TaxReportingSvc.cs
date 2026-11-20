@@ -29,6 +29,25 @@ public static class TaxReportingSvc
         decimal TaxAmount,
         decimal BaseTaxAmount);
 
+    public sealed record TaxRegisterRow(
+        DateTime DocumentDate,
+        string DocumentKind,
+        string DocumentNumber,
+        int LineNumber,
+        string TaxCode,
+        string TaxType,
+        string Treatment,
+        decimal Rate,
+        decimal TaxableAmount,
+        decimal TaxAmount,
+        bool IsRecoverable,
+        string Direction,
+        string TaxAccountCode,
+        string CurrencyCode,
+        decimal ExchangeRate,
+        decimal BaseTaxAmount,
+        string JournalNumber);
+
     public static IReadOnlyList<TaxPeriodRow> LoadPeriod(DateTime fromDate, DateTime toDate)
     {
         if (fromDate.Date > toDate.Date)
@@ -90,6 +109,79 @@ public static class TaxReportingSvc
                     Convert.ToDecimal(reader.GetValue(9), CultureInfo.InvariantCulture),
                     Convert.ToDecimal(reader.GetValue(10), CultureInfo.InvariantCulture),
                     Convert.ToDecimal(reader.GetValue(11), CultureInfo.InvariantCulture)));
+            }
+            return rows.AsReadOnly();
+        }
+    }
+
+    /// <summary>
+    /// Returns the immutable source-line tax register for the selected
+    /// company and jurisdiction. The document date, not posting timestamp,
+    /// determines the reporting period.
+    /// </summary>
+    public static IReadOnlyList<TaxRegisterRow> LoadRegister(DateTime fromDate, DateTime toDate)
+    {
+        if (fromDate.Date > toDate.Date)
+            throw new ArgumentException("Tax period start date cannot be after its end date.");
+
+        if (!AppHost.Permissions.Has(PermCat.Accounting.TaxReportView))
+            throw new UnauthorizedAccessException("The current user is not authorized to view tax reports.");
+
+        var company = AppState.CurrentCompanyCode;
+        var cs = DatabaseRuntime.GetConnectionString();
+        var settings = TaxSvc.LoadSettings();
+        if (string.IsNullOrWhiteSpace(company) || string.IsNullOrWhiteSpace(cs) ||
+            settings is null || !settings.Enabled)
+            return Array.Empty<TaxRegisterRow>();
+
+        DbConnection connection = DatabaseRuntime.IsPostgreSql()
+            ? new NpgsqlConnection(cs)
+            : new SqliteConnection(DatabaseRuntime.NormalizeSqliteConnectionString(cs));
+        using (connection)
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            var dateFrom = DatabaseRuntime.IsPostgreSql() ? "CAST($fromDate AS date)" : "$fromDate";
+            var dateTo = DatabaseRuntime.IsPostgreSql() ? "CAST($toDate AS date)" : "$toDate";
+            command.CommandText = $"""
+                SELECT document_date, source_doc_kind, source_doc_no, line_no,
+                       tax_code, tax_type, tax_treatment, tax_rate, taxable_amount,
+                       tax_amount, is_recoverable, tax_direction, tax_account_code,
+                       currency_code, exchange_rate, base_tax_amount, journal_doc_no
+                FROM tax_transactions
+                WHERE company_code=$company
+                  AND country_code=$country
+                  AND document_date >= {dateFrom}
+                  AND document_date <= {dateTo}
+                ORDER BY document_date, source_doc_kind, source_doc_no, line_no, tax_code;
+                """;
+            Add(command, "$company", company);
+            Add(command, "$country", settings.CountryCode);
+            Add(command, "$fromDate", fromDate.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            Add(command, "$toDate", toDate.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+
+            var rows = new List<TaxRegisterRow>();
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                rows.Add(new TaxRegisterRow(
+                    Convert.ToDateTime(reader.GetValue(0), CultureInfo.InvariantCulture),
+                    Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? string.Empty,
+                    Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture) ?? string.Empty,
+                    Convert.ToInt32(reader.GetValue(3), CultureInfo.InvariantCulture),
+                    Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture) ?? string.Empty,
+                    Convert.ToString(reader.GetValue(5), CultureInfo.InvariantCulture) ?? string.Empty,
+                    Convert.ToString(reader.GetValue(6), CultureInfo.InvariantCulture) ?? string.Empty,
+                    Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(reader.GetValue(8), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(reader.GetValue(9), CultureInfo.InvariantCulture),
+                    ToBoolean(reader.GetValue(10)),
+                    Convert.ToString(reader.GetValue(11), CultureInfo.InvariantCulture) ?? string.Empty,
+                    Convert.ToString(reader.GetValue(12), CultureInfo.InvariantCulture) ?? string.Empty,
+                    Convert.ToString(reader.GetValue(13), CultureInfo.InvariantCulture) ?? string.Empty,
+                    Convert.ToDecimal(reader.GetValue(14), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(reader.GetValue(15), CultureInfo.InvariantCulture),
+                    Convert.ToString(reader.GetValue(16), CultureInfo.InvariantCulture) ?? string.Empty));
             }
             return rows.AsReadOnly();
         }
