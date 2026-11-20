@@ -229,7 +229,9 @@ public static class TaxSvc
                 throw new InvalidOperationException("The active company has no enabled tax jurisdiction.");
 
             var dateExpression = DatabaseRuntime.IsPostgreSql() ? "CAST($effectiveFrom AS date)" : "$effectiveFrom";
-            var endExpression = DatabaseRuntime.IsPostgreSql() ? "CAST($effectiveTo AS date)" : "$effectiveTo";
+            var endExpression = rule.EffectiveTo.HasValue
+                ? (DatabaseRuntime.IsPostgreSql() ? "CAST($effectiveTo AS date)" : "$effectiveTo")
+                : "NULL";
             var activeValue = DatabaseRuntime.IsPostgreSql() ? "TRUE" : "1";
             var inactiveValue = DatabaseRuntime.IsPostgreSql() ? "FALSE" : "0";
 
@@ -267,6 +269,7 @@ public static class TaxSvc
                          $inputAccount, {dateExpression}, {endExpression}, $isDefault, {activeValue},
                          $createdBy, $sourceUrl, $sourceReference, NULL, 'USER_CONFIGURED')
                     ON CONFLICT(company_code, tax_code, effective_from) DO UPDATE SET
+                        country_code=excluded.country_code,
                         tax_name=excluded.tax_name,
                         tax_type=excluded.tax_type,
                         tax_treatment=excluded.tax_treatment,
@@ -297,7 +300,8 @@ public static class TaxSvc
                 Add(save, "$outputAccount", outputAccount);
                 Add(save, "$inputAccount", inputAccount);
                 Add(save, "$effectiveFrom", rule.EffectiveFrom.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-                Add(save, "$effectiveTo", rule.EffectiveTo?.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                if (rule.EffectiveTo.HasValue)
+                    Add(save, "$effectiveTo", rule.EffectiveTo.Value.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
                 Add(save, "$isDefault", rule.IsDefault);
                 Add(save, "$createdBy", Environment.UserName);
                 Add(save, "$sourceUrl", rule.SourceUrl ?? string.Empty);
