@@ -402,7 +402,8 @@
     "StatusPriceDenied": "تغيير الأسعار يحتاج صلاحية تجاوز أسعار نقاط البيع.",
     "StockOnHand": "الرصيد الفعلي",
     "StockReserved": "الكمية المحجوزة",
-    "StockAvailable": "المتاح للبيع"
+    "StockAvailable": "المتاح للبيع",
+    "Stock": "المخزون"
   },
   "Orders": {
     "Title": "الطلبيات",
