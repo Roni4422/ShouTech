@@ -86,7 +86,8 @@ public class GlPostingTests
             SELECT country_code, tax_code, tax_rate, taxable_amount, tax_amount,
                    tax_direction, tax_account_code, journal_doc_no, document_date
             FROM tax_transactions
-            WHERE company_code='GL1' AND source_doc_id=$doc AND line_no=1;
+            WHERE company_code='GL1' AND source_doc_kind='SAL'
+              AND source_doc_id=$doc AND line_no=1;
             """;
         query.Parameters.AddWithValue("$doc", doc.DocId);
         using var reader = query.ExecuteReader();
@@ -107,7 +108,8 @@ public class GlPostingTests
         purchaseQuery.CommandText = """
             SELECT tax_direction, tax_account_code, tax_amount
             FROM tax_transactions
-            WHERE company_code='GL1' AND source_doc_id=$doc AND line_no=1;
+            WHERE company_code='GL1' AND source_doc_kind='PUR'
+              AND source_doc_id=$doc AND line_no=1;
             """;
         purchaseQuery.Parameters.AddWithValue("$doc", purchase.DocId);
         using var purchaseReader = purchaseQuery.ExecuteReader();
