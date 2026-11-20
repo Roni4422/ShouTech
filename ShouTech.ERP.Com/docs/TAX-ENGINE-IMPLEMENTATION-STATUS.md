@@ -8,23 +8,30 @@ Branch: `work/full-app-stabilization-2026-11-18`
 - Added an explicit company-setup opt-in. The checkbox is unchecked by default; country selection alone does not enable tax.
 - The selected country must resolve to a known ISO country code before an opt-in can be saved.
 - Company tax activation is persisted in the company creation transaction for both SQLite and PostgreSQL. If the user opts in but the database write fails, company creation is refused rather than silently saving an untaxed company record.
-- Added company-scoped tax settings and effective-dated tax-rule tables in migration 067 for SQLite and PostgreSQL. No rate rows are seeded by this migration.
+- Added company-scoped tax settings and effective-dated tax-rule tables in migration 067 for SQLite and PostgreSQL. The schema migration itself does not seed rates; company creation seeds only the jurisdiction's initial rule set after explicit opt-in.
 - Changed tax lookup to fail closed: missing settings, missing rules, an unavailable database or an exception produces a zero default tax rate, never a guessed 15% rate.
 - Material tax rates are suppressed when the company has not enabled its tax system.
 - Invoice tax input is read-only when tax is disabled, and invoice capture forces all new line tax rates to zero in that state.
-- Added a deterministic decimal calculator supporting multiple tax components, tax-inclusive and tax-exclusive prices, compound components, recoverability flags and configurable currency precision.
-- Added unit tests for country catalog coverage and core calculation cases.
+- Added baseline standard-rate rules for Saudi Arabia, Jordan, Egypt, UAE, Bahrain, Oman, Lebanon, the UK, Türkiye and the 27 EU member states. Added limited schedule/reduced-rate starters for Jordan, Egypt, the UK and Türkiye, plus zero-rated and exempt placeholders. These are starter rules, not complete legal classifications.
+- Added a custom tax-rule editor for jurisdictions without a universal starter rate, including US state/local configuration, and a tax registration number field.
+- Added source URL, source reference, verification date and data-status provenance to tax rules (migration 070).
+- Added dedicated tax control accounts to the chart-of-accounts templates and made them postable.
+- Added tax code selection to the invoice header and invoice schedule, with effective-date lookups based on the invoice date.
+- Added atomic tax GL posting and immutable line-level tax snapshots tied to source documents, tax direction, recoverability, account, currency, exchange rate and journal number (migrations 069 and 072).
+- Added a period tax report based on the source document date, with output, recoverable input and non-recoverable input summaries kept separate by currency.
+- Added tax setup and tax reporting permissions, ribbon actions and English/Arabic/French/Turkish translations.
+- Added unit and integration coverage for country starter rules, explicit tax opt-in, tax GL posting and source-date snapshots. Latest full CI results are still being checked.
 
 ## Not yet complete — do not advertise these countries as fully tax-compliant
 
 The catalog is a jurisdiction registry, not proof of a complete legal tax pack. The following work remains before a country can be marked production-supported:
 
-- Verified, effective-dated country tax tables, including reduced, zero-rated, exempt, out-of-scope, special/schedule, withholding, excise and reverse-charge rules where applicable.
+- Full, legally verified, effective-dated country tax tables. Current starter data does not yet cover all reduced, zero-rated, exempt, out-of-scope, special/schedule, withholding, excise and reverse-charge rules.
 - Registration status, thresholds, registration-number validation, filing frequency and local rounding policies.
-- Tax account mapping, tax ledger, invoice posting, returns, settlements and reconciliation with the general ledger.
+- Complete tax ledger coverage for every transaction type, tax returns/settlements, payment reconciliation, and end-to-end reversal/cancellation tests for tax snapshots.
 - Country-specific invoice requirements and authority/e-invoicing adapters, including Saudi ZATCA and Egypt ETA.
 - EU country-specific VAT returns, cross-border place-of-supply rules, OSS/IOSS and country e-invoicing/fiscalization.
-- United States state, county, city and special-district rates, product taxability, sourcing, nexus, exemption certificates and tax holidays.
+- United States state, county, city and special-district rate datasets, product taxability, sourcing, nexus, exemption certificates and tax holidays. The current setup window supports manual rules but not a complete automated US rate engine.
 - Current legal review for Syria, Iraq, Kuwait, Qatar and any other jurisdiction whose applicable indirect-tax framework is not verified.
 - SQLite/PostgreSQL integration tests for tax activation, tax rule persistence, invoice calculation, posting, reversal and historical snapshots.
 
