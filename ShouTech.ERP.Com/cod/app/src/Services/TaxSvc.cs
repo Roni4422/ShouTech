@@ -72,6 +72,9 @@ public static class TaxSvc
     /// </summary>
     public static void SetTaxEnabled(string countryCode, bool enabled, string taxScheme = "", string registrationNumber = "")
     {
+        if (!AppHost.Permissions.Has(PermCat.Accounting.TaxManage))
+            throw new UnauthorizedAccessException("The current user is not authorized to change company tax settings.");
+
         var code = (countryCode ?? string.Empty).Trim().ToUpperInvariant();
         if (!TaxCountryPackCatalog.TryGet(code, out _))
             throw new ArgumentException("A supported country or jurisdiction code is required.", nameof(countryCode));
@@ -190,6 +193,8 @@ public static class TaxSvc
         if (outputAccount.Length > 50 || inputAccount.Length > 50)
             throw new ArgumentException("Tax account codes cannot exceed 50 characters.", nameof(rule));
 
+        if (!AppHost.Permissions.Has(PermCat.Accounting.TaxManage))
+            throw new UnauthorizedAccessException("The current user is not authorized to manage tax rules.");
         if (!IsEnabled)
             throw new InvalidOperationException("Enable the company's tax system before adding tax rules.");
 
