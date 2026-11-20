@@ -228,10 +228,12 @@ public sealed class TaxSetupWin : BaseWin
         else
         {
             var pack = TaxCountryPackCatalog.FindByNameOrCode(settings.CountryCode);
+            var loadedRules = TaxSvc.LoadRules();
+            var statusKey = loadedRules.Count > 0 ? "TaxSetup.EnabledStatus" : "TaxSetup.EnabledNeedsRules";
             _status.Text = string.Format(CultureInfo.CurrentCulture,
-                T("TaxSetup.EnabledStatus"), pack?.CountryName ?? settings.CountryCode, settings.Scheme);
+                T(statusKey), pack?.CountryName ?? settings.CountryCode, settings.Scheme);
             _jurisdictionAction.Content = T("TaxSetup.Disable");
-            _rules.ItemsSource = TaxSvc.LoadRules();
+            _rules.ItemsSource = loadedRules;
             _jurisdictionAction.IsEnabled = AppHost.Permissions.Has(PermCat.Accounting.TaxManage);
         }
         RefreshPermissions();
