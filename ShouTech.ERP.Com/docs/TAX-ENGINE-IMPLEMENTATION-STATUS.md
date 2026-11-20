@@ -4,7 +4,7 @@ Branch: `work/full-app-stabilization-2026-11-18`
 
 ## Implemented in the current foundation increment
 
-- Added a country/jurisdiction catalog for Saudi Arabia, Jordan, Egypt, Kuwait, UAE, Qatar, Bahrain, Oman, Syria, Iraq, Lebanon, the United States, all 27 EU member states, the United Kingdom and Türkiye.
+- Added a country/jurisdiction catalog for Saudi Arabia, Jordan, Egypt, Kuwait, UAE, Qatar, Bahrain, Oman, Syria, Iraq, Lebanon, the United States, all 27 EU member states, the United Kingdom, Türkiye and a custom `ZZ` jurisdiction for additional countries.
 - Added an explicit company-setup opt-in. The checkbox is unchecked by default; country selection alone does not enable tax.
 - The selected country must resolve to a known ISO country code before an opt-in can be saved.
 - Company tax activation is persisted in the company creation transaction for both SQLite and PostgreSQL. If the user opts in but the database write fails, company creation is refused rather than silently saving an untaxed company record.
