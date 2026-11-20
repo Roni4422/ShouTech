@@ -86,8 +86,8 @@ public sealed class PosService
         => _repository.SaveSettingsAsync(RequireCompany(companyId), settings, RequireUser(userId), cancellationToken);
 
     // ---- Products -----------------------------------------------------------
-    public Task<IReadOnlyList<PosProduct>> SearchProductsAsync(string companyId, string? term, int limit = 60, CancellationToken cancellationToken = default)
-        => _repository.SearchProductsAsync(RequireCompany(companyId), term, limit, cancellationToken);
+    public Task<IReadOnlyList<PosProduct>> SearchProductsAsync(string companyId, string? term, int? warehouseId = null, int limit = 60, CancellationToken cancellationToken = default)
+        => _repository.SearchProductsAsync(RequireCompany(companyId), term, warehouseId, limit, cancellationToken);
 
     // ---- Tenders ----------------------------------------------------------------
     /// <summary>Validates a sale's tenders (pure math) and returns the
