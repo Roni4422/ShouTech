@@ -15,39 +15,92 @@ namespace ShouTech.App.Services;
 /// </summary>
 public static class TaxSvc
 {
-    private static readonly Dictionary<string, decimal> CountryDefaults = new(StringComparer.OrdinalIgnoreCase)
-    {
-        // GCC
-        ["SA"] = 15m, ["AE"] = 5m, ["BH"] = 10m, ["OM"] = 5m, ["QA"] = 0m, ["KW"] = 0m,
-        // Levant
-        ["SY"] = 0m, ["JO"] = 16m, ["LB"] = 11m, ["PS"] = 16m, ["IQ"] = 0m,
-        // North Africa
-        ["EG"] = 14m, ["MA"] = 20m, ["TN"] = 19m, ["DZ"] = 19m, ["LY"] = 0m,
-        // Europe (common)
-        ["TR"] = 20m, ["DE"] = 19m, ["FR"] = 20m, ["GB"] = 20m, ["NL"] = 21m,
-    };
+    // Tax is opt-in per company. Country selection alone never enables taxation.
+    // Country rates are stored as effective-dated company rules, not hard-coded here.
 
     public sealed record TaxCodeRec(string Code, string Name, decimal Rate, string Country);
 
+    public static bool IsEnabled
+    {
+        get
+        {
+            try { return ReadTaxEnabled(); }
+            catch (Exception ex)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "TaxSvc.IsEnabled");
+                return false;
+            }
+        }
+    }
+
     public static decimal GetDefaultRate()
     {
+        if (!IsEnabled) return 0m;
+
         try
         {
-            DocSchema.Ensure();
             var fromDb = TryLoadActiveRate();
-            if (fromDb.HasValue) return fromDb.Value;
-
-            var country = GetCompanyCountry();
-            if (!string.IsNullOrWhiteSpace(country) &&
-                CountryDefaults.TryGetValue(country.Trim(), out var rate))
-                return rate;
+            return fromDb ?? 0m;
         }
-        catch (Exception exL44)
+        catch (Exception ex)
         {
-            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL44, "TaxSvc.GetDefaultRate");
-            // Fall through to conservative default.
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "TaxSvc.GetDefaultRate");
+            return 0m;
         }
-        return 15m;
+    }
+
+    /// <summary>
+    /// Persists the explicit company decision. A false value disables tax
+    /// calculations without deleting historical tax rules or posted tax data.
+    /// </summary>
+    public static void SetTaxEnabled(string countryCode, bool enabled, string taxScheme = "", string registrationNumber = "")
+    {
+        var code = (countryCode ?? string.Empty).Trim().ToUpperInvariant();
+        if (!TaxCountryPackCatalog.TryGet(code, out _))
+            throw new ArgumentException("A supported country or jurisdiction code is required.", nameof(countryCode));
+
+        var companyCode = AppState.CurrentCompanyCode;
+        if (string.IsNullOrWhiteSpace(companyCode))
+            throw new InvalidOperationException("An active company is required to configure taxation.");
+
+        var cs = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(cs))
+            throw new InvalidOperationException("The active company database is unavailable.");
+
+        using var connection = Open(cs);
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO company_tax_settings
+                (company_code, country_code, tax_enabled, tax_scheme, registration_number, updated_at)
+            VALUES ($company, $country, $enabled, $scheme, $registration, CURRENT_TIMESTAMP)
+            ON CONFLICT(company_code) DO UPDATE SET
+                country_code = excluded.country_code,
+                tax_enabled = excluded.tax_enabled,
+                tax_scheme = excluded.tax_scheme,
+                registration_number = excluded.registration_number,
+                updated_at = CURRENT_TIMESTAMP;
+            """;
+        Add(command, "$company", companyCode);
+        Add(command, "$country", code);
+        Add(command, "$enabled", enabled);
+        Add(command, "$scheme", taxScheme ?? string.Empty);
+        Add(command, "$registration", registrationNumber ?? string.Empty);
+        command.ExecuteNonQuery();
+    }
+
+    private static bool ReadTaxEnabled()
+    {
+        var cs = DatabaseRuntime.GetConnectionString();
+        var companyCode = AppState.CurrentCompanyCode;
+        if (string.IsNullOrWhiteSpace(cs) || string.IsNullOrWhiteSpace(companyCode)) return false;
+
+        using var connection = Open(cs);
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT tax_enabled FROM company_tax_settings WHERE company_code = $company LIMIT 1;";
+        Add(command, "$company", companyCode);
+        var value = command.ExecuteScalar();
+        return value is not null and not DBNull &&
+            (value is bool flag ? flag : Convert.ToInt32(value, CultureInfo.InvariantCulture) == 1);
     }
 
     public static IReadOnlyList<TaxCodeRec> LoadCodes()
@@ -62,10 +115,12 @@ public static class TaxSvc
             using var cmd = connection.CreateCommand();
             cmd.CommandText = """
                 SELECT tax_code, COALESCE(tax_name, tax_code), COALESCE(rate, 0), COALESCE(country_code, '')
-                FROM tax_codes
-                WHERE COALESCE(is_active, 1) = 1
+                FROM company_tax_rules
+                WHERE company_code = $company AND is_active = 1
                 ORDER BY tax_code;
                 """;
+            Add(cmd, "$company", AppState.CurrentCompanyCode ?? "");
+            if (!IsEnabled) return list;
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
@@ -145,7 +200,7 @@ public static class TaxSvc
                 SELECT material_id, COALESCE(NULLIF(pos_name,''), NULLIF(name_ar,''), NULLIF(name_en,''), code),
                        COALESCE(price_retail, price_list, 0),
                        COALESCE(default_unit, unit1, ''),
-                       COALESCE(tax_rate, 0)
+                       CASE WHEN EXISTS (SELECT 1 FROM company_tax_settings ts WHERE ts.company_code = materials.company_id AND ts.tax_enabled = 1) THEN COALESCE(tax_rate, 0) ELSE 0 END
                 FROM materials
                 WHERE company_id=$c
                   AND {activeMaterialPredicate}
@@ -185,48 +240,27 @@ public static class TaxSvc
     private static decimal? TryLoadActiveRate()
     {
         var cs = DatabaseRuntime.GetConnectionString();
-        if (string.IsNullOrWhiteSpace(cs)) return null;
+        var companyCode = AppState.CurrentCompanyCode;
+        if (string.IsNullOrWhiteSpace(cs) || string.IsNullOrWhiteSpace(companyCode)) return null;
         using var connection = Open(cs);
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT rate FROM tax_codes
-            WHERE COALESCE(is_active,1)=1 AND COALESCE(is_default,0)=1
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT r.rate
+            FROM company_tax_rules r
+            INNER JOIN company_tax_settings s ON s.company_code = r.company_code
+            WHERE r.company_code = $company
+              AND r.is_active = 1
+              AND r.is_default = 1
+              AND s.tax_enabled = 1
+              AND r.effective_from <= $today
+              AND (r.effective_to IS NULL OR r.effective_to >= $today)
+            ORDER BY r.effective_from DESC
             LIMIT 1;
             """;
-        try
-        {
-            var v = cmd.ExecuteScalar();
-            if (v is null or DBNull) return null;
-            return Convert.ToDecimal(v, CultureInfo.InvariantCulture);
-        }
-        catch (Exception exL191)
-        {
-            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL191, "TaxSvc.TryLoadActiveRate");
-            return null;
-        }
-    }
-
-    private static string GetCompanyCountry()
-    {
-        var cs = DatabaseRuntime.GetConnectionString();
-        if (string.IsNullOrWhiteSpace(cs)) return "SA";
-        try
-        {
-            using var connection = Open(cs);
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
-                SELECT COALESCE(country_code, country, 'SA') FROM companies
-                WHERE company_id=$id LIMIT 1;
-                """;
-            Add(cmd, "$id", AppState.CurrentCompanyCode ?? "");
-            var v = cmd.ExecuteScalar();
-            return Convert.ToString(v, CultureInfo.InvariantCulture) ?? "SA";
-        }
-        catch (Exception exL213)
-        {
-            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL213, "TaxSvc.GetCompanyCountry");
-            return "SA";
-        }
+        Add(command, "$company", companyCode);
+        Add(command, "$today", DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        var value = command.ExecuteScalar();
+        return value is null or DBNull ? null : Convert.ToDecimal(value, CultureInfo.InvariantCulture);
     }
 
     private static DbConnection Open(string connectionString)
