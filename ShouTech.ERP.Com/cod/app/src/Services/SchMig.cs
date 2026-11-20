@@ -108,6 +108,25 @@ public static class SchemaMigrator
                 .OrderBy(m => m.Id, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
+            // Keep desktop startup behavior aligned with SqlMigrator. Reject
+            // case-insensitive path collisions before opening the company DB.
+            var duplicateMigrationIds = migrations
+                .GroupBy(m => m.Id, StringComparer.OrdinalIgnoreCase)
+                .Where(group => group.Count() > 1)
+                .Select(group => group.Key)
+                .OrderBy(id => id, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (duplicateMigrationIds.Length > 0)
+            {
+                return new MigrationResult
+                {
+                    Success = false,
+                    Provider = normalized,
+                    Message = "Duplicate migration IDs were discovered (IDs are case-insensitive): " +
+                        string.Join(", ", duplicateMigrationIds)
+                };
+            }
+
             if (migrations.Count == 0)
             {
                 return new MigrationResult
