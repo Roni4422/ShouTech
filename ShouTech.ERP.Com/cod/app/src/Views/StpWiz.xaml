@@ -136,7 +136,11 @@
                         <TextBox x:Name="txtCity" Grid.Row="6" Grid.Column="1" Margin="{StaticResource MarginFormField}" Style="{StaticResource WizardTextBoxStyle}"/>
 
                         <TextBlock Grid.Row="6" Grid.Column="2" x:Name="lblCountry" Text="Country — optional" Style="{StaticResource WizardLabelStyle}"/>
-                        <TextBox x:Name="txtCountry" Grid.Row="6" Grid.Column="3" Margin="{StaticResource MarginFormField}" Style="{StaticResource WizardTextBoxStyle}"/>
+                        <ComboBox x:Name="cmbCountry"
+                                  Grid.Row="6" Grid.Column="3"
+                                  Margin="{StaticResource MarginFormField}"
+                                  SelectionChanged="CountrySelectionChanged"
+                                  VerticalContentAlignment="Center"/>
 
                         <TextBlock Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="2" x:Name="lblAuto14" Text="Notes — optional" Style="{StaticResource WizardLabelStyle}"/>
                         <TextBox x:Name="txtNotes" Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="3" Margin="{StaticResource MarginFormField}" Style="{StaticResource WizardTextBoxStyle}"/>
