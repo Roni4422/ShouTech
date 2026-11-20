@@ -286,7 +286,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
 
         _cmbTaxCode.ItemsSource = _taxCodes;
         _cmbTaxCode.SelectedValue = _doc.TaxCode;
-        var hasCurrentRules = TaxSvc.IsEnabled && TaxSvc.LoadCodes(asOfDate).Count > 0;
+        var hasCurrentRules = TaxSvc.IsEnabled && codes.Count > 0 && codes.Any(x => !x.Name.EndsWith(" (historical)", StringComparison.Ordinal));
         _cmbTaxCode.IsEnabled = hasCurrentRules;
         _txtTaxRate.IsReadOnly = !hasCurrentRules;
         if (!hasCurrentRules && !preserveUnknown)
@@ -920,8 +920,6 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _doc.CurrencyCode = doc.CurrencyCode;
         _doc.DefaultTaxRate = doc.DefaultTaxRate;
         _doc.TaxCode = doc.TaxCode ?? string.Empty;
-        RefreshTaxCodes(doc.DocDate, preserveUnknown: doc.Status != InvDocStatus.Draft);
-        _cmbTaxCode.SelectedValue = _doc.TaxCode;
         _doc.Notes = doc.Notes;
         _doc.Status = doc.Status;
         _doc.PaymentMethod = doc.PaymentMethod;
@@ -989,6 +987,9 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
                 TaxRate = doc.DefaultTaxRate,
                 WarehouseName = _doc.WarehouseName
             });
+
+        RefreshTaxCodes(doc.DocDate, preserveUnknown: doc.Status != InvDocStatus.Draft);
+        _cmbTaxCode.SelectedValue = _doc.TaxCode;
 
         var locked = doc.Status == InvDocStatus.Posted || doc.Status == InvDocStatus.Cancelled;
         _btnSave.IsEnabled = !locked;
