@@ -37,6 +37,8 @@ public sealed class PosService
         RequireCompany(companyId);
         if (string.IsNullOrWhiteSpace(terminalCode))
             throw new AppError(ErrorCodes.PosSessionStateInvalid, "A terminal code is required to open a POS session.");
+        if (!warehouseId.HasValue || warehouseId.Value <= 0)
+            throw new AppError(ErrorCodes.PosSessionStateInvalid, "An active warehouse is required to open a POS session.");
         if (openingCash < 0)
             throw new AppError(ErrorCodes.PosSessionStateInvalid, "The opening cash count cannot be negative.");
         return await _repository.OpenSessionAsync(companyId, terminalCode.Trim(), cashier ?? string.Empty, warehouseId, currencyCode, openingCash, RequireUser(userId), cancellationToken).ConfigureAwait(false);
