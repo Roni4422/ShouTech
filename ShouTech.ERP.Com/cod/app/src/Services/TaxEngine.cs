@@ -220,6 +220,34 @@ public static class TaxCountryPackCatalog
 
         Add("GB", "United Kingdom", TaxRegimeKind.Vat, "HM Revenue and Customs", "Post-EU national VAT rules require verification");
         Add("TR", "Türkiye", TaxRegimeKind.Vat, "Revenue Administration", "National VAT rules require verification");
+        Add("CA", "Canada", TaxRegimeKind.LocalConfigurationRequired, "Canada Revenue Agency and provincial tax authorities", "Federal GST/HST and provincial PST rules require province-specific setup");
+        Add("AU", "Australia", TaxRegimeKind.LocalConfigurationRequired, "Australian Taxation Office", "GST registration, taxable supply, and input credit rules require local setup");
+        Add("NZ", "New Zealand", TaxRegimeKind.LocalConfigurationRequired, "Inland Revenue", "GST registration and supply classification require local setup");
+        Add("JP", "Japan", TaxRegimeKind.LocalConfigurationRequired, "National Tax Agency", "Consumption tax, reduced rates, and qualified invoice rules require local setup");
+        Add("KR", "South Korea", TaxRegimeKind.LocalConfigurationRequired, "National Tax Service", "VAT and electronic tax invoice rules require local setup");
+        Add("SG", "Singapore", TaxRegimeKind.LocalConfigurationRequired, "Inland Revenue Authority of Singapore", "GST registration and reverse-charge rules require local setup");
+        Add("CH", "Switzerland", TaxRegimeKind.LocalConfigurationRequired, "Federal Tax Administration", "VAT rates and place-of-supply rules require local setup");
+        Add("NO", "Norway", TaxRegimeKind.LocalConfigurationRequired, "Norwegian Tax Administration", "VAT rates and sector-specific rules require local setup");
+        Add("IS", "Iceland", TaxRegimeKind.LocalConfigurationRequired, "Directorate of Internal Revenue", "VAT and reduced-rate rules require local setup");
+        Add("IN", "India", TaxRegimeKind.LocalConfigurationRequired, "Goods and Services Tax Network / CBIC", "CGST, SGST, IGST, cess, and place-of-supply rules require local setup");
+        Add("ZA", "South Africa", TaxRegimeKind.LocalConfigurationRequired, "South African Revenue Service", "VAT, zero-rated, and exempt supply rules require local setup");
+        Add("MX", "Mexico", TaxRegimeKind.LocalConfigurationRequired, "Servicio de Administración Tributaria", "IVA, IEPS, withholding, and CFDI rules require local setup");
+        Add("ID", "Indonesia", TaxRegimeKind.LocalConfigurationRequired, "Directorate General of Taxes", "VAT, luxury sales tax, and e-Faktur rules require local setup");
+        Add("MY", "Malaysia", TaxRegimeKind.LocalConfigurationRequired, "Royal Malaysian Customs Department", "Sales tax and service tax rules require local setup");
+        Add("TH", "Thailand", TaxRegimeKind.LocalConfigurationRequired, "Revenue Department", "VAT and specific business tax rules require local setup");
+        Add("PH", "Philippines", TaxRegimeKind.LocalConfigurationRequired, "Bureau of Internal Revenue", "VAT, percentage tax, and withholding rules require local setup");
+        Add("BR", "Brazil", TaxRegimeKind.LocalConfigurationRequired, "Receita Federal and state tax authorities", "ICMS, ISS, IPI, PIS/COFINS, and reform transition rules require local setup");
+        Add("AR", "Argentina", TaxRegimeKind.LocalConfigurationRequired, "AFIP / ARCA", "IVA, perceptions, retentions, and regional rules require local setup");
+        Add("CL", "Chile", TaxRegimeKind.LocalConfigurationRequired, "Servicio de Impuestos Internos", "IVA and electronic tax document rules require local setup");
+        Add("CO", "Colombia", TaxRegimeKind.LocalConfigurationRequired, "Dirección de Impuestos y Aduanas Nacionales", "IVA, consumption tax, withholding, and electronic invoicing require local setup");
+        Add("NG", "Nigeria", TaxRegimeKind.LocalConfigurationRequired, "Federal Inland Revenue Service", "VAT, withholding, and state levies require local setup");
+        Add("KE", "Kenya", TaxRegimeKind.LocalConfigurationRequired, "Kenya Revenue Authority", "VAT, excise, and eTIMS rules require local setup");
+        Add("GH", "Ghana", TaxRegimeKind.LocalConfigurationRequired, "Ghana Revenue Authority", "VAT, levies, and electronic invoicing require local setup");
+        Add("PK", "Pakistan", TaxRegimeKind.LocalConfigurationRequired, "Federal Board of Revenue and provincial authorities", "Sales tax on goods and services requires federal/provincial setup");
+        Add("BD", "Bangladesh", TaxRegimeKind.LocalConfigurationRequired, "National Board of Revenue", "VAT, supplementary duty, and Mushak rules require local setup");
+        Add("VN", "Vietnam", TaxRegimeKind.LocalConfigurationRequired, "General Department of Taxation", "VAT rates and electronic invoice rules require local setup");
+        Add("IL", "Israel", TaxRegimeKind.LocalConfigurationRequired, "Israel Tax Authority", "VAT, withholding, and invoice allocation rules require local setup");
+
         Add("ZZ", "Other / Custom jurisdiction", TaxRegimeKind.LocalConfigurationRequired, "User-configured competent authority", "Custom tax rules require manual legal validation");
         return result;
     }
