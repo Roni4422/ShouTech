@@ -49,6 +49,7 @@ namespace ShouTech.App.Views
         private bool _isCheckingPasswordAvailability;
         private bool _langUserTouched;
         private bool _syncingLanguageCombo;
+        private string _lastTaxPromptCountryCode = string.Empty;
 
         #endregion
 
@@ -1438,11 +1439,40 @@ namespace ShouTech.App.Views
         private void CountrySelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             var selected = cmbCountry.SelectedItem as ComboBoxItem;
-            var countryCode = selected?.Tag?.ToString();
-            var hasCountry = !string.IsNullOrWhiteSpace(countryCode);
+            var countryCode = selected?.Tag?.ToString()?.Trim().ToUpperInvariant() ?? string.Empty;
+            var hasCountry = countryCode.Length == 2;
             chkEnableTaxSystem.IsEnabled = hasCountry;
+
             if (!hasCountry)
+            {
                 chkEnableTaxSystem.IsChecked = false;
+                _lastTaxPromptCountryCode = string.Empty;
+                return;
+            }
+
+            if (string.Equals(_lastTaxPromptCountryCode, countryCode, StringComparison.Ordinal))
+                return;
+
+            _lastTaxPromptCountryCode = countryCode;
+            chkEnableTaxSystem.IsChecked = false;
+
+            if (_mode != StpWizMode.NewCompany || !IsLoaded)
+                return;
+
+            var countryName = selected?.Content?.ToString() ?? countryCode;
+            var prompt = string.Format(
+                CultureInfo.CurrentCulture,
+                W("TaxEnablePrompt", "Would you like to enable the tax system for {0}? Choose No to keep tax disabled for this company."),
+                countryName);
+            var answer = MessageBox.Show(
+                this,
+                prompt,
+                W("TaxEnableTitle", "Enable tax system?"),
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question,
+                MessageBoxResult.No);
+
+            chkEnableTaxSystem.IsChecked = answer == MessageBoxResult.Yes;
         }
 
         private NewCoReq BuildRequest()
