@@ -127,7 +127,12 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _txtGoodsAccount.Text = _doc.GoodsAccountName;
         _txtPartyAccount.Text = _doc.PartyAccountName;
 
-        _lines.Add(new LineVm { TaxRate = _doc.DefaultTaxRate, WarehouseName = _doc.WarehouseName });
+        _lines.Add(new LineVm
+        {
+            TaxCode = _doc.TaxCode ?? string.Empty,
+            TaxRate = _doc.DefaultTaxRate,
+            WarehouseName = _doc.WarehouseName
+        });
         WireEvents();
         RefreshTotals();
     }
@@ -821,6 +826,8 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             : doc.WarehouseName;
         _doc.CurrencyCode = doc.CurrencyCode;
         _doc.DefaultTaxRate = doc.DefaultTaxRate;
+        _doc.TaxCode = doc.TaxCode ?? string.Empty;
+        _cmbTaxCode.SelectedValue = _doc.TaxCode;
         _doc.Notes = doc.Notes;
         _doc.Status = doc.Status;
         _doc.PaymentMethod = doc.PaymentMethod;
@@ -880,7 +887,12 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         foreach (var line in doc.Lines)
             _lines.Add(LineVm.FromLine(line));
         if (_lines.Count == 0)
-            _lines.Add(new LineVm { TaxRate = doc.DefaultTaxRate, WarehouseName = _doc.WarehouseName });
+            _lines.Add(new LineVm
+            {
+                TaxCode = doc.TaxCode ?? string.Empty,
+                TaxRate = doc.DefaultTaxRate,
+                WarehouseName = _doc.WarehouseName
+            });
 
         var locked = doc.Status == InvDocStatus.Posted || doc.Status == InvDocStatus.Cancelled;
         _btnSave.IsEnabled = !locked;
@@ -1231,7 +1243,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         if (payIdx >= 0 && payIdx < _cmbPayment.Items.Count)
             _cmbPayment.SelectedIndex = payIdx;
 
-        if (_grid.Columns.Count >= 9)
+        if (_grid.Columns.Count >= 10)
         {
             _grid.Columns[0].Header = Tf("Invoice.ColCode", "Code");
             _grid.Columns[1].Header = Tf("Invoice.ColMaterial", "Material");
