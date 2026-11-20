@@ -121,6 +121,54 @@ public class GlPostingTests
     }
 
     [Fact]
+    public async Task PurchaseInvoice_Post_ExpendsNonRecoverableTaxIntoPurchaseCost()
+    {
+        using var db = await SeededAsync();
+        using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            connection.Open();
+            using var setup = connection.CreateCommand();
+            setup.CommandText = """
+                INSERT INTO company_tax_settings
+                    (company_code, country_code, tax_enabled, tax_scheme)
+                VALUES ('GL1', 'SA', 1, 'VAT');
+                INSERT INTO company_tax_rules
+                    (company_code, country_code, tax_code, tax_name, tax_type, tax_treatment,
+                     rate, calculation_mode, is_recoverable, output_account_code, input_account_code,
+                     effective_from, is_default, is_active, data_status)
+                VALUES ('GL1', 'SA', 'VAT-NR', 'Non-recoverable VAT', 'VAT', 'Exempt',
+                        15, 'Exclusive', 0, '2205', '1205', '2026-01-01', 1, 1, 'USER_CONFIGURED');
+                """;
+            setup.ExecuteNonQuery();
+        }
+
+        var doc = await PostInvoiceAsync(
+            db, InvDocKind.PurchaseInvoice, qty: 1m, price: 100m, taxRate: 15m, taxCode: "VAT-NR");
+
+        var entry = SingleEntry(db, "PUR", doc.DocId);
+        AssertBalanced(entry);
+        Assert.Equal(115m, Line(entry, "402").Debit);
+        Assert.DoesNotContain(entry.Lines, line => line.Code == "1205");
+
+        using var verify = new SqliteConnection(db.ConnectionString);
+        verify.Open();
+        using var query = verify.CreateCommand();
+        query.CommandText = """
+            SELECT is_recoverable, tax_amount, tax_direction
+            FROM tax_transactions
+            WHERE company_code='GL1' AND source_doc_kind='PUR'
+              AND source_doc_id=$doc AND line_no=1;
+            """;
+        query.Parameters.AddWithValue("$doc", doc.DocId);
+        using var reader = query.ExecuteReader();
+        Assert.True(reader.Read());
+        Assert.Equal(0, reader.GetInt32(0));
+        Assert.Equal(15m, reader.GetDecimal(1));
+        Assert.Equal("INPUT", reader.GetString(2));
+        Assert.False(reader.Read());
+    }
+
+    [Fact]
     public async Task SalesInvoice_Post_CreatesBalancedLinkedGlEntry_AndStampsRealJournalNumber()
     {
         using var db = await SeededAsync();
