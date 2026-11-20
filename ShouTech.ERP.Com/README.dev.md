@@ -1,5 +1,16 @@
 # ShouTech ERP Development Guide
 
+## Developer roadmap and engineering standards
+
+Before changing a module, use these canonical documents:
+
+1. [Developer Roadmap](docs/DEVELOPER_ROADMAP.md) — delivery phases, release gates, priorities and Definition of Done.
+2. [Developer Handbook](docs/DEVELOPER_HANDBOOK.md) — architecture, database, accounting, security, UI, localization, testing and pull-request rules.
+3. [Module Catalog](docs/MODULE_CATALOG.md) — business module ownership, dependencies and acceptance evidence.
+4. [Engineering Reference Library](docs/ENGINEERING_REFERENCE_LIBRARY.md) — international ERP, accounting, security, AI and country-authority sources.
+
+The roadmap is a living plan, not a claim that every feature is complete. Update its status only with source, test and CI evidence. Keep all changes on the approved development branch and do not commit directly to `main`.
+
 ## Supported databases
 
 ShouTech supports SQLite and PostgreSQL only. SQL Server-specific scripts and implementations are not part of the active runtime.
