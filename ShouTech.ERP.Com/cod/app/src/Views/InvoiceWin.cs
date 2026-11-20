@@ -36,7 +36,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
     private readonly TextBox _txtCurrency = new();
     private readonly TextBox _txtTaxRate = new();
     private readonly ComboBox _cmbTaxCode = new();
-    private readonly IReadOnlyList<TaxSvc.TaxCodeRec> _taxCodes = TaxSvc.LoadCodes();
+    private IReadOnlyList<TaxSvc.TaxCodeRec> _taxCodes = Array.Empty<TaxSvc.TaxCodeRec>();
     private readonly TextBox _txtReceiptNo = new();
     private readonly TextBox _txtReference = new();
     private readonly TextBox _txtBranch = new();
@@ -84,6 +84,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
     private readonly TextBlock _lblStatus = new() { Margin = new Thickness(8, 4, 0, 0), VerticalAlignment = VerticalAlignment.Center };
 
     private bool _syncingPayment;
+    private bool _syncingDocumentDate;
 
     public InvoiceWin() : this(InvDocKind.SalesInvoice) { }
 
@@ -102,6 +103,8 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             PaymentMethod = InvPaymentMethod.Cash,
             PartyAccountName = InvDoc.DefaultCashAccountName()
         };
+
+        _taxCodes = TaxSvc.LoadCodes(_doc.DocDate);
 
         Width = 1100;
         Height = 700;
@@ -207,6 +210,14 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         };
 
         _cmbPayment.SelectionChanged += (_, _) => OnPaymentMethodChanged();
+        _dtDate.SelectedDateChanged += (_, _) =>
+        {
+            if (_syncingDocumentDate || _doc.Status != InvDocStatus.Draft)
+                return;
+            _doc.DocDate = _dtDate.SelectedDate ?? DateTime.Today;
+            RefreshTaxCodes(_doc.DocDate);
+            RefreshTotals();
+        };
 
         void OnFooterEdit(object s, TextChangedEventArgs e) => RefreshTotalsFromFooterInputs();
         _txtLinesDiscount.TextChanged += OnFooterEdit;
@@ -219,6 +230,75 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
                 _txtPaid.Text = _txtPaymentValue.Text;
             RefreshTotalsFromFooterInputs();
         };
+    }
+
+    private void RefreshTaxCodes(DateTime asOfDate, bool preserveUnknown = false)
+    {
+        var codes = TaxSvc.LoadCodes(asOfDate).ToList();
+        if (preserveUnknown &&
+            !string.IsNullOrWhiteSpace(_doc.TaxCode) &&
+            !codes.Any(x => string.Equals(x.Code, _doc.TaxCode, StringComparison.OrdinalIgnoreCase)))
+        {
+            codes.Add(new TaxSvc.TaxCodeRec(
+                _doc.TaxCode,
+                _doc.TaxCode + " (historical)",
+                _doc.DefaultTaxRate,
+                string.Empty));
+        }
+
+        _taxCodes = codes.AsReadOnly();
+        if (!preserveUnknown)
+        {
+            if (!string.IsNullOrWhiteSpace(_doc.TaxCode))
+            {
+                var selected = _taxCodes.FirstOrDefault(x =>
+                    string.Equals(x.Code, _doc.TaxCode, StringComparison.OrdinalIgnoreCase));
+                if (selected is null)
+                {
+                    _doc.TaxCode = string.Empty;
+                    _doc.DefaultTaxRate = 0m;
+                }
+                else
+                {
+                    _doc.DefaultTaxRate = selected.Rate;
+                }
+            }
+
+            foreach (var line in _lines)
+            {
+                if (string.IsNullOrWhiteSpace(line.TaxCode))
+                    continue;
+                var selected = _taxCodes.FirstOrDefault(x =>
+                    string.Equals(x.Code, line.TaxCode, StringComparison.OrdinalIgnoreCase));
+                if (selected is null)
+                {
+                    line.TaxCode = string.Empty;
+                    line.TaxRate = 0m;
+                    line.NotifyTotals();
+                }
+                else
+                {
+                    line.TaxRate = selected.Rate;
+                    line.NotifyTotals();
+                }
+            }
+        }
+
+        _cmbTaxCode.ItemsSource = _taxCodes;
+        _cmbTaxCode.SelectedValue = _doc.TaxCode;
+        var hasCurrentRules = TaxSvc.IsEnabled && TaxSvc.LoadCodes(asOfDate).Count > 0;
+        _cmbTaxCode.IsEnabled = hasCurrentRules;
+        _txtTaxRate.IsReadOnly = !hasCurrentRules;
+        if (!hasCurrentRules && !preserveUnknown)
+        {
+            _doc.TaxCode = string.Empty;
+            _doc.DefaultTaxRate = 0m;
+            _txtTaxRate.Text = "0";
+        }
+        else
+        {
+            _txtTaxRate.Text = _doc.DefaultTaxRate.ToString("0.##", CultureInfo.InvariantCulture);
+        }
     }
 
     private void OnPaymentMethodChanged()
@@ -840,6 +920,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _doc.CurrencyCode = doc.CurrencyCode;
         _doc.DefaultTaxRate = doc.DefaultTaxRate;
         _doc.TaxCode = doc.TaxCode ?? string.Empty;
+        RefreshTaxCodes(doc.DocDate, preserveUnknown: doc.Status != InvDocStatus.Draft);
         _cmbTaxCode.SelectedValue = _doc.TaxCode;
         _doc.Notes = doc.Notes;
         _doc.Status = doc.Status;
@@ -862,7 +943,9 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _doc.JournalDocNo = doc.JournalDocNo;
 
         _txtDocNo.Text = doc.DocNo;
-        _dtDate.SelectedDate = doc.DocDate;
+        _syncingDocumentDate = true;
+        try { _dtDate.SelectedDate = doc.DocDate; }
+        finally { _syncingDocumentDate = false; }
         _txtPartyCode.Text = doc.PartyCode;
         _txtPartyName.Text = doc.PartyName;
         _txtCurrency.Text = doc.CurrencyCode;
