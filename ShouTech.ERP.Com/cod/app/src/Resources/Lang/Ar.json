@@ -191,7 +191,8 @@
     "AccountComparison": "مقارنة حساب",
     "FinancialAnalysis": "تحليل مالي",
     "LocalAnalysis": "محلي",
-    "AIAnalysis": "AI"
+    "AIAnalysis": "AI",
+    "TaxConfiguration": "إعدادات الضرائب"
   },
   "Bonds": {
     "Title": "السندات",
@@ -1422,7 +1423,8 @@
     "HelpUpdates": "التحديثات",
     "HelpSupport": "الدعم",
     "HelpLicense": "الترخيص",
-    "POSSales": "المبيعات"
+    "POSSales": "المبيعات",
+    "AccountsTax": "الضرائب"
   },
   "MatCard": {
     "ItemType.Stock": "مستودعي",
