@@ -30,8 +30,17 @@ public static class TaxCountryPackCatalog
     public static IReadOnlyCollection<TaxCountryPack> All =>
         Packs.Values.OrderBy(x => x.CountryName, StringComparer.Ordinal).ToArray();
 
-    public static bool TryGet(string countryCode, out TaxCountryPack pack) =>
-        Packs.TryGetValue((countryCode ?? string.Empty).Trim().ToUpperInvariant(), out pack!);
+    public static bool TryGet(string countryCode, out TaxCountryPack pack)
+    {
+        if (Packs.TryGetValue((countryCode ?? string.Empty).Trim().ToUpperInvariant(), out var found))
+        {
+            pack = found;
+            return true;
+        }
+
+        pack = null!;
+        return false;
+    }
 
     private static Dictionary<string, TaxCountryPack> Build()
     {
