@@ -1739,6 +1739,9 @@
     "VoucherOpenFailed": "Impossible d'ouvrir la pièce comptable.",
     "OriginalOpenFailed": "Impossible d'ouvrir la facture d'origine.",
     "ReverseReason": "L'utilisateur a demandé l'extourne depuis la fenêtre de facture"
+  ,
+    "TaxSystem": "Système fiscal",
+    "ColTaxCode": "Code de taxe"
   },
   "CompanyWizard": {
     "Title": {
