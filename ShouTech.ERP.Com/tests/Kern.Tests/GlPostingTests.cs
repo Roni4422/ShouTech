@@ -100,6 +100,7 @@ public class GlPostingTests
         Assert.Equal("2205", reader.GetString(6));
         Assert.Equal(entry.DocumentNumber, reader.GetString(7));
         Assert.False(reader.Read());
+        reader.Close();
 
         using var purchaseQuery = verify.CreateCommand();
         purchaseQuery.CommandText = """
