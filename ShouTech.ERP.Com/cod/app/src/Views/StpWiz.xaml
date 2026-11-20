@@ -144,6 +144,7 @@
                         <CheckBox x:Name="chkEnableTaxSystem"
                                   Grid.Row="8" Grid.Column="1" Grid.ColumnSpan="3"
                                   Content="Enable the selected country's tax system for this company"
+                                  loc:LocProps.Key="CompanyWizard.EnableTaxSystem"
                                   IsChecked="False"
                                   Margin="4,8,0,4"
                                   VerticalAlignment="Center"
