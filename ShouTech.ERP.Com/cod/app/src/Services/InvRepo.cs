@@ -1844,8 +1844,18 @@ public static class InvRepo
             }
             case InvDocKind.SalesReturn:
             {
+                // A generated full reversal must mirror the original revenue
+                // account exactly. A customer-initiated commercial return
+                // remains classified in the contra-revenue account.
+                var mirrorsOriginalSales = doc.OriginalDocId is > 0
+                    && doc.OriginalDocKind == InvDocKind.SalesInvoice;
                 for (var i = 0; i < doc.Lines.Count; i++)
-                    Add(CodeOr(infos[i].AccSalesReturn, GlAccounts.SalesReturns), leg[i], 0, cc);
+                {
+                    var revenueAccount = mirrorsOriginalSales
+                        ? CodeOr(infos[i].AccSales, GlAccounts.SalesRevenue)
+                        : CodeOr(infos[i].AccSalesReturn, GlAccounts.SalesReturns);
+                    Add(revenueAccount, leg[i], 0, cc);
+                }
                 if (splitTax) Add(taxAccountCode, taxLeg, 0);
                 // Step 5 reversal symmetry: a return of a document that was
                 // collected at posting mirrors its settlement leg too —
