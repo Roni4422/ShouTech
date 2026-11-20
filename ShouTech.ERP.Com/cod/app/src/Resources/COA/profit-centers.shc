@@ -226,7 +226,7 @@
       "balSheetId": 0,
       "type": "Asset",
       "balance": "Debit",
-      "posting": false,
+      "posting": true,
       "cardType": null,
       "names": {
         "ar": "Recoverable Input VAT",
@@ -460,7 +460,7 @@
       "balSheetId": 0,
       "type": "Liability",
       "balance": "Credit",
-      "posting": false,
+      "posting": true,
       "cardType": null,
       "names": {
         "ar": "VAT Payable",
