@@ -109,6 +109,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         Title = WindowTitleFor(kind);
 
         BuildUi();
+        _txtTaxRate.IsReadOnly = !TaxSvc.IsEnabled;
         ApplyLanguageDirection();
 
         _doc.DocNo = InvRepo.NextDocNo(kind);
@@ -623,7 +624,9 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _grid.Columns.Add(TextCol(nameof(LineVm.Unit), 60, Tf("Invoice.ColUnit", "Unit")));
         _grid.Columns.Add(TextCol(nameof(LineVm.UnitPriceText), 80, Tf("Invoice.ColUnitPrice", "Unit price")));
         _grid.Columns.Add(TextCol(nameof(LineVm.DiscountPctText), 60, Tf("Invoice.ColDiscount", "Disc %")));
-        _grid.Columns.Add(TextCol(nameof(LineVm.TaxRateText), 60, Tf("Invoice.ColTax", "Tax %")));
+        var taxRateColumn = TextCol(nameof(LineVm.TaxRateText), 60, Tf("Invoice.ColTax", "Tax %"));
+        taxRateColumn.IsReadOnly = !TaxSvc.IsEnabled;
+        _grid.Columns.Add(taxRateColumn);
         _grid.Columns.Add(new DataGridTextColumn
         {
             Header = Tf("Invoice.ColLineTotal", "Line total"),
@@ -705,7 +708,9 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _doc.CurrencyCode = string.IsNullOrWhiteSpace(_txtCurrency.Text)
             ? UsrPref.Load().CurrencyCode
             : _txtCurrency.Text.Trim().ToUpperInvariant();
-        _doc.DefaultTaxRate = ParseDec(_txtTaxRate.Text, TaxSvc.GetDefaultRate());
+        _doc.DefaultTaxRate = TaxSvc.IsEnabled
+            ? ParseDec(_txtTaxRate.Text, TaxSvc.GetDefaultRate())
+            : 0m;
         _doc.Notes = _txtNotes.Text;
         _doc.ReceiptNo = _txtReceiptNo.Text.Trim();
         _doc.Reference = _txtReference.Text.Trim();
