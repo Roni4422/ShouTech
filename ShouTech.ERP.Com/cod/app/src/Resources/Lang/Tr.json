@@ -3521,7 +3521,7 @@
     "Disable": "Vergiyi devre dışı bırak",
     "ChangeJurisdictionUseAction": "Önce mevcut vergi yetki alanını devre dışı bırakın, ardından yenisini etkinleştirin.",
     "Disabled": "Bu şirket için vergi devre dışı. Devam etmek için bir yetki alanı seçip Vergiyi etkinleştir'i seçin.",
-    "EnabledStatus": "Vergi {0} için etkin. Sistem: {1}. Başlangıç kuralları yüklendi; kayıt öncesinde yerel kuralları ve hesap eşlemesini doğrulayın.",
+    "EnabledStatus": "Vergi {0} için etkin. Sistem: {1}. Başlangıç kuralları yüklendi; her kuralın oranı ve hesap eşlemesi incelenip kaydedilmeden kayıt yapılamaz.",
     "DisableConfirm": "Bu şirket için vergiyi devre dışı bırakılsın mı? Mevcut kurallar ve kayıtlı vergi geçmişi korunur.",
     "EnableConfirm": "{0} için vergi sistemi etkinleştirilsin mi? Yetki alanının başlangıç kuralları yüklenecek. Devam edilsin mi?",
     "SelectCountry": "Önce bir vergi yetki alanı seçin.",
@@ -3556,10 +3556,14 @@
       "EffectiveTo": "Bitiş",
       "IsDefault": "Varsayılan",
       "IsActive": "Etkin",
-      "DataStatus": "Veri durumu"
+      "DataStatus": "Veri durumu",
+      "SourceUrl": "Kaynak URL'si",
+      "SourceReference": "Yasal referans"
     },
     "EnabledNeedsRules": "Vergi {0} ({1}) için etkin, ancak bu yetki alanının tüm oran ve sınıflandırma paketi yüklenmedi. Vergili belgeleri kaydetmeden önce ulusal, eyalet, yerel veya tarife kurallarını ekleyip doğrulayın.",
-    "RegistrationNumber": "Vergi kayıt numarası"
+    "RegistrationNumber": "Vergi kayıt numarası",
+    "SourceUrl": "Resmî kaynak URL'si",
+    "SourceReference": "Yasal referans / notlar"
   },
   "TaxReport": {
     "Title": "Vergi Dönem Raporu",
