@@ -267,6 +267,7 @@
                     </ribbon:RibbonGroup>
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.AccountsTax" Header="Tax">
                         <ribbon:RibbonButton loc:LocProps.Key="Accounts.TaxConfiguration" Label="Tax configuration" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Accounts.TaxReport" Label="Tax period report" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.AccountsCurrencies" Header="Currencies">
                         <ribbon:RibbonButton loc:LocProps.Key="Accounts.DefineCurrency" Label="Define currency" Click="OnRibbonButtonClick"/>
