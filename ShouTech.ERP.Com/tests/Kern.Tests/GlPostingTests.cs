@@ -118,6 +118,22 @@ public class GlPostingTests
         Assert.Equal("1205", purchaseReader.GetString(1));
         Assert.Equal(15m, purchaseReader.GetDecimal(2));
         Assert.False(purchaseReader.Read());
+
+        using var mutation = verify.CreateCommand();
+        mutation.CommandText = """
+            UPDATE tax_transactions SET tax_amount=0
+            WHERE company_code='GL1' AND source_doc_kind='SAL' AND source_doc_id=$doc AND line_no=1;
+            """;
+        mutation.Parameters.AddWithValue("$doc", doc.DocId);
+        Assert.Throws<SqliteException>(() => mutation.ExecuteNonQuery());
+
+        mutation.Parameters.Clear();
+        mutation.CommandText = """
+            DELETE FROM tax_transactions
+            WHERE company_code='GL1' AND source_doc_kind='SAL' AND source_doc_id=$doc AND line_no=1;
+            """;
+        mutation.Parameters.AddWithValue("$doc", doc.DocId);
+        Assert.Throws<SqliteException>(() => mutation.ExecuteNonQuery());
     }
 
     [Fact]
