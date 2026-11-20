@@ -3540,7 +3540,24 @@
     "Default": "Default rate",
     "EffectiveFromRequired": "An effective-from date is required.",
     "InvalidRate": "Enter a valid tax rate.",
-    "Saved": "Tax rule saved."
+    "Saved": "Tax rule saved.",
+    "Column": {
+      "Code": "Code",
+      "Name": "Name",
+      "TaxType": "Tax type",
+      "Treatment": "Treatment",
+      "Rate": "Rate (%)",
+      "CalculationMode": "Calculation",
+      "IsCompound": "Compound",
+      "IsRecoverable": "Recoverable",
+      "OutputAccountCode": "Output account",
+      "InputAccountCode": "Input account",
+      "EffectiveFrom": "Effective from",
+      "EffectiveTo": "Effective to",
+      "IsDefault": "Default",
+      "IsActive": "Active",
+      "DataStatus": "Data status"
+    }
   },
   "TaxReport": {
     "Title": "Tax Period Report",
