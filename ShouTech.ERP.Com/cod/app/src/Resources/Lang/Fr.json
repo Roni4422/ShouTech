@@ -1738,8 +1738,7 @@
     "NoOriginal": "Aucune facture d'origine liée à ce document.",
     "VoucherOpenFailed": "Impossible d'ouvrir la pièce comptable.",
     "OriginalOpenFailed": "Impossible d'ouvrir la facture d'origine.",
-    "ReverseReason": "L'utilisateur a demandé l'extourne depuis la fenêtre de facture"
-  ,
+    "ReverseReason": "L'utilisateur a demandé l'extourne depuis la fenêtre de facture",
     "TaxSystem": "Système fiscal",
     "ColTaxCode": "Code de taxe"
   },
@@ -1887,10 +1886,11 @@
       "Uae": "Émirats arabes unis — TVA",
       "Saudi": "Arabie saoudite — TVA",
       "Jordan": "Jordanie — Taxe sur les ventes"
-    }
-  ,
+    },
     "EnableTaxSystem": "Activer le système fiscal du pays sélectionné pour cette entreprise",
-    "TaxCountryRequired": "Choisissez un pays pris en charge ou son code ISO avant d'activer son système fiscal."
+    "TaxCountryRequired": "Choisissez un pays pris en charge ou son code ISO avant d'activer son système fiscal.",
+    "TaxEnableTitle": "Activer le système fiscal ?",
+    "TaxEnablePrompt": "Voulez-vous activer le système fiscal de {0} ? Choisissez Non pour laisser la fiscalité désactivée pour cette société."
   },
   "FiscalHint": {
     "Length": {},
