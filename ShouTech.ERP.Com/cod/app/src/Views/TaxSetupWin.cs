@@ -4,7 +4,6 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
-using System.Windows.Media;
 using ShouTech.App.Services;
 using ShouTech.Domain;
 
@@ -94,12 +93,6 @@ public sealed class TaxSetupWin : BaseWin
         root.Children.Add(top);
 
         _rules.SelectionChanged += (_, _) => LoadSelectedRule();
-        _rules.AutoGeneratingColumn += (_, e) =>
-        {
-            e.Column.Header = T("TaxSetup.Column." + e.PropertyName);
-            if (e.PropertyName is nameof(TaxSvc.TaxRuleRec.SourceUrl))
-                e.Cancel = true;
-        };
         root.Children.Add(_rules);
 
         var editor = new Grid { Margin = new Thickness(0, 10, 0, 4) };
