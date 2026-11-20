@@ -260,6 +260,7 @@ public sealed class PosRepository : IPosRepository
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         var deleted = _provider == "PostgreSQL" ? "COALESCE(is_deleted, false) = false" : "COALESCE(is_deleted, 0) = 0";
+        var activeStockBalance = _provider == "PostgreSQL" ? "sb.is_deleted = FALSE" : "COALESCE(sb.is_deleted, 0) = 0";
         var sql = $"""
             SELECT material_id, code,
                    COALESCE(NULLIF(pos_name,''), NULLIF(name_en,''), NULLIF(name_ar,''), code),
@@ -270,11 +271,11 @@ public sealed class PosRepository : IPosRepository
                    COALESCE((SELECT SUM(sb.available_qty) FROM material_stock_balances sb
                        WHERE sb.company_id = materials.company_id AND sb.material_id = materials.material_id
                          AND (@warehouse IS NULL OR sb.warehouse_id = @warehouse)
-                         AND sb.is_deleted = FALSE), 0),
+                         AND {activeStockBalance}), 0),
                    COALESCE((SELECT SUM(sb.reserved_qty) FROM material_stock_balances sb
                        WHERE sb.company_id = materials.company_id AND sb.material_id = materials.material_id
                          AND (@warehouse IS NULL OR sb.warehouse_id = @warehouse)
-                         AND sb.is_deleted = FALSE), 0)
+                         AND {activeStockBalance}), 0)
             FROM materials
             WHERE company_id = @company AND {deleted}
             """ + (text.Length == 0 ? "" : """
