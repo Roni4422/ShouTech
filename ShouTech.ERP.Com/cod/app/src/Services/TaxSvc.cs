@@ -159,7 +159,7 @@ public static class TaxSvc
                     Add(insert, "$createdBy", Environment.UserName);
                     Add(insert, "$sourceUrl", rule.SourceUrl);
                     Add(insert, "$sourceReference", rule.SourceReference);
-                    Add(insert, "$verifiedOn", "2026-11-20");
+                    Add(insert, "$verifiedOn", DBNull.Value);
                     insert.ExecuteNonQuery();
                 }
             }
