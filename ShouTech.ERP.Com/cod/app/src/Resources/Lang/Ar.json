@@ -3632,7 +3632,24 @@
     "Default": "النسبة الافتراضية",
     "EffectiveFromRequired": "تاريخ بداية السريان مطلوب.",
     "InvalidRate": "أدخل نسبة ضريبية صحيحة.",
-    "Saved": "تم حفظ القاعدة الضريبية."
+    "Saved": "تم حفظ القاعدة الضريبية.",
+    "Column": {
+      "Code": "الرمز",
+      "Name": "الاسم",
+      "TaxType": "نوع الضريبة",
+      "Treatment": "المعالجة",
+      "Rate": "النسبة (%)",
+      "CalculationMode": "طريقة الحساب",
+      "IsCompound": "مركبة",
+      "IsRecoverable": "قابلة للاسترداد",
+      "OutputAccountCode": "حساب المخرجات",
+      "InputAccountCode": "حساب المدخلات",
+      "EffectiveFrom": "ساري من",
+      "EffectiveTo": "ساري حتى",
+      "IsDefault": "افتراضي",
+      "IsActive": "نشط",
+      "DataStatus": "حالة البيانات"
+    }
   },
   "TaxReport": {
     "Title": "تقرير الفترة الضريبية",
