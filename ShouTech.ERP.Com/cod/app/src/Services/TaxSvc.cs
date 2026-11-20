@@ -27,7 +27,7 @@ public static class TaxSvc
         string CalculationMode, bool IsCompound, bool IsRecoverable,
         string OutputAccountCode, string InputAccountCode,
         DateTime EffectiveFrom, DateTime? EffectiveTo,
-        bool IsDefault, bool IsActive, string DataStatus);
+        bool IsDefault, bool IsActive, string DataStatus, string SourceUrl, string SourceReference);
 
     public sealed record TaxRuleDraft(
         string Code,
@@ -374,7 +374,8 @@ public static class TaxSvc
                    is_compound, is_recoverable,
                    COALESCE(output_account_code, ''), COALESCE(input_account_code, ''),
                    effective_from, effective_to, is_default, is_active,
-                   COALESCE(data_status, 'USER_CONFIGURED')
+                   COALESCE(data_status, 'USER_CONFIGURED'),
+                   COALESCE(source_url, ''), COALESCE(source_reference, '')
             FROM company_tax_rules
             WHERE company_code=$company
               AND country_code=(SELECT country_code FROM company_tax_settings WHERE company_code=$company LIMIT 1)
@@ -403,7 +404,9 @@ public static class TaxSvc
                 effectiveTo,
                 ToBoolean(reader.GetValue(12)),
                 ToBoolean(reader.GetValue(13)),
-                Convert.ToString(reader.GetValue(14), CultureInfo.InvariantCulture) ?? "USER_CONFIGURED"));
+                Convert.ToString(reader.GetValue(14), CultureInfo.InvariantCulture) ?? "USER_CONFIGURED",
+                Convert.ToString(reader.GetValue(15), CultureInfo.InvariantCulture) ?? string.Empty,
+                Convert.ToString(reader.GetValue(16), CultureInfo.InvariantCulture) ?? string.Empty));
         }
         return list.AsReadOnly();
     }
