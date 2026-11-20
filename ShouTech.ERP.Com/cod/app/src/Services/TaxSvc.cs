@@ -20,6 +20,15 @@ public static class TaxSvc
 
     public sealed record TaxCodeRec(string Code, string Name, decimal Rate, string Country);
 
+    public sealed record TaxSettingsRec(string CountryCode, bool Enabled, string Scheme, string RegistrationNumber);
+
+    public sealed record TaxRuleRec(
+        string Code, string Name, string TaxType, string Treatment, decimal Rate,
+        string CalculationMode, bool IsCompound, bool IsRecoverable,
+        string OutputAccountCode, string InputAccountCode,
+        DateTime EffectiveFrom, DateTime? EffectiveTo,
+        bool IsDefault, bool IsActive, string DataStatus);
+
     public sealed record TaxRuleDraft(
         string Code,
         string Name,
@@ -319,6 +328,85 @@ public static class TaxSvc
         return value is not null and not DBNull &&
             (value is bool flag ? flag : Convert.ToInt32(value, CultureInfo.InvariantCulture) == 1);
     }
+
+    public static TaxSettingsRec? LoadSettings()
+    {
+        var cs = DatabaseRuntime.GetConnectionString();
+        var company = AppState.CurrentCompanyCode;
+        if (string.IsNullOrWhiteSpace(cs) || string.IsNullOrWhiteSpace(company))
+            return null;
+
+        using var connection = Open(cs);
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT country_code, tax_enabled, COALESCE(tax_scheme, ''), COALESCE(registration_number, '')
+            FROM company_tax_settings
+            WHERE company_code=$company
+            LIMIT 1;
+            """;
+        Add(command, "$company", company);
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) return null;
+        return new TaxSettingsRec(
+            Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty,
+            ToBoolean(reader.GetValue(1)),
+            Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture) ?? string.Empty,
+            Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture) ?? string.Empty);
+    }
+
+    public static IReadOnlyList<TaxRuleRec> LoadRules()
+    {
+        var list = new List<TaxRuleRec>();
+        var cs = DatabaseRuntime.GetConnectionString();
+        var company = AppState.CurrentCompanyCode;
+        if (string.IsNullOrWhiteSpace(cs) || string.IsNullOrWhiteSpace(company))
+            return list;
+
+        using var connection = Open(cs);
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT tax_code, COALESCE(tax_name, tax_code), COALESCE(tax_type, ''),
+                   COALESCE(tax_treatment, ''), COALESCE(rate, 0), COALESCE(calculation_mode, 'Exclusive'),
+                   COALESCE(is_compound, 0), COALESCE(is_recoverable, 1),
+                   COALESCE(output_account_code, ''), COALESCE(input_account_code, ''),
+                   effective_from, effective_to, COALESCE(is_default, 0), COALESCE(is_active, 0),
+                   COALESCE(data_status, 'USER_CONFIGURED')
+            FROM company_tax_rules
+            WHERE company_code=$company
+              AND country_code=(SELECT country_code FROM company_tax_settings WHERE company_code=$company LIMIT 1)
+            ORDER BY tax_code, effective_from DESC;
+            """;
+        Add(command, "$company", company);
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            var effectiveFrom = Convert.ToDateTime(reader.GetValue(10), CultureInfo.InvariantCulture);
+            var effectiveTo = reader.IsDBNull(11)
+                ? (DateTime?)null
+                : Convert.ToDateTime(reader.GetValue(11), CultureInfo.InvariantCulture);
+            list.Add(new TaxRuleRec(
+                Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty,
+                Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? string.Empty,
+                Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture) ?? string.Empty,
+                Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture) ?? string.Empty,
+                Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture),
+                Convert.ToString(reader.GetValue(5), CultureInfo.InvariantCulture) ?? "Exclusive",
+                ToBoolean(reader.GetValue(6)),
+                ToBoolean(reader.GetValue(7)),
+                Convert.ToString(reader.GetValue(8), CultureInfo.InvariantCulture) ?? string.Empty,
+                Convert.ToString(reader.GetValue(9), CultureInfo.InvariantCulture) ?? string.Empty,
+                effectiveFrom,
+                effectiveTo,
+                ToBoolean(reader.GetValue(12)),
+                ToBoolean(reader.GetValue(13)),
+                Convert.ToString(reader.GetValue(14), CultureInfo.InvariantCulture) ?? "USER_CONFIGURED"));
+        }
+        return list.AsReadOnly();
+    }
+
+    private static bool ToBoolean(object value)
+        => value is bool flag || (value is not null and not DBNull &&
+            Convert.ToInt32(value, CultureInfo.InvariantCulture) == 1);
 
     public static IReadOnlyList<TaxCodeRec> LoadCodes(DateTime? asOfDate = null)
     {
