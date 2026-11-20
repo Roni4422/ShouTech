@@ -10,8 +10,8 @@ using ShouTech.Domain;
 namespace ShouTech.App.Services;
 
 /// <summary>
-/// Resolves default VAT / tax rates for the active company using tax_codes
-/// and regional defaults (GCC, North Africa, Levant, EU-style).
+/// Resolves tax settings and effective-dated rules for the active company.
+
 /// </summary>
 public static class TaxSvc
 {
@@ -118,7 +118,10 @@ public static class TaxSvc
             cmd.CommandText = $"""
                 SELECT tax_code, COALESCE(tax_name, tax_code), COALESCE(rate, 0), COALESCE(country_code, '')
                 FROM company_tax_rules
-                WHERE company_code = $company AND is_active = {activeValue}
+                WHERE company_code = $company
+                  AND is_active = {activeValue}
+                  AND effective_from <= CURRENT_DATE
+                  AND (effective_to IS NULL OR effective_to >= CURRENT_DATE)
                 ORDER BY tax_code;
                 """;
             Add(cmd, "$company", AppState.CurrentCompanyCode ?? "");
@@ -254,13 +257,12 @@ public static class TaxSvc
               AND r.is_active = {activeValue}
               AND r.is_default = {activeValue}
               AND s.tax_enabled = {activeValue}
-              AND r.effective_from <= $today
-              AND (r.effective_to IS NULL OR r.effective_to >= $today)
+              AND r.effective_from <= CURRENT_DATE
+              AND (r.effective_to IS NULL OR r.effective_to >= CURRENT_DATE)
             ORDER BY r.effective_from DESC
             LIMIT 1;
             """;
         Add(command, "$company", companyCode);
-        Add(command, "$today", DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         var value = command.ExecuteScalar();
         return value is null or DBNull ? null : Convert.ToDecimal(value, CultureInfo.InvariantCulture);
     }
