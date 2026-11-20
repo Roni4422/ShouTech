@@ -1669,7 +1669,76 @@ public static class InvRepo
         var materialTaxAccount = infos.Select(i => i.TaxAccount).FirstOrDefault(t => !string.IsNullOrWhiteSpace(t));
         if (!string.IsNullOrWhiteSpace(materialTaxAccount)) taxAccountCode = materialTaxAccount.Trim();
         var companyGuid = ResolveCompanyGuid(connection, tx);
-        var splitTax = tax > 0 && GlPosting.TryResolveAccount(connection, tx, provider, companyGuid, taxAccountCode) is not null;
+        var taxAccountGroups = new List<(string Account, decimal Amount)>();
+        var canSplitTax = tax > 0m;
+        var taxCountry = string.Empty;
+        if (canSplitTax)
+        {
+            using var taxSettings = connection.CreateCommand();
+            taxSettings.Transaction = tx;
+            taxSettings.CommandText = "SELECT country_code FROM company_tax_settings WHERE company_code=$company AND tax_enabled = " +
+                (DatabaseRuntime.IsPostgreSql() ? "TRUE" : "1") + " LIMIT 1;";
+            Add(taxSettings, "$company", Company);
+            taxCountry = Convert.ToString(taxSettings.ExecuteScalar(), CultureInfo.InvariantCulture) ?? string.Empty;
+
+            foreach (var group in doc.Lines.Where(line => line.LineTax != 0m)
+                         .GroupBy(line => line.TaxCode ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+            {
+                var account = taxAccountCode;
+                if (!string.IsNullOrWhiteSpace(group.Key) && !string.IsNullOrWhiteSpace(taxCountry))
+                {
+                    using var rule = connection.CreateCommand();
+                    rule.Transaction = tx;
+                    var activeValue = DatabaseRuntime.IsPostgreSql() ? "TRUE" : "1";
+                    var dateExpression = DatabaseRuntime.IsPostgreSql()
+                        ? "CAST($documentDate AS date)" : "$documentDate";
+                    var accountColumn = doc.Kind.IsSales() || doc.Kind == InvDocKind.PosSale
+                        ? "output_account_code" : "input_account_code";
+                    rule.CommandText = $"""
+                        SELECT COALESCE({accountColumn}, '')
+                        FROM company_tax_rules
+                        WHERE company_code=$company AND country_code=$country
+                          AND tax_code=$taxCode AND is_active={activeValue}
+                          AND effective_from <= {dateExpression}
+                          AND (effective_to IS NULL OR effective_to >= {dateExpression})
+                        ORDER BY effective_from DESC
+                        LIMIT 1;
+                        """;
+                    Add(rule, "$company", Company);
+                    Add(rule, "$country", taxCountry);
+                    Add(rule, "$taxCode", group.Key);
+                    Add(rule, "$documentDate", doc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                    var configuredAccount = Convert.ToString(rule.ExecuteScalar(), CultureInfo.InvariantCulture);
+                    if (!string.IsNullOrWhiteSpace(configuredAccount))
+                        account = configuredAccount.Trim();
+                }
+
+                if (GlPosting.TryResolveAccount(connection, tx, provider, companyGuid, account) is null)
+                {
+                    canSplitTax = false;
+                    taxAccountGroups.Clear();
+                    break;
+                }
+                taxAccountGroups.Add((account, group.Sum(line => line.LineTax)));
+            }
+
+            if (taxAccountGroups.Count == 0)
+            {
+                canSplitTax = GlPosting.TryResolveAccount(connection, tx, provider, companyGuid, taxAccountCode) is not null;
+                if (canSplitTax) taxAccountGroups.Add((taxAccountCode, tax));
+            }
+            else if (canSplitTax)
+            {
+                var allocatedTax = taxAccountGroups.Sum(group => group.Amount);
+                var residual = tax - allocatedTax;
+                if (residual != 0m)
+                {
+                    var last = taxAccountGroups[^1];
+                    taxAccountGroups[^1] = (last.Account, last.Amount + residual);
+                }
+            }
+        }
+        var splitTax = canSplitTax && taxAccountGroups.Count > 0;
         var taxLeg = splitTax ? tax : 0m;
 
         // Per-line revenue / purchase / returns leg amounts, adjusted so
@@ -1853,7 +1922,7 @@ public static class InvRepo
                 else Add(GlAccounts.Receivable, grand, 0);
                 for (var i = 0; i < doc.Lines.Count; i++)
                     Add(CodeOr(infos[i].AccSales, GlAccounts.SalesRevenue), 0, leg[i], cc);
-                if (splitTax) Add(taxAccountCode, 0, taxLeg);
+                if (splitTax) foreach (var taxGroup in taxAccountGroups) Add(taxGroup.Account, 0, taxGroup.Amount);
                 AddCogs(reverse: false);
                 break;
             }
@@ -1871,7 +1940,7 @@ public static class InvRepo
                         : CodeOr(infos[i].AccSalesReturn, GlAccounts.SalesReturns);
                     Add(revenueAccount, leg[i], 0, cc);
                 }
-                if (splitTax) Add(taxAccountCode, taxLeg, 0);
+                if (splitTax) foreach (var taxGroup in taxAccountGroups) Add(taxGroup.Account, taxGroup.Amount, 0);
                 // Step 5 reversal symmetry: a return of a document that was
                 // collected at posting mirrors its settlement leg too —
                 // credit the settlement account for the paid part and only
@@ -1902,7 +1971,7 @@ public static class InvRepo
             {
                 for (var i = 0; i < doc.Lines.Count; i++)
                     Add(CodeOr(infos[i].AccPurchase, GlAccounts.Purchases), leg[i], 0, cc);
-                if (splitTax) Add(taxAccountCode, taxLeg, 0);
+                if (splitTax) foreach (var taxGroup in taxAccountGroups) Add(taxGroup.Account, taxGroup.Amount, 0);
                 var paid = Math.Min(Math.Max(doc.PaidAmount, 0m), grand);
                 Add(settleAccount, 0, paid);
                 Add(GlAccounts.Payable, 0, grand - paid);
@@ -1928,7 +1997,7 @@ public static class InvRepo
                         : CodeOr(infos[i].AccPurchaseReturn, GlAccounts.PurchaseReturns);
                     Add(purchaseAccount, 0, leg[i], cc);
                 }
-                if (splitTax) Add(taxAccountCode, 0, taxLeg);
+                if (splitTax) foreach (var taxGroup in taxAccountGroups) Add(taxGroup.Account, 0, taxGroup.Amount);
                 break;
             }
             case InvDocKind.StockIn:
