@@ -223,9 +223,8 @@ public static class PosPosting
             {
                 find.Transaction = tx;
                 var hasBase = PartyLedger.ColumnExists(connection, tx, provider, "party_ledger", "base_debit");
-                find.CommandText = """
-                    SELECT debit, credit, currency_code
-                    """ + (hasBase ? ", base_debit, base_credit, exchange_rate" : "") + """
+                find.CommandText = $"""
+                    SELECT debit, credit, currency_code{(hasBase ? ", base_debit, base_credit, exchange_rate" : string.Empty)}
                     FROM party_ledger
                     WHERE company_id=$company AND party_id=$pid AND doc_id=$orig
                       AND doc_kind IN ('RCV', 'PAY');
