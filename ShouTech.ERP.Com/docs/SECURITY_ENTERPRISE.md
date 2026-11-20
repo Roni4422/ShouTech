@@ -45,15 +45,15 @@ for production, and the honest remaining backlog. It complements
   logged and never changes an authentication outcome. Passwords are never
   written to the audit log.
 
-### Password policy (now enforced)
-- Policy lives in `Security.PasswordPolicy` (cfg/appset.json + AppConfig
-  defaults). Phase 4 raised the defaults to enterprise values:
-  **minimum 12 characters, maximum 128, upper + lower + digit + symbol
-  required, common passwords denied** (`AllowCommonPasswords=false`).
-- Enforced centrally by `PwdPolicy.ValidateConfigured` at the credential
-  set-point that exists in code: `CoCreateSvc.CreateAsync` (company +
-  administrator creation). A violating password is rejected with all policy
-  violations listed, before any hashing or persistence.
+### Password policy
+- Company administrator passwords require **at least 3 characters** and allow
+  up to 128 characters. The user chooses the composition freely: letters,
+  digits, symbols, spaces, or any combination. No uppercase/lowercase/digit/
+  symbol mixture is required, and common-password or username-equality checks
+  do not override the user's choice.
+- Enforced centrally by `PwdPolicy.ValidateConfigured` in
+  `CoCreateSvc.CreateAsync` before hashing or persistence. Passwords shorter
+  than three characters or longer than the configured maximum are rejected.
 - Not applied to the DatWin dataset-package password: that is an export-file
   encryption passphrase, not an account credential (it has its own ≥8 rule in
   the UI). Changing it is an operator decision, noted here deliberately.
