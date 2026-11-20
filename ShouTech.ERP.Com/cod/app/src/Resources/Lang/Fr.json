@@ -3540,7 +3540,24 @@
     "Default": "Taux par défaut",
     "EffectiveFromRequired": "Une date de début est requise.",
     "InvalidRate": "Saisissez un taux valide.",
-    "Saved": "Règle fiscale enregistrée."
+    "Saved": "Règle fiscale enregistrée.",
+    "Column": {
+      "Code": "Code",
+      "Name": "Nom",
+      "TaxType": "Type de taxe",
+      "Treatment": "Traitement",
+      "Rate": "Taux (%)",
+      "CalculationMode": "Calcul",
+      "IsCompound": "Composée",
+      "IsRecoverable": "Récupérable",
+      "OutputAccountCode": "Compte collecté",
+      "InputAccountCode": "Compte déductible",
+      "EffectiveFrom": "Début",
+      "EffectiveTo": "Fin",
+      "IsDefault": "Par défaut",
+      "IsActive": "Actif",
+      "DataStatus": "État des données"
+    }
   },
   "TaxReport": {
     "Title": "Rapport de période fiscale",
