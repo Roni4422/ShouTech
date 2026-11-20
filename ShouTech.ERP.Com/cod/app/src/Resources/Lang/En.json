@@ -37,7 +37,8 @@
     "ProfitLoss": "Profit & Loss",
     "Title": "Accounts",
     "Trading": "Trading",
-    "TrialBalance": "Trial Balance"
+    "TrialBalance": "Trial Balance",
+    "TaxConfiguration": "Tax configuration"
   },
   "Application": {
     "Error": "Error",
@@ -1329,7 +1330,8 @@
     "ViewInformation": "Information",
     "ViewTheme": "Theme",
     "ViewTrees": "Trees",
-    "POSSales": "Sales"
+    "POSSales": "Sales",
+    "AccountsTax": "Tax"
   },
   "SalesRep": {
     "AssignSalesRepTargets": "Assign Sales Rep Targets",
