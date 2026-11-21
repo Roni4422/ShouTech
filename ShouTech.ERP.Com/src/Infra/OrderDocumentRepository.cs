@@ -952,32 +952,51 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                         || supplied.TaxRate < 0m || supplied.TaxRate > 100m)
                         throw new InvalidOperationException("Supplier invoice price, discount, or tax rate is outside the allowed range.");
 
-                    CommercialLineSnapshot source;
+                    CommercialLineSnapshot[] candidateSources;
                     if (supplied.SourceLineNo is int sourceLineNo)
                     {
                         if (!sourceByLineNumber.TryGetValue(sourceLineNo, out var matchedSource)
                             || matchedSource.MaterialId != materialId)
                             throw new InvalidOperationException($"Purchase-order line '{sourceLineNo}' does not belong to material '{materialId}'.");
-                        source = matchedSource;
+                        candidateSources = new[] { matchedSource };
                     }
                     else
                     {
-                        if (!sourceByMaterial.TryGetValue(materialId, out var matchingSources))
+                        if (!sourceByMaterial.TryGetValue(materialId, out candidateSources!))
                             throw new InvalidOperationException($"Material '{materialId}' is not part of purchase order '{order.DocNo}'.");
-                        if (matchingSources.Length != 1)
-                            throw new InvalidOperationException($"Specify the purchase-order line number for duplicated material '{materialId}'.");
-                        source = matchingSources[0];
+                        // When a purchase order contains the same material on
+                        // multiple lines, an invoice line without an explicit
+                        // source line is distributed deterministically across
+                        // those source lines in line-number order. This preserves
+                        // per-line receipt/GRNI matching while keeping ordinary
+                        // supplier invoice entry concise.
+                        Array.Sort(candidateSources, (left, right) => left.LineNo.CompareTo(right.LineNo));
                     }
 
-                    var remaining = remainingBySourceLine.GetValueOrDefault(source.LineNo);
-                    if (supplied.Qty > remaining)
+                    var quantityToAllocate = supplied.Qty;
+                    foreach (var source in candidateSources)
+                    {
+                        if (quantityToAllocate <= 0m)
+                            break;
+                        var remaining = remainingBySourceLine.GetValueOrDefault(source.LineNo);
+                        if (remaining <= 0m)
+                            continue;
+                        var allocatedQty = Math.Min(quantityToAllocate, remaining);
+                        remainingBySourceLine[source.LineNo] = remaining - allocatedQty;
+                        invoiceLines.Add(new CommercialLineDraft(
+                            source.MaterialId, source.MaterialCode, source.Description, source.Unit,
+                            allocatedQty, supplied.UnitPrice, supplied.DiscountPct, supplied.TaxRate,
+                            supplied.WarehouseId ?? source.WarehouseId, source.LineNo));
+                        quantityToAllocate -= allocatedQty;
+                    }
+
+                    if (quantityToAllocate > 0m)
+                    {
+                        var sourceLabel = supplied.SourceLineNo?.ToString(CultureInfo.InvariantCulture)
+                            ?? materialId.ToString(CultureInfo.InvariantCulture);
                         throw new InvalidOperationException(
-                            $"Supplier invoice quantity for purchase-order line '{source.LineNo}' exceeds its received, unbilled quantity ({remaining}).");
-                    remainingBySourceLine[source.LineNo] = remaining - supplied.Qty;
-                    invoiceLines.Add(new CommercialLineDraft(
-                        source.MaterialId, source.MaterialCode, source.Description, source.Unit,
-                        supplied.Qty, supplied.UnitPrice, supplied.DiscountPct, supplied.TaxRate,
-                        supplied.WarehouseId ?? source.WarehouseId, source.LineNo));
+                            $"Supplier invoice quantity for source '{sourceLabel}' exceeds its received, unbilled quantity by {quantityToAllocate}.");
+                    }
                 }
             }
             if (invoiceLines.Count == 0)
