@@ -603,7 +603,8 @@ public sealed class JournalRepository : IJournalRepository
 
                 if (linkCompany is not null && linkKind is not null && linkAmount > 0)
                 {
-                    if ((linkDocKind, linkKind) is not (("RCV", "C") or ("PAY", "S")))
+                    if (!((linkDocKind == "RCV" && linkKind == "C")
+                        || (linkDocKind == "PAY" && linkKind == "S")))
                         throw new InvalidOperationException(
                             "Cash receipt vouchers must be linked to customers and payment vouchers must be linked to suppliers.");
 
