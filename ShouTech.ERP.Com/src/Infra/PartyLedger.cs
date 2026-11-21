@@ -380,10 +380,13 @@ public static class PartyLedger
             using var release = Create(connection, transaction,
                 $"""
                 UPDATE {documentTable}
-                SET paid_amount = CASE WHEN paid_amount <= @amount + 0.005 THEN 0 ELSE paid_amount - @amount END
+                SET paid_amount = CASE
+                    WHEN CAST(paid_amount AS NUMERIC) <= CAST(@amount AS NUMERIC) + 0.005 THEN 0
+                    ELSE CAST(paid_amount AS NUMERIC) - CAST(@amount AS NUMERIC)
+                END
                 WHERE CAST(company_id AS TEXT) = @documentCompany
                   AND doc_id = @doc
-                  AND paid_amount + 0.005 >= @amount
+                  AND CAST(paid_amount AS NUMERIC) + 0.005 >= CAST(@amount AS NUMERIC)
                   AND COALESCE(is_deleted, {(isPg ? "FALSE" : "0")}) = {(isPg ? "FALSE" : "0")}
                 """);
             Add(release, "@amount", allocation.Amount);
