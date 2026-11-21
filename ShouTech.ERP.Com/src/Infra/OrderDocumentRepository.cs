@@ -648,18 +648,30 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
             var fx = FxRates.Resolve(connection, transaction, _provider,
                 order.CompanyId, order.CurrencyCode, receiptDate, order.ExchangeRate);
+            decimal inventorySubtotal = 0m;
+            decimal nonStockSubtotal = 0m;
+            foreach (var line in receiptDraftLines)
+            {
+                ComputeTotals(new[] { line }, out var lineSubtotal, out _, out _);
+                if (line.MaterialId is long materialId
+                    && await IsStockableAsync(connection, transaction, materialId, cancellationToken).ConfigureAwait(false))
+                    inventorySubtotal += lineSubtotal;
+                else
+                    nonStockSubtotal += lineSubtotal;
+            }
             if (receiptSubtotal > 0m)
             {
+                var receiptGlLines = new List<GlLineRequest>();
+                if (inventorySubtotal > 0m)
+                    receiptGlLines.Add(new GlLineRequest(GlAccounts.Inventory, inventorySubtotal, 0m, order.CostCenter));
+                if (nonStockSubtotal > 0m)
+                    receiptGlLines.Add(new GlLineRequest(GlAccounts.Purchases, nonStockSubtotal, 0m, order.CostCenter));
+                receiptGlLines.Add(new GlLineRequest(GlAccounts.GoodsReceivedNotInvoiced, 0m, receiptSubtotal));
                 GlPosting.PostInTransaction(connection, transaction, _provider,
                     new GlDocumentRequest(order.CompanyId, receiptDate,
                         $"Goods receipt {receiptDocNo.Trim()} against {order.DocNo}",
                         CommercialDocKinds.PurchaseReceipt, receiptId.ToString(CultureInfo.InvariantCulture),
-                        receiptDocNo.Trim(), order.CurrencyCode, fx.Rate,
-                        new List<GlLineRequest>
-                        {
-                            new(GlAccounts.Inventory, receiptSubtotal, 0m, order.CostCenter),
-                            new(GlAccounts.GoodsReceivedNotInvoiced, 0m, receiptSubtotal)
-                        }),
+                        receiptDocNo.Trim(), order.CurrencyCode, fx.Rate, receiptGlLines),
                     userId);
             }
 
