@@ -62,6 +62,40 @@ public sealed class OrderService
     public Task PostOrderAsync(CommercialDocSide side, long docId, string userId, CancellationToken cancellationToken = default)
         => _orders.PostOrderAsync(side, docId, userId, cancellationToken);
 
+    /// <summary>
+    /// Creates a draft delivery note from the remaining quantities on a posted
+    /// sales order. The chain repository records the source link atomically;
+    /// posting is a separate operation so the warehouse can review the draft.
+    /// </summary>
+    public async Task<(long DeliveryId, string DeliveryDocNo)> CreateSalesDeliveryAsync(
+        long salesOrderId,
+        DateOnly deliveryDate,
+        string userId,
+        IReadOnlyDictionary<long, decimal>? quantityByMaterialId = null,
+        long? warehouseId = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (salesOrderId <= 0) throw new ArgumentOutOfRangeException(nameof(salesOrderId));
+        var order = await _chain.FindSalesByIdAsync(salesOrderId, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Sales order was not found.");
+        if (order.DocKind != CommercialDocKinds.SalesOrder)
+            throw new InvalidOperationException("A delivery note must be created from a sales order.");
+        if (order.Status != CommercialDocumentStatus.Posted)
+            throw new InvalidOperationException("Only a posted sales order can be delivered.");
+
+        var deliveryDocNo = await _orders.NextDocNoAsync(
+            CommercialDocSide.Sales, order.CompanyId, CommercialDocKinds.DeliveryNote, cancellationToken).ConfigureAwait(false);
+        var chain = new SalesChainService(_chain);
+        var deliveryId = await chain.CreateFromSourceAsync(
+            salesOrderId, deliveryDocNo, deliveryDate, userId,
+            quantityByMaterialId, warehouseId, cancellationToken).ConfigureAwait(false);
+        return (deliveryId, deliveryDocNo);
+    }
+
+    /// <summary>Posts a delivery note through the stock-valuation chain in one transaction.</summary>
+    public Task PostSalesDeliveryAsync(long deliveryDocId, string userId, CancellationToken cancellationToken = default)
+        => _chain.PostSalesAsync(deliveryDocId, userId, cancellationToken);
+
     public async Task<(long ReceiptId, string ReceiptDocNo)> CreatePurchaseReceiptAsync(Guid companyId, long purchaseOrderId, DateOnly receiptDate, IReadOnlyList<CommercialLineDraft> receivedLines, string userId, CancellationToken cancellationToken = default)
     {
         var order = await _orders.FindByIdAsync(CommercialDocSide.Purchase, purchaseOrderId, cancellationToken).ConfigureAwait(false)
