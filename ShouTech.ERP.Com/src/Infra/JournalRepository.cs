@@ -619,6 +619,16 @@ public sealed class JournalRepository : IJournalRepository
                         throw new InvalidOperationException(
                             "Cash receipt vouchers must be linked to customers and payment vouchers must be linked to suppliers.");
 
+                    await using (var partyCheck = CreateCommand(connection, transaction,
+                        "SELECT COUNT(*) FROM parties WHERE company_id = @company AND kind = @kind AND ledger_id = @party AND is_deleted = " + (_provider == "PostgreSQL" ? "FALSE" : "0")))
+                    {
+                        Add(partyCheck, "@company", linkCompany.Trim());
+                        Add(partyCheck, "@kind", linkKind);
+                        Add(partyCheck, "@party", linkParty);
+                        if (Convert.ToInt64(await partyCheck.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture) != 1)
+                            throw new InvalidOperationException("The linked customer or supplier no longer exists in this company.");
+                    }
+
                     var controlAccount = linkKind == "C" ? GlAccounts.Receivable : GlAccounts.Payable;
                     decimal totalDebit, totalCredit, controlDebit, controlCredit;
                     await using (var control = CreateCommand(connection, transaction, """
