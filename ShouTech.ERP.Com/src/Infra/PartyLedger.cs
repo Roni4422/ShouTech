@@ -270,7 +270,8 @@ public static class PartyLedger
 
         long paymentLedgerId;
         using (var payment = Create(connection, transaction,
-            "SELECT ledger_id FROM party_ledger WHERE company_id = @company AND journal_entry_id = @journal AND doc_kind IN ('RCV','PAY')"))
+            "SELECT ledger_id FROM party_ledger WHERE company_id = @company AND journal_entry_id = @journal AND doc_kind IN ('RCV','PAY')"
+            + (IsPostgres(provider) ? " FOR UPDATE" : "")))
         {
             Add(payment, "@company", companyCode);
             Add(payment, "@journal", journalEntryId.ToString("D"));
