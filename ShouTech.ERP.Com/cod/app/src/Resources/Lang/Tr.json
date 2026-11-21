@@ -1743,7 +1743,8 @@
     "OriginalOpenFailed": "Orijinal fatura açılamadı.",
     "ReverseReason": "Kullanıcı fatura penceresinden ters kayıt istedi",
     "TaxSystem": "Vergi sistemi",
-    "ColTaxCode": "Vergi kodu"
+    "ColTaxCode": "Vergi kodu",
+    "StatusPosting": "İşleniyor — mutabakat gerekli"
   },
   "CompanyWizard": {
     "Title": {
@@ -3576,24 +3577,24 @@
     "SummaryTab": "Dönem özeti",
     "RegisterTab": "Vergi işlem kayıtları",
     "RegisterColumn": {
-        "DocumentDate": "Belge tarihi",
-        "DocumentKind": "Belge türü",
-        "DocumentNumber": "Belge numarası",
-        "LineNumber": "Satır",
-        "TaxCode": "Vergi kodu",
-        "TaxType": "Vergi türü",
-        "Treatment": "Vergi işlemi",
-        "Rate": "Oran (%)",
-        "TaxableAmount": "Vergiye tabi tutar",
-        "TaxAmount": "Vergi tutarı",
-        "IsRecoverable": "İndirilebilir",
-        "Direction": "Yön",
-        "TaxAccountCode": "Vergi hesabı",
-        "CurrencyCode": "Para birimi",
-        "ExchangeRate": "Döviz kuru",
-        "BaseTaxAmount": "Ana para biriminde vergi",
-        "JournalNumber": "Yevmiye numarası"
-      },
+      "DocumentDate": "Belge tarihi",
+      "DocumentKind": "Belge türü",
+      "DocumentNumber": "Belge numarası",
+      "LineNumber": "Satır",
+      "TaxCode": "Vergi kodu",
+      "TaxType": "Vergi türü",
+      "Treatment": "Vergi işlemi",
+      "Rate": "Oran (%)",
+      "TaxableAmount": "Vergiye tabi tutar",
+      "TaxAmount": "Vergi tutarı",
+      "IsRecoverable": "İndirilebilir",
+      "Direction": "Yön",
+      "TaxAccountCode": "Vergi hesabı",
+      "CurrencyCode": "Para birimi",
+      "ExchangeRate": "Döviz kuru",
+      "BaseTaxAmount": "Ana para biriminde vergi",
+      "JournalNumber": "Yevmiye numarası"
+    },
     "Column": {
       "TaxCode": "Vergi kodu",
       "TaxType": "Vergi türü",
