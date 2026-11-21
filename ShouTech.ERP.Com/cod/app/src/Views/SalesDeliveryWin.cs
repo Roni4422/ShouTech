@@ -31,6 +31,7 @@ public sealed class SalesDeliveryWin : BaseWin
     private readonly DataGrid _grid = new();
     private readonly TextBlock _lblStatus = new();
     private readonly ObservableCollection<DeliveryLineVm> _lines = new();
+    private readonly List<(TextBlock Label, string Key)> _headerLabels = new();
 
     private Guid _companyId;
     private long? _orderId;
@@ -48,6 +49,31 @@ public sealed class SalesDeliveryWin : BaseWin
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         BuildUi();
         Loaded += OnLoaded;
+    }
+
+    protected override void ApplyLocalizedText()
+    {
+        Title = T("SalesDelivery.Title");
+        _btnNew.Content = T("Common.New");
+        _btnLoad.Content = T("OrderDoc.Load");
+        _btnCreate.Content = T("SalesDelivery.CreateDraft");
+        _btnPost.Content = T("OrderDoc.Post");
+
+        foreach (var (label, key) in _headerLabels)
+            label.Text = T(key);
+
+        var headers = new[]
+        {
+            "SalesDelivery.ItemCode",
+            "SalesDelivery.Description",
+            "SalesDelivery.Unit",
+            "SalesDelivery.Ordered",
+            "SalesDelivery.Delivered",
+            "SalesDelivery.Remaining",
+            "SalesDelivery.ToDeliver"
+        };
+        for (var index = 0; index < _grid.Columns.Count && index < headers.Length; index++)
+            _grid.Columns[index].Header = T(headers[index]);
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -160,7 +186,9 @@ public sealed class SalesDeliveryWin : BaseWin
     private void AddHeaderField(Grid grid, int column, string labelKey, Control control)
     {
         var panel = new StackPanel { Margin = new Thickness(0, 0, 10, 0) };
-        panel.Children.Add(new TextBlock { Text = T(labelKey), Margin = new Thickness(0, 0, 0, 4) });
+        var label = new TextBlock { Text = T(labelKey), Margin = new Thickness(0, 0, 0, 4) };
+        _headerLabels.Add((label, labelKey));
+        panel.Children.Add(label);
         control.Margin = new Thickness(0, 0, 0, 2);
         panel.Children.Add(control);
         Grid.SetColumn(panel, column);
