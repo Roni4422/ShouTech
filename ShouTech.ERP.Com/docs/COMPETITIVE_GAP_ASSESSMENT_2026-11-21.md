@@ -712,7 +712,8 @@ Implemented on this branch:
 - GRNI clears at historical receipt base value; purchase price/FX variance posts separately to account 402.
 - Invoice posting does not receive stock a second time.
 - Supplier payment vouchers can be allocated to GUID-scoped purchase invoices while retaining the company-code party-ledger scope.
+- Supplier payment allocations are currency-checked; reversing an allocated payment restores invoice open balances and retains release provenance in migration 079 audit rows.
 
-Implementation contract and limits: `docs/PURCHASE_TO_PAY_WORKFLOW.md`.
+Implementation contract and limits: `docs/PURCHASE_TO_PAY_WORKFLOW.md` and `docs/PURCHASE_TO_PAY_CYCLE.md`.
 
 The following remain open and must not be represented as completed procurement capability: RFQ sourcing/quotation comparison, supplier invoice external-reference uniqueness, landed costs/freight/duty, lot/serial/expiry receipt capture, supplier returns/credit notes, and GRNI aging/exception reports.
