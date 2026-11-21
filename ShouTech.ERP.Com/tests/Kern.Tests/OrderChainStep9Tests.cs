@@ -218,7 +218,7 @@ namespace Kern.Tests
                         new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 30m),
                         partyId: 9, partyCode: "SUP-1"), Actor);
                 await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
-                await service.CreatePurchaseReceiptAsync(companyId, orderId, new DateOnly(2026, 11, 6),
+                var (receiptId, _) = await service.CreatePurchaseReceiptAsync(companyId, orderId, new DateOnly(2026, 11, 6),
                     new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 30m) }, Actor);
                 var (invoiceId, invoiceNo) = await service.CreatePurchaseInvoiceAsync(
                     companyId, orderId, new DateOnly(2026, 11, 7),
@@ -264,6 +264,12 @@ namespace Kern.Tests
                 var payment = Assert.Single(await reconciliation.GetPaymentsAsync(CompanyCode, "S"),
                     row => row.DocNo == "PAY-9103");
                 Assert.Equal(60m, payment.Available);
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    reconciliation.AllocateAsync(CompanyCode, "S", payment.LedgerId, "PURCHASE", orderId, 60m, Actor));
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    reconciliation.AllocateAsync(CompanyCode, "S", payment.LedgerId, "PURCHASE", receiptId, 60m, Actor));
+                Assert.Equal(0m, Scalar(connectionString,
+                    $"SELECT paid_amount FROM purchase_documents WHERE doc_id IN ({orderId}, {receiptId});"));
                 await reconciliation.AllocateAsync(
                     CompanyCode, "S", payment.LedgerId, "PURCHASE", invoiceId, 60m, Actor,
                     "Full settlement of supplier invoice");
