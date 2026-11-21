@@ -175,8 +175,21 @@ public sealed class PosOriginalBill
     public List<PosReturnableLine> Lines { get; set; } = new();
     /// <summary>Lines subtotal of the ORIGINAL bill (for pro-rata
     /// header discount/extra allocation to a partial return).</summary>
-    public decimal LinesSubtotal => Lines.Sum(l => decimal.Round(
-        l.QtySold * l.UnitPrice * (1m - l.DiscountPct / 100m), 4, MidpointRounding.AwayFromZero));
+    public decimal LinesSubtotal => Lines.Sum(line =>
+    {
+        var gross = line.QtySold * line.UnitPrice;
+        var discounted = decimal.Round(
+            gross - gross * (line.DiscountPct / 100m),
+            4,
+            MidpointRounding.AwayFromZero);
+        if (line.TaxRate <= 0m ||
+            !string.Equals(line.TaxCalculationMode, "Inclusive", StringComparison.OrdinalIgnoreCase))
+            return discounted;
+        return decimal.Round(
+            discounted / (1m + line.TaxRate / 100m),
+            4,
+            MidpointRounding.AwayFromZero);
+    });
 }
 
 /// <summary>Z-report data for one session (real session rows only):
