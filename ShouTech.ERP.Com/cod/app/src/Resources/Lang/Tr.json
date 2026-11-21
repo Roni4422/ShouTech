@@ -3632,6 +3632,9 @@
     "ExceedsRemaining": "Teslim miktarı siparişin kalan miktarını aşamaz.",
     "DraftCreated": "İrsaliye taslağı oluşturuldu",
     "SaveFirst": "Önce bir irsaliye taslağı oluşturun.",
-    "Posted": "İrsaliye kaydedildi"
+    "Posted": "İrsaliye kaydedildi",
+    "CreateInvoice": "Satış Faturası Oluştur",
+    "PostDeliveryFirst": "Faturasını oluşturmadan önce irsaliyeyi kaydedin.",
+    "InvoiceCreated": "Satış faturası taslağı oluşturuldu"
   }
 }
