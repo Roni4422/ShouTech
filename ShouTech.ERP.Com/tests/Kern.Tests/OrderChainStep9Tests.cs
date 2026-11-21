@@ -209,6 +209,54 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task ConcurrentSalesInvoices_CannotBillTheSameOrderQuantityTwice()
+        {
+            var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.SalesOrder, "SO-9110",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 30m),
+                        partyId: 7, partyCode: "CUS-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Sales, orderId, Actor);
+
+                async Task<string?> TryCreateInvoiceAsync()
+                {
+                    try
+                    {
+                        await service.ConvertToInvoiceAsync(
+                            CommercialDocSide.Sales, orderId, new DateOnly(2026, 11, 10), Actor);
+                        return null;
+                    }
+                    catch (Exception exception)
+                    {
+                        return exception.ToString();
+                    }
+                }
+
+                var outcomes = await Task.WhenAll(
+                    TryCreateInvoiceAsync(),
+                    TryCreateInvoiceAsync());
+
+                Assert.Single(outcomes.Where(outcome => outcome is null));
+                Assert.All(outcomes.Where(outcome => outcome is not null),
+                    failure => Assert.Contains("fully billed", failure!, StringComparison.OrdinalIgnoreCase));
+
+                var companyKey = companyId.ToString("D");
+                Assert.Equal(1m, Scalar(connectionString,
+                    $"SELECT COUNT(*) FROM sales_documents WHERE company_id = '{companyKey}' AND doc_kind = '{CommercialDocKinds.SalesInvoice}' AND is_deleted = 0;"));
+                Assert.Equal(2m, Scalar(connectionString,
+                    $"SELECT COALESCE(SUM(l.qty), 0) FROM sales_document_lines l INNER JOIN sales_documents d ON d.doc_id = l.doc_id WHERE d.company_id = '{companyKey}' AND d.doc_kind = '{CommercialDocKinds.SalesInvoice}' AND d.is_deleted = 0;"));
+                var progress = await service.GetProgressAsync(CommercialDocSide.Sales, orderId);
+                Assert.Equal(100m, progress.PerBilled);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task ConcurrentSupplierInvoices_CannotBillTheSameReceivedQuantityTwice()
         {
             var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
