@@ -110,6 +110,19 @@ public sealed class OrderService
         if (delivery.Status != CommercialDocumentStatus.Posted)
             throw new InvalidOperationException("Only a posted delivery note can be invoiced.");
 
+        var existingLinks = await _chain.GetSalesLinksFromAsync(
+            delivery.CompanyId, deliveryDocId, cancellationToken).ConfigureAwait(false);
+        foreach (var existingLink in existingLinks.Where(link =>
+                     link.TargetDocKind == CommercialDocKinds.SalesInvoice))
+        {
+            var existingInvoice = await _chain.FindSalesByIdAsync(
+                existingLink.TargetDocId, cancellationToken).ConfigureAwait(false);
+            if (existingInvoice is not null &&
+                existingInvoice.Status != CommercialDocumentStatus.Cancelled)
+                throw new InvalidOperationException(
+                    $"Delivery note '{delivery.DocNo}' already has an active sales invoice '{existingInvoice.DocNo}'.");
+        }
+
         var invoiceDocNo = await _orders.NextDocNoAsync(
             CommercialDocSide.Sales, delivery.CompanyId, CommercialDocKinds.SalesInvoice, cancellationToken).ConfigureAwait(false);
         var chain = new SalesChainService(_chain);
