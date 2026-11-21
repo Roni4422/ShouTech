@@ -591,6 +591,18 @@ public sealed class OrdWin : BaseWin, IWindowMode
             return;
         }
 
+        long? receiptWarehouseId;
+        try
+        {
+            receiptWarehouseId = CardStore.ResolveWarehouseId(_txtWhs.Text.Trim());
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OrdWin.ReceiveWarehouse");
+            ShowWarningMessage(ex.Message);
+            return;
+        }
+
         var rows = _lines
             .Where(line => line.Qty - line.FulfilledQty > 0m)
             .Select(line => new ReceiptLineVm
@@ -602,7 +614,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
                 Quantity = line.Qty - line.FulfilledQty,
                 UnitPrice = line.UnitPrice,
                 DiscountPct = line.DiscountPct,
-                WarehouseId = CardStore.ResolveWarehouseId(_txtWhs.Text.Trim())
+                WarehouseId = receiptWarehouseId
             })
             .ToList();
         if (rows.Count == 0)
