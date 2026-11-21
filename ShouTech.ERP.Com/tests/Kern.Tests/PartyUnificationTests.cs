@@ -216,6 +216,8 @@ public sealed class PartyUnificationTests
         Assert.Equal(0m, ExecScalar(db, $"SELECT paid_amount FROM purchase_documents WHERE doc_id = {purchaseId};"));
         Assert.Equal(0m, ExecScalar(db,
             $"SELECT COUNT(*) FROM payment_allocations WHERE company_id = '{CompanyCode}' AND payment_ledger_id = (SELECT ledger_id FROM party_ledger WHERE company_id = '{CompanyCode}' AND doc_kind = 'PAY' AND doc_no = 'PAY-SUP-1');"));
+        Assert.Equal(1m, ExecScalar(db,
+            $"SELECT COUNT(*) FROM payment_allocation_reversal_audit WHERE company_id = '{CompanyCode}' AND doc_table = 'PURCHASE' AND doc_id = {purchaseId} AND amount = 450 AND released_by = '{Actor}';"));
         Assert.Equal(1000m, Assert.Single(await recon.GetOpenDocumentsAsync(CompanyCode, "S")).OpenAmount);
         Assert.Empty(await recon.GetPaymentsAsync(CompanyCode, "S"));
     }
