@@ -270,6 +270,8 @@ namespace Kern.Tests
                     reconciliation.AllocateAsync(CompanyCode, "S", payment.LedgerId, "PURCHASE", receiptId, 60m, Actor));
                 Assert.Equal(0m, Scalar(connectionString,
                     $"SELECT paid_amount FROM purchase_documents WHERE doc_id IN ({orderId}, {receiptId});"));
+                Assert.Equal(0m, Scalar(connectionString,
+                    $"SELECT COUNT(*) FROM payment_allocations WHERE company_id = '{CompanyCode}';"));
                 await reconciliation.AllocateAsync(
                     CompanyCode, "S", payment.LedgerId, "PURCHASE", invoiceId, 60m, Actor,
                     "Full settlement of supplier invoice");
