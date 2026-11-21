@@ -3609,5 +3609,29 @@
       "TaxAmount": "Montant de taxe",
       "BaseTaxAmount": "Taxe en devise de base"
     }
+  },
+  "SalesDelivery": {
+    "Title": "Bon de livraison client",
+    "OrderNo": "N° commande client",
+    "DeliveryNo": "N° bon de livraison",
+    "Date": "Date de livraison",
+    "CreateDraft": "Créer un brouillon de livraison",
+    "ItemCode": "Code article",
+    "Description": "Description",
+    "Unit": "Unité",
+    "Ordered": "Commandé",
+    "Delivered": "Livré",
+    "Remaining": "Restant",
+    "ToDeliver": "Qté à livrer",
+    "SelectOrder": "Chargez une commande client validée avant de créer une livraison.",
+    "OrderRequired": "Saisissez un numéro de commande client.",
+    "PostedOrderRequired": "Seules les commandes client validées peuvent être livrées.",
+    "OrderLoaded": "Commande client chargée",
+    "QuantityRequired": "Saisissez une quantité à livrer pour au moins une ligne.",
+    "MaterialRequired": "Chaque ligne de livraison doit être liée à une fiche article.",
+    "ExceedsRemaining": "La quantité à livrer ne peut pas dépasser la quantité restante de la commande.",
+    "DraftCreated": "Brouillon de livraison créé",
+    "SaveFirst": "Créez d'abord un brouillon de livraison.",
+    "Posted": "Bon de livraison validé"
   }
 }
