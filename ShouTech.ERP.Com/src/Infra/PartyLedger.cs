@@ -316,7 +316,7 @@ public static class PartyLedger
             using var release = Create(connection, transaction,
                 $"""
                 UPDATE {documentTable}
-                SET paid_amount = paid_amount - @amount
+                SET paid_amount = CASE WHEN paid_amount <= @amount + 0.005 THEN 0 ELSE paid_amount - @amount END
                 WHERE CAST(company_id AS TEXT) = @documentCompany
                   AND doc_id = @doc
                   AND paid_amount + 0.005 >= @amount
