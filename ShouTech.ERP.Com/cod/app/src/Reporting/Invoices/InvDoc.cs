@@ -25,7 +25,10 @@ public enum InvDocStatus
 {
     Draft = 0,
     Posted = 1,
-    Cancelled = 2
+    Cancelled = 2,
+    // A dedicated stock engine has claimed the document but has not yet
+    // finalized its posting state. This must never be treated as editable Draft.
+    Posting = 3
 }
 
 /// <summary>
