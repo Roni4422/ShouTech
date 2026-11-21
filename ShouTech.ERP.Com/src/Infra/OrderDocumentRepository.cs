@@ -708,7 +708,11 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
     // -------------------------------------------------------------- convert
 
     public Task<long> ConvertToInvoiceAsync(CommercialDocSide side, long orderDocId, string invoiceDocNo, DateOnly invoiceDate, string userId, CancellationToken cancellationToken = default)
-        => ConvertToInvoiceCoreAsync(side, orderDocId, invoiceDocNo, invoiceDate, null, null, userId, cancellationToken);
+    {
+        if (side == CommercialDocSide.Purchase)
+            throw new InvalidOperationException("Supplier invoices must use CreatePurchaseInvoiceAsync with company-scoped receipt matching.");
+        return ConvertToInvoiceCoreAsync(side, orderDocId, invoiceDocNo, invoiceDate, null, null, userId, cancellationToken);
+    }
 
     public Task<long> CreatePurchaseInvoiceAsync(
         Guid companyId, long purchaseOrderId, string invoiceDocNo, DateOnly invoiceDate,
