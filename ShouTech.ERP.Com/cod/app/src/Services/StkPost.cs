@@ -978,6 +978,41 @@ public static class StkPost
         }
     }
 
+    public static bool IsOperationCompleted(string operationKey, string expectedType)
+    {
+        if (string.IsNullOrWhiteSpace(operationKey))
+            throw new ArgumentException("An operation key is required.", nameof(operationKey));
+        if (string.IsNullOrWhiteSpace(expectedType))
+            throw new ArgumentException("An operation type is required.", nameof(expectedType));
+
+        var company = AppState.CurrentCompanyCode?.Trim();
+        if (string.IsNullOrWhiteSpace(company))
+            throw new InvalidOperationException("No current company is selected.");
+        var connectionString = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(connectionString))
+            throw new InvalidOperationException("No connection to the current company database.");
+
+        using DbConnection connection = DatabaseRuntime.IsPostgreSql()
+            ? new NpgsqlConnection(connectionString)
+            : new SqliteConnection(DatabaseRuntime.NormalizeSqliteConnectionString(connectionString));
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT operation_type
+            FROM stock_posting_operations
+            WHERE company_id=$company AND operation_key=$key;
+            """;
+        Add(command, "$company", company);
+        Add(command, "$key", operationKey);
+        var value = command.ExecuteScalar();
+        if (value is null or DBNull) return false;
+        var actualType = Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+        if (!string.Equals(actualType, expectedType, StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                "The stock posting operation key is already registered for a different operation type.");
+        return true;
+    }
+
     private static bool TryReadCompletedOperation(
         DbConnection connection,
         DbTransaction tx,
