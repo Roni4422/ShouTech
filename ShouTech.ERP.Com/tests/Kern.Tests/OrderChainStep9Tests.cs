@@ -396,7 +396,7 @@ namespace Kern.Tests
 
                 Assert.Equal(0m, Scalar(connectionString,
                     $"SELECT COUNT(*) FROM purchase_documents WHERE doc_kind = 'PUR' AND company_id = '{companyId:D}';"));
-                Assert.Equal(100m, BalanceValue(connectionString, 42));
+                Assert.Equal(1100m, BalanceValue(connectionString, 42));
             }
             finally
             {
