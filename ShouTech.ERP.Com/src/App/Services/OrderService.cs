@@ -75,6 +75,26 @@ public sealed class OrderService
         return (receiptId, receiptDocNo);
     }
 
+    public async Task<(long InvoiceId, string InvoiceDocNo)> CreatePurchaseInvoiceAsync(
+        Guid companyId, long purchaseOrderId, DateOnly invoiceDate,
+        IReadOnlyList<CommercialLineDraft> invoiceLines, string userId,
+        CancellationToken cancellationToken = default)
+    {
+        if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
+        ArgumentNullException.ThrowIfNull(invoiceLines);
+        var order = await _orders.FindByIdAsync(CommercialDocSide.Purchase, purchaseOrderId, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Purchase order was not found.");
+        if (order.CompanyId != companyId)
+            throw new InvalidOperationException("The purchase order belongs to a different company.");
+        if (order.DocKind != CommercialDocKinds.PurchaseOrder)
+            throw new InvalidOperationException("A supplier invoice must be created from a purchase order.");
+        var invoiceDocNo = await _orders.NextDocNoAsync(
+            CommercialDocSide.Purchase, companyId, CommercialDocKinds.PurchaseInvoice, cancellationToken).ConfigureAwait(false);
+        var invoiceId = await _orders.CreatePurchaseInvoiceAsync(
+            companyId, purchaseOrderId, invoiceDocNo, invoiceDate, invoiceLines, userId, cancellationToken).ConfigureAwait(false);
+        return (invoiceId, invoiceDocNo);
+    }
+
     public Task CloseOrderAsync(CommercialDocSide side, long docId, string userId, CancellationToken cancellationToken = default)
         => _orders.SetStatusAsync(side, docId, CommercialDocumentStatus.Closed, userId, cancellationToken);
 
