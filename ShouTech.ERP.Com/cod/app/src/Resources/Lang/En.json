@@ -3645,5 +3645,30 @@
     "CreateInvoice": "Create Sales Invoice",
     "PostDeliveryFirst": "Post the delivery note before creating its invoice.",
     "InvoiceCreated": "Sales invoice draft created"
+  },
+  "SalesReturn": {
+    "Title": "Sales Return / Credit Note",
+    "LoadInvoice": "Load Invoice",
+    "PostReturn": "Post Return",
+    "OriginalInvoice": "Original Sales Invoice No.",
+    "Reason": "Return Reason",
+    "Code": "Item Code",
+    "Description": "Description",
+    "Unit": "Unit",
+    "Sold": "Sold",
+    "AlreadyReturned": "Already Returned",
+    "Returnable": "Returnable",
+    "ReturnQty": "Return Qty",
+    "Price": "Unit Price",
+    "Total": "Credit Note Total",
+    "InvoiceRequired": "Enter a sales invoice number.",
+    "InvoiceNotFound": "The posted sales invoice was not found.",
+    "PostedInvoiceRequired": "Only posted sales invoices can be returned.",
+    "LoadInvoiceFirst": "Load a posted sales invoice first.",
+    "ReasonRequired": "Enter the reason for this return.",
+    "SelectQuantity": "Enter a return quantity for at least one line.",
+    "ExceedsReturnable": "A return quantity cannot exceed the remaining returnable quantity.",
+    "Confirm": "Post this customer return and credit note?",
+    "Posted": "Sales return posted"
   }
 }
