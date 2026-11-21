@@ -49,7 +49,7 @@ not a claim that every procurement feature in the ERP is complete.
 ### 4. Supplier payment and reconciliation
 
 - Supplier payments are posted through the existing cash/bank journal voucher flow.
-- A voucher-party link writes the supplier debit to the party ledger in the same posting transaction.
+- A voucher-party link writes the supplier debit to the party ledger in the same posting transaction. The posting repository also requires the voucher to debit the configured payable control account (2201) for exactly the linked amount; a balanced voucher that debits an expense account instead is rejected.
 - Payment Reconciliation allocates the payment to the open supplier invoice and updates
   `purchase_documents.paid_amount` atomically. Allocation is rejected when the payment and invoice
   currencies differ; there is no implicit same-number cross-currency settlement.
@@ -78,7 +78,7 @@ not a claim that every procurement feature in the ERP is complete.
 - Receipt updates last purchase cost and posts inventory/GRNI.
 - Supplier price variance posts separately from GRNI.
 - Service receipts accrue to expense without changing stock.
-- Supplier payment voucher appears in the unallocated supplier-payment list.
+- Supplier payment voucher appears in the unallocated supplier-payment list and must post against the payable control account.
 - Payment allocation settles a GUID-scoped invoice while retaining the company-code payment key.
 - Cross-currency supplier payment allocation is rejected without changing invoice/payment balances.
 - Reversing an allocated supplier payment releases invoice balances and retains the full allocation-release audit record.
