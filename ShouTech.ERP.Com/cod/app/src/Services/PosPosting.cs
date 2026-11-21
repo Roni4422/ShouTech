@@ -117,6 +117,7 @@ public static class PosPosting
                 UnitPrice = source.UnitPrice,
                 DiscountPct = source.DiscountPct,
                 TaxRate = source.TaxRate,
+                TaxCalculationMode = source.TaxCalculationMode,
                 WarehouseId = source.WarehouseId
             });
         }
