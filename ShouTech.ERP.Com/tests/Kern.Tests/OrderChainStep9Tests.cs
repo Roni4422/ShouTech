@@ -208,6 +208,51 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task ConcurrentSupplierInvoices_CannotBillTheSameReceivedQuantityTwice()
+        {
+            var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-9110",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 30m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+                await service.CreatePurchaseReceiptAsync(companyId, orderId, new DateOnly(2026, 11, 9),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 30m) }, Actor);
+
+                async Task<bool> TryCreateInvoiceAsync(string number)
+                {
+                    try
+                    {
+                        await service.CreatePurchaseInvoiceAsync(
+                            companyId, orderId, number, new DateOnly(2026, 11, 10),
+                            new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 30m) }, Actor);
+                        return true;
+                    }
+                    catch (Exception)
+                    {
+                        return false;
+                    }
+                }
+
+                var outcomes = await Task.WhenAll(
+                    TryCreateInvoiceAsync("PUR-9110-A"),
+                    TryCreateInvoiceAsync("PUR-9110-B"));
+
+                Assert.Single(outcomes.Where(created => created));
+                Assert.Equal(1m, Scalar(connectionString,
+                    $"SELECT COUNT(*) FROM purchase_documents WHERE company_id = '{CompanyCode}' AND doc_kind = '{CommercialDocKinds.PurchaseInvoice}' AND is_deleted = 0;"));
+                Assert.Equal(2m, Scalar(connectionString,
+                    "SELECT COALESCE(SUM(qty), 0) FROM purchase_document_lines WHERE doc_id IN (SELECT doc_id FROM purchase_documents WHERE company_id = '" + CompanyCode + "' AND doc_kind = '" + CommercialDocKinds.PurchaseInvoice + "' AND is_deleted = 0);"));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task SupplierPaymentVoucher_ReconcilesAgainstGuidScopedPurchaseInvoice()
         {
             var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
