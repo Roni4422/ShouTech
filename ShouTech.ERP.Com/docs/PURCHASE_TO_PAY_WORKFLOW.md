@@ -49,7 +49,7 @@ not a claim that every procurement feature in the ERP is complete.
 ### 4. Supplier payment and reconciliation
 
 - Supplier payments are posted through the existing cash/bank journal voucher flow.
-- A voucher-party link writes the supplier debit to the party ledger in the same posting transaction. The posting repository also requires the voucher to debit the configured payable control account (2201) for exactly the linked amount; a balanced voucher that debits an expense account instead is rejected.
+- A voucher-party link writes the supplier debit to the party ledger in the same posting transaction. The posting repository verifies the voucher-party link belongs to the journal's company and requires the full voucher amount and linked amount to debit the configured payable control account (2201); a balanced voucher that debits an expense account instead is rejected.
 - Payment Reconciliation allocates the payment to the open supplier invoice and updates
   `purchase_documents.paid_amount` atomically. Allocation is rejected when the payment and invoice
   currencies differ; there is no implicit same-number cross-currency settlement.
