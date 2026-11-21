@@ -3618,5 +3618,29 @@
       "TaxAmount": "Tax amount",
       "BaseTaxAmount": "Base tax amount"
     }
+  },
+  "SalesDelivery": {
+    "Title": "Sales Delivery Note",
+    "OrderNo": "Sales Order No.",
+    "DeliveryNo": "Delivery Note No.",
+    "Date": "Delivery Date",
+    "CreateDraft": "Create Delivery Draft",
+    "ItemCode": "Item Code",
+    "Description": "Description",
+    "Unit": "Unit",
+    "Ordered": "Ordered",
+    "Delivered": "Delivered",
+    "Remaining": "Remaining",
+    "ToDeliver": "Qty to Deliver",
+    "SelectOrder": "Load a posted sales order before creating a delivery.",
+    "OrderRequired": "Enter a sales order number.",
+    "PostedOrderRequired": "Only posted sales orders can be delivered.",
+    "OrderLoaded": "Sales order loaded",
+    "QuantityRequired": "Enter a delivery quantity for at least one line.",
+    "MaterialRequired": "Every delivery line must be linked to a material card.",
+    "ExceedsRemaining": "A delivery quantity cannot exceed the remaining order quantity.",
+    "DraftCreated": "Delivery draft created",
+    "SaveFirst": "Create a delivery draft first.",
+    "Posted": "Delivery note posted"
   }
 }
