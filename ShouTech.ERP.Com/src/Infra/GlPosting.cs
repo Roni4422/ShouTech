@@ -429,7 +429,7 @@ public static class GlPosting
         // return documents have no journal-linked rows and are untouched.
         PartyLedger.MirrorForJournalReversal(connection, transaction, prov,
             companyId, journalEntryId, reversalId,
-            entryDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            entryDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), userId);
         return reversalId;
     }
 
