@@ -249,6 +249,55 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task SalesDeliveryInvoice_UsesDeliveryCostWithoutIssuingStockAgain()
+        {
+            var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.SalesOrder, "SO-DLV-COGS",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 25m),
+                        partyId: 7, partyCode: "CUS-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Sales, orderId, Actor);
+
+                var (deliveryId, deliveryNo) = await service.CreateSalesDeliveryAsync(
+                    orderId, new DateOnly(2026, 11, 10), Actor,
+                    new Dictionary<long, decimal> { [42] = 2m });
+                await service.PostSalesDeliveryAsync(deliveryId, Actor);
+
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    service.ConvertToInvoiceAsync(CommercialDocSide.Sales, orderId,
+                        new DateOnly(2026, 11, 11), Actor));
+
+                var (invoiceId, invoiceNo) = await service.CreateSalesInvoiceFromDeliveryAsync(
+                    deliveryId, new DateOnly(2026, 11, 11), Actor);
+                await service.PostSalesChainDocumentAsync(invoiceId, Actor);
+
+                var invoice = await orders.FindByIdAsync(CommercialDocSide.Sales, invoiceId);
+                Assert.NotNull(invoice);
+                Assert.Equal(CommercialDocKinds.SalesInvoice, invoice!.DocKind);
+                Assert.Equal(CommercialDocumentStatus.Posted, invoice.Status);
+                Assert.Equal(50m, invoice.GrandTotal);
+
+                // The delivery issued two units at the valuation cost of 10.
+                // The invoice posts COGS from that movement without issuing again.
+                Assert.Equal(98m, BalanceQty(connectionString, 42));
+                Assert.Equal(-20m, MovementCost(connectionString, deliveryNo, 42));
+                Assert.Equal(0m, MovementCost(connectionString, invoiceNo, 42));
+
+                var gl = GlByAccount(connectionString, "SAL", invoiceId);
+                Assert.Equal(50m, gl["1201"].Debit);
+                Assert.Equal(50m, gl["301"].Credit);
+                Assert.Equal(20m, gl["401"].Debit);
+                Assert.Equal(20m, gl["1203"].Credit);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task ConcurrentSalesInvoices_CannotBillTheSameOrderQuantityTwice()
         {
             var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
