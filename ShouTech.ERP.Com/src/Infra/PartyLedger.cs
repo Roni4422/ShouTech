@@ -237,6 +237,9 @@ public static class PartyLedger
             // recomputation at today's rate), so the pair nets to zero
             // in base exactly. Rows without stored base fall through to
             // rate resolution at the original row's rate.
+            if (row.DocKind is "RCV" or "PAY")
+                UnallocateVoucherPayments(connection, transaction, provider, company, originalEntryId);
+
             WriteEntry(connection, transaction, provider, company, row.Kind, row.Party,
                 row.DocKind, row.DocId, row.DocNo,
                 reversalDate,
@@ -247,6 +250,90 @@ public static class PartyLedger
                 baseDebit: row.BaseCredit,
                 baseCredit: row.BaseDebit);
         }
+    }
+
+    /// <summary>
+    /// Releases every allocation made from a cash receipt/payment voucher
+    /// before its party-ledger mirror is written. This keeps document
+    /// paid_amount and payment availability consistent when a voucher is
+    /// reversed; the caller owns the transaction, so a partial release can
+    /// never commit.
+    /// </summary>
+    private static void UnallocateVoucherPayments(
+        DbConnection connection, DbTransaction transaction, string provider,
+        string companyCode, Guid journalEntryId)
+    {
+        if (!TableExists(connection, transaction, provider, "payment_allocations")
+            || !ColumnExists(connection, transaction, provider, "party_ledger", "journal_entry_id"))
+            return;
+
+        long paymentLedgerId;
+        using (var payment = Create(connection, transaction,
+            "SELECT ledger_id FROM party_ledger WHERE company_id = @company AND journal_entry_id = @journal AND doc_kind IN ('RCV','PAY')"))
+        {
+            Add(payment, "@company", companyCode);
+            Add(payment, "@journal", journalEntryId.ToString("D"));
+            var value = payment.ExecuteScalar();
+            if (value is null or DBNull) return;
+            paymentLedgerId = Convert.ToInt64(value, CultureInfo.InvariantCulture);
+        }
+
+        var hasDocumentCompany = ColumnExists(connection, transaction, provider,
+            "payment_allocations", "document_company_id");
+        var companyExpression = hasDocumentCompany
+            ? "COALESCE(document_company_id, company_id)"
+            : "company_id";
+        var allocations = new List<(string Table, long DocumentId, string DocumentCompany, decimal Amount)>();
+        using (var load = Create(connection, transaction,
+            $"""
+            SELECT doc_table, doc_id, {companyExpression}, SUM(amount)
+            FROM payment_allocations
+            WHERE company_id = @company AND payment_ledger_id = @payment
+            GROUP BY doc_table, doc_id, {companyExpression}
+            """))
+        {
+            Add(load, "@company", companyCode);
+            Add(load, "@payment", paymentLedgerId);
+            using var reader = load.ExecuteReader();
+            while (reader.Read())
+            {
+                var table = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty;
+                if (table is not ("SALES" or "PURCHASE"))
+                    throw new InvalidOperationException($"Unsupported allocated document table '{table}' during voucher reversal.");
+                allocations.Add((
+                    table,
+                    Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture),
+                    Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture) ?? companyCode,
+                    Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture)));
+            }
+        }
+
+        var isPg = IsPostgres(provider);
+        foreach (var allocation in allocations)
+        {
+            var documentTable = allocation.Table == "SALES" ? "sales_documents" : "purchase_documents";
+            using var release = Create(connection, transaction,
+                $"""
+                UPDATE {documentTable}
+                SET paid_amount = paid_amount - @amount
+                WHERE CAST(company_id AS TEXT) = @documentCompany
+                  AND doc_id = @doc
+                  AND paid_amount + 0.005 >= @amount
+                  AND is_deleted = {(isPg ? "FALSE" : "0")}
+                """);
+            Add(release, "@amount", allocation.Amount);
+            Add(release, "@documentCompany", allocation.DocumentCompany);
+            Add(release, "@doc", allocation.DocumentId);
+            if (release.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException(
+                    $"Could not release the {allocation.Amount} allocation from {allocation.Table} document {allocation.DocumentId} while reversing the payment voucher.");
+        }
+
+        using var delete = Create(connection, transaction,
+            "DELETE FROM payment_allocations WHERE company_id = @company AND payment_ledger_id = @payment");
+        Add(delete, "@company", companyCode);
+        Add(delete, "@payment", paymentLedgerId);
+        delete.ExecuteNonQuery();
     }
 
     public static bool TableExists(DbConnection connection, DbTransaction? transaction, string provider, string table)
