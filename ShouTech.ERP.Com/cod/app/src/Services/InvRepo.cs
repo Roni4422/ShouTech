@@ -2913,11 +2913,13 @@ public static class InvRepo
         string originalPartyCode;
         string originalCurrency;
         decimal originalExchangeRate;
+        decimal originalDiscountAmount;
+        decimal originalExtraAmount;
         using (var original = connection.CreateCommand())
         {
             original.Transaction = transaction;
             original.CommandText = $"""
-                SELECT doc_no, doc_kind, status, party_id, party_code, currency_code, exchange_rate
+                SELECT doc_no, doc_kind, status, party_id, party_code, currency_code, exchange_rate, discount_amount, extra_amount
                 FROM sales_documents
                 WHERE doc_id = $originalId
                   AND (company_id = $company OR company_id = $guid)
@@ -2938,6 +2940,8 @@ public static class InvRepo
             originalPartyCode = reader.IsDBNull(4) ? string.Empty : Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture) ?? string.Empty;
             originalCurrency = reader.IsDBNull(5) ? "SAR" : Convert.ToString(reader.GetValue(5), CultureInfo.InvariantCulture) ?? "SAR";
             originalExchangeRate = reader.IsDBNull(6) ? 1m : Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture);
+            originalDiscountAmount = reader.IsDBNull(7) ? 0m : Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture);
+            originalExtraAmount = reader.IsDBNull(8) ? 0m : Convert.ToDecimal(reader.GetValue(8), CultureInfo.InvariantCulture);
         }
 
         if (returnDoc.PartyId != originalPartyId ||
@@ -3015,6 +3019,20 @@ public static class InvRepo
             throw new InvalidOperationException("A sales return requires at least one original invoice line.");
         if (returnDoc.Lines.GroupBy(line => line.LineNo).Any(group => group.Count() > 1))
             throw new InvalidOperationException("A sales return can contain each original invoice line only once.");
+
+        var originalLinesSubtotal = sourceLines.Values.Sum(source =>
+            decimal.Round(source.Qty * source.UnitPrice * (1m - source.DiscountPct / 100m),
+                4, MidpointRounding.AwayFromZero));
+        var returnLinesSubtotal = returnDoc.Lines.Sum(line =>
+            decimal.Round(line.Qty * line.UnitPrice * (1m - line.DiscountPct / 100m),
+                4, MidpointRounding.AwayFromZero));
+        var expectedDiscount = PosTenderMath.ProRata(
+            originalDiscountAmount, returnLinesSubtotal, originalLinesSubtotal);
+        var expectedExtra = PosTenderMath.ProRata(
+            originalExtraAmount, returnLinesSubtotal, originalLinesSubtotal);
+        if (returnDoc.LinesDiscountAmount != expectedDiscount ||
+            returnDoc.LinesExtraAmount != expectedExtra)
+            throw new InvalidOperationException("The sales return must allocate the original invoice discount and extra charges proportionally.");
 
         foreach (var line in returnDoc.Lines)
         {
