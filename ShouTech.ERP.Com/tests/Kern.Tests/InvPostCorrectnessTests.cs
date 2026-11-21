@@ -74,6 +74,68 @@ public sealed class InvPostCorrectnessTests
     }
 
     [Fact]
+    public async Task SalesReturn_PostingRejectsCumulativeQuantityAboveOriginalInvoice()
+    {
+        using var db = await SeededAsync();
+        var party = await SavePartyAsync(db, "C", "CUST-RETURN", 100000m);
+        var original = BuildDoc(InvDocKind.SalesInvoice, party.LedgerId, party.Code,
+            qty: 5m, price: 30m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        InvRepo.SaveDraft(original);
+        InvRepo.Post(original.DocId, original.Kind, Actor);
+        Assert.Equal(995m, StockQty(db));
+
+        InvDoc BuildReturn(decimal quantity) => new()
+        {
+            Kind = InvDocKind.SalesReturn,
+            DocNo = InvRepo.NextDocNo(InvDocKind.SalesReturn),
+            DocDate = new DateTime(2026, 11, 12),
+            PartyId = party.LedgerId,
+            PartyCode = party.Code,
+            PartyName = party.NameEn,
+            WarehouseId = 1,
+            CurrencyCode = original.CurrencyCode,
+            ExchangeRate = original.ExchangeRate,
+            PaymentMethod = InvPaymentMethod.Credit,
+            OriginalDocId = original.DocId,
+            OriginalDocKind = InvDocKind.SalesInvoice,
+            OriginalDocNo = original.DocNo,
+            Notes = "Customer return",
+            Lines =
+            {
+                new InvLine
+                {
+                    LineNo = 1,
+                    MaterialId = original.Lines[0].MaterialId,
+                    MaterialCode = original.Lines[0].MaterialCode,
+                    Description = original.Lines[0].Description,
+                    Unit = original.Lines[0].Unit,
+                    Qty = quantity,
+                    UnitPrice = original.Lines[0].UnitPrice,
+                    DiscountPct = original.Lines[0].DiscountPct,
+                    TaxCode = original.Lines[0].TaxCode,
+                    TaxRate = original.Lines[0].TaxRate,
+                    TaxCalculationMode = original.Lines[0].TaxCalculationMode,
+                    WarehouseId = original.Lines[0].WarehouseId
+                }
+            }
+        };
+
+        var firstReturn = BuildReturn(3m);
+        InvRepo.SaveDraft(firstReturn);
+        InvRepo.Post(firstReturn.DocId, InvDocKind.SalesReturn, Actor);
+        Assert.Equal(998m, StockQty(db));
+
+        var secondReturn = BuildReturn(3m);
+        InvRepo.SaveDraft(secondReturn);
+        var error = Assert.Throws<InvalidOperationException>(
+            () => InvRepo.Post(secondReturn.DocId, InvDocKind.SalesReturn, Actor));
+        Assert.Contains("exceeds the remaining returnable quantity", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(998m, StockQty(db));
+        Assert.Equal(1m, Scalar(db,
+            "SELECT COUNT(*) FROM sales_documents WHERE doc_kind = 'SRT' AND status = 'Posted' AND original_doc_id = " + original.DocId.ToString(CultureInfo.InvariantCulture)));
+    }
+
+    [Fact]
     public async Task DeliveryLinkedInvoice_PostsThroughChainWithoutSecondStockIssue()
     {
         using var db = await SeededAsync();
