@@ -451,6 +451,31 @@ public sealed class InvPostCorrectnessTests
     }
 
     [Fact]
+    public async Task StockTransfer_FailedEngineRevertsPostingClaimWithoutStockEffects()
+    {
+        using var db = await SeededAsync();
+        using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = $"INSERT INTO warehouses (warehouse_id, company_id, warehouse_code, warehouse_name_ar, warehouse_name_en, is_deleted) VALUES (2, '{CompanyCode}', 2, 'Second', 'Second', 0);";
+            cmd.ExecuteNonQuery();
+        }
+
+        var doc = BuildDoc(InvDocKind.StockTransfer, null, "", qty: 1001m, price: 10m,
+            taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        doc.TargetWarehouseId = 2;
+        doc.TargetWarehouseName = "Second";
+        InvRepo.SaveDraft(doc);
+
+        Assert.Throws<StkPost.StockTransferException>(() => InvRepo.Post(doc.DocId, doc.Kind, Actor));
+
+        Assert.Equal(InvDocStatus.Draft, InvRepo.Load(doc.DocId, doc.Kind)!.Status);
+        Assert.Equal(1000m, StockQty(db));
+        Assert.Equal(0m, Scalar(db, $"SELECT COUNT(*) FROM material_stock_movements WHERE company_id = '{CompanyCode}' AND movement_type IN ('TRANSFER_OUT', 'TRANSFER_IN');"));
+    }
+
+    [Fact]
     public async Task InventoryCount_PostsDeltaOnly_NotFullCountedQty()
     {
         using var db = await SeededAsync();
