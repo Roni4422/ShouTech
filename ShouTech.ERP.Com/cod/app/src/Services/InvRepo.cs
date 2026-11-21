@@ -306,7 +306,7 @@ public static class InvRepo
 
         // DLV-linked invoices use the commercial-chain posting path:
         // delivery already issued stock, so the invoice must not issue it again.
-        if (kind == InvDocKind.SalesInvoice && HasDeliverySourceLink(cs, docId))
+        if (kind == InvDocKind.SalesInvoice && IsDeliveryLinkedSalesInvoice(docId))
         {
             var chainRepository = new CommercialDocumentRepository(
                 DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite", cs);
@@ -2769,8 +2769,10 @@ public static class InvRepo
         }
     }
 
-    private static bool HasDeliverySourceLink(string connectionString, long invoiceDocId)
+    public static bool IsDeliveryLinkedSalesInvoice(long invoiceDocId)
     {
+        var connectionString = DatabaseRuntime.GetConnectionString()
+            ?? throw new InvalidOperationException("No database connection.");
         using var connection = Open(connectionString);
         using var command = connection.CreateCommand();
         command.CommandText = """
