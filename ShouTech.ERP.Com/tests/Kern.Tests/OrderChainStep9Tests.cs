@@ -118,6 +118,7 @@ namespace Kern.Tests
                 Assert.Equal(103m, BalanceQty(connectionString, 42));
                 Assert.Equal(1036m, BalanceValue(connectionString, 42));
                 Assert.Equal(36m, MovementCost(connectionString, firstReceiptNo, 42));
+                Assert.Equal(12m, Scalar(connectionString, "SELECT last_purchase_cost FROM materials WHERE material_id = 42;"));
 
                 var receiptGl = GlByAccount(connectionString, "RCV", firstReceiptId);
                 Assert.Equal(36m, receiptGl["1203"].Debit);
