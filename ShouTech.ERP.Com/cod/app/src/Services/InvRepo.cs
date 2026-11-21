@@ -3034,10 +3034,10 @@ public static class InvRepo
         var returnLinesSubtotal = returnDoc.Lines.Sum(line =>
             CalculateSalesReturnLineSubtotal(
                 line.Qty, line.UnitPrice, line.DiscountPct, line.TaxRate, line.TaxCalculationMode));
-        var expectedDiscount = ShouTech.Domain.Entities.PosTenderMath.ProRata(
-            originalDiscountAmount, returnLinesSubtotal, originalLinesSubtotal);
-        var expectedExtra = ShouTech.Domain.Entities.PosTenderMath.ProRata(
-            originalExtraAmount, returnLinesSubtotal, originalLinesSubtotal);
+        var expectedDiscount = originalLinesSubtotal == 0m ? 0m :
+            decimal.Round(originalDiscountAmount * returnLinesSubtotal / originalLinesSubtotal, 4, MidpointRounding.AwayFromZero);
+        var expectedExtra = originalLinesSubtotal == 0m ? 0m :
+            decimal.Round(originalExtraAmount * returnLinesSubtotal / originalLinesSubtotal, 4, MidpointRounding.AwayFromZero);
         if (returnDoc.LinesDiscountAmount != expectedDiscount ||
             returnDoc.LinesExtraAmount != expectedExtra)
             throw new InvalidOperationException("The sales return must allocate the original invoice discount and extra charges proportionally.");
