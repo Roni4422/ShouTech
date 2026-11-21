@@ -132,7 +132,7 @@ namespace Kern.Tests
 
                 // Receive the balance in a second receipt. Both receipts are independently linked to the PO.
                 var (secondReceiptId, secondReceiptNo) = await service.CreatePurchaseReceiptAsync(
-                    orderId, new DateOnly(2026, 11, 3),
+                    companyId, orderId, new DateOnly(2026, 11, 3),
                     new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 12m) }, Actor);
                 Assert.Equal(105m, BalanceQty(connectionString, 42));
                 Assert.Equal(1060m, BalanceValue(connectionString, 42));
@@ -185,7 +185,7 @@ namespace Kern.Tests
                         new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 30m),
                         partyId: 9, partyCode: "SUP-1"), Actor);
                 await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
-                await service.CreatePurchaseReceiptAsync(orderId, new DateOnly(2026, 11, 6),
+                await service.CreatePurchaseReceiptAsync(companyId, orderId, new DateOnly(2026, 11, 6),
                     new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 30m) }, Actor);
                 var (invoiceId, invoiceNo) = await service.ConvertToInvoiceAsync(
                     CommercialDocSide.Purchase, orderId, new DateOnly(2026, 11, 7), Actor);
