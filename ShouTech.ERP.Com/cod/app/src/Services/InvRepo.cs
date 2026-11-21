@@ -443,6 +443,9 @@ public static class InvRepo
             }
         }
 
+        if (kind == InvDocKind.SalesReturn)
+            ValidateSalesReturnAgainstOriginal(connection, tx, guidKey, doc);
+
         // Batch/serial capture (Phase B 054): merge the picker's
         // per-line selections (keyed by line number) into the loaded
         // lines so StkPost hands them to the valuation engine's
@@ -2766,6 +2769,135 @@ public static class InvRepo
         {
             AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exL760, "InvRepo.ReadLongNullable");
             return null;
+        }
+    }
+
+    private static void ValidateSalesReturnAgainstOriginal(
+        DbConnection connection,
+        DbTransaction transaction,
+        string guidKey,
+        InvDoc returnDoc)
+    {
+        if (returnDoc.OriginalDocId is not long originalDocId || originalDocId <= 0 ||
+            returnDoc.OriginalDocKind is not (InvDocKind.SalesInvoice or InvDocKind.PosSale))
+            throw new InvalidOperationException("A sales return must reference a posted sales invoice or POS sale.");
+
+        var originalKind = returnDoc.OriginalDocKind.Value;
+        var originalKindCode = originalKind switch
+        {
+            InvDocKind.SalesInvoice => "SAL",
+            InvDocKind.PosSale => "POS",
+            _ => throw new InvalidOperationException("Unsupported sales-return source document kind.")
+        };
+        var notDeleted = DatabaseRuntime.IsPostgreSql() ? "is_deleted = FALSE" : "is_deleted = 0";
+
+        string originalDocNo;
+        await using (var original = connection.CreateCommand())
+        {
+            original.Transaction = transaction;
+            original.CommandText = $"""
+                SELECT doc_no, doc_kind, status
+                FROM sales_documents
+                WHERE doc_id = $originalId
+                  AND (company_id = $company OR company_id = $guid)
+                  AND {notDeleted}
+                {(DatabaseRuntime.IsPostgreSql() ? "FOR UPDATE" : string.Empty)}
+                """;
+            Add(original, "$originalId", originalDocId);
+            Add(original, "$company", Company);
+            Add(original, "$guid", guidKey);
+            using var reader = original.ExecuteReader();
+            if (!reader.Read())
+                throw new InvalidOperationException("The original sales invoice was not found in the current company.");
+            originalDocNo = reader.GetString(0);
+            if (!string.Equals(reader.GetString(1), originalKindCode, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(reader.GetString(2), "Posted", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Only a posted original sales invoice can be returned.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(returnDoc.OriginalDocNo) &&
+            !string.Equals(returnDoc.OriginalDocNo.Trim(), originalDocNo, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The original sales invoice number does not match its document id.");
+
+        var sourceLines = new Dictionary<int, (long? MaterialId, string Unit, decimal Qty,
+            decimal UnitPrice, decimal DiscountPct, string TaxCode, decimal TaxRate, string TaxMode)>();
+        using (var lines = connection.CreateCommand())
+        {
+            lines.Transaction = transaction;
+            lines.CommandText = """
+                SELECT line_no, material_id, unit, qty, unit_price, discount_pct,
+                       tax_code, tax_rate, tax_calculation_mode
+                FROM sales_document_lines
+                WHERE doc_id = $originalId
+                ORDER BY line_no
+                """;
+            Add(lines, "$originalId", originalDocId);
+            using var reader = lines.ExecuteReader();
+            while (reader.Read())
+            {
+                var lineNo = Convert.ToInt32(reader.GetValue(0), CultureInfo.InvariantCulture);
+                sourceLines[lineNo] = (
+                    reader.IsDBNull(1) ? null : Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture),
+                    reader.IsDBNull(2) ? string.Empty : Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture) ?? string.Empty,
+                    Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture),
+                    reader.IsDBNull(6) ? string.Empty : Convert.ToString(reader.GetValue(6), CultureInfo.InvariantCulture) ?? string.Empty,
+                    Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture),
+                    reader.IsDBNull(8) ? "Exclusive" : Convert.ToString(reader.GetValue(8), CultureInfo.InvariantCulture) ?? "Exclusive");
+            }
+        }
+
+        if (sourceLines.Count == 0)
+            throw new InvalidOperationException("The original sales invoice has no returnable lines.");
+
+        var previouslyReturned = new Dictionary<int, decimal>();
+        using (var returned = connection.CreateCommand())
+        {
+            returned.Transaction = transaction;
+            returned.CommandText = $"""
+                SELECT line.line_no, COALESCE(SUM(line.qty), 0)
+                FROM sales_documents header
+                INNER JOIN sales_document_lines line ON line.doc_id = header.doc_id
+                WHERE (header.company_id = $company OR header.company_id = $guid)
+                  AND header.doc_kind = 'SRT'
+                  AND header.original_doc_id = $originalId
+                  AND header.original_doc_kind = $originalKind
+                  AND header.status = 'Posted'
+                  AND {notDeleted.Replace("is_deleted", "header.is_deleted", StringComparison.Ordinal)}
+                  AND header.doc_id <> $returnId
+                GROUP BY line.line_no
+                """;
+            Add(returned, "$company", Company);
+            Add(returned, "$guid", guidKey);
+            Add(returned, "$originalId", originalDocId);
+            Add(returned, "$originalKind", originalKind.ToString());
+            Add(returned, "$returnId", returnDoc.DocId);
+            using var reader = returned.ExecuteReader();
+            while (reader.Read())
+                previouslyReturned[Convert.ToInt32(reader.GetValue(0), CultureInfo.InvariantCulture)] =
+                    Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
+        }
+
+        if (returnDoc.Lines.Count == 0)
+            throw new InvalidOperationException("A sales return requires at least one original invoice line.");
+
+        foreach (var line in returnDoc.Lines)
+        {
+            if (!sourceLines.TryGetValue(line.LineNo, out var source))
+                throw new InvalidOperationException($"Return line {line.LineNo} does not exist on original invoice '{originalDocNo}'.");
+            if (line.MaterialId != source.MaterialId ||
+                !string.Equals(line.Unit ?? string.Empty, source.Unit, StringComparison.OrdinalIgnoreCase) ||
+                line.UnitPrice != source.UnitPrice ||
+                line.DiscountPct != source.DiscountPct ||
+                !string.Equals(line.TaxCode ?? string.Empty, source.TaxCode, StringComparison.OrdinalIgnoreCase) ||
+                line.TaxRate != source.TaxRate ||
+                !string.Equals(line.TaxCalculationMode ?? "Exclusive", source.TaxMode, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"Return line {line.LineNo} must retain the original material, unit, price, discount and tax settings.");
+            if (line.Qty <= 0m ||
+                previouslyReturned.GetValueOrDefault(line.LineNo) + line.Qty > source.Qty)
+                throw new InvalidOperationException(
+                    $"Return quantity for original line {line.LineNo} exceeds the remaining returnable quantity on invoice '{originalDocNo}'.");
         }
     }
 
