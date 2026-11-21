@@ -214,12 +214,13 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             string docStatus;
             string documentCurrency;
             await using (var doc = CreateCommand(connection, transaction,
-                $"SELECT CAST(company_id AS TEXT), doc_no, party_id, grand_total, paid_amount, status, COALESCE(currency_code, 'SAR') FROM {table} WHERE CAST(company_id AS TEXT) IN (@company, @documentCompany) AND doc_id = @doc AND {NotDeleted}"
+                $"SELECT CAST(company_id AS TEXT), doc_no, party_id, grand_total, paid_amount, status, COALESCE(currency_code, 'SAR') FROM {table} WHERE CAST(company_id AS TEXT) IN (@company, @documentCompany) AND doc_id = @doc AND doc_kind = @invoiceKind AND {NotDeleted}"
                 + (_provider == "PostgreSQL" ? " FOR UPDATE" : "")))
             {
                 Add(doc, "@company", companyId.Trim());
                 Add(doc, "@documentCompany", documentCompanyKey);
                 Add(doc, "@doc", docId);
+                Add(doc, "@invoiceKind", PartyKindToInvoiceKind(partyKind));
                 await using var reader = await doc.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                     throw new InvalidOperationException("The document was not found for this company.");
