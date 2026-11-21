@@ -384,7 +384,7 @@ public static class PartyLedger
                 WHERE CAST(company_id AS TEXT) = @documentCompany
                   AND doc_id = @doc
                   AND paid_amount + 0.005 >= @amount
-                  AND is_deleted = {(isPg ? "FALSE" : "0")}
+                  AND COALESCE(is_deleted, {(isPg ? "FALSE" : "0")}) = {(isPg ? "FALSE" : "0")}
                 """);
             Add(release, "@amount", allocation.Amount);
             Add(release, "@documentCompany", actualDocumentCompany);
