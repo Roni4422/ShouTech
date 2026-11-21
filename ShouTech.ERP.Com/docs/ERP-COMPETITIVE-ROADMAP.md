@@ -1,5 +1,8 @@
 # ShouTech ERP Competitive Gap Assessment and Delivery Roadmap
 
+> **Current consolidated assessment (2026-11-21):** See [COMPETITIVE_GAP_ASSESSMENT_2026-11-21.md](COMPETITIVE_GAP_ASSESSMENT_2026-11-21.md) for the full current comparison against Manager.io, ERPNext, Odoo, Al-Ameen 10 and Phenix 10, including the current branch evidence snapshot, prioritized gaps and release acceptance gates. This document remains the detailed engineering roadmap and historical workflow/source review.
+
+
 **Target:** Make ShouTech a commercially credible offline-first desktop ERP that can compete with Odoo and ERPNext in the business workflows relevant to its target customers.
 
 **Baseline branch:** `work/full-app-stabilization-2026-11-18`  
