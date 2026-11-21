@@ -909,6 +909,13 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             }
             else
             {
+                var delivered = await LinkedQuantitiesAsync(
+                    connection, transaction, side, order.CompanyId, orderDocId,
+                    CommercialDocKinds.DeliveryNote, cancellationToken).ConfigureAwait(false);
+                if (delivered.Values.Any(quantity => quantity > 0m))
+                    throw new InvalidOperationException(
+                        $"Sales order '{order.DocNo}' already has posted delivery notes. Create the invoice from the delivery note so stock is not issued twice.");
+
                 var billed = await LinkedQuantitiesAsync(
                     connection, transaction, side, order.CompanyId, orderDocId, invoiceKind, cancellationToken).ConfigureAwait(false);
                 var remainingByMaterial = new Dictionary<long, decimal>();
