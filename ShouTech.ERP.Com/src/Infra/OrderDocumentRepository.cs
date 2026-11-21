@@ -772,6 +772,9 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                         throw new InvalidOperationException("Every supplier invoice line must identify a material from the purchase order.");
                     if (supplied.Qty <= 0m)
                         throw new InvalidOperationException("Supplier invoice quantities must be greater than zero.");
+                    if (supplied.UnitPrice < 0m || supplied.DiscountPct < 0m || supplied.DiscountPct > 100m
+                        || supplied.TaxRate < 0m || supplied.TaxRate > 100m)
+                        throw new InvalidOperationException("Supplier invoice price, discount, or tax rate is outside the allowed range.");
                     if (!sourceByMaterial.TryGetValue(materialId, out var source))
                         throw new InvalidOperationException($"Material '{materialId}' is not part of purchase order '{order.DocNo}'.");
                     var remaining = remainingByMaterial.GetValueOrDefault(materialId);
@@ -1080,7 +1083,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                              @receiptCost, @receiptRate, @invoiceCost, @invoiceRate,
                              @receiptBase, @invoiceBase, @varianceBase, @actor)
                         """);
-                    Add(insert, "@id", _provider == "PostgreSQL" ? matchId : matchId.ToString("D"));
+                    Add(insert, "@id", _provider == "PostgreSQL" ? (object)matchId : matchId.ToString("D"));
                     Add(insert, "@company", order.CompanyId.ToString("D"));
                     Add(insert, "@order", purchaseOrderId);
                     Add(insert, "@receipt", receipt.DocId);
