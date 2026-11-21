@@ -918,8 +918,10 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                     CommercialLineSnapshot source;
                     if (supplied.SourceLineNo is int sourceLineNo)
                     {
-                        if (!sourceByLineNumber.TryGetValue(sourceLineNo, out source!) || source.MaterialId != materialId)
+                        if (!sourceByLineNumber.TryGetValue(sourceLineNo, out var matchedSource)
+                            || matchedSource.MaterialId != materialId)
                             throw new InvalidOperationException($"Purchase-order line '{sourceLineNo}' does not belong to material '{materialId}'.");
+                        source = matchedSource;
                     }
                     else
                     {
