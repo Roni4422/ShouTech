@@ -721,7 +721,7 @@ public static class InvRepo
     private static void UnsettleOriginalOnPosReturn(
         DbConnection connection, DbTransaction tx, string companyGuidKey,
         long originalDocId, long partyId, InvDoc returnDoc,
-        decimal refundCollected, string userId)
+        decimal refundCollected)
     {
         if (refundCollected <= 0m) return;
 
@@ -786,6 +786,7 @@ public static class InvRepo
                     hasBase && !reader.IsDBNull(4) ? Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture) : null,
                     hasBase && !reader.IsDBNull(5) ? Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture) : null,
                     hasBase && !reader.IsDBNull(6) ? Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture) : returnDoc.ExchangeRate));
+            }
         }
 
         var remaining = refundCollected;
