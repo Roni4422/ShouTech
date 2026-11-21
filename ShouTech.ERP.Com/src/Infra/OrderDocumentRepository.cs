@@ -543,6 +543,73 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         return quantities;
     }
 
+    private async Task<IReadOnlyDictionary<int, decimal>> LinkedQuantitiesBySourceLineAsync(
+        DbConnection connection, DbTransaction? transaction, CommercialDocSide side,
+        Guid companyId, long sourceDocId, string targetDocKind,
+        IReadOnlyList<CommercialLineSnapshot> sourceLines, CancellationToken cancellationToken)
+    {
+        var (docs, lines) = Tables(side);
+        await using var command = CreateCommand(connection, transaction, $"""
+            SELECT l.line_no, l.material_id, SUM(l.qty)
+            FROM document_links dl
+            JOIN {docs} d
+              ON d.company_id = dl.company_id
+             AND d.doc_id = dl.target_doc_id
+             AND d.doc_kind = dl.target_doc_kind
+            JOIN {lines} l
+              ON l.doc_id = d.doc_id
+            WHERE dl.company_id = @company
+              AND dl.source_doc_id = @sourceId
+              AND dl.target_doc_kind = @targetKind
+              AND d.status = @posted
+              AND d.is_deleted = 0
+            GROUP BY l.line_no, l.material_id
+            """);
+        Add(command, "@company", companyId.ToString("D"));
+        Add(command, "@sourceId", sourceDocId);
+        Add(command, "@targetKind", targetDocKind);
+        Add(command, "@posted", CommercialDocumentStatus.Posted);
+
+        var quantities = new Dictionary<int, decimal>();
+        var legacyByMaterial = new Dictionary<long, decimal>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            var lineNo = Convert.ToInt32(reader.GetValue(0), CultureInfo.InvariantCulture);
+            var materialId = reader.IsDBNull(1)
+                ? (long?)null
+                : Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture);
+            var qty = Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture);
+            var sourceLineExists = sourceLines.Any(line => line.LineNo == lineNo && line.MaterialId == materialId);
+            if (sourceLineExists)
+            {
+                quantities[lineNo] = quantities.GetValueOrDefault(lineNo) + qty;
+            }
+            else if (materialId is long legacyMaterialId)
+            {
+                legacyByMaterial[legacyMaterialId] = legacyByMaterial.GetValueOrDefault(legacyMaterialId) + qty;
+            }
+        }
+
+        foreach (var (materialId, legacyQty) in legacyByMaterial)
+        {
+            var remaining = legacyQty;
+            foreach (var sourceLine in sourceLines
+                .Where(line => line.MaterialId == materialId)
+                .OrderBy(line => line.LineNo))
+            {
+                var available = Math.Max(0m, sourceLine.Qty - quantities.GetValueOrDefault(sourceLine.LineNo));
+                var take = Math.Min(available, remaining);
+                if (take <= 0m) continue;
+                quantities[sourceLine.LineNo] = quantities.GetValueOrDefault(sourceLine.LineNo) + take;
+                remaining -= take;
+                if (remaining <= 0m) break;
+            }
+        }
+
+        return quantities;
+    }
+
     public async Task<long> CreatePurchaseReceiptAsync(
         Guid companyId, long purchaseOrderId, string receiptDocNo, DateOnly receiptDate,
         IReadOnlyList<CommercialLineDraft> receivedLines, string userId,
