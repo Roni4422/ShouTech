@@ -67,6 +67,9 @@ public sealed class OrdWin : BaseWin, IWindowMode
     private readonly Button _btnRemLine = new();
     private readonly Button _btnPrint = new();
 
+    private bool _isReceiving;
+    private bool _isConverting;
+
     private readonly TextBlock _lblTotal = new();
     private readonly TextBlock _lblStatus = new();
 
@@ -556,6 +559,9 @@ public sealed class OrdWin : BaseWin, IWindowMode
             ShowWarningMessage(T("OrderDoc.SaveFirst"));
             return;
         }
+        if (_isConverting) return;
+        _isConverting = true;
+        UpdateEditState();
         try
         {
             string invoiceDocNo;
@@ -590,6 +596,11 @@ public sealed class OrdWin : BaseWin, IWindowMode
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OrdWin.Convert");
             ShowWarningMessage(ex.Message);
         }
+        finally
+        {
+            _isConverting = false;
+            UpdateEditState();
+        }
     }
 
     private async Task ReceiveAsync()
@@ -605,6 +616,11 @@ public sealed class OrdWin : BaseWin, IWindowMode
             return;
         }
 
+        if (_isReceiving) return;
+        _isReceiving = true;
+        UpdateEditState();
+        try
+        {
         long? receiptWarehouseId;
         try
         {
@@ -746,6 +762,12 @@ public sealed class OrdWin : BaseWin, IWindowMode
         {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OrdWin.Receive");
             ShowWarningMessage(ex.Message);
+        }
+        }
+        finally
+        {
+            _isReceiving = false;
+            UpdateEditState();
         }
     }
 
@@ -952,8 +974,8 @@ public sealed class OrdWin : BaseWin, IWindowMode
         _txtNotes.IsEnabled = editable;
         _btnSave.IsEnabled = editable;
         _btnPost.IsEnabled = editable && _docId is not null;
-        _btnConvert.IsEnabled = _status == CommercialDocumentStatus.Posted;
-        _btnReceipt.IsEnabled = _kind == OrdKind.Purchase && _status == CommercialDocumentStatus.Posted && _docId is not null;
+        _btnConvert.IsEnabled = !_isConverting && _status == CommercialDocumentStatus.Posted;
+        _btnReceipt.IsEnabled = !_isReceiving && _kind == OrdKind.Purchase && _status == CommercialDocumentStatus.Posted && _docId is not null;
         _btnClose.IsEnabled = _status == CommercialDocumentStatus.Posted;
         _btnCancel.IsEnabled = _status is CommercialDocumentStatus.Draft or CommercialDocumentStatus.Posted;
         _btnAddLine.IsEnabled = editable;
