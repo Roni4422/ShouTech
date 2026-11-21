@@ -129,8 +129,8 @@ public static class InvRepo
     public static long SaveDraft(InvDoc doc)
     {
         ArgumentNullException.ThrowIfNull(doc);
-        if (doc.Status == InvDocStatus.Posted)
-            throw new InvalidOperationException("Posted documents cannot be overwritten. Use a return document.");
+        if (doc.Status != InvDocStatus.Draft)
+            throw new InvalidOperationException("Only Draft documents can be overwritten. Posted or in-progress documents require reconciliation or a return document.");
 
         DocSchema.Ensure();
         doc.RenumberLines();
@@ -858,9 +858,9 @@ public static class InvRepo
         }
 
         ClaimDedicatedPost(docId, kind, userId);
+        string engineDocNo;
         try
         {
-            string engineDocNo;
             if (kind == InvDocKind.StockTransfer)
             {
                 engineDocNo = PostTransferForDocument(doc);
@@ -870,8 +870,6 @@ public static class InvRepo
                 PostCountForDocument(doc);
                 engineDocNo = string.Empty;
             }
-            if (!string.IsNullOrEmpty(engineDocNo))
-                LinkEngineDocumentNo(docId, kind, engineDocNo);
         }
         catch (Exception engineFailure)
         {
@@ -882,11 +880,30 @@ public static class InvRepo
             catch (Exception revertFailure)
             {
                 throw new InvalidOperationException(
-                    $"Posting document '{doc.DocNo}' failed ({engineFailure.Message}) and its status could not be reverted to Draft; the document may read Posted without stock effects. Reconcile it manually before retrying.",
+                    $"Posting document '{doc.DocNo}' failed ({engineFailure.Message}) and its Posting claim could not be reverted to Draft. Reconcile the document before retrying.",
                     revertFailure);
             }
             throw;
         }
+
+        // The stock engine has committed its own transaction. Never revert
+        // to Draft after this point: doing so would allow a retry to duplicate
+        // stock. If finalization fails or the process stops here, the durable
+        // Posting state exposes the reconciliation requirement instead of
+        // falsely presenting the document as Posted or Draft.
+        try
+        {
+            CompleteDedicatedPost(docId, kind, userId);
+        }
+        catch (Exception finalizeFailure)
+        {
+            throw new InvalidOperationException(
+                $"Stock effects for document '{doc.DocNo}' were committed, but its posting state could not be finalized. The document remains Posting; do not retry. Reconcile it before further processing.",
+                finalizeFailure);
+        }
+
+        if (!string.IsNullOrEmpty(engineDocNo))
+            LinkEngineDocumentNo(docId, kind, engineDocNo);
     }
 
     private static string PostTransferForDocument(InvDoc doc)
@@ -988,12 +1005,16 @@ public static class InvRepo
     }
 
     private static void ClaimDedicatedPost(long docId, InvDocKind kind, string userId)
-        => SetDedicatedStatus(docId, kind, from: "Draft", to: "Posted", userId,
-            "Post failed — document may already be posted.");
+        => SetDedicatedStatus(docId, kind, from: "Draft", to: "Posting", userId: null,
+            "The document is not a Draft or another posting operation has already claimed it.");
 
     private static void RevertDedicatedClaim(long docId, InvDocKind kind)
-        => SetDedicatedStatus(docId, kind, from: "Posted", to: "Draft", userId: null,
-            "The document status could not be reverted to Draft.");
+        => SetDedicatedStatus(docId, kind, from: "Posting", to: "Draft", userId: null,
+            "The document posting claim could not be reverted to Draft.");
+
+    private static void CompleteDedicatedPost(long docId, InvDocKind kind, string userId)
+        => SetDedicatedStatus(docId, kind, from: "Posting", to: "Posted", userId,
+            "Stock effects were committed, but the document could not be finalized as Posted. Reconcile before retrying.");
 
     private static void SetDedicatedStatus(long docId, InvDocKind kind, string from, string to, string? userId, string failureMessage)
     {
@@ -1006,12 +1027,16 @@ public static class InvRepo
         cmd.CommandText = DatabaseRuntime.IsPostgreSql()
             ? $"""
                UPDATE {headerTable}
-               SET status=$to, posted_by=$user, posted_at=NOW()
+               SET status=$to,
+                   posted_by=CASE WHEN $to='Posted' THEN $user ELSE posted_by END,
+                   posted_at=CASE WHEN $to='Posted' THEN NOW() ELSE posted_at END
                WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND status=$from;
                """
             : $"""
                UPDATE {headerTable}
-               SET status=$to, posted_by=$user, posted_at=datetime('now')
+               SET status=$to,
+                   posted_by=CASE WHEN $to='Posted' THEN $user ELSE posted_by END,
+                   posted_at=CASE WHEN $to='Posted' THEN datetime('now') ELSE posted_at END
                WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND status=$from;
                """;
         Add(cmd, "$to", to);
@@ -1182,8 +1207,13 @@ public static class InvRepo
                 WarehouseName = ReadString(reader, "warehouse_name"),
                 CurrencyCode = reader.GetString(reader.GetOrdinal("currency_code")),
                 ExchangeRate = Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("exchange_rate")), CultureInfo.InvariantCulture),
-                Status = string.Equals(reader.GetString(reader.GetOrdinal("status")), "Posted", StringComparison.OrdinalIgnoreCase)
-                    ? InvDocStatus.Posted : InvDocStatus.Draft,
+                Status = reader.GetString(reader.GetOrdinal("status")).ToUpperInvariant() switch
+                {
+                    "POSTED" => InvDocStatus.Posted,
+                    "POSTING" => InvDocStatus.Posting,
+                    "CANCELLED" => InvDocStatus.Cancelled,
+                    _ => InvDocStatus.Draft
+                },
                 TaxCode = reader.IsDBNull(reader.GetOrdinal("tax_code")) ? null : reader.GetString(reader.GetOrdinal("tax_code")),
                 DefaultTaxRate = Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("tax_rate")), CultureInfo.InvariantCulture),
                 Notes = reader.IsDBNull(reader.GetOrdinal("notes")) ? null : reader.GetString(reader.GetOrdinal("notes")),
