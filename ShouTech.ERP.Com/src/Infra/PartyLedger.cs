@@ -354,13 +354,14 @@ public static class PartyLedger
                 $"""
                 UPDATE {documentTable}
                 SET paid_amount = CASE WHEN paid_amount <= @amount + 0.005 THEN 0 ELSE paid_amount - @amount END
-                WHERE CAST(company_id AS TEXT) = @documentCompany
+                WHERE CAST(company_id AS TEXT) IN (@documentCompany, @company)
                   AND doc_id = @doc
                   AND paid_amount + 0.005 >= @amount
                   AND is_deleted = {(isPg ? "FALSE" : "0")}
                 """);
             Add(release, "@amount", allocation.Amount);
             Add(release, "@documentCompany", allocation.DocumentCompany);
+            Add(release, "@company", companyCode);
             Add(release, "@doc", allocation.DocumentId);
             if (release.ExecuteNonQuery() != 1)
                 throw new InvalidOperationException(
