@@ -59,7 +59,7 @@ Purchase documents are company-scoped. Posted source documents remain auditable;
 - Posted payment vouchers are reversed; they are not deleted.
 - The reversal creates mirrored journal lines and a mirrored party-ledger entry.
 - Any allocations made from the original payment voucher are removed in the same reversal transaction, and each affected purchase invoice's paid amount is reduced by the released allocation.
-- The original payment ledger row and allocation audit history remain traceable through the original voucher and reversal journal. If an affected document cannot be updated consistently, the entire reversal transaction rolls back.
+- Each released allocation is copied to `payment_allocation_reversal_audit` with its original allocation identity, payment ledger, invoice, amount, allocator, note, releasing user, and reversal journal. The active allocation is then removed and the invoice paid amount is restored. If an affected document or audit row cannot be written consistently, the entire reversal transaction rolls back.
 
 ## 7. Integrity and acceptance checks
 
@@ -87,7 +87,7 @@ The purchase-to-pay flow must pass the following checks before release:
 - Order/receipt/invoice UI: `cod/app/src/Views/OrdWin.cs`
 - Supplier payment voucher: `cod/app/src/Views/CshWin.cs`
 - Supplier payment allocation: `src/Infra/ReconciliationRepository.cs` and `cod/app/src/Views/PayRecWin.cs`
-- Voucher reversal and allocation release: `src/Infra/JournalRepository.cs`, `src/Infra/GlPosting.cs`, and `src/Infra/PartyLedger.cs`
+- Voucher reversal and allocation release/audit: `src/Infra/JournalRepository.cs`, `src/Infra/GlPosting.cs`, and `src/Infra/PartyLedger.cs`; audit schema: `dba/mig/sqlite/079_payment_allocation_reversal_audit.sql` and `dba/mig/postgresql/079_payment_allocation_reversal_audit.sql`
 - Receipt/invoice matching schema: `dba/mig/sqlite/078_purchase_receipt_invoice_matches.sql` and `dba/mig/postgresql/078_purchase_receipt_invoice_matches.sql`
 - Regression coverage: `tests/Kern.Tests/OrderChainStep9Tests.cs` and `tests/Kern.Tests/PartyUnificationTests.cs`
 
