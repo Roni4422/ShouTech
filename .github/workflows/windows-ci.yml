@@ -2,7 +2,9 @@ name: Windows CI
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - work/full-app-stabilization-2026-11-18
   pull_request:
     branches: [main]
   workflow_dispatch:
