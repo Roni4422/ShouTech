@@ -153,6 +153,7 @@ public sealed record PosReturnableLine(
     decimal TaxRate, int? WarehouseId, decimal QtyAlreadyReturned)
 {
     public decimal QtyReturnable => QtySold - QtyAlreadyReturned;
+    public string TaxCalculationMode { get; init; } = "Exclusive";
 }
 
 /// <summary>The original posted POS bill a return is taken against.</summary>
