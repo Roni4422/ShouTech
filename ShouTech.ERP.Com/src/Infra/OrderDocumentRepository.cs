@@ -770,27 +770,39 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 remainingByMaterial[group.Key] = Math.Max(0m, remaining);
             }
 
+            var remainingBySourceLine = new Dictionary<int, decimal>();
+            foreach (var group in order.Lines.GroupBy(line => line.MaterialId ?? -line.LineNo))
+            {
+                var available = remainingByMaterial.GetValueOrDefault(group.Key);
+                foreach (var sourceLine in group.OrderBy(line => line.LineNo))
+                {
+                    var lineAvailable = Math.Min(sourceLine.Qty, available);
+                    remainingBySourceLine[sourceLine.LineNo] = Math.Max(0m, lineAvailable);
+                    available -= lineAvailable;
+                }
+            }
+
             var invoiceLines = new List<CommercialLineDraft>();
             if (invoiceLineOverrides is null)
             {
                 foreach (var line in order.Lines)
                 {
-                    var key = line.MaterialId ?? -line.LineNo;
-                    var remaining = Math.Min(line.Qty, remainingByMaterial.GetValueOrDefault(key));
+                    var remaining = remainingBySourceLine.GetValueOrDefault(line.LineNo);
                     if (remaining <= 0m)
                         continue;
-                    remainingByMaterial[key] -= remaining;
                     invoiceLines.Add(new CommercialLineDraft(
                         line.MaterialId, line.MaterialCode, line.Description, line.Unit,
-                        remaining, line.UnitPrice, line.DiscountPct, line.TaxRate, line.WarehouseId));
+                        remaining, line.UnitPrice, line.DiscountPct, line.TaxRate, line.WarehouseId,
+                        line.LineNo));
                 }
             }
             else
             {
+                var sourceByLineNumber = order.Lines.ToDictionary(line => line.LineNo);
                 var sourceByMaterial = order.Lines
                     .Where(line => line.MaterialId is not null)
                     .GroupBy(line => line.MaterialId!.Value)
-                    .ToDictionary(group => group.Key, group => group.First());
+                    .ToDictionary(group => group.Key, group => group.ToArray());
                 foreach (var supplied in invoiceLineOverrides)
                 {
                     if (supplied.MaterialId is not long materialId || materialId <= 0)
@@ -800,17 +812,31 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                     if (supplied.UnitPrice < 0m || supplied.DiscountPct < 0m || supplied.DiscountPct > 100m
                         || supplied.TaxRate < 0m || supplied.TaxRate > 100m)
                         throw new InvalidOperationException("Supplier invoice price, discount, or tax rate is outside the allowed range.");
-                    if (!sourceByMaterial.TryGetValue(materialId, out var source))
-                        throw new InvalidOperationException($"Material '{materialId}' is not part of purchase order '{order.DocNo}'.");
-                    var remaining = remainingByMaterial.GetValueOrDefault(materialId);
+
+                    CommercialLineSnapshot source;
+                    if (supplied.SourceLineNo is int sourceLineNo)
+                    {
+                        if (!sourceByLineNumber.TryGetValue(sourceLineNo, out source!) || source.MaterialId != materialId)
+                            throw new InvalidOperationException($"Purchase-order line '{sourceLineNo}' does not belong to material '{materialId}'.");
+                    }
+                    else
+                    {
+                        if (!sourceByMaterial.TryGetValue(materialId, out var matchingSources))
+                            throw new InvalidOperationException($"Material '{materialId}' is not part of purchase order '{order.DocNo}'.");
+                        if (matchingSources.Length != 1)
+                            throw new InvalidOperationException($"Specify the purchase-order line number for duplicated material '{materialId}'.");
+                        source = matchingSources[0];
+                    }
+
+                    var remaining = remainingBySourceLine.GetValueOrDefault(source.LineNo);
                     if (supplied.Qty > remaining)
                         throw new InvalidOperationException(
-                            $"Supplier invoice quantity for material '{materialId}' exceeds the received, unbilled quantity ({remaining}).");
-                    remainingByMaterial[materialId] = remaining - supplied.Qty;
+                            $"Supplier invoice quantity for purchase-order line '{source.LineNo}' exceeds its received, unbilled quantity ({remaining}).");
+                    remainingBySourceLine[source.LineNo] = remaining - supplied.Qty;
                     invoiceLines.Add(new CommercialLineDraft(
                         source.MaterialId, source.MaterialCode, source.Description, source.Unit,
                         supplied.Qty, supplied.UnitPrice, supplied.DiscountPct, supplied.TaxRate,
-                        supplied.WarehouseId ?? source.WarehouseId));
+                        supplied.WarehouseId ?? source.WarehouseId, source.LineNo));
                 }
             }
             if (invoiceLines.Count == 0)
