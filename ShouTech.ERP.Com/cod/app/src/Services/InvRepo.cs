@@ -2792,7 +2792,7 @@ public static class InvRepo
         var notDeleted = DatabaseRuntime.IsPostgreSql() ? "is_deleted = FALSE" : "is_deleted = 0";
 
         string originalDocNo;
-        await using (var original = connection.CreateCommand())
+        using (var original = connection.CreateCommand())
         {
             original.Transaction = transaction;
             original.CommandText = $"""
