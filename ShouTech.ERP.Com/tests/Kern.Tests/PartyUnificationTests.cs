@@ -158,6 +158,53 @@ public sealed class PartyUnificationTests
         Assert.Equal(400m, ExecScalar(db, $"SELECT paid_amount FROM sales_documents WHERE doc_id = {docId};"));
     }
 
+    [Fact]
+    public async Task SupplierPayment_IsAllocatedToPostedPurchaseInvoice()
+    {
+        using var db = await SeededAsync();
+        var supplierRepo = new MasterCardRepository("SQLite", db.ConnectionString);
+        var supplier = new Party { Kind = "S", Code = "SUP-1", NameEn = "Settlement Supplier", CreditLimit = 0m };
+        await supplierRepo.SavePartyAsync(CompanyCode, supplier, Actor);
+        Assert.True(supplier.LedgerId > 0);
+
+        var purchaseId = (long)ExecScalar(db,
+            $"INSERT INTO purchase_documents (company_id, doc_kind, doc_no, doc_date, party_id, party_name, currency_code, grand_total, paid_amount, status) VALUES ('{CompanyCode}', 'PUR', 'PUR-SUP-1', '2026-03-01', {supplier.LedgerId}, 'Settlement Supplier', 'SAR', 1000, 0, 'Posted'); SELECT last_insert_rowid();");
+        Exec(db,
+            $"INSERT INTO party_ledger (company_id, party_kind, party_id, doc_kind, doc_id, doc_no, entry_date, debit, credit, currency_code) VALUES ('{CompanyCode}', 'S', {supplier.LedgerId}, 'PUR', {purchaseId}, 'PUR-SUP-1', '2026-03-01', 0, 1000, 'SAR');");
+
+        var journalRepo = new JournalRepository("SQLite", db.ConnectionString);
+        var journal = new JournalService(journalRepo);
+        var cashId = await journalRepo.ResolveAccountIdAsync(db.CompanyId, "131");
+        var payableId = await journalRepo.ResolveAccountIdAsync(db.CompanyId, "2201");
+        var paymentId = await journal.CreateDraftAsync(db.CompanyId, new DateOnly(2026, 3, 5),
+            "Supplier payment PAY-SUP-1", Actor,
+            new[]
+            {
+                new JournalLineRequest(payableId, 600m, 0m),
+                new JournalLineRequest(cashId, 0m, 600m)
+            },
+            documentNumber: "PAY-SUP-1");
+        Exec(db,
+            $"INSERT INTO voucher_party_links (journal_entry_id, company_id, party_kind, party_id, party_code, doc_kind, doc_no, amount, currency_code, created_by) VALUES ('{paymentId:D}', '{CompanyCode}', 'S', {supplier.LedgerId}, 'SUP-1', 'PAY', 'PAY-SUP-1', 600, 'SAR', '{Actor}');");
+        await journal.PostAsync(paymentId, Actor);
+
+        var recon = new ReconciliationRepository("SQLite", db.ConnectionString);
+        var open = Assert.Single(await recon.GetOpenDocumentsAsync(CompanyCode, "S"));
+        Assert.Equal("PUR-SUP-1", open.DocNo);
+        Assert.Equal(1000m, open.OpenAmount);
+        var payment = Assert.Single(await recon.GetPaymentsAsync(CompanyCode, "S"));
+        Assert.Equal("PAY-SUP-1", payment.DocNo);
+        Assert.Equal(600m, payment.Available);
+
+        await recon.AllocateAsync(CompanyCode, "S", payment.LedgerId, "PURCHASE", purchaseId, 450m, Actor, "Partial supplier settlement");
+
+        Assert.Equal(550m, ExecScalar(db, $"SELECT paid_amount FROM purchase_documents WHERE doc_id = {purchaseId};"));
+        Assert.Equal(550m, Assert.Single(await recon.GetOpenDocumentsAsync(CompanyCode, "S")).OpenAmount);
+        Assert.Equal(150m, Assert.Single(await recon.GetPaymentsAsync(CompanyCode, "S")).Available);
+        Assert.Equal(1m, ExecScalar(db,
+            $"SELECT COUNT(*) FROM payment_allocations WHERE company_id = '{CompanyCode}' AND payment_ledger_id = (SELECT ledger_id FROM party_ledger WHERE company_id = '{CompanyCode}' AND doc_kind = 'PAY' AND doc_no = 'PAY-SUP-1') AND doc_table = 'PURCHASE' AND doc_id = {purchaseId} AND amount = 450;"));
+    }
+
     // ------------------------------------------------------------ invoice / POS paid at posting
 
     [Fact]
@@ -277,7 +324,7 @@ public sealed class PartyUnificationTests
         foreach (var (code, name) in new[]
         {
             ("131", "Cash"), ("1201", "Receivable"), ("1203", "Inventory"),
-            ("301", "Sales"), ("401", "COGS")
+            ("2201", "Payable"), ("301", "Sales"), ("401", "COGS")
         })
         {
             AccRepo.Save(null, new AccRepo.AccRec(
