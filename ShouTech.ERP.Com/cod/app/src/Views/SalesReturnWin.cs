@@ -155,26 +155,26 @@ public sealed class SalesReturnWin : BaseWin
         var quantities = SelectedQuantities();
         var selectedLines = _original.Lines.Where(line =>
             quantities.TryGetValue(line.LineNo, out var quantity) && quantity > 0m).ToArray();
-        var subtotal = selectedLines.Sum(line =>
-            decimal.Round(quantities[line.LineNo] * line.UnitPrice * (1m - line.DiscountPct / 100m),
-                4, MidpointRounding.AwayFromZero));
-        var tax = selectedLines.Sum(line =>
-        {
-            var lineSubtotal = decimal.Round(
-                quantities[line.LineNo] * line.UnitPrice * (1m - line.DiscountPct / 100m),
-                4, MidpointRounding.AwayFromZero);
-            return decimal.Round(lineSubtotal * line.TaxRate / 100m, 4, MidpointRounding.AwayFromZero);
-        });
+        var subtotal = selectedLines.Sum(line => ScaledLine(line, quantities[line.LineNo]).LineSubtotal);
+        var tax = selectedLines.Sum(line => ScaledLine(line, quantities[line.LineNo]).LineTax);
         var discount = PosTenderMath.ProRata(_original.LinesDiscountAmount, subtotal, LinesSubtotal(_original));
         var extra = PosTenderMath.ProRata(_original.LinesExtraAmount, subtotal, LinesSubtotal(_original));
         var total = decimal.Round(subtotal - discount + extra + tax, 4, MidpointRounding.AwayFromZero);
         _returnTotal.Text = $"{T("SalesReturn.Total")}: {F2Ui.Fmt(total)} {_original.CurrencyCode}";
     }
 
+    private static InvLine ScaledLine(InvLine source, decimal quantity)
+        => new()
+        {
+            Qty = quantity,
+            UnitPrice = source.UnitPrice,
+            DiscountPct = source.DiscountPct,
+            TaxRate = source.TaxRate,
+            TaxCalculationMode = source.TaxCalculationMode
+        };
+
     private static decimal LinesSubtotal(InvDoc invoice)
-        => invoice.Lines.Sum(line => decimal.Round(
-            line.Qty * line.UnitPrice * (1m - line.DiscountPct / 100m),
-            4, MidpointRounding.AwayFromZero));
+        => invoice.Lines.Sum(line => line.LineSubtotal);
 
     private Dictionary<int, decimal> SelectedQuantities()
         => _rows.Where(row => row.ReturnQty > 0m).ToDictionary(row => row.LineNo, row => row.ReturnQty);
@@ -206,9 +206,7 @@ public sealed class SalesReturnWin : BaseWin
                 .Where(line => quantities.TryGetValue(line.LineNo, out var quantity) && quantity > 0m)
                 .OrderBy(line => line.LineNo)
                 .ToArray();
-            var selectedSubtotal = selected.Sum(line =>
-                decimal.Round(quantities[line.LineNo] * line.UnitPrice * (1m - line.DiscountPct / 100m),
-                    4, MidpointRounding.AwayFromZero));
+            var selectedSubtotal = selected.Sum(line => ScaledLine(line, quantities[line.LineNo]).LineSubtotal);
 
             var returnDoc = new InvDoc
             {
