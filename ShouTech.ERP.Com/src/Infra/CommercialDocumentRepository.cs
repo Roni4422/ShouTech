@@ -803,7 +803,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
               AND link.source_doc_id = @orderId
               AND link.target_doc_kind = @deliveryKind
               AND delivery.status = @posted
-              AND delivery.is_deleted = 0
+              AND CAST(delivery.is_deleted AS TEXT) IN ('0', 'false')
               AND delivery.doc_id <> @currentId
             GROUP BY line.material_id, line.unit
             """,
