@@ -35,7 +35,7 @@ not a claim that every procurement feature in the ERP is complete.
 - Users can enter actual supplier unit prices and discounts. Tax is sourced from company tax rules and the tax-rate column is hidden when tax is disabled.
 - The repository rejects taxable supplier invoices unless the company explicitly enabled its tax system; selecting a country alone does not activate tax.
 - A supplier invoice cannot be posted before a receipt or for quantities beyond posted, unbilled receipts.
-- Each invoice line is allocated FIFO against receipt lines. The allocation is persisted in
+- Each invoice line retains its original purchase-order line number and is allocated FIFO against receipt lines for that same source line. Duplicate material cards on separate PO lines therefore retain their own quantity and cost history. The allocation is persisted in
   `purchase_receipt_invoice_matches`, including receipt/invoice line IDs, quantities,
   historical costs, exchange rates, and base-currency variance.
 - Invoice posting does not move stock a second time.
