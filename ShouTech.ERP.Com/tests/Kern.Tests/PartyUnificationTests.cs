@@ -219,7 +219,7 @@ public sealed class PartyUnificationTests
 
         await recon.AllocateAsync(CompanyCode, "S", payment.LedgerId, "PURCHASE", purchaseId, 450m, Actor, "Partial supplier settlement");
 
-        Assert.Equal(550m, ExecScalar(db, $"SELECT paid_amount FROM purchase_documents WHERE doc_id = {purchaseId};"));
+        Assert.Equal(450m, ExecScalar(db, $"SELECT paid_amount FROM purchase_documents WHERE doc_id = {purchaseId};"));
         Assert.Equal(550m, Assert.Single(await recon.GetOpenDocumentsAsync(CompanyCode, "S")).OpenAmount);
         Assert.Equal(150m, Assert.Single(await recon.GetPaymentsAsync(CompanyCode, "S")).Available);
         Assert.Equal(1m, ExecScalar(db,
