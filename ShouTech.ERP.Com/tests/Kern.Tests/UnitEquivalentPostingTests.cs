@@ -128,6 +128,34 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public void InventoryCount_ReplayDoesNotDuplicateStockEvenIfWarehouseIsLaterDeactivated()
+        {
+            using var ctx = CreateContext(unitsJson: UnitsJson, balanceQty: 10m, balanceAvg: 8m);
+            var lines = new[]
+            {
+                new StkPost.StockCountLine(1, "MAT-EQ", 7m, 8m)
+            };
+
+            var firstResult = StkPost.PostCount(
+                1, new DateTime(2026, 1, 5), "Physical count", lines, "INV:InventoryCount:replay-test");
+
+            Assert.Equal(1, firstResult);
+            Assert.Equal(7m, ctx.BalanceQty());
+
+            ctx.Execute("UPDATE warehouses SET is_active=0 WHERE company_id='TEST-EQUIV' AND warehouse_id=1;");
+
+            var replayResult = StkPost.PostCount(
+                1, new DateTime(2026, 1, 5), "Physical count", lines, "INV:InventoryCount:replay-test");
+
+            Assert.Equal(firstResult, replayResult);
+            Assert.Equal(7m, ctx.BalanceQty());
+            Assert.Equal(1m, ctx.ScalarDecimal(
+                "SELECT COUNT(*) FROM material_stock_movements WHERE movement_type='COUNT_CLOSE';"));
+            Assert.Equal(1m, ctx.ScalarDecimal(
+                "SELECT COUNT(*) FROM stock_posting_operations WHERE company_id='TEST-EQUIV' AND operation_key='INV:InventoryCount:replay-test';"));
+        }
+
+        [Fact]
         public void DedicatedPostingReceipt_IsDurableCompanyScopedAndTypeSafe()
         {
             using var ctx = CreateContext(unitsJson: UnitsJson, balanceQty: 10m, balanceAvg: 8m);
@@ -198,6 +226,15 @@ namespace Kern.Tests
             public decimal BalanceQty() =>
                 ScalarDecimal("SELECT available_qty FROM material_stock_balances WHERE material_id=1");
 
+            public void Execute(string sql)
+            {
+                using var connection = new SqliteConnection($"Data Source={_databasePath}");
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = sql;
+                command.ExecuteNonQuery();
+            }
+
             public void Dispose()
             {
                 _settingsField.SetValue(null, _oldSettings);
@@ -240,6 +277,10 @@ namespace Kern.Tests
                 using (var cmd = connection.CreateCommand())
                 {
                     cmd.CommandText = """
+                        INSERT INTO warehouses
+                          (warehouse_id, company_id, warehouse_code, warehouse_name_ar, is_active, is_deleted)
+                        VALUES
+                          (1, 'TEST-EQUIV', 1, 'Main warehouse', 1, 0);
                         INSERT INTO materials
                           (company_id, code, name_ar, name_en, is_stocked, is_service, allow_negative,
                            unit1, unit1_factor, unit2, unit2_factor, units_json)
