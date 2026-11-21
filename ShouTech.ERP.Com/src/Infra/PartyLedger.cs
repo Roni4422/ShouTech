@@ -239,7 +239,7 @@ public static class PartyLedger
             // in base exactly. Rows without stored base fall through to
             // rate resolution at the original row's rate.
             if (row.DocKind is "RCV" or "PAY")
-                UnallocateVoucherPayments(connection, transaction, provider, company, originalEntryId, reversalEntryId, userId);
+                UnallocateVoucherPayments(connection, transaction, provider, row.Company, company, originalEntryId, reversalEntryId, userId);
 
             WriteEntry(connection, transaction, provider, company, row.Kind, row.Party,
                 row.DocKind, row.DocId, row.DocNo,
@@ -262,7 +262,7 @@ public static class PartyLedger
     /// </summary>
     private static void UnallocateVoucherPayments(
         DbConnection connection, DbTransaction transaction, string provider,
-        string companyCode, Guid journalEntryId, Guid reversalJournalId, string userId)
+        string ledgerCompanyId, string companyCode, Guid journalEntryId, Guid reversalJournalId, string userId)
     {
         if (!TableExists(connection, transaction, provider, "payment_allocations")
             || !ColumnExists(connection, transaction, provider, "party_ledger", "journal_entry_id"))
@@ -273,7 +273,7 @@ public static class PartyLedger
             "SELECT ledger_id FROM party_ledger WHERE company_id = @company AND journal_entry_id = @journal AND doc_kind IN ('RCV','PAY')"
             + (IsPostgres(provider) ? " FOR UPDATE" : "")))
         {
-            Add(payment, "@company", companyCode);
+            Add(payment, "@company", ledgerCompanyId);
             Add(payment, "@journal", journalEntryId.ToString("D"));
             var value = payment.ExecuteScalar();
             if (value is null or DBNull) return;
