@@ -1403,6 +1403,121 @@ public static class InvRepo
         return value is null or DBNull ? null : Convert.ToInt64(value, CultureInfo.InvariantCulture);
     }
 
+    public static InvDoc? LoadByNumber(string docNo, InvDocKind kind)
+    {
+        if (string.IsNullOrWhiteSpace(docNo)) return null;
+        DocSchema.Ensure();
+        var table = kind.IsSales() ? "sales_documents" : "purchase_documents";
+        var connectionString = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(connectionString)) return null;
+
+        long? docId = null;
+        using (var connection = Open(connectionString))
+        {
+            var guidKey = ResolveCompanyGuidOrNull(connection, null)?.ToString("D") ?? Company;
+            using var command = connection.CreateCommand();
+            var notDeleted = DatabaseRuntime.IsPostgreSql() ? "is_deleted = FALSE" : "is_deleted = 0";
+            command.CommandText = $"""
+                SELECT doc_id
+                FROM {table}
+                WHERE (company_id = $company OR company_id = $guid)
+                  AND doc_kind = $kind AND doc_no = $docNo
+                  AND status = 'Posted' AND {notDeleted}
+                ORDER BY doc_id DESC
+                LIMIT 1
+                """;
+            Add(command, "$company", Company);
+            Add(command, "$guid", guidKey);
+            Add(command, "$kind", new InvDoc { Kind = kind }.KindCode);
+            Add(command, "$docNo", docNo.Trim());
+            var value = command.ExecuteScalar();
+            if (value is not null and not DBNull)
+                docId = Convert.ToInt64(value, CultureInfo.InvariantCulture);
+        }
+
+        return docId is long id ? Load(id, kind) : null;
+    }
+
+    public static IReadOnlyDictionary<int, decimal> GetAlreadyReturnedQuantities(
+        long originalDocId, InvDocKind originalKind)
+    {
+        if (originalDocId <= 0) throw new ArgumentOutOfRangeException(nameof(originalDocId));
+        if (originalKind is not (InvDocKind.SalesInvoice or InvDocKind.PosSale))
+            throw new ArgumentOutOfRangeException(nameof(originalKind));
+
+        var connectionString = DatabaseRuntime.GetConnectionString()
+            ?? throw new InvalidOperationException("No database connection.");
+        using var connection = Open(connectionString);
+        var guidKey = ResolveCompanyGuidOrNull(connection, null)?.ToString("D") ?? Company;
+        var notDeleted = DatabaseRuntime.IsPostgreSql() ? "header.is_deleted = FALSE" : "header.is_deleted = 0";
+        using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            SELECT line.line_no, COALESCE(SUM(line.qty), 0)
+            FROM sales_documents header
+            INNER JOIN sales_document_lines line ON line.doc_id = header.doc_id
+            WHERE (header.company_id = $company OR header.company_id = $guid)
+              AND header.doc_kind = 'SRT'
+              AND header.original_doc_id = $originalId
+              AND header.original_doc_kind = $originalKind
+              AND header.status = 'Posted'
+              AND {notDeleted}
+            GROUP BY line.line_no
+            """;
+        Add(command, "$company", Company);
+        Add(command, "$guid", guidKey);
+        Add(command, "$originalId", originalDocId);
+        Add(command, "$originalKind", originalKind.ToString());
+
+        var result = new Dictionary<int, decimal>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+            result[Convert.ToInt32(reader.GetValue(0), CultureInfo.InvariantCulture)] =
+                Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
+        return result;
+    }
+
+    public static void RestoreSalesReturnLineNumbers(long returnDocId, IReadOnlyList<int> originalLineNumbers)
+    {
+        if (returnDocId <= 0) throw new ArgumentOutOfRangeException(nameof(returnDocId));
+        ArgumentNullException.ThrowIfNull(originalLineNumbers);
+        var connectionString = DatabaseRuntime.GetConnectionString()
+            ?? throw new InvalidOperationException("No database connection.");
+        using var connection = Open(connectionString);
+        using var transaction = connection.BeginTransaction();
+        var lineIds = new List<long>();
+        using (var read = connection.CreateCommand())
+        {
+            read.Transaction = transaction;
+            read.CommandText = "SELECT line_id FROM sales_document_lines WHERE doc_id = $doc ORDER BY line_id;";
+            Add(read, "$doc", returnDocId);
+            using var reader = read.ExecuteReader();
+            while (reader.Read())
+                lineIds.Add(Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture));
+        }
+        if (lineIds.Count != originalLineNumbers.Count)
+            throw new InvalidOperationException("The saved return lines no longer match the original invoice lines.");
+
+        using (var temporary = connection.CreateCommand())
+        {
+            temporary.Transaction = transaction;
+            temporary.CommandText = "UPDATE sales_document_lines SET line_no = -line_id WHERE doc_id = $doc;";
+            Add(temporary, "$doc", returnDocId);
+            temporary.ExecuteNonQuery();
+        }
+        for (var index = 0; index < lineIds.Count; index++)
+        {
+            using var update = connection.CreateCommand();
+            update.Transaction = transaction;
+            update.CommandText = "UPDATE sales_document_lines SET line_no = $lineNo WHERE doc_id = $doc AND line_id = $lineId;";
+            Add(update, "$lineNo", originalLineNumbers[index]);
+            Add(update, "$doc", returnDocId);
+            Add(update, "$lineId", lineIds[index]);
+            if (update.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException("A saved return line could not be linked to its original invoice line.");
+        }
+        transaction.Commit();
+    }
+
     public static InvDoc? Load(long docId, InvDocKind kind)
     {
         DocSchema.Ensure();
