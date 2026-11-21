@@ -509,37 +509,41 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             // VAT account is configured). DLV/QUO/SO keep no GL entry —
             // the delivery note moves stock without amounts, and the
             // invoice is the chain's accounting document.
-            if (docKind == CommercialDocKinds.SalesInvoice && grandTotal > 0)
+            if (docKind == CommercialDocKinds.SalesInvoice)
             {
-                var companyGuid = Guid.Parse(companyId);
-                var splitTax = taxAmount > 0
-                    && GlPosting.TryResolveAccount(connection, transaction, _provider, companyGuid, GlAccounts.OutputVat) is not null;
-                var glLines = new List<GlLineRequest>
-                {
-                    new(GlAccounts.Receivable, grandTotal, 0m),
-                    new(GlAccounts.SalesRevenue, 0m, splitTax ? subtotal : grandTotal, costCenter)
-                };
-                if (splitTax)
-                    glLines.Add(new GlLineRequest(GlAccounts.OutputVat, 0m, taxAmount));
-
                 // A DLV-linked invoice does not issue stock again. Its COGS
                 // is released from the cost already captured by the delivery
                 // note's stock movements, exactly once.
                 var deliveryCogs = await GetDeliveryCogsForInvoiceAsync(
                     connection, transaction, docId, companyId, cancellationToken).ConfigureAwait(false);
-                if (deliveryCogs > 0m)
-                {
-                    glLines.Add(new GlLineRequest(GlAccounts.Cogs, deliveryCogs, 0m, costCenter));
-                    glLines.Add(new GlLineRequest(GlAccounts.Inventory, 0m, deliveryCogs));
-                }
 
-                GlPosting.PostInTransaction(connection, transaction, _provider,
-                    new GlDocumentRequest(companyGuid,
-                        DateOnly.Parse(docDate, CultureInfo.InvariantCulture),
-                        $"SAL {docNo}", CommercialDocKinds.SalesInvoice,
-                        docId.ToString(CultureInfo.InvariantCulture), docNo,
-                        currencyCode, exchangeRate, glLines),
-                    userId);
+                if (grandTotal > 0m || deliveryCogs > 0m)
+                {
+                    var companyGuid = Guid.Parse(companyId);
+                    var splitTax = taxAmount > 0
+                        && GlPosting.TryResolveAccount(connection, transaction, _provider, companyGuid, GlAccounts.OutputVat) is not null;
+                    var glLines = new List<GlLineRequest>();
+                    if (grandTotal > 0m)
+                    {
+                        glLines.Add(new GlLineRequest(GlAccounts.Receivable, grandTotal, 0m));
+                        glLines.Add(new GlLineRequest(GlAccounts.SalesRevenue, 0m, splitTax ? subtotal : grandTotal, costCenter));
+                        if (splitTax)
+                            glLines.Add(new GlLineRequest(GlAccounts.OutputVat, 0m, taxAmount));
+                    }
+                    if (deliveryCogs > 0m)
+                    {
+                        glLines.Add(new GlLineRequest(GlAccounts.Cogs, deliveryCogs, 0m, costCenter));
+                        glLines.Add(new GlLineRequest(GlAccounts.Inventory, 0m, deliveryCogs));
+                    }
+
+                    GlPosting.PostInTransaction(connection, transaction, _provider,
+                        new GlDocumentRequest(companyGuid,
+                            DateOnly.Parse(docDate, CultureInfo.InvariantCulture),
+                            $"SAL {docNo}", CommercialDocKinds.SalesInvoice,
+                            docId.ToString(CultureInfo.InvariantCulture), docNo,
+                            currencyCode, exchangeRate, glLines),
+                        userId);
+                }
             }
 
             await using var update = CreateCommand(connection, transaction,
