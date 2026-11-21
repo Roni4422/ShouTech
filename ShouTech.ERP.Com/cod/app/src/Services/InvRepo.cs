@@ -570,7 +570,7 @@ public static class InvRepo
         {
             UnsettleOriginalOnPosReturn(
                 connection, tx, guidKey, originalPosDocId, originalPartyId,
-                doc, doc.PaidAmount, userId);
+                doc, doc.PaidAmount);
         }
 
         // Party ledger: sales increase receivable (debit customer),
