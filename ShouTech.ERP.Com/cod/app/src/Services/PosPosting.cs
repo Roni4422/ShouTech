@@ -134,7 +134,7 @@ public static class PosPosting
             PartyCode = original.PartyCode ?? string.Empty,
             PartyName = original.PartyName ?? string.Empty,
             CurrencyCode = original.CurrencyCode,
-            ExchangeRate = 1m,
+            ExchangeRate = original.ExchangeRate,
             LinesDiscountAmount = PosTenderMath.ProRata(original.DiscountAmount, returnedSubtotal, original.LinesSubtotal),
             LinesExtraAmount = PosTenderMath.ProRata(original.ExtraAmount, returnedSubtotal, original.LinesSubtotal),
             PaidAmount = cashRefund + cardRefund,
