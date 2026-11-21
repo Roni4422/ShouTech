@@ -127,7 +127,7 @@ public static class RibbonNav
             // ------------------------------------------------ Orders
             case "Orders.DefineOrders": ShowDef(DefSets.OrderDefinitions, owner); return true;
             case "Orders.SearchOrders": Show(new DocSearchWin(DocSearchWin.DocSearchMode.Orders), owner); return true;
-            case "Orders.OrderReceiptDelivery":
+            case "Orders.OrderReceiptDelivery": Show(new SalesDeliveryWin(), owner); return true;
             case "Orders.TrackOrders": Show(new OrderTrackWin(), owner); return true;
             case "Orders.OrderPayments": Show(new OrderPaymentsWin(), owner); return true;
 
