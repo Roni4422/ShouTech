@@ -1033,6 +1033,8 @@ public static class InvRepo
             ?? throw new InvalidOperationException("Document not found.");
         if (doc.Status == InvDocStatus.Posted)
             throw new InvalidOperationException("Document is already posted.");
+        if (doc.Status is not (InvDocStatus.Draft or InvDocStatus.Posting))
+            throw new InvalidOperationException("Only Draft or recoverable Posting documents can be posted.");
         if (doc.Lines.Count == 0)
             throw new InvalidOperationException("The document has no lines to post.");
         if (batchSerialByLine is not null)
@@ -1048,22 +1050,32 @@ public static class InvRepo
             }
         }
 
-        ClaimDedicatedPost(docId, kind, userId);
+        var operationKey = $"INV:{kind}:{docId.ToString(CultureInfo.InvariantCulture)}";
+        var wasAlreadyClaimed = doc.Status == InvDocStatus.Posting;
+        if (!wasAlreadyClaimed)
+            ClaimDedicatedPost(docId, kind, userId);
+
         string engineDocNo;
         try
         {
             if (kind == InvDocKind.StockTransfer)
             {
-                engineDocNo = PostTransferForDocument(doc);
+                engineDocNo = PostTransferForDocument(doc, operationKey);
             }
             else
             {
-                PostCountForDocument(doc);
+                PostCountForDocument(doc, operationKey);
                 engineDocNo = string.Empty;
             }
         }
         catch (Exception engineFailure)
         {
+            var operationType = kind == InvDocKind.StockTransfer ? "StockTransfer" : "InventoryCount";
+            if (StkPost.IsOperationCompleted(operationKey, operationType))
+                throw new InvalidOperationException(
+                    $"Stock effects for document '{doc.DocNo}' were committed, but posting recovery could not continue. The document remains Posting; do not retry manually. Reconcile it before further processing.",
+                    engineFailure);
+
             try
             {
                 RevertDedicatedClaim(docId, kind);
@@ -1097,7 +1109,7 @@ public static class InvRepo
             LinkEngineDocumentNo(docId, kind, engineDocNo);
     }
 
-    private static string PostTransferForDocument(InvDoc doc)
+    private static string PostTransferForDocument(InvDoc doc, string operationKey)
     {
         if (doc.WarehouseId is not int sourceId)
             throw new StkPost.StockTransferException("INV-TRF-001", "A source warehouse is required for a stock transfer.");
@@ -1124,10 +1136,10 @@ public static class InvRepo
         if (lines.Count == 0)
             throw new StkPost.StockTransferException("INV-TRF-001", "Add at least one material quantity to transfer.");
 
-        return StkPost.PostTransfer(sourceId, targetId, doc.DocDate, reason, lines);
+        return StkPost.PostTransfer(sourceId, targetId, doc.DocDate, reason, lines, operationKey);
     }
 
-    private static void PostCountForDocument(InvDoc doc)
+    private static void PostCountForDocument(InvDoc doc, string operationKey)
     {
         if (doc.WarehouseId is not int warehouseId)
             throw new InvalidOperationException("A warehouse is required for an inventory count document.");
@@ -1169,7 +1181,7 @@ public static class InvRepo
         if (lines.Count == 0)
             throw new InvalidOperationException("The document has no lines to post.");
 
-        StkPost.PostCount(warehouseId, doc.DocDate, reason, lines);
+        StkPost.PostCount(warehouseId, doc.DocDate, reason, lines, operationKey);
     }
 
     /// <summary>The material id for a document line: the stored id when
