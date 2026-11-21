@@ -9,6 +9,7 @@ using ShouTech.App;
 using ShouTech.App.Configuration;
 using ShouTech.App.Reporting.Invoices;
 using ShouTech.App.Services;
+using ShouTech.Application.Services;
 using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Infrastructure;
