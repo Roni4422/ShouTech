@@ -696,3 +696,23 @@ The following official product pages and documentation were used as the public b
 - Update this document, the module catalog and the developer roadmap when an acceptance gate changes.
 - Keep all work on the approved stabilization branch unless the owner explicitly requests another branch.
 - Do not merge into `main` without explicit approval.
+
+
+## Procurement implementation update
+
+The purchase-to-pay core is now being implemented as a transactional document chain rather than a collection of disconnected window types:
+
+`Purchase Order → Goods Receipt (RCV) → Supplier Invoice (PUR) → Supplier Payment Voucher (PAY) → Reconciliation`
+
+Implemented on this branch:
+- Partial purchase receipts with ordered-quantity controls and stock/GRNI posting in one transaction.
+- Stock-tracked receipts update inventory at discounted cost and receipt-date FX; non-stock/service receipts accrue to expense without changing stock.
+- Supplier invoices are limited to received, unbilled quantities and can use actual supplier prices and discounts.
+- FIFO line-level receipt/invoice matches persist receipt and invoice line IDs, quantities, cost snapshots, FX rates, and variance.
+- GRNI clears at historical receipt base value; purchase price/FX variance posts separately to account 402.
+- Invoice posting does not receive stock a second time.
+- Supplier payment vouchers can be allocated to GUID-scoped purchase invoices while retaining the company-code party-ledger scope.
+
+Implementation contract and limits: `docs/PURCHASE_TO_PAY_WORKFLOW.md`.
+
+The following remain open and must not be represented as completed procurement capability: RFQ sourcing/quotation comparison, supplier invoice external-reference uniqueness, landed costs/freight/duty, lot/serial/expiry receipt capture, supplier returns/credit notes, and GRNI aging/exception reports.
