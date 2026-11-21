@@ -51,7 +51,12 @@ not a claim that every procurement feature in the ERP is complete.
 - Supplier payments are posted through the existing cash/bank journal voucher flow.
 - A voucher-party link writes the supplier debit to the party ledger in the same posting transaction.
 - Payment Reconciliation allocates the payment to the open supplier invoice and updates
-  `purchase_documents.paid_amount` atomically.
+  `purchase_documents.paid_amount` atomically. Allocation is rejected when the payment and invoice
+  currencies differ; there is no implicit same-number cross-currency settlement.
+- Reversing an allocated supplier payment releases its active allocations and restores each
+  affected invoice's open balance inside the journal-reversal transaction. Each released allocation
+  is preserved with allocator, note, amount, invoice identity, releasing user, and reversal journal
+  in `payment_allocation_reversal_audit`.
 - The payment ledger uses the company code while order-chain documents use the stable company
   identifier. Migration 077 adds `payment_allocations.document_company_id` so both scopes are
   retained and allocations remain company-isolated.
@@ -61,6 +66,7 @@ not a claim that every procurement feature in the ERP is complete.
 - Runtime code does not create tables.
 - Migration 077: `payment_allocations.document_company_id` for dual company-key reconciliation.
 - Migration 078: `purchase_receipt_invoice_matches` for line-level three-way matching and variance audit.
+- Migration 079: `payment_allocation_reversal_audit` for retained allocation provenance when a linked payment voucher is reversed.
 - GRNI control mapping currently uses account 2203 (accrued liabilities); the match table is the
   receipt-level subledger supporting reconciliation.
 
@@ -74,6 +80,8 @@ not a claim that every procurement feature in the ERP is complete.
 - Service receipts accrue to expense without changing stock.
 - Supplier payment voucher appears in the unallocated supplier-payment list.
 - Payment allocation settles a GUID-scoped invoice while retaining the company-code payment key.
+- Cross-currency supplier payment allocation is rejected without changing invoice/payment balances.
+- Reversing an allocated supplier payment releases invoice balances and retains the full allocation-release audit record.
 - SQLite and PostgreSQL migrations are repeatable.
 
 ## Remaining procurement scope
