@@ -1980,6 +1980,7 @@
     "Status": "Order Status",
     "ConvertToInvoice": "Convert to Invoice",
     "CreateSupplierInvoice": "Create Supplier Invoice",
+    "PurchaseOrderLine": "PO Line",
     "SupplierInvoiceCreated": "Supplier invoice posted",
     "NoReceivedToInvoice": "There are no received quantities available to invoice.",
     "CreateReceipt": "Receive Goods",
