@@ -922,7 +922,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             // VAT account is configured). A zero-value sales conversion
             // still posts its COGS pair (GlPosting skips 0/0 lines, so
             // the free-goods entry carries exactly the cost legs).
-            if (grandTotal > 0 || cogsAmount > 0)
+            if (grandTotal > 0 || cogsAmount > 0 || grniBaseAmount > 0)
             {
                 var splitTax = invoiceTax > 0 && GlPosting.TryResolveAccount(connection, transaction, _provider,
                     order.CompanyId, side == CommercialDocSide.Sales ? GlAccounts.OutputVat : GlAccounts.InputVat) is not null;
