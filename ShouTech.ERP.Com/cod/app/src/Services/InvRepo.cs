@@ -1820,15 +1820,116 @@ public static class InvRepo
 
         if (PartyLedger.TableExists(connection, tx, provider, "payment_allocations"))
         {
-            using var del = connection.CreateCommand();
-            del.Transaction = tx;
-            del.CommandText = """
-                DELETE FROM payment_allocations
-                WHERE company_id=$company AND doc_id=$orig AND doc_table IN ('SALES', 'PURCHASE');
-                """;
-            Add(del, "$company", Company);
-            Add(del, "$orig", original.DocId);
-            del.ExecuteNonQuery();
+            var documentTable = original.IsSalesSide ? "SALES" : "PURCHASE";
+            var hasDocumentCompany = PartyLedger.ColumnExists(
+                connection, tx, provider, "payment_allocations", "document_company_id");
+            var documentCompanyExpression = hasDocumentCompany
+                ? "COALESCE(document_company_id, company_id)"
+                : "company_id";
+            var allocations = new List<(string Id, long PaymentLedgerId, string DocumentCompany,
+                decimal Amount, string? AllocatedBy, string? Note)>();
+            using (var load = connection.CreateCommand())
+            {
+                load.Transaction = tx;
+                load.CommandText = $"""
+                    SELECT allocation_id, payment_ledger_id, {documentCompanyExpression},
+                           amount, allocated_by, note
+                    FROM payment_allocations
+                    WHERE company_id=$company AND doc_table=$table AND doc_id=$orig
+                    ORDER BY allocation_id;
+                    """;
+                Add(load, "$company", Company);
+                Add(load, "$table", documentTable);
+                Add(load, "$orig", original.DocId);
+                using var reader = load.ExecuteReader();
+                while (reader.Read())
+                {
+                    allocations.Add((
+                        Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty,
+                        Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture),
+                        Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture) ?? Company,
+                        Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture),
+                        reader.IsDBNull(4) ? null : Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture),
+                        reader.IsDBNull(5) ? null : Convert.ToString(reader.GetValue(5), CultureInfo.InvariantCulture)));
+                }
+            }
+
+            if (allocations.Count > 0)
+            {
+                if (!PartyLedger.TableExists(connection, tx, provider, "payment_allocation_reversal_audit"))
+                    throw new InvalidOperationException(
+                        "Payment-allocation reversal audit schema is missing. Apply the provider migrations before reversing this invoice.");
+
+                // The audit must identify the actual posted journal of the
+                // return document, not merely its document number or ID.
+                var companyGuid = ResolveCompanyGuid(connection, tx);
+                Guid reversalJournalId;
+                using (var journal = connection.CreateCommand())
+                {
+                    journal.Transaction = tx;
+                    journal.CommandText = """
+                        SELECT journal_entry_id
+                        FROM journal_entries
+                        WHERE company_id=$companyGuid AND source_doc_type=$sourceType
+                          AND source_doc_id=$sourceId AND status=1
+                        ORDER BY posted_at DESC
+                        LIMIT 1;
+                        """;
+                    Add(journal, "$companyGuid", DatabaseRuntime.IsPostgreSql()
+                        ? companyGuid
+                        : companyGuid.ToString("D", CultureInfo.InvariantCulture));
+                    Add(journal, "$sourceType", reversal.KindCode);
+                    Add(journal, "$sourceId", reversal.DocId.ToString(CultureInfo.InvariantCulture));
+                    var journalValue = journal.ExecuteScalar();
+                    if (journalValue is null or DBNull
+                        || !Guid.TryParse(Convert.ToString(journalValue, CultureInfo.InvariantCulture), out reversalJournalId))
+                        throw new InvalidOperationException(
+                            "The posted return journal could not be found; payment allocations were not released.");
+                }
+
+                foreach (var allocation in allocations)
+                {
+                    using var audit = connection.CreateCommand();
+                    audit.Transaction = tx;
+                    audit.CommandText = """
+                        INSERT INTO payment_allocation_reversal_audit
+                            (audit_id, company_id, allocation_id, payment_ledger_id, doc_table, doc_id,
+                             document_company_id, amount, allocated_by, note, released_by, reversal_journal_id)
+                        VALUES
+                            ($audit, $company, $allocation, $payment, $table, $doc,
+                             $documentCompany, $amount, $allocatedBy, $note, $releasedBy, $reversalJournal);
+                        """;
+                    var auditId = Guid.NewGuid();
+                    Add(audit, "$audit", DatabaseRuntime.IsPostgreSql() ? auditId : auditId.ToString("D"));
+                    Add(audit, "$company", Company);
+                    Add(audit, "$allocation", DatabaseRuntime.IsPostgreSql()
+                        ? Guid.Parse(allocation.Id)
+                        : allocation.Id);
+                    Add(audit, "$payment", allocation.PaymentLedgerId);
+                    Add(audit, "$table", documentTable);
+                    Add(audit, "$doc", original.DocId);
+                    Add(audit, "$documentCompany", allocation.DocumentCompany);
+                    Add(audit, "$amount", allocation.Amount);
+                    Add(audit, "$allocatedBy", (object?)allocation.AllocatedBy ?? DBNull.Value);
+                    Add(audit, "$note", (object?)allocation.Note ?? DBNull.Value);
+                    Add(audit, "$releasedBy", userId);
+                    Add(audit, "$reversalJournal", DatabaseRuntime.IsPostgreSql()
+                        ? reversalJournalId
+                        : reversalJournalId.ToString("D"));
+                    audit.ExecuteNonQuery();
+                }
+
+                using var del = connection.CreateCommand();
+                del.Transaction = tx;
+                del.CommandText = """
+                    DELETE FROM payment_allocations
+                    WHERE company_id=$company AND doc_table=$table AND doc_id=$orig;
+                    """;
+                Add(del, "$company", Company);
+                Add(del, "$table", documentTable);
+                Add(del, "$orig", original.DocId);
+                del.ExecuteNonQuery();
+            }
         }
 
         using (var upd = connection.CreateCommand())
