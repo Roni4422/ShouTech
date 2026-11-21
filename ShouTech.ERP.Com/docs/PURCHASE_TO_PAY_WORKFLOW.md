@@ -78,7 +78,8 @@ not a claim that every procurement feature in the ERP is complete.
 - Receipt updates last purchase cost and posts inventory/GRNI.
 - Supplier price variance posts separately from GRNI.
 - Service receipts accrue to expense without changing stock.
-- Supplier payment voucher appears in the unallocated supplier-payment list and must post against the payable control account.
+- Supplier payment voucher appears in the unallocated supplier-payment list; its full balanced amount and the exact linked amount must both debit the payable control account.
+- A supplier-linked payment voucher that debits an expense account instead of Accounts Payable is rejected before any party-ledger settlement is written.
 - Payment allocation settles a GUID-scoped invoice while retaining the company-code payment key.
 - Cross-currency supplier payment allocation is rejected without changing invoice/payment balances.
 - Reversing an allocated supplier payment releases invoice balances and retains the full allocation-release audit record.
