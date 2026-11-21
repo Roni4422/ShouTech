@@ -303,6 +303,17 @@ public static class InvRepo
         var headerTable = isSales ? "sales_documents" : "purchase_documents";
         var cs = DatabaseRuntime.GetConnectionString()
             ?? throw new InvalidOperationException("No database connection.");
+
+        // DLV-linked invoices use the commercial-chain posting path:
+        // delivery already issued stock, so the invoice must not issue it again.
+        if (kind == InvDocKind.SalesInvoice && HasDeliverySourceLink(cs, docId))
+        {
+            var chainRepository = new CommercialDocumentRepository(
+                DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite", cs);
+            chainRepository.PostSalesAsync(docId, userId).GetAwaiter().GetResult();
+            return;
+        }
+
         using var connection = Open(cs);
         using var tx = connection.BeginTransaction();
         // Step 9: dual company key (code or Guid), as in Load.
@@ -2756,6 +2767,21 @@ public static class InvRepo
             AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exL760, "InvRepo.ReadLongNullable");
             return null;
         }
+    }
+
+    private static bool HasDeliverySourceLink(string connectionString, long invoiceDocId)
+    {
+        using var connection = Open(connectionString);
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT COUNT(1)
+            FROM document_links
+            WHERE target_doc_id = $invoiceId
+              AND target_doc_kind = 'SAL'
+              AND source_doc_kind = 'DLV';
+            """;
+        Add(command, "$invoiceId", invoiceDocId);
+        return Convert.ToInt32(command.ExecuteScalar(), CultureInfo.InvariantCulture) > 0;
     }
 
     private static InvDocKind? ParseDocKind(string? value)
