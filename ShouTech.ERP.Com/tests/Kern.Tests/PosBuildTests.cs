@@ -327,6 +327,38 @@ public class PosBuildTests
 
         var original = await repo.GetOriginalBillAsync(CompanyCode, posted.DocNo);
         Assert.NotNull(original);
+
+        // A later receipt voucher may also be allocated to this invoice.
+        // A POS refund must reduce only the original at-posting allocation,
+        // never consume or delete this external receipt allocation.
+        long externalPaymentLedgerId;
+        using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            connection.Open();
+            using var tx = connection.BeginTransaction();
+            externalPaymentLedgerId = PartyLedger.WriteEntry(
+                connection, tx, "SQLite", CompanyCode, "C", 7,
+                "RCV", null, "RCV-EXT-1", "2026-03-10",
+                0m, 25m, "SAR", "External receipt allocated after sale");
+            using var allocation = connection.CreateCommand();
+            allocation.Transaction = tx;
+            allocation.CommandText = """
+                INSERT INTO payment_allocations
+                    (allocation_id, company_id, party_kind, party_id, payment_ledger_id,
+                     doc_table, doc_id, doc_no, amount, allocated_by, note)
+                VALUES ($id, $company, 'C', 7, $payment,
+                        'SALES', $doc, $docNo, 25, $actor, 'External receipt allocation');
+                """;
+            allocation.Parameters.AddWithValue("$id", Guid.NewGuid().ToString("D"));
+            allocation.Parameters.AddWithValue("$company", CompanyCode);
+            allocation.Parameters.AddWithValue("$payment", externalPaymentLedgerId);
+            allocation.Parameters.AddWithValue("$doc", posted.DocId);
+            allocation.Parameters.AddWithValue("$docNo", posted.DocNo);
+            allocation.Parameters.AddWithValue("$actor", Actor);
+            allocation.ExecuteNonQuery();
+            tx.Commit();
+        }
+
         var returned = PosPosting.CreatePosReturn(original!, new Dictionary<int, decimal> { [1] = 1m },
             cashRefund: 50m, cardRefund: 0m, session.Id, "customer changed mind", Actor, NoCapture);
         Assert.Equal(InvDocStatus.Posted, returned.Status);
@@ -335,8 +367,17 @@ public class PosBuildTests
         // Settlement symmetry: sale debit 100 + settlement credit 100;
         // return credit 50 + settlement mirror debit 50 -> net zero.
         Assert.Equal(150m, ScalarDecimal(db, "SELECT COALESCE(SUM(debit),0) FROM party_ledger WHERE party_id = 7"));
-        Assert.Equal(150m, ScalarDecimal(db, "SELECT COALESCE(SUM(credit),0) FROM party_ledger WHERE party_id = 7"));
+        Assert.Equal(175m, ScalarDecimal(db, "SELECT COALESCE(SUM(credit),0) FROM party_ledger WHERE party_id = 7"));
         Assert.Equal(50m, ScalarDecimal(db, $"SELECT paid_amount FROM sales_documents WHERE doc_id = {posted.DocId}"));
+        Assert.Equal(50m, ScalarDecimal(db, $"""
+            SELECT COALESCE(SUM(pa.amount), 0)
+            FROM payment_allocations pa
+            JOIN party_ledger pl ON pl.ledger_id = pa.payment_ledger_id
+            WHERE pa.company_id = '{CompanyCode}' AND pa.doc_id = {posted.DocId}
+              AND pl.doc_id = {posted.DocId} AND pl.doc_kind = 'RCV';
+            """));
+        Assert.Equal(25m, ScalarDecimal(db,
+            $"SELECT amount FROM payment_allocations WHERE payment_ledger_id = {externalPaymentLedgerId}"));
 
         // Refund tender recorded negative on the return, in the session.
         var refundTenders = await repo.GetTendersForDocAsync(CompanyCode, returned.DocId, "SRT");
