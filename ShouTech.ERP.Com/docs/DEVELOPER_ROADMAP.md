@@ -1,5 +1,8 @@
 # ShouTech Developer Roadmap
 
+> **Competitive benchmark:** The current full product comparison and evidence-based gap assessment is maintained in [COMPETITIVE_GAP_ASSESSMENT_2026-11-21.md](COMPETITIVE_GAP_ASSESSMENT_2026-11-21.md). Use it together with this staged delivery roadmap; it does not replace the engineering Definition of Done.
+
+
 **Status:** Living engineering plan  
 **Product:** ShouTech ERP Company  
 **Active stabilization branch:** `work/full-app-stabilization-2026-11-18`  
