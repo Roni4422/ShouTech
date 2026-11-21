@@ -83,6 +83,7 @@ public sealed class InvPostCorrectnessTests
         InvRepo.SaveDraft(original);
         InvRepo.Post(original.DocId, original.Kind, Actor);
         Assert.Equal(995m, StockQty(db));
+        Assert.Equal(original.DocId, InvRepo.LoadByNumber(original.DocNo, InvDocKind.SalesInvoice)!.DocId);
 
         InvDoc BuildReturn(decimal quantity) => new()
         {
@@ -124,6 +125,8 @@ public sealed class InvPostCorrectnessTests
         InvRepo.SaveDraft(firstReturn);
         InvRepo.Post(firstReturn.DocId, InvDocKind.SalesReturn, Actor);
         Assert.Equal(998m, StockQty(db));
+        Assert.Equal(3m, InvRepo.GetAlreadyReturnedQuantities(
+            original.DocId, InvDocKind.SalesInvoice)[1]);
 
         var secondReturn = BuildReturn(3m);
         InvRepo.SaveDraft(secondReturn);
