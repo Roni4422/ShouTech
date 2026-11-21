@@ -9,3 +9,6 @@ CREATE TABLE IF NOT EXISTS stock_posting_operations (
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (company_id, operation_key)
 );
+
+ALTER TABLE sales_documents ADD COLUMN IF NOT EXISTS posting_operation_key TEXT;
+ALTER TABLE purchase_documents ADD COLUMN IF NOT EXISTS posting_operation_key TEXT;
