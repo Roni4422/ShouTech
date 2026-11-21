@@ -175,6 +175,78 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task SupplierPaymentVoucher_ReconcilesAgainstGuidScopedPurchaseInvoice()
+        {
+            var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-9103",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 30m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+                await service.CreatePurchaseReceiptAsync(orderId, new DateOnly(2026, 11, 6),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 30m) }, Actor);
+                var (invoiceId, invoiceNo) = await service.ConvertToInvoiceAsync(
+                    CommercialDocSide.Purchase, orderId, new DateOnly(2026, 11, 7), Actor);
+                Assert.StartsWith("PUR-", invoiceNo);
+
+                var journalRepository = new JournalRepository("SQLite", connectionString);
+                var journal = new JournalService(journalRepository);
+                var payableAccount = await journalRepository.ResolveAccountIdAsync(companyId, "2201");
+                var cashAccount = await journalRepository.ResolveAccountIdAsync(companyId, "131");
+                var paymentId = await journal.CreateDraftAsync(
+                    companyId, new DateOnly(2026, 11, 8), "Supplier payment PAY-9103", Actor,
+                    new[]
+                    {
+                        new JournalLineRequest(payableAccount, 60m, 0m, "Settle supplier invoice"),
+                        new JournalLineRequest(cashAccount, 0m, 60m, "Cash payment")
+                    },
+                    currencyCode: "SAR", exchangeRate: 1m, documentNumber: "PAY-9103");
+
+                using (var connection = new SqliteConnection(connectionString))
+                {
+                    connection.Open();
+                    using var command = connection.CreateCommand();
+                    command.CommandText = """
+                        INSERT INTO voucher_party_links
+                            (journal_entry_id, company_id, party_kind, party_id, party_code, doc_kind, doc_no, amount, currency_code, created_by)
+                        VALUES
+                            ($journal, $company, 'S', 9, 'SUP-1', 'PAY', 'PAY-9103', 60, 'SAR', $actor);
+                        """;
+                    command.Parameters.AddWithValue("$journal", paymentId.ToString("D"));
+                    command.Parameters.AddWithValue("$company", CompanyCode);
+                    command.Parameters.AddWithValue("$actor", Actor);
+                    command.ExecuteNonQuery();
+                }
+                await journal.PostAsync(paymentId, Actor);
+
+                var reconciliation = new ReconciliationRepository("SQLite", connectionString);
+                var openBefore = await reconciliation.GetOpenDocumentsAsync(CompanyCode, "S");
+                var invoiceRow = Assert.Single(openBefore, row => row.DocId == invoiceId);
+                Assert.Equal(60m, invoiceRow.OpenAmount);
+
+                var payment = Assert.Single(await reconciliation.GetPaymentsAsync(CompanyCode, "S"),
+                    row => row.DocNo == "PAY-9103");
+                Assert.Equal(60m, payment.Available);
+                await reconciliation.AllocateAsync(
+                    CompanyCode, "S", payment.LedgerId, "PURCHASE", invoiceId, 60m, Actor,
+                    "Full settlement of supplier invoice");
+
+                Assert.Equal(60m, Scalar(connectionString,
+                    $"SELECT paid_amount FROM purchase_documents WHERE doc_id = {invoiceId};"));
+                Assert.Equal(1m, Scalar(connectionString,
+                    $"SELECT COUNT(*) FROM payment_allocations WHERE company_id = '{CompanyCode}' AND document_company_id = '{companyId:D}' AND doc_table = 'PURCHASE' AND doc_id = {invoiceId} AND amount = 60;"));
+                Assert.Empty(await reconciliation.GetOpenDocumentsAsync(CompanyCode, "S"));
+                Assert.Empty(await reconciliation.GetPaymentsAsync(CompanyCode, "S"));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task PurchaseInvoice_CannotBeCreatedBeforeAnyGoodsReceipt()
         {
             var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
@@ -474,6 +546,8 @@ namespace Kern.Tests
                     ("$name", $"2026-{m:D2}"), ("$s", $"2026-{m:D2}-01"),
                     ("$e", new DateTime(2026, m, 1).AddMonths(1).AddDays(-1).ToString("yyyy-MM-dd")));
             }
+            Exec("INSERT INTO parties (id, company_id, kind, code, name_en, credit_limit, is_active, is_deleted, created_by, ledger_id) VALUES ($id, $company, 'S', 'SUP-1', 'Step9 Supplier', 0, 1, 0, $actor, 9);",
+                ("$id", Guid.NewGuid().ToString("D")), ("$company", companyCode), ("$actor", Actor));
             foreach (var (code, name, type) in new[]
             {
                 ("1201", "Trade Accounts Receivable", "ASSET"), ("1203", "Merchandise Inventory", "ASSET"),
