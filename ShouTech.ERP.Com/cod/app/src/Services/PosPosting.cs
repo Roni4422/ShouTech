@@ -159,7 +159,6 @@ public static class PosPosting
         var tenders = BuildRefundTenders(returnDoc.GrandTotal, cashRefund, cardRefund);
         InvRepo.Post(returnDoc.DocId, returnDoc.Kind, userId, captures,
             new PosPostingContext(sessionId, tenders));
-        PartiallyUnsettleOriginal(original, returnDoc, cashRefund + cardRefund, userId);
         return InvRepo.Load(returnDoc.DocId, returnDoc.Kind) ?? returnDoc;
     }
 
@@ -206,112 +205,6 @@ public static class PosPosting
     /// paid_amount falls by the refund. External voucher allocations
     /// are NOT touched: that money really was received, and freeing
     /// it is the full-reversal rule, not a partial return's.</summary>
-    private static void PartiallyUnsettleOriginal(PosOriginalBill original, InvDoc returnDoc, decimal refundCollected, string userId)
-    {
-        if (refundCollected <= 0 || original.PartyId is not long partyId) return;
-        var cs = DatabaseRuntime.GetConnectionString()
-            ?? throw new InvalidOperationException("No database connection.");
-        var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
-        using var connection = Open(cs);
-        using var tx = connection.BeginTransaction();
-        try
-        {
-            // (1) Mirror the at-posting settlement (doc_kind RCV/PAY,
-            // doc_id = original — the shape only InvRepo.Post writes).
-            var remaining = refundCollected;
-            using (var find = connection.CreateCommand())
-            {
-                find.Transaction = tx;
-                var hasBase = PartyLedger.ColumnExists(connection, tx, provider, "party_ledger", "base_debit");
-                find.CommandText = $"""
-                    SELECT debit, credit, currency_code{(hasBase ? ", base_debit, base_credit, exchange_rate" : string.Empty)}
-                    FROM party_ledger
-                    WHERE company_id=$company AND party_id=$pid AND doc_id=$orig
-                      AND doc_kind IN ('RCV', 'PAY');
-                    """;
-                Add(find, "$company", Company);
-                Add(find, "$pid", partyId);
-                Add(find, "$orig", original.DocId);
-                var settlements = new List<(decimal Debit, decimal Credit, string Currency, decimal? BaseDebit, decimal? BaseCredit, decimal Rate)>();
-                using (var reader = find.ExecuteReader())
-                    while (reader.Read())
-                        settlements.Add((
-                            Convert.ToDecimal(reader.GetValue(0), CultureInfo.InvariantCulture),
-                            Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture),
-                            reader.IsDBNull(2) ? original.CurrencyCode : reader.GetString(2),
-                            hasBase && !reader.IsDBNull(3) ? Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture) : null,
-                            hasBase && !reader.IsDBNull(4) ? Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture) : null,
-                            hasBase && !reader.IsDBNull(5) ? Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture) : 0m));
-                foreach (var (debit, credit, currency, baseDebit, baseCredit, rate) in settlements)
-                {
-                    if (remaining <= 0) break;
-                    var settledAmount = Math.Max(debit, credit);
-                    var mirror = Math.Min(settledAmount, remaining);
-                    if (mirror <= 0) continue;
-                    var (mDebit, mCredit) = credit >= debit ? (mirror, 0m) : (0m, mirror);
-                    PartyLedger.WriteEntry(connection, tx, provider,
-                        Company, "C", partyId,
-                        returnDoc.KindCode, returnDoc.DocId, returnDoc.DocNo,
-                        DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                        mDebit, mCredit, currency,
-                        $"POS return refund of settlement collected at posting for {original.DocNo}",
-                        exchangeRate: rate,
-                        baseDebit: baseCredit,
-                        baseCredit: baseDebit);
-                    remaining -= mirror;
-                }
-            }
-
-            // (2) Reduce the at-posting allocation(s) for this document.
-            using (var alloc = connection.CreateCommand())
-            {
-                alloc.Transaction = tx;
-                alloc.CommandText = """
-                    UPDATE payment_allocations SET amount = amount - $refund
-                    WHERE company_id=$company AND doc_id=$orig AND doc_table='SALES' AND amount > 0;
-                    """;
-                Add(alloc, "$refund", refundCollected);
-                Add(alloc, "$company", Company);
-                Add(alloc, "$orig", original.DocId);
-                alloc.ExecuteNonQuery();
-            }
-            using (var del = connection.CreateCommand())
-            {
-                del.Transaction = tx;
-                del.CommandText = """
-                    DELETE FROM payment_allocations
-                    WHERE company_id=$company AND doc_id=$orig AND doc_table='SALES' AND amount <= 0;
-                    """;
-                Add(del, "$company", Company);
-                Add(del, "$orig", original.DocId);
-                del.ExecuteNonQuery();
-            }
-
-            // (3) The original's paid_amount falls by the refund.
-            using (var upd = connection.CreateCommand())
-            {
-                upd.Transaction = tx;
-                upd.CommandText = """
-                    UPDATE sales_documents SET paid_amount = paid_amount - $refund
-                    WHERE doc_id=$id AND company_id=$company AND paid_amount >= $refund;
-                    """;
-                Add(upd, "$refund", refundCollected);
-                Add(upd, "$id", original.DocId);
-                Add(upd, "$company", Company);
-                upd.ExecuteNonQuery();
-            }
-            tx.Commit();
-        }
-        catch (Exception ex)
-        {
-            try { tx.Rollback(); }
-            catch (InvalidOperationException) { /* already completed */ }
-            AppHost.Errors.Report(ErrorCodes.PosReturnOriginalInvalid, ex, "PosPosting.PartiallyUnsettleOriginal");
-            throw new InvalidOperationException(
-                $"The POS return '{returnDoc.DocNo}' posted, but the original bill's settlement could not be adjusted by the refund {refundCollected}. Do not retry; reconcile the party ledger for '{original.DocNo}' manually.", ex);
-        }
-    }
-
     private static DbConnection Open(string connectionString)
     {
         DbConnection connection = DatabaseRuntime.IsPostgreSql()
