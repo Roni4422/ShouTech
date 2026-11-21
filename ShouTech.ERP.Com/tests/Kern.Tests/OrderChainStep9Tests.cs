@@ -323,6 +323,60 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task DuplicateMaterialLines_DistributeReceiptAndInvoiceProgressBySourceLine()
+        {
+            var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-9105",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42 - first price", "PCS", 2m, 10m),
+                        new CommercialLineDraft(42, "MAT-42", "Item 42 - second price", "PCS", 3m, 12m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+
+                var (receiptId, receiptNo) = await service.CreatePurchaseReceiptAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 11),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 11m) }, Actor);
+                var receipt = await orders.FindByIdAsync(CommercialDocSide.Purchase, receiptId);
+                Assert.Equal(2, receipt!.Lines.Count);
+                Assert.Equal(2m, receipt.Lines[0].Qty);
+                Assert.Equal(1m, receipt.Lines[1].Qty);
+                Assert.Equal(10m, receipt.Lines[0].UnitPrice);
+                Assert.Equal(12m, receipt.Lines[1].UnitPrice);
+                Assert.Equal(103m, BalanceQty(connectionString, 42));
+                Assert.Equal(1032m, BalanceValue(connectionString, 42));
+                Assert.Equal(32m, MovementCost(connectionString, receiptNo, 42));
+
+                var receivedProgress = await service.GetProgressAsync(CommercialDocSide.Purchase, orderId);
+                Assert.Equal(2m, receivedProgress.Lines[0].FulfilledQty);
+                Assert.Equal(1m, receivedProgress.Lines[1].FulfilledQty);
+                Assert.Equal(60m, receivedProgress.PerFulfilled);
+
+                var (invoiceId, invoiceNo) = await service.CreatePurchaseInvoiceAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 12),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 11m) }, Actor);
+                Assert.Equal(0m, MovementCost(connectionString, invoiceNo, 42));
+                var invoiceGl = GlByAccount(connectionString, "PUR", invoiceId);
+                Assert.Equal(32m, invoiceGl["2203"].Debit);
+                Assert.Equal(1m, invoiceGl["402"].Debit);
+                Assert.Equal(33m, invoiceGl["2201"].Credit);
+
+                var billedProgress = await service.GetProgressAsync(CommercialDocSide.Purchase, orderId);
+                Assert.Equal(2m, billedProgress.Lines[0].BilledQty);
+                Assert.Equal(1m, billedProgress.Lines[1].BilledQty);
+                Assert.Equal(100m, billedProgress.PerFulfilled);
+                Assert.Equal(100m, billedProgress.PerBilled);
+                Assert.Equal(2m, Scalar(connectionString,
+                    $"SELECT COUNT(*) FROM purchase_receipt_invoice_matches WHERE invoice_doc_id = {invoiceId};"));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task PurchaseInvoice_CannotBeCreatedBeforeAnyGoodsReceipt()
         {
             var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
