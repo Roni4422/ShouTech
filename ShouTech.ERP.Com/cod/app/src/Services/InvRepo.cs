@@ -1052,8 +1052,11 @@ public static class InvRepo
 
         var operationKey = $"INV:{kind}:{docId.ToString(CultureInfo.InvariantCulture)}";
         var wasAlreadyClaimed = doc.Status == InvDocStatus.Posting;
+        if (wasAlreadyClaimed && !HasDedicatedPostClaim(docId, kind, operationKey))
+            throw new InvalidOperationException(
+                $"Document '{doc.DocNo}' is in Posting without a matching durable recovery key. It may have been posted by an earlier application version; reconcile its stock movements before retrying.");
         if (!wasAlreadyClaimed)
-            ClaimDedicatedPost(docId, kind, userId);
+            ClaimDedicatedPost(docId, kind, userId, operationKey);
 
         string engineDocNo;
         try
@@ -1207,19 +1210,42 @@ public static class InvRepo
         return Convert.ToInt64(value, CultureInfo.InvariantCulture);
     }
 
-    private static void ClaimDedicatedPost(long docId, InvDocKind kind, string userId)
-        => SetDedicatedStatus(docId, kind, from: "Draft", to: "Posting", userId: null,
+    private static bool HasDedicatedPostClaim(long docId, InvDocKind kind, string operationKey)
+    {
+        var headerTable = kind.IsSales() ? "sales_documents" : "purchase_documents";
+        var cs = DatabaseRuntime.GetConnectionString()
+            ?? throw new InvalidOperationException("No database connection.");
+        using var connection = Open(cs);
+        var guidKey = ResolveCompanyGuidOrNull(connection, null)?.ToString("D") ?? Company;
+        using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            SELECT posting_operation_key
+            FROM {headerTable}
+            WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND status='Posting';
+            """;
+        Add(command, "$id", docId);
+        Add(command, "$company", Company);
+        Add(command, "$guid", guidKey);
+        var value = command.ExecuteScalar();
+        return value is not null and not DBNull
+            && string.Equals(Convert.ToString(value, CultureInfo.InvariantCulture),
+                operationKey, StringComparison.Ordinal);
+    }
+
+    private static void ClaimDedicatedPost(long docId, InvDocKind kind, string userId, string operationKey)
+        => SetDedicatedStatus(docId, kind, from: "Draft", to: "Posting", userId: null, operationKey,
             "The document is not a Draft or another posting operation has already claimed it.");
 
     private static void RevertDedicatedClaim(long docId, InvDocKind kind)
-        => SetDedicatedStatus(docId, kind, from: "Posting", to: "Draft", userId: null,
+        => SetDedicatedStatus(docId, kind, from: "Posting", to: "Draft", userId: null, operationKey: null,
             "The document posting claim could not be reverted to Draft.");
 
     private static void CompleteDedicatedPost(long docId, InvDocKind kind, string userId)
-        => SetDedicatedStatus(docId, kind, from: "Posting", to: "Posted", userId,
+        => SetDedicatedStatus(docId, kind, from: "Posting", to: "Posted", userId, operationKey: null,
             "Stock effects were committed, but the document could not be finalized as Posted. Reconcile before retrying.");
 
-    private static void SetDedicatedStatus(long docId, InvDocKind kind, string from, string to, string? userId, string failureMessage)
+    private static void SetDedicatedStatus(long docId, InvDocKind kind, string from, string to,
+        string? userId, string? operationKey, string failureMessage)
     {
         var headerTable = kind.IsSales() ? "sales_documents" : "purchase_documents";
         var cs = DatabaseRuntime.GetConnectionString()
@@ -1231,6 +1257,7 @@ public static class InvRepo
             ? $"""
                UPDATE {headerTable}
                SET status=$to,
+                   posting_operation_key=CASE WHEN $to='Posting' THEN $operationKey WHEN $to='Draft' THEN NULL ELSE posting_operation_key END,
                    posted_by=CASE WHEN $to='Posted' THEN $user ELSE posted_by END,
                    posted_at=CASE WHEN $to='Posted' THEN NOW() ELSE posted_at END
                WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND status=$from;
@@ -1238,11 +1265,13 @@ public static class InvRepo
             : $"""
                UPDATE {headerTable}
                SET status=$to,
+                   posting_operation_key=CASE WHEN $to='Posting' THEN $operationKey WHEN $to='Draft' THEN NULL ELSE posting_operation_key END,
                    posted_by=CASE WHEN $to='Posted' THEN $user ELSE posted_by END,
                    posted_at=CASE WHEN $to='Posted' THEN datetime('now') ELSE posted_at END
                WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND status=$from;
                """;
         Add(cmd, "$to", to);
+        Add(cmd, "$operationKey", operationKey);
         Add(cmd, "$user", to == "Posted" ? userId : null);
         Add(cmd, "$id", docId);
         Add(cmd, "$company", Company);
