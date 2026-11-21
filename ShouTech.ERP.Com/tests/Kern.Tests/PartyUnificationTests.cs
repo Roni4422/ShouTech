@@ -196,6 +196,12 @@ public sealed class PartyUnificationTests
         Assert.Equal("PAY-SUP-1", payment.DocNo);
         Assert.Equal(600m, payment.Available);
 
+        Exec(db, $"UPDATE purchase_documents SET currency_code = 'EUR' WHERE doc_id = {purchaseId};");
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            recon.AllocateAsync(CompanyCode, "S", payment.LedgerId, "PURCHASE", purchaseId, 450m, Actor));
+        Assert.Equal(0m, ExecScalar(db, $"SELECT paid_amount FROM purchase_documents WHERE doc_id = {purchaseId};"));
+        Exec(db, $"UPDATE purchase_documents SET currency_code = 'SAR' WHERE doc_id = {purchaseId};");
+
         await recon.AllocateAsync(CompanyCode, "S", payment.LedgerId, "PURCHASE", purchaseId, 450m, Actor, "Partial supplier settlement");
 
         Assert.Equal(550m, ExecScalar(db, $"SELECT paid_amount FROM purchase_documents WHERE doc_id = {purchaseId};"));
