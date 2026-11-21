@@ -331,7 +331,7 @@ public static class PartyLedger
                      @documentCompany, @amount, @allocatedBy, @note, @releasedBy, @reversal)
                 """))
             {
-                Add(audit, "@audit", isPg ? auditId : auditId.ToString("D"));
+                Add(audit, "@audit", isPg ? (object)auditId : auditId.ToString("D"));
                 Add(audit, "@company", companyCode);
                 Add(audit, "@allocation", isPg
                     ? (object)Guid.Parse(allocation.AllocationId)
@@ -344,7 +344,7 @@ public static class PartyLedger
                 Add(audit, "@allocatedBy", (object?)allocation.AllocatedBy ?? DBNull.Value);
                 Add(audit, "@note", (object?)allocation.Note ?? DBNull.Value);
                 Add(audit, "@releasedBy", userId.Trim());
-                Add(audit, "@reversal", isPg ? reversalJournalId : reversalJournalId.ToString("D"));
+                Add(audit, "@reversal", isPg ? (object)reversalJournalId : reversalJournalId.ToString("D"));
                 audit.ExecuteNonQuery();
             }
 
