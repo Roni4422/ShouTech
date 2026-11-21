@@ -224,6 +224,13 @@ public sealed class SalesReturnWin : BaseWin
                 ExchangeRate = _original.ExchangeRate,
                 TaxCode = _original.TaxCode,
                 DefaultTaxRate = _original.DefaultTaxRate,
+                ReceiptNo = _original.ReceiptNo,
+                Reference = _original.Reference,
+                BranchName = _original.BranchName,
+                SalesRepName = _original.SalesRepName,
+                CostCenter = _original.CostCenter,
+                PartyAccountName = _original.PartyAccountName,
+                GoodsAccountName = _original.GoodsAccountName,
                 LinesDiscountAmount = PosTenderMath.ProRata(
                     _original.LinesDiscountAmount, selectedSubtotal, LinesSubtotal(_original)),
                 LinesExtraAmount = PosTenderMath.ProRata(
