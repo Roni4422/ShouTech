@@ -191,6 +191,39 @@ public sealed class InvPostCorrectnessTests
     }
 
     [Fact]
+    public async Task PostedInvoice_RejectsRetryWithoutDuplicatingAnyPostingEffects()
+    {
+        using var db = await SeededAsync();
+        var party = await SavePartyAsync(db, "C", "CUST-RETRY", creditLimit: 0m);
+        var stockBefore = StockQty(db);
+        var doc = BuildDoc(InvDocKind.SalesInvoice, party.LedgerId, "CUST-RETRY",
+            qty: 2m, price: 25m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        InvRepo.SaveDraft(doc);
+
+        InvRepo.Post(doc.DocId, doc.Kind, Actor);
+
+        var postedStock = StockQty(db);
+        var journalCount = Scalar(db,
+            $"SELECT COUNT(*) FROM journal_entries WHERE source_doc_type = 'SAL' AND source_doc_id = '{doc.DocId}';");
+        var ledgerCount = Scalar(db,
+            $"SELECT COUNT(*) FROM party_ledger WHERE doc_id = {doc.DocId};");
+        var movementCount = Scalar(db,
+            $"SELECT COUNT(*) FROM material_stock_movements WHERE company_id = '{CompanyCode}' AND document_no = '{doc.DocNo}';");
+
+        Assert.Throws<InvalidOperationException>(() => InvRepo.Post(doc.DocId, doc.Kind, Actor));
+
+        Assert.Equal(InvDocStatus.Posted, InvRepo.Load(doc.DocId, doc.Kind)!.Status);
+        Assert.Equal(postedStock, StockQty(db));
+        Assert.Equal(stockBefore - 2m, postedStock);
+        Assert.Equal(journalCount, Scalar(db,
+            $"SELECT COUNT(*) FROM journal_entries WHERE source_doc_type = 'SAL' AND source_doc_id = '{doc.DocId}';"));
+        Assert.Equal(ledgerCount, Scalar(db,
+            $"SELECT COUNT(*) FROM party_ledger WHERE doc_id = {doc.DocId};"));
+        Assert.Equal(movementCount, Scalar(db,
+            $"SELECT COUNT(*) FROM material_stock_movements WHERE company_id = '{CompanyCode}' AND document_no = '{doc.DocNo}';"));
+    }
+
+    [Fact]
     public async Task PurchaseDiscount_Stored1050_Posts1050_ToPayableAndGl()
     {
         using var db = await SeededAsync();
