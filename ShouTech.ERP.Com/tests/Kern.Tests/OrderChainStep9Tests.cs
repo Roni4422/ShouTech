@@ -271,6 +271,9 @@ namespace Kern.Tests
 
                 var (invoiceId, invoiceNo) = await service.CreateSalesInvoiceFromDeliveryAsync(
                     deliveryId, new DateOnly(2026, 11, 11), Actor);
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    service.CreateSalesInvoiceFromDeliveryAsync(
+                        deliveryId, new DateOnly(2026, 11, 12), Actor));
                 await service.PostSalesChainDocumentAsync(invoiceId, Actor);
 
                 var invoice = await orders.FindByIdAsync(CommercialDocSide.Sales, invoiceId);
