@@ -7,6 +7,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Input;
 using ShouTech.App.Services;
 using ShouTech.App.Localization;
 using WpfApp = System.Windows.Application;
@@ -77,8 +78,26 @@ public abstract class BaseWin : Window
             }
         }
 
+        PreviewKeyDown += OnHelpPreviewKeyDown;
         Loaded += OnBaseLoaded;
         Closed += OnBaseClosed;
+    }
+
+    private void OnHelpPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.F1 || e.IsRepeat || this is HelpWin)
+            return;
+
+        e.Handled = true;
+        try
+        {
+            var help = new HelpWin { Owner = this };
+            help.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "BaseWin.F1Help");
+        }
     }
 
     /// <summary>Localization service owned by the application shell.</summary>
@@ -283,6 +302,71 @@ public abstract class BaseWin : Window
                 passwordBox.SetResourceReference(StyleProperty, "VisuPasswordBoxStyle");
                 break;
         }
+    }
+
+    /// <summary>
+    /// Builds the shared compact record-number strip for data-entry windows.
+    /// Order is fixed physically: next 10, next 1, number, previous 1, previous 10.
+    /// Navigation is delegated to the owning window; this class owns the UI contract.
+    /// </summary>
+    protected static StackPanel CreateRecordNumberBar(TextBox numberBox, Action<int> navigate)
+    {
+        ArgumentNullException.ThrowIfNull(numberBox);
+        ArgumentNullException.ThrowIfNull(navigate);
+
+        numberBox.Width = 104;
+        numberBox.MinWidth = 104;
+        numberBox.Height = 26;
+        numberBox.Margin = new Thickness(1, 0, 1, 0);
+        numberBox.IsReadOnly = true;
+        numberBox.Focusable = false;
+        numberBox.TextAlignment = TextAlignment.Center;
+        ApplyFieldStyle(numberBox);
+
+        var bar = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            FlowDirection = FlowDirection.LeftToRight,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(2, 2, 2, 6)
+        };
+
+        var label = new TextBlock
+        {
+            Text = T("RecordNavigation.Number"),
+            Tag = "RecordNavigation.Number",
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 5, 0)
+        };
+        label.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
+        bar.Children.Add(label);
+
+        static Button MakeButton(string glyph, string key, int delta, Action<int> onNavigate)
+        {
+            var button = new Button
+            {
+                Content = glyph,
+                Width = 23,
+                MinWidth = 23,
+                Height = 26,
+                Padding = new Thickness(0),
+                Margin = new Thickness(1, 0, 1, 0),
+                ToolTip = T(key),
+                Focusable = true
+            };
+            button.SetResourceReference(StyleProperty, "VisuButtonStyle");
+            System.Windows.Automation.AutomationProperties.SetName(button, T(key));
+            button.Click += (_, _) => onNavigate(delta);
+            return button;
+        }
+
+        bar.Children.Add(MakeButton("≫", "RecordNavigation.NextTen", 10, navigate));
+        bar.Children.Add(MakeButton("›", "RecordNavigation.NextOne", 1, navigate));
+        bar.Children.Add(numberBox);
+        bar.Children.Add(MakeButton("‹", "RecordNavigation.PreviousOne", -1, navigate));
+        bar.Children.Add(MakeButton("≪", "RecordNavigation.PreviousTen", -10, navigate));
+        return bar;
     }
 
     /// <summary>Applies RTL/LTR according to the active language code.</summary>

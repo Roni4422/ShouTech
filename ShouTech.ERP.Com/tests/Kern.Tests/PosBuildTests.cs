@@ -143,11 +143,64 @@ public class PosBuildTests
         Assert.Equal(ErrorCodes.PosSessionlessNotAllowed, error2.Code);
         Assert.Null(await service.RequireSessionForSaleAsync(CompanyCode, "T1", callerMayBypassSession: true));
 
-        var session = await service.OpenSessionAsync(CompanyCode, "T1", "Cashier", null, "SAR", 200m, Actor);
+        var missingWarehouse = await Assert.ThrowsAsync<AppError>(() =>
+            service.OpenSessionAsync(CompanyCode, "T1", "Cashier", null, "SAR", 200m, Actor));
+        Assert.Equal(ErrorCodes.PosSessionStateInvalid, missingWarehouse.Code);
+
+        var session = await service.OpenSessionAsync(CompanyCode, "T1", "Cashier", 1, "SAR", 200m, Actor);
         var error3 = await Assert.ThrowsAsync<AppError>(() =>
-            service.OpenSessionAsync(CompanyCode, "T1", "Other", null, "SAR", 0m, Actor));
+            service.OpenSessionAsync(CompanyCode, "T1", "Other", 1, "SAR", 0m, Actor));
         Assert.Equal(ErrorCodes.PosSessionAlreadyOpen, error3.Code);
         Assert.Equal(session.Id, (await service.RequireSessionForSaleAsync(CompanyCode, "T1", callerMayBypassSession: false))!.Id);
+    }
+
+    [Fact]
+    public async Task TerminalWarehouse_ResolvesCompanyScopedActiveTerminalDefinition()
+    {
+        using var db = await SeededAsync();
+        await using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            await connection.OpenAsync();
+            await using var insert = connection.CreateCommand();
+            insert.CommandText = "INSERT INTO pos_terminals (id, company_id, code, name_en, warehouse_code, is_active, is_deleted) VALUES ('terminal-1', $company, 'T1', 'Main terminal', '1', 1, 0);";
+            insert.Parameters.AddWithValue("$company", CompanyCode);
+            Assert.Equal(1, await insert.ExecuteNonQueryAsync());
+        }
+
+        var service = new PosService(new PosRepository("SQLite", db.ConnectionString));
+        Assert.Equal(1, await service.GetTerminalWarehouseIdAsync(CompanyCode, "T1"));
+        Assert.Null(await service.GetTerminalWarehouseIdAsync(CompanyCode, "T2"));
+        Assert.Null(await service.GetTerminalWarehouseIdAsync("OTHER", "T1"));
+    }
+
+    [Fact]
+    public async Task ProductSearch_ReturnsLiveStockForSelectedWarehouse_AndCompanyOnly()
+    {
+        using var db = await SeededAsync();
+        var repo = new PosRepository("SQLite", db.ConnectionString);
+        await using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            await connection.OpenAsync();
+            await using var update = connection.CreateCommand();
+            update.CommandText = "UPDATE material_stock_balances SET reserved_qty = 125 WHERE company_id = $company AND warehouse_id = 1 AND material_id = 42;";
+            update.Parameters.AddWithValue("$company", CompanyCode);
+            Assert.Equal(1, await update.ExecuteNonQueryAsync());
+        }
+
+        var products = await repo.SearchProductsAsync(CompanyCode, "MAT-42", warehouseId: 1, limit: 10);
+        var product = Assert.Single(products);
+        Assert.Equal(1000m, product.OnHandQty);
+        Assert.Equal(125m, product.ReservedQty);
+        Assert.Equal(875m, product.SellableQty);
+
+        var otherWarehouse = await repo.SearchProductsAsync(CompanyCode, "MAT-42", warehouseId: 2, limit: 10);
+        Assert.Equal(0m, Assert.Single(otherWarehouse).SellableQty);
+
+        var noWarehouse = await repo.SearchProductsAsync(CompanyCode, "MAT-42", warehouseId: null, limit: 10);
+        Assert.Equal(875m, Assert.Single(noWarehouse).SellableQty);
+
+        var otherCompany = await repo.SearchProductsAsync("OTHER", "MAT-42", warehouseId: 1, limit: 10);
+        Assert.Empty(otherCompany);
     }
 
     [Fact]
@@ -274,16 +327,58 @@ public class PosBuildTests
 
         var original = await repo.GetOriginalBillAsync(CompanyCode, posted.DocNo);
         Assert.NotNull(original);
+
+        // A later receipt voucher may also be allocated to this invoice.
+        // A POS refund must reduce only the original at-posting allocation,
+        // never consume or delete this external receipt allocation.
+        long externalPaymentLedgerId;
+        using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            connection.Open();
+            using var tx = connection.BeginTransaction();
+            externalPaymentLedgerId = PartyLedger.WriteEntry(
+                connection, tx, "SQLite", CompanyCode, "C", 7,
+                "RCV", null, "RCV-EXT-1", "2026-03-10",
+                0m, 25m, "SAR", "External receipt allocated after sale",
+                exchangeRate: 1m);
+            using var allocation = connection.CreateCommand();
+            allocation.Transaction = tx;
+            allocation.CommandText = """
+                INSERT INTO payment_allocations
+                    (allocation_id, company_id, party_kind, party_id, payment_ledger_id,
+                     doc_table, doc_id, doc_no, amount, allocated_by, note)
+                VALUES ($id, $company, 'C', 7, $payment,
+                        'SALES', $doc, $docNo, 25, $actor, 'External receipt allocation');
+                """;
+            allocation.Parameters.AddWithValue("$id", Guid.NewGuid().ToString("D"));
+            allocation.Parameters.AddWithValue("$company", CompanyCode);
+            allocation.Parameters.AddWithValue("$payment", externalPaymentLedgerId);
+            allocation.Parameters.AddWithValue("$doc", posted.DocId);
+            allocation.Parameters.AddWithValue("$docNo", posted.DocNo);
+            allocation.Parameters.AddWithValue("$actor", Actor);
+            allocation.ExecuteNonQuery();
+            tx.Commit();
+        }
+
         var returned = PosPosting.CreatePosReturn(original!, new Dictionary<int, decimal> { [1] = 1m },
             cashRefund: 50m, cardRefund: 0m, session.Id, "customer changed mind", Actor, NoCapture);
         Assert.Equal(InvDocStatus.Posted, returned.Status);
         Assert.Equal(999m, StockQty(db)); // one unit back in stock
 
-        // Settlement symmetry: sale debit 100 + settlement credit 100;
-        // return credit 50 + settlement mirror debit 50 -> net zero.
+        // The sale/return pair nets to zero for the refunded amount.
+        // The separate 25 receipt credit and its allocation remain intact.
         Assert.Equal(150m, ScalarDecimal(db, "SELECT COALESCE(SUM(debit),0) FROM party_ledger WHERE party_id = 7"));
-        Assert.Equal(150m, ScalarDecimal(db, "SELECT COALESCE(SUM(credit),0) FROM party_ledger WHERE party_id = 7"));
+        Assert.Equal(175m, ScalarDecimal(db, "SELECT COALESCE(SUM(credit),0) FROM party_ledger WHERE party_id = 7"));
         Assert.Equal(50m, ScalarDecimal(db, $"SELECT paid_amount FROM sales_documents WHERE doc_id = {posted.DocId}"));
+        Assert.Equal(50m, ScalarDecimal(db, $"""
+            SELECT COALESCE(SUM(pa.amount), 0)
+            FROM payment_allocations pa
+            JOIN party_ledger pl ON pl.ledger_id = pa.payment_ledger_id
+            WHERE pa.company_id = '{CompanyCode}' AND pa.doc_id = {posted.DocId}
+              AND pl.doc_id = {posted.DocId} AND pl.doc_kind = 'RCV';
+            """));
+        Assert.Equal(25m, ScalarDecimal(db,
+            $"SELECT amount FROM payment_allocations WHERE payment_ledger_id = {externalPaymentLedgerId}"));
 
         // Refund tender recorded negative on the return, in the session.
         var refundTenders = await repo.GetTendersForDocAsync(CompanyCode, returned.DocId, "SRT");
@@ -303,6 +398,64 @@ public class PosBuildTests
         Assert.Equal(1, z.SalesCount);
         Assert.Equal(1, z.ReturnsCount);
         Assert.Equal(50m, z.CashRefunded);
+    }
+
+    [Fact]
+    public async Task PartialReturn_MissingOriginalSettlementAllocation_RollsBackEntirePosting()
+    {
+        using var db = await SeededAsync();
+        var repo = new PosRepository("SQLite", db.ConnectionString);
+        var service = new PosService(repo);
+        var session = await service.OpenSessionAsync(CompanyCode, "T1", "Cashier", 1, "SAR", 200m, Actor);
+
+        var sale = BuildSale(qty: 2m, price: 50m, partyId: 7);
+        var tenders = new List<PosTender>
+        {
+            new() { TenderType = PosTenderTypes.Cash, Amount = 100m, TenderedAmount = 100m }
+        };
+        var posted = PosPosting.CompleteSale(sale, session.Id, tenders, Actor, NoCapture);
+        Assert.Equal(998m, StockQty(db));
+
+        // Simulate inconsistent legacy data: the at-posting party-ledger
+        // settlement exists, but its allocation was removed. The return
+        // must fail closed and roll back stock, GL, party ledger and tenders.
+        using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            connection.Open();
+            using var delete = connection.CreateCommand();
+            delete.CommandText = """
+                DELETE FROM payment_allocations
+                WHERE company_id=$company AND doc_table='SALES' AND doc_id=$doc
+                  AND payment_ledger_id IN (
+                      SELECT ledger_id FROM party_ledger
+                      WHERE company_id=$company AND doc_id=$doc AND doc_kind='RCV');
+                """;
+            delete.Parameters.AddWithValue("$company", CompanyCode);
+            delete.Parameters.AddWithValue("$doc", posted.DocId);
+            Assert.Equal(1, delete.ExecuteNonQuery());
+        }
+
+        var original = await repo.GetOriginalBillAsync(CompanyCode, posted.DocNo);
+        Assert.NotNull(original);
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            PosPosting.CreatePosReturn(original!, new Dictionary<int, decimal> { [1] = 1m },
+                cashRefund: 50m, cardRefund: 0m, session.Id, "missing allocation", Actor, NoCapture));
+        Assert.Contains("allocation", error.Message.ToLowerInvariant());
+
+        Assert.Equal(998m, StockQty(db));
+        Assert.Equal(100m, ScalarDecimal(db,
+            $"SELECT paid_amount FROM sales_documents WHERE doc_id = {posted.DocId}"));
+        Assert.Equal(0m, ScalarDecimal(db, """
+            SELECT COUNT(*) FROM journal_entries
+            WHERE source_doc_type='SRT' AND status=1;
+            """));
+        Assert.Equal(0m, ScalarDecimal(db, """
+            SELECT COUNT(*) FROM pos_sale_tenders WHERE doc_kind='SRT';
+            """));
+        Assert.Equal(1m, ScalarDecimal(db, """
+            SELECT COUNT(*) FROM sales_documents
+            WHERE doc_kind='SRT' AND status='Draft';
+            """));
     }
 
     // ------------------------------------------------------------------
@@ -405,7 +558,20 @@ public class PosBuildTests
         var companyId = Guid.NewGuid();
         var connectionString = $"Data Source={dbPath};";
 
-        Assert.True((await SchemaMigrator.ApplyAllAsync("SQLite", dbPath)).Success);
+        var migration = await SchemaMigrator.ApplyAllAsync("SQLite", dbPath);
+        Assert.True(migration.Success, migration.Message);
+        using (var schemaProbe = new SqliteConnection(connectionString))
+        {
+            schemaProbe.Open();
+            using var columnsCommand = schemaProbe.CreateCommand();
+            columnsCommand.CommandText = "PRAGMA table_info('party_ledger');";
+            using var columnsReader = columnsCommand.ExecuteReader();
+            var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            while (columnsReader.Read())
+                columns.Add(columnsReader.GetString(1));
+            Assert.Contains("debit", columns);
+            Assert.Contains("credit", columns);
+        }
         PointAppAt(dbPath);
         AppState.SetCompany(CompanyCode, "POS Test Co", "POS Test Co");
 
@@ -445,7 +611,7 @@ public class PosBuildTests
                 cmd.ExecuteNonQuery();
             }
             Exec($"INSERT INTO materials (material_id, company_id, code, name_ar, name_en, is_stocked, avg_cost, is_deleted) VALUES (42, '{CompanyCode}', 'MAT-42', 'Item', 'Item', 1, 40, 0);");
-            Exec($"INSERT INTO warehouses (warehouse_id, company_id, warehouse_code, name, is_deleted) VALUES (1, '{CompanyCode}', 1, 'Main', 0);");
+            Exec($"INSERT INTO warehouses (warehouse_id, company_id, warehouse_code, warehouse_name_ar, warehouse_name_en, is_deleted) VALUES (1, '{CompanyCode}', 1, 'Main', 'Main', 0);");
             Exec($"INSERT INTO material_stock_balances (company_id, warehouse_id, material_id, available_qty, average_cost, last_cost) VALUES ('{CompanyCode}', 1, 42, 1000, 40, 40);");
         }
 

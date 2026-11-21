@@ -19,48 +19,54 @@ public class Phase4SecurityTests
 
     // ------------------------------------------------------------ PwdPolicy
 
-    [Fact]
-    public void Policy_AcceptsStrongPassword()
+    [Theory]
+    [InlineData("abc")]
+    [InlineData("123")]
+    [InlineData("!@#")]
+    [InlineData("a1!")]
+    [InlineData("A B")]
+    [InlineData("qwerty123")]
+    public void Policy_AcceptsAnyUserChosenPasswordComposition(string password)
     {
-        var errors = PwdPolicy.Validate("Str0ng!Passphrase", EnterprisePolicy(), "alice");
+        var errors = PwdPolicy.Validate(password, EnterprisePolicy(), "alice");
         Assert.Empty(errors);
     }
 
     [Fact]
-    public void Policy_RejectsShortPassword()
+    public void Policy_RejectsAnEmptyPasswordAsRequired()
     {
-        var errors = PwdPolicy.Validate("Ab1!xyz", EnterprisePolicy(), "alice");
-        Assert.Contains(errors, e => e.Contains("at least 12"));
+        var errors = PwdPolicy.Validate("", EnterprisePolicy(), "alice");
+        Assert.Contains(errors, e => e.Contains("required", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData("a")]
+    [InlineData("12")]
+    public void Policy_RejectsNonEmptyPasswordsShorterThanThreeCharacters(string password)
+    {
+        var errors = PwdPolicy.Validate(password, EnterprisePolicy(), "alice");
+        Assert.Contains(errors, e => e.Contains("at least 3", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public void Policy_RejectsMissingCharacterClasses()
+    public void Policy_RejectsOnlyValuesExceedingMaximumLength()
     {
         var policy = EnterprisePolicy();
-        Assert.NotEmpty(PwdPolicy.Validate("alllowercase1!x", policy));   // no uppercase
-        Assert.NotEmpty(PwdPolicy.Validate("ALLUPPERCASE1!X", policy));   // no lowercase
-        Assert.NotEmpty(PwdPolicy.Validate("NoDigitsHere!x", policy));    // no digit
-        Assert.NotEmpty(PwdPolicy.Validate("NoSymbol1234x", policy));     // no symbol
+        var tooLong = new string('x', 129);
+        Assert.Contains(PwdPolicy.Validate(tooLong, policy), e => e.Contains("not exceed 128"));
     }
 
     [Fact]
-    public void Policy_RejectsCommonAndUsernamePasswords()
-    {
-        var policy = EnterprisePolicy();
-        Assert.Contains(PwdPolicy.Validate("qwerty123", policy), e => e.Contains("common") || e.Contains("at least"));
-        Assert.NotEmpty(PwdPolicy.Validate("SomeUser!123", policy, "someuser!123"));
-    }
-
-    [Fact]
-    public void Policy_EnterpriseDefaults_AreStrong()
+    public void Policy_DefaultsAllowUserChosenComposition()
     {
         var policy = new PasswordPolicySettings();
-        Assert.True(policy.MinLength >= 12);
-        Assert.True(policy.RequireUpperCase);
-        Assert.True(policy.RequireLowerCase);
-        Assert.True(policy.RequireNumbers);
-        Assert.True(policy.RequireSpecialChars);
-        Assert.False(policy.AllowCommonPasswords);
+        Assert.Equal(3, policy.MinLength);
+        Assert.Equal(128, policy.MaxLength);
+        Assert.False(policy.RequireUpperCase);
+        Assert.False(policy.RequireLowerCase);
+        Assert.False(policy.RequireNumbers);
+        Assert.False(policy.RequireSpecialChars);
+        Assert.True(policy.AllowCommonPasswords);
     }
 
     // ---------------------------------------------------------- LoginLockout

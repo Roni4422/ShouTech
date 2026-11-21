@@ -6,6 +6,7 @@ ShouTech ERP Company is the company-level application within the ShouTech ERP pr
 
 - Main development branch: `main`
 - Developer documentation: see [`README.dev.md`](README.dev.md)
+- User help: [ShouTech ERP User Guide](docs/USER_GUIDE_EN.md) — also available in the application by pressing **F1**.
 - Documentation: see [`docs/`](docs/)
 
 ## Development

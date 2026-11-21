@@ -330,3 +330,17 @@ parity **0**; migrator double-run idempotent (harness (f)).
 - `CloseCashWin` remains as the legacy day-close; if the owner
   wants it retired now that sessions own the lifecycle, that is a
   small follow-up (its history table stays either way).
+
+
+## 7. Follow-up — live warehouse stock visibility and terminal warehouse binding
+
+Implemented on the stabilization branch after the original POS 066 build:
+
+- Product search now returns on-hand, reserved and sellable quantities from `material_stock_balances`, scoped by company and the active POS warehouse.
+- The POS product strip displays all three stock quantities. The cart shows the sellable quantity for each line, including lines entered by barcode (the stock lookup runs asynchronously so it does not block the scanner).
+- `PosWin` resolves the active warehouse in this order: open session warehouse, configured terminal warehouse, then company POS default warehouse. The same resolved warehouse is stamped on the POS document and its lines.
+- `PosSessionWin` resolves the warehouse from the active `pos_terminals.warehouse_code` definition, falling back to the configured POS default. Opening a session without a valid warehouse is refused; the application service also enforces this invariant.
+- After a successful sale, an open product strip refreshes from the database so the displayed quantities reflect the committed stock movement.
+- Stock labels are localized in the four language resources currently shipped with this project (English, Arabic, French and Turkish).
+
+**New automated coverage:** terminal-to-warehouse lookup is company-scoped and ignores inactive/missing terminals; product search verifies on-hand/reserved/sellable calculations, warehouse scoping and company isolation. The Windows CI run on the final branch head remains the acceptance gate; no test result is claimed here until that run completes.

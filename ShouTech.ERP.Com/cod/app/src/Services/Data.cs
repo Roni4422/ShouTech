@@ -370,7 +370,23 @@ internal static class DatabaseRuntime
     public static bool LooksLikeConnectionString(string? value)
     {
         var trimmed = value?.Trim();
-        return !string.IsNullOrWhiteSpace(trimmed) && trimmed.Contains('=') && trimmed.Contains(';');
+        if (string.IsNullOrWhiteSpace(trimmed))
+            return false;
+
+        // Valid SQLite connection strings may contain a single key/value pair
+        // and therefore have no trailing semicolon.
+        var separator = trimmed.IndexOf('=');
+        if (separator <= 0)
+            return false;
+
+        var key = trimmed[..separator].Trim();
+        return key.Equals("Data Source", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("Filename", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("File Name", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("Mode", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("Cache", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("Foreign Keys", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("Pooling", StringComparison.OrdinalIgnoreCase);
     }
 
     public static string NormalizeSqliteConnectionString(string sqlitePathOrConnectionString)

@@ -118,8 +118,11 @@ CREATE TABLE IF NOT EXISTS pos_settings (
 );
 
 ALTER TABLE sales_documents ADD COLUMN IF NOT EXISTS pos_session_id TEXT;
+-- sales_documents.is_deleted is retained as a legacy integer flag in the
+-- canonical commercial-document schema; cast through text for compatibility.
 CREATE INDEX IF NOT EXISTS ix_sales_documents_pos_session
-    ON sales_documents(company_id, pos_session_id) WHERE is_deleted = FALSE;
+    ON sales_documents(company_id, pos_session_id)
+    WHERE is_deleted::text IN ('0', 'false');
 
 INSERT INTO permissions(permission_code,permission_name,group_code,feature_code,operation_code,name_ar,name_en,description,display_order,is_sensitive) VALUES ('POS.DISCOUNT.OVERRIDE','POS Discount - Override','POS','DISCOUNT','OVERRIDE','POS Discount - Override','POS Discount - Override','Apply line or bill discounts at the till (Build POS 066)',383,true) ON CONFLICT(permission_code) DO UPDATE SET group_code=EXCLUDED.group_code,feature_code=EXCLUDED.feature_code,operation_code=EXCLUDED.operation_code,name_ar=EXCLUDED.name_ar,name_en=EXCLUDED.name_en,display_order=EXCLUDED.display_order,is_sensitive=EXCLUDED.is_sensitive;
 INSERT INTO permissions(permission_code,permission_name,group_code,feature_code,operation_code,name_ar,name_en,description,display_order,is_sensitive) VALUES ('POS.HOLD.MANAGE','POS Hold - Manage','POS','HOLD','MANAGE','POS Hold - Manage','POS Hold - Manage','Park (hold) and recall POS bills (Build POS 066)',384,false) ON CONFLICT(permission_code) DO UPDATE SET group_code=EXCLUDED.group_code,feature_code=EXCLUDED.feature_code,operation_code=EXCLUDED.operation_code,name_ar=EXCLUDED.name_ar,name_en=EXCLUDED.name_en,display_order=EXCLUDED.display_order,is_sensitive=EXCLUDED.is_sensitive;

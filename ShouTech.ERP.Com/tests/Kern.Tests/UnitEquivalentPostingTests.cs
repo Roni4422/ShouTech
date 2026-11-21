@@ -43,7 +43,8 @@ namespace Kern.Tests
 
             // 4 x 0.25 = exactly 1 kg out; unit cost restated per base unit (2.5 / 0.25 = 10).
             Assert.Equal(1m, ctx.ScalarDecimal("SELECT qty_out FROM material_stock_movements WHERE document_no='S-EQ-1'"));
-            Assert.Equal(10m, ctx.ScalarDecimal("SELECT unit_cost FROM material_stock_movements WHERE document_no='S-EQ-1'"));
+            // Outbound issues use stored average cost (8), not the sales price (10).
+            Assert.Equal(8m, ctx.ScalarDecimal("SELECT unit_cost FROM material_stock_movements WHERE document_no='S-EQ-1'"));
             Assert.Equal(9m, ctx.BalanceQty());
         }
 
@@ -126,6 +127,92 @@ namespace Kern.Tests
             Assert.Equal(9m, ctx.BalanceQty());
         }
 
+        [Fact]
+        public void InventoryCount_ReplayDoesNotDuplicateStockEvenIfWarehouseIsLaterDeactivated()
+        {
+            using var ctx = CreateContext(unitsJson: UnitsJson, balanceQty: 10m, balanceAvg: 8m);
+            var lines = new[]
+            {
+                new StkPost.StockCountLine(1, "MAT-EQ", 7m, 8m)
+            };
+
+            var firstResult = StkPost.PostCount(
+                1, new DateTime(2026, 1, 5), "Physical count", lines, "INV:InventoryCount:replay-test");
+
+            Assert.Equal(1, firstResult);
+            Assert.Equal(7m, ctx.BalanceQty());
+
+            ctx.Execute("UPDATE warehouses SET is_active=0 WHERE company_id='TEST-EQUIV' AND warehouse_id=1;");
+
+            var replayResult = StkPost.PostCount(
+                1, new DateTime(2026, 1, 5), "Physical count", lines, "INV:InventoryCount:replay-test");
+
+            Assert.Equal(firstResult, replayResult);
+            Assert.Equal(7m, ctx.BalanceQty());
+            Assert.Equal(1m, ctx.ScalarDecimal(
+                "SELECT COUNT(*) FROM material_stock_movements WHERE movement_type='COUNT_CLOSE';"));
+            Assert.Equal(1m, ctx.ScalarDecimal(
+                "SELECT COUNT(*) FROM stock_posting_operations WHERE company_id='TEST-EQUIV' AND operation_key='INV:InventoryCount:replay-test';"));
+        }
+
+        [Fact]
+        public void StockTransfer_ReplayReturnsOriginalDocumentWithoutRepeatingMovements()
+        {
+            using var ctx = CreateContext(unitsJson: UnitsJson, balanceQty: 10m, balanceAvg: 8m);
+            var lines = new[]
+            {
+                new StkPost.StockTransferLine(1, "MAT-EQ", 2m)
+            };
+
+            var firstDocumentNo = StkPost.PostTransfer(
+                1, 2, new DateTime(2026, 1, 5), "Transfer test", lines,
+                "INV:StockTransfer:replay-test");
+
+            Assert.Equal(8m, ctx.ScalarDecimal(
+                "SELECT available_qty FROM material_stock_balances WHERE warehouse_id=1 AND material_id=1;"));
+            Assert.Equal(2m, ctx.ScalarDecimal(
+                "SELECT available_qty FROM material_stock_balances WHERE warehouse_id=2 AND material_id=1;"));
+
+            ctx.Execute("UPDATE warehouses SET is_active=0 WHERE company_id='TEST-EQUIV' AND warehouse_id=2;");
+
+            var replayDocumentNo = StkPost.PostTransfer(
+                1, 2, new DateTime(2026, 1, 5), "Transfer test", lines,
+                "INV:StockTransfer:replay-test");
+
+            Assert.Equal(firstDocumentNo, replayDocumentNo);
+            Assert.Equal(8m, ctx.ScalarDecimal(
+                "SELECT available_qty FROM material_stock_balances WHERE warehouse_id=1 AND material_id=1;"));
+            Assert.Equal(2m, ctx.ScalarDecimal(
+                "SELECT available_qty FROM material_stock_balances WHERE warehouse_id=2 AND material_id=1;"));
+            Assert.Equal(2m, ctx.ScalarDecimal(
+                "SELECT COUNT(*) FROM material_stock_movements WHERE document_no='" + firstDocumentNo + "';"));
+        }
+
+        [Fact]
+        public void DedicatedPostingReceipt_IsDurableCompanyScopedAndTypeSafe()
+        {
+            using var ctx = CreateContext(unitsJson: UnitsJson, balanceQty: 10m, balanceAvg: 8m);
+
+            Assert.False(StkPost.IsOperationCompleted("INV:StockTransfer:42", "StockTransfer"));
+
+            using (var connection = new SqliteConnection($"Data Source={ctx.DatabasePath}"))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = """
+                    INSERT INTO stock_posting_operations
+                        (company_id, operation_key, operation_type, document_no, movement_count)
+                    VALUES
+                        ('TEST-EQUIV', 'INV:StockTransfer:42', 'StockTransfer', 'TRF-TEST-42', 2);
+                    """;
+                command.ExecuteNonQuery();
+            }
+
+            Assert.True(StkPost.IsOperationCompleted("INV:StockTransfer:42", "StockTransfer"));
+            Assert.Throws<InvalidOperationException>(
+                () => StkPost.IsOperationCompleted("INV:StockTransfer:42", "InventoryCount"));
+        }
+
         private const string UnitsJson =
             "[{\"UnitName\":\"kg\",\"Factor\":1},{\"UnitName\":\"g250\",\"Factor\":0.25}]";
 
@@ -148,6 +235,8 @@ namespace Kern.Tests
                 _oldCompany = oldCompany;
             }
 
+            public string DatabasePath => _databasePath;
+
             public void Post(InvDoc doc)
             {
                 using var connection = new SqliteConnection($"Data Source={_databasePath}");
@@ -169,6 +258,15 @@ namespace Kern.Tests
 
             public decimal BalanceQty() =>
                 ScalarDecimal("SELECT available_qty FROM material_stock_balances WHERE material_id=1");
+
+            public void Execute(string sql)
+            {
+                using var connection = new SqliteConnection($"Data Source={_databasePath}");
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = sql;
+                command.ExecuteNonQuery();
+            }
 
             public void Dispose()
             {
@@ -212,6 +310,11 @@ namespace Kern.Tests
                 using (var cmd = connection.CreateCommand())
                 {
                     cmd.CommandText = """
+                        INSERT INTO warehouses
+                          (warehouse_id, company_id, warehouse_code, warehouse_name_ar, is_active, is_deleted)
+                        VALUES
+                          (1, 'TEST-EQUIV', 1, 'Main warehouse', 1, 0),
+                          (2, 'TEST-EQUIV', 2, 'Secondary warehouse', 1, 0);
                         INSERT INTO materials
                           (company_id, code, name_ar, name_en, is_stocked, is_service, allow_negative,
                            unit1, unit1_factor, unit2, unit2_factor, units_json)

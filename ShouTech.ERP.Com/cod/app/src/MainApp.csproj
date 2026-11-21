@@ -83,9 +83,9 @@
   <ItemGroup>
 
     <ProjectReference Include="..\..\cor\inv.csproj" Condition="Exists('..\..\cor\inv.csproj')" />
-    <ProjectReference Include="..\..\..\src\ShouTech.Domain\ShouTech.Domain.csproj" Condition="Exists('..\..\..\src\ShouTech.Domain\ShouTech.Domain.csproj')" />
-    <ProjectReference Include="..\..\..\src\ShouTech.Application\ShouTech.Application.csproj" Condition="Exists('..\..\..\src\ShouTech.Application\ShouTech.Application.csproj')" />
-    <ProjectReference Include="..\..\..\src\ShouTech.Infrastructure\ShouTech.Infrastructure.csproj" Condition="Exists('..\..\..\src\ShouTech.Infrastructure\ShouTech.Infrastructure.csproj')" />
+    <ProjectReference Include="..\..\..\src\Domain\Domain.csproj" Condition="Exists('..\..\..\src\Domain\Domain.csproj')" />
+    <ProjectReference Include="..\..\..\src\App\App.csproj" Condition="Exists('..\..\..\src\App\App.csproj')" />
+    <ProjectReference Include="..\..\..\src\Infra\Infra.csproj" Condition="Exists('..\..\..\src\Infra\Infra.csproj')" />
 
   </ItemGroup>
 
@@ -117,8 +117,6 @@
 
     <!-- Application Source -->
     <Compile Include="**\*.cs" Exclude="obj\**\*;bin\**\*;ViewModels\MainWnVM.cs" />
-	<Compile Include="../../../cfg/AppSettings.cs" Condition="Exists('../../../cfg/AppSettings.cs')" />
-    <Compile Include="../../../cfg/CompanyInfo.cs" Condition="Exists('../../../cfg/CompanyInfo.cs')" />
 
   </ItemGroup>
 
@@ -131,6 +129,9 @@
     <None Include="../../../cfg/appset.json" Condition="Exists('../../../cfg/appset.json')" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="Resources\Errors\*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="Resources\Lang\*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="../../../docs/USER_GUIDE_EN.md" Link="docs/USER_GUIDE_EN.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="Resources/COA/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="Resources/Currencies/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	
 
   </ItemGroup>

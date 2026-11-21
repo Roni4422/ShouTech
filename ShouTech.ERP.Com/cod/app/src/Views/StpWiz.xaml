@@ -93,6 +93,7 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="{StaticResource FormLabelColumnWidth}"/><ColumnDefinition Width="*"/>
@@ -135,10 +136,22 @@
                         <TextBox x:Name="txtCity" Grid.Row="6" Grid.Column="1" Margin="{StaticResource MarginFormField}" Style="{StaticResource WizardTextBoxStyle}"/>
 
                         <TextBlock Grid.Row="6" Grid.Column="2" x:Name="lblCountry" Text="Country — optional" Style="{StaticResource WizardLabelStyle}"/>
-                        <TextBox x:Name="txtCountry" Grid.Row="6" Grid.Column="3" Margin="{StaticResource MarginFormField}" Style="{StaticResource WizardTextBoxStyle}"/>
+                        <ComboBox x:Name="cmbCountry"
+                                  Grid.Row="6" Grid.Column="3"
+                                  Margin="{StaticResource MarginFormField}"
+                                  SelectionChanged="CountrySelectionChanged"
+                                  VerticalContentAlignment="Center"/>
 
                         <TextBlock Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="2" x:Name="lblAuto14" Text="Notes — optional" Style="{StaticResource WizardLabelStyle}"/>
                         <TextBox x:Name="txtNotes" Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="3" Margin="{StaticResource MarginFormField}" Style="{StaticResource WizardTextBoxStyle}"/>
+
+                        <CheckBox x:Name="chkEnableTaxSystem"
+                                  Grid.Row="8" Grid.Column="1" Grid.ColumnSpan="3"
+                                  Content="Enable the selected country's tax system for this company"
+                                  IsChecked="False"
+                                  Margin="4,8,0,4"
+                                  VerticalAlignment="Center"
+                                  ToolTip="Tax remains disabled unless you explicitly select this option."/>
                     </Grid>
 
                     <Grid x:Name="PageCurrency" Visibility="Collapsed">

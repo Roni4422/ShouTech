@@ -371,7 +371,7 @@ namespace ShouTech.App.Views
                     _ = TryRefreshIndexInBackgroundAsync();
                 }
 
-                if (!Companies.Any())
+                if (Companies.Count == 0)
                 {
                     if (_mode == ComWinMode.Startup)
                     {

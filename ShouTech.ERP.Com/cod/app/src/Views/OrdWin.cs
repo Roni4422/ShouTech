@@ -60,11 +60,15 @@ public sealed class OrdWin : BaseWin, IWindowMode
     private readonly Button _btnSave = new();
     private readonly Button _btnPost = new();
     private readonly Button _btnConvert = new();
+    private readonly Button _btnReceipt = new();
     private readonly Button _btnClose = new();
     private readonly Button _btnCancel = new();
     private readonly Button _btnAddLine = new();
     private readonly Button _btnRemLine = new();
     private readonly Button _btnPrint = new();
+
+    private bool _isReceiving;
+    private bool _isConverting;
 
     private readonly TextBlock _lblTotal = new();
     private readonly TextBlock _lblStatus = new();
@@ -128,7 +132,9 @@ public sealed class OrdWin : BaseWin, IWindowMode
         StyleButton(_btnLoad, "OrderDoc.Load");
         StyleButton(_btnSave, "Common.Save");
         StyleButton(_btnPost, "OrderDoc.Post");
-        StyleButton(_btnConvert, "OrderDoc.ConvertToInvoice");
+        StyleButton(_btnConvert, _kind == OrdKind.Sales ? "OrderDoc.ConvertToInvoice" : "OrderDoc.CreateSupplierInvoice");
+        StyleButton(_btnReceipt, "OrderDoc.CreateReceipt");
+        _btnReceipt.Visibility = _kind == OrdKind.Purchase ? Visibility.Visible : Visibility.Collapsed;
         StyleButton(_btnClose, "OrderDoc.CloseOrder");
         StyleButton(_btnCancel, "OrderDoc.CancelOrder");
         StyleButton(_btnAddLine, "Invoice.AddLine");
@@ -140,6 +146,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
         _btnSave.Click += async (_, _) => await SaveAsync();
         _btnPost.Click += async (_, _) => await PostAsync();
         _btnConvert.Click += async (_, _) => await ConvertAsync();
+        _btnReceipt.Click += async (_, _) => await ReceiveAsync();
         // Step 9 (ORD-03): Close checks the permission family of the
         // window's OWN kind — it previously hardcoded the SALES cancel
         // permission for purchase orders too, so a purchasing-only user
@@ -169,7 +176,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             }
         };
 
-        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnConvert, _btnClose, _btnCancel, _btnAddLine, _btnRemLine, _btnPrint })
+        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnConvert, _btnReceipt, _btnClose, _btnCancel, _btnAddLine, _btnRemLine, _btnPrint })
             toolbar.Children.Add(b);
 
         var actionBar = new Border
@@ -552,11 +559,28 @@ public sealed class OrdWin : BaseWin, IWindowMode
             ShowWarningMessage(T("OrderDoc.SaveFirst"));
             return;
         }
+        if (_isConverting || _isReceiving) return;
+        _isConverting = true;
+        UpdateEditState();
         try
         {
-            var (invoiceId, invoiceDocNo) = await AppHost.Orders.ConvertToInvoiceAsync(
-                Side, _docId.Value, DateOnly.FromDateTime(DateTime.Today), CurrentUserId);
-            _lblStatus.Text = $"{T("OrderDoc.Converted")}: {invoiceDocNo}";
+            string invoiceDocNo;
+            if (_kind == OrdKind.Purchase)
+            {
+                var supplierInvoiceLines = CaptureSupplierInvoiceLines();
+                if (supplierInvoiceLines is null) return;
+                var result = await AppHost.Orders.CreatePurchaseInvoiceAsync(
+                    _companyId, _docId.Value, DateOnly.FromDateTime(DateTime.Today),
+                    supplierInvoiceLines, CurrentUserId);
+                invoiceDocNo = result.InvoiceDocNo;
+            }
+            else
+            {
+                var result = await AppHost.Orders.ConvertToInvoiceAsync(
+                    Side, _docId.Value, DateOnly.FromDateTime(DateTime.Today), CurrentUserId);
+                invoiceDocNo = result.InvoiceDocNo;
+            }
+            _lblStatus.Text = $"{T(_kind == OrdKind.Purchase ? "OrderDoc.SupplierInvoiceCreated" : "OrderDoc.Converted")}: {invoiceDocNo}";
             await RefreshProgressAsync(_docId.Value);
         }
         catch (AppError ex)
@@ -572,6 +596,347 @@ public sealed class OrdWin : BaseWin, IWindowMode
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OrdWin.Convert");
             ShowWarningMessage(ex.Message);
         }
+        finally
+        {
+            _isConverting = false;
+            UpdateEditState();
+        }
+    }
+
+    private async Task ReceiveAsync()
+    {
+        if (_kind != OrdKind.Purchase || !AppHost.Permissions.Has(PermCat.Purchasing.OrderConvert))
+        {
+            ShowWarningMessage(T("OrderDoc.PermissionDenied"));
+            return;
+        }
+        if (AppHost.Orders is null || _docId is null || _status != CommercialDocumentStatus.Posted)
+        {
+            ShowWarningMessage(T("OrderDoc.SaveFirst"));
+            return;
+        }
+
+        if (_isReceiving || _isConverting) return;
+        _isReceiving = true;
+        UpdateEditState();
+        try
+        {
+            long? receiptWarehouseId;
+            try
+            {
+                receiptWarehouseId = CardStore.ResolveWarehouseId(_txtWhs.Text.Trim());
+            }
+            catch (Exception ex)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OrdWin.ReceiveWarehouse");
+                ShowWarningMessage(ex.Message);
+                return;
+            }
+    
+            var rows = _lines
+                .Where(line => line.Qty - line.FulfilledQty > 0m)
+                .GroupBy(line => line.MaterialId)
+                .Select(group =>
+                {
+                    var line = group.First();
+                    return new ReceiptLineVm
+                    {
+                        MaterialId = line.MaterialId,
+                        ItemCode = line.ItemCode,
+                        Description = line.Description,
+                        Unit = line.Unit,
+                        Quantity = group.Sum(item => item.Qty - item.FulfilledQty),
+                        UnitPrice = line.UnitPrice,
+                        DiscountPct = line.DiscountPct,
+                        WarehouseId = receiptWarehouseId
+                    };
+                })
+                .ToList();
+            if (rows.Count == 0)
+            {
+                ShowWarningMessage(T("OrderDoc.NoRemainingReceipt"));
+                return;
+            }
+            if (rows.Any(line => line.MaterialId is null))
+            {
+                ShowWarningMessage(T("OrderDoc.MaterialRequiredForReceipt"));
+                return;
+            }
+    
+            var grid = new DataGrid
+            {
+                AutoGenerateColumns = false,
+                CanUserAddRows = false,
+                CanUserDeleteRows = false,
+                ItemsSource = rows,
+                HeadersVisibility = DataGridHeadersVisibility.Column,
+                SelectionUnit = DataGridSelectionUnit.CellOrRowHeader,
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+            grid.Columns.Add(new DataGridTextColumn
+            {
+                Header = T("Invoice.Col.Code"),
+                Binding = new Binding(nameof(ReceiptLineVm.ItemCode)),
+                IsReadOnly = true,
+                Width = new DataGridLength(1, DataGridLengthUnitType.Star)
+            });
+            grid.Columns.Add(new DataGridTextColumn
+            {
+                Header = T("Invoice.Col.Description"),
+                Binding = new Binding(nameof(ReceiptLineVm.Description)),
+                IsReadOnly = true,
+                Width = new DataGridLength(2, DataGridLengthUnitType.Star)
+            });
+            grid.Columns.Add(new DataGridTextColumn
+            {
+                Header = T("Invoice.Col.Unit"),
+                Binding = new Binding(nameof(ReceiptLineVm.Unit)),
+                IsReadOnly = true,
+                Width = 75
+            });
+            grid.Columns.Add(new DataGridTextColumn
+            {
+                Header = T("Invoice.Col.Qty"),
+                Binding = new Binding(nameof(ReceiptLineVm.Quantity))
+                {
+                    UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+                    StringFormat = "0.###"
+                },
+                Width = 110
+            });
+    
+            var dialog = new Window
+            {
+                Owner = this,
+                Title = T("OrderDoc.CreateReceipt"),
+                Width = 760,
+                Height = 420,
+                MinWidth = 560,
+                MinHeight = 300,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                ResizeMode = ResizeMode.CanResize
+            };
+            var content = new DockPanel { Margin = new Thickness(12) };
+            var actions = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            var confirm = new Button { Content = T("Buttons.Save"), MinWidth = 100, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+            var cancel = new Button { Content = T("Buttons.Cancel"), MinWidth = 100, IsCancel = true };
+            confirm.Click += (_, _) =>
+            {
+                grid.CommitEdit(DataGridEditingUnit.Cell, true);
+                grid.CommitEdit(DataGridEditingUnit.Row, true);
+                dialog.DialogResult = true;
+            };
+            actions.Children.Add(confirm);
+            actions.Children.Add(cancel);
+            DockPanel.SetDock(actions, Dock.Bottom);
+            content.Children.Add(actions);
+            content.Children.Add(grid);
+            dialog.Content = content;
+            if (dialog.ShowDialog() != true) return;
+    
+            var receiptLines = rows
+                .Where(line => line.Quantity > 0m)
+                .Select(line => new CommercialLineDraft(
+                    line.MaterialId, line.ItemCode, line.Description, line.Unit,
+                    line.Quantity, line.UnitPrice, line.DiscountPct, 0m, line.WarehouseId))
+                .ToList();
+            if (receiptLines.Count == 0)
+            {
+                ShowWarningMessage(T("OrderDoc.NoRemainingReceipt"));
+                return;
+            }
+    
+            try
+            {
+                var (_, receiptDocNo) = await AppHost.Orders.CreatePurchaseReceiptAsync(
+                    _companyId, _docId.Value, DateOnly.FromDateTime(DateTime.Today), receiptLines, CurrentUserId);
+                _lblStatus.Text = $"{T("OrderDoc.ReceiptCreated")}: {receiptDocNo}";
+                await RefreshProgressAsync(_docId.Value);
+                UpdateEditState();
+            }
+            catch (Exception ex)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OrdWin.Receive");
+                ShowWarningMessage(ex.Message);
+            }
+        }
+        finally
+        {
+            _isReceiving = false;
+            UpdateEditState();
+        }
+    }
+
+    private List<CommercialLineDraft>? CaptureSupplierInvoiceLines()
+    {
+        var taxEnabled = TaxSvc.IsEnabled;
+        var rows = _lines
+            .Where(line => line.FulfilledQty - line.BilledQty > 0m)
+            .Select(line => new SupplierInvoiceLineVm
+            {
+                MaterialId = line.MaterialId,
+                LineNo = line.LineNo,
+                ItemCode = line.ItemCode,
+                Description = line.Description,
+                Unit = line.Unit,
+                Quantity = line.FulfilledQty - line.BilledQty,
+                UnitPrice = line.UnitPrice,
+                DiscountPct = line.DiscountPct,
+                TaxRate = taxEnabled ? line.TaxRate : 0m
+            })
+            .ToList();
+        if (rows.Count == 0)
+        {
+            ShowWarningMessage(T("OrderDoc.NoReceivedToInvoice"));
+            return null;
+        }
+        if (rows.Any(line => line.MaterialId is null))
+        {
+            ShowWarningMessage(T("OrderDoc.MaterialRequiredForReceipt"));
+            return null;
+        }
+
+        long? warehouseId;
+        try
+        {
+            warehouseId = CardStore.ResolveWarehouseId(_txtWhs.Text.Trim());
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OrdWin.SupplierInvoiceWarehouse");
+            ShowWarningMessage(ex.Message);
+            return null;
+        }
+
+        var grid = new DataGrid
+        {
+            AutoGenerateColumns = false,
+            CanUserAddRows = false,
+            CanUserDeleteRows = false,
+            ItemsSource = rows,
+            HeadersVisibility = DataGridHeadersVisibility.Column,
+            SelectionUnit = DataGridSelectionUnit.CellOrRowHeader,
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        grid.Columns.Add(new DataGridTextColumn
+        {
+            Header = T("Invoice.Col.Code"),
+            Binding = new Binding(nameof(SupplierInvoiceLineVm.ItemCode)),
+            IsReadOnly = true,
+            Width = 95
+        });
+        grid.Columns.Add(new DataGridTextColumn
+        {
+            Header = T("OrderDoc.PurchaseOrderLine"),
+            Binding = new Binding(nameof(SupplierInvoiceLineVm.LineNo)),
+            IsReadOnly = true,
+            Width = 65
+        });
+        grid.Columns.Add(new DataGridTextColumn
+        {
+            Header = T("Invoice.Col.Description"),
+            Binding = new Binding(nameof(SupplierInvoiceLineVm.Description)),
+            IsReadOnly = true,
+            Width = new DataGridLength(2, DataGridLengthUnitType.Star)
+        });
+        grid.Columns.Add(new DataGridTextColumn
+        {
+            Header = T("Invoice.Col.Unit"),
+            Binding = new Binding(nameof(SupplierInvoiceLineVm.Unit)),
+            IsReadOnly = true,
+            Width = 60
+        });
+        grid.Columns.Add(new DataGridTextColumn
+        {
+            Header = T("Invoice.Col.Qty"),
+            Binding = new Binding(nameof(SupplierInvoiceLineVm.Quantity))
+            {
+                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+                StringFormat = "0.###"
+            },
+            Width = 85
+        });
+        grid.Columns.Add(new DataGridTextColumn
+        {
+            Header = T("Invoice.Col.PurchasePrice"),
+            Binding = new Binding(nameof(SupplierInvoiceLineVm.UnitPrice))
+            {
+                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+                StringFormat = "0.####"
+            },
+            Width = 105
+        });
+        grid.Columns.Add(new DataGridTextColumn
+        {
+            Header = T("Invoice.Col.Discount"),
+            Binding = new Binding(nameof(SupplierInvoiceLineVm.DiscountPct))
+            {
+                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+                StringFormat = "0.##"
+            },
+            Width = 85
+        });
+        grid.Columns.Add(new DataGridTextColumn
+        {
+            Header = T("Invoice.Col.TaxRate"),
+            Binding = new Binding(nameof(SupplierInvoiceLineVm.TaxRate))
+            {
+                StringFormat = "0.##"
+            },
+            IsReadOnly = true,
+            Visibility = taxEnabled ? Visibility.Visible : Visibility.Collapsed,
+            Width = 75
+        });
+
+        var dialog = new Window
+        {
+            Owner = this,
+            Title = T("OrderDoc.CreateSupplierInvoice"),
+            Width = 980,
+            Height = 460,
+            MinWidth = 720,
+            MinHeight = 320,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.CanResize
+        };
+        var content = new DockPanel { Margin = new Thickness(12) };
+        var actions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        var confirm = new Button { Content = T("Buttons.Save"), MinWidth = 100, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var cancel = new Button { Content = T("Buttons.Cancel"), MinWidth = 100, IsCancel = true };
+        confirm.Click += (_, _) =>
+        {
+            grid.CommitEdit(DataGridEditingUnit.Cell, true);
+            grid.CommitEdit(DataGridEditingUnit.Row, true);
+            dialog.DialogResult = true;
+        };
+        actions.Children.Add(confirm);
+        actions.Children.Add(cancel);
+        DockPanel.SetDock(actions, Dock.Bottom);
+        content.Children.Add(actions);
+        content.Children.Add(grid);
+        dialog.Content = content;
+        if (dialog.ShowDialog() != true) return null;
+
+        var result = rows
+            .Where(line => line.Quantity > 0m)
+            .Select(line => new CommercialLineDraft(
+                line.MaterialId, line.ItemCode, line.Description, line.Unit,
+                line.Quantity, line.UnitPrice, line.DiscountPct, line.TaxRate, warehouseId, line.LineNo))
+            .ToList();
+        if (result.Count == 0)
+        {
+            ShowWarningMessage(T("OrderDoc.NoReceivedToInvoice"));
+            return null;
+        }
+        return result;
     }
 
     private async Task SetStatusAsync(string newStatus, string permission)
@@ -617,7 +982,8 @@ public sealed class OrdWin : BaseWin, IWindowMode
         _txtNotes.IsEnabled = editable;
         _btnSave.IsEnabled = editable;
         _btnPost.IsEnabled = editable && _docId is not null;
-        _btnConvert.IsEnabled = _status == CommercialDocumentStatus.Posted;
+        _btnConvert.IsEnabled = !_isConverting && !_isReceiving && _status == CommercialDocumentStatus.Posted;
+        _btnReceipt.IsEnabled = !_isReceiving && !_isConverting && _kind == OrdKind.Purchase && _status == CommercialDocumentStatus.Posted && _docId is not null;
         _btnClose.IsEnabled = _status == CommercialDocumentStatus.Posted;
         _btnCancel.IsEnabled = _status is CommercialDocumentStatus.Draft or CommercialDocumentStatus.Posted;
         _btnAddLine.IsEnabled = editable;
@@ -754,7 +1120,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             _grid.Columns[4].Header = T("Invoice.Col.Qty");
             _grid.Columns[5].Header = T(_kind == OrdKind.Sales ? "Invoice.Col.SalePrice" : "Invoice.Col.PurchasePrice");
             _grid.Columns[6].Header = T("Invoice.Col.Discount");
-            _grid.Columns[7].Header = T("Invoice.ColTax");
+            _grid.Columns[7].Header = T("Invoice.Col.TaxRate");
             _grid.Columns[8].Header = T("Invoice.Col.LineTotal");
             _grid.Columns[9].Header = T("OrderDoc.Fulfilled");
             _grid.Columns[10].Header = T("OrderDoc.Billed");
@@ -790,6 +1156,31 @@ public sealed class OrdWin : BaseWin, IWindowMode
             Width = width,
             IsReadOnly = readOnly
         };
+
+    private sealed class SupplierInvoiceLineVm
+    {
+        public long? MaterialId { get; init; }
+        public int LineNo { get; init; }
+        public string ItemCode { get; init; } = "";
+        public string Description { get; init; } = "";
+        public string Unit { get; init; } = "";
+        public decimal Quantity { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal DiscountPct { get; set; }
+        public decimal TaxRate { get; set; }
+    }
+
+    private sealed class ReceiptLineVm
+    {
+        public long? MaterialId { get; init; }
+        public string ItemCode { get; init; } = "";
+        public string Description { get; init; } = "";
+        public string Unit { get; init; } = "";
+        public decimal Quantity { get; set; }
+        public decimal UnitPrice { get; init; }
+        public decimal DiscountPct { get; init; }
+        public long? WarehouseId { get; init; }
+    }
 
     private sealed class OrderLineVm : INotifyPropertyChanged
     {

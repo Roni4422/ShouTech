@@ -127,10 +127,10 @@ public class RouterMfgStep11Tests
         using var db = await ReportFixtureAsync();
         var rows = await RptQuery.MfgFeasibilityAsync(CancellationToken.None);
         Assert.Equal(2, rows.Count);
-        var rm1 = rows.Single(r => (string)r["ItemCode"]! == "RM-1");
+        var rm1 = rows.Single(r => (string)r["LineItemCode"]! == "RM-1");
         Assert.Equal(1m, Dec(rm1, "Required"));             // 4 × g250 × 0.25
         Assert.Equal(0.5m, Dec(rm1, "OnHand"));
-        var rm2 = rows.Single(r => (string)r["ItemCode"]! == "RM-2");
+        var rm2 = rows.Single(r => (string)r["LineItemCode"]! == "RM-2");
         Assert.Equal(3m, Dec(rm2, "Required"));
         Assert.Equal(10m, Dec(rm2, "OnHand"));
     }

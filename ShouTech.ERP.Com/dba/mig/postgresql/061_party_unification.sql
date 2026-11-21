@@ -38,13 +38,13 @@ UPDATE parties p
 SET ledger_id = c.customer_id
 FROM customers c
 WHERE p.kind = 'C' AND p.ledger_id IS NULL
-  AND c.company_id = p.company_id AND c.customer_code = p.code AND c.is_deleted = FALSE;
+  AND c.company_id = p.company_id AND c.customer_code = p.code AND c.is_deleted = 0;
 
 UPDATE parties p
 SET ledger_id = s.supplier_id
 FROM suppliers s
 WHERE p.kind = 'S' AND p.ledger_id IS NULL
-  AND s.company_id = p.company_id AND s.supplier_code = p.code AND s.is_deleted = FALSE;
+  AND s.company_id = p.company_id AND s.supplier_code = p.code AND s.is_deleted = 0;
 
 -- 2) Legacy-only parties are created in the canonical store.
 INSERT INTO parties
@@ -59,7 +59,7 @@ SELECT
     c.customer_name_ar, c.tax_number, c.commercial_reg,
     c.credit_limit, c.credit_days, NULLIF(c.price_tier, ''), NULLIF(c.gl_account_code, ''),
     NULLIF(c.phone, ''), NULLIF(c.mobile, ''), NULLIF(c.email, ''), NULLIF(c.address, ''),
-    c.is_active, NULL, c.is_deleted, c.created_by, c.created_at,
+    (c.is_active <> 0), NULL, (c.is_deleted <> 0), c.created_by, c.created_at,
     c.updated_by, c.updated_at,
     c.customer_id
 FROM customers c
@@ -80,7 +80,7 @@ SELECT
     s.supplier_name_ar, s.tax_number, s.commercial_reg,
     s.credit_limit, s.credit_days, NULLIF(s.price_tier, ''), NULLIF(s.gl_account_code, ''),
     NULLIF(s.phone, ''), NULLIF(s.mobile, ''), NULLIF(s.email, ''), NULLIF(s.address, ''),
-    s.is_active, NULL, s.is_deleted, s.created_by, s.created_at,
+    (s.is_active <> 0), NULL, (s.is_deleted <> 0), s.created_by, s.created_at,
     s.updated_by, s.updated_at,
     s.supplier_id
 FROM suppliers s

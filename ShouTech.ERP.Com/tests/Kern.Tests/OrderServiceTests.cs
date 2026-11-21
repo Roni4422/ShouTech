@@ -123,9 +123,15 @@ namespace Kern.Tests
                 var docId = await service.CreateOrderAsync(
                     Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-9001", 4m, 50m, partyId: 9, partyCode: "SUP-1"), "order-test");
                 await service.PostOrderAsync(CommercialDocSide.Purchase, docId, "order-test");
+                await service.CreatePurchaseReceiptAsync(
+                    companyId, docId, new DateOnly(2026, 11, 1),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Order test item", "PCS", 4m, 50m) },
+                    "order-test");
 
-                var (invoiceId, _) = await service.ConvertToInvoiceAsync(
-                    CommercialDocSide.Purchase, docId, new DateOnly(2026, 11, 2), "order-test");
+                var (invoiceId, _) = await service.CreatePurchaseInvoiceAsync(
+                    companyId, docId, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Order test item", "PCS", 4m, 50m) },
+                    "order-test");
                 var invoice = await orders.FindByIdAsync(CommercialDocSide.Purchase, invoiceId);
                 Assert.Equal(CommercialDocKinds.PurchaseInvoice, invoice!.DocKind);
                 Assert.Equal(200m, invoice.GrandTotal);
@@ -136,6 +142,32 @@ namespace Kern.Tests
                 ledger.CommandText = "SELECT COALESCE(SUM(credit),0) FROM party_ledger WHERE doc_id = $doc AND party_kind = 'S'";
                 ledger.Parameters.AddWithValue("$doc", invoiceId);
                 Assert.Equal(200m, Convert.ToDecimal(await ledger.ExecuteScalarAsync()));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task PostedInvoice_CannotBeCancelledDirectly()
+        {
+            var (service, orders, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.SalesOrder, "SO-9010", 2m, 25m), "order-test");
+                await service.PostOrderAsync(CommercialDocSide.Sales, orderId, "order-test");
+                var (invoiceId, _) = await service.ConvertToInvoiceAsync(
+                    CommercialDocSide.Sales, orderId, new DateOnly(2026, 11, 2), "order-test");
+
+                var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    orders.SetStatusAsync(CommercialDocSide.Sales, invoiceId,
+                        CommercialDocumentStatus.Cancelled, "order-test"));
+                Assert.Contains("return or reverse", error.Message.ToLowerInvariant());
+
+                var invoice = await orders.FindByIdAsync(CommercialDocSide.Sales, invoiceId);
+                Assert.Equal(CommercialDocumentStatus.Posted, invoice!.Status);
             }
             finally
             {
@@ -329,7 +361,7 @@ namespace Kern.Tests
             foreach (var (code, name, type) in new[]
             {
                 ("1201", "Trade Accounts Receivable", "ASSET"), ("1203", "Merchandise Inventory", "ASSET"),
-                ("2201", "Trade Accounts Payable", "LIABILITY"), ("301", "Goods Sales Revenue", "REVENUE"),
+                ("2201", "Trade Accounts Payable", "LIABILITY"), ("2203", "Accrued Liabilities / GRNI", "LIABILITY"), ("301", "Goods Sales Revenue", "REVENUE"),
                 ("401", "Cost of Goods Sold", "EXPENSE"), ("402", "Merchandise Purchases", "EXPENSE"),
                 ("131", "Cash on Hand", "ASSET")
             })

@@ -108,9 +108,12 @@ namespace Kern.Tests
                     BindingFlags.NonPublic | BindingFlags.Static);
                 Assert.NotNull(saveMethod);
 
+                var template = CoaTemplatesSvc.LoadDefault();
+                Assert.NotNull(template);
+
                 var saveTask = (Task<bool>)saveMethod!.Invoke(
                     null,
-                    new object[] { record, request })!;
+                    new object[] { record, request, template })!;
                 Assert.True(await saveTask);
 
                 await using var connection = new SqliteConnection($"Data Source={databasePath};");
@@ -251,7 +254,7 @@ namespace Kern.Tests
                 await using var command = connection.CreateCommand();
                 command.CommandText = """
                     SELECT company_id, company_name_ar, company_name_en,
-                           commercial_registration, currency_code, language_code
+                           tax_number, commercial_registration, currency_code, language_code
                     FROM companies
                     WHERE company_code = @code;
                     """;
@@ -262,8 +265,9 @@ namespace Kern.Tests
                 Assert.Equal(profile.Name, reader.GetString(1));
                 Assert.Equal(profile.NameEn, reader.GetString(2));
                 Assert.Equal(profile.TaxNumber, reader.GetString(3));
-                Assert.Equal(profile.CurrencyCode, reader.GetString(4));
-                Assert.Equal(profile.LanguageCode, reader.GetString(5));
+                Assert.Equal(profile.License, reader.GetString(4));
+                Assert.Equal(profile.CurrencyCode, reader.GetString(5));
+                Assert.Equal(profile.LanguageCode, reader.GetString(6));
             }
             finally
             {
@@ -553,6 +557,18 @@ namespace Kern.Tests
                     insertCompany.Parameters.AddWithValue("$id", companyId.ToString("D"));
                     insertCompany.Parameters.AddWithValue("$code", companyCode);
                     await insertCompany.ExecuteNonQueryAsync();
+
+                    using var insertCenters = connection.CreateCommand();
+                    insertCenters.CommandText = """
+                        INSERT INTO cost_centers (id, company_id, code, name_en, is_group, is_active, is_deleted)
+                        VALUES ($id1, $company, 'CC-10', 'Center 10', 0, 1, 0),
+                               ($id2, $company, 'CC-20', 'Center 20', 0, 1, 0);
+                        """;
+                    insertCenters.Parameters.AddWithValue("$id1", Guid.NewGuid().ToString("D"));
+                    insertCenters.Parameters.AddWithValue("$id2", Guid.NewGuid().ToString("D"));
+                    // Cost-center masters use the company CODE namespace.
+                    insertCenters.Parameters.AddWithValue("$company", companyCode);
+                    await insertCenters.ExecuteNonQueryAsync();
                 }
 
                 var structure = new ShouTech.Infrastructure.AccountingStructureRepository("SQLite", connectionString);
@@ -758,9 +774,7 @@ namespace Kern.Tests
         {
             var databasePath = Path.Combine(Path.GetTempPath(), $"shoutech-merge-{Guid.NewGuid():N}.sqlite3");
             var settingsField = typeof(AppCfgSvc).GetField("_settings", BindingFlags.NonPublic | BindingFlags.Static)!;
-            var schemaReadyField = typeof(DocSchema).GetField("_validated", BindingFlags.NonPublic | BindingFlags.Static)!;
             var oldSettings = settingsField.GetValue(null);
-            var oldSchemaReady = schemaReadyField.GetValue(null);
             var oldCompany = AppState.CurrentCompanyCode;
             const string company = "TEST-MERGE";
             try
@@ -779,7 +793,6 @@ namespace Kern.Tests
                 });
                 AppState.CurrentCompanyCode = company;
 
-                schemaReadyField.SetValue(null, false);
                 ApplySqliteMigrations(databasePath);
                 typeof(StkPost).Assembly
                     .GetType("ShouTech.App.Services.MatRepo")!
@@ -816,10 +829,10 @@ namespace Kern.Tests
                           ('OTHER-COMPANY', 1, 1, '2024-01-04', 'SAL', 'OTHER-1', 0, 1, 8, 'Other company');
                         INSERT INTO material_stock_balances
                           (company_id, warehouse_id, material_id, available_qty, reserved_qty,
-                           average_cost, last_cost, is_deleted)
+                           average_cost, last_cost, stock_value, is_deleted)
                         VALUES
-                          ('TEST-MERGE', 1, 1, 4, 2, 3, 3, 0),
-                          ('TEST-MERGE', 1, 2, 6, 1, 5, 5, 0);
+                          ('TEST-MERGE', 1, 1, 4, 2, 3, 3, 12, 0),
+                          ('TEST-MERGE', 1, 2, 6, 1, 5, 5, 30, 0);
                         """);
                 }
 
@@ -882,7 +895,6 @@ namespace Kern.Tests
             finally
             {
                 settingsField.SetValue(null, oldSettings);
-                schemaReadyField.SetValue(null, oldSchemaReady);
                 AppState.CurrentCompanyCode = oldCompany;
                 SqliteConnection.ClearAllPools();
                 if (File.Exists(databasePath))

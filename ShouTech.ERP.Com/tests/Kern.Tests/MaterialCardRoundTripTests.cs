@@ -137,6 +137,7 @@ namespace Kern.Tests
             using var ctx = CreateContext();
             var a = MatRepo.Save(FullyPopulated("RT-A"), isNew: true);
             var bRecord = FullyPopulated("RT-B");
+            bRecord.ExtraBarcodes[0].Barcode = "EXTRA-2";
             bRecord.Attributes = new List<MatAttrRow>
             {
                 new() { Key = "BSpec", Value = "BValue", Group = "BG", SortOrder = 1 }

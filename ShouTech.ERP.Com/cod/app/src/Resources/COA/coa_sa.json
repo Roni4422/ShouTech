@@ -397,6 +397,22 @@
       "balance": "Debit",
       "posting": true,
       "cardType": null
+    },
+    {
+      "code": "1205",
+      "parent": "12",
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": null
+    },
+    {
+      "code": "2205",
+      "parent": "22",
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": null
     }
   ],
   "nameKey": "COA.SA.Title"

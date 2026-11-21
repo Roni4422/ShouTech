@@ -260,7 +260,7 @@ public static class StkPost
                     doc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                     moveType, doc.DocNo ?? string.Empty,
                     qtyIn, qtyOut,
-                    ReceiptUnitCost: qtyIn > 0 ? unitCost : null,
+                    ReceiptUnitCost: qtyIn > 0 && doc.Kind != InvDocKind.SalesReturn ? unitCost : null,
                     LinkedRate: linkedRate,
                     Note: line.Description,
                     BatchAllocations: batchAllocs,
@@ -427,7 +427,8 @@ public static class StkPost
         long warehouseId,
         DateTime countDate,
         string reason,
-        IReadOnlyCollection<StockCountLine> lines)
+        IReadOnlyCollection<StockCountLine> lines,
+        string? operationKey = null)
     {
         ArgumentNullException.ThrowIfNull(lines);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(warehouseId);
@@ -470,7 +471,15 @@ public static class StkPost
             ? connection.BeginTransaction(System.Data.IsolationLevel.Serializable)
             : connection.BeginTransaction();
 
+        // A committed operation must remain recoverable even if the warehouse
+        // is later deactivated. Check the durable receipt before mutable
+        // master-data validation so a retry can safely finalize its document.
+        if (!string.IsNullOrWhiteSpace(operationKey)
+            && TryReadCompletedOperation(connection, tx, company, operationKey, "InventoryCount",
+                out _, out var completedMovementCount))
+            return completedMovementCount;
         EnsureWarehouseIsActive(connection, tx, company, warehouseId);
+
         var documentNo = $"CNT-{countDate:yyyyMMdd}-{Guid.NewGuid():N}";
         var date = countDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         var posted = 0;
@@ -539,6 +548,9 @@ public static class StkPost
                     Actor: AppState.CurrentUser?.Username));
             posted++;
         }
+
+        if (!string.IsNullOrWhiteSpace(operationKey))
+            RecordCompletedOperation(connection, tx, company, operationKey, "InventoryCount", documentNo, posted);
 
         tx.Commit();
         return posted;
@@ -852,7 +864,8 @@ public static class StkPost
         long targetWarehouseId,
         DateTime transferDate,
         string reason,
-        IReadOnlyCollection<StockTransferLine> lines)
+        IReadOnlyCollection<StockTransferLine> lines,
+        string? operationKey = null)
     {
         ArgumentNullException.ThrowIfNull(lines);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sourceWarehouseId);
@@ -897,6 +910,12 @@ public static class StkPost
                 ? connection.BeginTransaction(System.Data.IsolationLevel.Serializable)
                 : connection.BeginTransaction();
 
+            // A durable receipt takes precedence over current warehouse
+            // activation state: the stock transaction has already committed.
+            if (!string.IsNullOrWhiteSpace(operationKey)
+                && TryReadCompletedOperation(connection, tx, company, operationKey, "StockTransfer",
+                    out var completedDocumentNo, out _))
+                return completedDocumentNo;
             EnsureWarehouseIsActive(connection, tx, company, sourceWarehouseId);
             EnsureWarehouseIsActive(connection, tx, company, targetWarehouseId);
 
@@ -944,6 +963,10 @@ public static class StkPost
                         Actor: AppState.CurrentUser?.Username));
             }
 
+            if (!string.IsNullOrWhiteSpace(operationKey))
+                RecordCompletedOperation(connection, tx, company, operationKey, "StockTransfer",
+                    documentNo, lines.Count * 2);
+
             tx.Commit();
             return documentNo;
         }
@@ -958,6 +981,101 @@ public static class StkPost
                 "The material transfer failed and was rolled back.",
                 ex);
         }
+    }
+
+    public static bool IsOperationCompleted(string operationKey, string expectedType)
+    {
+        if (string.IsNullOrWhiteSpace(operationKey))
+            throw new ArgumentException("An operation key is required.", nameof(operationKey));
+        if (string.IsNullOrWhiteSpace(expectedType))
+            throw new ArgumentException("An operation type is required.", nameof(expectedType));
+
+        var company = AppState.CurrentCompanyCode?.Trim();
+        if (string.IsNullOrWhiteSpace(company))
+            throw new InvalidOperationException("No current company is selected.");
+        var connectionString = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(connectionString))
+            throw new InvalidOperationException("No connection to the current company database.");
+
+        using DbConnection connection = DatabaseRuntime.IsPostgreSql()
+            ? new NpgsqlConnection(connectionString)
+            : new SqliteConnection(DatabaseRuntime.NormalizeSqliteConnectionString(connectionString));
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT operation_type
+            FROM stock_posting_operations
+            WHERE company_id=$company AND operation_key=$key;
+            """;
+        Add(command, "$company", company);
+        Add(command, "$key", operationKey);
+        var value = command.ExecuteScalar();
+        if (value is null or DBNull) return false;
+        var actualType = Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+        if (!string.Equals(actualType, expectedType, StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                "The stock posting operation key is already registered for a different operation type.");
+        return true;
+    }
+
+    private static bool TryReadCompletedOperation(
+        DbConnection connection,
+        DbTransaction tx,
+        string company,
+        string operationKey,
+        string expectedType,
+        out string documentNo,
+        out int movementCount)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = tx;
+        command.CommandText = """
+            SELECT operation_type, document_no, movement_count
+            FROM stock_posting_operations
+            WHERE company_id=$company AND operation_key=$key;
+            """;
+        Add(command, "$company", company);
+        Add(command, "$key", operationKey);
+        using var reader = command.ExecuteReader();
+        if (!reader.Read())
+        {
+            documentNo = string.Empty;
+            movementCount = 0;
+            return false;
+        }
+
+        var actualType = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty;
+        if (!string.Equals(actualType, expectedType, StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                "The stock posting operation key is already registered for a different operation type.");
+
+        documentNo = Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? string.Empty;
+        movementCount = Convert.ToInt32(reader.GetValue(2), CultureInfo.InvariantCulture);
+        return true;
+    }
+
+    private static void RecordCompletedOperation(
+        DbConnection connection,
+        DbTransaction tx,
+        string company,
+        string operationKey,
+        string operationType,
+        string documentNo,
+        int movementCount)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = tx;
+        command.CommandText = """
+            INSERT INTO stock_posting_operations
+                (company_id, operation_key, operation_type, document_no, movement_count, created_at)
+            VALUES ($company, $key, $type, $documentNo, $count, CURRENT_TIMESTAMP);
+            """;
+        Add(command, "$company", company);
+        Add(command, "$key", operationKey);
+        Add(command, "$type", operationType);
+        Add(command, "$documentNo", documentNo);
+        Add(command, "$count", movementCount);
+        command.ExecuteNonQuery();
     }
 
     private static (long BalanceId, decimal Quantity, decimal AverageCost, decimal LastCost)? ReadBalance(

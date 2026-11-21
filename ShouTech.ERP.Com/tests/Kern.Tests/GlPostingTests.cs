@@ -45,6 +45,147 @@ public class GlPostingTests
     private const string CompanyCode = "GL1";
 
     [Fact]
+    public async Task SalesInvoice_Post_UsesCountryTaxAccount_AndWritesImmutableTaxSnapshot()
+    {
+        using var db = await SeededAsync();
+        using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            connection.Open();
+            using var setup = connection.CreateCommand();
+            setup.CommandText = """
+                INSERT INTO company_tax_settings
+                    (company_code, country_code, tax_enabled, tax_scheme)
+                VALUES ('GL1', 'SA', 1, 'VAT');
+                INSERT INTO company_tax_rules
+                    (company_code, country_code, tax_code, tax_name, tax_type, tax_treatment,
+                     rate, calculation_mode, is_recoverable, output_account_code, input_account_code,
+                     effective_from, is_default, is_active)
+                VALUES ('GL1', 'SA', 'VAT15', 'Standard VAT', 'VAT', 'Standard',
+                        15, 'Exclusive', 1, '2205', '1205', '2026-01-01', 1, 1);
+                """;
+            setup.ExecuteNonQuery();
+        }
+
+        var doc = await PostInvoiceAsync(
+            db, InvDocKind.SalesInvoice, qty: 1m, price: 100m, taxRate: 15m, taxCode: "VAT15");
+
+        var entry = SingleEntry(db, "SAL", doc.DocId);
+        AssertBalanced(entry);
+        Assert.Equal(15m, Line(entry, "2205").Credit);
+
+        var purchase = await PostInvoiceAsync(
+            db, InvDocKind.PurchaseInvoice, qty: 1m, price: 100m, taxRate: 15m, taxCode: "VAT15");
+        var purchaseEntry = SingleEntry(db, "PUR", purchase.DocId);
+        AssertBalanced(purchaseEntry);
+        Assert.Equal(15m, Line(purchaseEntry, "1205").Debit);
+
+        using var verify = new SqliteConnection(db.ConnectionString);
+        verify.Open();
+        using var query = verify.CreateCommand();
+        query.CommandText = """
+            SELECT country_code, tax_code, tax_rate, taxable_amount, tax_amount,
+                   tax_direction, tax_account_code, journal_doc_no, document_date
+            FROM tax_transactions
+            WHERE company_code='GL1' AND source_doc_kind='SAL'
+              AND source_doc_id=$doc AND line_no=1;
+            """;
+        query.Parameters.AddWithValue("$doc", doc.DocId);
+        using var reader = query.ExecuteReader();
+        Assert.True(reader.Read());
+        Assert.Equal("SA", reader.GetString(0));
+        Assert.Equal("VAT15", reader.GetString(1));
+        Assert.Equal(15m, reader.GetDecimal(2));
+        Assert.Equal(100m, reader.GetDecimal(3));
+        Assert.Equal(15m, reader.GetDecimal(4));
+        Assert.Equal("OUTPUT", reader.GetString(5));
+        Assert.Equal("2205", reader.GetString(6));
+        Assert.Equal(entry.DocumentNumber, reader.GetString(7));
+        Assert.Equal("2026-03-10", reader.GetString(8));
+        Assert.False(reader.Read());
+        reader.Close();
+
+        using var purchaseQuery = verify.CreateCommand();
+        purchaseQuery.CommandText = """
+            SELECT tax_direction, tax_account_code, tax_amount
+            FROM tax_transactions
+            WHERE company_code='GL1' AND source_doc_kind='PUR'
+              AND source_doc_id=$doc AND line_no=1;
+            """;
+        purchaseQuery.Parameters.AddWithValue("$doc", purchase.DocId);
+        using var purchaseReader = purchaseQuery.ExecuteReader();
+        Assert.True(purchaseReader.Read());
+        Assert.Equal("INPUT", purchaseReader.GetString(0));
+        Assert.Equal("1205", purchaseReader.GetString(1));
+        Assert.Equal(15m, purchaseReader.GetDecimal(2));
+        Assert.False(purchaseReader.Read());
+        purchaseReader.Close();
+
+        using var mutation = verify.CreateCommand();
+        mutation.CommandText = """
+            UPDATE tax_transactions SET tax_amount=0
+            WHERE company_code='GL1' AND source_doc_kind='SAL' AND source_doc_id=$doc AND line_no=1;
+            """;
+        mutation.Parameters.AddWithValue("$doc", doc.DocId);
+        Assert.Throws<SqliteException>(() => mutation.ExecuteNonQuery());
+
+        mutation.Parameters.Clear();
+        mutation.CommandText = """
+            DELETE FROM tax_transactions
+            WHERE company_code='GL1' AND source_doc_kind='SAL' AND source_doc_id=$doc AND line_no=1;
+            """;
+        mutation.Parameters.AddWithValue("$doc", doc.DocId);
+        Assert.Throws<SqliteException>(() => mutation.ExecuteNonQuery());
+    }
+
+    [Fact]
+    public async Task PurchaseInvoice_Post_ExpendsNonRecoverableTaxIntoPurchaseCost()
+    {
+        using var db = await SeededAsync();
+        using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            connection.Open();
+            using var setup = connection.CreateCommand();
+            setup.CommandText = """
+                INSERT INTO company_tax_settings
+                    (company_code, country_code, tax_enabled, tax_scheme)
+                VALUES ('GL1', 'SA', 1, 'VAT');
+                INSERT INTO company_tax_rules
+                    (company_code, country_code, tax_code, tax_name, tax_type, tax_treatment,
+                     rate, calculation_mode, is_recoverable, output_account_code, input_account_code,
+                     effective_from, is_default, is_active, data_status)
+                VALUES ('GL1', 'SA', 'VAT-NR', 'Non-recoverable VAT', 'VAT', 'Exempt',
+                        15, 'Exclusive', 0, '2205', '1205', '2026-01-01', 1, 1, 'USER_CONFIGURED');
+                """;
+            setup.ExecuteNonQuery();
+        }
+
+        var doc = await PostInvoiceAsync(
+            db, InvDocKind.PurchaseInvoice, qty: 1m, price: 100m, taxRate: 15m, taxCode: "VAT-NR");
+
+        var entry = SingleEntry(db, "PUR", doc.DocId);
+        AssertBalanced(entry);
+        Assert.Equal(115m, Line(entry, "402").Debit);
+        Assert.DoesNotContain(entry.Lines, line => line.Code == "1205");
+
+        using var verify = new SqliteConnection(db.ConnectionString);
+        verify.Open();
+        using var query = verify.CreateCommand();
+        query.CommandText = """
+            SELECT is_recoverable, tax_amount, tax_direction
+            FROM tax_transactions
+            WHERE company_code='GL1' AND source_doc_kind='PUR'
+              AND source_doc_id=$doc AND line_no=1;
+            """;
+        query.Parameters.AddWithValue("$doc", doc.DocId);
+        using var reader = query.ExecuteReader();
+        Assert.True(reader.Read());
+        Assert.Equal(0, reader.GetInt32(0));
+        Assert.Equal(15m, reader.GetDecimal(1));
+        Assert.Equal("INPUT", reader.GetString(2));
+        Assert.False(reader.Read());
+    }
+
+    [Fact]
     public async Task SalesInvoice_Post_CreatesBalancedLinkedGlEntry_AndStampsRealJournalNumber()
     {
         using var db = await SeededAsync();
@@ -136,7 +277,26 @@ public class GlPostingTests
               WHERE e.status = 1 GROUP BY l.account_id
               HAVING ABS(COALESCE(SUM(l.debit),0) - COALESCE(SUM(l.credit),0)) > 0.0001);
             """;
-        Assert.Equal(0L, Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture));
+        var unbalancedAccountCount = Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+        if (unbalancedAccountCount != 0)
+        {
+            using var diagnostic = connection.CreateCommand();
+            diagnostic.CommandText = """
+                SELECT a.account_code || '=' ||
+                       CAST(ROUND(COALESCE(SUM(l.debit),0) - COALESCE(SUM(l.credit),0), 4) AS TEXT)
+                FROM journal_entry_lines l
+                JOIN journal_entries e ON e.journal_entry_id = l.journal_entry_id
+                JOIN chart_of_accounts a ON a.account_id = l.account_id
+                WHERE e.status = 1
+                GROUP BY a.account_code
+                HAVING ABS(COALESCE(SUM(l.debit),0) - COALESCE(SUM(l.credit),0)) > 0.0001
+                ORDER BY a.account_code;
+                """;
+            using var reader = diagnostic.ExecuteReader();
+            var residuals = new List<string>();
+            while (reader.Read()) residuals.Add(reader.GetString(0));
+            Assert.Fail($"Invoice reversal left {unbalancedAccountCount} non-zero GL account balances: {string.Join(", ", residuals)}");
+        }
     }
 
     [Fact]
@@ -160,6 +320,47 @@ public class GlPostingTests
         var loaded = InvRepo.Load(doc.DocId, InvDocKind.SalesInvoice);
         Assert.Equal(InvDocStatus.Draft, loaded!.Status);
         Assert.Equal(string.Empty, loaded.JournalDocNo);
+    }
+
+    [Fact]
+    public async Task JournalPost_DraftCannotPostAfterFiscalPeriodCloses()
+    {
+        using var db = await SeededAsync();
+        var store = new JournalRepository("SQLite", db.ConnectionString);
+        var journal = new JournalService(store);
+        var cash = await store.ResolveAccountIdAsync(db.CompanyId, "131");
+        var sales = await store.ResolveAccountIdAsync(db.CompanyId, "301");
+        var entryId = await journal.CreateDraftAsync(db.CompanyId, new DateOnly(2026, 3, 10), "Closed period", Actor,
+            new[]
+            {
+                new JournalLineRequest(cash, 25m, 0m),
+                new JournalLineRequest(sales, 0m, 25m)
+            }, documentNumber: "JV-GL-CLOSED");
+
+        using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            connection.Open();
+            using var close = connection.CreateCommand();
+            close.CommandText = """
+                UPDATE fiscal_periods
+                SET status = 'CLOSED'
+                WHERE fiscal_year_id IN (
+                    SELECT fiscal_year_id FROM fiscal_years WHERE company_id = $company
+                );
+                """;
+            close.Parameters.AddWithValue("$company", db.CompanyId.ToString("D"));
+            Assert.True(close.ExecuteNonQuery() > 0);
+        }
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => journal.PostAsync(entryId, Actor));
+
+        using var verify = new SqliteConnection(db.ConnectionString);
+        verify.Open();
+        using var status = verify.CreateCommand();
+        status.CommandText = "SELECT status FROM journal_entries WHERE journal_entry_id = $id;";
+        status.Parameters.AddWithValue("$id", entryId.ToString("D"));
+        Assert.Equal((long)JournalEntryStatus.Draft,
+            Convert.ToInt64(status.ExecuteScalar(), CultureInfo.InvariantCulture));
     }
 
     [Fact]
@@ -342,7 +543,7 @@ public class GlPostingTests
         => Assert.Equal(entry.Lines.Sum(l => l.Debit), entry.Lines.Sum(l => l.Credit));
 
     private static Task<InvDoc> PostInvoiceAsync(TestDb db, InvDocKind kind, decimal qty, decimal price, decimal taxRate,
-        decimal paid = 0m)
+        decimal paid = 0m, string taxCode = "")
     {
         var doc = new InvDoc
         {
@@ -356,7 +557,7 @@ public class GlPostingTests
             CurrencyCode = "SAR",
             PaidAmount = paid,
             PaymentMethod = kind == InvDocKind.PosSale ? InvPaymentMethod.Cash : InvPaymentMethod.Credit,
-            Lines = { new InvLine { LineNo = 1, MaterialId = 42, MaterialCode = "MAT-42", Qty = qty, UnitPrice = price, TaxRate = taxRate, WarehouseId = 1 } }
+            Lines = { new InvLine { LineNo = 1, MaterialId = 42, MaterialCode = "MAT-42", Qty = qty, UnitPrice = price, TaxCode = taxCode, TaxRate = taxRate, WarehouseId = 1 } }
         };
         InvRepo.SaveDraft(doc);
         InvRepo.Post(doc.DocId, kind, Actor);
@@ -375,8 +576,9 @@ public class GlPostingTests
         }
         Exec($"INSERT INTO materials (material_id, company_id, code, name_ar, name_en, is_stocked, is_deleted) VALUES (1, '{CompanyCode}', 'RM-1', 'Raw', 'Raw', 1, 0);");
         Exec($"INSERT INTO materials (material_id, company_id, code, name_ar, name_en, is_stocked, is_deleted) VALUES (2, '{CompanyCode}', 'FG-1', 'Finished', 'Finished', 1, 0);");
-        Exec($"INSERT INTO warehouses (warehouse_id, company_id, warehouse_code, name, is_deleted) VALUES (1, '{CompanyCode}', 1, 'Main', 0);");
-        Exec($"INSERT INTO material_stock_balances (company_id, warehouse_id, material_id, available_qty, average_cost, last_cost) VALUES ('{CompanyCode}', 1, 1, 100, 2, 2);");
+        Exec($"UPDATE warehouses SET company_id = '{CompanyCode}', warehouse_code = 1, warehouse_name_ar = 'Main', warehouse_name_en = 'Main', is_deleted = 0 WHERE warehouse_id = 1;");
+        Exec($"INSERT INTO material_stock_movements (company_id, warehouse_id, material_id, movement_date, movement_type, document_no, qty_in, qty_out, unit_cost, note) VALUES ('{CompanyCode}', 1, 1, '2026-03-01', 'OPN', 'OPEN-RM-1', 100, 0, 2, 'Opening stock fixture');");
+        Exec($"INSERT INTO material_stock_balances (company_id, warehouse_id, material_id, available_qty, average_cost, last_cost, stock_value) VALUES ('{CompanyCode}', 1, 1, 100, 2, 2, 200);");
     }
 
     private sealed class TestDb : IDisposable
@@ -401,7 +603,20 @@ public class GlPostingTests
         var companyId = Guid.NewGuid();
         var connectionString = $"Data Source={dbPath};";
 
-        Assert.True((await SchemaMigrator.ApplyAllAsync("SQLite", dbPath)).Success);
+        var migration = await SchemaMigrator.ApplyAllAsync("SQLite", dbPath);
+        Assert.True(migration.Success, migration.Message);
+        using (var schemaProbe = new SqliteConnection(connectionString))
+        {
+            schemaProbe.Open();
+            using var columnsCommand = schemaProbe.CreateCommand();
+            columnsCommand.CommandText = "PRAGMA table_info('party_ledger');";
+            using var columnsReader = columnsCommand.ExecuteReader();
+            var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            while (columnsReader.Read())
+                columns.Add(columnsReader.GetString(1));
+            Assert.Contains("debit", columns);
+            Assert.Contains("credit", columns);
+        }
         PointAppAt(dbPath);
         AppState.SetCompany(CompanyCode, "GL Test Co", "GL Test Co");
 
@@ -421,7 +636,7 @@ public class GlPostingTests
         foreach (var (code, name) in new[]
         {
             ("131", "Cash"), ("132", "Bank"), ("1201", "Receivable"), ("1203", "Inventory"),
-            ("2201", "Payable"), ("301", "Sales"), ("302", "Sales Returns"), ("401", "COGS"),
+            ("1205", "Input VAT"), ("2201", "Payable"), ("2205", "Output VAT"), ("301", "Sales"), ("302", "Sales Returns"), ("401", "COGS"),
             ("402", "Purchases"), ("403", "Purchase Returns"), ("505", "Depreciation Expense"),
             ("1190", "Accumulated Depreciation"), ("1102", "Buildings")
         })
@@ -443,7 +658,7 @@ public class GlPostingTests
                 cmd.ExecuteNonQuery();
             }
             Exec($"INSERT INTO materials (material_id, company_id, code, name_ar, name_en, is_stocked, avg_cost, is_deleted) VALUES (42, '{CompanyCode}', 'MAT-42', 'Item', 'Item', 1, 40, 0);");
-            Exec($"INSERT INTO warehouses (warehouse_id, company_id, warehouse_code, name, is_deleted) VALUES (1, '{CompanyCode}', 1, 'Main', 0);");
+            Exec($"INSERT INTO warehouses (warehouse_id, company_id, warehouse_code, warehouse_name_ar, warehouse_name_en, is_deleted) VALUES (1, '{CompanyCode}', 1, 'Main', 'Main', 0);");
             Exec($"INSERT INTO material_stock_balances (company_id, warehouse_id, material_id, available_qty, average_cost, last_cost) VALUES ('{CompanyCode}', 1, 42, 1000, 40, 40);");
         }
 

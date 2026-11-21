@@ -108,6 +108,25 @@ public static class SchemaMigrator
                 .OrderBy(m => m.Id, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
+            // Keep desktop startup behavior aligned with SqlMigrator. Reject
+            // case-insensitive path collisions before opening the company DB.
+            var duplicateMigrationIds = migrations
+                .GroupBy(m => m.Id, StringComparer.OrdinalIgnoreCase)
+                .Where(group => group.Count() > 1)
+                .Select(group => group.Key)
+                .OrderBy(id => id, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (duplicateMigrationIds.Length > 0)
+            {
+                return new MigrationResult
+                {
+                    Success = false,
+                    Provider = normalized,
+                    Message = "Duplicate migration IDs were discovered (IDs are case-insensitive): " +
+                        string.Join(", ", duplicateMigrationIds)
+                };
+            }
+
             if (migrations.Count == 0)
             {
                 return new MigrationResult
@@ -222,22 +241,20 @@ public static class SchemaMigrator
         string provider,
         CancellationToken cancellationToken)
     {
+        // The migration ledger is schema and must have one canonical owner:
+        // the provider-specific bootstrap SQL under dba/mig. Keep this runner
+        // aligned with the standalone SqlMigrator so desktop startup and
+        // administrative migration runs cannot drift.
+        var migrationDirectory = ResolveMigrationDirectory(provider);
+        var historyPath = Path.Combine(migrationDirectory, "000_history.sql");
+        if (!File.Exists(historyPath))
+            throw new FileNotFoundException(
+                "Required DBA migration-history bootstrap is missing.", historyPath);
+
+        var historySql = await File.ReadAllTextAsync(
+            historyPath, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
-        command.CommandText = provider == "postgresql"
-            ? """
-              CREATE TABLE IF NOT EXISTS schema_migrations (
-                  migration_id TEXT PRIMARY KEY,
-                  checksum TEXT NOT NULL,
-                  applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-              );
-              """
-            : """
-              CREATE TABLE IF NOT EXISTS schema_migrations (
-                  migration_id TEXT NOT NULL PRIMARY KEY,
-                  checksum TEXT NOT NULL,
-                  applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-              );
-              """;
+        command.CommandText = historySql;
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -45,6 +46,126 @@ public sealed class InvPostCorrectnessTests
     private const string Actor = "invpost-test";
     private const string CompanyCode = "IP5";
 
+    [Fact]
+    public async Task DocSchema_ValidatesEachCompanyDatabaseIndependently()
+    {
+        using var validDb = await SeededAsync();
+        DocSchema.Ensure();
+
+        var root = Path.Combine(Path.GetTempPath(), "doc-schema-tests-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var incompletePath = Path.Combine(root, "incomplete.db");
+        try
+        {
+            using (var connection = new SqliteConnection($"Data Source={incompletePath};"))
+                connection.Open();
+
+            PointAppAt(incompletePath);
+            var error = Assert.Throws<InvalidOperationException>(() => DocSchema.Ensure());
+            Assert.Contains("schema is incomplete", error.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            PointAppAt(validDb.DbPath);
+            SqliteConnection.ClearAllPools();
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task LoadAndPost_RejectMismatchedStoredDocumentKind()
+    {
+        using var db = await SeededAsync();
+        var beforeStock = StockQty(db);
+        var doc = BuildDoc(InvDocKind.SalesInvoice, null, string.Empty,
+            qty: 2m, price: 10m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        InvRepo.SaveDraft(doc);
+
+        Assert.Throws<InvalidOperationException>(
+            () => InvRepo.Load(doc.DocId, InvDocKind.SalesReturn));
+        Assert.Throws<InvalidOperationException>(
+            () => InvRepo.Post(doc.DocId, InvDocKind.SalesReturn, Actor));
+
+        var original = InvRepo.Load(doc.DocId, InvDocKind.SalesInvoice);
+        Assert.NotNull(original);
+        Assert.Equal(InvDocStatus.Draft, original!.Status);
+        Assert.Equal(beforeStock, StockQty(db));
+        Assert.Equal(0m, Scalar(db, "SELECT COUNT(*) FROM journal_entries;"));
+        Assert.Equal(0m, Scalar(db, $"SELECT COUNT(*) FROM party_ledger WHERE doc_id = {doc.DocId};"));
+    }
+
+    [Fact]
+    public async Task Load_RestoresLineWarehouseNameFromItsStoredColumn()
+    {
+        using var db = await SeededAsync();
+        var doc = BuildDoc(InvDocKind.SalesInvoice, null, string.Empty,
+            qty: 1m, price: 10m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        doc.Lines[0].WarehouseName = "Line Warehouse";
+        InvRepo.SaveDraft(doc);
+
+        var loaded = InvRepo.Load(doc.DocId, InvDocKind.SalesInvoice);
+
+        Assert.NotNull(loaded);
+        Assert.Equal("Line Warehouse", loaded!.Lines.Single().WarehouseName);
+    }
+
+    [Fact]
+    public async Task NextDocNo_UsesHighestExistingSequenceInsteadOfRowCount()
+    {
+        using var db = await SeededAsync();
+        var year = DateTime.Today.Year.ToString(CultureInfo.InvariantCulture);
+        using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                INSERT INTO sales_documents
+                    (company_id, doc_kind, doc_no, doc_date, status, is_deleted)
+                VALUES
+                    ($company, 'SAL', $number, $date, 'Draft', 0);
+                """;
+            command.Parameters.AddWithValue("$company", CompanyCode);
+            command.Parameters.AddWithValue("$number", $"SAL-{year}-0007");
+            command.Parameters.AddWithValue("$date", DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            command.ExecuteNonQuery();
+        }
+
+        Assert.Equal($"SAL-{year}-0008", InvRepo.NextDocNo(InvDocKind.SalesInvoice));
+    }
+
+    [Fact]
+    public async Task NextDocNo_AllocatesUniqueNumbersForConcurrentCallers()
+    {
+        using var db = await SeededAsync();
+        const int callers = 12;
+
+        var allocated = await Task.WhenAll(
+            Enumerable.Range(0, callers)
+                .Select(_ => Task.Run(() => InvRepo.NextDocNo(InvDocKind.SalesInvoice))));
+
+        var expected = Enumerable.Range(1, callers)
+            .Select(value => $"SAL-{DateTime.Today.Year}-{value:D4}")
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(callers, allocated.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(expected, allocated.OrderBy(value => value, StringComparer.Ordinal).ToArray());
+    }
+
+    [Fact]
+    public async Task SaveDraft_AllocatesMissingNumberWithinItsDatabaseTransaction()
+    {
+        using var db = await SeededAsync();
+        var doc = BuildDoc(InvDocKind.SalesInvoice, null, string.Empty,
+            qty: 1m, price: 25m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        doc.DocNo = string.Empty;
+
+        InvRepo.SaveDraft(doc);
+
+        Assert.Equal($"SAL-{DateTime.Today.Year}-0002", doc.DocNo);
+        Assert.True(doc.DocId > 0);
+    }
+
     // ------------------------------------------------------------ (a)
 
     [Fact]
@@ -64,8 +185,42 @@ public sealed class InvPostCorrectnessTests
         Assert.Equal(0m, LedgerSum(db, party.LedgerId, "SAL", debit: false));
         var entry = SingleEntry(db, "SAL", doc.DocId);
         Assert.Equal(1050m, entry.Lines.Where(l => l.Code == "1201").Sum(l => l.Debit));
-        Assert.Equal(1050m, entry.Lines.Where(l => l.Code == "301").Sum(l => l.Credit));
+        Assert.Equal(900m, entry.Lines.Where(l => l.Code == "301").Sum(l => l.Credit));
+        Assert.Equal(150m, entry.Lines.Where(l => l.Code == "2205").Sum(l => l.Credit));
         Assert.Equal(entry.Lines.Sum(l => l.Debit), entry.Lines.Sum(l => l.Credit));
+    }
+
+    [Fact]
+    public async Task PostedInvoice_RejectsRetryWithoutDuplicatingAnyPostingEffects()
+    {
+        using var db = await SeededAsync();
+        var party = await SavePartyAsync(db, "C", "CUST-RETRY", creditLimit: 0m);
+        var stockBefore = StockQty(db);
+        var doc = BuildDoc(InvDocKind.SalesInvoice, party.LedgerId, "CUST-RETRY",
+            qty: 2m, price: 25m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        InvRepo.SaveDraft(doc);
+
+        InvRepo.Post(doc.DocId, doc.Kind, Actor);
+
+        var postedStock = StockQty(db);
+        var journalCount = Scalar(db,
+            $"SELECT COUNT(*) FROM journal_entries WHERE source_doc_type = 'SAL' AND source_doc_id = '{doc.DocId}';");
+        var ledgerCount = Scalar(db,
+            $"SELECT COUNT(*) FROM party_ledger WHERE doc_id = {doc.DocId};");
+        var movementCount = Scalar(db,
+            $"SELECT COUNT(*) FROM material_stock_movements WHERE company_id = '{CompanyCode}' AND document_no = '{doc.DocNo}';");
+
+        Assert.Throws<InvalidOperationException>(() => InvRepo.Post(doc.DocId, doc.Kind, Actor));
+
+        Assert.Equal(InvDocStatus.Posted, InvRepo.Load(doc.DocId, doc.Kind)!.Status);
+        Assert.Equal(postedStock, StockQty(db));
+        Assert.Equal(stockBefore - 2m, postedStock);
+        Assert.Equal(journalCount, Scalar(db,
+            $"SELECT COUNT(*) FROM journal_entries WHERE source_doc_type = 'SAL' AND source_doc_id = '{doc.DocId}';"));
+        Assert.Equal(ledgerCount, Scalar(db,
+            $"SELECT COUNT(*) FROM party_ledger WHERE doc_id = {doc.DocId};"));
+        Assert.Equal(movementCount, Scalar(db,
+            $"SELECT COUNT(*) FROM material_stock_movements WHERE company_id = '{CompanyCode}' AND document_no = '{doc.DocNo}';"));
     }
 
     [Fact]
@@ -83,8 +238,97 @@ public sealed class InvPostCorrectnessTests
 
         Assert.Equal(1050m, LedgerSum(db, party.LedgerId, "PUR", debit: false));
         var entry = SingleEntry(db, "PUR", doc.DocId);
-        Assert.Equal(1050m, entry.Lines.Where(l => l.Code == "402").Sum(l => l.Debit));
+        Assert.Equal(900m, entry.Lines.Where(l => l.Code == "402").Sum(l => l.Debit));
+        Assert.Equal(150m, entry.Lines.Where(l => l.Code == "1205").Sum(l => l.Debit));
         Assert.Equal(1050m, entry.Lines.Where(l => l.Code == "2201").Sum(l => l.Credit));
+    }
+
+    [Fact]
+    public async Task PurchaseInvoiceReturn_AuditsReleasedSupplierPaymentAllocation()
+    {
+        using var db = await SeededAsync();
+        var supplier = await SavePartyAsync(db, "S", "SUP-RET-1", creditLimit: 0m);
+        var stockBefore = StockQty(db);
+
+        var invoice = BuildDoc(InvDocKind.PurchaseInvoice, supplier.LedgerId, "SUP-RET-1",
+            qty: 1m, price: 100m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        InvRepo.SaveDraft(invoice);
+        InvRepo.Post(invoice.DocId, invoice.Kind, Actor);
+
+        long paymentLedgerId;
+        using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            connection.Open();
+            using var payment = connection.CreateCommand();
+            payment.CommandText = """
+                INSERT INTO party_ledger
+                    (company_id, party_kind, party_id, doc_kind, doc_no, entry_date,
+                     debit, credit, currency_code, note)
+                VALUES
+                    ($company, 'S', $party, 'PAY', 'PAY-RET-1', '2026-11-10',
+                     100, 0, 'SAR', 'Supplier payment used for invoice settlement')
+                RETURNING ledger_id;
+                """;
+            payment.Parameters.AddWithValue("$company", CompanyCode);
+            payment.Parameters.AddWithValue("$party", supplier.LedgerId);
+            paymentLedgerId = Convert.ToInt64(payment.ExecuteScalar(), CultureInfo.InvariantCulture);
+
+            using var allocation = connection.CreateCommand();
+            allocation.CommandText = """
+                INSERT INTO payment_allocations
+                    (allocation_id, company_id, document_company_id, party_kind, party_id,
+                     payment_ledger_id, doc_table, doc_id, doc_no, amount, allocated_by, note)
+                VALUES
+                    ($allocation, $company, $documentCompany, 'S', $party,
+                     $payment, 'PURCHASE', $doc, $docNo, 100, $actor, 'Full supplier invoice settlement');
+                """;
+            allocation.Parameters.AddWithValue("$allocation", Guid.NewGuid().ToString("D"));
+            allocation.Parameters.AddWithValue("$company", CompanyCode);
+            allocation.Parameters.AddWithValue("$documentCompany", CompanyCode);
+            allocation.Parameters.AddWithValue("$party", supplier.LedgerId);
+            allocation.Parameters.AddWithValue("$payment", paymentLedgerId);
+            allocation.Parameters.AddWithValue("$doc", invoice.DocId);
+            allocation.Parameters.AddWithValue("$docNo", invoice.DocNo);
+            allocation.Parameters.AddWithValue("$actor", Actor);
+            allocation.ExecuteNonQuery();
+
+            using var paid = connection.CreateCommand();
+            paid.CommandText = "UPDATE purchase_documents SET paid_amount=100 WHERE doc_id=$doc AND company_id=$company;";
+            paid.Parameters.AddWithValue("$doc", invoice.DocId);
+            paid.Parameters.AddWithValue("$company", CompanyCode);
+            Assert.Equal(1, paid.ExecuteNonQuery());
+        }
+
+        var reversalId = InvRepo.ReversePostedInvoice(
+            invoice.DocId, InvDocKind.PurchaseInvoice, "Supplier returned the full delivery", Actor);
+
+        Assert.Equal(stockBefore, StockQty(db));
+        Assert.Equal(0m, Scalar(db,
+            $"SELECT paid_amount FROM purchase_documents WHERE doc_id={invoice.DocId};"));
+        Assert.Equal(0m, Scalar(db,
+            $"SELECT COUNT(*) FROM payment_allocations WHERE company_id='{CompanyCode}' AND doc_table='PURCHASE' AND doc_id={invoice.DocId};"));
+        Assert.Equal(1m, Scalar(db,
+            $"SELECT COUNT(*) FROM payment_allocation_reversal_audit WHERE company_id='{CompanyCode}' AND doc_table='PURCHASE' AND doc_id={invoice.DocId};"));
+        Assert.Equal(100m, Scalar(db,
+            $"SELECT amount FROM payment_allocation_reversal_audit WHERE company_id='{CompanyCode}' AND doc_table='PURCHASE' AND doc_id={invoice.DocId};"));
+        Assert.Equal(1m, Scalar(db,
+            $"SELECT COUNT(*) FROM payment_allocation_reversal_audit WHERE company_id='{CompanyCode}' AND doc_table='PURCHASE' AND doc_id={invoice.DocId} AND released_by='{Actor}';"));
+
+        var returnDoc = InvRepo.Load(reversalId, InvDocKind.PurchaseReturn);
+        Assert.NotNull(returnDoc);
+        var persistedInvoice = InvRepo.Load(invoice.DocId, InvDocKind.PurchaseInvoice);
+        Assert.NotNull(persistedInvoice);
+        Assert.Equal(persistedInvoice!.StoredGrandTotal, returnDoc!.StoredGrandTotal);
+
+        var journalId = ScalarText(db,
+            $"SELECT journal_entry_id FROM journal_entries WHERE source_doc_type='PRT' AND source_doc_id='{reversalId}' AND status=1;");
+        Assert.Equal(journalId, ScalarText(db,
+            $"SELECT reversal_journal_id FROM payment_allocation_reversal_audit WHERE company_id='{CompanyCode}' AND doc_id={invoice.DocId};"));
+
+        var reconciliation = new ReconciliationRepository("SQLite", db.ConnectionString);
+        var availablePayments = await reconciliation.GetPaymentsAsync(CompanyCode, "S");
+        var reopenedPayment = Assert.Single(availablePayments, row => row.LedgerId == paymentLedgerId);
+        Assert.Equal(100m, reopenedPayment.Available);
     }
 
     // ------------------------------------------------------------ (b)
@@ -236,7 +480,7 @@ public sealed class InvPostCorrectnessTests
         {
             connection.Open();
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = $"INSERT INTO warehouses (warehouse_id, company_id, warehouse_code, name, is_deleted) VALUES (2, '{CompanyCode}', 2, 'Second', 0);";
+            cmd.CommandText = $"INSERT INTO warehouses (warehouse_id, company_id, warehouse_code, warehouse_name_ar, warehouse_name_en, is_deleted) VALUES (2, '{CompanyCode}', 2, 'Second', 'Second', 0);";
             cmd.ExecuteNonQuery();
         }
         var doc = BuildDoc(InvDocKind.StockTransfer, null, "", qty: 3m, price: 10m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
@@ -263,6 +507,63 @@ public sealed class InvPostCorrectnessTests
     }
 
     [Fact]
+    public async Task StockTransfer_RetryDoesNotDuplicateStockMovements()
+    {
+        using var db = await SeededAsync();
+        using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = $"INSERT INTO warehouses (warehouse_id, company_id, warehouse_code, warehouse_name_ar, warehouse_name_en, is_deleted) VALUES (2, '{CompanyCode}', 2, 'Second', 'Second', 0);";
+            cmd.ExecuteNonQuery();
+        }
+
+        var doc = BuildDoc(InvDocKind.StockTransfer, null, "", qty: 3m, price: 10m,
+            taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        doc.TargetWarehouseId = 2;
+        doc.TargetWarehouseName = "Second";
+        InvRepo.SaveDraft(doc);
+        InvRepo.Post(doc.DocId, doc.Kind, Actor);
+
+        var sourceAfterPost = StockQty(db);
+        var destinationAfterPost = Scalar(db, "SELECT COALESCE(available_qty, 0) FROM material_stock_balances WHERE company_id = '" + CompanyCode + "' AND warehouse_id = 2 AND material_id = 42;");
+        var movementCountAfterPost = Scalar(db, $"SELECT COUNT(*) FROM material_stock_movements WHERE company_id = '{CompanyCode}' AND movement_type IN ('TRANSFER_OUT', 'TRANSFER_IN');");
+
+        Assert.Throws<InvalidOperationException>(() => InvRepo.Post(doc.DocId, doc.Kind, Actor));
+
+        Assert.Equal(sourceAfterPost, StockQty(db));
+        Assert.Equal(destinationAfterPost, Scalar(db, "SELECT COALESCE(available_qty, 0) FROM material_stock_balances WHERE company_id = '" + CompanyCode + "' AND warehouse_id = 2 AND material_id = 42;"));
+        Assert.Equal(movementCountAfterPost, Scalar(db, $"SELECT COUNT(*) FROM material_stock_movements WHERE company_id = '{CompanyCode}' AND movement_type IN ('TRANSFER_OUT', 'TRANSFER_IN');"));
+        Assert.Equal(2m, movementCountAfterPost);
+        Assert.Equal(InvDocStatus.Posted, InvRepo.Load(doc.DocId, InvDocKind.StockTransfer)!.Status);
+    }
+
+    [Fact]
+    public async Task StockTransfer_FailedEngineRevertsPostingClaimWithoutStockEffects()
+    {
+        using var db = await SeededAsync();
+        using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = $"INSERT INTO warehouses (warehouse_id, company_id, warehouse_code, warehouse_name_ar, warehouse_name_en, is_deleted) VALUES (2, '{CompanyCode}', 2, 'Second', 'Second', 0);";
+            cmd.ExecuteNonQuery();
+        }
+
+        var doc = BuildDoc(InvDocKind.StockTransfer, null, "", qty: 1001m, price: 10m,
+            taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        doc.TargetWarehouseId = 2;
+        doc.TargetWarehouseName = "Second";
+        InvRepo.SaveDraft(doc);
+
+        Assert.Throws<StkPost.StockTransferException>(() => InvRepo.Post(doc.DocId, doc.Kind, Actor));
+
+        Assert.Equal(InvDocStatus.Draft, InvRepo.Load(doc.DocId, doc.Kind)!.Status);
+        Assert.Equal(1000m, StockQty(db));
+        Assert.Equal(0m, Scalar(db, $"SELECT COUNT(*) FROM material_stock_movements WHERE company_id = '{CompanyCode}' AND movement_type IN ('TRANSFER_OUT', 'TRANSFER_IN');"));
+    }
+
+    [Fact]
     public async Task InventoryCount_PostsDeltaOnly_NotFullCountedQty()
     {
         using var db = await SeededAsync();
@@ -278,6 +579,26 @@ public sealed class InvPostCorrectnessTests
         Assert.Equal(3m, Scalar(db, $"SELECT COALESCE(SUM(qty_in), 0) FROM material_stock_movements WHERE company_id = '{CompanyCode}' AND material_id = 42 AND movement_type = 'COUNT_CLOSE';"));
         var posted = InvRepo.Load(doc.DocId, InvDocKind.InventoryCount);
         Assert.Equal(InvDocStatus.Posted, posted!.Status);
+    }
+
+    [Fact]
+    public async Task InventoryCount_RetryDoesNotDuplicateStockMovements()
+    {
+        using var db = await SeededAsync();
+        var doc = BuildDoc(InvDocKind.InventoryCount, null, "", qty: 1003m, price: 10m,
+            taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        InvRepo.SaveDraft(doc);
+        InvRepo.Post(doc.DocId, doc.Kind, Actor);
+
+        var stockAfterPost = StockQty(db);
+        var movementCountAfterPost = Scalar(db, $"SELECT COUNT(*) FROM material_stock_movements WHERE company_id = '{CompanyCode}' AND movement_type = 'COUNT_CLOSE';");
+
+        Assert.Throws<InvalidOperationException>(() => InvRepo.Post(doc.DocId, doc.Kind, Actor));
+
+        Assert.Equal(stockAfterPost, StockQty(db));
+        Assert.Equal(movementCountAfterPost, Scalar(db, $"SELECT COUNT(*) FROM material_stock_movements WHERE company_id = '{CompanyCode}' AND movement_type = 'COUNT_CLOSE';"));
+        Assert.Equal(1m, movementCountAfterPost);
+        Assert.Equal(InvDocStatus.Posted, InvRepo.Load(doc.DocId, InvDocKind.InventoryCount)!.Status);
     }
 
     [Fact]
@@ -336,7 +657,9 @@ public sealed class InvPostCorrectnessTests
         Assert.NotNull(loaded);
         Assert.Equal(docId, loaded!.DocId);
         Assert.Equal("SAL-CHAIN-1", loaded.DocNo);
-        Assert.Equal(250m, loaded.GrandTotal);
+        // This fixture intentionally has no lines; verify the persisted
+        // header amount rather than the line-derived display total.
+        Assert.Equal(250m, loaded.StoredGrandTotal);
         Assert.Equal(InvDocStatus.Posted, loaded.Status);
     }
 
@@ -357,7 +680,7 @@ public sealed class InvPostCorrectnessTests
             LinesExtraAmount = extra,
             PaidAmount = paid,
             PaymentMethod = method,
-            Lines = { new InvLine { LineNo = 1, MaterialId = 42, MaterialCode = "MAT-42", Qty = qty, UnitPrice = price, TaxRate = taxRate, WarehouseId = 1 } }
+            Lines = { new InvLine { LineNo = 1, MaterialId = 42, MaterialCode = "MAT-42", Qty = qty, UnitPrice = price, TaxCode = taxRate > 0m ? "IP5-VAT15" : string.Empty, TaxRate = taxRate, WarehouseId = 1 } }
         };
 
     private static async Task<Party> SavePartyAsync(TestDb db, string kind, string code, decimal creditLimit)
@@ -409,6 +732,15 @@ public sealed class InvPostCorrectnessTests
     private static decimal StockQty(TestDb db)
         => Scalar(db, "SELECT COALESCE(available_qty, 0) FROM material_stock_balances WHERE company_id = '" + CompanyCode + "' AND warehouse_id = 1 AND material_id = 42;");
 
+    private static string ScalarText(TestDb db, string sql)
+    {
+        using var connection = new SqliteConnection(db.ConnectionString);
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = sql;
+        return Convert.ToString(cmd.ExecuteScalar(), CultureInfo.InvariantCulture) ?? string.Empty;
+    }
+
     private static decimal Scalar(TestDb db, string sql)
     {
         using var connection = new SqliteConnection(db.ConnectionString);
@@ -440,7 +772,20 @@ public sealed class InvPostCorrectnessTests
         var companyId = Guid.NewGuid();
         var connectionString = $"Data Source={dbPath};";
 
-        Assert.True((await SchemaMigrator.ApplyAllAsync("SQLite", dbPath)).Success);
+        var migration = await SchemaMigrator.ApplyAllAsync("SQLite", dbPath);
+        Assert.True(migration.Success, migration.Message);
+        using (var schemaProbe = new SqliteConnection(connectionString))
+        {
+            schemaProbe.Open();
+            using var columnsCommand = schemaProbe.CreateCommand();
+            columnsCommand.CommandText = "PRAGMA table_info('party_ledger');";
+            using var columnsReader = columnsCommand.ExecuteReader();
+            var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            while (columnsReader.Read())
+                columns.Add(columnsReader.GetString(1));
+            Assert.Contains("debit", columns);
+            Assert.Contains("credit", columns);
+        }
         PointAppAt(dbPath);
         AppState.SetCompany(CompanyCode, "InvPost Test Co", "InvPost Test Co");
 
@@ -452,6 +797,19 @@ public sealed class InvPostCorrectnessTests
             cmd.Parameters.AddWithValue("$id", companyId.ToString("D"));
             cmd.Parameters.AddWithValue("$code", CompanyCode);
             cmd.ExecuteNonQuery();
+
+            using var taxSetup = connection.CreateCommand();
+            taxSetup.CommandText = """
+                INSERT INTO company_tax_settings(company_code, country_code, tax_enabled, tax_scheme)
+                VALUES ('IP5', 'SA', 1, 'VAT');
+                INSERT INTO company_tax_rules
+                    (company_code, country_code, tax_code, tax_name, tax_type, tax_treatment,
+                     rate, calculation_mode, is_recoverable, output_account_code, input_account_code,
+                     effective_from, is_default, is_active)
+                VALUES ('IP5', 'SA', 'IP5-VAT15', 'Standard VAT', 'VAT', 'Standard',
+                        15, 'Exclusive', 1, '2205', '1205', '2026-01-01', 1, 1);
+                """;
+            taxSetup.ExecuteNonQuery();
         }
 
         var structure = new AccountingStructureRepository("SQLite", connectionString);
@@ -460,7 +818,7 @@ public sealed class InvPostCorrectnessTests
         foreach (var (code, name) in new[]
         {
             ("131", "Cash"), ("132", "Bank"), ("1201", "Receivable"), ("1203", "Inventory"),
-            ("2201", "Payable"), ("301", "Sales"), ("302", "Sales Returns"), ("401", "COGS"),
+            ("1205", "Input VAT"), ("2201", "Payable"), ("2205", "Output VAT"), ("301", "Sales"), ("302", "Sales Returns"), ("401", "COGS"),
             ("402", "Purchases"), ("403", "Purchase Returns")
         })
         {
@@ -480,7 +838,7 @@ public sealed class InvPostCorrectnessTests
                 cmd.ExecuteNonQuery();
             }
             Exec($"INSERT INTO materials (material_id, company_id, code, name_ar, name_en, is_stocked, avg_cost, is_deleted) VALUES (42, '{CompanyCode}', 'MAT-42', 'Item', 'Item', 1, 40, 0);");
-            Exec($"INSERT INTO warehouses (warehouse_id, company_id, warehouse_code, name, is_deleted) VALUES (1, '{CompanyCode}', 1, 'Main', 0);");
+            Exec($"INSERT INTO warehouses (warehouse_id, company_id, warehouse_code, warehouse_name_ar, warehouse_name_en, is_deleted) VALUES (1, '{CompanyCode}', 1, 'Main', 'Main', 0);");
             Exec($"INSERT INTO material_stock_balances (company_id, warehouse_id, material_id, available_qty, average_cost, last_cost) VALUES ('{CompanyCode}', 1, 42, 1000, 40, 40);");
         }
 

@@ -22,6 +22,35 @@ public static class InvRepo
     public static string NextDocNo(InvDocKind kind)
     {
         DocSchema.Ensure();
+        var cs = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(cs))
+            throw new InvalidOperationException(
+                "A company database must be connected before allocating a document number.");
+
+        try
+        {
+            using var connection = Open(cs);
+            using var transaction = connection is SqliteConnection sqliteConnection
+                ? sqliteConnection.BeginTransaction(deferred: false)
+                : connection.BeginTransaction();
+            var number = AllocateDocNo(connection, transaction, kind);
+            transaction.Commit();
+            return number;
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, ex, "InvRepo.NextDocNo");
+            throw new InvalidOperationException(
+                "A new document number could not be allocated. Check the database connection and retry.",
+                ex);
+        }
+    }
+
+    private static string AllocateDocNo(
+        DbConnection connection,
+        DbTransaction transaction,
+        InvDocKind kind)
+    {
         var table = kind.IsSales() ? "sales_documents" : "purchase_documents";
         var prefix = kind switch
         {
@@ -38,37 +67,70 @@ public static class InvRepo
             InvDocKind.Quotation => "QUO",
             _ => "DOC"
         };
-        var year = DateTime.Today.Year.ToString(CultureInfo.InvariantCulture);
-        var cs = DatabaseRuntime.GetConnectionString();
-        if (string.IsNullOrWhiteSpace(cs)) return $"{prefix}-{year}-0001";
+        var year = DateTime.Today.Year;
+        var documentPrefix = $"{prefix}-{year}-";
+        var suffixStart = documentPrefix.Length + 1;
+        var numericSuffixPredicate = DatabaseRuntime.IsPostgreSql()
+            ? "SUBSTR(doc_no, $suffixStart) ~ '^[0-9]+$'"
+            : "SUBSTR(doc_no, $suffixStart) GLOB '[0-9]*' AND SUBSTR(doc_no, $suffixStart) NOT GLOB '*[^0-9]*'";
 
-        try
+        using (var maxCommand = connection.CreateCommand())
         {
-            using var connection = Open(cs);
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = $"""
-                SELECT COUNT(1) FROM {table}
-                WHERE company_id = $company AND doc_kind = $kind
-                  AND doc_no LIKE $pattern;
+            maxCommand.Transaction = transaction;
+            maxCommand.CommandText = $"""
+                SELECT COALESCE(MAX(CAST(SUBSTR(doc_no, $suffixStart) AS BIGINT)), 0)
+                FROM {table}
+                WHERE company_id = $company
+                  AND doc_kind = $kind
+                  AND doc_no LIKE $pattern
+                  AND {numericSuffixPredicate};
                 """;
-            Add(cmd, "$company", Company);
-            Add(cmd, "$kind", prefix);
-            Add(cmd, "$pattern", $"{prefix}-{year}-%");
-            var count = Convert.ToInt32(cmd.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
-            return $"{prefix}-{year}-{(count + 1).ToString("D4", CultureInfo.InvariantCulture)}";
-        }
-        catch (Exception exL58)
-        {
-            AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exL58, "InvRepo.NextDocNo");
-            return $"{prefix}-{year}-0001";
+            Add(maxCommand, "$company", Company);
+            Add(maxCommand, "$kind", prefix);
+            Add(maxCommand, "$pattern", $"{documentPrefix}%");
+            Add(maxCommand, "$suffixStart", suffixStart);
+            var maximum = Convert.ToInt64(
+                maxCommand.ExecuteScalar() ?? 0,
+                CultureInfo.InvariantCulture);
+            if (maximum >= 99999999)
+                throw new InvalidOperationException(
+                    "The document number sequence has reached its supported limit.");
+
+            var next = maximum + 1;
+            var advanceExpression = DatabaseRuntime.IsPostgreSql()
+                ? "GREATEST(document_number_sequences.last_value + 1, EXCLUDED.last_value)"
+                : "MAX(document_number_sequences.last_value + 1, excluded.last_value)";
+
+            using var sequenceCommand = connection.CreateCommand();
+            sequenceCommand.Transaction = transaction;
+            sequenceCommand.CommandText = $"""
+                INSERT INTO document_number_sequences
+                    (company_id, doc_kind, doc_year, last_value)
+                VALUES ($company, $kind, $year, $next)
+                ON CONFLICT (company_id, doc_kind, doc_year)
+                DO UPDATE SET last_value = {advanceExpression}
+                RETURNING last_value;
+                """;
+            Add(sequenceCommand, "$company", Company);
+            Add(sequenceCommand, "$kind", prefix);
+            Add(sequenceCommand, "$year", year);
+            Add(sequenceCommand, "$next", next);
+            var allocated = Convert.ToInt64(
+                sequenceCommand.ExecuteScalar() ?? 0,
+                CultureInfo.InvariantCulture);
+            if (allocated <= 0 || allocated > 99999999)
+                throw new InvalidOperationException(
+                    "The document number sequence returned an invalid value.");
+
+            return $"{documentPrefix}{allocated.ToString("D4", CultureInfo.InvariantCulture)}";
         }
     }
 
     public static long SaveDraft(InvDoc doc)
     {
         ArgumentNullException.ThrowIfNull(doc);
-        if (doc.Status == InvDocStatus.Posted)
-            throw new InvalidOperationException("Posted documents cannot be overwritten. Use a return document.");
+        if (doc.Status != InvDocStatus.Draft)
+            throw new InvalidOperationException("Only Draft documents can be overwritten. Posted or in-progress documents require reconciliation or a return document.");
 
         DocSchema.Ensure();
         doc.RenumberLines();
@@ -77,7 +139,9 @@ public static class InvRepo
         var cs = DatabaseRuntime.GetConnectionString()
             ?? throw new InvalidOperationException("No database connection.");
         using var connection = Open(cs);
-        using var tx = connection.BeginTransaction();
+        using var tx = connection is SqliteConnection sqliteConnection
+            ? sqliteConnection.BeginTransaction(deferred: false)
+            : connection.BeginTransaction();
 
         var isSales = doc.IsSalesSide;
         var headerTable = isSales ? "sales_documents" : "purchase_documents";
@@ -87,7 +151,7 @@ public static class InvRepo
         if (docId <= 0)
         {
             if (string.IsNullOrWhiteSpace(doc.DocNo))
-                doc.DocNo = NextDocNo(doc.Kind);
+                doc.DocNo = AllocateDocNo(connection, tx, doc.Kind);
 
             using (var cmd = connection.CreateCommand())
             {
@@ -183,10 +247,10 @@ public static class InvRepo
             cmd.CommandText = $"""
                 INSERT INTO {lineTable}
                 (doc_id, line_no, material_id, material_code, description, unit, qty, unit_price,
-                 discount_pct, tax_rate, line_subtotal, line_tax, line_total, warehouse_id, warehouse_name)
+                 discount_pct, tax_code, tax_rate, tax_calculation_mode, line_subtotal, line_tax, line_total, warehouse_id, warehouse_name)
                 VALUES
                 ($doc, $no, $mid, $mcode, $desc, $unit, $qty, $price,
-                 $disc, $trate, $sub, $ltax, $ltot, $wh, $whname);
+                 $disc, $tcode, $trate, $taxMode, $sub, $ltax, $ltot, $wh, $whname);
                 """;
             Add(cmd, "$doc", docId);
             Add(cmd, "$no", line.LineNo);
@@ -197,7 +261,9 @@ public static class InvRepo
             Add(cmd, "$qty", line.Qty);
             Add(cmd, "$price", line.UnitPrice);
             Add(cmd, "$disc", line.DiscountPct);
+            Add(cmd, "$tcode", line.TaxCode ?? string.Empty);
             Add(cmd, "$trate", line.TaxRate);
+            Add(cmd, "$taxMode", line.TaxCalculationMode);
             Add(cmd, "$sub", line.LineSubtotal);
             Add(cmd, "$ltax", line.LineTax);
             Add(cmd, "$ltot", line.LineTotal);
@@ -250,7 +316,8 @@ public static class InvRepo
                 SELECT doc_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id,
                        currency_code, exchange_rate, subtotal, tax_amount, grand_total, status, tax_rate, party_code,
                        discount_amount, extra_amount,
-                       paid_amount, payment_method, cost_center
+                       paid_amount, payment_method, cost_center,
+                       original_doc_id, original_doc_kind, original_doc_no
                 FROM {headerTable}
                 WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND is_deleted=0;
                 """;
@@ -260,6 +327,11 @@ public static class InvRepo
             using var reader = cmd.ExecuteReader();
             if (!reader.Read())
                 throw new InvalidOperationException("Document not found.");
+            var storedKind = reader.GetString(reader.GetOrdinal("doc_kind"));
+            var expectedKind = new InvDoc { Kind = kind }.KindCode;
+            if (!string.Equals(storedKind, expectedKind, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    $"Document kind mismatch. The stored document is '{storedKind}', not '{expectedKind}'.");
             if (string.Equals(reader.GetString(reader.GetOrdinal("status")), "Posted", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Document is already posted.");
             doc = new InvDoc
@@ -277,6 +349,12 @@ public static class InvRepo
                 PaidAmount = reader.IsDBNull(reader.GetOrdinal("paid_amount")) ? 0m : Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("paid_amount")), CultureInfo.InvariantCulture),
                 PaymentMethod = ParsePaymentMethod(reader.IsDBNull(reader.GetOrdinal("payment_method")) ? null : reader.GetString(reader.GetOrdinal("payment_method"))),
                 CostCenter = reader.IsDBNull(reader.GetOrdinal("cost_center")) ? "" : reader.GetString(reader.GetOrdinal("cost_center")),
+                OriginalDocId = reader.IsDBNull(reader.GetOrdinal("original_doc_id"))
+                    ? null : Convert.ToInt64(reader.GetValue(reader.GetOrdinal("original_doc_id")), CultureInfo.InvariantCulture),
+                OriginalDocKind = ParseDocKind(reader.IsDBNull(reader.GetOrdinal("original_doc_kind"))
+                    ? null : reader.GetString(reader.GetOrdinal("original_doc_kind"))),
+                OriginalDocNo = reader.IsDBNull(reader.GetOrdinal("original_doc_no"))
+                    ? "" : reader.GetString(reader.GetOrdinal("original_doc_no")),
                 // Step 5 (sweep I-1): the STORED header totals are the
                 // amounts of record for posting. Before this fix Post
                 // selected subtotal/tax_amount/grand_total and discarded
@@ -329,7 +407,7 @@ public static class InvRepo
             lineCmd.Transaction = tx;
             lineCmd.CommandText = $"""
                 SELECT line_no, material_id, material_code, description, unit, qty, unit_price,
-                       discount_pct, tax_rate, warehouse_id
+                       discount_pct, tax_code, tax_rate, tax_calculation_mode, warehouse_id
                 FROM {lineTable} WHERE doc_id=$id ORDER BY line_no;
                 """;
             Add(lineCmd, "$id", docId);
@@ -346,8 +424,10 @@ public static class InvRepo
                     Qty = Convert.ToDecimal(lr.GetValue(5), CultureInfo.InvariantCulture),
                     UnitPrice = Convert.ToDecimal(lr.GetValue(6), CultureInfo.InvariantCulture),
                     DiscountPct = Convert.ToDecimal(lr.GetValue(7), CultureInfo.InvariantCulture),
-                    TaxRate = Convert.ToDecimal(lr.GetValue(8), CultureInfo.InvariantCulture),
-                    WarehouseId = lr.IsDBNull(9) ? null : Convert.ToInt32(lr.GetValue(9), CultureInfo.InvariantCulture),
+                    TaxCode = lr.IsDBNull(8) ? string.Empty : Convert.ToString(lr.GetValue(8), CultureInfo.InvariantCulture) ?? string.Empty,
+                    TaxRate = Convert.ToDecimal(lr.GetValue(9), CultureInfo.InvariantCulture),
+                    TaxCalculationMode = lr.IsDBNull(10) ? "Exclusive" : Convert.ToString(lr.GetValue(10), CultureInfo.InvariantCulture) ?? "Exclusive",
+                    WarehouseId = lr.IsDBNull(11) ? null : Convert.ToInt32(lr.GetValue(11), CultureInfo.InvariantCulture),
                 });
             }
         }
@@ -433,12 +513,16 @@ public static class InvRepo
                     docId.ToString(CultureInfo.InvariantCulture),
                     doc.DocNo ?? docId.ToString(CultureInfo.InvariantCulture),
                     doc.CurrencyCode,
-                    doc.ExchangeRate <= 0 ? 1m : doc.ExchangeRate,
+                    fx.Rate,
                     glLines),
                 userId);
             journalNo = glResult.DocumentNumber;
         }
         doc.JournalDocNo = journalNo;
+
+        // Tax register rows are written in the same transaction as the
+        // journal and document status. A failure rolls back the entire post.
+        WriteTaxTransactions(connection, tx, doc, journalNo, userId, fx.Rate);
 
         using (var upd = connection.CreateCommand())
         {
@@ -472,6 +556,22 @@ public static class InvRepo
         // expected cash a plain SUM in the Z report.
         if (pos is not null)
             WritePosTenders(connection, tx, doc, pos, userId);
+
+        // POS refunds must reverse the original at-posting settlement in
+        // this same transaction. Keeping this inside the document posting
+        // boundary prevents a committed return from being left with stale
+        // customer settlement/allocation balances after a process crash.
+        if (pos is not null
+            && doc.Kind == InvDocKind.SalesReturn
+            && doc.OriginalDocKind == InvDocKind.PosSale
+            && doc.OriginalDocId is long originalPosDocId
+            && doc.PartyId is long originalPartyId
+            && doc.PaidAmount > 0m)
+        {
+            UnsettleOriginalOnPosReturn(
+                connection, tx, guidKey, originalPosDocId, originalPartyId,
+                doc, doc.PaidAmount);
+        }
 
         // Party ledger: sales increase receivable (debit customer),
         // purchases increase payable — ONLY for kinds whose policy carries
@@ -610,6 +710,181 @@ public static class InvRepo
     // ---------------------------------------------------------------
     // Build POS 066: session / tender gate + tender writes
     // ---------------------------------------------------------------
+
+    /// <summary>
+    /// Mirrors only the settlement created when the original POS sale was
+    /// posted. The refund, mirrored party-ledger entry, original paid amount
+    /// and the exact originating allocation are updated under the caller's
+    /// document transaction. External receipt allocations are deliberately
+    /// preserved.
+    /// </summary>
+    private static void UnsettleOriginalOnPosReturn(
+        DbConnection connection, DbTransaction tx, string companyGuidKey,
+        long originalDocId, long partyId, InvDoc returnDoc,
+        decimal refundCollected)
+    {
+        if (refundCollected <= 0m) return;
+
+        var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+        var notDeleted = provider == "PostgreSQL" ? "is_deleted = FALSE" : "is_deleted = 0";
+        decimal originalPaid;
+        using (var original = connection.CreateCommand())
+        {
+            original.Transaction = tx;
+            original.CommandText = provider == "PostgreSQL"
+                ? $"""
+                   SELECT paid_amount
+                   FROM sales_documents
+                   WHERE doc_id=$id AND (company_id=$company OR company_id=$guid)
+                     AND status='Posted' AND {notDeleted}
+                   FOR UPDATE;
+                   """
+                : $"""
+                   SELECT paid_amount
+                   FROM sales_documents
+                   WHERE doc_id=$id AND (company_id=$company OR company_id=$guid)
+                     AND status='Posted' AND {notDeleted};
+                   """;
+            Add(original, "$id", originalDocId);
+            Add(original, "$company", Company);
+            Add(original, "$guid", companyGuidKey);
+            var value = original.ExecuteScalar();
+            if (value is null or DBNull)
+                throw new InvalidOperationException("The original POS sale is not posted in the current company.");
+            originalPaid = Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+        }
+
+        if (refundCollected > originalPaid)
+            throw new InvalidOperationException(
+                $"The POS refund {refundCollected} exceeds the original sale's remaining collected amount {originalPaid}.");
+
+        var hasBase = PartyLedger.ColumnExists(connection, tx, provider, "party_ledger", "base_debit");
+        var select = $"""
+            SELECT ledger_id, debit, credit, currency_code{(hasBase ? ", base_debit, base_credit, exchange_rate" : string.Empty)}
+            FROM party_ledger
+            WHERE company_id=$company AND party_id=$party AND doc_id=$original
+              AND doc_kind='RCV'
+            ORDER BY ledger_id;
+            """;
+        var settlements = new List<(long LedgerId, decimal Debit, decimal Credit, string Currency,
+            decimal? BaseDebit, decimal? BaseCredit, decimal Rate)>();
+        using (var find = connection.CreateCommand())
+        {
+            find.Transaction = tx;
+            find.CommandText = select;
+            Add(find, "$company", Company);
+            Add(find, "$party", partyId);
+            Add(find, "$original", originalDocId);
+            using var reader = find.ExecuteReader();
+            while (reader.Read())
+            {
+                settlements.Add((
+                    Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture),
+                    reader.IsDBNull(3) ? returnDoc.CurrencyCode : reader.GetString(3),
+                    hasBase && !reader.IsDBNull(4) ? Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture) : null,
+                    hasBase && !reader.IsDBNull(5) ? Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture) : null,
+                    hasBase && !reader.IsDBNull(6) ? Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture) : returnDoc.ExchangeRate));
+            }
+        }
+
+        var remaining = refundCollected;
+        foreach (var settlement in settlements)
+        {
+            if (remaining <= 0m) break;
+            var settledAmount = Math.Max(settlement.Debit, settlement.Credit);
+            var mirrorAmount = Math.Min(settledAmount, remaining);
+            if (mirrorAmount <= 0m) continue;
+
+            var (mirrorDebit, mirrorCredit) = settlement.Credit >= settlement.Debit
+                ? (mirrorAmount, 0m)
+                : (0m, mirrorAmount);
+
+            if (settlement.BaseDebit.HasValue && settlement.BaseCredit.HasValue)
+            {
+                PartyLedger.WriteEntry(
+                    connection, tx, provider, Company, "C", partyId,
+                    returnDoc.KindCode, returnDoc.DocId, returnDoc.DocNo,
+                    returnDoc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    mirrorDebit, mirrorCredit, settlement.Currency,
+                    $"POS return refund of settlement collected at posting for {returnDoc.OriginalDocNo}",
+                    exchangeRate: settlement.Rate,
+                    baseDebit: settlement.BaseCredit,
+                    baseCredit: settlement.BaseDebit);
+            }
+            else
+            {
+                PartyLedger.WriteEntry(
+                    connection, tx, provider, Company, "C", partyId,
+                    returnDoc.KindCode, returnDoc.DocId, returnDoc.DocNo,
+                    returnDoc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    mirrorDebit, mirrorCredit, settlement.Currency,
+                    $"POS return refund of settlement collected at posting for {returnDoc.OriginalDocNo}",
+                    exchangeRate: settlement.Rate);
+            }
+
+            // Only reduce the allocation created by this exact settlement
+            // ledger row. Allocations from later cash-receipt vouchers must
+            // not be consumed by a POS refund.
+            using (var allocation = connection.CreateCommand())
+            {
+                allocation.Transaction = tx;
+                allocation.CommandText = """
+                    UPDATE payment_allocations
+                    SET amount = amount - $refund
+                    WHERE company_id=$company AND doc_id=$original
+                      AND doc_table='SALES' AND payment_ledger_id=$payment
+                      AND amount >= $refund;
+                    """;
+                Add(allocation, "$refund", mirrorAmount);
+                Add(allocation, "$company", Company);
+                Add(allocation, "$original", originalDocId);
+                Add(allocation, "$payment", settlement.LedgerId);
+                if (allocation.ExecuteNonQuery() == 0)
+                    throw new InvalidOperationException(
+                        "The original POS settlement allocation is missing or smaller than the refund; the return was rolled back.");
+            }
+            using (var removeEmpty = connection.CreateCommand())
+            {
+                removeEmpty.Transaction = tx;
+                removeEmpty.CommandText = """
+                    DELETE FROM payment_allocations
+                    WHERE company_id=$company AND doc_id=$original
+                      AND doc_table='SALES' AND payment_ledger_id=$payment
+                      AND amount <= 0;
+                    """;
+                Add(removeEmpty, "$company", Company);
+                Add(removeEmpty, "$original", originalDocId);
+                Add(removeEmpty, "$payment", settlement.LedgerId);
+                removeEmpty.ExecuteNonQuery();
+            }
+
+            remaining -= mirrorAmount;
+        }
+
+        if (remaining > 0m)
+            throw new InvalidOperationException(
+                $"The original POS sale has no matching at-posting settlement for refund remainder {remaining}; the return was rolled back.");
+
+        using (var updateOriginal = connection.CreateCommand())
+        {
+            updateOriginal.Transaction = tx;
+            updateOriginal.CommandText = """
+                UPDATE sales_documents
+                SET paid_amount = paid_amount - $refund
+                WHERE doc_id=$id AND (company_id=$company OR company_id=$guid)
+                  AND status='Posted' AND paid_amount >= $refund;
+                """;
+            Add(updateOriginal, "$refund", refundCollected);
+            Add(updateOriginal, "$id", originalDocId);
+            Add(updateOriginal, "$company", Company);
+            Add(updateOriginal, "$guid", companyGuidKey);
+            if (updateOriginal.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException(
+                    "The original POS sale settlement changed during refund posting; the return was rolled back.");
+        }
+    }
 
     /// <summary>Validates the POS context inside the posting
     /// transaction: the session must exist and be Open for this
@@ -758,6 +1033,8 @@ public static class InvRepo
             ?? throw new InvalidOperationException("Document not found.");
         if (doc.Status == InvDocStatus.Posted)
             throw new InvalidOperationException("Document is already posted.");
+        if (doc.Status is not (InvDocStatus.Draft or InvDocStatus.Posting))
+            throw new InvalidOperationException("Only Draft or recoverable Posting documents can be posted.");
         if (doc.Lines.Count == 0)
             throw new InvalidOperationException("The document has no lines to post.");
         if (batchSerialByLine is not null)
@@ -773,24 +1050,35 @@ public static class InvRepo
             }
         }
 
-        ClaimDedicatedPost(docId, kind, userId);
+        var operationKey = $"INV:{kind}:{docId.ToString(CultureInfo.InvariantCulture)}";
+        var wasAlreadyClaimed = doc.Status == InvDocStatus.Posting;
+        if (wasAlreadyClaimed && !HasDedicatedPostClaim(docId, kind, operationKey))
+            throw new InvalidOperationException(
+                $"Document '{doc.DocNo}' is in Posting without a matching durable recovery key. It may have been posted by an earlier application version; reconcile its stock movements before retrying.");
+        if (!wasAlreadyClaimed)
+            ClaimDedicatedPost(docId, kind, userId, operationKey);
+
+        string engineDocNo;
         try
         {
-            string engineDocNo;
             if (kind == InvDocKind.StockTransfer)
             {
-                engineDocNo = PostTransferForDocument(doc);
+                engineDocNo = PostTransferForDocument(doc, operationKey);
             }
             else
             {
-                PostCountForDocument(doc);
+                PostCountForDocument(doc, operationKey);
                 engineDocNo = string.Empty;
             }
-            if (!string.IsNullOrEmpty(engineDocNo))
-                LinkEngineDocumentNo(docId, kind, engineDocNo);
         }
         catch (Exception engineFailure)
         {
+            var operationType = kind == InvDocKind.StockTransfer ? "StockTransfer" : "InventoryCount";
+            if (StkPost.IsOperationCompleted(operationKey, operationType))
+                throw new InvalidOperationException(
+                    $"Stock effects for document '{doc.DocNo}' were committed, but posting recovery could not continue. The document remains Posting; do not retry manually. Reconcile it before further processing.",
+                    engineFailure);
+
             try
             {
                 RevertDedicatedClaim(docId, kind);
@@ -798,14 +1086,33 @@ public static class InvRepo
             catch (Exception revertFailure)
             {
                 throw new InvalidOperationException(
-                    $"Posting document '{doc.DocNo}' failed ({engineFailure.Message}) and its status could not be reverted to Draft; the document may read Posted without stock effects. Reconcile it manually before retrying.",
+                    $"Posting document '{doc.DocNo}' failed ({engineFailure.Message}) and its Posting claim could not be reverted to Draft. Reconcile the document before retrying.",
                     revertFailure);
             }
             throw;
         }
+
+        // The stock engine has committed its own transaction. Never revert
+        // to Draft after this point: doing so would allow a retry to duplicate
+        // stock. If finalization fails or the process stops here, the durable
+        // Posting state exposes the reconciliation requirement instead of
+        // falsely presenting the document as Posted or Draft.
+        try
+        {
+            CompleteDedicatedPost(docId, kind, userId);
+        }
+        catch (Exception finalizeFailure)
+        {
+            throw new InvalidOperationException(
+                $"Stock effects for document '{doc.DocNo}' were committed, but its posting state could not be finalized. The document remains Posting; do not retry. Reconcile it before further processing.",
+                finalizeFailure);
+        }
+
+        if (!string.IsNullOrEmpty(engineDocNo))
+            LinkEngineDocumentNo(docId, kind, engineDocNo);
     }
 
-    private static string PostTransferForDocument(InvDoc doc)
+    private static string PostTransferForDocument(InvDoc doc, string operationKey)
     {
         if (doc.WarehouseId is not int sourceId)
             throw new StkPost.StockTransferException("INV-TRF-001", "A source warehouse is required for a stock transfer.");
@@ -832,10 +1139,10 @@ public static class InvRepo
         if (lines.Count == 0)
             throw new StkPost.StockTransferException("INV-TRF-001", "Add at least one material quantity to transfer.");
 
-        return StkPost.PostTransfer(sourceId, targetId, doc.DocDate, reason, lines);
+        return StkPost.PostTransfer(sourceId, targetId, doc.DocDate, reason, lines, operationKey);
     }
 
-    private static void PostCountForDocument(InvDoc doc)
+    private static void PostCountForDocument(InvDoc doc, string operationKey)
     {
         if (doc.WarehouseId is not int warehouseId)
             throw new InvalidOperationException("A warehouse is required for an inventory count document.");
@@ -877,7 +1184,7 @@ public static class InvRepo
         if (lines.Count == 0)
             throw new InvalidOperationException("The document has no lines to post.");
 
-        StkPost.PostCount(warehouseId, doc.DocDate, reason, lines);
+        StkPost.PostCount(warehouseId, doc.DocDate, reason, lines, operationKey);
     }
 
     /// <summary>The material id for a document line: the stored id when
@@ -903,15 +1210,45 @@ public static class InvRepo
         return Convert.ToInt64(value, CultureInfo.InvariantCulture);
     }
 
-    private static void ClaimDedicatedPost(long docId, InvDocKind kind, string userId)
-        => SetDedicatedStatus(docId, kind, from: "Draft", to: "Posted", userId,
-            "Post failed — document may already be posted.");
+    private static bool HasDedicatedPostClaim(long docId, InvDocKind kind, string operationKey)
+    {
+        var headerTable = kind.IsSales() ? "sales_documents" : "purchase_documents";
+        var cs = DatabaseRuntime.GetConnectionString()
+            ?? throw new InvalidOperationException("No database connection.");
+        using var connection = Open(cs);
+        var guidKey = ResolveCompanyGuidOrNull(connection, null)?.ToString("D") ?? Company;
+        using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            SELECT posting_operation_key
+            FROM {headerTable}
+            WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND status='Posting';
+            """;
+        Add(command, "$id", docId);
+        Add(command, "$company", Company);
+        Add(command, "$guid", guidKey);
+        var value = command.ExecuteScalar();
+        return value is not null and not DBNull
+            && string.Equals(Convert.ToString(value, CultureInfo.InvariantCulture),
+                operationKey, StringComparison.Ordinal);
+    }
+
+    private static void ClaimDedicatedPost(long docId, InvDocKind kind, string userId, string operationKey)
+        => SetDedicatedStatus(docId, kind, from: "Draft", to: "Posting", userId: null,
+            operationKey: operationKey,
+            failureMessage: "The document is not a Draft or another posting operation has already claimed it.");
 
     private static void RevertDedicatedClaim(long docId, InvDocKind kind)
-        => SetDedicatedStatus(docId, kind, from: "Posted", to: "Draft", userId: null,
-            "The document status could not be reverted to Draft.");
+        => SetDedicatedStatus(docId, kind, from: "Posting", to: "Draft", userId: null,
+            operationKey: null,
+            failureMessage: "The document posting claim could not be reverted to Draft.");
 
-    private static void SetDedicatedStatus(long docId, InvDocKind kind, string from, string to, string? userId, string failureMessage)
+    private static void CompleteDedicatedPost(long docId, InvDocKind kind, string userId)
+        => SetDedicatedStatus(docId, kind, from: "Posting", to: "Posted", userId: userId,
+            operationKey: null,
+            failureMessage: "Stock effects were committed, but the document could not be finalized as Posted. Reconcile before retrying.");
+
+    private static void SetDedicatedStatus(long docId, InvDocKind kind, string from, string to,
+        string? userId, string? operationKey, string failureMessage)
     {
         var headerTable = kind.IsSales() ? "sales_documents" : "purchase_documents";
         var cs = DatabaseRuntime.GetConnectionString()
@@ -922,15 +1259,22 @@ public static class InvRepo
         cmd.CommandText = DatabaseRuntime.IsPostgreSql()
             ? $"""
                UPDATE {headerTable}
-               SET status=$to, posted_by=$user, posted_at=NOW()
+               SET status=$to,
+                   posting_operation_key=CASE WHEN $to='Posting' THEN $operationKey WHEN $to='Draft' THEN NULL ELSE posting_operation_key END,
+                   posted_by=CASE WHEN $to='Posted' THEN $user ELSE posted_by END,
+                   posted_at=CASE WHEN $to='Posted' THEN NOW() ELSE posted_at END
                WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND status=$from;
                """
             : $"""
                UPDATE {headerTable}
-               SET status=$to, posted_by=$user, posted_at=datetime('now')
+               SET status=$to,
+                   posting_operation_key=CASE WHEN $to='Posting' THEN $operationKey WHEN $to='Draft' THEN NULL ELSE posting_operation_key END,
+                   posted_by=CASE WHEN $to='Posted' THEN $user ELSE posted_by END,
+                   posted_at=CASE WHEN $to='Posted' THEN datetime('now') ELSE posted_at END
                WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND status=$from;
                """;
         Add(cmd, "$to", to);
+        Add(cmd, "$operationKey", operationKey);
         Add(cmd, "$user", to == "Posted" ? userId : null);
         Add(cmd, "$id", docId);
         Add(cmd, "$company", Company);
@@ -1004,6 +1348,47 @@ public static class InvRepo
         }
     }
 
+    public static long? FindAdjacentDocumentId(long currentDocId, InvDocKind kind, int offset)
+    {
+        if (offset is not (-10 or -1 or 1 or 10))
+            throw new ArgumentOutOfRangeException(nameof(offset), "Navigation offset must be -10, -1, 1, or 10.");
+
+        var connectionString = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(connectionString))
+            throw new InvalidOperationException("No database connection.");
+
+        var table = kind.IsSales() ? "sales_documents" : "purchase_documents";
+        var order = offset < 0 ? "DESC" : "ASC";
+        var comparison = offset < 0 ? "<" : ">";
+        var skip = Math.Abs(offset) - 1;
+        using var connection = Open(connectionString);
+        var companyGuid = ResolveCompanyGuidOrNull(connection, null)?.ToString("D") ?? Company;
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = currentDocId > 0
+            ? $"""
+                SELECT doc_id FROM {table}
+                WHERE (company_id=$company OR company_id=$guid)
+                  AND doc_kind=$kind AND is_deleted=0 AND doc_id {comparison} $current
+                ORDER BY doc_id {order} LIMIT 1 OFFSET $skip;
+                """
+            : $"""
+                SELECT doc_id FROM {table}
+                WHERE (company_id=$company OR company_id=$guid)
+                  AND doc_kind=$kind AND is_deleted=0
+                ORDER BY doc_id {order} LIMIT 1;
+                """;
+        Add(cmd, "$company", Company);
+        Add(cmd, "$guid", companyGuid);
+        Add(cmd, "$kind", new InvDoc { Kind = kind }.KindCode);
+        if (currentDocId > 0)
+        {
+            Add(cmd, "$current", currentDocId);
+            Add(cmd, "$skip", skip);
+        }
+        var value = cmd.ExecuteScalar();
+        return value is null or DBNull ? null : Convert.ToInt64(value, CultureInfo.InvariantCulture);
+    }
+
     public static InvDoc? Load(long docId, InvDocKind kind)
     {
         DocSchema.Ensure();
@@ -1039,6 +1424,11 @@ public static class InvRepo
             Add(cmd, "$guid", guidKey);
             using var reader = cmd.ExecuteReader();
             if (!reader.Read()) return null;
+            var storedKind = reader.GetString(reader.GetOrdinal("doc_kind"));
+            var expectedKind = new InvDoc { Kind = kind }.KindCode;
+            if (!string.Equals(storedKind, expectedKind, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    $"Document kind mismatch. The stored document is '{storedKind}', not '{expectedKind}'.");
             doc = new InvDoc
             {
                 DocId = docId,
@@ -1052,8 +1442,13 @@ public static class InvRepo
                 WarehouseName = ReadString(reader, "warehouse_name"),
                 CurrencyCode = reader.GetString(reader.GetOrdinal("currency_code")),
                 ExchangeRate = Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("exchange_rate")), CultureInfo.InvariantCulture),
-                Status = string.Equals(reader.GetString(reader.GetOrdinal("status")), "Posted", StringComparison.OrdinalIgnoreCase)
-                    ? InvDocStatus.Posted : InvDocStatus.Draft,
+                Status = reader.GetString(reader.GetOrdinal("status")).ToUpperInvariant() switch
+                {
+                    "POSTED" => InvDocStatus.Posted,
+                    "POSTING" => InvDocStatus.Posting,
+                    "CANCELLED" => InvDocStatus.Cancelled,
+                    _ => InvDocStatus.Draft
+                },
                 TaxCode = reader.IsDBNull(reader.GetOrdinal("tax_code")) ? null : reader.GetString(reader.GetOrdinal("tax_code")),
                 DefaultTaxRate = Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("tax_rate")), CultureInfo.InvariantCulture),
                 Notes = reader.IsDBNull(reader.GetOrdinal("notes")) ? null : reader.GetString(reader.GetOrdinal("notes")),
@@ -1084,7 +1479,7 @@ public static class InvRepo
         {
             cmd.CommandText = $"""
                 SELECT line_no, material_id, material_code, description, unit, qty, unit_price,
-                       discount_pct, tax_rate, warehouse_id, warehouse_name
+                       discount_pct, tax_code, tax_rate, tax_calculation_mode, warehouse_id, warehouse_name
                 FROM {lineTable} WHERE doc_id=$id ORDER BY line_no;
                 """;
             Add(cmd, "$id", docId);
@@ -1101,10 +1496,12 @@ public static class InvRepo
                     Qty = Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture),
                     UnitPrice = Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture),
                     DiscountPct = Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture),
-                    TaxRate = Convert.ToDecimal(reader.GetValue(8), CultureInfo.InvariantCulture),
-                    WarehouseId = reader.IsDBNull(9) ? null : Convert.ToInt32(reader.GetValue(9), CultureInfo.InvariantCulture),
-                    WarehouseName = reader.FieldCount > 10 && !reader.IsDBNull(10)
-                        ? Convert.ToString(reader.GetValue(10), CultureInfo.InvariantCulture) ?? ""
+                    TaxCode = reader.IsDBNull(8) ? string.Empty : Convert.ToString(reader.GetValue(8), CultureInfo.InvariantCulture) ?? string.Empty,
+                    TaxRate = Convert.ToDecimal(reader.GetValue(9), CultureInfo.InvariantCulture),
+                    TaxCalculationMode = reader.IsDBNull(10) ? "Exclusive" : Convert.ToString(reader.GetValue(10), CultureInfo.InvariantCulture) ?? "Exclusive",
+                    WarehouseId = reader.IsDBNull(11) ? null : Convert.ToInt32(reader.GetValue(11), CultureInfo.InvariantCulture),
+                    WarehouseName = reader.FieldCount > 12 && !reader.IsDBNull(12)
+                        ? Convert.ToString(reader.GetValue(12), CultureInfo.InvariantCulture) ?? ""
                         : "",
                 });
             }
@@ -1244,7 +1641,9 @@ public static class InvRepo
                     Qty = line.Qty,
                     UnitPrice = line.UnitPrice,
                     DiscountPct = line.DiscountPct,
+                    TaxCode = line.TaxCode,
                     TaxRate = line.TaxRate,
+                    TaxCalculationMode = line.TaxCalculationMode,
                     WarehouseId = line.WarehouseId,
                     WarehouseName = line.WarehouseName
                 }).ToList()
@@ -1379,9 +1778,8 @@ public static class InvRepo
             using (var find = connection.CreateCommand())
             {
                 find.Transaction = tx;
-                find.CommandText = """
-                    SELECT debit, credit, currency_code
-                    """ + (hasBase ? ", base_debit, base_credit, exchange_rate" : "") + """
+                find.CommandText = $"""
+                    SELECT debit, credit, currency_code{(hasBase ? ", base_debit, base_credit, exchange_rate" : string.Empty)}
                     FROM party_ledger
                     WHERE company_id=$company AND party_id=$pid AND doc_id=$orig
                       AND doc_kind IN ('RCV', 'PAY');
@@ -1422,15 +1820,116 @@ public static class InvRepo
 
         if (PartyLedger.TableExists(connection, tx, provider, "payment_allocations"))
         {
-            using var del = connection.CreateCommand();
-            del.Transaction = tx;
-            del.CommandText = """
-                DELETE FROM payment_allocations
-                WHERE company_id=$company AND doc_id=$orig AND doc_table IN ('SALES', 'PURCHASE');
-                """;
-            Add(del, "$company", Company);
-            Add(del, "$orig", original.DocId);
-            del.ExecuteNonQuery();
+            var documentTable = original.IsSalesSide ? "SALES" : "PURCHASE";
+            var hasDocumentCompany = PartyLedger.ColumnExists(
+                connection, tx, provider, "payment_allocations", "document_company_id");
+            var documentCompanyExpression = hasDocumentCompany
+                ? "COALESCE(document_company_id, company_id)"
+                : "company_id";
+            var allocations = new List<(string Id, long PaymentLedgerId, string DocumentCompany,
+                decimal Amount, string? AllocatedBy, string? Note)>();
+            using (var load = connection.CreateCommand())
+            {
+                load.Transaction = tx;
+                load.CommandText = $"""
+                    SELECT allocation_id, payment_ledger_id, {documentCompanyExpression},
+                           amount, allocated_by, note
+                    FROM payment_allocations
+                    WHERE company_id=$company AND doc_table=$table AND doc_id=$orig
+                    ORDER BY allocation_id;
+                    """;
+                Add(load, "$company", Company);
+                Add(load, "$table", documentTable);
+                Add(load, "$orig", original.DocId);
+                using var reader = load.ExecuteReader();
+                while (reader.Read())
+                {
+                    allocations.Add((
+                        Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty,
+                        Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture),
+                        Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture) ?? Company,
+                        Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture),
+                        reader.IsDBNull(4) ? null : Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture),
+                        reader.IsDBNull(5) ? null : Convert.ToString(reader.GetValue(5), CultureInfo.InvariantCulture)));
+                }
+            }
+
+            if (allocations.Count > 0)
+            {
+                if (!PartyLedger.TableExists(connection, tx, provider, "payment_allocation_reversal_audit"))
+                    throw new InvalidOperationException(
+                        "Payment-allocation reversal audit schema is missing. Apply the provider migrations before reversing this invoice.");
+
+                // The audit must identify the actual posted journal of the
+                // return document, not merely its document number or ID.
+                var companyGuid = ResolveCompanyGuid(connection, tx);
+                Guid reversalJournalId;
+                using (var journal = connection.CreateCommand())
+                {
+                    journal.Transaction = tx;
+                    journal.CommandText = """
+                        SELECT journal_entry_id
+                        FROM journal_entries
+                        WHERE company_id=$companyGuid AND source_doc_type=$sourceType
+                          AND source_doc_id=$sourceId AND status=1
+                        ORDER BY posted_at DESC
+                        LIMIT 1;
+                        """;
+                    Add(journal, "$companyGuid", DatabaseRuntime.IsPostgreSql()
+                        ? companyGuid
+                        : companyGuid.ToString("D", CultureInfo.InvariantCulture));
+                    Add(journal, "$sourceType", reversal.KindCode);
+                    Add(journal, "$sourceId", reversal.DocId.ToString(CultureInfo.InvariantCulture));
+                    var journalValue = journal.ExecuteScalar();
+                    if (journalValue is null or DBNull
+                        || !Guid.TryParse(Convert.ToString(journalValue, CultureInfo.InvariantCulture), out reversalJournalId))
+                        throw new InvalidOperationException(
+                            "The posted return journal could not be found; payment allocations were not released.");
+                }
+
+                foreach (var allocation in allocations)
+                {
+                    using var audit = connection.CreateCommand();
+                    audit.Transaction = tx;
+                    audit.CommandText = """
+                        INSERT INTO payment_allocation_reversal_audit
+                            (audit_id, company_id, allocation_id, payment_ledger_id, doc_table, doc_id,
+                             document_company_id, amount, allocated_by, note, released_by, reversal_journal_id)
+                        VALUES
+                            ($audit, $company, $allocation, $payment, $table, $doc,
+                             $documentCompany, $amount, $allocatedBy, $note, $releasedBy, $reversalJournal);
+                        """;
+                    var auditId = Guid.NewGuid();
+                    Add(audit, "$audit", DatabaseRuntime.IsPostgreSql() ? auditId : auditId.ToString("D"));
+                    Add(audit, "$company", Company);
+                    Add(audit, "$allocation", DatabaseRuntime.IsPostgreSql()
+                        ? Guid.Parse(allocation.Id)
+                        : allocation.Id);
+                    Add(audit, "$payment", allocation.PaymentLedgerId);
+                    Add(audit, "$table", documentTable);
+                    Add(audit, "$doc", original.DocId);
+                    Add(audit, "$documentCompany", allocation.DocumentCompany);
+                    Add(audit, "$amount", allocation.Amount);
+                    Add(audit, "$allocatedBy", (object?)allocation.AllocatedBy ?? DBNull.Value);
+                    Add(audit, "$note", (object?)allocation.Note ?? DBNull.Value);
+                    Add(audit, "$releasedBy", userId);
+                    Add(audit, "$reversalJournal", DatabaseRuntime.IsPostgreSql()
+                        ? reversalJournalId
+                        : reversalJournalId.ToString("D"));
+                    audit.ExecuteNonQuery();
+                }
+
+                using var del = connection.CreateCommand();
+                del.Transaction = tx;
+                del.CommandText = """
+                    DELETE FROM payment_allocations
+                    WHERE company_id=$company AND doc_table=$table AND doc_id=$orig;
+                    """;
+                Add(del, "$company", Company);
+                Add(del, "$table", documentTable);
+                Add(del, "$orig", original.DocId);
+                del.ExecuteNonQuery();
+            }
         }
 
         using (var upd = connection.CreateCommand())
@@ -1608,14 +2107,119 @@ public static class InvRepo
 
         var infos = doc.Lines.Select(l => LoadMaterialGl(connection, tx, l, doc.WarehouseId)).ToList();
 
-        // Optional tax leg: only when a postable VAT account resolves.
-        var taxAccountCode = doc.Kind.IsSales() || doc.Kind == InvDocKind.PosSale
-            ? GlAccounts.OutputVat : GlAccounts.InputVat;
+        // Tax is split by legal treatment. Output tax is always a liability;
+        // recoverable input tax is an asset; non-recoverable input tax remains
+        // part of the purchase/stock cost instead of being posted as a receivable.
+        var isSalesDocument = doc.Kind.IsSales() || doc.Kind == InvDocKind.PosSale;
+        var taxAccountCode = isSalesDocument ? GlAccounts.OutputVat : GlAccounts.InputVat;
         var materialTaxAccount = infos.Select(i => i.TaxAccount).FirstOrDefault(t => !string.IsNullOrWhiteSpace(t));
         if (!string.IsNullOrWhiteSpace(materialTaxAccount)) taxAccountCode = materialTaxAccount.Trim();
         var companyGuid = ResolveCompanyGuid(connection, tx);
-        var splitTax = tax > 0 && GlPosting.TryResolveAccount(connection, tx, provider, companyGuid, taxAccountCode) is not null;
-        var taxLeg = splitTax ? tax : 0m;
+        var taxAccountGroups = new List<(string Account, decimal Amount)>();
+        var nonRecoverableTaxByLine = new decimal[doc.Lines.Count];
+        var canSplitTax = tax > 0m;
+        var taxCountry = string.Empty;
+        decimal taxAmountRequiringAccount = 0m;
+        if (canSplitTax)
+        {
+            using var taxSettings = connection.CreateCommand();
+            taxSettings.Transaction = tx;
+            taxSettings.CommandText = "SELECT country_code FROM company_tax_settings WHERE company_code=$company AND tax_enabled = " +
+                (DatabaseRuntime.IsPostgreSql() ? "TRUE" : "1") + " LIMIT 1;";
+            InvRepo.Add(taxSettings, "$company", Company);
+            taxCountry = Convert.ToString(taxSettings.ExecuteScalar(), CultureInfo.InvariantCulture) ?? string.Empty;
+
+            var hasTaxLineGroups = doc.Lines.Any(line => line.LineTax != 0m);
+            foreach (var group in doc.Lines.Where(line => line.LineTax != 0m)
+                         .GroupBy(line => line.TaxCode ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+            {
+                var account = taxAccountCode;
+                var recoverable = true;
+                if (!string.IsNullOrWhiteSpace(group.Key) && !string.IsNullOrWhiteSpace(taxCountry))
+                {
+                    using var rule = connection.CreateCommand();
+                    rule.Transaction = tx;
+                    var activeValue = DatabaseRuntime.IsPostgreSql() ? "TRUE" : "1";
+                    var dateExpression = DatabaseRuntime.IsPostgreSql()
+                        ? "CAST($documentDate AS date)" : "$documentDate";
+                    var accountColumn = isSalesDocument ? "output_account_code" : "input_account_code";
+                    rule.CommandText = $"""
+                        SELECT COALESCE({accountColumn}, ''), is_recoverable
+                        FROM company_tax_rules
+                        WHERE company_code=$company AND country_code=$country
+                          AND tax_code=$taxCode AND is_active={activeValue}
+                          AND effective_from <= {dateExpression}
+                          AND (effective_to IS NULL OR effective_to >= {dateExpression})
+                        ORDER BY effective_from DESC
+                        LIMIT 1;
+                        """;
+                    InvRepo.Add(rule, "$company", Company);
+                    InvRepo.Add(rule, "$country", taxCountry);
+                    InvRepo.Add(rule, "$taxCode", group.Key);
+                    InvRepo.Add(rule, "$documentDate", doc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                    using var ruleReader = rule.ExecuteReader();
+                    if (ruleReader.Read())
+                    {
+                        var configuredAccount = Convert.ToString(ruleReader.GetValue(0), CultureInfo.InvariantCulture);
+                        recoverable = isSalesDocument || (ruleReader.GetValue(1) is bool flag
+                            ? flag
+                            : Convert.ToInt32(ruleReader.GetValue(1), CultureInfo.InvariantCulture) == 1);
+                        if (!string.IsNullOrWhiteSpace(configuredAccount))
+                            account = configuredAccount.Trim();
+                    }
+                }
+
+                var groupAmount = group.Sum(line => line.LineTax);
+                if (!isSalesDocument && !recoverable)
+                {
+                    foreach (var line in group)
+                    {
+                        var lineIndex = doc.Lines.IndexOf(line);
+                        if (lineIndex >= 0)
+                            nonRecoverableTaxByLine[lineIndex] += line.LineTax;
+                    }
+                    continue;
+                }
+
+                taxAmountRequiringAccount += groupAmount;
+                if (GlPosting.TryResolveAccount(connection, tx, provider, companyGuid, account) is null)
+                {
+                    canSplitTax = false;
+                    taxAccountGroups.Clear();
+                    break;
+                }
+                taxAccountGroups.Add((account, groupAmount));
+            }
+
+            if (!hasTaxLineGroups)
+            {
+                taxAmountRequiringAccount = tax;
+                canSplitTax = GlPosting.TryResolveAccount(connection, tx, provider, companyGuid, taxAccountCode) is not null;
+                if (canSplitTax) taxAccountGroups.Add((taxAccountCode, tax));
+            }
+            else if (canSplitTax)
+            {
+                var allocatedTax = taxAccountGroups.Sum(group => group.Amount) + nonRecoverableTaxByLine.Sum();
+                var residual = tax - allocatedTax;
+                if (residual != 0m)
+                {
+                    if (taxAccountGroups.Count > 0)
+                    {
+                        var last = taxAccountGroups[^1];
+                        taxAccountGroups[^1] = (last.Account, last.Amount + residual);
+                    }
+                    else if (nonRecoverableTaxByLine.Length > 0)
+                    {
+                        nonRecoverableTaxByLine[^1] += residual;
+                    }
+                }
+            }
+        }
+        var splitTax = canSplitTax && taxAccountGroups.Count > 0;
+        if (taxAmountRequiringAccount > 0m && !splitTax)
+            throw new InvalidOperationException(
+                "The enabled tax system has no valid posting account for recoverable/output tax. Configure the tax account in the chart of accounts before posting.");
+        var taxLeg = splitTax ? taxAccountGroups.Sum(group => group.Amount) : 0m;
 
         // Per-line revenue / purchase / returns leg amounts, adjusted so
         // their sum is EXACTLY (stored grand − tax leg). Before Step 5
@@ -1633,7 +2237,10 @@ public static class InvRepo
         var leg = new decimal[doc.Lines.Count];
         {
             var bases = doc.Lines
-                .Select(l => decimal.Round(l.LineSubtotal + (splitTax ? 0m : l.LineTax), 4, MidpointRounding.AwayFromZero))
+                .Select((line, index) => decimal.Round(
+                    line.LineSubtotal + (isSalesDocument ? 0m :
+                        (splitTax ? nonRecoverableTaxByLine[index] : line.LineTax)),
+                    4, MidpointRounding.AwayFromZero))
                 .ToArray();
             var adjustment = (grand - taxLeg) - bases.Sum();
             if (adjustment != 0m && bases.Length > 0)
@@ -1747,7 +2354,11 @@ public static class InvRepo
                 // unchanged), instead of inflating COGS by the rate.
                 if (effectiveRate != 1m)
                 {
-                    cost = decimal.Round(cost / effectiveRate, 4, MidpointRounding.AwayFromZero);
+                    // Retain precision in this bridge conversion. GlPosting
+                    // converts the line back to base currency at 4dp; a
+                    // 4dp intermediate can create a one-unit rounding loss
+                    // (for example 80 / 3.75 * 3.75 = 79.9999).
+                    cost = decimal.Round(cost / effectiveRate, 8, MidpointRounding.AwayFromZero);
                     if (cost <= 0) continue;
                 }
                 var cogs = CodeOr(info.AccCogs, GlAccounts.Cogs);
@@ -1794,15 +2405,25 @@ public static class InvRepo
                 else Add(GlAccounts.Receivable, grand, 0);
                 for (var i = 0; i < doc.Lines.Count; i++)
                     Add(CodeOr(infos[i].AccSales, GlAccounts.SalesRevenue), 0, leg[i], cc);
-                if (splitTax) Add(taxAccountCode, 0, taxLeg);
+                if (splitTax) foreach (var taxGroup in taxAccountGroups) Add(taxGroup.Account, 0, taxGroup.Amount);
                 AddCogs(reverse: false);
                 break;
             }
             case InvDocKind.SalesReturn:
             {
+                // A generated full reversal must mirror the original revenue
+                // account exactly. A customer-initiated commercial return
+                // remains classified in the contra-revenue account.
+                var mirrorsOriginalSales = doc.OriginalDocId is > 0
+                    && doc.OriginalDocKind is InvDocKind.SalesInvoice or InvDocKind.PosSale;
                 for (var i = 0; i < doc.Lines.Count; i++)
-                    Add(CodeOr(infos[i].AccSalesReturn, GlAccounts.SalesReturns), leg[i], 0, cc);
-                if (splitTax) Add(taxAccountCode, taxLeg, 0);
+                {
+                    var revenueAccount = mirrorsOriginalSales
+                        ? CodeOr(infos[i].AccSales, GlAccounts.SalesRevenue)
+                        : CodeOr(infos[i].AccSalesReturn, GlAccounts.SalesReturns);
+                    Add(revenueAccount, leg[i], 0, cc);
+                }
+                if (splitTax) foreach (var taxGroup in taxAccountGroups) Add(taxGroup.Account, taxGroup.Amount, 0);
                 // Step 5 reversal symmetry: a return of a document that was
                 // collected at posting mirrors its settlement leg too —
                 // credit the settlement account for the paid part and only
@@ -1833,7 +2454,7 @@ public static class InvRepo
             {
                 for (var i = 0; i < doc.Lines.Count; i++)
                     Add(CodeOr(infos[i].AccPurchase, GlAccounts.Purchases), leg[i], 0, cc);
-                if (splitTax) Add(taxAccountCode, taxLeg, 0);
+                if (splitTax) foreach (var taxGroup in taxAccountGroups) Add(taxGroup.Account, taxGroup.Amount, 0);
                 var paid = Math.Min(Math.Max(doc.PaidAmount, 0m), grand);
                 Add(settleAccount, 0, paid);
                 Add(GlAccounts.Payable, 0, grand - paid);
@@ -1847,9 +2468,19 @@ public static class InvRepo
                 var paid = Math.Min(Math.Max(doc.PaidAmount, 0m), grand);
                 Add(GlAccounts.Payable, grand - paid, 0);
                 Add(settleAccount, paid, 0);
+                // A generated full reversal mirrors the original purchase
+                // account. A normal supplier return remains classified in
+                // the purchase-return contra account.
+                var mirrorsOriginalPurchase = doc.OriginalDocId is > 0
+                    && doc.OriginalDocKind == InvDocKind.PurchaseInvoice;
                 for (var i = 0; i < doc.Lines.Count; i++)
-                    Add(CodeOr(infos[i].AccPurchaseReturn, GlAccounts.PurchaseReturns), 0, leg[i], cc);
-                if (splitTax) Add(taxAccountCode, 0, taxLeg);
+                {
+                    var purchaseAccount = mirrorsOriginalPurchase
+                        ? CodeOr(infos[i].AccPurchase, GlAccounts.Purchases)
+                        : CodeOr(infos[i].AccPurchaseReturn, GlAccounts.PurchaseReturns);
+                    Add(purchaseAccount, 0, leg[i], cc);
+                }
+                if (splitTax) foreach (var taxGroup in taxAccountGroups) Add(taxGroup.Account, 0, taxGroup.Amount);
                 break;
             }
             case InvDocKind.StockIn:
@@ -1862,6 +2493,158 @@ public static class InvRepo
                 break;
         }
         return lines;
+    }
+
+
+    /// <summary>
+    /// Writes an immutable, line-level tax snapshot for a posted document.
+    /// The snapshot is transactionally coupled to the GL posting and records
+    /// the exact effective rule used at the document date.
+    /// </summary>
+    private static void WriteTaxTransactions(
+        DbConnection connection, DbTransaction tx, InvDoc doc,
+        string journalNo, string userId, decimal exchangeRate)
+    {
+        var enabledValue = DatabaseRuntime.IsPostgreSql() ? "TRUE" : "1";
+        string countryCode;
+        using (var settings = connection.CreateCommand())
+        {
+            settings.Transaction = tx;
+            settings.CommandText = $"""
+                SELECT country_code
+                FROM company_tax_settings
+                WHERE company_code = $company AND tax_enabled = {enabledValue}
+                LIMIT 1;
+                """;
+            Add(settings, "$company", Company);
+            countryCode = Convert.ToString(settings.ExecuteScalar(), CultureInfo.InvariantCulture) ?? string.Empty;
+        }
+
+        if (string.IsNullOrWhiteSpace(countryCode))
+        {
+            if (doc.PostingTaxAmount != 0m || doc.Lines.Any(line => line.TaxRate != 0m))
+                throw new InvalidOperationException(
+                    "Tax is present on this document, but the company's tax system is not enabled. Enable the correct tax system or remove tax before posting.");
+            return;
+        }
+
+        var isSalesTax = doc.Kind.IsSales() || doc.Kind == InvDocKind.PosSale;
+        var direction = isSalesTax ? "OUTPUT" : "INPUT";
+        var isReturn = doc.Kind is InvDocKind.SalesReturn or InvDocKind.PurchaseReturn;
+        decimal registeredTax = 0m;
+
+        foreach (var line in doc.Lines)
+        {
+            if (string.IsNullOrWhiteSpace(line.TaxCode))
+            {
+                if (line.TaxRate != 0m || line.LineTax != 0m)
+                    throw new InvalidOperationException(
+                        $"Invoice line {line.LineNo} has a tax rate but no tax code. Select a valid tax system code before posting.");
+                continue;
+            }
+
+            string taxType;
+            string treatment;
+            string accountCode;
+            bool recoverable;
+            decimal approvedRate;
+            string dataStatus;
+            using (var rule = connection.CreateCommand())
+            {
+                rule.Transaction = tx;
+                var documentDateExpression = DatabaseRuntime.IsPostgreSql()
+                    ? "CAST($documentDate AS date)" : "$documentDate";
+                rule.CommandText = $"""
+                    SELECT tax_type, tax_treatment, rate, is_recoverable,
+                           CASE WHEN $direction = 'OUTPUT' THEN COALESCE(output_account_code, '')
+                                ELSE COALESCE(input_account_code, '') END,
+                           COALESCE(data_status, 'USER_CONFIGURED')
+                    FROM company_tax_rules
+                    WHERE company_code = $company
+                      AND country_code = $country
+                      AND tax_code = $code
+                      AND is_active = {enabledValue}
+                      AND effective_from <= {documentDateExpression}
+                      AND (effective_to IS NULL OR effective_to >= {documentDateExpression})
+                    ORDER BY effective_from DESC
+                    LIMIT 1;
+                    """;
+                Add(rule, "$company", Company);
+                Add(rule, "$country", countryCode);
+                Add(rule, "$code", line.TaxCode.Trim());
+                Add(rule, "$direction", direction);
+                Add(rule, "$documentDate", doc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                using var reader = rule.ExecuteReader();
+                if (!reader.Read())
+                    throw new InvalidOperationException(
+                        $"Tax code '{line.TaxCode}' on invoice line {line.LineNo} has no active rule for {countryCode} on {doc.DocDate:yyyy-MM-dd}.");
+                taxType = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty;
+                treatment = Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? "Standard";
+                approvedRate = Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture);
+                recoverable = reader.GetValue(3) is bool flag
+                    ? flag
+                    : Convert.ToInt32(reader.GetValue(3), CultureInfo.InvariantCulture) == 1;
+                accountCode = Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture) ?? string.Empty;
+                dataStatus = Convert.ToString(reader.GetValue(5), CultureInfo.InvariantCulture) ?? "USER_CONFIGURED";
+            }
+
+            if (string.Equals(dataStatus, "BASELINE_REVIEW_REQUIRED", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    $"Tax rule '{line.TaxCode}' is a starter rule and has not been reviewed. Open Tax Configuration, review the effective rate and account mapping, then save the rule before posting.");
+
+            if (string.IsNullOrWhiteSpace(accountCode))
+                accountCode = direction == "OUTPUT" ? GlAccounts.OutputVat : GlAccounts.InputVat;
+
+            if (Math.Abs(line.TaxRate - approvedRate) > 0.000001m)
+                throw new InvalidOperationException(
+                    $"Tax rate on invoice line {line.LineNo} does not match the approved effective rate for '{line.TaxCode}'. Reload the tax code and recalculate the invoice.");
+
+            var amount = isReturn ? -line.LineTax : line.LineTax;
+            registeredTax += amount;
+            using var insert = connection.CreateCommand();
+            insert.Transaction = tx;
+            var insertDocumentDateExpression = DatabaseRuntime.IsPostgreSql()
+                ? "CAST($docDate AS date)" : "$docDate";
+            insert.CommandText = $"""
+                INSERT INTO tax_transactions
+                    (company_code, country_code, source_doc_kind, source_doc_id, source_doc_no,
+                     line_no, tax_code, tax_type, tax_treatment, tax_rate, taxable_amount,
+                     tax_amount, is_recoverable, tax_direction, tax_account_code, currency_code,
+                     exchange_rate, base_tax_amount, journal_doc_no, created_by, document_date)
+                VALUES
+                    ($company, $country, $kind, $docId, $docNo,
+                     $lineNo, $taxCode, $taxType, $treatment, $rate, $taxable,
+                     $tax, $recoverable, $direction, $account, $currency,
+                     $exchangeRate, $baseTax, $journal, $user, {insertDocumentDateExpression})
+                ON CONFLICT (company_code, source_doc_kind, source_doc_id, line_no, tax_code) DO NOTHING;
+                """;
+            Add(insert, "$docDate", doc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            Add(insert, "$company", Company);
+            Add(insert, "$country", countryCode);
+            Add(insert, "$kind", doc.KindCode);
+            Add(insert, "$docId", doc.DocId);
+            Add(insert, "$docNo", doc.DocNo);
+            Add(insert, "$lineNo", line.LineNo);
+            Add(insert, "$taxCode", line.TaxCode.Trim());
+            Add(insert, "$taxType", taxType);
+            Add(insert, "$treatment", treatment);
+            Add(insert, "$rate", approvedRate);
+            Add(insert, "$taxable", isReturn ? -line.LineSubtotal : line.LineSubtotal);
+            Add(insert, "$tax", amount);
+            Add(insert, "$recoverable", recoverable);
+            Add(insert, "$direction", direction);
+            Add(insert, "$account", accountCode);
+            Add(insert, "$currency", doc.CurrencyCode);
+            Add(insert, "$exchangeRate", exchangeRate);
+            Add(insert, "$baseTax", decimal.Round(amount * exchangeRate, 6, MidpointRounding.AwayFromZero));
+            Add(insert, "$journal", journalNo);
+            Add(insert, "$user", userId);
+            insert.ExecuteNonQuery();
+        }
+
+        if (Math.Abs(registeredTax - (isReturn ? -doc.PostingTaxAmount : doc.PostingTaxAmount)) > 0.0001m)
+            throw new InvalidOperationException(
+                "The invoice tax lines do not reconcile with the stored document tax total. Recalculate the invoice before posting.");
     }
 
     private static void BindHeader(DbCommand cmd, InvDoc doc)

@@ -112,8 +112,12 @@ CREATE TABLE IF NOT EXISTS currencies (
     deleted_at TIMESTAMPTZ,
     deleted_by TEXT
 );
+-- Migration 031 owns the canonical currencies table (code/is_deleted).
+-- Migration 050 must not index the legacy column names from its retired
+-- duplicate table definition.
 CREATE UNIQUE INDEX IF NOT EXISTS ux_currencies_company_code
-    ON currencies(company_id, currency_code) WHERE is_deleted = 0;
+    ON currencies(company_id, code)
+    WHERE is_deleted = FALSE;
 
 CREATE TABLE IF NOT EXISTS currency_rates (
     rate_id BIGSERIAL PRIMARY KEY,
@@ -147,8 +151,9 @@ CREATE TABLE IF NOT EXISTS sales_reps (
     deleted_at TIMESTAMPTZ,
     deleted_by TEXT
 );
+-- Migration 031 owns the canonical sales_reps table (code/is_deleted BOOLEAN).
 CREATE UNIQUE INDEX IF NOT EXISTS ux_sales_reps_company_code
-    ON sales_reps(company_id, rep_code) WHERE is_deleted = 0;
+    ON sales_reps(company_id, code) WHERE is_deleted = FALSE;
 
 CREATE TABLE IF NOT EXISTS sales_rep_targets (
     target_id BIGSERIAL PRIMARY KEY,

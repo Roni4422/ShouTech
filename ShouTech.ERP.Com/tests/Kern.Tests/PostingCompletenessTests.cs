@@ -394,6 +394,77 @@ namespace Kern.Tests
             var connectionString = $"Data Source={databasePath};";
             var companyId = Guid.NewGuid();
             ApplySqliteMigrations(databasePath);
+            using (var connection = new SqliteConnection(connectionString))
+            {
+                connection.Open();
+                using var seed = connection.CreateCommand();
+                seed.CommandText = """
+                    INSERT INTO companies (company_id, company_code, company_name_ar, company_name_en)
+                    VALUES ($companyId, $companyCode, 'Posting test company', 'Posting test company');
+
+                    INSERT INTO warehouses
+                        (warehouse_id, company_id, warehouse_code, warehouse_name_ar, warehouse_name_en, is_active, is_deleted)
+                    VALUES (1, $companyCode, 1, 'Main', 'Main', 1, 0);
+
+                    INSERT INTO materials
+                        (material_id, company_id, code, name_ar, name_en, is_stocked, is_deleted, allow_negative)
+                    VALUES (42, $companyCode, 'MAT-42', 'Posting test item', 'Posting test item', 1, 0, 0);
+
+                    INSERT INTO material_stock_balances
+                        (company_id, warehouse_id, material_id, available_qty, average_cost, last_cost)
+                    VALUES ($companyCode, 1, 42, 1000, 40, 40);
+
+                    INSERT INTO chart_of_accounts
+                        (account_id, company_id, account_code, account_name, account_type, is_active, is_deleted, is_postable)
+                    VALUES ($accountId, $companyId, '1201', 'Accounts Receivable', 'ASSET', 1, 0, 1);
+
+                    INSERT INTO chart_of_accounts
+                        (account_id, company_id, account_code, account_name, account_type, is_active, is_deleted, is_postable)
+                    VALUES
+                        ($salesAccountId, $companyId, '301', 'Sales Revenue', 'REVENUE', 1, 0, 1),
+                        ($inventoryAccountId, $companyId, '1203', 'Inventory', 'ASSET', 1, 0, 1),
+                        ($cogsAccountId, $companyId, '401', 'Cost of Goods Sold', 'EXPENSE', 1, 0, 1);
+                    """;
+                seed.Parameters.AddWithValue("$accountId", Guid.NewGuid().ToString("D"));
+                seed.Parameters.AddWithValue("$salesAccountId", Guid.NewGuid().ToString("D"));
+                seed.Parameters.AddWithValue("$inventoryAccountId", Guid.NewGuid().ToString("D"));
+                seed.Parameters.AddWithValue("$cogsAccountId", Guid.NewGuid().ToString("D"));
+                seed.Parameters.AddWithValue("$companyId", companyId.ToString("D"));
+                seed.Parameters.AddWithValue("$companyCode", companyId.ToString("D"));
+                seed.ExecuteNonQuery();
+
+                // The chain's invoice posting now writes a real GL entry.
+                // Keep every test document date in an explicitly open period.
+                using var fiscal = connection.CreateCommand();
+                fiscal.CommandText = """
+                    INSERT INTO fiscal_years
+                        (company_id, fiscal_year, database_name, start_date, end_date, is_current, is_closed)
+                    VALUES ($company, 2026, '', '2026-01-01', '2026-12-31', 1, 0);
+                    SELECT last_insert_rowid();
+                    """;
+                fiscal.Parameters.AddWithValue("$company", companyId.ToString("D"));
+                var yearId = Convert.ToInt64(fiscal.ExecuteScalar(), CultureInfo.InvariantCulture);
+
+                for (var month = 1; month <= 12; month++)
+                {
+                    using var period = connection.CreateCommand();
+                    period.CommandText = """
+                        INSERT INTO fiscal_periods
+                            (fiscal_period_id, company_id, fiscal_year_id, period_number,
+                             period_name, start_date, end_date, status)
+                        VALUES ($id, $company, $year, $number, $name, $start, $end, 'OPEN');
+                        """;
+                    var start = new DateTime(2026, month, 1);
+                    period.Parameters.AddWithValue("$id", Guid.NewGuid().ToString("D"));
+                    period.Parameters.AddWithValue("$company", companyId.ToString("D"));
+                    period.Parameters.AddWithValue("$year", yearId);
+                    period.Parameters.AddWithValue("$number", month);
+                    period.Parameters.AddWithValue("$name", $"2026-{month:D2}");
+                    period.Parameters.AddWithValue("$start", start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                    period.Parameters.AddWithValue("$end", start.AddMonths(1).AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                    period.ExecuteNonQuery();
+                }
+            }
             var repository = new ShouTech.Infrastructure.CommercialDocumentRepository("SQLite", connectionString);
             return Task.FromResult<(SalesChainService Service, Guid CompanyId, string ConnectionString, Action Cleanup)>((new SalesChainService(repository), companyId, connectionString, () => CleanupFiles(databasePath)));
         }

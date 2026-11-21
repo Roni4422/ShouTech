@@ -47,6 +47,22 @@ internal static class Program
             .OrderBy(m => m.Id, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        // Migration IDs are relative paths. Reject case-insensitive collisions
+        // before opening the database so Windows and Linux discover the same set.
+        var duplicateMigrationIds = migrations
+            .GroupBy(m => m.Id, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .OrderBy(id => id, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (duplicateMigrationIds.Length > 0)
+        {
+            Console.Error.WriteLine(
+                "Duplicate migration IDs were discovered (IDs are case-insensitive): " +
+                string.Join(", ", duplicateMigrationIds));
+            return 2;
+        }
+
         if (migrations.Count == 0)
         {
             Console.WriteLine($"No SQL migrations found in {migrationDirectory}.");

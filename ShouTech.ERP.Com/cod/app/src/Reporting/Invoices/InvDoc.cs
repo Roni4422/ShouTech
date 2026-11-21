@@ -25,7 +25,10 @@ public enum InvDocStatus
 {
     Draft = 0,
     Posted = 1,
-    Cancelled = 2
+    Cancelled = 2,
+    // A dedicated stock engine has claimed the document but has not yet
+    // finalized its posting state. This must never be treated as editable Draft.
+    Posting = 3
 }
 
 /// <summary>
@@ -54,6 +57,8 @@ public sealed class InvLine
     public decimal Qty { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal DiscountPct { get; set; }
+    public string TaxCode { get; set; } = string.Empty;
+    public string TaxCalculationMode { get; set; } = "Exclusive";
     public decimal TaxRate { get; set; }
     public int? WarehouseId { get; set; }
     public string WarehouseName { get; set; } = string.Empty;
@@ -70,18 +75,40 @@ public sealed class InvLine
     /// confirmed the expired-batch override for this line at capture.</summary>
     public bool AllowExpiredBatchIssue { get; set; }
 
-    public decimal LineSubtotal
+    private decimal DiscountedEnteredAmount
     {
         get
         {
             var gross = Qty * UnitPrice;
-            var disc = gross * (DiscountPct / 100m);
-            return decimal.Round(gross - disc, 4, MidpointRounding.AwayFromZero);
+            var discount = gross * (DiscountPct / 100m);
+            return decimal.Round(gross - discount, 4, MidpointRounding.AwayFromZero);
+        }
+    }
+
+    public decimal LineSubtotal
+    {
+        get
+        {
+            var enteredAmount = DiscountedEnteredAmount;
+            if (!string.Equals(TaxCalculationMode, "Inclusive", StringComparison.OrdinalIgnoreCase) || TaxRate <= 0m)
+                return enteredAmount;
+
+            var divisor = 1m + (TaxRate / 100m);
+            return decimal.Round(enteredAmount / divisor, 4, MidpointRounding.AwayFromZero);
         }
     }
 
     public decimal LineTax
-        => decimal.Round(LineSubtotal * (TaxRate / 100m), 4, MidpointRounding.AwayFromZero);
+    {
+        get
+        {
+            var enteredAmount = DiscountedEnteredAmount;
+            if (TaxRate <= 0m) return 0m;
+            if (string.Equals(TaxCalculationMode, "Inclusive", StringComparison.OrdinalIgnoreCase))
+                return decimal.Round(enteredAmount - LineSubtotal, 4, MidpointRounding.AwayFromZero);
+            return decimal.Round(LineSubtotal * (TaxRate / 100m), 4, MidpointRounding.AwayFromZero);
+        }
+    }
 
     public decimal LineTotal => LineSubtotal + LineTax;
 }

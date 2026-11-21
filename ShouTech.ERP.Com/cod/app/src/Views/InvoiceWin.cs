@@ -35,6 +35,10 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
     private readonly DatePicker _dtDate = new() { SelectedDate = DateTime.Today };
     private readonly TextBox _txtCurrency = new();
     private readonly TextBox _txtTaxRate = new();
+    private readonly ComboBox _cmbTaxCode = new();
+    private readonly DataGridComboBoxColumn _taxCodeColumn = new();
+    private IReadOnlyList<TaxSvc.TaxCodeRec> _taxCodes = Array.Empty<TaxSvc.TaxCodeRec>();
+    private bool _suppressTaxSelectionChanged;
     private readonly TextBox _txtReceiptNo = new();
     private readonly TextBox _txtReference = new();
     private readonly TextBox _txtBranch = new();
@@ -82,6 +86,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
     private readonly TextBlock _lblStatus = new() { Margin = new Thickness(8, 4, 0, 0), VerticalAlignment = VerticalAlignment.Center };
 
     private bool _syncingPayment;
+    private bool _syncingDocumentDate;
 
     public InvoiceWin() : this(InvDocKind.SalesInvoice) { }
 
@@ -101,6 +106,8 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             PartyAccountName = InvDoc.DefaultCashAccountName()
         };
 
+        _taxCodes = TaxSvc.LoadCodes(_doc.DocDate);
+
         Width = 1100;
         Height = 700;
         MinWidth = 660;
@@ -109,6 +116,18 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         Title = WindowTitleFor(kind);
 
         BuildUi();
+        _txtTaxRate.IsReadOnly = !TaxSvc.IsEnabled || _taxCodes.Count == 0;
+        _cmbTaxCode.ItemsSource = _taxCodes;
+        _cmbTaxCode.DisplayMemberPath = nameof(TaxSvc.TaxCodeRec.Name);
+        _cmbTaxCode.SelectedValuePath = nameof(TaxSvc.TaxCodeRec.Code);
+        _cmbTaxCode.IsEnabled = TaxSvc.IsEnabled && _taxCodes.Count > 0;
+        if (TaxSvc.IsEnabled && string.IsNullOrWhiteSpace(_doc.TaxCode) && _taxCodes.Count > 0)
+        {
+            var defaultTax = _taxCodes.FirstOrDefault(x => x.Rate == _doc.DefaultTaxRate) ?? _taxCodes[0];
+            _doc.TaxCode = defaultTax.Code;
+            _doc.DefaultTaxRate = defaultTax.Rate;
+        }
+        _cmbTaxCode.SelectedValue = _doc.TaxCode;
         ApplyLanguageDirection();
 
         _doc.DocNo = InvRepo.NextDocNo(kind);
@@ -119,7 +138,14 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _txtGoodsAccount.Text = _doc.GoodsAccountName;
         _txtPartyAccount.Text = _doc.PartyAccountName;
 
-        _lines.Add(new LineVm { TaxRate = _doc.DefaultTaxRate, WarehouseName = _doc.WarehouseName });
+        _lines.Add(new LineVm
+        {
+            TaxCode = _doc.TaxCode ?? string.Empty,
+            TaxRate = _doc.DefaultTaxRate,
+            TaxCalculationMode = _taxCodes.FirstOrDefault(x =>
+                string.Equals(x.Code, _doc.TaxCode, StringComparison.OrdinalIgnoreCase))?.CalculationMode ?? "Exclusive",
+            WarehouseName = _doc.WarehouseName
+        });
         WireEvents();
         RefreshTotals();
     }
@@ -188,6 +214,14 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         };
 
         _cmbPayment.SelectionChanged += (_, _) => OnPaymentMethodChanged();
+        _dtDate.SelectedDateChanged += (_, _) =>
+        {
+            if (_syncingDocumentDate || _doc.Status != InvDocStatus.Draft)
+                return;
+            _doc.DocDate = _dtDate.SelectedDate ?? DateTime.Today;
+            RefreshTaxCodes(_doc.DocDate);
+            RefreshTotals();
+        };
 
         void OnFooterEdit(object s, TextChangedEventArgs e) => RefreshTotalsFromFooterInputs();
         _txtLinesDiscount.TextChanged += OnFooterEdit;
@@ -200,6 +234,95 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
                 _txtPaid.Text = _txtPaymentValue.Text;
             RefreshTotalsFromFooterInputs();
         };
+    }
+
+    private void RefreshTaxCodes(DateTime asOfDate, bool preserveUnknown = false)
+    {
+        var codes = TaxSvc.LoadCodes(asOfDate).ToList();
+        if (preserveUnknown &&
+            !string.IsNullOrWhiteSpace(_doc.TaxCode) &&
+            !codes.Any(x => string.Equals(x.Code, _doc.TaxCode, StringComparison.OrdinalIgnoreCase)))
+        {
+            codes.Add(new TaxSvc.TaxCodeRec(
+                _doc.TaxCode,
+                _doc.TaxCode + " (historical)",
+                _doc.DefaultTaxRate,
+                string.Empty,
+                "Exclusive"));
+        }
+
+        if (preserveUnknown)
+        {
+            foreach (var line in _lines.Where(x => !string.IsNullOrWhiteSpace(x.TaxCode)))
+            {
+                if (codes.Any(x => string.Equals(x.Code, line.TaxCode, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+                codes.Add(new TaxSvc.TaxCodeRec(
+                    line.TaxCode,
+                    line.TaxCode + " (historical)",
+                    line.TaxRate,
+                    string.Empty,
+                    line.TaxCalculationMode));
+            }
+        }
+
+        _taxCodes = codes.AsReadOnly();
+        if (!preserveUnknown)
+        {
+            if (!string.IsNullOrWhiteSpace(_doc.TaxCode))
+            {
+                var selected = _taxCodes.FirstOrDefault(x =>
+                    string.Equals(x.Code, _doc.TaxCode, StringComparison.OrdinalIgnoreCase));
+                if (selected is null)
+                {
+                    _doc.TaxCode = string.Empty;
+                    _doc.DefaultTaxRate = 0m;
+                }
+                else
+                {
+                    _doc.DefaultTaxRate = selected.Rate;
+                }
+            }
+
+            foreach (var line in _lines)
+            {
+                if (string.IsNullOrWhiteSpace(line.TaxCode))
+                    continue;
+                var selected = _taxCodes.FirstOrDefault(x =>
+                    string.Equals(x.Code, line.TaxCode, StringComparison.OrdinalIgnoreCase));
+                if (selected is null)
+                {
+                    line.TaxCode = string.Empty;
+                    line.TaxRate = 0m;
+                    line.TaxCalculationMode = "Exclusive";
+                    line.NotifyTotals();
+                }
+                else
+                {
+                    line.TaxRate = selected.Rate;
+                    line.TaxCalculationMode = selected.CalculationMode;
+                    line.NotifyTotals();
+                }
+            }
+        }
+
+        _cmbTaxCode.ItemsSource = _taxCodes;
+        _taxCodeColumn.ItemsSource = _taxCodes;
+        _cmbTaxCode.SelectedValue = _doc.TaxCode;
+        var hasCurrentRules = TaxSvc.IsEnabled && codes.Count > 0 && codes.Any(x => !x.Name.EndsWith(" (historical)", StringComparison.Ordinal));
+        _cmbTaxCode.IsEnabled = hasCurrentRules;
+        _taxCodeColumn.IsReadOnly = !hasCurrentRules;
+        _txtTaxRate.IsReadOnly = !hasCurrentRules;
+        if (!hasCurrentRules && !preserveUnknown)
+        {
+            _doc.TaxCode = string.Empty;
+            _doc.DefaultTaxRate = 0m;
+            _txtTaxRate.Text = "0";
+        }
+        else
+        {
+            _txtTaxRate.Text = _doc.DefaultTaxRate.ToString("0.##", CultureInfo.InvariantCulture);
+        }
     }
 
     private void OnPaymentMethodChanged()
@@ -272,11 +395,31 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _btnPost.Click += (_, _) => PostDoc();
         _btnPrint.Click += (_, _) => InvPrn.Print(CaptureDoc(), CurrentCompanyDisplay);
         _btnPdf.Click += (_, _) => InvPrn.ExportPdf(CaptureDoc(), CurrentCompanyDisplay);
+        _cmbTaxCode.SelectionChanged += (_, _) =>
+        {
+            if (_suppressTaxSelectionChanged) return;
+            var selectedCode = Convert.ToString(_cmbTaxCode.SelectedValue, CultureInfo.InvariantCulture) ?? string.Empty;
+            var selectedTax = _taxCodes.FirstOrDefault(x => string.Equals(x.Code, selectedCode, StringComparison.OrdinalIgnoreCase));
+            if (selectedTax is null) return;
+            _doc.TaxCode = selectedTax.Code;
+            _doc.DefaultTaxRate = selectedTax.Rate;
+            _txtTaxRate.Text = selectedTax.Rate.ToString("0.##", CultureInfo.InvariantCulture);
+            foreach (var line in _lines)
+            {
+                line.TaxCode = selectedTax.Code;
+                line.TaxRate = selectedTax.Rate;
+                line.TaxCalculationMode = selectedTax.CalculationMode;
+            }
+            RefreshTotals();
+        };
         _btnAddLine.Click += (_, _) =>
         {
             _lines.Add(new LineVm
             {
+                TaxCode = Convert.ToString(_cmbTaxCode.SelectedValue, CultureInfo.InvariantCulture) ?? string.Empty,
                 TaxRate = ParseDec(_txtTaxRate.Text, TaxSvc.GetDefaultRate()),
+                TaxCalculationMode = _taxCodes.FirstOrDefault(x =>
+                    string.Equals(x.Code, Convert.ToString(_cmbTaxCode.SelectedValue, CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase))?.CalculationMode ?? "Exclusive",
                 WarehouseName = _txtWarehouse.Text.Trim()
             });
             RefreshTotals();
@@ -412,7 +555,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
     /// <summary>
     /// Phenix-like compact header: 3 columns × tight rows, uniform control size, no large gaps.
     /// </summary>
-    private Grid BuildHeaderPanel()
+    private DockPanel BuildHeaderPanel()
     {
         const double gap = 4;
 
@@ -428,10 +571,10 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         }
 
         Size(_cmbPayment);
-        Size(_txtDocNo);
         Size(_dtDate);
         Size(_txtCurrency);
         Size(_txtTaxRate);
+        Size(_cmbTaxCode);
         Size(_txtReceiptNo);
         Size(_txtReference);
         Size(_txtBranch);
@@ -456,13 +599,13 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         for (var i = 0; i < 8; i++)
             payment.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         AddLabeledCell(payment, 0, Tf("Invoice.PaymentMethod", "Payment method"), _cmbPayment);
-        AddLabeledCell(payment, 1, Tf("Invoice.DocNo", "Invoice No."), _txtDocNo);
-        AddLabeledCell(payment, 2, Tf("Invoice.Date", "Date"), _dtDate);
-        AddLabeledCell(payment, 3, Tf("Invoice.Currency", "Currency"), _txtCurrency);
-        AddLabeledCell(payment, 4, Tf("Invoice.TaxRate", "Tax %"), _txtTaxRate);
-        AddLabeledCell(payment, 5, Tf("Invoice.ReceiptNo", "Receipt no."), _txtReceiptNo);
-        AddLabeledCell(payment, 6, Tf("Invoice.Reference", "Reference"), _txtReference);
-        AddLabeledCell(payment, 7, Tf("Invoice.Branch", "Branch"), _txtBranch);
+        AddLabeledCell(payment, 1, Tf("Invoice.Date", "Date"), _dtDate);
+        AddLabeledCell(payment, 2, Tf("Invoice.Currency", "Currency"), _txtCurrency);
+        AddLabeledCell(payment, 3, Tf("Invoice.TaxRate", "Tax %"), _txtTaxRate);
+        AddLabeledCell(payment, 4, Tf("Invoice.ReceiptNo", "Receipt no."), _txtReceiptNo);
+        AddLabeledCell(payment, 5, Tf("Invoice.Reference", "Reference"), _txtReference);
+        AddLabeledCell(payment, 6, Tf("Invoice.Branch", "Branch"), _txtBranch);
+        AddLabeledCell(payment, 7, Tf("Invoice.TaxSystem", "Tax system"), _cmbTaxCode);
 
         // Party / warehouse column
         var party = new Grid { Margin = new Thickness(gap) };
@@ -491,7 +634,13 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         grid.Children.Add(accounts);
         grid.Children.Add(party);
         grid.Children.Add(payment);
-        return grid;
+
+        var panel = new DockPanel { LastChildFill = true };
+        var recordBar = CreateRecordNumberBar(_txtDocNo, NavigateDocuments);
+        DockPanel.SetDock(recordBar, Dock.Top);
+        panel.Children.Add(recordBar);
+        panel.Children.Add(grid);
+        return panel;
     }
 
     /// <summary>
@@ -619,7 +768,19 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _grid.Columns.Add(TextCol(nameof(LineVm.Unit), 60, Tf("Invoice.ColUnit", "Unit")));
         _grid.Columns.Add(TextCol(nameof(LineVm.UnitPriceText), 80, Tf("Invoice.ColUnitPrice", "Unit price")));
         _grid.Columns.Add(TextCol(nameof(LineVm.DiscountPctText), 60, Tf("Invoice.ColDiscount", "Disc %")));
-        _grid.Columns.Add(TextCol(nameof(LineVm.TaxRateText), 60, Tf("Invoice.ColTax", "Tax %")));
+        _taxCodeColumn.Header = Tf("Invoice.ColTaxCode", "Tax system");
+        _taxCodeColumn.SelectedValueBinding = new Binding(nameof(LineVm.TaxCode)) { Mode = BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged };
+        _taxCodeColumn.SelectedValuePath = nameof(TaxSvc.TaxCodeRec.Code);
+        _taxCodeColumn.DisplayMemberPath = nameof(TaxSvc.TaxCodeRec.Name);
+        _taxCodeColumn.ItemsSource = _taxCodes;
+        _taxCodeColumn.Width = 125;
+        _taxCodeColumn.IsReadOnly = !TaxSvc.IsEnabled || _taxCodes.Count == 0;
+        /* Keep the tax-code column identity stable: DisplayIndex changes
+           when users reorder columns, so event logic must not depend on it. */
+        _grid.Columns.Add(_taxCodeColumn);
+        var taxRateColumn = TextCol(nameof(LineVm.TaxRateText), 60, Tf("Invoice.ColTax", "Tax %"));
+        taxRateColumn.IsReadOnly = !TaxSvc.IsEnabled || _taxCodes.Count == 0;
+        _grid.Columns.Add(taxRateColumn);
         _grid.Columns.Add(new DataGridTextColumn
         {
             Header = Tf("Invoice.ColLineTotal", "Line total"),
@@ -639,6 +800,14 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         {
             if (e.Row.Item is LineVm line)
             {
+                if (ReferenceEquals(e.Column, _taxCodeColumn) && TaxSvc.IsEnabled)
+                {
+                    var selectedTax = _taxCodes.FirstOrDefault(x =>
+                        string.Equals(x.Code, line.TaxCode, StringComparison.OrdinalIgnoreCase));
+                    line.TaxRate = selectedTax?.Rate ?? 0m;
+                    line.TaxCalculationMode = selectedTax?.CalculationMode ?? "Exclusive";
+                }
+
                 line.NotifyTotals();
                 RefreshTotals();
             }
@@ -684,6 +853,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _lblStatus.Text = _doc.Status switch
         {
             InvDocStatus.Posted => Tf("Invoice.StatusPosted", "Posted"),
+            InvDocStatus.Posting => Tf("Invoice.StatusPosting", "Posting — reconciliation required"),
             InvDocStatus.Cancelled => Tf("Invoice.StatusCancelled", "Cancelled"),
             _ => Tf("Invoice.StatusDraft", "Draft")
         };
@@ -701,7 +871,13 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _doc.CurrencyCode = string.IsNullOrWhiteSpace(_txtCurrency.Text)
             ? UsrPref.Load().CurrencyCode
             : _txtCurrency.Text.Trim().ToUpperInvariant();
-        _doc.DefaultTaxRate = ParseDec(_txtTaxRate.Text, TaxSvc.GetDefaultRate());
+        var taxEnabled = TaxSvc.IsEnabled && _taxCodes.Count > 0;
+        _doc.TaxCode = taxEnabled
+            ? Convert.ToString(_cmbTaxCode.SelectedValue, CultureInfo.InvariantCulture) ?? string.Empty
+            : string.Empty;
+        _doc.DefaultTaxRate = taxEnabled
+            ? ParseDec(_txtTaxRate.Text, TaxSvc.GetDefaultRate())
+            : 0m;
         _doc.Notes = _txtNotes.Text;
         _doc.ReceiptNo = _txtReceiptNo.Text.Trim();
         _doc.Reference = _txtReference.Text.Trim();
@@ -718,7 +894,16 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _doc.LinesDiscountAmount = ParseDec(_txtLinesDiscount.Text, 0);
         _doc.LinesExtraAmount = ParseDec(_txtLinesExtra.Text, 0);
         _doc.PaidAmount = ParseDec(_txtPaid.Text, 0);
-        _doc.Lines = _lines.Select(l => l.ToLine())
+        _doc.Lines = _lines.Select(l =>
+            {
+                var line = l.ToLine();
+                if (!taxEnabled)
+                {
+                    line.TaxCode = string.Empty;
+                    line.TaxRate = 0m;
+                }
+                return line;
+            })
             .Where(l => !string.IsNullOrWhiteSpace(l.Description) || l.Qty != 0)
             .ToList();
         // Resolve typed codes/names to ids so stock posting and reloads work:
@@ -763,6 +948,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             : doc.WarehouseName;
         _doc.CurrencyCode = doc.CurrencyCode;
         _doc.DefaultTaxRate = doc.DefaultTaxRate;
+        _doc.TaxCode = doc.TaxCode ?? string.Empty;
         _doc.Notes = doc.Notes;
         _doc.Status = doc.Status;
         _doc.PaymentMethod = doc.PaymentMethod;
@@ -784,7 +970,9 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _doc.JournalDocNo = doc.JournalDocNo;
 
         _txtDocNo.Text = doc.DocNo;
-        _dtDate.SelectedDate = doc.DocDate;
+        _syncingDocumentDate = true;
+        try { _dtDate.SelectedDate = doc.DocDate; }
+        finally { _syncingDocumentDate = false; }
         _txtPartyCode.Text = doc.PartyCode;
         _txtPartyName.Text = doc.PartyName;
         _txtCurrency.Text = doc.CurrencyCode;
@@ -822,9 +1010,21 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         foreach (var line in doc.Lines)
             _lines.Add(LineVm.FromLine(line));
         if (_lines.Count == 0)
-            _lines.Add(new LineVm { TaxRate = doc.DefaultTaxRate, WarehouseName = _doc.WarehouseName });
+            _lines.Add(new LineVm
+            {
+                TaxCode = doc.TaxCode ?? string.Empty,
+                TaxRate = doc.DefaultTaxRate,
+                TaxCalculationMode = _taxCodes.FirstOrDefault(x =>
+                    string.Equals(x.Code, doc.TaxCode, StringComparison.OrdinalIgnoreCase))?.CalculationMode ?? "Exclusive",
+                WarehouseName = _doc.WarehouseName
+            });
 
-        var locked = doc.Status == InvDocStatus.Posted || doc.Status == InvDocStatus.Cancelled;
+        RefreshTaxCodes(doc.DocDate, preserveUnknown: doc.Status != InvDocStatus.Draft);
+        _suppressTaxSelectionChanged = true;
+        try { _cmbTaxCode.SelectedValue = _doc.TaxCode; }
+        finally { _suppressTaxSelectionChanged = false; }
+
+        var locked = doc.Status is InvDocStatus.Posted or InvDocStatus.Posting or InvDocStatus.Cancelled;
         _btnSave.IsEnabled = !locked;
         _btnReverse.IsEnabled = locked && doc.Kind is InvDocKind.SalesInvoice or InvDocKind.PurchaseInvoice or InvDocKind.PosSale;
         if (_btnReverse.IsEnabled)
@@ -923,6 +1123,29 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         }
     }
 
+    private void NavigateDocuments(int offset)
+    {
+        try
+        {
+            if (_doc.DocId <= 0 || _doc.Status == InvDocStatus.Draft)
+            {
+                var answer = MessageBox.Show(this, T("RecordNavigation.DiscardChanges"),
+                    T("RecordNavigation.Title"), MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                if (answer != MessageBoxResult.Yes) return;
+            }
+
+            var targetId = InvRepo.FindAdjacentDocumentId(_doc.DocId, _doc.Kind, offset);
+            if (targetId is not long id) return;
+            var target = InvRepo.Load(id, _doc.Kind);
+            if (target is not null) ApplyDoc(target);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "InvoiceWin.NavigateDocuments");
+            MessageBox.Show(this, ex.Message, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     private void SaveDraft()
     {
         try
@@ -931,6 +1154,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             var doc = CaptureDoc();
             if (doc.Lines.Count == 0) { ShowWarn("Invoice.NeedLines"); return; }
             InvRepo.SaveDraft(doc);
+            LoadedDocumentId = doc.DocId;
             _txtDocNo.Text = doc.DocNo;
             ShowInfo("Invoice.Saved");
             RefreshTotals();
@@ -1032,7 +1256,13 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         if (_grid.SelectedItem is not LineVm line)
         {
             if (_lines.Count == 0)
-                _lines.Add(new LineVm { TaxRate = ParseDec(_txtTaxRate.Text, TaxSvc.GetDefaultRate()) });
+                _lines.Add(new LineVm
+            {
+                TaxCode = Convert.ToString(_cmbTaxCode.SelectedValue, CultureInfo.InvariantCulture) ?? string.Empty,
+                TaxRate = ParseDec(_txtTaxRate.Text, TaxSvc.GetDefaultRate()),
+                TaxCalculationMode = _taxCodes.FirstOrDefault(x =>
+                    string.Equals(x.Code, Convert.ToString(_cmbTaxCode.SelectedValue, CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase))?.CalculationMode ?? "Exclusive"
+            });
             line = _lines[^1];
             _grid.SelectedItem = line;
         }
@@ -1149,7 +1379,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         if (payIdx >= 0 && payIdx < _cmbPayment.Items.Count)
             _cmbPayment.SelectedIndex = payIdx;
 
-        if (_grid.Columns.Count >= 9)
+        if (_grid.Columns.Count >= 10)
         {
             _grid.Columns[0].Header = Tf("Invoice.ColCode", "Code");
             _grid.Columns[1].Header = Tf("Invoice.ColMaterial", "Material");
@@ -1157,9 +1387,10 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             _grid.Columns[3].Header = Tf("Invoice.ColUnit", "Unit");
             _grid.Columns[4].Header = Tf("Invoice.ColUnitPrice", "Unit price");
             _grid.Columns[5].Header = Tf("Invoice.ColDiscount", "Disc %");
-            _grid.Columns[6].Header = Tf("Invoice.ColTax", "Tax %");
-            _grid.Columns[7].Header = Tf("Invoice.ColLineTotal", "Line total");
-            _grid.Columns[8].Header = Tf("Invoice.ColWarehouse", "Warehouse");
+            _grid.Columns[6].Header = Tf("Invoice.ColTaxCode", "Tax system");
+            _grid.Columns[7].Header = Tf("Invoice.ColTax", "Tax %");
+            _grid.Columns[8].Header = Tf("Invoice.ColLineTotal", "Line total");
+            _grid.Columns[9].Header = Tf("Invoice.ColWarehouse", "Warehouse");
         }
 
         RefreshTotals();
@@ -1175,6 +1406,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         private string _unitPriceText = "0";
         private string _discountPctText = "0";
         private string _taxRateText = "0";
+        private string _taxCode = string.Empty;
         private string _warehouseName = string.Empty;
 
         public long? MaterialId { get; set; }
@@ -1186,6 +1418,8 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         public string UnitPriceText { get => _unitPriceText; set { _unitPriceText = value; OnPropertyChanged(); NotifyTotals(); } }
         public string DiscountPctText { get => _discountPctText; set { _discountPctText = value; OnPropertyChanged(); NotifyTotals(); } }
         public string TaxRateText { get => _taxRateText; set { _taxRateText = value; OnPropertyChanged(); NotifyTotals(); } }
+        public string TaxCode { get => _taxCode; set { _taxCode = value ?? string.Empty; OnPropertyChanged(); } }
+        public string TaxCalculationMode { get; set; } = "Exclusive";
         public string WarehouseName { get => _warehouseName; set { _warehouseName = value; OnPropertyChanged(); } }
 
         public decimal TaxRate
@@ -1220,6 +1454,8 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             Qty = ParseDec(QtyText, 0),
             UnitPrice = ParseDec(UnitPriceText, 0),
             DiscountPct = ParseDec(DiscountPctText, 0),
+            TaxCode = TaxCode,
+            TaxCalculationMode = TaxCalculationMode,
             TaxRate = ParseDec(TaxRateText, 0),
             WarehouseId = WarehouseId,
             WarehouseName = WarehouseName
@@ -1234,6 +1470,8 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             QtyText = line.Qty.ToString("0.###", CultureInfo.InvariantCulture),
             UnitPriceText = line.UnitPrice.ToString("0.####", CultureInfo.InvariantCulture),
             DiscountPctText = line.DiscountPct.ToString("0.##", CultureInfo.InvariantCulture),
+            TaxCode = line.TaxCode,
+            TaxCalculationMode = line.TaxCalculationMode,
             TaxRateText = line.TaxRate.ToString("0.##", CultureInfo.InvariantCulture),
             WarehouseId = line.WarehouseId,
             WarehouseName = line.WarehouseName
