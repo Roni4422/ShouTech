@@ -480,17 +480,23 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         var fulfilled = await LinkedQuantitiesAsync(connection, null, side, order.CompanyId, docId, fulfillKind, cancellationToken).ConfigureAwait(false);
         var billed = await LinkedQuantitiesAsync(connection, null, side, order.CompanyId, docId, billedKind, cancellationToken).ConfigureAwait(false);
 
+        var remainingFulfilled = fulfilled.ToDictionary(pair => pair.Key, pair => pair.Value);
+        var remainingBilled = billed.ToDictionary(pair => pair.Key, pair => pair.Value);
         var lines = new List<OrderProgressLine>();
         decimal totalOrdered = 0m, totalFulfilled = 0m, totalBilled = 0m;
         foreach (var line in order.Lines)
         {
             var key = line.MaterialId ?? -line.LineNo;
-            var f = fulfilled.TryGetValue(key, out var fv) ? fv : 0m;
-            var b = billed.TryGetValue(key, out var bv) ? bv : 0m;
-            lines.Add(new OrderProgressLine(line.MaterialId, line.MaterialCode, line.Description, line.Qty, f, b));
+            var fulfilledAvailable = remainingFulfilled.GetValueOrDefault(key);
+            var billedAvailable = remainingBilled.GetValueOrDefault(key);
+            var lineFulfilled = Math.Min(line.Qty, fulfilledAvailable);
+            var lineBilled = Math.Min(line.Qty, billedAvailable);
+            remainingFulfilled[key] = Math.Max(0m, fulfilledAvailable - lineFulfilled);
+            remainingBilled[key] = Math.Max(0m, billedAvailable - lineBilled);
+            lines.Add(new OrderProgressLine(line.MaterialId, line.MaterialCode, line.Description, line.Qty, lineFulfilled, lineBilled));
             totalOrdered += line.Qty;
-            totalFulfilled += Math.Min(f, line.Qty);
-            totalBilled += Math.Min(b, line.Qty);
+            totalFulfilled += lineFulfilled;
+            totalBilled += lineBilled;
         }
         var perFulfilled = totalOrdered <= 0m ? 0m : decimal.Round(100m * totalFulfilled / totalOrdered, 2);
         var perBilled = totalOrdered <= 0m ? 0m : decimal.Round(100m * totalBilled / totalOrdered, 2);
