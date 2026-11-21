@@ -243,6 +243,92 @@ public sealed class InvPostCorrectnessTests
         Assert.Equal(1050m, entry.Lines.Where(l => l.Code == "2201").Sum(l => l.Credit));
     }
 
+    [Fact]
+    public async Task PurchaseInvoiceReturn_AuditsReleasedSupplierPaymentAllocation()
+    {
+        using var db = await SeededAsync();
+        var supplier = await SavePartyAsync(db, "S", "SUP-RET-1", creditLimit: 0m);
+        var stockBefore = StockQty(db);
+
+        var invoice = BuildDoc(InvDocKind.PurchaseInvoice, supplier.LedgerId, "SUP-RET-1",
+            qty: 1m, price: 100m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        InvRepo.SaveDraft(invoice);
+        InvRepo.Post(invoice.DocId, invoice.Kind, Actor);
+
+        long paymentLedgerId;
+        using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            connection.Open();
+            using var payment = connection.CreateCommand();
+            payment.CommandText = """
+                INSERT INTO party_ledger
+                    (company_id, party_kind, party_id, doc_kind, doc_no, entry_date,
+                     debit, credit, currency_code, note)
+                VALUES
+                    ($company, 'S', $party, 'PAY', 'PAY-RET-1', '2026-11-10',
+                     100, 0, 'SAR', 'Supplier payment used for invoice settlement')
+                RETURNING ledger_id;
+                """;
+            payment.Parameters.AddWithValue("$company", CompanyCode);
+            payment.Parameters.AddWithValue("$party", supplier.LedgerId);
+            paymentLedgerId = Convert.ToInt64(payment.ExecuteScalar(), CultureInfo.InvariantCulture);
+
+            using var allocation = connection.CreateCommand();
+            allocation.CommandText = """
+                INSERT INTO payment_allocations
+                    (allocation_id, company_id, document_company_id, party_kind, party_id,
+                     payment_ledger_id, doc_table, doc_id, doc_no, amount, allocated_by, note)
+                VALUES
+                    ($allocation, $company, $documentCompany, 'S', $party,
+                     $payment, 'PURCHASE', $doc, $docNo, 100, $actor, 'Full supplier invoice settlement');
+                """;
+            allocation.Parameters.AddWithValue("$allocation", Guid.NewGuid().ToString("D"));
+            allocation.Parameters.AddWithValue("$company", CompanyCode);
+            allocation.Parameters.AddWithValue("$documentCompany", CompanyCode);
+            allocation.Parameters.AddWithValue("$party", supplier.LedgerId);
+            allocation.Parameters.AddWithValue("$payment", paymentLedgerId);
+            allocation.Parameters.AddWithValue("$doc", invoice.DocId);
+            allocation.Parameters.AddWithValue("$docNo", invoice.DocNo);
+            allocation.Parameters.AddWithValue("$actor", Actor);
+            allocation.ExecuteNonQuery();
+
+            using var paid = connection.CreateCommand();
+            paid.CommandText = "UPDATE purchase_documents SET paid_amount=100 WHERE doc_id=$doc AND company_id=$company;";
+            paid.Parameters.AddWithValue("$doc", invoice.DocId);
+            paid.Parameters.AddWithValue("$company", CompanyCode);
+            Assert.Equal(1, paid.ExecuteNonQuery());
+        }
+
+        var reversalId = InvRepo.ReversePostedInvoice(
+            invoice.DocId, InvDocKind.PurchaseInvoice, "Supplier returned the full delivery", Actor);
+
+        Assert.Equal(stockBefore, StockQty(db));
+        Assert.Equal(0m, Scalar(db,
+            $"SELECT paid_amount FROM purchase_documents WHERE doc_id={invoice.DocId};"));
+        Assert.Equal(0m, Scalar(db,
+            $"SELECT COUNT(*) FROM payment_allocations WHERE company_id='{CompanyCode}' AND doc_table='PURCHASE' AND doc_id={invoice.DocId};"));
+        Assert.Equal(1m, Scalar(db,
+            $"SELECT COUNT(*) FROM payment_allocation_reversal_audit WHERE company_id='{CompanyCode}' AND doc_table='PURCHASE' AND doc_id={invoice.DocId};"));
+        Assert.Equal(100m, Scalar(db,
+            $"SELECT amount FROM payment_allocation_reversal_audit WHERE company_id='{CompanyCode}' AND doc_table='PURCHASE' AND doc_id={invoice.DocId};"));
+        Assert.Equal(1m, Scalar(db,
+            $"SELECT COUNT(*) FROM payment_allocation_reversal_audit WHERE company_id='{CompanyCode}' AND doc_table='PURCHASE' AND doc_id={invoice.DocId} AND released_by='{Actor}';"));
+
+        var returnDoc = InvRepo.Load(reversalId, InvDocKind.PurchaseReturn);
+        Assert.NotNull(returnDoc);
+        Assert.Equal(invoice.StoredGrandTotal, returnDoc!.StoredGrandTotal);
+
+        var journalId = ScalarText(db,
+            $"SELECT journal_entry_id FROM journal_entries WHERE source_doc_type='PRT' AND source_doc_id='{reversalId}' AND status=1;");
+        Assert.Equal(journalId, ScalarText(db,
+            $"SELECT reversal_journal_id FROM payment_allocation_reversal_audit WHERE company_id='{CompanyCode}' AND doc_id={invoice.DocId};"));
+
+        var reconciliation = new ReconciliationRepository("SQLite", db.ConnectionString);
+        var availablePayments = await reconciliation.GetPaymentsAsync(CompanyCode, "S");
+        var reopenedPayment = Assert.Single(availablePayments, row => row.LedgerId == paymentLedgerId);
+        Assert.Equal(100m, reopenedPayment.Available);
+    }
+
     // ------------------------------------------------------------ (b)
 
     [Fact]
@@ -643,6 +729,15 @@ public sealed class InvPostCorrectnessTests
 
     private static decimal StockQty(TestDb db)
         => Scalar(db, "SELECT COALESCE(available_qty, 0) FROM material_stock_balances WHERE company_id = '" + CompanyCode + "' AND warehouse_id = 1 AND material_id = 42;");
+
+    private static string ScalarText(TestDb db, string sql)
+    {
+        using var connection = new SqliteConnection(db.ConnectionString);
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = sql;
+        return Convert.ToString(cmd.ExecuteScalar(), CultureInfo.InvariantCulture) ?? string.Empty;
+    }
 
     private static decimal Scalar(TestDb db, string sql)
     {
