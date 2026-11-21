@@ -853,6 +853,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _lblStatus.Text = _doc.Status switch
         {
             InvDocStatus.Posted => Tf("Invoice.StatusPosted", "Posted"),
+            InvDocStatus.Posting => Tf("Invoice.StatusPosting", "Posting — reconciliation required"),
             InvDocStatus.Cancelled => Tf("Invoice.StatusCancelled", "Cancelled"),
             _ => Tf("Invoice.StatusDraft", "Draft")
         };
@@ -1023,7 +1024,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         try { _cmbTaxCode.SelectedValue = _doc.TaxCode; }
         finally { _suppressTaxSelectionChanged = false; }
 
-        var locked = doc.Status == InvDocStatus.Posted || doc.Status == InvDocStatus.Cancelled;
+        var locked = doc.Status is InvDocStatus.Posted or InvDocStatus.Posting or InvDocStatus.Cancelled;
         _btnSave.IsEnabled = !locked;
         _btnReverse.IsEnabled = locked && doc.Kind is InvDocKind.SalesInvoice or InvDocKind.PurchaseInvoice or InvDocKind.PosSale;
         if (_btnReverse.IsEnabled)
