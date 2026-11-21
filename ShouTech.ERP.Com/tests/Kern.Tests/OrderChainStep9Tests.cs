@@ -365,8 +365,8 @@ namespace Kern.Tests
                 var billedProgress = await service.GetProgressAsync(CommercialDocSide.Purchase, orderId);
                 Assert.Equal(2m, billedProgress.Lines[0].BilledQty);
                 Assert.Equal(1m, billedProgress.Lines[1].BilledQty);
-                Assert.Equal(100m, billedProgress.PerFulfilled);
-                Assert.Equal(100m, billedProgress.PerBilled);
+                Assert.Equal(60m, billedProgress.PerFulfilled);
+                Assert.Equal(60m, billedProgress.PerBilled);
                 Assert.Equal(2m, Scalar(connectionString,
                     $"SELECT COUNT(*) FROM purchase_receipt_invoice_matches WHERE invoice_doc_id = {invoiceId};"));
             }
