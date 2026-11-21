@@ -221,18 +221,18 @@ namespace Kern.Tests
                 await service.CreatePurchaseReceiptAsync(companyId, orderId, new DateOnly(2026, 11, 9),
                     new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 30m) }, Actor);
 
-                async Task<bool> TryCreateInvoiceAsync()
+                async Task<string?> TryCreateInvoiceAsync()
                 {
                     try
                     {
                         await service.CreatePurchaseInvoiceAsync(
                             companyId, orderId, new DateOnly(2026, 11, 10),
                             new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 30m) }, Actor);
-                        return true;
+                        return null;
                     }
-                    catch (InvalidOperationException)
+                    catch (Exception exception)
                     {
-                        return false;
+                        return exception.ToString();
                     }
                 }
 
@@ -240,7 +240,9 @@ namespace Kern.Tests
                     TryCreateInvoiceAsync(),
                     TryCreateInvoiceAsync());
 
-                Assert.Equal(1, Array.FindAll(outcomes, created => created).Length);
+                Assert.Single(outcomes.Where(outcome => outcome is null));
+                Assert.All(outcomes.Where(outcome => outcome is not null),
+                    failure => Assert.Contains("received, unbilled", failure!, StringComparison.OrdinalIgnoreCase));
                 Assert.Equal(1m, Scalar(connectionString,
                     $"SELECT COUNT(*) FROM purchase_documents WHERE company_id = '{CompanyCode}' AND doc_kind = '{CommercialDocKinds.PurchaseInvoice}' AND is_deleted = 0;"));
                 Assert.Equal(2m, Scalar(connectionString,
