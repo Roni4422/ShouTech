@@ -559,7 +559,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             ShowWarningMessage(T("OrderDoc.SaveFirst"));
             return;
         }
-        if (_isConverting) return;
+        if (_isConverting || _isReceiving) return;
         _isConverting = true;
         UpdateEditState();
         try
@@ -616,7 +616,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             return;
         }
 
-        if (_isReceiving) return;
+        if (_isReceiving || _isConverting) return;
         _isReceiving = true;
         UpdateEditState();
         try
@@ -974,8 +974,8 @@ public sealed class OrdWin : BaseWin, IWindowMode
         _txtNotes.IsEnabled = editable;
         _btnSave.IsEnabled = editable;
         _btnPost.IsEnabled = editable && _docId is not null;
-        _btnConvert.IsEnabled = !_isConverting && _status == CommercialDocumentStatus.Posted;
-        _btnReceipt.IsEnabled = !_isReceiving && _kind == OrdKind.Purchase && _status == CommercialDocumentStatus.Posted && _docId is not null;
+        _btnConvert.IsEnabled = !_isConverting && !_isReceiving && _status == CommercialDocumentStatus.Posted;
+        _btnReceipt.IsEnabled = !_isReceiving && !_isConverting && _kind == OrdKind.Purchase && _status == CommercialDocumentStatus.Posted && _docId is not null;
         _btnClose.IsEnabled = _status == CommercialDocumentStatus.Posted;
         _btnCancel.IsEnabled = _status is CommercialDocumentStatus.Draft or CommercialDocumentStatus.Posted;
         _btnAddLine.IsEnabled = editable;
