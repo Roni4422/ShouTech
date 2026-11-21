@@ -689,7 +689,25 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
     // -------------------------------------------------------------- convert
 
-    public async Task<long> ConvertToInvoiceAsync(CommercialDocSide side, long orderDocId, string invoiceDocNo, DateOnly invoiceDate, string userId, CancellationToken cancellationToken = default)
+    public Task<long> ConvertToInvoiceAsync(CommercialDocSide side, long orderDocId, string invoiceDocNo, DateOnly invoiceDate, string userId, CancellationToken cancellationToken = default)
+        => ConvertToInvoiceCoreAsync(side, orderDocId, invoiceDocNo, invoiceDate, null, null, userId, cancellationToken);
+
+    public Task<long> CreatePurchaseInvoiceAsync(
+        Guid companyId, long purchaseOrderId, string invoiceDocNo, DateOnly invoiceDate,
+        IReadOnlyList<CommercialLineDraft> invoiceLines, string userId,
+        CancellationToken cancellationToken = default)
+    {
+        if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
+        ArgumentNullException.ThrowIfNull(invoiceLines);
+        if (invoiceLines.Count == 0) throw new InvalidOperationException("A supplier invoice requires at least one line.");
+        return ConvertToInvoiceCoreAsync(CommercialDocSide.Purchase, purchaseOrderId,
+            invoiceDocNo, invoiceDate, invoiceLines, companyId, userId, cancellationToken);
+    }
+
+    private async Task<long> ConvertToInvoiceCoreAsync(
+        CommercialDocSide side, long orderDocId, string invoiceDocNo, DateOnly invoiceDate,
+        IReadOnlyList<CommercialLineDraft>? invoiceLineOverrides, Guid? expectedCompanyId,
+        string userId, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(invoiceDocNo)) throw new ArgumentException("Invoice number is required.", nameof(invoiceDocNo));
         if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
@@ -705,6 +723,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 ?? throw new InvalidOperationException("Order was not found.");
             if (order.DocKind != orderKind)
                 throw new InvalidOperationException($"Document '{order.DocNo}' is a '{order.DocKind}', not an order ('{orderKind}').");
+            if (expectedCompanyId is Guid expectedCompany && order.CompanyId != expectedCompany)
+                throw new InvalidOperationException("The purchase order belongs to a different company.");
             if (order.Status != CommercialDocumentStatus.Posted)
                 throw new InvalidOperationException($"Only posted orders can be converted; order '{order.DocNo}' is '{order.Status}'.");
             if (order.PartyId is null)
@@ -726,16 +746,44 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             }
 
             var invoiceLines = new List<CommercialLineDraft>();
-            foreach (var line in order.Lines)
+            if (invoiceLineOverrides is null)
             {
-                var key = line.MaterialId ?? -line.LineNo;
-                var remaining = Math.Min(line.Qty, remainingByMaterial.GetValueOrDefault(key));
-                if (remaining <= 0m)
-                    continue;
-                remainingByMaterial[key] -= remaining;
-                invoiceLines.Add(new CommercialLineDraft(
-                    line.MaterialId, line.MaterialCode, line.Description, line.Unit,
-                    remaining, line.UnitPrice, line.DiscountPct, line.TaxRate, line.WarehouseId));
+                foreach (var line in order.Lines)
+                {
+                    var key = line.MaterialId ?? -line.LineNo;
+                    var remaining = Math.Min(line.Qty, remainingByMaterial.GetValueOrDefault(key));
+                    if (remaining <= 0m)
+                        continue;
+                    remainingByMaterial[key] -= remaining;
+                    invoiceLines.Add(new CommercialLineDraft(
+                        line.MaterialId, line.MaterialCode, line.Description, line.Unit,
+                        remaining, line.UnitPrice, line.DiscountPct, line.TaxRate, line.WarehouseId));
+                }
+            }
+            else
+            {
+                var sourceByMaterial = order.Lines
+                    .Where(line => line.MaterialId is not null)
+                    .GroupBy(line => line.MaterialId!.Value)
+                    .ToDictionary(group => group.Key, group => group.First());
+                foreach (var supplied in invoiceLineOverrides)
+                {
+                    if (supplied.MaterialId is not long materialId || materialId <= 0)
+                        throw new InvalidOperationException("Every supplier invoice line must identify a material from the purchase order.");
+                    if (supplied.Qty <= 0m)
+                        throw new InvalidOperationException("Supplier invoice quantities must be greater than zero.");
+                    if (!sourceByMaterial.TryGetValue(materialId, out var source))
+                        throw new InvalidOperationException($"Material '{materialId}' is not part of purchase order '{order.DocNo}'.");
+                    var remaining = remainingByMaterial.GetValueOrDefault(materialId);
+                    if (supplied.Qty > remaining)
+                        throw new InvalidOperationException(
+                            $"Supplier invoice quantity for material '{materialId}' exceeds the received, unbilled quantity ({remaining}).");
+                    remainingByMaterial[materialId] = remaining - supplied.Qty;
+                    invoiceLines.Add(new CommercialLineDraft(
+                        source.MaterialId, source.MaterialCode, source.Description, source.Unit,
+                        supplied.Qty, supplied.UnitPrice, supplied.DiscountPct, supplied.TaxRate,
+                        supplied.WarehouseId ?? source.WarehouseId));
+                }
             }
             if (invoiceLines.Count == 0)
                 throw new InvalidOperationException(side == CommercialDocSide.Purchase
@@ -760,6 +808,17 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             // GlPosting below resolves identically from the same inputs.
             var fx = FxRates.Resolve(connection, transaction, _provider,
                 order.CompanyId, order.CurrencyCode, invoiceDate, order.ExchangeRate);
+
+            decimal grniBaseAmount = 0m;
+            IReadOnlyList<long> matchedReceiptIds = Array.Empty<long>();
+            if (side == CommercialDocSide.Purchase)
+            {
+                var matchResult = await MatchPurchaseInvoiceToReceiptsAsync(
+                    connection, transaction, order, orderDocId, invoiceId, invoiceLines,
+                    fx.Rate, userId, cancellationToken).ConfigureAwait(false);
+                grniBaseAmount = matchResult.GrniBaseAmount;
+                matchedReceiptIds = matchResult.ReceiptIds;
+            }
 
             // Credit-limit gate (ACC-5006): the converted invoice is created
             // already posted and its ledger row is written below, so the
@@ -824,22 +883,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
             if (side == CommercialDocSide.Purchase)
             {
-                await using var receipts = CreateCommand(connection, transaction, """
-                    SELECT target_doc_id
-                    FROM document_links
-                    WHERE company_id = @company AND source_doc_kind = @sourceKind
-                      AND source_doc_id = @sourceId AND target_doc_kind = @receiptKind
-                    ORDER BY target_doc_id
-                    """);
-                Add(receipts, "@company", order.CompanyId.ToString("D"));
-                Add(receipts, "@sourceKind", CommercialDocKinds.PurchaseOrder);
-                Add(receipts, "@sourceId", orderDocId);
-                Add(receipts, "@receiptKind", CommercialDocKinds.PurchaseReceipt);
-                var receiptIds = new List<long>();
-                await using (var receiptReader = await receipts.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
-                    while (await receiptReader.ReadAsync(cancellationToken).ConfigureAwait(false))
-                        receiptIds.Add(Convert.ToInt64(receiptReader.GetValue(0), CultureInfo.InvariantCulture));
-                foreach (var receiptId in receiptIds)
+                foreach (var receiptId in matchedReceiptIds)
                 {
                     await using var receiptLink = CreateCommand(connection, transaction, """
                         INSERT INTO document_links (company_id, source_doc_kind, source_doc_id, target_doc_kind, target_doc_id, created_by)
@@ -888,8 +932,16 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 }
                 else
                 {
-                    // A supplier invoice clears the receipt accrual; it must not receive stock a second time.
-                    glLines.Add(new GlLineRequest(GlAccounts.GoodsReceivedNotInvoiced, splitTax ? invoiceSubtotal : grandTotal, 0m, order.CostCenter));
+                    // Clear GRNI at the receipt's historical base value; price
+                    // and FX differences go to the purchase variance account.
+                    var grniDocumentAmount = decimal.Round(grniBaseAmount / fx.Rate, 6, MidpointRounding.AwayFromZero);
+                    var invoiceCostAmount = splitTax ? invoiceSubtotal : grandTotal;
+                    var purchaseVariance = invoiceCostAmount - grniDocumentAmount;
+                    glLines.Add(new GlLineRequest(GlAccounts.GoodsReceivedNotInvoiced, grniDocumentAmount, 0m, order.CostCenter));
+                    if (purchaseVariance > 0m)
+                        glLines.Add(new GlLineRequest(GlAccounts.Purchases, purchaseVariance, 0m, order.CostCenter));
+                    else if (purchaseVariance < 0m)
+                        glLines.Add(new GlLineRequest(GlAccounts.Purchases, 0m, -purchaseVariance, order.CostCenter));
                     if (splitTax) glLines.Add(new GlLineRequest(GlAccounts.InputVat, invoiceTax, 0m));
                     glLines.Add(new GlLineRequest(GlAccounts.Payable, 0m, grandTotal));
                 }
@@ -897,7 +949,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                     new GlDocumentRequest(order.CompanyId, invoiceDate,
                         $"{invoiceKind} {invoiceDocNo.Trim()} from order {order.DocNo}",
                         invoiceKind, invoiceId.ToString(CultureInfo.InvariantCulture), invoiceDocNo.Trim(),
-                        order.CurrencyCode, order.ExchangeRate, glLines),
+                        order.CurrencyCode, fx.Rate, glLines),
                     userId);
             }
 
@@ -909,6 +961,159 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    private async Task<(decimal GrniBaseAmount, IReadOnlyList<long> ReceiptIds)> MatchPurchaseInvoiceToReceiptsAsync(
+        DbConnection connection, DbTransaction transaction, CommercialDocumentSnapshot order,
+        long purchaseOrderId, long invoiceId, IReadOnlyList<CommercialLineDraft> invoiceLines,
+        decimal invoiceExchangeRate, string userId, CancellationToken cancellationToken)
+    {
+        var receiptIds = new List<long>();
+        await using (var receipts = CreateCommand(connection, transaction, """
+            SELECT target_doc_id
+            FROM document_links
+            WHERE company_id = @company AND source_doc_kind = @sourceKind
+              AND source_doc_id = @sourceId AND target_doc_kind = @receiptKind
+            ORDER BY target_doc_id
+            """))
+        {
+            Add(receipts, "@company", order.CompanyId.ToString("D"));
+            Add(receipts, "@sourceKind", CommercialDocKinds.PurchaseOrder);
+            Add(receipts, "@sourceId", purchaseOrderId);
+            Add(receipts, "@receiptKind", CommercialDocKinds.PurchaseReceipt);
+            await using var reader = await receipts.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                receiptIds.Add(Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture));
+        }
+        if (receiptIds.Count == 0)
+            throw new InvalidOperationException("A supplier invoice cannot be posted without a posted goods receipt.");
+
+        var matchedByReceiptLine = new Dictionary<long, decimal>();
+        await using (var prior = CreateCommand(connection, transaction, """
+            SELECT receipt_line_id, COALESCE(SUM(matched_qty), 0)
+            FROM purchase_receipt_invoice_matches
+            WHERE company_id = @company AND purchase_order_id = @order
+            GROUP BY receipt_line_id
+            """))
+        {
+            Add(prior, "@company", order.CompanyId.ToString("D"));
+            Add(prior, "@order", purchaseOrderId);
+            await using var reader = await prior.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                matchedByReceiptLine[Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture)] =
+                    Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
+        }
+
+        var receiptSnapshots = new List<(CommercialDocumentSnapshot Document, decimal ExchangeRate)>();
+        foreach (var receiptId in receiptIds)
+        {
+            var receipt = await ReadSnapshotAsync(connection, transaction, CommercialDocSide.Purchase,
+                receiptId, order.CompanyId, CommercialDocKinds.PurchaseReceipt, null, cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException($"Goods receipt '{receiptId}' could not be loaded for matching.");
+            if (receipt.Status != CommercialDocumentStatus.Posted)
+                throw new InvalidOperationException($"Goods receipt '{receipt.DocNo}' is not posted.");
+            if (!string.Equals(receipt.CurrencyCode, order.CurrencyCode, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"Goods receipt '{receipt.DocNo}' uses a different currency from its purchase order.");
+            var receiptFx = FxRates.Resolve(connection, transaction, _provider,
+                order.CompanyId, receipt.CurrencyCode, receipt.DocDate, receipt.ExchangeRate);
+            receiptSnapshots.Add((receipt, receiptFx.Rate));
+        }
+
+        var persistedInvoiceLines = new List<(long LineId, int LineNo, long MaterialId, decimal Qty, decimal UnitPrice, decimal DiscountPct)>();
+        await using (var invoiceReaderCommand = CreateCommand(connection, transaction, """
+            SELECT line_id, line_no, material_id, qty, unit_price, discount_pct
+            FROM purchase_document_lines
+            WHERE doc_id = @invoice
+            ORDER BY line_no
+            """))
+        {
+            Add(invoiceReaderCommand, "@invoice", invoiceId);
+            await using var reader = await invoiceReaderCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (reader.IsDBNull(2))
+                    throw new InvalidOperationException("Supplier invoice lines must reference a material card to be matched to receipts.");
+                persistedInvoiceLines.Add((
+                    Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+                    Convert.ToInt32(reader.GetValue(1), CultureInfo.InvariantCulture),
+                    Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture)));
+            }
+        }
+        if (persistedInvoiceLines.Count != invoiceLines.Count)
+            throw new InvalidOperationException("The persisted supplier invoice lines do not match the requested invoice lines.");
+
+        var usedReceiptIds = new HashSet<long>();
+        decimal totalGrniBase = 0m;
+        for (var invoiceIndex = 0; invoiceIndex < persistedInvoiceLines.Count; invoiceIndex++)
+        {
+            var invoiceLine = persistedInvoiceLines[invoiceIndex];
+            var invoiceRemaining = invoiceLine.Qty;
+            var invoiceUnitCost = invoiceLine.UnitPrice * (1m - invoiceLine.DiscountPct / 100m);
+
+            foreach (var (receipt, receiptExchangeRate) in receiptSnapshots)
+            {
+                foreach (var receiptLine in receipt.Lines.Where(line => line.MaterialId == invoiceLine.MaterialId))
+                {
+                    var alreadyMatched = matchedByReceiptLine.GetValueOrDefault(receiptLine.LineId);
+                    var receiptRemaining = receiptLine.Qty - alreadyMatched;
+                    var take = Math.Min(invoiceRemaining, receiptRemaining);
+                    if (take <= 0m) continue;
+
+                    var receiptUnitCost = receiptLine.UnitPrice * (1m - receiptLine.DiscountPct / 100m);
+                    var receiptBaseAmount = decimal.Round(take * receiptUnitCost * receiptExchangeRate, 6, MidpointRounding.AwayFromZero);
+                    var invoiceBaseAmount = decimal.Round(take * invoiceUnitCost * invoiceExchangeRate, 6, MidpointRounding.AwayFromZero);
+                    var varianceBaseAmount = invoiceBaseAmount - receiptBaseAmount;
+                    var matchId = Guid.NewGuid();
+
+                    await using var insert = CreateCommand(connection, transaction, """
+                        INSERT INTO purchase_receipt_invoice_matches
+                            (match_id, company_id, purchase_order_id, receipt_doc_id, receipt_line_id,
+                             invoice_doc_id, invoice_line_id, material_id, matched_qty,
+                             receipt_unit_cost, receipt_exchange_rate, invoice_unit_cost, invoice_exchange_rate,
+                             receipt_base_amount, invoice_base_amount, variance_base_amount, created_by)
+                        VALUES
+                            (@id, @company, @order, @receipt, @receiptLine,
+                             @invoice, @invoiceLine, @material, @qty,
+                             @receiptCost, @receiptRate, @invoiceCost, @invoiceRate,
+                             @receiptBase, @invoiceBase, @varianceBase, @actor)
+                        """);
+                    Add(insert, "@id", _provider == "PostgreSQL" ? matchId : matchId.ToString("D"));
+                    Add(insert, "@company", order.CompanyId.ToString("D"));
+                    Add(insert, "@order", purchaseOrderId);
+                    Add(insert, "@receipt", receipt.DocId);
+                    Add(insert, "@receiptLine", receiptLine.LineId);
+                    Add(insert, "@invoice", invoiceId);
+                    Add(insert, "@invoiceLine", invoiceLine.LineId);
+                    Add(insert, "@material", invoiceLine.MaterialId);
+                    Add(insert, "@qty", take);
+                    Add(insert, "@receiptCost", receiptUnitCost);
+                    Add(insert, "@receiptRate", receiptExchangeRate);
+                    Add(insert, "@invoiceCost", invoiceUnitCost);
+                    Add(insert, "@invoiceRate", invoiceExchangeRate);
+                    Add(insert, "@receiptBase", receiptBaseAmount);
+                    Add(insert, "@invoiceBase", invoiceBaseAmount);
+                    Add(insert, "@varianceBase", varianceBaseAmount);
+                    Add(insert, "@actor", userId.Trim());
+                    await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+                    matchedByReceiptLine[receiptLine.LineId] = alreadyMatched + take;
+                    invoiceRemaining -= take;
+                    totalGrniBase += receiptBaseAmount;
+                    usedReceiptIds.Add(receipt.DocId);
+                    if (invoiceRemaining <= 0m) break;
+                }
+                if (invoiceRemaining <= 0m) break;
+            }
+
+            if (invoiceRemaining > 0m)
+                throw new InvalidOperationException(
+                    $"Supplier invoice line {invoiceLine.LineNo} exceeds the remaining unbilled quantity on posted goods receipts.");
+        }
+
+        return (totalGrniBase, usedReceiptIds.OrderBy(id => id).ToArray());
     }
 
     public async Task<IReadOnlyList<CommercialDocumentLink>> GetLinksFromAsync(Guid companyId, long sourceDocId, CancellationToken cancellationToken = default)
