@@ -553,7 +553,8 @@ public static class StockValuationEngine
         }
 
         var isPurchaseReceipt = isReceipt
-            && string.Equals(request.MovementType, "PUR", StringComparison.OrdinalIgnoreCase);
+            && (string.Equals(request.MovementType, "PUR", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(request.MovementType, "RCV", StringComparison.OrdinalIgnoreCase));
         if (totalQty <= 0 && !isPurchaseReceipt) return;
 
         var sets = new List<string>();
