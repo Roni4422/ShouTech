@@ -660,7 +660,7 @@ public sealed class PosRepository : IPosRepository
                 returned[Convert.ToInt32(reader.GetValue(0), CultureInfo.InvariantCulture)] = ReadDecimal(reader, 1);
         }
         await using (var command = CreateCommand(connection, null, """
-            SELECT line_no, material_id, material_code, description, unit, qty, unit_price, discount_pct, tax_rate, warehouse_id
+            SELECT line_no, material_id, material_code, description, unit, qty, unit_price, discount_pct, tax_rate, warehouse_id, tax_calculation_mode
             FROM sales_document_lines WHERE doc_id = @doc ORDER BY line_no
             """))
         {
@@ -676,7 +676,10 @@ public sealed class PosRepository : IPosRepository
                     ReadString(reader, 4), ReadDecimal(reader, 5), ReadDecimal(reader, 6),
                     ReadDecimal(reader, 7), ReadDecimal(reader, 8),
                     reader.IsDBNull(9) ? null : Convert.ToInt32(reader.GetValue(9), CultureInfo.InvariantCulture),
-                    returned.GetValueOrDefault(lineNo)));
+                    returned.GetValueOrDefault(lineNo))
+                {
+                    TaxCalculationMode = ReadString(reader, 10) ?? "Exclusive"
+                });
             }
         }
         return bill;
