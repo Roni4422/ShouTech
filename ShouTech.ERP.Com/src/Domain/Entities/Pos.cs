@@ -166,6 +166,7 @@ public sealed class PosOriginalBill
     public string? PartyCode { get; set; }
     public string? PartyName { get; set; }
     public string CurrencyCode { get; set; } = "SAR";
+    public decimal ExchangeRate { get; set; } = 1m;
     public decimal DiscountAmount { get; set; }
     public decimal ExtraAmount { get; set; }
     public decimal GrandTotal { get; set; }
