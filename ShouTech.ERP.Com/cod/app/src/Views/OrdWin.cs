@@ -394,7 +394,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
                     Qty = line.Qty,
                     UnitPrice = line.UnitPrice,
                     DiscountPct = line.DiscountPct,
-                    TaxRate = line.TaxRate
+                    TaxRate = taxEnabled ? line.TaxRate : 0m
                 });
             }
             if (_lines.Count == 0)
@@ -751,6 +751,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
 
     private IReadOnlyList<CommercialLineDraft>? CaptureSupplierInvoiceLines()
     {
+        var taxEnabled = TaxSvc.IsEnabled;
         var rows = _lines
             .Where(line => line.FulfilledQty - line.BilledQty > 0m)
             .Select(line => new SupplierInvoiceLineVm
@@ -854,9 +855,10 @@ public sealed class OrdWin : BaseWin, IWindowMode
             Header = T("Invoice.Col.TaxRate"),
             Binding = new Binding(nameof(SupplierInvoiceLineVm.TaxRate))
             {
-                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
                 StringFormat = "0.##"
             },
+            IsReadOnly = true,
+            Visibility = taxEnabled ? Visibility.Visible : Visibility.Collapsed,
             Width = 75
         });
 
