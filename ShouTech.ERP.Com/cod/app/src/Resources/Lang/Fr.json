@@ -1743,7 +1743,8 @@
     "OriginalOpenFailed": "Impossible d'ouvrir la facture d'origine.",
     "ReverseReason": "L'utilisateur a demandé l'extourne depuis la fenêtre de facture",
     "TaxSystem": "Système fiscal",
-    "ColTaxCode": "Code de taxe"
+    "ColTaxCode": "Code de taxe",
+    "StatusPosting": "Comptabilisation en cours — rapprochement requis"
   },
   "CompanyWizard": {
     "Title": {
@@ -3576,24 +3577,24 @@
     "SummaryTab": "Résumé de période",
     "RegisterTab": "Registre des opérations fiscales",
     "RegisterColumn": {
-        "DocumentDate": "Date du document",
-        "DocumentKind": "Type de document",
-        "DocumentNumber": "Numéro du document",
-        "LineNumber": "Ligne",
-        "TaxCode": "Code fiscal",
-        "TaxType": "Type de taxe",
-        "Treatment": "Traitement",
-        "Rate": "Taux (%)",
-        "TaxableAmount": "Montant imposable",
-        "TaxAmount": "Montant de taxe",
-        "IsRecoverable": "Récupérable",
-        "Direction": "Sens",
-        "TaxAccountCode": "Compte fiscal",
-        "CurrencyCode": "Devise",
-        "ExchangeRate": "Taux de change",
-        "BaseTaxAmount": "Taxe en devise de base",
-        "JournalNumber": "Numéro de journal"
-      },
+      "DocumentDate": "Date du document",
+      "DocumentKind": "Type de document",
+      "DocumentNumber": "Numéro du document",
+      "LineNumber": "Ligne",
+      "TaxCode": "Code fiscal",
+      "TaxType": "Type de taxe",
+      "Treatment": "Traitement",
+      "Rate": "Taux (%)",
+      "TaxableAmount": "Montant imposable",
+      "TaxAmount": "Montant de taxe",
+      "IsRecoverable": "Récupérable",
+      "Direction": "Sens",
+      "TaxAccountCode": "Compte fiscal",
+      "CurrencyCode": "Devise",
+      "ExchangeRate": "Taux de change",
+      "BaseTaxAmount": "Taxe en devise de base",
+      "JournalNumber": "Numéro de journal"
+    },
     "Column": {
       "TaxCode": "Code taxe",
       "TaxType": "Type de taxe",
