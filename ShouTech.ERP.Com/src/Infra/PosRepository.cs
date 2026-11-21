@@ -634,7 +634,7 @@ public sealed class PosRepository : IPosRepository
                 PartyId = reader.IsDBNull(3) ? null : Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture),
                 PartyCode = ReadString(reader, 4), PartyName = ReadString(reader, 5),
                 CurrencyCode = ReadString(reader, 6) ?? "SAR",
-                ExchangeRate = ReadDecimal(reader, 7, 1m),
+                ExchangeRate = reader.IsDBNull(7) ? 1m : ReadDecimal(reader, 7),
                 DiscountAmount = ReadDecimal(reader, 8), ExtraAmount = ReadDecimal(reader, 9),
                 GrandTotal = ReadDecimal(reader, 10), PaidAmount = ReadDecimal(reader, 11),
                 SessionId = ReadGuidOrNull(reader, 12)
