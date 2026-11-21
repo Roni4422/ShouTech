@@ -538,10 +538,11 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
     }
 
     public async Task<long> CreatePurchaseReceiptAsync(
-        long purchaseOrderId, string receiptDocNo, DateOnly receiptDate,
+        Guid companyId, long purchaseOrderId, string receiptDocNo, DateOnly receiptDate,
         IReadOnlyList<CommercialLineDraft> receivedLines, string userId,
         CancellationToken cancellationToken = default)
     {
+        if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
         if (purchaseOrderId <= 0) throw new ArgumentOutOfRangeException(nameof(purchaseOrderId));
         if (string.IsNullOrWhiteSpace(receiptDocNo)) throw new ArgumentException("Receipt number is required.", nameof(receiptDocNo));
         if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
@@ -556,9 +557,10 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             // Serialize receipts for one PO so concurrent users cannot receive the same remaining quantity.
             await using (var orderLock = CreateCommand(connection, transaction,
                 _provider == "PostgreSQL"
-                    ? "SELECT doc_id FROM purchase_documents WHERE doc_id = @doc AND doc_kind = @kind AND status = @posted AND is_deleted = 0 FOR UPDATE"
-                    : "SELECT doc_id FROM purchase_documents WHERE doc_id = @doc AND doc_kind = @kind AND status = @posted AND is_deleted = 0"))
+                    ? "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @doc AND doc_kind = @kind AND status = @posted AND is_deleted = 0 FOR UPDATE"
+                    : "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @doc AND doc_kind = @kind AND status = @posted AND is_deleted = 0"))
             {
+                Add(orderLock, "@company", companyId.ToString("D"));
                 Add(orderLock, "@doc", purchaseOrderId);
                 Add(orderLock, "@kind", CommercialDocKinds.PurchaseOrder);
                 Add(orderLock, "@posted", CommercialDocumentStatus.Posted);
@@ -567,7 +569,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             }
 
             var order = await ReadSnapshotAsync(connection, transaction, CommercialDocSide.Purchase,
-                purchaseOrderId, null, null, null, cancellationToken).ConfigureAwait(false)
+                purchaseOrderId, companyId, null, null, cancellationToken).ConfigureAwait(false)
                 ?? throw new InvalidOperationException("Purchase order was not found.");
             if (order.DocKind != CommercialDocKinds.PurchaseOrder || order.Status != CommercialDocumentStatus.Posted)
                 throw new InvalidOperationException("Only a posted purchase order can be received.");
