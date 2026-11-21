@@ -73,6 +73,63 @@ public sealed class InvPostCorrectnessTests
     }
 
     [Fact]
+    public async Task DeliveryLinkedInvoice_PostsThroughChainWithoutSecondStockIssue()
+    {
+        using var db = await SeededAsync();
+        var party = await SavePartyAsync(db, "C", "CUST-DLV", 100000m);
+        var orderRepository = new OrderDocumentRepository("SQLite", db.ConnectionString);
+        var chainRepository = new CommercialDocumentRepository("SQLite", db.ConnectionString);
+        var service = new OrderService(orderRepository, chainRepository);
+
+        var orderId = await service.CreateOrderAsync(
+            new CommercialDocumentDraft(
+                db.CompanyId,
+                CommercialDocKinds.SalesOrder,
+                "SO-INV-DLV",
+                new DateOnly(2026, 11, 10),
+                party.LedgerId,
+                party.NameEn,
+                1,
+                "SAR",
+                1m,
+                null,
+                new[]
+                {
+                    new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 25m, 0m, 0m, 1)
+                },
+                party.Code,
+                new DateOnly(2026, 11, 30),
+                null),
+            Actor);
+        await service.PostOrderAsync(CommercialDocSide.Sales, orderId, Actor);
+
+        var (deliveryId, deliveryNo) = await service.CreateSalesDeliveryAsync(
+            orderId, new DateOnly(2026, 11, 11), Actor,
+            new Dictionary<long, decimal> { [42] = 2m }, 1);
+        await service.PostSalesDeliveryAsync(deliveryId, Actor);
+        var stockAfterDelivery = StockQty(db);
+        Assert.Equal(998m, stockAfterDelivery);
+
+        var (invoiceId, invoiceNo) = await service.CreateSalesInvoiceFromDeliveryAsync(
+            deliveryId, new DateOnly(2026, 11, 12), Actor);
+        // Exercise the same repository entry point used by InvoiceWin.
+        InvRepo.Post(invoiceId, InvDocKind.SalesInvoice, Actor);
+
+        Assert.Equal(998m, StockQty(db));
+        Assert.Equal(-80m, Scalar(db,
+            $"SELECT COALESCE(SUM(cost_amount), 0) FROM material_stock_movements WHERE company_id = '{CompanyCode}' AND document_no = '{deliveryNo}' AND material_id = 42;"));
+        Assert.Equal(0m, Scalar(db,
+            $"SELECT COALESCE(SUM(cost_amount), 0) FROM material_stock_movements WHERE company_id = '{CompanyCode}' AND document_no = '{invoiceNo}' AND material_id = 42;"));
+
+        var gl = SingleEntry(db, "SAL", invoiceId).Lines.ToDictionary(
+            line => line.Code, line => (line.Debit, line.Credit), StringComparer.OrdinalIgnoreCase);
+        Assert.Equal(50m, gl["1201"].Debit);
+        Assert.Equal(50m, gl["301"].Credit);
+        Assert.Equal(80m, gl["401"].Debit);
+        Assert.Equal(80m, gl["1203"].Credit);
+    }
+
+    [Fact]
     public async Task LoadAndPost_RejectMismatchedStoredDocumentKind()
     {
         using var db = await SeededAsync();
