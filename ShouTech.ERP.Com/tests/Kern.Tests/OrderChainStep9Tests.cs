@@ -257,6 +257,7 @@ namespace Kern.Tests
 
                 var reconciliation = new ReconciliationRepository("SQLite", connectionString);
                 var openBefore = await reconciliation.GetOpenDocumentsAsync(CompanyCode, "S");
+                Assert.Single(openBefore);
                 var invoiceRow = Assert.Single(openBefore, row => row.DocId == invoiceId);
                 Assert.Equal(60m, invoiceRow.OpenAmount);
 
