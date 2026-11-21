@@ -165,11 +165,16 @@ public sealed class SalesReturnWin : BaseWin
                 4, MidpointRounding.AwayFromZero);
             return decimal.Round(lineSubtotal * line.TaxRate / 100m, 4, MidpointRounding.AwayFromZero);
         });
-        var discount = PosTenderMath.ProRata(_original.LinesDiscountAmount, subtotal, _original.LinesSubtotal);
-        var extra = PosTenderMath.ProRata(_original.LinesExtraAmount, subtotal, _original.LinesSubtotal);
+        var discount = PosTenderMath.ProRata(_original.LinesDiscountAmount, subtotal, LinesSubtotal(_original));
+        var extra = PosTenderMath.ProRata(_original.LinesExtraAmount, subtotal, LinesSubtotal(_original));
         var total = decimal.Round(subtotal - discount + extra + tax, 4, MidpointRounding.AwayFromZero);
         _returnTotal.Text = $"{T("SalesReturn.Total")}: {F2Ui.Fmt(total)} {_original.CurrencyCode}";
     }
+
+    private static decimal LinesSubtotal(InvDoc invoice)
+        => invoice.Lines.Sum(line => decimal.Round(
+            line.Qty * line.UnitPrice * (1m - line.DiscountPct / 100m),
+            4, MidpointRounding.AwayFromZero));
 
     private Dictionary<int, decimal> SelectedQuantities()
         => _rows.Where(row => row.ReturnQty > 0m).ToDictionary(row => row.LineNo, row => row.ReturnQty);
@@ -220,9 +225,9 @@ public sealed class SalesReturnWin : BaseWin
                 TaxCode = _original.TaxCode,
                 DefaultTaxRate = _original.DefaultTaxRate,
                 LinesDiscountAmount = PosTenderMath.ProRata(
-                    _original.LinesDiscountAmount, selectedSubtotal, _original.LinesSubtotal),
+                    _original.LinesDiscountAmount, selectedSubtotal, LinesSubtotal(_original)),
                 LinesExtraAmount = PosTenderMath.ProRata(
-                    _original.LinesExtraAmount, selectedSubtotal, _original.LinesSubtotal),
+                    _original.LinesExtraAmount, selectedSubtotal, LinesSubtotal(_original)),
                 PaidAmount = 0m,
                 PaymentMethod = InvPaymentMethod.Credit,
                 OriginalDocId = _original.DocId,
