@@ -350,22 +350,49 @@ public static class PartyLedger
             }
 
             var documentTable = allocation.Table == "SALES" ? "sales_documents" : "purchase_documents";
+            string actualDocumentCompany;
+            decimal currentPaidAmount;
+            bool documentDeleted;
+            using (var inspect = Create(connection, transaction,
+                $"""
+                SELECT CAST(company_id AS TEXT), paid_amount, is_deleted
+                FROM {documentTable}
+                WHERE CAST(company_id AS TEXT) IN (@documentCompany, @company) AND doc_id = @doc
+                """))
+            {
+                Add(inspect, "@documentCompany", allocation.DocumentCompany);
+                Add(inspect, "@company", companyCode);
+                Add(inspect, "@doc", allocation.DocumentId);
+                using var reader = inspect.ExecuteReader();
+                if (!reader.Read())
+                    throw new InvalidOperationException(
+                        $"Could not find {allocation.Table} document {allocation.DocumentId} for company keys '{allocation.DocumentCompany}' or '{companyCode}' while reversing the payment voucher.");
+                actualDocumentCompany = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty;
+                currentPaidAmount = Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
+                var deletedValue = Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture);
+                documentDeleted = deletedValue is not null
+                    && deletedValue.Trim() is not ("0" or "false" or "False");
+            }
+
+            if (documentDeleted || currentPaidAmount + 0.005m < allocation.Amount)
+                throw new InvalidOperationException(
+                    $"Cannot release {allocation.Amount} from {allocation.Table} document {allocation.DocumentId}: paid amount is {currentPaidAmount}, deleted={documentDeleted}, company='{actualDocumentCompany}'.");
+
             using var release = Create(connection, transaction,
                 $"""
                 UPDATE {documentTable}
                 SET paid_amount = CASE WHEN paid_amount <= @amount + 0.005 THEN 0 ELSE paid_amount - @amount END
-                WHERE CAST(company_id AS TEXT) IN (@documentCompany, @company)
+                WHERE CAST(company_id AS TEXT) = @documentCompany
                   AND doc_id = @doc
                   AND paid_amount + 0.005 >= @amount
                   AND is_deleted = {(isPg ? "FALSE" : "0")}
                 """);
             Add(release, "@amount", allocation.Amount);
-            Add(release, "@documentCompany", allocation.DocumentCompany);
-            Add(release, "@company", companyCode);
+            Add(release, "@documentCompany", actualDocumentCompany);
             Add(release, "@doc", allocation.DocumentId);
             if (release.ExecuteNonQuery() != 1)
                 throw new InvalidOperationException(
-                    $"Could not release the {allocation.Amount} allocation from {allocation.Table} document {allocation.DocumentId} while reversing the payment voucher.");
+                    $"Could not release the {allocation.Amount} allocation from {allocation.Table} document {allocation.DocumentId} (company '{actualDocumentCompany}', paid amount {currentPaidAmount}) while reversing the payment voucher.");
         }
 
         using var delete = Create(connection, transaction,
