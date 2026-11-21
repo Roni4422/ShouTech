@@ -471,11 +471,14 @@ public static class StkPost
             ? connection.BeginTransaction(System.Data.IsolationLevel.Serializable)
             : connection.BeginTransaction();
 
-        EnsureWarehouseIsActive(connection, tx, company, warehouseId);
+        // A committed operation must remain recoverable even if the warehouse
+        // is later deactivated. Check the durable receipt before mutable
+        // master-data validation so a retry can safely finalize its document.
         if (!string.IsNullOrWhiteSpace(operationKey)
             && TryReadCompletedOperation(connection, tx, company, operationKey, "InventoryCount",
                 out _, out var completedMovementCount))
             return completedMovementCount;
+        EnsureWarehouseIsActive(connection, tx, company, warehouseId);
 
         var documentNo = $"CNT-{countDate:yyyyMMdd}-{Guid.NewGuid():N}";
         var date = countDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
@@ -907,12 +910,14 @@ public static class StkPost
                 ? connection.BeginTransaction(System.Data.IsolationLevel.Serializable)
                 : connection.BeginTransaction();
 
-            EnsureWarehouseIsActive(connection, tx, company, sourceWarehouseId);
-            EnsureWarehouseIsActive(connection, tx, company, targetWarehouseId);
+            // A durable receipt takes precedence over current warehouse
+            // activation state: the stock transaction has already committed.
             if (!string.IsNullOrWhiteSpace(operationKey)
                 && TryReadCompletedOperation(connection, tx, company, operationKey, "StockTransfer",
                     out var completedDocumentNo, out _))
                 return completedDocumentNo;
+            EnsureWarehouseIsActive(connection, tx, company, sourceWarehouseId);
+            EnsureWarehouseIsActive(connection, tx, company, targetWarehouseId);
 
             var documentNo = string.Create(
                 CultureInfo.InvariantCulture,
