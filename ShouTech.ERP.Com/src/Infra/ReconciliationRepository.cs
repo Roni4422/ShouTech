@@ -167,7 +167,8 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             string? paymentDocKind;
             string paymentCurrency;
             await using (var pay = CreateCommand(connection, transaction,
-                "SELECT party_kind, party_id, debit, credit, doc_kind, COALESCE(currency_code, 'SAR') FROM party_ledger WHERE company_id = @company AND ledger_id = @id"))
+                "SELECT party_kind, party_id, debit, credit, doc_kind, COALESCE(currency_code, 'SAR') FROM party_ledger WHERE company_id = @company AND ledger_id = @id"
+                + (_provider == "PostgreSQL" ? " FOR UPDATE" : "")))
             {
                 Add(pay, "@company", companyId.Trim());
                 Add(pay, "@id", paymentLedgerId);
@@ -211,7 +212,8 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             string docStatus;
             string documentCurrency;
             await using (var doc = CreateCommand(connection, transaction,
-                $"SELECT CAST(company_id AS TEXT), doc_no, party_id, grand_total, paid_amount, status, COALESCE(currency_code, 'SAR') FROM {table} WHERE CAST(company_id AS TEXT) IN (@company, @documentCompany) AND doc_id = @doc AND {NotDeleted}"))
+                $"SELECT CAST(company_id AS TEXT), doc_no, party_id, grand_total, paid_amount, status, COALESCE(currency_code, 'SAR') FROM {table} WHERE CAST(company_id AS TEXT) IN (@company, @documentCompany) AND doc_id = @doc AND {NotDeleted}"
+                + (_provider == "PostgreSQL" ? " FOR UPDATE" : "")))
             {
                 Add(doc, "@company", companyId.Trim());
                 Add(doc, "@documentCompany", documentCompanyKey);
