@@ -557,7 +557,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             // Serialize receipts for one PO so concurrent users cannot receive the same remaining quantity.
             await using (var orderLock = CreateCommand(connection, transaction,
                 _provider == "PostgreSQL"
-                    ? "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @doc AND doc_kind = @kind AND status = @posted AND is_deleted = 0 FOR UPDATE"
+                    ? "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @doc AND doc_kind = @kind AND status = @posted AND is_deleted = FALSE FOR UPDATE"
                     : "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @doc AND doc_kind = @kind AND status = @posted AND is_deleted = 0"))
             {
                 Add(orderLock, "@company", companyId.ToString("D"));
