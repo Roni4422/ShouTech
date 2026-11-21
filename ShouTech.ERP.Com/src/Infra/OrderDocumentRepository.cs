@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
@@ -607,7 +608,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                         $"Receipt quantity for material '{materialId}' exceeds the remaining purchase-order quantity ({remaining}).");
             }
 
-            var priorToAllocate = new Dictionary<long, decimal>(received);
+            var priorToAllocate = received.ToDictionary(pair => pair.Key, pair => pair.Value);
             var requestedToAllocate = new Dictionary<long, decimal>(requested);
             var receiptDraftLines = new List<CommercialLineDraft>();
             foreach (var line in order.Lines)
