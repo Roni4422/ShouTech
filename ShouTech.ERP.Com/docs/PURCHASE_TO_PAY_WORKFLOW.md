@@ -1,0 +1,89 @@
+# Purchase-to-Pay Workflow
+
+## Scope
+
+This document records the purchase-to-pay implementation on
+`work/full-app-stabilization-2026-11-18`. It is an implementation contract,
+not a claim that every procurement feature in the ERP is complete.
+
+## Current transaction chain
+
+`Purchase Order → Goods Receipt (RCV) → Supplier Invoice (PUR) → Supplier Payment Voucher (PAY) → Payment Reconciliation`
+
+### 1. Purchase order
+
+- A posted purchase order is the commercial commitment.
+- Posting the order does not receive stock and does not create a supplier payable.
+- The order remains the parent document for receipts and supplier invoices.
+- Fulfilment and billing progress are calculated from linked posted documents.
+
+### 2. Goods receipt
+
+- A receipt can be created only from a posted purchase order in the active company.
+- The receipt UI defaults each line to the outstanding quantity and permits partial quantities.
+- Receipt posting validates material identity, positive quantities, and the remaining ordered quantity.
+- Receipt document, stock movement, GRNI journal, and PO-to-receipt link commit in one database transaction.
+- Stock-tracked materials increase inventory at discounted purchase cost and the receipt-date exchange rate.
+- Non-stock/service materials do not create stock movements; their receipt value is debited to the purchases/expense account.
+- Both paths credit the GRNI control account (2203).
+- Receipt posting does not create a supplier payable or supplier-ledger entry.
+- Repeated submission cannot receive beyond the PO's remaining quantity.
+
+### 3. Supplier invoice and three-way matching
+
+- The supplier invoice UI defaults to received-but-not-yet-invoiced quantities.
+- Users can enter actual supplier unit prices, discounts, and tax rates.
+- A supplier invoice cannot be posted before a receipt or for quantities beyond posted, unbilled receipts.
+- Each invoice line is allocated FIFO against receipt lines. The allocation is persisted in
+  `purchase_receipt_invoice_matches`, including receipt/invoice line IDs, quantities,
+  historical costs, exchange rates, and base-currency variance.
+- Invoice posting does not move stock a second time.
+- GRNI is debited at the receipt's historical base value.
+- Price and exchange-rate variance is posted to the purchases/variance account (402).
+- Recoverable input tax is split to the input-VAT account when that account is configured;
+  otherwise tax remains in purchase cost.
+- The supplier payable is credited for the invoice total.
+- PO-to-invoice and matched receipt-to-invoice links are written in the same transaction.
+
+### 4. Supplier payment and reconciliation
+
+- Supplier payments are posted through the existing cash/bank journal voucher flow.
+- A voucher-party link writes the supplier debit to the party ledger in the same posting transaction.
+- Payment Reconciliation allocates the payment to the open supplier invoice and updates
+  `purchase_documents.paid_amount` atomically.
+- The payment ledger uses the company code while order-chain documents use the stable company
+  identifier. Migration 077 adds `payment_allocations.document_company_id` so both scopes are
+  retained and allocations remain company-isolated.
+
+## Database ownership
+
+- Runtime code does not create tables.
+- Migration 077: `payment_allocations.document_company_id` for dual company-key reconciliation.
+- Migration 078: `purchase_receipt_invoice_matches` for line-level three-way matching and variance audit.
+- GRNI control mapping currently uses account 2203 (accrued liabilities); the match table is the
+  receipt-level subledger supporting reconciliation.
+
+## Required regression coverage
+
+- Partial receipt, second receipt, and partial supplier invoices across receipt lines.
+- No invoice before receipt.
+- Over-receipt rejected without changing stock.
+- Receipt updates last purchase cost and posts inventory/GRNI.
+- Supplier price variance posts separately from GRNI.
+- Service receipts accrue to expense without changing stock.
+- Supplier payment voucher appears in the unallocated supplier-payment list.
+- Payment allocation settles a GUID-scoped invoice while retaining the company-code payment key.
+- SQLite and PostgreSQL migrations are repeatable.
+
+## Remaining procurement scope
+
+The current chain does not yet claim completion of:
+- purchase requisition approval and multi-supplier RFQ quotation comparison;
+- supplier invoice external-reference uniqueness and document attachment;
+- freight, landed-cost allocation, customs and duty capitalization;
+- lot/serial/batch/expiry capture at receipt;
+- supplier returns, debit/credit notes, and reversal/replacement workflows;
+- GRNI aging, unmatched receipt/invoice exception workbench, and period-end reconciliation report.
+
+These are follow-on acceptance areas; they must not be silently treated as implemented merely because
+the core PO-to-payment path exists.
