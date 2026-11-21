@@ -847,30 +847,40 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             if (order.PartyId is null)
                 throw new InvalidOperationException($"Order '{order.DocNo}' has no party account id; set the party from its card before converting.");
 
-            var billed = await LinkedQuantitiesAsync(connection, transaction, side, order.CompanyId, orderDocId, invoiceKind, cancellationToken).ConfigureAwait(false);
-            var received = side == CommercialDocSide.Purchase
-                ? await LinkedQuantitiesAsync(connection, transaction, side, order.CompanyId, orderDocId, CommercialDocKinds.PurchaseReceipt, cancellationToken).ConfigureAwait(false)
-                : new Dictionary<long, decimal>();
-            var remainingByMaterial = new Dictionary<long, decimal>();
-            foreach (var group in order.Lines.GroupBy(line => line.MaterialId ?? -line.LineNo))
-            {
-                var orderedQty = group.Sum(line => line.Qty);
-                var alreadyBilled = billed.GetValueOrDefault(group.Key);
-                var remaining = orderedQty - alreadyBilled;
-                if (side == CommercialDocSide.Purchase)
-                    remaining = Math.Min(remaining, received.GetValueOrDefault(group.Key) - alreadyBilled);
-                remainingByMaterial[group.Key] = Math.Max(0m, remaining);
-            }
-
             var remainingBySourceLine = new Dictionary<int, decimal>();
-            foreach (var group in order.Lines.GroupBy(line => line.MaterialId ?? -line.LineNo))
+            if (side == CommercialDocSide.Purchase)
             {
-                var available = remainingByMaterial.GetValueOrDefault(group.Key);
-                foreach (var sourceLine in group.OrderBy(line => line.LineNo))
+                var billedByLine = await LinkedQuantitiesBySourceLineAsync(
+                    connection, transaction, side, order.CompanyId, orderDocId,
+                    CommercialDocKinds.PurchaseInvoice, order.Lines, cancellationToken).ConfigureAwait(false);
+                var receivedByLine = await LinkedQuantitiesBySourceLineAsync(
+                    connection, transaction, side, order.CompanyId, orderDocId,
+                    CommercialDocKinds.PurchaseReceipt, order.Lines, cancellationToken).ConfigureAwait(false);
+                foreach (var line in order.Lines)
                 {
-                    var lineAvailable = Math.Min(sourceLine.Qty, available);
-                    remainingBySourceLine[sourceLine.LineNo] = Math.Max(0m, lineAvailable);
-                    available -= lineAvailable;
+                    var alreadyBilled = billedByLine.GetValueOrDefault(line.LineNo);
+                    var alreadyReceived = receivedByLine.GetValueOrDefault(line.LineNo);
+                    var remaining = Math.Min(line.Qty - alreadyBilled, alreadyReceived - alreadyBilled);
+                    remainingBySourceLine[line.LineNo] = Math.Max(0m, remaining);
+                }
+            }
+            else
+            {
+                var billed = await LinkedQuantitiesAsync(
+                    connection, transaction, side, order.CompanyId, orderDocId, invoiceKind, cancellationToken).ConfigureAwait(false);
+                var remainingByMaterial = new Dictionary<long, decimal>();
+                foreach (var group in order.Lines.GroupBy(line => line.MaterialId ?? -line.LineNo))
+                    remainingByMaterial[group.Key] = Math.Max(0m, group.Sum(line => line.Qty) - billed.GetValueOrDefault(group.Key));
+
+                foreach (var group in order.Lines.GroupBy(line => line.MaterialId ?? -line.LineNo))
+                {
+                    var available = remainingByMaterial.GetValueOrDefault(group.Key);
+                    foreach (var sourceLine in group.OrderBy(line => line.LineNo))
+                    {
+                        var lineAvailable = Math.Min(sourceLine.Qty, available);
+                        remainingBySourceLine[sourceLine.LineNo] = Math.Max(0m, lineAvailable);
+                        available -= lineAvailable;
+                    }
                 }
             }
 
