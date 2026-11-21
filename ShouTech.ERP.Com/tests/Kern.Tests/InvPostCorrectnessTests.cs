@@ -469,6 +469,26 @@ public sealed class InvPostCorrectnessTests
     }
 
     [Fact]
+    public async Task InventoryCount_RetryDoesNotDuplicateStockMovements()
+    {
+        using var db = await SeededAsync();
+        var doc = BuildDoc(InvDocKind.InventoryCount, null, "", qty: 1003m, price: 10m,
+            taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        InvRepo.SaveDraft(doc);
+        InvRepo.Post(doc.DocId, doc.Kind, Actor);
+
+        var stockAfterPost = StockQty(db);
+        var movementCountAfterPost = Scalar(db, $"SELECT COUNT(*) FROM material_stock_movements WHERE company_id = '{CompanyCode}' AND movement_type = 'COUNT_CLOSE';");
+
+        Assert.Throws<InvalidOperationException>(() => InvRepo.Post(doc.DocId, doc.Kind, Actor));
+
+        Assert.Equal(stockAfterPost, StockQty(db));
+        Assert.Equal(movementCountAfterPost, Scalar(db, $"SELECT COUNT(*) FROM material_stock_movements WHERE company_id = '{CompanyCode}' AND movement_type = 'COUNT_CLOSE';"));
+        Assert.Equal(1m, movementCountAfterPost);
+        Assert.Equal(InvDocStatus.Posted, InvRepo.Load(doc.DocId, InvDocKind.InventoryCount)!.Status);
+    }
+
+    [Fact]
     public void PostingPolicy_MatrixIsAsDesigned()
     {
         Assert.True(InvPostingPolicy.For(InvDocKind.SalesInvoice).PartyLedger);
