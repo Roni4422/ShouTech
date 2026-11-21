@@ -34,6 +34,8 @@ public interface IOrderDocumentRepository
     Task PostOrderAsync(CommercialDocSide side, long docId, string userId, CancellationToken cancellationToken = default);
 
     /// <summary>Creates and posts a partial goods receipt against a posted purchase order. Stock, GRNI journal, receipt document, and source link commit atomically.</summary>
+    /// <summary>Creates a posted supplier invoice from received quantities, records line-level receipt matching and price variance, and clears GRNI atomically.</summary>
+    Task<long> CreatePurchaseInvoiceAsync(Guid companyId, long purchaseOrderId, string invoiceDocNo, DateOnly invoiceDate, IReadOnlyList<CommercialLineDraft> invoiceLines, string userId, CancellationToken cancellationToken = default);
     Task<long> CreatePurchaseReceiptAsync(Guid companyId, long purchaseOrderId, string receiptDocNo, DateOnly receiptDate, IReadOnlyList<CommercialLineDraft> receivedLines, string userId, CancellationToken cancellationToken = default);
 
     /// <summary>Moves a document to Closed / Cancelled / Lost with transition guards.</summary>
