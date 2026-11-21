@@ -140,22 +140,29 @@ namespace Kern.Tests
 
                 // Supplier invoice is matched to received quantity, clears GRNI,
                 // and does not run a second stock receipt.
-                var (invoiceId, invoiceDocNo) = await service.ConvertToInvoiceAsync(
-                    CommercialDocSide.Purchase, orderId, new DateOnly(2026, 11, 4), Actor);
+                var (invoiceId, invoiceDocNo) = await service.CreatePurchaseInvoiceAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 4),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 5m, 13m) }, Actor);
                 var invoice = await orders.FindByIdAsync(CommercialDocSide.Purchase, invoiceId);
                 Assert.Equal(CommercialDocKinds.PurchaseInvoice, invoice!.DocKind);
                 Assert.Equal(5m, invoice.Lines[0].Qty);
-                Assert.Equal(60m, invoice.GrandTotal);
+                Assert.Equal(65m, invoice.GrandTotal);
                 Assert.Equal(105m, BalanceQty(connectionString, 42));
                 Assert.Equal(1060m, BalanceValue(connectionString, 42));
                 Assert.Equal(0m, MovementCost(connectionString, invoiceDocNo, 42));
 
                 var invoiceGl = GlByAccount(connectionString, "PUR", invoiceId);
                 Assert.Equal(60m, invoiceGl["2203"].Debit);
-                Assert.Equal(60m, invoiceGl["2201"].Credit);
-                Assert.False(invoiceGl.ContainsKey("402"));
+                Assert.Equal(5m, invoiceGl["402"].Debit);
+                Assert.Equal(65m, invoiceGl["2201"].Credit);
+                Assert.Equal(2m, Scalar(connectionString,
+                    $"SELECT COUNT(*) FROM purchase_receipt_invoice_matches WHERE invoice_doc_id = {invoiceId};"));
+                Assert.Equal(5m, Scalar(connectionString,
+                    $"SELECT SUM(matched_qty) FROM purchase_receipt_invoice_matches WHERE invoice_doc_id = {invoiceId};"));
+                Assert.Equal(5m, Scalar(connectionString,
+                    $"SELECT SUM(variance_base_amount) FROM purchase_receipt_invoice_matches WHERE invoice_doc_id = {invoiceId};"));
                 Assert.Equal(1m, Scalar(connectionString,
-                    $"SELECT COUNT(*) FROM party_ledger WHERE doc_kind = 'PUR' AND doc_id = {invoiceId} AND credit = 60;"));
+                    $"SELECT COUNT(*) FROM party_ledger WHERE doc_kind = 'PUR' AND doc_id = {invoiceId} AND credit = 65;"));
 
                 var progress = await service.GetProgressAsync(CommercialDocSide.Purchase, orderId);
                 Assert.Equal(100m, progress.PerFulfilled);
@@ -187,8 +194,9 @@ namespace Kern.Tests
                 await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
                 await service.CreatePurchaseReceiptAsync(companyId, orderId, new DateOnly(2026, 11, 6),
                     new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 30m) }, Actor);
-                var (invoiceId, invoiceNo) = await service.ConvertToInvoiceAsync(
-                    CommercialDocSide.Purchase, orderId, new DateOnly(2026, 11, 7), Actor);
+                var (invoiceId, invoiceNo) = await service.CreatePurchaseInvoiceAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 7),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 30m) }, Actor);
                 Assert.StartsWith("PUR-", invoiceNo);
 
                 var journalRepository = new JournalRepository("SQLite", connectionString);
@@ -259,7 +267,8 @@ namespace Kern.Tests
                 await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
 
                 await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                    service.ConvertToInvoiceAsync(CommercialDocSide.Purchase, orderId, new DateOnly(2026, 11, 4), Actor));
+                    service.CreatePurchaseInvoiceAsync(companyId, orderId, new DateOnly(2026, 11, 4),
+                        new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 1m, 15m) }, Actor));
 
                 var invoices = await service.SearchAsync(CommercialDocSide.Purchase, companyId,
                     CommercialDocKinds.PurchaseInvoice, null, null, null, null, 50);
