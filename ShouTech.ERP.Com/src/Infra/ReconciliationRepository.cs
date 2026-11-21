@@ -165,8 +165,9 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             long paymentParty;
             decimal paymentAmount;
             string? paymentDocKind;
+            string paymentCurrency;
             await using (var pay = CreateCommand(connection, transaction,
-                "SELECT party_kind, party_id, debit, credit, doc_kind FROM party_ledger WHERE company_id = @company AND ledger_id = @id"))
+                "SELECT party_kind, party_id, debit, credit, doc_kind, COALESCE(currency_code, 'SAR') FROM party_ledger WHERE company_id = @company AND ledger_id = @id"))
             {
                 Add(pay, "@company", companyId.Trim());
                 Add(pay, "@id", paymentLedgerId);
@@ -179,6 +180,7 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                 var credit = ReadDecimal(reader, 3);
                 paymentAmount = partyKind == "C" ? credit : debit;
                 paymentDocKind = ReadString(reader, 4);
+                paymentCurrency = ReadString(reader, 5) ?? "SAR";
             }
             // Step 4 (L-10): returns and other non-payment entries are not
             // allocatable payments, even if they sit on the payment side.
@@ -207,8 +209,9 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             decimal openAmount;
             decimal docTotal, docPaid;
             string docStatus;
+            string documentCurrency;
             await using (var doc = CreateCommand(connection, transaction,
-                $"SELECT CAST(company_id AS TEXT), doc_no, party_id, grand_total, paid_amount, status FROM {table} WHERE CAST(company_id AS TEXT) IN (@company, @documentCompany) AND doc_id = @doc AND {NotDeleted}"))
+                $"SELECT CAST(company_id AS TEXT), doc_no, party_id, grand_total, paid_amount, status, COALESCE(currency_code, 'SAR') FROM {table} WHERE CAST(company_id AS TEXT) IN (@company, @documentCompany) AND doc_id = @doc AND {NotDeleted}"))
             {
                 Add(doc, "@company", companyId.Trim());
                 Add(doc, "@documentCompany", documentCompanyKey);
@@ -222,6 +225,7 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                 docTotal = ReadDecimal(reader, 3);
                 docPaid = ReadDecimal(reader, 4);
                 docStatus = ReadString(reader, 5) ?? string.Empty;
+                documentCurrency = ReadString(reader, 6) ?? "SAR";
             }
             if (!string.Equals(docStatus, "Posted", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Only posted documents can be reconciled.");
@@ -230,6 +234,9 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             openAmount = docTotal - docPaid;
             if (docParty != paymentParty)
                 throw new InvalidOperationException("The payment and the document belong to different parties.");
+            if (!string.Equals(paymentCurrency.Trim(), documentCurrency.Trim(), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    $"The payment currency '{paymentCurrency}' does not match the document currency '{documentCurrency}'. Convert the funds or use a payment in the document currency before allocating.");
             if (amount > openAmount + Tolerance)
                 throw new InvalidOperationException("Allocation exceeds the document's open amount.");
 
