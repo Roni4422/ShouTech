@@ -521,6 +521,18 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                 };
                 if (splitTax)
                     glLines.Add(new GlLineRequest(GlAccounts.OutputVat, 0m, taxAmount));
+
+                // A DLV-linked invoice does not issue stock again. Its COGS
+                // is released from the cost already captured by the delivery
+                // note's stock movements, exactly once.
+                var deliveryCogs = await GetDeliveryCogsForInvoiceAsync(
+                    connection, transaction, docId, companyId, cancellationToken).ConfigureAwait(false);
+                if (deliveryCogs > 0m)
+                {
+                    glLines.Add(new GlLineRequest(GlAccounts.Cogs, deliveryCogs, 0m, costCenter));
+                    glLines.Add(new GlLineRequest(GlAccounts.Inventory, 0m, deliveryCogs));
+                }
+
                 GlPosting.PostInTransaction(connection, transaction, _provider,
                     new GlDocumentRequest(companyGuid,
                         DateOnly.Parse(docDate, CultureInfo.InvariantCulture),
@@ -827,6 +839,141 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                     $"Delivery quantity for material '{materialLabel}' and unit '{key.Unit}' exceeds the remaining quantity on sales order '{sourceOrderId}'.");
             }
         }
+    }
+
+    /// <summary>
+    /// Returns the cost of a delivery linked to this sales invoice. The
+    /// delivery is locked and must be invoiced in one posted invoice until
+    /// line-level cost allocations are available; this prevents duplicated
+    /// COGS when two invoices target the same delivery.
+    /// </summary>
+    private async Task<decimal> GetDeliveryCogsForInvoiceAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        long invoiceDocId,
+        string companyId,
+        CancellationToken cancellationToken)
+    {
+        long? deliveryDocId = null;
+        await using (var link = CreateCommand(connection, transaction, """
+            SELECT source_doc_id
+            FROM document_links
+            WHERE company_id = @company
+              AND source_doc_kind = @deliveryKind
+              AND target_doc_kind = @invoiceKind
+              AND target_doc_id = @invoiceId
+            """))
+        {
+            Add(link, "@company", companyId);
+            Add(link, "@deliveryKind", CommercialDocKinds.DeliveryNote);
+            Add(link, "@invoiceKind", CommercialDocKinds.SalesInvoice);
+            Add(link, "@invoiceId", invoiceDocId);
+            var value = await link.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            if (value is not null and not DBNull)
+                deliveryDocId = Convert.ToInt64(value, CultureInfo.InvariantCulture);
+        }
+
+        if (deliveryDocId is null)
+            return 0m;
+
+        string deliveryNo;
+        await using (var deliveryLock = CreateCommand(connection, transaction,
+            _provider == "PostgreSQL"
+                ? """
+                  SELECT doc_no
+                  FROM sales_documents
+                  WHERE doc_id = @deliveryId AND company_id = @company
+                    AND doc_kind = @deliveryKind AND status = @posted
+                    AND CAST(is_deleted AS TEXT) IN ('0', 'false')
+                  FOR UPDATE
+                  """
+                : """
+                  SELECT doc_no
+                  FROM sales_documents
+                  WHERE doc_id = @deliveryId AND company_id = @company
+                    AND doc_kind = @deliveryKind AND status = @posted
+                    AND CAST(is_deleted AS TEXT) IN ('0', 'false')
+                  """))
+        {
+            Add(deliveryLock, "@deliveryId", deliveryDocId.Value);
+            Add(deliveryLock, "@company", companyId);
+            Add(deliveryLock, "@deliveryKind", CommercialDocKinds.DeliveryNote);
+            Add(deliveryLock, "@posted", CommercialDocumentStatus.Posted);
+            var value = await deliveryLock.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            if (value is null or DBNull)
+                throw new InvalidOperationException("The source delivery note is missing or is not posted.");
+            deliveryNo = Convert.ToString(value, CultureInfo.InvariantCulture)!;
+        }
+
+        async Task<Dictionary<(long MaterialId, string Unit), decimal>> ReadQuantitiesAsync(
+            string sql, params (string Name, object Value)[] parameters)
+        {
+            var result = new Dictionary<(long MaterialId, string Unit), decimal>();
+            await using var command = CreateCommand(connection, transaction, sql);
+            foreach (var (name, value) in parameters)
+                Add(command, name, value);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var materialId = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture);
+                var unit = Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? string.Empty;
+                result[(materialId, unit)] = Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture);
+            }
+            return result;
+        }
+
+        const string byMaterialAndUnit = """
+            SELECT COALESCE(material_id, -1), COALESCE(unit, ''), SUM(qty)
+            FROM sales_document_lines
+            WHERE doc_id = @docId
+            GROUP BY material_id, unit
+            """;
+        var delivered = await ReadQuantitiesAsync(byMaterialAndUnit, ("@docId", deliveryDocId.Value)).ConfigureAwait(false);
+        var invoiced = await ReadQuantitiesAsync(byMaterialAndUnit, ("@docId", invoiceDocId)).ConfigureAwait(false);
+        var previouslyInvoiced = await ReadQuantitiesAsync("""
+            SELECT COALESCE(line.material_id, -1), COALESCE(line.unit, ''), SUM(line.qty)
+            FROM document_links link
+            INNER JOIN sales_documents invoice
+                ON invoice.company_id = link.company_id
+               AND invoice.doc_id = link.target_doc_id
+               AND invoice.doc_kind = link.target_doc_kind
+            INNER JOIN sales_document_lines line ON line.doc_id = invoice.doc_id
+            WHERE link.company_id = @company
+              AND link.source_doc_kind = @deliveryKind
+              AND link.source_doc_id = @deliveryId
+              AND link.target_doc_kind = @invoiceKind
+              AND invoice.status = @posted
+              AND CAST(invoice.is_deleted AS TEXT) IN ('0', 'false')
+              AND invoice.doc_id <> @currentId
+            GROUP BY line.material_id, line.unit
+            """,
+            ("@company", companyId),
+            ("@deliveryKind", CommercialDocKinds.DeliveryNote),
+            ("@deliveryId", deliveryDocId.Value),
+            ("@invoiceKind", CommercialDocKinds.SalesInvoice),
+            ("@posted", CommercialDocumentStatus.Posted),
+            ("@currentId", invoiceDocId)).ConfigureAwait(false);
+
+        if (previouslyInvoiced.Values.Any(quantity => quantity > 0m))
+            throw new InvalidOperationException("A delivery note must be invoiced in one document until partial delivery-cost allocation is enabled.");
+
+        if (delivered.Count != invoiced.Count ||
+            delivered.Any(pair => invoiced.GetValueOrDefault(pair.Key) != pair.Value))
+            throw new InvalidOperationException("The sales invoice must include the complete remaining quantity from its delivery note.");
+
+        var companyCode = await PartyLedger.ResolveCompanyCodeAsync(
+            connection, transaction, _provider, companyId, cancellationToken).ConfigureAwait(false);
+        await using var cost = CreateCommand(connection, transaction, """
+            SELECT COALESCE(SUM(cost_amount), 0)
+            FROM material_stock_movements
+            WHERE company_id = @companyCode AND document_no = @deliveryNo
+            """);
+        Add(cost, "@companyCode", companyCode);
+        Add(cost, "@deliveryNo", deliveryNo);
+        var movementCost = Convert.ToDecimal(
+            await cost.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
+            CultureInfo.InvariantCulture);
+        return Math.Max(0m, -movementCost);
     }
 
     private static DbCommand CreateCommand(DbConnection connection, DbTransaction transaction, string sql)
