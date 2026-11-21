@@ -48,7 +48,7 @@ Purchase documents are company-scoped. Posted source documents remain auditable;
 ## 5. Supplier payment
 
 - Create a Payment Voucher for the supplier, select party kind Supplier, choose the cash/bank account, and enter balanced voucher lines.
-- Posting a linked supplier payment writes the debit settlement entry to the supplier party ledger in the same transaction as the journal posting.
+- Posting a linked supplier payment writes the debit settlement entry to the supplier party ledger in the same transaction as the journal posting. The repository enforces a debit to the payable control account (2201) for the exact linked amount; posting a supplier-linked voucher against an expense account is rejected.
 - The payment does not silently settle an invoice merely because the supplier is selected. Use Payment Reconciliation to allocate the payment to one or more open supplier invoices.
 - The reconciliation engine re-reads and validates the payment balance, supplier identity, document status, open amount, company scope, and currency inside one transaction.
 - Allocations are recorded in `payment_allocations`; the purchase invoice's `paid_amount` is increased in that same transaction.
