@@ -1780,6 +1780,8 @@ public static class InvRepo
 
             SaveDraft(reversal);
             reversalDraftId = reversal.DocId;
+            RestoreSalesReturnLineNumbers(
+                reversalDraftId, original.Lines.Select(line => line.LineNo).ToArray());
 
             // Persist the draft ID before posting so a failure cannot leave an orphan
             // draft while deleting the only record that prevents a duplicate reversal.
