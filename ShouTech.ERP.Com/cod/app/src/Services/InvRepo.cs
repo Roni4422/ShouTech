@@ -3034,9 +3034,9 @@ public static class InvRepo
         var returnLinesSubtotal = returnDoc.Lines.Sum(line =>
             decimal.Round(line.Qty * line.UnitPrice * (1m - line.DiscountPct / 100m),
                 4, MidpointRounding.AwayFromZero));
-        var expectedDiscount = PosTenderMath.ProRata(
+        var expectedDiscount = ShouTech.Domain.Entities.PosTenderMath.ProRata(
             originalDiscountAmount, returnLinesSubtotal, originalLinesSubtotal);
-        var expectedExtra = PosTenderMath.ProRata(
+        var expectedExtra = ShouTech.Domain.Entities.PosTenderMath.ProRata(
             originalExtraAmount, returnLinesSubtotal, originalLinesSubtotal);
         if (returnDoc.LinesDiscountAmount != expectedDiscount ||
             returnDoc.LinesExtraAmount != expectedExtra)
