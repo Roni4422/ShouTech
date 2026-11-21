@@ -185,7 +185,7 @@ public static class PartyLedger
     /// </summary>
     public static void MirrorForJournalReversal(
         DbConnection connection, DbTransaction transaction, string provider,
-        Guid companyGuid, Guid originalEntryId, Guid reversalEntryId, string reversalDate)
+        Guid companyGuid, Guid originalEntryId, Guid reversalEntryId, string reversalDate, string userId)
     {
         if (!TableExists(connection, transaction, provider, "party_ledger"))
             return;
@@ -239,7 +239,7 @@ public static class PartyLedger
             // in base exactly. Rows without stored base fall through to
             // rate resolution at the original row's rate.
             if (row.DocKind is "RCV" or "PAY")
-                UnallocateVoucherPayments(connection, transaction, provider, company, originalEntryId);
+                UnallocateVoucherPayments(connection, transaction, provider, company, originalEntryId, reversalEntryId, userId);
 
             WriteEntry(connection, transaction, provider, company, row.Kind, row.Party,
                 row.DocKind, row.DocId, row.DocNo,
@@ -262,7 +262,7 @@ public static class PartyLedger
     /// </summary>
     private static void UnallocateVoucherPayments(
         DbConnection connection, DbTransaction transaction, string provider,
-        string companyCode, Guid journalEntryId)
+        string companyCode, Guid journalEntryId, Guid reversalJournalId, string userId)
     {
         if (!TableExists(connection, transaction, provider, "payment_allocations")
             || !ColumnExists(connection, transaction, provider, "party_ledger", "journal_entry_id"))
@@ -284,13 +284,14 @@ public static class PartyLedger
         var companyExpression = hasDocumentCompany
             ? "COALESCE(document_company_id, company_id)"
             : "company_id";
-        var allocations = new List<(string Table, long DocumentId, string DocumentCompany, decimal Amount)>();
+        var allocations = new List<(string AllocationId, string Table, long DocumentId,
+            string DocumentCompany, decimal Amount, string? AllocatedBy, string? Note)>();
         using (var load = Create(connection, transaction,
             $"""
-            SELECT doc_table, doc_id, {companyExpression}, SUM(amount)
+            SELECT allocation_id, doc_table, doc_id, {companyExpression}, amount, allocated_by, note
             FROM payment_allocations
             WHERE company_id = @company AND payment_ledger_id = @payment
-            GROUP BY doc_table, doc_id, {companyExpression}
+            ORDER BY allocation_id
             """))
         {
             Add(load, "@company", companyCode);
@@ -298,20 +299,55 @@ public static class PartyLedger
             using var reader = load.ExecuteReader();
             while (reader.Read())
             {
-                var table = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty;
+                var table = Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? string.Empty;
                 if (table is not ("SALES" or "PURCHASE"))
                     throw new InvalidOperationException($"Unsupported allocated document table '{table}' during voucher reversal.");
                 allocations.Add((
+                    Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty,
                     table,
-                    Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture),
-                    Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture) ?? companyCode,
-                    Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture)));
+                    Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture),
+                    Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture) ?? companyCode,
+                    Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture),
+                    reader.IsDBNull(5) ? null : Convert.ToString(reader.GetValue(5), CultureInfo.InvariantCulture),
+                    reader.IsDBNull(6) ? null : Convert.ToString(reader.GetValue(6), CultureInfo.InvariantCulture)));
             }
         }
+
+        if (allocations.Count == 0) return;
+        if (!TableExists(connection, transaction, provider, "payment_allocation_reversal_audit"))
+            throw new InvalidOperationException(
+                "Payment-allocation reversal audit schema is missing. Apply database migrations before reversing this allocated voucher.");
 
         var isPg = IsPostgres(provider);
         foreach (var allocation in allocations)
         {
+            var auditId = Guid.NewGuid();
+            using (var audit = Create(connection, transaction, """
+                INSERT INTO payment_allocation_reversal_audit
+                    (audit_id, company_id, allocation_id, payment_ledger_id, doc_table, doc_id,
+                     document_company_id, amount, allocated_by, note, released_by, reversal_journal_id)
+                VALUES
+                    (@audit, @company, @allocation, @payment, @table, @doc,
+                     @documentCompany, @amount, @allocatedBy, @note, @releasedBy, @reversal)
+                """))
+            {
+                Add(audit, "@audit", isPg ? auditId : auditId.ToString("D"));
+                Add(audit, "@company", companyCode);
+                Add(audit, "@allocation", isPg
+                    ? (object)Guid.Parse(allocation.AllocationId)
+                    : allocation.AllocationId);
+                Add(audit, "@payment", paymentLedgerId);
+                Add(audit, "@table", allocation.Table);
+                Add(audit, "@doc", allocation.DocumentId);
+                Add(audit, "@documentCompany", allocation.DocumentCompany);
+                Add(audit, "@amount", allocation.Amount);
+                Add(audit, "@allocatedBy", (object?)allocation.AllocatedBy ?? DBNull.Value);
+                Add(audit, "@note", (object?)allocation.Note ?? DBNull.Value);
+                Add(audit, "@releasedBy", userId.Trim());
+                Add(audit, "@reversal", isPg ? reversalJournalId : reversalJournalId.ToString("D"));
+                audit.ExecuteNonQuery();
+            }
+
             var documentTable = allocation.Table == "SALES" ? "sales_documents" : "purchase_documents";
             using var release = Create(connection, transaction,
                 $"""
