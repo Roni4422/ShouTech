@@ -350,7 +350,11 @@ namespace Kern.Tests
 
                 var (receiptId, receiptNo) = await service.CreatePurchaseReceiptAsync(
                     companyId, orderId, new DateOnly(2026, 11, 11),
-                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 11m) }, Actor);
+                    new[]
+                    {
+                        new CommercialLineDraft(42, "MAT-42", "Item 42 - first PO line", "PCS", 2m, 11m, 0m, 0m, null, 1),
+                        new CommercialLineDraft(42, "MAT-42", "Item 42 - second PO line", "PCS", 1m, 11m, 0m, 0m, null, 2)
+                    }, Actor);
                 var receipt = await orders.FindByIdAsync(CommercialDocSide.Purchase, receiptId);
                 Assert.Equal(2, receipt!.Lines.Count);
                 Assert.Equal(2m, receipt.Lines[0].Qty);
