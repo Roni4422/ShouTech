@@ -603,6 +603,36 @@ public sealed class JournalRepository : IJournalRepository
 
                 if (linkCompany is not null && linkKind is not null && linkAmount > 0)
                 {
+                    if ((linkDocKind, linkKind) is not (("RCV", "C") or ("PAY", "S")))
+                        throw new InvalidOperationException(
+                            "Cash receipt vouchers must be linked to customers and payment vouchers must be linked to suppliers.");
+
+                    var controlAccount = linkKind == "C" ? GlAccounts.Receivable : GlAccounts.Payable;
+                    decimal controlDebit, controlCredit;
+                    await using (var control = CreateCommand(connection, transaction, """
+                        SELECT COALESCE(SUM(l.debit), 0), COALESCE(SUM(l.credit), 0)
+                        FROM journal_entry_lines l
+                        INNER JOIN chart_of_accounts a
+                            ON a.account_id = l.account_id AND a.company_id = @company
+                        WHERE l.journal_entry_id = @journal AND a.account_code = @account
+                        """))
+                    {
+                        Add(control, "@company", FormatGuid(companyId));
+                        Add(control, "@journal", FormatGuid(journalEntryId));
+                        Add(control, "@account", controlAccount);
+                        await using var controlReader = await control.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                        if (!await controlReader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                            throw new InvalidOperationException("The party control account could not be validated on the voucher.");
+                        controlDebit = Convert.ToDecimal(controlReader.GetValue(0), CultureInfo.InvariantCulture);
+                        controlCredit = Convert.ToDecimal(controlReader.GetValue(1), CultureInfo.InvariantCulture);
+                    }
+
+                    var controlAmount = linkKind == "S" ? controlDebit : controlCredit;
+                    var wrongSideAmount = linkKind == "S" ? controlCredit : controlDebit;
+                    if (Math.Abs(controlAmount - linkAmount) > 0.005m || wrongSideAmount > 0.005m)
+                        throw new InvalidOperationException(
+                            $"The voucher must post exactly {linkAmount:N2} to the supplier/customer control account {controlAccount} on the settlement side before it can update the party ledger.");
+
                     var (debit, credit) = PartyLedger.SettlementSides(linkKind, linkAmount);
                     // Step 7: the settlement inherits the voucher's own
                     // currency + header rate, so its base amount is the
