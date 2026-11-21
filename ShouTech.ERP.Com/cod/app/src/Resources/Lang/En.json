@@ -3641,6 +3641,9 @@
     "ExceedsRemaining": "A delivery quantity cannot exceed the remaining order quantity.",
     "DraftCreated": "Delivery draft created",
     "SaveFirst": "Create a delivery draft first.",
-    "Posted": "Delivery note posted"
+    "Posted": "Delivery note posted",
+    "CreateInvoice": "Create Sales Invoice",
+    "PostDeliveryFirst": "Post the delivery note before creating its invoice.",
+    "InvoiceCreated": "Sales invoice draft created"
   }
 }
