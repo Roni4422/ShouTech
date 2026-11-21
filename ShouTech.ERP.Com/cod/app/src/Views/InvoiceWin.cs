@@ -1177,8 +1177,13 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             // Batch/serial capture (Phase B 054): tracked lines are
             // captured in the picker before posting; cancelling the
             // picker aborts the post and keeps the draft.
-            var captures = BatchSerialCaptureSvc.CaptureForPosting(doc, this);
-            if (captures is null) return;
+            var deliveryLinked = doc.Kind == InvDocKind.SalesInvoice
+                && InvRepo.IsDeliveryLinkedSalesInvoice(doc.DocId);
+            // The delivery note already captured stock batches/serials and
+            // issued the stock. Its invoice posts receivable, revenue and the
+            // linked delivery's COGS, so do not ask for a second stock capture.
+            var captures = deliveryLinked ? null : BatchSerialCaptureSvc.CaptureForPosting(doc, this);
+            if (!deliveryLinked && captures is null) return;
             InvRepo.Post(doc.DocId, doc.Kind, AppState.CurrentUser?.Username ?? Environment.UserName, captures);
             doc.Status = InvDocStatus.Posted;
             // Reload so JournalDocNo assigned during post is visible to the voucher button.
