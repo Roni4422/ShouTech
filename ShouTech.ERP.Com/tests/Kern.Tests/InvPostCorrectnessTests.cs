@@ -419,6 +419,38 @@ public sealed class InvPostCorrectnessTests
     }
 
     [Fact]
+    public async Task StockTransfer_RetryDoesNotDuplicateStockMovements()
+    {
+        using var db = await SeededAsync();
+        using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = $"INSERT INTO warehouses (warehouse_id, company_id, warehouse_code, warehouse_name_ar, warehouse_name_en, is_deleted) VALUES (2, '{CompanyCode}', 2, 'Second', 'Second', 0);";
+            cmd.ExecuteNonQuery();
+        }
+
+        var doc = BuildDoc(InvDocKind.StockTransfer, null, "", qty: 3m, price: 10m,
+            taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        doc.TargetWarehouseId = 2;
+        doc.TargetWarehouseName = "Second";
+        InvRepo.SaveDraft(doc);
+        InvRepo.Post(doc.DocId, doc.Kind, Actor);
+
+        var sourceAfterPost = StockQty(db);
+        var destinationAfterPost = Scalar(db, "SELECT COALESCE(available_qty, 0) FROM material_stock_balances WHERE company_id = '" + CompanyCode + "' AND warehouse_id = 2 AND material_id = 42;");
+        var movementCountAfterPost = Scalar(db, $"SELECT COUNT(*) FROM material_stock_movements WHERE company_id = '{CompanyCode}' AND movement_type IN ('TRANSFER_OUT', 'TRANSFER_IN');");
+
+        Assert.Throws<InvalidOperationException>(() => InvRepo.Post(doc.DocId, doc.Kind, Actor));
+
+        Assert.Equal(sourceAfterPost, StockQty(db));
+        Assert.Equal(destinationAfterPost, Scalar(db, "SELECT COALESCE(available_qty, 0) FROM material_stock_balances WHERE company_id = '" + CompanyCode + "' AND warehouse_id = 2 AND material_id = 42;"));
+        Assert.Equal(movementCountAfterPost, Scalar(db, $"SELECT COUNT(*) FROM material_stock_movements WHERE company_id = '{CompanyCode}' AND movement_type IN ('TRANSFER_OUT', 'TRANSFER_IN');"));
+        Assert.Equal(2m, movementCountAfterPost);
+        Assert.Equal(InvDocStatus.Posted, InvRepo.Load(doc.DocId, InvDocKind.StockTransfer)!.Status);
+    }
+
+    [Fact]
     public async Task InventoryCount_PostsDeltaOnly_NotFullCountedQty()
     {
         using var db = await SeededAsync();
