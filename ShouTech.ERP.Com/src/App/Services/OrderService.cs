@@ -92,6 +92,36 @@ public sealed class OrderService
         return (deliveryId, deliveryDocNo);
     }
 
+    /// <summary>
+    /// Creates a draft sales invoice from a posted delivery note. The invoice
+    /// inherits the delivered lines and carries a DLV-to-SAL document link.
+    /// </summary>
+    public async Task<(long InvoiceId, string InvoiceDocNo)> CreateSalesInvoiceFromDeliveryAsync(
+        long deliveryDocId,
+        DateOnly invoiceDate,
+        string userId,
+        CancellationToken cancellationToken = default)
+    {
+        if (deliveryDocId <= 0) throw new ArgumentOutOfRangeException(nameof(deliveryDocId));
+        var delivery = await _chain.FindSalesByIdAsync(deliveryDocId, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Delivery note was not found.");
+        if (delivery.DocKind != CommercialDocKinds.DeliveryNote)
+            throw new InvalidOperationException("A sales invoice must be created from a delivery note.");
+        if (delivery.Status != CommercialDocumentStatus.Posted)
+            throw new InvalidOperationException("Only a posted delivery note can be invoiced.");
+
+        var invoiceDocNo = await _orders.NextDocNoAsync(
+            CommercialDocSide.Sales, delivery.CompanyId, CommercialDocKinds.SalesInvoice, cancellationToken).ConfigureAwait(false);
+        var chain = new SalesChainService(_chain);
+        var invoiceId = await chain.CreateFromSourceAsync(
+            deliveryDocId, invoiceDocNo, invoiceDate, userId, null, null, cancellationToken).ConfigureAwait(false);
+        return (invoiceId, invoiceDocNo);
+    }
+
+    /// <summary>Posts a sales-chain draft, including the DLV-linked invoice accounting path.</summary>
+    public Task PostSalesChainDocumentAsync(long documentId, string userId, CancellationToken cancellationToken = default)
+        => _chain.PostSalesAsync(documentId, userId, cancellationToken);
+
     /// <summary>Posts a delivery note through the stock-valuation chain in one transaction.</summary>
     public Task PostSalesDeliveryAsync(long deliveryDocId, string userId, CancellationToken cancellationToken = default)
         => _chain.PostSalesAsync(deliveryDocId, userId, cancellationToken);
