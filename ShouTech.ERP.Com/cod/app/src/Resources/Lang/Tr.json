@@ -3636,5 +3636,30 @@
     "CreateInvoice": "Satış Faturası Oluştur",
     "PostDeliveryFirst": "Faturasını oluşturmadan önce irsaliyeyi kaydedin.",
     "InvoiceCreated": "Satış faturası taslağı oluşturuldu"
+  },
+  "SalesReturn": {
+    "Title": "Satış İadesi / Alacak Dekontu",
+    "LoadInvoice": "Faturayı Yükle",
+    "PostReturn": "İadeyi Kaydet",
+    "OriginalInvoice": "Orijinal Satış Fatura No.",
+    "Reason": "İade Nedeni",
+    "Code": "Ürün Kodu",
+    "Description": "Açıklama",
+    "Unit": "Birim",
+    "Sold": "Satılan",
+    "AlreadyReturned": "Önceden İade",
+    "Returnable": "İade Edilebilir",
+    "ReturnQty": "İade Miktarı",
+    "Price": "Birim Fiyat",
+    "Total": "Alacak Dekontu Toplamı",
+    "InvoiceRequired": "Bir satış fatura numarası girin.",
+    "InvoiceNotFound": "Kaydedilmiş satış faturası bulunamadı.",
+    "PostedInvoiceRequired": "Yalnızca kaydedilmiş satış faturaları iade edilebilir.",
+    "LoadInvoiceFirst": "Önce kaydedilmiş bir satış faturası yükleyin.",
+    "ReasonRequired": "İade nedenini girin.",
+    "SelectQuantity": "En az bir satır için iade miktarı girin.",
+    "ExceedsReturnable": "İade miktarı kalan iade edilebilir miktarı aşamaz.",
+    "Confirm": "Bu müşteri iadesi ve alacak dekontu kaydedilsin mi?",
+    "Posted": "Satış iadesi kaydedildi"
   }
 }
