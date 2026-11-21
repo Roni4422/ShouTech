@@ -1015,11 +1015,13 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
     {
         var receiptIds = new List<long>();
         await using (var receipts = CreateCommand(connection, transaction, """
-            SELECT target_doc_id
-            FROM document_links
-            WHERE company_id = @company AND source_doc_kind = @sourceKind
-              AND source_doc_id = @sourceId AND target_doc_kind = @receiptKind
-            ORDER BY target_doc_id
+            SELECT l.target_doc_id
+            FROM document_links l
+            INNER JOIN purchase_documents d
+                ON d.doc_id = l.target_doc_id AND CAST(d.company_id AS TEXT) = l.company_id
+            WHERE l.company_id = @company AND l.source_doc_kind = @sourceKind
+              AND l.source_doc_id = @sourceId AND l.target_doc_kind = @receiptKind
+            ORDER BY d.doc_date, d.doc_id
             """))
         {
             Add(receipts, "@company", order.CompanyId.ToString("D"));
