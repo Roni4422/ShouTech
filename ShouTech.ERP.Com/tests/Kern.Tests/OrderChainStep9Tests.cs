@@ -130,7 +130,27 @@ namespace Kern.Tests
                 Assert.Equal(60m, firstProgress.PerFulfilled);
                 Assert.Equal(0m, firstProgress.PerBilled);
 
-                // Receive the balance in a second receipt. Both receipts are independently linked to the PO.
+                // The first supplier bill may consume only part of the first receipt.
+                var (firstInvoiceId, firstInvoiceNo) = await service.CreatePurchaseInvoiceAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 13m) }, Actor);
+                var firstInvoice = await orders.FindByIdAsync(CommercialDocSide.Purchase, firstInvoiceId);
+                Assert.Equal(2m, firstInvoice!.Lines[0].Qty);
+                Assert.Equal(26m, firstInvoice.GrandTotal);
+                Assert.Equal(103m, BalanceQty(connectionString, 42));
+                Assert.Equal(1036m, BalanceValue(connectionString, 42));
+                Assert.Equal(0m, MovementCost(connectionString, firstInvoiceNo, 42));
+                var firstInvoiceGl = GlByAccount(connectionString, "PUR", firstInvoiceId);
+                Assert.Equal(24m, firstInvoiceGl["2203"].Debit);
+                Assert.Equal(2m, firstInvoiceGl["402"].Debit);
+                Assert.Equal(26m, firstInvoiceGl["2201"].Credit);
+
+                var partiallyBilled = await service.GetProgressAsync(CommercialDocSide.Purchase, orderId);
+                Assert.Equal(60m, partiallyBilled.PerFulfilled);
+                Assert.Equal(40m, partiallyBilled.PerBilled);
+
+                // Receive the balance in a second receipt, then bill the remaining
+                // one unit from receipt one plus both units from receipt two.
                 var (secondReceiptId, secondReceiptNo) = await service.CreatePurchaseReceiptAsync(
                     companyId, orderId, new DateOnly(2026, 11, 3),
                     new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 12m) }, Actor);
@@ -138,31 +158,33 @@ namespace Kern.Tests
                 Assert.Equal(1060m, BalanceValue(connectionString, 42));
                 Assert.Equal(24m, MovementCost(connectionString, secondReceiptNo, 42));
 
-                // Supplier invoice is matched to received quantity, clears GRNI,
-                // and does not run a second stock receipt.
                 var (invoiceId, invoiceDocNo) = await service.CreatePurchaseInvoiceAsync(
                     companyId, orderId, new DateOnly(2026, 11, 4),
-                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 5m, 13m) }, Actor);
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 13m) }, Actor);
                 var invoice = await orders.FindByIdAsync(CommercialDocSide.Purchase, invoiceId);
                 Assert.Equal(CommercialDocKinds.PurchaseInvoice, invoice!.DocKind);
-                Assert.Equal(5m, invoice.Lines[0].Qty);
-                Assert.Equal(65m, invoice.GrandTotal);
+                Assert.Equal(3m, invoice.Lines[0].Qty);
+                Assert.Equal(39m, invoice.GrandTotal);
                 Assert.Equal(105m, BalanceQty(connectionString, 42));
                 Assert.Equal(1060m, BalanceValue(connectionString, 42));
                 Assert.Equal(0m, MovementCost(connectionString, invoiceDocNo, 42));
 
                 var invoiceGl = GlByAccount(connectionString, "PUR", invoiceId);
-                Assert.Equal(60m, invoiceGl["2203"].Debit);
-                Assert.Equal(5m, invoiceGl["402"].Debit);
-                Assert.Equal(65m, invoiceGl["2201"].Credit);
+                Assert.Equal(36m, invoiceGl["2203"].Debit);
+                Assert.Equal(3m, invoiceGl["402"].Debit);
+                Assert.Equal(39m, invoiceGl["2201"].Credit);
                 Assert.Equal(2m, Scalar(connectionString,
                     $"SELECT COUNT(*) FROM purchase_receipt_invoice_matches WHERE invoice_doc_id = {invoiceId};"));
+                Assert.Equal(3m, Scalar(connectionString,
+                    $"SELECT COUNT(*) FROM purchase_receipt_invoice_matches WHERE purchase_order_id = {orderId};"));
                 Assert.Equal(5m, Scalar(connectionString,
-                    $"SELECT SUM(matched_qty) FROM purchase_receipt_invoice_matches WHERE invoice_doc_id = {invoiceId};"));
+                    $"SELECT SUM(matched_qty) FROM purchase_receipt_invoice_matches WHERE purchase_order_id = {orderId};"));
                 Assert.Equal(5m, Scalar(connectionString,
-                    $"SELECT SUM(variance_base_amount) FROM purchase_receipt_invoice_matches WHERE invoice_doc_id = {invoiceId};"));
+                    $"SELECT SUM(variance_base_amount) FROM purchase_receipt_invoice_matches WHERE purchase_order_id = {orderId};"));
                 Assert.Equal(1m, Scalar(connectionString,
-                    $"SELECT COUNT(*) FROM party_ledger WHERE doc_kind = 'PUR' AND doc_id = {invoiceId} AND credit = 65;"));
+                    $"SELECT COUNT(*) FROM party_ledger WHERE doc_kind = 'PUR' AND doc_id = {firstInvoiceId} AND credit = 26;"));
+                Assert.Equal(1m, Scalar(connectionString,
+                    $"SELECT COUNT(*) FROM party_ledger WHERE doc_kind = 'PUR' AND doc_id = {invoiceId} AND credit = 39;"));
 
                 var progress = await service.GetProgressAsync(CommercialDocSide.Purchase, orderId);
                 Assert.Equal(100m, progress.PerFulfilled);
