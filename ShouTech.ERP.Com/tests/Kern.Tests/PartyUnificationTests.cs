@@ -176,6 +176,21 @@ public sealed class PartyUnificationTests
         var journal = new JournalService(journalRepo);
         var cashId = await journalRepo.ResolveAccountIdAsync(db.CompanyId, "131");
         var payableId = await journalRepo.ResolveAccountIdAsync(db.CompanyId, "2201");
+        var wrongExpenseId = await journalRepo.ResolveAccountIdAsync(db.CompanyId, "401");
+        var badPaymentId = await journal.CreateDraftAsync(db.CompanyId, new DateOnly(2026, 3, 4),
+            "Invalid supplier payment", Actor,
+            new[]
+            {
+                new JournalLineRequest(wrongExpenseId, 600m, 0m),
+                new JournalLineRequest(cashId, 0m, 600m)
+            },
+            documentNumber: "PAY-SUP-BAD");
+        Exec(db,
+            $"INSERT INTO voucher_party_links (journal_entry_id, company_id, party_kind, party_id, party_code, doc_kind, doc_no, amount, currency_code, created_by) VALUES ('{badPaymentId:D}', '{CompanyCode}', 'S', {supplier.LedgerId}, 'SUP-1', 'PAY', 'PAY-SUP-BAD', 600, 'SAR', '{Actor}');");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => journal.PostAsync(badPaymentId, Actor));
+        Assert.Equal(0m, ExecScalar(db,
+            $"SELECT COUNT(*) FROM party_ledger WHERE company_id = '{CompanyCode}' AND journal_entry_id = '{badPaymentId:D}';"));
+
         var paymentId = await journal.CreateDraftAsync(db.CompanyId, new DateOnly(2026, 3, 5),
             "Supplier payment PAY-SUP-1", Actor,
             new[]
