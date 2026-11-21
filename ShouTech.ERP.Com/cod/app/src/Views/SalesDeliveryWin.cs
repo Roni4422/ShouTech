@@ -11,6 +11,7 @@ using System.Windows.Data;
 using System.Windows.Media;
 using ShouTech.App.Services;
 using ShouTech.App.Reporting.Invoices;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
 
@@ -440,6 +441,10 @@ public sealed class SalesDeliveryWin : BaseWin
             UpdateState();
         }
     }
+
+    private void ShowWarningMessage(string message)
+        => MessageBox.Show(this, message, T("Common.Warning"),
+            MessageBoxButton.OK, MessageBoxImage.Warning);
 
     private void UpdateState()
     {
