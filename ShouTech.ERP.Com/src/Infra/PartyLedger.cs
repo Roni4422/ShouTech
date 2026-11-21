@@ -369,9 +369,8 @@ public static class PartyLedger
                         $"Could not find {allocation.Table} document {allocation.DocumentId} for company keys '{allocation.DocumentCompany}' or '{companyCode}' while reversing the payment voucher.");
                 actualDocumentCompany = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty;
                 currentPaidAmount = Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
-                var deletedValue = Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture);
-                documentDeleted = deletedValue is not null
-                    && deletedValue.Trim() is not ("0" or "false" or "False");
+                documentDeleted = !reader.IsDBNull(2)
+                    && Convert.ToBoolean(reader.GetValue(2), CultureInfo.InvariantCulture);
             }
 
             if (documentDeleted || currentPaidAmount + 0.005m < allocation.Amount)
