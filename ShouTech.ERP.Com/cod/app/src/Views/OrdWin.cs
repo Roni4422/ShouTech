@@ -831,6 +831,13 @@ public sealed class OrdWin : BaseWin, IWindowMode
         });
         grid.Columns.Add(new DataGridTextColumn
         {
+            Header = T("OrderDoc.PurchaseOrderLine"),
+            Binding = new Binding(nameof(SupplierInvoiceLineVm.LineNo)),
+            IsReadOnly = true,
+            Width = 65
+        });
+        grid.Columns.Add(new DataGridTextColumn
+        {
             Header = T("Invoice.Col.Description"),
             Binding = new Binding(nameof(SupplierInvoiceLineVm.Description)),
             IsReadOnly = true,
