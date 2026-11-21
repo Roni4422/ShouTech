@@ -745,6 +745,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 ?? throw new InvalidOperationException("Order was not found.");
             if (order.DocKind != orderKind)
                 throw new InvalidOperationException($"Document '{order.DocNo}' is a '{order.DocKind}', not an order ('{orderKind}').");
+            if (side == CommercialDocSide.Purchase && expectedCompanyId is null)
+                throw new InvalidOperationException("Supplier invoice posting requires an explicit company scope.");
             if (expectedCompanyId is Guid expectedCompany && order.CompanyId != expectedCompany)
                 throw new InvalidOperationException("The purchase order belongs to a different company.");
             if (order.Status != CommercialDocumentStatus.Posted)
