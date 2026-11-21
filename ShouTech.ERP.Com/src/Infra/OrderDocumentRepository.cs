@@ -834,41 +834,47 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            // Purchase receipts and supplier invoices consume the same received,
-            // unbilled quantities. Serialize purchase conversions on the order row
-            // so two concurrent supplier invoices cannot both observe and consume
-            // the same remaining receipt quantity. SQLite's immediate write
-            // transaction already serializes writers; PostgreSQL needs an explicit
-            // row lock before progress and receipt matches are read.
-            if (side == CommercialDocSide.Purchase)
-            {
-                if (expectedCompanyId is not Guid purchaseCompanyId || purchaseCompanyId == Guid.Empty)
-                    throw new InvalidOperationException("Supplier invoice posting requires an explicit company scope.");
+            // Both sales and purchase invoice conversions consume order quantities.
+            // Serialize on the source order before reading linked billing progress;
+            // otherwise two PostgreSQL transactions can both observe the same
+            // remaining quantity and create duplicate invoices. SQLite's write
+            // transaction serializes writers; PostgreSQL requires SELECT FOR UPDATE.
+            // Purchase invoices additionally require an explicit company scope.
+            if (side == CommercialDocSide.Purchase &&
+                (expectedCompanyId is not Guid purchaseCompanyId || purchaseCompanyId == Guid.Empty))
+                throw new InvalidOperationException("Supplier invoice posting requires an explicit company scope.");
 
-                await using var orderLock = CreateCommand(connection, transaction,
-                    _provider == "PostgreSQL"
-                        ? """
-                          SELECT doc_id
-                          FROM purchase_documents
-                          WHERE doc_id = @id AND company_id = @company
-                            AND doc_kind = @kind AND status = @posted
-                            AND CAST(is_deleted AS TEXT) IN ('0', 'false')
-                          FOR UPDATE
-                          """
-                        : """
-                          SELECT doc_id
-                          FROM purchase_documents
-                          WHERE doc_id = @id AND company_id = @company
-                            AND doc_kind = @kind AND status = @posted
-                            AND CAST(is_deleted AS TEXT) IN ('0', 'false')
-                          """);
+            var (orderTable, _) = Tables(side);
+            var expectedCompanyValue = expectedCompanyId?.ToString("D");
+            await using (var orderLock = CreateCommand(connection, transaction,
+                _provider == "PostgreSQL"
+                    ? $"""
+                      SELECT doc_id
+                      FROM {orderTable}
+                      WHERE doc_id = @id
+                        AND (@company IS NULL OR company_id = @company)
+                        AND doc_kind = @kind AND status = @posted
+                        AND CAST(is_deleted AS TEXT) IN ('0', 'false')
+                      FOR UPDATE
+                      """
+                    : $"""
+                      SELECT doc_id
+                      FROM {orderTable}
+                      WHERE doc_id = @id
+                        AND (@company IS NULL OR company_id = @company)
+                        AND doc_kind = @kind AND status = @posted
+                        AND CAST(is_deleted AS TEXT) IN ('0', 'false')
+                      """))
+            {
                 Add(orderLock, "@id", orderDocId);
-                Add(orderLock, "@company", purchaseCompanyId.ToString("D"));
-                Add(orderLock, "@kind", CommercialDocKinds.PurchaseOrder);
+                Add(orderLock, "@company", (object?)expectedCompanyValue ?? DBNull.Value);
+                Add(orderLock, "@kind", orderKind);
                 Add(orderLock, "@posted", CommercialDocumentStatus.Posted);
                 var lockedOrderId = await orderLock.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
                 if (lockedOrderId is null or DBNull)
-                    throw new InvalidOperationException("Only a posted purchase order in the selected company can be invoiced.");
+                    throw new InvalidOperationException(side == CommercialDocSide.Purchase
+                        ? "Only a posted purchase order in the selected company can be invoiced."
+                        : "Only a posted sales order can be invoiced.");
             }
 
             var order = await ReadSnapshotAsync(connection, transaction, side, orderDocId, null, null, null, cancellationToken).ConfigureAwait(false)
