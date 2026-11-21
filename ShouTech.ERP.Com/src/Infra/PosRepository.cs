@@ -615,7 +615,7 @@ public sealed class PosRepository : IPosRepository
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         PosOriginalBill? bill;
         await using (var command = CreateCommand(connection, null, $"""
-            SELECT doc_id, doc_no, doc_date, party_id, party_code, party_name, currency_code,
+            SELECT doc_id, doc_no, doc_date, party_id, party_code, party_name, currency_code, exchange_rate,
                    discount_amount, extra_amount, grand_total, paid_amount, pos_session_id
             FROM sales_documents
             WHERE company_id = @company AND doc_kind = 'POS' AND doc_no = @no
@@ -634,9 +634,10 @@ public sealed class PosRepository : IPosRepository
                 PartyId = reader.IsDBNull(3) ? null : Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture),
                 PartyCode = ReadString(reader, 4), PartyName = ReadString(reader, 5),
                 CurrencyCode = ReadString(reader, 6) ?? "SAR",
-                DiscountAmount = ReadDecimal(reader, 7), ExtraAmount = ReadDecimal(reader, 8),
-                GrandTotal = ReadDecimal(reader, 9), PaidAmount = ReadDecimal(reader, 10),
-                SessionId = ReadGuidOrNull(reader, 11)
+                ExchangeRate = ReadDecimal(reader, 7, 1m),
+                DiscountAmount = ReadDecimal(reader, 8), ExtraAmount = ReadDecimal(reader, 9),
+                GrandTotal = ReadDecimal(reader, 10), PaidAmount = ReadDecimal(reader, 11),
+                SessionId = ReadGuidOrNull(reader, 12)
             };
         }
         // Already-returned quantities: posted SRT documents whose
