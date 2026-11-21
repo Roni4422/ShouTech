@@ -3029,11 +3029,11 @@ public static class InvRepo
             throw new InvalidOperationException("A sales return can contain each original invoice line only once.");
 
         var originalLinesSubtotal = sourceLines.Values.Sum(source =>
-            decimal.Round(source.Qty * source.UnitPrice * (1m - source.DiscountPct / 100m),
-                4, MidpointRounding.AwayFromZero));
+            CalculateSalesReturnLineSubtotal(
+                source.Qty, source.UnitPrice, source.DiscountPct, source.TaxRate, source.TaxMode));
         var returnLinesSubtotal = returnDoc.Lines.Sum(line =>
-            decimal.Round(line.Qty * line.UnitPrice * (1m - line.DiscountPct / 100m),
-                4, MidpointRounding.AwayFromZero));
+            CalculateSalesReturnLineSubtotal(
+                line.Qty, line.UnitPrice, line.DiscountPct, line.TaxRate, line.TaxCalculationMode));
         var expectedDiscount = ShouTech.Domain.Entities.PosTenderMath.ProRata(
             originalDiscountAmount, returnLinesSubtotal, originalLinesSubtotal);
         var expectedExtra = ShouTech.Domain.Entities.PosTenderMath.ProRata(
@@ -3062,6 +3062,28 @@ public static class InvRepo
                 throw new InvalidOperationException(
                     $"Return quantity for original line {line.LineNo} exceeds the remaining returnable quantity on invoice '{originalDocNo}'.");
         }
+    }
+
+    private static decimal CalculateSalesReturnLineSubtotal(
+        decimal quantity,
+        decimal unitPrice,
+        decimal discountPct,
+        decimal taxRate,
+        string taxCalculationMode)
+    {
+        var gross = quantity * unitPrice;
+        var discounted = decimal.Round(
+            gross - gross * (discountPct / 100m),
+            4,
+            MidpointRounding.AwayFromZero);
+        if (taxRate <= 0m ||
+            !string.Equals(taxCalculationMode, "Inclusive", StringComparison.OrdinalIgnoreCase))
+            return discounted;
+
+        return decimal.Round(
+            discounted / (1m + taxRate / 100m),
+            4,
+            MidpointRounding.AwayFromZero);
     }
 
     public static bool IsDeliveryLinkedSalesInvoice(long invoiceDocId)
