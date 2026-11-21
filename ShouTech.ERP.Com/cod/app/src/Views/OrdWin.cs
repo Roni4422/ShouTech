@@ -621,148 +621,148 @@ public sealed class OrdWin : BaseWin, IWindowMode
         UpdateEditState();
         try
         {
-        long? receiptWarehouseId;
-        try
-        {
-            receiptWarehouseId = CardStore.ResolveWarehouseId(_txtWhs.Text.Trim());
-        }
-        catch (Exception ex)
-        {
-            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OrdWin.ReceiveWarehouse");
-            ShowWarningMessage(ex.Message);
-            return;
-        }
-
-        var rows = _lines
-            .Where(line => line.Qty - line.FulfilledQty > 0m)
-            .GroupBy(line => line.MaterialId)
-            .Select(group =>
+            long? receiptWarehouseId;
+            try
             {
-                var line = group.First();
-                return new ReceiptLineVm
+                receiptWarehouseId = CardStore.ResolveWarehouseId(_txtWhs.Text.Trim());
+            }
+            catch (Exception ex)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OrdWin.ReceiveWarehouse");
+                ShowWarningMessage(ex.Message);
+                return;
+            }
+    
+            var rows = _lines
+                .Where(line => line.Qty - line.FulfilledQty > 0m)
+                .GroupBy(line => line.MaterialId)
+                .Select(group =>
                 {
-                    MaterialId = line.MaterialId,
-                    ItemCode = line.ItemCode,
-                    Description = line.Description,
-                    Unit = line.Unit,
-                    Quantity = group.Sum(item => item.Qty - item.FulfilledQty),
-                    UnitPrice = line.UnitPrice,
-                    DiscountPct = line.DiscountPct,
-                    WarehouseId = receiptWarehouseId
-                };
-            })
-            .ToList();
-        if (rows.Count == 0)
-        {
-            ShowWarningMessage(T("OrderDoc.NoRemainingReceipt"));
-            return;
-        }
-        if (rows.Any(line => line.MaterialId is null))
-        {
-            ShowWarningMessage(T("OrderDoc.MaterialRequiredForReceipt"));
-            return;
-        }
-
-        var grid = new DataGrid
-        {
-            AutoGenerateColumns = false,
-            CanUserAddRows = false,
-            CanUserDeleteRows = false,
-            ItemsSource = rows,
-            HeadersVisibility = DataGridHeadersVisibility.Column,
-            SelectionUnit = DataGridSelectionUnit.CellOrRowHeader,
-            Margin = new Thickness(0, 0, 0, 10)
-        };
-        grid.Columns.Add(new DataGridTextColumn
-        {
-            Header = T("Invoice.Col.Code"),
-            Binding = new Binding(nameof(ReceiptLineVm.ItemCode)),
-            IsReadOnly = true,
-            Width = new DataGridLength(1, DataGridLengthUnitType.Star)
-        });
-        grid.Columns.Add(new DataGridTextColumn
-        {
-            Header = T("Invoice.Col.Description"),
-            Binding = new Binding(nameof(ReceiptLineVm.Description)),
-            IsReadOnly = true,
-            Width = new DataGridLength(2, DataGridLengthUnitType.Star)
-        });
-        grid.Columns.Add(new DataGridTextColumn
-        {
-            Header = T("Invoice.Col.Unit"),
-            Binding = new Binding(nameof(ReceiptLineVm.Unit)),
-            IsReadOnly = true,
-            Width = 75
-        });
-        grid.Columns.Add(new DataGridTextColumn
-        {
-            Header = T("Invoice.Col.Qty"),
-            Binding = new Binding(nameof(ReceiptLineVm.Quantity))
+                    var line = group.First();
+                    return new ReceiptLineVm
+                    {
+                        MaterialId = line.MaterialId,
+                        ItemCode = line.ItemCode,
+                        Description = line.Description,
+                        Unit = line.Unit,
+                        Quantity = group.Sum(item => item.Qty - item.FulfilledQty),
+                        UnitPrice = line.UnitPrice,
+                        DiscountPct = line.DiscountPct,
+                        WarehouseId = receiptWarehouseId
+                    };
+                })
+                .ToList();
+            if (rows.Count == 0)
             {
-                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
-                StringFormat = "0.###"
-            },
-            Width = 110
-        });
-
-        var dialog = new Window
-        {
-            Owner = this,
-            Title = T("OrderDoc.CreateReceipt"),
-            Width = 760,
-            Height = 420,
-            MinWidth = 560,
-            MinHeight = 300,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ResizeMode = ResizeMode.CanResize
-        };
-        var content = new DockPanel { Margin = new Thickness(12) };
-        var actions = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right
-        };
-        var confirm = new Button { Content = T("Buttons.Save"), MinWidth = 100, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        var cancel = new Button { Content = T("Buttons.Cancel"), MinWidth = 100, IsCancel = true };
-        confirm.Click += (_, _) =>
-        {
-            grid.CommitEdit(DataGridEditingUnit.Cell, true);
-            grid.CommitEdit(DataGridEditingUnit.Row, true);
-            dialog.DialogResult = true;
-        };
-        actions.Children.Add(confirm);
-        actions.Children.Add(cancel);
-        DockPanel.SetDock(actions, Dock.Bottom);
-        content.Children.Add(actions);
-        content.Children.Add(grid);
-        dialog.Content = content;
-        if (dialog.ShowDialog() != true) return;
-
-        var receiptLines = rows
-            .Where(line => line.Quantity > 0m)
-            .Select(line => new CommercialLineDraft(
-                line.MaterialId, line.ItemCode, line.Description, line.Unit,
-                line.Quantity, line.UnitPrice, line.DiscountPct, 0m, line.WarehouseId))
-            .ToList();
-        if (receiptLines.Count == 0)
-        {
-            ShowWarningMessage(T("OrderDoc.NoRemainingReceipt"));
-            return;
-        }
-
-        try
-        {
-            var (_, receiptDocNo) = await AppHost.Orders.CreatePurchaseReceiptAsync(
-                _companyId, _docId.Value, DateOnly.FromDateTime(DateTime.Today), receiptLines, CurrentUserId);
-            _lblStatus.Text = $"{T("OrderDoc.ReceiptCreated")}: {receiptDocNo}";
-            await RefreshProgressAsync(_docId.Value);
-            UpdateEditState();
-        }
-        catch (Exception ex)
-        {
-            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OrdWin.Receive");
-            ShowWarningMessage(ex.Message);
-        }
+                ShowWarningMessage(T("OrderDoc.NoRemainingReceipt"));
+                return;
+            }
+            if (rows.Any(line => line.MaterialId is null))
+            {
+                ShowWarningMessage(T("OrderDoc.MaterialRequiredForReceipt"));
+                return;
+            }
+    
+            var grid = new DataGrid
+            {
+                AutoGenerateColumns = false,
+                CanUserAddRows = false,
+                CanUserDeleteRows = false,
+                ItemsSource = rows,
+                HeadersVisibility = DataGridHeadersVisibility.Column,
+                SelectionUnit = DataGridSelectionUnit.CellOrRowHeader,
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+            grid.Columns.Add(new DataGridTextColumn
+            {
+                Header = T("Invoice.Col.Code"),
+                Binding = new Binding(nameof(ReceiptLineVm.ItemCode)),
+                IsReadOnly = true,
+                Width = new DataGridLength(1, DataGridLengthUnitType.Star)
+            });
+            grid.Columns.Add(new DataGridTextColumn
+            {
+                Header = T("Invoice.Col.Description"),
+                Binding = new Binding(nameof(ReceiptLineVm.Description)),
+                IsReadOnly = true,
+                Width = new DataGridLength(2, DataGridLengthUnitType.Star)
+            });
+            grid.Columns.Add(new DataGridTextColumn
+            {
+                Header = T("Invoice.Col.Unit"),
+                Binding = new Binding(nameof(ReceiptLineVm.Unit)),
+                IsReadOnly = true,
+                Width = 75
+            });
+            grid.Columns.Add(new DataGridTextColumn
+            {
+                Header = T("Invoice.Col.Qty"),
+                Binding = new Binding(nameof(ReceiptLineVm.Quantity))
+                {
+                    UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+                    StringFormat = "0.###"
+                },
+                Width = 110
+            });
+    
+            var dialog = new Window
+            {
+                Owner = this,
+                Title = T("OrderDoc.CreateReceipt"),
+                Width = 760,
+                Height = 420,
+                MinWidth = 560,
+                MinHeight = 300,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                ResizeMode = ResizeMode.CanResize
+            };
+            var content = new DockPanel { Margin = new Thickness(12) };
+            var actions = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            var confirm = new Button { Content = T("Buttons.Save"), MinWidth = 100, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+            var cancel = new Button { Content = T("Buttons.Cancel"), MinWidth = 100, IsCancel = true };
+            confirm.Click += (_, _) =>
+            {
+                grid.CommitEdit(DataGridEditingUnit.Cell, true);
+                grid.CommitEdit(DataGridEditingUnit.Row, true);
+                dialog.DialogResult = true;
+            };
+            actions.Children.Add(confirm);
+            actions.Children.Add(cancel);
+            DockPanel.SetDock(actions, Dock.Bottom);
+            content.Children.Add(actions);
+            content.Children.Add(grid);
+            dialog.Content = content;
+            if (dialog.ShowDialog() != true) return;
+    
+            var receiptLines = rows
+                .Where(line => line.Quantity > 0m)
+                .Select(line => new CommercialLineDraft(
+                    line.MaterialId, line.ItemCode, line.Description, line.Unit,
+                    line.Quantity, line.UnitPrice, line.DiscountPct, 0m, line.WarehouseId))
+                .ToList();
+            if (receiptLines.Count == 0)
+            {
+                ShowWarningMessage(T("OrderDoc.NoRemainingReceipt"));
+                return;
+            }
+    
+            try
+            {
+                var (_, receiptDocNo) = await AppHost.Orders.CreatePurchaseReceiptAsync(
+                    _companyId, _docId.Value, DateOnly.FromDateTime(DateTime.Today), receiptLines, CurrentUserId);
+                _lblStatus.Text = $"{T("OrderDoc.ReceiptCreated")}: {receiptDocNo}";
+                await RefreshProgressAsync(_docId.Value);
+                UpdateEditState();
+            }
+            catch (Exception ex)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OrdWin.Receive");
+                ShowWarningMessage(ex.Message);
+            }
         }
         finally
         {
