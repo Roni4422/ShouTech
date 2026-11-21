@@ -18,6 +18,8 @@ public static class GlAccounts
     public const string Inventory = "1203";
     public const string InputVat = "1205";
     public const string Payable = "2201";
+    // GRNI accrual is carried in the existing accrued-liabilities control (2203).
+    public const string GoodsReceivedNotInvoiced = "2203";
     public const string OutputVat = "2205";
     public const string FixedAssets = "1102";
     public const string AccumulatedDepreciation = "1190";
