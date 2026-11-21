@@ -373,9 +373,10 @@ public sealed class SalesDeliveryWin : BaseWin
     private void UpdateState()
     {
         _btnLoad.IsEnabled = !_busy;
-        _btnCreate.IsEnabled = !_busy && _orderId is not null && _lines.Any(line => line.RemainingQty > 0m);
+        var canStartDelivery = _deliveryId is null || _deliveryStatus == CommercialDocumentStatus.Posted;
+        _btnCreate.IsEnabled = !_busy && _orderId is not null && canStartDelivery && _lines.Any(line => line.RemainingQty > 0m);
         _btnPost.IsEnabled = !_busy && _deliveryId is not null && _deliveryStatus == CommercialDocumentStatus.Draft;
-        _grid.IsEnabled = !_busy && _orderId is not null && _deliveryStatus != CommercialDocumentStatus.Posted;
+        _grid.IsEnabled = !_busy && _orderId is not null && canStartDelivery;
     }
 
     private sealed class DeliveryLineVm : INotifyPropertyChanged
@@ -387,8 +388,26 @@ public sealed class SalesDeliveryWin : BaseWin
         public string Description { get; init; } = string.Empty;
         public string Unit { get; init; } = string.Empty;
         public decimal OrderedQty { get; init; }
-        public decimal DeliveredQty { get; set; }
-        public decimal RemainingQty { get; set; }
+        private decimal _deliveredQty;
+        private decimal _remainingQty;
+        public decimal DeliveredQty
+        {
+            get => _deliveredQty;
+            set
+            {
+                _deliveredQty = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DeliveredQty)));
+            }
+        }
+        public decimal RemainingQty
+        {
+            get => _remainingQty;
+            set
+            {
+                _remainingQty = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RemainingQty)));
+            }
+        }
         public decimal QtyToDeliver
         {
             get => _qtyToDeliver;
