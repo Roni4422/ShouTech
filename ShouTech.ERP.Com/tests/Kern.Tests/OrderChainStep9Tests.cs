@@ -377,6 +377,34 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task SupplierInvoice_TaxIsRejectedWhenCompanyTaxWasNotOptedIn()
+        {
+            var (service, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-9106",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 1m, 100m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+                await service.CreatePurchaseReceiptAsync(companyId, orderId, new DateOnly(2026, 11, 13),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 1m, 100m) }, Actor);
+
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    service.CreatePurchaseInvoiceAsync(companyId, orderId, new DateOnly(2026, 11, 14),
+                        new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 1m, 100m, 0m, 15m) }, Actor));
+
+                Assert.Equal(0m, Scalar(connectionString,
+                    $"SELECT COUNT(*) FROM purchase_documents WHERE doc_kind = 'PUR' AND company_id = '{companyId:D}';"));
+                Assert.Equal(100m, BalanceValue(connectionString, 42));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task PurchaseInvoice_CannotBeCreatedBeforeAnyGoodsReceipt()
         {
             var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
