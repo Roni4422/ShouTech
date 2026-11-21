@@ -159,9 +159,11 @@ namespace Kern.Tests
                 var secondDelivery = await repository.FindSalesByIdAsync(secondDeliveryId);
                 Assert.NotNull(secondDelivery);
                 Assert.Equal(CommercialDocumentStatus.Draft, secondDelivery!.Status);
-                Assert.Equal(1, (int)Scalar(connectionString,
+                await using var verify = new SqliteConnection(connectionString);
+                await verify.OpenAsync();
+                Assert.Equal(1, (int)Scalar(verify,
                     "SELECT COUNT(*) FROM material_stock_movements WHERE document_no IN ('DLV-OVER-1', 'DLV-OVER-2')"));
-                Assert.Equal(993m, Scalar(connectionString,
+                Assert.Equal(993m, Scalar(verify,
                     "SELECT available_qty FROM material_stock_balances WHERE material_id = 42 AND warehouse_id = 1"));
             }
             finally
