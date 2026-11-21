@@ -477,22 +477,46 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
         var fulfillKind = side == CommercialDocSide.Sales ? CommercialDocKinds.DeliveryNote : CommercialDocKinds.PurchaseReceipt;
         var billedKind = side == CommercialDocSide.Sales ? CommercialDocKinds.SalesInvoice : CommercialDocKinds.PurchaseInvoice;
-        var fulfilled = await LinkedQuantitiesAsync(connection, null, side, order.CompanyId, docId, fulfillKind, cancellationToken).ConfigureAwait(false);
-        var billed = await LinkedQuantitiesAsync(connection, null, side, order.CompanyId, docId, billedKind, cancellationToken).ConfigureAwait(false);
+        var lineFulfilledQuantities = new Dictionary<int, decimal>();
+        var lineBilledQuantities = new Dictionary<int, decimal>();
+        if (side == CommercialDocSide.Purchase)
+        {
+            var fulfilledByLine = await LinkedQuantitiesBySourceLineAsync(
+                connection, null, side, order.CompanyId, docId, fulfillKind, order.Lines, cancellationToken).ConfigureAwait(false);
+            var billedByLine = await LinkedQuantitiesBySourceLineAsync(
+                connection, null, side, order.CompanyId, docId, billedKind, order.Lines, cancellationToken).ConfigureAwait(false);
+            foreach (var line in order.Lines)
+            {
+                lineFulfilledQuantities[line.LineNo] = Math.Min(line.Qty, fulfilledByLine.GetValueOrDefault(line.LineNo));
+                lineBilledQuantities[line.LineNo] = Math.Min(line.Qty, billedByLine.GetValueOrDefault(line.LineNo));
+            }
+        }
+        else
+        {
+            var fulfilled = await LinkedQuantitiesAsync(connection, null, side, order.CompanyId, docId, fulfillKind, cancellationToken).ConfigureAwait(false);
+            var billed = await LinkedQuantitiesAsync(connection, null, side, order.CompanyId, docId, billedKind, cancellationToken).ConfigureAwait(false);
+            var remainingFulfilled = fulfilled.ToDictionary(pair => pair.Key, pair => pair.Value);
+            var remainingBilled = billed.ToDictionary(pair => pair.Key, pair => pair.Value);
+            foreach (var line in order.Lines)
+            {
+                var key = line.MaterialId ?? -line.LineNo;
+                var fulfilledAvailable = remainingFulfilled.GetValueOrDefault(key);
+                var billedAvailable = remainingBilled.GetValueOrDefault(key);
+                var lineFulfilled = Math.Min(line.Qty, fulfilledAvailable);
+                var lineBilled = Math.Min(line.Qty, billedAvailable);
+                remainingFulfilled[key] = Math.Max(0m, fulfilledAvailable - lineFulfilled);
+                remainingBilled[key] = Math.Max(0m, billedAvailable - lineBilled);
+                lineFulfilledQuantities[line.LineNo] = lineFulfilled;
+                lineBilledQuantities[line.LineNo] = lineBilled;
+            }
+        }
 
-        var remainingFulfilled = fulfilled.ToDictionary(pair => pair.Key, pair => pair.Value);
-        var remainingBilled = billed.ToDictionary(pair => pair.Key, pair => pair.Value);
         var lines = new List<OrderProgressLine>();
         decimal totalOrdered = 0m, totalFulfilled = 0m, totalBilled = 0m;
         foreach (var line in order.Lines)
         {
-            var key = line.MaterialId ?? -line.LineNo;
-            var fulfilledAvailable = remainingFulfilled.GetValueOrDefault(key);
-            var billedAvailable = remainingBilled.GetValueOrDefault(key);
-            var lineFulfilled = Math.Min(line.Qty, fulfilledAvailable);
-            var lineBilled = Math.Min(line.Qty, billedAvailable);
-            remainingFulfilled[key] = Math.Max(0m, fulfilledAvailable - lineFulfilled);
-            remainingBilled[key] = Math.Max(0m, billedAvailable - lineBilled);
+            var lineFulfilled = lineFulfilledQuantities.GetValueOrDefault(line.LineNo);
+            var lineBilled = lineBilledQuantities.GetValueOrDefault(line.LineNo);
             lines.Add(new OrderProgressLine(line.MaterialId, line.MaterialCode, line.Description, line.Qty, lineFulfilled, lineBilled));
             totalOrdered += line.Qty;
             totalFulfilled += lineFulfilled;
