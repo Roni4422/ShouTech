@@ -308,11 +308,12 @@ namespace Kern.Tests
 
                 var (invoiceId, invoiceNo) = await service.CreatePurchaseInvoiceAsync(
                     companyId, orderId, new DateOnly(2026, 11, 10),
-                    new[] { new CommercialLineDraft(43, "MAT-43", "Consulting service", "HOUR", 2m, 50m) }, Actor);
+                    new[] { new CommercialLineDraft(43, "MAT-43", "Consulting service", "HOUR", 2m, 45m) }, Actor);
                 Assert.Equal(0m, MovementCost(connectionString, invoiceNo, 43));
                 var invoiceGl = GlByAccount(connectionString, "PUR", invoiceId);
                 Assert.Equal(100m, invoiceGl["2203"].Debit);
-                Assert.Equal(100m, invoiceGl["2201"].Credit);
+                Assert.Equal(10m, invoiceGl["402"].Credit);
+                Assert.Equal(90m, invoiceGl["2201"].Credit);
                 Assert.Equal(50m, BalanceQty(connectionString, 43));
             }
             finally
