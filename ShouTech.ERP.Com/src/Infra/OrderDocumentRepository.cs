@@ -962,7 +962,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                     }
                     else
                     {
-                        if (!sourceByMaterial.TryGetValue(materialId, out candidateSources!))
+                        if (!sourceByMaterial.TryGetValue(materialId, out var matchingSources))
                             throw new InvalidOperationException($"Material '{materialId}' is not part of purchase order '{order.DocNo}'.");
                         // When a purchase order contains the same material on
                         // multiple lines, an invoice line without an explicit
@@ -970,7 +970,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                         // those source lines in line-number order. This preserves
                         // per-line receipt/GRNI matching while keeping ordinary
                         // supplier invoice entry concise.
-                        Array.Sort(candidateSources, (left, right) => left.LineNo.CompareTo(right.LineNo));
+                        candidateSources = matchingSources.OrderBy(source => source.LineNo).ToArray();
                     }
 
                     var quantityToAllocate = supplied.Qty;
