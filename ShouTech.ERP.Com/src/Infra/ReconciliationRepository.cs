@@ -68,14 +68,12 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             FROM {table} d
             WHERE CAST(d.company_id AS TEXT) IN (@company, @documentCompany)
               AND d.{NotDeleted} AND d.status = 'Posted' AND d.party_id IS NOT NULL
-              AND d.doc_kind = @invoiceKind
               AND {kindFilter} AND d.grand_total - d.paid_amount > 0.005
             ORDER BY d.doc_date, d.doc_id
             """);
         Add(command, "@company", companyId.Trim());
         Add(command, "@documentCompany", documentCompanyKey);
         Add(command, "@docTable", PartyKindToDocTable(partyKind));
-        Add(command, "@invoiceKind", PartyKindToInvoiceKind(partyKind));
         var result = new List<OpenDocumentRow>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -153,6 +151,7 @@ public sealed class ReconciliationRepository : IReconciliationRepository
         if (amount <= 0)
             throw new InvalidOperationException("Allocation amount must be greater than zero.");
         var table = DocumentTable(docTable);
+        var invoiceKindFilter = docTable == "SALES" ? "doc_kind IN ('SAL', 'POS')" : "doc_kind = 'PUR'";
 
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
@@ -214,13 +213,12 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             string docStatus;
             string documentCurrency;
             await using (var doc = CreateCommand(connection, transaction,
-                $"SELECT CAST(company_id AS TEXT), doc_no, party_id, grand_total, paid_amount, status, COALESCE(currency_code, 'SAR') FROM {table} WHERE CAST(company_id AS TEXT) IN (@company, @documentCompany) AND doc_id = @doc AND doc_kind = @invoiceKind AND {NotDeleted}"
+                $"SELECT CAST(company_id AS TEXT), doc_no, party_id, grand_total, paid_amount, status, COALESCE(currency_code, 'SAR') FROM {table} WHERE CAST(company_id AS TEXT) IN (@company, @documentCompany) AND doc_id = @doc AND {invoiceKindFilter} AND {NotDeleted}"
                 + (_provider == "PostgreSQL" ? " FOR UPDATE" : "")))
             {
                 Add(doc, "@company", companyId.Trim());
                 Add(doc, "@documentCompany", documentCompanyKey);
                 Add(doc, "@doc", docId);
-                Add(doc, "@invoiceKind", PartyKindToInvoiceKind(partyKind));
                 await using var reader = await doc.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                     throw new InvalidOperationException("The document was not found for this company.");
@@ -301,13 +299,6 @@ public sealed class ReconciliationRepository : IReconciliationRepository
         return Convert.ToString(value, CultureInfo.InvariantCulture) ?? throw new InvalidOperationException(
             $"Company '{companyId.Trim()}' has an invalid operational document key.");
     }
-
-    private static string PartyKindToInvoiceKind(string partyKind) => partyKind switch
-    {
-        "C" => "SAL",
-        "S" => "PUR",
-        _ => throw new ArgumentException("Party kind must be 'C' (customer) or 'S' (supplier).", nameof(partyKind))
-    };
 
     private static string PartyKindToDocTable(string partyKind) => partyKind switch
     {
