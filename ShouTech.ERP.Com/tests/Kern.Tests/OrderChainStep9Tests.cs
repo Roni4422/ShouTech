@@ -95,7 +95,7 @@ namespace Kern.Tests
         }
 
         [Fact]
-        public async Task PurchaseOrder_Convert_ReceivesStockAtLineCost()
+        public async Task PurchaseOrder_ReceiptThenInvoice_AccruesAndClearsGrniWithoutDoubleReceiving()
         {
             var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
             try
@@ -106,21 +106,93 @@ namespace Kern.Tests
                         partyId: 9, partyCode: "SUP-1"), Actor);
                 await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
 
-                var (invoiceId, invoiceDocNo) = await service.ConvertToInvoiceAsync(
-                    CommercialDocSide.Purchase, orderId, new DateOnly(2026, 11, 2), Actor);
+                // First receipt is partial. It increases inventory and credits GRNI,
+                // but it must not create a supplier payable before the bill arrives.
+                var (firstReceiptId, firstReceiptNo) = await service.CreatePurchaseReceiptAsync(
+                    orderId, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 12m) }, Actor);
+                var firstReceipt = await orders.FindByIdAsync(CommercialDocSide.Purchase, firstReceiptId);
+                Assert.Equal(CommercialDocKinds.PurchaseReceipt, firstReceipt!.DocKind);
+                Assert.Equal(CommercialDocumentStatus.Posted, firstReceipt.Status);
+                Assert.Equal(36m, firstReceipt.GrandTotal);
+                Assert.Equal(103m, BalanceQty(connectionString, 42));
+                Assert.Equal(1036m, BalanceValue(connectionString, 42));
+                Assert.Equal(36m, MovementCost(connectionString, firstReceiptNo, 42));
 
-                var invoice = await orders.FindByIdAsync(CommercialDocSide.Purchase, invoiceId);
-                Assert.Equal(60m, invoice!.GrandTotal);
+                var receiptGl = GlByAccount(connectionString, "RCV", firstReceiptId);
+                Assert.Equal(36m, receiptGl["1203"].Debit);
+                Assert.Equal(36m, receiptGl["2203"].Credit);
+                Assert.Equal(0m, Scalar(connectionString,
+                    $"SELECT COUNT(*) FROM party_ledger WHERE doc_kind = 'RCV' AND doc_id = {firstReceiptId};"));
 
-                // Received at the line cost: 100 @ 10 + 5 @ 12 = 1,060.
+                var firstProgress = await service.GetProgressAsync(CommercialDocSide.Purchase, orderId);
+                Assert.Equal(60m, firstProgress.PerFulfilled);
+                Assert.Equal(0m, firstProgress.PerBilled);
+
+                // Receive the balance in a second receipt. Both receipts are independently linked to the PO.
+                var (secondReceiptId, secondReceiptNo) = await service.CreatePurchaseReceiptAsync(
+                    orderId, new DateOnly(2026, 11, 3),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 12m) }, Actor);
                 Assert.Equal(105m, BalanceQty(connectionString, 42));
                 Assert.Equal(1060m, BalanceValue(connectionString, 42));
-                Assert.Equal(60m, MovementCost(connectionString, invoiceDocNo, 42));
+                Assert.Equal(24m, MovementCost(connectionString, secondReceiptNo, 42));
 
-                var gl = GlByAccount(connectionString, "PUR", invoiceId);
-                Assert.Equal(60m, gl["402"].Debit);
-                Assert.Equal(60m, gl["2201"].Credit);
-                Assert.False(gl.ContainsKey("401")); // no COGS on a purchase
+                // Supplier invoice is matched to received quantity, clears GRNI,
+                // and does not run a second stock receipt.
+                var (invoiceId, invoiceDocNo) = await service.ConvertToInvoiceAsync(
+                    CommercialDocSide.Purchase, orderId, new DateOnly(2026, 11, 4), Actor);
+                var invoice = await orders.FindByIdAsync(CommercialDocSide.Purchase, invoiceId);
+                Assert.Equal(CommercialDocKinds.PurchaseInvoice, invoice!.DocKind);
+                Assert.Equal(5m, invoice.Lines[0].Qty);
+                Assert.Equal(60m, invoice.GrandTotal);
+                Assert.Equal(105m, BalanceQty(connectionString, 42));
+                Assert.Equal(1060m, BalanceValue(connectionString, 42));
+                Assert.Equal(0m, MovementCost(connectionString, invoiceDocNo, 42));
+
+                var invoiceGl = GlByAccount(connectionString, "PUR", invoiceId);
+                Assert.Equal(60m, invoiceGl["2203"].Debit);
+                Assert.Equal(60m, invoiceGl["2201"].Credit);
+                Assert.False(invoiceGl.ContainsKey("402"));
+                Assert.Equal(1m, Scalar(connectionString,
+                    $"SELECT COUNT(*) FROM party_ledger WHERE doc_kind = 'PUR' AND doc_id = {invoiceId} AND credit = 60;"));
+
+                var progress = await service.GetProgressAsync(CommercialDocSide.Purchase, orderId);
+                Assert.Equal(100m, progress.PerFulfilled);
+                Assert.Equal(100m, progress.PerBilled);
+
+                // A third receipt is an over-receipt and must fail without changing stock.
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    service.CreatePurchaseReceiptAsync(orderId, new DateOnly(2026, 11, 5),
+                        new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 1m, 12m) }, Actor));
+                Assert.Equal(105m, BalanceQty(connectionString, 42));
+                Assert.NotEqual(firstReceiptId, secondReceiptId);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task PurchaseInvoice_CannotBeCreatedBeforeAnyGoodsReceipt()
+        {
+            var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-9102",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 15m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    service.ConvertToInvoiceAsync(CommercialDocSide.Purchase, orderId, new DateOnly(2026, 11, 4), Actor));
+
+                var invoices = await service.SearchAsync(CommercialDocSide.Purchase, companyId,
+                    CommercialDocKinds.PurchaseInvoice, null, null, null, null, 50);
+                Assert.Empty(invoices);
+                Assert.Equal(100m, BalanceQty(connectionString, 42));
+                Assert.Equal(1000m, BalanceValue(connectionString, 42));
             }
             finally
             {
@@ -404,7 +476,7 @@ namespace Kern.Tests
             foreach (var (code, name, type) in new[]
             {
                 ("1201", "Trade Accounts Receivable", "ASSET"), ("1203", "Merchandise Inventory", "ASSET"),
-                ("2201", "Trade Accounts Payable", "LIABILITY"), ("301", "Goods Sales Revenue", "REVENUE"),
+                ("2201", "Trade Accounts Payable", "LIABILITY"), ("2203", "Accrued Liabilities / GRNI", "LIABILITY"), ("301", "Goods Sales Revenue", "REVENUE"),
                 ("401", "Cost of Goods Sold", "EXPENSE"), ("402", "Merchandise Purchases", "EXPENSE"),
                 ("131", "Cash on Hand", "ASSET")
             })
