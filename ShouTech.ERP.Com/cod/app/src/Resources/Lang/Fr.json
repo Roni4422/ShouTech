@@ -3632,6 +3632,9 @@
     "ExceedsRemaining": "La quantité à livrer ne peut pas dépasser la quantité restante de la commande.",
     "DraftCreated": "Brouillon de livraison créé",
     "SaveFirst": "Créez d'abord un brouillon de livraison.",
-    "Posted": "Bon de livraison validé"
+    "Posted": "Bon de livraison validé",
+    "CreateInvoice": "Créer une facture client",
+    "PostDeliveryFirst": "Validez le bon de livraison avant de créer sa facture.",
+    "InvoiceCreated": "Brouillon de facture client créé"
   }
 }
