@@ -1448,15 +1448,20 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
     {
         var (_, lineTable) = Tables(side);
         var lineNumber = 0;
+        var usedLineNumbers = new HashSet<int>();
         for (var index = 0; index < lines.Count; index++)
         {
             var line = lines[index];
             var totals = computed[index];
+            lineNumber++;
+            var persistedLineNumber = line.SourceLineNo ?? lineNumber;
+            if (persistedLineNumber <= 0 || !usedLineNumbers.Add(persistedLineNumber))
+                throw new InvalidOperationException("Document line numbers must be positive and unique within a document.");
             await using var insertLine = CreateCommand(connection, transaction,
                 $"INSERT INTO {lineTable} (doc_id, line_no, material_id, material_code, description, unit, qty, unit_price, discount_pct, tax_rate, line_subtotal, line_tax, line_total, warehouse_id) " +
                 "VALUES (@doc, @line, @material, @materialCode, @description, @unit, @qty, @price, @discount, @taxRate, @subtotal, @tax, @total, @warehouse)");
             Add(insertLine, "@doc", docId);
-            Add(insertLine, "@line", ++lineNumber);
+            Add(insertLine, "@line", persistedLineNumber);
             Add(insertLine, "@material", (object?)line.MaterialId ?? DBNull.Value);
             Add(insertLine, "@materialCode", (object?)line.MaterialCode ?? DBNull.Value);
             Add(insertLine, "@description", string.IsNullOrWhiteSpace(line.Description) ? line.MaterialCode ?? "Item" : line.Description.Trim());
