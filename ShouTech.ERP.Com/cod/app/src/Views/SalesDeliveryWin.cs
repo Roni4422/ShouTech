@@ -10,6 +10,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
 using ShouTech.App.Services;
+using ShouTech.App.Reporting.Invoices;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
 
@@ -28,6 +29,7 @@ public sealed class SalesDeliveryWin : BaseWin
     private readonly Button _btnLoad = new();
     private readonly Button _btnCreate = new();
     private readonly Button _btnPost = new();
+    private readonly Button _btnInvoice = new();
     private readonly DataGrid _grid = new();
     private readonly TextBlock _lblStatus = new();
     private readonly ObservableCollection<DeliveryLineVm> _lines = new();
@@ -58,6 +60,7 @@ public sealed class SalesDeliveryWin : BaseWin
         _btnLoad.Content = T("OrderDoc.Load");
         _btnCreate.Content = T("SalesDelivery.CreateDraft");
         _btnPost.Content = T("OrderDoc.Post");
+        _btnInvoice.Content = T("SalesDelivery.CreateInvoice");
 
         foreach (var (label, key) in _headerLabels)
             label.Text = T(key);
@@ -116,14 +119,17 @@ public sealed class SalesDeliveryWin : BaseWin
         StyleButton(_btnLoad, "OrderDoc.Load");
         StyleButton(_btnCreate, "SalesDelivery.CreateDraft");
         StyleButton(_btnPost, "OrderDoc.Post");
+        StyleButton(_btnInvoice, "SalesDelivery.CreateInvoice");
         _btnNew.Click += (_, _) => ResetWindow();
         _btnLoad.Click += async (_, _) => await LoadOrderAsync();
         _btnCreate.Click += async (_, _) => await CreateDeliveryAsync();
         _btnPost.Click += async (_, _) => await PostDeliveryAsync();
+        _btnInvoice.Click += async (_, _) => await CreateInvoiceAsync();
         actions.Children.Add(_btnNew);
         actions.Children.Add(_btnLoad);
         actions.Children.Add(_btnCreate);
         actions.Children.Add(_btnPost);
+        actions.Children.Add(_btnInvoice);
 
         var actionBorder = new Border
         {
@@ -398,9 +404,47 @@ public sealed class SalesDeliveryWin : BaseWin
         }
     }
 
+    private async Task CreateInvoiceAsync()
+    {
+        if (!AppHost.Permissions.Has(PermCat.Sales.OrderConvert))
+        {
+            ShowWarningMessage(T("OrderDoc.PermissionDenied"));
+            return;
+        }
+        if (_busy || _deliveryId is null || _deliveryStatus != CommercialDocumentStatus.Posted || AppHost.Orders is null)
+        {
+            ShowWarningMessage(T("SalesDelivery.PostDeliveryFirst"));
+            return;
+        }
+
+        try
+        {
+            _busy = true;
+            UpdateState();
+            var result = await AppHost.Orders.CreateSalesInvoiceFromDeliveryAsync(
+                _deliveryId.Value,
+                DateOnly.FromDateTime(DateTime.Today),
+                CurrentUserId);
+            _lblStatus.Text = $"{T("SalesDelivery.InvoiceCreated")}: {result.InvoiceDocNo}";
+            var invoiceWindow = new InvoiceWin(result.InvoiceId, InvDocKind.SalesInvoice) { Owner = this };
+            invoiceWindow.Show();
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "SalesDeliveryWin.CreateInvoice");
+            ShowWarningMessage(ex.Message);
+        }
+        finally
+        {
+            _busy = false;
+            UpdateState();
+        }
+    }
+
     private void UpdateState()
     {
         _btnLoad.IsEnabled = !_busy;
+        _btnInvoice.IsEnabled = !_busy && _deliveryId is not null && _deliveryStatus == CommercialDocumentStatus.Posted;
         var canStartDelivery = _deliveryId is null || _deliveryStatus == CommercialDocumentStatus.Posted;
         _btnCreate.IsEnabled = !_busy && _orderId is not null && canStartDelivery && _lines.Any(line => line.RemainingQty > 0m);
         _btnPost.IsEnabled = !_busy && _deliveryId is not null && _deliveryStatus == CommercialDocumentStatus.Draft;
