@@ -31,8 +31,9 @@ not a claim that every procurement feature in the ERP is complete.
 
 ### 3. Supplier invoice and three-way matching
 
-- The supplier invoice UI defaults to received-but-not-yet-invoiced quantities.
-- Users can enter actual supplier unit prices, discounts, and tax rates.
+- The supplier invoice UI defaults to received-but-not-yet-invoiced quantities and allocates duplicate material lines in source-line order.
+- Users can enter actual supplier unit prices and discounts. Tax is sourced from company tax rules and the tax-rate column is hidden when tax is disabled.
+- The repository rejects taxable supplier invoices unless the company explicitly enabled its tax system; selecting a country alone does not activate tax.
 - A supplier invoice cannot be posted before a receipt or for quantities beyond posted, unbilled receipts.
 - Each invoice line is allocated FIFO against receipt lines. The allocation is persisted in
   `purchase_receipt_invoice_matches`, including receipt/invoice line IDs, quantities,
