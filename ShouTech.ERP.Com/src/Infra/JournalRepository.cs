@@ -603,6 +603,17 @@ public sealed class JournalRepository : IJournalRepository
 
                 if (linkCompany is not null && linkKind is not null && linkAmount > 0)
                 {
+                    await using (var companyCheck = CreateCommand(connection, transaction,
+                        "SELECT company_id FROM companies WHERE company_code = @code"))
+                    {
+                        Add(companyCheck, "@code", linkCompany.Trim());
+                        var linkedCompany = await companyCheck.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                        if (linkedCompany is null or DBNull
+                            || !Guid.TryParse(Convert.ToString(linkedCompany, CultureInfo.InvariantCulture), out var linkedCompanyId)
+                            || linkedCompanyId != companyId)
+                            throw new InvalidOperationException("The voucher party link belongs to a different company.");
+                    }
+
                     if (!((linkDocKind == "RCV" && linkKind == "C")
                         || (linkDocKind == "PAY" && linkKind == "S")))
                         throw new InvalidOperationException(
