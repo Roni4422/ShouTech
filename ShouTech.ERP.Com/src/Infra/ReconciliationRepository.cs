@@ -202,23 +202,26 @@ public sealed class ReconciliationRepository : IReconciliationRepository
 
             // 2) Re-read the document inside the transaction.
             string docNo;
+            string actualDocumentCompanyKey;
             long docParty;
             decimal openAmount;
             decimal docTotal, docPaid;
             string docStatus;
             await using (var doc = CreateCommand(connection, transaction,
-                $"SELECT doc_no, party_id, grand_total, paid_amount, status FROM {table} WHERE CAST(company_id AS TEXT) = @documentCompany AND doc_id = @doc AND {NotDeleted}"))
+                $"SELECT CAST(company_id AS TEXT), doc_no, party_id, grand_total, paid_amount, status FROM {table} WHERE CAST(company_id AS TEXT) IN (@company, @documentCompany) AND doc_id = @doc AND {NotDeleted}"))
             {
+                Add(doc, "@company", companyId.Trim());
                 Add(doc, "@documentCompany", documentCompanyKey);
                 Add(doc, "@doc", docId);
                 await using var reader = await doc.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                     throw new InvalidOperationException("The document was not found for this company.");
-                docNo = ReadString(reader, 0) ?? string.Empty;
-                docParty = reader.IsDBNull(1) ? -1 : Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture);
-                docTotal = ReadDecimal(reader, 2);
-                docPaid = ReadDecimal(reader, 3);
-                docStatus = ReadString(reader, 4) ?? string.Empty;
+                actualDocumentCompanyKey = ReadString(reader, 0) ?? string.Empty;
+                docNo = ReadString(reader, 1) ?? string.Empty;
+                docParty = reader.IsDBNull(2) ? -1 : Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture);
+                docTotal = ReadDecimal(reader, 3);
+                docPaid = ReadDecimal(reader, 4);
+                docStatus = ReadString(reader, 5) ?? string.Empty;
             }
             if (!string.Equals(docStatus, "Posted", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Only posted documents can be reconciled.");
@@ -237,7 +240,7 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             {
                 Add(insert, "@id", FormatGuid(allocationId));
                 Add(insert, "@company", companyId.Trim());
-                Add(insert, "@documentCompany", documentCompanyKey);
+                Add(insert, "@documentCompany", actualDocumentCompanyKey);
                 Add(insert, "@kind", partyKind);
                 Add(insert, "@party", paymentParty);
                 Add(insert, "@payment", paymentLedgerId);
@@ -254,7 +257,7 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                 $"UPDATE {table} SET paid_amount = paid_amount + @amount WHERE CAST(company_id AS TEXT) = @documentCompany AND doc_id = @doc AND {NotDeleted}"))
             {
                 Add(settle, "@amount", amount);
-                Add(settle, "@documentCompany", documentCompanyKey);
+                Add(settle, "@documentCompany", actualDocumentCompanyKey);
                 Add(settle, "@doc", docId);
                 if (await settle.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
                     throw new InvalidOperationException("The document could not be settled (missing or deleted).");
