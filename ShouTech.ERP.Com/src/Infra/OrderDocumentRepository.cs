@@ -688,6 +688,9 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
             var received = await LinkedQuantitiesAsync(connection, transaction, CommercialDocSide.Purchase,
                 order.CompanyId, purchaseOrderId, CommercialDocKinds.PurchaseReceipt, cancellationToken).ConfigureAwait(false);
+            var receivedBySourceLine = await LinkedQuantitiesBySourceLineAsync(
+                connection, transaction, CommercialDocSide.Purchase, order.CompanyId,
+                purchaseOrderId, CommercialDocKinds.PurchaseReceipt, order.Lines, cancellationToken).ConfigureAwait(false);
             var orderedByMaterial = new Dictionary<long, decimal>();
             foreach (var line in order.Lines)
             {
@@ -707,14 +710,12 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                         $"Receipt quantity for material '{materialId}' exceeds the remaining purchase-order quantity ({remaining}).");
             }
 
-            var priorToAllocate = received.ToDictionary(pair => pair.Key, pair => pair.Value);
             var requestedToAllocate = new Dictionary<long, decimal>(requested);
             var receiptDraftLines = new List<CommercialLineDraft>();
             foreach (var line in order.Lines)
             {
                 var materialId = line.MaterialId!.Value;
-                var prior = Math.Min(line.Qty, priorToAllocate.GetValueOrDefault(materialId));
-                priorToAllocate[materialId] = Math.Max(0m, priorToAllocate.GetValueOrDefault(materialId) - prior);
+                var prior = Math.Min(line.Qty, receivedBySourceLine.GetValueOrDefault(line.LineNo));
                 var lineRemaining = line.Qty - prior;
                 var take = Math.Min(lineRemaining, requestedToAllocate.GetValueOrDefault(materialId));
                 if (take <= 0m) continue;
