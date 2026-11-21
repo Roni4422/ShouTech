@@ -872,8 +872,8 @@ public sealed class OrdWin : BaseWin, IWindowMode
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right
         };
-        var confirm = new Button { Content = T("Common.Save"), MinWidth = 100, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        var cancel = new Button { Content = T("Common.Cancel"), MinWidth = 100, IsCancel = true };
+        var confirm = new Button { Content = T("Buttons.Save"), MinWidth = 100, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var cancel = new Button { Content = T("Buttons.Cancel"), MinWidth = 100, IsCancel = true };
         confirm.Click += (_, _) =>
         {
             grid.CommitEdit(DataGridEditingUnit.Cell, true);
@@ -1083,7 +1083,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             _grid.Columns[4].Header = T("Invoice.Col.Qty");
             _grid.Columns[5].Header = T(_kind == OrdKind.Sales ? "Invoice.Col.SalePrice" : "Invoice.Col.PurchasePrice");
             _grid.Columns[6].Header = T("Invoice.Col.Discount");
-            _grid.Columns[7].Header = T("Invoice.ColTax");
+            _grid.Columns[7].Header = T("Invoice.Col.TaxRate");
             _grid.Columns[8].Header = T("Invoice.Col.LineTotal");
             _grid.Columns[9].Header = T("OrderDoc.Fulfilled");
             _grid.Columns[10].Header = T("OrderDoc.Billed");
