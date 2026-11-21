@@ -190,6 +190,10 @@ namespace Kern.Tests
                 Assert.Equal(100m, progress.PerFulfilled);
                 Assert.Equal(100m, progress.PerBilled);
 
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    service.CreatePurchaseInvoiceAsync(companyId, orderId, new DateOnly(2026, 11, 5),
+                        new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 1m, 13m) }, Actor));
+
                 // A third receipt is an over-receipt and must fail without changing stock.
                 await Assert.ThrowsAsync<InvalidOperationException>(() =>
                     service.CreatePurchaseReceiptAsync(companyId, orderId, new DateOnly(2026, 11, 5),
