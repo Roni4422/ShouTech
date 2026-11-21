@@ -123,6 +123,10 @@ namespace Kern.Tests
                 var docId = await service.CreateOrderAsync(
                     Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-9001", 4m, 50m, partyId: 9, partyCode: "SUP-1"), "order-test");
                 await service.PostOrderAsync(CommercialDocSide.Purchase, docId, "order-test");
+                await service.CreatePurchaseReceiptAsync(
+                    companyId, docId, new DateOnly(2026, 11, 1),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Order test item", "PCS", 4m, 50m) },
+                    "order-test");
 
                 var (invoiceId, _) = await service.ConvertToInvoiceAsync(
                     CommercialDocSide.Purchase, docId, new DateOnly(2026, 11, 2), "order-test");
@@ -355,7 +359,7 @@ namespace Kern.Tests
             foreach (var (code, name, type) in new[]
             {
                 ("1201", "Trade Accounts Receivable", "ASSET"), ("1203", "Merchandise Inventory", "ASSET"),
-                ("2201", "Trade Accounts Payable", "LIABILITY"), ("301", "Goods Sales Revenue", "REVENUE"),
+                ("2201", "Trade Accounts Payable", "LIABILITY"), ("2203", "Accrued Liabilities / GRNI", "LIABILITY"), ("301", "Goods Sales Revenue", "REVENUE"),
                 ("401", "Cost of Goods Sold", "EXPENSE"), ("402", "Merchandise Purchases", "EXPENSE"),
                 ("131", "Cash on Hand", "ASSET")
             })
