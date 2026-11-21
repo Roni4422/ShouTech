@@ -209,6 +209,46 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task SalesDeliveryService_CreatesLinkedDraftAndPostsStockForPartialQuantity()
+        {
+            var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.SalesOrder, "SO-9111",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 5m, 25m),
+                        partyId: 7, partyCode: "CUS-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Sales, orderId, Actor);
+
+                var (deliveryId, deliveryNo) = await service.CreateSalesDeliveryAsync(
+                    orderId,
+                    new DateOnly(2026, 11, 10),
+                    Actor,
+                    new Dictionary<long, decimal> { [42] = 2m });
+
+                Assert.StartsWith("DLV-", deliveryNo);
+                var draft = await orders.FindByIdAsync(CommercialDocSide.Sales, deliveryId);
+                Assert.NotNull(draft);
+                Assert.Equal(CommercialDocKinds.DeliveryNote, draft!.DocKind);
+                Assert.Equal(CommercialDocumentStatus.Draft, draft.Status);
+                Assert.Equal(2m, Assert.Single(draft.Lines).Qty);
+
+                await service.PostSalesDeliveryAsync(deliveryId, Actor);
+
+                var posted = await orders.FindByIdAsync(CommercialDocSide.Sales, deliveryId);
+                Assert.NotNull(posted);
+                Assert.Equal(CommercialDocumentStatus.Posted, posted!.Status);
+                Assert.Equal(98m, BalanceQty(connectionString, 42));
+                var progress = await service.GetProgressAsync(CommercialDocSide.Sales, orderId);
+                Assert.Equal(40m, progress.PerFulfilled);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task ConcurrentSalesInvoices_CannotBillTheSameOrderQuantityTwice()
         {
             var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
