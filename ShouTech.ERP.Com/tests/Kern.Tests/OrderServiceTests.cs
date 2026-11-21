@@ -128,8 +128,10 @@ namespace Kern.Tests
                     new[] { new CommercialLineDraft(42, "MAT-42", "Order test item", "PCS", 4m, 50m) },
                     "order-test");
 
-                var (invoiceId, _) = await service.ConvertToInvoiceAsync(
-                    CommercialDocSide.Purchase, docId, new DateOnly(2026, 11, 2), "order-test");
+                var (invoiceId, _) = await service.CreatePurchaseInvoiceAsync(
+                    companyId, docId, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Order test item", "PCS", 4m, 50m) },
+                    "order-test");
                 var invoice = await orders.FindByIdAsync(CommercialDocSide.Purchase, invoiceId);
                 Assert.Equal(CommercialDocKinds.PurchaseInvoice, invoice!.DocKind);
                 Assert.Equal(200m, invoice.GrandTotal);
