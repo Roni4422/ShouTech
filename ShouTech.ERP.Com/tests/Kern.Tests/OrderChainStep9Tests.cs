@@ -109,7 +109,7 @@ namespace Kern.Tests
                 // First receipt is partial. It increases inventory and credits GRNI,
                 // but it must not create a supplier payable before the bill arrives.
                 var (firstReceiptId, firstReceiptNo) = await service.CreatePurchaseReceiptAsync(
-                    orderId, new DateOnly(2026, 11, 2),
+                    companyId, orderId, new DateOnly(2026, 11, 2),
                     new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 12m) }, Actor);
                 var firstReceipt = await orders.FindByIdAsync(CommercialDocSide.Purchase, firstReceiptId);
                 Assert.Equal(CommercialDocKinds.PurchaseReceipt, firstReceipt!.DocKind);
@@ -163,7 +163,7 @@ namespace Kern.Tests
 
                 // A third receipt is an over-receipt and must fail without changing stock.
                 await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                    service.CreatePurchaseReceiptAsync(orderId, new DateOnly(2026, 11, 5),
+                    service.CreatePurchaseReceiptAsync(companyId, orderId, new DateOnly(2026, 11, 5),
                         new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 1m, 12m) }, Actor));
                 Assert.Equal(105m, BalanceQty(connectionString, 42));
                 Assert.NotEqual(firstReceiptId, secondReceiptId);
