@@ -1129,7 +1129,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
             foreach (var (receipt, receiptExchangeRate) in receiptSnapshots)
             {
-                foreach (var receiptLine in receipt.Lines.Where(line => line.MaterialId == invoiceLine.MaterialId))
+                foreach (var receiptLine in receipt.Lines.Where(line => line.MaterialId == invoiceLine.MaterialId && line.LineNo == invoiceLine.LineNo))
                 {
                     var alreadyMatched = matchedByReceiptLine.GetValueOrDefault(receiptLine.LineId);
                     var receiptRemaining = receiptLine.Qty - alreadyMatched;
