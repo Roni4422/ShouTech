@@ -399,6 +399,64 @@ public class PosBuildTests
         Assert.Equal(50m, z.CashRefunded);
     }
 
+    [Fact]
+    public async Task PartialReturn_MissingOriginalSettlementAllocation_RollsBackEntirePosting()
+    {
+        using var db = await SeededAsync();
+        var repo = new PosRepository("SQLite", db.ConnectionString);
+        var service = new PosService(repo);
+        var session = await service.OpenSessionAsync(CompanyCode, "T1", "Cashier", 1, "SAR", 200m, Actor);
+
+        var sale = BuildSale(qty: 2m, price: 50m, partyId: 7);
+        var tenders = new List<PosTender>
+        {
+            new() { TenderType = PosTenderTypes.Cash, Amount = 100m, TenderedAmount = 100m }
+        };
+        var posted = PosPosting.CompleteSale(sale, session.Id, tenders, Actor, NoCapture);
+        Assert.Equal(998m, StockQty(db));
+
+        // Simulate inconsistent legacy data: the at-posting party-ledger
+        // settlement exists, but its allocation was removed. The return
+        // must fail closed and roll back stock, GL, party ledger and tenders.
+        using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            connection.Open();
+            using var delete = connection.CreateCommand();
+            delete.CommandText = """
+                DELETE FROM payment_allocations
+                WHERE company_id=$company AND doc_table='SALES' AND doc_id=$doc
+                  AND payment_ledger_id IN (
+                      SELECT ledger_id FROM party_ledger
+                      WHERE company_id=$company AND doc_id=$doc AND doc_kind='RCV');
+                """;
+            delete.Parameters.AddWithValue("$company", CompanyCode);
+            delete.Parameters.AddWithValue("$doc", posted.DocId);
+            Assert.Equal(1, delete.ExecuteNonQuery());
+        }
+
+        var original = await repo.GetOriginalBillAsync(CompanyCode, posted.DocNo);
+        Assert.NotNull(original);
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            PosPosting.CreatePosReturn(original!, new Dictionary<int, decimal> { [1] = 1m },
+                cashRefund: 50m, cardRefund: 0m, session.Id, "missing allocation", Actor, NoCapture));
+        Assert.Contains("allocation", error.Message, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Equal(998m, StockQty(db));
+        Assert.Equal(100m, ScalarDecimal(db,
+            $"SELECT paid_amount FROM sales_documents WHERE doc_id = {posted.DocId}"));
+        Assert.Equal(0m, ScalarDecimal(db, """
+            SELECT COUNT(*) FROM journal_entries
+            WHERE source_doc_type='SRT' AND status=1;
+            """));
+        Assert.Equal(0m, ScalarDecimal(db, """
+            SELECT COUNT(*) FROM pos_sale_tenders WHERE doc_kind='SRT';
+            """));
+        Assert.Equal(1m, ScalarDecimal(db, """
+            SELECT COUNT(*) FROM sales_documents
+            WHERE doc_kind='SRT' AND status='Draft';
+            """));
+    }
+
     // ------------------------------------------------------------------
     // Helpers (GlPostingTests shape)
     // ------------------------------------------------------------------
