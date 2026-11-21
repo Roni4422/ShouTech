@@ -558,7 +558,6 @@ public sealed class OrdWin : BaseWin, IWindowMode
         }
         try
         {
-            long invoiceId;
             string invoiceDocNo;
             if (_kind == OrdKind.Purchase)
             {
@@ -567,17 +566,15 @@ public sealed class OrdWin : BaseWin, IWindowMode
                 var result = await AppHost.Orders.CreatePurchaseInvoiceAsync(
                     _companyId, _docId.Value, DateOnly.FromDateTime(DateTime.Today),
                     supplierInvoiceLines, CurrentUserId);
-                invoiceId = result.InvoiceId;
                 invoiceDocNo = result.InvoiceDocNo;
             }
             else
             {
                 var result = await AppHost.Orders.ConvertToInvoiceAsync(
                     Side, _docId.Value, DateOnly.FromDateTime(DateTime.Today), CurrentUserId);
-                invoiceId = result.InvoiceId;
                 invoiceDocNo = result.InvoiceDocNo;
             }
-            _lblStatus.Text = $"{T("OrderDoc.Converted")}: {invoiceDocNo}";
+            _lblStatus.Text = $"{T(_kind == OrdKind.Purchase ? "OrderDoc.SupplierInvoiceCreated" : "OrderDoc.Converted")}: {invoiceDocNo}";
             await RefreshProgressAsync(_docId.Value);
         }
         catch (AppError ex)
@@ -704,8 +701,8 @@ public sealed class OrdWin : BaseWin, IWindowMode
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right
         };
-        var confirm = new Button { Content = T("Common.Save"), MinWidth = 100, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        var cancel = new Button { Content = T("Common.Cancel"), MinWidth = 100, IsCancel = true };
+        var confirm = new Button { Content = T("Buttons.Save"), MinWidth = 100, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var cancel = new Button { Content = T("Buttons.Cancel"), MinWidth = 100, IsCancel = true };
         confirm.Click += (_, _) =>
         {
             grid.CommitEdit(DataGridEditingUnit.Cell, true);
@@ -849,7 +846,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
         });
         grid.Columns.Add(new DataGridTextColumn
         {
-            Header = T("Invoice.ColTax"),
+            Header = T("Invoice.Col.TaxRate"),
             Binding = new Binding(nameof(SupplierInvoiceLineVm.TaxRate))
             {
                 UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
