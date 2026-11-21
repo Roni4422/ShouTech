@@ -131,6 +131,46 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task PostingDeliveryNote_RejectsDraftsThatOverDeliverTheSameSalesOrder()
+        {
+            var (service, repository, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                var quotationId = await service.CreateQuotationAsync(Draft(companyId, "QT-OVER-DLV"), "posting-test");
+                var orderId = await service.CreateFromSourceAsync(
+                    quotationId, "SO-OVER-DLV", new DateOnly(2026, 10, 20), "posting-test");
+                await service.PostAsync(orderId, "posting-test");
+
+                // Both drafts are created before either is posted. A draft must
+                // not consume quantity, but posting the second must re-check the
+                // source order against the first committed delivery.
+                var firstDeliveryId = await service.CreateFromSourceAsync(
+                    orderId, "DLV-OVER-1", new DateOnly(2026, 10, 21), "posting-test",
+                    quantityByMaterialId: new System.Collections.Generic.Dictionary<long, decimal> { [42] = 7m });
+                var secondDeliveryId = await service.CreateFromSourceAsync(
+                    orderId, "DLV-OVER-2", new DateOnly(2026, 10, 22), "posting-test",
+                    quantityByMaterialId: new System.Collections.Generic.Dictionary<long, decimal> { [42] = 7m });
+
+                await service.PostAsync(firstDeliveryId, "posting-test");
+                var error = await Assert.ThrowsAsync<InvalidOperationException>(
+                    () => service.PostAsync(secondDeliveryId, "posting-test"));
+                Assert.Contains("exceeds the remaining quantity", error.Message, StringComparison.OrdinalIgnoreCase);
+
+                var secondDelivery = await repository.FindSalesByIdAsync(secondDeliveryId);
+                Assert.NotNull(secondDelivery);
+                Assert.Equal(CommercialDocumentStatus.Draft, secondDelivery!.Status);
+                Assert.Equal(1, (int)Scalar(connectionString,
+                    "SELECT COUNT(*) FROM material_stock_movements WHERE document_no IN ('DLV-OVER-1', 'DLV-OVER-2')"));
+                Assert.Equal(993m, Scalar(connectionString,
+                    "SELECT available_qty FROM material_stock_balances WHERE material_id = 42 AND warehouse_id = 1"));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task PostingSalesInvoice_WritesCustomerPartyLedgerDebit()
         {
             var (service, _, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
