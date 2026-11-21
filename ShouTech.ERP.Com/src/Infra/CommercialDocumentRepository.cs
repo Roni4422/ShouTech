@@ -226,6 +226,50 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             Add(link, "@targetId", docId);
             Add(link, "@actor", userId.Trim());
             await link.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+            // Preserve order-level billed progress when the invoice is
+            // created from a delivery note. The direct DLV->SAL link is
+            // retained for delivery accounting; this additional SO->SAL
+            // link lets the source order report its billed quantities too.
+            if (string.Equals(sourceDocKind.Trim(), CommercialDocKinds.DeliveryNote, StringComparison.Ordinal) &&
+                string.Equals(draft.DocKind.Trim(), CommercialDocKinds.SalesInvoice, StringComparison.Ordinal))
+            {
+                long? sourceOrderId = null;
+                await using (var parentOrder = CreateCommand(connection, transaction, """
+                    SELECT source_doc_id
+                    FROM document_links
+                    WHERE company_id = @company
+                      AND source_doc_kind = @orderKind
+                      AND target_doc_kind = @deliveryKind
+                      AND target_doc_id = @deliveryId
+                    """))
+                {
+                    Add(parentOrder, "@company", draft.CompanyId.ToString("D"));
+                    Add(parentOrder, "@orderKind", CommercialDocKinds.SalesOrder);
+                    Add(parentOrder, "@deliveryKind", CommercialDocKinds.DeliveryNote);
+                    Add(parentOrder, "@deliveryId", sourceDocId);
+                    var value = await parentOrder.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                    if (value is not null and not DBNull)
+                        sourceOrderId = Convert.ToInt64(value, CultureInfo.InvariantCulture);
+                }
+
+                if (sourceOrderId is not null)
+                {
+                    await using var orderInvoiceLink = CreateCommand(connection, transaction, """
+                        INSERT INTO document_links
+                            (company_id, source_doc_kind, source_doc_id, target_doc_kind, target_doc_id, created_by)
+                        VALUES (@company, @orderKind, @orderId, @invoiceKind, @invoiceId, @actor)
+                        """);
+                    Add(orderInvoiceLink, "@company", draft.CompanyId.ToString("D"));
+                    Add(orderInvoiceLink, "@orderKind", CommercialDocKinds.SalesOrder);
+                    Add(orderInvoiceLink, "@orderId", sourceOrderId.Value);
+                    Add(orderInvoiceLink, "@invoiceKind", CommercialDocKinds.SalesInvoice);
+                    Add(orderInvoiceLink, "@invoiceId", docId);
+                    Add(orderInvoiceLink, "@actor", userId.Trim());
+                    await orderInvoiceLink.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                }
+            }
+
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return docId;
         }
