@@ -3041,6 +3041,8 @@ public static class InvRepo
         if (returnDoc.LinesDiscountAmount != expectedDiscount ||
             returnDoc.LinesExtraAmount != expectedExtra)
             throw new InvalidOperationException("The sales return must allocate the original invoice discount and extra charges proportionally.");
+        if (returnDoc.PaidAmount < 0m || returnDoc.PaidAmount > returnDoc.GrandTotal)
+            throw new InvalidOperationException("The sales return refund cannot exceed its credit note total.");
 
         foreach (var line in returnDoc.Lines)
         {
