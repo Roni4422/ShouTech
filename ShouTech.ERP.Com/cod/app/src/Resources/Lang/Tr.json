@@ -3609,5 +3609,29 @@
       "TaxAmount": "Vergi tutarı",
       "BaseTaxAmount": "Temel para biriminde vergi"
     }
+  },
+  "SalesDelivery": {
+    "Title": "Satış İrsaliyesi",
+    "OrderNo": "Satış Sipariş No.",
+    "DeliveryNo": "İrsaliye No.",
+    "Date": "Teslim Tarihi",
+    "CreateDraft": "İrsaliye Taslağı Oluştur",
+    "ItemCode": "Ürün Kodu",
+    "Description": "Açıklama",
+    "Unit": "Birim",
+    "Ordered": "Sipariş",
+    "Delivered": "Teslim Edilen",
+    "Remaining": "Kalan",
+    "ToDeliver": "Teslim Edilecek Miktar",
+    "SelectOrder": "İrsaliye oluşturmadan önce onaylanmış bir satış siparişi yükleyin.",
+    "OrderRequired": "Bir satış sipariş numarası girin.",
+    "PostedOrderRequired": "Yalnızca onaylanmış satış siparişleri teslim edilebilir.",
+    "OrderLoaded": "Satış siparişi yüklendi",
+    "QuantityRequired": "En az bir satır için teslim miktarı girin.",
+    "MaterialRequired": "Her teslimat satırı bir ürün kartına bağlı olmalıdır.",
+    "ExceedsRemaining": "Teslim miktarı siparişin kalan miktarını aşamaz.",
+    "DraftCreated": "İrsaliye taslağı oluşturuldu",
+    "SaveFirst": "Önce bir irsaliye taslağı oluşturun.",
+    "Posted": "İrsaliye kaydedildi"
   }
 }
