@@ -619,16 +619,21 @@ public sealed class OrdWin : BaseWin, IWindowMode
 
         var rows = _lines
             .Where(line => line.Qty - line.FulfilledQty > 0m)
-            .Select(line => new ReceiptLineVm
+            .GroupBy(line => line.MaterialId)
+            .Select(group =>
             {
-                MaterialId = line.MaterialId,
-                ItemCode = line.ItemCode,
-                Description = line.Description,
-                Unit = line.Unit,
-                Quantity = line.Qty - line.FulfilledQty,
-                UnitPrice = line.UnitPrice,
-                DiscountPct = line.DiscountPct,
-                WarehouseId = receiptWarehouseId
+                var line = group.First();
+                return new ReceiptLineVm
+                {
+                    MaterialId = line.MaterialId,
+                    ItemCode = line.ItemCode,
+                    Description = line.Description,
+                    Unit = line.Unit,
+                    Quantity = group.Sum(item => item.Qty - item.FulfilledQty),
+                    UnitPrice = line.UnitPrice,
+                    DiscountPct = line.DiscountPct,
+                    WarehouseId = receiptWarehouseId
+                };
             })
             .ToList();
         if (rows.Count == 0)
