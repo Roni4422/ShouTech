@@ -632,7 +632,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                     line.MaterialId, line.MaterialCode, line.Description, line.Unit,
                     take, line.UnitPrice, line.DiscountPct, 0m,
                     requestedWarehouse.TryGetValue(materialId, out var chosenWarehouse)
-                        ? chosenWarehouse : line.WarehouseId));
+                        ? chosenWarehouse : line.WarehouseId,
+                    line.LineNo));
             }
 
             if (receiptDraftLines.Count == 0 || requestedToAllocate.Values.Any(qty => qty > 0m))
