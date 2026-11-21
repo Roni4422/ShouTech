@@ -705,7 +705,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
 
         try
         {
-            var (receiptId, receiptDocNo) = await AppHost.Orders.CreatePurchaseReceiptAsync(
+            var (_, receiptDocNo) = await AppHost.Orders.CreatePurchaseReceiptAsync(
                 _docId.Value, DateOnly.FromDateTime(DateTime.Today), receiptLines, CurrentUserId);
             _lblStatus.Text = $"{T("OrderDoc.ReceiptCreated")}: {receiptDocNo}";
             await RefreshProgressAsync(_docId.Value);
