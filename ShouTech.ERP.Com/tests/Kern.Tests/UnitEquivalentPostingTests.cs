@@ -127,6 +127,31 @@ namespace Kern.Tests
             Assert.Equal(9m, ctx.BalanceQty());
         }
 
+        [Fact]
+        public void DedicatedPostingReceipt_IsDurableCompanyScopedAndTypeSafe()
+        {
+            using var ctx = CreateContext(unitsJson: UnitsJson, balanceQty: 10m, balanceAvg: 8m);
+
+            Assert.False(StkPost.IsOperationCompleted("INV:StockTransfer:42", "StockTransfer"));
+
+            using (var connection = new SqliteConnection($"Data Source={ctx.DatabasePath}"))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = """
+                    INSERT INTO stock_posting_operations
+                        (company_id, operation_key, operation_type, document_no, movement_count)
+                    VALUES
+                        ('TEST-EQUIV', 'INV:StockTransfer:42', 'StockTransfer', 'TRF-TEST-42', 2);
+                    """;
+                command.ExecuteNonQuery();
+            }
+
+            Assert.True(StkPost.IsOperationCompleted("INV:StockTransfer:42", "StockTransfer"));
+            Assert.Throws<InvalidOperationException>(
+                () => StkPost.IsOperationCompleted("INV:StockTransfer:42", "InventoryCount"));
+        }
+
         private const string UnitsJson =
             "[{\"UnitName\":\"kg\",\"Factor\":1},{\"UnitName\":\"g250\",\"Factor\":0.25}]";
 
@@ -148,6 +173,8 @@ namespace Kern.Tests
                 _oldSettings = oldSettings;
                 _oldCompany = oldCompany;
             }
+
+            public string DatabasePath => _databasePath;
 
             public void Post(InvDoc doc)
             {
