@@ -557,6 +557,22 @@ public static class InvRepo
         if (pos is not null)
             WritePosTenders(connection, tx, doc, pos, userId);
 
+        // POS refunds must reverse the original at-posting settlement in
+        // this same transaction. Keeping this inside the document posting
+        // boundary prevents a committed return from being left with stale
+        // customer settlement/allocation balances after a process crash.
+        if (pos is not null
+            && doc.Kind == InvDocKind.SalesReturn
+            && doc.OriginalDocKind == InvDocKind.PosSale
+            && doc.OriginalDocId is long originalPosDocId
+            && doc.PartyId is long originalPartyId
+            && doc.PaidAmount > 0m)
+        {
+            UnsettleOriginalOnPosReturn(
+                connection, tx, guidKey, originalPosDocId, originalPartyId,
+                doc, doc.PaidAmount, userId);
+        }
+
         // Party ledger: sales increase receivable (debit customer),
         // purchases increase payable — ONLY for kinds whose policy carries
         // a party-ledger effect (Step 5). Before this gate the block ran
@@ -701,6 +717,180 @@ public static class InvRepo
     /// the tenders must settle the document's STORED total exactly.
     /// Also stamps the transient split onto the loaded document so
     /// BuildGlLines posts the cash/card settlement legs honestly.</summary>
+    /// <summary>
+    /// Mirrors only the settlement created when the original POS sale was
+    /// posted. The refund, mirrored party-ledger entry, original paid amount
+    /// and the exact originating allocation are updated under the caller's
+    /// document transaction. External receipt allocations are deliberately
+    /// preserved.
+    /// </summary>
+    private static void UnsettleOriginalOnPosReturn(
+        DbConnection connection, DbTransaction tx, string companyGuidKey,
+        long originalDocId, long partyId, InvDoc returnDoc,
+        decimal refundCollected, string userId)
+    {
+        if (refundCollected <= 0m) return;
+
+        var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+        var notDeleted = provider == "PostgreSQL" ? "is_deleted = FALSE" : "is_deleted = 0";
+        decimal originalPaid;
+        using (var original = connection.CreateCommand())
+        {
+            original.Transaction = tx;
+            original.CommandText = provider == "PostgreSQL"
+                ? $"""
+                   SELECT paid_amount
+                   FROM sales_documents
+                   WHERE doc_id=$id AND (company_id=$company OR company_id=$guid)
+                     AND status='Posted' AND {notDeleted}
+                   FOR UPDATE;
+                   """
+                : $"""
+                   SELECT paid_amount
+                   FROM sales_documents
+                   WHERE doc_id=$id AND (company_id=$company OR company_id=$guid)
+                     AND status='Posted' AND {notDeleted};
+                   """;
+            Add(original, "$id", originalDocId);
+            Add(original, "$company", Company);
+            Add(original, "$guid", companyGuidKey);
+            var value = original.ExecuteScalar();
+            if (value is null or DBNull)
+                throw new InvalidOperationException("The original POS sale is not posted in the current company.");
+            originalPaid = Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+        }
+
+        if (refundCollected > originalPaid)
+            throw new InvalidOperationException(
+                $"The POS refund {refundCollected} exceeds the original sale's remaining collected amount {originalPaid}.");
+
+        var hasBase = PartyLedger.ColumnExists(connection, tx, provider, "party_ledger", "base_debit");
+        var select = $"""
+            SELECT ledger_id, debit, credit, currency_code{(hasBase ? ", base_debit, base_credit, exchange_rate" : string.Empty)}
+            FROM party_ledger
+            WHERE company_id=$company AND party_id=$party AND doc_id=$original
+              AND doc_kind='RCV'
+            ORDER BY ledger_id;
+            """;
+        var settlements = new List<(long LedgerId, decimal Debit, decimal Credit, string Currency,
+            decimal? BaseDebit, decimal? BaseCredit, decimal Rate)>();
+        using (var find = connection.CreateCommand())
+        {
+            find.Transaction = tx;
+            find.CommandText = select;
+            Add(find, "$company", Company);
+            Add(find, "$party", partyId);
+            Add(find, "$original", originalDocId);
+            using var reader = find.ExecuteReader();
+            while (reader.Read())
+            {
+                settlements.Add((
+                    Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture),
+                    reader.IsDBNull(3) ? returnDoc.CurrencyCode : reader.GetString(3),
+                    hasBase && !reader.IsDBNull(4) ? Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture) : null,
+                    hasBase && !reader.IsDBNull(5) ? Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture) : null,
+                    hasBase && !reader.IsDBNull(6) ? Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture) : returnDoc.ExchangeRate));
+        }
+
+        var remaining = refundCollected;
+        foreach (var settlement in settlements)
+        {
+            if (remaining <= 0m) break;
+            var settledAmount = Math.Max(settlement.Debit, settlement.Credit);
+            var mirrorAmount = Math.Min(settledAmount, remaining);
+            if (mirrorAmount <= 0m) continue;
+
+            var (mirrorDebit, mirrorCredit) = settlement.Credit >= settlement.Debit
+                ? (mirrorAmount, 0m)
+                : (0m, mirrorAmount);
+
+            if (settlement.BaseDebit.HasValue && settlement.BaseCredit.HasValue)
+            {
+                PartyLedger.WriteEntry(
+                    connection, tx, provider, Company, "C", partyId,
+                    returnDoc.KindCode, returnDoc.DocId, returnDoc.DocNo,
+                    returnDoc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    mirrorDebit, mirrorCredit, settlement.Currency,
+                    $"POS return refund of settlement collected at posting for {returnDoc.OriginalDocNo}",
+                    exchangeRate: settlement.Rate,
+                    baseDebit: settlement.BaseCredit,
+                    baseCredit: settlement.BaseDebit);
+            }
+            else
+            {
+                PartyLedger.WriteEntry(
+                    connection, tx, provider, Company, "C", partyId,
+                    returnDoc.KindCode, returnDoc.DocId, returnDoc.DocNo,
+                    returnDoc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    mirrorDebit, mirrorCredit, settlement.Currency,
+                    $"POS return refund of settlement collected at posting for {returnDoc.OriginalDocNo}",
+                    exchangeRate: settlement.Rate);
+            }
+
+            // Only reduce the allocation created by this exact settlement
+            // ledger row. Allocations from later cash-receipt vouchers must
+            // not be consumed by a POS refund.
+            using (var allocation = connection.CreateCommand())
+            {
+                allocation.Transaction = tx;
+                allocation.CommandText = """
+                    UPDATE payment_allocations
+                    SET amount = amount - $refund
+                    WHERE company_id=$company AND doc_id=$original
+                      AND doc_table='SALES' AND payment_ledger_id=$payment
+                      AND amount >= $refund;
+                    """;
+                Add(allocation, "$refund", mirrorAmount);
+                Add(allocation, "$company", Company);
+                Add(allocation, "$original", originalDocId);
+                Add(allocation, "$payment", settlement.LedgerId);
+                if (allocation.ExecuteNonQuery() == 0)
+                    throw new InvalidOperationException(
+                        "The original POS settlement allocation is missing or smaller than the refund; the return was rolled back.");
+            }
+            using (var removeEmpty = connection.CreateCommand())
+            {
+                removeEmpty.Transaction = tx;
+                removeEmpty.CommandText = """
+                    DELETE FROM payment_allocations
+                    WHERE company_id=$company AND doc_id=$original
+                      AND doc_table='SALES' AND payment_ledger_id=$payment
+                      AND amount <= 0;
+                    """;
+                Add(removeEmpty, "$company", Company);
+                Add(removeEmpty, "$original", originalDocId);
+                Add(removeEmpty, "$payment", settlement.LedgerId);
+                removeEmpty.ExecuteNonQuery();
+            }
+
+            remaining -= mirrorAmount;
+        }
+
+        if (remaining > 0m)
+            throw new InvalidOperationException(
+                $"The original POS sale has no matching at-posting settlement for refund remainder {remaining}; the return was rolled back.");
+
+        using (var updateOriginal = connection.CreateCommand())
+        {
+            updateOriginal.Transaction = tx;
+            updateOriginal.CommandText = """
+                UPDATE sales_documents
+                SET paid_amount = paid_amount - $refund
+                WHERE doc_id=$id AND (company_id=$company OR company_id=$guid)
+                  AND status='Posted' AND paid_amount >= $refund;
+                """;
+            Add(updateOriginal, "$refund", refundCollected);
+            Add(updateOriginal, "$id", originalDocId);
+            Add(updateOriginal, "$company", Company);
+            Add(updateOriginal, "$guid", companyGuidKey);
+            if (updateOriginal.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException(
+                    "The original POS sale settlement changed during refund posting; the return was rolled back.");
+        }
+    }
+
     private static void ValidatePosContext(DbConnection connection, DbTransaction tx, InvDoc doc, PosPostingContext pos)
     {
         var notDeleted = DatabaseRuntime.IsPostgreSql() ? "is_deleted = false" : "is_deleted = 0";
