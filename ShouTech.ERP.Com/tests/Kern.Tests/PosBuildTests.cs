@@ -339,7 +339,8 @@ public class PosBuildTests
             externalPaymentLedgerId = PartyLedger.WriteEntry(
                 connection, tx, "SQLite", CompanyCode, "C", 7,
                 "RCV", null, "RCV-EXT-1", "2026-03-10",
-                0m, 25m, "SAR", "External receipt allocated after sale");
+                0m, 25m, "SAR", "External receipt allocated after sale",
+                exchangeRate: 1m);
             using var allocation = connection.CreateCommand();
             allocation.Transaction = tx;
             allocation.CommandText = """
