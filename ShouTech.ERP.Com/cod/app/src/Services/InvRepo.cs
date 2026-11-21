@@ -1500,7 +1500,15 @@ public static class InvRepo
         using (var temporary = connection.CreateCommand())
         {
             temporary.Transaction = transaction;
-            temporary.CommandText = "UPDATE sales_document_lines SET line_no = -line_id WHERE doc_id = $doc;";
+            temporary.CommandText = """
+                UPDATE sales_document_lines
+                SET line_no = line_no + (
+                    SELECT COALESCE(MAX(line_no), 0) + 1000000
+                    FROM sales_document_lines
+                    WHERE doc_id = $doc
+                )
+                WHERE doc_id = $doc;
+                """;
             Add(temporary, "$doc", returnDocId);
             temporary.ExecuteNonQuery();
         }
