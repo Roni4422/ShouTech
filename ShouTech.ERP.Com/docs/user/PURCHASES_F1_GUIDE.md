@@ -92,5 +92,5 @@ A payment can be allocated partially or across multiple invoices, subject to the
 
 - Do not delete posted purchase orders, receipts, invoices, or payment vouchers to correct accounting history.
 - Use the application's authorized reversal, return, or credit-note workflow when available.
-- Keep supplier documents and references with the transaction so the receipt, invoice, and payment can be audited together.
+- The current purchase invoice workflow does not yet enforce uniqueness of the supplier's external invoice number or attach the original supplier file. Retain those originals in the approved document-control process until that feature is delivered.
 - Press **F1** from a purchase window to open the relevant help topic when contextual help is enabled.
