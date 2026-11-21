@@ -2909,11 +2909,15 @@ public static class InvRepo
         var notDeleted = DatabaseRuntime.IsPostgreSql() ? "is_deleted = FALSE" : "is_deleted = 0";
 
         string originalDocNo;
+        long? originalPartyId;
+        string originalPartyCode;
+        string originalCurrency;
+        decimal originalExchangeRate;
         using (var original = connection.CreateCommand())
         {
             original.Transaction = transaction;
             original.CommandText = $"""
-                SELECT doc_no, doc_kind, status
+                SELECT doc_no, doc_kind, status, party_id, party_code, currency_code, exchange_rate
                 FROM sales_documents
                 WHERE doc_id = $originalId
                   AND (company_id = $company OR company_id = $guid)
@@ -2930,20 +2934,30 @@ public static class InvRepo
             if (!string.Equals(reader.GetString(1), originalKindCode, StringComparison.OrdinalIgnoreCase) ||
                 !string.Equals(reader.GetString(2), "Posted", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Only a posted original sales invoice can be returned.");
+            originalPartyId = reader.IsDBNull(3) ? null : Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture);
+            originalPartyCode = reader.IsDBNull(4) ? string.Empty : Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture) ?? string.Empty;
+            originalCurrency = reader.IsDBNull(5) ? "SAR" : Convert.ToString(reader.GetValue(5), CultureInfo.InvariantCulture) ?? "SAR";
+            originalExchangeRate = reader.IsDBNull(6) ? 1m : Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture);
         }
+
+        if (returnDoc.PartyId != originalPartyId ||
+            !string.Equals(returnDoc.PartyCode ?? string.Empty, originalPartyCode, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(returnDoc.CurrencyCode, originalCurrency, StringComparison.OrdinalIgnoreCase) ||
+            returnDoc.ExchangeRate != originalExchangeRate)
+            throw new InvalidOperationException("The sales return must use the original invoice customer and currency.");
 
         if (!string.IsNullOrWhiteSpace(returnDoc.OriginalDocNo) &&
             !string.Equals(returnDoc.OriginalDocNo.Trim(), originalDocNo, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("The original sales invoice number does not match its document id.");
 
         var sourceLines = new Dictionary<int, (long? MaterialId, string Unit, decimal Qty,
-            decimal UnitPrice, decimal DiscountPct, string TaxCode, decimal TaxRate, string TaxMode)>();
+            decimal UnitPrice, decimal DiscountPct, string TaxCode, decimal TaxRate, string TaxMode, int? WarehouseId)>();
         using (var lines = connection.CreateCommand())
         {
             lines.Transaction = transaction;
             lines.CommandText = """
                 SELECT line_no, material_id, unit, qty, unit_price, discount_pct,
-                       tax_code, tax_rate, tax_calculation_mode
+                       tax_code, tax_rate, tax_calculation_mode, warehouse_id
                 FROM sales_document_lines
                 WHERE doc_id = $originalId
                 ORDER BY line_no
@@ -2961,7 +2975,8 @@ public static class InvRepo
                     Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture),
                     reader.IsDBNull(6) ? string.Empty : Convert.ToString(reader.GetValue(6), CultureInfo.InvariantCulture) ?? string.Empty,
                     Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture),
-                    reader.IsDBNull(8) ? "Exclusive" : Convert.ToString(reader.GetValue(8), CultureInfo.InvariantCulture) ?? "Exclusive");
+                    reader.IsDBNull(8) ? "Exclusive" : Convert.ToString(reader.GetValue(8), CultureInfo.InvariantCulture) ?? "Exclusive",
+                    reader.IsDBNull(9) ? null : Convert.ToInt32(reader.GetValue(9), CultureInfo.InvariantCulture));
             }
         }
 
@@ -2998,6 +3013,8 @@ public static class InvRepo
 
         if (returnDoc.Lines.Count == 0)
             throw new InvalidOperationException("A sales return requires at least one original invoice line.");
+        if (returnDoc.Lines.GroupBy(line => line.LineNo).Any(group => group.Count() > 1))
+            throw new InvalidOperationException("A sales return can contain each original invoice line only once.");
 
         foreach (var line in returnDoc.Lines)
         {
@@ -3009,7 +3026,8 @@ public static class InvRepo
                 line.DiscountPct != source.DiscountPct ||
                 !string.Equals(line.TaxCode ?? string.Empty, source.TaxCode, StringComparison.OrdinalIgnoreCase) ||
                 line.TaxRate != source.TaxRate ||
-                !string.Equals(line.TaxCalculationMode ?? "Exclusive", source.TaxMode, StringComparison.OrdinalIgnoreCase))
+                !string.Equals(line.TaxCalculationMode ?? "Exclusive", source.TaxMode, StringComparison.OrdinalIgnoreCase) ||
+                line.WarehouseId != source.WarehouseId)
                 throw new InvalidOperationException($"Return line {line.LineNo} must retain the original material, unit, price, discount and tax settings.");
             if (line.Qty <= 0m ||
                 previouslyReturned.GetValueOrDefault(line.LineNo) + line.Qty > source.Qty)
