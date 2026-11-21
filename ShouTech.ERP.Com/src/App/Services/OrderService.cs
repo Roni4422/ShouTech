@@ -62,14 +62,16 @@ public sealed class OrderService
     public Task PostOrderAsync(CommercialDocSide side, long docId, string userId, CancellationToken cancellationToken = default)
         => _orders.PostOrderAsync(side, docId, userId, cancellationToken);
 
-    public async Task<(long ReceiptId, string ReceiptDocNo)> CreatePurchaseReceiptAsync(long purchaseOrderId, DateOnly receiptDate, IReadOnlyList<CommercialLineDraft> receivedLines, string userId, CancellationToken cancellationToken = default)
+    public async Task<(long ReceiptId, string ReceiptDocNo)> CreatePurchaseReceiptAsync(Guid companyId, long purchaseOrderId, DateOnly receiptDate, IReadOnlyList<CommercialLineDraft> receivedLines, string userId, CancellationToken cancellationToken = default)
     {
         var order = await _orders.FindByIdAsync(CommercialDocSide.Purchase, purchaseOrderId, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException("Purchase order was not found.");
+        if (order.CompanyId != companyId)
+            throw new InvalidOperationException("The purchase order belongs to a different company.");
         if (order.DocKind != CommercialDocKinds.PurchaseOrder)
             throw new InvalidOperationException("A goods receipt must be created from a purchase order.");
         var receiptDocNo = await _orders.NextDocNoAsync(CommercialDocSide.Purchase, order.CompanyId, CommercialDocKinds.PurchaseReceipt, cancellationToken).ConfigureAwait(false);
-        var receiptId = await _orders.CreatePurchaseReceiptAsync(purchaseOrderId, receiptDocNo, receiptDate, receivedLines, userId, cancellationToken).ConfigureAwait(false);
+        var receiptId = await _orders.CreatePurchaseReceiptAsync(companyId, purchaseOrderId, receiptDocNo, receiptDate, receivedLines, userId, cancellationToken).ConfigureAwait(false);
         return (receiptId, receiptDocNo);
     }
 
