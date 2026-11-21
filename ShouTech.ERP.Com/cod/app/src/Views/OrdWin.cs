@@ -779,6 +779,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             .Select(line => new SupplierInvoiceLineVm
             {
                 MaterialId = line.MaterialId,
+                LineNo = line.LineNo,
                 ItemCode = line.ItemCode,
                 Description = line.Description,
                 Unit = line.Unit,
@@ -921,7 +922,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             .Where(line => line.Quantity > 0m)
             .Select(line => new CommercialLineDraft(
                 line.MaterialId, line.ItemCode, line.Description, line.Unit,
-                line.Quantity, line.UnitPrice, line.DiscountPct, line.TaxRate, warehouseId))
+                line.Quantity, line.UnitPrice, line.DiscountPct, line.TaxRate, warehouseId, line.LineNo))
             .ToList();
         if (result.Count == 0)
         {
@@ -1152,6 +1153,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
     private sealed class SupplierInvoiceLineVm
     {
         public long? MaterialId { get; init; }
+        public int LineNo { get; init; }
         public string ItemCode { get; init; } = "";
         public string Description { get; init; } = "";
         public string Unit { get; init; } = "";
