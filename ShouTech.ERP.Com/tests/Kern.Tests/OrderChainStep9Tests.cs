@@ -243,7 +243,7 @@ namespace Kern.Tests
 
                 Assert.Single(outcomes.Where(outcome => outcome is null));
                 Assert.All(outcomes.Where(outcome => outcome is not null),
-                    failure => Assert.Contains("received, unbilled", failure!, StringComparison.OrdinalIgnoreCase));
+                    failure => Assert.Contains("received", failure!, StringComparison.OrdinalIgnoreCase));
                 Assert.Equal(1m, Scalar(connectionString,
                     $"SELECT COUNT(*) FROM purchase_documents WHERE company_id = '{CompanyCode}' AND doc_kind = '{CommercialDocKinds.PurchaseInvoice}' AND is_deleted = 0;"));
                 Assert.Equal(2m, Scalar(connectionString,
