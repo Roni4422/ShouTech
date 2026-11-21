@@ -1233,16 +1233,19 @@ public static class InvRepo
     }
 
     private static void ClaimDedicatedPost(long docId, InvDocKind kind, string userId, string operationKey)
-        => SetDedicatedStatus(docId, kind, from: "Draft", to: "Posting", userId: null, operationKey,
-            "The document is not a Draft or another posting operation has already claimed it.");
+        => SetDedicatedStatus(docId, kind, from: "Draft", to: "Posting", userId: null,
+            operationKey: operationKey,
+            failureMessage: "The document is not a Draft or another posting operation has already claimed it.");
 
     private static void RevertDedicatedClaim(long docId, InvDocKind kind)
-        => SetDedicatedStatus(docId, kind, from: "Posting", to: "Draft", userId: null, operationKey: null,
-            "The document posting claim could not be reverted to Draft.");
+        => SetDedicatedStatus(docId, kind, from: "Posting", to: "Draft", userId: null,
+            operationKey: null,
+            failureMessage: "The document posting claim could not be reverted to Draft.");
 
     private static void CompleteDedicatedPost(long docId, InvDocKind kind, string userId)
-        => SetDedicatedStatus(docId, kind, from: "Posting", to: "Posted", userId, operationKey: null,
-            "Stock effects were committed, but the document could not be finalized as Posted. Reconcile before retrying.");
+        => SetDedicatedStatus(docId, kind, from: "Posting", to: "Posted", userId: userId,
+            operationKey: null,
+            failureMessage: "Stock effects were committed, but the document could not be finalized as Posted. Reconcile before retrying.");
 
     private static void SetDedicatedStatus(long docId, InvDocKind kind, string from, string to,
         string? userId, string? operationKey, string failureMessage)
