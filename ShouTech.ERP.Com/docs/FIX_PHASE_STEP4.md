@@ -225,10 +225,13 @@ repositories (the Kern facts do, on Windows).
    surfaces the error but a GL-only draft may remain (it posts no
    settlement until linked). Making draft+link one transaction needs a
    JournalRepository API change — flagged rather than hacked around.
-2. **Reversing an allocated voucher/payment** restores the party
-   ledger (mirror) but does not un-allocate: `paid_amount` on the
-   settled document is not rolled back, because
-   ReconciliationRepository has no Unallocate (pre-existing). Decide:
+2. **Reversing an allocated voucher/payment** is now handled by the shared
+   journal reversal transaction: active allocations from the linked RCV/PAY
+   ledger row are copied to `payment_allocation_reversal_audit`, the affected
+   document `paid_amount` values are reduced, and the active allocation rows
+   are deleted before the mirrored party-ledger row is written. If any audit
+   insert or document update fails, the entire reversal rolls back. Covered by
+   `PartyUnificationTests.SupplierPayment_IsAllocatedToPostedPurchaseInvoice`.
    block reversal while allocations exist, or build Unallocate.
 3. **InvRepo reversal of a paid-at-posting invoice** does not mirror
    the paid settlement (the reversal document carries no PaidAmount);
