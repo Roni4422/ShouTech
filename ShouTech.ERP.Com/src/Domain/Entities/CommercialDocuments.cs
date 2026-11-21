@@ -90,7 +90,8 @@ public sealed record CommercialLineDraft(
     decimal UnitPrice,
     decimal DiscountPct = 0m,
     decimal TaxRate = 0m,
-    long? WarehouseId = null);
+    long? WarehouseId = null,
+    int? SourceLineNo = null);
 
 /// <summary>A new commercial document header to persist with its lines.</summary>
 public sealed record CommercialDocumentDraft(
