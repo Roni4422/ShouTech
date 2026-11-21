@@ -711,12 +711,6 @@ public static class InvRepo
     // Build POS 066: session / tender gate + tender writes
     // ---------------------------------------------------------------
 
-    /// <summary>Validates the POS context inside the posting
-    /// transaction: the session must exist and be Open for this
-    /// company (or session-less mode must be explicitly enabled), and
-    /// the tenders must settle the document's STORED total exactly.
-    /// Also stamps the transient split onto the loaded document so
-    /// BuildGlLines posts the cash/card settlement legs honestly.</summary>
     /// <summary>
     /// Mirrors only the settlement created when the original POS sale was
     /// posted. The refund, mirrored party-ledger entry, original paid amount
@@ -891,6 +885,12 @@ public static class InvRepo
         }
     }
 
+    /// <summary>Validates the POS context inside the posting
+    /// transaction: the session must exist and be Open for this
+    /// company (or session-less mode must be explicitly enabled), and
+    /// the tenders must settle the document's STORED total exactly.
+    /// Also stamps the transient split onto the loaded document so
+    /// BuildGlLines posts the cash/card settlement legs honestly.</summary>
     private static void ValidatePosContext(DbConnection connection, DbTransaction tx, InvDoc doc, PosPostingContext pos)
     {
         var notDeleted = DatabaseRuntime.IsPostgreSql() ? "is_deleted = false" : "is_deleted = 0";
