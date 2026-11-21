@@ -3636,5 +3636,30 @@
     "CreateInvoice": "Créer une facture client",
     "PostDeliveryFirst": "Validez le bon de livraison avant de créer sa facture.",
     "InvoiceCreated": "Brouillon de facture client créé"
+  },
+  "SalesReturn": {
+    "Title": "Retour client / Avoir",
+    "LoadInvoice": "Charger la facture",
+    "PostReturn": "Valider le retour",
+    "OriginalInvoice": "N° facture client d'origine",
+    "Reason": "Motif du retour",
+    "Code": "Code article",
+    "Description": "Description",
+    "Unit": "Unité",
+    "Sold": "Vendu",
+    "AlreadyReturned": "Déjà retourné",
+    "Returnable": "Retournable",
+    "ReturnQty": "Qté retournée",
+    "Price": "Prix unitaire",
+    "Total": "Total de l'avoir",
+    "InvoiceRequired": "Saisissez un numéro de facture client.",
+    "InvoiceNotFound": "La facture client validée est introuvable.",
+    "PostedInvoiceRequired": "Seules les factures client validées peuvent être retournées.",
+    "LoadInvoiceFirst": "Chargez d'abord une facture client validée.",
+    "ReasonRequired": "Saisissez le motif du retour.",
+    "SelectQuantity": "Saisissez une quantité de retour pour au moins une ligne.",
+    "ExceedsReturnable": "La quantité retournée ne peut pas dépasser la quantité encore retournable.",
+    "Confirm": "Valider ce retour client et cet avoir ?",
+    "Posted": "Retour client validé"
   }
 }
