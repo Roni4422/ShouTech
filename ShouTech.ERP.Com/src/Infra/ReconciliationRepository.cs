@@ -53,6 +53,8 @@ public sealed class ReconciliationRepository : IReconciliationRepository
         var table = DocumentTable(PartyKindToDocTable(partyKind));
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var documentCompanyKey = await ResolveDocumentCompanyKeyAsync(
+            connection, null, companyId, cancellationToken).ConfigureAwait(false);
         var kindFilter = PartyKindToDocTable(partyKind) == "SALES"
             ? "d.doc_kind IN ('SAL', 'POS')"
             : "d.doc_kind IN ('PUR')";
@@ -60,13 +62,17 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             $"""
             SELECT d.doc_id, d.doc_no, d.doc_date, d.party_id, d.party_name, d.currency_code, d.grand_total, d.paid_amount,
                    COALESCE((SELECT SUM(a.amount) FROM payment_allocations a
-                             WHERE a.company_id = d.company_id AND a.doc_table = @docTable AND a.doc_id = d.doc_id), 0) AS allocated
+                             WHERE a.company_id = @company AND a.doc_table = @docTable AND a.doc_id = d.doc_id
+                               AND (a.document_company_id = CAST(d.company_id AS TEXT)
+                                    OR (a.document_company_id IS NULL AND a.company_id = CAST(d.company_id AS TEXT)))), 0) AS allocated
             FROM {table} d
-            WHERE d.company_id = @company AND d.{NotDeleted} AND d.status = 'Posted' AND d.party_id IS NOT NULL
+            WHERE CAST(d.company_id AS TEXT) IN (@company, @documentCompany)
+              AND d.{NotDeleted} AND d.status = 'Posted' AND d.party_id IS NOT NULL
               AND {kindFilter} AND d.grand_total - d.paid_amount > 0.005
             ORDER BY d.doc_date, d.doc_id
             """);
         Add(command, "@company", companyId.Trim());
+        Add(command, "@documentCompany", documentCompanyKey);
         Add(command, "@docTable", PartyKindToDocTable(partyKind));
         var result = new List<OpenDocumentRow>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -151,6 +157,9 @@ public sealed class ReconciliationRepository : IReconciliationRepository
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            var documentCompanyKey = await ResolveDocumentCompanyKeyAsync(
+                connection, transaction, companyId, cancellationToken).ConfigureAwait(false);
+
             // 1) Re-read the payment inside the transaction.
             string paymentKind;
             long paymentParty;
@@ -198,9 +207,9 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             decimal docTotal, docPaid;
             string docStatus;
             await using (var doc = CreateCommand(connection, transaction,
-                $"SELECT doc_no, party_id, grand_total, paid_amount, status FROM {table} WHERE company_id = @company AND doc_id = @doc AND {NotDeleted}"))
+                $"SELECT doc_no, party_id, grand_total, paid_amount, status FROM {table} WHERE CAST(company_id AS TEXT) = @documentCompany AND doc_id = @doc AND {NotDeleted}"))
             {
-                Add(doc, "@company", companyId.Trim());
+                Add(doc, "@documentCompany", documentCompanyKey);
                 Add(doc, "@doc", docId);
                 await using var reader = await doc.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -224,10 +233,11 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             // 3) Insert the allocation and settle it against the document.
             var allocationId = Guid.NewGuid();
             await using (var insert = CreateCommand(connection, transaction,
-                "INSERT INTO payment_allocations (allocation_id, company_id, party_kind, party_id, payment_ledger_id, doc_table, doc_id, doc_no, amount, allocated_by, note) VALUES (@id, @company, @kind, @party, @payment, @docTable, @doc, @docNo, @amount, @user, @note)"))
+                "INSERT INTO payment_allocations (allocation_id, company_id, document_company_id, party_kind, party_id, payment_ledger_id, doc_table, doc_id, doc_no, amount, allocated_by, note) VALUES (@id, @company, @documentCompany, @kind, @party, @payment, @docTable, @doc, @docNo, @amount, @user, @note)"))
             {
                 Add(insert, "@id", FormatGuid(allocationId));
                 Add(insert, "@company", companyId.Trim());
+                Add(insert, "@documentCompany", documentCompanyKey);
                 Add(insert, "@kind", partyKind);
                 Add(insert, "@party", paymentParty);
                 Add(insert, "@payment", paymentLedgerId);
@@ -241,10 +251,10 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             }
 
             await using (var settle = CreateCommand(connection, transaction,
-                $"UPDATE {table} SET paid_amount = paid_amount + @amount WHERE company_id = @company AND doc_id = @doc AND {NotDeleted}"))
+                $"UPDATE {table} SET paid_amount = paid_amount + @amount WHERE CAST(company_id AS TEXT) = @documentCompany AND doc_id = @doc AND {NotDeleted}"))
             {
                 Add(settle, "@amount", amount);
-                Add(settle, "@company", companyId.Trim());
+                Add(settle, "@documentCompany", documentCompanyKey);
                 Add(settle, "@doc", docId);
                 if (await settle.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
                     throw new InvalidOperationException("The document could not be settled (missing or deleted).");
@@ -258,6 +268,23 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    private async Task<string> ResolveDocumentCompanyKeyAsync(
+        DbConnection connection, DbTransaction? transaction, string companyId,
+        CancellationToken cancellationToken)
+    {
+        if (Guid.TryParse(companyId, out var suppliedGuid))
+            return suppliedGuid.ToString("D");
+
+        await using var command = CreateCommand(connection, transaction,
+            "SELECT company_id FROM companies WHERE company_code = @code");
+        Add(command, "@code", companyId.Trim());
+        var value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        if (value is null or DBNull)
+            throw new InvalidOperationException($"Company '{companyId.Trim()}' could not be resolved to its operational document key.");
+        return Convert.ToString(value, CultureInfo.InvariantCulture) ?? throw new InvalidOperationException(
+            $"Company '{companyId.Trim()}' has an invalid operational document key.");
     }
 
     private static string PartyKindToDocTable(string partyKind) => partyKind switch
