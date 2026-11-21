@@ -365,8 +365,8 @@ public class PosBuildTests
         Assert.Equal(InvDocStatus.Posted, returned.Status);
         Assert.Equal(999m, StockQty(db)); // one unit back in stock
 
-        // Settlement symmetry: sale debit 100 + settlement credit 100;
-        // return credit 50 + settlement mirror debit 50 -> net zero.
+        // The sale/return pair nets to zero for the refunded amount.
+        // The separate 25 receipt credit and its allocation remain intact.
         Assert.Equal(150m, ScalarDecimal(db, "SELECT COALESCE(SUM(debit),0) FROM party_ledger WHERE party_id = 7"));
         Assert.Equal(175m, ScalarDecimal(db, "SELECT COALESCE(SUM(credit),0) FROM party_ledger WHERE party_id = 7"));
         Assert.Equal(50m, ScalarDecimal(db, $"SELECT paid_amount FROM sales_documents WHERE doc_id = {posted.DocId}"));
@@ -440,7 +440,7 @@ public class PosBuildTests
         var error = Assert.Throws<InvalidOperationException>(() =>
             PosPosting.CreatePosReturn(original!, new Dictionary<int, decimal> { [1] = 1m },
                 cashRefund: 50m, cardRefund: 0m, session.Id, "missing allocation", Actor, NoCapture));
-        Assert.Contains("allocation", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("allocation", error.Message.ToLowerInvariant());
 
         Assert.Equal(998m, StockQty(db));
         Assert.Equal(100m, ScalarDecimal(db,
