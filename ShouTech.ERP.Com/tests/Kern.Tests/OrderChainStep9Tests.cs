@@ -277,6 +277,52 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task NonStockServiceReceipt_AccruesToExpenseWithoutCreatingInventory()
+        {
+            var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                using (var connection = new SqliteConnection(connectionString))
+                {
+                    connection.Open();
+                    using var command = connection.CreateCommand();
+                    command.CommandText = "UPDATE materials SET is_stocked = 0, is_service = 1 WHERE material_id = 43;";
+                    command.ExecuteNonQuery();
+                }
+
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-9104",
+                        new CommercialLineDraft(43, "MAT-43", "Consulting service", "HOUR", 2m, 50m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+
+                var (_, receiptNo) = await service.CreatePurchaseReceiptAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 9),
+                    new[] { new CommercialLineDraft(43, "MAT-43", "Consulting service", "HOUR", 2m, 50m) }, Actor);
+                Assert.Equal(50m, BalanceQty(connectionString, 43));
+                Assert.Equal(0m, MovementCost(connectionString, receiptNo, 43));
+                var receiptGl = GlByAccount(connectionString, "RCV", Scalar(connectionString,
+                    $"SELECT doc_id FROM purchase_documents WHERE doc_no = '{receiptNo}';"));
+                Assert.Equal(100m, receiptGl["402"].Debit);
+                Assert.Equal(100m, receiptGl["2203"].Credit);
+                Assert.False(receiptGl.ContainsKey("1203"));
+
+                var (invoiceId, invoiceNo) = await service.CreatePurchaseInvoiceAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 10),
+                    new[] { new CommercialLineDraft(43, "MAT-43", "Consulting service", "HOUR", 2m, 50m) }, Actor);
+                Assert.Equal(0m, MovementCost(connectionString, invoiceNo, 43));
+                var invoiceGl = GlByAccount(connectionString, "PUR", invoiceId);
+                Assert.Equal(100m, invoiceGl["2203"].Debit);
+                Assert.Equal(100m, invoiceGl["2201"].Credit);
+                Assert.Equal(50m, BalanceQty(connectionString, 43));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task PurchaseInvoice_CannotBeCreatedBeforeAnyGoodsReceipt()
         {
             var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
