@@ -609,13 +609,15 @@ public sealed class JournalRepository : IJournalRepository
                             "Cash receipt vouchers must be linked to customers and payment vouchers must be linked to suppliers.");
 
                     var controlAccount = linkKind == "C" ? GlAccounts.Receivable : GlAccounts.Payable;
-                    decimal controlDebit, controlCredit;
+                    decimal totalDebit, totalCredit, controlDebit, controlCredit;
                     await using (var control = CreateCommand(connection, transaction, """
-                        SELECT COALESCE(SUM(l.debit), 0), COALESCE(SUM(l.credit), 0)
+                        SELECT COALESCE(SUM(l.debit), 0), COALESCE(SUM(l.credit), 0),
+                               COALESCE(SUM(CASE WHEN a.account_code = @account THEN l.debit ELSE 0 END), 0),
+                               COALESCE(SUM(CASE WHEN a.account_code = @account THEN l.credit ELSE 0 END), 0)
                         FROM journal_entry_lines l
                         INNER JOIN chart_of_accounts a
                             ON a.account_id = l.account_id AND a.company_id = @company
-                        WHERE l.journal_entry_id = @journal AND a.account_code = @account
+                        WHERE l.journal_entry_id = @journal
                         """))
                     {
                         Add(control, "@company", FormatGuid(companyId));
@@ -624,13 +626,18 @@ public sealed class JournalRepository : IJournalRepository
                         await using var controlReader = await control.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                         if (!await controlReader.ReadAsync(cancellationToken).ConfigureAwait(false))
                             throw new InvalidOperationException("The party control account could not be validated on the voucher.");
-                        controlDebit = Convert.ToDecimal(controlReader.GetValue(0), CultureInfo.InvariantCulture);
-                        controlCredit = Convert.ToDecimal(controlReader.GetValue(1), CultureInfo.InvariantCulture);
+                        totalDebit = Convert.ToDecimal(controlReader.GetValue(0), CultureInfo.InvariantCulture);
+                        totalCredit = Convert.ToDecimal(controlReader.GetValue(1), CultureInfo.InvariantCulture);
+                        controlDebit = Convert.ToDecimal(controlReader.GetValue(2), CultureInfo.InvariantCulture);
+                        controlCredit = Convert.ToDecimal(controlReader.GetValue(3), CultureInfo.InvariantCulture);
                     }
 
                     var controlAmount = linkKind == "S" ? controlDebit : controlCredit;
                     var wrongSideAmount = linkKind == "S" ? controlCredit : controlDebit;
-                    if (Math.Abs(controlAmount - linkAmount) > 0.005m || wrongSideAmount > 0.005m)
+                    var voucherAmount = linkKind == "S" ? totalDebit : totalCredit;
+                    if (Math.Abs(voucherAmount - linkAmount) > 0.005m
+                        || Math.Abs(controlAmount - linkAmount) > 0.005m
+                        || wrongSideAmount > 0.005m)
                         throw new InvalidOperationException(
                             $"The voucher must post exactly {linkAmount:N2} to the supplier/customer control account {controlAccount} on the settlement side before it can update the party ledger.");
 
