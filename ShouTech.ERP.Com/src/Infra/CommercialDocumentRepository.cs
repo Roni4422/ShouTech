@@ -394,6 +394,9 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
 
             if (docKind == CommercialDocKinds.DeliveryNote)
             {
+                await EnsureDeliveryWithinSalesOrderAsync(
+                    connection, transaction, docId, companyId, cancellationToken).ConfigureAwait(false);
+
                 var pending = new List<(long MaterialId, decimal Qty, long WarehouseId, string? Unit)>();
                 await using (var lines = CreateCommand(connection, transaction,
                     "SELECT material_id, qty, warehouse_id, unit FROM sales_document_lines WHERE doc_id = @doc ORDER BY line_no"))
@@ -695,6 +698,135 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         return isStocked
                && !isService
                && !string.Equals(itemType, "Service", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Enforces the source sales-order quantity ceiling at delivery posting time.
+    /// Draft delivery notes do not consume order quantity; the guard runs inside
+    /// the same transaction as stock posting so a second concurrent dispatch
+    /// cannot post against quantities already delivered by the first.
+    /// </summary>
+    private async Task EnsureDeliveryWithinSalesOrderAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        long deliveryDocId,
+        string companyId,
+        CancellationToken cancellationToken)
+    {
+        long? sourceOrderId = null;
+        await using (var sourceLink = CreateCommand(connection, transaction, """
+            SELECT source_doc_id
+            FROM document_links
+            WHERE company_id = @company
+              AND target_doc_kind = @deliveryKind
+              AND target_doc_id = @deliveryId
+              AND source_doc_kind = @orderKind
+            """))
+        {
+            Add(sourceLink, "@company", companyId);
+            Add(sourceLink, "@deliveryKind", CommercialDocKinds.DeliveryNote);
+            Add(sourceLink, "@deliveryId", deliveryDocId);
+            Add(sourceLink, "@orderKind", CommercialDocKinds.SalesOrder);
+            var value = await sourceLink.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            if (value is not null and not DBNull)
+                sourceOrderId = Convert.ToInt64(value, CultureInfo.InvariantCulture);
+        }
+
+        // A manually entered, unlinked delivery note follows the legacy path.
+        // Linked deliveries must always respect their originating posted order.
+        if (sourceOrderId is null)
+            return;
+
+        await using (var orderLock = CreateCommand(connection, transaction,
+            _provider == "PostgreSQL"
+                ? """
+                  SELECT doc_id
+                  FROM sales_documents
+                  WHERE doc_id = @orderId AND company_id = @company
+                    AND doc_kind = @orderKind AND status = @posted
+                    AND CAST(is_deleted AS TEXT) IN ('0', 'false')
+                  FOR UPDATE
+                  """
+                : """
+                  SELECT doc_id
+                  FROM sales_documents
+                  WHERE doc_id = @orderId AND company_id = @company
+                    AND doc_kind = @orderKind AND status = @posted
+                    AND CAST(is_deleted AS TEXT) IN ('0', 'false')
+                  """))
+        {
+            Add(orderLock, "@orderId", sourceOrderId.Value);
+            Add(orderLock, "@company", companyId);
+            Add(orderLock, "@orderKind", CommercialDocKinds.SalesOrder);
+            Add(orderLock, "@posted", CommercialDocumentStatus.Posted);
+            var locked = await orderLock.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            if (locked is null or DBNull)
+                throw new InvalidOperationException("The source sales order is missing, cancelled, or not posted.");
+        }
+
+        async Task<Dictionary<(long MaterialId, string Unit), decimal>> ReadQuantitiesAsync(
+            string sql, params (string Name, object Value)[] parameters)
+        {
+            var result = new Dictionary<(long MaterialId, string Unit), decimal>();
+            await using var command = CreateCommand(connection, transaction, sql);
+            foreach (var (name, value) in parameters)
+                Add(command, name, value);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var materialId = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture);
+                var unit = Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? string.Empty;
+                result[(materialId, unit)] = Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture);
+            }
+            return result;
+        }
+
+        const string groupByMaterialAndUnit = """
+            SELECT COALESCE(material_id, -1), COALESCE(unit, ''), SUM(qty)
+            FROM sales_document_lines
+            WHERE doc_id = @docId
+            GROUP BY material_id, unit
+            """;
+
+        var ordered = await ReadQuantitiesAsync(groupByMaterialAndUnit, ("@docId", sourceOrderId.Value)).ConfigureAwait(false);
+        var current = await ReadQuantitiesAsync(groupByMaterialAndUnit, ("@docId", deliveryDocId)).ConfigureAwait(false);
+        var previouslyDelivered = await ReadQuantitiesAsync("""
+            SELECT COALESCE(line.material_id, -1), COALESCE(line.unit, ''), SUM(line.qty)
+            FROM document_links link
+            INNER JOIN sales_documents delivery
+                ON delivery.company_id = link.company_id
+               AND delivery.doc_id = link.target_doc_id
+               AND delivery.doc_kind = link.target_doc_kind
+            INNER JOIN sales_document_lines line ON line.doc_id = delivery.doc_id
+            WHERE link.company_id = @company
+              AND link.source_doc_kind = @orderKind
+              AND link.source_doc_id = @orderId
+              AND link.target_doc_kind = @deliveryKind
+              AND delivery.status = @posted
+              AND delivery.is_deleted = 0
+              AND delivery.doc_id <> @currentId
+            GROUP BY line.material_id, line.unit
+            """,
+            ("@company", companyId),
+            ("@orderKind", CommercialDocKinds.SalesOrder),
+            ("@orderId", sourceOrderId.Value),
+            ("@deliveryKind", CommercialDocKinds.DeliveryNote),
+            ("@posted", CommercialDocumentStatus.Posted),
+            ("@currentId", deliveryDocId)).ConfigureAwait(false);
+
+        foreach (var (key, currentQty) in current)
+        {
+            var orderedQty = ordered.GetValueOrDefault(key);
+            var deliveredQty = previouslyDelivered.GetValueOrDefault(key);
+            if (orderedQty <= 0m || deliveredQty + currentQty > orderedQty)
+            {
+                var materialLabel = key.MaterialId < 0
+                    ? "unassigned material"
+                    : key.MaterialId.ToString(CultureInfo.InvariantCulture);
+                throw new InvalidOperationException(
+                    $"Delivery quantity for material '{materialLabel}' and unit '{key.Unit}' exceeds the remaining quantity on sales order '{sourceOrderId}'.");
+            }
+        }
     }
 
     private static DbCommand CreateCommand(DbConnection connection, DbTransaction transaction, string sql)
