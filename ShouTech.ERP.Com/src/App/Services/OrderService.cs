@@ -116,6 +116,8 @@ public sealed class OrderService
     /// </summary>
     public async Task<(long InvoiceId, string InvoiceDocNo)> ConvertToInvoiceAsync(CommercialDocSide side, long orderDocId, DateOnly invoiceDate, string userId, CancellationToken cancellationToken = default)
     {
+        if (side == CommercialDocSide.Purchase)
+            throw new InvalidOperationException("Supplier invoices must use CreatePurchaseInvoiceAsync with the active company and received line quantities.");
         var order = await _orders.FindByIdAsync(side, orderDocId, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException("Order was not found.");
         var invoiceKind = side == CommercialDocSide.Sales ? CommercialDocKinds.SalesInvoice : CommercialDocKinds.PurchaseInvoice;
