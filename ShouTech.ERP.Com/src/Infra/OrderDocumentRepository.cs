@@ -639,7 +639,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 receiptDraft, CommercialDocumentStatus.Posted, userId, cancellationToken).ConfigureAwait(false);
             ComputeTotals(receiptDraftLines, out var receiptSubtotal, out _, out _);
 
-            var (companyCode, _) = await PostConversionStockAsync(
+            _ = await PostConversionStockAsync(
                 connection, transaction, CommercialDocSide.Purchase, order, receiptDraftLines,
                 receiptDocNo.Trim(), receiptDate, cancellationToken, CommercialDocKinds.PurchaseReceipt).ConfigureAwait(false);
 
@@ -985,9 +985,10 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             }
             else
             {
+                var discountedUnitPrice = line.UnitPrice * (1m - line.DiscountPct / 100m);
                 var unitCost = equivalent == 1m
-                    ? line.UnitPrice
-                    : decimal.Round(line.UnitPrice / equivalent, 6, MidpointRounding.AwayFromZero);
+                    ? discountedUnitPrice
+                    : decimal.Round(discountedUnitPrice / equivalent, 6, MidpointRounding.AwayFromZero);
                 StockValuationEngine.Apply(connection, transaction, _provider,
                     new StockMovementRequest(companyCode, warehouseId, materialId,
                         movementDate, purchaseMovementKind ?? CommercialDocKinds.PurchaseInvoice, invoiceDocNo,
