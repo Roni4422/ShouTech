@@ -811,6 +811,10 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                     ? $"Purchase order '{order.DocNo}' has no received quantity available to invoice. Post a goods receipt first."
                     : $"Order '{order.DocNo}' is already fully billed.");
 
+            if (side == CommercialDocSide.Purchase && invoiceLines.Any(line => line.TaxRate > 0m)
+                && !await IsCompanyTaxEnabledAsync(connection, transaction, order.CompanyId, cancellationToken).ConfigureAwait(false))
+                throw new InvalidOperationException("Tax is disabled for this company. Enable the company's tax system before posting a taxable supplier invoice.");
+
             var invoiceDraft = new CommercialDocumentDraft(
                 order.CompanyId, invoiceKind, invoiceDocNo.Trim(), invoiceDate,
                 order.PartyId, order.PartyName, order.WarehouseId,
@@ -982,6 +986,20 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    private async Task<bool> IsCompanyTaxEnabledAsync(
+        DbConnection connection, DbTransaction transaction, Guid companyId,
+        CancellationToken cancellationToken)
+    {
+        var companyCode = await PartyLedger.ResolveCompanyCodeAsync(
+            connection, transaction, _provider, companyId.ToString("D"), cancellationToken).ConfigureAwait(false);
+        await using var command = CreateCommand(connection, transaction,
+            "SELECT tax_enabled FROM company_tax_settings WHERE company_code = @company");
+        Add(command, "@company", companyCode);
+        var value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return value is not null and not DBNull
+            && Convert.ToBoolean(value, CultureInfo.InvariantCulture);
     }
 
     private async Task<(decimal GrniBaseAmount, IReadOnlyList<long> ReceiptIds)> MatchPurchaseInvoiceToReceiptsAsync(
