@@ -156,6 +156,39 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public void StockTransfer_ReplayReturnsOriginalDocumentWithoutRepeatingMovements()
+        {
+            using var ctx = CreateContext(unitsJson: UnitsJson, balanceQty: 10m, balanceAvg: 8m);
+            var lines = new[]
+            {
+                new StkPost.StockTransferLine(1, "MAT-EQ", 2m)
+            };
+
+            var firstDocumentNo = StkPost.PostTransfer(
+                1, 2, new DateTime(2026, 1, 5), "Transfer test", lines,
+                "INV:StockTransfer:replay-test");
+
+            Assert.Equal(8m, ctx.ScalarDecimal(
+                "SELECT available_qty FROM material_stock_balances WHERE warehouse_id=1 AND material_id=1;"));
+            Assert.Equal(2m, ctx.ScalarDecimal(
+                "SELECT available_qty FROM material_stock_balances WHERE warehouse_id=2 AND material_id=1;"));
+
+            ctx.Execute("UPDATE warehouses SET is_active=0 WHERE company_id='TEST-EQUIV' AND warehouse_id=2;");
+
+            var replayDocumentNo = StkPost.PostTransfer(
+                1, 2, new DateTime(2026, 1, 5), "Transfer test", lines,
+                "INV:StockTransfer:replay-test");
+
+            Assert.Equal(firstDocumentNo, replayDocumentNo);
+            Assert.Equal(8m, ctx.ScalarDecimal(
+                "SELECT available_qty FROM material_stock_balances WHERE warehouse_id=1 AND material_id=1;"));
+            Assert.Equal(2m, ctx.ScalarDecimal(
+                "SELECT available_qty FROM material_stock_balances WHERE warehouse_id=2 AND material_id=1;"));
+            Assert.Equal(2m, ctx.ScalarDecimal(
+                "SELECT COUNT(*) FROM material_stock_movements WHERE document_no='" + firstDocumentNo + "';"));
+        }
+
+        [Fact]
         public void DedicatedPostingReceipt_IsDurableCompanyScopedAndTypeSafe()
         {
             using var ctx = CreateContext(unitsJson: UnitsJson, balanceQty: 10m, balanceAvg: 8m);
@@ -280,7 +313,8 @@ namespace Kern.Tests
                         INSERT INTO warehouses
                           (warehouse_id, company_id, warehouse_code, warehouse_name_ar, is_active, is_deleted)
                         VALUES
-                          (1, 'TEST-EQUIV', 1, 'Main warehouse', 1, 0);
+                          (1, 'TEST-EQUIV', 1, 'Main warehouse', 1, 0),
+                          (2, 'TEST-EQUIV', 2, 'Secondary warehouse', 1, 0);
                         INSERT INTO materials
                           (company_id, code, name_ar, name_en, is_stocked, is_service, allow_negative,
                            unit1, unit1_factor, unit2, unit2_factor, units_json)
