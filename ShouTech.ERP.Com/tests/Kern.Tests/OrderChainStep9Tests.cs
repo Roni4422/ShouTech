@@ -296,13 +296,12 @@ namespace Kern.Tests
                         partyId: 9, partyCode: "SUP-1"), Actor);
                 await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
 
-                var (_, receiptNo) = await service.CreatePurchaseReceiptAsync(
+                var (receiptId, receiptNo) = await service.CreatePurchaseReceiptAsync(
                     companyId, orderId, new DateOnly(2026, 11, 9),
                     new[] { new CommercialLineDraft(43, "MAT-43", "Consulting service", "HOUR", 2m, 50m) }, Actor);
                 Assert.Equal(50m, BalanceQty(connectionString, 43));
                 Assert.Equal(0m, MovementCost(connectionString, receiptNo, 43));
-                var receiptGl = GlByAccount(connectionString, "RCV", Scalar(connectionString,
-                    $"SELECT doc_id FROM purchase_documents WHERE doc_no = '{receiptNo}';"));
+                var receiptGl = GlByAccount(connectionString, "RCV", receiptId);
                 Assert.Equal(100m, receiptGl["402"].Debit);
                 Assert.Equal(100m, receiptGl["2203"].Credit);
                 Assert.False(receiptGl.ContainsKey("1203"));
