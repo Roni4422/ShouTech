@@ -316,7 +316,9 @@ public sealed class InvPostCorrectnessTests
 
         var returnDoc = InvRepo.Load(reversalId, InvDocKind.PurchaseReturn);
         Assert.NotNull(returnDoc);
-        Assert.Equal(invoice.StoredGrandTotal, returnDoc!.StoredGrandTotal);
+        var persistedInvoice = InvRepo.Load(invoice.DocId, InvDocKind.PurchaseInvoice);
+        Assert.NotNull(persistedInvoice);
+        Assert.Equal(persistedInvoice!.StoredGrandTotal, returnDoc!.StoredGrandTotal);
 
         var journalId = ScalarText(db,
             $"SELECT journal_entry_id FROM journal_entries WHERE source_doc_type='PRT' AND source_doc_id='{reversalId}' AND status=1;");
