@@ -294,6 +294,10 @@ namespace Kern.Tests
                 Assert.Equal(50m, gl["301"].Credit);
                 Assert.Equal(20m, gl["401"].Debit);
                 Assert.Equal(20m, gl["1203"].Credit);
+
+                var orderProgress = await service.GetProgressAsync(CommercialDocSide.Sales, orderId);
+                Assert.Equal(100m, orderProgress.PerFulfilled);
+                Assert.Equal(100m, orderProgress.PerBilled);
             }
             finally
             {
