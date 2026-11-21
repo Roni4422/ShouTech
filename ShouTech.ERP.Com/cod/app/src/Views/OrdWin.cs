@@ -394,7 +394,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
                     Qty = line.Qty,
                     UnitPrice = line.UnitPrice,
                     DiscountPct = line.DiscountPct,
-                    TaxRate = taxEnabled ? line.TaxRate : 0m
+                    TaxRate = line.TaxRate
                 });
             }
             if (_lines.Count == 0)
@@ -749,7 +749,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
         }
     }
 
-    private IReadOnlyList<CommercialLineDraft>? CaptureSupplierInvoiceLines()
+    private List<CommercialLineDraft>? CaptureSupplierInvoiceLines()
     {
         var taxEnabled = TaxSvc.IsEnabled;
         var rows = _lines
@@ -763,7 +763,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
                 Quantity = line.FulfilledQty - line.BilledQty,
                 UnitPrice = line.UnitPrice,
                 DiscountPct = line.DiscountPct,
-                TaxRate = line.TaxRate
+                TaxRate = taxEnabled ? line.TaxRate : 0m
             })
             .ToList();
         if (rows.Count == 0)
