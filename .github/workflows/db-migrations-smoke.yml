@@ -59,7 +59,15 @@ jobs:
           missing_return = sorted(required_return - return_columns)
           if missing_return:
               raise SystemExit(f"SQLite purchase-return allocation table is missing columns: {missing_return}")
-          print("SQLite journal, material-group membership, and purchase-return lineage schemas verified.")
+          receipt_return_table = con.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='purchase_receipt_return_line_allocations'").fetchone()[0]
+          if receipt_return_table != 1:
+              raise SystemExit("SQLite pre-invoice receipt-return allocation table is missing")
+          receipt_return_columns = {row[1] for row in con.execute("PRAGMA table_info(purchase_receipt_return_line_allocations)")}
+          required_receipt_return = {"allocation_id", "company_id", "return_doc_id", "return_line_id", "original_doc_id", "original_line_id", "material_id", "returned_qty", "created_by", "created_at"}
+          missing_receipt_return = sorted(required_receipt_return - receipt_return_columns)
+          if missing_receipt_return:
+              raise SystemExit(f"SQLite pre-invoice receipt-return table is missing columns: {missing_receipt_return}")
+          print("SQLite journal, material-group membership, invoice-return, and pre-invoice receipt-return schemas verified.")
           PY
       - name: Test existing SQLite migration-history table
         run: |
@@ -126,7 +134,11 @@ jobs:
           test "$return_table_count" = "1" || { echo "PostgreSQL purchase_return_line_allocations table is missing"; exit 1; }
           return_column_count=$(psql -h localhost -U shoutest -d shoutest -Atc "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='purchase_return_line_allocations' AND column_name IN ('allocation_id','company_id','return_doc_id','return_line_id','original_doc_id','original_line_id','material_id','returned_qty','created_by','created_at')")
           test "$return_column_count" = "10" || { echo "PostgreSQL purchase-return lineage columns are incomplete"; exit 1; }
-          echo "PostgreSQL journal, material-group membership, and purchase-return lineage schemas verified."
+          receipt_return_table_count=$(psql -h localhost -U shoutest -d shoutest -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='purchase_receipt_return_line_allocations'")
+          test "$receipt_return_table_count" = "1" || { echo "PostgreSQL pre-invoice receipt-return allocation table is missing"; exit 1; }
+          receipt_return_column_count=$(psql -h localhost -U shoutest -d shoutest -Atc "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='purchase_receipt_return_line_allocations' AND column_name IN ('allocation_id','company_id','return_doc_id','return_line_id','original_doc_id','original_line_id','material_id','returned_qty','created_by','created_at')")
+          test "$receipt_return_column_count" = "10" || { echo "PostgreSQL pre-invoice receipt-return lineage columns are incomplete"; exit 1; }
+          echo "PostgreSQL journal, material-group membership, invoice-return, and pre-invoice receipt-return schemas verified."
       - name: Test existing PostgreSQL migration-history table
         env:
           PG_CONN_HISTORY: Host=localhost;Port=5432;Database=shoutest_existing_history;Username=shoutest;Password=shoutest
