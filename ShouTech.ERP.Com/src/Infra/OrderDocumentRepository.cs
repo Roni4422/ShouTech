@@ -994,7 +994,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
     public async Task<long> CreatePurchaseReceiptReturnAsync(
         Guid companyId, long receiptId, string returnDocNo, DateOnly returnDate,
-        IReadOnlyList<CommercialLineDraft> returnedLines, string userId,
+        IReadOnlyList<CommercialLineDraft> returnedLines, string userId, string? reason = null,
         CancellationToken cancellationToken = default)
     {
         if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
@@ -1145,7 +1145,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             var returnDraft = new CommercialDocumentDraft(
                 companyId, CommercialDocKinds.PurchaseReceiptReturn, returnDocNo.Trim(), returnDate,
                 receipt.PartyId, receipt.PartyName, receipt.WarehouseId, receipt.CurrencyCode,
-                receiptFx.Rate, $"Return against goods receipt {receipt.DocNo}",
+                receiptFx.Rate, $"Return against goods receipt {receipt.DocNo}. Reason: {(string.IsNullOrWhiteSpace(reason) ? "Supplier return" : reason.Trim())}",
                 returnDraftLines, receipt.PartyCode, null, null, order.CostCenter,
                 order.BranchName, order.SalesRepName, receipt.WarehouseName);
             var returnId = await InsertDocumentAsync(connection, transaction, CommercialDocSide.Purchase,
