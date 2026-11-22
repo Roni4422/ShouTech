@@ -83,6 +83,7 @@ Purchase documents are company-scoped. Posted source documents remain auditable;
 
 - A separate pre-invoice return can be created from a posted goods receipt through `PurchaseReceiptReturnWin`; only quantities not already invoiced or returned are eligible.
 - The receipt return, line allocations, stock issue, GRNI debit, valuation variance, and source link are committed atomically. It does not create a supplier payable or supplier debit note.
+- Batch/serial-tracked goods reuse the original receipt's recorded batch/serial allocations during return posting. If a legacy receipt has no allocation history, the stock engine refuses to silently process the tracked return.
 - Return allocations reduce the purchase order's net received quantity and are excluded from later invoice matching. This allows replacement goods to be received against the remaining purchase-order quantity without treating returned goods as available for invoicing.
 
 ## 8. Integrity and acceptance checks
