@@ -14,6 +14,7 @@ public static class CommercialDocKinds
     public const string SupplierQuotation = "SQ";
     public const string PurchaseOrder = "PO";
     public const string PurchaseReceipt = "RCV";
+    public const string PurchaseReceiptReturn = "RRT";
     public const string PurchaseReceiptReturn = "RCR";
     public const string PurchaseInvoice = "PUR";
 }
