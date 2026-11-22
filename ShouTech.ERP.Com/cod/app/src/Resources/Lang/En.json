@@ -3782,10 +3782,11 @@
       "Loaded": "Receipt {0} — Supplier: {1}",
       "ReceiptRequired": "Enter a goods receipt number.",
       "PostedReceiptRequired": "Select a posted goods receipt.",
-      "InvalidQuantities": "Enter a positive return quantity within the available quantity for at least one line.",
+      "InvalidQuantities": "Enter a return reason and a positive quantity within the available quantity for at least one line.",
       "ConfirmPost": "Post this supplier return? Stock and GRNI will be reduced in the same transaction.",
       "Created": "Pre-invoice supplier return {0} was posted.",
-      "Total": "Return quantity total: {0:N4}"
+      "Total": "Return quantity total: {0:N4}",
+      "Reason": "Return reason"
     },
     "ReturnGoodsReceipt": "Return goods receipt"
   }
