@@ -41,7 +41,7 @@ public sealed class SupplierQuotationEntryWin : BaseWin
 
     public SupplierQuotationEntryWin(long rfqId)
     {
-        if (rfqId <= 0) throw new ArgumentOutOfRangeException(nameof(rfqId));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(rfqId);
         _rfqId = rfqId;
         Width = 1120;
         Height = 720;
