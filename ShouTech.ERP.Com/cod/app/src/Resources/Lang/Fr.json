@@ -2571,7 +2571,8 @@
     "TrackTitle": "Suivi des commandes",
     "TitleRfq": "Demande de devis",
     "ValidTill": "Date limite de réponse",
-    "RfqCannotConvert": "Une demande de devis ne peut pas être convertie directement en facture fournisseur."
+    "RfqCannotConvert": "Une demande de devis ne peut pas être convertie directement en facture fournisseur.",
+    "RfqOpen": "Demande de devis ouverte"
   },
   "Definitions": {
     "Title": "Définitions",
