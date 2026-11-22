@@ -1178,6 +1178,20 @@ namespace Kern.Tests
 
                 Assert.Equal(1m, Scalar(connectionString,
                     $"SELECT COUNT(*) FROM payment_allocations WHERE doc_table = 'PURCHASE' AND doc_id = {invoiceId};"));
+
+                var savedPolicy = await matchRepository.GetPolicyAsync(CompanyCode);
+                Assert.NotNull(savedPolicy);
+                await matchRepository.SavePolicyAsync(
+                    CompanyCode,
+                    savedPolicy with { PriceWarningPercent = savedPolicy.PriceWarningPercent + 0.25m },
+                    savedPolicy.PolicyVersion,
+                    "approver-02");
+
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    reconciliation.AllocateAsync(
+                        CompanyCode, "S", paymentLedgerId, "PURCHASE", invoiceId, 1m, Actor));
+                Assert.Equal(1m, Scalar(connectionString,
+                    $"SELECT COUNT(*) FROM payment_allocations WHERE doc_table = 'PURCHASE' AND doc_id = {invoiceId};"));
             }
             finally
             {
