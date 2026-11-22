@@ -805,6 +805,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
             var requested = new Dictionary<long, decimal>();
             var requestedWarehouse = new Dictionary<long, long?>();
+            var requestedBySourceLine = new Dictionary<int, CommercialLineDraft>();
             foreach (var line in receivedLines)
             {
                 if (line.MaterialId is not long materialId || materialId <= 0)
@@ -814,6 +815,14 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 requested[materialId] = requested.GetValueOrDefault(materialId) + line.Qty;
                 if (line.WarehouseId is not null)
                     requestedWarehouse[materialId] = line.WarehouseId;
+                if (line.SourceLineNo is int sourceLineNo)
+                {
+                    var sourceLine = order.Lines.SingleOrDefault(candidate => candidate.LineNo == sourceLineNo);
+                    if (sourceLine is null || sourceLine.MaterialId != materialId)
+                        throw new InvalidOperationException("A receipt source line must identify a matching purchase-order line.");
+                    if (!requestedBySourceLine.TryAdd(sourceLineNo, line))
+                        throw new InvalidOperationException("A purchase-order line can appear only once in a goods receipt.");
+                }
             }
 
             var received = await LinkedQuantitiesAsync(connection, transaction, CommercialDocSide.Purchase,
@@ -841,12 +850,33 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             }
 
             var requestedToAllocate = new Dictionary<long, decimal>(requested);
+            var explicitlyReceivedBySourceLine = new Dictionary<int, decimal>();
             var receiptDraftLines = new List<CommercialLineDraft>();
+            foreach (var line in order.Lines)
+            {
+                if (!requestedBySourceLine.TryGetValue(line.LineNo, out var explicitRequest))
+                    continue;
+                var materialId = line.MaterialId!.Value;
+                var prior = Math.Min(line.Qty, receivedBySourceLine.GetValueOrDefault(line.LineNo));
+                var remaining = line.Qty - prior;
+                if (explicitRequest.Qty > remaining)
+                    throw new InvalidOperationException(
+                        $"Receipt quantity for purchase-order line {line.LineNo} exceeds its remaining quantity ({Math.Max(0m, remaining)}).");
+                explicitlyReceivedBySourceLine[line.LineNo] = explicitRequest.Qty;
+                requestedToAllocate[materialId] -= explicitRequest.Qty;
+                receiptDraftLines.Add(new CommercialLineDraft(
+                    line.MaterialId, line.MaterialCode, line.Description, line.Unit,
+                    explicitRequest.Qty, line.UnitPrice, line.DiscountPct, 0m,
+                    explicitRequest.WarehouseId ?? line.WarehouseId,
+                    line.LineNo));
+            }
+
             foreach (var line in order.Lines)
             {
                 var materialId = line.MaterialId!.Value;
                 var prior = Math.Min(line.Qty, receivedBySourceLine.GetValueOrDefault(line.LineNo));
-                var lineRemaining = line.Qty - prior;
+                var explicitQty = explicitlyReceivedBySourceLine.GetValueOrDefault(line.LineNo);
+                var lineRemaining = line.Qty - prior - explicitQty;
                 var take = Math.Min(lineRemaining, requestedToAllocate.GetValueOrDefault(materialId));
                 if (take <= 0m) continue;
                 requestedToAllocate[materialId] -= take;
