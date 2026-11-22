@@ -203,8 +203,27 @@ public sealed class OrderService
     public Task CancelOrderAsync(CommercialDocSide side, long docId, string userId, CancellationToken cancellationToken = default)
         => _orders.SetStatusAsync(side, docId, CommercialDocumentStatus.Cancelled, userId, cancellationToken);
 
-    public Task MarkQuotationLostAsync(long docId, string userId, CancellationToken cancellationToken = default)
-        => _orders.SetStatusAsync(CommercialDocSide.Sales, docId, CommercialDocumentStatus.Lost, userId, cancellationToken);
+    public async Task MarkQuotationLostAsync(long docId, string userId, CancellationToken cancellationToken = default)
+    {
+        var quotation = await _orders.FindByIdAsync(CommercialDocSide.Sales, docId, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Sales quotation was not found.");
+        if (quotation.DocKind != CommercialDocKinds.SalesQuotation ||
+            quotation.Status != CommercialDocumentStatus.Posted)
+            throw new InvalidOperationException("Only a posted sales quotation can be marked as lost.");
+        await _orders.SetStatusAsync(
+            CommercialDocSide.Sales, docId, CommercialDocumentStatus.Lost, userId, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task MarkSupplierQuotationLostAsync(long docId, string userId, CancellationToken cancellationToken = default)
+    {
+        var quotation = await _orders.FindByIdAsync(CommercialDocSide.Purchase, docId, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Supplier quotation was not found.");
+        if (quotation.DocKind != CommercialDocKinds.SupplierQuotation ||
+            quotation.Status != CommercialDocumentStatus.Posted)
+            throw new InvalidOperationException("Only a posted supplier quotation can be marked as lost.");
+        await _orders.SetStatusAsync(
+            CommercialDocSide.Purchase, docId, CommercialDocumentStatus.Lost, userId, cancellationToken).ConfigureAwait(false);
+    }
 
     public Task<IReadOnlyList<CommercialDocumentSummary>> SearchAsync(CommercialDocSide side, Guid companyId, string? docKind, string? status, string? search, DateOnly? from, DateOnly? to, int limit = 500, CancellationToken cancellationToken = default)
         => _orders.ListAsync(side, companyId, docKind, status, search, from, to, limit, cancellationToken);
