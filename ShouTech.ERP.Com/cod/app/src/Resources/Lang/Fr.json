@@ -3661,5 +3661,30 @@
     "ExceedsReturnable": "La quantité retournée ne peut pas dépasser la quantité encore retournable.",
     "Confirm": "Valider ce retour client et cet avoir ?",
     "Posted": "Retour client validé"
+  },
+  "PurchaseReturn": {
+    "Title": "Retour achat / Note de débit",
+    "LoadInvoice": "Charger la facture fournisseur",
+    "PostReturn": "Valider le retour",
+    "OriginalInvoice": "N° facture fournisseur d'origine",
+    "Reason": "Motif du retour",
+    "Code": "Code article",
+    "Description": "Description",
+    "Unit": "Unité",
+    "Invoiced": "Facturé",
+    "AlreadyReturned": "Déjà retourné",
+    "Returnable": "Retournable",
+    "ReturnQty": "Qté retournée",
+    "Price": "Prix unitaire",
+    "Total": "Total de la note de débit",
+    "InvoiceRequired": "Saisissez un numéro de facture fournisseur.",
+    "InvoiceNotFound": "La facture fournisseur validée est introuvable.",
+    "PostedInvoiceRequired": "Seules les factures fournisseur validées peuvent être retournées.",
+    "LoadInvoiceFirst": "Chargez d'abord une facture fournisseur validée.",
+    "ReasonRequired": "Saisissez le motif du retour.",
+    "SelectQuantity": "Saisissez une quantité de retour pour au moins une ligne.",
+    "ExceedsReturnable": "La quantité retournée ne peut pas dépasser la quantité encore retournable.",
+    "Confirm": "Valider ce retour fournisseur et cette note de débit ?",
+    "Posted": "Retour achat / note de débit validé"
   }
 }
