@@ -15,6 +15,4 @@ CREATE TABLE IF NOT EXISTS purchase_receipt_return_allocations (
         UNIQUE (company_id, return_doc_id, return_line_id)
 );
 CREATE INDEX IF NOT EXISTS ix_purchase_receipt_return_source_line
-    ON purchase_receipt_return_allocations (company_id, original_receipt_id, original_receipt_line_id);
-CREATE INDEX IF NOT EXISTS ix_purchase_receipt_return_po
-    ON purchase_receipt_return_allocations (company_id, purchase_order_id);
+    ON purchase_receipt_return_allocations (company_id, original_doc_id, original_line_id);
