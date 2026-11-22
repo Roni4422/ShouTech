@@ -1496,6 +1496,7 @@ public static class InvRepo
 
         var headerTable = returnKind.IsSales() ? "sales_documents" : "purchase_documents";
         var lineTable = returnKind.IsSales() ? "sales_document_lines" : "purchase_document_lines";
+        var notDeleted = DatabaseRuntime.IsPostgreSql() ? "is_deleted = FALSE" : "is_deleted = 0";
         var connectionString = DatabaseRuntime.GetConnectionString()
             ?? throw new InvalidOperationException("No database connection.");
         using var connection = Open(connectionString);
@@ -1504,7 +1505,7 @@ public static class InvRepo
         using (var verify = connection.CreateCommand())
         {
             verify.Transaction = transaction;
-            verify.CommandText = $"SELECT COUNT(*) FROM {headerTable} WHERE doc_id = $doc AND doc_kind = $kind AND is_deleted = 0;";
+            verify.CommandText = $"SELECT COUNT(*) FROM {headerTable} WHERE doc_id = $doc AND doc_kind = $kind AND {notDeleted};";
             Add(verify, "$doc", returnDocId);
             Add(verify, "$kind", returnKind == InvDocKind.SalesReturn ? "SRT" : "PRT");
             if (Convert.ToInt64(verify.ExecuteScalar(), CultureInfo.InvariantCulture) != 1)
