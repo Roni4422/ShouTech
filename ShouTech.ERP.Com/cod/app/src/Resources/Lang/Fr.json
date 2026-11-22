@@ -3782,5 +3782,32 @@
       "Reason": "Motif du retour"
     },
     "ReturnGoodsReceipt": "Retour de réception fournisseur"
+  },
+  "PurchaseMatch": {
+    "Title": "Contrôle de rapprochement à trois voies des achats",
+    "ServiceUnavailable": "Le contrôle des achats est indisponible pour l’entreprise active.",
+    "PermissionDenied": "Vous n’avez pas l’autorisation d’afficher ces contrôles.",
+    "Save": "Enregistrer la règle",
+    "Release": "Lever le blocage",
+    "Enabled": "Activer le contrôle à trois voies",
+    "RequireReceipt": "Exiger une réception de marchandises validée",
+    "PriceWarning": "Seuil d’alerte d’écart de prix (%)",
+    "PriceBlock": "Seuil de blocage d’écart de prix (%)",
+    "TaxWarning": "Seuil d’alerte d’écart de taxe (%)",
+    "TaxBlock": "Seuil de blocage d’écart de taxe (%)",
+    "BaseWarning": "Seuil d’alerte d’écart en devise de base",
+    "BaseBlock": "Seuil de blocage d’écart en devise de base",
+    "RecentEvaluations": "Dernières évaluations des factures fournisseurs",
+    "ColInvoice": "ID facture",
+    "ColDecision": "Décision",
+    "ColVersion": "Version",
+    "ColReasons": "Codes de motif",
+    "ColEvaluatedBy": "Évalué par",
+    "ColDate": "Évalué le",
+    "ReleaseReason": "Motif obligatoire de déblocage",
+    "Loaded": "Paramètres et évaluations chargés.",
+    "Saved": "Règle de rapprochement enregistrée.",
+    "OnlyBlockedCanRelease": "Sélectionnez une évaluation bloquée à débloquer.",
+    "InvalidNumber": "Saisissez un nombre décimal valide et non négatif."
   }
 }
