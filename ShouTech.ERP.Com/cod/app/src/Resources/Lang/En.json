@@ -1135,7 +1135,9 @@
       "InvoicedQty": "Invoiced Qty",
       "ReturnedQty": "Returned Qty",
       "RemainingQty": "Remaining Qty",
-      "RemainingBaseAmount": "Remaining GRNI (Base)"
+      "RemainingBaseAmount": "Remaining GRNI (Base)",
+      "OpeningBalance": "Opening Balance",
+      "RunningBalance": "Running Balance"
     },
     "Filter": {
       "All": "All",
@@ -1213,7 +1215,8 @@
     "ShortageStatus": "Shortage",
     "BudgetVariance": "Budget Variance",
     "QualitySummary": "Quality Inspection Summary",
-    "GoodsReceivedNotInvoiced": "Goods Received Not Invoiced (GRNI)"
+    "GoodsReceivedNotInvoiced": "Goods Received Not Invoiced (GRNI)",
+    "SupplierStatement": "Supplier Statement"
   },
   "RestoreCompany": {
     "Close": "Close",
