@@ -486,6 +486,75 @@ public static class RptQuery
     }
 
 
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> GoodsReceivedNotInvoicedAsync(
+        DateTime from, DateTime to, CancellationToken ct)
+    {
+        DocSchema.Ensure();
+        const string sql = """
+            SELECT r.doc_date AS ReceiptDate,
+                   r.doc_no AS ReceiptNo,
+                   po.doc_no AS PurchaseOrderNo,
+                   COALESCE(NULLIF(s.name_en, ''), s.name_ar, r.party_name, '') AS SupplierName,
+                   COALESCE(l.material_code, '') AS MaterialCode,
+                   l.description AS Description,
+                   l.qty AS ReceivedQty,
+                   COALESCE(m.MatchedQty, 0) AS InvoicedQty,
+                   COALESCE(rt.ReturnedQty, 0) AS ReturnedQty,
+                   MAX(0, l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0)) AS RemainingQty,
+                   CASE WHEN l.qty > 0 THEN
+                       MAX(0, l.line_subtotal * r.exchange_rate *
+                           (l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0)) / l.qty)
+                       ELSE 0 END AS RemainingBaseAmount
+            FROM purchase_documents r
+            INNER JOIN companies co ON co.company_id = r.company_id
+            INNER JOIN document_links dl
+              ON dl.company_id = r.company_id
+             AND dl.source_doc_kind = 'PO'
+             AND dl.target_doc_kind = 'RCV'
+             AND dl.target_doc_id = r.doc_id
+            INNER JOIN purchase_documents po
+              ON po.company_id = r.company_id
+             AND po.doc_id = dl.source_doc_id
+             AND po.doc_kind = 'PO'
+            INNER JOIN purchase_document_lines l ON l.doc_id = r.doc_id
+            LEFT JOIN parties s
+              ON s.ledger_id = r.party_id AND s.company_id = r.company_id AND s.kind = 'S'
+            LEFT JOIN (
+                SELECT company_id, receipt_doc_id, receipt_line_id,
+                       SUM(matched_qty) AS MatchedQty
+                FROM purchase_receipt_invoice_matches
+                GROUP BY company_id, receipt_doc_id, receipt_line_id
+            ) m ON m.company_id = r.company_id
+               AND m.receipt_doc_id = r.doc_id
+               AND m.receipt_line_id = l.line_id
+            LEFT JOIN (
+                SELECT a.company_id, a.original_doc_id, a.original_line_id,
+                       SUM(a.returned_qty) AS ReturnedQty
+                FROM purchase_receipt_return_line_allocations a
+                INNER JOIN purchase_documents rd
+                  ON rd.company_id = a.company_id
+                 AND rd.doc_id = a.return_doc_id
+                 AND rd.doc_kind = 'RCR'
+                 AND rd.status = 'Posted'
+                 AND CAST(rd.is_deleted AS TEXT) IN ('0', 'false')
+                GROUP BY a.company_id, a.original_doc_id, a.original_line_id
+            ) rt ON rt.company_id = r.company_id
+                AND rt.original_doc_id = r.doc_id
+                AND rt.original_line_id = l.line_id
+            WHERE co.company_code = $company
+              AND r.doc_kind = 'RCV'
+              AND r.status = 'Posted'
+              AND CAST(r.is_deleted AS TEXT) IN ('0', 'false')
+              AND r.doc_date >= $from
+              AND r.doc_date < $toEx
+            ORDER BY r.doc_date, r.doc_no, l.line_no;
+            """;
+        return await QueryAsync(sql, ct,
+            ("$company", Company),
+            ("$from", DateStart(from)),
+            ("$toEx", DateEndExclusive(to)));
+    }
+
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> PartyAgingAsync(
         bool customers, CancellationToken ct)
     {
