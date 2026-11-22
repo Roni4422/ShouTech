@@ -305,7 +305,7 @@ namespace Kern.Tests
 
                     INSERT INTO material_stock_balances
                         (company_id, warehouse_id, material_id, available_qty, average_cost, last_cost)
-                    VALUES ($companyId, 1, 42, 1000, 40, 40);
+                    VALUES ('SC-TEST', 1, 42, 1000, 40, 40);
                     """;
                 command.Parameters.AddWithValue("$companyId", companyId.ToString("D"));
                 command.ExecuteNonQuery();
