@@ -527,8 +527,8 @@ public static class RptQuery
         var normalizedSearch = string.IsNullOrWhiteSpace(search) ? string.Empty : "%" + search.Trim() + "%";
         return await QueryAsync(sql, ct,
             ("$company", Company),
-            ("$from", DateStart(from)),
-            ("$toEx", DateEndExclusive(to)),
+            ("$from", from.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
+            ("$toEx", to.Date.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
             ("$search", normalizedSearch));
     }
 
@@ -600,8 +600,8 @@ public static class RptQuery
             """;
         return await QueryAsync(sql, ct,
             ("$company", Company),
-            ("$from", DateStart(from)),
-            ("$toEx", DateEndExclusive(to)));
+            ("$from", from.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
+            ("$toEx", to.Date.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
     }
 
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> PartyAgingAsync(
