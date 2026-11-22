@@ -1,5 +1,6 @@
 using ShouTech.Domain;
 using System.Globalization;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -27,6 +28,7 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
     private readonly TextBox _baseBlock = NumberBox();
     private readonly TextBox _releaseReason = new();
     private readonly DataGrid _history = new();
+    private readonly TextBox _matchDetails = new();
     private readonly TextBlock _status = new();
     private readonly Button _save = new();
     private readonly Button _refresh = new();
@@ -160,7 +162,20 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
         _history.Columns.Add(Column("PurchaseMatch.ColEvaluatedBy", nameof(EvaluationRow.EvaluatedBy), 130));
         _history.Columns.Add(Column("PurchaseMatch.ColDate", nameof(EvaluationRow.EvaluatedAt), 155));
         _history.ItemsSource = _rows;
+        _history.SelectionChanged += (_, _) => DisplayMatchDetails();
         historyPanel.Children.Add(_history);
+
+        _matchDetails.IsReadOnly = true;
+        _matchDetails.AcceptsReturn = true;
+        _matchDetails.TextWrapping = TextWrapping.Wrap;
+        _matchDetails.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+        _matchDetails.MinHeight = 100;
+        _matchDetails.MaxHeight = 170;
+        _matchDetails.Margin = new Thickness(0, 8, 0, 0);
+        _matchDetails.SetResourceReference(Control.BackgroundProperty, "InputBackgroundBrush");
+        _matchDetails.SetResourceReference(Control.ForegroundProperty, "TextBrush");
+        _matchDetails.ToolTip = T("PurchaseMatch.MatchDetails");
+        historyPanel.Children.Add(_matchDetails);
 
         var releasePanel = new DockPanel { Margin = new Thickness(0, 8, 0, 0) };
         var reasonLabel = new TextBlock
@@ -240,16 +255,40 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
                     item.EvaluationVersion,
                     item.Decision,
                     string.Join(", ", item.ReasonCodes),
+                    item.ResultSnapshotJson,
                     item.EvaluatedBy ?? string.Empty,
                     item.EvaluatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture)));
             }
             _history.Items.Refresh();
+            DisplayMatchDetails();
             _status.Text = T("PurchaseMatch.Loaded");
         }
         catch (Exception ex)
         {
             _status.Text = ex.Message;
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PurchaseMatchPolicyWin.RefreshAsync");
+        }
+    }
+
+    private void DisplayMatchDetails()
+    {
+        if (_history.SelectedItem is not EvaluationRow row ||
+            string.IsNullOrWhiteSpace(row.ResultSnapshotJson))
+        {
+            _matchDetails.Clear();
+            return;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(row.ResultSnapshotJson);
+            _matchDetails.Text = JsonSerializer.Serialize(
+                document.RootElement,
+                new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (JsonException)
+        {
+            _matchDetails.Text = row.ResultSnapshotJson;
         }
     }
 
@@ -359,6 +398,7 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
         int EvaluationVersion,
         string Decision,
         string Reasons,
+        string ResultSnapshotJson,
         string EvaluatedBy,
         string EvaluatedAt);
 }
