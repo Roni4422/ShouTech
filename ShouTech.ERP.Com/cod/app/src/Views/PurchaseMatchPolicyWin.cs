@@ -33,6 +33,7 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
     private readonly Button _save = new();
     private readonly Button _refresh = new();
     private readonly Button _release = new();
+    private readonly Button _reevaluate = new();
     private readonly Button _close = new();
     private readonly List<EvaluationRow> _rows = new();
     private PurchaseMatchPolicy? _policy;
@@ -101,12 +102,14 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
         StyleButton(_save, "PurchaseMatch.Save");
         StyleButton(_refresh, "Common.Refresh");
         StyleButton(_release, "PurchaseMatch.Release");
+        StyleButton(_reevaluate, "PurchaseMatch.Reevaluate");
         StyleButton(_close, "Common.Close");
         _save.Click += async (_, _) => await SaveAsync();
         _refresh.Click += async (_, _) => await RefreshAsync();
         _release.Click += async (_, _) => await ReleaseAsync();
+        _reevaluate.Click += async (_, _) => await ReevaluateAsync();
         _close.Click += (_, _) => Close();
-        foreach (var button in new[] { _save, _refresh, _release, _close })
+        foreach (var button in new[] { _save, _refresh, _release, _reevaluate, _close })
             commands.Children.Add(button);
         DockPanel.SetDock(commands, Dock.Bottom);
         root.Children.Add(commands);
@@ -162,7 +165,11 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
         _history.Columns.Add(Column("PurchaseMatch.ColEvaluatedBy", nameof(EvaluationRow.EvaluatedBy), 130));
         _history.Columns.Add(Column("PurchaseMatch.ColDate", nameof(EvaluationRow.EvaluatedAt), 155));
         _history.ItemsSource = _rows;
-        _history.SelectionChanged += (_, _) => DisplayMatchDetails();
+        _history.SelectionChanged += (_, _) =>
+        {
+            DisplayMatchDetails();
+            UpdateReevaluateAvailability();
+        };
         historyPanel.Children.Add(_history);
 
         _matchDetails.IsReadOnly = true;
@@ -253,6 +260,7 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
                     item.EvaluationId,
                     item.InvoiceDocId,
                     item.EvaluationVersion,
+                    item.PolicyVersion,
                     item.Decision,
                     string.Join(", ", item.ReasonCodes),
                     item.ResultSnapshotJson,
@@ -261,12 +269,39 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
             }
             _history.Items.Refresh();
             DisplayMatchDetails();
+            UpdateReevaluateAvailability();
             _status.Text = T("PurchaseMatch.Loaded");
         }
         catch (Exception ex)
         {
             _status.Text = ex.Message;
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PurchaseMatchPolicyWin.RefreshAsync");
+        }
+    }
+
+    private void UpdateReevaluateAvailability()
+    {
+        _reevaluate.IsEnabled = _canManage &&
+            _history.SelectedItem is EvaluationRow row &&
+            _policy is { IsEnabled: true } current &&
+            row.PolicyVersion != current.PolicyVersion;
+    }
+
+    private async Task ReevaluateAsync()
+    {
+        if (_service is null || !_canManage || _history.SelectedItem is not EvaluationRow row)
+            return;
+        try
+        {
+            var result = await _service.ReevaluateInvoiceAsync(
+                CurrentCompanyCode, row.InvoiceDocId, CurrentUserId);
+            await RefreshAsync();
+            _status.Text = T("PurchaseMatch.Reevaluated") + " " + result.Decision;
+        }
+        catch (Exception ex)
+        {
+            _status.Text = ex.Message;
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -379,6 +414,7 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
         StyleButton(_save, "PurchaseMatch.Save");
         StyleButton(_refresh, "Common.Refresh");
         StyleButton(_release, "PurchaseMatch.Release");
+        StyleButton(_reevaluate, "PurchaseMatch.Reevaluate");
         StyleButton(_close, "Common.Close");
         _releaseReason.ToolTip = T("PurchaseMatch.ReleaseReason");
         if (_history.Columns.Count == 6)
@@ -396,6 +432,7 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
         Guid EvaluationId,
         long InvoiceDocId,
         int EvaluationVersion,
+        int PolicyVersion,
         string Decision,
         string Reasons,
         string ResultSnapshotJson,
