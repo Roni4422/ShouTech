@@ -601,7 +601,9 @@
       "InvoicedQty": "الكمية المفوترة",
       "ReturnedQty": "الكمية المرتجعة",
       "RemainingQty": "الكمية المتبقية",
-      "RemainingBaseAmount": "قيمة GRNI المتبقية (العملة الأساسية)"
+      "RemainingBaseAmount": "قيمة GRNI المتبقية (العملة الأساسية)",
+      "OpeningBalance": "الرصيد الافتتاحي",
+      "RunningBalance": "الرصيد الجاري"
     },
     "Filter": {
       "All": "الكل",
@@ -679,7 +681,8 @@
     "ShortageStatus": "عجز",
     "BudgetVariance": "انحراف الموازنة",
     "QualitySummary": "ملخص فحوصات الجودة",
-    "GoodsReceivedNotInvoiced": "البضائع المستلمة غير المفوترة (GRNI)"
+    "GoodsReceivedNotInvoiced": "البضائع المستلمة غير المفوترة (GRNI)",
+    "SupplierStatement": "كشف حساب المورد"
   },
   "Tools": {
     "Title": "أدوات",
