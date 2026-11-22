@@ -108,12 +108,14 @@ Partial supplier debit notes against posted invoices are implemented in `cod/app
 
 Pre-invoice receipt returns are implemented separately in `cod/app/src/Views/PurchaseReceiptReturnWin.cs` and `src/Infra/OrderDocumentRepository.cs`; migration 081 records cumulative receipt-line return allocations.
 
+Supplier invoice external references are unique per company and supplier (case-insensitive and whitespace-trimmed) for active purchase invoices. The application validates before save, and SQLite/PostgreSQL migration 084 adds matching partial unique indexes as the concurrency guard.
+
 The current chain does not yet claim completion of:
 - purchase requisition creation, budget/need validation, multi-level approval, and conversion of an approved requisition into an RFQ or purchase order;
-- supplier invoice external-reference uniqueness and invoice-document attachment management;
+- supplier invoice-document attachment management;
 - freight, landed-cost allocation, customs and duty capitalization;
 - complete lot/serial/batch/expiry capture and traceability in the purchase receipt workflow. The pre-invoice receipt-return path is already implemented separately through `PurchaseReceiptReturnWin` and the transactional `CreatePurchaseReceiptReturnAsync` operation; migration 081 persists receipt-line return allocations, and posting reverses stock/GRNI while excluding returned quantities from later invoice matching. This capability is implemented at source level but still requires end-to-end acceptance evidence.
-- The GRNI report now supports an as-of date and 0–30 / 31–60 / 61–90 / 90+ day aging buckets over the remaining base-currency receipt value. The unmatched receipt/invoice exception workbench and a period-end reconciliation report remain outstanding.
+- The GRNI report supports an as-of date and 0–30 / 31–60 / 61–90 / 90+ day aging buckets over the remaining base-currency receipt value. Invoice matches and receipt returns are restricted to documents posted on or before the selected as-of date, so later activity does not rewrite historical GRNI. The unmatched receipt/invoice exception workbench and a period-end reconciliation report remain outstanding.
 
 The RFQ supplier-response, side-by-side comparison, explicit award, and supplier-quotation-to-draft-PO workflows are implemented in the application service and dedicated UI. Supplier quotations can also be marked Lost; this disposition is separate from awarding an offer. These capabilities still require the full application build and end-to-end acceptance run before release readiness can be claimed.
 
