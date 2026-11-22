@@ -780,6 +780,87 @@ namespace Kern.Tests
             }
         }
 
+        [Fact]
+        public async Task PurchaseRfq_CollectsComparesAndAwardsSupplierQuotesByBaseCurrency()
+        {
+            var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var rfq = new CommercialDocumentDraft(
+                    companyId, CommercialDocKinds.RequestForQuotation, "RFQ-COMP-01",
+                    new DateOnly(2026, 11, 1), null, null, 1, "SAR", 1m,
+                    "Competitive sourcing request",
+                    new[]
+                    {
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 10m, 0m, SourceLineNo: 1),
+                        new CommercialLineDraft(43, "MAT-43", "Item 43", "PCS", 5m, 0m, SourceLineNo: 2)
+                    },
+                    ValidTill: new DateOnly(2026, 11, 15));
+                var rfqId = await service.CreateOrderAsync(rfq, Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, rfqId, Actor);
+
+                var (expensiveQuoteId, _) = await service.CreateSupplierQuotationFromRfqAsync(
+                    rfqId, 91, "SUP-91", "Supplier 91", "Q-91",
+                    new DateOnly(2026, 11, 3), new DateOnly(2026, 11, 14),
+                    "EUR", 1.1m,
+                    new[]
+                    {
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 10m, 12m, SourceLineNo: 1),
+                        new CommercialLineDraft(43, "MAT-43", "Item 43", "PCS", 5m, 30m, SourceLineNo: 2)
+                    }, Actor, new DateOnly(2026, 11, 12), "Delivery included");
+                await service.PostOrderAsync(CommercialDocSide.Purchase, expensiveQuoteId, Actor);
+
+                var (winningQuoteId, _) = await service.CreateSupplierQuotationFromRfqAsync(
+                    rfqId, 92, "SUP-92", "Supplier 92", "Q-92",
+                    new DateOnly(2026, 11, 4), new DateOnly(2026, 11, 14),
+                    "USD", 0.9m,
+                    new[]
+                    {
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 10m, 13m, SourceLineNo: 1),
+                        new CommercialLineDraft(43, "MAT-43", "Item 43", "PCS", 5m, 25m, SourceLineNo: 2)
+                    }, Actor, new DateOnly(2026, 11, 10), "Earlier delivery");
+                await service.PostOrderAsync(CommercialDocSide.Purchase, winningQuoteId, Actor);
+
+                var offers = await service.CompareSupplierQuotationsAsync(rfqId);
+                Assert.Equal(2, offers.Count);
+                Assert.Equal(winningQuoteId, offers[0].DocId);
+                Assert.Equal(2, offers[0].Lines.Count);
+                Assert.Equal(225m, offers[0].Lines.Sum(line => line.BaseCurrencyLineTotal));
+                Assert.Equal(new DateOnly(2026, 11, 10), offers[0].DeliveryDate);
+                Assert.Equal(10m, offers[0].Lines[0].Quantity);
+                Assert.Equal(13m, offers[0].Lines[0].UnitPrice);
+                Assert.Equal(1, offers[0].Lines[0].RfqLineNo);
+
+                var (purchaseOrderId, purchaseOrderNo) =
+                    await service.CreatePurchaseOrderFromSupplierQuotationAsync(
+                        winningQuoteId, new DateOnly(2026, 11, 5), Actor);
+                var purchaseOrder = await orders.FindByIdAsync(
+                    CommercialDocSide.Purchase, purchaseOrderId);
+                Assert.NotNull(purchaseOrder);
+                Assert.Equal(CommercialDocKinds.PurchaseOrder, purchaseOrder!.DocKind);
+                Assert.Equal(CommercialDocumentStatus.Draft, purchaseOrder.Status);
+                Assert.Equal("SUP-92", purchaseOrder.PartyCode);
+                Assert.Equal("USD", purchaseOrder.CurrencyCode);
+                Assert.Equal(2, purchaseOrder.Lines.Count);
+                Assert.Equal(13m, purchaseOrder.Lines[0].UnitPrice);
+                Assert.Equal(225m, purchaseOrder.GrandTotal);
+                Assert.StartsWith("PO-", purchaseOrderNo);
+
+                var quoteLinks = await orders.GetLinksFromAsync(companyId, winningQuoteId);
+                Assert.Contains(quoteLinks, link =>
+                    link.TargetDocId == purchaseOrderId &&
+                    link.TargetDocKind == CommercialDocKinds.PurchaseOrder);
+
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    service.CreatePurchaseOrderFromSupplierQuotationAsync(
+                        winningQuoteId, new DateOnly(2026, 11, 6), Actor));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
         // ------------------------------------------------------------ fixture
 
         private static CommercialDocumentDraft Order(
