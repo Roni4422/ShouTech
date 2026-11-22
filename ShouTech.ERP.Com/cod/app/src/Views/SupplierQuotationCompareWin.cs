@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using ShouTech.App.Services;
 using ShouTech.Domain.Entities;
+using ShouTech.Domain.Interfaces;
 
 namespace ShouTech.App.Views;
 
