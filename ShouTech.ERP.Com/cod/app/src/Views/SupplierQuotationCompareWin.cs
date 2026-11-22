@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using ShouTech.App.Services;
+using ShouTech.App.Reporting.Invoices;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
 
@@ -63,9 +64,9 @@ public sealed class SupplierQuotationCompareWin : BaseWin
         Title = T("Purchasing.SupplierQuotationComparison.Title");
         var root = new DockPanel { Margin = new Thickness(12) };
         var footer = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-        StyleButton(_refresh, "Common.Refresh");
-        StyleButton(_award, "Purchasing.SupplierQuotationComparison.Award");
-        StyleButton(_close, "Common.Close");
+        F2Ui.StyleButton(_refresh, "Common.Refresh");
+        F2Ui.StyleButton(_award, "Purchasing.SupplierQuotationComparison.Award");
+        F2Ui.StyleButton(_close, "Common.Close");
         _refresh.Click += async (_, _) => await RefreshAsync();
         _award.Click += async (_, _) => await AwardAsync();
         _close.Click += (_, _) => Close();
