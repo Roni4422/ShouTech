@@ -167,6 +167,53 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task PurchaseReceiptReturn_SubsetLine_PreservesSourceLineAndNewReturnLineIdentity()
+        {
+            var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-9111",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 12m),
+                        new CommercialLineDraft(43, "MAT-43", "Item 43", "PCS", 2m, 20m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+
+                var (receiptId, _) = await service.CreatePurchaseReceiptAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 2),
+                    new[]
+                    {
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 12m),
+                        new CommercialLineDraft(43, "MAT-43", "Item 43", "PCS", 2m, 20m)
+                    }, Actor);
+                var receipt = await orders.FindByIdAsync(CommercialDocSide.Purchase, receiptId);
+                Assert.NotNull(receipt);
+                Assert.Equal(2, receipt!.Lines.Count);
+
+                var (returnId, _) = await service.CreatePurchaseReceiptReturnAsync(
+                    companyId, receiptId, new DateOnly(2026, 11, 3),
+                    new[] { new CommercialLineDraft(43, "MAT-43", "Item 43", "PCS", 1m, 20m, SourceLineNo: 2) }, Actor);
+                var returned = await orders.FindByIdAsync(CommercialDocSide.Purchase, returnId);
+                Assert.NotNull(returned);
+                Assert.Single(returned!.Lines);
+
+                var allocation = connectionString;
+                Assert.Equal(receipt.Lines[1].LineId, (long)Scalar(connectionString,
+                    $"SELECT original_line_id FROM purchase_receipt_return_line_allocations WHERE return_doc_id = {returnId};"));
+                Assert.Equal(returned.Lines[0].LineId, (long)Scalar(connectionString,
+                    $"SELECT return_line_id FROM purchase_receipt_return_line_allocations WHERE return_doc_id = {returnId};"));
+                Assert.Equal(1m, Scalar(connectionString,
+                    $"SELECT returned_qty FROM purchase_receipt_return_line_allocations WHERE return_doc_id = {returnId};"));
+                Assert.Equal(101m, BalanceQty(connectionString, 42));
+                Assert.Equal(101m, BalanceQty(connectionString, 43));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task PurchaseOrder_ReceiptThenInvoice_AccruesAndClearsGrniWithoutDoubleReceiving()
         {
             var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
