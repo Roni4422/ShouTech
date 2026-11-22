@@ -293,7 +293,7 @@ namespace Kern.Tests
                     quotedLines: new[]
                     {
                         new CommercialLineDraft(
-                            42, "MAT-42", "Order test item", "PCS", 3m, 11m,
+                            42, "MAT-42", "Order test item", "PCS", 5m, 11m,
                             SourceLineNo: 1)
                     },
                     userId: "order-test");
@@ -314,7 +314,7 @@ namespace Kern.Tests
                         quotedLines: new[]
                         {
                             new CommercialLineDraft(
-                                42, "MAT-42", "Order test item", "PCS", 6m, 10m,
+                                42, "MAT-42", "Order test item", "PCS", 3m, 10m,
                                 SourceLineNo: 1)
                         },
                         userId: "order-test"));
@@ -324,7 +324,7 @@ namespace Kern.Tests
                 var offer = Assert.Single(offers);
                 Assert.Equal(quotationId, offer.DocId);
                 Assert.Equal("Supplier 91", offer.SupplierName);
-                Assert.Equal(33m, offer.GrandTotal);
+                Assert.Equal(55m, offer.GrandTotal);
 
                 var (purchaseOrderId, purchaseOrderNo) =
                     await service.CreatePurchaseOrderFromSupplierQuotationAsync(
@@ -336,8 +336,8 @@ namespace Kern.Tests
                 Assert.NotNull(purchaseOrder);
                 Assert.Equal(CommercialDocKinds.PurchaseOrder, purchaseOrder!.DocKind);
                 Assert.Equal(CommercialDocumentStatus.Draft, purchaseOrder.Status);
-                Assert.Equal(3m, Assert.Single(purchaseOrder.Lines).Qty);
-                Assert.Equal(33m, purchaseOrder.GrandTotal);
+                Assert.Equal(5m, Assert.Single(purchaseOrder.Lines).Qty);
+                Assert.Equal(55m, purchaseOrder.GrandTotal);
 
                 var rfqLinks = await orders.GetLinksFromAsync(companyId, rfqId);
                 var rfqResponse = Assert.Single(rfqLinks);
