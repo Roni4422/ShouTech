@@ -87,12 +87,25 @@ not a claim that every procurement feature in the ERP is complete.
 - Concurrent returns against the same supplier invoice cannot consume the same remaining quantity.
 - SQLite and PostgreSQL migrations are repeatable.
 
+## Sourcing request entry
+
+A supplier-neutral Request for Quotation (RFQ) can now be created from
+**Orders → Request for Quotation**. It uses the shared commercial-document
+engine, supports item lines and a response deadline, can be saved as a draft,
+posted, loaded by document number, and printed. A supplier is not mandatory
+on the RFQ header because one request may be sent to multiple suppliers.
+
+Supplier response creation, side-by-side offer evaluation, award approval,
+and purchase-order conversion are available in the application service layer
+but still require dedicated user-interface workflows and end-to-end acceptance
+coverage before the sourcing process can be called complete.
+
 ## Remaining procurement scope
 
 Partial supplier debit notes against posted invoices are implemented in `cod/app/src/Views/PurchaseReturnWin.cs` and `cod/app/src/Services/InvRepo.cs`; migration 080 records cumulative line allocations.
 
 The current chain does not yet claim completion of:
-- purchase requisition approval and multi-supplier RFQ quotation comparison;
+- purchase requisition approval, supplier response entry, side-by-side RFQ comparison, and award UI;
 - supplier invoice external-reference uniqueness and document attachment;
 - freight, landed-cost allocation, customs and duty capitalization;
 - lot/serial/batch/expiry capture at receipt;
