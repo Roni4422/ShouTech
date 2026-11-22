@@ -1,3 +1,4 @@
+using System;
 using ShouTech.Domain.Entities;
 using Xunit;
 
