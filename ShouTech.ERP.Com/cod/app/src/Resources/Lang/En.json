@@ -3819,5 +3819,6 @@
     "Saved": "Purchase match policy saved.",
     "OnlyBlockedCanRelease": "Select a blocked evaluation to release.",
     "InvalidNumber": "Enter a valid non-negative decimal number."
-  }
+  },
+  "PurchaseMatch.MatchDetails": "Select an invoice evaluation to inspect its source-line match details."
 }
