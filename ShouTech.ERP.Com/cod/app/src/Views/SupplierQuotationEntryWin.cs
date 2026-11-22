@@ -123,19 +123,18 @@ public sealed class SupplierQuotationEntryWin : BaseWin
         DockPanel.SetDock(_status, Dock.Bottom);
         root.Children.Add(_status);
 
-        var form = new Grid { Margin = new Thickness(0, 0, 0, 8) };
-        for (var i = 0; i < 4; i++) form.ColumnDefinitions.Add(new ColumnDefinition());
-        for (var i = 0; i < 4; i++) form.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        AddField(form, 0, 0, "Purchasing.SupplierQuotationEntry.SupplierId", _supplierId);
-        AddField(form, 0, 1, "Purchasing.SupplierQuotationEntry.SupplierCode", _supplierCode);
-        AddField(form, 0, 2, "Purchasing.SupplierQuotationEntry.SupplierName", _supplierName);
-        AddField(form, 0, 3, "Purchasing.SupplierQuotationEntry.Reference", _supplierReference);
-        AddField(form, 1, 0, "Purchasing.SupplierQuotationEntry.Currency", _currency);
-        AddField(form, 1, 1, "Purchasing.SupplierQuotationEntry.ExchangeRate", _exchangeRate);
-        AddField(form, 1, 2, "Purchasing.SupplierQuotationEntry.Date", _quotationDate);
-        AddField(form, 1, 3, "Purchasing.SupplierQuotationEntry.ValidTill", _validTill);
-        AddField(form, 2, 0, "Purchasing.SupplierQuotationEntry.DeliveryDate", _deliveryDate);
-        AddField(form, 2, 1, "Purchasing.SupplierQuotationEntry.Terms", _terms, 3);
+        var form = CreateFormGrid(2);
+        form.Margin = new Thickness(0, 0, 0, 8);
+        AddFormField(_fieldLabels, form, 0, 0, "Purchasing.SupplierQuotationEntry.SupplierId", _supplierId);
+        AddFormField(_fieldLabels, form, 0, 1, "Purchasing.SupplierQuotationEntry.SupplierCode", _supplierCode);
+        AddFormField(_fieldLabels, form, 1, 0, "Purchasing.SupplierQuotationEntry.SupplierName", _supplierName);
+        AddFormField(_fieldLabels, form, 1, 1, "Purchasing.SupplierQuotationEntry.Reference", _supplierReference);
+        AddFormField(_fieldLabels, form, 2, 0, "Purchasing.SupplierQuotationEntry.Currency", _currency);
+        AddFormField(_fieldLabels, form, 2, 1, "Purchasing.SupplierQuotationEntry.ExchangeRate", _exchangeRate);
+        AddFormField(_fieldLabels, form, 3, 0, "Purchasing.SupplierQuotationEntry.Date", _quotationDate);
+        AddFormField(_fieldLabels, form, 3, 1, "Purchasing.SupplierQuotationEntry.ValidTill", _validTill);
+        AddFormField(_fieldLabels, form, 4, 0, "Purchasing.SupplierQuotationEntry.DeliveryDate", _deliveryDate);
+        AddFormField(_fieldLabels, form, 4, 1, "Purchasing.SupplierQuotationEntry.Terms", _terms);
         DockPanel.SetDock(form, Dock.Top);
         root.Children.Add(form);
 
@@ -153,20 +152,6 @@ public sealed class SupplierQuotationEntryWin : BaseWin
         _linesGrid.Columns.Add(new DataGridTextColumn { Header = T("Purchasing.SupplierQuotationEntry.TaxRate"), Binding = new Binding(nameof(QuotationLineVm.TaxRate)) { StringFormat = "N2", UpdateSourceTrigger = UpdateSourceTrigger.LostFocus }, Width = 85 });
         root.Children.Add(_linesGrid);
         Content = root;
-    }
-
-    private void AddField(Grid grid, int row, int column, string key, Control input, int span = 1)
-    {
-        var panel = new StackPanel { Margin = new Thickness(4) };
-        var label = new TextBlock { Text = T(key), Margin = new Thickness(0, 0, 0, 3) };
-        _fieldLabels.Add((label, key));
-        panel.Children.Add(label);
-        input.MinWidth = 100;
-        panel.Children.Add(input);
-        Grid.SetRow(panel, row);
-        Grid.SetColumn(panel, column);
-        Grid.SetColumnSpan(panel, span);
-        grid.Children.Add(panel);
     }
 
     private async Task SaveAndPostAsync()
