@@ -1179,6 +1179,111 @@ namespace Kern.Tests
             return Convert.ToString(command.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
         }
 
+        [Fact]
+        public async Task PurchaseMatchPolicyRepository_UsesOptimisticVersionAndPersistsSettings()
+        {
+            var (_, _, _, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var repository = new PurchaseMatchPolicyRepository("SQLite", connectionString);
+                var initial = new PurchaseMatchPolicy(
+                    true, true, 2m, 5m, 1m, 3m, 10m, 25m, 1);
+
+                await repository.SavePolicyAsync(CompanyCode, initial, 0, Actor);
+                var saved = await repository.GetPolicyAsync(CompanyCode);
+
+                Assert.NotNull(saved);
+                Assert.Equal(1, saved.PolicyVersion);
+                Assert.True(saved.IsEnabled);
+                Assert.Equal(2m, saved.PriceWarningPercent);
+
+                var changed = saved with { PriceWarningPercent = 2.5m };
+                await repository.SavePolicyAsync(CompanyCode, changed, saved.PolicyVersion, Actor);
+                var updated = await repository.GetPolicyAsync(CompanyCode);
+
+                Assert.NotNull(updated);
+                Assert.Equal(2, updated.PolicyVersion);
+                Assert.Equal(2.5m, updated.PriceWarningPercent);
+
+                await Assert.ThrowsAsync<System.Data.DBConcurrencyException>(() =>
+                    repository.SavePolicyAsync(CompanyCode, initial, 1, Actor));
+
+                var afterConflict = await repository.GetPolicyAsync(CompanyCode);
+                Assert.NotNull(afterConflict);
+                Assert.Equal(2, afterConflict.PolicyVersion);
+                Assert.Equal(2.5m, afterConflict.PriceWarningPercent);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task PurchaseMatchPolicyRepository_ReleaseIsAuditedAndOnlyTargetsLatestBlockedEvaluation()
+        {
+            var (_, _, _, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var evaluationId = Guid.NewGuid();
+                using (var connection = new SqliteConnection(connectionString))
+                {
+                    connection.Open();
+                    using var insert = connection.CreateCommand();
+                    insert.CommandText = """
+                        INSERT INTO purchase_match_evaluations
+                            (evaluation_id, company_code, invoice_doc_id, evaluation_version,
+                             policy_version, decision, reason_codes_json,
+                             policy_snapshot_json, result_snapshot_json, evaluated_by)
+                        VALUES
+                            ($id, $company, 7001, 1, 1, 'Blocked', '["PRICE_BLOCKED"]',
+                             '{}', '{"priceVariancePercent":8.3}', $actor)
+                        """;
+                    insert.Parameters.AddWithValue("$id", evaluationId.ToString("D"));
+                    insert.Parameters.AddWithValue("$company", CompanyCode);
+                    insert.Parameters.AddWithValue("$actor", Actor);
+                    insert.ExecuteNonQuery();
+                }
+
+                var repository = new PurchaseMatchPolicyRepository("SQLite", connectionString);
+                var overrideId = await repository.RecordOverrideAsync(
+                    CompanyCode, 7001, evaluationId, Actor, "Approved by purchasing director");
+
+                Assert.NotEqual(Guid.Empty, overrideId);
+                Assert.Equal(1m, Scalar(connectionString,
+                    "SELECT COUNT(*) FROM purchase_match_overrides WHERE company_code = '" + CompanyCode +
+                    "' AND invoice_doc_id = 7001 AND evaluation_id = '" + evaluationId.ToString("D") + "' " +
+                    "AND released_by = '" + Actor + "' AND release_reason = 'Approved by purchasing director';"));
+
+                using (var connection = new SqliteConnection(connectionString))
+                {
+                    connection.Open();
+                    using var insert = connection.CreateCommand();
+                    insert.CommandText = """
+                        INSERT INTO purchase_match_evaluations
+                            (evaluation_id, company_code, invoice_doc_id, evaluation_version,
+                             policy_version, decision, reason_codes_json,
+                             policy_snapshot_json, result_snapshot_json, evaluated_by)
+                        VALUES
+                            ($id, $company, 7001, 2, 1, 'Blocked', '["TAX_BLOCKED"]',
+                             '{}', '{"taxVariancePercent":9}', $actor)
+                        """;
+                    insert.Parameters.AddWithValue("$id", Guid.NewGuid().ToString("D"));
+                    insert.Parameters.AddWithValue("$company", CompanyCode);
+                    insert.Parameters.AddWithValue("$actor", Actor);
+                    insert.ExecuteNonQuery();
+                }
+
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    repository.RecordOverrideAsync(
+                        CompanyCode, 7001, evaluationId, Actor, "Attempt stale release"));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
         private static Task<(OrderService Service, OrderDocumentRepository Orders, Guid CompanyId, string ConnectionString, Action Cleanup)> CreateAsync()
         {
             var databasePath = Path.Combine(Path.GetTempPath(), $"shoutech-step9-{Guid.NewGuid():N}.sqlite3");
