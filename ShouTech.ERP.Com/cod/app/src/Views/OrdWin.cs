@@ -570,6 +570,12 @@ public sealed class OrdWin : BaseWin, IWindowMode
 
     private async Task PostAsync()
     {
+        var permission = _kind == OrdKind.Sales ? PermKey.SalesPost : PermKey.PurchPost;
+        if (!AppHost.Permissions.Has(permission))
+        {
+            ShowWarningMessage(T("OrderDoc.PermissionDenied"));
+            return;
+        }
         if (AppHost.Orders is null || _docId is null)
         {
             ShowWarningMessage(T("OrderDoc.SaveFirst"));
@@ -591,8 +597,13 @@ public sealed class OrdWin : BaseWin, IWindowMode
 
     private async Task ConvertAsync()
     {
-        var permission = _kind == OrdKind.Sales ? PermCat.Sales.OrderConvert : PermCat.Purchasing.OrderConvert;
-        if (!AppHost.Permissions.Has(permission))
+        var canConvert = _kind == OrdKind.Sales
+            ? AppHost.Permissions.Has(PermCat.Sales.OrderConvert)
+            : AppHost.Permissions.HasAll(
+                PermCat.Purchasing.OrderConvert,
+                PermCat.Purchasing.InvoiceCreate,
+                PermCat.Purchasing.InvoicePost);
+        if (!canConvert)
         {
             ShowWarningMessage(T("OrderDoc.PermissionDenied"));
             return;
@@ -653,7 +664,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
 
     private async Task ReceiveAsync()
     {
-        if (_kind != OrdKind.Purchase || !AppHost.Permissions.Has(PermCat.Purchasing.OrderConvert))
+        if (_kind != OrdKind.Purchase || !AppHost.Permissions.Has(PermKey.PurchPost))
         {
             ShowWarningMessage(T("OrderDoc.PermissionDenied"));
             return;
@@ -1032,7 +1043,8 @@ public sealed class OrdWin : BaseWin, IWindowMode
         _txtWhs.IsEnabled = editable;
         _txtNotes.IsEnabled = editable;
         _btnSave.IsEnabled = editable;
-        _btnPost.IsEnabled = editable && _docId is not null;
+        var postPermission = _kind == OrdKind.Sales ? PermKey.SalesPost : PermKey.PurchPost;
+        _btnPost.IsEnabled = editable && _docId is not null && AppHost.Permissions.Has(postPermission);
         _btnConvert.IsEnabled = !IsRfq && !_isConverting && !_isReceiving && _status == CommercialDocumentStatus.Posted;
         _btnReceipt.IsEnabled = !_isReceiving && !_isConverting && _kind == OrdKind.Purchase && _status == CommercialDocumentStatus.Posted && _docId is not null;
         _btnClose.IsEnabled = _status == CommercialDocumentStatus.Posted;
