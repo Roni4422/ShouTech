@@ -683,21 +683,17 @@ public sealed class OrdWin : BaseWin, IWindowMode
     
             var rows = _lines
                 .Where(line => line.Qty - line.FulfilledQty > 0m)
-                .GroupBy(line => line.MaterialId)
-                .Select(group =>
+                .Select(line => new ReceiptLineVm
                 {
-                    var line = group.First();
-                    return new ReceiptLineVm
-                    {
-                        MaterialId = line.MaterialId,
-                        ItemCode = line.ItemCode,
-                        Description = line.Description,
-                        Unit = line.Unit,
-                        Quantity = group.Sum(item => item.Qty - item.FulfilledQty),
-                        UnitPrice = line.UnitPrice,
-                        DiscountPct = line.DiscountPct,
-                        WarehouseId = receiptWarehouseId
-                    };
+                    SourceLineNo = line.LineNo,
+                    MaterialId = line.MaterialId,
+                    ItemCode = line.ItemCode,
+                    Description = line.Description,
+                    Unit = line.Unit,
+                    Quantity = line.Qty - line.FulfilledQty,
+                    UnitPrice = line.UnitPrice,
+                    DiscountPct = line.DiscountPct,
+                    WarehouseId = receiptWarehouseId
                 })
                 .ToList();
             if (rows.Count == 0)
@@ -721,6 +717,13 @@ public sealed class OrdWin : BaseWin, IWindowMode
                 SelectionUnit = DataGridSelectionUnit.CellOrRowHeader,
                 Margin = new Thickness(0, 0, 0, 10)
             };
+            grid.Columns.Add(new DataGridTextColumn
+            {
+                Header = T("OrderDoc.PurchaseOrderLine"),
+                Binding = new Binding(nameof(ReceiptLineVm.SourceLineNo)),
+                IsReadOnly = true,
+                Width = 70
+            });
             grid.Columns.Add(new DataGridTextColumn
             {
                 Header = T("Invoice.Col.Code"),
@@ -790,7 +793,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
                 .Where(line => line.Quantity > 0m)
                 .Select(line => new CommercialLineDraft(
                     line.MaterialId, line.ItemCode, line.Description, line.Unit,
-                    line.Quantity, line.UnitPrice, line.DiscountPct, 0m, line.WarehouseId))
+                    line.Quantity, line.UnitPrice, line.DiscountPct, 0m, line.WarehouseId, line.SourceLineNo))
                 .ToList();
             if (receiptLines.Count == 0)
             {
@@ -1220,6 +1223,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
 
     private sealed class ReceiptLineVm
     {
+        public int SourceLineNo { get; init; }
         public long? MaterialId { get; init; }
         public string ItemCode { get; init; } = "";
         public string Description { get; init; } = "";
