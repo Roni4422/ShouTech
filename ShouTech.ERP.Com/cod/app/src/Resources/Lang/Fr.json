@@ -607,7 +607,8 @@
       "Days": "Jours",
       "Limit": "Limite",
       "P2From": "Période 2 du",
-      "P2To": "Période 2 au"
+      "P2To": "Période 2 au",
+      "Search": "Rechercher par code, nom ou téléphone du fournisseur"
     },
     "CustomerAging": "Balance âgée clients",
     "SupplierAging": "Balance âgée fournisseurs",
