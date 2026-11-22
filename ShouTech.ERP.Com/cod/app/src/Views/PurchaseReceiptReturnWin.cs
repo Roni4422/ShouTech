@@ -52,7 +52,7 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
     {
         Title = T("Purchasing.ReceiptReturn.Title");
         F2Ui.ApplyTexts(_labels, _headers, new[] { _load, _post, _close }, T);
-        _receiptInfo.Text = _receiptId is null ? string.Empty : string.Format(CultureInfo.CurrentCulture, T("Purchasing.ReceiptReturn.Loaded"), _loadedReceiptNo, _loadedSupplierName);
+        _receiptInfo.Text = _receiptId is null ? string.Empty : Tf("Purchasing.ReceiptReturn.Loaded", _loadedReceiptNo, _loadedSupplierName);
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -176,8 +176,7 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
                     DiscountPct = line.DiscountPct,
                     WarehouseId = line.WarehouseId
                 });
-            _receiptInfo.Text = string.Format(CultureInfo.CurrentCulture,
-                T("Purchasing.ReceiptReturn.Loaded"), _loadedReceiptNo, _loadedSupplierName);
+            _receiptInfo.Text = Tf("Purchasing.ReceiptReturn.Loaded", _loadedReceiptNo, _loadedSupplierName);
             _post.IsEnabled = _lines.Any(x => x.ReturnableQty > 0m);
             UpdateStatus();
         }
@@ -224,7 +223,7 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
             var result = await AppHost.Orders.CreatePurchaseReceiptReturnAsync(
                 _companyId, receiptId, DateOnly.FromDateTime(DateTime.Today), drafts, CurrentUserId);
             MessageBox.Show(this,
-                string.Format(CultureInfo.CurrentCulture, T("Purchasing.ReceiptReturn.Created"), result.ReturnDocNo),
+                Tf("Purchasing.ReceiptReturn.Created", result.ReturnDocNo),
                 Title, MessageBoxButton.OK, MessageBoxImage.Information);
             _receiptId = null;
             _lines.Clear();
@@ -250,8 +249,7 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
     private void UpdateStatus()
     {
         var total = _lines.Sum(x => Math.Max(0m, x.ReturnQty));
-        _status.Text = string.Format(CultureInfo.CurrentCulture,
-            T("Purchasing.ReceiptReturn.Total"), total);
+        _status.Text = Tf("Purchasing.ReceiptReturn.Total", total);
     }
 
     private sealed class ReturnLineVm
