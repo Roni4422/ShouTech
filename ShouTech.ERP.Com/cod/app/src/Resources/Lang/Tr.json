@@ -415,7 +415,8 @@
     "OrderReceiptDelivery": "Sipariş Teslim Alma Faturaları",
     "TrackOrders": "Siparişleri Takip Et",
     "OrderPayments": "Sipariş Ödemeleri",
-    "SearchOrders": "Sipariş Ara"
+    "SearchOrders": "Sipariş Ara",
+    "RequestForQuotation": "Teklif Talebi"
   },
   "Customers": {
     "Title": "Müşteriler",
@@ -2567,7 +2568,10 @@
     "SaveFirst": "Önce belgeyi kaydedin.",
     "ServiceUnavailable": "Sipariş hizmeti kullanılamıyor (veritabanı bağlantısı yok).",
     "StatusClosed": "Kapalı",
-    "TrackTitle": "Sipariş Takibi"
+    "TrackTitle": "Sipariş Takibi",
+    "TitleRfq": "Teklif Talebi",
+    "ValidTill": "Yanıt Son Tarihi",
+    "RfqCannotConvert": "Teklif talebi doğrudan tedarikçi faturasına dönüştürülemez."
   },
   "Definitions": {
     "Title": "Tanımlar",
