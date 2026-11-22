@@ -129,11 +129,10 @@ public sealed class SupplierQuotationCompareWin : BaseWin
         {
             _offers = await AppHost.Orders.CompareSupplierQuotationsAsync(_rfqId);
             _offersGrid.ItemsSource = _offers;
-            _offersGrid.SelectedItem = _offers.FirstOrDefault();
+            _offersGrid.SelectedItem = _offers.Count == 0 ? null : _offers[0];
             _status.Text = _offers.Count == 0
                 ? T("Purchasing.SupplierQuotationComparison.NoOffers")
-                : string.Format(System.Globalization.CultureInfo.CurrentCulture,
-                    T("Purchasing.SupplierQuotationComparison.OfferCount"), _offers.Count);
+                : Tf("Purchasing.SupplierQuotationComparison.OfferCount", _offers.Count);
             _award.IsEnabled = _offers.Count > 0;
         }
         catch (Exception ex)
@@ -158,8 +157,7 @@ public sealed class SupplierQuotationCompareWin : BaseWin
             return;
         }
         var confirm = MessageBox.Show(this,
-            string.Format(System.Globalization.CultureInfo.CurrentCulture,
-                T("Purchasing.SupplierQuotationComparison.ConfirmAward"), selected.SupplierName, selected.DocNo),
+            Tf("Purchasing.SupplierQuotationComparison.ConfirmAward", selected.SupplierName, selected.DocNo),
             Title, MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (confirm != MessageBoxResult.Yes) return;
 
@@ -168,8 +166,7 @@ public sealed class SupplierQuotationCompareWin : BaseWin
             var result = await AppHost.Orders.CreatePurchaseOrderFromSupplierQuotationAsync(
                 selected.DocId, DateOnly.FromDateTime(DateTime.Today), CurrentUserId);
             MessageBox.Show(this,
-                string.Format(System.Globalization.CultureInfo.CurrentCulture,
-                    T("Purchasing.SupplierQuotationComparison.AwardCreated"), result.PurchaseOrderNo),
+                Tf("Purchasing.SupplierQuotationComparison.AwardCreated", result.PurchaseOrderNo),
                 Title, MessageBoxButton.OK, MessageBoxImage.Information);
             await RefreshAsync();
         }
