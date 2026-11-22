@@ -208,6 +208,81 @@ public sealed class InvPostCorrectnessTests
     }
 
     [Fact]
+    public async Task ConcurrentPurchaseReturns_CannotConsumeTheSameRemainingInvoiceQuantity()
+    {
+        using var db = await SeededAsync();
+        var party = await SavePartyAsync(db, "S", "SUP-RETURN-RACE", 100000m);
+        var original = BuildDoc(InvDocKind.PurchaseInvoice, party.LedgerId, party.Code,
+            qty: 5m, price: 30m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        InvRepo.SaveDraft(original);
+        InvRepo.Post(original.DocId, original.Kind, Actor);
+
+        InvDoc BuildReturn() => new()
+        {
+            Kind = InvDocKind.PurchaseReturn,
+            DocNo = InvRepo.NextDocNo(InvDocKind.PurchaseReturn),
+            DocDate = new DateTime(2026, 11, 12),
+            PartyId = party.LedgerId,
+            PartyCode = party.Code,
+            PartyName = party.NameEn,
+            WarehouseId = 1,
+            CurrencyCode = original.CurrencyCode,
+            ExchangeRate = original.ExchangeRate,
+            PaymentMethod = InvPaymentMethod.Credit,
+            OriginalDocId = original.DocId,
+            OriginalDocKind = InvDocKind.PurchaseInvoice,
+            OriginalDocNo = original.DocNo,
+            Lines =
+            {
+                new InvLine
+                {
+                    LineNo = 1,
+                    MaterialId = original.Lines[0].MaterialId,
+                    MaterialCode = original.Lines[0].MaterialCode,
+                    Description = original.Lines[0].Description,
+                    Unit = original.Lines[0].Unit,
+                    Qty = 3m,
+                    UnitPrice = original.Lines[0].UnitPrice,
+                    DiscountPct = original.Lines[0].DiscountPct,
+                    TaxCode = original.Lines[0].TaxCode,
+                    TaxRate = original.Lines[0].TaxRate,
+                    TaxCalculationMode = original.Lines[0].TaxCalculationMode,
+                    WarehouseId = original.Lines[0].WarehouseId
+                }
+            }
+        };
+
+        var first = BuildReturn();
+        var second = BuildReturn();
+        InvRepo.SaveDraft(first);
+        InvRepo.SaveDraft(second);
+        InvRepo.RestoreReturnLineNumbers(first.DocId, InvDocKind.PurchaseReturn, new[] { 1 });
+        InvRepo.RestoreReturnLineNumbers(second.DocId, InvDocKind.PurchaseReturn, new[] { 1 });
+
+        static bool TryPost(long id)
+        {
+            try
+            {
+                InvRepo.Post(id, InvDocKind.PurchaseReturn, Actor);
+                return true;
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or Microsoft.Data.Sqlite.SqliteException)
+            {
+                return false;
+            }
+        }
+
+        var results = await Task.WhenAll(
+            Task.Run(() => TryPost(first.DocId)),
+            Task.Run(() => TryPost(second.DocId)));
+
+        Assert.Single(results.Where(posted => posted));
+        Assert.Equal(3m, InvRepo.GetAlreadyReturnedPurchaseQuantities(original.DocId)[1]);
+        Assert.Equal(1m, Scalar(db,
+            "SELECT COUNT(*) FROM purchase_documents WHERE doc_kind = 'PRT' AND status = 'Posted' AND original_doc_id = " + original.DocId.ToString(CultureInfo.InvariantCulture)));
+    }
+
+    [Fact]
     public async Task DeliveryLinkedInvoice_PostsThroughChainWithoutSecondStockIssue()
     {
         using var db = await SeededAsync();
