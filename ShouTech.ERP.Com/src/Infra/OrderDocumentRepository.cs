@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data.Common;
 using System.Globalization;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
@@ -1544,6 +1545,12 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             // whole conversion back, invoice included.
             var stockCompanyCode = await PartyLedger.ResolveCompanyCodeAsync(
                 connection, transaction, _provider, order.CompanyId.ToString("D"), cancellationToken).ConfigureAwait(false);
+            if (side == CommercialDocSide.Purchase)
+            {
+                await PersistPurchaseMatchEvaluationAsync(
+                    connection, transaction, order, invoiceId, invoiceLines, stockCompanyCode,
+                    invoiceSubtotal, invoiceTax, grniBaseAmount, fx.Rate, userId, cancellationToken).ConfigureAwait(false);
+            }
             var cogsAmount = 0m;
             if (side == CommercialDocSide.Sales)
             {
@@ -2067,6 +2074,139 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         if (string.IsNullOrWhiteSpace(draft.DocNo)) throw new ArgumentException("Document number is required.", nameof(draft));
         if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
         if (draft.Lines.Count == 0) throw new InvalidOperationException("A commercial document requires at least one line.");
+    }
+
+    private async Task PersistPurchaseMatchEvaluationAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        CommercialDocumentSnapshot order,
+        long invoiceDocId,
+        IReadOnlyList<CommercialLineDraft> invoiceLines,
+        string companyCode,
+        decimal invoiceSubtotal,
+        decimal invoiceTax,
+        decimal grniBaseAmount,
+        decimal exchangeRate,
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        var policyVersion = 1;
+        var policyEnabled = false;
+        var requireReceiptMatch = true;
+        var priceWarning = 0m;
+        var priceBlock = 0m;
+        var taxWarning = 0m;
+        var taxBlock = 0m;
+        var baseWarning = 0m;
+        var baseBlock = 0m;
+
+        await using (var policyCommand = CreateCommand(connection, transaction, """
+            SELECT is_enabled, require_receipt_match, price_warning_percent, price_block_percent,
+                   tax_warning_percent, tax_block_percent, base_variance_warning_amount,
+                   base_variance_block_amount, policy_version
+            FROM purchase_match_policies
+            WHERE company_code = @company
+            """))
+        {
+            Add(policyCommand, "@company", companyCode);
+            await using var reader = await policyCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                policyEnabled = Convert.ToBoolean(reader.GetValue(0), CultureInfo.InvariantCulture);
+                requireReceiptMatch = Convert.ToBoolean(reader.GetValue(1), CultureInfo.InvariantCulture);
+                priceWarning = Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture);
+                priceBlock = Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture);
+                taxWarning = Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture);
+                taxBlock = Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture);
+                baseWarning = Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture);
+                baseBlock = Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture);
+                policyVersion = Convert.ToInt32(reader.GetValue(8), CultureInfo.InvariantCulture);
+            }
+        }
+
+        var policy = new PurchaseMatchPolicy(
+            policyEnabled, requireReceiptMatch, priceWarning, priceBlock,
+            taxWarning, taxBlock, baseWarning, baseBlock, policyVersion);
+
+        decimal expectedTax = 0m;
+        decimal actualTax = 0m;
+        var sourceLines = order.Lines.ToDictionary(line => line.LineNo);
+        foreach (var invoiceLine in invoiceLines)
+        {
+            if (invoiceLine.SourceLineNo is not int sourceLineNo ||
+                !sourceLines.TryGetValue(sourceLineNo, out var sourceLine))
+                throw new InvalidOperationException("A supplier invoice line is missing its purchase-order source line for match evaluation.");
+
+            var net = decimal.Round(
+                invoiceLine.Qty * invoiceLine.UnitPrice * (1m - invoiceLine.DiscountPct / 100m),
+                2, MidpointRounding.AwayFromZero);
+            expectedTax += decimal.Round(net * sourceLine.TaxRate / 100m, 2, MidpointRounding.AwayFromZero);
+            actualTax += decimal.Round(net * invoiceLine.TaxRate / 100m, 2, MidpointRounding.AwayFromZero);
+        }
+
+        var taxVariancePercent = expectedTax == 0m
+            ? (actualTax == 0m ? 0m : decimal.MaxValue)
+            : decimal.Round(Math.Abs(actualTax - expectedTax) / Math.Abs(expectedTax) * 100m, 6, MidpointRounding.AwayFromZero);
+        var invoiceBaseAmount = decimal.Round(invoiceSubtotal * exchangeRate, 6, MidpointRounding.AwayFromZero);
+        var priceVariancePercent = grniBaseAmount == 0m
+            ? (invoiceBaseAmount == 0m ? 0m : decimal.MaxValue)
+            : decimal.Round(Math.Abs(invoiceBaseAmount - grniBaseAmount) / Math.Abs(grniBaseAmount) * 100m, 6, MidpointRounding.AwayFromZero);
+        var absoluteBaseVariance = Math.Abs(invoiceBaseAmount - grniBaseAmount);
+
+        var evaluation = PurchaseMatchPolicyEvaluator.Evaluate(
+            policy,
+            new PurchaseMatchVariance(
+                priceVariancePercent,
+                taxVariancePercent,
+                absoluteBaseVariance,
+                HasReceiptMatch: true));
+
+        var nextVersion = 1;
+        await using (var versionCommand = CreateCommand(connection, transaction, """
+            SELECT COALESCE(MAX(evaluation_version), 0) + 1
+            FROM purchase_match_evaluations
+            WHERE company_code = @company AND invoice_doc_id = @invoice
+            """))
+        {
+            Add(versionCommand, "@company", companyCode);
+            Add(versionCommand, "@invoice", invoiceDocId);
+            nextVersion = Convert.ToInt32(
+                await versionCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
+                CultureInfo.InvariantCulture);
+        }
+
+        var evaluationId = Guid.NewGuid();
+        var policySnapshot = JsonSerializer.Serialize(new
+        {
+            policyEnabled, requireReceiptMatch, priceWarning, priceBlock,
+            taxWarning, taxBlock, baseWarning, baseBlock, policyVersion
+        });
+        var resultSnapshot = JsonSerializer.Serialize(new
+        {
+            priceVariancePercent, taxVariancePercent, absoluteBaseVariance,
+            grniBaseAmount, invoiceBaseAmount, invoiceTax, expectedTax,
+            evaluation.Decision, evaluation.ReasonCodes
+        });
+
+        await using var insert = CreateCommand(connection, transaction, """
+            INSERT INTO purchase_match_evaluations
+                (evaluation_id, company_code, invoice_doc_id, evaluation_version, policy_version,
+                 decision, reason_codes_json, policy_snapshot_json, result_snapshot_json, evaluated_by)
+            VALUES
+                (@id, @company, @invoice, @version, @policyVersion,
+                 @decision, @reasons, @policySnapshot, @resultSnapshot, @actor)
+            """);
+        Add(insert, "@id", _provider == "PostgreSQL" ? (object)evaluationId : evaluationId.ToString("D"));
+        Add(insert, "@company", companyCode);
+        Add(insert, "@invoice", invoiceDocId);
+        Add(insert, "@version", nextVersion);
+        Add(insert, "@policyVersion", policyVersion);
+        Add(insert, "@decision", evaluation.Decision);
+        Add(insert, "@reasons", JsonSerializer.Serialize(evaluation.ReasonCodes));
+        Add(insert, "@policySnapshot", policySnapshot);
+        Add(insert, "@resultSnapshot", resultSnapshot);
+        Add(insert, "@actor", userId.Trim());
+        await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private static List<(decimal Subtotal, decimal Tax, decimal Total)> ComputeTotals(
