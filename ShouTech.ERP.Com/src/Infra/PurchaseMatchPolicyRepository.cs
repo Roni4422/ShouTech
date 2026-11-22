@@ -218,8 +218,9 @@ public sealed class PurchaseMatchPolicyRepository : IPurchaseMatchPolicyReposito
 
         string? latestEvaluationId = null;
         string? latestDecision = null;
+        string? evaluatedBy = null;
         await using (var latest = CreateCommand(connection, transaction, """
-            SELECT evaluation_id, decision
+            SELECT evaluation_id, decision, evaluated_by
             FROM purchase_match_evaluations
             WHERE company_code = @company AND invoice_doc_id = @invoice
             ORDER BY evaluation_version DESC
@@ -233,6 +234,9 @@ public sealed class PurchaseMatchPolicyRepository : IPurchaseMatchPolicyReposito
             {
                 latestEvaluationId = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture);
                 latestDecision = Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture);
+                evaluatedBy = reader.IsDBNull(2)
+                    ? null
+                    : Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture);
             }
         }
 
@@ -241,6 +245,11 @@ public sealed class PurchaseMatchPolicyRepository : IPurchaseMatchPolicyReposito
             latestId != evaluationId)
             throw new InvalidOperationException(
                 "Only the latest blocked purchase match evaluation can be released.");
+
+        if (!string.IsNullOrWhiteSpace(evaluatedBy) &&
+            string.Equals(evaluatedBy.Trim(), actor.Trim(), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                "The user who evaluated and posted this supplier invoice cannot release its blocked match.");
 
         var overrideId = Guid.NewGuid();
         await using (var insert = CreateCommand(connection, transaction, """
