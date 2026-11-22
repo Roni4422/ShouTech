@@ -37,6 +37,11 @@ namespace ShouTech.App.Services
 
         public object NavigateTo(string pageKey)
         {
+            _logging.LogOperation(
+                "Navigation",
+                "OpenPage",
+                $"PageKey={pageKey}");
+
             if (string.Equals(pageKey, "dashboard", StringComparison.OrdinalIgnoreCase))
                 return GetOrCreate("dashboard", () => new DashVw());
 
@@ -53,6 +58,11 @@ namespace ShouTech.App.Services
                 : moduleKey;
 
             var cacheKey = $"{module}::{actionTitle}";
+            _logging.LogOperation(
+                "Navigation",
+                "OpenRibbonModule",
+                $"Module={module}; Action={actionTitle}; Tab={tabName ?? "-"}; TabHeader={tabHeader ?? "-"}");
+
             return GetOrCreate(cacheKey, () => CreateWorkspace(actionTitle, module, actionTitle));
         }
 

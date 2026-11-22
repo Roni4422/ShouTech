@@ -343,7 +343,13 @@ namespace ShouTech.App.ViewModels
             }
 
             if (TryHandleSystemAction(actionKey, label))
+            {
+                _logging.LogOperation(
+                    "Ribbon",
+                    "ExecuteSystemAction",
+                    $"ActionKey={actionKey ?? "-"}; Label={label ?? "-"}; Tab={tabName ?? "-"}; TabHeader={tabHeader ?? "-"}");
                 return;
+            }
 
             var module = RibModMap.ResolveModule(tabName, tabHeader);
 
