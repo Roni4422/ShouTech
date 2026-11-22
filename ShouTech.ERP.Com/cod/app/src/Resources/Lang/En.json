@@ -2009,7 +2009,8 @@
     "TrackTitle": "Order Tracking",
     "TitleRfq": "Request for Quotation",
     "ValidTill": "Response Deadline",
-    "RfqCannotConvert": "A request for quotation cannot be converted directly to a supplier invoice."
+    "RfqCannotConvert": "A request for quotation cannot be converted directly to a supplier invoice.",
+    "RfqOpen": "Open sourcing request"
   },
   "BarcodeDesign": {
     "SaveDesign": "Save design",
