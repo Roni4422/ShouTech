@@ -185,9 +185,33 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             decimal paymentAmount;
             string? paymentDocKind;
             string paymentCurrency;
+            // A reversed voucher remains in the append-only party ledger, but it is
+            // no longer a valid source of funds. Enforce the same journal-status
+            // guard used by GetPaymentsAsync here as well, so direct repository
+            // callers cannot bypass the filtered payment list.
+            var hasJournalLink = PartyLedger.ColumnExists(
+                connection, transaction, _provider, "party_ledger", "journal_entry_id");
+            var activeJournalPredicate = hasJournalLink
+                ? """
+                  AND (l.journal_entry_id IS NULL OR NOT EXISTS (
+                      SELECT 1
+                      FROM journal_entries j
+                      JOIN companies c
+                        ON CAST(c.company_id AS TEXT) = CAST(j.company_id AS TEXT)
+                      WHERE c.company_code = l.company_id
+                        AND CAST(j.journal_entry_id AS TEXT) = CAST(l.journal_entry_id AS TEXT)
+                        AND j.status = 2
+                  ))
+                  """
+                : string.Empty;
             await using (var pay = CreateCommand(connection, transaction,
-                "SELECT party_kind, party_id, debit, credit, doc_kind, COALESCE(currency_code, 'SAR') FROM party_ledger WHERE company_id = @company AND ledger_id = @id"
-                + (_provider == "PostgreSQL" ? " FOR UPDATE" : "")))
+                $"""
+                SELECT l.party_kind, l.party_id, l.debit, l.credit, l.doc_kind,
+                       COALESCE(l.currency_code, 'SAR')
+                FROM party_ledger l
+                WHERE l.company_id = @company AND l.ledger_id = @id
+                  {activeJournalPredicate}
+                """ + (_provider == "PostgreSQL" ? " FOR UPDATE" : "")))
             {
                 Add(pay, "@company", companyId.Trim());
                 Add(pay, "@id", paymentLedgerId);
