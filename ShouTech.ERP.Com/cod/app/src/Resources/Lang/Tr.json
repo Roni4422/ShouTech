@@ -3781,7 +3781,8 @@
       "Total": "Toplam iade miktarı: {0:N4}",
       "Reason": "İade nedeni"
     },
-    "ReturnGoodsReceipt": "Mal kabul iadesi"
+    "ReturnGoodsReceipt": "Mal kabul iadesi",
+    "MatchPolicy": "Üçlü eşleştirme ilkesi"
   },
   "PurchaseMatch": {
     "Title": "Satın Alma Üçlü Eşleştirme Kontrolleri",
