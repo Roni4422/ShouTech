@@ -3782,5 +3782,32 @@
       "Reason": "İade nedeni"
     },
     "ReturnGoodsReceipt": "Mal kabul iadesi"
+  },
+  "PurchaseMatch": {
+    "Title": "Satın Alma Üçlü Eşleştirme Kontrolleri",
+    "ServiceUnavailable": "Etkin şirket için satın alma eşleştirme denetimleri kullanılamıyor.",
+    "PermissionDenied": "Satın alma eşleştirme denetimlerini görüntüleme izniniz yok.",
+    "Save": "İlkeyi Kaydet",
+    "Release": "Engeli Kaldır",
+    "Enabled": "Üçlü eşleştirme denetimini etkinleştir",
+    "RequireReceipt": "Onaylanmış mal kabulü zorunlu tut",
+    "PriceWarning": "Fiyat farkı uyarı eşiği (%)",
+    "PriceBlock": "Fiyat farkı engelleme eşiği (%)",
+    "TaxWarning": "Vergi farkı uyarı eşiği (%)",
+    "TaxBlock": "Vergi farkı engelleme eşiği (%)",
+    "BaseWarning": "Ana para birimi farkı uyarı eşiği",
+    "BaseBlock": "Ana para birimi farkı engelleme eşiği",
+    "RecentEvaluations": "Son tedarikçi faturası değerlendirmeleri",
+    "ColInvoice": "Fatura kimliği",
+    "ColDecision": "Karar",
+    "ColVersion": "Sürüm",
+    "ColReasons": "Neden kodları",
+    "ColEvaluatedBy": "Değerlendiren",
+    "ColDate": "Değerlendirme tarihi",
+    "ReleaseReason": "Zorunlu kaldırma gerekçesi",
+    "Loaded": "Eşleştirme ayarları ve değerlendirmeleri yüklendi.",
+    "Saved": "Eşleştirme ilkesi kaydedildi.",
+    "OnlyBlockedCanRelease": "Engelini kaldırmak için engellenmiş bir değerlendirme seçin.",
+    "InvalidNumber": "Geçerli, negatif olmayan bir ondalık sayı girin."
   }
 }
