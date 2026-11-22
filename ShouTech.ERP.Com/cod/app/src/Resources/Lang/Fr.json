@@ -602,7 +602,9 @@
       "RemainingQty": "Qté restante",
       "RemainingBaseAmount": "GRNI restant (devise de base)",
       "OpeningBalance": "Solde d'ouverture",
-      "RunningBalance": "Solde courant"
+      "RunningBalance": "Solde courant",
+      "DebitBase": "Débit (devise de base)",
+      "CreditBase": "Crédit (devise de base)"
     },
     "Filter": {
       "All": "Tous",
