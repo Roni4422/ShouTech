@@ -2291,6 +2291,30 @@ public static class InvRepo
     private static string CodeOr(string? configured, string fallback)
         => string.IsNullOrWhiteSpace(configured) ? fallback : configured.Trim();
 
+    private static bool IsGeneratedFullReversal(DbConnection connection, DbTransaction tx, InvDoc document)
+    {
+        if (document.DocId <= 0 || document.OriginalDocId is not > 0)
+            return false;
+
+        var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+        if (!PartyLedger.TableExists(connection, tx, provider, "document_reversals"))
+            return false;
+
+        using var command = connection.CreateCommand();
+        command.Transaction = tx;
+        command.CommandText = """
+            SELECT COUNT(*)
+            FROM document_reversals
+            WHERE company_id = $company
+              AND reversal_doc_kind = $kind
+              AND reversal_doc_id = $document
+            """;
+        Add(command, "$company", Company);
+        Add(command, "$kind", document.Kind.ToString());
+        Add(command, "$document", document.DocId);
+        return Convert.ToInt32(command.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture) == 1;
+    }
+
     private static List<ShouTech.Domain.Entities.GlLineRequest> BuildGlLines(DbConnection connection, DbTransaction tx, InvDoc doc, decimal effectiveRate = 1m)
     {
         var lines = new List<ShouTech.Domain.Entities.GlLineRequest>();
@@ -2613,7 +2637,7 @@ public static class InvRepo
                 // A generated full reversal must mirror the original revenue
                 // account exactly. A customer-initiated commercial return
                 // remains classified in the contra-revenue account.
-                var mirrorsOriginalSales = doc.OriginalDocId is > 0
+                var mirrorsOriginalSales = IsGeneratedFullReversal(connection, tx, doc)
                     && doc.OriginalDocKind is InvDocKind.SalesInvoice or InvDocKind.PosSale;
                 for (var i = 0; i < doc.Lines.Count; i++)
                 {
@@ -2670,7 +2694,7 @@ public static class InvRepo
                 // A generated full reversal mirrors the original purchase
                 // account. A normal supplier return remains classified in
                 // the purchase-return contra account.
-                var mirrorsOriginalPurchase = doc.OriginalDocId is > 0
+                var mirrorsOriginalPurchase = IsGeneratedFullReversal(connection, tx, doc)
                     && doc.OriginalDocKind == InvDocKind.PurchaseInvoice;
                 for (var i = 0; i < doc.Lines.Count; i++)
                 {
