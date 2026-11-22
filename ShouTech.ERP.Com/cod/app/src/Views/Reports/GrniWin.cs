@@ -58,7 +58,7 @@ public sealed class GrniWin : RptBase
                 ?? throw new InvalidOperationException("A posted goods receipt has an invalid document date.");
             var ageDays = Math.Max(0, (asOf - receiptDate.Value.Date).Days);
             var remainingAmount = RptWinUtil.Dec(row.GetValueOrDefault("RemainingBaseAmount"));
-            var values = new Dictionary<string, object?>(row, StringComparer.Ordinal)
+            var values = row.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)
             {
                 ["AgeDays"] = ageDays,
                 ["Bucket0_30"] = ageDays <= 30 ? remainingAmount : 0m,
