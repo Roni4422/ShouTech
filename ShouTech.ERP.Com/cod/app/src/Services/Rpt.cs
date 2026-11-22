@@ -555,7 +555,7 @@ public static class RptQuery
                            (l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0)) / l.qty
                        ELSE 0 END AS RemainingBaseAmount
             FROM purchase_documents r
-            INNER JOIN companies co ON co.company_id = r.company_id
+            INNER JOIN companies co ON CAST(co.company_id AS TEXT) = r.company_id
             INNER JOIN document_links dl
               ON dl.company_id = r.company_id
              AND dl.source_doc_kind = 'PO'
