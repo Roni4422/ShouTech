@@ -783,7 +783,7 @@ namespace Kern.Tests
         [Fact]
         public async Task PurchaseRfq_CollectsComparesAndAwardsSupplierQuotesByBaseCurrency()
         {
-            var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
+            var (service, orders, companyId, _, cleanup) = await CreateAsync();
             try
             {
                 var rfq = new CommercialDocumentDraft(
