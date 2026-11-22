@@ -79,6 +79,8 @@ public static class RptNav
             case "Invoices.PurchaseReturn":
             case "Invoices.ReturnPurchaseInvoice":
                 OpenPurchaseReturn(owner); return true;
+            case "Purchasing.ReturnGoodsReceipt":
+                OpenPurchaseReceiptReturn(owner); return true;
             case "Invoices.SalesInvoiceList":
             case "Reports.SalesInvoiceList":
                 OpenSalesInvoiceList(owner); return true;
@@ -213,6 +215,7 @@ public static class RptNav
     public static void OpenSalesReturn(Window? owner = null) => Show(new SalesReturnWin(), owner);
     public static void OpenPurchaseInvoice(Window? owner = null) => Show(new InvoiceWin(InvDocKind.PurchaseInvoice), owner);
     public static void OpenPurchaseReturn(Window? owner = null) => Show(new PurchaseReturnWin(), owner);
+    public static void OpenPurchaseReceiptReturn(Window? owner = null) => Show(new PurchaseReceiptReturnWin(), owner);
     public static void OpenStockTransfer(Window? owner = null) => Show(new InvoiceWin(InvDocKind.StockTransfer), owner);
     public static void OpenOpeningStock(Window? owner = null) => Show(new InvoiceWin(InvDocKind.OpeningStock), owner);
     public static void OpenStockIn(Window? owner = null) => Show(new InvoiceWin(InvDocKind.StockIn), owner);
