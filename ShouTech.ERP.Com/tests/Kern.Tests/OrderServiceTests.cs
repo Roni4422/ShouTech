@@ -280,6 +280,14 @@ namespace Kern.Tests
                 var rfqId = await service.CreateOrderAsync(rfq, "order-test");
                 await service.PostOrderAsync(CommercialDocSide.Purchase, rfqId, "order-test");
 
+                var postedRfqs = await service.SearchAsync(
+                    CommercialDocSide.Purchase,
+                    companyId,
+                    CommercialDocKinds.RequestForQuotation,
+                    CommercialDocumentStatus.Posted,
+                    null, null, null, 20);
+                Assert.Contains(postedRfqs, item => item.DocId == rfqId);
+
                 var (quotationId, quotationNo) = await service.CreateSupplierQuotationFromRfqAsync(
                     rfqId,
                     supplierId: 91,
