@@ -89,7 +89,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                    paid_amount, status, notes, party_code, branch_name, sales_rep_name, cost_center,
                    warehouse_name, delivery_date, valid_till
             FROM {docs}
-            WHERE is_deleted = 0
+            WHERE CAST(is_deleted AS TEXT) IN ('0', 'false')
               AND (@docId IS NULL OR doc_id = @docId)
               AND (@company IS NULL OR company_id = @company)
               AND (@kind IS NULL OR doc_kind = @kind)
@@ -216,7 +216,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             await using (var source = CreateCommand(connection, transaction, """
                 SELECT company_id, doc_kind, status
                 FROM purchase_documents
-                WHERE doc_id = @sourceId AND is_deleted = 0
+                WHERE doc_id = @sourceId AND CAST(is_deleted AS TEXT) IN ('0', 'false')
                 """ + sourceLock))
             {
                 Add(source, "@sourceId", sourceDocId);
@@ -240,7 +240,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                     FROM document_links l
                     JOIN purchase_documents p
                       ON p.doc_id = l.target_doc_id
-                     AND p.is_deleted = 0
+                     AND CAST(p.is_deleted AS TEXT) IN ('0', 'false')
                     WHERE l.company_id = @company
                       AND l.source_doc_kind = @sourceKind
                       AND l.source_doc_id = @sourceId
@@ -312,7 +312,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                     exchange_rate = @rate, subtotal = @subtotal, tax_amount = @tax, grand_total = @total,
                     notes = @notes, delivery_date = @deliveryDate, valid_till = @validTill,
                     cost_center = @costCenter, branch_name = @branchName, sales_rep_name = @salesRepName
-                WHERE doc_id = @doc AND status = @draft AND is_deleted = 0
+                WHERE doc_id = @doc AND status = @draft AND CAST(is_deleted AS TEXT) IN ('0', 'false')
                 """))
             {
                 Add(update, "@date", draft.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
@@ -363,7 +363,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         try
         {
             string kind, status;
-            await using (var read = CreateCommand(connection, transaction, $"SELECT doc_kind, status FROM {docs} WHERE doc_id = @doc AND is_deleted = 0"))
+            await using (var read = CreateCommand(connection, transaction, $"SELECT doc_kind, status FROM {docs} WHERE doc_id = @doc AND CAST(is_deleted AS TEXT) IN ('0', 'false')"))
             {
                 Add(read, "@doc", docId);
                 await using var reader = await read.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -382,7 +382,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 throw new InvalidOperationException($"Only draft orders can be posted; this document is '{status}'.");
 
             await using var update = CreateCommand(connection, transaction,
-                $"UPDATE {docs} SET status = @posted, posted_by = @actor, posted_at = CURRENT_TIMESTAMP WHERE doc_id = @doc AND status = @draft AND is_deleted = 0");
+                $"UPDATE {docs} SET status = @posted, posted_by = @actor, posted_at = CURRENT_TIMESTAMP WHERE doc_id = @doc AND status = @draft AND CAST(is_deleted AS TEXT) IN ('0', 'false')");
             Add(update, "@posted", CommercialDocumentStatus.Posted);
             Add(update, "@actor", userId.Trim());
             Add(update, "@doc", docId);
@@ -415,7 +415,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         try
         {
             string status, kind, companyId;
-            await using (var read = CreateCommand(connection, transaction, $"SELECT status, doc_kind, company_id FROM {docs} WHERE doc_id = @doc AND is_deleted = 0"))
+            await using (var read = CreateCommand(connection, transaction, $"SELECT status, doc_kind, company_id FROM {docs} WHERE doc_id = @doc AND CAST(is_deleted AS TEXT) IN ('0', 'false')"))
             {
                 Add(read, "@doc", docId);
                 await using var reader = await read.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -457,7 +457,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                       AND dl.source_doc_kind = @kind
                       AND dl.source_doc_id = @doc
                       AND target.status = @posted
-                      AND target.is_deleted = 0
+                      AND CAST(target.is_deleted AS TEXT) IN ('0', 'false')
                     """);
                 Add(downstream, "@company", companyId);
                 Add(downstream, "@kind", kind);
@@ -475,7 +475,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 throw new InvalidOperationException($"A document in status '{status}' cannot move to '{newStatus}'.");
 
             await using var update = CreateCommand(connection, transaction,
-                $"UPDATE {docs} SET status = @new WHERE doc_id = @doc AND status = @old AND is_deleted = 0");
+                $"UPDATE {docs} SET status = @new WHERE doc_id = @doc AND status = @old AND CAST(is_deleted AS TEXT) IN ('0', 'false')");
             Add(update, "@new", newStatus);
             Add(update, "@doc", docId);
             Add(update, "@old", status);
@@ -530,7 +530,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         command.CommandText = $"""
             SELECT doc_id, doc_kind, doc_no, doc_date, party_code, party_name, grand_total, status, delivery_date, valid_till
             FROM {docs}
-            WHERE (company_id = @company OR company_id = @companyCode) AND is_deleted = 0
+            WHERE (company_id = @company OR company_id = @companyCode) AND CAST(is_deleted AS TEXT) IN ('0', 'false')
               AND (@kind IS NULL OR doc_kind = @kind)
               AND (@status IS NULL OR status = @status)
               AND (@from IS NULL OR doc_date >= @from)
@@ -644,7 +644,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                         AND rd.company_id = a.company_id
                         AND rd.doc_kind = @returnKind
                         AND rd.status = @posted
-                        AND rd.is_deleted = 0
+                        AND CAST(rd.is_deleted AS TEXT) IN ('0', 'false')
                        WHERE a.company_id = dl.company_id
                          AND a.original_doc_id = d.doc_id
                          AND a.original_line_id = l.line_id
@@ -660,7 +660,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
               AND dl.source_doc_id = @sourceId
               AND dl.target_doc_kind = @targetKind
               AND d.status = @posted
-              AND d.is_deleted = 0
+              AND CAST(d.is_deleted AS TEXT) IN ('0', 'false')
             GROUP BY l.material_id, l.line_no, l.line_id, d.doc_id, dl.company_id
             """);
         Add(command, "@company", companyId.ToString("D"));
@@ -700,7 +700,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                         AND rd.company_id = a.company_id
                         AND rd.doc_kind = @returnKind
                         AND rd.status = @posted
-                        AND rd.is_deleted = 0
+                        AND CAST(rd.is_deleted AS TEXT) IN ('0', 'false')
                        WHERE a.company_id = dl.company_id
                          AND a.original_doc_id = d.doc_id
                          AND a.original_line_id = l.line_id
@@ -716,7 +716,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
               AND dl.source_doc_id = @sourceId
               AND dl.target_doc_kind = @targetKind
               AND d.status = @posted
-              AND d.is_deleted = 0
+              AND CAST(d.is_deleted AS TEXT) IN ('0', 'false')
             GROUP BY l.line_no, l.material_id, l.line_id, d.doc_id, dl.company_id
             """);
         Add(command, "@company", companyId.ToString("D"));
@@ -1006,7 +1006,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
              AND d.company_id = a.company_id
              AND d.doc_kind = @returnKind
              AND d.status = @posted
-             AND d.is_deleted = 0
+             AND CAST(d.is_deleted AS TEXT) IN ('0', 'false')
             WHERE a.company_id = @company AND a.original_doc_id = @receipt
             GROUP BY a.original_line_id
             """))
@@ -1077,8 +1077,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
             await using (var orderLock = CreateCommand(connection, transaction,
                 _provider == "PostgreSQL"
-                    ? "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @order AND doc_kind = @kind AND status = @posted AND is_deleted = 0 FOR UPDATE"
-                    : "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @order AND doc_kind = @kind AND status = @posted AND is_deleted = 0"))
+                    ? "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @order AND doc_kind = @kind AND status = @posted AND CAST(is_deleted AS TEXT) IN ('0', 'false') FOR UPDATE"
+                    : "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @order AND doc_kind = @kind AND status = @posted AND CAST(is_deleted AS TEXT) IN ('0', 'false')"))
             {
                 Add(orderLock, "@company", companyId.ToString("D"));
                 Add(orderLock, "@order", purchaseOrderId);
@@ -1090,8 +1090,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
             await using (var receiptLock = CreateCommand(connection, transaction,
                 _provider == "PostgreSQL"
-                    ? "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @receipt AND doc_kind = @kind AND status = @posted AND is_deleted = 0 FOR UPDATE"
-                    : "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @receipt AND doc_kind = @kind AND status = @posted AND is_deleted = 0"))
+                    ? "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @receipt AND doc_kind = @kind AND status = @posted AND CAST(is_deleted AS TEXT) IN ('0', 'false') FOR UPDATE"
+                    : "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @receipt AND doc_kind = @kind AND status = @posted AND CAST(is_deleted AS TEXT) IN ('0', 'false')"))
             {
                 Add(receiptLock, "@company", companyId.ToString("D"));
                 Add(receiptLock, "@receipt", receiptId);
@@ -1145,7 +1145,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                  AND d.company_id = a.company_id
                  AND d.doc_kind = @returnKind
                  AND d.status = @posted
-                 AND d.is_deleted = 0
+                 AND CAST(d.is_deleted AS TEXT) IN ('0', 'false')
                 WHERE a.company_id = @company AND a.original_doc_id = @receipt
                 GROUP BY a.original_line_id
                 """))
@@ -1805,7 +1805,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                  AND d.company_id = a.company_id
                  AND d.doc_kind = @returnKind
                  AND d.status = @posted
-                 AND d.is_deleted = 0
+                 AND CAST(d.is_deleted AS TEXT) IN ('0', 'false')
                 WHERE a.company_id = @company AND a.original_doc_id = @receipt
                 GROUP BY a.original_line_id
                 """);
