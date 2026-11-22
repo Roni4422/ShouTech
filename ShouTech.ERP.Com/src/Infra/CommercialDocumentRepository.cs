@@ -504,7 +504,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                     // (AutoAllocateSerials) — recorded either way in
                     // stock_movement_allocations.
                     StockValuationEngine.Apply(connection, transaction, _provider,
-                        new StockMovementRequest(companyId, lineWarehouse, materialId,
+                        new StockMovementRequest(qcCompany, lineWarehouse, materialId,
                             docDate, "DLV", docNo, QtyIn: 0m, QtyOut: baseQty,
                             Note: $"Delivery note {docNo} posting",
                             AutoAllocateSerials: true));
