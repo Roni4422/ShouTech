@@ -21,7 +21,8 @@ namespace ShouTech.App.Views;
 public enum OrdKind
 {
     Sales,
-    Purchase
+    Purchase,
+    RequestForQuotation
 }
 
 /// <summary>
@@ -96,7 +97,13 @@ public sealed class OrdWin : BaseWin, IWindowMode
         Loaded += OnLoaded;
     }
 
-    private string DocKindCode => _kind == OrdKind.Sales ? CommercialDocKinds.SalesOrder : CommercialDocKinds.PurchaseOrder;
+    private bool IsRfq => _kind == OrdKind.RequestForQuotation;
+    private string DocKindCode => _kind switch
+    {
+        OrdKind.Sales => CommercialDocKinds.SalesOrder,
+        OrdKind.RequestForQuotation => CommercialDocKinds.RequestForQuotation,
+        _ => CommercialDocKinds.PurchaseOrder
+    };
     private CommercialDocSide Side => _kind == OrdKind.Sales ? CommercialDocSide.Sales : CommercialDocSide.Purchase;
     private string ViewPermission => _kind == OrdKind.Sales ? PermCat.Sales.OrderView : PermCat.Purchasing.OrderView;
 
@@ -135,6 +142,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
         StyleButton(_btnConvert, _kind == OrdKind.Sales ? "OrderDoc.ConvertToInvoice" : "OrderDoc.CreateSupplierInvoice");
         StyleButton(_btnReceipt, "OrderDoc.CreateReceipt");
         _btnReceipt.Visibility = _kind == OrdKind.Purchase ? Visibility.Visible : Visibility.Collapsed;
+        _btnConvert.Visibility = IsRfq ? Visibility.Collapsed : Visibility.Visible;
         StyleButton(_btnClose, "OrderDoc.CloseOrder");
         StyleButton(_btnCancel, "OrderDoc.CancelOrder");
         StyleButton(_btnAddLine, "Invoice.AddLine");
@@ -220,7 +228,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
         headerForm.Margin = new Thickness(0, 0, 0, 8);
         AddFormField(headerForm, 0, 0, "OrderDoc.OrderNo", _txtDocNo);
         AddFormField(headerForm, 0, 1, "OrderDoc.Date", _dtDate);
-        AddFormField(headerForm, 0, 2, "OrderDoc.DeliveryDate", _dtDeliveryDate);
+        AddFormField(headerForm, 0, 2, IsRfq ? "OrderDoc.ValidTill" : "OrderDoc.DeliveryDate", _dtDeliveryDate);
         AddFormField(headerForm, 0, 3, _kind == OrdKind.Sales ? "Invoice.CustomerCode" : "Invoice.SupplierCode", _txtPartyCode);
         AddFormField(headerForm, 1, 0, _kind == OrdKind.Sales ? "Invoice.CustomerName" : "Invoice.SupplierName", _txtPartyName, spanPairs: 2);
         AddFormField(headerForm, 1, 2, "Invoice.Warehouse", _txtWhs);
@@ -314,7 +322,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             _status = CommercialDocumentStatus.Draft;
             _txtDocNo.Text = AppHost.Orders is not null && _companyId != Guid.Empty
                 ? await AppHost.Orders.NextDocNoAsync(Side, _companyId, DocKindCode)
-                : (_kind == OrdKind.Sales ? "SO-" : "PO-") + DateTime.Now.ToString("yyyyMMdd-HHmm", CultureInfo.InvariantCulture);
+                : (IsRfq ? "RFQ-" : _kind == OrdKind.Sales ? "SO-" : "PO-") + DateTime.Now.ToString("yyyyMMdd-HHmm", CultureInfo.InvariantCulture);
             _dtDate.SelectedDate = DateTime.Today;
             _dtDeliveryDate.SelectedDate = DateTime.Today.AddDays(7);
             _txtPartyCode.Text = string.Empty;
@@ -517,8 +525,8 @@ public sealed class OrdWin : BaseWin, IWindowMode
             string.IsNullOrWhiteSpace(_txtNotes.Text) ? null : _txtNotes.Text.Trim(),
             lines,
             string.IsNullOrWhiteSpace(_txtPartyCode.Text) ? null : _txtPartyCode.Text.Trim(),
-            _dtDeliveryDate.SelectedDate is { } delivery ? DateOnly.FromDateTime(delivery) : null,
-            null,
+            IsRfq ? null : _dtDeliveryDate.SelectedDate is { } delivery ? DateOnly.FromDateTime(delivery) : null,
+            IsRfq && _dtDeliveryDate.SelectedDate is { } validTill ? DateOnly.FromDateTime(validTill) : null,
             null,
             null,
             null,
@@ -538,7 +546,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             _status = CommercialDocumentStatus.Posted;
             UpdateEditState();
             RefreshTotals();
-            await RefreshProgressAsync(_docId.Value);
+            if (!IsRfq) await RefreshProgressAsync(_docId.Value);
         }
         catch (Exception ex)
         {
@@ -552,6 +560,11 @@ public sealed class OrdWin : BaseWin, IWindowMode
         if (!AppHost.Permissions.Has(permission))
         {
             ShowWarningMessage(T("OrderDoc.PermissionDenied"));
+            return;
+        }
+        if (IsRfq)
+        {
+            ShowWarningMessage(T("OrderDoc.RfqCannotConvert"));
             return;
         }
         if (AppHost.Orders is null || _docId is null)
@@ -982,7 +995,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
         _txtNotes.IsEnabled = editable;
         _btnSave.IsEnabled = editable;
         _btnPost.IsEnabled = editable && _docId is not null;
-        _btnConvert.IsEnabled = !_isConverting && !_isReceiving && _status == CommercialDocumentStatus.Posted;
+        _btnConvert.IsEnabled = !IsRfq && !_isConverting && !_isReceiving && _status == CommercialDocumentStatus.Posted;
         _btnReceipt.IsEnabled = !_isReceiving && !_isConverting && _kind == OrdKind.Purchase && _status == CommercialDocumentStatus.Posted && _docId is not null;
         _btnClose.IsEnabled = _status == CommercialDocumentStatus.Posted;
         _btnCancel.IsEnabled = _status is CommercialDocumentStatus.Draft or CommercialDocumentStatus.Posted;
@@ -1043,7 +1056,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
         });
         panel.Children.Add(new TextBlock
         {
-            Text = T(_kind == OrdKind.Sales ? "OrderDoc.TitleSales" : "OrderDoc.TitlePurchase"),
+            Text = T(IsRfq ? "OrderDoc.TitleRfq" : _kind == OrdKind.Sales ? "OrderDoc.TitleSales" : "OrderDoc.TitlePurchase"),
             FontSize = 20,
             FontWeight = FontWeights.Bold
         });
@@ -1110,7 +1123,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
 
     protected override void ApplyLocalizedText()
     {
-        Title = T(_kind == OrdKind.Sales ? "OrderDoc.TitleSales" : "OrderDoc.TitlePurchase");
+        Title = T(IsRfq ? "OrderDoc.TitleRfq" : _kind == OrdKind.Sales ? "OrderDoc.TitleSales" : "OrderDoc.TitlePurchase");
         if (_grid.Columns.Count >= 11)
         {
             _grid.Columns[0].Header = "#";
