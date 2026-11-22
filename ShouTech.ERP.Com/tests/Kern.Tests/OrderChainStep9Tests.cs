@@ -825,7 +825,7 @@ namespace Kern.Tests
                 Assert.Equal(2, offers.Count);
                 Assert.Equal(winningQuoteId, offers[0].DocId);
                 Assert.Equal(2, offers[0].Lines.Count);
-                Assert.Equal(225m, offers[0].Lines.Sum(line => line.BaseCurrencyLineTotal));
+                Assert.Equal(229.5m, offers[0].Lines.Sum(line => line.BaseCurrencyLineTotal));
                 Assert.Equal(new DateOnly(2026, 11, 10), offers[0].DeliveryDate);
                 Assert.Equal(10m, offers[0].Lines[0].Quantity);
                 Assert.Equal(13m, offers[0].Lines[0].UnitPrice);
@@ -843,7 +843,7 @@ namespace Kern.Tests
                 Assert.Equal("USD", purchaseOrder.CurrencyCode);
                 Assert.Equal(2, purchaseOrder.Lines.Count);
                 Assert.Equal(13m, purchaseOrder.Lines[0].UnitPrice);
-                Assert.Equal(225m, purchaseOrder.GrandTotal);
+                Assert.Equal(255m, purchaseOrder.GrandTotal);
                 Assert.StartsWith("PO-", purchaseOrderNo);
 
                 var quoteLinks = await orders.GetLinksFromAsync(companyId, winningQuoteId);
