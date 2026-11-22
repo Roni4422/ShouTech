@@ -415,7 +415,8 @@
     "OrderReceiptDelivery": "Factures de Réception/Livraison",
     "TrackOrders": "Suivre les Commandes",
     "OrderPayments": "Paiements des Commandes",
-    "SearchOrders": "Rechercher des Commandes"
+    "SearchOrders": "Rechercher des Commandes",
+    "RequestForQuotation": "Demande de devis"
   },
   "Customers": {
     "Title": "Clients",
@@ -2567,7 +2568,10 @@
     "SaveFirst": "Enregistrez d'abord le document.",
     "ServiceUnavailable": "Le service des commandes est indisponible (aucune connexion à la base de données).",
     "StatusClosed": "Clôturé",
-    "TrackTitle": "Suivi des commandes"
+    "TrackTitle": "Suivi des commandes",
+    "TitleRfq": "Demande de devis",
+    "ValidTill": "Date limite de réponse",
+    "RfqCannotConvert": "Une demande de devis ne peut pas être convertie directement en facture fournisseur."
   },
   "Definitions": {
     "Title": "Définitions",
