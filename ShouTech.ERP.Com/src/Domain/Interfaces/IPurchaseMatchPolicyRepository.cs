@@ -11,6 +11,9 @@ public interface IPurchaseMatchPolicyRepository
 {
     Task<PurchaseMatchPolicy?> GetPolicyAsync(string companyCode, CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<PurchaseMatchEvaluationSnapshot>> GetRecentEvaluationsAsync(
+        string companyCode, int take = 50, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Saves a policy using optimistic concurrency. expectedVersion is zero
     /// when creating the first policy; otherwise it must equal the current
