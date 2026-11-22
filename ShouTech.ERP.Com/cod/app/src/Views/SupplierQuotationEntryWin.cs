@@ -33,6 +33,7 @@ public sealed class SupplierQuotationEntryWin : BaseWin
     private readonly DataGrid _linesGrid = new();
     private readonly ObservableCollection<QuotationLineVm> _lines = new();
     private readonly TextBlock _status = new();
+    private readonly Button _selectSupplier = new();
     private readonly Button _savePost = new();
     private readonly Button _close = new();
     private bool _busy;
@@ -55,6 +56,7 @@ public sealed class SupplierQuotationEntryWin : BaseWin
     protected override void ApplyLocalizedText()
     {
         Title = T("Purchasing.SupplierQuotationEntry.Title");
+        _selectSupplier.Content = T("Purchasing.SupplierQuotationEntry.SelectSupplier");
         _savePost.Content = T("Purchasing.SupplierQuotationEntry.SaveAndPost");
         _close.Content = T("Common.Close");
         foreach (var child in _fieldLabels)
@@ -114,7 +116,12 @@ public sealed class SupplierQuotationEntryWin : BaseWin
         Title = T("Purchasing.SupplierQuotationEntry.Title");
         var root = new DockPanel { Margin = new Thickness(12) };
         var footer = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        F2Ui.StyleButton(_selectSupplier, "Purchasing.SupplierQuotationEntry.SelectSupplier");
         F2Ui.StyleButton(_savePost, "Purchasing.SupplierQuotationEntry.SaveAndPost");
+        _supplierId.IsReadOnly = true;
+        _supplierCode.IsReadOnly = true;
+        _supplierName.IsReadOnly = true;
+        _selectSupplier.Click += (_, _) => SelectSupplier();
         F2Ui.StyleButton(_close, "Common.Close");
         _savePost.Click += async (_, _) => await SaveAndPostAsync();
         _close.Click += (_, _) => Close();
@@ -128,16 +135,17 @@ public sealed class SupplierQuotationEntryWin : BaseWin
 
         var form = CreateFormGrid(2);
         form.Margin = new Thickness(0, 0, 0, 8);
-        F2Ui.AddField(_fieldLabels, form, 0, 0, "Purchasing.SupplierQuotationEntry.SupplierId", _supplierId);
-        F2Ui.AddField(_fieldLabels, form, 0, 1, "Purchasing.SupplierQuotationEntry.SupplierCode", _supplierCode);
-        F2Ui.AddField(_fieldLabels, form, 1, 0, "Purchasing.SupplierQuotationEntry.SupplierName", _supplierName);
-        F2Ui.AddField(_fieldLabels, form, 1, 1, "Purchasing.SupplierQuotationEntry.Reference", _supplierReference);
-        F2Ui.AddField(_fieldLabels, form, 2, 0, "Purchasing.SupplierQuotationEntry.Currency", _currency);
-        F2Ui.AddField(_fieldLabels, form, 2, 1, "Purchasing.SupplierQuotationEntry.ExchangeRate", _exchangeRate);
-        F2Ui.AddField(_fieldLabels, form, 3, 0, "Purchasing.SupplierQuotationEntry.Date", _quotationDate);
-        F2Ui.AddField(_fieldLabels, form, 3, 1, "Purchasing.SupplierQuotationEntry.ValidTill", _validTill);
-        F2Ui.AddField(_fieldLabels, form, 4, 0, "Purchasing.SupplierQuotationEntry.DeliveryDate", _deliveryDate);
-        F2Ui.AddField(_fieldLabels, form, 4, 1, "Purchasing.SupplierQuotationEntry.Terms", _terms);
+        F2Ui.AddField(_fieldLabels, form, 0, 0, "Purchasing.SupplierQuotationEntry.SelectSupplier", _selectSupplier);
+        F2Ui.AddField(_fieldLabels, form, 0, 1, "Purchasing.SupplierQuotationEntry.SupplierId", _supplierId);
+        F2Ui.AddField(_fieldLabels, form, 1, 0, "Purchasing.SupplierQuotationEntry.SupplierCode", _supplierCode);
+        F2Ui.AddField(_fieldLabels, form, 1, 1, "Purchasing.SupplierQuotationEntry.SupplierName", _supplierName);
+        F2Ui.AddField(_fieldLabels, form, 2, 0, "Purchasing.SupplierQuotationEntry.Reference", _supplierReference);
+        F2Ui.AddField(_fieldLabels, form, 2, 1, "Purchasing.SupplierQuotationEntry.Currency", _currency);
+        F2Ui.AddField(_fieldLabels, form, 3, 0, "Purchasing.SupplierQuotationEntry.ExchangeRate", _exchangeRate);
+        F2Ui.AddField(_fieldLabels, form, 3, 1, "Purchasing.SupplierQuotationEntry.Date", _quotationDate);
+        F2Ui.AddField(_fieldLabels, form, 4, 0, "Purchasing.SupplierQuotationEntry.ValidTill", _validTill);
+        F2Ui.AddField(_fieldLabels, form, 4, 1, "Purchasing.SupplierQuotationEntry.DeliveryDate", _deliveryDate);
+        F2Ui.AddField(_fieldLabels, form, 5, 0, "Purchasing.SupplierQuotationEntry.Terms", _terms, 2);
         DockPanel.SetDock(form, Dock.Top);
         root.Children.Add(form);
 
@@ -155,6 +163,17 @@ public sealed class SupplierQuotationEntryWin : BaseWin
         _linesGrid.Columns.Add(new DataGridTextColumn { Header = T("Purchasing.SupplierQuotationEntry.TaxRate"), Binding = new Binding(nameof(QuotationLineVm.TaxRate)) { StringFormat = "N2", UpdateSourceTrigger = UpdateSourceTrigger.LostFocus }, Width = 85 });
         root.Children.Add(_linesGrid);
         Content = root;
+    }
+
+    private void SelectSupplier()
+    {
+        var picker = new PartySearchWin { KindFilter = PartyKinds.Supplier, Owner = this };
+        if (picker.ShowDialog() != true || picker.SelectedParty is not { } supplier ||
+            supplier.Kind != PartyKinds.Supplier || supplier.LedgerId <= 0)
+            return;
+        _supplierId.Text = supplier.LedgerId.ToString(CultureInfo.InvariantCulture);
+        _supplierCode.Text = supplier.Code;
+        _supplierName.Text = supplier.NameEn;
     }
 
     private async Task SaveAndPostAsync()
