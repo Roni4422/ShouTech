@@ -3740,6 +3740,27 @@
       "InvalidDates": "Quotation validity must not precede the quotation date.",
       "InvalidCurrency": "Enter a three-letter currency code.",
       "Created": "Supplier quotation {0} was created and posted."
+    },
+    "ReceiptReturn": {
+      "Title": "Return Goods Receipt",
+      "LoadReceipt": "Load goods receipt",
+      "PostReturn": "Post supplier return",
+      "ReceiptNo": "Goods receipt number",
+      "Line": "Line",
+      "Item": "Item",
+      "Description": "Description",
+      "Received": "Received qty",
+      "Invoiced": "Invoiced qty",
+      "Returned": "Already returned",
+      "Returnable": "Available to return",
+      "ReturnQty": "Return quantity",
+      "Loaded": "Receipt {0} — Supplier: {1}",
+      "ReceiptRequired": "Enter a goods receipt number.",
+      "PostedReceiptRequired": "Select a posted goods receipt.",
+      "InvalidQuantities": "Enter a positive return quantity within the available quantity for at least one line.",
+      "ConfirmPost": "Post this supplier return? Stock and GRNI will be reduced in the same transaction.",
+      "Created": "Pre-invoice supplier return {0} was posted.",
+      "Total": "Return quantity total: {0:N4}"
     }
   }
 }
