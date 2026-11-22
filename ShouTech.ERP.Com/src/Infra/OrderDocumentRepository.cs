@@ -2100,13 +2100,14 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         var baseWarning = 0m;
         var baseBlock = 0m;
 
-        await using (var policyCommand = CreateCommand(connection, transaction, """
+        var policySql = """
             SELECT is_enabled, require_receipt_match, price_warning_percent, price_block_percent,
                    tax_warning_percent, tax_block_percent, base_variance_warning_amount,
                    base_variance_block_amount, policy_version
             FROM purchase_match_policies
             WHERE company_code = @company
-            """))
+            """ + (_provider == "PostgreSQL" ? " FOR SHARE" : string.Empty);
+        await using (var policyCommand = CreateCommand(connection, transaction, policySql))
         {
             Add(policyCommand, "@company", companyCode);
             await using var reader = await policyCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
