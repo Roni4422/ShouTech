@@ -3756,7 +3756,8 @@
       "InvalidDates": "Teklif geçerliliği teklif tarihinden önce olamaz.",
       "InvalidCurrency": "Üç harfli para birimi kodu girin.",
       "Created": "Tedarikçi teklifi {0} oluşturuldu ve onaylandı.",
-      "SelectSupplier": "Tedarikçi seç"
+      "SelectSupplier": "Tedarikçi seç",
+      "Supplier": "Tedarikçi"
     },
     "ReceiptReturn": {
       "Title": "Mal Kabul İade",
