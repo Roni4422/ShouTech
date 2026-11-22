@@ -1168,7 +1168,11 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 var line = returnDraftLines[returnLineIndex];
                 var sourceLineNo = line.SourceLineNo!.Value;
                 var sourceLine = receiptLines[sourceLineNo];
-                var returnLineNo = returnLineIndex + 1;
+                // InsertLinesAsync preserves SourceLineNo for traceability, so a
+                // subset return can legitimately have line numbers such as 2, 4.
+                // Resolve the persisted return-line identity instead of assuming
+                // the subset was renumbered sequentially from one.
+                var returnLineNo = line.SourceLineNo ?? returnLineIndex + 1;
                 var allocationId = Guid.NewGuid();
                 await using var allocation = CreateCommand(connection, transaction, """
                     INSERT INTO purchase_receipt_return_line_allocations
