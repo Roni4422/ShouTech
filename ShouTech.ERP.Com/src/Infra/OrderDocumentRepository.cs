@@ -206,11 +206,16 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            // Serialize conversions from the same supplier quotation. PostgreSQL
+            // row-locks the source document; SQLite's write transaction provides
+            // the corresponding single-writer protection. This closes the
+            // check-then-insert race in the application service.
+            var sourceLock = _provider == "PostgreSQL" ? " FOR UPDATE" : string.Empty;
             await using (var source = CreateCommand(connection, transaction, """
                 SELECT company_id, doc_kind, status
                 FROM purchase_documents
                 WHERE doc_id = @sourceId AND is_deleted = 0
-                """))
+                """ + sourceLock))
             {
                 Add(source, "@sourceId", sourceDocId);
                 await using var reader = await source.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -223,6 +228,34 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                     throw new InvalidOperationException("The source and target documents must belong to the same company.");
                 if (kind != sourceDocKind || status != CommercialDocumentStatus.Posted)
                     throw new InvalidOperationException("The source document must be posted and have the expected document type.");
+            }
+
+            if (sourceDocKind == CommercialDocKinds.SupplierQuotation &&
+                draft.DocKind == CommercialDocKinds.PurchaseOrder)
+            {
+                await using var duplicateOrder = CreateCommand(connection, transaction, """
+                    SELECT COUNT(*)
+                    FROM document_links l
+                    JOIN purchase_documents p
+                      ON p.doc_id = l.target_doc_id
+                     AND p.is_deleted = 0
+                    WHERE l.company_id = @company
+                      AND l.source_doc_kind = @sourceKind
+                      AND l.source_doc_id = @sourceId
+                      AND l.target_doc_kind = @targetKind
+                      AND p.status <> @cancelled
+                    """);
+                Add(duplicateOrder, "@company", draft.CompanyId.ToString("D"));
+                Add(duplicateOrder, "@sourceKind", sourceDocKind);
+                Add(duplicateOrder, "@sourceId", sourceDocId);
+                Add(duplicateOrder, "@targetKind", CommercialDocKinds.PurchaseOrder);
+                Add(duplicateOrder, "@cancelled", CommercialDocumentStatus.Cancelled);
+                var existingOrders = Convert.ToInt32(
+                    await duplicateOrder.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
+                    CultureInfo.InvariantCulture);
+                if (existingOrders > 0)
+                    throw new InvalidOperationException(
+                        "This supplier quotation already has an active purchase order.");
             }
 
             var targetId = await InsertDocumentAsync(
