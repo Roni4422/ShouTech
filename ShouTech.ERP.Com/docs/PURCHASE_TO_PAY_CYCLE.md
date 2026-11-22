@@ -128,3 +128,18 @@ The purchase-to-pay flow must pass the following checks before release:
 ## Known boundaries
 
 This implementation matches by purchase order, material/service identity, and quantity. RFQ responses are compared line-by-line and normalized to base currency; supplier award remains an explicit user decision. It does not yet implement a configurable three-way-match tolerance matrix for price, tax, delivery, or supplier-specific policy; price differences are currently posted to the Purchases variance account. Foreign-currency payment allocation is deliberately blocked rather than converted implicitly. Approval routing, supplier remittance advice, bank-file reconciliation, supplier statement matching, and configurable three-way-match tolerances remain follow-up capabilities.
+
+## Competitive control design references
+
+The next matching/approval increment should preserve the current received-quantity control and add an explicit payment eligibility decision rather than silently weakening quantity validation:
+
+- Odoo's three-way matching compares PO, receipt, and vendor bill, and exposes a "Should Be Paid" decision. Its documentation positions the control as a payment gate, with exceptions reviewable by an authorized user: https://www.odoo.com/documentation/18.0/applications/finance/accounting/payables/supplier_bills/manage.html
+- Odoo separates bill control by ordered quantities versus received quantities; three-way matching is intended to operate with received-quantity control: https://www.odoo.com/documentation/18.0/applications/inventory_and_mrp/purchase/manage_deals/control_bills.html
+- ERPNext exposes company-level requirements for PO and receipt links and allows narrowly scoped supplier exceptions; it also highlights rate-change controls and the trade-off between controls and document-entry effort: https://docs.frappe.io/erpnext/buying-settings
+
+ShouTech already enforces received quantities at invoice creation, so the next step must not copy a weaker payment-only gate. It should add a per-company and (later) supplier-specific tolerance policy for unit price, tax, and absolute base-currency variance; calculate and persist a match result (Pass, Warning, Blocked, or authorized Override); retain who approved each override and why; and make payment allocation reject a Blocked invoice until an authorized release is recorded. Defaults must remain non-breaking and explicit; no silent country-, supplier-, or user-derived policy should be activated.
+
+## Regression coverage added in the active development branch
+
+- `PurchaseInvoice_SubsetSourceLine_MatchesExactReceiptLine` verifies that an invoice containing only a later PO line is matched to that exact receipt line, with the persisted invoice-line identity and matched quantity checked against `purchase_receipt_invoice_matches`.
+- This complements the partial receipt-return source-line test and the existing multi-receipt / partial-invoice matching coverage. CI for the current branch head must pass before this increment is considered verified.
