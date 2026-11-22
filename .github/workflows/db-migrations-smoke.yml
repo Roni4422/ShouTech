@@ -16,6 +16,10 @@ on:
       - '.github/workflows/db-migrations-smoke.yml'
   workflow_dispatch:
 
+concurrency:
+  group: db-migrations-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   sqlite-migrations:
     runs-on: ubuntu-latest
