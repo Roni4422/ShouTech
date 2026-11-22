@@ -445,6 +445,8 @@ public static class InvRepo
 
         if (kind == InvDocKind.SalesReturn)
             ValidateSalesReturnAgainstOriginal(connection, tx, guidKey, doc);
+        if (kind == InvDocKind.PurchaseReturn)
+            ValidateAndAllocatePurchaseReturnAgainstOriginal(connection, tx, guidKey, doc, userId);
 
         // Batch/serial capture (Phase B 054): merge the picker's
         // per-line selections (keyed by line number) into the loaded
@@ -1468,6 +1470,42 @@ public static class InvRepo
         Add(command, "$originalId", originalDocId);
         Add(command, "$originalKind", originalKind.ToString());
 
+        var result = new Dictionary<int, decimal>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+            result[Convert.ToInt32(reader.GetValue(0), CultureInfo.InvariantCulture)] =
+                Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
+        return result;
+    }
+
+    public static IReadOnlyDictionary<int, decimal> GetAlreadyReturnedPurchaseQuantities(long originalDocId)
+    {
+        if (originalDocId <= 0) throw new ArgumentOutOfRangeException(nameof(originalDocId));
+        var connectionString = DatabaseRuntime.GetConnectionString()
+            ?? throw new InvalidOperationException("No database connection.");
+        using var connection = Open(connectionString);
+        var guidKey = ResolveCompanyGuidOrNull(connection, null)?.ToString("D") ?? Company;
+        var notDeleted = DatabaseRuntime.IsPostgreSql() ? "returned.is_deleted = FALSE" : "returned.is_deleted = 0";
+        using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            SELECT source.line_no, COALESCE(SUM(allocation.returned_qty), 0)
+            FROM purchase_return_line_allocations allocation
+            INNER JOIN purchase_document_lines source
+                ON source.line_id = allocation.original_line_id
+               AND source.doc_id = allocation.original_doc_id
+            INNER JOIN purchase_documents returned
+                ON returned.doc_id = allocation.return_doc_id
+               AND returned.company_id = allocation.company_id
+            WHERE allocation.company_id IN ($company, $guid)
+              AND allocation.original_doc_id = $originalId
+              AND returned.doc_kind = 'PRT'
+              AND returned.status = 'Posted'
+              AND {notDeleted}
+            GROUP BY source.line_no
+            """;
+        Add(command, "$company", Company);
+        Add(command, "$guid", guidKey);
+        Add(command, "$originalId", originalDocId);
         var result = new Dictionary<int, decimal>();
         using var reader = command.ExecuteReader();
         while (reader.Read())
@@ -2916,6 +2954,198 @@ public static class InvRepo
         {
             AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exL760, "InvRepo.ReadLongNullable");
             return null;
+        }
+    }
+
+    private static void ValidateAndAllocatePurchaseReturnAgainstOriginal(
+        DbConnection connection,
+        DbTransaction transaction,
+        string guidKey,
+        InvDoc returnDoc,
+        string userId)
+    {
+        if (returnDoc.OriginalDocId is not long originalDocId || originalDocId <= 0 ||
+            returnDoc.OriginalDocKind != InvDocKind.PurchaseInvoice)
+            throw new InvalidOperationException("A purchase debit note must reference a posted supplier invoice.");
+
+        var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+        if (!PartyLedger.TableExists(connection, transaction, provider, "purchase_return_line_allocations"))
+            throw new InvalidOperationException("Purchase-return lineage schema is missing. Apply database migration 080 before posting a purchase return.");
+
+        var notDeleted = provider == "PostgreSQL" ? "is_deleted = FALSE" : "is_deleted = 0";
+        string sourceCompany;
+        string originalDocNo;
+        long? originalPartyId;
+        string originalPartyCode;
+        string originalCurrency;
+        decimal originalExchangeRate;
+        decimal originalDiscountAmount;
+        decimal originalExtraAmount;
+
+        using (var original = connection.CreateCommand())
+        {
+            original.Transaction = transaction;
+            original.CommandText = $"""
+                SELECT CAST(company_id AS TEXT), doc_no, doc_kind, status, party_id, party_code,
+                       currency_code, exchange_rate, discount_amount, extra_amount
+                FROM purchase_documents
+                WHERE doc_id = $originalId
+                  AND (company_id = $company OR company_id = $guid)
+                  AND {notDeleted}
+                {(provider == "PostgreSQL" ? "FOR UPDATE" : string.Empty)}
+                """;
+            Add(original, "$originalId", originalDocId);
+            Add(original, "$company", Company);
+            Add(original, "$guid", guidKey);
+            using var reader = original.ExecuteReader();
+            if (!reader.Read())
+                throw new InvalidOperationException("The original supplier invoice was not found in the current company.");
+            sourceCompany = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? Company;
+            originalDocNo = Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? string.Empty;
+            if (!string.Equals(Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture), "PUR", StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture), "Posted", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Only a posted supplier invoice can be returned.");
+            originalPartyId = reader.IsDBNull(4) ? null : Convert.ToInt64(reader.GetValue(4), CultureInfo.InvariantCulture);
+            originalPartyCode = reader.IsDBNull(5) ? string.Empty : Convert.ToString(reader.GetValue(5), CultureInfo.InvariantCulture) ?? string.Empty;
+            originalCurrency = reader.IsDBNull(6) ? "SAR" : Convert.ToString(reader.GetValue(6), CultureInfo.InvariantCulture) ?? "SAR";
+            originalExchangeRate = reader.IsDBNull(7) ? 1m : Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture);
+            originalDiscountAmount = reader.IsDBNull(8) ? 0m : Convert.ToDecimal(reader.GetValue(8), CultureInfo.InvariantCulture);
+            originalExtraAmount = reader.IsDBNull(9) ? 0m : Convert.ToDecimal(reader.GetValue(9), CultureInfo.InvariantCulture);
+        }
+
+        if (returnDoc.PartyId != originalPartyId ||
+            !string.Equals(returnDoc.PartyCode ?? string.Empty, originalPartyCode, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(returnDoc.CurrencyCode, originalCurrency, StringComparison.OrdinalIgnoreCase) ||
+            returnDoc.ExchangeRate != originalExchangeRate)
+            throw new InvalidOperationException("The purchase return must use the original supplier and invoice currency.");
+        if (!string.IsNullOrWhiteSpace(returnDoc.OriginalDocNo) &&
+            !string.Equals(returnDoc.OriginalDocNo.Trim(), originalDocNo, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The original supplier invoice number does not match its document id.");
+        if (returnDoc.PaidAmount != 0m)
+            throw new InvalidOperationException("A purchase debit note is a supplier credit document and cannot record a payment at posting.");
+
+        var sourceLines = new Dictionary<int, (long LineId, long? MaterialId, string Unit, decimal Qty,
+            decimal UnitPrice, decimal DiscountPct, string TaxCode, decimal TaxRate, string TaxMode, int? WarehouseId)>();
+        using (var lines = connection.CreateCommand())
+        {
+            lines.Transaction = transaction;
+            lines.CommandText = """
+                SELECT line_id, line_no, material_id, unit, qty, unit_price, discount_pct,
+                       tax_code, tax_rate, tax_calculation_mode, warehouse_id
+                FROM purchase_document_lines
+                WHERE doc_id = $originalId
+                ORDER BY line_no
+                """;
+            Add(lines, "$originalId", originalDocId);
+            using var reader = lines.ExecuteReader();
+            while (reader.Read())
+            {
+                var lineNo = Convert.ToInt32(reader.GetValue(1), CultureInfo.InvariantCulture);
+                sourceLines[lineNo] = (
+                    Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+                    reader.IsDBNull(2) ? null : Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture),
+                    reader.IsDBNull(3) ? string.Empty : Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture) ?? string.Empty,
+                    Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture),
+                    reader.IsDBNull(7) ? string.Empty : Convert.ToString(reader.GetValue(7), CultureInfo.InvariantCulture) ?? string.Empty,
+                    Convert.ToDecimal(reader.GetValue(8), CultureInfo.InvariantCulture),
+                    reader.IsDBNull(9) ? "Exclusive" : Convert.ToString(reader.GetValue(9), CultureInfo.InvariantCulture) ?? "Exclusive",
+                    reader.IsDBNull(10) ? null : Convert.ToInt32(reader.GetValue(10), CultureInfo.InvariantCulture));
+            }
+        }
+        if (sourceLines.Count == 0)
+            throw new InvalidOperationException("The original supplier invoice has no returnable lines.");
+        if (returnDoc.Lines.Count == 0)
+            throw new InvalidOperationException("A purchase return requires at least one original invoice line.");
+        if (returnDoc.Lines.GroupBy(line => line.LineNo).Any(group => group.Count() > 1))
+            throw new InvalidOperationException("A purchase return can contain each original invoice line only once.");
+
+        var previouslyReturned = new Dictionary<long, decimal>();
+        using (var returned = connection.CreateCommand())
+        {
+            returned.Transaction = transaction;
+            returned.CommandText = """
+                SELECT original_line_id, COALESCE(SUM(returned_qty), 0)
+                FROM purchase_return_line_allocations
+                WHERE company_id = $sourceCompany AND original_doc_id = $originalId
+                GROUP BY original_line_id
+                """;
+            Add(returned, "$sourceCompany", sourceCompany);
+            Add(returned, "$originalId", originalDocId);
+            using var reader = returned.ExecuteReader();
+            while (reader.Read())
+                previouslyReturned[Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture)] =
+                    Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
+        }
+
+        var originalLinesSubtotal = sourceLines.Values.Sum(source =>
+            CalculateSalesReturnLineSubtotal(source.Qty, source.UnitPrice, source.DiscountPct, source.TaxRate, source.TaxMode));
+        var returnLinesSubtotal = returnDoc.Lines.Sum(line =>
+            CalculateSalesReturnLineSubtotal(line.Qty, line.UnitPrice, line.DiscountPct, line.TaxRate, line.TaxCalculationMode));
+        var expectedDiscount = originalLinesSubtotal == 0m ? 0m :
+            decimal.Round(originalDiscountAmount * returnLinesSubtotal / originalLinesSubtotal, 4, MidpointRounding.AwayFromZero);
+        var expectedExtra = originalLinesSubtotal == 0m ? 0m :
+            decimal.Round(originalExtraAmount * returnLinesSubtotal / originalLinesSubtotal, 4, MidpointRounding.AwayFromZero);
+        if (returnDoc.LinesDiscountAmount != expectedDiscount || returnDoc.LinesExtraAmount != expectedExtra)
+            throw new InvalidOperationException("The purchase return must allocate the original invoice discount and extra charges proportionally.");
+
+        var allocations = new List<(long ReturnLineId, long OriginalLineId, long MaterialId, decimal Quantity)>();
+        foreach (var line in returnDoc.Lines)
+        {
+            if (!sourceLines.TryGetValue(line.LineNo, out var source))
+                throw new InvalidOperationException($"Return line {line.LineNo} does not exist on original supplier invoice '{originalDocNo}'.");
+            if (source.MaterialId is not long materialId)
+                throw new InvalidOperationException("Purchase return lineage requires a material or service card on every returned invoice line.");
+            if (line.MaterialId != source.MaterialId ||
+                !string.Equals(line.Unit ?? string.Empty, source.Unit, StringComparison.OrdinalIgnoreCase) ||
+                line.UnitPrice != source.UnitPrice ||
+                line.DiscountPct != source.DiscountPct ||
+                !string.Equals(line.TaxCode ?? string.Empty, source.TaxCode, StringComparison.OrdinalIgnoreCase) ||
+                line.TaxRate != source.TaxRate ||
+                !string.Equals(line.TaxCalculationMode ?? "Exclusive", source.TaxMode, StringComparison.OrdinalIgnoreCase) ||
+                line.WarehouseId != source.WarehouseId)
+                throw new InvalidOperationException($"Return line {line.LineNo} must retain the original material, unit, price, discount and tax settings.");
+            if (line.Qty <= 0m ||
+                previouslyReturned.GetValueOrDefault(source.LineId) + line.Qty > source.Qty)
+                throw new InvalidOperationException(
+                    $"Return quantity for original line {line.LineNo} exceeds the remaining returnable quantity on supplier invoice '{originalDocNo}'.");
+
+            using var returnLine = connection.CreateCommand();
+            returnLine.Transaction = transaction;
+            returnLine.CommandText = "SELECT line_id FROM purchase_document_lines WHERE doc_id = $returnId AND line_no = $lineNo";
+            Add(returnLine, "$returnId", returnDoc.DocId);
+            Add(returnLine, "$lineNo", line.LineNo);
+            var returnLineValue = returnLine.ExecuteScalar();
+            if (returnLineValue is null or DBNull)
+                throw new InvalidOperationException($"Saved purchase return line {line.LineNo} could not be found for lineage allocation.");
+            allocations.Add((Convert.ToInt64(returnLineValue, CultureInfo.InvariantCulture),
+                source.LineId, materialId, line.Qty));
+        }
+
+        foreach (var allocation in allocations)
+        {
+            using var insert = connection.CreateCommand();
+            insert.Transaction = transaction;
+            insert.CommandText = """
+                INSERT INTO purchase_return_line_allocations
+                    (allocation_id, company_id, return_doc_id, return_line_id, original_doc_id,
+                     original_line_id, material_id, returned_qty, created_by, created_at)
+                VALUES
+                    ($id, $company, $returnDoc, $returnLine, $originalDoc,
+                     $originalLine, $material, $quantity, $actor, $createdAt)
+                """;
+            Add(insert, "$id", Guid.NewGuid().ToString("D"));
+            Add(insert, "$company", sourceCompany);
+            Add(insert, "$returnDoc", returnDoc.DocId);
+            Add(insert, "$returnLine", allocation.ReturnLineId);
+            Add(insert, "$originalDoc", originalDocId);
+            Add(insert, "$originalLine", allocation.OriginalLineId);
+            Add(insert, "$material", allocation.MaterialId);
+            Add(insert, "$quantity", allocation.Quantity);
+            Add(insert, "$actor", string.IsNullOrWhiteSpace(userId) ? Environment.UserName : userId.Trim());
+            Add(insert, "$createdAt", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture));
+            insert.ExecuteNonQuery();
         }
     }
 
