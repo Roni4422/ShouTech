@@ -75,6 +75,37 @@ public sealed class InvPostCorrectnessTests
     }
 
     [Fact]
+    public async Task SupplierInvoice_ExternalReferenceIsUniquePerCompanyAndSupplier()
+    {
+        using var db = await SeededAsync();
+        var supplier = await SavePartyAsync(db, "S", "SUP-EXT-REF-1", 100000m);
+        var otherSupplier = await SavePartyAsync(db, "S", "SUP-EXT-REF-2", 100000m);
+
+        var first = BuildDoc(InvDocKind.PurchaseInvoice, supplier.LedgerId, supplier.Code,
+            qty: 1m, price: 25m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        first.Reference = "SUP-INV-2026-001";
+        InvRepo.SaveDraft(first);
+
+        var duplicate = BuildDoc(InvDocKind.PurchaseInvoice, supplier.LedgerId, supplier.Code,
+            qty: 2m, price: 30m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        duplicate.Reference = " sup-inv-2026-001 ";
+        var error = Assert.Throws<InvalidOperationException>(() => InvRepo.SaveDraft(duplicate));
+        Assert.Contains("external reference", error.Message, StringComparison.OrdinalIgnoreCase);
+
+        var sameReferenceForAnotherSupplier = BuildDoc(
+            InvDocKind.PurchaseInvoice, otherSupplier.LedgerId, otherSupplier.Code,
+            qty: 1m, price: 25m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        sameReferenceForAnotherSupplier.Reference = "SUP-INV-2026-001";
+        InvRepo.SaveDraft(sameReferenceForAnotherSupplier);
+
+        var edited = InvRepo.Load(first.DocId, InvDocKind.PurchaseInvoice);
+        Assert.NotNull(edited);
+        edited!.Reference = "  SUP-INV-2026-001  ";
+        InvRepo.SaveDraft(edited);
+        Assert.Equal("  SUP-INV-2026-001  ", InvRepo.Load(first.DocId, InvDocKind.PurchaseInvoice)!.Reference);
+    }
+
+    [Fact]
     public async Task SalesReturn_PostingRejectsCumulativeQuantityAboveOriginalInvoice()
     {
         using var db = await SeededAsync();
