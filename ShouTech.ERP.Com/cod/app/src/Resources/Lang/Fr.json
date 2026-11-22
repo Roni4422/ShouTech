@@ -489,7 +489,7 @@
       "Balance": "Solde",
       "Date": "Date",
       "DocNo": "N° document",
-      "Description": "Libellé",
+      "Description": "Description",
       "Status": "Statut",
       "User": "Utilisateur",
       "Warehouse": "Entrepôt",
@@ -593,7 +593,14 @@
       "Shortage": "Manquant",
       "ChequesIn": "Chèques reçus",
       "ChequesOut": "Chèques émis",
-      "Projected": "Projeté"
+      "Projected": "Projeté",
+      "ReceiptNo": "N° de réception",
+      "PurchaseOrder": "Commande d'achat",
+      "ReceivedQty": "Qté reçue",
+      "InvoicedQty": "Qté facturée",
+      "ReturnedQty": "Qté retournée",
+      "RemainingQty": "Qté restante",
+      "RemainingBaseAmount": "GRNI restant (devise de base)"
     },
     "Filter": {
       "All": "Tous",
@@ -670,7 +677,8 @@
     "Feasible": "Faisable",
     "ShortageStatus": "Manquant",
     "BudgetVariance": "Écart budgétaire",
-    "QualitySummary": "Résumé des inspections qualité"
+    "QualitySummary": "Résumé des inspections qualité",
+    "GoodsReceivedNotInvoiced": "Marchandises reçues non facturées (GRNI)"
   },
   "Tools": {
     "Title": "Outils",
