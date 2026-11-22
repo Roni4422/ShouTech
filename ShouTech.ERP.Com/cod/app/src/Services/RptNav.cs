@@ -165,6 +165,9 @@ public static class RptNav
             case "Orders.PurchaseOrder":
             case "OrderDoc.TitlePurchase":
                 OpenPurchaseOrder(owner); return true;
+            case "Orders.RequestForQuotation":
+            case "Purchasing.RequestForQuotation":
+                OpenRequestForQuotation(owner); return true;
             // Phase 7B - three DISTINCT barcode windows:
             //   Create   = single material, N copies      (BarWin)
             //   Generate = auto-assign barcodes for ALL materials (BcdGenWin)
@@ -247,6 +250,7 @@ public static class RptNav
     public static void OpenHrPayroll(Window? owner = null) => Show(new HrPayrollWin(), owner);
     public static void OpenSalesOrder(Window? owner = null) => Show(new OrdWin(OrdKind.Sales), owner);
     public static void OpenPurchaseOrder(Window? owner = null) => Show(new OrdWin(OrdKind.Purchase), owner);
+    public static void OpenRequestForQuotation(Window? owner = null) => Show(new OrdWin(OrdKind.RequestForQuotation), owner);
     public static void OpenBarcodeTool(Window? owner = null) => Show(new BarWin(), owner);
     public static void OpenBarcodeGenerator(Window? owner = null) => Show(new BcdGenWin(), owner);
     public static void OpenBarcodeDesigner(Window? owner = null) => Show(new BcdDesWin(), owner);
