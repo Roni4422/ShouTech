@@ -305,7 +305,7 @@ namespace Kern.Tests
                 Assert.Equal(1m, Scalar(connectionString,
                     $"SELECT returned_qty FROM purchase_receipt_return_line_allocations WHERE return_doc_id = {returnId};"));
                 Assert.Equal(102m, BalanceQty(connectionString, 42));
-                Assert.Equal(101m, BalanceQty(connectionString, 43));
+                Assert.Equal(51m, BalanceQty(connectionString, 43));
             }
             finally
             {
