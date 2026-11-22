@@ -1,7 +1,7 @@
 -- Tracks quantities returned to suppliers before a supplier invoice exists.
 -- One allocation ties each posted return line to the exact original receipt line.
 CREATE TABLE IF NOT EXISTS purchase_receipt_return_line_allocations (
-    allocation_id TEXT PRIMARY KEY,
+    allocation_id TEXT NOT NULL PRIMARY KEY,
     company_id TEXT NOT NULL,
     return_doc_id INTEGER NOT NULL,
     return_line_id INTEGER NOT NULL,
