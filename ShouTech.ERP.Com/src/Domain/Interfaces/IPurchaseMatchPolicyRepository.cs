@@ -26,6 +26,12 @@ public interface IPurchaseMatchPolicyRepository
         string actor,
         CancellationToken cancellationToken = default);
 
+    Task<PurchaseMatchEvaluationSnapshot> ReevaluateLatestAsync(
+        string companyCode,
+        long invoiceDocId,
+        string actor,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Releases only the latest Blocked evaluation for this invoice.
     /// The caller is responsible for checking PURCH.MATCH.OVERRIDE.
