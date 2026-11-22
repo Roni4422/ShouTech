@@ -603,7 +603,9 @@
       "RemainingQty": "الكمية المتبقية",
       "RemainingBaseAmount": "قيمة GRNI المتبقية (العملة الأساسية)",
       "OpeningBalance": "الرصيد الافتتاحي",
-      "RunningBalance": "الرصيد الجاري"
+      "RunningBalance": "الرصيد الجاري",
+      "DebitBase": "مدين (العملة الأساسية)",
+      "CreditBase": "دائن (العملة الأساسية)"
     },
     "Filter": {
       "All": "الكل",
