@@ -91,7 +91,7 @@ public sealed class SupplierQuotationCompareWin : BaseWin
         ConfigureGrid(_linesGrid);
         _offersGrid.AutoGeneratingColumn += (_, args) =>
         {
-            if (args.PropertyName == nameof(SupplierQuotationOffer.Lines))
+            if (args.PropertyName is nameof(SupplierQuotationOffer.Lines) or nameof(SupplierQuotationOffer.DocId))
             {
                 args.Cancel = true;
                 return;
@@ -99,7 +99,14 @@ public sealed class SupplierQuotationCompareWin : BaseWin
             args.Column.Header = T("Purchasing.SupplierQuotationComparison.Columns." + args.PropertyName);
         };
         _linesGrid.AutoGeneratingColumn += (_, args) =>
+        {
+            if (args.PropertyName == nameof(SupplierQuotationLineOffer.MaterialId))
+            {
+                args.Cancel = true;
+                return;
+            }
             args.Column.Header = T("Purchasing.SupplierQuotationComparison.Columns." + args.PropertyName);
+        };
         _offersGrid.SelectionChanged += (_, _) =>
         {
             if (_offersGrid.SelectedItem is SupplierQuotationOffer selected)
