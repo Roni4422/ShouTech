@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using ShouTech.App.Services;
 using ShouTech.App.Reporting.Invoices;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
 
@@ -101,7 +102,7 @@ public sealed class SupplierQuotationEntryWin : BaseWin
         }
         catch (Exception ex)
         {
-            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "SupplierQuotationEntryWin.OnLoaded");
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "SupplierQuotationEntryWin.OnLoaded");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             Close();
         }
@@ -204,7 +205,7 @@ public sealed class SupplierQuotationEntryWin : BaseWin
         }
         catch (Exception ex)
         {
-            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "SupplierQuotationEntryWin.SaveAndPostAsync");
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "SupplierQuotationEntryWin.SaveAndPostAsync");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         finally
