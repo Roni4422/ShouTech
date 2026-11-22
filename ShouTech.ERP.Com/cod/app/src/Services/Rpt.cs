@@ -2123,7 +2123,9 @@ public static class RptQuery
             await using var reader = await command.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
             {
-                var row = new Dictionary<string, object?>(StringComparer.Ordinal);
+                // PostgreSQL folds unquoted SQL aliases to lowercase; report column keys use PascalCase.
+                // A case-insensitive row map keeps the same query contract on SQLite and PostgreSQL.
+                var row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
                 for (var i = 0; i < reader.FieldCount; i++)
                 {
                     var name = reader.GetName(i);
