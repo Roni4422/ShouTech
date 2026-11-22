@@ -2982,6 +2982,29 @@ public static class InvRepo
         decimal originalDiscountAmount;
         decimal originalExtraAmount;
 
+        // Serialize concurrent returns against the same supplier invoice.
+        // PostgreSQL locks the source row in the SELECT below; SQLite takes
+        // its write reservation with this no-op update before reading prior
+        // allocations, so two partial returns cannot both consume the same
+        // remaining quantity.
+        if (provider == "SQLite")
+        {
+            using var sourceLock = connection.CreateCommand();
+            sourceLock.Transaction = transaction;
+            sourceLock.CommandText = """
+                UPDATE purchase_documents
+                SET doc_no = doc_no
+                WHERE doc_id = $originalId
+                  AND (company_id = $company OR company_id = $guid)
+                  AND is_deleted = 0
+                """;
+            Add(sourceLock, "$originalId", originalDocId);
+            Add(sourceLock, "$company", Company);
+            Add(sourceLock, "$guid", guidKey);
+            if (sourceLock.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException("The original supplier invoice could not be locked for return processing.");
+        }
+
         using (var original = connection.CreateCommand())
         {
             original.Transaction = transaction;
