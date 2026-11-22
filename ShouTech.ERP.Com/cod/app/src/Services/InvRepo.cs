@@ -2906,6 +2906,25 @@ public static class InvRepo
             return;
 
         var guidKey = ResolveCompanyGuidOrNull(connection, transaction)?.ToString("D") ?? Company;
+        var normalizedReference = doc.Reference.Trim().ToUpperInvariant();
+
+        // The partial unique index protects a single stored company key. Older
+        // documents may carry the company code while newer order-chain rows use
+        // the company GUID, so serialize application writes on the canonical
+        // company/supplier/reference tuple before checking both aliases.
+        if (DatabaseRuntime.IsPostgreSql())
+        {
+            using var lockCommand = connection.CreateCommand();
+            lockCommand.Transaction = transaction;
+            lockCommand.CommandText = """
+                SELECT pg_advisory_xact_lock(
+                    hashtextextended($lock_key, 0));
+                """;
+            Add(lockCommand, "$lock_key",
+                $"{guidKey}|{supplierId.ToString(CultureInfo.InvariantCulture)}|{normalizedReference}");
+            lockCommand.ExecuteNonQuery();
+        }
+
         using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = """
@@ -2922,7 +2941,7 @@ public static class InvRepo
         Add(command, "$company", Company);
         Add(command, "$guid", guidKey);
         Add(command, "$supplier", supplierId);
-        Add(command, "$reference", doc.Reference.Trim());
+        Add(command, "$reference", normalizedReference);
         Add(command, "$current", doc.DocId > 0 ? doc.DocId : null);
 
         if (command.ExecuteScalar() is not null and not DBNull)
