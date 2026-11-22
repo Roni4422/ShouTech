@@ -163,6 +163,47 @@ public class GlPostingTests
     }
 
     [Fact]
+    public async Task JournalPost_DraftCannotPostAfterFiscalPeriodCloses()
+    {
+        using var db = await SeededAsync();
+        var store = new JournalRepository("SQLite", db.ConnectionString);
+        var journal = new JournalService(store);
+        var cash = await store.ResolveAccountIdAsync(db.CompanyId, "131");
+        var sales = await store.ResolveAccountIdAsync(db.CompanyId, "301");
+        var entryId = await journal.CreateDraftAsync(db.CompanyId, new DateOnly(2026, 3, 10), "Closed period", Actor,
+            new[]
+            {
+                new JournalLineRequest(cash, 25m, 0m),
+                new JournalLineRequest(sales, 0m, 25m)
+            }, documentNumber: "JV-GL-CLOSED");
+
+        using (var connection = new SqliteConnection(db.ConnectionString))
+        {
+            connection.Open();
+            using var close = connection.CreateCommand();
+            close.CommandText = """
+                UPDATE fiscal_periods
+                SET status = 'CLOSED'
+                WHERE fiscal_year_id IN (
+                    SELECT fiscal_year_id FROM fiscal_years WHERE company_id = $company
+                );
+                """;
+            close.Parameters.AddWithValue("$company", db.CompanyId.ToString("D"));
+            Assert.True(close.ExecuteNonQuery() > 0);
+        }
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => journal.PostAsync(entryId, Actor));
+
+        using var verify = new SqliteConnection(db.ConnectionString);
+        verify.Open();
+        using var status = verify.CreateCommand();
+        status.CommandText = "SELECT status FROM journal_entries WHERE journal_entry_id = $id;";
+        status.Parameters.AddWithValue("$id", entryId.ToString("D"));
+        Assert.Equal((long)JournalEntryStatus.Draft,
+            Convert.ToInt64(status.ExecuteScalar(), CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
     public async Task JournalPost_UnknownCostCenter_FailsWithAcc5009()
     {
         using var db = await SeededAsync();
