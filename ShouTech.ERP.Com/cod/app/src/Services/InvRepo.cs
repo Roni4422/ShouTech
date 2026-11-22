@@ -1495,7 +1495,7 @@ public static class InvRepo
                AND source.doc_id = allocation.original_doc_id
             INNER JOIN purchase_documents returned
                 ON returned.doc_id = allocation.return_doc_id
-               AND returned.company_id = allocation.company_id
+               AND CAST(returned.company_id AS TEXT) = allocation.company_id
             WHERE allocation.company_id IN ($company, $guid)
               AND allocation.original_doc_id = $originalId
               AND returned.doc_kind = 'PRT'
