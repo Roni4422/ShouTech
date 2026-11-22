@@ -3790,7 +3790,8 @@
       "Total": "Return quantity total: {0:N4}",
       "Reason": "Return reason"
     },
-    "ReturnGoodsReceipt": "Return goods receipt"
+    "ReturnGoodsReceipt": "Return goods receipt",
+    "MatchPolicy": "Three-way match policy"
   },
   "PurchaseMatch": {
     "Title": "Purchase Three-Way Match Controls",
