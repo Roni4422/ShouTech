@@ -81,7 +81,9 @@ Purchase documents are company-scoped. Posted source documents remain auditable;
 - Full purchase-invoice reversals use the same source-line allocation guard; a partial return therefore prevents a later full reversal from returning more than the remaining quantity.
 - Tracked materials require batch/serial capture during return posting.
 
-This workflow currently handles an invoice-linked supplier return / debit note. A separate physical return directly from a posted goods receipt before supplier invoicing, with GRNI-only accounting and no supplier payable effect, is not yet implemented. Do not record that event as a debit note unless the supplier invoice has been posted.
+- A separate pre-invoice return can be created from a posted goods receipt through `PurchaseReceiptReturnWin`; only quantities not already invoiced or returned are eligible.
+- The receipt return, line allocations, stock issue, GRNI debit, valuation variance, and source link are committed atomically. It does not create a supplier payable or supplier debit note.
+- Return allocations reduce the purchase order's net received quantity and are excluded from later invoice matching. This allows replacement goods to be received against the remaining purchase-order quantity without treating returned goods as available for invoicing.
 
 ## 8. Integrity and acceptance checks
 
@@ -101,6 +103,9 @@ The purchase-to-pay flow must pass the following checks before release:
 12. Allocation between different currencies is rejected.
 13. Reversing a supplier payment releases its allocations and restores the invoice's open balance atomically.
 14. Every operation remains isolated to the active company and retains document links and user audit data.
+15. A pre-invoice receipt return cannot exceed the receipt quantity remaining after posted invoice matches and prior returns.
+16. A returned receipt quantity is excluded from order fulfilment and cannot be consumed by a later supplier invoice.
+17. Returning goods and posting an invoice concurrently cannot consume the same receipt quantity; both operations serialize on the purchase order.
 
 ## Implementation map
 
@@ -110,13 +115,15 @@ The purchase-to-pay flow must pass the following checks before release:
 - Supplier quotation capture and posting from an RFQ: `cod/app/src/Views/SupplierQuotationEntryWin.cs`
 - Supplier quotation comparison, line review, and award to a linked draft purchase order: `cod/app/src/Views/SupplierQuotationCompareWin.cs`
 - Invoice-linked partial purchase return / debit note UI and validation: `cod/app/src/Views/PurchaseReturnWin.cs` and `cod/app/src/Services/InvRepo.cs`
+- Pre-invoice goods receipt return UI: `cod/app/src/Views/PurchaseReceiptReturnWin.cs`; transactional stock/GRNI return and net-receipt matching: `src/Infra/OrderDocumentRepository.cs`
 - Supplier payment voucher: `cod/app/src/Views/CshWin.cs`
 - Supplier payment allocation: `src/Infra/ReconciliationRepository.cs` and `cod/app/src/Views/PayRecWin.cs`
 - Voucher reversal and allocation release/audit: `src/Infra/JournalRepository.cs`, `src/Infra/GlPosting.cs`, and `src/Infra/PartyLedger.cs`; audit schema: `dba/mig/sqlite/079_payment_allocation_reversal_audit.sql` and `dba/mig/postgresql/079_payment_allocation_reversal_audit.sql`
 - Receipt/invoice matching schema: `dba/mig/sqlite/078_purchase_receipt_invoice_matches.sql` and `dba/mig/postgresql/078_purchase_receipt_invoice_matches.sql`
-- Purchase-return line allocation schema: `dba/mig/sqlite/080_purchase_return_line_allocations.sql` and `dba/mig/postgresql/080_purchase_return_line_allocations.sql
+- Purchase-invoice return allocation schema: `dba/mig/sqlite/080_purchase_return_line_allocations.sql` and `dba/mig/postgresql/080_purchase_return_line_allocations.sql`
+- Pre-invoice receipt-return allocation schema: `dba/mig/sqlite/081_purchase_receipt_return_line_allocations.sql` and `dba/mig/postgresql/081_purchase_receipt_return_line_allocations.sql
 - Regression coverage: `tests/Kern.Tests/OrderChainStep9Tests.cs` and `tests/Kern.Tests/PartyUnificationTests.cs`
 
 ## Known boundaries
 
-This implementation matches by purchase order, material/service identity, and quantity. RFQ responses are compared line-by-line and normalized to base currency; supplier award remains an explicit user decision. It does not yet implement a configurable three-way-match tolerance matrix for price, tax, delivery, or supplier-specific policy; price differences are currently posted to the Purchases variance account. Foreign-currency payment allocation is deliberately blocked rather than converted implicitly. Approval routing, supplier remittance advice, bank-file reconciliation, supplier statement matching, configurable three-way-match tolerances, and a separate pre-invoice goods-receipt return remain follow-up capabilities.
+This implementation matches by purchase order, material/service identity, and quantity. RFQ responses are compared line-by-line and normalized to base currency; supplier award remains an explicit user decision. It does not yet implement a configurable three-way-match tolerance matrix for price, tax, delivery, or supplier-specific policy; price differences are currently posted to the Purchases variance account. Foreign-currency payment allocation is deliberately blocked rather than converted implicitly. Approval routing, supplier remittance advice, bank-file reconciliation, supplier statement matching, and configurable three-way-match tolerances remain follow-up capabilities.
