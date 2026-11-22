@@ -249,7 +249,7 @@ public sealed class PurchaseMatchPolicyRepository : IPurchaseMatchPolicyReposito
             WHERE company_code = @company AND invoice_doc_id = @invoice
             ORDER BY evaluation_version DESC
             LIMIT 1
-            """))
+            """ + (_provider == "PostgreSQL" ? " FOR UPDATE" : string.Empty)))
         {
             Add(latest, "@company", companyCode.Trim());
             Add(latest, "@invoice", invoiceDocId);
@@ -277,6 +277,21 @@ public sealed class PurchaseMatchPolicyRepository : IPurchaseMatchPolicyReposito
         var hasReceiptMatch = root.TryGetProperty("matchDetails", out var matchDetails) &&
                               matchDetails.ValueKind == System.Text.Json.JsonValueKind.Array &&
                               matchDetails.GetArrayLength() > 0;
+        if (!hasReceiptMatch)
+        {
+            await using var matchCount = CreateCommand(connection, transaction, """
+                SELECT COUNT(*)
+                FROM purchase_receipt_invoice_matches m
+                JOIN purchase_documents d ON d.doc_id = m.invoice_doc_id
+                JOIN companies c ON c.company_id = d.company_id
+                WHERE c.company_code = @company AND m.invoice_doc_id = @invoice
+                """);
+            Add(matchCount, "@company", companyCode.Trim());
+            Add(matchCount, "@invoice", invoiceDocId);
+            hasReceiptMatch = Convert.ToInt64(
+                await matchCount.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
+                CultureInfo.InvariantCulture) > 0;
+        }
         var evaluation = PurchaseMatchPolicyEvaluator.Evaluate(
             policy,
             new PurchaseMatchVariance(priceVariance, taxVariance, baseVariance, hasReceiptMatch));
