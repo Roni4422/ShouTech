@@ -256,6 +256,86 @@ namespace Kern.Tests
             }
         }
 
+        [Fact]
+        public async Task Rfq_SupplierQuotationComparison_AndPurchaseOrderConversion_PreserveDocumentLinks()
+        {
+            var (service, orders, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                var rfq = new CommercialDocumentDraft(
+                    companyId,
+                    CommercialDocKinds.RequestForQuotation,
+                    "RFQ-9001",
+                    new DateOnly(2026, 10, 20),
+                    null,
+                    null,
+                    null,
+                    "SAR",
+                    1m,
+                    "Request for supplier pricing",
+                    new[]
+                    {
+                        new CommercialLineDraft(42, "MAT-42", "Order test item", "PCS", 5m, 0m)
+                    });
+                var rfqId = await service.CreateOrderAsync(rfq, "order-test");
+                await service.PostOrderAsync(CommercialDocSide.Purchase, rfqId, "order-test");
+
+                var (quotationId, quotationNo) = await service.CreateSupplierQuotationFromRfqAsync(
+                    rfqId,
+                    supplierId: 91,
+                    supplierCode: "SUP-91",
+                    supplierName: "Supplier 91",
+                    supplierQuotationNumber: "SUP-Q-91",
+                    quotationDate: new DateOnly(2026, 10, 21),
+                    validTill: new DateOnly(2026, 11, 20),
+                    currencyCode: "SAR",
+                    exchangeRate: 1m,
+                    quotedLines: new[]
+                    {
+                        new CommercialLineDraft(
+                            42, "MAT-42", "Order test item", "PCS", 5m, 11m,
+                            SourceLineNo: 1)
+                    },
+                    userId: "order-test");
+
+                Assert.StartsWith("SQ-", quotationNo);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, quotationId, "order-test");
+
+                var offers = await service.CompareSupplierQuotationsAsync(rfqId);
+                var offer = Assert.Single(offers);
+                Assert.Equal(quotationId, offer.DocId);
+                Assert.Equal("Supplier 91", offer.SupplierName);
+                Assert.Equal(55m, offer.GrandTotal);
+
+                var (purchaseOrderId, purchaseOrderNo) =
+                    await service.CreatePurchaseOrderFromSupplierQuotationAsync(
+                        quotationId, new DateOnly(2026, 10, 22), "order-test");
+                Assert.StartsWith("PO-", purchaseOrderNo);
+
+                var purchaseOrder = await orders.FindByIdAsync(
+                    CommercialDocSide.Purchase, purchaseOrderId);
+                Assert.NotNull(purchaseOrder);
+                Assert.Equal(CommercialDocKinds.PurchaseOrder, purchaseOrder!.DocKind);
+                Assert.Equal(CommercialDocumentStatus.Draft, purchaseOrder.Status);
+                Assert.Equal(5m, Assert.Single(purchaseOrder.Lines).Qty);
+                Assert.Equal(55m, purchaseOrder.GrandTotal);
+
+                var rfqLinks = await orders.GetLinksFromAsync(companyId, rfqId);
+                var rfqResponse = Assert.Single(rfqLinks);
+                Assert.Equal(CommercialDocKinds.SupplierQuotation, rfqResponse.TargetDocKind);
+                Assert.Equal(quotationId, rfqResponse.TargetDocId);
+
+                var quotationLinks = await orders.GetLinksFromAsync(companyId, quotationId);
+                var poLink = Assert.Single(quotationLinks);
+                Assert.Equal(CommercialDocKinds.PurchaseOrder, poLink.TargetDocKind);
+                Assert.Equal(purchaseOrderId, poLink.TargetDocId);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
         // ------------------------------------------------------------ harness
 
         private static string LastConnectionString = string.Empty;
