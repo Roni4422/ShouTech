@@ -147,6 +147,8 @@ public static class InvRepo
         var headerTable = isSales ? "sales_documents" : "purchase_documents";
         var lineTable = isSales ? "sales_document_lines" : "purchase_document_lines";
 
+        EnsureUniqueSupplierInvoiceReference(connection, tx, doc);
+
         long docId = doc.DocId;
         if (docId <= 0)
         {
@@ -2894,6 +2896,38 @@ public static class InvRepo
         if (Math.Abs(registeredTax - (isReturn ? -doc.PostingTaxAmount : doc.PostingTaxAmount)) > 0.0001m)
             throw new InvalidOperationException(
                 "The invoice tax lines do not reconcile with the stored document tax total. Recalculate the invoice before posting.");
+    }
+
+    private static void EnsureUniqueSupplierInvoiceReference(DbConnection connection, DbTransaction transaction, InvDoc doc)
+    {
+        if (doc.Kind != InvDocKind.PurchaseInvoice ||
+            doc.PartyId is not long supplierId || supplierId <= 0 ||
+            string.IsNullOrWhiteSpace(doc.Reference))
+            return;
+
+        var guidKey = ResolveCompanyGuidOrNull(connection, transaction)?.ToString("D") ?? Company;
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            SELECT doc_id
+            FROM purchase_documents
+            WHERE (company_id = $company OR company_id = $guid)
+              AND doc_kind = 'PUR'
+              AND party_id = $supplier
+              AND lower(trim(reference_no)) = lower(trim($reference))
+              AND is_deleted = 0
+              AND ($current IS NULL OR doc_id <> $current)
+            LIMIT 1;
+            """;
+        Add(command, "$company", Company);
+        Add(command, "$guid", guidKey);
+        Add(command, "$supplier", supplierId);
+        Add(command, "$reference", doc.Reference.Trim());
+        Add(command, "$current", doc.DocId > 0 ? doc.DocId : null);
+
+        if (command.ExecuteScalar() is not null and not DBNull)
+            throw new InvalidOperationException(
+                "A supplier invoice with this external reference already exists for the selected supplier.");
     }
 
     private static void BindHeader(DbCommand cmd, InvDoc doc)
