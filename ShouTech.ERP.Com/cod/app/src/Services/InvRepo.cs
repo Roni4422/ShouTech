@@ -3044,8 +3044,8 @@ public static class InvRepo
         if (!string.IsNullOrWhiteSpace(returnDoc.OriginalDocNo) &&
             !string.Equals(returnDoc.OriginalDocNo.Trim(), originalDocNo, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("The original supplier invoice number does not match its document id.");
-        if (returnDoc.PaidAmount != 0m)
-            throw new InvalidOperationException("A purchase debit note is a supplier credit document and cannot record a payment at posting.");
+        if (returnDoc.PaidAmount < 0m || returnDoc.PaidAmount > returnDoc.GrandTotal)
+            throw new InvalidOperationException("The supplier refund cannot exceed the purchase debit note total.");
 
         var sourceLines = new Dictionary<int, (long LineId, long? MaterialId, string Unit, decimal Qty,
             decimal UnitPrice, decimal DiscountPct, string TaxCode, decimal TaxRate, string TaxMode, int? WarehouseId)>();
