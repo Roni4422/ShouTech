@@ -73,6 +73,22 @@ public sealed record CommercialDocumentSnapshot(
     DateOnly? DeliveryDate = null,
     DateOnly? ValidTill = null);
 
+/// <summary>Quantity available for return from one posted goods-receipt line.</summary>
+public sealed record PurchaseReceiptReturnableLine(
+    long ReceiptLineId,
+    int LineNo,
+    long? MaterialId,
+    string? MaterialCode,
+    string Description,
+    string? Unit,
+    decimal ReceivedQty,
+    decimal InvoicedQty,
+    decimal ReturnedQty,
+    decimal ReturnableQty,
+    decimal UnitPrice,
+    decimal DiscountPct,
+    long? WarehouseId);
+
 /// <summary>A cross-document chain link (see dba document_links table).</summary>
 public sealed record CommercialDocumentLink(
     long LinkId,
