@@ -106,7 +106,9 @@ The purchase-to-pay flow must pass the following checks before release:
 
 - Purchase-order, receipt, invoice, matching, GRNI, and purchase variance: `src/Infra/OrderDocumentRepository.cs`
 - Application workflow: `src/App/Services/OrderService.cs`
-- Order/receipt/invoice UI: `cod/app/src/Views/OrdWin.cs`
+- Order/receipt/invoice and RFQ UI: `cod/app/src/Views/OrdWin.cs`
+- Supplier quotation capture and posting from an RFQ: `cod/app/src/Views/SupplierQuotationEntryWin.cs`
+- Supplier quotation comparison, line review, and award to a linked draft purchase order: `cod/app/src/Views/SupplierQuotationCompareWin.cs`
 - Invoice-linked partial purchase return / debit note UI and validation: `cod/app/src/Views/PurchaseReturnWin.cs` and `cod/app/src/Services/InvRepo.cs`
 - Supplier payment voucher: `cod/app/src/Views/CshWin.cs`
 - Supplier payment allocation: `src/Infra/ReconciliationRepository.cs` and `cod/app/src/Views/PayRecWin.cs`
