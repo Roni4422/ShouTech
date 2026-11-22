@@ -23,6 +23,7 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
     private readonly List<(TextBlock Label, string Key)> _labels = new();
     private readonly List<(DataGridColumn Column, string Key)> _headers = new();
     private readonly TextBox _receiptNo = new();
+    private readonly TextBox _reason = new();
     private readonly TextBlock _receiptInfo = new();
     private readonly TextBlock _status = new();
     private readonly DataGrid _grid = new();
@@ -104,6 +105,7 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
         var form = F2Ui.CreateFormGrid(2);
         form.Margin = new Thickness(0, 0, 0, 8);
         F2Ui.AddField(_labels, form, 0, 0, "Purchasing.ReceiptReturn.ReceiptNo", _receiptNo);
+        F2Ui.AddField(_labels, form, 0, 1, "Purchasing.ReceiptReturn.Reason", _reason);
         DockPanel.SetDock(form, Dock.Top);
         content.Children.Add(form);
         _receiptInfo.Margin = new Thickness(0, 0, 0, 8);
@@ -204,7 +206,7 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
         _grid.CommitEdit(DataGridEditingUnit.Cell, true);
         _grid.CommitEdit(DataGridEditingUnit.Row, true);
         var selected = _lines.Where(x => x.ReturnQty > 0m).ToArray();
-        if (selected.Length == 0 || selected.Any(x => x.ReturnQty < 0m || x.ReturnQty > x.ReturnableQty))
+        if (string.IsNullOrWhiteSpace(_reason.Text) || selected.Length == 0 || selected.Any(x => x.ReturnQty < 0m || x.ReturnQty > x.ReturnableQty))
         {
             _status.Text = T("Purchasing.ReceiptReturn.InvalidQuantities");
             return;
@@ -221,7 +223,7 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
                 x.MaterialId, x.MaterialCode, x.Description, x.Unit, x.ReturnQty,
                 x.UnitPrice, x.DiscountPct, 0m, x.WarehouseId, x.ReceiptLineNo)).ToArray();
             var result = await AppHost.Orders.CreatePurchaseReceiptReturnAsync(
-                _companyId, receiptId, DateOnly.FromDateTime(DateTime.Today), drafts, CurrentUserId);
+                _companyId, receiptId, DateOnly.FromDateTime(DateTime.Today), drafts, CurrentUserId, _reason.Text.Trim());
             MessageBox.Show(this,
                 Tf("Purchasing.ReceiptReturn.Created", result.ReturnDocNo),
                 Title, MessageBoxButton.OK, MessageBoxImage.Information);
@@ -232,6 +234,7 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
             _loadedSupplierName = string.Empty;
             _status.Text = string.Empty;
             _receiptNo.Clear();
+            _reason.Clear();
         }
         catch (Exception ex)
         {
