@@ -38,6 +38,44 @@ namespace Kern.Tests
         private const string Actor = "step9-test";
         private const string CompanyCode = "ORDER-GL";
 
+        [Fact]
+        public async Task SupplierQuotation_CanBeMarkedLost_WithoutTouchingSalesDocuments()
+        {
+            var (service, orders, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                var rfqId = await service.CreateOrderAsync(
+                    new CommercialDocumentDraft(
+                        companyId, CommercialDocKinds.RequestForQuotation, "RFQ-LOST-01",
+                        new DateOnly(2026, 11, 2), null, null, 1, "USD", 1m, null,
+                        new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 10m) }),
+                    Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, rfqId, Actor);
+
+                var (quotationId, _) = await service.CreateSupplierQuotationFromRfqAsync(
+                    rfqId, 9, "SUP-1", "Step9 Supplier", "SUP-Q-LOST-01",
+                    new DateOnly(2026, 11, 3), new DateOnly(2026, 11, 30),
+                    "USD", 1m,
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 9m, SourceLineNo: 1) },
+                    Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, quotationId, Actor);
+
+                await service.MarkSupplierQuotationLostAsync(quotationId, Actor);
+
+                var lost = await orders.FindByIdAsync(CommercialDocSide.Purchase, quotationId);
+                Assert.NotNull(lost);
+                Assert.Equal(CommercialDocKinds.SupplierQuotation, lost!.DocKind);
+                Assert.Equal(CommercialDocumentStatus.Lost, lost.Status);
+                var rfq = await orders.FindByIdAsync(CommercialDocSide.Purchase, rfqId);
+                Assert.NotNull(rfq);
+                Assert.Equal(CommercialDocumentStatus.Posted, rfq!.Status);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
         // ------------------------------------------------------------ (b) sales
 
         [Fact]
