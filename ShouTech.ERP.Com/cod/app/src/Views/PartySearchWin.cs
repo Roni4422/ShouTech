@@ -35,6 +35,8 @@ public sealed class PartySearchWin : BaseWin
     /// <summary>Kind ("C"/"S") of the chosen party.</summary>
     public string? SelectedPartyKind { get; private set; }
 
+    public Party? SelectedParty { get; private set; }
+
     /// <summary>Optional kind pre-filter: "C", "S", or null for both.</summary>
     public string? KindFilter { get; set; }
 
@@ -176,6 +178,7 @@ public sealed class PartySearchWin : BaseWin
     {
         if (_grid.SelectedItem is not Party party)
             return;
+        SelectedParty = party;
         SelectedPartyCode = party.Code;
         SelectedPartyKind = party.Kind;
         DialogResult = true;
