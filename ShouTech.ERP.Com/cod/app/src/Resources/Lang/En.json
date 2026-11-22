@@ -3761,6 +3761,7 @@
       "ConfirmPost": "Post this supplier return? Stock and GRNI will be reduced in the same transaction.",
       "Created": "Pre-invoice supplier return {0} was posted.",
       "Total": "Return quantity total: {0:N4}"
-    }
+    },
+    "ReturnGoodsReceipt": "Return goods receipt"
   }
 }
