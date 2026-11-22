@@ -1130,6 +1130,7 @@ namespace Kern.Tests
                 ("1201", "Trade Accounts Receivable", "ASSET"), ("1203", "Merchandise Inventory", "ASSET"),
                 ("2201", "Trade Accounts Payable", "LIABILITY"), ("2203", "Accrued Liabilities / GRNI", "LIABILITY"), ("301", "Goods Sales Revenue", "REVENUE"),
                 ("401", "Cost of Goods Sold", "EXPENSE"), ("402", "Merchandise Purchases", "EXPENSE"),
+                ("403", "Purchase Returns", "EXPENSE"),
                 ("131", "Cash on Hand", "ASSET")
             })
             {
