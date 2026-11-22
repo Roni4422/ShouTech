@@ -600,7 +600,9 @@
       "InvoicedQty": "Faturalanan miktar",
       "ReturnedQty": "İade miktarı",
       "RemainingQty": "Kalan miktar",
-      "RemainingBaseAmount": "Kalan GRNI (ana para birimi)"
+      "RemainingBaseAmount": "Kalan GRNI (ana para birimi)",
+      "OpeningBalance": "Açılış bakiyesi",
+      "RunningBalance": "Güncel bakiye"
     },
     "Filter": {
       "All": "Tümü",
@@ -678,7 +680,8 @@
     "ShortageStatus": "Eksik",
     "BudgetVariance": "Bütçe Sapması",
     "QualitySummary": "Kalite Denetim Özeti",
-    "GoodsReceivedNotInvoiced": "Faturalanmamış Alınan Mallar (GRNI)"
+    "GoodsReceivedNotInvoiced": "Faturalanmamış Alınan Mallar (GRNI)",
+    "SupplierStatement": "Tedarikçi Ekstresi"
   },
   "Tools": {
     "Title": "Araçlar",
