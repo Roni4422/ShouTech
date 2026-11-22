@@ -896,6 +896,281 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         }
     }
 
+    public async Task<long> CreatePurchaseReceiptReturnAsync(
+        Guid companyId, long receiptId, string returnDocNo, DateOnly returnDate,
+        IReadOnlyList<CommercialLineDraft> returnedLines, string userId,
+        CancellationToken cancellationToken = default)
+    {
+        if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
+        if (receiptId <= 0) throw new ArgumentOutOfRangeException(nameof(receiptId));
+        if (string.IsNullOrWhiteSpace(returnDocNo)) throw new ArgumentException("Return number is required.", nameof(returnDocNo));
+        if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
+        ArgumentNullException.ThrowIfNull(returnedLines);
+        if (returnedLines.Count == 0) throw new InvalidOperationException("A goods receipt return requires at least one line.");
+
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            // Resolve the source PO first, then lock it. Invoice conversion and
+            // receipt returns serialize on this same row to prevent a race where
+            // the same receipt quantity is both invoiced and returned.
+            long purchaseOrderId;
+            await using (var sourceOrder = CreateCommand(connection, transaction, """
+                SELECT source_doc_id
+                FROM document_links
+                WHERE company_id = @company
+                  AND source_doc_kind = @orderKind
+                  AND target_doc_kind = @receiptKind
+                  AND target_doc_id = @receiptId
+                ORDER BY link_id
+                LIMIT 1
+                """))
+            {
+                Add(sourceOrder, "@company", companyId.ToString("D"));
+                Add(sourceOrder, "@orderKind", CommercialDocKinds.PurchaseOrder);
+                Add(sourceOrder, "@receiptKind", CommercialDocKinds.PurchaseReceipt);
+                Add(sourceOrder, "@receiptId", receiptId);
+                var value = await sourceOrder.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                if (value is null or DBNull)
+                    throw new InvalidOperationException("The goods receipt is not linked to a purchase order.");
+                purchaseOrderId = Convert.ToInt64(value, CultureInfo.InvariantCulture);
+            }
+
+            await using (var orderLock = CreateCommand(connection, transaction,
+                _provider == "PostgreSQL"
+                    ? "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @order AND doc_kind = @kind AND status = @posted AND is_deleted = FALSE FOR UPDATE"
+                    : "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @order AND doc_kind = @kind AND status = @posted AND is_deleted = 0"))
+            {
+                Add(orderLock, "@company", companyId.ToString("D"));
+                Add(orderLock, "@order", purchaseOrderId);
+                Add(orderLock, "@kind", CommercialDocKinds.PurchaseOrder);
+                Add(orderLock, "@posted", CommercialDocumentStatus.Posted);
+                if (await orderLock.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) is null)
+                    throw new InvalidOperationException("Only a posted purchase order can have a receipt return.");
+            }
+
+            await using (var receiptLock = CreateCommand(connection, transaction,
+                _provider == "PostgreSQL"
+                    ? "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @receipt AND doc_kind = @kind AND status = @posted AND is_deleted = FALSE FOR UPDATE"
+                    : "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @receipt AND doc_kind = @kind AND status = @posted AND is_deleted = 0"))
+            {
+                Add(receiptLock, "@company", companyId.ToString("D"));
+                Add(receiptLock, "@receipt", receiptId);
+                Add(receiptLock, "@kind", CommercialDocKinds.PurchaseReceipt);
+                Add(receiptLock, "@posted", CommercialDocumentStatus.Posted);
+                if (await receiptLock.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) is null)
+                    throw new InvalidOperationException("Only a posted goods receipt can be returned.");
+            }
+
+            var order = await ReadSnapshotAsync(connection, transaction, CommercialDocSide.Purchase,
+                purchaseOrderId, companyId, CommercialDocKinds.PurchaseOrder, null, cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("The source purchase order could not be loaded.");
+            var receipt = await ReadSnapshotAsync(connection, transaction, CommercialDocSide.Purchase,
+                receiptId, companyId, CommercialDocKinds.PurchaseReceipt, null, cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("The source goods receipt could not be loaded.");
+            if (receipt.PartyId is null || receipt.PartyId != order.PartyId)
+                throw new InvalidOperationException("The receipt supplier does not match its purchase order.");
+            if (returnDate < receipt.DocDate)
+                throw new InvalidOperationException("A goods receipt return date cannot precede its source receipt date.");
+
+            var matchedByLine = new Dictionary<long, decimal>();
+            await using (var matched = CreateCommand(connection, transaction, """
+                SELECT receipt_line_id, COALESCE(SUM(matched_qty), 0)
+                FROM purchase_receipt_invoice_matches
+                WHERE company_id = @company AND receipt_doc_id = @receipt
+                GROUP BY receipt_line_id
+                """))
+            {
+                Add(matched, "@company", companyId.ToString("D"));
+                Add(matched, "@receipt", receiptId);
+                await using var reader = await matched.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    matchedByLine[Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture)] =
+                        Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
+            }
+
+            var returnedByLine = new Dictionary<long, decimal>();
+            await using (var returned = CreateCommand(connection, transaction, """
+                SELECT a.original_line_id, COALESCE(SUM(a.returned_qty), 0)
+                FROM purchase_receipt_return_line_allocations a
+                JOIN purchase_documents d
+                  ON d.doc_id = a.return_doc_id
+                 AND d.company_id = a.company_id
+                 AND d.doc_kind = @returnKind
+                 AND d.status = @posted
+                 AND d.is_deleted = 0
+                WHERE a.company_id = @company AND a.original_doc_id = @receipt
+                GROUP BY a.original_line_id
+                """))
+            {
+                Add(returned, "@returnKind", CommercialDocKinds.PurchaseReceiptReturn);
+                Add(returned, "@posted", CommercialDocumentStatus.Posted);
+                Add(returned, "@company", companyId.ToString("D"));
+                Add(returned, "@receipt", receiptId);
+                await using var reader = await returned.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    returnedByLine[Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture)] =
+                        Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
+            }
+
+            var receiptLines = receipt.Lines.ToDictionary(line => line.LineNo);
+            var requestedLines = new Dictionary<int, CommercialLineDraft>();
+            foreach (var requested in returnedLines)
+            {
+                if (requested.SourceLineNo is not int sourceLineNo ||
+                    !receiptLines.TryGetValue(sourceLineNo, out var sourceLine))
+                    throw new InvalidOperationException("Every return line must identify an original goods receipt line.");
+                if (!requestedLines.TryAdd(sourceLineNo, requested))
+                    throw new InvalidOperationException("A goods receipt line can appear only once in a return document.");
+                if (requested.Qty <= 0m || requested.MaterialId != sourceLine.MaterialId)
+                    throw new InvalidOperationException("Return quantities must be positive and material identities must match the source receipt.");
+                var invoiced = matchedByLine.GetValueOrDefault(sourceLine.LineId);
+                var alreadyReturned = returnedByLine.GetValueOrDefault(sourceLine.LineId);
+                var remaining = sourceLine.Qty - invoiced - alreadyReturned;
+                if (requested.Qty > remaining)
+                    throw new InvalidOperationException(
+                        $"Return quantity for receipt line {sourceLineNo} exceeds the unbilled, unreturned quantity ({Math.Max(0m, remaining)}).");
+            }
+
+            var returnDraftLines = new List<CommercialLineDraft>();
+            foreach (var (sourceLineNo, requested) in requestedLines.OrderBy(x => x.Key))
+            {
+                var sourceLine = receiptLines[sourceLineNo];
+                returnDraftLines.Add(new CommercialLineDraft(
+                    sourceLine.MaterialId, sourceLine.MaterialCode, sourceLine.Description,
+                    sourceLine.Unit, requested.Qty, sourceLine.UnitPrice, sourceLine.DiscountPct,
+                    0m, sourceLine.WarehouseId, sourceLine.LineNo));
+            }
+
+            var receiptFx = FxRates.Resolve(connection, transaction, _provider,
+                companyId, receipt.CurrencyCode, receipt.DocDate, receipt.ExchangeRate);
+            var returnDraft = new CommercialDocumentDraft(
+                companyId, CommercialDocKinds.PurchaseReceiptReturn, returnDocNo.Trim(), returnDate,
+                receipt.PartyId, receipt.PartyName, receipt.WarehouseId, receipt.CurrencyCode,
+                receiptFx.Rate, $"Return against goods receipt {receipt.DocNo}",
+                returnDraftLines, receipt.PartyCode, null, null, order.CostCenter,
+                order.BranchName, order.SalesRepName, receipt.WarehouseName);
+            var returnId = await InsertDocumentAsync(connection, transaction, CommercialDocSide.Purchase,
+                returnDraft, CommercialDocumentStatus.Posted, userId, cancellationToken).ConfigureAwait(false);
+
+            var returnLineIds = new Dictionary<int, long>();
+            await using (var lineIds = CreateCommand(connection, transaction,
+                "SELECT line_id, line_no FROM purchase_document_lines WHERE doc_id = @doc"))
+            {
+                Add(lineIds, "@doc", returnId);
+                await using var reader = await lineIds.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    returnLineIds[Convert.ToInt32(reader.GetValue(1), CultureInfo.InvariantCulture)] =
+                        Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture);
+            }
+
+            foreach (var line in returnDraftLines)
+            {
+                var sourceLineNo = line.SourceLineNo!.Value;
+                var sourceLine = receiptLines[sourceLineNo];
+                var allocationId = Guid.NewGuid();
+                await using var allocation = CreateCommand(connection, transaction, """
+                    INSERT INTO purchase_receipt_return_line_allocations
+                        (allocation_id, company_id, return_doc_id, return_line_id, original_doc_id,
+                         original_line_id, material_id, returned_qty, created_by)
+                    VALUES (@id, @company, @returnDoc, @returnLine, @sourceDoc,
+                            @sourceLine, @material, @qty, @actor)
+                    """);
+                Add(allocation, "@id", _provider == "PostgreSQL" ? (object)allocationId : allocationId.ToString("D"));
+                Add(allocation, "@company", companyId.ToString("D"));
+                Add(allocation, "@returnDoc", returnId);
+                Add(allocation, "@returnLine", returnLineIds[sourceLineNo]);
+                Add(allocation, "@sourceDoc", receiptId);
+                Add(allocation, "@sourceLine", sourceLine.LineId);
+                Add(allocation, "@material", sourceLine.MaterialId!.Value);
+                Add(allocation, "@qty", line.Qty);
+                Add(allocation, "@actor", userId.Trim());
+                await allocation.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            var companyCode = await PartyLedger.ResolveCompanyCodeAsync(
+                connection, transaction, _provider, companyId.ToString("D"), cancellationToken).ConfigureAwait(false);
+            decimal inventoryCostBase = 0m;
+            decimal nonStockBase = 0m;
+            decimal grniBase = 0m;
+            foreach (var line in returnDraftLines)
+            {
+                var sourceLine = receiptLines[line.SourceLineNo!.Value];
+                var discountedUnitCost = sourceLine.UnitPrice * (1m - sourceLine.DiscountPct / 100m);
+                var baseAmount = decimal.Round(line.Qty * discountedUnitCost * receiptFx.Rate, 6, MidpointRounding.AwayFromZero);
+                grniBase += baseAmount;
+                if (line.MaterialId is not long materialId ||
+                    !await IsStockableAsync(connection, transaction, materialId, cancellationToken).ConfigureAwait(false))
+                {
+                    nonStockBase += baseAmount;
+                    continue;
+                }
+
+                var warehouseId = line.WarehouseId ?? receipt.WarehouseId
+                    ?? await ResolveDefaultWarehouseAsync(connection, transaction, companyCode, cancellationToken).ConfigureAwait(false);
+                await EnsureWarehouseIsActiveAsync(connection, transaction, companyCode, warehouseId, cancellationToken).ConfigureAwait(false);
+                var equivalent = await ResolveUnitEquivalentAsync(connection, transaction, materialId, line.Unit, cancellationToken).ConfigureAwait(false);
+                var movement = StockValuationEngine.Apply(connection, transaction, _provider,
+                    new StockMovementRequest(companyCode, warehouseId, materialId,
+                        returnDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                        CommercialDocKinds.PurchaseReceiptReturn, returnDocNo.Trim(),
+                        QtyIn: 0m, QtyOut: line.Qty * equivalent,
+                        Note: $"Supplier return against receipt {receipt.DocNo}",
+                        OriginalDocumentNo: receipt.DocNo,
+                        PartyId: receipt.PartyId));
+                inventoryCostBase += -movement.CostAmount;
+            }
+
+            var varianceBase = grniBase - inventoryCostBase - nonStockBase;
+            if (grniBase > 0m || inventoryCostBase > 0m || nonStockBase > 0m)
+            {
+                var rate = receiptFx.Rate;
+                var glLines = new List<GlLineRequest>
+                {
+                    new(GlAccounts.GoodsReceivedNotInvoiced, grniBase / rate, 0m, order.CostCenter)
+                };
+                if (inventoryCostBase > 0m)
+                    glLines.Add(new GlLineRequest(GlAccounts.Inventory, 0m, inventoryCostBase / rate, order.CostCenter));
+                if (nonStockBase > 0m)
+                    glLines.Add(new GlLineRequest(GlAccounts.Purchases, 0m, nonStockBase / rate, order.CostCenter));
+                if (varianceBase > 0m)
+                    glLines.Add(new GlLineRequest(GlAccounts.PurchaseReturns, 0m, varianceBase / rate, order.CostCenter));
+                else if (varianceBase < 0m)
+                    glLines.Add(new GlLineRequest(GlAccounts.PurchaseReturns, -varianceBase / rate, 0m, order.CostCenter));
+                GlPosting.PostInTransaction(connection, transaction, _provider,
+                    new GlDocumentRequest(companyId, returnDate,
+                        $"Pre-invoice supplier return {returnDocNo.Trim()} against receipt {receipt.DocNo}",
+                        CommercialDocKinds.PurchaseReceiptReturn, returnId.ToString(CultureInfo.InvariantCulture),
+                        returnDocNo.Trim(), receipt.CurrencyCode, rate, glLines),
+                    userId);
+            }
+
+            await using (var link = CreateCommand(connection, transaction, """
+                INSERT INTO document_links (company_id, source_doc_kind, source_doc_id, target_doc_kind, target_doc_id, created_by)
+                VALUES (@company, @sourceKind, @sourceId, @targetKind, @targetId, @actor)
+                """))
+            {
+                Add(link, "@company", companyId.ToString("D"));
+                Add(link, "@sourceKind", CommercialDocKinds.PurchaseReceipt);
+                Add(link, "@sourceId", receiptId);
+                Add(link, "@targetKind", CommercialDocKinds.PurchaseReceiptReturn);
+                Add(link, "@targetId", returnId);
+                Add(link, "@actor", userId.Trim());
+                await link.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return returnId;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
     // -------------------------------------------------------------- convert
 
     public Task<long> ConvertToInvoiceAsync(CommercialDocSide side, long orderDocId, string invoiceDocNo, DateOnly invoiceDate, string userId, CancellationToken cancellationToken = default)
