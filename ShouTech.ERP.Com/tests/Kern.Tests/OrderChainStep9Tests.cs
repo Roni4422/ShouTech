@@ -133,6 +133,8 @@ namespace Kern.Tests
                 Assert.Equal(1m, Scalar(connectionString,
                     $"SELECT COUNT(*) FROM purchase_receipt_return_line_allocations WHERE return_doc_id = {returnId};"));
 
+                var availableAfterReturn = await service.GetPurchaseReceiptReturnableLinesAsync(companyId, receiptId);
+                Assert.Equal(2m, Assert.Single(availableAfterReturn).ReturnableQty);
                 var netProgress = await service.GetProgressAsync(CommercialDocSide.Purchase, orderId);
                 Assert.Equal(40m, netProgress.PerFulfilled);
                 Assert.Equal(0m, netProgress.PerBilled);
@@ -143,6 +145,8 @@ namespace Kern.Tests
                 var firstInvoice = await orders.FindByIdAsync(CommercialDocSide.Purchase, firstInvoiceId);
                 Assert.Equal(2m, firstInvoice!.Lines[0].Qty);
                 Assert.Equal(102m, BalanceQty(connectionString, 42));
+                Assert.Equal(0m, Assert.Single(
+                    await service.GetPurchaseReceiptReturnableLinesAsync(companyId, receiptId)).ReturnableQty);
                 await Assert.ThrowsAsync<InvalidOperationException>(() =>
                     service.CreatePurchaseReceiptReturnAsync(
                         companyId, receiptId, new DateOnly(2026, 11, 4),
