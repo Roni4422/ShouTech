@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using ShouTech.App.Services;
 using ShouTech.App.Reporting.Invoices;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
 
@@ -136,7 +137,7 @@ public sealed class SupplierQuotationCompareWin : BaseWin
         }
         catch (Exception ex)
         {
-            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "SupplierQuotationCompareWin.RefreshAsync");
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "SupplierQuotationCompareWin.RefreshAsync");
             _status.Text = T("Common.OperationUnavailable");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
@@ -173,7 +174,7 @@ public sealed class SupplierQuotationCompareWin : BaseWin
         }
         catch (Exception ex)
         {
-            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "SupplierQuotationCompareWin.AwardAsync");
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "SupplierQuotationCompareWin.AwardAsync");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
