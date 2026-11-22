@@ -104,6 +104,20 @@ public sealed class ReconciliationRepository : IReconciliationRepository
         var amountExpr = partyKind == "C" ? "l.credit" : "l.debit";
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        // Reversed vouchers remain in the append-only party ledger, but the
+        // original settlement must no longer be offered as an available payment.
+        var hasJournalLink = PartyLedger.ColumnExists(
+            connection, null, _provider, "party_ledger", "journal_entry_id");
+        var activeJournalPredicate = hasJournalLink
+            ? """
+              AND (l.journal_entry_id IS NULL OR NOT EXISTS (
+                  SELECT 1 FROM journal_entries j
+                  WHERE CAST(j.company_id AS TEXT) = CAST(l.company_id AS TEXT)
+                    AND CAST(j.journal_entry_id AS TEXT) = CAST(l.journal_entry_id AS TEXT)
+                    AND j.status = 2
+              ))
+              """
+            : string.Empty;
         await using var command = CreateCommand(connection, null,
             $"""
             SELECT l.ledger_id, l.entry_date, l.doc_kind, l.doc_no, l.party_id, l.note, {amountExpr} AS amount,
@@ -116,6 +130,7 @@ public sealed class ReconciliationRepository : IReconciliationRepository
               ON p.company_id = l.company_id AND p.kind = l.party_kind AND p.ledger_id = l.party_id
             WHERE l.company_id = @company AND l.party_kind = @kind AND {sidePredicate}
               AND l.doc_kind IN ('RCV', 'PAY', 'INS')
+              {activeJournalPredicate}
             ORDER BY l.entry_date, l.ledger_id
             """);
         Add(command, "@company", companyId.Trim());
