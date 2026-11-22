@@ -1247,13 +1247,13 @@ namespace Kern.Tests
 
                 var repository = new PurchaseMatchPolicyRepository("SQLite", connectionString);
                 var overrideId = await repository.RecordOverrideAsync(
-                    CompanyCode, 7001, evaluationId, Actor, "Approved by purchasing director");
+                    CompanyCode, 7001, evaluationId, "approver-02", "Approved by purchasing director");
 
                 Assert.NotEqual(Guid.Empty, overrideId);
                 Assert.Equal(1m, Scalar(connectionString,
                     "SELECT COUNT(*) FROM purchase_match_overrides WHERE company_code = '" + CompanyCode +
                     "' AND invoice_doc_id = 7001 AND evaluation_id = '" + evaluationId.ToString("D") + "' " +
-                    "AND released_by = '" + Actor + "' AND release_reason = 'Approved by purchasing director';"));
+                    "AND released_by = 'approver-02' AND release_reason = 'Approved by purchasing director';"));
 
                 using (var connection = new SqliteConnection(connectionString))
                 {
@@ -1276,7 +1276,7 @@ namespace Kern.Tests
 
                 await Assert.ThrowsAsync<InvalidOperationException>(() =>
                     repository.RecordOverrideAsync(
-                        CompanyCode, 7001, evaluationId, Actor, "Attempt stale release"));
+                        CompanyCode, 7001, evaluationId, "approver-03", "Attempt stale release"));
             }
             finally
             {
