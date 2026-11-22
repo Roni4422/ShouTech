@@ -607,7 +607,8 @@
       "Days": "Gün",
       "Limit": "Limit",
       "P2From": "Dönem 2 Başlangıç",
-      "P2To": "Dönem 2 Bitiş"
+      "P2To": "Dönem 2 Bitiş",
+      "Search": "Tedarikçi kodu, adı veya telefonuyla ara"
     },
     "CustomerAging": "Müşteri yaşlandırma",
     "SupplierAging": "Tedarikçi yaşlandırma",
