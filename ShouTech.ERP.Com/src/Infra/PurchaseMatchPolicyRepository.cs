@@ -380,7 +380,7 @@ public sealed class PurchaseMatchPolicyRepository : IPurchaseMatchPolicyReposito
             WHERE company_code = @company AND invoice_doc_id = @invoice
             ORDER BY evaluation_version DESC
             LIMIT 1
-            """))
+            """ + (_provider == "PostgreSQL" ? " FOR UPDATE" : string.Empty)))
         {
             Add(latest, "@company", companyCode.Trim());
             Add(latest, "@invoice", invoiceDocId);
