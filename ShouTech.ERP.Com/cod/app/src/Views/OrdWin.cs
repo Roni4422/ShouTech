@@ -162,7 +162,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             }
             var entry = new SupplierQuotationEntryWin(_docId.Value) { Owner = this };
             if (entry.ShowDialog() == true)
-                _ = OpenQuotationComparisonAsync();
+                OpenQuotationComparison();
         };
         _btnCompareQuotes.Visibility = IsRfq ? Visibility.Visible : Visibility.Collapsed;
         _btnCompareQuotes.Click += (_, _) =>
