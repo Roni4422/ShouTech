@@ -472,11 +472,16 @@ public static class RptQuery
                    COALESCE(d.status, 'Draft') AS Status,
                    COALESCE(d.currency_code, 'SAR') AS Currency
             FROM purchase_documents d
-            LEFT JOIN parties s ON s.ledger_id = d.party_id AND s.company_id = d.company_id AND s.kind = 'S'
-            WHERE d.company_id = $company
+            INNER JOIN companies co
+              ON co.company_code = $company
+             AND (CAST(co.company_id AS TEXT) = CAST(d.company_id AS TEXT)
+                  OR d.company_id = co.company_code)
+            LEFT JOIN parties s
+              ON s.ledger_id = d.party_id AND s.company_id = $company AND s.kind = 'S'
+            WHERE d.doc_kind = 'PUR'
               AND d.doc_date >= $from
               AND d.doc_date <= $to
-              AND d.is_deleted = 0
+              AND CAST(d.is_deleted AS TEXT) IN ('0', 'false')
             ORDER BY d.doc_date DESC, d.doc_no DESC;
             """;
         return await QueryAsync(sql, ct,
