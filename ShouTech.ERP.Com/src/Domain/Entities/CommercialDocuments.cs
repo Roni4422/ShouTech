@@ -150,6 +150,20 @@ public sealed record OrderProgress(
     decimal PerFulfilled,
     decimal PerBilled);
 
+/// <summary>One quoted item, normalized to the company's base currency for comparison.</summary>
+public sealed record SupplierQuotationLineOffer(
+    int RfqLineNo,
+    long? MaterialId,
+    string? MaterialCode,
+    string Description,
+    string? Unit,
+    decimal Quantity,
+    decimal UnitPrice,
+    decimal DiscountPct,
+    decimal TaxRate,
+    decimal LineTotal,
+    decimal BaseCurrencyLineTotal);
+
 /// <summary>Comparable supplier offer linked to one sourcing request.</summary>
 public sealed record SupplierQuotationOffer(
     long DocId,
@@ -163,4 +177,5 @@ public sealed record SupplierQuotationOffer(
     DateOnly QuotationDate,
     DateOnly? ValidTill,
     DateOnly? DeliveryDate,
-    string Status);
+    string Status,
+    IReadOnlyList<SupplierQuotationLineOffer> Lines);
