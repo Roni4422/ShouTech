@@ -12,7 +12,18 @@ Use this sequence for a normal supplier purchase:
 
 A purchase order is a commitment. It does not increase stock or create a supplier payable by itself.
 
-## 1. Create a Purchase Order
+## 1. Create a Request for Quotation (RFQ)
+
+1. Open **Orders → Request for Quotation**.
+2. Enter the request date and response deadline.
+3. Add each material or service, the required quantity, and the unit.
+4. You may leave the supplier fields empty when the same RFQ will be sent to several suppliers.
+5. Save the request as a draft, review the requested lines, and post it when it is ready to be issued.
+6. Print the posted RFQ and send it to the invited suppliers.
+
+The RFQ is a sourcing request; posting it does not receive stock, create a supplier payable, or select a supplier. Supplier response entry, comparison, and award are not yet exposed as complete user-interface workflows.
+
+## 2. Create a Purchase Order
 
 1. Open **Purchases → Purchase Orders**.
 2. Select the supplier and currency.
