@@ -25,7 +25,10 @@ public sealed class SupAgingWin : RptBase
             new() { Key = "B90", HeaderTextKey = "Reports.Col.Aging90Plus", Type = RptColType.Money, Width = 100, Format = "N2" },
             new() { Key = "Balance", HeaderTextKey = "Reports.Col.Balance", Type = RptColType.Money, Width = 110, Format = "N2" },
         },
-        Filters = Array.Empty<RptFlt>()
+        Filters = new RptFlt[]
+        {
+            new() { Key = "Search", LabelTextKey = "Reports.Filter.Search", Kind = RptFltKind.Text }
+        }
     };
 
     protected override async Task<RptData> LoadDataAsync(RptFltValues filters, CancellationToken ct)
@@ -41,6 +44,11 @@ public sealed class SupAgingWin : RptBase
             ["B90"] = Dec(r.GetValueOrDefault("Bucket90Plus")),
             ["Balance"] = Dec(r.GetValueOrDefault("Balance")),
         }).ToList();
+        var search = filters.GetString("Search")?.Trim();
+        if (!string.IsNullOrWhiteSpace(search))
+            rows = rows.Where(row =>
+                Convert.ToString(row["Code"], CultureInfo.InvariantCulture)?.Contains(search, StringComparison.OrdinalIgnoreCase) == true ||
+                Convert.ToString(row["Name"], CultureInfo.InvariantCulture)?.Contains(search, StringComparison.OrdinalIgnoreCase) == true).ToList();
         return new RptData
         {
             Columns = BuildDefinition().Columns,
