@@ -177,6 +177,52 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task PurchaseInvoice_SubsetSourceLine_MatchesExactReceiptLine()
+        {
+            var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-9112",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 12m),
+                        new CommercialLineDraft(43, "MAT-43", "Item 43", "PCS", 2m, 20m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+
+                var (receiptId, _) = await service.CreatePurchaseReceiptAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 2),
+                    new[]
+                    {
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 12m),
+                        new CommercialLineDraft(43, "MAT-43", "Item 43", "PCS", 2m, 20m)
+                    }, Actor);
+                var receipt = await orders.FindByIdAsync(CommercialDocSide.Purchase, receiptId);
+                Assert.NotNull(receipt);
+                Assert.Equal(2, receipt!.Lines.Count);
+
+                var (invoiceId, _) = await service.CreatePurchaseInvoiceAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 3),
+                    new[] { new CommercialLineDraft(43, "MAT-43", "Item 43", "PCS", 1m, 20m, SourceLineNo: 2) }, Actor);
+                var invoice = await orders.FindByIdAsync(CommercialDocSide.Purchase, invoiceId);
+                Assert.NotNull(invoice);
+                Assert.Single(invoice!.Lines);
+
+                Assert.Equal(receipt.Lines[1].LineId, (long)Scalar(connectionString,
+                    $"SELECT receipt_line_id FROM purchase_receipt_invoice_matches WHERE invoice_doc_id = {invoiceId};"));
+                Assert.Equal(invoice.Lines[0].LineId, (long)Scalar(connectionString,
+                    $"SELECT invoice_line_id FROM purchase_receipt_invoice_matches WHERE invoice_doc_id = {invoiceId};"));
+                Assert.Equal(1m, Scalar(connectionString,
+                    $"SELECT matched_qty FROM purchase_receipt_invoice_matches WHERE invoice_doc_id = {invoiceId};"));
+                Assert.Equal(0m, Scalar(connectionString,
+                    $"SELECT COALESCE(SUM(matched_qty), 0) FROM purchase_receipt_invoice_matches WHERE invoice_doc_id = {invoiceId} AND material_id = 42;"));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task PurchaseReceiptReturn_SubsetLine_PreservesSourceLineAndNewReturnLineIdentity()
         {
             var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
