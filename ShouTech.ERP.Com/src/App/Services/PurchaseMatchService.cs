@@ -56,6 +56,22 @@ public sealed class PurchaseMatchService
                 $"Company={companyCode}; Enabled={policy.IsEnabled}; ExpectedVersion={expectedVersion}.").ConfigureAwait(false);
     }
 
+    public async Task<PurchaseMatchEvaluationSnapshot> ReevaluateInvoiceAsync(
+        string companyCode,
+        long invoiceDocId,
+        string actor,
+        CancellationToken cancellationToken = default)
+    {
+        RequirePermission("PURCH.MATCH.POLICY.MANAGE");
+        RequireActor(actor);
+        var result = await _repository.ReevaluateLatestAsync(
+            RequireCompany(companyCode), invoiceDocId, actor, cancellationToken).ConfigureAwait(false);
+        if (_audit is not null)
+            await _audit(actor, "Purchase invoice match re-evaluated",
+                $"Company={companyCode}; Invoice={invoiceDocId}; Evaluation={result.EvaluationId:D}; PolicyVersion={result.PolicyVersion}; Decision={result.Decision}.").ConfigureAwait(false);
+        return result;
+    }
+
     public async Task<Guid> ReleaseBlockedEvaluationAsync(
         string companyCode,
         long invoiceDocId,
