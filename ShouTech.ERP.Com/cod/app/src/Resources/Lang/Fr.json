@@ -3703,6 +3703,34 @@
       "ConfirmAward": "Créer un bon de commande à partir de l’offre {1} de {0} ?",
       "AwardCreated": "Le bon de commande provisoire {0} a été créé et lié à l’offre retenue.",
       "PostRfqFirst": "Enregistrez et validez la demande avant de comparer les offres."
+    },
+    "SupplierQuotationEntry": {
+      "Title": "Saisir une offre fournisseur",
+      "Open": "Saisir une offre fournisseur",
+      "SaveAndPost": "Enregistrer et valider",
+      "SupplierId": "ID fournisseur",
+      "SupplierCode": "Code fournisseur",
+      "SupplierName": "Nom du fournisseur",
+      "Reference": "Référence de l’offre",
+      "Currency": "Devise",
+      "ExchangeRate": "Taux de change",
+      "Date": "Date de l’offre",
+      "ValidTill": "Valable jusqu’au",
+      "DeliveryDate": "Livraison promise",
+      "Terms": "Conditions commerciales",
+      "Line": "Ligne RFQ",
+      "Item": "Article",
+      "Description": "Description",
+      "Quantity": "Quantité demandée",
+      "Unit": "Unité",
+      "UnitPrice": "Prix unitaire proposé",
+      "DiscountPct": "Remise %",
+      "TaxRate": "Taxe %",
+      "SourceLines": "Lignes RFQ chargées : {0}",
+      "InvalidInput": "Saisissez un fournisseur valide, une référence, un taux de change et des prix, remises et taxes valides.",
+      "InvalidDates": "La validité ne peut pas précéder la date de l’offre.",
+      "InvalidCurrency": "Saisissez un code devise de trois lettres.",
+      "Created": "L’offre fournisseur {0} a été créée et validée."
     }
   }
 }
