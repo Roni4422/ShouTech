@@ -3903,5 +3903,7 @@
     "OnlyBlockedCanRelease": "اختر تقييماً محظوراً لرفع الحظر عنه.",
     "InvalidNumber": "أدخل رقماً عشرياً صحيحاً غير سالب."
   },
-  "PurchaseMatch.MatchDetails": "اختر تقييم الفاتورة لمراجعة تفاصيل المطابقة على مستوى الأسطر المصدرية."
+  "PurchaseMatch.MatchDetails": "اختر تقييم الفاتورة لمراجعة تفاصيل المطابقة على مستوى الأسطر المصدرية.",
+  "PurchaseMatch.Reevaluate": "إعادة التقييم",
+  "PurchaseMatch.Reevaluated": "تمت إعادة تقييم الفاتورة:"
 }
