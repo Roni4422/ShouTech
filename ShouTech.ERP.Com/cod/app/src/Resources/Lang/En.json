@@ -3791,5 +3791,32 @@
       "Reason": "Return reason"
     },
     "ReturnGoodsReceipt": "Return goods receipt"
+  },
+  "PurchaseMatch": {
+    "Title": "Purchase Three-Way Match Controls",
+    "ServiceUnavailable": "Purchase match controls are unavailable for the active company.",
+    "PermissionDenied": "You do not have permission to view purchase match controls.",
+    "Save": "Save Policy",
+    "Release": "Release Block",
+    "Enabled": "Enable three-way match control",
+    "RequireReceipt": "Require a posted goods receipt",
+    "PriceWarning": "Price variance warning (%)",
+    "PriceBlock": "Price variance block (%)",
+    "TaxWarning": "Tax variance warning (%)",
+    "TaxBlock": "Tax variance block (%)",
+    "BaseWarning": "Base-currency variance warning",
+    "BaseBlock": "Base-currency variance block",
+    "RecentEvaluations": "Latest supplier invoice evaluations",
+    "ColInvoice": "Invoice ID",
+    "ColDecision": "Decision",
+    "ColVersion": "Version",
+    "ColReasons": "Reason codes",
+    "ColEvaluatedBy": "Evaluated by",
+    "ColDate": "Evaluated at",
+    "ReleaseReason": "Mandatory release reason",
+    "Loaded": "Purchase match settings and evaluations loaded.",
+    "Saved": "Purchase match policy saved.",
+    "OnlyBlockedCanRelease": "Select a blocked evaluation to release.",
+    "InvalidNumber": "Enter a valid non-negative decimal number."
   }
 }
