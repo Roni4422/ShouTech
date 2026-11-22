@@ -123,7 +123,13 @@ namespace Kern.Tests
                 Assert.Equal(CommercialDocumentStatus.Posted, receiptReturn.Status);
                 Assert.Equal(12m, receiptReturn.GrandTotal);
                 Assert.Equal(102m, BalanceQty(connectionString, 42));
-                Assert.Equal(12m, GlByAccount(connectionString, "RCR", returnId)["2203"].Debit);
+                var returnGl = GlByAccount(connectionString, "RCR", returnId);
+                Assert.Equal(12m, returnGl["2203"].Debit);
+                Assert.Equal(0m, Scalar(connectionString,
+                    $"SELECT COUNT(*) FROM party_ledger WHERE doc_kind = 'RCR' AND doc_id = {returnId};"));
+                decimal returnDebit = 0m, returnCredit = 0m;
+                foreach (var amount in returnGl.Values) { returnDebit += amount.Debit; returnCredit += amount.Credit; }
+                Assert.Equal(returnDebit, returnCredit);
                 Assert.Equal(1m, Scalar(connectionString,
                     $"SELECT COUNT(*) FROM purchase_receipt_return_line_allocations WHERE return_doc_id = {returnId};"));
 
