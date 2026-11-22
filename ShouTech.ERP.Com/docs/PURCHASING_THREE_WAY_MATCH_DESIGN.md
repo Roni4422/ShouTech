@@ -110,17 +110,33 @@ The UI must not display an enabled toggle until the settings are persisted. Do n
 14. Company A policy and evaluations cannot affect Company B.
 15. A missing or corrupt enabled-policy record fails closed; it must not silently permit payment.
 
-## Implementation order
+## Implementation status
 
-1. Add SQLite and PostgreSQL migrations for company policy, invoice evaluations, and override audit.
-2. Add provider-neutral policy/evaluation repository methods and domain records.
-3. Integrate evaluation into the purchase invoice transaction.
-4. Enforce the decision inside payment allocation transaction.
-5. Add permission catalog entries, localized resources, and error catalog entries.
-6. Add settings, invoice match panel, and override UI.
-7. Add integration tests for both providers and run the full solution build/test pipeline.
-8. Update `PURCHASE_TO_PAY_CYCLE.md` only after implementation and test evidence exist.
+The following foundation has been committed to the work branch:
+
+1. SQLite and PostgreSQL migrations 082/083 create opt-in policy storage, immutable evaluation history, append-only override history, dedicated permissions, and a unique release-per-evaluation constraint.
+2. Domain records and provider-neutral repositories read and update policies with optimistic version checks, return the latest evaluation per invoice, and append releases only for the latest Blocked evaluation.
+3. Purchase invoice conversion evaluates price, tax, and base-currency variance inside the same transaction as invoice posting and GRNI/GL effects.
+4. Payment allocation checks the current company policy and latest invoice evaluation inside the allocation transaction. Enabled policies fail closed for missing evaluations, stale policy versions, invalid decisions, and unreleased Blocked results.
+5. Dedicated policy-manage and override permissions are seeded for administrators; the application service checks them on every write and emits audit events.
+6. A Purchasing ribbon route opens the policy and recent-evaluation window. English, Arabic, French, and Turkish resources have been added.
+7. Regression tests cover evaluator outcomes, blocked payment rejection, audited release, self-approval rejection, policy version conflicts, and permission enforcement.
+
+## Remaining implementation and verification
+
+1. Add controlled invoice re-evaluation when policy changes, retaining all prior evaluations and requiring the current policy version before payment.
+2. Add a source-line drill-down to the invoice match window showing PO, receipt, invoice, quantities, unit prices, tax, exchange rates, and base-currency variance.
+3. Verify the invoice entry paths used by the WPF application all create a match evaluation when a company policy is enabled; manual supplier invoices must not bypass the payment gate.
+4. Add integration coverage for warning allocation, policy-version invalidation, missing evaluation, duplicate override, tenant isolation, and concurrent receipt-return/invoice/payment races.
+5. Run the full solution build and all relevant SQLite and PostgreSQL integration tests; fix every failure before release.
+6. Update `PURCHASE_TO_PAY_CYCLE.md` only with verified test evidence and close the remaining purchase reports, supplier statements, and exception workflow gaps.
 
 ## Release gate
 
-Do not call this feature complete until both providers pass the integration suite, all 15 regression cases are covered, payment allocation is proven to reject blocked invoices transactionally, and the UI is connected to persisted settings and permissions.
+Do not call the purchasing cycle or this feature complete until:
+- both providers apply all migrations and pass the same integration scenarios;
+- the active policy version is enforced transactionally at invoice posting and payment allocation;
+- a Blocked invoice cannot be paid without an authorized, independently approved, reasoned override;
+- all WPF supplier-invoice paths are covered, including legacy/manual entry paths;
+- the source-line comparison and re-evaluation workflows are available to authorized users;
+- purchase reports, returns, GRNI, supplier balances, and payment reconciliation pass end-to-end regression tests.
