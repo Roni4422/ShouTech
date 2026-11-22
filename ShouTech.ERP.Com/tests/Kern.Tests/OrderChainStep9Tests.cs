@@ -215,6 +215,13 @@ namespace Kern.Tests
                     $"SELECT matched_qty FROM purchase_receipt_invoice_matches WHERE invoice_doc_id = {invoiceId};"));
                 Assert.Equal(0m, Scalar(connectionString,
                     $"SELECT COALESCE(SUM(matched_qty), 0) FROM purchase_receipt_invoice_matches WHERE invoice_doc_id = {invoiceId} AND material_id = 42;"));
+
+                var evaluationSnapshot = ScalarText(connectionString,
+                    $"SELECT result_snapshot_json FROM purchase_match_evaluations WHERE company_code = '{CompanyCode}' AND invoice_doc_id = {invoiceId};");
+                Assert.Contains("\\"matchDetails\\":[{", evaluationSnapshot, StringComparison.Ordinal);
+                Assert.Contains("\\"receiptLineId\\":" + receipt.Lines[1].LineId, evaluationSnapshot, StringComparison.Ordinal);
+                Assert.Contains("\\"invoiceLineId\\":" + invoice.Lines[0].LineId, evaluationSnapshot, StringComparison.Ordinal);
+                Assert.Contains("\\"matchedQty\\":1", evaluationSnapshot, StringComparison.Ordinal);
             }
             finally
             {
