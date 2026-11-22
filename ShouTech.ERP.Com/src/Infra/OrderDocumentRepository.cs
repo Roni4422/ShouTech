@@ -1233,9 +1233,11 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             decimal inventoryCostBase = 0m;
             decimal nonStockBase = 0m;
             decimal grniBase = 0m;
-            foreach (var line in returnDraftLines)
+            for (var returnLineIndex = 0; returnLineIndex < returnDraftLines.Count; returnLineIndex++)
             {
-                var sourceLine = receiptLines[line.SourceLineNo!.Value];
+                var line = returnDraftLines[returnLineIndex];
+                var sourceLineNo = returnSourceLineNumbers[returnLineIndex];
+                var sourceLine = receiptLines[sourceLineNo];
                 var discountedUnitCost = sourceLine.UnitPrice * (1m - sourceLine.DiscountPct / 100m);
                 var baseAmount = decimal.Round(line.Qty * discountedUnitCost * receiptFx.Rate, 6, MidpointRounding.AwayFromZero);
                 grniBase += baseAmount;
