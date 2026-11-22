@@ -152,6 +152,14 @@ public sealed class OrderService
         return (receiptId, receiptDocNo);
     }
 
+    public Task<IReadOnlyList<PurchaseReceiptReturnableLine>> GetPurchaseReceiptReturnableLinesAsync(
+        Guid companyId, long receiptId, CancellationToken cancellationToken = default)
+    {
+        if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
+        if (receiptId <= 0) throw new ArgumentOutOfRangeException(nameof(receiptId));
+        return _orders.GetPurchaseReceiptReturnableLinesAsync(companyId, receiptId, cancellationToken);
+    }
+
     /// <summary>Returns unbilled goods to a supplier from a posted receipt, reversing GRNI and stock in one transaction.</summary>
     public async Task<(long ReturnId, string ReturnDocNo)> CreatePurchaseReceiptReturnAsync(
         Guid companyId, long receiptId, DateOnly returnDate,
