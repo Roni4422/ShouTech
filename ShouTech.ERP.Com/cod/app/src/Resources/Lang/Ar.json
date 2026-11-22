@@ -3794,7 +3794,32 @@
       "SelectOffer": "يرجى تحديد عرض مورد أولاً.",
       "ConfirmAward": "هل تريد إنشاء أمر شراء من عرض المورد {0} رقم {1}؟",
       "AwardCreated": "تم إنشاء أمر الشراء {0} كمسودة وربطه بعرض المورد المعتمد.",
-      "PostRfqFirst": "احفظ طلب عروض الأسعار ورحّله قبل مقارنة عروض الموردين."
+      "PostRfqFirst": "احفظ طلب عروض الأسعار ورحّله قبل مقارنة عروض الموردين.",
+      "Columns": {
+        "DocId": "معرّف المستند",
+        "DocNo": "رقم العرض",
+        "SupplierName": "المورد",
+        "CurrencyCode": "العملة",
+        "ExchangeRate": "سعر الصرف",
+        "Subtotal": "الإجمالي قبل الضريبة",
+        "TaxAmount": "الضريبة",
+        "GrandTotal": "الإجمالي",
+        "QuotationDate": "تاريخ العرض",
+        "ValidTill": "صالح حتى",
+        "DeliveryDate": "موعد التسليم",
+        "Status": "الحالة",
+        "RfqLineNo": "بند طلب الأسعار",
+        "MaterialId": "معرّف الصنف",
+        "MaterialCode": "رمز الصنف",
+        "Description": "الوصف",
+        "Unit": "الوحدة",
+        "Quantity": "الكمية",
+        "UnitPrice": "سعر الوحدة",
+        "DiscountPct": "الخصم %",
+        "TaxRate": "الضريبة %",
+        "LineTotal": "إجمالي البند",
+        "BaseCurrencyLineTotal": "الإجمالي بالعملة الأساسية"
+      }
     },
     "SupplierQuotationEntry": {
       "Title": "إدخال عرض مورد",
