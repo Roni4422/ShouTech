@@ -83,16 +83,20 @@ not a claim that every procurement feature in the ERP is complete.
 - Payment allocation settles a GUID-scoped invoice while retaining the company-code payment key.
 - Cross-currency supplier payment allocation is rejected without changing invoice/payment balances.
 - Reversing an allocated supplier payment releases invoice balances and retains the full allocation-release audit record.
+- Partial purchase debit notes retain original invoice-line identity and cannot cumulatively return more than the posted supplier invoice quantity.
+- Concurrent returns against the same supplier invoice cannot consume the same remaining quantity.
 - SQLite and PostgreSQL migrations are repeatable.
 
 ## Remaining procurement scope
+
+Partial supplier debit notes against posted invoices are implemented in `cod/app/src/Views/PurchaseReturnWin.cs` and `cod/app/src/Services/InvRepo.cs`; migration 080 records cumulative line allocations.
 
 The current chain does not yet claim completion of:
 - purchase requisition approval and multi-supplier RFQ quotation comparison;
 - supplier invoice external-reference uniqueness and document attachment;
 - freight, landed-cost allocation, customs and duty capitalization;
 - lot/serial/batch/expiry capture at receipt;
-- supplier returns, debit/credit notes, and reversal/replacement workflows;
+- a separate physical purchase return from a posted goods receipt before supplier invoicing (the current `PurchaseReturn` workflow is an invoice-linked debit note that also issues returned stock);
 - GRNI aging, unmatched receipt/invoice exception workbench, and period-end reconciliation report.
 
 These are follow-on acceptance areas; they must not be silently treated as implemented merely because
