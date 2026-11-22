@@ -3703,6 +3703,34 @@
       "ConfirmAward": "{0} tedarikçisinin {1} teklifinden satın alma siparişi oluşturulsun mu?",
       "AwardCreated": "Taslak satın alma siparişi {0} oluşturuldu ve seçilen teklife bağlandı.",
       "PostRfqFirst": "Teklifleri karşılaştırmadan önce talebi kaydedip onaylayın."
+    },
+    "SupplierQuotationEntry": {
+      "Title": "Tedarikçi Teklifi Gir",
+      "Open": "Tedarikçi teklifi gir",
+      "SaveAndPost": "Kaydet ve onayla",
+      "SupplierId": "Tedarikçi kimliği",
+      "SupplierCode": "Tedarikçi kodu",
+      "SupplierName": "Tedarikçi adı",
+      "Reference": "Tedarikçi teklif numarası",
+      "Currency": "Para birimi",
+      "ExchangeRate": "Döviz kuru",
+      "Date": "Teklif tarihi",
+      "ValidTill": "Geçerlilik tarihi",
+      "DeliveryDate": "Taahhüt edilen teslimat",
+      "Terms": "Ticari koşullar",
+      "Line": "Talep satırı",
+      "Item": "Ürün",
+      "Description": "Açıklama",
+      "Quantity": "Talep miktarı",
+      "Unit": "Birim",
+      "UnitPrice": "Teklif birim fiyatı",
+      "DiscountPct": "İndirim %",
+      "TaxRate": "Vergi %",
+      "SourceLines": "Yüklenen talep satırları: {0}",
+      "InvalidInput": "Geçerli tedarikçi bilgisi, teklif referansı, kur ve geçerli fiyat/indirim/vergi değerleri girin.",
+      "InvalidDates": "Teklif geçerliliği teklif tarihinden önce olamaz.",
+      "InvalidCurrency": "Üç harfli para birimi kodu girin.",
+      "Created": "Tedarikçi teklifi {0} oluşturuldu ve onaylandı."
     }
   }
 }
