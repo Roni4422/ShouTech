@@ -2571,7 +2571,8 @@
     "TrackTitle": "Sipariş Takibi",
     "TitleRfq": "Teklif Talebi",
     "ValidTill": "Yanıt Son Tarihi",
-    "RfqCannotConvert": "Teklif talebi doğrudan tedarikçi faturasına dönüştürülemez."
+    "RfqCannotConvert": "Teklif talebi doğrudan tedarikçi faturasına dönüştürülemez.",
+    "RfqOpen": "Açık teklif talebi"
   },
   "Definitions": {
     "Title": "Tanımlar",
