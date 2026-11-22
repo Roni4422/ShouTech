@@ -3755,7 +3755,8 @@
       "InvalidInput": "Saisissez un fournisseur valide, une référence, un taux de change et des prix, remises et taxes valides.",
       "InvalidDates": "La validité ne peut pas précéder la date de l’offre.",
       "InvalidCurrency": "Saisissez un code devise de trois lettres.",
-      "Created": "L’offre fournisseur {0} a été créée et validée."
+      "Created": "L’offre fournisseur {0} a été créée et validée.",
+      "SelectSupplier": "Sélectionner le fournisseur"
     },
     "ReceiptReturn": {
       "Title": "Retour de réception fournisseur",
