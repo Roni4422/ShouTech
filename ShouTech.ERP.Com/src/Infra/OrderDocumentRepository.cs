@@ -786,8 +786,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             // Serialize receipts for one PO so concurrent users cannot receive the same remaining quantity.
             await using (var orderLock = CreateCommand(connection, transaction,
                 _provider == "PostgreSQL"
-                    ? "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @doc AND doc_kind = @kind AND status = @posted AND is_deleted = 0 FOR UPDATE"
-                    : "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @doc AND doc_kind = @kind AND status = @posted AND is_deleted = 0"))
+                    ? "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @doc AND doc_kind = @kind AND status = @posted AND CAST(is_deleted AS TEXT) IN ('0', 'false') FOR UPDATE"
+                    : "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @doc AND doc_kind = @kind AND status = @posted AND CAST(is_deleted AS TEXT) IN ('0', 'false')"))
             {
                 Add(orderLock, "@company", companyId.ToString("D"));
                 Add(orderLock, "@doc", purchaseOrderId);
@@ -982,7 +982,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
              AND inv.doc_id = m.invoice_doc_id
              AND inv.doc_kind = @invoiceKind
              AND inv.status = @posted
-             AND inv.is_deleted = 0
+             AND CAST(inv.is_deleted AS TEXT) IN ('0', 'false')
             WHERE m.company_id = @company AND m.receipt_doc_id = @receipt
             GROUP BY m.receipt_line_id
             """))
@@ -1121,7 +1121,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                  AND inv.doc_id = m.invoice_doc_id
                  AND inv.doc_kind = @invoiceKind
                  AND inv.status = @posted
-                 AND inv.is_deleted = 0
+                 AND CAST(inv.is_deleted AS TEXT) IN ('0', 'false')
                 WHERE m.company_id = @company AND m.receipt_doc_id = @receipt
                 GROUP BY m.receipt_line_id
                 """))
@@ -1383,7 +1383,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                       WHERE doc_id = @id
                         AND (@company IS NULL OR company_id = @company)
                         AND doc_kind = @kind AND status = @posted
-                        AND is_deleted = 0
+                        AND CAST(is_deleted AS TEXT) IN ('0', 'false')
                       FOR UPDATE
                       """
                     : $"""
@@ -1392,7 +1392,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                       WHERE doc_id = @id
                         AND (@company IS NULL OR company_id = @company)
                         AND doc_kind = @kind AND status = @posted
-                        AND is_deleted = 0
+                        AND CAST(is_deleted AS TEXT) IN ('0', 'false')
                       """))
             {
                 Add(orderLock, "@id", orderDocId);
@@ -1779,7 +1779,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
              AND inv.doc_id = m.invoice_doc_id
              AND inv.doc_kind = @invoiceKind
              AND inv.status = @posted
-             AND inv.is_deleted = 0
+             AND CAST(inv.is_deleted AS TEXT) IN ('0', 'false')
             WHERE m.company_id = @company AND m.purchase_order_id = @order
             GROUP BY m.receipt_line_id
             """))
