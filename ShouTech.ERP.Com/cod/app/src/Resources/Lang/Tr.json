@@ -3811,5 +3811,7 @@
     "OnlyBlockedCanRelease": "Engelini kaldırmak için engellenmiş bir değerlendirme seçin.",
     "InvalidNumber": "Geçerli, negatif olmayan bir ondalık sayı girin."
   },
-  "PurchaseMatch.MatchDetails": "Kaynak satır eşleştirme ayrıntılarını incelemek için bir fatura değerlendirmesi seçin."
+  "PurchaseMatch.MatchDetails": "Kaynak satır eşleştirme ayrıntılarını incelemek için bir fatura değerlendirmesi seçin.",
+  "PurchaseMatch.Reevaluate": "Yeniden değerlendir",
+  "PurchaseMatch.Reevaluated": "Fatura yeniden değerlendirildi:"
 }
