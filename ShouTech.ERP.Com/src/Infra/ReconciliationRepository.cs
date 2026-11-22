@@ -111,8 +111,11 @@ public sealed class ReconciliationRepository : IReconciliationRepository
         var activeJournalPredicate = hasJournalLink
             ? """
               AND (l.journal_entry_id IS NULL OR NOT EXISTS (
-                  SELECT 1 FROM journal_entries j
-                  WHERE CAST(j.company_id AS TEXT) = CAST(l.company_id AS TEXT)
+                  SELECT 1
+                  FROM journal_entries j
+                  JOIN companies c
+                    ON CAST(c.company_id AS TEXT) = CAST(j.company_id AS TEXT)
+                  WHERE c.company_code = l.company_id
                     AND CAST(j.journal_entry_id AS TEXT) = CAST(l.journal_entry_id AS TEXT)
                     AND j.status = 2
               ))
