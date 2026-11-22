@@ -329,6 +329,33 @@ namespace Kern.Tests
                 var poLink = Assert.Single(quotationLinks);
                 Assert.Equal(CommercialDocKinds.PurchaseOrder, poLink.TargetDocKind);
                 Assert.Equal(purchaseOrderId, poLink.TargetDocId);
+
+                // The repository must enforce the one-active-PO invariant
+                // inside its transaction, even when callers bypass the
+                // service's earlier duplicate check.
+                var duplicateDraft = new CommercialDocumentDraft(
+                    companyId,
+                    CommercialDocKinds.PurchaseOrder,
+                    "PO-DUPLICATE",
+                    new DateOnly(2026, 10, 22),
+                    91,
+                    "Supplier 91",
+                    null,
+                    "SAR",
+                    1m,
+                    "Duplicate conversion must be rejected",
+                    new[]
+                    {
+                        new CommercialLineDraft(42, "MAT-42", "Order test item", "PCS", 5m, 11m)
+                    },
+                    "SUP-91");
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    orders.CreateLinkedDraftAsync(
+                        CommercialDocSide.Purchase,
+                        duplicateDraft,
+                        CommercialDocKinds.SupplierQuotation,
+                        quotationId,
+                        "order-test"));
             }
             finally
             {
