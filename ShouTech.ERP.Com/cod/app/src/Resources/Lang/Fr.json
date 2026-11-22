@@ -3756,7 +3756,8 @@
       "InvalidDates": "La validité ne peut pas précéder la date de l’offre.",
       "InvalidCurrency": "Saisissez un code devise de trois lettres.",
       "Created": "L’offre fournisseur {0} a été créée et validée.",
-      "SelectSupplier": "Sélectionner le fournisseur"
+      "SelectSupplier": "Sélectionner le fournisseur",
+      "Supplier": "Fournisseur"
     },
     "ReceiptReturn": {
       "Title": "Retour de réception fournisseur",
