@@ -8,6 +8,15 @@ This document describes the implemented purchasing flow in ShouTech ERP. The ope
 
 Purchase documents are company-scoped. Posted source documents remain auditable; corrections use reversal workflows rather than destructive edits.
 
+## 0. Supplier RFQ, quotation capture, comparison, and award
+
+- Create and post a Request for Quotation (RFQ) with required item lines, quantities, response deadline, and delivery requirements.
+- Record each supplier response against the posted RFQ. Every response must identify every RFQ source line exactly once and retain requested item identity and quantity; omitted or substituted items are rejected.
+- Capture supplier quotation reference, currency, exchange rate, validity date, promised delivery date, unit prices, discounts, taxes, and commercial terms.
+- Compare posted supplier responses by item, including quoted quantity, unit price, discount, tax rate, line total, and normalized base-currency line total. Offers are ordered by normalized grand total and then promised delivery date; comparison is decision support, not an automatic award.
+- Convert the selected, posted, unexpired supplier quotation into a draft purchase order. Supplier, currency, exchange rate, quoted terms, promised delivery date, and source-line identity are retained. The purchase order links back to the winning quotation.
+- A quotation cannot create a second active purchase order. An expired quotation must be renewed before award.
+
 ## 1. Purchase order
 
 - Create a purchase order for a supplier and add material or service lines.
@@ -108,4 +117,4 @@ The purchase-to-pay flow must pass the following checks before release:
 
 ## Known boundaries
 
-This implementation matches by purchase order, material/service identity, and quantity. It does not yet implement a configurable three-way-match tolerance matrix for price, tax, delivery, or supplier-specific policy; price differences are currently posted to the Purchases variance account. Foreign-currency payment allocation is deliberately blocked rather than converted implicitly. Approval routing, multi-supplier RFQ quotation comparison, supplier remittance advice, bank-file reconciliation, supplier statement matching, and a separate pre-invoice goods-receipt return remain follow-up capabilities.
+This implementation matches by purchase order, material/service identity, and quantity. RFQ responses are compared line-by-line and normalized to base currency; supplier award remains an explicit user decision. It does not yet implement a configurable three-way-match tolerance matrix for price, tax, delivery, or supplier-specific policy; price differences are currently posted to the Purchases variance account. Foreign-currency payment allocation is deliberately blocked rather than converted implicitly. Approval routing, supplier remittance advice, bank-file reconciliation, supplier statement matching, configurable three-way-match tolerances, and a separate pre-invoice goods-receipt return remain follow-up capabilities.
