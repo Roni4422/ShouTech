@@ -1655,6 +1655,31 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                     Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
         }
 
+        var returnedByReceiptLine = new Dictionary<long, decimal>();
+        foreach (var receiptId in receiptIds)
+        {
+            await using var returned = CreateCommand(connection, transaction, """
+                SELECT a.original_line_id, COALESCE(SUM(a.returned_qty), 0)
+                FROM purchase_receipt_return_line_allocations a
+                JOIN purchase_documents d
+                  ON d.doc_id = a.return_doc_id
+                 AND d.company_id = a.company_id
+                 AND d.doc_kind = @returnKind
+                 AND d.status = @posted
+                 AND d.is_deleted = 0
+                WHERE a.company_id = @company AND a.original_doc_id = @receipt
+                GROUP BY a.original_line_id
+                """);
+            Add(returned, "@returnKind", CommercialDocKinds.PurchaseReceiptReturn);
+            Add(returned, "@posted", CommercialDocumentStatus.Posted);
+            Add(returned, "@company", order.CompanyId.ToString("D"));
+            Add(returned, "@receipt", receiptId);
+            await using var reader = await returned.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                returnedByReceiptLine[Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture)] =
+                    Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
+        }
+
         var receiptSnapshots = new List<(CommercialDocumentSnapshot Document, decimal ExchangeRate)>();
         foreach (var receiptId in receiptIds)
         {
@@ -1709,7 +1734,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 foreach (var receiptLine in receipt.Lines.Where(line => line.MaterialId == invoiceLine.MaterialId && line.LineNo == invoiceLine.LineNo))
                 {
                     var alreadyMatched = matchedByReceiptLine.GetValueOrDefault(receiptLine.LineId);
-                    var receiptRemaining = receiptLine.Qty - alreadyMatched;
+                    var receiptRemaining = receiptLine.Qty - alreadyMatched - returnedByReceiptLine.GetValueOrDefault(receiptLine.LineId);
                     var take = Math.Min(invoiceRemaining, receiptRemaining);
                     if (take <= 0m) continue;
 
