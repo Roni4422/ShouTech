@@ -46,6 +46,8 @@ public sealed class SupplierQuotationCompareWin : BaseWin
         _refresh.Content = T("Common.Refresh");
         _award.Content = T("Purchasing.SupplierQuotationComparison.Award");
         _close.Content = T("Common.Close");
+        LocalizeColumns(_offersGrid);
+        LocalizeColumns(_linesGrid);
 
     }
 
@@ -89,8 +91,14 @@ public sealed class SupplierQuotationCompareWin : BaseWin
         _offersGrid.AutoGeneratingColumn += (_, args) =>
         {
             if (args.PropertyName == nameof(SupplierQuotationOffer.Lines))
+            {
                 args.Cancel = true;
+                return;
+            }
+            args.Column.Header = T("Purchasing.SupplierQuotationComparison.Columns." + args.PropertyName);
         };
+        _linesGrid.AutoGeneratingColumn += (_, args) =>
+            args.Column.Header = T("Purchasing.SupplierQuotationComparison.Columns." + args.PropertyName);
         _offersGrid.SelectionChanged += (_, _) =>
         {
             if (_offersGrid.SelectedItem is SupplierQuotationOffer selected)
@@ -104,6 +112,16 @@ public sealed class SupplierQuotationCompareWin : BaseWin
         content.Children.Add(_linesGrid);
         root.Children.Add(content);
         Content = root;
+    }
+
+    private void LocalizeColumns(DataGrid grid)
+    {
+        foreach (var column in grid.Columns)
+        {
+            if (column is DataGridBoundColumn bound && bound.Binding is Binding binding &&
+                !string.IsNullOrWhiteSpace(binding.Path?.Path))
+                column.Header = T("Purchasing.SupplierQuotationComparison.Columns." + binding.Path.Path);
+        }
     }
 
     private static void ConfigureGrid(DataGrid grid)
