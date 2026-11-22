@@ -5,7 +5,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using ShouTech.App.Services;
-using ShouTech.App.Reporting.Invoices;
 using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
