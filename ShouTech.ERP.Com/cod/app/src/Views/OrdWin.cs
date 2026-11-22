@@ -68,6 +68,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
     private readonly Button _btnRemLine = new();
     private readonly Button _btnPrint = new();
     private readonly Button _btnCompareQuotes = new();
+    private readonly Button _btnAddSupplierQuote = new();
 
     private bool _isReceiving;
     private bool _isConverting;
@@ -98,7 +99,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
         Loaded += OnLoaded;
     }
 
-    private bool IsRfq => _kind == OrdKind.RequestForQuotation;
+    private bool IsRfq => _kind == OrdKind.RequestForQuotation;\n\n    private async Task OpenQuotationComparisonAsync()\n    {\n        if (_docId is null) return;\n        var window = new SupplierQuotationCompareWin(_docId.Value) { Owner = this };\n        window.ShowDialog();\n        await Task.CompletedTask;\n    }
     private string DocKindCode => _kind switch
     {
         OrdKind.Sales => CommercialDocKinds.SalesOrder,
@@ -150,6 +151,19 @@ public sealed class OrdWin : BaseWin, IWindowMode
         StyleButton(_btnRemLine, "Invoice.RemoveLine");
         StyleButton(_btnPrint, "Invoice.Print");
         StyleButton(_btnCompareQuotes, "Purchasing.SupplierQuotationComparison.Open");
+        StyleButton(_btnAddSupplierQuote, "Purchasing.SupplierQuotationEntry.Open");
+        _btnAddSupplierQuote.Visibility = IsRfq ? Visibility.Visible : Visibility.Collapsed;
+        _btnAddSupplierQuote.Click += (_, _) =>
+        {
+            if (_docId is null || _status != CommercialDocumentStatus.Posted)
+            {
+                ShowWarningMessage(T("Purchasing.SupplierQuotationComparison.PostRfqFirst"));
+                return;
+            }
+            var entry = new SupplierQuotationEntryWin(_docId.Value) { Owner = this };
+            if (entry.ShowDialog() == true)
+                _ = OpenQuotationComparisonAsync();
+        };
         _btnCompareQuotes.Visibility = IsRfq ? Visibility.Visible : Visibility.Collapsed;
         _btnCompareQuotes.Click += (_, _) =>
         {
@@ -197,7 +211,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             }
         };
 
-        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnConvert, _btnReceipt, _btnCompareQuotes, _btnClose, _btnCancel, _btnAddLine, _btnRemLine, _btnPrint })
+        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnConvert, _btnReceipt, _btnAddSupplierQuote, _btnCompareQuotes, _btnClose, _btnCancel, _btnAddLine, _btnRemLine, _btnPrint })
             toolbar.Children.Add(b);
 
         var actionBar = new Border
