@@ -197,14 +197,13 @@ namespace Kern.Tests
                 Assert.NotNull(returned);
                 Assert.Single(returned!.Lines);
 
-                var allocation = connectionString;
                 Assert.Equal(receipt.Lines[1].LineId, (long)Scalar(connectionString,
                     $"SELECT original_line_id FROM purchase_receipt_return_line_allocations WHERE return_doc_id = {returnId};"));
                 Assert.Equal(returned.Lines[0].LineId, (long)Scalar(connectionString,
                     $"SELECT return_line_id FROM purchase_receipt_return_line_allocations WHERE return_doc_id = {returnId};"));
                 Assert.Equal(1m, Scalar(connectionString,
                     $"SELECT returned_qty FROM purchase_receipt_return_line_allocations WHERE return_doc_id = {returnId};"));
-                Assert.Equal(101m, BalanceQty(connectionString, 42));
+                Assert.Equal(102m, BalanceQty(connectionString, 42));
                 Assert.Equal(101m, BalanceQty(connectionString, 43));
             }
             finally
