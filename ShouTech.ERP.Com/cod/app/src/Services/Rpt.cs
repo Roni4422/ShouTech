@@ -500,10 +500,13 @@ public static class RptQuery
                    l.qty AS ReceivedQty,
                    COALESCE(m.MatchedQty, 0) AS InvoicedQty,
                    COALESCE(rt.ReturnedQty, 0) AS ReturnedQty,
-                   MAX(0, l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0)) AS RemainingQty,
-                   CASE WHEN l.qty > 0 THEN
-                       MAX(0, l.line_subtotal * r.exchange_rate *
-                           (l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0)) / l.qty)
+                   CASE WHEN l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0) > 0
+                        THEN l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0)
+                        ELSE 0 END AS RemainingQty,
+                   CASE WHEN l.qty > 0 AND
+                       l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0) > 0
+                       THEN l.line_subtotal * r.exchange_rate *
+                           (l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0)) / l.qty
                        ELSE 0 END AS RemainingBaseAmount
             FROM purchase_documents r
             INNER JOIN companies co ON co.company_id = r.company_id
