@@ -927,6 +927,71 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         }
     }
 
+    public async Task<IReadOnlyList<PurchaseReceiptReturnableLine>> GetPurchaseReceiptReturnableLinesAsync(
+        Guid companyId, long receiptId, CancellationToken cancellationToken = default)
+    {
+        if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
+        if (receiptId <= 0) throw new ArgumentOutOfRangeException(nameof(receiptId));
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var receipt = await ReadSnapshotAsync(connection, null, CommercialDocSide.Purchase,
+            receiptId, companyId, CommercialDocKinds.PurchaseReceipt, null, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("The goods receipt was not found in the selected company.");
+        if (receipt.Status != CommercialDocumentStatus.Posted)
+            throw new InvalidOperationException("Only a posted goods receipt can be returned.");
+
+        var invoiced = new Dictionary<long, decimal>();
+        await using (var matches = CreateCommand(connection, null, """
+            SELECT receipt_line_id, COALESCE(SUM(matched_qty), 0)
+            FROM purchase_receipt_invoice_matches
+            WHERE company_id = @company AND receipt_doc_id = @receipt
+            GROUP BY receipt_line_id
+            """))
+        {
+            Add(matches, "@company", companyId.ToString("D"));
+            Add(matches, "@receipt", receiptId);
+            await using var reader = await matches.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                invoiced[Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture)] =
+                    Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
+        }
+
+        var returned = new Dictionary<long, decimal>();
+        await using (var returns = CreateCommand(connection, null, """
+            SELECT a.original_line_id, COALESCE(SUM(a.returned_qty), 0)
+            FROM purchase_receipt_return_line_allocations a
+            JOIN purchase_documents d
+              ON d.doc_id = a.return_doc_id
+             AND d.company_id = a.company_id
+             AND d.doc_kind = @returnKind
+             AND d.status = @posted
+             AND d.is_deleted = 0
+            WHERE a.company_id = @company AND a.original_doc_id = @receipt
+            GROUP BY a.original_line_id
+            """))
+        {
+            Add(returns, "@returnKind", CommercialDocKinds.PurchaseReceiptReturn);
+            Add(returns, "@posted", CommercialDocumentStatus.Posted);
+            Add(returns, "@company", companyId.ToString("D"));
+            Add(returns, "@receipt", receiptId);
+            await using var reader = await returns.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                returned[Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture)] =
+                    Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
+        }
+
+        return receipt.Lines.OrderBy(line => line.LineNo).Select(line =>
+        {
+            var invoicedQty = invoiced.GetValueOrDefault(line.LineId);
+            var returnedQty = returned.GetValueOrDefault(line.LineId);
+            return new PurchaseReceiptReturnableLine(
+                line.LineId, line.LineNo, line.MaterialId, line.MaterialCode, line.Description,
+                line.Unit, line.Qty, invoicedQty, returnedQty,
+                Math.Max(0m, line.Qty - invoicedQty - returnedQty),
+                line.UnitPrice, line.DiscountPct, line.WarehouseId);
+        }).ToArray();
+    }
+
     public async Task<long> CreatePurchaseReceiptReturnAsync(
         Guid companyId, long receiptId, string returnDocNo, DateOnly returnDate,
         IReadOnlyList<CommercialLineDraft> returnedLines, string userId,
