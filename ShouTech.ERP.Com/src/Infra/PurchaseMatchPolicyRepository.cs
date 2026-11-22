@@ -241,7 +241,6 @@ public sealed class PurchaseMatchPolicyRepository : IPurchaseMatchPolicyReposito
             throw new InvalidOperationException("Purchase match policy is disabled; re-evaluation is not required.");
 
         string? previousResult = null;
-        string? previousDecision = null;
         var previousPolicyVersion = 0;
         var previousEvaluationVersion = 0;
         await using (var latest = CreateCommand(connection, transaction, """
@@ -258,7 +257,6 @@ public sealed class PurchaseMatchPolicyRepository : IPurchaseMatchPolicyReposito
             if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 throw new InvalidOperationException("The invoice has no prior match evaluation and cannot be re-evaluated from a missing source snapshot.");
             previousResult = ReadJsonText(reader.GetValue(0));
-            previousDecision = Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture);
             previousPolicyVersion = Convert.ToInt32(reader.GetValue(2), CultureInfo.InvariantCulture);
             previousEvaluationVersion = Convert.ToInt32(reader.GetValue(3), CultureInfo.InvariantCulture);
         }
@@ -300,10 +298,8 @@ public sealed class PurchaseMatchPolicyRepository : IPurchaseMatchPolicyReposito
         var snapshotValues = new Dictionary<string, System.Text.Json.JsonElement>();
         foreach (var property in root.EnumerateObject())
             snapshotValues[property.Name] = property.Value.Clone();
-        snapshotValues["decision"] = System.Text.Json.JsonDocument.Parse(
-            System.Text.Json.JsonSerializer.Serialize(evaluation.Decision)).RootElement.Clone();
-        snapshotValues["reasonCodes"] = System.Text.Json.JsonDocument.Parse(
-            System.Text.Json.JsonSerializer.Serialize(evaluation.ReasonCodes)).RootElement.Clone();
+        snapshotValues["decision"] = System.Text.Json.JsonSerializer.SerializeToElement(evaluation.Decision);
+        snapshotValues["reasonCodes"] = System.Text.Json.JsonSerializer.SerializeToElement(evaluation.ReasonCodes);
         var resultSnapshot = System.Text.Json.JsonSerializer.Serialize(snapshotValues);
         var reasonsJson = System.Text.Json.JsonSerializer.Serialize(evaluation.ReasonCodes);
         var reasonsValue = _provider == "PostgreSQL" ? "CAST(@reasons AS jsonb)" : "@reasons";
