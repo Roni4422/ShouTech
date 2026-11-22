@@ -251,8 +251,8 @@ public sealed class OrderService
             throw new InvalidOperationException("A supplier quotation must respond to a posted request for quotation.");
         if (rfq.ValidTill is { } deadline && quotationDate > deadline)
             throw new InvalidOperationException("The request for quotation response deadline has passed.");
-        if (quotedLines.Count == 0 || quotedLines.Count > rfq.Lines.Count)
-            throw new InvalidOperationException("A supplier quotation must contain at least one requested line and cannot exceed the RFQ line count.");
+        if (quotedLines.Count != rfq.Lines.Count)
+            throw new InvalidOperationException("A supplier quotation must respond to every requested line.");
 
         var requested = rfq.Lines.ToDictionary(line => line.LineNo);
         var seen = new HashSet<int>();
@@ -260,10 +260,10 @@ public sealed class OrderService
         {
             if (line.SourceLineNo is not { } sourceLineNo || !requested.TryGetValue(sourceLineNo, out var source))
                 throw new InvalidOperationException("Every supplier quotation line must reference an original RFQ line.");
-            if (!seen.Add(sourceLineNo) || line.Qty <= 0m || line.Qty > source.Qty ||
+            if (!seen.Add(sourceLineNo) || line.Qty != source.Qty ||
                 line.MaterialId != source.MaterialId ||
                 !string.Equals(line.MaterialCode, source.MaterialCode, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("Supplier quotation lines must match an original RFQ item and offer a positive quantity no greater than the requested quantity.");
+                throw new InvalidOperationException("Supplier quotation lines must match the RFQ items and requested quantities exactly.");
         }
 
         var docNo = await _orders.NextDocNoAsync(
