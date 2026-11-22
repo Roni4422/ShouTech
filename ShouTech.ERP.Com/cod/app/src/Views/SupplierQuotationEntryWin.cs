@@ -135,7 +135,7 @@ public sealed class SupplierQuotationEntryWin : BaseWin
 
         var form = CreateFormGrid(2);
         form.Margin = new Thickness(0, 0, 0, 8);
-        F2Ui.AddField(_fieldLabels, form, 0, 0, "Purchasing.SupplierQuotationEntry.SelectSupplier", _selectSupplier);
+        F2Ui.AddField(_fieldLabels, form, 0, 0, "Purchasing.SupplierQuotationEntry.Supplier", _selectSupplier);
         F2Ui.AddField(_fieldLabels, form, 0, 1, "Purchasing.SupplierQuotationEntry.SupplierId", _supplierId);
         F2Ui.AddField(_fieldLabels, form, 1, 0, "Purchasing.SupplierQuotationEntry.SupplierCode", _supplierCode);
         F2Ui.AddField(_fieldLabels, form, 1, 1, "Purchasing.SupplierQuotationEntry.SupplierName", _supplierName);
