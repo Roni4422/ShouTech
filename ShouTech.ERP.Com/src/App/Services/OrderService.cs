@@ -163,7 +163,7 @@ public sealed class OrderService
     /// <summary>Returns unbilled goods to a supplier from a posted receipt, reversing GRNI and stock in one transaction.</summary>
     public async Task<(long ReturnId, string ReturnDocNo)> CreatePurchaseReceiptReturnAsync(
         Guid companyId, long receiptId, DateOnly returnDate,
-        IReadOnlyList<CommercialLineDraft> returnedLines, string userId,
+        IReadOnlyList<CommercialLineDraft> returnedLines, string userId, string? reason = null,
         CancellationToken cancellationToken = default)
     {
         if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
@@ -173,7 +173,7 @@ public sealed class OrderService
         var docNo = await _orders.NextDocNoAsync(
             CommercialDocSide.Purchase, companyId, CommercialDocKinds.PurchaseReceiptReturn, cancellationToken).ConfigureAwait(false);
         var returnId = await _orders.CreatePurchaseReceiptReturnAsync(
-            companyId, receiptId, docNo, returnDate, returnedLines, userId, cancellationToken).ConfigureAwait(false);
+            companyId, receiptId, docNo, returnDate, returnedLines, userId, reason, cancellationToken).ConfigureAwait(false);
         return (returnId, docNo);
     }
 
