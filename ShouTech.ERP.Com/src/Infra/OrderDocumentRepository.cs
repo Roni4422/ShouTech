@@ -1114,10 +1114,16 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
             var matchedByLine = new Dictionary<long, decimal>();
             await using (var matched = CreateCommand(connection, transaction, """
-                SELECT receipt_line_id, COALESCE(SUM(matched_qty), 0)
-                FROM purchase_receipt_invoice_matches
-                WHERE company_id = @company AND receipt_doc_id = @receipt
-                GROUP BY receipt_line_id
+                SELECT m.receipt_line_id, COALESCE(SUM(m.matched_qty), 0)
+                FROM purchase_receipt_invoice_matches m
+                INNER JOIN purchase_documents inv
+                  ON inv.company_id = m.company_id
+                 AND inv.doc_id = m.invoice_doc_id
+                 AND inv.doc_kind = @invoiceKind
+                 AND inv.status = @posted
+                 AND CAST(inv.is_deleted AS TEXT) IN ('0', 'false')
+                WHERE m.company_id = @company AND m.receipt_doc_id = @receipt
+                GROUP BY m.receipt_line_id
                 """))
             {
                 Add(matched, "@invoiceKind", CommercialDocKinds.PurchaseInvoice);
