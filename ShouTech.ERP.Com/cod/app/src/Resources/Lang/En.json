@@ -1137,7 +1137,9 @@
       "RemainingQty": "Remaining Qty",
       "RemainingBaseAmount": "Remaining GRNI (Base)",
       "OpeningBalance": "Opening Balance",
-      "RunningBalance": "Running Balance"
+      "RunningBalance": "Running Balance",
+      "DebitBase": "Debit (Base)",
+      "CreditBase": "Credit (Base)"
     },
     "Filter": {
       "All": "All",
