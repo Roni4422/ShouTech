@@ -33,7 +33,7 @@ The RFQ is a sourcing request; posting it does not receive stock, create a suppl
 
 Use a material card for each stock item and for each non-stock service. A service card must be configured as non-stock/service so it is expensed rather than added to inventory.
 
-## 2. Receive goods
+## 3. Receive goods
 
 1. Open the posted purchase order.
 2. Choose **Receive Goods**.
@@ -51,7 +51,7 @@ The application prevents receiving more than the remaining purchase-order quanti
 - The other side is credited to the Goods Received Not Invoiced (GRNI) control account.
 - A receipt does not create a supplier payable.
 
-## 3. Enter the supplier invoice
+## 4. Enter the supplier invoice
 
 1. Open the purchase order after at least one goods receipt is posted.
 2. Choose **Create Supplier Invoice**.
@@ -70,7 +70,7 @@ The invoice cannot exceed the quantities already received and not yet invoiced. 
 - Accounts Payable is credited for the supplier invoice total.
 - Inventory is not increased again by the supplier invoice.
 
-## 4. Record a supplier payment
+## 5. Record a supplier payment
 
 1. Open the cash/bank payment voucher window.
 2. Select the supplier as the party.
@@ -79,7 +79,7 @@ The invoice cannot exceed the quantities already received and not yet invoiced. 
 
 Posting the voucher records the supplier debit and the cash/bank credit. It does not silently mark a specific invoice as paid.
 
-## 5. Allocate the payment
+## 6. Allocate the payment
 
 1. Open **Payment Reconciliation**.
 2. Select the supplier.
@@ -89,7 +89,7 @@ Posting the voucher records the supplier debit and the cash/bank credit. It does
 
 A payment can be allocated partially or across multiple invoices, subject to the available payment and invoice balances. The invoice's paid amount and the payment's available amount are updated in the same transaction.
 
-## 6. Return goods and create a supplier debit note
+## 7. Return goods and create a supplier debit note
 
 1. Open **Purchase Return** from the purchase-invoice actions.
 2. Enter the number of the posted supplier invoice and choose **Load Supplier Invoice**.
@@ -102,7 +102,7 @@ The application links each returned line to its original supplier-invoice line, 
 
 **Important:** this window handles a return against an already-posted supplier invoice. A separate physical return directly from a goods receipt before supplier invoicing is not yet available. Do not use a debit note to represent that pre-invoice event.
 
-## 7. Common messages
+## 8. Common messages
 
 | Message | What to do |
 |---|---|
@@ -112,7 +112,7 @@ The application links each returned line to its original supplier-invoice line, 
 | Tax is disabled for this company | Ask an authorized user to review the company's tax activation decision and tax rules. |
 | Payment or invoice is not listed in reconciliation | Confirm that the supplier, company, document status, and currency are correct; verify that the voucher and invoice are posted. |
 
-## 8. Audit and corrections
+## 9. Audit and corrections
 
 - Do not delete posted purchase orders, receipts, invoices, or payment vouchers to correct accounting history.
 - Use the application's authorized reversal, return, or credit-note workflow when available.
