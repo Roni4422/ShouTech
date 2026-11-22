@@ -3848,7 +3848,8 @@
       "InvalidDates": "يجب ألا يسبق تاريخ انتهاء العرض تاريخ العرض.",
       "InvalidCurrency": "أدخل رمز عملة من ثلاثة أحرف.",
       "Created": "تم إنشاء وترحيل عرض المورد {0}.",
-      "SelectSupplier": "اختيار المورد"
+      "SelectSupplier": "اختيار المورد",
+      "Supplier": "المورد"
     },
     "ReceiptReturn": {
       "Title": "مرتجع استلام بضاعة",
