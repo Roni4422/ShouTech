@@ -931,7 +931,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         Guid companyId, long receiptId, CancellationToken cancellationToken = default)
     {
         if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
-        if (receiptId <= 0) throw new ArgumentOutOfRangeException(nameof(receiptId));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(receiptId);
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         var receipt = await ReadSnapshotAsync(connection, null, CommercialDocSide.Purchase,
