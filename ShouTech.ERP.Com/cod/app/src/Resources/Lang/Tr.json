@@ -3755,7 +3755,8 @@
       "InvalidInput": "Geçerli tedarikçi bilgisi, teklif referansı, kur ve geçerli fiyat/indirim/vergi değerleri girin.",
       "InvalidDates": "Teklif geçerliliği teklif tarihinden önce olamaz.",
       "InvalidCurrency": "Üç harfli para birimi kodu girin.",
-      "Created": "Tedarikçi teklifi {0} oluşturuldu ve onaylandı."
+      "Created": "Tedarikçi teklifi {0} oluşturuldu ve onaylandı.",
+      "SelectSupplier": "Tedarikçi seç"
     },
     "ReceiptReturn": {
       "Title": "Mal Kabul İade",
