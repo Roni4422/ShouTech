@@ -3731,6 +3731,27 @@
       "InvalidDates": "La validité ne peut pas précéder la date de l’offre.",
       "InvalidCurrency": "Saisissez un code devise de trois lettres.",
       "Created": "L’offre fournisseur {0} a été créée et validée."
+    },
+    "ReceiptReturn": {
+      "Title": "Retour de réception fournisseur",
+      "LoadReceipt": "Charger la réception",
+      "PostReturn": "Valider le retour fournisseur",
+      "ReceiptNo": "Numéro de réception",
+      "Line": "Ligne",
+      "Item": "Article",
+      "Description": "Description",
+      "Received": "Quantité reçue",
+      "Invoiced": "Quantité facturée",
+      "Returned": "Déjà retournée",
+      "Returnable": "Disponible au retour",
+      "ReturnQty": "Quantité à retourner",
+      "Loaded": "Réception {0} — Fournisseur : {1}",
+      "ReceiptRequired": "Saisissez un numéro de réception.",
+      "PostedReceiptRequired": "Sélectionnez une réception validée.",
+      "InvalidQuantities": "Saisissez une quantité positive ne dépassant pas le disponible sur au moins une ligne.",
+      "ConfirmPost": "Valider ce retour fournisseur ? Le stock et le GRNI seront réduits dans la même transaction.",
+      "Created": "Le retour fournisseur avant facture {0} a été validé.",
+      "Total": "Quantité totale retournée : {0:N4}"
     }
   }
 }
