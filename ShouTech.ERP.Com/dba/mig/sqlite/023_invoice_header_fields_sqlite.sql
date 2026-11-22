@@ -32,7 +32,7 @@ ALTER TABLE purchase_documents ADD COLUMN party_code TEXT;
 ALTER TABLE sales_document_lines ADD COLUMN warehouse_name TEXT;
 ALTER TABLE purchase_document_lines ADD COLUMN warehouse_name TEXT;
 
--- Original invoice link (Phenix "الأصل") and posted journal voucher number (Phenix "السند")
+-- Original invoice link and posted journal voucher number.
 ALTER TABLE sales_documents ADD COLUMN original_doc_id INTEGER;
 ALTER TABLE sales_documents ADD COLUMN original_doc_kind TEXT;
 ALTER TABLE sales_documents ADD COLUMN original_doc_no TEXT;
