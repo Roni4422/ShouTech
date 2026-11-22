@@ -49,3 +49,29 @@ CREATE TABLE IF NOT EXISTS purchase_match_overrides (
 
 CREATE INDEX IF NOT EXISTS ix_purchase_match_overrides_invoice
     ON purchase_match_overrides(company_code, invoice_doc_id, released_at);
+
+-- Evaluation and override rows are historical accounting evidence.
+-- Corrections must append a new evaluation or override, never mutate history.
+CREATE TRIGGER IF NOT EXISTS trg_purchase_match_evaluations_no_update
+BEFORE UPDATE ON purchase_match_evaluations
+BEGIN
+    SELECT RAISE(ABORT, 'Purchase match evaluations are immutable.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_purchase_match_evaluations_no_delete
+BEFORE DELETE ON purchase_match_evaluations
+BEGIN
+    SELECT RAISE(ABORT, 'Purchase match evaluations are immutable.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_purchase_match_overrides_no_update
+BEFORE UPDATE ON purchase_match_overrides
+BEGIN
+    SELECT RAISE(ABORT, 'Purchase match overrides are immutable.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_purchase_match_overrides_no_delete
+BEFORE DELETE ON purchase_match_overrides
+BEGIN
+    SELECT RAISE(ABORT, 'Purchase match overrides are immutable.');
+END;
