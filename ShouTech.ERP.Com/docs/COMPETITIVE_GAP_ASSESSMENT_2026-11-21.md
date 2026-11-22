@@ -109,7 +109,7 @@ The most important parity gaps are not basic invoice screens. They are complete 
 ShouTech has foundations for GL, party ledgers, sales chain, purchasing orders, inventory valuation/recalculation, batch/serial capture, POS, manufacturing, planning, quality, assets, projects, CRM, HR and reporting. Existing code includes services and repositories for many of these domains.
 
 The critical gaps identified by the current process-parity documents include:
-- Purchase Receipt and complete receipt-to-bill flow, including received-not-invoiced (GRNI) accounting and duplicate-receipt protection.
+- Purchase requisition, budget/need validation and multi-level approval before RFQ/PO; supplier invoice external-reference uniqueness and attachment management; landed-cost allocation; complete lot/serial/expiry receipt traceability; and GRNI aging/exception reporting.
 - Warehouse bin/location execution, picking, put-away, reservations and replenishment.
 - Full manufacturing execution: routings, work centres, job cards, capacity and actual-versus-standard labor/overhead costing.
 - Complete stock ledger replay/reconciliation and batch/serial/expiry acceptance.
@@ -119,7 +119,7 @@ The critical gaps identified by the current process-parity documents include:
 
 **Required ShouTech upgrades**
 
-1. Implement Purchase Receipt as a first-class document, with partial receipts, source-line quantities, GRNI, supplier invoice matching and return handling.
+1. Complete the upstream procurement-control path: purchase requisitions, budget/need checks, approval matrices, segregation of duties, and conversion of approved requests into RFQs or purchase orders.
 2. Make stock ledger entries the authoritative auditable source for quantity and value; test FIFO and weighted average, backdated entries, reposting and deterministic replay.
 3. Complete warehouse execution with bins, pick/put-away, reservations, replenishment, cycle count and traceable movements.
 4. Add multi-level, revision-controlled BOM; routings; work centres; job cards; MRP; capacity calendars; WIP; scrap/by-products; subcontracting; actual cost and variance.
@@ -716,4 +716,4 @@ Implemented on this branch:
 
 Implementation contract and limits: `docs/PURCHASE_TO_PAY_WORKFLOW.md` and `docs/PURCHASE_TO_PAY_CYCLE.md`.
 
-The following remain open and must not be represented as completed procurement capability: RFQ sourcing/quotation comparison, supplier invoice external-reference uniqueness, landed costs/freight/duty, lot/serial/expiry receipt capture, supplier returns/credit notes, and GRNI aging/exception reports.
+The following remain open and must not be represented as completed procurement capability: purchase requisitions and multi-level approval; supplier invoice external-reference uniqueness and document attachments; freight/insurance/customs/duty landed-cost allocation and capitalization; full receipt-time lot/serial/batch/expiry capture and end-to-end traceability; GRNI aging, unmatched receipt/invoice exception workbench and period-end reconciliation reports. RFQ supplier responses, line comparison, explicit award, supplier-quotation-to-draft-PO, partial PO receipts, GRNI, received-quantity invoice matching, payment allocation, invoice-linked debit notes, and pre-invoice receipt returns have implementation paths on this branch; they remain subject to current-head CI and end-to-end acceptance.
