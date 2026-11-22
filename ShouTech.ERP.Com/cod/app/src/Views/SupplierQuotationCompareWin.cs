@@ -23,6 +23,7 @@ public sealed class SupplierQuotationCompareWin : BaseWin
     private readonly TextBlock _status = new();
     private readonly Button _refresh = new();
     private readonly Button _award = new();
+    private readonly Button _markLost = new();
     private readonly Button _close = new();
     private IReadOnlyList<SupplierQuotationOffer> _offers = Array.Empty<SupplierQuotationOffer>();
 
@@ -45,6 +46,7 @@ public sealed class SupplierQuotationCompareWin : BaseWin
         Title = T("Purchasing.SupplierQuotationComparison.Title");
         _refresh.Content = T("Common.Refresh");
         _award.Content = T("Purchasing.SupplierQuotationComparison.Award");
+        _markLost.Content = T("DocSearch.SetLost");
         _close.Content = T("Common.Close");
         LocalizeColumns(_offersGrid);
         LocalizeColumns(_linesGrid);
@@ -69,11 +71,14 @@ public sealed class SupplierQuotationCompareWin : BaseWin
         var footer = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         F2Ui.StyleButton(_refresh, "Common.Refresh");
         F2Ui.StyleButton(_award, "Purchasing.SupplierQuotationComparison.Award");
+        F2Ui.StyleButton(_markLost, "DocSearch.SetLost");
         F2Ui.StyleButton(_close, "Common.Close");
         _refresh.Click += async (_, _) => await RefreshAsync();
         _award.Click += async (_, _) => await AwardAsync();
+        _markLost.Click += async (_, _) => await MarkLostAsync();
         _close.Click += (_, _) => Close();
         footer.Children.Add(_award);
+        footer.Children.Add(_markLost);
         footer.Children.Add(_refresh);
         footer.Children.Add(_close);
         DockPanel.SetDock(footer, Dock.Bottom);
@@ -157,12 +162,43 @@ public sealed class SupplierQuotationCompareWin : BaseWin
             _status.Text = _offers.Count == 0
                 ? T("Purchasing.SupplierQuotationComparison.NoOffers")
                 : Tf("Purchasing.SupplierQuotationComparison.OfferCount", _offers.Count);
-            _award.IsEnabled = _offers.Count > 0;
+            _award.IsEnabled = _offers.Count > 0 && AppHost.Permissions.Has(PermCat.Purchasing.OrderConvert);
+            _markLost.IsEnabled = _offers.Count > 0 && AppHost.Permissions.Has(PermCat.Purchasing.OrderCancel);
         }
         catch (Exception ex)
         {
             AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "SupplierQuotationCompareWin.RefreshAsync");
             _status.Text = T("Common.OperationUnavailable");
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private async Task MarkLostAsync()
+    {
+        if (_offersGrid.SelectedItem is not SupplierQuotationOffer selected || AppHost.Orders is null)
+        {
+            MessageBox.Show(this, T("Purchasing.SupplierQuotationComparison.SelectOffer"), Title,
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (!AppHost.Permissions.Has(PermCat.Purchasing.OrderCancel))
+        {
+            MessageBox.Show(this, T("OrderDoc.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        var confirm = MessageBox.Show(this,
+            Tf("Purchasing.SupplierQuotationComparison.ConfirmMarkLost", selected.SupplierName, selected.DocNo),
+            Title, MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        try
+        {
+            await AppHost.Orders.MarkSupplierQuotationLostAsync(selected.DocId, CurrentUserId);
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "SupplierQuotationCompareWin.MarkLostAsync");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
