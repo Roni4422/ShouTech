@@ -3091,10 +3091,10 @@ public static class InvRepo
             returned.CommandText = """
                 SELECT original_line_id, COALESCE(SUM(returned_qty), 0)
                 FROM purchase_return_line_allocations
-                WHERE company_id = $sourceCompany AND original_doc_id = $originalId
+                WHERE company_id = $allocationCompany AND original_doc_id = $originalId
                 GROUP BY original_line_id
                 """;
-            Add(returned, "$sourceCompany", sourceCompany);
+            Add(returned, "$allocationCompany", Company);
             Add(returned, "$originalId", originalDocId);
             using var reader = returned.ExecuteReader();
             while (reader.Read())
@@ -3159,7 +3159,7 @@ public static class InvRepo
                      $originalLine, $material, $quantity, $actor, $createdAt)
                 """;
             Add(insert, "$id", Guid.NewGuid().ToString("D"));
-            Add(insert, "$company", sourceCompany);
+            Add(insert, "$company", Company);
             Add(insert, "$returnDoc", returnDoc.DocId);
             Add(insert, "$returnLine", allocation.ReturnLineId);
             Add(insert, "$originalDoc", originalDocId);
