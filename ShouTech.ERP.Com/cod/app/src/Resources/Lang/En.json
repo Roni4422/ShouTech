@@ -3712,6 +3712,34 @@
       "ConfirmAward": "Create a purchase order from {0} quotation {1}?",
       "AwardCreated": "Draft purchase order {0} was created and linked to the awarded quotation.",
       "PostRfqFirst": "Save and post the RFQ before comparing supplier quotations."
+    },
+    "SupplierQuotationEntry": {
+      "Title": "Enter Supplier Quotation",
+      "Open": "Enter supplier offer",
+      "SaveAndPost": "Save and post quotation",
+      "SupplierId": "Supplier ID",
+      "SupplierCode": "Supplier code",
+      "SupplierName": "Supplier name",
+      "Reference": "Supplier quotation number",
+      "Currency": "Currency",
+      "ExchangeRate": "Exchange rate",
+      "Date": "Quotation date",
+      "ValidTill": "Valid until",
+      "DeliveryDate": "Promised delivery",
+      "Terms": "Commercial terms",
+      "Line": "RFQ line",
+      "Item": "Item",
+      "Description": "Description",
+      "Quantity": "Requested quantity",
+      "Unit": "Unit",
+      "UnitPrice": "Quoted unit price",
+      "DiscountPct": "Discount %",
+      "TaxRate": "Tax %",
+      "SourceLines": "RFQ lines loaded: {0}",
+      "InvalidInput": "Enter a valid supplier identity, quotation reference, exchange rate, and non-negative line prices, discounts, and tax rates.",
+      "InvalidDates": "Quotation validity must not precede the quotation date.",
+      "InvalidCurrency": "Enter a three-letter currency code.",
+      "Created": "Supplier quotation {0} was created and posted."
     }
   }
 }
