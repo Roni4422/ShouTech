@@ -602,7 +602,9 @@
       "RemainingQty": "Kalan miktar",
       "RemainingBaseAmount": "Kalan GRNI (ana para birimi)",
       "OpeningBalance": "Açılış bakiyesi",
-      "RunningBalance": "Güncel bakiye"
+      "RunningBalance": "Güncel bakiye",
+      "DebitBase": "Borç (ana para birimi)",
+      "CreditBase": "Alacak (ana para birimi)"
     },
     "Filter": {
       "All": "Tümü",
