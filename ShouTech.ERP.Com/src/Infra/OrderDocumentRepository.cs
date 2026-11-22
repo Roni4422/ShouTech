@@ -2182,10 +2182,47 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             policyEnabled, requireReceiptMatch, priceWarning, priceBlock,
             taxWarning, taxBlock, baseWarning, baseBlock, policyVersion
         });
+        var matchDetails = new List<object>();
+        await using (var matchCommand = CreateCommand(connection, transaction, """
+            SELECT match_id, purchase_order_id, receipt_doc_id, receipt_line_id,
+                   invoice_line_id, material_id, matched_qty, receipt_unit_cost,
+                   receipt_exchange_rate, invoice_unit_cost, invoice_exchange_rate,
+                   receipt_base_amount, invoice_base_amount, variance_base_amount
+            FROM purchase_receipt_invoice_matches
+            WHERE company_id = @company AND invoice_doc_id = @invoice
+            ORDER BY receipt_doc_id, receipt_line_id, invoice_line_id, match_id
+            """))
+        {
+            Add(matchCommand, "@company", order.CompanyId.ToString("D"));
+            Add(matchCommand, "@invoice", invoiceDocId);
+            await using var matchReader = await matchCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await matchReader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                matchDetails.Add(new
+                {
+                    matchId = Convert.ToString(matchReader.GetValue(0), CultureInfo.InvariantCulture),
+                    purchaseOrderId = Convert.ToInt64(matchReader.GetValue(1), CultureInfo.InvariantCulture),
+                    receiptDocId = Convert.ToInt64(matchReader.GetValue(2), CultureInfo.InvariantCulture),
+                    receiptLineId = Convert.ToInt64(matchReader.GetValue(3), CultureInfo.InvariantCulture),
+                    invoiceLineId = Convert.ToInt64(matchReader.GetValue(4), CultureInfo.InvariantCulture),
+                    materialId = Convert.ToInt64(matchReader.GetValue(5), CultureInfo.InvariantCulture),
+                    matchedQty = Convert.ToDecimal(matchReader.GetValue(6), CultureInfo.InvariantCulture),
+                    receiptUnitCost = Convert.ToDecimal(matchReader.GetValue(7), CultureInfo.InvariantCulture),
+                    receiptExchangeRate = Convert.ToDecimal(matchReader.GetValue(8), CultureInfo.InvariantCulture),
+                    invoiceUnitCost = Convert.ToDecimal(matchReader.GetValue(9), CultureInfo.InvariantCulture),
+                    invoiceExchangeRate = Convert.ToDecimal(matchReader.GetValue(10), CultureInfo.InvariantCulture),
+                    receiptBaseAmount = Convert.ToDecimal(matchReader.GetValue(11), CultureInfo.InvariantCulture),
+                    invoiceBaseAmount = Convert.ToDecimal(matchReader.GetValue(12), CultureInfo.InvariantCulture),
+                    varianceBaseAmount = Convert.ToDecimal(matchReader.GetValue(13), CultureInfo.InvariantCulture)
+                });
+            }
+        }
+
         var resultSnapshot = JsonSerializer.Serialize(new
         {
             priceVariancePercent, taxVariancePercent, absoluteBaseVariance,
             grniBaseAmount, invoiceBaseAmount, invoiceTax, expectedTax,
+            matchDetails,
             evaluation.Decision, evaluation.ReasonCodes
         });
 
