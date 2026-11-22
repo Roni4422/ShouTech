@@ -20,6 +20,8 @@ public static class RptNav
 
         switch (actionKey.Trim())
         {
+            case "Purchasing.MatchPolicy":
+                OpenPurchaseMatchPolicy(owner); return true;
             case "Accounts.TrialBalance":
             case "Reports.TrialBalance":
                 OpenTrialBalance(owner); return true;
@@ -253,6 +255,7 @@ public static class RptNav
     public static void OpenHrPayroll(Window? owner = null) => Show(new HrPayrollWin(), owner);
     public static void OpenSalesOrder(Window? owner = null) => Show(new OrdWin(OrdKind.Sales), owner);
     public static void OpenPurchaseOrder(Window? owner = null) => Show(new OrdWin(OrdKind.Purchase), owner);
+    public static void OpenPurchaseMatchPolicy(Window? owner = null) => Show(new PurchaseMatchPolicyWin(), owner);
     public static void OpenRequestForQuotation(Window? owner = null) => Show(new OrdWin(OrdKind.RequestForQuotation), owner);
     public static void OpenBarcodeTool(Window? owner = null) => Show(new BarWin(), owner);
     public static void OpenBarcodeGenerator(Window? owner = null) => Show(new BcdGenWin(), owner);
