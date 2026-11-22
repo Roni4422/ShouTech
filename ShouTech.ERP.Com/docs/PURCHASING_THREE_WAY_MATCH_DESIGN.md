@@ -120,7 +120,9 @@ The following foundation has been committed to the work branch:
 4. Payment allocation checks the current company policy and latest invoice evaluation inside the allocation transaction. Enabled policies fail closed for missing evaluations, stale policy versions, invalid decisions, and unreleased Blocked results.
 5. Dedicated policy-manage and override permissions are seeded for administrators; the application service checks them on every write and emits audit events.
 6. A Purchasing ribbon route opens the policy and recent-evaluation window. English, Arabic, French, and Turkish resources have been added.
-7. Regression tests cover evaluator outcomes, blocked payment rejection, audited release, self-approval rejection, policy version conflicts, and permission enforcement.
+7. Regression tests cover evaluator outcomes, blocked payment rejection, audited release, self-approval rejection, policy version conflicts, permission enforcement, source-line match snapshot persistence, and append-only re-evaluation after a policy change.
+8. The evaluation review window displays the stored source-line snapshot and exposes a permission-checked re-evaluation action when the policy version is stale.
+9. The legacy manual supplier invoice repository path refuses posting while the company three-way-match policy is enabled, preventing immediate settlement from bypassing PO/receipt controls.
 
 ## Remaining implementation and verification
 
@@ -139,4 +141,5 @@ Do not call the purchasing cycle or this feature complete until:
 - a Blocked invoice cannot be paid without an authorized, independently approved, reasoned override;
 - all WPF supplier-invoice paths are covered, including legacy/manual entry paths;
 - the source-line comparison and re-evaluation workflows are available to authorized users;
+- legacy manual supplier invoice posting cannot bypass an enabled policy;
 - purchase reports, returns, GRNI, supplier balances, and payment reconciliation pass end-to-end regression tests.
