@@ -593,7 +593,14 @@
       "Shortage": "Eksik",
       "ChequesIn": "Gelen Çekler",
       "ChequesOut": "Giden Çekler",
-      "Projected": "Öngörülen"
+      "Projected": "Öngörülen",
+      "ReceiptNo": "Mal kabul no.",
+      "PurchaseOrder": "Satın alma siparişi",
+      "ReceivedQty": "Alınan miktar",
+      "InvoicedQty": "Faturalanan miktar",
+      "ReturnedQty": "İade miktarı",
+      "RemainingQty": "Kalan miktar",
+      "RemainingBaseAmount": "Kalan GRNI (ana para birimi)"
     },
     "Filter": {
       "All": "Tümü",
@@ -670,7 +677,8 @@
     "Feasible": "Mümkün",
     "ShortageStatus": "Eksik",
     "BudgetVariance": "Bütçe Sapması",
-    "QualitySummary": "Kalite Denetim Özeti"
+    "QualitySummary": "Kalite Denetim Özeti",
+    "GoodsReceivedNotInvoiced": "Faturalanmamış Alınan Mallar (GRNI)"
   },
   "Tools": {
     "Title": "Araçlar",
