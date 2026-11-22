@@ -490,7 +490,7 @@
       "Balance": "الرصيد",
       "Date": "التاريخ",
       "DocNo": "رقم المستند",
-      "Description": "البيان",
+      "Description": "الوصف",
       "Status": "الحالة",
       "User": "المستخدم",
       "Warehouse": "المستودع",
@@ -594,7 +594,14 @@
       "Shortage": "العجز",
       "ChequesIn": "شيكات واردة",
       "ChequesOut": "شيكات صادرة",
-      "Projected": "المتوقع"
+      "Projected": "المتوقع",
+      "ReceiptNo": "رقم الاستلام",
+      "PurchaseOrder": "أمر الشراء",
+      "ReceivedQty": "الكمية المستلمة",
+      "InvoicedQty": "الكمية المفوترة",
+      "ReturnedQty": "الكمية المرتجعة",
+      "RemainingQty": "الكمية المتبقية",
+      "RemainingBaseAmount": "قيمة GRNI المتبقية (العملة الأساسية)"
     },
     "Filter": {
       "All": "الكل",
@@ -671,7 +678,8 @@
     "Feasible": "ممكن",
     "ShortageStatus": "عجز",
     "BudgetVariance": "انحراف الموازنة",
-    "QualitySummary": "ملخص فحوصات الجودة"
+    "QualitySummary": "ملخص فحوصات الجودة",
+    "GoodsReceivedNotInvoiced": "البضائع المستلمة غير المفوترة (GRNI)"
   },
   "Tools": {
     "Title": "أدوات",
