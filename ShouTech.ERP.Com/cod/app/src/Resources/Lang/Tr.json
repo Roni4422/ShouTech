@@ -3773,10 +3773,11 @@
       "Loaded": "Fiş {0} — Tedarikçi: {1}",
       "ReceiptRequired": "Mal kabul numarası girin.",
       "PostedReceiptRequired": "Onaylanmış bir mal kabul fişi seçin.",
-      "InvalidQuantities": "En az bir satır için kullanılabilir miktarı aşmayan pozitif iade miktarı girin.",
+      "InvalidQuantities": "Bir iade nedeni ve en az bir satır için kullanılabilir miktarı aşmayan pozitif miktar girin.",
       "ConfirmPost": "Tedarikçi iadesi kaydedilsin mi? Stok ve faturalanmamış mal kabul tutarı aynı işlemde azaltılır.",
       "Created": "Fatura öncesi tedarikçi iadesi {0} kaydedildi.",
-      "Total": "Toplam iade miktarı: {0:N4}"
+      "Total": "Toplam iade miktarı: {0:N4}",
+      "Reason": "İade nedeni"
     },
     "ReturnGoodsReceipt": "Mal kabul iadesi"
   }
