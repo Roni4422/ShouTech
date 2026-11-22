@@ -53,7 +53,14 @@ public sealed class PartySearchWin : BaseWin
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
-        if (!AppHost.Permissions.Has(PermCat.Customers.View))
+        var hasPartyViewPermission = KindFilter switch
+        {
+            PartyKinds.Supplier => AppHost.Permissions.Has(PermCat.Purchasing.OrderView),
+            PartyKinds.Customer => AppHost.Permissions.Has(PermCat.Customers.View),
+            _ => AppHost.Permissions.Has(PermCat.Customers.View)
+                 || AppHost.Permissions.Has(PermCat.Purchasing.OrderView)
+        };
+        if (!hasPartyViewPermission)
         {
             MessageBox.Show(this, T("MasterCards.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             Close();
