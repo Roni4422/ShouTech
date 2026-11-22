@@ -99,7 +99,15 @@ public sealed class OrdWin : BaseWin, IWindowMode
         Loaded += OnLoaded;
     }
 
-    private bool IsRfq => _kind == OrdKind.RequestForQuotation;\n\n    private async Task OpenQuotationComparisonAsync()\n    {\n        if (_docId is null) return;\n        var window = new SupplierQuotationCompareWin(_docId.Value) { Owner = this };\n        window.ShowDialog();\n        await Task.CompletedTask;\n    }
+    private bool IsRfq => _kind == OrdKind.RequestForQuotation;
+
+    private void OpenQuotationComparison()
+    {
+        if (_docId is null) return;
+        var window = new SupplierQuotationCompareWin(_docId.Value) { Owner = this };
+        window.ShowDialog();
+    }
+
     private string DocKindCode => _kind switch
     {
         OrdKind.Sales => CommercialDocKinds.SalesOrder,
