@@ -201,6 +201,12 @@ public sealed class OrderTrackWin : BaseWin
     protected override void ApplyLocalizedText()
     {
         Title = T("OrderDoc.TrackTitle");
+        if (_cmbKind.Items.Count >= 3)
+        {
+            ((ComboBoxItem)_cmbKind.Items[0]).Content = T("OrderDoc.TitleSales");
+            ((ComboBoxItem)_cmbKind.Items[1]).Content = T("OrderDoc.TitlePurchase");
+            ((ComboBoxItem)_cmbKind.Items[2]).Content = T("OrderDoc.TitleRfq");
+        }
         if (_grid.Columns.Count >= 7)
         {
             _grid.Columns[0].Header = T("OrderDoc.OrderNo");
