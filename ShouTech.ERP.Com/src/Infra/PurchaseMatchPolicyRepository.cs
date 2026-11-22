@@ -195,6 +195,149 @@ public sealed class PurchaseMatchPolicyRepository : IPurchaseMatchPolicyReposito
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<PurchaseMatchEvaluationSnapshot> ReevaluateLatestAsync(
+        string companyCode,
+        long invoiceDocId,
+        string actor,
+        CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyCode);
+        if (invoiceDocId <= 0)
+            throw new ArgumentOutOfRangeException(nameof(invoiceDocId));
+        if (string.IsNullOrWhiteSpace(actor))
+            throw new ArgumentException("An authenticated actor is required.", nameof(actor));
+
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+        PurchaseMatchPolicy policy;
+        var policySql = """
+            SELECT is_enabled, require_receipt_match, price_warning_percent, price_block_percent,
+                   tax_warning_percent, tax_block_percent, base_variance_warning_amount,
+                   base_variance_block_amount, policy_version
+            FROM purchase_match_policies
+            WHERE company_code = @company
+            """ + (_provider == "PostgreSQL" ? " FOR SHARE" : string.Empty);
+        await using (var policyCommand = CreateCommand(connection, transaction, policySql))
+        {
+            Add(policyCommand, "@company", companyCode.Trim());
+            await using var reader = await policyCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                throw new InvalidOperationException("No purchase match policy is configured for this company.");
+            policy = new PurchaseMatchPolicy(
+                Convert.ToBoolean(reader.GetValue(0), CultureInfo.InvariantCulture),
+                Convert.ToBoolean(reader.GetValue(1), CultureInfo.InvariantCulture),
+                Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture),
+                Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture),
+                Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture),
+                Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture),
+                Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture),
+                Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture),
+                Convert.ToInt32(reader.GetValue(8), CultureInfo.InvariantCulture));
+        }
+        policy.Validate();
+        if (!policy.IsEnabled)
+            throw new InvalidOperationException("Purchase match policy is disabled; re-evaluation is not required.");
+
+        string? previousResult = null;
+        string? previousDecision = null;
+        var previousPolicyVersion = 0;
+        var previousEvaluationVersion = 0;
+        await using (var latest = CreateCommand(connection, transaction, """
+            SELECT result_snapshot_json, decision, policy_version, evaluation_version
+            FROM purchase_match_evaluations
+            WHERE company_code = @company AND invoice_doc_id = @invoice
+            ORDER BY evaluation_version DESC
+            LIMIT 1
+            """))
+        {
+            Add(latest, "@company", companyCode.Trim());
+            Add(latest, "@invoice", invoiceDocId);
+            await using var reader = await latest.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                throw new InvalidOperationException("The invoice has no prior match evaluation and cannot be re-evaluated from a missing source snapshot.");
+            previousResult = ReadJsonText(reader.GetValue(0));
+            previousDecision = Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture);
+            previousPolicyVersion = Convert.ToInt32(reader.GetValue(2), CultureInfo.InvariantCulture);
+            previousEvaluationVersion = Convert.ToInt32(reader.GetValue(3), CultureInfo.InvariantCulture);
+        }
+
+        if (previousPolicyVersion == policy.PolicyVersion)
+            throw new InvalidOperationException("The latest invoice evaluation already uses the current policy version.");
+
+        using var previousDocument = System.Text.Json.JsonDocument.Parse(previousResult ?? "{}");
+        var root = previousDocument.RootElement;
+        if (!root.TryGetProperty("priceVariancePercent", out var priceValue) ||
+            !root.TryGetProperty("taxVariancePercent", out var taxValue) ||
+            !root.TryGetProperty("absoluteBaseVariance", out var baseValue))
+            throw new InvalidOperationException("The prior evaluation snapshot does not contain all required variance measurements.");
+
+        var priceVariance = priceValue.GetDecimal();
+        var taxVariance = taxValue.GetDecimal();
+        var baseVariance = baseValue.GetDecimal();
+        var hasReceiptMatch = root.TryGetProperty("matchDetails", out var matchDetails) &&
+                              matchDetails.ValueKind == System.Text.Json.JsonValueKind.Array &&
+                              matchDetails.GetArrayLength() > 0;
+        var evaluation = PurchaseMatchPolicyEvaluator.Evaluate(
+            policy,
+            new PurchaseMatchVariance(priceVariance, taxVariance, baseVariance, hasReceiptMatch));
+
+        var evaluationId = Guid.NewGuid();
+        var evaluationVersion = previousEvaluationVersion + 1;
+        var policySnapshot = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            policyEnabled = policy.IsEnabled,
+            requireReceiptMatch = policy.RequireReceiptMatch,
+            priceWarning = policy.PriceWarningPercent,
+            priceBlock = policy.PriceBlockPercent,
+            taxWarning = policy.TaxWarningPercent,
+            taxBlock = policy.TaxBlockPercent,
+            baseWarning = policy.BaseVarianceWarningAmount,
+            baseBlock = policy.BaseVarianceBlockAmount,
+            policyVersion = policy.PolicyVersion
+        });
+        var snapshotValues = new Dictionary<string, System.Text.Json.JsonElement>();
+        foreach (var property in root.EnumerateObject())
+            snapshotValues[property.Name] = property.Value.Clone();
+        snapshotValues["decision"] = System.Text.Json.JsonDocument.Parse(
+            System.Text.Json.JsonSerializer.Serialize(evaluation.Decision)).RootElement.Clone();
+        snapshotValues["reasonCodes"] = System.Text.Json.JsonDocument.Parse(
+            System.Text.Json.JsonSerializer.Serialize(evaluation.ReasonCodes)).RootElement.Clone();
+        var resultSnapshot = System.Text.Json.JsonSerializer.Serialize(snapshotValues);
+        var reasonsJson = System.Text.Json.JsonSerializer.Serialize(evaluation.ReasonCodes);
+        var reasonsValue = _provider == "PostgreSQL" ? "CAST(@reasons AS jsonb)" : "@reasons";
+        var policyValue = _provider == "PostgreSQL" ? "CAST(@policySnapshot AS jsonb)" : "@policySnapshot";
+        var resultValue = _provider == "PostgreSQL" ? "CAST(@resultSnapshot AS jsonb)" : "@resultSnapshot";
+        await using (var insert = CreateCommand(connection, transaction, $"""
+            INSERT INTO purchase_match_evaluations
+                (evaluation_id, company_code, invoice_doc_id, evaluation_version, policy_version,
+                 decision, reason_codes_json, policy_snapshot_json, result_snapshot_json, evaluated_by)
+            VALUES
+                (@id, @company, @invoice, @version, @policyVersion,
+                 @decision, {reasonsValue}, {policyValue}, {resultValue}, @actor)
+            """))
+        {
+            Add(insert, "@id", _provider == "PostgreSQL" ? (object)evaluationId : evaluationId.ToString("D"));
+            Add(insert, "@company", companyCode.Trim());
+            Add(insert, "@invoice", invoiceDocId);
+            Add(insert, "@version", evaluationVersion);
+            Add(insert, "@policyVersion", policy.PolicyVersion);
+            Add(insert, "@decision", evaluation.Decision);
+            Add(insert, "@reasons", reasonsJson);
+            Add(insert, "@policySnapshot", policySnapshot);
+            Add(insert, "@resultSnapshot", resultSnapshot);
+            Add(insert, "@actor", actor.Trim());
+            await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return new PurchaseMatchEvaluationSnapshot(
+            evaluationId, invoiceDocId, evaluationVersion, policy.PolicyVersion,
+            evaluation.Decision, evaluation.ReasonCodes, policySnapshot, resultSnapshot,
+            actor.Trim(), DateTime.UtcNow);
+    }
+
     public async Task<Guid> RecordOverrideAsync(
         string companyCode,
         long invoiceDocId,
