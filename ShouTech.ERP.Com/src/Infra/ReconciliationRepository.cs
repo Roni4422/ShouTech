@@ -261,6 +261,51 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             if (amount > openAmount + Tolerance)
                 throw new InvalidOperationException("Allocation exceeds the document's open amount.");
 
+            // Purchase three-way match is a payment gate, not merely a display warning.
+            // Read the latest immutable evaluation inside this same allocation
+            // transaction, after the invoice row has been locked above.
+            if (docTable == "PURCHASE")
+            {
+                string? evaluationId = null;
+                string? decision = null;
+                await using (var evaluation = CreateCommand(connection, transaction, """
+                    SELECT evaluation_id, decision
+                    FROM purchase_match_evaluations
+                    WHERE company_code = @company AND invoice_doc_id = @doc
+                    ORDER BY evaluation_version DESC
+                    LIMIT 1
+                    """))
+                {
+                    Add(evaluation, "@company", companyId.Trim());
+                    Add(evaluation, "@doc", docId);
+                    await using var reader = await evaluation.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                    if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    {
+                        evaluationId = ReadString(reader, 0);
+                        decision = ReadString(reader, 1);
+                    }
+                }
+
+                if (string.Equals(decision, "Blocked", StringComparison.Ordinal))
+                {
+                    await using var release = CreateCommand(connection, transaction, """
+                        SELECT 1
+                        FROM purchase_match_overrides
+                        WHERE company_code = @company
+                          AND invoice_doc_id = @doc
+                          AND evaluation_id = @evaluation
+                        LIMIT 1
+                        """);
+                    Add(release, "@company", companyId.Trim());
+                    Add(release, "@doc", docId);
+                    Add(release, "@evaluation", evaluationId ?? string.Empty);
+                    var hasRelease = await release.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                    if (hasRelease is null or DBNull)
+                        throw new InvalidOperationException(
+                            "This supplier invoice is blocked by the purchase three-way match control and requires an authorized, audited release before payment allocation.");
+                }
+            }
+
             // 3) Insert the allocation and settle it against the document.
             var allocationId = Guid.NewGuid();
             await using (var insert = CreateCommand(connection, transaction,
