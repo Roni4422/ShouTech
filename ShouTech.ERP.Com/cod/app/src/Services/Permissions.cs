@@ -458,6 +458,9 @@ namespace ShouTech.App.Services
             public const string OrderConvert = "PURCH.ORDER.CONVERT";
 
             public const string ReportsView = "PURCH.REPORTS.VIEW";
+
+            public const string MatchPolicyManage = "PURCH.MATCH.POLICY.MANAGE";
+            public const string MatchOverride = "PURCH.MATCH.OVERRIDE";
         }
 
         // =====================================================================
