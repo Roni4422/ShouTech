@@ -137,6 +137,10 @@ namespace Kern.Tests
                 var firstInvoice = await orders.FindByIdAsync(CommercialDocSide.Purchase, firstInvoiceId);
                 Assert.Equal(2m, firstInvoice!.Lines[0].Qty);
                 Assert.Equal(102m, BalanceQty(connectionString, 42));
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    service.CreatePurchaseReceiptReturnAsync(
+                        companyId, receiptId, new DateOnly(2026, 11, 4),
+                        new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 1m, 12m, SourceLineNo: 1) }, Actor));
 
                 var (secondReceiptId, _) = await service.CreatePurchaseReceiptAsync(
                     companyId, orderId, new DateOnly(2026, 11, 5),
