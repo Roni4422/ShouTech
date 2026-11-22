@@ -1967,7 +1967,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         DbConnection connection, DbTransaction? transaction, Guid companyId, CancellationToken cancellationToken)
     {
         await using var command = CreateCommand(connection, transaction,
-            "SELECT company_code FROM companies WHERE company_id = @id");
+            "SELECT company_code FROM companies WHERE CAST(company_id AS TEXT) = @id");
         Add(command, "@id", companyId.ToString("D"));
         var value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
         return value is null or DBNull ? null : Convert.ToString(value, CultureInfo.InvariantCulture);
