@@ -3781,7 +3781,8 @@
       "Total": "Quantité totale retournée : {0:N4}",
       "Reason": "Motif du retour"
     },
-    "ReturnGoodsReceipt": "Retour de réception fournisseur"
+    "ReturnGoodsReceipt": "Retour de réception fournisseur",
+    "MatchPolicy": "Règle de rapprochement à trois voies"
   },
   "PurchaseMatch": {
     "Title": "Contrôle de rapprochement à trois voies des achats",
