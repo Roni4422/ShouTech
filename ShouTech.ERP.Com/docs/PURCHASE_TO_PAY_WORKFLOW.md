@@ -95,10 +95,12 @@ engine, supports item lines and a response deadline, can be saved as a draft,
 posted, loaded by document number, and printed. A supplier is not mandatory
 on the RFQ header because one request may be sent to multiple suppliers.
 
-Supplier response creation, side-by-side offer evaluation, award approval,
-and purchase-order conversion are available in the application service layer
-but still require dedicated user-interface workflows and end-to-end acceptance
-coverage before the sourcing process can be called complete.
+Supplier responses are captured in the dedicated supplier quotation
+entry window. Posted offers can be compared side by side, explicitly awarded,
+and converted into a linked draft purchase order. A supplier quotation can
+also be marked Lost without changing the RFQ or any sales document. These
+workflows still require full end-to-end acceptance coverage before release
+readiness can be claimed.
 
 ## Remaining procurement scope
 
