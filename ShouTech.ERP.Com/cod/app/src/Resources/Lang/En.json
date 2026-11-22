@@ -1128,7 +1128,14 @@
       "Shortage": "Shortage",
       "ChequesIn": "Cheques In",
       "ChequesOut": "Cheques Out",
-      "Projected": "Projected"
+      "Projected": "Projected",
+      "ReceiptNo": "Receipt No.",
+      "PurchaseOrder": "Purchase Order",
+      "ReceivedQty": "Received Qty",
+      "InvoicedQty": "Invoiced Qty",
+      "ReturnedQty": "Returned Qty",
+      "RemainingQty": "Remaining Qty",
+      "RemainingBaseAmount": "Remaining GRNI (Base)"
     },
     "Filter": {
       "All": "All",
@@ -1205,7 +1212,8 @@
     "Feasible": "Feasible",
     "ShortageStatus": "Shortage",
     "BudgetVariance": "Budget Variance",
-    "QualitySummary": "Quality Inspection Summary"
+    "QualitySummary": "Quality Inspection Summary",
+    "GoodsReceivedNotInvoiced": "Goods Received Not Invoiced (GRNI)"
   },
   "RestoreCompany": {
     "Close": "Close",
