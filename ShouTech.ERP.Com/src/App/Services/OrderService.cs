@@ -297,10 +297,24 @@ public sealed class OrderService
             if (quote is null || quote.Status != CommercialDocumentStatus.Posted ||
                 quote.DocKind != CommercialDocKinds.SupplierQuotation)
                 continue;
+            var quotedLines = quote.Lines.Select(line => new SupplierQuotationLineOffer(
+                line.LineNo,
+                line.MaterialId,
+                line.MaterialCode,
+                line.Description,
+                line.Unit,
+                line.Qty,
+                line.UnitPrice,
+                line.DiscountPct,
+                line.TaxRate,
+                line.LineTotal,
+                decimal.Round(line.LineTotal * quote.ExchangeRate, 4, MidpointRounding.AwayFromZero)))
+                .ToArray();
             offers.Add(new SupplierQuotationOffer(
                 quote.DocId, quote.DocNo, quote.PartyName ?? quote.PartyCode ?? "Unknown supplier",
                 quote.CurrencyCode, quote.ExchangeRate, quote.Subtotal, quote.TaxAmount,
-                quote.GrandTotal, quote.DocDate, quote.ValidTill, quote.DeliveryDate, quote.Status));
+                quote.GrandTotal, quote.DocDate, quote.ValidTill, quote.DeliveryDate, quote.Status,
+                quotedLines));
         }
         return offers.OrderBy(x => x.GrandTotal * x.ExchangeRate)
             .ThenBy(x => x.DeliveryDate ?? DateOnly.MaxValue)
