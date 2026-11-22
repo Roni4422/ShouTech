@@ -186,9 +186,8 @@ public sealed class SupplierQuotationCompareWin : BaseWin
             MessageBox.Show(this, T("OrderDoc.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
-        var confirm = MessageBox.Show(this,
-            Tf("Purchasing.SupplierQuotationComparison.ConfirmMarkLost", selected.SupplierName, selected.DocNo),
-            Title, MessageBoxButton.YesNo, MessageBoxImage.Question);
+        var confirm = MessageBox.Show(this, T("DocSearch.ConfirmLost"), Title,
+            MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (confirm != MessageBoxResult.Yes) return;
 
         try
