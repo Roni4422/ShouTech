@@ -55,7 +55,8 @@ public sealed class PartySearchWin : BaseWin
     {
         var hasPartyViewPermission = KindFilter switch
         {
-            PartyKinds.Supplier => AppHost.Permissions.Has(PermCat.Purchasing.OrderView),
+            PartyKinds.Supplier => AppHost.Permissions.Has(PermCat.Purchasing.OrderView)
+                || AppHost.Permissions.Has(PermCat.Purchasing.OrderCreate),
             PartyKinds.Customer => AppHost.Permissions.Has(PermCat.Customers.View),
             _ => AppHost.Permissions.Has(PermCat.Customers.View)
                  || AppHost.Permissions.Has(PermCat.Purchasing.OrderView)
