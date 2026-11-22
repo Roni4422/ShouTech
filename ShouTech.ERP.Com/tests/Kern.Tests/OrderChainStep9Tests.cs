@@ -1320,6 +1320,63 @@ namespace Kern.Tests
             }
         }
 
+        [Fact]
+        public async Task PurchaseMatchPolicyRepository_ReevaluationAppendsNewVersionAndPreservesSourceDetails()
+        {
+            var (_, _, _, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var repository = new PurchaseMatchPolicyRepository("SQLite", connectionString);
+                await repository.SavePolicyAsync(
+                    CompanyCode,
+                    new PurchaseMatchPolicy(true, true, 1m, 5m, 1m, 5m, 1m, 5m, 1),
+                    0,
+                    Actor);
+
+                var originalEvaluationId = Guid.NewGuid();
+                using (var connection = new SqliteConnection(connectionString))
+                {
+                    connection.Open();
+                    using var insert = connection.CreateCommand();
+                    insert.CommandText = """
+                        INSERT INTO purchase_match_evaluations
+                            (evaluation_id, company_code, invoice_doc_id, evaluation_version,
+                             policy_version, decision, reason_codes_json,
+                             policy_snapshot_json, result_snapshot_json, evaluated_by)
+                        VALUES
+                            ($id, $company, 7002, 1, 1, 'Pass', '[]',
+                             '{}', '{"priceVariancePercent":4,"taxVariancePercent":0,"absoluteBaseVariance":0,"matchDetails":[{"receiptLineId":77}]}', $actor)
+                        """;
+                    insert.Parameters.AddWithValue("$id", originalEvaluationId.ToString("D"));
+                    insert.Parameters.AddWithValue("$company", CompanyCode);
+                    insert.Parameters.AddWithValue("$actor", Actor);
+                    insert.ExecuteNonQuery();
+                }
+
+                await repository.SavePolicyAsync(
+                    CompanyCode,
+                    new PurchaseMatchPolicy(true, true, 1m, 3m, 1m, 5m, 1m, 5m, 2),
+                    1,
+                    "policy-admin");
+
+                var reevaluated = await repository.ReevaluateLatestAsync(
+                    CompanyCode, 7002, "reviewer-02");
+
+                Assert.Equal(2, reevaluated.EvaluationVersion);
+                Assert.Equal(2, reevaluated.PolicyVersion);
+                Assert.Equal("Blocked", reevaluated.Decision);
+                Assert.Contains("\\"receiptLineId\\":77", reevaluated.ResultSnapshotJson, StringComparison.Ordinal);
+                Assert.Equal(2m, Scalar(connectionString,
+                    $"SELECT COUNT(*) FROM purchase_match_evaluations WHERE company_code = '{CompanyCode}' AND invoice_doc_id = 7002;"));
+                Assert.Equal("Pass", ScalarText(connectionString,
+                    $"SELECT decision FROM purchase_match_evaluations WHERE evaluation_id = '{originalEvaluationId:D}';"));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
         private static Task<(OrderService Service, OrderDocumentRepository Orders, Guid CompanyId, string ConnectionString, Action Cleanup)> CreateAsync()
         {
             var databasePath = Path.Combine(Path.GetTempPath(), $"shoutech-step9-{Guid.NewGuid():N}.sqlite3");
