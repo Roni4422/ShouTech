@@ -87,7 +87,9 @@ public sealed class OrderTrackWin : BaseWin
         // align with the other list windows' filters.
         var filters = CreateFormGrid(3);
         filters.Margin = new Thickness(0, 0, 0, 8);
-        _cmbKind.ItemsSource = new[] { "SO", "PO" };
+        _cmbKind.Items.Add(new ComboBoxItem { Content = T("OrderDoc.TitleSales"), Tag = CommercialDocKinds.SalesOrder });
+        _cmbKind.Items.Add(new ComboBoxItem { Content = T("OrderDoc.TitlePurchase"), Tag = CommercialDocKinds.PurchaseOrder });
+        _cmbKind.Items.Add(new ComboBoxItem { Content = T("OrderDoc.TitleRfq"), Tag = CommercialDocKinds.RequestForQuotation });
         _cmbKind.SelectedIndex = 0;
         _cmbKind.SelectionChanged += async (_, _) => await LoadAsync();
         AddFormField(filters, 0, 0, "DocSearch.Kind", _cmbKind);
@@ -146,13 +148,17 @@ public sealed class OrderTrackWin : BaseWin
         }
         try
         {
-            var kind = _cmbKind.SelectedItem as string ?? "SO";
-            var side = kind == "SO" ? CommercialDocSide.Sales : CommercialDocSide.Purchase;
-            // The tracking schedule shows every matching order — no row cap.
+            var kind = (_cmbKind.SelectedItem as ComboBoxItem)?.Tag as string
+                ?? CommercialDocKinds.SalesOrder;
+            var side = kind == CommercialDocKinds.SalesOrder
+                ? CommercialDocSide.Sales
+                : CommercialDocSide.Purchase;
+            // The tracking schedule shows every matching posted document — no row cap.
             var orders = await AppHost.Orders.SearchAsync(side, _companyId, kind, CommercialDocumentStatus.Posted, null, null, null, int.MaxValue);
             foreach (var order in orders)
             {
-                var progress = await AppHost.Orders.GetProgressAsync(side, order.DocId);
+                var isRfq = order.DocKind == CommercialDocKinds.RequestForQuotation;
+                var progress = isRfq ? null : await AppHost.Orders.GetProgressAsync(side, order.DocId);
                 _rows.Add(new TrackRow
                 {
                     DocId = order.DocId,
@@ -162,11 +168,12 @@ public sealed class OrderTrackWin : BaseWin
                     DateText = order.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                     PartyText = string.IsNullOrWhiteSpace(order.PartyCode) ? order.PartyName ?? "" : $"{order.PartyCode} - {order.PartyName}",
                     TotalText = order.GrandTotal.ToString("N2", CultureInfo.InvariantCulture),
-                    StatusText = progress.PerFulfilled >= 100m && progress.PerBilled >= 100m
-                        ? T("OrderDoc.Completed")
-                        : T("OrderDoc.Open"),
-                    FulfilledText = progress.PerFulfilled.ToString("N1", CultureInfo.InvariantCulture) + "%",
-                    BilledText = progress.PerBilled.ToString("N1", CultureInfo.InvariantCulture) + "%"
+                    StatusText = isRfq ? T("OrderDoc.RfqOpen")
+                        : progress!.PerFulfilled >= 100m && progress.PerBilled >= 100m
+                            ? T("OrderDoc.Completed")
+                            : T("OrderDoc.Open"),
+                    FulfilledText = isRfq ? "—" : progress!.PerFulfilled.ToString("N1", CultureInfo.InvariantCulture) + "%",
+                    BilledText = isRfq ? "—" : progress!.PerBilled.ToString("N1", CultureInfo.InvariantCulture) + "%"
                 });
             }
             _lblStatus.Text = $"{T("DocSearch.Results")}: {_rows.Count}";
@@ -180,7 +187,13 @@ public sealed class OrderTrackWin : BaseWin
     private void OpenSelected()
     {
         if (_grid.SelectedItem is not TrackRow row) return;
-        var ord = new OrdWin(row.DocKind == CommercialDocKinds.SalesOrder ? OrdKind.Sales : OrdKind.Purchase);
+        var mode = row.DocKind switch
+        {
+            CommercialDocKinds.SalesOrder => OrdKind.Sales,
+            CommercialDocKinds.RequestForQuotation => OrdKind.RequestForQuotation,
+            _ => OrdKind.Purchase
+        };
+        var ord = new OrdWin(mode);
         ord.Show();
         _ = ord.LoadOrderAsync(row.DocId);
     }
