@@ -283,7 +283,7 @@ public sealed class PurchaseMatchPolicyRepository : IPurchaseMatchPolicyReposito
                 SELECT COUNT(*)
                 FROM purchase_receipt_invoice_matches m
                 JOIN purchase_documents d ON d.doc_id = m.invoice_doc_id
-                JOIN companies c ON c.company_id = d.company_id
+                JOIN companies c ON CAST(c.company_id AS TEXT) = d.company_id
                 WHERE c.company_code = @company AND m.invoice_doc_id = @invoice
                 """);
             Add(matchCount, "@company", companyCode.Trim());
