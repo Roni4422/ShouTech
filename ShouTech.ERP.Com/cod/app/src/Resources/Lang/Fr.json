@@ -3810,5 +3810,6 @@
     "Saved": "Règle de rapprochement enregistrée.",
     "OnlyBlockedCanRelease": "Sélectionnez une évaluation bloquée à débloquer.",
     "InvalidNumber": "Saisissez un nombre décimal valide et non négatif."
-  }
+  },
+  "PurchaseMatch.MatchDetails": "Sélectionnez une évaluation de facture pour consulter le détail de rapprochement des lignes sources."
 }
