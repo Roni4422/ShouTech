@@ -110,6 +110,8 @@ Pre-invoice receipt returns are implemented separately in `cod/app/src/Views/Pur
 
 Supplier invoice external references are unique per company and supplier (case-insensitive and whitespace-trimmed) for active purchase invoices. The application validates before save, and SQLite/PostgreSQL migration 084 adds matching partial unique indexes as the concurrency guard.
 
+Receipt-return eligibility and invoice posting now count only match rows whose source supplier invoice remains posted and is not deleted. This protects replacement invoices and receipt-return quantities from stale match rows retained for inactive legacy invoices. Regression coverage exercises an inactive invoice with retained matches, a full returnable quantity, and a replacement invoice against the same receipt.
+
 The current chain does not yet claim completion of:
 - purchase requisition creation, budget/need validation, multi-level approval, and conversion of an approved requisition into an RFQ or purchase order;
 - supplier invoice-document attachment management;
