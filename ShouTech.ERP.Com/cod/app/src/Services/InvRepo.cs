@@ -3036,6 +3036,8 @@ public static class InvRepo
             originalExtraAmount = reader.IsDBNull(9) ? 0m : Convert.ToDecimal(reader.GetValue(9), CultureInfo.InvariantCulture);
         }
 
+        if (string.IsNullOrWhiteSpace(sourceCompany))
+            throw new InvalidOperationException("The original supplier invoice has no company key.");
         if (returnDoc.PartyId != originalPartyId ||
             !string.Equals(returnDoc.PartyCode ?? string.Empty, originalPartyCode, StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(returnDoc.CurrencyCode, originalCurrency, StringComparison.OrdinalIgnoreCase) ||
