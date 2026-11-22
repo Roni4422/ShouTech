@@ -105,12 +105,14 @@ coverage before the sourcing process can be called complete.
 Partial supplier debit notes against posted invoices are implemented in `cod/app/src/Views/PurchaseReturnWin.cs` and `cod/app/src/Services/InvRepo.cs`; migration 080 records cumulative line allocations.
 
 The current chain does not yet claim completion of:
-- purchase requisition approval, supplier response entry, side-by-side RFQ comparison, and award UI;
-- supplier invoice external-reference uniqueness and document attachment;
+- purchase requisition creation, budget/need validation, multi-level approval, and conversion of an approved requisition into an RFQ or purchase order;
+- supplier invoice external-reference uniqueness and invoice-document attachment management;
 - freight, landed-cost allocation, customs and duty capitalization;
-- lot/serial/batch/expiry capture at receipt;
+- complete lot/serial/batch/expiry capture and traceability in the purchase receipt workflow;
 - a separate physical purchase return from a posted goods receipt before supplier invoicing (the current `PurchaseReturn` workflow is an invoice-linked debit note that also issues returned stock);
 - GRNI aging, unmatched receipt/invoice exception workbench, and period-end reconciliation report.
 
-These are follow-on acceptance areas; they must not be silently treated as implemented merely because
+The RFQ supplier-response, side-by-side comparison, explicit award, and supplier-quotation-to-draft-PO workflows are implemented in the application service and dedicated UI. Supplier quotations can also be marked Lost; this disposition is separate from awarding an offer. These capabilities still require the full application build and end-to-end acceptance run before release readiness can be claimed.
+
+These remaining procurement areas must not be silently treated as implemented merely because
 the core PO-to-payment path exists.
