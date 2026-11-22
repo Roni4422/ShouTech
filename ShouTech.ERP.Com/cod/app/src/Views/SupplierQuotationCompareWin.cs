@@ -38,6 +38,16 @@ public sealed class SupplierQuotationCompareWin : BaseWin
         Loaded += OnLoaded;
     }
 
+    protected override void ApplyLocalizedText()
+    {
+        Title = T("Purchasing.SupplierQuotationComparison.Title");
+        _refresh.Content = T("Common.Refresh");
+        _award.Content = T("Purchasing.SupplierQuotationComparison.Award");
+        _close.Content = T("Common.Close");
+        if (_offersGrid.Columns.Count > 0)
+            _offersGrid.Columns.FirstOrDefault(c => c.Header?.ToString() == "Lines")?.SetCurrentValue(DataGridColumn.VisibilityProperty, Visibility.Collapsed);
+    }
+
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         if (!AppHost.Permissions.Has(PermCat.Purchasing.OrderView))
