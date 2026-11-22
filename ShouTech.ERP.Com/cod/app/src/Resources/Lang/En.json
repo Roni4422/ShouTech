@@ -1142,7 +1142,8 @@
       "Days": "Days",
       "Limit": "Limit",
       "P2From": "Period 2 From",
-      "P2To": "Period 2 To"
+      "P2To": "Period 2 To",
+      "Search": "Search supplier code, name, or phone"
     },
     "CustomerAging": "Customer aging",
     "SupplierAging": "Supplier aging",
