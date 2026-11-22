@@ -3752,6 +3752,7 @@
       "ConfirmPost": "Tedarikçi iadesi kaydedilsin mi? Stok ve faturalanmamış mal kabul tutarı aynı işlemde azaltılır.",
       "Created": "Fatura öncesi tedarikçi iadesi {0} kaydedildi.",
       "Total": "Toplam iade miktarı: {0:N4}"
-    }
+    },
+    "ReturnGoodsReceipt": "Mal kabul iadesi"
   }
 }
