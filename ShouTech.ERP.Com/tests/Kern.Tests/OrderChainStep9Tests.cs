@@ -1096,6 +1096,89 @@ namespace Kern.Tests
             return Convert.ToDecimal(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
         }
 
+        [Fact]
+        public async Task PurchaseInvoice_BlockedThreeWayMatch_PreventsSupplierPaymentAllocation()
+        {
+            var (service, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                using (var connection = new SqliteConnection(connectionString))
+                {
+                    connection.Open();
+                    using var policy = connection.CreateCommand();
+                    policy.CommandText = """
+                        INSERT INTO purchase_match_policies
+                            (company_code, is_enabled, require_receipt_match,
+                             price_warning_percent, price_block_percent,
+                             tax_warning_percent, tax_block_percent,
+                             base_variance_warning_amount, base_variance_block_amount,
+                             policy_version, created_by, updated_by)
+                        VALUES
+                            ($company, 1, 1, 1, 5, 1, 5, 0.5, 1, 1, $actor, $actor)
+                        """;
+                    policy.Parameters.AddWithValue("$company", CompanyCode);
+                    policy.Parameters.AddWithValue("$actor", Actor);
+                    policy.ExecuteNonQuery();
+                }
+
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-MATCH-BLOCK",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 5m, 12m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+                await service.CreatePurchaseReceiptAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 5m, 12m) }, Actor);
+
+                var (invoiceId, _) = await service.CreatePurchaseInvoiceAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 13m) }, Actor);
+
+                Assert.Equal("Blocked", ScalarText(connectionString,
+                    $"SELECT decision FROM purchase_match_evaluations WHERE company_code = '{CompanyCode}' AND invoice_doc_id = {invoiceId};"));
+
+                long paymentLedgerId;
+                using (var connection = new SqliteConnection(connectionString))
+                {
+                    connection.Open();
+                    using var insert = connection.CreateCommand();
+                    insert.CommandText = """
+                        INSERT INTO party_ledger
+                            (company_id, party_kind, party_id, doc_kind, doc_id, doc_no,
+                             entry_date, debit, credit, currency_code, note)
+                        VALUES
+                            ($company, 'S', 9, 'PAY', 9001, 'PAY-MATCH-BLOCK',
+                             '2026-11-02', 26, 0, 'SAR', 'Blocked match regression test');
+                        SELECT last_insert_rowid();
+                        """;
+                    insert.Parameters.AddWithValue("$company", CompanyCode);
+                    paymentLedgerId = Convert.ToInt64(insert.ExecuteScalar());
+                }
+
+                var reconciliation = new ReconciliationRepository("SQLite", connectionString);
+                var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    reconciliation.AllocateAsync(
+                        CompanyCode, "S", paymentLedgerId, "PURCHASE", invoiceId, 1m, Actor));
+
+                Assert.Contains("three-way match", error.Message, StringComparison.OrdinalIgnoreCase);
+                Assert.Equal(0m, Scalar(connectionString,
+                    $"SELECT COUNT(*) FROM payment_allocations WHERE doc_table = 'PURCHASE' AND doc_id = {invoiceId};"));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        private static string ScalarText(string connectionString, string sql)
+        {
+            using var connection = new SqliteConnection(connectionString);
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            return Convert.ToString(command.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+        }
+
         private static Task<(OrderService Service, OrderDocumentRepository Orders, Guid CompanyId, string ConnectionString, Action Cleanup)> CreateAsync()
         {
             var databasePath = Path.Combine(Path.GetTempPath(), $"shoutech-step9-{Guid.NewGuid():N}.sqlite3");
