@@ -22,7 +22,10 @@ public sealed class SupBalWin : RptBase
             new() { Key = "Phone", HeaderTextKey = "Reports.Col.Phone", Type = RptColType.Text, Width = 120 },
             new() { Key = "Balance", HeaderTextKey = "Reports.Col.Balance", Type = RptColType.Money, Width = 130, Format = "N2" },
         },
-        Filters = Array.Empty<RptFlt>()
+        Filters = new RptFlt[]
+        {
+            new() { Key = "Search", LabelTextKey = "Reports.Filter.Search", Kind = RptFltKind.Text }
+        }
     };
 
     protected override async Task<RptData> LoadDataAsync(RptFltValues filters, CancellationToken ct)
@@ -44,6 +47,12 @@ public sealed class SupBalWin : RptBase
                 ["Balance"] = ToDec(r.GetValueOrDefault("Balance")),
             };
         }).ToList();
+        var search = filters.GetString("Search")?.Trim();
+        if (!string.IsNullOrWhiteSpace(search))
+            rows = rows.Where(row =>
+                Convert.ToString(row["Code"], CultureInfo.InvariantCulture)?.Contains(search, StringComparison.OrdinalIgnoreCase) == true ||
+                Convert.ToString(row["Name"], CultureInfo.InvariantCulture)?.Contains(search, StringComparison.OrdinalIgnoreCase) == true ||
+                Convert.ToString(row["Phone"], CultureInfo.InvariantCulture)?.Contains(search, StringComparison.OrdinalIgnoreCase) == true).ToList();
 
         return new RptData
         {
