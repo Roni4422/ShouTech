@@ -241,7 +241,12 @@ public class GlPostingTests
     public async Task PurchaseReturn_Post_MirrorsPurchaseEntry()
     {
         using var db = await SeededAsync();
-        var doc = await PostInvoiceAsync(db, InvDocKind.PurchaseReturn, qty: 1m, price: 50m, taxRate: 0m);
+        var original = await PostInvoiceAsync(db, InvDocKind.PurchaseInvoice, qty: 1m, price: 50m, taxRate: 0m);
+        var doc = await PostInvoiceAsync(
+            db, InvDocKind.PurchaseReturn, qty: 1m, price: 50m, taxRate: 0m,
+            originalDocId: original.DocId,
+            originalDocKind: InvDocKind.PurchaseInvoice,
+            originalDocNo: original.DocNo);
 
         var entry = SingleEntry(db, "PRT", doc.DocId);
         AssertBalanced(entry);
