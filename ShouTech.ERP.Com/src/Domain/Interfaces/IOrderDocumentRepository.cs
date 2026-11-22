@@ -41,6 +41,8 @@ public interface IOrderDocumentRepository
     Task<long> CreatePurchaseInvoiceAsync(Guid companyId, long purchaseOrderId, string invoiceDocNo, DateOnly invoiceDate, IReadOnlyList<CommercialLineDraft> invoiceLines, string userId, CancellationToken cancellationToken = default);
     Task<long> CreatePurchaseReceiptAsync(Guid companyId, long purchaseOrderId, string receiptDocNo, DateOnly receiptDate, IReadOnlyList<CommercialLineDraft> receivedLines, string userId, CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<PurchaseReceiptReturnableLine>> GetPurchaseReceiptReturnableLinesAsync(Guid companyId, long receiptId, CancellationToken cancellationToken = default);
+
     /// <summary>Creates a posted pre-invoice goods return against an original receipt, consuming only quantities not yet invoiced or returned.</summary>
     Task<long> CreatePurchaseReceiptReturnAsync(Guid companyId, long receiptId, string returnDocNo, DateOnly returnDate, IReadOnlyList<CommercialLineDraft> returnedLines, string userId, CancellationToken cancellationToken = default);
 
