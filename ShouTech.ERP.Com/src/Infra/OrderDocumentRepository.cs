@@ -425,15 +425,17 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 kind = reader.GetString(1);
                 companyId = reader.GetString(2);
             }
-            if (newStatus == CommercialDocumentStatus.Lost && kind != CommercialDocKinds.SalesQuotation)
-                throw new InvalidOperationException("Only quotations can be marked as lost.");
+            if (newStatus == CommercialDocumentStatus.Lost &&
+                kind is not (CommercialDocKinds.SalesQuotation or CommercialDocKinds.SupplierQuotation))
+                throw new InvalidOperationException("Only sales or supplier quotations can be marked as lost.");
             if (status == CommercialDocumentStatus.Posted
                 && newStatus is CommercialDocumentStatus.Cancelled or CommercialDocumentStatus.Lost)
             {
                 var isCommitment = kind is CommercialDocKinds.SalesOrder
                     or CommercialDocKinds.PurchaseOrder
                     or CommercialDocKinds.SalesQuotation
-                    or CommercialDocKinds.RequestForQuotation;
+                    or CommercialDocKinds.RequestForQuotation
+                    or CommercialDocKinds.SupplierQuotation;
 
                 // Operational documents have already affected stock, GL or
                 // party balances. They must be corrected with a return or a
