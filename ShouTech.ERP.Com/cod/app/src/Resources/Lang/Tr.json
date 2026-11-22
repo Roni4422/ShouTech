@@ -3691,5 +3691,18 @@
     "ExceedsReturnable": "İade miktarı kalan iade edilebilir miktarı aşamaz.",
     "Confirm": "Bu tedarikçi iadesi ve borç dekontu kaydedilsin mi?",
     "Posted": "Satın alma iadesi / borç dekontu kaydedildi"
+  },
+  "Purchasing": {
+    "SupplierQuotationComparison": {
+      "Title": "Tedarikçi Teklif Karşılaştırması",
+      "Open": "Tedarikçi tekliflerini karşılaştır",
+      "Award": "Seçili teklifi onayla",
+      "NoOffers": "Bu talebe bağlı onaylanmış tedarikçi teklifi yok.",
+      "OfferCount": "Onaylanmış tedarikçi teklifleri: {0}",
+      "SelectOffer": "Önce bir tedarikçi teklifi seçin.",
+      "ConfirmAward": "{0} tedarikçisinin {1} teklifinden satın alma siparişi oluşturulsun mu?",
+      "AwardCreated": "Taslak satın alma siparişi {0} oluşturuldu ve seçilen teklife bağlandı.",
+      "PostRfqFirst": "Teklifleri karşılaştırmadan önce talebi kaydedip onaylayın."
+    }
   }
 }
