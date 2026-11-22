@@ -37,6 +37,7 @@ public sealed class SupplierQuotationCompareWin : BaseWin
         MinHeight = 480;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         BuildUi();
+        ApplyLocalizedText();
         Loaded += OnLoaded;
     }
 
