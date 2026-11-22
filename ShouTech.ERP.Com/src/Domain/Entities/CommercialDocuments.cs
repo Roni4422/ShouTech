@@ -11,6 +11,7 @@ public static class CommercialDocKinds
     public const string DeliveryNote = "DLV";
     public const string SalesInvoice = "SAL";
     public const string RequestForQuotation = "RFQ";
+    public const string SupplierQuotation = "SQ";
     public const string PurchaseOrder = "PO";
     public const string PurchaseReceipt = "RCV";
     public const string PurchaseInvoice = "PUR";
@@ -148,3 +149,18 @@ public sealed record OrderProgress(
     IReadOnlyList<OrderProgressLine> Lines,
     decimal PerFulfilled,
     decimal PerBilled);
+
+/// <summary>Comparable supplier offer linked to one sourcing request.</summary>
+public sealed record SupplierQuotationOffer(
+    long DocId,
+    string DocNo,
+    string SupplierName,
+    string CurrencyCode,
+    decimal ExchangeRate,
+    decimal Subtotal,
+    decimal TaxAmount,
+    decimal GrandTotal,
+    DateOnly QuotationDate,
+    DateOnly? ValidTill,
+    DateOnly? DeliveryDate,
+    string Status);
