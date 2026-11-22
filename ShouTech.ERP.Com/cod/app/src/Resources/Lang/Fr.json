@@ -3691,5 +3691,18 @@
     "ExceedsReturnable": "La quantité retournée ne peut pas dépasser la quantité encore retournable.",
     "Confirm": "Valider ce retour fournisseur et cette note de débit ?",
     "Posted": "Retour achat / note de débit validé"
+  },
+  "Purchasing": {
+    "SupplierQuotationComparison": {
+      "Title": "Comparaison des offres fournisseurs",
+      "Open": "Comparer les offres fournisseurs",
+      "Award": "Attribuer l’offre sélectionnée",
+      "NoOffers": "Aucune offre fournisseur validée n’est liée à cette demande.",
+      "OfferCount": "Offres fournisseurs validées : {0}",
+      "SelectOffer": "Sélectionnez d’abord une offre fournisseur.",
+      "ConfirmAward": "Créer un bon de commande à partir de l’offre {1} de {0} ?",
+      "AwardCreated": "Le bon de commande provisoire {0} a été créé et lié à l’offre retenue.",
+      "PostRfqFirst": "Enregistrez et validez la demande avant de comparer les offres."
+    }
   }
 }
