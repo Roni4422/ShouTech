@@ -1097,10 +1097,12 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                         Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture);
             }
 
-            foreach (var line in returnDraftLines)
+            for (var returnLineIndex = 0; returnLineIndex < returnDraftLines.Count; returnLineIndex++)
             {
+                var line = returnDraftLines[returnLineIndex];
                 var sourceLineNo = line.SourceLineNo!.Value;
                 var sourceLine = receiptLines[sourceLineNo];
+                var returnLineNo = returnLineIndex + 1;
                 var allocationId = Guid.NewGuid();
                 await using var allocation = CreateCommand(connection, transaction, """
                     INSERT INTO purchase_receipt_return_line_allocations
@@ -1112,7 +1114,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 Add(allocation, "@id", _provider == "PostgreSQL" ? (object)allocationId : allocationId.ToString("D"));
                 Add(allocation, "@company", companyId.ToString("D"));
                 Add(allocation, "@returnDoc", returnId);
-                Add(allocation, "@returnLine", returnLineIds[sourceLineNo]);
+                Add(allocation, "@returnLine", returnLineIds[returnLineNo]);
                 Add(allocation, "@sourceDoc", receiptId);
                 Add(allocation, "@sourceLine", sourceLine.LineId);
                 Add(allocation, "@material", sourceLine.MaterialId!.Value);
