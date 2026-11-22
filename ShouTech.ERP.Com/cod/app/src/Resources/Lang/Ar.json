@@ -416,7 +416,8 @@
     "OrderReceiptDelivery": "فواتير استلام وتسليم الطلبيات",
     "TrackOrders": "متابعة الطلبيات",
     "OrderPayments": "دفعات الطلبيات",
-    "SearchOrders": "بحث الطلبيات"
+    "SearchOrders": "بحث الطلبيات",
+    "RequestForQuotation": "طلبات عروض الأسعار"
   },
   "Customers": {
     "Title": "العملاء",
@@ -2089,7 +2090,10 @@
     "SaveFirst": "احفظ المستند أولاً.",
     "ServiceUnavailable": "خدمة الطلبات غير متاحة (لا يوجد اتصال بقاعدة البيانات).",
     "StatusClosed": "مغلق",
-    "TrackTitle": "تتبع الطلبات"
+    "TrackTitle": "تتبع الطلبات",
+    "TitleRfq": "طلب عرض سعر",
+    "ValidTill": "آخر موعد لاستلام العروض",
+    "RfqCannotConvert": "لا يمكن تحويل طلب عرض السعر مباشرة إلى فاتورة مورد."
   },
   "BarcodeDesign": {
     "SaveDesign": "حفظ التصميم",
