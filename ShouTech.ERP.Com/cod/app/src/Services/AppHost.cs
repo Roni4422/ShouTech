@@ -48,6 +48,7 @@ namespace ShouTech.App.Services
         public static ProjectService? Projects { get; private set; }
         public static AssetService? Assets { get; private set; }
         public static ReconciliationService? Reconciliation { get; private set; }
+        public static PurchaseMatchService? PurchaseMatch { get; private set; }
         public static MasterCardService? MasterCards { get; private set; }
         public static ChequeService? Cheques { get; private set; }
         public static MfgOrderService? Manufacturing { get; private set; }
@@ -135,6 +136,10 @@ namespace ShouTech.App.Services
 
             // Audit service
             Audit = new AuditService(Logging);
+            PurchaseMatch = CreatePhase3Service((provider, connection) => new PurchaseMatchService(
+                new PurchaseMatchPolicyRepository(provider, connection),
+                Permissions.Has,
+                (user, action, details) => Audit.LogUserActionAsync(user, action, details)), "Purchase Match Controls");
 
             // Initialize visual identity.
             // VisuId handles the visual resources and saved accent color.
@@ -193,6 +198,11 @@ namespace ShouTech.App.Services
                 Manufacturing = CreatePhase3Service((provider, connection) => new MfgOrderService(new MfgOrderRepository(provider, connection)), "Manufacturing Orders");
                 Boms = CreatePhase3Service((provider, connection) => new BomService(new BomRepository(provider, connection)), "Bills of Materials");
                 Planning = CreatePhase3Service((provider, connection) => new PlanningService(new PlanningRepository(provider, connection)), "Manufacturing Planning");
+                Orders = CreatePhase3Service((provider, connection) => new OrderService(new OrderDocumentRepository(provider, connection), new CommercialDocumentRepository(provider, connection)), "Orders");
+                PurchaseMatch = CreatePhase3Service((provider, connection) => new PurchaseMatchService(
+                    new PurchaseMatchPolicyRepository(provider, connection),
+                    Permissions.Has,
+                    (user, action, details) => Audit.LogUserActionAsync(user, action, details)), "Purchase Match Controls");
                 AccountingStructure = CreateAccountingStructureRepository();
                 DatabaseHealth = CreateDatabaseHealth();
 
@@ -360,6 +370,7 @@ namespace ShouTech.App.Services
         public static ProjectService? Projects => AppHost.Projects;
         public static AssetService? Assets => AppHost.Assets;
         public static ReconciliationService? Reconciliation => AppHost.Reconciliation;
+        public static PurchaseMatchService? PurchaseMatch => AppHost.PurchaseMatch;
         public static MasterCardService? MasterCards => AppHost.MasterCards;
         public static ChequeService? Cheques => AppHost.Cheques;
         public static MfgOrderService? Manufacturing => AppHost.Manufacturing;
