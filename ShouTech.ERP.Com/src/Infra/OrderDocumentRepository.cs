@@ -1163,14 +1163,19 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                         $"Return quantity for receipt line {sourceLineNo} exceeds the unbilled, unreturned quantity ({Math.Max(0m, remaining)}).");
             }
 
+            // A return document owns its own sequential line numbers. Keep the
+            // source receipt line number separately for the allocation audit;
+            // SourceLineNo must not become the new document's line number.
             var returnDraftLines = new List<CommercialLineDraft>();
+            var returnSourceLineNumbers = new List<int>();
             foreach (var (sourceLineNo, requested) in requestedLines.OrderBy(x => x.Key))
             {
                 var sourceLine = receiptLines[sourceLineNo];
+                returnSourceLineNumbers.Add(sourceLineNo);
                 returnDraftLines.Add(new CommercialLineDraft(
                     sourceLine.MaterialId, sourceLine.MaterialCode, sourceLine.Description,
                     sourceLine.Unit, requested.Qty, sourceLine.UnitPrice, sourceLine.DiscountPct,
-                    0m, sourceLine.WarehouseId, sourceLine.LineNo));
+                    0m, sourceLine.WarehouseId));
             }
 
             var receiptFx = FxRates.Resolve(connection, transaction, _provider,
@@ -1198,13 +1203,11 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             for (var returnLineIndex = 0; returnLineIndex < returnDraftLines.Count; returnLineIndex++)
             {
                 var line = returnDraftLines[returnLineIndex];
-                var sourceLineNo = line.SourceLineNo!.Value;
+                var sourceLineNo = returnSourceLineNumbers[returnLineIndex];
                 var sourceLine = receiptLines[sourceLineNo];
-                // InsertLinesAsync preserves SourceLineNo for traceability, so a
-                // subset return can legitimately have line numbers such as 2, 4.
-                // Resolve the persisted return-line identity instead of assuming
-                // the subset was renumbered sequentially from one.
-                var returnLineNo = line.SourceLineNo ?? returnLineIndex + 1;
+                // Return-line identity belongs to this new document; source-line
+                // identity is stored independently in original_line_id.
+                var returnLineNo = returnLineIndex + 1;
                 var allocationId = Guid.NewGuid();
                 await using var allocation = CreateCommand(connection, transaction, """
                     INSERT INTO purchase_receipt_return_line_allocations
