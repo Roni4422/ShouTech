@@ -30,7 +30,7 @@ public sealed class OrderService
     public static CommercialDocSide SideFor(string docKind) => docKind switch
     {
         CommercialDocKinds.SalesOrder or CommercialDocKinds.SalesQuotation or CommercialDocKinds.DeliveryNote or CommercialDocKinds.SalesInvoice => CommercialDocSide.Sales,
-        CommercialDocKinds.PurchaseOrder or CommercialDocKinds.RequestForQuotation or CommercialDocKinds.SupplierQuotation or CommercialDocKinds.PurchaseReceipt or CommercialDocKinds.PurchaseInvoice => CommercialDocSide.Purchase,
+        CommercialDocKinds.PurchaseOrder or CommercialDocKinds.RequestForQuotation or CommercialDocKinds.SupplierQuotation or CommercialDocKinds.PurchaseReceipt or CommercialDocKinds.PurchaseReceiptReturn or CommercialDocKinds.PurchaseInvoice => CommercialDocSide.Purchase,
         _ => throw new ArgumentException($"Unknown document kind '{docKind}'.", nameof(docKind))
     };
 
@@ -150,6 +150,23 @@ public sealed class OrderService
         var receiptDocNo = await _orders.NextDocNoAsync(CommercialDocSide.Purchase, order.CompanyId, CommercialDocKinds.PurchaseReceipt, cancellationToken).ConfigureAwait(false);
         var receiptId = await _orders.CreatePurchaseReceiptAsync(companyId, purchaseOrderId, receiptDocNo, receiptDate, receivedLines, userId, cancellationToken).ConfigureAwait(false);
         return (receiptId, receiptDocNo);
+    }
+
+    /// <summary>Returns unbilled goods to a supplier from a posted receipt, reversing GRNI and stock in one transaction.</summary>
+    public async Task<(long ReturnId, string ReturnDocNo)> CreatePurchaseReceiptReturnAsync(
+        Guid companyId, long receiptId, DateOnly returnDate,
+        IReadOnlyList<CommercialLineDraft> returnedLines, string userId,
+        CancellationToken cancellationToken = default)
+    {
+        if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
+        if (receiptId <= 0) throw new ArgumentOutOfRangeException(nameof(receiptId));
+        ArgumentNullException.ThrowIfNull(returnedLines);
+        if (returnedLines.Count == 0) throw new InvalidOperationException("At least one return line is required.");
+        var docNo = await _orders.NextDocNoAsync(
+            CommercialDocSide.Purchase, companyId, CommercialDocKinds.PurchaseReceiptReturn, cancellationToken).ConfigureAwait(false);
+        var returnId = await _orders.CreatePurchaseReceiptReturnAsync(
+            companyId, receiptId, docNo, returnDate, returnedLines, userId, cancellationToken).ConfigureAwait(false);
+        return (returnId, docNo);
     }
 
     public async Task<(long InvoiceId, string InvoiceDocNo)> CreatePurchaseInvoiceAsync(
