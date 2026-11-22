@@ -655,6 +655,21 @@ namespace Kern.Tests
                     $"SELECT COUNT(*) FROM payment_allocations WHERE company_id = '{CompanyCode}' AND document_company_id = '{companyId:D}' AND doc_table = 'PURCHASE' AND doc_id = {invoiceId} AND amount = 60;"));
                 Assert.Empty(await reconciliation.GetOpenDocumentsAsync(CompanyCode, "S"));
                 Assert.Empty(await reconciliation.GetPaymentsAsync(CompanyCode, "S"));
+
+                // Reversing the voucher releases the invoice allocation and
+                // makes the original append-only ledger row permanently
+                // ineligible as a payment source, including direct API calls.
+                await journal.ReverseAsync(paymentId, Actor, "Regression test reversal");
+                Assert.Equal(0m, Scalar(connectionString,
+                    $"SELECT paid_amount FROM purchase_documents WHERE doc_id = {invoiceId};"));
+                Assert.Empty(await reconciliation.GetPaymentsAsync(CompanyCode, "S"));
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    reconciliation.AllocateAsync(
+                        CompanyCode, "S", payment.LedgerId, "PURCHASE", invoiceId, 60m, Actor));
+                Assert.Equal(0m, Scalar(connectionString,
+                    $"SELECT COUNT(*) FROM payment_allocations WHERE company_id = '{CompanyCode}';"));
+                Assert.Equal(1m, Scalar(connectionString,
+                    $"SELECT COUNT(*) FROM payment_allocation_reversal_audit WHERE company_id = '{CompanyCode}' AND payment_ledger_id = {payment.LedgerId};"));
             }
             finally
             {
