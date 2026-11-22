@@ -486,6 +486,53 @@ public static class RptQuery
     }
 
 
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> SupplierStatementAsync(
+        DateTime from, DateTime to, string? search, CancellationToken ct)
+    {
+        DocSchema.Ensure();
+        const string sql = """
+            WITH supplier_ledger AS (
+                SELECT p.code AS SupplierCode,
+                       COALESCE(NULLIF(p.name_en, ''), p.name_ar, '') AS SupplierName,
+                       l.ledger_id AS LedgerId,
+                       l.entry_date AS EntryDate,
+                       COALESCE(l.doc_no, '') AS DocumentNo,
+                       COALESCE(l.doc_kind, '') AS DocumentKind,
+                       COALESCE(l.note, '') AS Note,
+                       COALESCE(l.currency_code, '') AS CurrencyCode,
+                       COALESCE(l.base_debit, l.debit) AS DebitBase,
+                       COALESCE(l.base_credit, l.credit) AS CreditBase,
+                       SUM(COALESCE(l.base_credit, l.credit) - COALESCE(l.base_debit, l.debit))
+                           OVER (PARTITION BY l.party_id ORDER BY l.entry_date, l.ledger_id
+                                 ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS RunningBalanceBase,
+                       SUM(CASE WHEN l.entry_date < $from
+                                THEN COALESCE(l.base_credit, l.credit) - COALESCE(l.base_debit, l.debit)
+                                ELSE 0 END)
+                           OVER (PARTITION BY l.party_id) AS OpeningBalanceBase
+                FROM party_ledger l
+                INNER JOIN companies co ON co.company_id = l.company_id
+                INNER JOIN parties p
+                  ON p.ledger_id = l.party_id AND p.company_id = l.company_id AND p.kind = 'S'
+                WHERE co.company_code = $company AND l.party_kind = 'S'
+            )
+            SELECT SupplierCode, SupplierName, EntryDate, DocumentNo, DocumentKind,
+                   Note, CurrencyCode, DebitBase, CreditBase,
+                   OpeningBalanceBase, RunningBalanceBase
+            FROM supplier_ledger
+            WHERE EntryDate >= $from AND EntryDate < $toEx
+              AND ($search = '' OR LOWER(SupplierCode) LIKE LOWER($search)
+                   OR LOWER(SupplierName) LIKE LOWER($search)
+                   OR LOWER(DocumentNo) LIKE LOWER($search))
+            ORDER BY SupplierCode, EntryDate, LedgerId;
+            """;
+        var normalizedSearch = string.IsNullOrWhiteSpace(search) ? string.Empty : "%" + search.Trim() + "%";
+        return await QueryAsync(sql, ct,
+            ("$company", Company),
+            ("$from", DateStart(from)),
+            ("$toEx", DateEndExclusive(to)),
+            ("$search", normalizedSearch));
+    }
+
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> GoodsReceivedNotInvoicedAsync(
         DateTime from, DateTime to, CancellationToken ct)
     {
