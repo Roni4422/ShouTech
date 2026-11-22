@@ -56,8 +56,8 @@ public sealed class SupStatementWin : RptBase
             ["DebitBase"] = rows.Sum(row => RptWinUtil.Dec(row.GetValueOrDefault("DebitBase"))),
             ["CreditBase"] = rows.Sum(row => RptWinUtil.Dec(row.GetValueOrDefault("CreditBase"))),
         };
-        if (openingBySupplier.Count == 1)
-            totals["OpeningBalanceBase"] = openingBySupplier.Values.Single();
+        if (openingBySupplier.Count > 0)
+            totals["OpeningBalanceBase"] = openingBySupplier.Values.Sum();
 
         return new RptData
         {
