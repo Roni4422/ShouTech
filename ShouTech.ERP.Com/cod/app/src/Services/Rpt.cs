@@ -574,10 +574,17 @@ public static class RptQuery
             LEFT JOIN parties s
               ON s.ledger_id = r.party_id AND s.company_id = r.company_id AND s.kind = 'S'
             LEFT JOIN (
-                SELECT company_id, receipt_doc_id, receipt_line_id,
-                       SUM(matched_qty) AS MatchedQty
-                FROM purchase_receipt_invoice_matches
-                GROUP BY company_id, receipt_doc_id, receipt_line_id
+                SELECT m.company_id, m.receipt_doc_id, m.receipt_line_id,
+                       SUM(m.matched_qty) AS MatchedQty
+                FROM purchase_receipt_invoice_matches m
+                INNER JOIN purchase_documents inv
+                  ON inv.company_id = m.company_id
+                 AND inv.doc_id = m.invoice_doc_id
+                 AND inv.doc_kind = 'PUR'
+                 AND inv.status = 'Posted'
+                 AND CAST(inv.is_deleted AS TEXT) IN ('0', 'false')
+                 AND inv.doc_date < $toEx
+                GROUP BY m.company_id, m.receipt_doc_id, m.receipt_line_id
             ) m ON m.company_id = r.company_id
                AND m.receipt_doc_id = r.doc_id
                AND m.receipt_line_id = l.line_id
@@ -591,6 +598,7 @@ public static class RptQuery
                  AND rd.doc_kind = 'RCR'
                  AND rd.status = 'Posted'
                  AND CAST(rd.is_deleted AS TEXT) IN ('0', 'false')
+                 AND rd.doc_date < $toEx
                 GROUP BY a.company_id, a.original_doc_id, a.original_line_id
             ) rt ON rt.company_id = r.company_id
                 AND rt.original_doc_id = r.doc_id
