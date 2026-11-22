@@ -268,11 +268,12 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             {
                 var policyEnabled = false;
                 var currentPolicyVersion = 0;
-                await using (var policy = CreateCommand(connection, transaction, """
+                var policySql = """
                     SELECT is_enabled, policy_version
                     FROM purchase_match_policies
                     WHERE company_code = @company
-                    """))
+                    """ + (_provider == "PostgreSQL" ? " FOR SHARE" : string.Empty);
+                await using (var policy = CreateCommand(connection, transaction, policySql))
                 {
                     Add(policy, "@company", companyId.Trim());
                     await using var reader = await policy.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
