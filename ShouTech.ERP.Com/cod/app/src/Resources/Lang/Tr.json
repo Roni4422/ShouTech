@@ -3702,7 +3702,32 @@
       "SelectOffer": "Önce bir tedarikçi teklifi seçin.",
       "ConfirmAward": "{0} tedarikçisinin {1} teklifinden satın alma siparişi oluşturulsun mu?",
       "AwardCreated": "Taslak satın alma siparişi {0} oluşturuldu ve seçilen teklife bağlandı.",
-      "PostRfqFirst": "Teklifleri karşılaştırmadan önce talebi kaydedip onaylayın."
+      "PostRfqFirst": "Teklifleri karşılaştırmadan önce talebi kaydedip onaylayın.",
+      "Columns": {
+        "DocId": "Belge kimliği",
+        "DocNo": "Teklif no.",
+        "SupplierName": "Tedarikçi",
+        "CurrencyCode": "Para birimi",
+        "ExchangeRate": "Döviz kuru",
+        "Subtotal": "Ara toplam",
+        "TaxAmount": "Vergi",
+        "GrandTotal": "Genel toplam",
+        "QuotationDate": "Teklif tarihi",
+        "ValidTill": "Geçerlilik tarihi",
+        "DeliveryDate": "Teslim tarihi",
+        "Status": "Durum",
+        "RfqLineNo": "Talep satırı",
+        "MaterialId": "Ürün kimliği",
+        "MaterialCode": "Ürün kodu",
+        "Description": "Açıklama",
+        "Unit": "Birim",
+        "Quantity": "Miktar",
+        "UnitPrice": "Birim fiyat",
+        "DiscountPct": "İndirim %",
+        "TaxRate": "Vergi %",
+        "LineTotal": "Satır toplamı",
+        "BaseCurrencyLineTotal": "Ana para birimi toplamı"
+      }
     },
     "SupplierQuotationEntry": {
       "Title": "Tedarikçi Teklifi Gir",
