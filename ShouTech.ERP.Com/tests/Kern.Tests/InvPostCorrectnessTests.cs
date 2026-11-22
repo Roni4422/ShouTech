@@ -253,8 +253,8 @@ public sealed class InvPostCorrectnessTests
         };
 
         var first = BuildReturn();
-        var second = BuildReturn();
         InvRepo.SaveDraft(first);
+        var second = BuildReturn();
         InvRepo.SaveDraft(second);
         InvRepo.RestoreReturnLineNumbers(first.DocId, InvDocKind.PurchaseReturn, new[] { 1 });
         InvRepo.RestoreReturnLineNumbers(second.DocId, InvDocKind.PurchaseReturn, new[] { 1 });
