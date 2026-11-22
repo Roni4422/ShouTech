@@ -345,6 +345,7 @@
                         <ribbon:RibbonButton loc:LocProps.Key="Invoices.PurchaseInvoice" Label="Purchase invoice" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Invoices.PurchaseReturn" Label="Purchase return invoice" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Purchasing.ReturnGoodsReceipt" Label="Return goods receipt" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Purchasing.MatchPolicy" Label="Three-way match policy" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.InvoicesSales" Header="Sales">
                         <ribbon:RibbonButton loc:LocProps.Key="Invoices.SalesInvoice" Label="Sales invoice" Click="OnRibbonButtonClick"/>
