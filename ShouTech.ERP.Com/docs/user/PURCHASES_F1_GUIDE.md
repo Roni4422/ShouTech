@@ -78,7 +78,20 @@ Posting the voucher records the supplier debit and the cash/bank credit. It does
 
 A payment can be allocated partially or across multiple invoices, subject to the available payment and invoice balances. The invoice's paid amount and the payment's available amount are updated in the same transaction.
 
-## 6. Common messages
+## 6. Return goods and create a supplier debit note
+
+1. Open **Purchase Return** from the purchase-invoice actions.
+2. Enter the number of the posted supplier invoice and choose **Load Supplier Invoice**.
+3. Confirm the supplier, invoice currency, and original invoice details.
+4. Enter a return quantity only for the lines being returned. The grid shows invoiced, already returned, and remaining returnable quantities.
+5. Enter the return reason. If batch or serial tracking is enabled for a returned item, complete the capture step when prompted.
+6. Review the debit-note total and post the return.
+
+The application links each returned line to its original supplier-invoice line, preserves the original price and tax settings, allocates header discounts proportionally, and rejects quantities above the remaining returnable amount. The original invoice is retained; the return is a separate posted document with its own audit trail.
+
+**Important:** this window handles a return against an already-posted supplier invoice. A separate physical return directly from a goods receipt before supplier invoicing is not yet available. Do not use a debit note to represent that pre-invoice event.
+
+## 7. Common messages
 
 | Message | What to do |
 |---|---|
@@ -88,7 +101,7 @@ A payment can be allocated partially or across multiple invoices, subject to the
 | Tax is disabled for this company | Ask an authorized user to review the company's tax activation decision and tax rules. |
 | Payment or invoice is not listed in reconciliation | Confirm that the supplier, company, document status, and currency are correct; verify that the voucher and invoice are posted. |
 
-## 7. Audit and corrections
+## 8. Audit and corrections
 
 - Do not delete posted purchase orders, receipts, invoices, or payment vouchers to correct accounting history.
 - Use the application's authorized reversal, return, or credit-note workflow when available.
