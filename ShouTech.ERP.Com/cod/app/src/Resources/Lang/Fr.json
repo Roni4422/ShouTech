@@ -3702,7 +3702,32 @@
       "SelectOffer": "Sélectionnez d’abord une offre fournisseur.",
       "ConfirmAward": "Créer un bon de commande à partir de l’offre {1} de {0} ?",
       "AwardCreated": "Le bon de commande provisoire {0} a été créé et lié à l’offre retenue.",
-      "PostRfqFirst": "Enregistrez et validez la demande avant de comparer les offres."
+      "PostRfqFirst": "Enregistrez et validez la demande avant de comparer les offres.",
+      "Columns": {
+        "DocId": "ID du document",
+        "DocNo": "N° de l’offre",
+        "SupplierName": "Fournisseur",
+        "CurrencyCode": "Devise",
+        "ExchangeRate": "Taux de change",
+        "Subtotal": "Sous-total",
+        "TaxAmount": "Taxe",
+        "GrandTotal": "Total général",
+        "QuotationDate": "Date de l’offre",
+        "ValidTill": "Valable jusqu’au",
+        "DeliveryDate": "Date de livraison",
+        "Status": "Statut",
+        "RfqLineNo": "Ligne RFQ",
+        "MaterialId": "ID article",
+        "MaterialCode": "Code article",
+        "Description": "Description",
+        "Unit": "Unité",
+        "Quantity": "Quantité",
+        "UnitPrice": "Prix unitaire",
+        "DiscountPct": "Remise %",
+        "TaxRate": "Taxe %",
+        "LineTotal": "Total ligne",
+        "BaseCurrencyLineTotal": "Total en devise de base"
+      }
     },
     "SupplierQuotationEntry": {
       "Title": "Saisir une offre fournisseur",
