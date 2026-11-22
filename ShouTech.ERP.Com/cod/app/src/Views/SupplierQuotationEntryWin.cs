@@ -49,6 +49,7 @@ public sealed class SupplierQuotationEntryWin : BaseWin
         MinHeight = 500;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         BuildUi();
+        ApplyLocalizedText();
         Loaded += OnLoaded;
     }
 
@@ -83,6 +84,8 @@ public sealed class SupplierQuotationEntryWin : BaseWin
             if (rfq is null || rfq.DocKind != CommercialDocKinds.RequestForQuotation ||
                 rfq.Status != CommercialDocumentStatus.Posted)
                 throw new InvalidOperationException("A posted request for quotation is required.");
+            _currency.Text = rfq.CurrencyCode;
+            _exchangeRate.Text = rfq.ExchangeRate.ToString(CultureInfo.CurrentCulture);
             foreach (var line in rfq.Lines.OrderBy(x => x.LineNo))
                 _lines.Add(new QuotationLineVm
                 {
