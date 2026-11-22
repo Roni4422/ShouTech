@@ -3711,7 +3711,32 @@
       "SelectOffer": "Select a supplier quotation first.",
       "ConfirmAward": "Create a purchase order from {0} quotation {1}?",
       "AwardCreated": "Draft purchase order {0} was created and linked to the awarded quotation.",
-      "PostRfqFirst": "Save and post the RFQ before comparing supplier quotations."
+      "PostRfqFirst": "Save and post the RFQ before comparing supplier quotations.",
+      "Columns": {
+        "DocId": "Document ID",
+        "DocNo": "Quotation no.",
+        "SupplierName": "Supplier",
+        "CurrencyCode": "Currency",
+        "ExchangeRate": "Exchange rate",
+        "Subtotal": "Subtotal",
+        "TaxAmount": "Tax",
+        "GrandTotal": "Grand total",
+        "QuotationDate": "Quotation date",
+        "ValidTill": "Valid until",
+        "DeliveryDate": "Delivery date",
+        "Status": "Status",
+        "RfqLineNo": "RFQ line",
+        "MaterialId": "Material ID",
+        "MaterialCode": "Item code",
+        "Description": "Description",
+        "Unit": "Unit",
+        "Quantity": "Quantity",
+        "UnitPrice": "Unit price",
+        "DiscountPct": "Discount %",
+        "TaxRate": "Tax %",
+        "LineTotal": "Line total",
+        "BaseCurrencyLineTotal": "Base currency total"
+      }
     },
     "SupplierQuotationEntry": {
       "Title": "Enter Supplier Quotation",
