@@ -215,6 +215,61 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task PurchaseReceiptMatching_IgnoresRetainedMatchesForInactiveInvoices()
+        {
+            var (service, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-9111",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 12m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+
+                var (receiptId, _) = await service.CreatePurchaseReceiptAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 12m) }, Actor);
+
+                var (inactiveInvoiceId, _) = await service.CreatePurchaseInvoiceAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 3),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 12m) }, Actor);
+
+                // Simulate retained match rows from an inactive legacy invoice.
+                // Normal application flows reverse posted operational documents;
+                // they do not directly cancel them.
+                using (var connection = new SqliteConnection(connectionString))
+                {
+                    connection.Open();
+                    using var update = connection.CreateCommand();
+                    update.CommandText = """
+                        UPDATE purchase_documents
+                        SET status = 'Cancelled'
+                        WHERE company_id = $company AND doc_id = $invoice AND doc_kind = 'PUR';
+                        """;
+                    update.Parameters.AddWithValue("$company", companyId.ToString("D"));
+                    update.Parameters.AddWithValue("$invoice", inactiveInvoiceId);
+                    Assert.Equal(1, update.ExecuteNonQuery());
+                }
+
+                var returnable = await service.GetPurchaseReceiptReturnableLinesAsync(companyId, receiptId);
+                Assert.Equal(2m, Assert.Single(returnable).ReturnableQty);
+
+                // A replacement invoice must also be able to consume the same
+                // receipt quantity; stale matches must not cause a false overbill.
+                var (replacementInvoiceId, _) = await service.CreatePurchaseInvoiceAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 4),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 12m) }, Actor);
+                Assert.True(replacementInvoiceId > 0);
+                Assert.Equal(0m, Assert.Single(
+                    await service.GetPurchaseReceiptReturnableLinesAsync(companyId, receiptId)).ReturnableQty);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task PurchaseInvoice_SubsetSourceLine_MatchesExactReceiptLine()
         {
             var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
