@@ -510,10 +510,9 @@ public static class RptQuery
                                 ELSE 0 END)
                            OVER (PARTITION BY l.party_id) AS OpeningBalanceBase
                 FROM party_ledger l
-                INNER JOIN companies co ON co.company_id = l.company_id
                 INNER JOIN parties p
                   ON p.ledger_id = l.party_id AND p.company_id = l.company_id AND p.kind = 'S'
-                WHERE co.company_code = $company AND l.party_kind = 'S'
+                WHERE l.company_id = $company AND l.party_kind = 'S'
             )
             SELECT SupplierCode, SupplierName, EntryDate, DocumentNo, DocumentKind,
                    Note, CurrencyCode, DebitBase, CreditBase,
