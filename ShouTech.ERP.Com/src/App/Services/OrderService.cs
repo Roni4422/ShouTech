@@ -156,7 +156,7 @@ public sealed class OrderService
         Guid companyId, long receiptId, CancellationToken cancellationToken = default)
     {
         if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
-        if (receiptId <= 0) throw new ArgumentOutOfRangeException(nameof(receiptId));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(receiptId);
         return _orders.GetPurchaseReceiptReturnableLinesAsync(companyId, receiptId, cancellationToken);
     }
 
