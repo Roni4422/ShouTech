@@ -782,6 +782,45 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task PurchaseReceipt_ExplicitSourceLineSelectionDoesNotFallBackToEarlierDuplicateMaterialLine()
+        {
+            var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-9106",
+                        new CommercialLineDraft(42, "MAT-42", "First source line", "PCS", 2m, 10m),
+                        new CommercialLineDraft(42, "MAT-42", "Second source line", "PCS", 3m, 12m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+
+                var (receiptId, receiptNo) = await service.CreatePurchaseReceiptAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 13),
+                    new[]
+                    {
+                        new CommercialLineDraft(42, "MAT-42", "Second source line", "PCS",
+                            1m, 12m, 0m, 0m, null, 2)
+                    }, Actor);
+
+                var receipt = await orders.FindByIdAsync(CommercialDocSide.Purchase, receiptId);
+                Assert.NotNull(receipt);
+                var receivedLine = Assert.Single(receipt!.Lines);
+                Assert.Equal(2, receivedLine.LineNo);
+                Assert.Equal(12m, receivedLine.UnitPrice);
+                Assert.Equal(1m, receivedLine.Qty);
+
+                var progress = await service.GetProgressAsync(CommercialDocSide.Purchase, orderId);
+                Assert.Equal(0m, progress.Lines.Single(line => line.Description == "First source line").FulfilledQty);
+                Assert.Equal(1m, progress.Lines.Single(line => line.Description == "Second source line").FulfilledQty);
+                Assert.Equal(12m, MovementCost(connectionString, receiptNo, 42));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task SupplierInvoice_TaxIsRejectedWhenCompanyTaxWasNotOptedIn()
         {
             var (service, _, companyId, connectionString, cleanup) = await CreateAsync();
