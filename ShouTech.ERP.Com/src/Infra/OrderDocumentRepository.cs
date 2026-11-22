@@ -1069,7 +1069,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
             await using (var orderLock = CreateCommand(connection, transaction,
                 _provider == "PostgreSQL"
-                    ? "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @order AND doc_kind = @kind AND status = @posted AND is_deleted = FALSE FOR UPDATE"
+                    ? "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @order AND doc_kind = @kind AND status = @posted AND is_deleted = 0 FOR UPDATE"
                     : "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @order AND doc_kind = @kind AND status = @posted AND is_deleted = 0"))
             {
                 Add(orderLock, "@company", companyId.ToString("D"));
@@ -1082,7 +1082,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
             await using (var receiptLock = CreateCommand(connection, transaction,
                 _provider == "PostgreSQL"
-                    ? "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @receipt AND doc_kind = @kind AND status = @posted AND is_deleted = FALSE FOR UPDATE"
+                    ? "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @receipt AND doc_kind = @kind AND status = @posted AND is_deleted = 0 FOR UPDATE"
                     : "SELECT doc_id FROM purchase_documents WHERE company_id = @company AND doc_id = @receipt AND doc_kind = @kind AND status = @posted AND is_deleted = 0"))
             {
                 Add(receiptLock, "@company", companyId.ToString("D"));
