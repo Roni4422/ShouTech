@@ -526,6 +526,7 @@
                         <ribbon:RibbonButton loc:LocProps.Key="Reports.SalesInvoiceList" Label="Sales invoices" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Reports.PurchaseInvoiceList" Label="Purchase invoices" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Reports.GoodsReceivedNotInvoiced" Label="Goods received not invoiced" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Reports.SupplierStatement" Label="Supplier statement" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.ReportsReports" Header="Other">
                         <ribbon:RibbonButton loc:LocProps.Key="Reports.Statistics" Label="Statistics" Click="OnRibbonButtonClick"/>
