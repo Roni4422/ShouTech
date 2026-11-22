@@ -32,6 +32,8 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
     private readonly Button _close = new();
     private Guid _companyId;
     private long? _receiptId;
+    private string _loadedReceiptNo = string.Empty;
+    private string _loadedSupplierName = string.Empty;
     private bool _busy;
 
     public PurchaseReceiptReturnWin()
@@ -50,7 +52,7 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
     {
         Title = T("Purchasing.ReceiptReturn.Title");
         F2Ui.ApplyTexts(_labels, _headers, new[] { _load, _post, _close }, T);
-        _receiptInfo.Text = _receiptId is null ? string.Empty : T("Purchasing.ReceiptReturn.Loaded");
+        _receiptInfo.Text = _receiptId is null ? string.Empty : string.Format(CultureInfo.CurrentCulture, T("Purchasing.ReceiptReturn.Loaded"), _loadedReceiptNo, _loadedSupplierName);
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -84,6 +86,7 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
         F2Ui.StyleButton(_load, "Purchasing.ReceiptReturn.LoadReceipt");
         F2Ui.StyleButton(_post, "Purchasing.ReceiptReturn.PostReturn");
         F2Ui.StyleButton(_close, "Common.Close");
+        _post.IsEnabled = false;
         _load.Click += async (_, _) => await LoadReceiptAsync();
         _post.Click += async (_, _) => await PostReturnAsync();
         _close.Click += (_, _) => Close();
@@ -129,7 +132,8 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
     {
         var binding = new Binding(path) { UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged };
         if (format is not null) binding.StringFormat = format;
-        var column = new DataGridTextColumn { Binding = binding, Width = width, IsReadOnly = readOnly };
+        var columnWidth = width == 2d ? new DataGridLength(2, DataGridLengthUnitType.Star) : new DataGridLength(width);
+        var column = new DataGridTextColumn { Binding = binding, Width = columnWidth, IsReadOnly = readOnly };
         _headers.Add((column, key));
         _grid.Columns.Add(column);
     }
@@ -152,6 +156,8 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
                 throw new InvalidOperationException(T("Purchasing.ReceiptReturn.PostedReceiptRequired"));
             var available = await AppHost.Orders.GetPurchaseReceiptReturnableLinesAsync(_companyId, receipt.DocId);
             _receiptId = receipt.DocId;
+            _loadedReceiptNo = receipt.DocNo;
+            _loadedSupplierName = receipt.PartyName ?? receipt.PartyCode ?? string.Empty;
             _lines.Clear();
             foreach (var line in available)
                 _lines.Add(new ReturnLineVm
@@ -171,7 +177,7 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
                     WarehouseId = line.WarehouseId
                 });
             _receiptInfo.Text = string.Format(CultureInfo.CurrentCulture,
-                T("Purchasing.ReceiptReturn.Loaded"), receipt.DocNo, receipt.PartyName ?? receipt.PartyCode ?? string.Empty);
+                T("Purchasing.ReceiptReturn.Loaded"), _loadedReceiptNo, _loadedSupplierName);
             _post.IsEnabled = _lines.Any(x => x.ReturnableQty > 0m);
             UpdateStatus();
         }
@@ -181,6 +187,8 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
             _receiptId = null;
             _lines.Clear();
             _receiptInfo.Text = string.Empty;
+            _loadedReceiptNo = string.Empty;
+            _loadedSupplierName = string.Empty;
             _status.Text = T("Common.OperationUnavailable");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
@@ -221,6 +229,8 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
             _receiptId = null;
             _lines.Clear();
             _receiptInfo.Text = string.Empty;
+            _loadedReceiptNo = string.Empty;
+            _loadedSupplierName = string.Empty;
             _status.Text = string.Empty;
             _receiptNo.Clear();
         }
