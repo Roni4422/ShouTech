@@ -1,3 +1,4 @@
+using ShouTech.Domain;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
