@@ -44,8 +44,7 @@ public sealed class SupplierQuotationCompareWin : BaseWin
         _refresh.Content = T("Common.Refresh");
         _award.Content = T("Purchasing.SupplierQuotationComparison.Award");
         _close.Content = T("Common.Close");
-        if (_offersGrid.Columns.Count > 0)
-            _offersGrid.Columns.FirstOrDefault(c => c.Header?.ToString() == "Lines")?.SetCurrentValue(DataGridColumn.VisibilityProperty, Visibility.Collapsed);
+
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -85,6 +84,11 @@ public sealed class SupplierQuotationCompareWin : BaseWin
         content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         ConfigureGrid(_offersGrid);
         ConfigureGrid(_linesGrid);
+        _offersGrid.AutoGeneratingColumn += (_, args) =>
+        {
+            if (args.PropertyName == nameof(SupplierQuotationOffer.Lines))
+                args.Cancel = true;
+        };
         _offersGrid.SelectionChanged += (_, _) =>
         {
             if (_offersGrid.SelectedItem is SupplierQuotationOffer selected)
