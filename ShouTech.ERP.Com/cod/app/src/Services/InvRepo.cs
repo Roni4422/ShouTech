@@ -1477,18 +1477,45 @@ public static class InvRepo
     }
 
     public static void RestoreSalesReturnLineNumbers(long returnDocId, IReadOnlyList<int> originalLineNumbers)
+        => RestoreReturnLineNumbers(returnDocId, InvDocKind.SalesReturn, originalLineNumbers);
+
+    /// <summary>
+    /// Restores source line identities on a saved return document. The
+    /// document side determines the fixed table pair; no identifier comes
+    /// from user input. This supports both sales and purchase reversals.
+    /// </summary>
+    public static void RestoreReturnLineNumbers(
+        long returnDocId,
+        InvDocKind returnKind,
+        IReadOnlyList<int> originalLineNumbers)
     {
         if (returnDocId <= 0) throw new ArgumentOutOfRangeException(nameof(returnDocId));
         ArgumentNullException.ThrowIfNull(originalLineNumbers);
+        if (returnKind is not (InvDocKind.SalesReturn or InvDocKind.PurchaseReturn))
+            throw new ArgumentException("Only sales and purchase return documents can restore source line numbers.", nameof(returnKind));
+
+        var headerTable = returnKind.IsSales() ? "sales_documents" : "purchase_documents";
+        var lineTable = returnKind.IsSales() ? "sales_document_lines" : "purchase_document_lines";
         var connectionString = DatabaseRuntime.GetConnectionString()
             ?? throw new InvalidOperationException("No database connection.");
         using var connection = Open(connectionString);
         using var transaction = connection.BeginTransaction();
+
+        using (var verify = connection.CreateCommand())
+        {
+            verify.Transaction = transaction;
+            verify.CommandText = $"SELECT COUNT(*) FROM {headerTable} WHERE doc_id = $doc AND doc_kind = $kind AND is_deleted = 0;";
+            Add(verify, "$doc", returnDocId);
+            Add(verify, "$kind", returnKind == InvDocKind.SalesReturn ? "SRT" : "PRT");
+            if (Convert.ToInt64(verify.ExecuteScalar(), CultureInfo.InvariantCulture) != 1)
+                throw new InvalidOperationException("The saved return document could not be verified.");
+        }
+
         var lineIds = new List<long>();
         using (var read = connection.CreateCommand())
         {
             read.Transaction = transaction;
-            read.CommandText = "SELECT line_id FROM sales_document_lines WHERE doc_id = $doc ORDER BY line_id;";
+            read.CommandText = $"SELECT line_id FROM {lineTable} WHERE doc_id = $doc ORDER BY line_id;";
             Add(read, "$doc", returnDocId);
             using var reader = read.ExecuteReader();
             while (reader.Read())
@@ -1496,19 +1523,13 @@ public static class InvRepo
         }
         if (lineIds.Count != originalLineNumbers.Count)
             throw new InvalidOperationException("The saved return lines no longer match the original invoice lines.");
+        if (originalLineNumbers.Distinct().Count() != originalLineNumbers.Count || originalLineNumbers.Any(n => n <= 0))
+            throw new InvalidOperationException("Original invoice line numbers must be unique positive values.");
 
         using (var temporary = connection.CreateCommand())
         {
             temporary.Transaction = transaction;
-            temporary.CommandText = """
-                UPDATE sales_document_lines
-                SET line_no = line_no + (
-                    SELECT COALESCE(MAX(line_no), 0) + 1000000
-                    FROM sales_document_lines
-                    WHERE doc_id = $doc
-                )
-                WHERE doc_id = $doc;
-                """;
+            temporary.CommandText = $"UPDATE {lineTable} SET line_no = line_no + (SELECT COALESCE(MAX(line_no), 0) + 1000000 FROM {lineTable} WHERE doc_id = $doc) WHERE doc_id = $doc;";
             Add(temporary, "$doc", returnDocId);
             temporary.ExecuteNonQuery();
         }
@@ -1516,7 +1537,7 @@ public static class InvRepo
         {
             using var update = connection.CreateCommand();
             update.Transaction = transaction;
-            update.CommandText = "UPDATE sales_document_lines SET line_no = $lineNo WHERE doc_id = $doc AND line_id = $lineId;";
+            update.CommandText = $"UPDATE {lineTable} SET line_no = $lineNo WHERE doc_id = $doc AND line_id = $lineId;";
             Add(update, "$lineNo", originalLineNumbers[index]);
             Add(update, "$doc", returnDocId);
             Add(update, "$lineId", lineIds[index]);
@@ -1788,8 +1809,8 @@ public static class InvRepo
 
             SaveDraft(reversal);
             reversalDraftId = reversal.DocId;
-            RestoreSalesReturnLineNumbers(
-                reversalDraftId, original.Lines.Select(line => line.LineNo).ToArray());
+            RestoreReturnLineNumbers(
+                reversalDraftId, reversalKind, original.Lines.Select(line => line.LineNo).ToArray());
 
             // Persist the draft ID before posting so a failure cannot leave an orphan
             // draft while deleting the only record that prevents a duplicate reversal.
