@@ -27,6 +27,9 @@ public interface IOrderDocumentRepository
 
     Task<long> CreateDraftAsync(CommercialDocSide side, CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default);
 
+    /// <summary>Creates a draft and its source-document link atomically.</summary>
+    Task<long> CreateLinkedDraftAsync(CommercialDocSide side, CommercialDocumentDraft draft, string sourceDocKind, long sourceDocId, string userId, CancellationToken cancellationToken = default);
+
     /// <summary>Replaces header fields and lines of a Draft document; throws when not a draft.</summary>
     Task UpdateDraftAsync(CommercialDocSide side, long docId, CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default);
 
