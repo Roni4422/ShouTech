@@ -87,5 +87,13 @@ public sealed class PurchaseMatchServiceTests
             OverrideCalls++;
             return Task.FromResult(Guid.NewGuid());
         }
+
+        public Task<PurchaseMatchEvaluationSnapshot> ReevaluateLatestAsync(
+            string companyCode, long invoiceDocId, string actor,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new PurchaseMatchEvaluationSnapshot(
+                Guid.NewGuid(), invoiceDocId, 1, 1, "Pass", Array.Empty<string>(),
+                "{}", "{}", actor, DateTime.UtcNow));
+
     }
 }
