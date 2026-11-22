@@ -373,7 +373,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
         var doc = await AppHost.Orders.FindByIdAsync(Side, docId);
         if (doc is null) return;
         ApplySnapshot(doc);
-        if (doc.Status == CommercialDocumentStatus.Posted)
+        if (!IsRfq && doc.Status == CommercialDocumentStatus.Posted)
             await RefreshProgressAsync(doc.DocId);
     }
 
@@ -387,7 +387,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             _status = doc.Status;
             _txtDocNo.Text = doc.DocNo;
             _dtDate.SelectedDate = doc.DocDate.ToDateTime(TimeOnly.MinValue);
-            _dtDeliveryDate.SelectedDate = doc.DeliveryDate?.ToDateTime(TimeOnly.MinValue);
+            _dtDeliveryDate.SelectedDate = (IsRfq ? doc.ValidTill : doc.DeliveryDate)?.ToDateTime(TimeOnly.MinValue);
             _txtPartyCode.Text = doc.PartyCode ?? string.Empty;
             _txtPartyName.Text = doc.PartyName ?? string.Empty;
             _txtWhs.Text = doc.WarehouseName ?? string.Empty;
