@@ -3731,6 +3731,27 @@
       "InvalidDates": "Teklif geçerliliği teklif tarihinden önce olamaz.",
       "InvalidCurrency": "Üç harfli para birimi kodu girin.",
       "Created": "Tedarikçi teklifi {0} oluşturuldu ve onaylandı."
+    },
+    "ReceiptReturn": {
+      "Title": "Mal Kabul İade",
+      "LoadReceipt": "Mal kabul fişini yükle",
+      "PostReturn": "Tedarikçi iadesini kaydet",
+      "ReceiptNo": "Mal kabul numarası",
+      "Line": "Satır",
+      "Item": "Ürün",
+      "Description": "Açıklama",
+      "Received": "Alınan miktar",
+      "Invoiced": "Faturalanan miktar",
+      "Returned": "Önceden iade edilen",
+      "Returnable": "İade edilebilir",
+      "ReturnQty": "İade miktarı",
+      "Loaded": "Fiş {0} — Tedarikçi: {1}",
+      "ReceiptRequired": "Mal kabul numarası girin.",
+      "PostedReceiptRequired": "Onaylanmış bir mal kabul fişi seçin.",
+      "InvalidQuantities": "En az bir satır için kullanılabilir miktarı aşmayan pozitif iade miktarı girin.",
+      "ConfirmPost": "Tedarikçi iadesi kaydedilsin mi? Stok ve faturalanmamış mal kabul tutarı aynı işlemde azaltılır.",
+      "Created": "Fatura öncesi tedarikçi iadesi {0} kaydedildi.",
+      "Total": "Toplam iade miktarı: {0:N4}"
     }
   }
 }
