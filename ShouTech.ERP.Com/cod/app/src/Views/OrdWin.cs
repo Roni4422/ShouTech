@@ -67,6 +67,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
     private readonly Button _btnAddLine = new();
     private readonly Button _btnRemLine = new();
     private readonly Button _btnPrint = new();
+    private readonly Button _btnCompareQuotes = new();
 
     private bool _isReceiving;
     private bool _isConverting;
@@ -148,6 +149,18 @@ public sealed class OrdWin : BaseWin, IWindowMode
         StyleButton(_btnAddLine, "Invoice.AddLine");
         StyleButton(_btnRemLine, "Invoice.RemoveLine");
         StyleButton(_btnPrint, "Invoice.Print");
+        StyleButton(_btnCompareQuotes, "Purchasing.SupplierQuotationComparison.Open");
+        _btnCompareQuotes.Visibility = IsRfq ? Visibility.Visible : Visibility.Collapsed;
+        _btnCompareQuotes.Click += (_, _) =>
+        {
+            if (_docId is null || _status != CommercialDocumentStatus.Posted)
+            {
+                ShowWarningMessage(T("Purchasing.SupplierQuotationComparison.PostRfqFirst"));
+                return;
+            }
+            var window = new SupplierQuotationCompareWin(_docId.Value) { Owner = this };
+            window.ShowDialog();
+        };
 
         _btnNew.Click += async (_, _) => await ResetOrderAsync();
         _btnLoad.Click += async (_, _) => await LoadByNumberAsync();
@@ -184,7 +197,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             }
         };
 
-        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnConvert, _btnReceipt, _btnClose, _btnCancel, _btnAddLine, _btnRemLine, _btnPrint })
+        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnConvert, _btnReceipt, _btnCompareQuotes, _btnClose, _btnCancel, _btnAddLine, _btnRemLine, _btnPrint })
             toolbar.Children.Add(b);
 
         var actionBar = new Border
