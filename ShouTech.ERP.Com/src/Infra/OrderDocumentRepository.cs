@@ -43,6 +43,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         CommercialDocKinds.DeliveryNote => "DLV",
         CommercialDocKinds.SalesInvoice => "SAL",
         CommercialDocKinds.RequestForQuotation => "RFQ",
+        CommercialDocKinds.SupplierQuotation => "SQ",
         CommercialDocKinds.PurchaseOrder => "PO",
         CommercialDocKinds.PurchaseReceipt => "RCV",
         CommercialDocKinds.PurchaseInvoice => "PUR",
@@ -187,6 +188,70 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         }
     }
 
+    public async Task<long> CreateLinkedDraftAsync(
+        CommercialDocSide side, CommercialDocumentDraft draft, string sourceDocKind,
+        long sourceDocId, string userId, CancellationToken cancellationToken = default)
+    {
+        ValidateDraft(draft, userId);
+        if (side != CommercialDocSide.Purchase || sourceDocId <= 0)
+            throw new ArgumentException("Linked sourcing documents must be purchase documents with a valid source id.");
+        var validPair = (sourceDocKind, draft.DocKind) is
+            (CommercialDocKinds.RequestForQuotation, CommercialDocKinds.SupplierQuotation) or
+            (CommercialDocKinds.SupplierQuotation, CommercialDocKinds.PurchaseOrder);
+        if (!validPair)
+            throw new InvalidOperationException("Only RFQ-to-supplier-quotation and supplier-quotation-to-purchase-order links are supported.");
+
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using (var source = CreateCommand(connection, transaction, """
+                SELECT company_id, doc_kind, status
+                FROM purchase_documents
+                WHERE doc_id = @sourceId AND is_deleted = 0
+                """))
+            {
+                Add(source, "@sourceId", sourceDocId);
+                await using var reader = await source.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    throw new InvalidOperationException("The source purchasing document was not found.");
+                var company = reader.GetString(0);
+                var kind = reader.GetString(1);
+                var status = reader.GetString(2);
+                if (!Guid.TryParse(company, out var sourceCompany) || sourceCompany != draft.CompanyId)
+                    throw new InvalidOperationException("The source and target documents must belong to the same company.");
+                if (kind != sourceDocKind || status != CommercialDocumentStatus.Posted)
+                    throw new InvalidOperationException("The source document must be posted and have the expected document type.");
+            }
+
+            var targetId = await InsertDocumentAsync(
+                connection, transaction, side, draft, CommercialDocumentStatus.Draft, userId, cancellationToken).ConfigureAwait(false);
+            await using (var link = CreateCommand(connection, transaction, """
+                INSERT INTO document_links
+                    (company_id, source_doc_kind, source_doc_id, target_doc_kind, target_doc_id, created_by)
+                VALUES (@company, @sourceKind, @sourceId, @targetKind, @targetId, @actor)
+                """))
+            {
+                Add(link, "@company", draft.CompanyId.ToString("D"));
+                Add(link, "@sourceKind", sourceDocKind);
+                Add(link, "@sourceId", sourceDocId);
+                Add(link, "@targetKind", draft.DocKind);
+                Add(link, "@targetId", targetId);
+                Add(link, "@actor", userId.Trim());
+                await link.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return targetId;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
     public async Task UpdateDraftAsync(CommercialDocSide side, long docId, CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default)
     {
         ValidateDraft(draft, userId);
@@ -275,7 +340,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
             var orderKinds = side == CommercialDocSide.Sales
                 ? new[] { CommercialDocKinds.SalesOrder, CommercialDocKinds.SalesQuotation }
-                : new[] { CommercialDocKinds.PurchaseOrder, CommercialDocKinds.RequestForQuotation };
+                : new[] { CommercialDocKinds.PurchaseOrder, CommercialDocKinds.RequestForQuotation, CommercialDocKinds.SupplierQuotation };
             if (Array.IndexOf(orderKinds, kind) < 0)
                 throw new InvalidOperationException($"Document kind '{kind}' is not an order kind; use the invoice posting path.");
             if (status != CommercialDocumentStatus.Draft)
