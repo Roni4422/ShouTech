@@ -1160,7 +1160,7 @@ namespace Kern.Tests
                     reconciliation.AllocateAsync(
                         CompanyCode, "S", paymentLedgerId, "PURCHASE", invoiceId, 1m, Actor));
 
-                Assert.Contains("three-way match", error.Message, StringComparison.OrdinalIgnoreCase);
+                Assert.Contains("three-way match", error.Message.ToLowerInvariant());
                 Assert.Equal(0m, Scalar(connectionString,
                     $"SELECT COUNT(*) FROM payment_allocations WHERE doc_table = 'PURCHASE' AND doc_id = {invoiceId};"));
             }
