@@ -49,3 +49,22 @@ CREATE TABLE IF NOT EXISTS purchase_match_overrides (
 
 CREATE INDEX IF NOT EXISTS ix_purchase_match_overrides_invoice
     ON purchase_match_overrides(company_code, invoice_doc_id, released_at);
+
+-- Evaluation and override rows are historical accounting evidence.
+-- Corrections must append a new evaluation or override, never mutate history.
+CREATE OR REPLACE FUNCTION reject_purchase_match_history_mutation()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'Purchase match history is immutable.';
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_purchase_match_evaluations_immutable ON purchase_match_evaluations;
+CREATE TRIGGER trg_purchase_match_evaluations_immutable
+BEFORE UPDATE OR DELETE ON purchase_match_evaluations
+FOR EACH ROW EXECUTE FUNCTION reject_purchase_match_history_mutation();
+
+DROP TRIGGER IF EXISTS trg_purchase_match_overrides_immutable ON purchase_match_overrides;
+CREATE TRIGGER trg_purchase_match_overrides_immutable
+BEFORE UPDATE OR DELETE ON purchase_match_overrides
+FOR EACH ROW EXECUTE FUNCTION reject_purchase_match_history_mutation();
