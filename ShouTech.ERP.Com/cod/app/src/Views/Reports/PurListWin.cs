@@ -32,6 +32,7 @@ public sealed class PurListWin : RptBase
         {
             new() { Key = "From", LabelTextKey = "Reports.Filter.DateFrom", Kind = RptFltKind.DateFrom, DefaultValue = new DateTime(DateTime.Today.Year, 1, 1) },
             new() { Key = "To", LabelTextKey = "Reports.Filter.DateTo", Kind = RptFltKind.DateTo, DefaultValue = DateTime.Today },
+            new() { Key = "Search", LabelTextKey = "Reports.Filter.Search", Kind = RptFltKind.Text },
         }
     };
 
@@ -53,6 +54,12 @@ public sealed class PurListWin : RptBase
             ["Status"] = r.GetValueOrDefault("Status"),
             ["Currency"] = r.GetValueOrDefault("Currency"),
         }).ToList();
+        var search = filters.GetString("Search")?.Trim();
+        if (!string.IsNullOrWhiteSpace(search))
+            rows = rows.Where(row =>
+                Convert.ToString(row["DocNo"], CultureInfo.InvariantCulture)?.Contains(search, StringComparison.OrdinalIgnoreCase) == true ||
+                Convert.ToString(row["PartyCode"], CultureInfo.InvariantCulture)?.Contains(search, StringComparison.OrdinalIgnoreCase) == true ||
+                Convert.ToString(row["PartyName"], CultureInfo.InvariantCulture)?.Contains(search, StringComparison.OrdinalIgnoreCase) == true).ToList();
 
         return new RptData
         {
