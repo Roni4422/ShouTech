@@ -222,7 +222,12 @@ public class GlPostingTests
     public async Task SalesReturn_Post_MirrorsSalesEntry()
     {
         using var db = await SeededAsync();
-        var doc = await PostInvoiceAsync(db, InvDocKind.SalesReturn, qty: 1m, price: 100m, taxRate: 0m);
+        var original = await PostInvoiceAsync(db, InvDocKind.SalesInvoice, qty: 1m, price: 100m, taxRate: 0m);
+        var doc = await PostInvoiceAsync(
+            db, InvDocKind.SalesReturn, qty: 1m, price: 100m, taxRate: 0m,
+            originalDocId: original.DocId,
+            originalDocKind: InvDocKind.SalesInvoice,
+            originalDocNo: original.DocNo);
 
         var entry = SingleEntry(db, "SRT", doc.DocId);
         AssertBalanced(entry);
@@ -543,7 +548,8 @@ public class GlPostingTests
         => Assert.Equal(entry.Lines.Sum(l => l.Debit), entry.Lines.Sum(l => l.Credit));
 
     private static Task<InvDoc> PostInvoiceAsync(TestDb db, InvDocKind kind, decimal qty, decimal price, decimal taxRate,
-        decimal paid = 0m, string taxCode = "")
+        decimal paid = 0m, string taxCode = "", long? originalDocId = null,
+        InvDocKind? originalDocKind = null, string? originalDocNo = null)
     {
         var doc = new InvDoc
         {
@@ -556,6 +562,9 @@ public class GlPostingTests
             WarehouseId = 1,
             CurrencyCode = "SAR",
             PaidAmount = paid,
+            OriginalDocId = originalDocId,
+            OriginalDocKind = originalDocKind,
+            OriginalDocNo = originalDocNo,
             PaymentMethod = kind == InvDocKind.PosSale ? InvPaymentMethod.Cash : InvPaymentMethod.Credit,
             Lines = { new InvLine { LineNo = 1, MaterialId = 42, MaterialCode = "MAT-42", Qty = qty, UnitPrice = price, TaxCode = taxCode, TaxRate = taxRate, WarehouseId = 1 } }
         };
