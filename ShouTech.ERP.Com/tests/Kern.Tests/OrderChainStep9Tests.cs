@@ -218,10 +218,10 @@ namespace Kern.Tests
 
                 var evaluationSnapshot = ScalarText(connectionString,
                     $"SELECT result_snapshot_json FROM purchase_match_evaluations WHERE company_code = '{CompanyCode}' AND invoice_doc_id = {invoiceId};");
-                Assert.Contains("\\"matchDetails\\":[{", evaluationSnapshot, StringComparison.Ordinal);
-                Assert.Contains("\\"receiptLineId\\":" + receipt.Lines[1].LineId, evaluationSnapshot, StringComparison.Ordinal);
-                Assert.Contains("\\"invoiceLineId\\":" + invoice.Lines[0].LineId, evaluationSnapshot, StringComparison.Ordinal);
-                Assert.Contains("\\"matchedQty\\":1", evaluationSnapshot, StringComparison.Ordinal);
+                Assert.Contains("\"matchDetails\":[{", evaluationSnapshot, StringComparison.Ordinal);
+                Assert.Contains("\"receiptLineId\":" + receipt.Lines[1].LineId, evaluationSnapshot, StringComparison.Ordinal);
+                Assert.Contains("\"invoiceLineId\":" + invoice.Lines[0].LineId, evaluationSnapshot, StringComparison.Ordinal);
+                Assert.Contains("\"matchedQty\":1", evaluationSnapshot, StringComparison.Ordinal);
             }
             finally
             {
@@ -1365,7 +1365,7 @@ namespace Kern.Tests
                 Assert.Equal(2, reevaluated.EvaluationVersion);
                 Assert.Equal(2, reevaluated.PolicyVersion);
                 Assert.Equal("Blocked", reevaluated.Decision);
-                Assert.Contains("\\"receiptLineId\\":77", reevaluated.ResultSnapshotJson, StringComparison.Ordinal);
+                Assert.Contains("\"receiptLineId\":77", reevaluated.ResultSnapshotJson, StringComparison.Ordinal);
                 Assert.Equal(2m, Scalar(connectionString,
                     $"SELECT COUNT(*) FROM purchase_match_evaluations WHERE company_code = '{CompanyCode}' AND invoice_doc_id = 7002;"));
                 Assert.Equal("Pass", ScalarText(connectionString,
