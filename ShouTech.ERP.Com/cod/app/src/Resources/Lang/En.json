@@ -3670,5 +3670,30 @@
     "ExceedsReturnable": "A return quantity cannot exceed the remaining returnable quantity.",
     "Confirm": "Post this customer return and credit note?",
     "Posted": "Sales return posted"
+  },
+  "PurchaseReturn": {
+    "Title": "Purchase Return / Debit Note",
+    "LoadInvoice": "Load Supplier Invoice",
+    "PostReturn": "Post Return",
+    "OriginalInvoice": "Original Supplier Invoice No.",
+    "Reason": "Return Reason",
+    "Code": "Item Code",
+    "Description": "Description",
+    "Unit": "Unit",
+    "Invoiced": "Invoiced",
+    "AlreadyReturned": "Already Returned",
+    "Returnable": "Returnable",
+    "ReturnQty": "Return Qty",
+    "Price": "Unit Price",
+    "Total": "Debit Note Total",
+    "InvoiceRequired": "Enter a supplier invoice number.",
+    "InvoiceNotFound": "The posted supplier invoice was not found.",
+    "PostedInvoiceRequired": "Only posted supplier invoices can be returned.",
+    "LoadInvoiceFirst": "Load a posted supplier invoice first.",
+    "ReasonRequired": "Enter the reason for this return.",
+    "SelectQuantity": "Enter a return quantity for at least one line.",
+    "ExceedsReturnable": "A return quantity cannot exceed the remaining returnable quantity.",
+    "Confirm": "Post this supplier return and debit note?",
+    "Posted": "Purchase return / debit note posted"
   }
 }
