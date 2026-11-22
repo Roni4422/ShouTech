@@ -35,6 +35,7 @@ public sealed class SupplierQuotationEntryWin : BaseWin
     private readonly Button _savePost = new();
     private readonly Button _close = new();
     private bool _busy;
+    private readonly System.Collections.Generic.List<(TextBlock Label, string Key)> _fieldLabels = new();
 
     public SupplierQuotationEntryWin(long rfqId)
     {
@@ -47,6 +48,18 @@ public sealed class SupplierQuotationEntryWin : BaseWin
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         BuildUi();
         Loaded += OnLoaded;
+    }
+
+    protected override void ApplyLocalizedText()
+    {
+        Title = T("Purchasing.SupplierQuotationEntry.Title");
+        _savePost.Content = T("Purchasing.SupplierQuotationEntry.SaveAndPost");
+        _close.Content = T("Common.Close");
+        foreach (var child in _fieldLabels)
+            child.Label.Text = T(child.Key);
+        var keys = new[] { "Line", "Item", "Description", "Quantity", "Unit", "UnitPrice", "DiscountPct", "TaxRate" };
+        for (var i = 0; i < Math.Min(keys.Length, _linesGrid.Columns.Count); i++)
+            _linesGrid.Columns[i].Header = T("Purchasing.SupplierQuotationEntry." + keys[i]);
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -145,7 +158,9 @@ public sealed class SupplierQuotationEntryWin : BaseWin
     private void AddField(Grid grid, int row, int column, string key, Control input, int span = 1)
     {
         var panel = new StackPanel { Margin = new Thickness(4) };
-        panel.Children.Add(new TextBlock { Text = T(key), Margin = new Thickness(0, 0, 0, 3) });
+        var label = new TextBlock { Text = T(key), Margin = new Thickness(0, 0, 0, 3) };
+        _fieldLabels.Add((label, key));
+        panel.Children.Add(label);
         input.MinWidth = 100;
         panel.Children.Add(input);
         Grid.SetRow(panel, row);
