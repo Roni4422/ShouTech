@@ -100,8 +100,7 @@ public sealed class SupplierQuotationEntryWin : BaseWin
                     TaxRate = line.TaxRate
                 });
             _linesGrid.ItemsSource = _lines;
-            _status.Text = string.Format(CultureInfo.CurrentCulture,
-                T("Purchasing.SupplierQuotationEntry.SourceLines"), _lines.Count);
+            _status.Text = Tf("Purchasing.SupplierQuotationEntry.SourceLines", _lines.Count);
         }
         catch (Exception ex)
         {
@@ -200,8 +199,7 @@ public sealed class SupplierQuotationEntryWin : BaseWin
                 _terms.Text.Trim());
             await AppHost.Orders.PostOrderAsync(CommercialDocSide.Purchase, result.QuotationId, CurrentUserId);
             MessageBox.Show(this,
-                string.Format(CultureInfo.CurrentCulture,
-                    T("Purchasing.SupplierQuotationEntry.Created"), result.QuotationNo),
+                Tf("Purchasing.SupplierQuotationEntry.Created", result.QuotationNo),
                 Title, MessageBoxButton.OK, MessageBoxImage.Information);
             DialogResult = true;
             Close();
