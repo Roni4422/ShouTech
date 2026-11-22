@@ -3764,7 +3764,8 @@
       "InvalidInput": "Enter a valid supplier identity, quotation reference, exchange rate, and non-negative line prices, discounts, and tax rates.",
       "InvalidDates": "Quotation validity must not precede the quotation date.",
       "InvalidCurrency": "Enter a three-letter currency code.",
-      "Created": "Supplier quotation {0} was created and posted."
+      "Created": "Supplier quotation {0} was created and posted.",
+      "SelectSupplier": "Select supplier"
     },
     "ReceiptReturn": {
       "Title": "Return Goods Receipt",
