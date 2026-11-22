@@ -25,6 +25,8 @@ public static class RptNav
             case "Purchasing.GRNI":
             case "Reports.GoodsReceivedNotInvoiced":
                 OpenGoodsReceivedNotInvoiced(owner); return true;
+            case "Reports.SupplierStatement":
+                OpenSupplierStatement(owner); return true;
             case "Accounts.TrialBalance":
             case "Reports.TrialBalance":
                 OpenTrialBalance(owner); return true;
@@ -204,6 +206,7 @@ public static class RptNav
     public static void OpenTrialBalance(Window? owner = null) => Show(new TrialBalanceWin(), owner);
     public static void OpenPaymentReconciliation(Window? owner = null) => Show(new PayRecWin(), owner);
     public static void OpenGoodsReceivedNotInvoiced(Window? owner = null) => Show(new GrniWin(), owner);
+    public static void OpenSupplierStatement(Window? owner = null) => Show(new SupStatementWin(), owner);
     public static void OpenProjects(Window? owner = null) => Show(new ProjWin(), owner);
     public static void OpenAssets(Window? owner = null) => Show(new AssetWin(), owner);
     public static void OpenAccountBalance(Window? owner = null) => Show(new AccBalWin(), owner);
