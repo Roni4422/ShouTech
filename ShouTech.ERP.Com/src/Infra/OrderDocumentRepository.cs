@@ -2188,13 +2188,16 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             evaluation.Decision, evaluation.ReasonCodes
         });
 
-        await using var insert = CreateCommand(connection, transaction, """
+        var reasonsValue = _provider == "PostgreSQL" ? "CAST(@reasons AS jsonb)" : "@reasons";
+        var policySnapshotValue = _provider == "PostgreSQL" ? "CAST(@policySnapshot AS jsonb)" : "@policySnapshot";
+        var resultSnapshotValue = _provider == "PostgreSQL" ? "CAST(@resultSnapshot AS jsonb)" : "@resultSnapshot";
+        await using var insert = CreateCommand(connection, transaction, $"""
             INSERT INTO purchase_match_evaluations
                 (evaluation_id, company_code, invoice_doc_id, evaluation_version, policy_version,
                  decision, reason_codes_json, policy_snapshot_json, result_snapshot_json, evaluated_by)
             VALUES
                 (@id, @company, @invoice, @version, @policyVersion,
-                 @decision, @reasons, @policySnapshot, @resultSnapshot, @actor)
+                 @decision, {reasonsValue}, {policySnapshotValue}, {resultSnapshotValue}, @actor)
             """);
         Add(insert, "@id", _provider == "PostgreSQL" ? (object)evaluationId : evaluationId.ToString("D"));
         Add(insert, "@company", companyCode);
