@@ -261,48 +261,84 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             if (amount > openAmount + Tolerance)
                 throw new InvalidOperationException("Allocation exceeds the document's open amount.");
 
-            // Purchase three-way match is a payment gate, not merely a display warning.
-            // Read the latest immutable evaluation inside this same allocation
-            // transaction, after the invoice row has been locked above.
+            // An enabled company policy fails closed: a supplier invoice without
+            // a current evaluation cannot be paid through reconciliation.
+            // A disabled policy preserves the company's pre-control behavior.
             if (docTable == "PURCHASE")
             {
-                string? evaluationId = null;
-                string? decision = null;
-                await using (var evaluation = CreateCommand(connection, transaction, """
-                    SELECT evaluation_id, decision
-                    FROM purchase_match_evaluations
-                    WHERE company_code = @company AND invoice_doc_id = @doc
-                    ORDER BY evaluation_version DESC
-                    LIMIT 1
+                var policyEnabled = false;
+                var currentPolicyVersion = 0;
+                await using (var policy = CreateCommand(connection, transaction, """
+                    SELECT is_enabled, policy_version
+                    FROM purchase_match_policies
+                    WHERE company_code = @company
                     """))
                 {
-                    Add(evaluation, "@company", companyId.Trim());
-                    Add(evaluation, "@doc", docId);
-                    await using var reader = await evaluation.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                    Add(policy, "@company", companyId.Trim());
+                    await using var reader = await policy.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                     if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                     {
-                        evaluationId = ReadString(reader, 0);
-                        decision = ReadString(reader, 1);
+                        policyEnabled = Convert.ToBoolean(reader.GetValue(0), CultureInfo.InvariantCulture);
+                        currentPolicyVersion = Convert.ToInt32(reader.GetValue(1), CultureInfo.InvariantCulture);
                     }
                 }
 
-                if (string.Equals(decision, "Blocked", StringComparison.Ordinal))
+                if (policyEnabled)
                 {
-                    await using var release = CreateCommand(connection, transaction, """
-                        SELECT 1
-                        FROM purchase_match_overrides
-                        WHERE company_code = @company
-                          AND invoice_doc_id = @doc
-                          AND evaluation_id = @evaluation
+                    string? evaluationId = null;
+                    string? decision = null;
+                    var evaluationPolicyVersion = 0;
+                    await using (var evaluation = CreateCommand(connection, transaction, """
+                        SELECT evaluation_id, decision, policy_version
+                        FROM purchase_match_evaluations
+                        WHERE company_code = @company AND invoice_doc_id = @doc
+                        ORDER BY evaluation_version DESC
                         LIMIT 1
-                        """);
-                    Add(release, "@company", companyId.Trim());
-                    Add(release, "@doc", docId);
-                    Add(release, "@evaluation", evaluationId ?? string.Empty);
-                    var hasRelease = await release.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-                    if (hasRelease is null or DBNull)
+                        """))
+                    {
+                        Add(evaluation, "@company", companyId.Trim());
+                        Add(evaluation, "@doc", docId);
+                        await using var reader = await evaluation.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                        if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                        {
+                            evaluationId = ReadString(reader, 0);
+                            decision = ReadString(reader, 1);
+                            evaluationPolicyVersion = Convert.ToInt32(reader.GetValue(2), CultureInfo.InvariantCulture);
+                        }
+                    }
+
+                    if (string.IsNullOrWhiteSpace(evaluationId))
                         throw new InvalidOperationException(
-                            "This supplier invoice is blocked by the purchase three-way match control and requires an authorized, audited release before payment allocation.");
+                            "This supplier invoice has no three-way match evaluation. Evaluate it against a posted purchase order and goods receipt before allocating payment.");
+
+                    if (evaluationPolicyVersion != currentPolicyVersion)
+                        throw new InvalidOperationException(
+                            "The purchase match policy changed after this invoice was evaluated. Re-evaluate the invoice under the current policy before allocating payment.");
+
+                    if (string.Equals(decision, "Blocked", StringComparison.Ordinal))
+                    {
+                        await using var release = CreateCommand(connection, transaction, """
+                            SELECT 1
+                            FROM purchase_match_overrides
+                            WHERE company_code = @company
+                              AND invoice_doc_id = @doc
+                              AND evaluation_id = @evaluation
+                            LIMIT 1
+                            """);
+                        Add(release, "@company", companyId.Trim());
+                        Add(release, "@doc", docId);
+                        Add(release, "@evaluation", evaluationId);
+                        var hasRelease = await release.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                        if (hasRelease is null or DBNull)
+                            throw new InvalidOperationException(
+                                "This supplier invoice is blocked by the purchase three-way match control and requires an authorized, audited release before payment allocation.");
+                    }
+                    else if (!string.Equals(decision, "Pass", StringComparison.Ordinal) &&
+                             !string.Equals(decision, "Warning", StringComparison.Ordinal))
+                    {
+                        throw new InvalidOperationException(
+                            "The supplier invoice has an invalid three-way match decision and cannot be paid until it is re-evaluated.");
+                    }
                 }
             }
 
