@@ -3752,6 +3752,7 @@
       "ConfirmPost": "Valider ce retour fournisseur ? Le stock et le GRNI seront réduits dans la même transaction.",
       "Created": "Le retour fournisseur avant facture {0} a été validé.",
       "Total": "Quantité totale retournée : {0:N4}"
-    }
+    },
+    "ReturnGoodsReceipt": "Retour de réception fournisseur"
   }
 }
