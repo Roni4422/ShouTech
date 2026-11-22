@@ -5,13 +5,12 @@ CREATE TABLE IF NOT EXISTS purchase_receipt_return_allocations (
     company_id TEXT NOT NULL,
     return_doc_id BIGINT NOT NULL,
     return_line_id BIGINT NOT NULL,
-    original_receipt_id BIGINT NOT NULL,
-    original_receipt_line_id BIGINT NOT NULL,
-    purchase_order_id BIGINT NOT NULL,
+    original_doc_id BIGINT NOT NULL,
+    original_line_id BIGINT NOT NULL,
     material_id BIGINT NOT NULL,
     returned_qty NUMERIC NOT NULL CHECK (returned_qty > 0),
     created_by TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT uq_purchase_receipt_return_line
         UNIQUE (company_id, return_doc_id, return_line_id)
 );
