@@ -484,7 +484,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
     private CommercialDocumentDraft BuildDraft()
     {
         ResolveParty();
-        if (string.IsNullOrWhiteSpace(_txtPartyCode.Text) && string.IsNullOrWhiteSpace(_txtPartyName.Text))
+        if (!IsRfq && string.IsNullOrWhiteSpace(_txtPartyCode.Text) && string.IsNullOrWhiteSpace(_txtPartyName.Text))
             throw new InvalidOperationException(T("OrderDoc.PartyRequired"));
         // Step 9 (ORD-10): the warehouse text resolves to a real
         // warehouse id (the same CardStore resolution InvoiceWin uses),
@@ -1060,7 +1060,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             FontSize = 20,
             FontWeight = FontWeights.Bold
         });
-        panel.Children.Add(new TextBlock { Text = $"{T("OrderDoc.OrderNo")}: {_txtDocNo.Text}    {T("OrderDoc.Date")}: {_dtDate.SelectedDate:yyyy-MM-dd}    {T("OrderDoc.DeliveryDate")}: {_dtDeliveryDate.SelectedDate:yyyy-MM-dd}", Margin = new Thickness(0, 8, 0, 2) });
+        panel.Children.Add(new TextBlock { Text = $"{T("OrderDoc.OrderNo")}: {_txtDocNo.Text}    {T("OrderDoc.Date")}: {_dtDate.SelectedDate:yyyy-MM-dd}    {T(IsRfq ? "OrderDoc.ValidTill" : "OrderDoc.DeliveryDate")}: {_dtDeliveryDate.SelectedDate:yyyy-MM-dd}", Margin = new Thickness(0, 8, 0, 2) });
         panel.Children.Add(new TextBlock { Text = $"{T("OrderDoc.Partner")}: {_txtPartyCode.Text} - {_txtPartyName.Text}", Margin = new Thickness(0, 2, 0, 12) });
 
         var table = new Grid();
