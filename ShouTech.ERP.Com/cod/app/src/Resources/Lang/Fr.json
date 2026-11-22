@@ -600,7 +600,9 @@
       "InvoicedQty": "Qté facturée",
       "ReturnedQty": "Qté retournée",
       "RemainingQty": "Qté restante",
-      "RemainingBaseAmount": "GRNI restant (devise de base)"
+      "RemainingBaseAmount": "GRNI restant (devise de base)",
+      "OpeningBalance": "Solde d'ouverture",
+      "RunningBalance": "Solde courant"
     },
     "Filter": {
       "All": "Tous",
@@ -678,7 +680,8 @@
     "ShortageStatus": "Manquant",
     "BudgetVariance": "Écart budgétaire",
     "QualitySummary": "Résumé des inspections qualité",
-    "GoodsReceivedNotInvoiced": "Marchandises reçues non facturées (GRNI)"
+    "GoodsReceivedNotInvoiced": "Marchandises reçues non facturées (GRNI)",
+    "SupplierStatement": "Relevé fournisseur"
   },
   "Tools": {
     "Title": "Outils",
