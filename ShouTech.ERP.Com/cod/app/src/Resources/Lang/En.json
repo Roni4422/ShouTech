@@ -3820,5 +3820,7 @@
     "OnlyBlockedCanRelease": "Select a blocked evaluation to release.",
     "InvalidNumber": "Enter a valid non-negative decimal number."
   },
-  "PurchaseMatch.MatchDetails": "Select an invoice evaluation to inspect its source-line match details."
+  "PurchaseMatch.MatchDetails": "Select an invoice evaluation to inspect its source-line match details.",
+  "PurchaseMatch.Reevaluate": "Re-evaluate",
+  "PurchaseMatch.Reevaluated": "Invoice re-evaluated:"
 }
