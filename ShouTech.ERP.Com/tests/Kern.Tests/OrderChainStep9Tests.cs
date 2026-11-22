@@ -787,7 +787,7 @@ namespace Kern.Tests
             long partyId = 7, string partyCode = "CUST-1")
             => new(
                 companyId, kind, docNo, new DateOnly(2026, 10, 20),
-                partyId, "Test Party", null, "SAR", 1m, null,
+                partyId, "Test Party", 1, "SAR", 1m, null,
                 new[] { line }, partyCode, new DateOnly(2026, 11, 1), null);
 
         private static CommercialDocumentDraft Order(
@@ -795,7 +795,7 @@ namespace Kern.Tests
             long partyId = 7, string partyCode = "CUST-1")
             => new(
                 companyId, kind, docNo, new DateOnly(2026, 10, 20),
-                partyId, "Test Party", null, "SAR", 1m, null,
+                partyId, "Test Party", 1, "SAR", 1m, null,
                 new[] { line1, line2 }, partyCode, new DateOnly(2026, 11, 1), null);
 
         private static decimal BalanceQty(string connectionString, long materialId)
