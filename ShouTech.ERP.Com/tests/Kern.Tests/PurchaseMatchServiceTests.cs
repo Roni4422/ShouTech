@@ -39,6 +39,35 @@ public sealed class PurchaseMatchServiceTests
     }
 
     [Fact]
+    public async Task AuthorizedOverride_IsPersistedAndAudited()
+    {
+        var repository = new FakePurchaseMatchRepository();
+        var auditCalls = new List<string>();
+        var service = new PurchaseMatchService(
+            repository,
+            key => key == "PURCH.MATCH.OVERRIDE",
+            (_, action, details) =>
+            {
+                auditCalls.Add(action + "|" + details);
+                return Task.CompletedTask;
+            });
+        var evaluationId = Guid.NewGuid();
+
+        var overrideId = await service.ReleaseBlockedEvaluationAsync(
+            "COMP-01", 44, evaluationId, "finance-manager", "Approved after finance review");
+
+        Assert.Equal(repository.LastOverrideId, overrideId);
+        Assert.Equal(1, repository.OverrideCalls);
+        Assert.Equal(44, repository.LastOverrideInvoiceId);
+        Assert.Equal(evaluationId, repository.LastOverrideEvaluationId);
+        Assert.Equal("finance-manager", repository.LastOverrideActor);
+        Assert.Equal("Approved after finance review", repository.LastOverrideReason);
+        Assert.Single(auditCalls);
+        Assert.Contains("Purchase match block released", auditCalls[0]);
+        Assert.Contains("Approved after finance review", auditCalls[0]);
+    }
+
+    [Fact]
     public async Task AuthorizedPolicyWrite_IsPersistedAndAudited()
     {
         var repository = new FakePurchaseMatchRepository();
@@ -64,6 +93,11 @@ public sealed class PurchaseMatchServiceTests
     {
         public int SaveCalls { get; private set; }
         public int OverrideCalls { get; private set; }
+        public Guid LastOverrideId { get; private set; }
+        public long LastOverrideInvoiceId { get; private set; }
+        public Guid LastOverrideEvaluationId { get; private set; }
+        public string? LastOverrideActor { get; private set; }
+        public string? LastOverrideReason { get; private set; }
 
         public Task<PurchaseMatchPolicy?> GetPolicyAsync(string companyCode, CancellationToken cancellationToken = default)
             => Task.FromResult<PurchaseMatchPolicy?>(null);
@@ -85,7 +119,12 @@ public sealed class PurchaseMatchServiceTests
             CancellationToken cancellationToken = default)
         {
             OverrideCalls++;
-            return Task.FromResult(Guid.NewGuid());
+            LastOverrideId = Guid.NewGuid();
+            LastOverrideInvoiceId = invoiceDocId;
+            LastOverrideEvaluationId = evaluationId;
+            LastOverrideActor = actor;
+            LastOverrideReason = reason;
+            return Task.FromResult(LastOverrideId);
         }
 
         public Task<PurchaseMatchEvaluationSnapshot> ReevaluateLatestAsync(
