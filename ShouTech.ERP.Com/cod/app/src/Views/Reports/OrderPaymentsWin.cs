@@ -30,7 +30,8 @@ public sealed class OrderPaymentsWin : RptBase
         Filters = new RptFlt[]
         {
             new() { Key = "From", LabelTextKey = "Reports.Filter.DateFrom", Kind = RptFltKind.DateFrom, DefaultValue = new DateTime(DateTime.Today.Year, 1, 1) },
-            new() { Key = "To", LabelTextKey = "Reports.Filter.DateTo", Kind = RptFltKind.DateTo, DefaultValue = DateTime.Today }
+            new() { Key = "To", LabelTextKey = "Reports.Filter.DateTo", Kind = RptFltKind.DateTo, DefaultValue = DateTime.Today },
+            new() { Key = "Search", LabelTextKey = "Reports.Filter.Search", Kind = RptFltKind.Text }
         }
     };
 
@@ -41,6 +42,11 @@ public sealed class OrderPaymentsWin : RptBase
         var raw = await RptQuery.OrderPaymentsAsync(from, to, ct);
         var def = BuildDefinition();
         var rows = RptWinUtil.Map(raw, def.Columns);
+        var search = filters.GetString("Search")?.Trim();
+        if (!string.IsNullOrWhiteSpace(search))
+            rows = rows.Where(row =>
+                Convert.ToString(row.GetValueOrDefault("DocNo"), CultureInfo.InvariantCulture)?.Contains(search, StringComparison.OrdinalIgnoreCase) == true ||
+                Convert.ToString(row.GetValueOrDefault("PartyName"), CultureInfo.InvariantCulture)?.Contains(search, StringComparison.OrdinalIgnoreCase) == true).ToList();
         return new RptData
         {
             Columns = def.Columns,
