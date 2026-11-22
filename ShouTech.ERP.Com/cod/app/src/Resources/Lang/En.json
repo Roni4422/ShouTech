@@ -809,7 +809,8 @@
     "SalesOrder": "Sales Order",
     "SearchOrders": "Search Orders",
     "Title": "Orders",
-    "TrackOrders": "Track Orders"
+    "TrackOrders": "Track Orders",
+    "RequestForQuotation": "Request for Quotation"
   },
   "OtherTools": {
     "CloseDriverCash": "Close Driver Cash",
@@ -2005,7 +2006,10 @@
     "SaveFirst": "Save the document first.",
     "ServiceUnavailable": "The orders service is unavailable (no database connection).",
     "StatusClosed": "Closed",
-    "TrackTitle": "Order Tracking"
+    "TrackTitle": "Order Tracking",
+    "TitleRfq": "Request for Quotation",
+    "ValidTill": "Response Deadline",
+    "RfqCannotConvert": "A request for quotation cannot be converted directly to a supplier invoice."
   },
   "BarcodeDesign": {
     "SaveDesign": "Save design",
