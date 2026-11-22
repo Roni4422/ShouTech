@@ -46,6 +46,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         CommercialDocKinds.SupplierQuotation => "SQ",
         CommercialDocKinds.PurchaseOrder => "PO",
         CommercialDocKinds.PurchaseReceipt => "RCV",
+        CommercialDocKinds.PurchaseReceiptReturn => "RCR",
         CommercialDocKinds.PurchaseInvoice => "PUR",
         _ => "DOC"
     };
@@ -631,7 +632,20 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
     {
         var (docs, lines) = Tables(side);
         await using var command = CreateCommand(connection, transaction, $"""
-            SELECT l.material_id, l.line_no, SUM(l.qty)
+            SELECT l.material_id, l.line_no,
+                   SUM(l.qty) - CASE WHEN @targetKind = @receiptKind THEN COALESCE((
+                       SELECT SUM(a.returned_qty)
+                       FROM purchase_receipt_return_line_allocations a
+                       JOIN {docs} rd
+                         ON rd.doc_id = a.return_doc_id
+                        AND rd.company_id = a.company_id
+                        AND rd.doc_kind = @returnKind
+                        AND rd.status = @posted
+                        AND rd.is_deleted = 0
+                       WHERE a.company_id = dl.company_id
+                         AND a.original_doc_id = d.doc_id
+                         AND a.original_line_id = l.line_id
+                   ), 0) ELSE 0 END
             FROM document_links dl
             JOIN {docs} d
               ON d.company_id = dl.company_id
@@ -644,12 +658,14 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
               AND dl.target_doc_kind = @targetKind
               AND d.status = @posted
               AND d.is_deleted = 0
-            GROUP BY l.material_id, l.line_no
+            GROUP BY l.material_id, l.line_no, l.line_id, d.doc_id, dl.company_id
             """);
         Add(command, "@company", companyId.ToString("D"));
         Add(command, "@sourceId", sourceDocId);
         Add(command, "@targetKind", targetDocKind);
         Add(command, "@posted", CommercialDocumentStatus.Posted);
+        Add(command, "@receiptKind", CommercialDocKinds.PurchaseReceipt);
+        Add(command, "@returnKind", CommercialDocKinds.PurchaseReceiptReturn);
 
         var quantities = new Dictionary<long, decimal>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -672,7 +688,20 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
     {
         var (docs, lines) = Tables(side);
         await using var command = CreateCommand(connection, transaction, $"""
-            SELECT l.line_no, l.material_id, SUM(l.qty)
+            SELECT l.line_no, l.material_id,
+                   SUM(l.qty) - CASE WHEN @targetKind = @receiptKind THEN COALESCE((
+                       SELECT SUM(a.returned_qty)
+                       FROM purchase_receipt_return_line_allocations a
+                       JOIN {docs} rd
+                         ON rd.doc_id = a.return_doc_id
+                        AND rd.company_id = a.company_id
+                        AND rd.doc_kind = @returnKind
+                        AND rd.status = @posted
+                        AND rd.is_deleted = 0
+                       WHERE a.company_id = dl.company_id
+                         AND a.original_doc_id = d.doc_id
+                         AND a.original_line_id = l.line_id
+                   ), 0) ELSE 0 END
             FROM document_links dl
             JOIN {docs} d
               ON d.company_id = dl.company_id
@@ -685,12 +714,14 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
               AND dl.target_doc_kind = @targetKind
               AND d.status = @posted
               AND d.is_deleted = 0
-            GROUP BY l.line_no, l.material_id
+            GROUP BY l.line_no, l.material_id, l.line_id, d.doc_id, dl.company_id
             """);
         Add(command, "@company", companyId.ToString("D"));
         Add(command, "@sourceId", sourceDocId);
         Add(command, "@targetKind", targetDocKind);
         Add(command, "@posted", CommercialDocumentStatus.Posted);
+        Add(command, "@receiptKind", CommercialDocKinds.PurchaseReceipt);
+        Add(command, "@returnKind", CommercialDocKinds.PurchaseReceiptReturn);
 
         var quantities = new Dictionary<int, decimal>();
         var legacyByMaterial = new Dictionary<long, decimal>();
