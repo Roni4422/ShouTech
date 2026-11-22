@@ -36,6 +36,7 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
     private readonly Button _reevaluate = new();
     private readonly Button _close = new();
     private readonly List<EvaluationRow> _rows = new();
+    private static readonly JsonSerializerOptions MatchDetailsJsonOptions = new() { WriteIndented = true };
     private PurchaseMatchPolicy? _policy;
     private bool _canManage;
     private bool _canRelease;
@@ -216,7 +217,7 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
             Width = width == 2 ? new DataGridLength(1, DataGridLengthUnitType.Star) : new DataGridLength(width)
         };
 
-    private void AddThresholdField(Grid grid, int column, int row, string key, TextBox input)
+    private static void AddThresholdField(Grid grid, int column, int row, string key, TextBox input)
     {
         var panel = new StackPanel { Margin = new Thickness(5, 3, 12, 3) };
         panel.Children.Add(new TextBlock { Text = T(key), Margin = new Thickness(0, 0, 0, 3) });
@@ -319,7 +320,7 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
             using var document = JsonDocument.Parse(row.ResultSnapshotJson);
             _matchDetails.Text = JsonSerializer.Serialize(
                 document.RootElement,
-                new JsonSerializerOptions { WriteIndented = true });
+                MatchDetailsJsonOptions);
         }
         catch (JsonException)
         {
