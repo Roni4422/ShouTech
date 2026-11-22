@@ -1163,6 +1163,21 @@ namespace Kern.Tests
                 Assert.Contains("three-way match", error.Message.ToLowerInvariant());
                 Assert.Equal(0m, Scalar(connectionString,
                     $"SELECT COUNT(*) FROM payment_allocations WHERE doc_table = 'PURCHASE' AND doc_id = {invoiceId};"));
+
+                var evaluationId = Guid.Parse(ScalarText(connectionString,
+                    $"SELECT evaluation_id FROM purchase_match_evaluations WHERE company_code = '{CompanyCode}' AND invoice_doc_id = {invoiceId};"));
+                var matchRepository = new PurchaseMatchPolicyRepository("SQLite", connectionString);
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    matchRepository.RecordOverrideAsync(
+                        CompanyCode, invoiceId, evaluationId, Actor, "Self approval attempt"));
+                await matchRepository.RecordOverrideAsync(
+                    CompanyCode, invoiceId, evaluationId, "approver-02", "Approved by purchasing director");
+
+                await reconciliation.AllocateAsync(
+                    CompanyCode, "S", paymentLedgerId, "PURCHASE", invoiceId, 1m, Actor);
+
+                Assert.Equal(1m, Scalar(connectionString,
+                    $"SELECT COUNT(*) FROM payment_allocations WHERE doc_table = 'PURCHASE' AND doc_id = {invoiceId};"));
             }
             finally
             {
