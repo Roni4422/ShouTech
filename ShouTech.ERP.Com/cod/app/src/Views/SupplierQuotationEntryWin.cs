@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using ShouTech.App.Services;
+using ShouTech.App.Reporting.Invoices;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
 
@@ -111,8 +112,8 @@ public sealed class SupplierQuotationEntryWin : BaseWin
         Title = T("Purchasing.SupplierQuotationEntry.Title");
         var root = new DockPanel { Margin = new Thickness(12) };
         var footer = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-        StyleButton(_savePost, "Purchasing.SupplierQuotationEntry.SaveAndPost");
-        StyleButton(_close, "Common.Close");
+        F2Ui.StyleButton(_savePost, "Purchasing.SupplierQuotationEntry.SaveAndPost");
+        F2Ui.StyleButton(_close, "Common.Close");
         _savePost.Click += async (_, _) => await SaveAndPostAsync();
         _close.Click += (_, _) => Close();
         footer.Children.Add(_savePost);
@@ -125,16 +126,16 @@ public sealed class SupplierQuotationEntryWin : BaseWin
 
         var form = CreateFormGrid(2);
         form.Margin = new Thickness(0, 0, 0, 8);
-        AddFormField(_fieldLabels, form, 0, 0, "Purchasing.SupplierQuotationEntry.SupplierId", _supplierId);
-        AddFormField(_fieldLabels, form, 0, 1, "Purchasing.SupplierQuotationEntry.SupplierCode", _supplierCode);
-        AddFormField(_fieldLabels, form, 1, 0, "Purchasing.SupplierQuotationEntry.SupplierName", _supplierName);
-        AddFormField(_fieldLabels, form, 1, 1, "Purchasing.SupplierQuotationEntry.Reference", _supplierReference);
-        AddFormField(_fieldLabels, form, 2, 0, "Purchasing.SupplierQuotationEntry.Currency", _currency);
-        AddFormField(_fieldLabels, form, 2, 1, "Purchasing.SupplierQuotationEntry.ExchangeRate", _exchangeRate);
-        AddFormField(_fieldLabels, form, 3, 0, "Purchasing.SupplierQuotationEntry.Date", _quotationDate);
-        AddFormField(_fieldLabels, form, 3, 1, "Purchasing.SupplierQuotationEntry.ValidTill", _validTill);
-        AddFormField(_fieldLabels, form, 4, 0, "Purchasing.SupplierQuotationEntry.DeliveryDate", _deliveryDate);
-        AddFormField(_fieldLabels, form, 4, 1, "Purchasing.SupplierQuotationEntry.Terms", _terms);
+        F2Ui.AddField(_fieldLabels, form, 0, 0, "Purchasing.SupplierQuotationEntry.SupplierId", _supplierId);
+        F2Ui.AddField(_fieldLabels, form, 0, 1, "Purchasing.SupplierQuotationEntry.SupplierCode", _supplierCode);
+        F2Ui.AddField(_fieldLabels, form, 1, 0, "Purchasing.SupplierQuotationEntry.SupplierName", _supplierName);
+        F2Ui.AddField(_fieldLabels, form, 1, 1, "Purchasing.SupplierQuotationEntry.Reference", _supplierReference);
+        F2Ui.AddField(_fieldLabels, form, 2, 0, "Purchasing.SupplierQuotationEntry.Currency", _currency);
+        F2Ui.AddField(_fieldLabels, form, 2, 1, "Purchasing.SupplierQuotationEntry.ExchangeRate", _exchangeRate);
+        F2Ui.AddField(_fieldLabels, form, 3, 0, "Purchasing.SupplierQuotationEntry.Date", _quotationDate);
+        F2Ui.AddField(_fieldLabels, form, 3, 1, "Purchasing.SupplierQuotationEntry.ValidTill", _validTill);
+        F2Ui.AddField(_fieldLabels, form, 4, 0, "Purchasing.SupplierQuotationEntry.DeliveryDate", _deliveryDate);
+        F2Ui.AddField(_fieldLabels, form, 4, 1, "Purchasing.SupplierQuotationEntry.Terms", _terms);
         DockPanel.SetDock(form, Dock.Top);
         root.Children.Add(form);
 
