@@ -382,6 +382,32 @@ public static class InvRepo
             };
         }
 
+        // The legacy InvoiceWin/InvRepo purchase path has no PO/receipt
+        // lineage and can settle a bill immediately during posting. When the
+        // company enables three-way matching, block this path at the repository
+        // boundary so callers cannot bypass the commercial-chain evaluation or
+        // its payment gate. The company can still use legacy manual invoices
+        // while the control is explicitly disabled.
+        if (kind == InvDocKind.PurchaseInvoice)
+        {
+            using var matchPolicy = connection.CreateCommand();
+            matchPolicy.Transaction = tx;
+            matchPolicy.CommandText = """
+                SELECT is_enabled
+                FROM purchase_match_policies
+                WHERE company_code = $company
+                LIMIT 1;
+                """;
+            Add(matchPolicy, "$company", Company);
+            var policyValue = matchPolicy.ExecuteScalar();
+            if (policyValue is not null and not DBNull &&
+                Convert.ToBoolean(policyValue, CultureInfo.InvariantCulture))
+            {
+                throw new InvalidOperationException(
+                    "This company requires purchase-order and goods-receipt matching. Create the supplier invoice from the purchasing order workflow; legacy manual invoice posting is blocked.");
+            }
+        }
+
         // Kind guard (Step 5, sweep I-2): the effects a kind may have are
         // defined ONCE in InvPostingPolicy and enforced here, at the
         // repository layer, so every caller (InvoiceWin, PosCheckoutWin,
