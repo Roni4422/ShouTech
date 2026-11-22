@@ -259,7 +259,7 @@ public sealed class PurchaseReturnWin : BaseWin
 
             var originalLineNumbers = returnDoc.Lines.Select(line => line.LineNo).ToArray();
             InvRepo.SaveDraft(returnDoc);
-            InvRepo.RestorePurchaseReturnLineNumbers(returnDoc.DocId, originalLineNumbers);
+            InvRepo.RestoreReturnLineNumbers(returnDoc.DocId, InvDocKind.PurchaseReturn, originalLineNumbers);
             for (var index = 0; index < returnDoc.Lines.Count; index++)
                 returnDoc.Lines[index].LineNo = originalLineNumbers[index];
 
