@@ -64,6 +64,71 @@ public sealed class PurchaseMatchPolicyRepository : IPurchaseMatchPolicyReposito
         return policy;
     }
 
+    public async Task<IReadOnlyList<PurchaseMatchEvaluationSnapshot>> GetRecentEvaluationsAsync(
+        string companyCode,
+        int take = 50,
+        CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyCode);
+        if (take is < 1 or > 200)
+            throw new ArgumentOutOfRangeException(nameof(take), "The result limit must be between 1 and 200.");
+
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = CreateCommand(connection, null, """
+            SELECT e.evaluation_id, e.invoice_doc_id, e.evaluation_version, e.policy_version,
+                   e.decision, e.reason_codes_json, e.policy_snapshot_json,
+                   e.result_snapshot_json, e.evaluated_by, e.evaluated_at
+            FROM purchase_match_evaluations e
+            WHERE e.company_code = @company
+              AND e.evaluation_version = (
+                  SELECT MAX(latest.evaluation_version)
+                  FROM purchase_match_evaluations latest
+                  WHERE latest.company_code = e.company_code
+                    AND latest.invoice_doc_id = e.invoice_doc_id
+              )
+            ORDER BY e.evaluated_at DESC, e.invoice_doc_id DESC
+            LIMIT @take
+            """);
+        Add(command, "@company", companyCode.Trim());
+        Add(command, "@take", take);
+
+        var result = new List<PurchaseMatchEvaluationSnapshot>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            var idText = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture);
+            if (!Guid.TryParse(idText, out var evaluationId))
+                throw new InvalidOperationException("A stored purchase match evaluation has an invalid identifier.");
+
+            result.Add(new PurchaseMatchEvaluationSnapshot(
+                evaluationId,
+                Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture),
+                Convert.ToInt32(reader.GetValue(2), CultureInfo.InvariantCulture),
+                Convert.ToInt32(reader.GetValue(3), CultureInfo.InvariantCulture),
+                Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture) ?? string.Empty,
+                ReadJsonStringArray(reader.GetValue(5)),
+                ReadJsonText(reader.GetValue(6)),
+                ReadJsonText(reader.GetValue(7)),
+                reader.IsDBNull(8) ? null : Convert.ToString(reader.GetValue(8), CultureInfo.InvariantCulture),
+                Convert.ToDateTime(reader.GetValue(9), CultureInfo.InvariantCulture)));
+        }
+        return result.AsReadOnly();
+    }
+
+    private static IReadOnlyList<string> ReadJsonStringArray(object value)
+    {
+        var json = ReadJsonText(value);
+        return System.Text.Json.JsonSerializer.Deserialize<string[]>(json) ?? Array.Empty<string>();
+    }
+
+    private static string ReadJsonText(object value) => value switch
+    {
+        string text => text,
+        System.Text.Json.JsonDocument document => document.RootElement.GetRawText(),
+        _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? "{}"
+    };
+
     public async Task SavePolicyAsync(
         string companyCode,
         PurchaseMatchPolicy policy,
