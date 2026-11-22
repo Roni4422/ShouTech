@@ -97,6 +97,72 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task PurchaseReceiptReturn_BeforeInvoice_ReducesNetReceiptAndLeavesOnlyGoodQtyBillable()
+        {
+            var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-9110",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 5m, 12m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+
+                var (receiptId, receiptNo) = await service.CreatePurchaseReceiptAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 12m) }, Actor);
+                Assert.Equal(103m, BalanceQty(connectionString, 42));
+                Assert.Equal(36m, GlByAccount(connectionString, "RCV", receiptId)["2203"].Credit);
+
+                var (returnId, returnNo) = await service.CreatePurchaseReceiptReturnAsync(
+                    companyId, receiptId, new DateOnly(2026, 11, 3),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 1m, 12m, SourceLineNo: 1) }, Actor);
+                var receiptReturn = await orders.FindByIdAsync(CommercialDocSide.Purchase, returnId);
+                Assert.NotNull(receiptReturn);
+                Assert.Equal(CommercialDocKinds.PurchaseReceiptReturn, receiptReturn!.DocKind);
+                Assert.Equal(CommercialDocumentStatus.Posted, receiptReturn.Status);
+                Assert.Equal(12m, receiptReturn.GrandTotal);
+                Assert.Equal(102m, BalanceQty(connectionString, 42));
+                Assert.Equal(12m, GlByAccount(connectionString, "RCR", returnId)["2203"].Debit);
+                Assert.Equal(1m, Scalar(connectionString,
+                    $"SELECT COUNT(*) FROM purchase_receipt_return_line_allocations WHERE return_doc_id = {returnId};"));
+
+                var netProgress = await service.GetProgressAsync(CommercialDocSide.Purchase, orderId);
+                Assert.Equal(40m, netProgress.PerFulfilled);
+                Assert.Equal(0m, netProgress.PerBilled);
+
+                var (firstInvoiceId, _) = await service.CreatePurchaseInvoiceAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 4),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 13m) }, Actor);
+                var firstInvoice = await orders.FindByIdAsync(CommercialDocSide.Purchase, firstInvoiceId);
+                Assert.Equal(2m, firstInvoice!.Lines[0].Qty);
+                Assert.Equal(102m, BalanceQty(connectionString, 42));
+
+                var (secondReceiptId, _) = await service.CreatePurchaseReceiptAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 5),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 12m) }, Actor);
+                var secondReceipt = await orders.FindByIdAsync(CommercialDocSide.Purchase, secondReceiptId);
+                Assert.Equal(3m, secondReceipt!.Lines[0].Qty);
+
+                var (secondInvoiceId, _) = await service.CreatePurchaseInvoiceAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 6),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 13m) }, Actor);
+                var secondInvoice = await orders.FindByIdAsync(CommercialDocSide.Purchase, secondInvoiceId);
+                Assert.Equal(3m, secondInvoice!.Lines[0].Qty);
+
+                var finalProgress = await service.GetProgressAsync(CommercialDocSide.Purchase, orderId);
+                Assert.Equal(100m, finalProgress.PerFulfilled);
+                Assert.Equal(100m, finalProgress.PerBilled);
+                Assert.StartsWith("RCR-", returnNo);
+                Assert.StartsWith("RCV-", receiptNo);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task PurchaseOrder_ReceiptThenInvoice_AccruesAndClearsGrniWithoutDoubleReceiving()
         {
             var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
