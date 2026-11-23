@@ -12,27 +12,27 @@ public sealed class BudgetServicePermissionTests
         => new(new BudgetRepository("SQLite", "Data Source=:memory:"), _ => false);
 
     [Fact]
-    public void ReadRequiresBudgetViewPermission()
+    public async Task ReadRequiresBudgetViewPermission()
     {
         var service = DeniedService();
-        Assert.Throws<UnauthorizedAccessException>(() => service.GetAllAsync(Guid.NewGuid()));
-        Assert.Throws<UnauthorizedAccessException>(() => service.GetVarianceAsync(Guid.NewGuid()));
-        Assert.Throws<UnauthorizedAccessException>(() => service.GetFiscalYearsAsync(Guid.NewGuid()));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.GetAllAsync(Guid.NewGuid()));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.GetVarianceAsync(Guid.NewGuid()));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.GetFiscalYearsAsync(Guid.NewGuid()));
     }
 
     [Fact]
-    public void DeleteRequiresBudgetEditPermission()
+    public async Task DeleteRequiresBudgetEditPermission()
     {
         var service = DeniedService();
-        Assert.Throws<UnauthorizedAccessException>(() =>
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             service.DeleteAsync(Guid.NewGuid(), Guid.NewGuid(), "user"));
     }
 
     [Fact]
-    public void StatusChangeRequiresBudgetActivationPermission()
+    public async Task StatusChangeRequiresBudgetActivationPermission()
     {
         var service = DeniedService();
-        Assert.Throws<UnauthorizedAccessException>(() =>
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             service.SetStatusAsync(Guid.NewGuid(), Guid.NewGuid(), "Active", "user"));
     }
 }
