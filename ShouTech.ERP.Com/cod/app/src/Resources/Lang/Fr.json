@@ -3843,6 +3843,8 @@
   "PurchaseAttachments": {
     "Title": "Pièces jointes du document d'achat",
     "Open": "Pièces jointes",
+    "Receipt": "Pièces jointes de la réception",
+    "Return": "Pièces jointes du retour",
     "Upload": "Téléverser",
     "OpenFile": "Ouvrir",
     "Delete": "Supprimer",
