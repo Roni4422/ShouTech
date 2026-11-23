@@ -35,22 +35,15 @@ public sealed class PurchaseAttachmentsWin : BaseWin
         foreach(var b in new[]{_upload,_open,_delete,_refresh,_close})bar.Children.Add(b);
         DockPanel.SetDock(bar,Dock.Top);root.Children.Add(bar);
         _grid.AutoGenerateColumns=false;_grid.IsReadOnly=true;_grid.CanUserAddRows=false;_grid.SelectionMode=DataGridSelectionMode.Single;_grid.SelectionUnit=DataGridSelectionUnit.FullRow;_grid.ItemsSource=_rows;
-        _grid.Columns.Add(new DataGridTextColumn{Header=new TextBlock{Text=T("PurchaseAttachments.FileName"),Tag="PurchaseAttachments.FileName"},Binding=new Binding(nameof(AttachmentRow.Name)),Width=new DataGridLength(2,DataGridLengthUnitType.Star)});
-        _grid.Columns.Add(new DataGridTextColumn{Header=new TextBlock{Text=T("PurchaseAttachments.Size"),Tag="PurchaseAttachments.Size"},Binding=new Binding(nameof(AttachmentRow.Size)),Width=100});
-        _grid.Columns.Add(new DataGridTextColumn{Header=new TextBlock{Text=T("PurchaseAttachments.UploadedBy"),Tag="PurchaseAttachments.UploadedBy"},Binding=new Binding(nameof(AttachmentRow.UploadedBy)),Width=130});
-        _grid.Columns.Add(new DataGridTextColumn{Header=new TextBlock{Text=T("PurchaseAttachments.UploadedAt"),Tag="PurchaseAttachments.UploadedAt"},Binding=new Binding(nameof(AttachmentRow.UploadedAt)),Width=170});
+        _grid.Columns.Add(new DataGridTextColumn{Header=T("PurchaseAttachments.FileName"),Binding=new Binding(nameof(AttachmentRow.Name)),Width=new DataGridLength(2,DataGridLengthUnitType.Star)});
+        _grid.Columns.Add(new DataGridTextColumn{Header=T("PurchaseAttachments.Size"),Binding=new Binding(nameof(AttachmentRow.Size)),Width=100});
+        _grid.Columns.Add(new DataGridTextColumn{Header=T("PurchaseAttachments.UploadedBy"),Binding=new Binding(nameof(AttachmentRow.UploadedBy)),Width=130});
+        _grid.Columns.Add(new DataGridTextColumn{Header=T("PurchaseAttachments.UploadedAt"),Binding=new Binding(nameof(AttachmentRow.UploadedAt)),Width=170});
         root.Children.Add(_grid);Content=root;
         _upload.IsEnabled=AppHost.Permissions.Has("PUR.ATTACH.UPLOAD");_delete.IsEnabled=AppHost.Permissions.Has("PUR.ATTACH.DELETE");
         ApplyLocalizedText();
     }
-    protected override void ApplyLocalizedText()
-    {
-        foreach(var button in new[]{_upload,_open,_delete,_refresh,_close})
-            if(button.Tag is string key) button.Content=T(key);
-        foreach(var column in _grid.Columns)
-            if(column.Header is TextBlock header && header.Tag is string key) header.Text=T(key);
-    }
-    private static void StyleButton(Button button,string key){button.Content=T(key);button.MinWidth=78;button.Margin=new Thickness(4,0,0,0);button.Padding=new Thickness(8,4,8,4);}
+    private static void StyleButton(Button button,string key){button.Tag=key;button.Content=T(key);button.MinWidth=78;button.Margin=new Thickness(4,0,0,0);button.Padding=new Thickness(8,4,8,4);}
 
     protected override void ApplyLocalizedText()
     {
