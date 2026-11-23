@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -65,7 +66,7 @@ public sealed class PurchaseAttachmentsWin : BaseWin
     private async Task RefreshAsync()
     {
         var service=AppHost.PurchaseAttachments;if(service is null){MessageBox.Show(this,T("PurchaseAttachments.MissingService"),Title);return;}
-        try{_rows.Clear();foreach(var a in await service.ListAsync(_companyId,_documentId)){_rows.Add(new(a.Id,a.OriginalName,$"{a.ByteLength/1024d:N1} KB",a.UploadedBy,a.UploadedAt.ToLocalTime().ToString("g")));}}
+        try{_rows.Clear();foreach(var a in await service.ListAsync(_companyId,_documentId)){_rows.Add(new(a.Id,a.OriginalName,$"{a.ByteLength/1024d:N1} KB",a.UploadedBy,a.UploadedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)));}}
         catch(Exception ex){MessageBox.Show(this,ex.Message,Title,MessageBoxButton.OK,MessageBoxImage.Warning);}
     }
     private async Task UploadAsync()
