@@ -23,6 +23,83 @@ namespace Kern.Tests
     public class OrderServiceTests
     {
         [Fact]
+        public async Task PurchaseRequisition_ApprovalIsSequentialAndPreventsSelfApproval()
+        {
+            var (ordersService, orders, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var draft = new CommercialDocumentDraft(
+                    companyId,
+                    CommercialDocKinds.PurchaseRequisition,
+                    "PRQ-9001",
+                    new DateOnly(2026, 11, 1),
+                    null,
+                    null,
+                    null,
+                    "SAR",
+                    1m,
+                    "Office supplies",
+                    new[]
+                    {
+                        new CommercialLineDraft(42, "MAT-42", "Order test item", "PCS", 3m, 12m)
+                    });
+                var requisitionId = await orders.CreateDraftAsync(
+                    CommercialDocSide.Purchase, draft, "requester");
+                var repository = new PurchaseRequisitionWorkflowRepository("SQLite", connectionString);
+                var workflow = new PurchaseRequisitionWorkflowService(repository, ordersService, _ => true);
+
+                await workflow.SubmitAsync(companyId, requisitionId,
+                    new[]
+                    {
+                        new PurchaseRequisitionApprovalStep(1, "manager-1"),
+                        new PurchaseRequisitionApprovalStep(2, "manager-2")
+                    },
+                    "requester");
+
+                var submitted = await workflow.GetAsync(companyId, requisitionId);
+                Assert.NotNull(submitted);
+                Assert.Equal("Submitted", submitted!.Status);
+                Assert.Equal(2, submitted.Approvals.Count);
+                Assert.Equal("Pending", submitted.Approvals[0].Status);
+
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    workflow.DecideAsync(companyId, requisitionId,
+                        submitted.Approvals[0].ApprovalId, "requester", true, null));
+
+                await workflow.DecideAsync(companyId, requisitionId,
+                    submitted.Approvals[0].ApprovalId, "manager-1", true, null);
+                var afterFirst = await workflow.GetAsync(companyId, requisitionId);
+                Assert.NotNull(afterFirst);
+                Assert.Equal("Submitted", afterFirst!.Status);
+                Assert.Equal("Approved", afterFirst.Approvals[0].Status);
+                Assert.Equal("Pending", afterFirst.Approvals[1].Status);
+
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    workflow.DecideAsync(companyId, requisitionId,
+                        afterFirst.Approvals[1].ApprovalId, "manager-2", true, null));
+
+                await workflow.DecideAsync(companyId, requisitionId,
+                    afterFirst.Approvals[1].ApprovalId, "manager-2", true, null);
+                var approved = await workflow.GetAsync(companyId, requisitionId);
+                Assert.NotNull(approved);
+                Assert.Equal("Approved", approved!.Status);
+                Assert.All(approved.Approvals, step => Assert.Equal("Approved", step.Status));
+
+                await using var connection = new SqliteConnection(connectionString);
+                await connection.OpenAsync();
+                await using var events = connection.CreateCommand();
+                events.CommandText = "SELECT COUNT(*) FROM purchase_requisition_events WHERE company_id = $company AND requisition_doc_id = $requisition";
+                events.Parameters.AddWithValue("$company", companyId.ToString("D"));
+                events.Parameters.AddWithValue("$requisition", requisitionId);
+                Assert.Equal(4L, Convert.ToInt64(await events.ExecuteScalarAsync()));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task SalesOrder_SaveReloadPost_PersistsSchedulingFields()
         {
             var (service, orders, companyId, _, cleanup) = await CreateAsync();
