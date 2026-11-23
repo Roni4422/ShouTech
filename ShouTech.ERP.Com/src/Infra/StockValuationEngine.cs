@@ -631,9 +631,9 @@ public static class StockValuationEngine
               INSERT INTO material_stock_movements
                   (company_id, warehouse_id, material_id, movement_date, movement_type, document_no,
                    qty_in, qty_out, unit_cost, note,
-                   balance_qty_after, valuation_rate, stock_value_after, cost_amount, valuation_method)
+                   balance_qty_after, valuation_rate, stock_value_after, cost_amount, valuation_method, source_document_line_id)
               VALUES (@c, @w, @m, @d, @t, @doc, @qin, @qout, @cost, @note,
-                      @balQty, @rate, @stockVal, @costAmt, @method);
+                      @balQty, @rate, @stockVal, @costAmt, @method, @sourceLine);
               SELECT last_insert_rowid();
               """;
         using var cmd = CreateCommand(connection, transaction, sql);
