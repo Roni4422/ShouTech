@@ -30,9 +30,12 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
     private readonly ObservableCollection<ReturnLineVm> _lines = new();
     private readonly Button _load = new();
     private readonly Button _post = new();
+    private readonly Button _receiptAttachments = new();
+    private readonly Button _returnAttachments = new();
     private readonly Button _close = new();
     private Guid _companyId;
     private long? _receiptId;
+    private long? _returnId;
     private string _loadedReceiptNo = string.Empty;
     private string _loadedSupplierName = string.Empty;
     private bool _busy;
@@ -52,7 +55,7 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
     protected override void ApplyLocalizedText()
     {
         Title = T("Purchasing.ReceiptReturn.Title");
-        F2Ui.ApplyTexts(_labels, _headers, new[] { _load, _post, _close }, T);
+        F2Ui.ApplyTexts(_labels, _headers, new[] { _load, _post, _receiptAttachments, _returnAttachments, _close }, T);
         _receiptInfo.Text = _receiptId is null ? string.Empty : Tf("Purchasing.ReceiptReturn.Loaded", _loadedReceiptNo, _loadedSupplierName);
     }
 
@@ -86,13 +89,21 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         F2Ui.StyleButton(_load, "Purchasing.ReceiptReturn.LoadReceipt");
         F2Ui.StyleButton(_post, "Purchasing.ReceiptReturn.PostReturn");
+        F2Ui.StyleButton(_receiptAttachments, "PurchaseAttachments.Receipt");
+        F2Ui.StyleButton(_returnAttachments, "PurchaseAttachments.Return");
         F2Ui.StyleButton(_close, "Common.Close");
         _post.IsEnabled = false;
+        _receiptAttachments.IsEnabled = false;
+        _returnAttachments.IsEnabled = false;
+        _receiptAttachments.Click += async (_, _) => await OpenAttachmentsAsync(_receiptId);
+        _returnAttachments.Click += async (_, _) => await OpenAttachmentsAsync(_returnId);
         _load.Click += async (_, _) => await LoadReceiptAsync();
         _post.Click += async (_, _) => await PostReturnAsync();
         _close.Click += (_, _) => Close();
         buttons.Children.Add(_load);
         buttons.Children.Add(_post);
+        buttons.Children.Add(_receiptAttachments);
+        buttons.Children.Add(_returnAttachments);
         buttons.Children.Add(_close);
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
@@ -160,6 +171,9 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
                 throw new InvalidOperationException(T("Purchasing.ReceiptReturn.PostedReceiptRequired"));
             var available = await AppHost.Orders.GetPurchaseReceiptReturnableLinesAsync(_companyId, receipt.DocId);
             _receiptId = receipt.DocId;
+            _returnId = null;
+            _receiptAttachments.IsEnabled = true;
+            _returnAttachments.IsEnabled = false;
             _loadedReceiptNo = receipt.DocNo;
             _loadedSupplierName = receipt.PartyName ?? receipt.PartyCode ?? string.Empty;
             _lines.Clear();
@@ -188,6 +202,9 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
         {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PurchaseReceiptReturnWin.LoadReceiptAsync");
             _receiptId = null;
+            _returnId = null;
+            _receiptAttachments.IsEnabled = false;
+            _returnAttachments.IsEnabled = false;
             _lines.Clear();
             _receiptInfo.Text = string.Empty;
             _loadedReceiptNo = string.Empty;
@@ -199,6 +216,24 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
         {
             _busy = false;
             _load.IsEnabled = true;
+        }
+    }
+
+    private async Task OpenAttachmentsAsync(long? documentId)
+    {
+        if (documentId is not long id || AppHost.PurchaseAttachments is null)
+        {
+            MessageBox.Show(this, T("PurchaseAttachments.MissingService"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        try
+        {
+            new PurchaseAttachmentsWin(_companyId, id, CurrentUserId) { Owner = this }.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PurchaseReceiptReturnWin.OpenAttachments");
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -228,16 +263,14 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
                 ParseSerials(x.SerialsText))).ToArray();
             var result = await AppHost.Orders.CreatePurchaseReceiptReturnAsync(
                 _companyId, receiptId, DateOnly.FromDateTime(DateTime.Today), drafts, CurrentUserId, _reason.Text.Trim());
+            _returnId = result.ReturnId;
+            _returnAttachments.IsEnabled = true;
+            _lines.Clear();
+            _post.IsEnabled = false;
+            _status.Text = Tf("Purchasing.ReceiptReturn.Created", result.ReturnDocNo);
             MessageBox.Show(this,
                 Tf("Purchasing.ReceiptReturn.Created", result.ReturnDocNo),
                 Title, MessageBoxButton.OK, MessageBoxImage.Information);
-            _receiptId = null;
-            _lines.Clear();
-            _receiptInfo.Text = string.Empty;
-            _loadedReceiptNo = string.Empty;
-            _loadedSupplierName = string.Empty;
-            _status.Text = string.Empty;
-            _receiptNo.Clear();
             _reason.Clear();
         }
         catch (Exception ex)
