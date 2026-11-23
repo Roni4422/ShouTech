@@ -37,3 +37,6 @@ INSERT OR IGNORE INTO permissions(permission_code,permission_name,group_code,fea
 INSERT OR IGNORE INTO role_permissions(role_id,permission_id) SELECT r.role_id,p.permission_id FROM roles r CROSS JOIN permissions p WHERE r.role_code='ROLE_ADMINISTRATOR' AND p.permission_code LIKE 'PUR.REQ.%';
 INSERT OR IGNORE INTO role_permissions(role_id,permission_id) SELECT r.role_id,p.permission_id FROM roles r CROSS JOIN permissions p WHERE r.role_code='ROLE_USER' AND p.permission_code IN ('PUR.REQ.VIEW','PUR.REQ.EDIT');
 INSERT OR IGNORE INTO role_permissions(role_id,permission_id) SELECT r.role_id,p.permission_id FROM roles r CROSS JOIN permissions p WHERE r.role_code='ROLE_VIEWER' AND p.permission_code='PUR.REQ.VIEW';
+
+-- A requisition can create at most one PO, even under concurrent conversion attempts.
+CREATE UNIQUE INDEX IF NOT EXISTS ux_purchase_requisition_single_po_link ON document_links(company_id,source_doc_kind,source_doc_id,target_doc_kind) WHERE source_doc_kind='PRQ' AND target_doc_kind='PO';
