@@ -3881,6 +3881,15 @@
     "InvalidInput": "Girilen değerleri kontrol edin.",
     "NoReceipt": "Bu numarayla onaylanmış mal kabul bulunamadı.",
     "NoVoucher": "Geçerli bir ek maliyet belge kimliği girin."
+  ,
+    "Search": "Belgelerde ara",
+    "Refresh": "Geçmişi yenile",
+    "LoadSelected": "Seçileni yükle",
+    "ColNumber": "Belge",
+    "ColReceipt": "Mal kabul",
+    "ColDate": "Tarih",
+    "ColAmount": "Tutar",
+    "ColStatus": "Durum"
   },
   "PurchaseRequisition": {
     "Title": "Satın alma talepleri",
