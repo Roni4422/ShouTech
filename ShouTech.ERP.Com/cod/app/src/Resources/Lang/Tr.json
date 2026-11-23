@@ -151,8 +151,11 @@
     "MaterialMoveNoHistory": "Aktarılacak malzeme hareketi bulunamadı.",
     "MaterialMoveFailed": "Malzeme hareketleri aktarılamadı.",
     "MaterialMoveCompleted": "Malzeme hareketleri aktarıldı. Kayıt: {0}",
-    "MaterialDiscounts": "Malzeme İndirimleri"
-  },
+    "MaterialDiscounts": "Malzeme İndirimleri",
+ 
+    "PurchaseRequisitions": "Satın alma talepleri",
+    "LandedCosts": "Ek maliyetler"
+   },
   "Accounts": {
     "Title": "Hesaplar",
     "ChartOfAccounts": "Hesap Planı",
@@ -3848,6 +3851,36 @@
     "Size": "Boyut",
     "UploadedBy": "Yükleyen",
     "UploadedAt": "Yüklenme tarihi"
+  },
+  "PurchaseLandedCost": {
+    "Title": "Satın alma ek maliyetleri",
+    "Number": "Belge no.",
+    "Date": "Tarih",
+    "ReceiptNo": "Mal kabul no.",
+    "Currency": "Para birimi",
+    "ExchangeRate": "Döviz kuru",
+    "VoucherId": "Ek maliyet belge kimliği",
+    "ReversalNo": "Ters kayıt no.",
+    "ReversalDate": "Ters kayıt tarihi",
+    "Reason": "Ters kayıt nedeni",
+    "ChargeCode": "Masraf kodu",
+    "Description": "Açıklama",
+    "Amount": "Tutar",
+    "Basis": "Dağıtım esası",
+    "AddCharge": "Masraf ekle",
+    "RemoveCharge": "Masrafı kaldır",
+    "CreateDraft": "Taslak oluştur",
+    "Post": "Muhasebeleştir",
+    "Reverse": "Belgeyi ters kaydet",
+    "Close": "Kapat",
+    "DraftCreated": "Taslak oluşturuldu:",
+    "Posted": "Muhasebeleştirildi. Yevmiye kaydı:",
+    "Reversed": "Ters kaydedildi. Yevmiye kaydı:",
+    "ServiceUnavailable": "Satın alma ek maliyet hizmeti kullanılamıyor.",
+    "PermissionDenied": "Bu işlevi kullanma izniniz yok.",
+    "InvalidInput": "Girilen değerleri kontrol edin.",
+    "NoReceipt": "Bu numarayla onaylanmış mal kabul bulunamadı.",
+    "NoVoucher": "Geçerli bir ek maliyet belge kimliği girin."
   },
   "PurchaseRequisition": {
     "Title": "Satın alma talepleri",
