@@ -151,8 +151,11 @@
     "MaterialMoveNoHistory": "Aucun historique de matière à transférer.",
     "MaterialMoveFailed": "Impossible de transférer l'historique de la matière.",
     "MaterialMoveCompleted": "Historique transféré. Enregistrements : {0}",
-    "MaterialDiscounts": "Remises sur les Matières"
-  },
+    "MaterialDiscounts": "Remises sur les Matières",
+ 
+    "PurchaseRequisitions": "Demandes d’achat",
+    "LandedCosts": "Coûts d’approche"
+   },
   "Accounts": {
     "Title": "Comptes",
     "ChartOfAccounts": "Plan Comptable",
@@ -3848,6 +3851,36 @@
     "Size": "Taille",
     "UploadedBy": "Téléversé par",
     "UploadedAt": "Date de téléversement"
+  },
+  "PurchaseLandedCost": {
+    "Title": "Coûts d’approche des achats",
+    "Number": "N° de pièce",
+    "Date": "Date",
+    "ReceiptNo": "N° de réception",
+    "Currency": "Devise",
+    "ExchangeRate": "Taux de change",
+    "VoucherId": "ID du coût d’approche",
+    "ReversalNo": "N° de contrepassation",
+    "ReversalDate": "Date de contrepassation",
+    "Reason": "Motif de contrepassation",
+    "ChargeCode": "Code de frais",
+    "Description": "Description",
+    "Amount": "Montant",
+    "Basis": "Base de répartition",
+    "AddCharge": "Ajouter des frais",
+    "RemoveCharge": "Supprimer les frais",
+    "CreateDraft": "Créer le brouillon",
+    "Post": "Comptabiliser",
+    "Reverse": "Contrepasser",
+    "Close": "Fermer",
+    "DraftCreated": "Brouillon créé :",
+    "Posted": "Comptabilisé. Écriture :",
+    "Reversed": "Contrepassé. Écriture :",
+    "ServiceUnavailable": "Le service des coûts d’approche est indisponible.",
+    "PermissionDenied": "Vous n’avez pas l’autorisation d’utiliser cette fonction.",
+    "InvalidInput": "Vérifiez les valeurs saisies.",
+    "NoReceipt": "Aucune réception validée ne correspond à ce numéro.",
+    "NoVoucher": "Saisissez un identifiant de coût d’approche valide."
   },
   "PurchaseRequisition": {
     "Title": "Demandes d'achat",
