@@ -260,6 +260,7 @@ public sealed class PurchaseLandedCostRepository
                 header.ExecuteNonQuery();
             }
 
+            var originalCharges = new List<(string Code, string Description, string Basis, decimal Amount, decimal Base, object Account)>();
             using (var charges = Cmd(connection, transaction, """
                 SELECT charge_code, description, allocation_basis, amount, base_amount, expense_account_code
                 FROM purchase_landed_cost_charges WHERE landed_cost_id = @id
@@ -268,25 +269,33 @@ public sealed class PurchaseLandedCostRepository
                 Add(charges, "@id", Id(landedCostId));
                 using var reader = charges.ExecuteReader();
                 while (reader.Read())
-                {
-                    using var insert = Cmd(connection, transaction, """
-                        INSERT INTO purchase_landed_cost_charges
-                            (charge_id, landed_cost_id, charge_code, description, allocation_basis,
-                             amount, base_amount, expense_account_code)
-                        VALUES (@id, @landed, @code, @description, @basis, @amount, @base, @account)
-                        """);
-                    Add(insert, "@id", Id(Guid.NewGuid()));
-                    Add(insert, "@landed", Id(reversalId));
-                    Add(insert, "@code", Text(reader.GetValue(0)) ?? "");
-                    Add(insert, "@description", "Reversal: " + (Text(reader.GetValue(1)) ?? ""));
-                    Add(insert, "@basis", Text(reader.GetValue(2)) ?? "Manual");
-                    Add(insert, "@amount", -Dec(reader.GetValue(3)));
-                    Add(insert, "@base", -Dec(reader.GetValue(4)));
-                    Add(insert, "@account", reader.IsDBNull(5) ? DBNull.Value : reader.GetValue(5));
-                    insert.ExecuteNonQuery();
-                }
+                    originalCharges.Add((Text(reader.GetValue(0)) ?? "", Text(reader.GetValue(1)) ?? "",
+                        Text(reader.GetValue(2)) ?? "Manual", Dec(reader.GetValue(3)), Dec(reader.GetValue(4)),
+                        reader.IsDBNull(5) ? DBNull.Value : reader.GetValue(5)));
+            }
+            var reversalChargeIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in originalCharges)
+            {
+                var newChargeId = Guid.NewGuid();
+                reversalChargeIds[item.Code] = newChargeId;
+                using var insert = Cmd(connection, transaction, """
+                    INSERT INTO purchase_landed_cost_charges
+                        (charge_id, landed_cost_id, charge_code, description, allocation_basis,
+                         amount, base_amount, expense_account_code)
+                    VALUES (@id, @landed, @code, @description, @basis, @amount, @base, @account)
+                    """);
+                Add(insert, "@id", Id(newChargeId));
+                Add(insert, "@landed", Id(reversalId));
+                Add(insert, "@code", item.Code);
+                Add(insert, "@description", "Reversal: " + item.Description);
+                Add(insert, "@basis", item.Basis);
+                Add(insert, "@amount", -item.Amount);
+                Add(insert, "@base", -item.Base);
+                Add(insert, "@account", item.Account);
+                insert.ExecuteNonQuery();
             }
 
+            var originalAllocations = new List<(Guid Charge, long Line, long Material, long Warehouse, decimal Qty, decimal Amount, decimal Unit)>();
             using (var allocations = Cmd(connection, transaction, """
                 SELECT charge_id, receipt_line_id, material_id, warehouse_id, base_quantity,
                        allocated_base_amount, unit_cost_addition
@@ -295,53 +304,56 @@ public sealed class PurchaseLandedCostRepository
             {
                 Add(allocations, "@id", Id(landedCostId));
                 using var reader = allocations.ExecuteReader();
-                var originals = new List<(Guid Charge, long Line, long Material, long Warehouse, decimal Qty, decimal Amount, decimal Unit)>();
                 while (reader.Read())
-                    originals.Add((Guid.Parse(Text(reader.GetValue(0))!), Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture),
+                    originalAllocations.Add((Guid.Parse(Text(reader.GetValue(0))!), Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture),
                         Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture), Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture),
                         Dec(reader.GetValue(4)), Dec(reader.GetValue(5)), Dec(reader.GetValue(6))));
-                foreach (var item in originals)
+            }
+            using (var originalChargeCodes = Cmd(connection, transaction, """
+                SELECT charge_id, charge_code FROM purchase_landed_cost_charges WHERE landed_cost_id = @id
+                """))
+            {
+                Add(originalChargeCodes, "@id", Id(landedCostId));
+                using var reader = originalChargeCodes.ExecuteReader();
+                while (reader.Read())
                 {
-                    // Charge identifiers are re-created above; resolve by code to keep the reversal independent.
-                    string code;
-                    using (var codeQuery = Cmd(connection, transaction, """
-                        SELECT charge_code FROM purchase_landed_cost_charges WHERE charge_id = @id
-                        """))
-                    {
-                        Add(codeQuery, "@id", Id(item.Charge));
-                        code = Convert.ToString(codeQuery.ExecuteScalar(), CultureInfo.InvariantCulture) ?? "";
-                    }
-                    Guid newCharge;
-                    using (var chargeQuery = Cmd(connection, transaction, """
-                        SELECT charge_id FROM purchase_landed_cost_charges
-                        WHERE landed_cost_id = @landed AND charge_code = @code
-                        """))
-                    {
-                        Add(chargeQuery, "@landed", Id(reversalId));
-                        Add(chargeQuery, "@code", code);
-                        newCharge = Guid.Parse(Convert.ToString(chargeQuery.ExecuteScalar(), CultureInfo.InvariantCulture)!);
-                    }
-                    using var insert = Cmd(connection, transaction, """
-                        INSERT INTO purchase_landed_cost_allocations
-                            (allocation_id, landed_cost_id, charge_id, company_id, receipt_doc_id,
-                             receipt_line_id, material_id, warehouse_id, base_quantity,
-                             allocated_base_amount, unit_cost_addition)
-                        VALUES (@id, @landed, @charge, @company, @receipt, @line,
-                                @material, @warehouse, @qty, @amount, @unit)
-                        """);
-                    Add(insert, "@id", Id(Guid.NewGuid()));
-                    Add(insert, "@landed", Id(reversalId));
-                    Add(insert, "@charge", Id(newCharge));
-                    Add(insert, "@company", company);
-                    Add(insert, "@receipt", receiptId);
-                    Add(insert, "@line", item.Line);
-                    Add(insert, "@material", item.Material);
-                    Add(insert, "@warehouse", item.Warehouse);
-                    Add(insert, "@qty", item.Qty);
-                    Add(insert, "@amount", -item.Amount);
-                    Add(insert, "@unit", -item.Unit);
-                    insert.ExecuteNonQuery();
+                    var oldChargeId = Guid.Parse(Text(reader.GetValue(0))!);
+                    var code = Text(reader.GetValue(1)) ?? "";
+                    if (!reversalChargeIds.ContainsKey(code))
+                        throw new InvalidOperationException("A landed-cost reversal charge could not be mapped.");
                 }
+            }
+            foreach (var item in originalAllocations)
+            {
+                string code;
+                using (var codeQuery = Cmd(connection, transaction,
+                    "SELECT charge_code FROM purchase_landed_cost_charges WHERE charge_id = @id"))
+                {
+                    Add(codeQuery, "@id", Id(item.Charge));
+                    code = Convert.ToString(codeQuery.ExecuteScalar(), CultureInfo.InvariantCulture) ?? "";
+                }
+                if (!reversalChargeIds.TryGetValue(code, out var newCharge))
+                    throw new InvalidOperationException("A reversal allocation has no matching reversal charge.");
+                using var insert = Cmd(connection, transaction, """
+                    INSERT INTO purchase_landed_cost_allocations
+                        (allocation_id, landed_cost_id, charge_id, company_id, receipt_doc_id,
+                         receipt_line_id, material_id, warehouse_id, base_quantity,
+                         allocated_base_amount, unit_cost_addition)
+                    VALUES (@id, @landed, @charge, @company, @receipt, @line,
+                            @material, @warehouse, @qty, @amount, @unit)
+                    """);
+                Add(insert, "@id", Id(Guid.NewGuid()));
+                Add(insert, "@landed", Id(reversalId));
+                Add(insert, "@charge", Id(newCharge));
+                Add(insert, "@company", company);
+                Add(insert, "@receipt", receiptId);
+                Add(insert, "@line", item.Line);
+                Add(insert, "@material", item.Material);
+                Add(insert, "@warehouse", item.Warehouse);
+                Add(insert, "@qty", item.Qty);
+                Add(insert, "@amount", -item.Amount);
+                Add(insert, "@unit", -item.Unit);
+                insert.ExecuteNonQuery();
             }
 
             var journalId = PostCore(connection, transaction, companyId, reversalId, actor, "LND-REV", cancellationToken);
