@@ -103,9 +103,9 @@ public static class StockValuationEngine
 
         var isPg = NormalizeProvider(provider) == "PostgreSQL";
         var company = companyId.Trim();
+        if (string.IsNullOrWhiteSpace(stockCompanyCode)) throw new ArgumentException("Stock company code is required.", nameof(stockCompanyCode));
         var stockCompany = stockCompanyCode.Trim();
         object DbGuid(Guid value) => isPg ? value : value.ToString("D");
-        if (string.IsNullOrWhiteSpace(stockCompany)) throw new ArgumentException("Stock company code is required.", nameof(stockCompanyCode));
         string receiptNumber;
         long receiptLineId;
         using (var allocation = CreateCommand(connection, transaction, """
@@ -202,7 +202,7 @@ public static class StockValuationEngine
         if (layerId is not null)
         {
             using var movementCost = CreateCommand(connection, transaction, """
-                SELECT cost_amount FROM material_stock_movements
+                SELECT COALESCE(cost_amount, 0) FROM material_stock_movements
                 WHERE stock_movement_id = @movement AND company_id = @company
                 """);
             Add(movementCost, "@movement", sourceMovementId);
@@ -262,7 +262,7 @@ public static class StockValuationEngine
         using (var updateMovement = CreateCommand(connection, transaction, """
             UPDATE material_stock_movements
             SET unit_cost = @cost, valuation_rate = @rate,
-                cost_amount = @movementCost, stock_value_after = stock_value_after + @amount
+                cost_amount = @movementCost, stock_value_after = COALESCE(stock_value_after, 0) + @amount
             WHERE stock_movement_id = @movement AND company_id = @company
             """))
         {
@@ -278,8 +278,8 @@ public static class StockValuationEngine
 
         if (inventoryAdjustment != 0m)
         {
-            if (balance is null)
-                throw new InvalidOperationException("The stock balance for the receipt line is missing.");
+            if (balance is null || balance.Quantity < remainingQty)
+                throw new InvalidOperationException("The stock balance does not contain the remaining quantity of the receipt cost source.");
             var newStockValue = ValuationMath.RoundMoney(balance.Value + inventoryAdjustment);
             if (newStockValue < 0m)
                 throw new InvalidOperationException("The landed-cost adjustment would make inventory value negative.");
