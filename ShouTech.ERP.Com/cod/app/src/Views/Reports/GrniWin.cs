@@ -37,11 +37,13 @@ public sealed class GrniWin : RptBase
             new() { Key = "Bucket31_60", HeaderTextKey = "Reports.Col.Aging31_60", Type = RptColType.Money, Width = 105, Format = "N2" },
             new() { Key = "Bucket61_90", HeaderTextKey = "Reports.Col.Aging61_90", Type = RptColType.Money, Width = 105, Format = "N2" },
             new() { Key = "Bucket90Plus", HeaderTextKey = "Reports.Col.Aging90Plus", Type = RptColType.Money, Width = 105, Format = "N2" },
-            new() { Key = "GlBalanceBase", HeaderTextKey = "Reports.Col.GrniGlBalance", Type = RptColType.Money, Width = 125, Format = "N2" },
-            new() { Key = "DifferenceBase", HeaderTextKey = "Reports.Col.GrniDifference", Type = RptColType.Money, Width = 125, Format = "N2" },
+            new() { Key = "GlBalanceBase", HeaderTextKey = "Reports.Col.GrniGlBalanceCompany", Type = RptColType.Money, Width = 125, Format = "N2" },
+            new() { Key = "DifferenceBase", HeaderTextKey = "Reports.Col.GrniDifferenceCompany", Type = RptColType.Money, Width = 135, Format = "N2" },
+            new() { Key = "AgeBand", HeaderTextKey = "Reports.Col.AgeBand", Type = RptColType.Text, Width = 105 },
         },
         Filters = new RptFlt[]
         {
+            new() { Key = "From", LabelTextKey = "Reports.Filter.DateFrom", Kind = RptFltKind.DateFrom, DefaultValue = DateTime.Today.AddYears(-1) },
             new() { Key = "AsOf", LabelTextKey = "Reports.Filter.AsOf", Kind = RptFltKind.DateTo, DefaultValue = DateTime.Today },
             new() { Key = "Search", LabelTextKey = "Reports.Filter.Search", Kind = RptFltKind.Text },
         }
@@ -50,7 +52,9 @@ public sealed class GrniWin : RptBase
     protected override async Task<RptData> LoadDataAsync(RptFltValues filters, CancellationToken ct)
     {
         var asOf = filters.GetDateOr("AsOf", DateTime.Today).Date;
-        var raw = await RptQuery.GoodsReceivedNotInvoicedAsync(DateTime.MinValue, asOf, ct);
+        var from = filters.GetDateOr("From", DateTime.Today.AddYears(-1)).Date;
+        if (from > asOf) throw new InvalidOperationException("The GRNI start date cannot be after the as-of date.");
+        var raw = await RptQuery.GoodsReceivedNotInvoicedAsync(from, asOf, ct);
         var reconciliation = await RptQuery.GoodsReceivedNotInvoicedReconciliationAsync(asOf, ct);
         // Reconciliation may return one row per account or receipt group.
         // Sum every row so the report never silently drops all but the first group.
@@ -71,11 +75,16 @@ public sealed class GrniWin : RptBase
             var remainingAmount = RptWinUtil.Dec(row.GetValueOrDefault("RemainingBaseAmount"));
             var values = row.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
             values["AgeDays"] = ageDays;
+            values["AgeBand"] = ageDays <= 30 ? T("Reports.Aging.Current")
+                : ageDays <= 60 ? T("Reports.Aging.31_60")
+                : ageDays <= 90 ? T("Reports.Aging.61_90")
+                : T("Reports.Aging.90Plus");
             values["Bucket0_30"] = ageDays <= 30 ? remainingAmount : 0m;
             values["Bucket31_60"] = ageDays is > 30 and <= 60 ? remainingAmount : 0m;
             values["Bucket61_90"] = ageDays is > 60 and <= 90 ? remainingAmount : 0m;
             values["Bucket90Plus"] = ageDays > 90 ? remainingAmount : 0m;
-            agedRows.Add(values);
+            if (RptWinUtil.Dec(values.GetValueOrDefault("RemainingQty")) > 0m)
+                agedRows.Add(values);
         }
 
         var search = filters.GetString("Search")?.Trim();
