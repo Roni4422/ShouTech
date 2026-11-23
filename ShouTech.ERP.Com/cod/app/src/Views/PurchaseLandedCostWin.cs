@@ -79,6 +79,10 @@ public sealed class PurchaseLandedCostWin : BaseWin
         StyleButton(_refresh, "PurchaseLandedCost.Refresh");
         StyleButton(_loadSelected, "PurchaseLandedCost.LoadSelected");
         StyleButton(_close, "PurchaseLandedCost.Close");
+        toolbar.Children.Add(new TextBlock { Text = T("PurchaseLandedCost.Search"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 4, 0) });
+        _search.Width = 170;
+        _search.VerticalContentAlignment = VerticalAlignment.Center;
+        toolbar.Children.Add(_search);
         _add.Click += (_, _) => _charges.Add(new ChargeRow { Code = "OTHER", Description = "", Amount = "0", Basis = "Value" });
         _remove.Click += (_, _) => { if (_grid.SelectedItem is ChargeRow row) _charges.Remove(row); };
         _create.Click += async (_, _) => await CreateDraftAsync();
