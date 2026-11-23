@@ -124,6 +124,8 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
         AddColumn("Purchasing.ReceiptReturn.Returned", nameof(ReturnLineVm.ReturnedQty), 90, true, "N4");
         AddColumn("Purchasing.ReceiptReturn.Returnable", nameof(ReturnLineVm.ReturnableQty), 100, true, "N4");
         AddColumn("Purchasing.ReceiptReturn.ReturnQty", nameof(ReturnLineVm.ReturnQty), 105, false, "N4");
+        AddColumn("Purchasing.ReceiptReturn.BatchAllocations", nameof(ReturnLineVm.BatchAllocationsText), 180, false);
+        AddColumn("Purchasing.ReceiptReturn.Serials", nameof(ReturnLineVm.SerialsText), 180, false);
         _grid.CellEditEnding += (_, _) => Dispatcher.BeginInvoke(new Action(UpdateStatus));
         content.Children.Add(_grid);
         root.Children.Add(content);
@@ -221,7 +223,9 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
         {
             var drafts = selected.Select(x => new CommercialLineDraft(
                 x.MaterialId, x.MaterialCode, x.Description, x.Unit, x.ReturnQty,
-                x.UnitPrice, x.DiscountPct, 0m, x.WarehouseId, x.ReceiptLineNo)).ToArray();
+                x.UnitPrice, x.DiscountPct, 0m, x.WarehouseId, x.ReceiptLineNo,
+                ParseBatchAllocations(x.BatchAllocationsText),
+                ParseSerials(x.SerialsText))).ToArray();
             var result = await AppHost.Orders.CreatePurchaseReceiptReturnAsync(
                 _companyId, receiptId, DateOnly.FromDateTime(DateTime.Today), drafts, CurrentUserId, _reason.Text.Trim());
             MessageBox.Show(this,
@@ -255,6 +259,32 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
         _status.Text = Tf("Purchasing.ReceiptReturn.Total", total);
     }
 
+    private static IReadOnlyList<CommercialBatchAllocationDraft>? ParseBatchAllocations(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var result = new List<CommercialBatchAllocationDraft>();
+        foreach (var token in value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var pair = token.Split('=', 2, StringSplitOptions.TrimEntries);
+            if (pair.Length != 2 || string.IsNullOrWhiteSpace(pair[0])
+                || !decimal.TryParse(pair[1], NumberStyles.Number, CultureInfo.InvariantCulture, out var qty)
+                || qty <= 0m)
+                throw new FormatException(T("Purchasing.ReceiptReturn.InvalidTracking"));
+            result.Add(new CommercialBatchAllocationDraft(pair[0], qty));
+        }
+        return result;
+    }
+
+    private static IReadOnlyList<CommercialSerialSelectionDraft>? ParseSerials(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var serials = value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (serials.Any(string.IsNullOrWhiteSpace)
+            || serials.Distinct(StringComparer.OrdinalIgnoreCase).Count() != serials.Length)
+            throw new FormatException(T("Purchasing.ReceiptReturn.InvalidTracking"));
+        return serials.Select(serial => new CommercialSerialSelectionDraft(serial)).ToArray();
+    }
+
     private sealed class ReturnLineVm
     {
         public int ReceiptLineNo { get; set; }
@@ -268,6 +298,8 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
         public decimal ReturnedQty { get; set; }
         public decimal ReturnableQty { get; set; }
         public decimal ReturnQty { get; set; }
+        public string BatchAllocationsText { get; set; } = string.Empty;
+        public string SerialsText { get; set; } = string.Empty;
         public decimal UnitPrice { get; set; }
         public decimal DiscountPct { get; set; }
         public long? WarehouseId { get; set; }
