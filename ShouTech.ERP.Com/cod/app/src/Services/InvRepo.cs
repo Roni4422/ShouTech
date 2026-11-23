@@ -1471,7 +1471,7 @@ public static class InvRepo
     public static IReadOnlyDictionary<int, decimal> GetAlreadyReturnedQuantities(
         long originalDocId, InvDocKind originalKind)
     {
-        if (originalDocId <= 0) throw new ArgumentOutOfRangeException(nameof(originalDocId));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(originalDocId);
         if (originalKind is not (InvDocKind.SalesInvoice or InvDocKind.PosSale))
             throw new ArgumentOutOfRangeException(nameof(originalKind));
 
@@ -1508,7 +1508,7 @@ public static class InvRepo
 
     public static IReadOnlyDictionary<int, decimal> GetAlreadyReturnedPurchaseQuantities(long originalDocId)
     {
-        if (originalDocId <= 0) throw new ArgumentOutOfRangeException(nameof(originalDocId));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(originalDocId);
         var connectionString = DatabaseRuntime.GetConnectionString()
             ?? throw new InvalidOperationException("No database connection.");
         using var connection = Open(connectionString);
@@ -1555,7 +1555,7 @@ public static class InvRepo
         InvDocKind returnKind,
         IReadOnlyList<int> originalLineNumbers)
     {
-        if (returnDocId <= 0) throw new ArgumentOutOfRangeException(nameof(returnDocId));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(returnDocId);
         ArgumentNullException.ThrowIfNull(originalLineNumbers);
         if (returnKind is not (InvDocKind.SalesReturn or InvDocKind.PurchaseReturn))
             throw new ArgumentException("Only sales and purchase return documents can restore source line numbers.", nameof(returnKind));
