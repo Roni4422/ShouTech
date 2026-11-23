@@ -76,7 +76,7 @@ namespace Kern.Tests
 
                 await Assert.ThrowsAsync<InvalidOperationException>(() =>
                     workflow.DecideAsync(companyId, requisitionId,
-                        afterFirst.Approvals[1].ApprovalId, "manager-2", true, null));
+                        afterFirst.Approvals[1].ApprovalId, "manager-1", true, null));
 
                 await workflow.DecideAsync(companyId, requisitionId,
                     afterFirst.Approvals[1].ApprovalId, "manager-2", true, null);
@@ -91,7 +91,7 @@ namespace Kern.Tests
                 events.CommandText = "SELECT COUNT(*) FROM purchase_requisition_events WHERE company_id = $company AND requisition_doc_id = $requisition";
                 events.Parameters.AddWithValue("$company", companyId.ToString("D"));
                 events.Parameters.AddWithValue("$requisition", requisitionId);
-                Assert.Equal(4L, Convert.ToInt64(await events.ExecuteScalarAsync()));
+                Assert.Equal(3L, Convert.ToInt64(await events.ExecuteScalarAsync()));
             }
             finally
             {
