@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -79,10 +80,10 @@ public sealed class PurchaseLandedCostWin : BaseWin
         StyleButton(_refresh, "PurchaseLandedCost.Refresh");
         StyleButton(_loadSelected, "PurchaseLandedCost.LoadSelected");
         StyleButton(_close, "PurchaseLandedCost.Close");
-        foreach (var column in _grid.Columns)
-            if (column.Tag is string columnKey) column.Header = T(columnKey);
-        foreach (var column in _historyGrid.Columns)
-            if (column.Tag is string historyKey) column.Header = T(historyKey);
+        var chargeKeys = new[] { "PurchaseLandedCost.ChargeCode", "PurchaseLandedCost.Description", "PurchaseLandedCost.Amount", "PurchaseLandedCost.Basis" };
+        for (var i = 0; i < chargeKeys.Length && i < _grid.Columns.Count; i++) _grid.Columns[i].Header = T(chargeKeys[i]);
+        var historyKeys = new[] { "PurchaseLandedCost.ColNumber", "PurchaseLandedCost.ColReceipt", "PurchaseLandedCost.ColDate", "PurchaseLandedCost.ColAmount", "PurchaseLandedCost.ColStatus" };
+        for (var i = 0; i < historyKeys.Length && i < _historyGrid.Columns.Count; i++) _historyGrid.Columns[i].Header = T(historyKeys[i]);
         LocalizeLabels(this);
     }
 
@@ -151,16 +152,15 @@ public sealed class PurchaseLandedCostWin : BaseWin
         _grid.CanUserAddRows = false;
         _grid.IsReadOnly = false;
         _grid.SelectionMode = DataGridSelectionMode.Single;
-        _grid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ChargeCode"), Binding = new Binding(nameof(ChargeRow.Code)), Width = 110, Tag = "PurchaseLandedCost.ChargeCode" });
-        _grid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.Description"), Binding = new Binding(nameof(ChargeRow.Description)), Width = new DataGridLength(2, DataGridLengthUnitType.Star), Tag = "PurchaseLandedCost.Description" });
-        _grid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.Amount"), Binding = new Binding(nameof(ChargeRow.Amount)), Width = 120, Tag = "PurchaseLandedCost.Amount" });
+        _grid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ChargeCode"), Binding = new Binding(nameof(ChargeRow.Code)), Width = 110 });
+        _grid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.Description"), Binding = new Binding(nameof(ChargeRow.Description)), Width = new DataGridLength(2, DataGridLengthUnitType.Star) });
+        _grid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.Amount"), Binding = new Binding(nameof(ChargeRow.Amount)), Width = 120 });
         var basisColumn = new DataGridComboBoxColumn
         {
             Header = T("PurchaseLandedCost.Basis"),
             ItemsSource = new[] { "Value", "Quantity", "Weight", "Volume" },
             SelectedItemBinding = new Binding(nameof(ChargeRow.Basis)),
-            Width = 130,
-            Tag = "PurchaseLandedCost.Basis"
+            Width = 130
         };
         _grid.Columns.Add(basisColumn);
         Grid.SetRow(_grid, 1);
@@ -174,11 +174,11 @@ public sealed class PurchaseLandedCostWin : BaseWin
         _historyGrid.IsReadOnly = true;
         _historyGrid.CanUserAddRows = false;
         _historyGrid.SelectionMode = DataGridSelectionMode.Single;
-        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColNumber"), Binding = new Binding(nameof(VoucherRow.Number)), Width = 130, Tag = "PurchaseLandedCost.ColNumber" });
-        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColReceipt"), Binding = new Binding(nameof(VoucherRow.Receipt)), Width = 130, Tag = "PurchaseLandedCost.ColReceipt" });
-        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColDate"), Binding = new Binding(nameof(VoucherRow.Date)), Width = 110, Tag = "PurchaseLandedCost.ColDate" });
-        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColAmount"), Binding = new Binding(nameof(VoucherRow.Amount)), Width = 110, Tag = "PurchaseLandedCost.ColAmount" });
-        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColStatus"), Binding = new Binding(nameof(VoucherRow.Status)), Width = 110, Tag = "PurchaseLandedCost.ColStatus" });
+        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColNumber"), Binding = new Binding(nameof(VoucherRow.Number)), Width = 130 });
+        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColReceipt"), Binding = new Binding(nameof(VoucherRow.Receipt)), Width = 130 });
+        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColDate"), Binding = new Binding(nameof(VoucherRow.Date)), Width = 110 });
+        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColAmount"), Binding = new Binding(nameof(VoucherRow.Amount)), Width = 110 });
+        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColStatus"), Binding = new Binding(nameof(VoucherRow.Status)), Width = 110 });
         Grid.SetRow(_historyGrid, 2);
         body.Children.Add(_historyGrid);
 
@@ -308,6 +308,15 @@ public sealed class PurchaseLandedCostWin : BaseWin
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PurchaseLandedCostWin.ReverseAsync");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+    }
+
+    private static void StyleButton(Button button, string key)
+    {
+        button.Tag = key;
+        button.Content = T(key);
+        button.MinWidth = 82;
+        button.Margin = new Thickness(3);
+        button.Padding = new Thickness(8, 4, 8, 4);
     }
 
     private sealed record VoucherRow(Guid Id, string Number, string Receipt, string Date, string Amount, string Status);
