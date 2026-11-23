@@ -49,6 +49,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         CommercialDocKinds.PurchaseReceipt => "RCV",
         CommercialDocKinds.PurchaseReceiptReturn => "RCR",
         CommercialDocKinds.PurchaseInvoice => "PUR",
+        CommercialDocKinds.PurchaseRequisition => "PRQ",
         _ => "DOC"
     };
 

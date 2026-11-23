@@ -3827,5 +3827,20 @@
   },
   "PurchaseMatch.MatchDetails": "Kaynak satır eşleştirme ayrıntılarını incelemek için bir fatura değerlendirmesi seçin.",
   "PurchaseMatch.Reevaluate": "Yeniden değerlendir",
-  "PurchaseMatch.Reevaluated": "Fatura yeniden değerlendirildi:"
+  "PurchaseMatch.Reevaluated": "Fatura yeniden değerlendirildi:",
+  "PurchaseAttachments": {
+    "Title": "Satın alma belgesi ekleri",
+    "Open": "Ekler",
+    "Upload": "Yükle",
+    "OpenFile": "Aç",
+    "Delete": "Sil",
+    "Refresh": "Yenile",
+    "Close": "Kapat",
+    "ConfirmDelete": "Seçili ek silinsin mi?",
+    "NoSelection": "Önce bir ek seçin.",
+    "MissingService": "Ek hizmeti kullanılamıyor.",
+    "NoDocument": "Ek eklemeden önce satın alma belgesini kaydedin.",
+    "PermissionDenied": "Ekleri yönetme izniniz yok.",
+    "UploadFilter": "Belgeler ve görseller"
+  }
 }

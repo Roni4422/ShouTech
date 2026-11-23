@@ -3919,5 +3919,20 @@
   },
   "PurchaseMatch.MatchDetails": "اختر تقييم الفاتورة لمراجعة تفاصيل المطابقة على مستوى الأسطر المصدرية.",
   "PurchaseMatch.Reevaluate": "إعادة التقييم",
-  "PurchaseMatch.Reevaluated": "تمت إعادة تقييم الفاتورة:"
+  "PurchaseMatch.Reevaluated": "تمت إعادة تقييم الفاتورة:",
+  "PurchaseAttachments": {
+    "Title": "مرفقات مستند الشراء",
+    "Open": "المرفقات",
+    "Upload": "رفع",
+    "OpenFile": "فتح",
+    "Delete": "حذف",
+    "Refresh": "تحديث",
+    "Close": "إغلاق",
+    "ConfirmDelete": "هل تريد حذف المرفق المحدد؟",
+    "NoSelection": "اختر مرفقاً أولاً.",
+    "MissingService": "خدمة المرفقات غير متاحة.",
+    "NoDocument": "احفظ مستند الشراء قبل إضافة المرفقات.",
+    "PermissionDenied": "ليست لديك صلاحية إدارة المرفقات.",
+    "UploadFilter": "المستندات والصور"
+  }
 }

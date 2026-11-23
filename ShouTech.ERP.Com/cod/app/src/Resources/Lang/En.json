@@ -3836,5 +3836,20 @@
   },
   "PurchaseMatch.MatchDetails": "Select an invoice evaluation to inspect its source-line match details.",
   "PurchaseMatch.Reevaluate": "Re-evaluate",
-  "PurchaseMatch.Reevaluated": "Invoice re-evaluated:"
+  "PurchaseMatch.Reevaluated": "Invoice re-evaluated:",
+  "PurchaseAttachments": {
+    "Title": "Purchase document attachments",
+    "Open": "Attachments",
+    "Upload": "Upload",
+    "OpenFile": "Open",
+    "Delete": "Delete",
+    "Refresh": "Refresh",
+    "Close": "Close",
+    "ConfirmDelete": "Delete the selected attachment?",
+    "NoSelection": "Select an attachment first.",
+    "MissingService": "Attachment service is unavailable.",
+    "NoDocument": "Save the purchase document before adding attachments.",
+    "PermissionDenied": "You do not have permission to manage attachments.",
+    "UploadFilter": "Documents and images"
+  }
 }

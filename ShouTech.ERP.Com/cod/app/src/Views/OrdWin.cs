@@ -63,6 +63,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
     private readonly Button _btnPost = new();
     private readonly Button _btnConvert = new();
     private readonly Button _btnReceipt = new();
+    private readonly Button _btnAttachments = new();
     private readonly Button _btnClose = new();
     private readonly Button _btnCancel = new();
     private readonly Button _btnAddLine = new();
@@ -152,6 +153,8 @@ public sealed class OrdWin : BaseWin, IWindowMode
         StyleButton(_btnPost, "OrderDoc.Post");
         StyleButton(_btnConvert, _kind == OrdKind.Sales ? "OrderDoc.ConvertToInvoice" : "OrderDoc.CreateSupplierInvoice");
         StyleButton(_btnReceipt, "OrderDoc.CreateReceipt");
+        StyleButton(_btnAttachments, "PurchaseAttachments.Open");
+        _btnAttachments.Visibility = _kind == OrdKind.Purchase ? Visibility.Visible : Visibility.Collapsed;
         _btnReceipt.Visibility = _kind == OrdKind.Purchase ? Visibility.Visible : Visibility.Collapsed;
         _btnConvert.Visibility = IsRfq ? Visibility.Collapsed : Visibility.Visible;
         StyleButton(_btnClose, "OrderDoc.CloseOrder");
@@ -191,6 +194,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
         _btnPost.Click += async (_, _) => await PostAsync();
         _btnConvert.Click += async (_, _) => await ConvertAsync();
         _btnReceipt.Click += async (_, _) => await ReceiveAsync();
+        _btnAttachments.Click += (_, _) => OpenAttachments();
         // Step 9 (ORD-03): Close checks the permission family of the
         // window's OWN kind — it previously hardcoded the SALES cancel
         // permission for purchase orders too, so a purchasing-only user
@@ -220,7 +224,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             }
         };
 
-        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnConvert, _btnReceipt, _btnAddSupplierQuote, _btnCompareQuotes, _btnClose, _btnCancel, _btnAddLine, _btnRemLine, _btnPrint })
+        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnConvert, _btnReceipt, _btnAttachments, _btnAddSupplierQuote, _btnCompareQuotes, _btnClose, _btnCancel, _btnAddLine, _btnRemLine, _btnPrint })
             toolbar.Children.Add(b);
 
         var actionBar = new Border
@@ -661,6 +665,19 @@ public sealed class OrdWin : BaseWin, IWindowMode
             _isConverting = false;
             UpdateEditState();
         }
+    }
+
+    private void OpenAttachments()
+    {
+        if (_kind != OrdKind.Purchase || _docId is null || _companyId == Guid.Empty)
+        {
+            ShowWarningMessage(T("OrderDoc.SaveFirst"));
+            return;
+        }
+        new PurchaseAttachmentsWin(_companyId, _docId.Value, CurrentUserId)
+        {
+            Owner = this
+        }.ShowDialog();
     }
 
     private async Task ReceiveAsync()

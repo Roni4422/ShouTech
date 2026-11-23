@@ -3827,5 +3827,20 @@
   },
   "PurchaseMatch.MatchDetails": "Sélectionnez une évaluation de facture pour consulter le détail de rapprochement des lignes sources.",
   "PurchaseMatch.Reevaluate": "Réévaluer",
-  "PurchaseMatch.Reevaluated": "Facture réévaluée :"
+  "PurchaseMatch.Reevaluated": "Facture réévaluée :",
+  "PurchaseAttachments": {
+    "Title": "Pièces jointes du document d'achat",
+    "Open": "Pièces jointes",
+    "Upload": "Téléverser",
+    "OpenFile": "Ouvrir",
+    "Delete": "Supprimer",
+    "Refresh": "Actualiser",
+    "Close": "Fermer",
+    "ConfirmDelete": "Supprimer la pièce jointe sélectionnée ?",
+    "NoSelection": "Sélectionnez d'abord une pièce jointe.",
+    "MissingService": "Le service de pièces jointes est indisponible.",
+    "NoDocument": "Enregistrez le document d'achat avant d'ajouter des pièces jointes.",
+    "PermissionDenied": "Vous n'avez pas l'autorisation de gérer les pièces jointes.",
+    "UploadFilter": "Documents et images"
+  }
 }
