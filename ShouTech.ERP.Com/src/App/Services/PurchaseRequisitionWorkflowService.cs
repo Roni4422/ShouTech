@@ -7,11 +7,13 @@ public sealed class PurchaseRequisitionWorkflowService
 {
     private readonly IPurchaseRequisitionWorkflowRepository _repository;
     private readonly OrderService _orders;
-    public PurchaseRequisitionWorkflowService(IPurchaseRequisitionWorkflowRepository repository,OrderService orders)
-    { _repository=repository??throw new ArgumentNullException(nameof(repository));_orders=orders??throw new ArgumentNullException(nameof(orders)); }
+    private readonly Func<string,bool> _hasPermission;
+    public PurchaseRequisitionWorkflowService(IPurchaseRequisitionWorkflowRepository repository,OrderService orders,Func<string,bool> hasPermission)
+    { _repository=repository??throw new ArgumentNullException(nameof(repository));_orders=orders??throw new ArgumentNullException(nameof(orders));_hasPermission=hasPermission??throw new ArgumentNullException(nameof(hasPermission)); }
 
     public async Task<long> CreateDraftAsync(CommercialDocumentDraft draft,string actor,CancellationToken ct=default)
     {
+        RequirePermission("PUR.REQ.EDIT");
         ArgumentNullException.ThrowIfNull(draft);
         if(draft.CompanyId==Guid.Empty||draft.DocKind!=CommercialDocKinds.PurchaseRequisition||draft.Lines.Count==0)
             throw new InvalidOperationException("A purchase requisition draft requires a company and at least one line.");
@@ -22,22 +24,29 @@ public sealed class PurchaseRequisitionWorkflowService
     }
 
     public Task<PurchaseRequisitionWorkflow?> GetAsync(Guid companyId,long id,CancellationToken ct=default)
-        => _repository.GetAsync(RequireCompany(companyId),id,ct);
-
-    public Task UpdateDraftAsync(Guid companyId,long id,CommercialDocumentDraft draft,string actor,CancellationToken ct=default)
     {
+        if(!_hasPermission("PUR.REQ.VIEW")&&!_hasPermission("PUR.REQ.APPROVE"))throw new UnauthorizedAccessException("Purchase requisition view permission is required.");
+        return _repository.GetAsync(RequireCompany(companyId),id,ct);
+    }
+
+    public async Task UpdateDraftAsync(Guid companyId,long id,CommercialDocumentDraft draft,string actor,CancellationToken ct=default)
+    {
+        RequirePermission("PUR.REQ.EDIT");
         RequireCompany(companyId);ArgumentOutOfRangeException.ThrowIfNegativeOrZero(id);ArgumentNullException.ThrowIfNull(draft);
         if(draft.CompanyId!=companyId||draft.DocKind!=CommercialDocKinds.PurchaseRequisition||draft.PartyId is not null||draft.Lines.Count==0)
             throw new InvalidOperationException("A requisition update must retain its company, kind, supplier-neutral status, and at least one line.");
         if(draft.Lines.Any(x=>x.Qty<=0||x.UnitPrice<0||string.IsNullOrWhiteSpace(x.Description)))
             throw new InvalidOperationException("Requisition lines require descriptions, positive quantities, and non-negative estimates.");
-        return _orders.UpdatePurchaseRequisitionDraftAsync(id,draft,RequireActor(actor),ct);
+        var workflow=await _repository.GetAsync(companyId,id,ct).ConfigureAwait(false);
+        if(workflow is not null)throw new InvalidOperationException("A requisition cannot be edited after it has been submitted.");
+        await _orders.UpdatePurchaseRequisitionDraftAsync(id,draft,RequireActor(actor),ct).ConfigureAwait(false);
     }
 
 
 
     public Task SubmitAsync(Guid companyId,long id,IReadOnlyList<PurchaseRequisitionApprovalStep> steps,string actor,CancellationToken ct=default)
     {
+        RequirePermission("PUR.REQ.EDIT");
         RequireCompany(companyId);ArgumentOutOfRangeException.ThrowIfNegativeOrZero(id);
         if(steps is null||steps.Count==0)throw new InvalidOperationException("At least one approval step is required.");
         var ordered=steps.OrderBy(x=>x.StepNo).ToArray();
@@ -50,6 +59,7 @@ public sealed class PurchaseRequisitionWorkflowService
 
     public Task DecideAsync(Guid companyId,long id,long approvalId,string approver,bool approve,string? reason,CancellationToken ct=default)
     {
+        RequirePermission("PUR.REQ.APPROVE");
         RequireCompany(companyId);ArgumentOutOfRangeException.ThrowIfNegativeOrZero(id);ArgumentOutOfRangeException.ThrowIfNegativeOrZero(approvalId);
         if(!approve&&string.IsNullOrWhiteSpace(reason))throw new InvalidOperationException("A rejection reason is required.");
         return _repository.DecideAsync(companyId,id,approvalId,RequireActor(approver),approve,reason,ct);
@@ -57,6 +67,7 @@ public sealed class PurchaseRequisitionWorkflowService
 
     public async Task<PurchaseRequisitionConversion> ConvertToPurchaseOrderDraftAsync(Guid companyId,long requisitionId,long supplierId,string supplierName,string currencyCode,decimal exchangeRate,long? warehouseId,string actor,CancellationToken ct=default)
     {
+        RequirePermission("PUR.REQ.CONVERT");
         RequireCompany(companyId);ArgumentOutOfRangeException.ThrowIfNegativeOrZero(requisitionId);ArgumentOutOfRangeException.ThrowIfNegativeOrZero(supplierId);
         if(string.IsNullOrWhiteSpace(supplierName)||string.IsNullOrWhiteSpace(currencyCode)||exchangeRate<=0)throw new InvalidOperationException("Supplier, currency, and positive exchange rate are required.");
         var workflow=await _repository.GetAsync(companyId,requisitionId,ct).ConfigureAwait(false)??throw new InvalidOperationException("Purchase requisition workflow was not found.");
@@ -84,6 +95,7 @@ public sealed class PurchaseRequisitionWorkflowService
         await _repository.MarkConvertedAsync(companyId,requisitionId,poId,actor,ct).ConfigureAwait(false);
         return new(poId,number);
     }
+    private void RequirePermission(string code){if(!_hasPermission(code))throw new UnauthorizedAccessException($"Missing permission: {code}.");}
     private static Guid RequireCompany(Guid id)=>id==Guid.Empty?throw new ArgumentException("Company is required.",nameof(id)):id;
     private static string RequireActor(string value)=>string.IsNullOrWhiteSpace(value)?throw new ArgumentException("Actor is required.",nameof(value)):value.Trim();
 }
