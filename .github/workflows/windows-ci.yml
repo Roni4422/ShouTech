@@ -51,9 +51,13 @@ jobs:
           $ns = @{ t = 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010' }
           Select-Xml -Xml $x -XPath "//t:UnitTestResult[@outcome='Failed']" -Namespace $ns | ForEach-Object {
             $n = $_.Node
-            $nm = $n.testName
-            $msg = ($n.Message.InnerText -replace "[\r\n]+", " ")
-            Write-Host ("::error::FAILED TEST: {0} :: {1}" -f $nm, $msg)
+            $nm = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($n.testName))
+            $msg = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($n.'Message'.'#text' + ' ' + $n.InnerXml)))
+            $st  = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($n.'StackTrace'.'#text'))
+            for ($i = 0; $i -lt $nm.Length; $i += 400) { Write-Host ("::error::B64NAME {0}" -f $nm.Substring($i, [Math]::Min(400, $nm.Length - $i))) }
+            for ($i = 0; $i -lt $msg.Length; $i += 400) { Write-Host ("::error::B64MSG {0}" -f $msg.Substring($i, [Math]::Min(400, $msg.Length - $i))) }
+            for ($i = 0; $i -lt $st.Length; $i += 400) { Write-Host ("::error::B64ST {0}" -f $st.Substring($i, [Math]::Min(400, $st.Length - $i))) }
+            Write-Host "::error::B64END"
           }
 
       - name: Upload test results
