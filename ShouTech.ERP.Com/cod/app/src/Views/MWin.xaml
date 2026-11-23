@@ -392,6 +392,8 @@
                 <ribbon:RibbonTab x:Name="TabOrders" Header="Orders" Visibility="Collapsed">
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.OrdersOrders" Header="Orders">
                         <ribbon:RibbonButton loc:LocProps.Key="Orders.PurchaseOrder" Label="Purchase order" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Orders.PurchaseRequisitions" Label="Purchase requisitions" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Orders.LandedCosts" Label="Landed costs" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Orders.RequestForQuotation" Label="Request for quotation" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Orders.SalesOrder" Label="Sales order" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
