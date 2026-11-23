@@ -119,6 +119,8 @@ public class BatchSerialEngineTests
         Assert.Equal(1m, BatchBalance(db, "B-LINE-2"));
         Assert.Equal("Delivered", SerialStatus(db, "SN-LINE-1"));
         Assert.Equal("InStock", SerialStatus(db, "SN-LINE-2"));
+        Assert.Equal(101m, Scalar(db,
+            "SELECT original_source_document_line_id FROM material_stock_movements WHERE document_no = 'RCR-TRACK-01';"));
     }
 
     [Fact]
