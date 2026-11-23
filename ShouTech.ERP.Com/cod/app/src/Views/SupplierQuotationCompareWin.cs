@@ -126,7 +126,7 @@ public sealed class SupplierQuotationCompareWin : BaseWin
         Content = root;
     }
 
-    private void LocalizeColumns(DataGrid grid)
+    private static void LocalizeColumns(DataGrid grid)
     {
         foreach (var column in grid.Columns)
         {
