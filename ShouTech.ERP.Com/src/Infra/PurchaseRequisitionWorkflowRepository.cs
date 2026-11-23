@@ -68,6 +68,8 @@ public sealed class PurchaseRequisitionWorkflowRepository:IPurchaseRequisitionWo
                 throw new InvalidOperationException(existingPo is null
                     ? "The requisition is marked converted but has no linked purchase order."
                     : "The requisition has already been converted.");
+            if(existingPo is not null)
+                throw new InvalidOperationException("The requisition already carries a purchase-order link and cannot start another conversion.");
             if(status=="Converting")
                 throw new InvalidOperationException("This requisition is already being converted to a purchase order.");
             if(status!="Approved")
@@ -154,6 +156,8 @@ public sealed class PurchaseRequisitionWorkflowRepository:IPurchaseRequisitionWo
                     throw new InvalidOperationException("Purchase requisition workflow was not found.");
                 var status=Text(reader,0);
                 var existingPo=reader.IsDBNull(1)?(long?)null:Num(reader,1);
+                if(existingPo is long linkedPo && linkedPo!=poId)
+                    throw new InvalidOperationException("A requisition conversion cannot replace an existing purchase-order link.");
                 if(string.Equals(status,"Converted",StringComparison.Ordinal))
                 {
                     if(existingPo!=poId)
