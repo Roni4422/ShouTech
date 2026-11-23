@@ -559,7 +559,7 @@ internal static class BatchSerialAllocator
         var serialPlan = new List<(long? BatchId, long SerialId, string SerialNo, string? Expiry)>();
         if (tracking.HasSerial)
         {
-            if (request.Serials is { Count: > 0 } explicitSerials)
+            if (request.Serials is { Count: > 0 })
             {
                 var validated = RequireSerials(request, materialCode, qty);
                 foreach (var selected in validated)
