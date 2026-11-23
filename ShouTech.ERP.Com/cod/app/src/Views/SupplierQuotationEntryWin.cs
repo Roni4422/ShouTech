@@ -35,7 +35,9 @@ public sealed class SupplierQuotationEntryWin : BaseWin
     private readonly TextBlock _status = new();
     private readonly Button _selectSupplier = new();
     private readonly Button _savePost = new();
+    private readonly Button _attachments = new();
     private readonly Button _close = new();
+    private long? _quotationId;
     private bool _busy;
     private readonly System.Collections.Generic.List<(TextBlock Label, string Key)> _fieldLabels = new();
 
@@ -58,6 +60,7 @@ public sealed class SupplierQuotationEntryWin : BaseWin
         Title = T("Purchasing.SupplierQuotationEntry.Title");
         _selectSupplier.Content = T("Purchasing.SupplierQuotationEntry.SelectSupplier");
         _savePost.Content = T("Purchasing.SupplierQuotationEntry.SaveAndPost");
+        _attachments.Content = T("PurchaseAttachments.Open");
         _close.Content = T("Common.Close");
         foreach (var child in _fieldLabels)
             child.Label.Text = T(child.Key);
@@ -118,6 +121,9 @@ public sealed class SupplierQuotationEntryWin : BaseWin
         var footer = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         F2Ui.StyleButton(_selectSupplier, "Purchasing.SupplierQuotationEntry.SelectSupplier");
         F2Ui.StyleButton(_savePost, "Purchasing.SupplierQuotationEntry.SaveAndPost");
+        F2Ui.StyleButton(_attachments, "PurchaseAttachments.Open");
+        _attachments.IsEnabled = false;
+        _attachments.Click += async (_, _) => await OpenAttachmentsAsync();
         _supplierId.IsReadOnly = true;
         _supplierCode.IsReadOnly = true;
         _supplierName.IsReadOnly = true;
@@ -125,6 +131,7 @@ public sealed class SupplierQuotationEntryWin : BaseWin
         F2Ui.StyleButton(_close, "Common.Close");
         _savePost.Click += async (_, _) => await SaveAndPostAsync();
         _close.Click += (_, _) => Close();
+        footer.Children.Add(_attachments);
         footer.Children.Add(_savePost);
         footer.Children.Add(_close);
         DockPanel.SetDock(footer, Dock.Bottom);
@@ -163,6 +170,26 @@ public sealed class SupplierQuotationEntryWin : BaseWin
         _linesGrid.Columns.Add(new DataGridTextColumn { Header = T("Purchasing.SupplierQuotationEntry.TaxRate"), Binding = new Binding(nameof(QuotationLineVm.TaxRate)) { StringFormat = "N2", UpdateSourceTrigger = UpdateSourceTrigger.LostFocus }, Width = 85 });
         root.Children.Add(_linesGrid);
         Content = root;
+    }
+
+    private async Task OpenAttachmentsAsync()
+    {
+        if (_quotationId is not long documentId || AppHost.JournalStore is null
+            || AppHost.PurchaseAttachments is null)
+        {
+            MessageBox.Show(this, T("PurchaseAttachments.MissingService"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        try
+        {
+            var companyId = await AppHost.JournalStore.ResolveCompanyIdAsync(CurrentCompanyCode);
+            new PurchaseAttachmentsWin(companyId, documentId, CurrentUserId) { Owner = this }.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "SupplierQuotationEntryWin.OpenAttachments");
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private void SelectSupplier()
@@ -216,11 +243,13 @@ public sealed class SupplierQuotationEntryWin : BaseWin
                 _deliveryDate.SelectedDate is { } delivery ? DateOnly.FromDateTime(delivery) : null,
                 _terms.Text.Trim());
             await AppHost.Orders.PostOrderAsync(CommercialDocSide.Purchase, result.QuotationId, CurrentUserId);
+            _quotationId = result.QuotationId;
+            _attachments.IsEnabled = true;
+            _savePost.IsEnabled = false;
+            _status.Text = Tf("Purchasing.SupplierQuotationEntry.Created", result.QuotationNo);
             MessageBox.Show(this,
                 Tf("Purchasing.SupplierQuotationEntry.Created", result.QuotationNo),
                 Title, MessageBoxButton.OK, MessageBoxImage.Information);
-            DialogResult = true;
-            Close();
         }
         catch (Exception ex)
         {
