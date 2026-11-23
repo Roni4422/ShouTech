@@ -203,7 +203,7 @@ namespace ShouTech.App.Services
                 Boms = CreatePhase3Service((provider, connection) => new BomService(new BomRepository(provider, connection)), "Bills of Materials");
                 Planning = CreatePhase3Service((provider, connection) => new PlanningService(new PlanningRepository(provider, connection)), "Manufacturing Planning");
                 Orders = CreatePhase3Service((provider, connection) => new OrderService(new OrderDocumentRepository(provider, connection), new CommercialDocumentRepository(provider, connection)), "Orders");
-            PurchaseRequisitions = CreatePhase3Service((provider, connection) => new PurchaseRequisitionWorkflowService(new PurchaseRequisitionWorkflowRepository(provider, connection), Orders!), "Purchase Requisitions");
+            PurchaseRequisitions = CreatePhase3Service((provider, connection) => new PurchaseRequisitionWorkflowService(new PurchaseRequisitionWorkflowRepository(provider, connection), Orders!, Permissions.Has), "Purchase Requisitions");
                 PurchaseAttachments = CreatePhase3Service((provider, connection) => new PurchaseDocumentAttachmentService(new PurchaseDocumentAttachmentRepository(provider, connection), Orders!, Permissions.Has, (user, action, details) => Audit.LogUserActionAsync(user, action, details)), "Purchase Attachments");
                 PurchaseMatch = CreatePhase3Service((provider, connection) => new PurchaseMatchService(
                     new PurchaseMatchPolicyRepository(provider, connection),
