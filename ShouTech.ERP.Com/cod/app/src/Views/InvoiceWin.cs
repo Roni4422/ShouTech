@@ -1397,7 +1397,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             _ => "Invoice.SalesTitle"
         }, WindowTitleFor(_doc.Kind));
 
-        foreach (var btn in new[] { _btnSave, _btnPost, _btnReverse, _btnPrint, _btnPdf, _btnAddLine, _btnRemoveLine, _btnFindMaterial, _btnVoucher, _btnOriginal })
+        foreach (var btn in new[] { _btnSave, _btnPost, _btnReverse, _btnPrint, _btnPdf, _btnAddLine, _btnRemoveLine, _btnFindMaterial, _btnVoucher, _btnOriginal, _btnAttachments })
         {
             if (btn.Tag is string key)
                 btn.Content = Tf(key, btn.Content?.ToString());
