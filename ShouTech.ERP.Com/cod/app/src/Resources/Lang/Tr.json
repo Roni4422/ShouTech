@@ -3843,6 +3843,8 @@
   "PurchaseAttachments": {
     "Title": "Satın alma belgesi ekleri",
     "Open": "Ekler",
+    "Receipt": "Mal kabul ekleri",
+    "Return": "İade ekleri",
     "Upload": "Yükle",
     "OpenFile": "Aç",
     "Delete": "Sil",
