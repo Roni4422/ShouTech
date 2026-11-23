@@ -49,6 +49,7 @@ namespace ShouTech.App.Services
         public static AssetService? Assets { get; private set; }
         public static ReconciliationService? Reconciliation { get; private set; }
         public static PurchaseMatchService? PurchaseMatch { get; private set; }
+        public static PurchaseLandedCostService? PurchaseLandedCosts { get; private set; }
         public static PurchaseRequisitionWorkflowService? PurchaseRequisitions { get; private set; }
         public static PurchaseDocumentAttachmentService? PurchaseAttachments { get; private set; }
         public static MasterCardService? MasterCards { get; private set; }
@@ -144,6 +145,7 @@ namespace ShouTech.App.Services
                 new PurchaseMatchPolicyRepository(provider, connection),
                 Permissions.Has,
                 (user, action, details) => Audit.LogUserActionAsync(user, action, details)), "Purchase Match Controls");
+            PurchaseLandedCosts = CreatePhase3Service((provider, connection) => new PurchaseLandedCostService(new PurchaseLandedCostRepository(provider, connection), Permissions.Has), "Purchase Landed Costs");
 
             // Initialize visual identity.
             // VisuId handles the visual resources and saved accent color.
@@ -209,6 +211,7 @@ namespace ShouTech.App.Services
                     new PurchaseMatchPolicyRepository(provider, connection),
                     Permissions.Has,
                     (user, action, details) => Audit.LogUserActionAsync(user, action, details)), "Purchase Match Controls");
+                PurchaseLandedCosts = CreatePhase3Service((provider, connection) => new PurchaseLandedCostService(new PurchaseLandedCostRepository(provider, connection), Permissions.Has), "Purchase Landed Costs");
                 AccountingStructure = CreateAccountingStructureRepository();
                 DatabaseHealth = CreateDatabaseHealth();
 
@@ -377,6 +380,7 @@ namespace ShouTech.App.Services
         public static AssetService? Assets => AppHost.Assets;
         public static ReconciliationService? Reconciliation => AppHost.Reconciliation;
         public static PurchaseMatchService? PurchaseMatch => AppHost.PurchaseMatch;
+        public static PurchaseLandedCostService? PurchaseLandedCosts => AppHost.PurchaseLandedCosts;
         public static MasterCardService? MasterCards => AppHost.MasterCards;
         public static ChequeService? Cheques => AppHost.Cheques;
         public static MfgOrderService? Manufacturing => AppHost.Manufacturing;
