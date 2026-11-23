@@ -617,6 +617,87 @@ public static class RptQuery
             ("$toEx", to.Date.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
     }
 
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> GoodsReceivedNotInvoicedReconciliationAsync(
+        DateTime asOf, CancellationToken ct)
+    {
+        DocSchema.Ensure();
+        const string sql = """
+            WITH open_receipt_lines AS (
+                SELECT l.line_subtotal * r.exchange_rate *
+                    CASE WHEN l.qty > 0
+                         THEN MAX(0, l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0)) / l.qty
+                         ELSE 0 END AS OpenBaseAmount
+                FROM purchase_documents r
+                INNER JOIN companies co ON CAST(co.company_id AS TEXT) = r.company_id
+                INNER JOIN purchase_document_lines l ON l.doc_id = r.doc_id
+                INNER JOIN document_links dl
+                  ON dl.company_id = r.company_id
+                 AND dl.source_doc_kind = 'PO'
+                 AND dl.target_doc_kind = 'RCV'
+                 AND dl.target_doc_id = r.doc_id
+                LEFT JOIN (
+                    SELECT m.company_id, m.receipt_doc_id, m.receipt_line_id,
+                           SUM(m.matched_qty) AS MatchedQty
+                    FROM purchase_receipt_invoice_matches m
+                    INNER JOIN purchase_documents inv
+                      ON inv.company_id = m.company_id
+                     AND inv.doc_id = m.invoice_doc_id
+                     AND inv.doc_kind = 'PUR'
+                     AND inv.status = 'Posted'
+                     AND CAST(inv.is_deleted AS TEXT) IN ('0', 'false')
+                     AND inv.doc_date <= $asOf
+                    GROUP BY m.company_id, m.receipt_doc_id, m.receipt_line_id
+                ) m ON m.company_id = r.company_id
+                   AND m.receipt_doc_id = r.doc_id
+                   AND m.receipt_line_id = l.line_id
+                LEFT JOIN (
+                    SELECT a.company_id, a.original_doc_id, a.original_line_id,
+                           SUM(a.returned_qty) AS ReturnedQty
+                    FROM purchase_receipt_return_line_allocations a
+                    INNER JOIN purchase_documents rd
+                      ON rd.company_id = a.company_id
+                     AND rd.doc_id = a.return_doc_id
+                     AND rd.doc_kind = 'RCR'
+                     AND rd.status = 'Posted'
+                     AND CAST(rd.is_deleted AS TEXT) IN ('0', 'false')
+                     AND rd.doc_date <= $asOf
+                    GROUP BY a.company_id, a.original_doc_id, a.original_line_id
+                ) rt ON rt.company_id = r.company_id
+                    AND rt.original_doc_id = r.doc_id
+                    AND rt.original_line_id = l.line_id
+                WHERE co.company_code = $company
+                  AND r.doc_kind = 'RCV'
+                  AND r.status = 'Posted'
+                  AND CAST(r.is_deleted AS TEXT) IN ('0', 'false')
+                  AND r.doc_date <= $asOf
+            ),
+            receipt_control AS (
+                SELECT COALESCE(SUM(OpenBaseAmount), 0) AS OpenReceiptBase
+                FROM open_receipt_lines
+            ),
+            gl_control AS (
+                SELECT COALESCE(SUM(COALESCE(l.base_credit, l.credit) -
+                                    COALESCE(l.base_debit, l.debit)), 0) AS GlBalanceBase
+                FROM journal_entries j
+                INNER JOIN companies co ON co.company_id = j.company_id
+                INNER JOIN journal_entry_lines l ON l.journal_entry_id = j.journal_entry_id
+                INNER JOIN chart_of_accounts a
+                  ON a.account_id = l.account_id AND a.company_id = j.company_id
+                WHERE co.company_code = $company
+                  AND a.account_code = '2203'
+                  AND j.status IN (1, 2)
+                  AND j.entry_date <= $asOf
+            )
+            SELECT receipt_control.OpenReceiptBase,
+                   gl_control.GlBalanceBase,
+                   receipt_control.OpenReceiptBase - gl_control.GlBalanceBase AS DifferenceBase
+            FROM receipt_control CROSS JOIN gl_control;
+            """;
+        return await QueryAsync(sql, ct,
+            ("$company", Company),
+            ("$asOf", DateStart(asOf)));
+    }
+
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> PartyAgingAsync(
         bool customers, CancellationToken ct)
     {
