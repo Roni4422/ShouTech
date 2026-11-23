@@ -577,9 +577,27 @@ internal static class BatchSerialAllocator
             else
             {
                 if (qty != decimal.Truncate(qty)) return false;
-                foreach (var source in serialOriginals.Take((int)qty))
-                    serialPlan.Add((source.BatchId, source.SerialId!.Value,
-                        source.SerialNo ?? string.Empty, source.Expiry));
+                if (tracking.HasBatch)
+                {
+                    // Keep auto-selected serials aligned with the batch
+                    // slices chosen above, even when the original receipt
+                    // captured serials in a different order.
+                    foreach (var batch in batchPlan.GroupBy(x => x.BatchId))
+                    {
+                        var required = batch.Sum(x => x.Qty);
+                        if (required != decimal.Truncate(required)) return false;
+                        var already = serialPlan.Count(x => x.BatchId == batch.Key);
+                        foreach (var source in serialOriginals.Where(x => x.BatchId == batch.Key).Skip(already).Take((int)required))
+                            serialPlan.Add((source.BatchId, source.SerialId!.Value,
+                                source.SerialNo ?? string.Empty, source.Expiry));
+                    }
+                }
+                else
+                {
+                    foreach (var source in serialOriginals.Take((int)qty))
+                        serialPlan.Add((source.BatchId, source.SerialId!.Value,
+                            source.SerialNo ?? string.Empty, source.Expiry));
+                }
             }
             if (serialPlan.Count != (int)qty) return false;
         }
