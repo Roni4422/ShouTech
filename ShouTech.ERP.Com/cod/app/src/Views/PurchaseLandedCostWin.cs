@@ -87,7 +87,7 @@ public sealed class PurchaseLandedCostWin : BaseWin
         LocalizeLabels(this);
     }
 
-    private void LocalizeLabels(DependencyObject root)
+    private static void LocalizeLabels(DependencyObject root)
     {
         foreach (var child in LogicalTreeHelper.GetChildren(root))
         {
@@ -190,7 +190,7 @@ public sealed class PurchaseLandedCostWin : BaseWin
         ApplyPermissions();
     }
 
-    private void AddField(Grid grid, int column, int row, string key, Control control)
+    private static void AddField(Grid grid, int column, int row, string key, Control control)
     {
         var panel = new StackPanel { Margin = new Thickness(5) };
         panel.Children.Add(new TextBlock { Text = T(key), Tag = key, Margin = new Thickness(0, 0, 0, 3) });
@@ -225,7 +225,6 @@ public sealed class PurchaseLandedCostWin : BaseWin
         }
         catch (Exception ex)
         {
-            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PurchaseLandedCostWin.RefreshHistoryAsync");
             _status.Text = ex.Message;
         }
     }
@@ -270,7 +269,6 @@ public sealed class PurchaseLandedCostWin : BaseWin
         }
         catch (Exception ex)
         {
-            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PurchaseLandedCostWin.CreateDraftAsync");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
@@ -287,7 +285,6 @@ public sealed class PurchaseLandedCostWin : BaseWin
         }
         catch (Exception ex)
         {
-            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PurchaseLandedCostWin.PostAsync");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
@@ -305,7 +302,6 @@ public sealed class PurchaseLandedCostWin : BaseWin
         }
         catch (Exception ex)
         {
-            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PurchaseLandedCostWin.ReverseAsync");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
