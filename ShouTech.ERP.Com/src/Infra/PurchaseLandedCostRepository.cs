@@ -442,16 +442,21 @@ public sealed class PurchaseLandedCostRepository
 
         var stockCompanyCode = PartyLedger.ResolveCompanyCode(connection, transaction, _provider, company);
         var allocations = new List<(Guid Id, long Line, long Material, long Warehouse, decimal Amount, long Movement)>();
-        using (var query = Cmd(connection, transaction, """
+        using (var query = Cmd(connection, transaction, $"""
             SELECT a.allocation_id, a.receipt_line_id, a.material_id, a.warehouse_id,
-                   a.allocated_base_amount, sm.stock_movement_id
+                   a.allocated_base_amount,
+                   (SELECT COUNT(*) FROM material_stock_movements sm
+                    WHERE sm.company_id = @stockCompany
+                      AND sm.source_document_line_id = a.receipt_line_id
+                      AND sm.document_no = d.doc_no AND sm.movement_type = 'RCV'
+                      AND sm.qty_in > 0 AND sm.is_deleted = {(Pg ? "FALSE" : "0")}) AS MovementCount,
+                   (SELECT MIN(sm.stock_movement_id) FROM material_stock_movements sm
+                    WHERE sm.company_id = @stockCompany
+                      AND sm.source_document_line_id = a.receipt_line_id
+                      AND sm.document_no = d.doc_no AND sm.movement_type = 'RCV'
+                      AND sm.qty_in > 0 AND sm.is_deleted = {(Pg ? "FALSE" : "0")}) AS MovementId
             FROM purchase_landed_cost_allocations a
             JOIN purchase_documents d ON d.doc_id = a.receipt_doc_id AND d.company_id = a.company_id
-            JOIN material_stock_movements sm
-              ON sm.company_id = @stockCompany
-             AND sm.source_document_line_id = a.receipt_line_id
-             AND sm.document_no = d.doc_no AND sm.movement_type = 'RCV'
-             AND sm.qty_in > 0 AND sm.is_deleted = @false
             WHERE a.company_id = @company AND a.landed_cost_id = @landed
             ORDER BY a.receipt_line_id, a.allocation_id
             """))
@@ -459,14 +464,16 @@ public sealed class PurchaseLandedCostRepository
             Add(query, "@company", company);
             Add(query, "@stockCompany", stockCompanyCode);
             Add(query, "@landed", Id(landedCostId));
-            Add(query, "@false", Pg ? false : 0);
             using var reader = query.ExecuteReader();
             while (reader.Read())
             {
                 if (reader.IsDBNull(3)) throw new InvalidOperationException("A landed-cost allocation has no receipt warehouse.");
+                var movementCount = Convert.ToInt32(reader.GetValue(5), CultureInfo.InvariantCulture);
+                if (movementCount != 1 || reader.IsDBNull(6))
+                    throw new InvalidOperationException("Every landed-cost allocation must map to exactly one active stock movement for its receipt line.");
                 allocations.Add((Guid.Parse(Text(reader.GetValue(0))!), Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture),
                     Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture), Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture),
-                    Dec(reader.GetValue(4)), Convert.ToInt64(reader.GetValue(5), CultureInfo.InvariantCulture)));
+                    Dec(reader.GetValue(4)), Convert.ToInt64(reader.GetValue(6), CultureInfo.InvariantCulture)));
             }
         }
         if (allocations.Count == 0) throw new InvalidOperationException("The landed-cost voucher has no traceable stock allocations.");
