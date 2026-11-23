@@ -152,8 +152,11 @@
     "MaterialMoveNoHistory": "لا توجد حركات للمادة المراد نقلها.",
     "MaterialMoveFailed": "تعذر نقل حركات المادة.",
     "MaterialMoveCompleted": "تم نقل حركات المادة بنجاح. عدد السجلات: {0}",
-    "MaterialDiscounts": "حسومات المواد"
-  },
+    "MaterialDiscounts": "حسومات المواد",
+ 
+    "PurchaseRequisitions": "طلبات الشراء",
+    "LandedCosts": "التكاليف الإضافية"
+   },
   "Accounts": {
     "Title": "الحسابات",
     "ChartOfAccounts": "دليل الحسابات",
@@ -3940,6 +3943,36 @@
     "Size": "الحجم",
     "UploadedBy": "رفع بواسطة",
     "UploadedAt": "تاريخ الرفع"
+  },
+  "PurchaseLandedCost": {
+    "Title": "تكاليف الشراء الإضافية",
+    "Number": "رقم السند",
+    "Date": "التاريخ",
+    "ReceiptNo": "رقم استلام البضاعة",
+    "Currency": "العملة",
+    "ExchangeRate": "سعر الصرف",
+    "VoucherId": "معرّف سند التكلفة",
+    "ReversalNo": "رقم سند العكس",
+    "ReversalDate": "تاريخ العكس",
+    "Reason": "سبب العكس",
+    "ChargeCode": "رمز التكلفة",
+    "Description": "البيان",
+    "Amount": "المبلغ",
+    "Basis": "أساس التوزيع",
+    "AddCharge": "إضافة تكلفة",
+    "RemoveCharge": "حذف التكلفة",
+    "CreateDraft": "إنشاء مسودة",
+    "Post": "ترحيل",
+    "Reverse": "عكس السند",
+    "Close": "إغلاق",
+    "DraftCreated": "تم إنشاء المسودة:",
+    "Posted": "تم الترحيل. رقم القيد:",
+    "Reversed": "تم العكس. رقم القيد:",
+    "ServiceUnavailable": "خدمة تكاليف الشراء غير متاحة.",
+    "PermissionDenied": "لا تملك صلاحية استخدام هذه الوظيفة.",
+    "InvalidInput": "تحقق من البيانات المدخلة.",
+    "NoReceipt": "لم يتم العثور على استلام بضاعة مرحّل بهذا الرقم.",
+    "NoVoucher": "أدخل معرّف سند تكلفة صحيحاً."
   },
   "PurchaseRequisition": {
     "Title": "طلبات الشراء الداخلية",
