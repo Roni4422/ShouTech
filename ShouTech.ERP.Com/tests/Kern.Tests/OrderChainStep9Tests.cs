@@ -1251,6 +1251,108 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task PurchaseLandedCost_PostAndReverse_RevaluesRemainingStockAndConsumedCost()
+        {
+            var (service, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-LC-9101",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 12m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+                var (receiptId, receiptNo) = await service.CreatePurchaseReceiptAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 12m) }, Actor);
+
+                // Consume one unit after receipt. The landed-cost voucher
+                // must capitalize the two units still attributable to the
+                // receipt and recognize the consumed third in COGS.
+                await using (var connection = new SqliteConnection(connectionString))
+                {
+                    await connection.OpenAsync();
+                    await using var transaction = await connection.BeginTransactionAsync();
+                    StockValuationEngine.Apply(connection, transaction, "SQLite",
+                        new StockMovementRequest(CompanyCode, 1, 42, "2026-11-03", "SAL",
+                            "SAL-LC-9101", QtyIn: 0m, QtyOut: 1m));
+                    await transaction.CommitAsync();
+                }
+
+                var quantityBefore = BalanceQty(connectionString, 42);
+                var valueBefore = BalanceValue(connectionString, 42);
+                var landedCosts = new PurchaseLandedCostService(
+                    new PurchaseLandedCostRepository("SQLite", connectionString), _ => true);
+                var landedCostId = await landedCosts.CreateDraftAsync(
+                    companyId, receiptId, "LC-9101", new DateOnly(2026, 11, 3),
+                    "SAR", 1m,
+                    new[]
+                    {
+                        new PurchaseLandedCostChargeDraft(
+                            "FREIGHT", "Inbound freight", 20m, LandedCostAllocationBases.ByValue)
+                    },
+                    Actor);
+
+                var journalId = await landedCosts.PostAsync(companyId, landedCostId, Actor);
+                var posted = (await landedCosts.ListAsync(companyId, "LC-9101")).Single();
+                Assert.Equal("Posted", posted.Status);
+                Assert.Equal(journalId, posted.JournalEntryId);
+                Assert.Equal(quantityBefore, BalanceQty(connectionString, 42));
+                Assert.Equal(56m, MovementCost(connectionString, receiptNo, 42));
+                Assert.True(BalanceValue(connectionString, 42) > valueBefore);
+
+                static Dictionary<string, (decimal Debit, decimal Credit)> JournalAccounts(
+                    string connectionString, Guid journalId)
+                {
+                    var rows = new Dictionary<string, (decimal Debit, decimal Credit)>();
+                    using var connection = new SqliteConnection(connectionString);
+                    connection.Open();
+                    using var command = connection.CreateCommand();
+                    command.CommandText = """
+                        SELECT a.account_code, COALESCE(SUM(l.debit),0), COALESCE(SUM(l.credit),0)
+                        FROM journal_entries e
+                        JOIN journal_entry_lines l ON l.journal_entry_id=e.journal_entry_id
+                        JOIN chart_of_accounts a ON a.account_id=l.account_id
+                        WHERE e.journal_entry_id=$id AND e.status=1
+                        GROUP BY a.account_code;
+                        """;
+                    command.Parameters.AddWithValue("$id", journalId.ToString("D"));
+                    using var reader = command.ExecuteReader();
+                    while (reader.Read())
+                        rows[reader.GetString(0)] = (reader.GetDecimal(1), reader.GetDecimal(2));
+                    return rows;
+                }
+
+                var postedGl = JournalAccounts(connectionString, journalId);
+                Assert.Equal(20m, postedGl.Values.Sum(x => x.Credit));
+                Assert.Equal(20m, postedGl.Values.Sum(x => x.Debit));
+                Assert.True(postedGl["1203"].Debit > 0m);
+                Assert.True(postedGl["401"].Debit > 0m);
+                Assert.Equal(20m, postedGl["2201"].Credit);
+
+                var reversalJournalId = await landedCosts.ReverseAsync(
+                    companyId, landedCostId, "LC-REV-9101",
+                    new DateOnly(2026, 11, 4), "Reverse landed-cost test", Actor);
+                var reversed = (await landedCosts.ListAsync(companyId, "LC-9101")).Single();
+                Assert.Equal("Cancelled", reversed.Status);
+                Assert.NotNull(reversed.ReversalId);
+                Assert.Equal(quantityBefore, BalanceQty(connectionString, 42));
+                Assert.Equal(valueBefore, BalanceValue(connectionString, 42));
+                Assert.Equal(36m, MovementCost(connectionString, receiptNo, 42));
+
+                var reversalGl = JournalAccounts(connectionString, reversalJournalId);
+                Assert.Equal(20m, reversalGl.Values.Sum(x => x.Debit));
+                Assert.Equal(20m, reversalGl.Values.Sum(x => x.Credit));
+                Assert.Equal(20m, reversalGl["2201"].Debit);
+                Assert.True(reversalGl["1203"].Credit > 0m);
+                Assert.True(reversalGl["401"].Credit > 0m);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task PurchaseInvoice_BlockedThreeWayMatch_PreventsSupplierPaymentAllocation()
         {
             var (service, _, companyId, connectionString, cleanup) = await CreateAsync();
