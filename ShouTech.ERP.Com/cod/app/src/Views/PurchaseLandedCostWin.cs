@@ -250,13 +250,13 @@ public sealed class PurchaseLandedCostWin : BaseWin
         if (!AppHost.Permissions.Has("PUR.LANDEDCOST.EDIT")) return;
         try
         {
-            if (!decimal.TryParse(_rate.Text, NumberStyles.Number, CultureInfo.InvariantCulture, out var rate) || rate <= 0m)
-                throw new InvalidOperationException(T("PurchaseLandedCost.InvalidInput"));
             var receipt = await AppHost.Orders!.FindByNumberAsync(
                 CommercialDocSide.Purchase, _companyId, CommercialDocKinds.PurchaseReceipt, _receipt.Text.Trim());
             if (receipt is null) throw new InvalidOperationException(T("PurchaseLandedCost.NoReceipt"));
             if (string.IsNullOrWhiteSpace(_currency.Text)) _currency.Text = receipt.CurrencyCode;
             if (_rate.Text == "1" && receipt.ExchangeRate > 0m) _rate.Text = receipt.ExchangeRate.ToString(CultureInfo.InvariantCulture);
+            if (!decimal.TryParse(_rate.Text, NumberStyles.Number, CultureInfo.InvariantCulture, out var rate) || rate <= 0m)
+                throw new InvalidOperationException(T("PurchaseLandedCost.InvalidInput"));
             _grid.CommitEdit(DataGridEditingUnit.Cell, true);
             _grid.CommitEdit(DataGridEditingUnit.Row, true);
             var receiptLinesByNumber = receipt.Lines.ToDictionary(line => line.LineNo, line => line.LineId);
