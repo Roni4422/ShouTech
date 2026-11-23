@@ -140,7 +140,8 @@ public static class StockValuationEngine
             WHERE stock_movement_id = @movement AND company_id = @stockCompany
               AND warehouse_id = @w AND material_id = @m
               AND movement_type = 'RCV' AND document_no = @receipt
-              AND qty_in > 0 AND is_deleted = {(isPg ? "FALSE" : "0")}
+              AND source_document_line_id = @line AND qty_in > 0
+              AND is_deleted = {(isPg ? "FALSE" : "0")}
             """))
         {
             Add(source, "@movement", sourceMovementId);
@@ -148,6 +149,7 @@ public static class StockValuationEngine
             Add(source, "@w", warehouseId);
             Add(source, "@m", materialId);
             Add(source, "@receipt", receiptNumber);
+            Add(source, "@line", receiptLineId);
             if (Convert.ToInt64(source.ExecuteScalar(), CultureInfo.InvariantCulture) != 1)
                 throw new InvalidOperationException("The stock movement does not belong to the receipt allocated by this landed-cost voucher.");
         }
