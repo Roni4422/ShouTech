@@ -25,7 +25,7 @@ public sealed class PurchaseRequisitionWorkflowService
 
     public Task<PurchaseRequisitionWorkflow?> GetAsync(Guid companyId,long id,CancellationToken ct=default)
     {
-        if(!_hasPermission("PUR.REQ.VIEW")&&!_hasPermission("PUR.REQ.APPROVE"))throw new UnauthorizedAccessException("Purchase requisition view permission is required.");
+        if(!_hasPermission("PUR.REQ.VIEW")&&!_hasPermission("PUR.REQ.APPROVE")&&!_hasPermission("PUR.REQ.CONVERT"))throw new UnauthorizedAccessException("Purchase requisition view permission is required.");
         return _repository.GetAsync(RequireCompany(companyId),id,ct);
     }
 

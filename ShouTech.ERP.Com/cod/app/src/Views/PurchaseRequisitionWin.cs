@@ -29,7 +29,7 @@ public sealed class PurchaseRequisitionWin : BaseWin
     private async Task InitializeAsync()
     {
         if(AppHost.PurchaseRequisitions is null||AppHost.Orders is null||AppHost.JournalStore is null){MessageBox.Show(this,T("PurchaseRequisition.ServiceUnavailable"),Title);Close();return;}
-        if(!AppHost.Permissions.Has("PUR.REQ.VIEW")&&!AppHost.Permissions.Has("PUR.REQ.EDIT")&&!AppHost.Permissions.Has("PUR.REQ.APPROVE")){MessageBox.Show(this,T("PurchaseRequisition.PermissionDenied"),Title);Close();return;}
+        if(!AppHost.Permissions.Has("PUR.REQ.VIEW")&&!AppHost.Permissions.Has("PUR.REQ.EDIT")&&!AppHost.Permissions.Has("PUR.REQ.APPROVE")&&!AppHost.Permissions.Has("PUR.REQ.CONVERT")){MessageBox.Show(this,T("PurchaseRequisition.PermissionDenied"),Title);Close();return;}
         try{_companyId=await AppHost.JournalStore.ResolveCompanyIdAsync(CurrentCompanyCode);if(_companyId==Guid.Empty)throw new InvalidOperationException("Company context is unavailable.");await NewAsync();}
         catch(Exception ex){MessageBox.Show(this,ex.Message,Title,MessageBoxButton.OK,MessageBoxImage.Warning);Close();}
     }
