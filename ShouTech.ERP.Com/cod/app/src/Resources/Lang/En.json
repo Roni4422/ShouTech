@@ -791,8 +791,11 @@
     "OperationSuccess": "Operation completed successfully",
     "PleaseWait": "Please wait...",
     "RequiredField": "This field is required",
-    "SaveSuccess": "Saved successfully"
-  },
+    "SaveSuccess": "Saved successfully",
+ 
+    "PurchaseRequisitions": "Purchase requisitions",
+    "LandedCosts": "Landed costs"
+   },
   "Notifications": {
     "BackupCreated": "Backup created successfully.",
     "ChangesSaved": "Changes saved successfully.",
@@ -3857,6 +3860,36 @@
     "Size": "Size",
     "UploadedBy": "Uploaded by",
     "UploadedAt": "Uploaded at"
+  },
+  "PurchaseLandedCost": {
+    "Title": "Purchase landed costs",
+    "Number": "Voucher no.",
+    "Date": "Date",
+    "ReceiptNo": "Goods receipt no.",
+    "Currency": "Currency",
+    "ExchangeRate": "Exchange rate",
+    "VoucherId": "Landed-cost voucher ID",
+    "ReversalNo": "Reversal no.",
+    "ReversalDate": "Reversal date",
+    "Reason": "Reversal reason",
+    "ChargeCode": "Charge code",
+    "Description": "Description",
+    "Amount": "Amount",
+    "Basis": "Allocation basis",
+    "AddCharge": "Add charge",
+    "RemoveCharge": "Remove charge",
+    "CreateDraft": "Create draft",
+    "Post": "Post",
+    "Reverse": "Reverse voucher",
+    "Close": "Close",
+    "DraftCreated": "Draft created:",
+    "Posted": "Posted. Journal entry:",
+    "Reversed": "Reversed. Journal entry:",
+    "ServiceUnavailable": "Purchase landed-cost service is unavailable.",
+    "PermissionDenied": "You do not have permission to use this function.",
+    "InvalidInput": "Check the entered values.",
+    "NoReceipt": "No posted goods receipt was found with that number.",
+    "NoVoucher": "Enter a valid landed-cost voucher ID."
   },
   "PurchaseRequisition": {
     "Title": "Purchase requisitions",
