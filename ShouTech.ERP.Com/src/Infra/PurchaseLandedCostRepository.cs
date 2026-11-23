@@ -139,12 +139,28 @@ public sealed class PurchaseLandedCostRepository : IPurchaseLandedCostRepository
             }
 
             var allocations = LandedCostAllocator.Allocate(allocatorLines, charges.Select(x =>
-                new LandedCostCharge(x.ChargeCode.Trim(),
-                    decimal.Round(x.Amount * effectiveRate, 4, MidpointRounding.AwayFromZero),
-                    x.AllocationBasis,
-                    x.ManualAmounts?.ToDictionary(
+            {
+                var baseAmount = decimal.Round(x.Amount * effectiveRate, 4, MidpointRounding.AwayFromZero);
+                IReadOnlyDictionary<long, decimal>? manualBaseAmounts = null;
+                if (x.ManualAmounts is not null)
+                {
+                    if (decimal.Round(x.ManualAmounts.Values.Sum(), 4, MidpointRounding.AwayFromZero)
+                        != decimal.Round(x.Amount, 4, MidpointRounding.AwayFromZero))
+                        throw new InvalidOperationException($"Manual allocations for charge '{x.ChargeCode}' must sum to its entered amount.");
+                    var converted = x.ManualAmounts.OrderBy(item => item.Key).ToDictionary(
                         item => item.Key,
-                        item => decimal.Round(item.Value * effectiveRate, 4, MidpointRounding.AwayFromZero)))).ToArray());
+                        item => decimal.Round(item.Value * effectiveRate, 4, MidpointRounding.AwayFromZero));
+                    if (converted.Count > 0)
+                    {
+                        var finalKey = converted.Keys.Max();
+                        converted[finalKey] = decimal.Round(
+                            converted[finalKey] + baseAmount - converted.Values.Sum(),
+                            4, MidpointRounding.AwayFromZero);
+                    }
+                    manualBaseAmounts = converted;
+                }
+                return new LandedCostCharge(x.ChargeCode.Trim(), baseAmount, x.AllocationBasis, manualBaseAmounts);
+            }).ToArray());
             var lineById = receiptLines.ToDictionary(x => x.LineId);
             foreach (var allocation in allocations)
             {
