@@ -176,6 +176,50 @@ public sealed class PurchaseLandedCostRepository
         }
     }
 
+    public async Task<IReadOnlyList<PurchaseLandedCostSummary>> ListAsync(
+        Guid companyId, string? search = null, CancellationToken cancellationToken = default)
+    {
+        if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
+        await using var connection = Open();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var rows = new List<PurchaseLandedCostSummary>();
+        await using var command = Cmd(connection, null, """
+            SELECT h.landed_cost_id, h.company_id, h.doc_no, h.doc_date,
+                   h.receipt_doc_id, d.doc_no, h.supplier_id, h.supplier_name,
+                   h.currency_code, h.exchange_rate, h.total_amount, h.total_base_amount,
+                   h.status, h.journal_entry_id, h.source_reversal_id
+            FROM purchase_landed_costs h
+            JOIN purchase_documents d
+              ON d.doc_id = h.receipt_doc_id AND d.company_id = h.company_id
+            WHERE h.company_id = @company
+              AND (@search = '' OR h.doc_no LIKE @pattern OR d.doc_no LIKE @pattern OR h.supplier_name LIKE @pattern)
+            ORDER BY h.doc_date DESC, h.created_at DESC
+            LIMIT 300
+            """);
+        Add(command, "@company", companyId.ToString("D"));
+        Add(command, "@search", (search ?? "").Trim());
+        Add(command, "@pattern", "%" + (search ?? "").Trim() + "%");
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            Guid? journal = reader.IsDBNull(13) ? null : Guid.Parse(Text(reader.GetValue(13))!);
+            Guid? reversal = reader.IsDBNull(14) ? null : Guid.Parse(Text(reader.GetValue(14))!);
+            rows.Add(new PurchaseLandedCostSummary(
+                Guid.Parse(Text(reader.GetValue(0))!),
+                Guid.Parse(Text(reader.GetValue(1))!),
+                Text(reader.GetValue(2)) ?? "",
+                DateOnly.Parse(Text(reader.GetValue(3)) ?? "", CultureInfo.InvariantCulture),
+                Convert.ToInt64(reader.GetValue(4), CultureInfo.InvariantCulture),
+                Text(reader.GetValue(5)) ?? "",
+                reader.IsDBNull(6) ? null : Convert.ToInt64(reader.GetValue(6), CultureInfo.InvariantCulture),
+                reader.IsDBNull(7) ? null : Text(reader.GetValue(7)),
+                Text(reader.GetValue(8)) ?? "SAR",
+                Dec(reader.GetValue(9)), Dec(reader.GetValue(10)), Dec(reader.GetValue(11)),
+                Text(reader.GetValue(12)) ?? "Draft", journal, reversal));
+        }
+        return rows;
+    }
+
     public async Task<Guid> PostAsync(Guid companyId, Guid landedCostId, string actor,
         CancellationToken cancellationToken = default)
     {
