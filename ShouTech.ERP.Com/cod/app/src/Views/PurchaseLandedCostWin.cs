@@ -80,7 +80,7 @@ public sealed class PurchaseLandedCostWin : BaseWin
         StyleButton(_refresh, "PurchaseLandedCost.Refresh");
         StyleButton(_loadSelected, "PurchaseLandedCost.LoadSelected");
         StyleButton(_close, "PurchaseLandedCost.Close");
-        var chargeKeys = new[] { "PurchaseLandedCost.ChargeCode", "PurchaseLandedCost.Description", "PurchaseLandedCost.Amount", "PurchaseLandedCost.Basis" };
+        var chargeKeys = new[] { "PurchaseLandedCost.ChargeCode", "PurchaseLandedCost.Description", "PurchaseLandedCost.Amount", "PurchaseLandedCost.Basis", "PurchaseLandedCost.ManualAmounts" };
         for (var i = 0; i < chargeKeys.Length && i < _grid.Columns.Count; i++) _grid.Columns[i].Header = T(chargeKeys[i]);
         var historyKeys = new[] { "PurchaseLandedCost.ColNumber", "PurchaseLandedCost.ColReceipt", "PurchaseLandedCost.ColDate", "PurchaseLandedCost.ColAmount", "PurchaseLandedCost.ColStatus" };
         for (var i = 0; i < historyKeys.Length && i < _historyGrid.Columns.Count; i++) _historyGrid.Columns[i].Header = T(historyKeys[i]);
@@ -158,11 +158,17 @@ public sealed class PurchaseLandedCostWin : BaseWin
         var basisColumn = new DataGridComboBoxColumn
         {
             Header = T("PurchaseLandedCost.Basis"),
-            ItemsSource = new[] { "Value", "Quantity", "Weight", "Volume" },
+            ItemsSource = new[] { "Value", "Quantity", "Weight", "Volume", "Manual" },
             SelectedItemBinding = new Binding(nameof(ChargeRow.Basis)),
             Width = 130
         };
         _grid.Columns.Add(basisColumn);
+        _grid.Columns.Add(new DataGridTextColumn
+        {
+            Header = T("PurchaseLandedCost.ManualAmounts"),
+            Binding = new Binding(nameof(ChargeRow.ManualAmounts)),
+            Width = new DataGridLength(2, DataGridLengthUnitType.Star)
+        });
         Grid.SetRow(_grid, 1);
         body.Children.Add(_grid);
 
@@ -253,11 +259,29 @@ public sealed class PurchaseLandedCostWin : BaseWin
             if (_rate.Text == "1" && receipt.ExchangeRate > 0m) _rate.Text = receipt.ExchangeRate.ToString(CultureInfo.InvariantCulture);
             _grid.CommitEdit(DataGridEditingUnit.Cell, true);
             _grid.CommitEdit(DataGridEditingUnit.Row, true);
+            var receiptLinesByNumber = receipt.Lines.ToDictionary(line => line.LineNo, line => line.LineId);
             var charges = _charges.Select(row =>
             {
                 if (!decimal.TryParse(row.Amount, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount))
                     throw new FormatException(T("PurchaseLandedCost.InvalidInput"));
-                return new PurchaseLandedCostChargeDraft(row.Code, row.Description, amount, row.Basis);
+                IReadOnlyDictionary<long, decimal>? manualAmounts = null;
+                if (string.Equals(row.Basis, "Manual", StringComparison.OrdinalIgnoreCase))
+                {
+                    var parsed = new Dictionary<long, decimal>();
+                    foreach (var token in (row.ManualAmounts ?? string.Empty).Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    {
+                        var pair = token.Split('=', 2, StringSplitOptions.TrimEntries);
+                        if (pair.Length != 2
+                            || !int.TryParse(pair[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var lineNo)
+                            || !receiptLinesByNumber.TryGetValue(lineNo, out var lineId)
+                            || !decimal.TryParse(pair[1], NumberStyles.Number, CultureInfo.InvariantCulture, out var allocation))
+                            throw new FormatException(T("PurchaseLandedCost.InvalidManualAmounts"));
+                        if (!parsed.TryAdd(lineId, allocation))
+                            throw new FormatException(T("PurchaseLandedCost.InvalidManualAmounts"));
+                    }
+                    manualAmounts = parsed;
+                }
+                return new PurchaseLandedCostChargeDraft(row.Code, row.Description, amount, row.Basis, manualAmounts);
             }).ToArray();
             var id = await AppHost.PurchaseLandedCosts!.CreateDraftAsync(_companyId, receipt.DocId,
                 _number.Text.Trim(), DateOnly.FromDateTime(_date.SelectedDate ?? DateTime.Today),
@@ -323,5 +347,6 @@ public sealed class PurchaseLandedCostWin : BaseWin
         public string Description { get; set; } = "";
         public string Amount { get; set; } = "0";
         public string Basis { get; set; } = "Value";
+        public string ManualAmounts { get; set; } = "";
     }
 }
