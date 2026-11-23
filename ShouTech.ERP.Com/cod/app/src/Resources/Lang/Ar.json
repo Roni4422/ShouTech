@@ -3973,6 +3973,15 @@
     "InvalidInput": "تحقق من البيانات المدخلة.",
     "NoReceipt": "لم يتم العثور على استلام بضاعة مرحّل بهذا الرقم.",
     "NoVoucher": "أدخل معرّف سند تكلفة صحيحاً."
+  ,
+    "Search": "بحث في السندات",
+    "Refresh": "تحديث السجل",
+    "LoadSelected": "تحميل المحدد",
+    "ColNumber": "السند",
+    "ColReceipt": "الاستلام",
+    "ColDate": "التاريخ",
+    "ColAmount": "المبلغ",
+    "ColStatus": "الحالة"
   },
   "PurchaseRequisition": {
     "Title": "طلبات الشراء الداخلية",
