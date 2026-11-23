@@ -55,7 +55,11 @@ public sealed class GrniWin : RptBase
         var reconciliationRow = reconciliation.FirstOrDefault();
         var glBalanceBase = RptWinUtil.Dec(reconciliationRow?.GetValueOrDefault("GlBalanceBase"));
         var differenceBase = RptWinUtil.Dec(reconciliationRow?.GetValueOrDefault("DifferenceBase"));
-        var rows = RptWinUtil.Map(raw, BuildDefinition().Columns.Take(12).ToArray());
+        var reportColumns = BuildDefinition().Columns;
+        var receiptColumns = new RptCol[12];
+        for (var index = 0; index < receiptColumns.Length; index++)
+            receiptColumns[index] = reportColumns[index];
+        var rows = RptWinUtil.Map(raw, receiptColumns);
         var agedRows = new List<IReadOnlyDictionary<string, object?>>(rows.Count);
 
         foreach (var row in rows)
