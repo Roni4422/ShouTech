@@ -3871,6 +3871,8 @@
     "Description": "Description",
     "Amount": "Montant",
     "Basis": "Base de répartition",
+    "ManualAmounts": "Répartition manuelle (n° ligne=montant ; ...)",
+    "InvalidManualAmounts": "Saisissez les répartitions sous la forme numéro de ligne=montant, séparées par des points-virgules. Chaque ligne doit appartenir à la réception sélectionnée.",
     "AddCharge": "Ajouter des frais",
     "RemoveCharge": "Supprimer les frais",
     "CreateDraft": "Créer le brouillon",
