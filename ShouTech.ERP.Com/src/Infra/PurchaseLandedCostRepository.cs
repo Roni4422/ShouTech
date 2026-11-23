@@ -401,7 +401,7 @@ public sealed class PurchaseLandedCostRepository
             FROM purchase_landed_cost_allocations a
             JOIN purchase_documents d ON d.doc_id = a.receipt_doc_id AND d.company_id = a.company_id
             JOIN material_stock_movements sm
-              ON sm.company_id = a.company_id
+              ON sm.company_id = @stockCompany
              AND sm.source_document_line_id = a.receipt_line_id
              AND sm.document_no = d.doc_no AND sm.movement_type = 'RCV'
              AND sm.qty_in > 0 AND sm.is_deleted = @false
@@ -429,7 +429,7 @@ public sealed class PurchaseLandedCostRepository
         {
             var result = StockValuationEngine.ApplyLandedCostAdjustment(connection, transaction, _provider,
                 company, stockCompanyCode, landedCostId, allocation.Id, allocation.Movement,
-                allocation.Material, allocation.Amount, actor);
+                allocation.Warehouse, allocation.Material, allocation.Amount, actor);
             inventoryBase += result.InventoryAdjustment;
             consumedBase += result.ConsumedCostAdjustment;
         }
