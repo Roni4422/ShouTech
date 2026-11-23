@@ -464,10 +464,10 @@ public sealed class PurchaseLandedCostRepository : IPurchaseLandedCostRepository
         if (supplierId <= 0) throw new InvalidOperationException("The receipt must identify a supplier before landed costs can be posted.");
 
         var stockCompanyCode = PartyLedger.ResolveCompanyCode(connection, transaction, _provider, company);
-        var allocations = new List<(Guid Id, long Line, long Material, long Warehouse, decimal Amount, long Movement)>();
+        var allocations = new List<(Guid Id, long Line, long Material, long Warehouse, decimal Amount, string ExpenseAccount, long Movement)>();
         using (var query = Cmd(connection, transaction, $"""
             SELECT a.allocation_id, a.receipt_line_id, a.material_id, a.warehouse_id,
-                   a.base_quantity, a.allocated_base_amount,
+                   a.base_quantity, a.allocated_base_amount, c.expense_account_code,
                    (SELECT COUNT(*) FROM material_stock_movements sm
                     WHERE sm.company_id = @stockCompany
                       AND sm.source_document_line_id = a.receipt_line_id
@@ -496,17 +496,19 @@ public sealed class PurchaseLandedCostRepository : IPurchaseLandedCostRepository
             while (reader.Read())
             {
                 if (reader.IsDBNull(3)) throw new InvalidOperationException("A landed-cost allocation has no receipt warehouse.");
-                var movementCount = Convert.ToInt32(reader.GetValue(6), CultureInfo.InvariantCulture);
-                if (movementCount != 1 || reader.IsDBNull(7) || reader.IsDBNull(8))
+                var movementCount = Convert.ToInt32(reader.GetValue(7), CultureInfo.InvariantCulture);
+                if (movementCount != 1 || reader.IsDBNull(8) || reader.IsDBNull(9))
                     throw new InvalidOperationException("Every landed-cost allocation must map to exactly one active stock movement for its receipt line.");
                 var allocatedQty = Dec(reader.GetValue(4));
-                var movementQty = Dec(reader.GetValue(8));
+                var movementQty = Dec(reader.GetValue(9));
                 if (decimal.Round(allocatedQty, 6, MidpointRounding.AwayFromZero)
                     != decimal.Round(movementQty, 6, MidpointRounding.AwayFromZero))
                     throw new InvalidOperationException("The landed-cost allocation quantity no longer matches its source receipt movement.");
+                var expenseAccount = reader.IsDBNull(6) || string.IsNullOrWhiteSpace(Text(reader.GetValue(6)))
+                    ? GlAccounts.Cogs : Text(reader.GetValue(6))!.Trim();
                 allocations.Add((Guid.Parse(Text(reader.GetValue(0))!), Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture),
                     Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture), Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture),
-                    Dec(reader.GetValue(5)), Convert.ToInt64(reader.GetValue(7), CultureInfo.InvariantCulture)));
+                    Dec(reader.GetValue(5)), expenseAccount, Convert.ToInt64(reader.GetValue(8), CultureInfo.InvariantCulture)));
             }
         }
         if (allocations.Count == 0) throw new InvalidOperationException("The landed-cost voucher has no traceable stock allocations.");
@@ -515,6 +517,7 @@ public sealed class PurchaseLandedCostRepository : IPurchaseLandedCostRepository
             throw new InvalidOperationException("Landed-cost line allocations do not reconcile to the voucher base total.");
 
         decimal inventoryBase = 0m, consumedBase = 0m;
+        var consumedByAccountBase = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
         foreach (var allocation in allocations)
         {
             var result = StockValuationEngine.ApplyLandedCostAdjustment(connection, transaction, _provider,
@@ -522,6 +525,8 @@ public sealed class PurchaseLandedCostRepository : IPurchaseLandedCostRepository
                 allocation.Warehouse, allocation.Material, allocation.Amount, actor);
             inventoryBase += result.InventoryAdjustment;
             consumedBase += result.ConsumedCostAdjustment;
+            consumedByAccountBase[allocation.ExpenseAccount] =
+                consumedByAccountBase.GetValueOrDefault(allocation.ExpenseAccount) + result.ConsumedCostAdjustment;
         }
         inventoryBase = decimal.Round(inventoryBase, 4, MidpointRounding.AwayFromZero);
         consumedBase = decimal.Round(consumedBase, 4, MidpointRounding.AwayFromZero);
@@ -531,9 +536,25 @@ public sealed class PurchaseLandedCostRepository : IPurchaseLandedCostRepository
         if (consumedAmount != 0m) consumedAmount += roundingDelta;
         else inventoryAmount += roundingDelta;
 
+        var consumedByAccount = consumedByAccountBase
+            .OrderBy(item => item.Key, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(item => item.Key,
+                item => decimal.Round(item.Value / exchangeRate, 4, MidpointRounding.AwayFromZero),
+                StringComparer.OrdinalIgnoreCase);
+        if (consumedByAccount.Count > 0)
+        {
+            var finalAccount = consumedByAccount.Keys.Last();
+            consumedByAccount[finalAccount] += consumedAmount - consumedByAccount.Values.Sum();
+        }
+        else if (consumedAmount != 0m)
+        {
+            consumedByAccount[GlAccounts.Cogs] = consumedAmount;
+        }
+
         var glLines = new List<GlLineRequest>();
         AddSignedLine(glLines, GlAccounts.Inventory, inventoryAmount, "Landed cost capitalized to stock");
-        AddSignedLine(glLines, GlAccounts.Cogs, consumedAmount, "Landed cost on consumed stock");
+        foreach (var item in consumedByAccount)
+            AddSignedLine(glLines, item.Key, item.Value, "Landed cost on consumed stock");
         AddSignedLine(glLines, GlAccounts.Payable, -totalAmount, "Supplier landed-cost charge");
         var gl = GlPosting.PostInTransaction(connection, transaction, _provider,
             new GlDocumentRequest(companyId, date, $"Landed cost {docNo}",
