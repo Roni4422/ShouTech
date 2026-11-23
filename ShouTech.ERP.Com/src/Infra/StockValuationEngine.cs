@@ -39,7 +39,8 @@ public sealed record StockMovementRequest(
     bool AutoAllocateSerials = false,
     bool AllowExpiredBatchIssue = false,
     long? PartyId = null,
-    string? Actor = null);
+    string? Actor = null,
+    long? SourceDocumentLineId = null);
 
 public sealed record StockMovementResult(
     long MovementId,
@@ -621,9 +622,9 @@ public static class StockValuationEngine
               INSERT INTO material_stock_movements
                   (company_id, warehouse_id, material_id, movement_date, movement_type, document_no,
                    qty_in, qty_out, unit_cost, note,
-                   balance_qty_after, valuation_rate, stock_value_after, cost_amount, valuation_method)
+                   balance_qty_after, valuation_rate, stock_value_after, cost_amount, valuation_method, source_document_line_id)
               VALUES (@c, @w, @m, @d, @t, @doc, @qin, @qout, @cost, @note,
-                      @balQty, @rate, @stockVal, @costAmt, @method)
+                      @balQty, @rate, @stockVal, @costAmt, @method, @sourceLine)
               RETURNING stock_movement_id
               """
             : """
@@ -656,6 +657,7 @@ public static class StockValuationEngine
         Add(cmd, "@stockVal", state.Value);
         Add(cmd, "@costAmt", costAmount);
         Add(cmd, "@method", methodLabel);
+        Add(cmd, "@sourceLine", (object?)request.SourceDocumentLineId ?? DBNull.Value);
         return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
