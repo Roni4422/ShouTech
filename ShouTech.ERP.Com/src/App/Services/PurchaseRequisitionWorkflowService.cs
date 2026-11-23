@@ -77,7 +77,6 @@ public sealed class PurchaseRequisitionWorkflowService
             var existing=await _orders.FindByIdAsync(CommercialDocSide.Purchase,existingId,ct).ConfigureAwait(false)??throw new InvalidOperationException("Linked purchase order is missing.");
             return new(existing.DocId,existing.DocNo);
         }
-        if(workflow.Status!="Approved")throw new InvalidOperationException("Only an approved requisition can be converted.");
         var link=(await _orders.Orders.GetLinksFromAsync(companyId,requisitionId,ct).ConfigureAwait(false))
             .FirstOrDefault(x=>x.SourceDocKind==CommercialDocKinds.PurchaseRequisition&&x.TargetDocKind==CommercialDocKinds.PurchaseOrder);
         if(link is not null)
@@ -86,15 +85,38 @@ public sealed class PurchaseRequisitionWorkflowService
             await _repository.MarkConvertedAsync(companyId,requisitionId,existing.DocId,RequireActor(actor),ct).ConfigureAwait(false);
             return new(existing.DocId,existing.DocNo);
         }
+        if(workflow.Status!="Approved")throw new InvalidOperationException("Only an approved requisition that is not already converting can be converted.");
         var requisition=await _orders.FindByIdAsync(CommercialDocSide.Purchase,requisitionId,ct).ConfigureAwait(false)
             ??throw new InvalidOperationException("Purchase requisition document was not found.");
         if(requisition.DocKind!=CommercialDocKinds.PurchaseRequisition)throw new InvalidOperationException("Source document is not a purchase requisition.");
         var number=await _orders.NextDocNoAsync(CommercialDocSide.Purchase,companyId,CommercialDocKinds.PurchaseOrder,ct).ConfigureAwait(false);
         var lines=requisition.Lines.Select(x=>new CommercialLineDraft(x.MaterialId,x.MaterialCode,x.Description,x.Unit,x.Qty,x.UnitPrice,x.DiscountPct,0m,x.WarehouseId??warehouseId,x.LineNo)).ToArray();
         var draft=new CommercialDocumentDraft(companyId,CommercialDocKinds.PurchaseOrder,number,DateOnly.FromDateTime(DateTime.Today),supplierId,supplierName.Trim(),warehouseId,currencyCode.Trim().ToUpperInvariant(),exchangeRate,$"Created from requisition {requisition.DocNo}",lines);
-        var poId=await _orders.Orders.CreateLinkedDraftAsync(CommercialDocSide.Purchase,draft,CommercialDocKinds.PurchaseRequisition,requisitionId,RequireActor(actor),ct).ConfigureAwait(false);
-        await _repository.MarkConvertedAsync(companyId,requisitionId,poId,RequireActor(actor),ct).ConfigureAwait(false);
-        return new(poId,number);
+        var conversionActor=RequireActor(actor);
+        await _repository.BeginConversionAsync(companyId,requisitionId,conversionActor,ct).ConfigureAwait(false);
+        try
+        {
+            var poId=await _orders.Orders.CreateLinkedDraftAsync(
+                CommercialDocSide.Purchase,draft,CommercialDocKinds.PurchaseRequisition,
+                requisitionId,conversionActor,ct).ConfigureAwait(false);
+            await _repository.MarkConvertedAsync(companyId,requisitionId,poId,conversionActor,ct).ConfigureAwait(false);
+            return new(poId,number);
+        }
+        catch(Exception conversionError)
+        {
+            try
+            {
+                await _repository.AbortConversionAsync(companyId,requisitionId,conversionActor,
+                    conversionError.Message,CancellationToken.None).ConfigureAwait(false);
+            }
+            catch(Exception rollbackError)
+            {
+                throw new AggregateException(
+                    "Purchase-order creation failed and the requisition conversion state could not be reconciled.",
+                    conversionError,rollbackError);
+            }
+            throw;
+        }
     }
     private void RequirePermission(string code){if(!_hasPermission(code))throw new UnauthorizedAccessException($"Missing permission: {code}.");}
     private static Guid RequireCompany(Guid id)=>id==Guid.Empty?throw new ArgumentException("Company is required.",nameof(id)):id;
