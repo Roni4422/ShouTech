@@ -3875,6 +3875,7 @@
     "Amount": "Tutar",
     "Basis": "Dağıtım esası",
     "ManualAmounts": "Manuel dağıtım (satır no=tutar; ...)",
+    "ExpenseAccount": "Tüketilen maliyet gider hesabı",
     "InvalidManualAmounts": "Dağıtımları satır numarası=tutar biçiminde, noktalı virgülle ayırarak girin. Her satır seçilen mal kabule ait olmalıdır.",
     "AddCharge": "Masraf ekle",
     "RemoveCharge": "Masrafı kaldır",
