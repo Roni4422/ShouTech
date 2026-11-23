@@ -23,4 +23,4 @@ public sealed record PurchaseLandedCostSummary(
     decimal TotalBaseAmount,
     string Status,
     Guid? JournalEntryId,
-    Guid? ReversedFromId);
+    Guid? ReversalId);
