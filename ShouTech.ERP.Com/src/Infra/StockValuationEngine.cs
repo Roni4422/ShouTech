@@ -184,10 +184,10 @@ public static class StockValuationEngine
                     throw new InvalidOperationException("The stock balance could not be revalued.");
             }
             decimal totalQty, totalValue;
-            using (var totals = CreateCommand(connection, transaction, """
+            using (var totals = CreateCommand(connection, transaction, $"""
                 SELECT COALESCE(SUM(available_qty), 0), COALESCE(SUM(stock_value), 0)
                 FROM material_stock_balances
-                WHERE company_id = @c AND material_id = @m AND is_deleted = ${(isPg ? "FALSE" : "0")}
+                WHERE company_id = @c AND material_id = @m AND is_deleted = {(isPg ? "FALSE" : "0")}
                 """))
             {
                 Add(totals, "@c", company);
