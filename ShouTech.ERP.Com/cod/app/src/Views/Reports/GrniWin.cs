@@ -52,9 +52,10 @@ public sealed class GrniWin : RptBase
         var asOf = filters.GetDateOr("AsOf", DateTime.Today).Date;
         var raw = await RptQuery.GoodsReceivedNotInvoicedAsync(DateTime.MinValue, asOf, ct);
         var reconciliation = await RptQuery.GoodsReceivedNotInvoicedReconciliationAsync(asOf, ct);
-        var reconciliationRow = reconciliation.Count > 0 ? reconciliation[0] : null;
-        var glBalanceBase = RptWinUtil.Dec(reconciliationRow?.GetValueOrDefault("GlBalanceBase"));
-        var differenceBase = RptWinUtil.Dec(reconciliationRow?.GetValueOrDefault("DifferenceBase"));
+        // Reconciliation may return one row per account or receipt group.
+        // Sum every row so the report never silently drops all but the first group.
+        var glBalanceBase = reconciliation.Sum(row => RptWinUtil.Dec(row.GetValueOrDefault("GlBalanceBase")));
+        var differenceBase = reconciliation.Sum(row => RptWinUtil.Dec(row.GetValueOrDefault("DifferenceBase")));
         var reportColumns = BuildDefinition().Columns;
         var receiptColumns = new RptCol[12];
         for (var index = 0; index < receiptColumns.Length; index++)
