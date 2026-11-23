@@ -624,8 +624,8 @@ public static class RptQuery
         const string sql = """
             WITH open_receipt_lines AS (
                 SELECT l.line_subtotal * r.exchange_rate *
-                    CASE WHEN l.qty > 0
-                         THEN MAX(0, l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0)) / l.qty
+                    CASE WHEN l.qty > 0 AND l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0) > 0
+                         THEN (l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0)) / l.qty
                          ELSE 0 END AS OpenBaseAmount
                 FROM purchase_documents r
                 INNER JOIN companies co ON CAST(co.company_id AS TEXT) = r.company_id
