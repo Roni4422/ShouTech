@@ -609,8 +609,12 @@
       "DebitBase": "Débit (devise de base)",
       "CreditBase": "Crédit (devise de base)",
       "GrniGlBalance": "Solde GL des réceptions non facturées (devise de base)",
-      "GrniDifference": "Écart GRNI (devise de base)"
-    },
+      "GrniDifference": "Écart GRNI (devise de base)",
+   
+      "AgeBand": "Tranche d’ancienneté",
+      "GrniGlBalanceCompany": "Solde GRNI du grand livre (toute la société, devise de base)",
+      "GrniDifferenceCompany": "Écart GRNI (toute la société, devise de base)"
+     },
     "Filter": {
       "All": "Tous",
       "DateFrom": "Du",
