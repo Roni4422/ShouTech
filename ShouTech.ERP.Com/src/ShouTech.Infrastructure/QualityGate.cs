@@ -171,6 +171,30 @@ public static class QualityGate
     // ------------------------------------------------------------------
     // Incoming diversion + inspection creation
     // ------------------------------------------------------------------
+    /// <summary>
+    /// Incoming receipt diversion (Phase B 056, decision Q2, mirror of
+    /// StkPost): a receipt of a material with quality_check_required
+    /// must NOT land in sellable stock. Called by the stock writer
+    /// BEFORE the engine, it returns the id of the company's quarantine
+    /// warehouse to post into, or 0 when there is nothing to divert
+    /// (non-QC material, or a pre-056 database with no gate tables). The
+    /// writer records the Draft inspection AFTER the movement through
+    /// <see cref="EnsureInspection"/>, when the movement's batch is
+    /// known.
+    /// </summary>
+    public static long DivertReceipt(
+        DbConnection connection, DbTransaction transaction, string provider,
+        string companyId, long materialId)
+    {
+        var prov = GlPosting.NormalizeProvider(provider);
+        if (!PartyLedger.TableExists(connection, transaction, prov, "quality_inspections"))
+            return 0;
+        var profile = LoadProfile(connection, transaction, prov, companyId, materialId);
+        if (!profile.QualityCheckRequired)
+            return 0;
+        return EnsureQuarantineWarehouse(connection, transaction, prov, companyId);
+    }
+
     /// <summary>Creates (or returns the existing) Draft inspection for
     /// one diverted receipt quantity, snapshotting the material's
     /// template lines as the inspection lines. Idempotent per
