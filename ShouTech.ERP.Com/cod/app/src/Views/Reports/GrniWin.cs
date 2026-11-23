@@ -75,10 +75,10 @@ public sealed class GrniWin : RptBase
             var remainingAmount = RptWinUtil.Dec(row.GetValueOrDefault("RemainingBaseAmount"));
             var values = row.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
             values["AgeDays"] = ageDays;
-            values["AgeBand"] = ageDays <= 30 ? T("Reports.Aging.Current")
-                : ageDays <= 60 ? T("Reports.Aging.31_60")
-                : ageDays <= 90 ? T("Reports.Aging.61_90")
-                : T("Reports.Aging.90Plus");
+            values["AgeBand"] = ageDays <= 30 ? T("Reports.Col.Aging0_30")
+                : ageDays <= 60 ? T("Reports.Col.Aging31_60")
+                : ageDays <= 90 ? T("Reports.Col.Aging61_90")
+                : T("Reports.Col.Aging90Plus");
             values["Bucket0_30"] = ageDays <= 30 ? remainingAmount : 0m;
             values["Bucket31_60"] = ageDays is > 30 and <= 60 ? remainingAmount : 0m;
             values["Bucket61_90"] = ageDays is > 60 and <= 90 ? remainingAmount : 0m;
