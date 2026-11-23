@@ -93,6 +93,35 @@ public class BatchSerialEngineTests
     }
 
     [Fact]
+    public async Task PurchaseReturn_UsesSelectedBatchAndSerialFromExactReceiptLine()
+    {
+        using var db = await SeededAsync();
+        SeedMaterial(db, 64, hasBatch: true, hasSerial: true);
+
+        Apply(db, Req(64, "2026-01-01", "RCV", "RCV-TRACK-01", qtyIn: 1m, receiptCost: 50m,
+            batches: new[] { new BatchAllocationRequest("B-LINE-1", 1m) },
+            serials: new[] { new SerialSelection("SN-LINE-1", "B-LINE-1") },
+            sourceLineId: 101));
+        Apply(db, Req(64, "2026-01-01", "RCV", "RCV-TRACK-01", qtyIn: 1m, receiptCost: 50m,
+            batches: new[] { new BatchAllocationRequest("B-LINE-2", 1m) },
+            serials: new[] { new SerialSelection("SN-LINE-2", "B-LINE-2") },
+            sourceLineId: 102));
+
+        var returned = Apply(db, Req(64, "2026-01-02", "RCR", "RCR-TRACK-01", qtyOut: 1m,
+            batches: new[] { new BatchAllocationRequest("B-LINE-1", 1m) },
+            serials: new[] { new SerialSelection("SN-LINE-1", "B-LINE-1") },
+            originalDocNo: "RCV-TRACK-01",
+            sourceLineId: 201, originalSourceLineId: 101));
+
+        Assert.Contains(returned.AllocationRecords, x => x.BatchNo == "B-LINE-1" && x.Qty == -1m);
+        Assert.Contains(returned.AllocationRecords, x => x.SerialNo == "SN-LINE-1" && x.Qty == -1m);
+        Assert.Equal(0m, BatchBalance(db, "B-LINE-1"));
+        Assert.Equal(1m, BatchBalance(db, "B-LINE-2"));
+        Assert.Equal("Delivered", SerialStatus(db, "SN-LINE-1"));
+        Assert.Equal("InStock", SerialStatus(db, "SN-LINE-2"));
+    }
+
+    [Fact]
     public async Task SerialReceipt_DuplicateSerial_RefusedWith6008()
     {
         using var db = await SeededAsync();
@@ -250,11 +279,14 @@ public class BatchSerialEngineTests
         decimal? receiptCost = null,
         IReadOnlyList<BatchAllocationRequest>? batches = null,
         IReadOnlyList<SerialSelection>? serials = null,
-        string? originalDocNo = null, bool allowExpired = false)
+        string? originalDocNo = null, bool allowExpired = false,
+        long? sourceLineId = null, long? originalSourceLineId = null)
         => new(CompanyCode, 1, materialId, date, type, docNo,
                qtyIn, qtyOut, ReceiptUnitCost: receiptCost,
                BatchAllocations: batches, Serials: serials,
-               OriginalDocumentNo: originalDocNo, AllowExpiredBatchIssue: allowExpired);
+               OriginalDocumentNo: originalDocNo, AllowExpiredBatchIssue: allowExpired,
+               SourceDocumentLineId: sourceLineId,
+               OriginalSourceDocumentLineId: originalSourceLineId);
 
     private static StockMovementResult Apply(TestDb db, StockMovementRequest request)
         => StockValuationEngine.Apply(db.Connection, db.Tx, "SQLite", request);
