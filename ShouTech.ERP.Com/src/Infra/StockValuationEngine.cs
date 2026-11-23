@@ -167,6 +167,8 @@ public static class StockValuationEngine
 
         var balance = LoadBalance(connection, transaction, isPg, stockCompany, warehouseId, materialId);
         var material = LoadMaterial(connection, transaction, isPg, stockCompany, materialId);
+        if (!material.IsStocked || material.IsService)
+            throw new InvalidOperationException("Landed costs can only revalue stocked inventory materials.");
         long? layerId = null;
         decimal layerRemainingQty = 0m, originalQty, remainingQty, oldUnitCost;
         using (var layer = CreateCommand(connection, transaction, $"""
@@ -206,8 +208,7 @@ public static class StockValuationEngine
         // the original receipt movement.
         decimal receiptBalanceQty, originalMovementCost;
         using (var movement = CreateCommand(connection, transaction, """
-            SELECT qty_in, balance_qty_after, COALESCE(valuation_rate, unit_cost),
-                   COALESCE(cost_amount, 0)
+            SELECT qty_in, balance_qty_after, COALESCE(cost_amount, 0)
             FROM material_stock_movements
             WHERE stock_movement_id = @movement AND company_id = @company
               AND warehouse_id = @w AND material_id = @m
@@ -222,9 +223,9 @@ public static class StockValuationEngine
                 throw new InvalidOperationException("The source receipt movement is unavailable for landed-cost revaluation.");
             originalQty = ValuationText.ToDecimal(reader.GetValue(0));
             receiptBalanceQty = ValuationText.ToDecimal(reader.GetValue(1));
-            originalMovementCost = ValuationText.ToDecimal(reader.GetValue(3));
-            if (layerId is null)
-                oldUnitCost = ValuationText.ToDecimal(reader.GetValue(2));
+            originalMovementCost = ValuationText.ToDecimal(reader.GetValue(2));
+            if (layerId is null && originalQty > 0m)
+                oldUnitCost = ValuationMath.RoundRate(originalMovementCost / originalQty);
         }
         if (layerId is not null)
         {
@@ -273,6 +274,10 @@ public static class StockValuationEngine
         var inventoryAdjustment = remainingQty == 0m ? 0m
             : ValuationMath.RoundMoney((newUnitCost - oldUnitCost) * remainingQty);
         var consumedAdjustment = allocatedBaseAmount - inventoryAdjustment;
+        var quantityRemainingImmediatelyAfterReceipt =
+            Math.Min(originalQty, Math.Max(0m, receiptBalanceQty));
+        var receiptSnapshotAdjustment = ValuationMath.RoundMoney(
+            (newUnitCost - oldUnitCost) * quantityRemainingImmediatelyAfterReceipt);
 
         if (layerId is long exactLayerId)
         {
@@ -288,14 +293,14 @@ public static class StockValuationEngine
         using (var updateMovement = CreateCommand(connection, transaction, """
             UPDATE material_stock_movements
             SET unit_cost = @cost, valuation_rate = @rate,
-                cost_amount = @movementCost, stock_value_after = COALESCE(stock_value_after, 0) + @amount
+                cost_amount = @movementCost, stock_value_after = COALESCE(stock_value_after, 0) + @snapshotAmount
             WHERE stock_movement_id = @movement AND company_id = @company
             """))
         {
             Add(updateMovement, "@cost", newUnitCost);
             Add(updateMovement, "@rate", newUnitCost);
             Add(updateMovement, "@movementCost", originalMovementCost + allocatedBaseAmount);
-            Add(updateMovement, "@amount", allocatedBaseAmount);
+            Add(updateMovement, "@snapshotAmount", receiptSnapshotAdjustment);
             Add(updateMovement, "@movement", sourceMovementId);
             Add(updateMovement, "@company", stockCompany);
             if (updateMovement.ExecuteNonQuery() != 1)
