@@ -61,6 +61,16 @@ public sealed class LandedCostAllocatorTests
     }
 
     [Fact]
+    public void ManualAllocationCannotInvertChargeSign()
+    {
+        Assert.Throws<InvalidOperationException>(() => LandedCostAllocator.Allocate(Lines, new[]
+        {
+            new LandedCostCharge("FREIGHT", 10m, "Manual",
+                new Dictionary<long, decimal> { [11] = -5m, [12] = 15m })
+        }));
+    }
+
+    [Fact]
     public void ZeroAllocationBaseIsRejected()
     {
         var noWeight = new[] { new LandedCostReceiptLine(1, 1m, 0m, 0m, 0m) };
