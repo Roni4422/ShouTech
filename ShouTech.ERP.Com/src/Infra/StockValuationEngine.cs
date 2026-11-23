@@ -163,9 +163,12 @@ public static class StockValuationEngine
                 throw new InvalidOperationException("This landed-cost allocation has already adjusted stock valuation.");
         }
 
+        var balance = LoadBalance(connection, transaction, isPg, stockCompany, warehouseId, materialId);
+        var material = LoadMaterial(connection, transaction, isPg, stockCompany, materialId);
+        long? layerId = null;
         decimal originalQty, remainingQty, oldUnitCost;
         using (var layer = CreateCommand(connection, transaction, $"""
-            SELECT qty_in, qty_remaining, unit_cost
+            SELECT layer_id, qty_in, qty_remaining, unit_cost
             FROM stock_cost_layers
             WHERE company_id = @c AND warehouse_id = @w AND material_id = @m
               AND source_movement_id = @movement
@@ -178,53 +181,98 @@ public static class StockValuationEngine
             Add(layer, "@m", materialId);
             Add(layer, "@movement", sourceMovementId);
             using var reader = layer.ExecuteReader();
+            if (reader.Read())
+            {
+                layerId = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture);
+                originalQty = ValuationText.ToDecimal(reader.GetValue(1));
+                remainingQty = ValuationText.ToDecimal(reader.GetValue(2));
+                oldUnitCost = ValuationText.ToDecimal(reader.GetValue(3));
+            }
+            else
+            {
+                if (ValuationMath.UsesLayers(ValuationMath.NormalizeMethod(material.CostMethod)))
+                    throw new InvalidOperationException("The receipt cost layer was not found for this landed-cost allocation.");
+                originalQty = 0m;
+                remainingQty = 0m;
+                oldUnitCost = 0m;
+            }
+        }
+
+        decimal receiptBalanceQty = 0m, originalMovementCost = 0m;
+        if (layerId is null)
+        {
+            using var movement = CreateCommand(connection, transaction, """
+                SELECT qty_in, balance_qty_after, COALESCE(valuation_rate, unit_cost), cost_amount
+                FROM material_stock_movements
+                WHERE stock_movement_id = @movement AND company_id = @company
+                  AND warehouse_id = @w AND material_id = @m
+                """);
+            Add(movement, "@movement", sourceMovementId);
+            Add(movement, "@company", stockCompany);
+            Add(movement, "@w", warehouseId);
+            Add(movement, "@m", materialId);
+            using var reader = movement.ExecuteReader();
             if (!reader.Read())
-                throw new InvalidOperationException("The receipt cost layer was not found for this landed-cost allocation.");
+                throw new InvalidOperationException("The source receipt movement is unavailable for landed-cost revaluation.");
             originalQty = ValuationText.ToDecimal(reader.GetValue(0));
-            remainingQty = ValuationText.ToDecimal(reader.GetValue(1));
+            receiptBalanceQty = ValuationText.ToDecimal(reader.GetValue(1));
             oldUnitCost = ValuationText.ToDecimal(reader.GetValue(2));
+            originalMovementCost = ValuationText.ToDecimal(reader.GetValue(3));
+            remainingQty = balance is null || balance.Quantity <= 0m || receiptBalanceQty <= 0m
+                ? 0m
+                : Math.Min(originalQty, originalQty * Math.Min(1m, balance.Quantity / receiptBalanceQty));
         }
         if (originalQty <= 0m || remainingQty < 0m || remainingQty > originalQty)
-            throw new InvalidOperationException("The receipt cost layer has invalid quantity state.");
+            throw new InvalidOperationException("The receipt cost source has invalid quantity state.");
 
-        var targetInventoryAdjustment = remainingQty == 0m ? 0m
-            : ValuationMath.RoundMoney(allocatedBaseAmount * remainingQty / originalQty);
-        var newUnitCost = oldUnitCost;
-        if (remainingQty > 0m)
-        {
-            newUnitCost = ValuationMath.RoundRate(oldUnitCost + targetInventoryAdjustment / remainingQty);
-            if (newUnitCost < 0m)
-                throw new InvalidOperationException("A landed-cost credit cannot reduce the remaining layer below zero cost.");
-        }
-        // Keep the stock balance equal to the value actually represented
-        // by the rounded cost layer; send any sub-cent rate-rounding
-        // remainder to consumed cost so the total allocation still ties.
+        var newUnitCost = ValuationMath.RoundRate(oldUnitCost + allocatedBaseAmount / originalQty);
+        if (newUnitCost < 0m)
+            throw new InvalidOperationException("A landed-cost credit cannot reduce the receipt cost below zero.");
+        // The receipt movement is the historical source record. Its full
+        // cost is revised, while only the share still represented in stock
+        // is added to inventory; the consumed remainder is recognized in COGS.
         var inventoryAdjustment = remainingQty == 0m ? 0m
             : ValuationMath.RoundMoney((newUnitCost - oldUnitCost) * remainingQty);
         var consumedAdjustment = allocatedBaseAmount - inventoryAdjustment;
 
-        var balance = LoadBalance(connection, transaction, isPg, stockCompany, warehouseId, materialId);
+        if (layerId is long exactLayerId)
+        {
+            using var updateLayer = CreateCommand(connection, transaction,
+                "UPDATE stock_cost_layers SET unit_cost = @cost WHERE company_id = @c AND layer_id = @layer");
+            Add(updateLayer, "@cost", newUnitCost);
+            Add(updateLayer, "@c", stockCompany);
+            Add(updateLayer, "@layer", exactLayerId);
+            if (updateLayer.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException("The receipt cost layer could not be revalued.");
+        }
+
+        using (var updateMovement = CreateCommand(connection, transaction, """
+            UPDATE material_stock_movements
+            SET unit_cost = @cost, valuation_rate = @rate,
+                cost_amount = @movementCost, stock_value_after = stock_value_after + @amount
+            WHERE stock_movement_id = @movement AND company_id = @company
+            """))
+        {
+            Add(updateMovement, "@cost", newUnitCost);
+            Add(updateMovement, "@rate", newUnitCost);
+            Add(updateMovement, "@movementCost", originalMovementCost + allocatedBaseAmount);
+            Add(updateMovement, "@amount", allocatedBaseAmount);
+            Add(updateMovement, "@movement", sourceMovementId);
+            Add(updateMovement, "@company", stockCompany);
+            if (updateMovement.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException("The source receipt movement could not be revalued.");
+        }
+
         if (inventoryAdjustment != 0m)
         {
             if (balance is null)
-                throw new InvalidOperationException("The stock balance for the receipt layer is missing.");
+                throw new InvalidOperationException("The stock balance for the receipt line is missing.");
             var newStockValue = ValuationMath.RoundMoney(balance.Value + inventoryAdjustment);
             if (newStockValue < 0m)
                 throw new InvalidOperationException("The landed-cost adjustment would make inventory value negative.");
             var average = balance.Quantity > 0m
                 ? ValuationMath.RoundRate(newStockValue / balance.Quantity)
                 : balance.AverageCost;
-            using (var updateLayer = CreateCommand(connection, transaction,
-                "UPDATE stock_cost_layers SET unit_cost = @cost WHERE company_id = @c AND layer_id = (SELECT layer_id FROM stock_cost_layers WHERE company_id = @c AND warehouse_id = @w AND material_id = @m AND source_movement_id = @movement ORDER BY layer_id LIMIT 1)"))
-            {
-                Add(updateLayer, "@cost", newUnitCost);
-                Add(updateLayer, "@c", stockCompany);
-                Add(updateLayer, "@w", warehouseId);
-                Add(updateLayer, "@m", materialId);
-                Add(updateLayer, "@movement", sourceMovementId);
-                if (updateLayer.ExecuteNonQuery() != 1)
-                    throw new InvalidOperationException("The receipt cost layer could not be revalued.");
-            }
             using (var updateBalance = CreateCommand(connection, transaction, """
                 UPDATE material_stock_balances
                 SET stock_value = @value, average_cost = @average,
