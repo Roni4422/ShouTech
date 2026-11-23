@@ -3841,6 +3841,10 @@
     "MissingService": "Le service de pièces jointes est indisponible.",
     "NoDocument": "Enregistrez le document d'achat avant d'ajouter des pièces jointes.",
     "PermissionDenied": "Vous n'avez pas l'autorisation de gérer les pièces jointes.",
-    "UploadFilter": "Documents et images"
+    "UploadFilter": "Documents et images",
+    "FileName": "Nom du fichier",
+    "Size": "Taille",
+    "UploadedBy": "Téléversé par",
+    "UploadedAt": "Date de téléversement"
   }
 }

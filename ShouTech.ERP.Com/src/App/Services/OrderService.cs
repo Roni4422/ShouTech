@@ -59,6 +59,14 @@ public sealed class OrderService
     public Task<string> NextDocNoAsync(CommercialDocSide side, Guid companyId, string docKind, CancellationToken cancellationToken = default)
         => _orders.NextDocNoAsync(side, companyId, docKind, cancellationToken);
 
+    public async Task UpdatePurchaseRequisitionDraftAsync(long requisitionId,CommercialDocumentDraft draft,string userId,CancellationToken cancellationToken=default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(requisitionId);
+        if(draft.DocKind!=CommercialDocKinds.PurchaseRequisition||draft.PartyId is not null)
+            throw new InvalidOperationException("Only a supplier-neutral purchase requisition draft can be updated.");
+        await _orders.UpdateDraftAsync(CommercialDocSide.Purchase,requisitionId,draft,userId,cancellationToken).ConfigureAwait(false);
+    }
+
     public Task PostOrderAsync(CommercialDocSide side, long docId, string userId, CancellationToken cancellationToken = default)
         => _orders.PostOrderAsync(side, docId, userId, cancellationToken);
 

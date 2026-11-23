@@ -3841,6 +3841,10 @@
     "MissingService": "Ek hizmeti kullanılamıyor.",
     "NoDocument": "Ek eklemeden önce satın alma belgesini kaydedin.",
     "PermissionDenied": "Ekleri yönetme izniniz yok.",
-    "UploadFilter": "Belgeler ve görseller"
+    "UploadFilter": "Belgeler ve görseller",
+    "FileName": "Dosya adı",
+    "Size": "Boyut",
+    "UploadedBy": "Yükleyen",
+    "UploadedAt": "Yüklenme tarihi"
   }
 }

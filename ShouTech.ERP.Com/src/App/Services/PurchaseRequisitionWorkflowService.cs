@@ -24,6 +24,18 @@ public sealed class PurchaseRequisitionWorkflowService
     public Task<PurchaseRequisitionWorkflow?> GetAsync(Guid companyId,long id,CancellationToken ct=default)
         => _repository.GetAsync(RequireCompany(companyId),id,ct);
 
+    public Task UpdateDraftAsync(Guid companyId,long id,CommercialDocumentDraft draft,string actor,CancellationToken ct=default)
+    {
+        RequireCompany(companyId);ArgumentOutOfRangeException.ThrowIfNegativeOrZero(id);ArgumentNullException.ThrowIfNull(draft);
+        if(draft.CompanyId!=companyId||draft.DocKind!=CommercialDocKinds.PurchaseRequisition||draft.PartyId is not null||draft.Lines.Count==0)
+            throw new InvalidOperationException("A requisition update must retain its company, kind, supplier-neutral status, and at least one line.");
+        if(draft.Lines.Any(x=>x.Qty<=0||x.UnitPrice<0||string.IsNullOrWhiteSpace(x.Description)))
+            throw new InvalidOperationException("Requisition lines require descriptions, positive quantities, and non-negative estimates.");
+        return _orders.UpdatePurchaseRequisitionDraftAsync(id,draft,RequireActor(actor),ct);
+    }
+
+
+
     public Task SubmitAsync(Guid companyId,long id,IReadOnlyList<PurchaseRequisitionApprovalStep> steps,string actor,CancellationToken ct=default)
     {
         RequireCompany(companyId);ArgumentOutOfRangeException.ThrowIfNegativeOrZero(id);
