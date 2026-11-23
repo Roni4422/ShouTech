@@ -16,6 +16,7 @@ public static class CommercialDocKinds
     public const string PurchaseReceipt = "RCV";
     public const string PurchaseReceiptReturn = "RCR";
     public const string PurchaseInvoice = "PUR";
+    public const string PurchaseRequisition = "PRQ";
 }
 
 /// <summary>Statuses stored in the commercial document status column (TEXT).</summary>

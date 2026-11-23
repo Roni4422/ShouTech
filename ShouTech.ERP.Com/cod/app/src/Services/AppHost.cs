@@ -49,6 +49,7 @@ namespace ShouTech.App.Services
         public static AssetService? Assets { get; private set; }
         public static ReconciliationService? Reconciliation { get; private set; }
         public static PurchaseMatchService? PurchaseMatch { get; private set; }
+        public static PurchaseRequisitionWorkflowService? PurchaseRequisitions { get; private set; }
         public static MasterCardService? MasterCards { get; private set; }
         public static ChequeService? Cheques { get; private set; }
         public static MfgOrderService? Manufacturing { get; private set; }
@@ -115,6 +116,7 @@ namespace ShouTech.App.Services
             Boms = CreatePhase3Service((provider, connection) => new BomService(new BomRepository(provider, connection)), "Bills of Materials");
             Planning = CreatePhase3Service((provider, connection) => new PlanningService(new PlanningRepository(provider, connection)), "Manufacturing Planning");
             Orders = CreatePhase3Service((provider, connection) => new OrderService(new OrderDocumentRepository(provider, connection), new CommercialDocumentRepository(provider, connection)), "Orders");
+            PurchaseRequisitions = CreatePhase3Service((provider, connection) => new PurchaseRequisitionWorkflowService(new PurchaseRequisitionWorkflowRepository(provider, connection), Orders!), "Purchase Requisitions");
             Definitions = CreatePhase3Service((provider, connection) => new DefinitionService(new DefinitionRepository(provider, connection)), "Definitions");
             Operations = CreatePhase3Service((provider, connection) => new OperationsService(new OperationsRepository(provider, connection)), "Operations");
             AccountingStructure = CreateAccountingStructureRepository();
@@ -199,6 +201,7 @@ namespace ShouTech.App.Services
                 Boms = CreatePhase3Service((provider, connection) => new BomService(new BomRepository(provider, connection)), "Bills of Materials");
                 Planning = CreatePhase3Service((provider, connection) => new PlanningService(new PlanningRepository(provider, connection)), "Manufacturing Planning");
                 Orders = CreatePhase3Service((provider, connection) => new OrderService(new OrderDocumentRepository(provider, connection), new CommercialDocumentRepository(provider, connection)), "Orders");
+            PurchaseRequisitions = CreatePhase3Service((provider, connection) => new PurchaseRequisitionWorkflowService(new PurchaseRequisitionWorkflowRepository(provider, connection), Orders!), "Purchase Requisitions");
                 PurchaseMatch = CreatePhase3Service((provider, connection) => new PurchaseMatchService(
                     new PurchaseMatchPolicyRepository(provider, connection),
                     Permissions.Has,
@@ -377,6 +380,7 @@ namespace ShouTech.App.Services
         public static BomService? Boms => AppHost.Boms;
         public static PlanningService? Planning => AppHost.Planning;
         public static OrderService? Orders => AppHost.Orders;
+        public static PurchaseRequisitionWorkflowService? PurchaseRequisitions => AppHost.PurchaseRequisitions;
         public static DefinitionService? Definitions => AppHost.Definitions;
         public static OperationsService? Operations => AppHost.Operations;
         public static AccountingStructureRepository? AccountingStructure => AppHost.AccountingStructure;

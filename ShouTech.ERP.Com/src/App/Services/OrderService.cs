@@ -30,7 +30,7 @@ public sealed class OrderService
     public static CommercialDocSide SideFor(string docKind) => docKind switch
     {
         CommercialDocKinds.SalesOrder or CommercialDocKinds.SalesQuotation or CommercialDocKinds.DeliveryNote or CommercialDocKinds.SalesInvoice => CommercialDocSide.Sales,
-        CommercialDocKinds.PurchaseOrder or CommercialDocKinds.RequestForQuotation or CommercialDocKinds.SupplierQuotation or CommercialDocKinds.PurchaseReceipt or CommercialDocKinds.PurchaseReceiptReturn or CommercialDocKinds.PurchaseInvoice => CommercialDocSide.Purchase,
+        CommercialDocKinds.PurchaseOrder or CommercialDocKinds.RequestForQuotation or CommercialDocKinds.SupplierQuotation or CommercialDocKinds.PurchaseReceipt or CommercialDocKinds.PurchaseReceiptReturn or CommercialDocKinds.PurchaseInvoice or CommercialDocKinds.PurchaseRequisition => CommercialDocSide.Purchase,
         _ => throw new ArgumentException($"Unknown document kind '{docKind}'.", nameof(docKind))
     };
 
