@@ -499,8 +499,14 @@ internal static class BatchSerialAllocator
 
         var batchOriginals = originals.Where(o => o.BatchId is not null && o.SerialId is null).ToList();
         var serialOriginals = originals.Where(o => o.SerialId is not null).ToList();
-        if (tracking.HasBatch && batchOriginals.Sum(o => o.Qty) < qty) return false;
-        if (tracking.HasSerial && serialOriginals.Count < qty) return false;
+        if (tracking.HasBatch && batchOriginals.Sum(o => o.Qty) < qty)
+            throw new AppError(ErrorCodes.BatchAllocationMismatch,
+                $"The original receipt does not contain complete batch allocation history for material '{materialCode}'.",
+                materialCode);
+        if (tracking.HasSerial && serialOriginals.Count < qty)
+            throw new AppError(ErrorCodes.BatchAllocationMismatch,
+                $"The original receipt does not contain enough serial allocation history for material '{materialCode}'.",
+                materialCode);
         if (tracking.HasBatch && tracking.HasSerial &&
             ((request.BatchAllocations is { Count: > 0 }) != (request.Serials is { Count: > 0 })))
             throw new AppError(ErrorCodes.BatchAllocationMismatch,
@@ -552,7 +558,10 @@ internal static class BatchSerialAllocator
                         left -= take;
                     }
                 }
-                if (left > 0m) return false;
+                if (left > 0m)
+                    throw new AppError(ErrorCodes.BatchAllocationMismatch,
+                        $"The original receipt batch allocations do not cover the return quantity for material '{materialCode}'.",
+                        materialCode);
             }
         }
 
@@ -585,7 +594,10 @@ internal static class BatchSerialAllocator
                     foreach (var batch in batchPlan.GroupBy(x => x.BatchId))
                     {
                         var required = batch.Sum(x => x.Qty);
-                        if (required != decimal.Truncate(required)) return false;
+                        if (required != decimal.Truncate(required))
+                            throw new AppError(ErrorCodes.BatchAllocationMismatch,
+                                $"Serial-tracked batch quantities for material '{materialCode}' must be whole units.",
+                                materialCode);
                         var already = serialPlan.Count(x => x.BatchId == batch.Key);
                         foreach (var source in serialOriginals.Where(x => x.BatchId == batch.Key).Skip(already).Take((int)required))
                             serialPlan.Add((source.BatchId, source.SerialId!.Value,
@@ -599,7 +611,10 @@ internal static class BatchSerialAllocator
                             source.SerialNo ?? string.Empty, source.Expiry));
                 }
             }
-            if (serialPlan.Count != (int)qty) return false;
+            if (serialPlan.Count != (int)qty)
+                throw new AppError(ErrorCodes.BatchAllocationMismatch,
+                    $"The original receipt serial allocations do not cover the return quantity for material '{materialCode}'.",
+                    materialCode);
         }
 
         if (tracking.HasBatch && tracking.HasSerial)
