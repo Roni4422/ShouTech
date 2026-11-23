@@ -200,9 +200,10 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             throw new ArgumentException("Linked sourcing documents must be purchase documents with a valid source id.");
         var validPair = (sourceDocKind, draft.DocKind) is
             (CommercialDocKinds.RequestForQuotation, CommercialDocKinds.SupplierQuotation) or
-            (CommercialDocKinds.SupplierQuotation, CommercialDocKinds.PurchaseOrder);
+            (CommercialDocKinds.SupplierQuotation, CommercialDocKinds.PurchaseOrder) or
+            (CommercialDocKinds.PurchaseRequisition, CommercialDocKinds.PurchaseOrder);
         if (!validPair)
-            throw new InvalidOperationException("Only RFQ-to-supplier-quotation and supplier-quotation-to-purchase-order links are supported.");
+            throw new InvalidOperationException("Unsupported purchasing document conversion.");
 
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
@@ -229,8 +230,11 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 var status = reader.GetString(2);
                 if (!Guid.TryParse(company, out var sourceCompany) || sourceCompany != draft.CompanyId)
                     throw new InvalidOperationException("The source and target documents must belong to the same company.");
-                if (kind != sourceDocKind || status != CommercialDocumentStatus.Posted)
-                    throw new InvalidOperationException("The source document must be posted and have the expected document type.");
+                var expectedSourceStatus = sourceDocKind == CommercialDocKinds.PurchaseRequisition
+                    ? CommercialDocumentStatus.Draft
+                    : CommercialDocumentStatus.Posted;
+                if (kind != sourceDocKind || status != expectedSourceStatus)
+                    throw new InvalidOperationException("The source document must have the expected type and workflow state.");
             }
 
             if (sourceDocKind == CommercialDocKinds.SupplierQuotation &&
