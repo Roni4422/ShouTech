@@ -199,6 +199,19 @@ public static class StockValuationEngine
         }
 
         decimal receiptBalanceQty = 0m, originalMovementCost = 0m;
+        if (layerId is not null)
+        {
+            using var movementCost = CreateCommand(connection, transaction, """
+                SELECT cost_amount FROM material_stock_movements
+                WHERE stock_movement_id = @movement AND company_id = @company
+                """);
+            Add(movementCost, "@movement", sourceMovementId);
+            Add(movementCost, "@company", stockCompany);
+            var savedCost = movementCost.ExecuteScalar();
+            if (savedCost is null or DBNull)
+                throw new InvalidOperationException("The source receipt movement cost could not be read.");
+            originalMovementCost = ValuationText.ToDecimal(savedCost);
+        }
         if (layerId is null)
         {
             using var movement = CreateCommand(connection, transaction, """
