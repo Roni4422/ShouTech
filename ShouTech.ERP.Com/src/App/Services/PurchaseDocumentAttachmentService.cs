@@ -49,10 +49,21 @@ public sealed class PurchaseDocumentAttachmentService
         {
             await _audit(actor,"PurchaseAttachment.Upload",$"{companyId:D}:{documentId}:{id:D}:{item.Sha256}").ConfigureAwait(false);
         }
-        catch
+        catch (Exception auditError)
         {
-            try { await _repository.SoftDeleteAsync(companyId,id,actor,CancellationToken.None).ConfigureAwait(false); }
-            finally { if (File.Exists(fullPath)) File.Delete(fullPath); }
+            try
+            {
+                await _repository.SoftDeleteAsync(companyId, id, actor, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception rollbackError)
+            {
+                // Keep the file when metadata rollback fails: an active
+                // metadata row must never be left pointing at missing bytes.
+                throw new AggregateException(
+                    "Attachment audit failed and the metadata rollback also failed; the file was retained for recovery.",
+                    auditError, rollbackError);
+            }
+            if (File.Exists(fullPath)) File.Delete(fullPath);
             throw;
         }
         return item;
@@ -92,9 +103,18 @@ public sealed class PurchaseDocumentAttachmentService
         {
             await _audit(actor,"PurchaseAttachment.Delete",$"{companyId:D}:{item.DocumentId}:{attachmentId:D}:{item.Sha256}").ConfigureAwait(false);
         }
-        catch
+        catch (Exception auditError)
         {
-            await _repository.RestoreAsync(companyId,attachmentId,CancellationToken.None).ConfigureAwait(false);
+            try
+            {
+                await _repository.RestoreAsync(companyId, attachmentId, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception rollbackError)
+            {
+                throw new AggregateException(
+                    "Attachment audit failed and the soft-delete rollback also failed.",
+                    auditError, rollbackError);
+            }
             throw;
         }
     }
