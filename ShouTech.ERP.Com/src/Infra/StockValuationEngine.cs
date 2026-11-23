@@ -190,8 +190,11 @@ public static class StockValuationEngine
             }
             else
             {
-                if (ValuationMath.UsesLayers(ValuationMath.NormalizeMethod(material.CostMethod)))
-                    throw new InvalidOperationException("The receipt cost layer was not found for this landed-cost allocation.");
+                // A FIFO/LIFO receipt can be fully absorbed by a prior
+                // negative-stock deficit and therefore have no surviving
+                // cost layer. The source movement remains authoritative;
+                // the movement-based remainder calculation below will
+                // assign the entire landed cost to consumed stock.
                 oldUnitCost = 0m;
             }
         }
