@@ -40,7 +40,8 @@ public sealed record StockMovementRequest(
     bool AllowExpiredBatchIssue = false,
     long? PartyId = null,
     string? Actor = null,
-    long? SourceDocumentLineId = null);
+    long? SourceDocumentLineId = null,
+    long? OriginalSourceDocumentLineId = null);
 
 public sealed record StockMovementResult(
     long MovementId,
