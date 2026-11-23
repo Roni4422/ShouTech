@@ -1,4 +1,5 @@
 using ShouTech.Domain.Entities;
+using ShouTech.Infrastructure;
 
 namespace ShouTech.Application.Services;
 
