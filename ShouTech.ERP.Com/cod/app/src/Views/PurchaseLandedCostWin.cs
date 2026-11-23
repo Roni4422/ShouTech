@@ -18,15 +18,19 @@ public sealed class PurchaseLandedCostWin : BaseWin
     private readonly DatePicker _date = new() { SelectedDate = DateTime.Today };
     private readonly DatePicker _reversalDate = new() { SelectedDate = DateTime.Today };
     private readonly DataGrid _grid = new();
+    private readonly DataGrid _historyGrid = new();
+    private readonly TextBox _search = new();
     private readonly ObservableCollection<ChargeRow> _charges = new();
+    private readonly ObservableCollection<VoucherRow> _historyRows = new();
     private readonly TextBlock _status = new();
-    private readonly Button _add = new(), _remove = new(), _create = new(), _post = new(), _reverse = new(), _close = new();
+    private readonly Button _add = new(), _remove = new(), _create = new(), _post = new(), _reverse = new(), _refresh = new(), _loadSelected = new(), _close = new();
 
     public PurchaseLandedCostWin()
     {
         Title = T("PurchaseLandedCost.Title");
         Width = 1120; Height = 720; MinWidth = 850; MinHeight = 560;
         _grid.ItemsSource = _charges;
+        _historyGrid.ItemsSource = _historyRows;
         BuildUi();
         Loaded += async (_, _) => await InitializeAsync();
     }
@@ -54,6 +58,7 @@ public sealed class PurchaseLandedCostWin : BaseWin
             if (_companyId == Guid.Empty) throw new InvalidOperationException("Company context is unavailable.");
             _charges.Add(new ChargeRow { Code = "FREIGHT", Description = "Freight", Amount = "0", Basis = "Value" });
             ApplyPermissions();
+            await RefreshHistoryAsync();
         }
         catch (Exception ex)
         {
@@ -71,14 +76,18 @@ public sealed class PurchaseLandedCostWin : BaseWin
         StyleButton(_create, "PurchaseLandedCost.CreateDraft");
         StyleButton(_post, "PurchaseLandedCost.Post");
         StyleButton(_reverse, "PurchaseLandedCost.Reverse");
+        StyleButton(_refresh, "PurchaseLandedCost.Refresh");
+        StyleButton(_loadSelected, "PurchaseLandedCost.LoadSelected");
         StyleButton(_close, "PurchaseLandedCost.Close");
         _add.Click += (_, _) => _charges.Add(new ChargeRow { Code = "OTHER", Description = "", Amount = "0", Basis = "Value" });
         _remove.Click += (_, _) => { if (_grid.SelectedItem is ChargeRow row) _charges.Remove(row); };
         _create.Click += async (_, _) => await CreateDraftAsync();
         _post.Click += async (_, _) => await PostAsync();
         _reverse.Click += async (_, _) => await ReverseAsync();
+        _refresh.Click += async (_, _) => await RefreshHistoryAsync();
+        _loadSelected.Click += LoadSelectedVoucher;
         _close.Click += (_, _) => Close();
-        foreach (var button in new[] { _add, _remove, _create, _post, _reverse, _close }) toolbar.Children.Add(button);
+        foreach (var button in new[] { _add, _remove, _create, _post, _reverse, _refresh, _loadSelected, _close }) toolbar.Children.Add(button);
         DockPanel.SetDock(toolbar, Dock.Top);
         root.Children.Add(toolbar);
 
@@ -89,6 +98,7 @@ public sealed class PurchaseLandedCostWin : BaseWin
         var body = new Grid();
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(170) });
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var header = new Grid { Margin = new Thickness(0, 0, 0, 10) };
         for (var i = 0; i < 4; i++) header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -126,7 +136,19 @@ public sealed class PurchaseLandedCostWin : BaseWin
         reversal.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star) });
         reversal.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
         AddField(reversal, 0, 0, "PurchaseLandedCost.Reason", _reason);
-        Grid.SetRow(reversal, 2);
+        _historyGrid.AutoGenerateColumns = false;
+        _historyGrid.IsReadOnly = true;
+        _historyGrid.CanUserAddRows = false;
+        _historyGrid.SelectionMode = DataGridSelectionMode.Single;
+        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColNumber"), Binding = new Binding(nameof(VoucherRow.Number)), Width = 130 });
+        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColReceipt"), Binding = new Binding(nameof(VoucherRow.Receipt)), Width = 130 });
+        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColDate"), Binding = new Binding(nameof(VoucherRow.Date)), Width = 110 });
+        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColAmount"), Binding = new Binding(nameof(VoucherRow.Amount)), Width = 110 });
+        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColStatus"), Binding = new Binding(nameof(VoucherRow.Status)), Width = 110 });
+        Grid.SetRow(_historyGrid, 2);
+        body.Children.Add(_historyGrid);
+
+        Grid.SetRow(reversal, 3);
         body.Children.Add(reversal);
 
         root.Children.Add(body);
@@ -150,7 +172,37 @@ public sealed class PurchaseLandedCostWin : BaseWin
         _create.IsEnabled = AppHost.Permissions.Has("PUR.LANDEDCOST.EDIT");
         _post.IsEnabled = AppHost.Permissions.Has("PUR.LANDEDCOST.POST");
         _reverse.IsEnabled = AppHost.Permissions.Has("PUR.LANDEDCOST.REVERSE");
+        _refresh.IsEnabled = _loadSelected.IsEnabled = AppHost.Permissions.Has("PUR.LANDEDCOST.VIEW");
         _add.IsEnabled = _remove.IsEnabled = _create.IsEnabled;
+    }
+
+    private async Task RefreshHistoryAsync()
+    {
+        if (_companyId == Guid.Empty || !AppHost.Permissions.Has("PUR.LANDEDCOST.VIEW")) return;
+        try
+        {
+            _historyRows.Clear();
+            var rows = await AppHost.PurchaseLandedCosts!.ListAsync(_companyId, _search.Text);
+            foreach (var row in rows)
+                _historyRows.Add(new VoucherRow(row.Id, row.DocumentNumber, row.ReceiptDocumentNumber,
+                    row.DocumentDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    row.TotalAmount.ToString("N4", CultureInfo.InvariantCulture), row.Status));
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PurchaseLandedCostWin.RefreshHistoryAsync");
+            _status.Text = ex.Message;
+        }
+    }
+
+    private void LoadSelectedVoucher(object? sender, RoutedEventArgs e)
+    {
+        if (_historyGrid.SelectedItem is not VoucherRow row) return;
+        _voucherId.Text = row.Id.ToString("D");
+        _number.Text = row.Number;
+        _receipt.Text = row.Receipt;
+        _reversalNumber.Text = row.Number + "-REV";
+        _status.Text = row.Status;
     }
 
     private async Task CreateDraftAsync()
@@ -177,6 +229,7 @@ public sealed class PurchaseLandedCostWin : BaseWin
                 rate, charges, CurrentUserId);
             _voucherId.Text = id.ToString("D");
             _status.Text = T("PurchaseLandedCost.DraftCreated") + " " + _number.Text.Trim();
+            await RefreshHistoryAsync();
         }
         catch (Exception ex)
         {
@@ -193,6 +246,7 @@ public sealed class PurchaseLandedCostWin : BaseWin
             if (!Guid.TryParse(_voucherId.Text, out var id)) throw new InvalidOperationException(T("PurchaseLandedCost.NoVoucher"));
             var journal = await AppHost.PurchaseLandedCosts!.PostAsync(_companyId, id, CurrentUserId);
             _status.Text = T("PurchaseLandedCost.Posted") + " " + journal.ToString("D");
+            await RefreshHistoryAsync();
         }
         catch (Exception ex)
         {
@@ -210,6 +264,7 @@ public sealed class PurchaseLandedCostWin : BaseWin
             var journal = await AppHost.PurchaseLandedCosts!.ReverseAsync(_companyId, id, _reversalNumber.Text.Trim(),
                 DateOnly.FromDateTime(_reversalDate.SelectedDate ?? DateTime.Today), _reason.Text, CurrentUserId);
             _status.Text = T("PurchaseLandedCost.Reversed") + " " + journal.ToString("D");
+            await RefreshHistoryAsync();
         }
         catch (Exception ex)
         {
@@ -217,6 +272,8 @@ public sealed class PurchaseLandedCostWin : BaseWin
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
+
+    private sealed record VoucherRow(Guid Id, string Number, string Receipt, string Date, string Amount, string Status);
 
     private sealed class ChargeRow
     {
