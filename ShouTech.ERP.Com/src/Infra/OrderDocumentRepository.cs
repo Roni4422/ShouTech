@@ -913,7 +913,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
             _ = await PostConversionStockAsync(
                 connection, transaction, CommercialDocSide.Purchase, order, receiptDraftLines,
-                receiptDocNo.Trim(), receiptDate, cancellationToken, CommercialDocKinds.PurchaseReceipt, userId).ConfigureAwait(false);
+                receiptDocNo.Trim(), receiptDate, cancellationToken, CommercialDocKinds.PurchaseReceipt, userId, sourceDocumentId: receiptId).ConfigureAwait(false);
 
             var fx = FxRates.Resolve(connection, transaction, _provider,
                 order.CompanyId, order.CurrencyCode, receiptDate, order.ExchangeRate);
@@ -1621,7 +1621,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             {
                 var stockResult = await PostConversionStockAsync(
                     connection, transaction, side, order, invoiceLines,
-                    invoiceDocNo.Trim(), invoiceDate, cancellationToken, actor: userId).ConfigureAwait(false);
+                    invoiceDocNo.Trim(), invoiceDate, cancellationToken, actor: userId, sourceDocumentId: invoiceId).ConfigureAwait(false);
                 stockCompanyCode = stockResult.CompanyCode;
                 cogsAmount = stockResult.CogsAmount;
             }
@@ -1988,14 +1988,31 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         DbConnection connection, DbTransaction transaction, CommercialDocSide side,
         CommercialDocumentSnapshot order, IReadOnlyList<CommercialLineDraft> invoiceLines,
         string invoiceDocNo, DateOnly invoiceDate, CancellationToken cancellationToken,
-        string? purchaseMovementKind = null, string? actor = null)
+        string? purchaseMovementKind = null, string? actor = null, long? sourceDocumentId = null)
     {
         var companyCode = await PartyLedger.ResolveCompanyCodeAsync(
             connection, transaction, _provider, order.CompanyId.ToString("D"), cancellationToken).ConfigureAwait(false);
         var cogsAmount = 0m;
         var movementDate = invoiceDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-        foreach (var line in invoiceLines)
+        IReadOnlyList<long>? sourceLineIds = null;
+        if (sourceDocumentId is long sourceId)
         {
+            var lineTable = side == CommercialDocSide.Sales ? "sales_document_lines" : "purchase_document_lines";
+            var ids = new List<long>();
+            await using var lineCommand = CreateCommand(connection, transaction,
+                $"SELECT line_id FROM {lineTable} WHERE doc_id = @doc ORDER BY line_no");
+            Add(lineCommand, "@doc", sourceId);
+            await using var lineReader = await lineCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await lineReader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                ids.Add(Convert.ToInt64(lineReader.GetValue(0), CultureInfo.InvariantCulture));
+            sourceLineIds = ids;
+            if (sourceLineIds.Count != invoiceLines.Count)
+                throw new InvalidOperationException("Stock movement source lines do not match the posted commercial document lines.");
+        }
+        for (var lineIndex = 0; lineIndex < invoiceLines.Count; lineIndex++)
+        {
+            var line = invoiceLines[lineIndex];
+            var sourceLineId = sourceLineIds is null ? (long?)null : sourceLineIds[lineIndex];
             if (line.MaterialId is not long materialId)
                 continue; // no stock identity — same rule as chain delivery notes
             if (!await IsStockableAsync(connection, transaction, materialId, cancellationToken).ConfigureAwait(false))
@@ -2040,7 +2057,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                         Serials: serials,
                         AllowExpiredBatchIssue: line.AllowExpiredBatchIssue,
                         PartyId: order.PartyId,
-                        Actor: actor));
+                        Actor: actor,
+                        SourceDocumentLineId: sourceLineId));
             }
         }
         return (companyCode, cogsAmount);
