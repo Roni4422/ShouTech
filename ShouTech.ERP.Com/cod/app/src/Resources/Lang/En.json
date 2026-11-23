@@ -3852,6 +3852,8 @@
   "PurchaseAttachments": {
     "Title": "Purchase document attachments",
     "Open": "Attachments",
+    "Receipt": "Receipt attachments",
+    "Return": "Return attachments",
     "Upload": "Upload",
     "OpenFile": "Open",
     "Delete": "Delete",
