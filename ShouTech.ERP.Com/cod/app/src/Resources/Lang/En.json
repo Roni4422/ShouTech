@@ -3890,6 +3890,15 @@
     "InvalidInput": "Check the entered values.",
     "NoReceipt": "No posted goods receipt was found with that number.",
     "NoVoucher": "Enter a valid landed-cost voucher ID."
+  ,
+    "Search": "Search vouchers",
+    "Refresh": "Refresh history",
+    "LoadSelected": "Load selected",
+    "ColNumber": "Voucher",
+    "ColReceipt": "Receipt",
+    "ColDate": "Date",
+    "ColAmount": "Amount",
+    "ColStatus": "Status"
   },
   "PurchaseRequisition": {
     "Title": "Purchase requisitions",
