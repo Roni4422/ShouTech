@@ -44,8 +44,28 @@ public sealed class PurchaseDocumentAttachmentService
     public async Task<IReadOnlyList<PurchaseDocumentAttachment>> ListAsync(Guid companyId,long documentId,CancellationToken ct=default)
     {RequireCompany(companyId);RequirePermission("PUR.ATTACH.VIEW");var doc=await _orders.FindByIdAsync(CommercialDocSide.Purchase,documentId,ct).ConfigureAwait(false);if(doc is null||doc.CompanyId!=companyId)throw new InvalidOperationException("Purchase document was not found.");return await _repository.ListAsync(companyId,documentId,ct).ConfigureAwait(false);}
     public async Task<Stream> OpenReadAsync(Guid companyId,Guid attachmentId,string actor,CancellationToken ct=default)
-    {RequireCompany(companyId);RequirePermission("PUR.ATTACH.VIEW");var item=await _repository.FindAsync(companyId,attachmentId,ct).ConfigureAwait(false)??throw new FileNotFoundException("Attachment was not found.");var path=SafePath(Path.Combine(_root,companyId.ToString("N")),item.StorageKey);if(!File.Exists(path))throw new FileNotFoundException("Attachment content is missing from secure storage.");await _audit(actor,"PurchaseAttachment.Download",$"{companyId:D}:{item.DocumentId}:{attachmentId:D}:{item.Sha256}").ConfigureAwait(false);
-        return new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read,81920,FileOptions.Asynchronous|FileOptions.SequentialScan);}
+    {
+        RequireCompany(companyId);
+        RequirePermission("PUR.ATTACH.VIEW");
+        RequireActor(actor);
+        var item=await _repository.FindAsync(companyId,attachmentId,ct).ConfigureAwait(false)
+            ??throw new FileNotFoundException("Attachment was not found.");
+        var path=SafePath(Path.Combine(_root,companyId.ToString("N")),item.StorageKey);
+        if(!File.Exists(path))
+            throw new FileNotFoundException("Attachment content is missing from secure storage.");
+
+        var bytes=await File.ReadAllBytesAsync(path,ct).ConfigureAwait(false);
+        var actualHash=SHA256.HashData(bytes);
+        byte[] expectedHash;
+        try { expectedHash=Convert.FromHexString(item.Sha256); }
+        catch(FormatException ex) { throw new InvalidDataException("Attachment integrity metadata is invalid.",ex); }
+        if(bytes.LongLength!=item.ByteLength ||
+           !CryptographicOperations.FixedTimeEquals(actualHash,expectedHash))
+            throw new InvalidDataException("Attachment content failed its integrity check.");
+
+        await _audit(actor,"PurchaseAttachment.Download",$"{companyId:D}:{item.DocumentId}:{attachmentId:D}:{item.Sha256}").ConfigureAwait(false);
+        return new MemoryStream(bytes,writable:false);
+    }
     public async Task DeleteAsync(Guid companyId,Guid attachmentId,string actor,CancellationToken ct=default)
     {RequireCompany(companyId);RequirePermission("PUR.ATTACH.DELETE");RequireActor(actor);var item=await _repository.FindAsync(companyId,attachmentId,ct).ConfigureAwait(false)??throw new FileNotFoundException("Attachment was not found.");await _repository.SoftDeleteAsync(companyId,attachmentId,actor,ct).ConfigureAwait(false);await _audit(actor,"PurchaseAttachment.Delete",$"{companyId:D}:{item.DocumentId}:{attachmentId:D}:{item.Sha256}").ConfigureAwait(false);}
     private void RequirePermission(string code){if(!_hasPermission(code))throw new UnauthorizedAccessException("You do not have permission to access purchase attachments.");}
