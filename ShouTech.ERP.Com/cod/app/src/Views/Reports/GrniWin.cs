@@ -52,7 +52,7 @@ public sealed class GrniWin : RptBase
         var asOf = filters.GetDateOr("AsOf", DateTime.Today).Date;
         var raw = await RptQuery.GoodsReceivedNotInvoicedAsync(DateTime.MinValue, asOf, ct);
         var reconciliation = await RptQuery.GoodsReceivedNotInvoicedReconciliationAsync(asOf, ct);
-        var reconciliationRow = reconciliation.FirstOrDefault();
+        var reconciliationRow = reconciliation.Count > 0 ? reconciliation[0] : null;
         var glBalanceBase = RptWinUtil.Dec(reconciliationRow?.GetValueOrDefault("GlBalanceBase"));
         var differenceBase = RptWinUtil.Dec(reconciliationRow?.GetValueOrDefault("DifferenceBase"));
         var reportColumns = BuildDefinition().Columns;
