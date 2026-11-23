@@ -37,7 +37,7 @@ public sealed class PurchaseRequisitionWin : BaseWin
     {
         var root=new DockPanel{Margin=new Thickness(12)};
         var toolbar=new WrapPanel{HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,0,0,8)};
-        Style(_new,"PurchaseRequisition.New");Style(_load,"PurchaseRequisition.Load");Style(_save,"PurchaseRequisition.Save");Style(_submit,"PurchaseRequisition.Submit");Style(_approve,"PurchaseRequisition.Approve");Style(_reject,"PurchaseRequisition.Reject");Style(_convert,"PurchaseRequisition.Convert");Style(_close,"PurchaseRequisition.Close");
+        StyleButton(_new,"PurchaseRequisition.New");StyleButton(_load,"PurchaseRequisition.Load");StyleButton(_save,"PurchaseRequisition.Save");StyleButton(_submit,"PurchaseRequisition.Submit");StyleButton(_approve,"PurchaseRequisition.Approve");StyleButton(_reject,"PurchaseRequisition.Reject");StyleButton(_convert,"PurchaseRequisition.Convert");StyleButton(_close,"PurchaseRequisition.Close");
         _new.Click+=async(_,_)=>await NewAsync();_load.Click+=async(_,_)=>await LoadAsync();_save.Click+=async(_,_)=>await SaveAsync();_submit.Click+=async(_,_)=>await SubmitAsync();_approve.Click+=async(_,_)=>await DecideAsync(true);_reject.Click+=async(_,_)=>await DecideAsync(false);_convert.Click+=async(_,_)=>await ConvertAsync();_close.Click+=(_,_)=>Close();
         foreach(var b in new[]{_new,_load,_save,_submit,_approve,_reject,_convert,_close})toolbar.Children.Add(b);DockPanel.SetDock(toolbar,Dock.Top);root.Children.Add(toolbar);
         var statusBar=new Border{Child=_status,Padding=new Thickness(5),BorderThickness=new Thickness(0,1,0,0)};DockPanel.SetDock(statusBar,Dock.Bottom);root.Children.Add(statusBar);
@@ -49,10 +49,34 @@ public sealed class PurchaseRequisitionWin : BaseWin
         ConfigureGrid(_approvals);AddCol(_approvals,"PurchaseRequisition.ApprovalStep",nameof(ApprovalVm.StepNo),65);AddCol(_approvals,"PurchaseRequisition.Approver",nameof(ApprovalVm.Approver),150);AddCol(_approvals,"PurchaseRequisition.ApprovalStatus",nameof(ApprovalVm.Status),100);AddCol(_approvals,"PurchaseRequisition.ApprovalReason",nameof(ApprovalVm.Reason),2);Grid.SetRow(_approvals,3);body.Children.Add(_approvals);
         root.Children.Add(body);Content=root;ApplyLocalizedText();
     }
-    private static void Style(Button b,string key){b.Content=T(key);b.MinWidth=82;b.Margin=new Thickness(3);b.Padding=new Thickness(8,4,8,4);}
+    private static void StyleButton(Button b,string key){b.Content=T(key);b.MinWidth=82;b.Margin=new Thickness(3);b.Padding=new Thickness(8,4,8,4);}
     private static void ConfigureGrid(DataGrid g){g.AutoGenerateColumns=false;g.CanUserAddRows=true;g.CanUserDeleteRows=true;g.HeadersVisibility=DataGridHeadersVisibility.Column;g.Margin=new Thickness(0,0,0,8);}
     private static void AddCol(DataGrid g,string key,string path,double width){g.Columns.Add(new DataGridTextColumn{Header=T(key),Binding=new Binding(path){UpdateSourceTrigger=UpdateSourceTrigger.PropertyChanged},Width=width==2?new DataGridLength(1,DataGridLengthUnitType.Star):new DataGridLength(width)});}
     private static void AddField(Grid g,int col,int row,string key,Control input){var panel=new StackPanel{Margin=new Thickness(4)};panel.Children.Add(new TextBlock{Text=T(key),Margin=new Thickness(0,0,0,3)});input.Margin=new Thickness(0,0,4,0);input.MinWidth=100;panel.Children.Add(input);Grid.SetColumn(panel,col);Grid.SetRow(panel,row);g.Children.Add(panel);}
+
+    protected override void ApplyLocalizedText()
+    {
+        Title = T("PurchaseRequisition.Title");
+        StyleButton(_new, "PurchaseRequisition.New");
+        StyleButton(_load, "PurchaseRequisition.Load");
+        StyleButton(_save, "PurchaseRequisition.Save");
+        StyleButton(_submit, "PurchaseRequisition.Submit");
+        StyleButton(_approve, "PurchaseRequisition.Approve");
+        StyleButton(_reject, "PurchaseRequisition.Reject");
+        StyleButton(_convert, "PurchaseRequisition.Convert");
+        StyleButton(_close, "PurchaseRequisition.Close");
+        if (_lines.Columns.Count == 7)
+        {
+            var keys = new[] { "PurchaseRequisition.LineNo", "PurchaseRequisition.MaterialId", "PurchaseRequisition.MaterialCode", "PurchaseRequisition.Description", "PurchaseRequisition.Unit", "PurchaseRequisition.Quantity", "PurchaseRequisition.EstimatedPrice" };
+            for (var i = 0; i < keys.Length; i++) _lines.Columns[i].Header = T(keys[i]);
+        }
+        if (_approvals.Columns.Count == 4)
+        {
+            var keys = new[] { "PurchaseRequisition.ApprovalStep", "PurchaseRequisition.Approver", "PurchaseRequisition.ApprovalStatus", "PurchaseRequisition.ApprovalReason" };
+            for (var i = 0; i < keys.Length; i++) _approvals.Columns[i].Header = T(keys[i]);
+        }
+    }
+
     private async Task NewAsync(){_documentId=null;_number.Text=await AppHost.Orders!.NextDocNoAsync(CommercialDocSide.Purchase,_companyId,CommercialDocKinds.PurchaseRequisition);_date.SelectedDate=DateTime.Today;_department.Clear();_notes.Clear();_approvers.Clear();_reason.Clear();_supplierId.Clear();_supplierName.Clear();_lineRows.Clear();_lineRows.Add(new(){LineNo=1,Quantity=1,EstimatedPrice=0});_approvalRows.Clear();_status.Text="Draft";}
     private CommercialDocumentDraft BuildDraft(){var currency=_currency.Text.Trim().ToUpperInvariant();if(!decimal.TryParse(_rate.Text,NumberStyles.Number,CultureInfo.InvariantCulture,out var rate)||rate<=0)throw new InvalidOperationException(T("PurchaseRequisition.InvalidInput"));var lines=_lineRows.Where(x=>!string.IsNullOrWhiteSpace(x.Description)).Select((x,i)=>new CommercialLineDraft(ParseLong(x.MaterialId),x.MaterialCode,x.Description,x.Unit,ParseDecimal(x.Quantity),ParseDecimal(x.EstimatedPrice),0,0,ParseLong(_warehouse.Text),i+1)).ToArray();if(lines.Length==0)throw new InvalidOperationException(T("PurchaseRequisition.InvalidInput"));var notes=string.IsNullOrWhiteSpace(_department.Text)?_notes.Text:$"Department: {_department.Text.Trim()}\n{_notes.Text}";return new(_companyId,CommercialDocKinds.PurchaseRequisition,_number.Text.Trim(),DateOnly.FromDateTime(_date.SelectedDate??DateTime.Today),null,null,ParseLong(_warehouse.Text),currency,rate,notes,lines);}
     private async Task SaveAsync(){if(!AppHost.Permissions.Has("PUR.REQ.EDIT")){MessageBox.Show(this,T("PurchaseRequisition.PermissionDenied"),Title);return;}try{var draft=BuildDraft();if(_documentId is null)_documentId=await AppHost.PurchaseRequisitions!.CreateDraftAsync(draft,CurrentUserId);else await AppHost.PurchaseRequisitions!.UpdateDraftAsync(_companyId,_documentId.Value,draft,CurrentUserId);_status.Text=T("PurchaseRequisition.Saved");}catch(Exception ex){MessageBox.Show(this,ex.Message,Title,MessageBoxButton.OK,MessageBoxImage.Warning);}}

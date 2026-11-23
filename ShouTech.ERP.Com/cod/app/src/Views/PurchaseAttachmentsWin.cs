@@ -30,7 +30,7 @@ public sealed class PurchaseAttachmentsWin : BaseWin
     {
         var root=new DockPanel{Margin=new Thickness(12)};
         var bar=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,0,0,8)};
-        Style(_upload,"PurchaseAttachments.Upload");Style(_open,"PurchaseAttachments.OpenFile");Style(_delete,"PurchaseAttachments.Delete");Style(_refresh,"PurchaseAttachments.Refresh");Style(_close,"PurchaseAttachments.Close");
+        StyleButton(_upload,"PurchaseAttachments.Upload");StyleButton(_open,"PurchaseAttachments.OpenFile");StyleButton(_delete,"PurchaseAttachments.Delete");StyleButton(_refresh,"PurchaseAttachments.Refresh");StyleButton(_close,"PurchaseAttachments.Close");
         _upload.Click+=async(_,_)=>await UploadAsync();_open.Click+=async(_,_)=>await OpenAsync();_delete.Click+=async(_,_)=>await DeleteAsync();_refresh.Click+=async(_,_)=>await RefreshAsync();_close.Click+=(_,_)=>Close();
         foreach(var b in new[]{_upload,_open,_delete,_refresh,_close})bar.Children.Add(b);
         DockPanel.SetDock(bar,Dock.Top);root.Children.Add(bar);
@@ -43,7 +43,25 @@ public sealed class PurchaseAttachmentsWin : BaseWin
         _upload.IsEnabled=AppHost.Permissions.Has("PUR.ATTACH.UPLOAD");_delete.IsEnabled=AppHost.Permissions.Has("PUR.ATTACH.DELETE");
         ApplyLocalizedText();
     }
-    private static void Style(Button button,string key){button.Content=T(key);button.MinWidth=78;button.Margin=new Thickness(4,0,0,0);button.Padding=new Thickness(8,4,8,4);}
+    private static void StyleButton(Button button,string key){button.Content=T(key);button.MinWidth=78;button.Margin=new Thickness(4,0,0,0);button.Padding=new Thickness(8,4,8,4);}
+
+    protected override void ApplyLocalizedText()
+    {
+        Title = T("PurchaseAttachments.Title");
+        StyleButton(_upload, "PurchaseAttachments.Upload");
+        StyleButton(_open, "PurchaseAttachments.OpenFile");
+        StyleButton(_delete, "PurchaseAttachments.Delete");
+        StyleButton(_refresh, "PurchaseAttachments.Refresh");
+        StyleButton(_close, "PurchaseAttachments.Close");
+        if (_grid.Columns.Count == 4)
+        {
+            _grid.Columns[0].Header = T("PurchaseAttachments.FileName");
+            _grid.Columns[1].Header = T("PurchaseAttachments.Size");
+            _grid.Columns[2].Header = T("PurchaseAttachments.UploadedBy");
+            _grid.Columns[3].Header = T("PurchaseAttachments.UploadedAt");
+        }
+    }
+
     private async Task RefreshAsync()
     {
         var service=AppHost.PurchaseAttachments;if(service is null){MessageBox.Show(this,T("PurchaseAttachments.MissingService"),Title);return;}
