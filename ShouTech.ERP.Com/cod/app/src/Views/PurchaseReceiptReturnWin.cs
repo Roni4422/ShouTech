@@ -95,8 +95,8 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
         _post.IsEnabled = false;
         _receiptAttachments.IsEnabled = false;
         _returnAttachments.IsEnabled = false;
-        _receiptAttachments.Click += async (_, _) => await OpenAttachmentsAsync(_receiptId);
-        _returnAttachments.Click += async (_, _) => await OpenAttachmentsAsync(_returnId);
+        _receiptAttachments.Click += (_, _) => OpenAttachments(_receiptId);
+        _returnAttachments.Click += (_, _) => OpenAttachments(_returnId);
         _load.Click += async (_, _) => await LoadReceiptAsync();
         _post.Click += async (_, _) => await PostReturnAsync();
         _close.Click += (_, _) => Close();
@@ -219,7 +219,7 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
         }
     }
 
-    private async Task OpenAttachmentsAsync(long? documentId)
+    private void OpenAttachments(long? documentId)
     {
         if (documentId is not long id || AppHost.PurchaseAttachments is null)
         {
