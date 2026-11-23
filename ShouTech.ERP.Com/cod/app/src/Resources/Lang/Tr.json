@@ -604,7 +604,9 @@
       "OpeningBalance": "Açılış bakiyesi",
       "RunningBalance": "Güncel bakiye",
       "DebitBase": "Borç (ana para birimi)",
-      "CreditBase": "Alacak (ana para birimi)"
+      "CreditBase": "Alacak (ana para birimi)",
+      "GrniGlBalance": "Faturalanmamış mal kabul GL bakiyesi (ana para birimi)",
+      "GrniDifference": "GRNI mutabakat farkı (ana para birimi)"
     },
     "Filter": {
       "All": "Tümü",
