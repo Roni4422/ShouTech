@@ -595,7 +595,7 @@ public sealed class PurchaseLandedCostRepository
     private object Id(Guid id) => Pg ? id : id.ToString("D");
     private object DateValue(DateOnly date) => Pg ? date : date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     private DbConnection Open() => Pg ? new NpgsqlConnection(_connectionString) : new SqliteConnection(_connectionString);
-    private static DbCommand Cmd(DbConnection connection, DbTransaction transaction, string sql)
+    private static DbCommand Cmd(DbConnection connection, DbTransaction? transaction, string sql)
     { var command = connection.CreateCommand(); command.Transaction = transaction; command.CommandText = sql; return command; }
     private static void Add(DbCommand command, string name, object value)
     { var parameter = command.CreateParameter(); parameter.ParameterName = name; parameter.Value = value; command.Parameters.Add(parameter); }
