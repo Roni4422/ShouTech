@@ -109,6 +109,9 @@ public static class LandedCostAllocator
         if (amounts.Count == 0 || amounts.Keys.Any(id => !lineIds.Contains(id)))
             throw new InvalidOperationException($"Charge '{charge.ChargeCode}' contains an unknown or empty manual allocation.");
         var rounded = amounts.ToDictionary(x => x.Key, x => Round(x.Value));
+        if (charge.BaseAmount >= 0m && rounded.Values.Any(x => x < 0m) ||
+            charge.BaseAmount < 0m && rounded.Values.Any(x => x > 0m))
+            throw new InvalidOperationException($"Manual allocations for '{charge.ChargeCode}' must have the same sign as the charge.");
         if (Round(rounded.Values.Sum()) != Round(charge.BaseAmount))
             throw new InvalidOperationException($"Manual allocations for '{charge.ChargeCode}' must equal its base amount.");
         foreach (var item in rounded.OrderBy(x => x.Key))
