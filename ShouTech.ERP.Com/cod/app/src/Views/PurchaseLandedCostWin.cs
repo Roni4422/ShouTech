@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using ShouTech.App.Services;
 using ShouTech.Domain.Entities;
+using ShouTech.Domain.Interfaces;
 
 namespace ShouTech.App.Views;
 
@@ -18,7 +19,6 @@ public sealed class PurchaseLandedCostWin : BaseWin
     private readonly DatePicker _reversalDate = new() { SelectedDate = DateTime.Today };
     private readonly DataGrid _grid = new();
     private readonly ObservableCollection<ChargeRow> _charges = new();
-    private readonly ComboBox _basis = new();
     private readonly TextBlock _status = new();
     private readonly Button _add = new(), _remove = new(), _create = new(), _post = new(), _reverse = new(), _close = new();
 
@@ -163,6 +163,8 @@ public sealed class PurchaseLandedCostWin : BaseWin
             var receipt = await AppHost.Orders!.FindByNumberAsync(
                 CommercialDocSide.Purchase, _companyId, CommercialDocKinds.PurchaseReceipt, _receipt.Text.Trim());
             if (receipt is null) throw new InvalidOperationException(T("PurchaseLandedCost.NoReceipt"));
+            _grid.CommitEdit(DataGridEditingUnit.Cell, true);
+            _grid.CommitEdit(DataGridEditingUnit.Row, true);
             var charges = _charges.Select(row =>
             {
                 if (!decimal.TryParse(row.Amount, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount))
