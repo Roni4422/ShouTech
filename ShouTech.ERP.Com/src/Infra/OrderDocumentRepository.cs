@@ -1621,7 +1621,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             {
                 var stockResult = await PostConversionStockAsync(
                     connection, transaction, side, order, invoiceLines,
-                    invoiceDocNo.Trim(), invoiceDate, cancellationToken, actor: userId, sourceDocumentId: invoiceId).ConfigureAwait(false);
+                    invoiceDocNo.Trim(), invoiceDate, cancellationToken, actor: userId).ConfigureAwait(false);
                 stockCompanyCode = stockResult.CompanyCode;
                 cogsAmount = stockResult.CogsAmount;
             }
