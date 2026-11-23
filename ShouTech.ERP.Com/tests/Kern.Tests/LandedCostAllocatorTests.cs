@@ -15,11 +15,17 @@ public sealed class LandedCostAllocatorTests
         new(13, 5m, 600m, 60m, 6m)
     };
 
+    public static IEnumerable<object[]> ProportionalAllocationCases =>
+        new[]
+        {
+            new object[] { "Value", 100m, 10m, 30m, 60m },
+            new object[] { "Quantity", 100m, 20m, 30m, 50m },
+            new object[] { "Weight", 100m, 10m, 30m, 60m },
+            new object[] { "Volume", 100m, 10m, 30m, 60m }
+        };
+
     [Theory]
-    [InlineData("Value", 100m, 10m, 30m, 60m)]
-    [InlineData("Quantity", 100m, 20m, 30m, 50m)]
-    [InlineData("Weight", 100m, 10m, 30m, 60m)]
-    [InlineData("Volume", 100m, 10m, 30m, 60m)]
+    [MemberData(nameof(ProportionalAllocationCases))]
     public void ProportionalBasesAllocateAndReconcile(string basis, decimal total, decimal first, decimal second, decimal third)
     {
         var result = LandedCostAllocator.Allocate(Lines,
