@@ -52,8 +52,9 @@ public sealed class PurchaseRequisitionWorkflowService
         var ordered=steps.OrderBy(x=>x.StepNo).ToArray();
         if(ordered.Any(x=>x.StepNo<=0||string.IsNullOrWhiteSpace(x.ApproverUserId))||
            ordered.Select(x=>x.StepNo).Distinct().Count()!=ordered.Length||
+           ordered.Select(x=>x.StepNo).Where((step,index)=>step!=index+1).Any()||
            ordered.Select(x=>x.ApproverUserId.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Count()!=ordered.Length)
-            throw new InvalidOperationException("Approval sequence numbers and approvers must be unique.");
+            throw new InvalidOperationException("Approval steps must be contiguous from one and approvers must be unique.");
         return _repository.SubmitAsync(companyId,id,ordered,RequireActor(actor),ct);
     }
 
@@ -82,7 +83,7 @@ public sealed class PurchaseRequisitionWorkflowService
         if(link is not null)
         {
             var existing=await _orders.FindByIdAsync(CommercialDocSide.Purchase,link.TargetDocId,ct).ConfigureAwait(false)??throw new InvalidOperationException("Linked purchase order is missing.");
-            await _repository.MarkConvertedAsync(companyId,requisitionId,existing.DocId,actor,ct).ConfigureAwait(false);
+            await _repository.MarkConvertedAsync(companyId,requisitionId,existing.DocId,RequireActor(actor),ct).ConfigureAwait(false);
             return new(existing.DocId,existing.DocNo);
         }
         var requisition=await _orders.FindByIdAsync(CommercialDocSide.Purchase,requisitionId,ct).ConfigureAwait(false)
@@ -92,7 +93,7 @@ public sealed class PurchaseRequisitionWorkflowService
         var lines=requisition.Lines.Select(x=>new CommercialLineDraft(x.MaterialId,x.MaterialCode,x.Description,x.Unit,x.Qty,x.UnitPrice,x.DiscountPct,0m,x.WarehouseId??warehouseId,x.LineNo)).ToArray();
         var draft=new CommercialDocumentDraft(companyId,CommercialDocKinds.PurchaseOrder,number,DateOnly.FromDateTime(DateTime.Today),supplierId,supplierName.Trim(),warehouseId,currencyCode.Trim().ToUpperInvariant(),exchangeRate,$"Created from requisition {requisition.DocNo}",lines);
         var poId=await _orders.Orders.CreateLinkedDraftAsync(CommercialDocSide.Purchase,draft,CommercialDocKinds.PurchaseRequisition,requisitionId,RequireActor(actor),ct).ConfigureAwait(false);
-        await _repository.MarkConvertedAsync(companyId,requisitionId,poId,actor,ct).ConfigureAwait(false);
+        await _repository.MarkConvertedAsync(companyId,requisitionId,poId,RequireActor(actor),ct).ConfigureAwait(false);
         return new(poId,number);
     }
     private void RequirePermission(string code){if(!_hasPermission(code))throw new UnauthorizedAccessException($"Missing permission: {code}.");}
