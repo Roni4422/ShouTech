@@ -259,7 +259,7 @@ public sealed class SupplierQuotationEntryWin : BaseWin
         finally
         {
             _busy = false;
-            _savePost.IsEnabled = true;
+            _savePost.IsEnabled = _quotationId is null;
         }
     }
 
