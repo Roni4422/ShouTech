@@ -3884,6 +3884,7 @@
     "Amount": "Amount",
     "Basis": "Allocation basis",
     "ManualAmounts": "Manual line allocations (line no=amount; ...)",
+    "ExpenseAccount": "Consumed-cost expense account",
     "InvalidManualAmounts": "Enter manual allocations as line number=amount, separated by semicolons. Each line must belong to the selected receipt.",
     "AddCharge": "Add charge",
     "RemoveCharge": "Remove charge",
