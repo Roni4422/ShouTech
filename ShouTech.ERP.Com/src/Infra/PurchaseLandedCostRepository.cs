@@ -4,7 +4,6 @@ using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Npgsql;
 using ShouTech.Domain.Entities;
-using ShouTech.Domain.Interfaces;
 
 namespace ShouTech.Infrastructure;
 
@@ -240,9 +239,9 @@ public sealed class PurchaseLandedCostRepository
                 INSERT INTO purchase_landed_costs
                     (landed_cost_id, company_id, doc_no, doc_date, receipt_doc_id,
                      supplier_id, supplier_name, currency_code, exchange_rate,
-                     total_amount, total_base_amount, status, source_reversal_id, created_by)
+                     total_amount, total_base_amount, status, created_by)
                 VALUES (@id, @company, @number, @date, @receipt, @supplier, @supplierName,
-                        @currency, @rate, @amount, @base, 'Draft', @source, @actor)
+                        @currency, @rate, @amount, @base, 'Draft', @actor)
                 """))
             {
                 Add(header, "@id", Id(reversalId));
@@ -256,7 +255,6 @@ public sealed class PurchaseLandedCostRepository
                 Add(header, "@rate", rate);
                 Add(header, "@amount", totalAmount);
                 Add(header, "@base", totalBase);
-                Add(header, "@source", Id(landedCostId));
                 Add(header, "@actor", actor.Trim());
                 header.ExecuteNonQuery();
             }
@@ -310,20 +308,6 @@ public sealed class PurchaseLandedCostRepository
                         Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture), Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture),
                         Dec(reader.GetValue(4)), Dec(reader.GetValue(5)), Dec(reader.GetValue(6))));
             }
-            using (var originalChargeCodes = Cmd(connection, transaction, """
-                SELECT charge_id, charge_code FROM purchase_landed_cost_charges WHERE landed_cost_id = @id
-                """))
-            {
-                Add(originalChargeCodes, "@id", Id(landedCostId));
-                using var reader = originalChargeCodes.ExecuteReader();
-                while (reader.Read())
-                {
-                    var oldChargeId = Guid.Parse(Text(reader.GetValue(0))!);
-                    var code = Text(reader.GetValue(1)) ?? "";
-                    if (!reversalChargeIds.ContainsKey(code))
-                        throw new InvalidOperationException("A landed-cost reversal charge could not be mapped.");
-                }
-            }
             foreach (var item in originalAllocations)
             {
                 string code;
@@ -359,14 +343,14 @@ public sealed class PurchaseLandedCostRepository
 
             var journalId = PostCore(connection, transaction, companyId, reversalId, actor, "LND-REV", cancellationToken);
             using (var originalUpdate = Cmd(connection, transaction,
-                "UPDATE purchase_landed_costs SET status = 'Cancelled' WHERE company_id = @company AND landed_cost_id = @id AND status = 'Posted'"))
+                "UPDATE purchase_landed_costs SET status = 'Cancelled', source_reversal_id = @reversal WHERE company_id = @company AND landed_cost_id = @id AND status = 'Posted'"))
             {
                 Add(originalUpdate, "@company", company);
                 Add(originalUpdate, "@id", Id(landedCostId));
+                Add(originalUpdate, "@reversal", Id(reversalId));
                 if (originalUpdate.ExecuteNonQuery() != 1) throw new InvalidOperationException("The original voucher changed while reversal was being posted.");
             }
             AddEvent(connection, transaction, company, landedCostId, "Reversed", actor, reason.Trim());
-            AddEvent(connection, transaction, company, reversalId, "ReversalPosted", actor, $"Reverses {landedCostId:D}; {reason.Trim()}");
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return journalId;
         }
