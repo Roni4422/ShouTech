@@ -1199,7 +1199,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 returnDraftLines.Add(new CommercialLineDraft(
                     sourceLine.MaterialId, sourceLine.MaterialCode, sourceLine.Description,
                     sourceLine.Unit, requested.Qty, sourceLine.UnitPrice, sourceLine.DiscountPct,
-                    0m, sourceLine.WarehouseId));
+                    0m, sourceLine.WarehouseId, null,
+                    requested.BatchAllocations, requested.Serials, requested.AllowExpiredBatchIssue));
             }
 
             var receiptFx = FxRates.Resolve(connection, transaction, _provider,
@@ -1282,7 +1283,17 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                         CommercialDocKinds.PurchaseReceiptReturn, returnDocNo.Trim(),
                         QtyIn: 0m, QtyOut: line.Qty * equivalent,
                         Note: $"Supplier return against receipt {receipt.DocNo}",
+                        BatchAllocations: line.BatchAllocations?.Select(allocation =>
+                            new BatchAllocationRequest(
+                                allocation.BatchNo,
+                                decimal.Round(allocation.Qty * equivalent, 6, MidpointRounding.AwayFromZero),
+                                allocation.ExpiryDate, allocation.MfgDate, allocation.SupplierBatchNo)).ToArray(),
+                        Serials: line.Serials?.Select(serial =>
+                            new SerialSelection(serial.SerialNo, serial.BatchNo, serial.WarrantyExpiry)).ToArray(),
+                        AllowExpiredBatchIssue: line.AllowExpiredBatchIssue,
                         OriginalDocumentNo: receipt.DocNo,
+                        OriginalSourceDocumentLineId: sourceLine.LineId,
+                        SourceDocumentLineId: returnLineIds[returnLineIndex + 1],
                         PartyId: receipt.PartyId));
                 inventoryCostBase += -movement.CostAmount;
             }
