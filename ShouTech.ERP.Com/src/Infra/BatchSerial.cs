@@ -129,16 +129,14 @@ internal static class BatchSerialAllocator
 
         // Linked return: re-enter (sales return) or consume (purchase
         // return) the original document's batches/serials.
-        if (!string.IsNullOrWhiteSpace(request.OriginalDocumentNo)
-            && request.BatchAllocations is null && request.Serials is null)
+        if (!string.IsNullOrWhiteSpace(request.OriginalDocumentNo))
         {
             if (TryApplyFromOriginal(connection, transaction, isPg, request, tracking,
                     materialCode, movementId, qty, isReceipt, results))
                 return results;
             // The original document carries no allocations (it predates
-            // 054): fall through to the normal rules, which will demand
-            // explicit data for a receipt — an honest failure, never a
-            // silent untracked posting of a tracked material.
+            // 054): fall through to the normal rules, which demand explicit
+            // tracking data rather than silently losing batch/serial identity.
         }
 
         if (tracking.HasBatch)
