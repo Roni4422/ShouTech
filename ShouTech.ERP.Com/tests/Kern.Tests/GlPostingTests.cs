@@ -569,7 +569,7 @@ public class GlPostingTests
             PaidAmount = paid,
             OriginalDocId = originalDocId,
             OriginalDocKind = originalDocKind,
-            OriginalDocNo = originalDocNo,
+            OriginalDocNo = originalDocNo ?? string.Empty,
             PaymentMethod = kind == InvDocKind.PosSale ? InvPaymentMethod.Cash : InvPaymentMethod.Credit,
             Lines = { new InvLine { LineNo = 1, MaterialId = 42, MaterialCode = "MAT-42", Qty = qty, UnitPrice = price, TaxCode = taxCode, TaxRate = taxRate, WarehouseId = 1 } }
         };
