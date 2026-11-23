@@ -82,7 +82,10 @@ public sealed class PurchaseLandedCostRepository
             var chargeIds = charges.ToDictionary(x => x.ChargeCode.Trim(), _ => Guid.NewGuid(), StringComparer.OrdinalIgnoreCase);
             var landedCostId = Guid.NewGuid();
             var totalAmount = decimal.Round(charges.Sum(x => x.Amount), 4, MidpointRounding.AwayFromZero);
-            var totalBase = decimal.Round(charges.Sum(x => x.Amount * exchangeRate), 4, MidpointRounding.AwayFromZero);
+            var totalBase = decimal.Round(charges.Sum(x =>
+                decimal.Round(x.Amount * exchangeRate, 4, MidpointRounding.AwayFromZero)), 4, MidpointRounding.AwayFromZero);
+            if (totalAmount == 0m || totalBase == 0m)
+                throw new InvalidOperationException("The landed-cost voucher must have a non-zero net charge.");
 
             using (var header = Cmd(connection, transaction, """
                 INSERT INTO purchase_landed_costs
