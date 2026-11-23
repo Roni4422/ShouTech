@@ -191,7 +191,7 @@ namespace ShouTech.App.Services
             try
             {
                 Journal = CreateJournalService();
-                Budgets = CreatePhase3Service((provider, connection) => new BudgetService(new BudgetRepository(provider, connection)), "Budgets");
+                Budgets = CreatePhase3Service((provider, connection) => new BudgetService(new BudgetRepository(provider, connection), Permissions.Has), "Budgets");
                 Quality = CreatePhase3Service((provider, connection) => new QualityService(new QualityRepository(provider, connection)), "Quality");
                 Crm = CreatePhase3Service((provider, connection) => new CrmService(new CrmRepository(provider, connection)), "CRM");
             Hr = CreatePhase3Service((provider, connection) => new HrService(new HrRepository(provider, connection)), "HR");
