@@ -1144,8 +1144,12 @@
       "DebitBase": "Debit (Base)",
       "CreditBase": "Credit (Base)",
       "GrniGlBalance": "GRNI GL Balance (Base)",
-      "GrniDifference": "GRNI Difference (Base)"
-    },
+      "GrniDifference": "GRNI Difference (Base)",
+   
+      "AgeBand": "Aging band",
+      "GrniGlBalanceCompany": "GRNI GL balance (company-wide, base)",
+      "GrniDifferenceCompany": "GRNI difference (company-wide, base)"
+     },
     "Filter": {
       "All": "All",
       "DateFrom": "From",
