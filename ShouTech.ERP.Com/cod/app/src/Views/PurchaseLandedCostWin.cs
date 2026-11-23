@@ -80,7 +80,7 @@ public sealed class PurchaseLandedCostWin : BaseWin
         StyleButton(_refresh, "PurchaseLandedCost.Refresh");
         StyleButton(_loadSelected, "PurchaseLandedCost.LoadSelected");
         StyleButton(_close, "PurchaseLandedCost.Close");
-        var chargeKeys = new[] { "PurchaseLandedCost.ChargeCode", "PurchaseLandedCost.Description", "PurchaseLandedCost.Amount", "PurchaseLandedCost.Basis", "PurchaseLandedCost.ManualAmounts" };
+        var chargeKeys = new[] { "PurchaseLandedCost.ChargeCode", "PurchaseLandedCost.Description", "PurchaseLandedCost.Amount", "PurchaseLandedCost.Basis", "PurchaseLandedCost.ManualAmounts", "PurchaseLandedCost.ExpenseAccount" };
         for (var i = 0; i < chargeKeys.Length && i < _grid.Columns.Count; i++) _grid.Columns[i].Header = T(chargeKeys[i]);
         var historyKeys = new[] { "PurchaseLandedCost.ColNumber", "PurchaseLandedCost.ColReceipt", "PurchaseLandedCost.ColDate", "PurchaseLandedCost.ColAmount", "PurchaseLandedCost.ColStatus" };
         for (var i = 0; i < historyKeys.Length && i < _historyGrid.Columns.Count; i++) _historyGrid.Columns[i].Header = T(historyKeys[i]);
@@ -168,6 +168,12 @@ public sealed class PurchaseLandedCostWin : BaseWin
             Header = T("PurchaseLandedCost.ManualAmounts"),
             Binding = new Binding(nameof(ChargeRow.ManualAmounts)),
             Width = new DataGridLength(2, DataGridLengthUnitType.Star)
+        });
+        _grid.Columns.Add(new DataGridTextColumn
+        {
+            Header = T("PurchaseLandedCost.ExpenseAccount"),
+            Binding = new Binding(nameof(ChargeRow.ExpenseAccountCode)),
+            Width = 120
         });
         Grid.SetRow(_grid, 1);
         body.Children.Add(_grid);
@@ -281,7 +287,8 @@ public sealed class PurchaseLandedCostWin : BaseWin
                     }
                     manualAmounts = parsed;
                 }
-                return new PurchaseLandedCostChargeDraft(row.Code, row.Description, amount, row.Basis, manualAmounts);
+                return new PurchaseLandedCostChargeDraft(row.Code, row.Description, amount, row.Basis, manualAmounts,
+                    string.IsNullOrWhiteSpace(row.ExpenseAccountCode) ? null : row.ExpenseAccountCode.Trim());
             }).ToArray();
             var id = await AppHost.PurchaseLandedCosts!.CreateDraftAsync(_companyId, receipt.DocId,
                 _number.Text.Trim(), DateOnly.FromDateTime(_date.SelectedDate ?? DateTime.Today),
@@ -348,5 +355,6 @@ public sealed class PurchaseLandedCostWin : BaseWin
         public string Amount { get; set; } = "0";
         public string Basis { get; set; } = "Value";
         public string ManualAmounts { get; set; } = "";
+        public string ExpenseAccountCode { get; set; } = "";
     }
 }
