@@ -76,6 +76,176 @@ public sealed record StockMovementResult(
 /// </summary>
 public static class StockValuationEngine
 {
+    /// <summary>
+    /// Applies the inventory and consumed-stock portions of a landed-cost
+    /// allocation to the exact receipt cost layer. This is a value-only
+    /// adjustment: it deliberately creates no quantity movement. The
+    /// caller owns the transaction and must post the matching GL entry
+    /// before committing it.
+    /// </summary>
+    public static LandedCostValuationAdjustmentResult ApplyLandedCostAdjustment(
+        DbConnection connection, DbTransaction transaction, string provider,
+        string companyId, Guid landedCostId, Guid allocationId,
+        long sourceMovementId, long warehouseId, long materialId,
+        decimal allocatedBaseAmount, string actor)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+        if (string.IsNullOrWhiteSpace(companyId))
+            throw new ArgumentException("Company is required.", nameof(companyId));
+        if (landedCostId == Guid.Empty || allocationId == Guid.Empty)
+            throw new ArgumentException("Landed-cost and allocation identifiers are required.");
+        if (sourceMovementId <= 0 || warehouseId <= 0 || materialId <= 0)
+            throw new ArgumentOutOfRangeException(nameof(sourceMovementId));
+        if (string.IsNullOrWhiteSpace(actor))
+            throw new ArgumentException("Actor is required.", nameof(actor));
+
+        var isPg = NormalizeProvider(provider) == "PostgreSQL";
+        var company = companyId.Trim();
+        // Idempotency is enforced by the unique allocation_id constraint;
+        // check it before touching the layer so a retry cannot double value.
+        using (var duplicate = CreateCommand(connection, transaction,
+            "SELECT COUNT(*) FROM purchase_landed_cost_stock_adjustments WHERE company_id = @c AND allocation_id = @a"))
+        {
+            Add(duplicate, "@c", company);
+            Add(duplicate, "@a", allocationId.ToString("D"));
+            if (Convert.ToInt64(duplicate.ExecuteScalar(), CultureInfo.InvariantCulture) != 0)
+                throw new InvalidOperationException("This landed-cost allocation has already adjusted stock valuation.");
+        }
+
+        decimal originalQty, remainingQty, oldUnitCost;
+        using (var layer = CreateCommand(connection, transaction, $"""
+            SELECT qty_in, qty_remaining, unit_cost
+            FROM stock_cost_layers
+            WHERE company_id = @c AND warehouse_id = @w AND material_id = @m
+              AND source_movement_id = @movement
+            ORDER BY layer_id
+            LIMIT 1{(isPg ? " FOR UPDATE" : string.Empty)}
+            """))
+        {
+            Add(layer, "@c", company);
+            Add(layer, "@w", warehouseId);
+            Add(layer, "@m", materialId);
+            Add(layer, "@movement", sourceMovementId);
+            using var reader = layer.ExecuteReader();
+            if (!reader.Read())
+                throw new InvalidOperationException("The receipt cost layer was not found for this landed-cost allocation.");
+            originalQty = ValuationText.ToDecimal(reader.GetValue(0));
+            remainingQty = ValuationText.ToDecimal(reader.GetValue(1));
+            oldUnitCost = ValuationText.ToDecimal(reader.GetValue(2));
+        }
+        if (originalQty <= 0m || remainingQty < 0m || remainingQty > originalQty)
+            throw new InvalidOperationException("The receipt cost layer has invalid quantity state.");
+
+        var inventoryAdjustment = remainingQty == 0m ? 0m
+            : ValuationMath.RoundMoney(allocatedBaseAmount * remainingQty / originalQty);
+        var consumedAdjustment = allocatedBaseAmount - inventoryAdjustment;
+        var newUnitCost = oldUnitCost;
+        if (remainingQty > 0m)
+        {
+            newUnitCost = ValuationMath.RoundRate(oldUnitCost + inventoryAdjustment / remainingQty);
+            if (newUnitCost < 0m)
+                throw new InvalidOperationException("A landed-cost credit cannot reduce the remaining layer below zero cost.");
+        }
+
+        var balance = LoadBalance(connection, transaction, isPg, company, warehouseId, materialId);
+        if (inventoryAdjustment != 0m)
+        {
+            if (balance is null)
+                throw new InvalidOperationException("The stock balance for the receipt layer is missing.");
+            var newStockValue = ValuationMath.RoundMoney(balance.Value + inventoryAdjustment);
+            if (newStockValue < 0m)
+                throw new InvalidOperationException("The landed-cost adjustment would make inventory value negative.");
+            var average = balance.Quantity > 0m
+                ? ValuationMath.RoundRate(newStockValue / balance.Quantity)
+                : balance.AverageCost;
+            using (var updateLayer = CreateCommand(connection, transaction,
+                "UPDATE stock_cost_layers SET unit_cost = @cost WHERE company_id = @c AND layer_id = (SELECT layer_id FROM stock_cost_layers WHERE company_id = @c AND warehouse_id = @w AND material_id = @m AND source_movement_id = @movement ORDER BY layer_id LIMIT 1)"))
+            {
+                Add(updateLayer, "@cost", newUnitCost);
+                Add(updateLayer, "@c", company);
+                Add(updateLayer, "@w", warehouseId);
+                Add(updateLayer, "@m", materialId);
+                Add(updateLayer, "@movement", sourceMovementId);
+                if (updateLayer.ExecuteNonQuery() != 1)
+                    throw new InvalidOperationException("The receipt cost layer could not be revalued.");
+            }
+            using (var updateBalance = CreateCommand(connection, transaction, """
+                UPDATE material_stock_balances
+                SET stock_value = @value, average_cost = @average,
+                    last_updated = CURRENT_TIMESTAMP
+                WHERE stock_balance_id = @id
+                """))
+            {
+                Add(updateBalance, "@value", newStockValue);
+                Add(updateBalance, "@average", average);
+                Add(updateBalance, "@id", balance.Id);
+                if (updateBalance.ExecuteNonQuery() != 1)
+                    throw new InvalidOperationException("The stock balance could not be revalued.");
+            }
+            decimal totalQty, totalValue;
+            using (var totals = CreateCommand(connection, transaction, """
+                SELECT COALESCE(SUM(available_qty), 0), COALESCE(SUM(stock_value), 0)
+                FROM material_stock_balances
+                WHERE company_id = @c AND material_id = @m AND is_deleted = 0
+                """))
+            {
+                Add(totals, "@c", company);
+                Add(totals, "@m", materialId);
+                using var reader = totals.ExecuteReader();
+                reader.Read();
+                totalQty = ValuationText.ToDecimal(reader.GetValue(0));
+                totalValue = ValuationText.ToDecimal(reader.GetValue(1));
+            }
+            if (totalQty > 0m)
+            {
+                using var card = CreateCommand(connection, transaction,
+                    "UPDATE materials SET avg_cost = @average WHERE company_id = @c AND material_id = @m");
+                Add(card, "@average", ValuationMath.RoundRate(totalValue / totalQty));
+                Add(card, "@c", company);
+                Add(card, "@m", materialId);
+                card.ExecuteNonQuery();
+            }
+        }
+
+        using (var audit = CreateCommand(connection, transaction, """
+            INSERT INTO purchase_landed_cost_stock_adjustments
+                (adjustment_id, company_id, landed_cost_id, allocation_id,
+                 source_movement_id, warehouse_id, material_id, allocated_base_amount,
+                 original_quantity, remaining_quantity, inventory_adjustment,
+                 consumed_adjustment, unit_cost_before, unit_cost_after, actor)
+            VALUES (@id, @c, @landed, @allocation, @movement, @w, @m, @amount,
+                    @original, @remaining, @inventory, @consumed, @before, @after, @actor)
+            """))
+        {
+            Add(audit, "@id", Guid.NewGuid().ToString("D"));
+            Add(audit, "@c", company);
+            Add(audit, "@landed", landedCostId.ToString("D"));
+            Add(audit, "@allocation", allocationId.ToString("D"));
+            Add(audit, "@movement", sourceMovementId);
+            Add(audit, "@w", warehouseId);
+            Add(audit, "@m", materialId);
+            Add(audit, "@amount", allocatedBaseAmount);
+            Add(audit, "@original", originalQty);
+            Add(audit, "@remaining", remainingQty);
+            Add(audit, "@inventory", inventoryAdjustment);
+            Add(audit, "@consumed", consumedAdjustment);
+            Add(audit, "@before", oldUnitCost);
+            Add(audit, "@after", newUnitCost);
+            Add(audit, "@actor", actor.Trim());
+            audit.ExecuteNonQuery();
+        }
+
+        return new LandedCostValuationAdjustmentResult(
+            inventoryAdjustment, consumedAdjustment, originalQty, remainingQty,
+            oldUnitCost, newUnitCost);
+    }
+
+    public sealed record LandedCostValuationAdjustmentResult(
+        decimal InventoryAdjustment, decimal ConsumedCostAdjustment,
+        decimal OriginalQuantity, decimal RemainingQuantity,
+        decimal UnitCostBefore, decimal UnitCostAfter);
+
     // ------------------------------------------------------------------
     // Public entry point
     // ------------------------------------------------------------------
