@@ -53,6 +53,9 @@ public sealed class PurchaseLandedCostRepository : IPurchaseLandedCostRepository
         try
         {
             var company = companyId.ToString("D");
+            var fx = FxRates.Resolve(connection, transaction, _provider,
+                companyId, currencyCode, documentDate, exchangeRate);
+            var effectiveRate = fx.Rate;
             string receiptNo;
             long? supplierId;
             string? supplierName;
@@ -84,7 +87,7 @@ public sealed class PurchaseLandedCostRepository : IPurchaseLandedCostRepository
             var landedCostId = Guid.NewGuid();
             var totalAmount = decimal.Round(charges.Sum(x => x.Amount), 4, MidpointRounding.AwayFromZero);
             var totalBase = decimal.Round(charges.Sum(x =>
-                decimal.Round(x.Amount * exchangeRate, 4, MidpointRounding.AwayFromZero)), 4, MidpointRounding.AwayFromZero);
+                decimal.Round(x.Amount * effectiveRate, 4, MidpointRounding.AwayFromZero)), 4, MidpointRounding.AwayFromZero);
             if (totalAmount == 0m || totalBase == 0m)
                 throw new InvalidOperationException("The landed-cost voucher must have a non-zero net charge.");
 
@@ -105,7 +108,7 @@ public sealed class PurchaseLandedCostRepository : IPurchaseLandedCostRepository
                 Add(header, "@supplier", (object?)supplierId ?? DBNull.Value);
                 Add(header, "@supplierName", (object?)supplierName ?? DBNull.Value);
                 Add(header, "@currency", currencyCode.Trim().ToUpperInvariant());
-                Add(header, "@rate", exchangeRate);
+                Add(header, "@rate", effectiveRate);
                 Add(header, "@amount", totalAmount);
                 Add(header, "@base", totalBase);
                 Add(header, "@actor", actor.Trim());
@@ -115,7 +118,7 @@ public sealed class PurchaseLandedCostRepository : IPurchaseLandedCostRepository
             foreach (var charge in charges)
             {
                 var chargeId = chargeIds[charge.ChargeCode.Trim()];
-                var baseAmount = decimal.Round(charge.Amount * exchangeRate, 4, MidpointRounding.AwayFromZero);
+                var baseAmount = decimal.Round(charge.Amount * effectiveRate, 4, MidpointRounding.AwayFromZero);
                 using (var insert = Cmd(connection, transaction, """
                     INSERT INTO purchase_landed_cost_charges
                         (charge_id, landed_cost_id, charge_code, description, allocation_basis,
@@ -137,7 +140,7 @@ public sealed class PurchaseLandedCostRepository : IPurchaseLandedCostRepository
 
             var allocations = LandedCostAllocator.Allocate(allocatorLines, charges.Select(x =>
                 new LandedCostCharge(x.ChargeCode.Trim(),
-                    decimal.Round(x.Amount * exchangeRate, 4, MidpointRounding.AwayFromZero),
+                    decimal.Round(x.Amount * effectiveRate, 4, MidpointRounding.AwayFromZero),
                     x.AllocationBasis, x.ManualAmounts)).ToArray());
             var lineById = receiptLines.ToDictionary(x => x.LineId);
             foreach (var allocation in allocations)
