@@ -86,7 +86,23 @@ Purchase documents are company-scoped. Posted source documents remain auditable;
 - Batch/serial-tracked goods reuse the original receipt's recorded batch/serial allocations during return posting. If a legacy receipt has no allocation history, the stock engine refuses to silently process the tracked return.
 - Return allocations reduce the purchase order's net received quantity and are excluded from later invoice matching. This allows replacement goods to be received against the remaining purchase-order quantity without treating returned goods as available for invoicing.
 
-## 8. Integrity and acceptance checks
+## 8. GRNI as-of reconciliation
+
+- The GRNI report is evaluated as of the selected date and lists the remaining quantities and base-currency values by posted receipt line after posted supplier-invoice matches and posted pre-invoice returns.
+- Its reconciliation summary compares the open receipt-side GRNI value with the posted general-ledger balance of control account 2203 through the same date. The difference is shown in base currency.
+- A non-zero difference is an exception for investigation, not an instruction to post a balancing journal automatically. Users must identify missing receipt/invoice/return postings, manual control-account journals, date cut-off errors, or legacy data differences before an authorized adjustment is posted.
+- Reversed journal entries are included net of their posted reversal, so a properly reversed posting does not continue to inflate the control balance.
+- The report is a diagnostic tie-out; a controlled period-end reconciliation workbench with saved sign-off, exception ownership, and adjustment/reversal workflow remains a release requirement.
+
+## 9. Landed-cost allocation foundation
+
+- The allocation engine supports proportional distribution by base goods value, base quantity, weight, volume, and explicit manual line amounts.
+- Monetary allocations are rounded to four decimal places; the final eligible receipt line absorbs the rounding remainder so each charge reconciles exactly to its base-currency amount.
+- Manual allocations must reference receipt lines and reconcile to the charge total without reversing the sign of the charge.
+- The provider-specific voucher, charge, allocation, and audit tables are defined in migrations 087 for SQLite and PostgreSQL.
+- The posting workflow is not considered complete until allocated cost is incorporated into the stock valuation/layer replay, consumed-stock variance, supplier liability, and GL transaction atomically, with reversal and partial-consumption tests. A draft schema or calculation alone must not be treated as a posted landed-cost feature.
+
+## 10. Integrity and acceptance checks
 
 The purchase-to-pay flow must pass the following checks before release:
 
