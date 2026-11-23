@@ -467,7 +467,7 @@ public sealed class PurchaseLandedCostRepository : IPurchaseLandedCostRepository
         var allocations = new List<(Guid Id, long Line, long Material, long Warehouse, decimal Amount, long Movement)>();
         using (var query = Cmd(connection, transaction, $"""
             SELECT a.allocation_id, a.receipt_line_id, a.material_id, a.warehouse_id,
-                   a.allocated_base_amount,
+                   a.base_quantity, a.allocated_base_amount,
                    (SELECT COUNT(*) FROM material_stock_movements sm
                     WHERE sm.company_id = @stockCompany
                       AND sm.source_document_line_id = a.receipt_line_id
@@ -477,7 +477,12 @@ public sealed class PurchaseLandedCostRepository : IPurchaseLandedCostRepository
                     WHERE sm.company_id = @stockCompany
                       AND sm.source_document_line_id = a.receipt_line_id
                       AND sm.document_no = d.doc_no AND sm.movement_type = 'RCV'
-                      AND sm.qty_in > 0 AND sm.is_deleted = {(Pg ? "FALSE" : "0")}) AS MovementId
+                      AND sm.qty_in > 0 AND sm.is_deleted = {(Pg ? "FALSE" : "0")}) AS MovementId,
+                   (SELECT MIN(sm.qty_in) FROM material_stock_movements sm
+                    WHERE sm.company_id = @stockCompany
+                      AND sm.source_document_line_id = a.receipt_line_id
+                      AND sm.document_no = d.doc_no AND sm.movement_type = 'RCV'
+                      AND sm.qty_in > 0 AND sm.is_deleted = {(Pg ? "FALSE" : "0")}) AS MovementQty
             FROM purchase_landed_cost_allocations a
             JOIN purchase_documents d ON d.doc_id = a.receipt_doc_id AND d.company_id = a.company_id
             WHERE a.company_id = @company AND a.landed_cost_id = @landed
@@ -491,15 +496,23 @@ public sealed class PurchaseLandedCostRepository : IPurchaseLandedCostRepository
             while (reader.Read())
             {
                 if (reader.IsDBNull(3)) throw new InvalidOperationException("A landed-cost allocation has no receipt warehouse.");
-                var movementCount = Convert.ToInt32(reader.GetValue(5), CultureInfo.InvariantCulture);
-                if (movementCount != 1 || reader.IsDBNull(6))
+                var movementCount = Convert.ToInt32(reader.GetValue(6), CultureInfo.InvariantCulture);
+                if (movementCount != 1 || reader.IsDBNull(7) || reader.IsDBNull(8))
                     throw new InvalidOperationException("Every landed-cost allocation must map to exactly one active stock movement for its receipt line.");
+                var allocatedQty = Dec(reader.GetValue(4));
+                var movementQty = Dec(reader.GetValue(8));
+                if (decimal.Round(allocatedQty, 6, MidpointRounding.AwayFromZero)
+                    != decimal.Round(movementQty, 6, MidpointRounding.AwayFromZero))
+                    throw new InvalidOperationException("The landed-cost allocation quantity no longer matches its source receipt movement.");
                 allocations.Add((Guid.Parse(Text(reader.GetValue(0))!), Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture),
                     Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture), Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture),
-                    Dec(reader.GetValue(4)), Convert.ToInt64(reader.GetValue(6), CultureInfo.InvariantCulture)));
+                    Dec(reader.GetValue(5)), Convert.ToInt64(reader.GetValue(7), CultureInfo.InvariantCulture)));
             }
         }
         if (allocations.Count == 0) throw new InvalidOperationException("The landed-cost voucher has no traceable stock allocations.");
+        var allocatedBaseTotal = decimal.Round(allocations.Sum(x => x.Amount), 4, MidpointRounding.AwayFromZero);
+        if (allocatedBaseTotal != decimal.Round(totalBase, 4, MidpointRounding.AwayFromZero))
+            throw new InvalidOperationException("Landed-cost line allocations do not reconcile to the voucher base total.");
 
         decimal inventoryBase = 0m, consumedBase = 0m;
         foreach (var allocation in allocations)
