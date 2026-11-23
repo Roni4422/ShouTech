@@ -43,6 +43,97 @@ public sealed class PurchaseRequisitionWorkflowRepository:IPurchaseRequisitionWo
             await Event(c,t,company,id,status,approver,reason,ct);await t.CommitAsync(ct).ConfigureAwait(false);
         }catch{await t.RollbackAsync(CancellationToken.None).ConfigureAwait(false);throw;}
     }
+    public async Task<bool> BeginConversionAsync(Guid company,long id,string actor,CancellationToken ct=default)
+    {
+        Require(company,id);
+        if(string.IsNullOrWhiteSpace(actor))throw new ArgumentException("Actor is required.",nameof(actor));
+        await using var c=Open();
+        await c.OpenAsync(ct).ConfigureAwait(false);
+        await using var t=await c.BeginTransactionAsync(ct).ConfigureAwait(false);
+        try
+        {
+            string status;
+            long? existingPo;
+            await using(var current=Cmd(c,t,
+                "SELECT status,purchase_order_id FROM purchase_requisition_workflow WHERE company_id=@c AND requisition_doc_id=@id"+(Pg?" FOR UPDATE":string.Empty)))
+            {
+                Add(current,"@c",Co(company));Add(current,"@id",id);
+                await using var reader=await current.ExecuteReaderAsync(ct).ConfigureAwait(false);
+                if(!await reader.ReadAsync(ct).ConfigureAwait(false))
+                    throw new InvalidOperationException("Purchase requisition workflow was not found.");
+                status=Text(reader,0)??"";
+                existingPo=reader.IsDBNull(1)?null:Num(reader,1);
+            }
+            if(status=="Converted")
+                throw new InvalidOperationException(existingPo is null
+                    ? "The requisition is marked converted but has no linked purchase order."
+                    : "The requisition has already been converted.");
+            if(status=="Converting")
+                throw new InvalidOperationException("This requisition is already being converted to a purchase order.");
+            if(status!="Approved")
+                throw new InvalidOperationException("Only an approved requisition can begin conversion.");
+            await using(var update=Cmd(c,t,"UPDATE purchase_requisition_workflow SET status='Converting',updated_at=CURRENT_TIMESTAMP WHERE company_id=@c AND requisition_doc_id=@id AND status='Approved'"))
+            {
+                Add(update,"@c",Co(company));Add(update,"@id",id);
+                if(await update.ExecuteNonQueryAsync(ct).ConfigureAwait(false)!=1)
+                    throw new InvalidOperationException("The requisition conversion state changed; reload and retry.");
+            }
+            await Event(c,t,company,id,"ConversionStarted",actor.Trim(),null,ct);
+            await t.CommitAsync(ct).ConfigureAwait(false);
+            return true;
+        }
+        catch
+        {
+            await t.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    public async Task AbortConversionAsync(Guid company,long id,string actor,string reason,CancellationToken ct=default)
+    {
+        Require(company,id);
+        if(string.IsNullOrWhiteSpace(actor))throw new ArgumentException("Actor is required.",nameof(actor));
+        await using var c=Open();
+        await c.OpenAsync(ct).ConfigureAwait(false);
+        await using var t=await c.BeginTransactionAsync(ct).ConfigureAwait(false);
+        try
+        {
+            string status;
+            await using(var current=Cmd(c,t,
+                "SELECT status FROM purchase_requisition_workflow WHERE company_id=@c AND requisition_doc_id=@id"+(Pg?" FOR UPDATE":string.Empty)))
+            {
+                Add(current,"@c",Co(company));Add(current,"@id",id);
+                status=Convert.ToString(await current.ExecuteScalarAsync(ct).ConfigureAwait(false),CultureInfo.InvariantCulture)??"";
+            }
+            if(status!="Converting")
+            {
+                await t.CommitAsync(ct).ConfigureAwait(false);
+                return;
+            }
+            await using(var linked=Cmd(c,t,"SELECT COUNT(*) FROM document_links WHERE company_id=@c AND source_doc_kind='PRQ' AND source_doc_id=@id AND target_doc_kind='PO'"))
+            {
+                Add(linked,"@c",Co(company));Add(linked,"@id",id);
+                if(Convert.ToInt64(await linked.ExecuteScalarAsync(ct).ConfigureAwait(false),CultureInfo.InvariantCulture)>0)
+                {
+                    await t.CommitAsync(ct).ConfigureAwait(false);
+                    return;
+                }
+            }
+            await using(var update=Cmd(c,t,"UPDATE purchase_requisition_workflow SET status='Approved',updated_at=CURRENT_TIMESTAMP WHERE company_id=@c AND requisition_doc_id=@id AND status='Converting'"))
+            {
+                Add(update,"@c",Co(company));Add(update,"@id",id);
+                if(await update.ExecuteNonQueryAsync(ct).ConfigureAwait(false)==1)
+                    await Event(c,t,company,id,"ConversionFailed",actor.Trim(),string.IsNullOrWhiteSpace(reason)?"Purchase-order draft creation failed.":reason.Trim(),ct);
+            }
+            await t.CommitAsync(ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            await t.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
     public async Task MarkConvertedAsync(Guid company,long id,long poId,string actor,CancellationToken ct=default)
     {
         Require(company,id);
@@ -71,10 +162,11 @@ public sealed class PurchaseRequisitionWorkflowRepository:IPurchaseRequisitionWo
                     await t.CommitAsync(ct).ConfigureAwait(false);
                     return;
                 }
-                if(!string.Equals(status,"Approved",StringComparison.Ordinal))
+                if(!string.Equals(status,"Approved",StringComparison.Ordinal)
+                    && !string.Equals(status,"Converting",StringComparison.Ordinal))
                     throw new InvalidOperationException("Only an approved requisition can be converted.");
             }
-            await using(var update=Cmd(c,t,"UPDATE purchase_requisition_workflow SET status='Converted',purchase_order_id=@po,updated_at=CURRENT_TIMESTAMP WHERE company_id=@c AND requisition_doc_id=@id AND status='Approved'"))
+            await using(var update=Cmd(c,t,"UPDATE purchase_requisition_workflow SET status='Converted',purchase_order_id=@po,updated_at=CURRENT_TIMESTAMP WHERE company_id=@c AND requisition_doc_id=@id AND status IN ('Approved','Converting')"))
             {
                 Add(update,"@po",poId);
                 Add(update,"@c",Co(company));
