@@ -64,6 +64,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
     private readonly Button _btnConvert = new();
     private readonly Button _btnReceipt = new();
     private readonly Button _btnAttachments = new();
+    private readonly Button _btnRequisitions = new();
     private readonly Button _btnClose = new();
     private readonly Button _btnCancel = new();
     private readonly Button _btnAddLine = new();
@@ -154,6 +155,8 @@ public sealed class OrdWin : BaseWin, IWindowMode
         StyleButton(_btnConvert, _kind == OrdKind.Sales ? "OrderDoc.ConvertToInvoice" : "OrderDoc.CreateSupplierInvoice");
         StyleButton(_btnReceipt, "OrderDoc.CreateReceipt");
         StyleButton(_btnAttachments, "PurchaseAttachments.Open");
+        StyleButton(_btnRequisitions, "PurchaseRequisition.Open");
+        _btnRequisitions.Visibility = _kind == OrdKind.Purchase ? Visibility.Visible : Visibility.Collapsed;
         _btnAttachments.Visibility = _kind == OrdKind.Purchase ? Visibility.Visible : Visibility.Collapsed;
         _btnReceipt.Visibility = _kind == OrdKind.Purchase ? Visibility.Visible : Visibility.Collapsed;
         _btnConvert.Visibility = IsRfq ? Visibility.Collapsed : Visibility.Visible;
@@ -195,6 +198,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
         _btnConvert.Click += async (_, _) => await ConvertAsync();
         _btnReceipt.Click += async (_, _) => await ReceiveAsync();
         _btnAttachments.Click += (_, _) => OpenAttachments();
+        _btnRequisitions.Click += (_, _) => new PurchaseRequisitionWin { Owner = this }.ShowDialog();
         // Step 9 (ORD-03): Close checks the permission family of the
         // window's OWN kind — it previously hardcoded the SALES cancel
         // permission for purchase orders too, so a purchasing-only user
@@ -224,7 +228,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             }
         };
 
-        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnConvert, _btnReceipt, _btnAttachments, _btnAddSupplierQuote, _btnCompareQuotes, _btnClose, _btnCancel, _btnAddLine, _btnRemLine, _btnPrint })
+        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnConvert, _btnReceipt, _btnAttachments, _btnRequisitions, _btnAddSupplierQuote, _btnCompareQuotes, _btnClose, _btnCancel, _btnAddLine, _btnRemLine, _btnPrint })
             toolbar.Children.Add(b);
 
         var actionBar = new Border

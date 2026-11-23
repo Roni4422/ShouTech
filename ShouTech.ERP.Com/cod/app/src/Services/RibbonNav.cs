@@ -125,6 +125,7 @@ public static class RibbonNav
             case "POS.DeleteMaterial": Show(new MatDirWin(), owner); return true;
 
             // ------------------------------------------------ Orders
+            case "Orders.PurchaseRequisitions": Show(new PurchaseRequisitionWin(), owner); return true;
             case "Orders.DefineOrders": ShowDef(DefSets.OrderDefinitions, owner); return true;
             case "Orders.SearchOrders": Show(new DocSearchWin(DocSearchWin.DocSearchMode.Orders), owner); return true;
             case "Orders.OrderReceiptDelivery": Show(new SalesDeliveryWin(), owner); return true;
