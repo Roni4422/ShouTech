@@ -26,7 +26,7 @@ public sealed class PurchaseDocumentAttachmentService
         var safeName=Path.GetFileName(fileName??string.Empty).Trim();
         if(string.IsNullOrWhiteSpace(safeName)||safeName.Length>240||!AllowedExtensions.Contains(Path.GetExtension(safeName)))throw new InvalidOperationException("Attachment file type or name is not allowed.");
         var document=await _orders.FindByIdAsync(CommercialDocSide.Purchase,documentId,ct).ConfigureAwait(false);
-        if(document is null||document.CompanyId!=companyId||document.DocKind is not (CommercialDocKinds.PurchaseOrder or CommercialDocKinds.PurchaseReceipt or CommercialDocKinds.PurchaseReceiptReturn or CommercialDocKinds.PurchaseInvoice or "PRT" or CommercialDocKinds.SupplierQuotation or CommercialDocKinds.RequestForQuotation or CommercialDocKinds.PurchaseRequisition))
+        if(document is null||document.CompanyId!=companyId||document.DocKind is not (CommercialDocKinds.PurchaseOrder or CommercialDocKinds.PurchaseReceipt or CommercialDocKinds.PurchaseReceiptReturn or CommercialDocKinds.PurchaseInvoice or CommercialDocKinds.PurchaseReturn or CommercialDocKinds.SupplierQuotation or CommercialDocKinds.RequestForQuotation or CommercialDocKinds.PurchaseRequisition))
             throw new InvalidOperationException("The purchase document was not found in the active company.");
         await using var memory=new MemoryStream();
         var buffer=new byte[81920];long length=0;
