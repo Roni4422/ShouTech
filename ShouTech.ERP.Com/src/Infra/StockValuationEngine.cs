@@ -233,7 +233,7 @@ public static class StockValuationEngine
             originalMovementCost = ValuationText.ToDecimal(reader.GetValue(3));
             remainingQty = balance is null || balance.Quantity <= 0m || receiptBalanceQty <= 0m
                 ? 0m
-                : Math.Min(originalQty, originalQty * Math.Min(1m, balance.Quantity / receiptBalanceQty));
+                : Math.Min(balance.Quantity, Math.Min(originalQty, originalQty * Math.Min(1m, balance.Quantity / receiptBalanceQty)));
         }
         if (originalQty <= 0m || remainingQty < 0m || remainingQty > originalQty)
             throw new InvalidOperationException("The receipt cost source has invalid quantity state.");
