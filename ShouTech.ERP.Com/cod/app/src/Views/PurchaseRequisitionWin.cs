@@ -49,10 +49,26 @@ public sealed class PurchaseRequisitionWin : BaseWin
         ConfigureGrid(_approvals);AddCol(_approvals,"PurchaseRequisition.ApprovalStep",nameof(ApprovalVm.StepNo),65);AddCol(_approvals,"PurchaseRequisition.Approver",nameof(ApprovalVm.Approver),150);AddCol(_approvals,"PurchaseRequisition.ApprovalStatus",nameof(ApprovalVm.Status),100);AddCol(_approvals,"PurchaseRequisition.ApprovalReason",nameof(ApprovalVm.Reason),2);Grid.SetRow(_approvals,3);body.Children.Add(_approvals);
         root.Children.Add(body);Content=root;ApplyLocalizedText();
     }
+    protected override void ApplyLocalizedText()
+    {
+        foreach(var button in new[]{_new,_load,_save,_submit,_approve,_reject,_convert,_close})
+            if(button.Tag is string key) button.Content=T(key);
+        foreach(var column in _lines.Columns.Concat(_approvals.Columns))
+            if(column.Header is TextBlock header && header.Tag is string key) header.Text=T(key);
+        RelocalizeLabels(this);
+    }
+    private static void RelocalizeLabels(DependencyObject parent)
+    {
+        foreach(var child in LogicalTreeHelper.GetChildren(parent).OfType<DependencyObject>())
+        {
+            if(child is TextBlock label && label.Tag is string key) label.Text=T(key);
+            RelocalizeLabels(child);
+        }
+    }
     private static void StyleButton(Button b,string key){b.Content=T(key);b.MinWidth=82;b.Margin=new Thickness(3);b.Padding=new Thickness(8,4,8,4);}
     private static void ConfigureGrid(DataGrid g){g.AutoGenerateColumns=false;g.CanUserAddRows=true;g.CanUserDeleteRows=true;g.HeadersVisibility=DataGridHeadersVisibility.Column;g.Margin=new Thickness(0,0,0,8);}
-    private static void AddCol(DataGrid g,string key,string path,double width){g.Columns.Add(new DataGridTextColumn{Header=T(key),Binding=new Binding(path){UpdateSourceTrigger=UpdateSourceTrigger.PropertyChanged},Width=width==2?new DataGridLength(1,DataGridLengthUnitType.Star):new DataGridLength(width)});}
-    private static void AddField(Grid g,int col,int row,string key,Control input){var panel=new StackPanel{Margin=new Thickness(4)};panel.Children.Add(new TextBlock{Text=T(key),Margin=new Thickness(0,0,0,3)});input.Margin=new Thickness(0,0,4,0);input.MinWidth=100;panel.Children.Add(input);Grid.SetColumn(panel,col);Grid.SetRow(panel,row);g.Children.Add(panel);}
+    private static void AddCol(DataGrid g,string key,string path,double width){g.Columns.Add(new DataGridTextColumn{Header=new TextBlock{Text=T(key),Tag=key},Binding=new Binding(path){UpdateSourceTrigger=UpdateSourceTrigger.PropertyChanged},Width=width==2?new DataGridLength(1,DataGridLengthUnitType.Star):new DataGridLength(width)});}
+    private static void AddField(Grid g,int col,int row,string key,Control input){var panel=new StackPanel{Margin=new Thickness(4)};panel.Children.Add(new TextBlock{Text=T(key),Tag=key,Margin=new Thickness(0,0,0,3)});input.Margin=new Thickness(0,0,4,0);input.MinWidth=100;panel.Children.Add(input);Grid.SetColumn(panel,col);Grid.SetRow(panel,row);g.Children.Add(panel);}
 
     protected override void ApplyLocalizedText()
     {
