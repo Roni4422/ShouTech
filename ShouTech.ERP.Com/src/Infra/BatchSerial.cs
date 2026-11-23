@@ -459,8 +459,9 @@ internal static class BatchSerialAllocator
         long movementId, decimal qty, bool isReceipt, List<StockAllocationRecord> results)
     {
         // Original allocations for this material: receipts carry +, issues
-        // carry -. A sales return (receipt) mirrors the original ISSUE;
-        // a purchase return (issue) mirrors the original RECEIPT.
+        // carry -. A sales return mirrors the original ISSUE; a purchase
+        // return mirrors the original RECEIPT. The optional source line
+        // prevents two identical materials on one receipt from sharing lots.
         var wantSign = isReceipt ? -1m : 1m;
         var originals = new List<(long? BatchId, string? BatchNo, string? Expiry, long? SerialId, string? SerialNo, decimal Qty)>();
         using (var cmd = CreateCommand(connection, transaction, """
@@ -471,104 +472,173 @@ internal static class BatchSerialAllocator
             LEFT JOIN stock_batches b ON b.batch_id = a.batch_id
             LEFT JOIN stock_serials s ON s.serial_id = a.serial_id
             WHERE m.company_id = @c AND m.document_no = @doc AND m.material_id = @mat
+              AND (@sourceLine IS NULL OR m.source_document_line_id = @sourceLine)
             ORDER BY a.allocation_id
             """))
         {
             Add(cmd, "@c", request.CompanyId.Trim());
             Add(cmd, "@doc", request.OriginalDocumentNo!);
             Add(cmd, "@mat", request.MaterialId);
+            Add(cmd, "@sourceLine", (object?)request.OriginalSourceDocumentLineId ?? DBNull.Value);
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
-                var q = ValuationText.ToDecimal(reader.GetValue(5));
-                if (Math.Sign(q) != Math.Sign(wantSign)) continue;
+                var signed = ValuationText.ToDecimal(reader.GetValue(5));
+                if (Math.Sign(signed) != Math.Sign(wantSign)) continue;
                 originals.Add((
                     reader.IsDBNull(0) ? null : Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
                     ValuationText.ToText(reader.GetValue(1)),
                     ValuationText.ToText(reader.GetValue(2)),
                     reader.IsDBNull(3) ? null : Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture),
                     ValuationText.ToText(reader.GetValue(4)),
-                    Math.Abs(q)));
+                    Math.Abs(signed)));
             }
         }
         if (originals.Count == 0) return false;
-
-        // Coverage is proven BEFORE anything is written: a false return
-        // lets the caller fall through to the normal rules, so a partial
-        // write here would double-allocate.
-        if (tracking.HasBatch)
-        {
-            var batchCover = originals.Where(o => o.BatchId is not null && o.SerialId is null).Sum(o => o.Qty);
-            if (batchCover < qty) return false;
-        }
-        if (tracking.HasSerial)
-        {
-            var serialCover = originals.Count(o => o.SerialId is not null);
-            if (serialCover < qty) return false;
-        }
         if (!tracking.HasBatch && !tracking.HasSerial) return false;
 
+        var batchOriginals = originals.Where(o => o.BatchId is not null && o.SerialId is null).ToList();
+        var serialOriginals = originals.Where(o => o.SerialId is not null).ToList();
+        if (tracking.HasBatch && batchOriginals.Sum(o => o.Qty) < qty) return false;
+        if (tracking.HasSerial && serialOriginals.Count < qty) return false;
+        if (tracking.HasBatch && tracking.HasSerial &&
+            ((request.BatchAllocations is { Count: > 0 }) != (request.Serials is { Count: > 0 })))
+            throw new AppError(ErrorCodes.BatchAllocationMismatch,
+                $"Material '{materialCode}' is both batch- and serial-tracked; select both dimensions on a linked return.",
+                materialCode);
+
         var signedQty = isReceipt ? qty : -qty;
-        var remaining = qty;
-        foreach (var o in originals.Where(o => o.BatchId is not null && o.SerialId is null))
+        var batchPlan = new List<(long BatchId, string BatchNo, string? Expiry, decimal Qty)>();
+        if (tracking.HasBatch)
         {
-            if (remaining <= 0) break;
-            var take = Math.Min(remaining, o.Qty);
-            // A purchase return consumes the original receipt's batch:
-            // its balance must still cover the take.
-            if (!isReceipt)
+            if (request.BatchAllocations is { Count: > 0 } explicitBatches)
             {
-                var onHand = BatchOnHand(connection, transaction, isPg, request, o.BatchId!.Value);
-                if (onHand < take)
-                    throw new AppError(ErrorCodes.BatchStockInsufficient,
-                        $"Batch '{o.BatchNo}' holds {onHand} of material '{materialCode}'; the return needs {take}.",
-                        o.BatchNo ?? "-", materialCode);
+                if (explicitBatches.Any(x => x.Qty <= 0m || string.IsNullOrWhiteSpace(x.BatchNo))
+                    || explicitBatches.Sum(x => x.Qty) != qty)
+                    throw new AppError(ErrorCodes.BatchAllocationMismatch,
+                        $"Batch selections for material '{materialCode}' must be positive and sum to {qty}.",
+                        materialCode);
+                foreach (var requested in explicitBatches)
+                {
+                    var left = requested.Qty;
+                    foreach (var source in batchOriginals.Where(o =>
+                        string.Equals(o.BatchNo, requested.BatchNo.Trim(), StringComparison.OrdinalIgnoreCase)))
+                    {
+                        if (left <= 0m) break;
+                        var take = Math.Min(left, source.Qty);
+                        if (take > 0m)
+                        {
+                            batchPlan.Add((source.BatchId!.Value, source.BatchNo ?? requested.BatchNo,
+                                source.Expiry, take));
+                            left -= take;
+                        }
+                    }
+                    if (left > 0m)
+                        throw new AppError(ErrorCodes.BatchAllocationMismatch,
+                            $"Batch '{requested.BatchNo}' was not received on the selected source line in the requested quantity.",
+                            requested.BatchNo, materialCode);
+                }
             }
-            AddBatchBalance(connection, transaction, isPg, request, o.BatchId!.Value, signedQty > 0 ? take : -take);
-            var id = InsertAllocation(connection, transaction, isPg, movementId,
-                o.BatchId, null, signedQty > 0 ? take : -take, o.Expiry);
-            results.Add(new StockAllocationRecord(id, movementId, o.BatchId,
-                o.BatchNo, null, null, signedQty > 0 ? take : -take, o.Expiry));
-            remaining -= take;
+            else
+            {
+                var left = qty;
+                foreach (var source in batchOriginals)
+                {
+                    if (left <= 0m) break;
+                    var take = Math.Min(left, source.Qty);
+                    if (take > 0m)
+                    {
+                        batchPlan.Add((source.BatchId!.Value, source.BatchNo ?? string.Empty, source.Expiry, take));
+                        left -= take;
+                    }
+                }
+                if (left > 0m) return false;
+            }
         }
 
+        var serialPlan = new List<(long? BatchId, long SerialId, string SerialNo, string? Expiry)>();
         if (tracking.HasSerial)
         {
-            var serialOriginals = originals.Where(o => o.SerialId is not null).ToList();
-            var serialRemaining = qty;
-            foreach (var o in serialOriginals)
+            if (request.Serials is { Count: > 0 } explicitSerials)
             {
-                if (serialRemaining <= 0) break;
-                if (isReceipt)
+                var validated = RequireSerials(request, materialCode, qty);
+                foreach (var selected in validated)
                 {
-                    // The returned unit comes back into stock at the
-                    // return warehouse (Delivered -> InStock).
-                    UpdateSerialState(connection, transaction, isPg, o.SerialId!.Value,
-                        "InStock", request.WarehouseId, null);
-                }
-                else
-                {
-                    var serial = FindSerialById(connection, transaction, isPg, request, o.SerialId!.Value);
-                    if (serial is null || !string.Equals(serial.Status, "InStock", StringComparison.OrdinalIgnoreCase)
-                        || serial.WarehouseId != request.WarehouseId)
+                    var source = serialOriginals.FirstOrDefault(o =>
+                        string.Equals(o.SerialNo, selected.SerialNo.Trim(), StringComparison.OrdinalIgnoreCase));
+                    if (source.SerialId is null)
                         throw new AppError(ErrorCodes.SerialUnavailable,
-                            $"Serial '{o.SerialNo}' of material '{materialCode}' is not in stock for the return.",
-                            o.SerialNo ?? "-", materialCode);
-                    UpdateSerialState(connection, transaction, isPg, o.SerialId!.Value,
-                        "Delivered", null, request.PartyId);
+                            $"Serial '{selected.SerialNo}' was not part of the selected source receipt line.",
+                            selected.SerialNo, materialCode);
+                    serialPlan.Add((source.BatchId, source.SerialId.Value,
+                        source.SerialNo ?? selected.SerialNo.Trim(), source.Expiry));
                 }
-                var id = InsertAllocation(connection, transaction, isPg, movementId,
-                    o.BatchId, o.SerialId, signedQty > 0 ? 1m : -1m, o.Expiry);
-                results.Add(new StockAllocationRecord(id, movementId, o.BatchId,
-                    o.BatchNo, o.SerialId, o.SerialNo, signedQty > 0 ? 1m : -1m, o.Expiry));
-                serialRemaining -= 1m;
             }
-            // Coverage was proven above, so both dimensions are fully
-            // allocated here (the batch loop handled the batch rows).
-            return serialRemaining <= 0 && (!tracking.HasBatch || remaining <= 0);
+            else
+            {
+                if (qty != decimal.Truncate(qty)) return false;
+                foreach (var source in serialOriginals.Take((int)qty))
+                    serialPlan.Add((source.BatchId, source.SerialId!.Value,
+                        source.SerialNo ?? string.Empty, source.Expiry));
+            }
+            if (serialPlan.Count != (int)qty) return false;
         }
 
-        return remaining <= 0;
+        if (tracking.HasBatch && tracking.HasSerial)
+        {
+            var batchTotals = batchPlan.GroupBy(x => x.BatchId).ToDictionary(g => g.Key, g => g.Sum(x => x.Qty));
+            var serialTotals = serialPlan.Where(x => x.BatchId is not null)
+                .GroupBy(x => x.BatchId!.Value).ToDictionary(g => g.Key, g => (decimal)g.Count());
+            if (batchTotals.Any(x => serialTotals.GetValueOrDefault(x.Key) != x.Value)
+                || serialTotals.Any(x => batchTotals.GetValueOrDefault(x.Key) != x.Value))
+                throw new AppError(ErrorCodes.BatchAllocationMismatch,
+                    $"Selected batches and serials for material '{materialCode}' do not describe the same units.",
+                    materialCode);
+        }
+
+        foreach (var (batchId, batchNo, expiry, take) in batchPlan)
+        {
+            if (!isReceipt)
+            {
+                var onHand = BatchOnHand(connection, transaction, isPg, request, batchId);
+                if (onHand < take)
+                    throw new AppError(ErrorCodes.BatchStockInsufficient,
+                        $"Batch '{batchNo}' holds {onHand} of material '{materialCode}'; the return needs {take}.",
+                        batchNo, materialCode);
+            }
+            AddBatchBalance(connection, transaction, isPg, request, batchId, signedQty > 0 ? take : -take);
+            var id = InsertAllocation(connection, transaction, isPg, movementId,
+                batchId, null, signedQty > 0 ? take : -take, expiry);
+            results.Add(new StockAllocationRecord(id, movementId, batchId,
+                batchNo, null, null, signedQty > 0 ? take : -take, expiry));
+        }
+
+        foreach (var selected in serialPlan)
+        {
+            if (isReceipt)
+            {
+                UpdateSerialState(connection, transaction, isPg, selected.SerialId,
+                    "InStock", request.WarehouseId, null);
+            }
+            else
+            {
+                var serial = FindSerialById(connection, transaction, isPg, request, selected.SerialId);
+                if (serial is null || !string.Equals(serial.Status, "InStock", StringComparison.OrdinalIgnoreCase)
+                    || serial.WarehouseId != request.WarehouseId)
+                    throw new AppError(ErrorCodes.SerialUnavailable,
+                        $"Serial '{selected.SerialNo}' of material '{materialCode}' is not in stock for the return.",
+                        selected.SerialNo, materialCode);
+                UpdateSerialState(connection, transaction, isPg, selected.SerialId,
+                    "Delivered", null, request.PartyId);
+            }
+            var id = InsertAllocation(connection, transaction, isPg, movementId,
+                selected.BatchId, selected.SerialId, signedQty > 0 ? 1m : -1m, selected.Expiry);
+            results.Add(new StockAllocationRecord(id, movementId, selected.BatchId,
+                null, selected.SerialId, selected.SerialNo, signedQty > 0 ? 1m : -1m, selected.Expiry));
+        }
+
+        return (!tracking.HasBatch || batchPlan.Sum(x => x.Qty) == qty)
+            && (!tracking.HasSerial || serialPlan.Count == (int)qty);
     }
 
     // ------------------------------------------------------------------
