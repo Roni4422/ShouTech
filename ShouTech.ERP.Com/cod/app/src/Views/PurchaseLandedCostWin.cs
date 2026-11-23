@@ -178,6 +178,7 @@ public sealed class PurchaseLandedCostWin : BaseWin
         _reverse.IsEnabled = AppHost.Permissions.Has("PUR.LANDEDCOST.REVERSE");
         _refresh.IsEnabled = _loadSelected.IsEnabled = AppHost.Permissions.Has("PUR.LANDEDCOST.VIEW");
         _add.IsEnabled = _remove.IsEnabled = _create.IsEnabled;
+        _grid.IsReadOnly = !_create.IsEnabled;
     }
 
     private async Task RefreshHistoryAsync()
