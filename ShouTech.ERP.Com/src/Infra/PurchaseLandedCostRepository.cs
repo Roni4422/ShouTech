@@ -230,7 +230,7 @@ public sealed class PurchaseLandedCostRepository
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var journalId = PostCore(connection, transaction, companyId, landedCostId, actor, "LND", cancellationToken);
+            var journalId = PostCore(connection, transaction, companyId, landedCostId, actor, "LND");
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return journalId;
         }
@@ -388,7 +388,7 @@ public sealed class PurchaseLandedCostRepository
                 insert.ExecuteNonQuery();
             }
 
-            var journalId = PostCore(connection, transaction, companyId, reversalId, actor, "LND-REV", cancellationToken);
+            var journalId = PostCore(connection, transaction, companyId, reversalId, actor, "LND-REV");
             using (var originalUpdate = Cmd(connection, transaction,
                 "UPDATE purchase_landed_costs SET status = 'Cancelled', source_reversal_id = @reversal WHERE company_id = @company AND landed_cost_id = @id AND status = 'Posted'"))
             {
@@ -409,7 +409,7 @@ public sealed class PurchaseLandedCostRepository
     }
 
     private Guid PostCore(DbConnection connection, DbTransaction transaction, Guid companyId,
-        Guid landedCostId, string actor, string sourceType, CancellationToken cancellationToken)
+        Guid landedCostId, string actor, string sourceType)
     {
         var company = companyId.ToString("D");
         DateOnly date;
