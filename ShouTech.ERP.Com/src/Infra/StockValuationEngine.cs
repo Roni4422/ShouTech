@@ -102,6 +102,49 @@ public static class StockValuationEngine
 
         var isPg = NormalizeProvider(provider) == "PostgreSQL";
         var company = companyId.Trim();
+        string receiptNumber;
+        using (var allocation = CreateCommand(connection, transaction, """
+            SELECT a.allocated_base_amount, a.material_id, a.warehouse_id, d.doc_no
+            FROM purchase_landed_cost_allocations a
+            JOIN purchase_landed_costs h
+              ON h.landed_cost_id = a.landed_cost_id
+             AND h.company_id = a.company_id
+            JOIN purchase_documents d ON d.doc_id = a.receipt_doc_id
+            WHERE a.company_id = @c AND a.landed_cost_id = @landed
+              AND a.allocation_id = @allocation
+            """))
+        {
+            Add(allocation, "@c", company);
+            Add(allocation, "@landed", landedCostId.ToString("D"));
+            Add(allocation, "@allocation", allocationId.ToString("D"));
+            using var reader = allocation.ExecuteReader();
+            if (!reader.Read())
+                throw new InvalidOperationException("The landed-cost allocation was not found in this company.");
+            var savedAmount = ValuationText.ToDecimal(reader.GetValue(0));
+            var savedMaterial = Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture);
+            var savedWarehouse = reader.IsDBNull(2) ? (long?)null
+                : Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture);
+            receiptNumber = ValuationText.ToText(reader.GetValue(3)) ?? string.Empty;
+            if (savedAmount != allocatedBaseAmount || savedMaterial != materialId
+                || (savedWarehouse.HasValue && savedWarehouse.Value != warehouseId))
+                throw new InvalidOperationException("The landed-cost allocation does not match the requested material, warehouse, or amount.");
+        }
+        using (var source = CreateCommand(connection, transaction, """
+            SELECT COUNT(*) FROM material_stock_movements
+            WHERE stock_movement_id = @movement AND company_id = @c
+              AND warehouse_id = @w AND material_id = @m
+              AND movement_type = 'RCV' AND document_no = @receipt
+              AND qty_in > 0
+            """))
+        {
+            Add(source, "@movement", sourceMovementId);
+            Add(source, "@c", company);
+            Add(source, "@w", warehouseId);
+            Add(source, "@m", materialId);
+            Add(source, "@receipt", receiptNumber);
+            if (Convert.ToInt64(source.ExecuteScalar(), CultureInfo.InvariantCulture) != 1)
+                throw new InvalidOperationException("The stock movement does not belong to the receipt allocated by this landed-cost voucher.");
+        }
         // Idempotency is enforced by the unique allocation_id constraint;
         // check it before touching the layer so a retry cannot double value.
         using (var duplicate = CreateCommand(connection, transaction,
