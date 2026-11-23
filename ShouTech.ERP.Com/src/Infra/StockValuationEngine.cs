@@ -226,12 +226,39 @@ public static class StockValuationEngine
             if (layerId is null)
                 oldUnitCost = ValuationText.ToDecimal(reader.GetValue(2));
         }
-        remainingQty = layerId is not null
-            ? layerRemainingQty
-            : balance is null || balance.Quantity <= 0m || receiptBalanceQty <= 0m
-                ? 0m
-                : Math.Min(balance.Quantity, Math.Min(originalQty,
-                    originalQty * Math.Min(1m, balance.Quantity / receiptBalanceQty)));
+        if (layerId is not null)
+        {
+            remainingQty = layerRemainingQty;
+        }
+        else
+        {
+            // For moving-average / standard-cost materials there is no
+            // per-receipt cost layer. Track the source receipt quantity
+            // forward through subsequent issues instead of comparing the
+            // entire warehouse balance (which may contain older/newer
+            // receipts). Any negative-stock deficit at receipt time is
+            // already reflected in balance_qty_after.
+            remainingQty = Math.Min(originalQty, Math.Max(0m, receiptBalanceQty));
+            using var issues = CreateCommand(connection, transaction, $"""
+                SELECT qty_out
+                FROM material_stock_movements
+                WHERE company_id = @company AND warehouse_id = @w AND material_id = @m
+                  AND stock_movement_id > @movement AND qty_out > 0
+                  AND is_deleted = {(isPg ? "FALSE" : "0")}
+                ORDER BY stock_movement_id
+                """);
+            Add(issues, "@company", stockCompany);
+            Add(issues, "@w", warehouseId);
+            Add(issues, "@m", materialId);
+            Add(issues, "@movement", sourceMovementId);
+            using var reader = issues.ExecuteReader();
+            while (reader.Read() && remainingQty > 0m)
+                remainingQty = Math.Max(0m, remainingQty - ValuationText.ToDecimal(reader.GetValue(0)));
+            if (balance is null || balance.Quantity <= 0m)
+                remainingQty = 0m;
+            else
+                remainingQty = Math.Min(remainingQty, balance.Quantity);
+        }
         if (originalQty <= 0m || remainingQty < 0m || remainingQty > originalQty)
             throw new InvalidOperationException("The receipt cost source has invalid quantity state.");
 
