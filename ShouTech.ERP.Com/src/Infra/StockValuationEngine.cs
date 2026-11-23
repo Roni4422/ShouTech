@@ -187,7 +187,7 @@ public static class StockValuationEngine
             using (var totals = CreateCommand(connection, transaction, """
                 SELECT COALESCE(SUM(available_qty), 0), COALESCE(SUM(stock_value), 0)
                 FROM material_stock_balances
-                WHERE company_id = @c AND material_id = @m AND is_deleted = 0
+                WHERE company_id = @c AND material_id = @m AND is_deleted = ${(isPg ? "FALSE" : "0")}
                 """))
             {
                 Add(totals, "@c", company);
