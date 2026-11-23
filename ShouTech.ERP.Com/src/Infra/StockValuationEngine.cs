@@ -244,6 +244,7 @@ public static class StockValuationEngine
                 FROM material_stock_movements
                 WHERE company_id = @company AND warehouse_id = @w AND material_id = @m
                   AND stock_movement_id > @movement AND qty_out > 0
+                  AND (movement_type <> 'RCR' OR original_source_document_line_id = @sourceLine)
                   AND is_deleted = {(isPg ? "FALSE" : "0")}
                 ORDER BY stock_movement_id
                 """);
@@ -251,6 +252,7 @@ public static class StockValuationEngine
             Add(issues, "@w", warehouseId);
             Add(issues, "@m", materialId);
             Add(issues, "@movement", sourceMovementId);
+            Add(issues, "@sourceLine", receiptLineId);
             using var reader = issues.ExecuteReader();
             while (reader.Read() && remainingQty > 0m)
                 remainingQty = Math.Max(0m, remainingQty - ValuationText.ToDecimal(reader.GetValue(0)));
