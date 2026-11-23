@@ -6,6 +6,7 @@ using System.IO;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using ShouTech.Application.Services;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
 using ShouTech.Infrastructure;
