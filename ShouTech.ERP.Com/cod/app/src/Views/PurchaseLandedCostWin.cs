@@ -67,6 +67,35 @@ public sealed class PurchaseLandedCostWin : BaseWin
         }
     }
 
+    /// <summary>Re-applies every user-visible string when the shell language changes.</summary>
+    protected override void ApplyLocalizedText()
+    {
+        Title = T("PurchaseLandedCost.Title");
+        StyleButton(_add, "PurchaseLandedCost.AddCharge");
+        StyleButton(_remove, "PurchaseLandedCost.RemoveCharge");
+        StyleButton(_create, "PurchaseLandedCost.CreateDraft");
+        StyleButton(_post, "PurchaseLandedCost.Post");
+        StyleButton(_reverse, "PurchaseLandedCost.Reverse");
+        StyleButton(_refresh, "PurchaseLandedCost.Refresh");
+        StyleButton(_loadSelected, "PurchaseLandedCost.LoadSelected");
+        StyleButton(_close, "PurchaseLandedCost.Close");
+        foreach (var column in _grid.Columns)
+            if (column.Tag is string columnKey) column.Header = T(columnKey);
+        foreach (var column in _historyGrid.Columns)
+            if (column.Tag is string historyKey) column.Header = T(historyKey);
+        LocalizeLabels(this);
+    }
+
+    private void LocalizeLabels(DependencyObject root)
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(root))
+        {
+            if (child is not DependencyObject node) continue;
+            if (node is TextBlock textBlock && textBlock.Tag is string key) textBlock.Text = T(key);
+            LocalizeLabels(node);
+        }
+    }
+
     private void BuildUi()
     {
         var root = new DockPanel { Margin = new Thickness(12) };
@@ -79,7 +108,7 @@ public sealed class PurchaseLandedCostWin : BaseWin
         StyleButton(_refresh, "PurchaseLandedCost.Refresh");
         StyleButton(_loadSelected, "PurchaseLandedCost.LoadSelected");
         StyleButton(_close, "PurchaseLandedCost.Close");
-        toolbar.Children.Add(new TextBlock { Text = T("PurchaseLandedCost.Search"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 4, 0) });
+        toolbar.Children.Add(new TextBlock { Text = T("PurchaseLandedCost.Search"), Tag = "PurchaseLandedCost.Search", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 4, 0) });
         _search.Width = 170;
         _search.VerticalContentAlignment = VerticalAlignment.Center;
         toolbar.Children.Add(_search);
@@ -122,15 +151,16 @@ public sealed class PurchaseLandedCostWin : BaseWin
         _grid.CanUserAddRows = false;
         _grid.IsReadOnly = false;
         _grid.SelectionMode = DataGridSelectionMode.Single;
-        _grid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ChargeCode"), Binding = new Binding(nameof(ChargeRow.Code)), Width = 110 });
-        _grid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.Description"), Binding = new Binding(nameof(ChargeRow.Description)), Width = new DataGridLength(2, DataGridLengthUnitType.Star) });
-        _grid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.Amount"), Binding = new Binding(nameof(ChargeRow.Amount)), Width = 120 });
+        _grid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ChargeCode"), Binding = new Binding(nameof(ChargeRow.Code)), Width = 110, Tag = "PurchaseLandedCost.ChargeCode" });
+        _grid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.Description"), Binding = new Binding(nameof(ChargeRow.Description)), Width = new DataGridLength(2, DataGridLengthUnitType.Star), Tag = "PurchaseLandedCost.Description" });
+        _grid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.Amount"), Binding = new Binding(nameof(ChargeRow.Amount)), Width = 120, Tag = "PurchaseLandedCost.Amount" });
         var basisColumn = new DataGridComboBoxColumn
         {
             Header = T("PurchaseLandedCost.Basis"),
             ItemsSource = new[] { "Value", "Quantity", "Weight", "Volume" },
             SelectedItemBinding = new Binding(nameof(ChargeRow.Basis)),
-            Width = 130
+            Width = 130,
+            Tag = "PurchaseLandedCost.Basis"
         };
         _grid.Columns.Add(basisColumn);
         Grid.SetRow(_grid, 1);
@@ -144,11 +174,11 @@ public sealed class PurchaseLandedCostWin : BaseWin
         _historyGrid.IsReadOnly = true;
         _historyGrid.CanUserAddRows = false;
         _historyGrid.SelectionMode = DataGridSelectionMode.Single;
-        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColNumber"), Binding = new Binding(nameof(VoucherRow.Number)), Width = 130 });
-        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColReceipt"), Binding = new Binding(nameof(VoucherRow.Receipt)), Width = 130 });
-        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColDate"), Binding = new Binding(nameof(VoucherRow.Date)), Width = 110 });
-        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColAmount"), Binding = new Binding(nameof(VoucherRow.Amount)), Width = 110 });
-        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColStatus"), Binding = new Binding(nameof(VoucherRow.Status)), Width = 110 });
+        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColNumber"), Binding = new Binding(nameof(VoucherRow.Number)), Width = 130, Tag = "PurchaseLandedCost.ColNumber" });
+        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColReceipt"), Binding = new Binding(nameof(VoucherRow.Receipt)), Width = 130, Tag = "PurchaseLandedCost.ColReceipt" });
+        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColDate"), Binding = new Binding(nameof(VoucherRow.Date)), Width = 110, Tag = "PurchaseLandedCost.ColDate" });
+        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColAmount"), Binding = new Binding(nameof(VoucherRow.Amount)), Width = 110, Tag = "PurchaseLandedCost.ColAmount" });
+        _historyGrid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ColStatus"), Binding = new Binding(nameof(VoucherRow.Status)), Width = 110, Tag = "PurchaseLandedCost.ColStatus" });
         Grid.SetRow(_historyGrid, 2);
         body.Children.Add(_historyGrid);
 
@@ -163,7 +193,7 @@ public sealed class PurchaseLandedCostWin : BaseWin
     private void AddField(Grid grid, int column, int row, string key, Control control)
     {
         var panel = new StackPanel { Margin = new Thickness(5) };
-        panel.Children.Add(new TextBlock { Text = T(key), Margin = new Thickness(0, 0, 0, 3) });
+        panel.Children.Add(new TextBlock { Text = T(key), Tag = key, Margin = new Thickness(0, 0, 0, 3) });
         control.Margin = new Thickness(0, 0, 4, 0);
         panel.Children.Add(control);
         Grid.SetColumn(panel, column);
