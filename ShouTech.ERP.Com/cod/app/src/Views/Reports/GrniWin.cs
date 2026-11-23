@@ -37,6 +37,8 @@ public sealed class GrniWin : RptBase
             new() { Key = "Bucket31_60", HeaderTextKey = "Reports.Col.Aging31_60", Type = RptColType.Money, Width = 105, Format = "N2" },
             new() { Key = "Bucket61_90", HeaderTextKey = "Reports.Col.Aging61_90", Type = RptColType.Money, Width = 105, Format = "N2" },
             new() { Key = "Bucket90Plus", HeaderTextKey = "Reports.Col.Aging90Plus", Type = RptColType.Money, Width = 105, Format = "N2" },
+            new() { Key = "GlBalanceBase", HeaderTextKey = "Reports.Col.GrniGlBalance", Type = RptColType.Money, Width = 125, Format = "N2" },
+            new() { Key = "DifferenceBase", HeaderTextKey = "Reports.Col.GrniDifference", Type = RptColType.Money, Width = 125, Format = "N2" },
         },
         Filters = new RptFlt[]
         {
@@ -49,6 +51,10 @@ public sealed class GrniWin : RptBase
     {
         var asOf = filters.GetDateOr("AsOf", DateTime.Today).Date;
         var raw = await RptQuery.GoodsReceivedNotInvoicedAsync(DateTime.MinValue, asOf, ct);
+        var reconciliation = await RptQuery.GoodsReceivedNotInvoicedReconciliationAsync(asOf, ct);
+        var reconciliationRow = reconciliation.FirstOrDefault();
+        var glBalanceBase = RptWinUtil.Dec(reconciliationRow?.GetValueOrDefault("GlBalanceBase"));
+        var differenceBase = RptWinUtil.Dec(reconciliationRow?.GetValueOrDefault("DifferenceBase"));
         var rows = RptWinUtil.Map(raw, BuildDefinition().Columns.Take(12).ToArray());
         var agedRows = new List<IReadOnlyDictionary<string, object?>>(rows.Count);
 
@@ -89,6 +95,8 @@ public sealed class GrniWin : RptBase
                 ["Bucket31_60"] = agedRows.Sum(row => RptWinUtil.Dec(row.GetValueOrDefault("Bucket31_60"))),
                 ["Bucket61_90"] = agedRows.Sum(row => RptWinUtil.Dec(row.GetValueOrDefault("Bucket61_90"))),
                 ["Bucket90Plus"] = agedRows.Sum(row => RptWinUtil.Dec(row.GetValueOrDefault("Bucket90Plus"))),
+                ["GlBalanceBase"] = glBalanceBase,
+                ["DifferenceBase"] = differenceBase,
             }
         };
     }
