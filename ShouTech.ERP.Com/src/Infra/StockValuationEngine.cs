@@ -104,8 +104,9 @@ public static class StockValuationEngine
         var isPg = NormalizeProvider(provider) == "PostgreSQL";
         var company = companyId.Trim();
         string receiptNumber;
+        long receiptLineId;
         using (var allocation = CreateCommand(connection, transaction, """
-            SELECT a.allocated_base_amount, a.material_id, a.warehouse_id, d.doc_no
+            SELECT a.allocated_base_amount, a.material_id, a.warehouse_id, d.doc_no, a.receipt_line_id
             FROM purchase_landed_cost_allocations a
             JOIN purchase_landed_costs h
               ON h.landed_cost_id = a.landed_cost_id
@@ -126,6 +127,7 @@ public static class StockValuationEngine
             var savedWarehouse = reader.IsDBNull(2) ? (long?)null
                 : Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture);
             receiptNumber = ValuationText.ToText(reader.GetValue(3)) ?? string.Empty;
+            receiptLineId = Convert.ToInt64(reader.GetValue(4), CultureInfo.InvariantCulture);
             if (savedAmount != allocatedBaseAmount || savedMaterial != materialId
                 || (savedWarehouse.HasValue && savedWarehouse.Value != warehouseId))
                 throw new InvalidOperationException("The landed-cost allocation does not match the requested material, warehouse, or amount.");
@@ -135,7 +137,7 @@ public static class StockValuationEngine
             WHERE stock_movement_id = @movement AND company_id = @c
               AND warehouse_id = @w AND material_id = @m
               AND movement_type = 'RCV' AND document_no = @receipt
-              AND qty_in > 0
+              AND source_document_line_id = @line AND qty_in > 0
             """))
         {
             Add(source, "@movement", sourceMovementId);
@@ -143,6 +145,7 @@ public static class StockValuationEngine
             Add(source, "@w", warehouseId);
             Add(source, "@m", materialId);
             Add(source, "@receipt", receiptNumber);
+            Add(source, "@line", receiptLineId);
             if (Convert.ToInt64(source.ExecuteScalar(), CultureInfo.InvariantCulture) != 1)
                 throw new InvalidOperationException("The stock movement does not belong to the receipt allocated by this landed-cost voucher.");
         }
