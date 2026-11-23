@@ -114,7 +114,7 @@ public static class StockValuationEngine
             JOIN purchase_landed_costs h
               ON h.landed_cost_id = a.landed_cost_id
              AND h.company_id = a.company_id
-            JOIN purchase_documents d ON d.doc_id = a.receipt_doc_id
+            JOIN purchase_documents d ON d.doc_id = a.receipt_doc_id AND d.company_id = a.company_id
             WHERE a.company_id = @c AND a.landed_cost_id = @landed
               AND a.allocation_id = @allocation
             """))
@@ -135,12 +135,13 @@ public static class StockValuationEngine
                 || (savedWarehouse.HasValue && savedWarehouse.Value != warehouseId))
                 throw new InvalidOperationException("The landed-cost allocation does not match the requested material, warehouse, or amount.");
         }
-        using (var source = CreateCommand(connection, transaction, """
+        using (var source = CreateCommand(connection, transaction, $"""
             SELECT COUNT(*) FROM material_stock_movements
             WHERE stock_movement_id = @movement AND company_id = @stockCompany
               AND warehouse_id = @w AND material_id = @m
               AND movement_type = 'RCV' AND document_no = @receipt
               AND source_document_line_id = @line AND qty_in > 0
+              AND is_deleted = {(isPg ? "FALSE" : "0")}
             """))
         {
             Add(source, "@movement", sourceMovementId);
