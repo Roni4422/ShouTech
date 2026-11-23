@@ -284,11 +284,12 @@ public sealed class PurchaseLandedCostRepository : IPurchaseLandedCostRepository
             long receiptId;
             long supplierId;
             string supplierName;
-            using (var original = Cmd(connection, transaction, """
+            using (var original = Cmd(connection, transaction, $"""
                 SELECT receipt_doc_id, supplier_id, supplier_name, currency_code,
                        exchange_rate, total_amount, total_base_amount, status
                 FROM purchase_landed_costs
                 WHERE company_id = @company AND landed_cost_id = @id
+                {(Pg ? "FOR UPDATE" : string.Empty)}
                 """))
             {
                 Add(original, "@company", company);
@@ -441,11 +442,12 @@ public sealed class PurchaseLandedCostRepository : IPurchaseLandedCostRepository
         string docNo, currency, status;
         long receiptId, supplierId;
         decimal exchangeRate, totalAmount, totalBase;
-        using (var header = Cmd(connection, transaction, """
+        using (var header = Cmd(connection, transaction, $"""
             SELECT doc_no, doc_date, receipt_doc_id, supplier_id, currency_code,
                    exchange_rate, total_amount, total_base_amount, status
             FROM purchase_landed_costs
             WHERE company_id = @company AND landed_cost_id = @id
+            {(Pg ? "FOR UPDATE" : string.Empty)}
             """))
         {
             Add(header, "@company", company);
