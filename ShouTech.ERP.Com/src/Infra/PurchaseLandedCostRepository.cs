@@ -73,7 +73,8 @@ public sealed class PurchaseLandedCostRepository
                 supplierName = reader.IsDBNull(2) ? null : Text(reader.GetValue(2));
             }
 
-            var receiptLines = LoadReceiptCostLines(connection, transaction, company, receiptDocumentId, receiptNo);
+            var stockCompanyCode = PartyLedger.ResolveCompanyCode(connection, transaction, _provider, company);
+            var receiptLines = LoadReceiptCostLines(connection, transaction, stockCompanyCode, receiptDocumentId, receiptNo);
             if (receiptLines.Count == 0)
                 throw new InvalidOperationException("The selected receipt has no stock-valued material lines eligible for landed costs.");
 
@@ -408,6 +409,7 @@ public sealed class PurchaseLandedCostRepository
         if (status != "Draft") throw new InvalidOperationException("Only a draft landed-cost voucher can be posted.");
         if (supplierId <= 0) throw new InvalidOperationException("The receipt must identify a supplier before landed costs can be posted.");
 
+        var stockCompanyCode = PartyLedger.ResolveCompanyCode(connection, transaction, _provider, company);
         var allocations = new List<(Guid Id, long Line, long Material, long Warehouse, decimal Amount, long Movement)>();
         using (var query = Cmd(connection, transaction, """
             SELECT a.allocation_id, a.receipt_line_id, a.material_id, a.warehouse_id,
@@ -424,6 +426,7 @@ public sealed class PurchaseLandedCostRepository
             """))
         {
             Add(query, "@company", company);
+            Add(query, "@stockCompany", stockCompanyCode);
             Add(query, "@landed", Id(landedCostId));
             Add(query, "@false", Pg ? false : 0);
             using var reader = query.ExecuteReader();
@@ -441,7 +444,7 @@ public sealed class PurchaseLandedCostRepository
         foreach (var allocation in allocations)
         {
             var result = StockValuationEngine.ApplyLandedCostAdjustment(connection, transaction, _provider,
-                company, landedCostId, allocation.Id, allocation.Movement, allocation.Warehouse,
+                company, stockCompanyCode, landedCostId, allocation.Id, allocation.Movement,
                 allocation.Material, allocation.Amount, actor);
             inventoryBase += result.InventoryAdjustment;
             consumedBase += result.ConsumedCostAdjustment;
