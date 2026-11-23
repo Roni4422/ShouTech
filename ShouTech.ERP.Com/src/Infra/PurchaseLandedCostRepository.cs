@@ -75,6 +75,8 @@ public sealed class PurchaseLandedCostRepository : IPurchaseLandedCostRepository
                 supplierId = reader.IsDBNull(1) ? null : Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture);
                 supplierName = reader.IsDBNull(2) ? null : Text(reader.GetValue(2));
             }
+            if (supplierId is null or <= 0)
+                throw new InvalidOperationException("The selected goods receipt must identify a supplier before a landed-cost voucher can be created.");
 
             var stockCompanyCode = PartyLedger.ResolveCompanyCode(connection, transaction, _provider, company);
             var receiptLines = LoadReceiptCostLines(connection, transaction, stockCompanyCode, receiptDocumentId, receiptNo);
