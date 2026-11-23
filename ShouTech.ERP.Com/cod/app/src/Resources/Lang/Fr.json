@@ -3881,6 +3881,15 @@
     "InvalidInput": "Vérifiez les valeurs saisies.",
     "NoReceipt": "Aucune réception validée ne correspond à ce numéro.",
     "NoVoucher": "Saisissez un identifiant de coût d’approche valide."
+  ,
+    "Search": "Rechercher des pièces",
+    "Refresh": "Actualiser l’historique",
+    "LoadSelected": "Charger la sélection",
+    "ColNumber": "Pièce",
+    "ColReceipt": "Réception",
+    "ColDate": "Date",
+    "ColAmount": "Montant",
+    "ColStatus": "Statut"
   },
   "PurchaseRequisition": {
     "Title": "Demandes d'achat",
