@@ -381,7 +381,7 @@ public class BudgetGuardTests
             FiscalYearId = fiscalYearId,
             Store = store,
             Journal = new JournalService(store),
-            Budgets = new BudgetService(new BudgetRepository("SQLite", connectionString))
+            Budgets = new BudgetService(new BudgetRepository("SQLite", connectionString), _ => true)
         };
     }
 
