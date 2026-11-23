@@ -180,16 +180,21 @@ public static class StockValuationEngine
         if (originalQty <= 0m || remainingQty < 0m || remainingQty > originalQty)
             throw new InvalidOperationException("The receipt cost layer has invalid quantity state.");
 
-        var inventoryAdjustment = remainingQty == 0m ? 0m
+        var targetInventoryAdjustment = remainingQty == 0m ? 0m
             : ValuationMath.RoundMoney(allocatedBaseAmount * remainingQty / originalQty);
-        var consumedAdjustment = allocatedBaseAmount - inventoryAdjustment;
         var newUnitCost = oldUnitCost;
         if (remainingQty > 0m)
         {
-            newUnitCost = ValuationMath.RoundRate(oldUnitCost + inventoryAdjustment / remainingQty);
+            newUnitCost = ValuationMath.RoundRate(oldUnitCost + targetInventoryAdjustment / remainingQty);
             if (newUnitCost < 0m)
                 throw new InvalidOperationException("A landed-cost credit cannot reduce the remaining layer below zero cost.");
         }
+        // Keep the stock balance equal to the value actually represented
+        // by the rounded cost layer; send any sub-cent rate-rounding
+        // remainder to consumed cost so the total allocation still ties.
+        var inventoryAdjustment = remainingQty == 0m ? 0m
+            : ValuationMath.RoundMoney((newUnitCost - oldUnitCost) * remainingQty);
+        var consumedAdjustment = allocatedBaseAmount - inventoryAdjustment;
 
         var balance = LoadBalance(connection, transaction, isPg, company, warehouseId, materialId);
         if (inventoryAdjustment != 0m)
