@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ShouTech.Domain.Entities;
@@ -10,20 +11,22 @@ namespace ShouTech.Application.Services;
 /// <summary>
 /// Buying-chain workflow (VIBE modern spec, milestone M1): Request for
 /// Quotation (RFQ) -> Purchase Order (PO) -> Purchase Receipt (RCV) ->
-/// Purchase Invoice (PUR). The buying twin of SalesChainService, on the
-/// same commercial document records and the same document_links table:
-/// each step copies a posted source document into a new draft of the next
-/// kind, supports partial quantities, and records the chain link.
-/// Clean-room re-implementation of the ERPNext / Al-Ameen 10 buying flow
-/// (concepts only).
+/// Purchase Invoice (PUR), with ERPNext-style Purchase Returns (PRT)
+/// from a posted receipt or invoice. The buying twin of
+/// SalesChainService, on the same commercial document records and the
+/// same document_links table: each step copies a posted source document
+/// into a new draft of the next kind, supports partial quantities, and
+/// records the chain link. Clean-room re-implementation of the ERPNext /
+/// Al-Ameen 10 buying flow (concepts only).
 /// </summary>
 public sealed class BuyingChainService
 {
-    private static readonly IReadOnlyDictionary<string, string> AllowedTransitions = new Dictionary<string, string>
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> AllowedTransitions = new Dictionary<string, IReadOnlyList<string>>
     {
-        [CommercialDocKinds.RequestForQuotation] = CommercialDocKinds.PurchaseOrder,
-        [CommercialDocKinds.PurchaseOrder] = CommercialDocKinds.PurchaseReceipt,
-        [CommercialDocKinds.PurchaseReceipt] = CommercialDocKinds.PurchaseInvoice
+        [CommercialDocKinds.RequestForQuotation] = new[] { CommercialDocKinds.PurchaseOrder },
+        [CommercialDocKinds.PurchaseOrder] = new[] { CommercialDocKinds.PurchaseReceipt },
+        [CommercialDocKinds.PurchaseReceipt] = new[] { CommercialDocKinds.PurchaseInvoice, CommercialDocKinds.PurchaseReturn },
+        [CommercialDocKinds.PurchaseInvoice] = new[] { CommercialDocKinds.PurchaseReturn }
     };
 
     private readonly IPurchaseDocumentRepository _repository;
@@ -37,7 +40,10 @@ public sealed class BuyingChainService
     /// Creates a new draft document of the next chain stage from a posted source document.
     /// When <paramref name="quantityByMaterialId"/> is null the full remaining quantity of each
     /// line is copied; otherwise only the requested quantities are copied and the sum of
-    /// previously fulfilled quantities is respected.
+    /// previously fulfilled quantities is respected. A receipt defaults to creating a
+    /// purchase invoice; an invoice creates a purchase return; pass an explicit
+    /// <paramref name="targetDocKind"/> to branch otherwise (for example a purchase return
+    /// from a receipt).
     /// </summary>
     /// <returns>The database id of the created draft.</returns>
     public async Task<long> CreateFromSourceAsync(
@@ -47,7 +53,8 @@ public sealed class BuyingChainService
         string userId,
         IReadOnlyDictionary<long, decimal>? quantityByMaterialId = null,
         long? warehouseId = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? targetDocKind = null)
     {
         if (sourceDocId <= 0) throw new ArgumentException("Source document is required.", nameof(sourceDocId));
         if (string.IsNullOrWhiteSpace(docNo)) throw new ArgumentException("Document number is required.", nameof(docNo));
@@ -59,10 +66,19 @@ public sealed class BuyingChainService
         if (source.Status != CommercialDocumentStatus.Posted)
             throw new InvalidOperationException($"Only posted documents can continue the chain; document '{source.DocNo}' is '{source.Status}'.");
 
-        if (!AllowedTransitions.TryGetValue(source.DocKind, out var targetKind))
+        if (!AllowedTransitions.TryGetValue(source.DocKind, out var targetKinds))
             throw new InvalidOperationException($"Document kind '{source.DocKind}' cannot continue the buying chain.");
 
-        var fulfilled = await _repository.GetPurchaseFulfilledQuantitiesAsync(source.CompanyId, sourceDocId, targetKind, cancellationToken).ConfigureAwait(false);
+        var resolvedTargetKind = string.IsNullOrWhiteSpace(targetDocKind)
+            ? source.DocKind == CommercialDocKinds.PurchaseReceipt
+                ? CommercialDocKinds.PurchaseInvoice
+                : targetKinds[0]
+            : targetKinds.Contains(targetDocKind)
+                ? targetDocKind
+                : throw new InvalidOperationException(
+                    $"Document kind '{source.DocKind}' cannot continue the buying chain into '{targetDocKind}'.");
+
+        var fulfilled = await _repository.GetPurchaseFulfilledQuantitiesAsync(source.CompanyId, sourceDocId, resolvedTargetKind, cancellationToken).ConfigureAwait(false);
 
         var lines = new List<CommercialLineDraft>();
         foreach (var line in source.Lines)
@@ -99,7 +115,7 @@ public sealed class BuyingChainService
 
         var draft = new CommercialDocumentDraft(
             source.CompanyId,
-            targetKind,
+            resolvedTargetKind,
             docNo.Trim(),
             targetDate,
             source.PartyId,
@@ -111,7 +127,7 @@ public sealed class BuyingChainService
             lines);
 
         var targetDocId = await _repository.CreatePurchaseDraftAsync(draft, userId, cancellationToken).ConfigureAwait(false);
-        await _repository.AddLinkAsync(source.CompanyId, source.DocKind, sourceDocId, targetKind, targetDocId, userId, cancellationToken).ConfigureAwait(false);
+        await _repository.AddLinkAsync(source.CompanyId, source.DocKind, sourceDocId, resolvedTargetKind, targetDocId, userId, cancellationToken).ConfigureAwait(false);
         return targetDocId;
     }
 
@@ -128,4 +144,22 @@ public sealed class BuyingChainService
     /// <summary>Posts a buying-chain draft (for example the purchase order created from an RFQ).</summary>
     public async Task PostAsync(long docId, string userId, CancellationToken cancellationToken = default) =>
         await _repository.PostPurchaseAsync(docId, userId, cancellationToken).ConfigureAwait(false);
+
+    /// <summary>
+    /// Creates a purchase-return (PRT) draft from a posted purchase receipt or
+    /// purchase invoice, limited to that document's not-yet-returned quantities.
+    /// Posting it reverses the receipt's stock and the invoice's supplier
+    /// liability through the same side-effect contract.
+    /// </summary>
+    /// <returns>The database id of the created return draft.</returns>
+    public Task<long> CreateReturnFromSourceAsync(
+        long sourceDocId,
+        string docNo,
+        DateOnly targetDate,
+        string userId,
+        IReadOnlyDictionary<long, decimal>? quantityByMaterialId = null,
+        long? warehouseId = null,
+        CancellationToken cancellationToken = default)
+        => CreateFromSourceAsync(sourceDocId, docNo, targetDate, userId, quantityByMaterialId,
+            warehouseId, cancellationToken, CommercialDocKinds.PurchaseReturn);
 }

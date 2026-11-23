@@ -17,10 +17,18 @@ namespace ShouTech.Infrastructure;
 /// CommercialDocumentRepository: same table shapes, same document_links
 /// table, same side-effect contracts:
 /// - RCV (purchase receipt): one stock movement (QtyIn) per stockable line
-///   valued by the ONE StockValuationEngine, in base-unit quantities.
+///   valued by the ONE StockValuationEngine, in base-unit quantities; a
+///   receipt of a quality_check_required material is diverted to the
+///   company's quarantine warehouse (decision Q2) with a Draft incoming
+///   inspection created in the same transaction, exactly like the
+///   legacy StkPost receipt path.
 /// - PUR (purchase invoice): a party_ledger credit for the supplier
 ///   grand total and a balanced journal entry (Dr Purchases [+ input VAT]
 ///   / Cr Payable) posted in the same transaction.
+/// - PRT (purchase return): the mirror of RCV + PUR — one QtyOut
+///   movement per stockable line, a party_ledger debit for the supplier,
+///   and a balanced journal entry (Dr Payable / Cr Purchase Returns [+ Cr
+///   input VAT]) in the same transaction.
 /// - RFQ / PO: no side effects.
 /// </summary>
 public sealed class PurchaseDocumentRepository : IPurchaseDocumentRepository
@@ -306,6 +314,10 @@ public sealed class PurchaseDocumentRepository : IPurchaseDocumentRepository
 
             if (docKind == CommercialDocKinds.PurchaseReceipt)
             {
+                // The quality gate keys the company by CODE (the stock
+                // world), resolved once per posting from this
+                // repository's Guid key — same as the sales side.
+                var qcCompany = PartyLedger.ResolveCompanyCode(connection, transaction, _provider, companyId);
                 var pending = new List<(long MaterialId, decimal Qty, long WarehouseId, string? Unit, decimal UnitPrice)>();
                 await using (var lines = CreateCommand(connection, transaction,
                     "SELECT material_id, qty, warehouse_id, unit, unit_price FROM purchase_document_lines WHERE doc_id = @doc ORDER BY line_no"))
@@ -341,17 +353,109 @@ public sealed class PurchaseDocumentRepository : IPurchaseDocumentRepository
                     var baseQty = qty * await ResolveUnitEquivalentAsync(
                         connection, transaction, materialId, lineUnit, cancellationToken).ConfigureAwait(false);
 
+                    // Incoming quality gate (Phase B 056, decision Q2,
+                    // mirror of StkPost): a receipt of a material with
+                    // quality_check_required lands in the QUARANTINE
+                    // warehouse — not in sellable stock — and a Draft
+                    // incoming inspection is created against the receipt
+                    // below, in this same transaction. Completion releases
+                    // it (QualityGate); a pre-056 database diverts nothing.
+                    var quarantineWarehouseId = QualityGate.DivertReceipt(
+                        connection, transaction, _provider, qcCompany, materialId);
+                    var diverted = quarantineWarehouseId > 0;
+                    var effectiveWarehouse = diverted ? quarantineWarehouseId : lineWarehouse;
+
                     // Valuation + batch/serial: mastered by the ONE
                     // StockValuationEngine at the material's cost method,
                     // exactly like the delivery-note receipt side.
-                    StockValuationEngine.Apply(connection, transaction, _provider,
-                        new StockMovementRequest(companyId, lineWarehouse, materialId,
+                    var movement = StockValuationEngine.Apply(connection, transaction, _provider,
+                        new StockMovementRequest(companyId, effectiveWarehouse, materialId,
                             docDate, "RCV", docNo, QtyIn: baseQty, QtyOut: 0m,
                             Note: $"Purchase receipt {docNo} posting",
                             ReceiptUnitCost: unitPrice));
+
+                    if (diverted)
+                    {
+                        var batchId = movement.AllocationRecords
+                            .FirstOrDefault(a => a.BatchId is not null)?.BatchId;
+                        QualityGate.EnsureInspection(connection, transaction, _provider, qcCompany,
+                            QualityInspectionTypes.Incoming, CommercialDocKinds.PurchaseReceipt,
+                            docId.ToString(CultureInfo.InvariantCulture), docNo,
+                            materialId, batchId, lineWarehouse, effectiveWarehouse,
+                            partyId, baseQty, docDate, userId.Trim());
+                    }
                 }
             }
-            else if (docKind == CommercialDocKinds.PurchaseInvoice && partyId is not null)
+            else if (docKind == CommercialDocKinds.PurchaseReturn)
+            {
+                // Stock-out legs (the mirror of a receipt): each stockable
+                // line issues the returned base-unit quantity out of the
+                // line's warehouse. Receipt cost carries the return -- the
+                // issue does not -- so no receipt pricing is passed; the
+                // engine values the issue from the balance/layer queue, and
+                // serial-tracked lines auto-pick like a chain delivery.
+                var pendingLines = new List<(long MaterialId, decimal Qty, long WarehouseId, string? Unit)>();
+                await using (var lines = CreateCommand(connection, transaction,
+                    "SELECT material_id, qty, warehouse_id, unit FROM purchase_document_lines WHERE doc_id = @doc ORDER BY line_no"))
+                {
+                    Add(lines, "@doc", docId);
+                    await using var reader = await lines.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                    while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    {
+                        if (reader.IsDBNull(0))
+                            continue;
+                        var lineWarehouse = reader.IsDBNull(2)
+                            ? warehouseId ?? 0L
+                            : Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture);
+                        pendingLines.Add((Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+                                          Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture),
+                                          lineWarehouse,
+                                          reader.IsDBNull(3) ? null : reader.GetString(3)));
+                    }
+                }
+
+                foreach (var (materialId, qty, lineWarehouse, lineUnit) in pendingLines)
+                {
+                    // Service-material rule (mirrors the sales side): a
+                    // service material is non-stock and creates no movement.
+                    if (!await IsStockableAsync(connection, transaction, materialId, cancellationToken).ConfigureAwait(false))
+                        continue;
+
+                    var baseQty = qty * await ResolveUnitEquivalentAsync(
+                        connection, transaction, materialId, lineUnit, cancellationToken).ConfigureAwait(false);
+
+                    StockValuationEngine.Apply(connection, transaction, _provider,
+                        new StockMovementRequest(companyId, lineWarehouse, materialId,
+                            docDate, CommercialDocKinds.PurchaseReturn, docNo,
+                            QtyIn: 0m, QtyOut: baseQty,
+                            Note: $"Purchase return {docNo} posting",
+                            AutoAllocateSerials: true));
+                }
+
+                if (partyId is not null)
+                {
+                    // Effective rate resolved ONCE through FxRates — same
+                    // as the purchase invoice posting path.
+                    var fx = FxRates.Resolve(connection, transaction, _provider,
+                        Guid.Parse(companyId), currencyCode,
+                        DateOnly.Parse(docDate, CultureInfo.InvariantCulture), exchangeRate);
+
+                    var ledgerCompany = await PartyLedger.ResolveCompanyCodeAsync(
+                        connection, transaction, _provider, companyId, cancellationToken).ConfigureAwait(false);
+
+                    // Supplier liability reversal: DEBIT the party ledger
+                    // at the grand total — the exact mirror of the invoice
+                    // credit — so the supplier balance shrinks.
+                    PartyLedger.WriteEntry(connection, transaction, _provider,
+                        ledgerCompany, "S", partyId.Value,
+                        CommercialDocKinds.PurchaseReturn, docId, docNo, docDate,
+                        grandTotal, 0m, currencyCode,
+                        $"Purchase return {docNo} posting",
+                        exchangeRate: fx.Rate);
+                }
+            }
+
+            if (docKind == CommercialDocKinds.PurchaseInvoice && partyId is not null)
             {
                 // Effective rate resolved ONCE through FxRates — same as
                 // the sales invoice posting path.
@@ -373,26 +477,38 @@ public sealed class PurchaseDocumentRepository : IPurchaseDocumentRepository
                     exchangeRate: fx.Rate);
             }
 
-            // Real GL posting: a posted chain PURCHASE INVOICE creates its
-            // balanced journal entry in this same transaction
-            // (Dr Purchases [+ Dr Input VAT when postable] / Cr Payable).
-            // RCV/RFQ/PO keep no GL entry.
-            if (docKind == CommercialDocKinds.PurchaseInvoice && grandTotal > 0)
+            // Real GL posting: a posted chain PURCHASE INVOICE or PURCHASE
+            // RETURN creates its balanced journal entry in this same
+            // transaction. PUR: Dr Purchases [+ Dr Input VAT when postable]
+            // / Cr Payable. PRT is the exact mirror (Dr Payable / Cr
+            // Purchase Returns [+ Cr Input VAT]). RCV/RFQ/PO keep no GL
+            // entry.
+            if ((docKind == CommercialDocKinds.PurchaseInvoice || docKind == CommercialDocKinds.PurchaseReturn)
+                && grandTotal > 0)
             {
                 var companyGuid = Guid.Parse(companyId);
                 var splitTax = taxAmount > 0
                     && GlPosting.TryResolveAccount(connection, transaction, _provider, companyGuid, GlAccounts.InputVat) is not null;
-                var glLines = new List<GlLineRequest>
+                var isReturn = docKind == CommercialDocKinds.PurchaseReturn;
+                var glLines = new List<GlLineRequest>();
+                if (isReturn)
                 {
-                    new(GlAccounts.Payable, 0m, grandTotal),
-                    new(GlAccounts.Purchases, splitTax ? subtotal : grandTotal, 0m, costCenter)
-                };
+                    glLines.Add(new GlLineRequest(GlAccounts.Payable, grandTotal, 0m));
+                    glLines.Add(new GlLineRequest(GlAccounts.PurchaseReturns, 0m, splitTax ? subtotal : grandTotal, costCenter));
+                }
+                else
+                {
+                    glLines.Add(new GlLineRequest(GlAccounts.Payable, 0m, grandTotal));
+                    glLines.Add(new GlLineRequest(GlAccounts.Purchases, splitTax ? subtotal : grandTotal, 0m, costCenter));
+                }
                 if (splitTax)
-                    glLines.Add(new GlLineRequest(GlAccounts.InputVat, taxAmount, 0m));
+                    glLines.Add(isReturn
+                        ? new GlLineRequest(GlAccounts.InputVat, 0m, taxAmount)
+                        : new GlLineRequest(GlAccounts.InputVat, taxAmount, 0m));
                 GlPosting.PostInTransaction(connection, transaction, _provider,
                     new GlDocumentRequest(companyGuid,
                         DateOnly.Parse(docDate, CultureInfo.InvariantCulture),
-                        $"PUR {docNo}", CommercialDocKinds.PurchaseInvoice,
+                        isReturn ? $"PRT {docNo}" : $"PUR {docNo}", docKind,
                         docId.ToString(CultureInfo.InvariantCulture), docNo,
                         currencyCode, exchangeRate, glLines),
                     userId);

@@ -27,7 +27,7 @@ ERPNext current modules: accounts, assets, buying, crm, edi, maintenance, manufa
 | **Accounts** | GL, AP/AR, payment reconciliation, taxes, budgets | GL, chart of accounts, journals, vouchers, periods, year close | Payment reconciliation & budgets missing |
 | **Stock** | Multi-warehouse, batches, serial nos, valuation (FIFO/Moving Avg), stock ledger | Inventory core, warehouses, movements, barcodes | Batch/serial tracking, valuation methods, stock ledger audit |
 | **Selling** | Quotations, SO, delivery notes, pricing rules | Orders, customer pricing | Quotation→SO→Delivery→Invoice chain incomplete |
-| **Buying** | RFQ, PO, receipt, purchase invoices | Purchase invoices | RFQ/PO/receipt chain missing |
+| **Buying** | RFQ, PO, receipt, purchase invoices, purchase returns | RFQ/PO/receipt/invoice chain + purchase returns (PRT) with stock, supplier-ledger and GL side effects; incoming QC gate on receipts | Buying-chain UI window |
 | **CRM** | Leads, opportunities, activities | CRM folder, leads, sales reps | Opportunity pipeline & activity logging |
 | **Manufacturing** | BOM, work orders, MRP, job cards | BOM, production orders | MRP planning, job-card tracking |
 | **Projects** | Projects, tasks, timesheets | — | Missing |
