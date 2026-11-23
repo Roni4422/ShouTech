@@ -45,7 +45,7 @@ jobs:
         if: failure()
         shell: pwsh
         run: |
-          $trx = Get-ChildItem -Path "**/TestResults/*.trx" -Recurse -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          $trx = Get-ChildItem -Path . -Recurse -Filter *.trx -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $trx) { Write-Host "::error::No trx test results found"; exit 0 }
           [xml]$x = Get-Content $trx.FullName
           $ns = @{ t = 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010' }
