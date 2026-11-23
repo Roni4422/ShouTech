@@ -86,7 +86,7 @@ public static class StockValuationEngine
     /// </summary>
     public static LandedCostValuationAdjustmentResult ApplyLandedCostAdjustment(
         DbConnection connection, DbTransaction transaction, string provider,
-        string companyId, Guid landedCostId, Guid allocationId,
+        string companyId, string stockCompanyCode, Guid landedCostId, Guid allocationId,
         long sourceMovementId, long warehouseId, long materialId,
         decimal allocatedBaseAmount, string actor)
     {
@@ -103,6 +103,9 @@ public static class StockValuationEngine
 
         var isPg = NormalizeProvider(provider) == "PostgreSQL";
         var company = companyId.Trim();
+        var stockCompany = stockCompanyCode.Trim();
+        object DbGuid(Guid value) => isPg ? value : value.ToString("D");
+        if (string.IsNullOrWhiteSpace(stockCompany)) throw new ArgumentException("Stock company code is required.", nameof(stockCompanyCode));
         string receiptNumber;
         long receiptLineId;
         using (var allocation = CreateCommand(connection, transaction, """
@@ -117,8 +120,8 @@ public static class StockValuationEngine
             """))
         {
             Add(allocation, "@c", company);
-            Add(allocation, "@landed", landedCostId.ToString("D"));
-            Add(allocation, "@allocation", allocationId.ToString("D"));
+            Add(allocation, "@landed", DbGuid(landedCostId));
+            Add(allocation, "@allocation", DbGuid(allocationId));
             using var reader = allocation.ExecuteReader();
             if (!reader.Read())
                 throw new InvalidOperationException("The landed-cost allocation was not found in this company.");
@@ -134,14 +137,14 @@ public static class StockValuationEngine
         }
         using (var source = CreateCommand(connection, transaction, """
             SELECT COUNT(*) FROM material_stock_movements
-            WHERE stock_movement_id = @movement AND company_id = @c
+            WHERE stock_movement_id = @movement AND company_id = @stockCompany
               AND warehouse_id = @w AND material_id = @m
               AND movement_type = 'RCV' AND document_no = @receipt
               AND source_document_line_id = @line AND qty_in > 0
             """))
         {
             Add(source, "@movement", sourceMovementId);
-            Add(source, "@c", company);
+            Add(source, "@stockCompany", stockCompany);
             Add(source, "@w", warehouseId);
             Add(source, "@m", materialId);
             Add(source, "@receipt", receiptNumber);
@@ -155,7 +158,7 @@ public static class StockValuationEngine
             "SELECT COUNT(*) FROM purchase_landed_cost_stock_adjustments WHERE company_id = @c AND allocation_id = @a"))
         {
             Add(duplicate, "@c", company);
-            Add(duplicate, "@a", allocationId.ToString("D"));
+            Add(duplicate, "@a", DbGuid(allocationId));
             if (Convert.ToInt64(duplicate.ExecuteScalar(), CultureInfo.InvariantCulture) != 0)
                 throw new InvalidOperationException("This landed-cost allocation has already adjusted stock valuation.");
         }
@@ -170,7 +173,7 @@ public static class StockValuationEngine
             LIMIT 1{(isPg ? " FOR UPDATE" : string.Empty)}
             """))
         {
-            Add(layer, "@c", company);
+            Add(layer, "@c", stockCompany);
             Add(layer, "@w", warehouseId);
             Add(layer, "@m", materialId);
             Add(layer, "@movement", sourceMovementId);
@@ -200,7 +203,7 @@ public static class StockValuationEngine
             : ValuationMath.RoundMoney((newUnitCost - oldUnitCost) * remainingQty);
         var consumedAdjustment = allocatedBaseAmount - inventoryAdjustment;
 
-        var balance = LoadBalance(connection, transaction, isPg, company, warehouseId, materialId);
+        var balance = LoadBalance(connection, transaction, isPg, stockCompany, warehouseId, materialId);
         if (inventoryAdjustment != 0m)
         {
             if (balance is null)
@@ -215,7 +218,7 @@ public static class StockValuationEngine
                 "UPDATE stock_cost_layers SET unit_cost = @cost WHERE company_id = @c AND layer_id = (SELECT layer_id FROM stock_cost_layers WHERE company_id = @c AND warehouse_id = @w AND material_id = @m AND source_movement_id = @movement ORDER BY layer_id LIMIT 1)"))
             {
                 Add(updateLayer, "@cost", newUnitCost);
-                Add(updateLayer, "@c", company);
+                Add(updateLayer, "@c", stockCompany);
                 Add(updateLayer, "@w", warehouseId);
                 Add(updateLayer, "@m", materialId);
                 Add(updateLayer, "@movement", sourceMovementId);
@@ -242,7 +245,7 @@ public static class StockValuationEngine
                 WHERE company_id = @c AND material_id = @m AND is_deleted = {(isPg ? "FALSE" : "0")}
                 """))
             {
-                Add(totals, "@c", company);
+                Add(totals, "@c", stockCompany);
                 Add(totals, "@m", materialId);
                 using var reader = totals.ExecuteReader();
                 reader.Read();
@@ -254,7 +257,7 @@ public static class StockValuationEngine
                 using var card = CreateCommand(connection, transaction,
                     "UPDATE materials SET avg_cost = @average WHERE company_id = @c AND material_id = @m");
                 Add(card, "@average", ValuationMath.RoundRate(totalValue / totalQty));
-                Add(card, "@c", company);
+                Add(card, "@c", stockCompany);
                 Add(card, "@m", materialId);
                 card.ExecuteNonQuery();
             }
@@ -270,10 +273,10 @@ public static class StockValuationEngine
                     @original, @remaining, @inventory, @consumed, @before, @after, @actor)
             """))
         {
-            Add(audit, "@id", Guid.NewGuid().ToString("D"));
+            Add(audit, "@id", DbGuid(Guid.NewGuid()));
             Add(audit, "@c", company);
-            Add(audit, "@landed", landedCostId.ToString("D"));
-            Add(audit, "@allocation", allocationId.ToString("D"));
+            Add(audit, "@landed", DbGuid(landedCostId));
+            Add(audit, "@allocation", DbGuid(allocationId));
             Add(audit, "@movement", sourceMovementId);
             Add(audit, "@w", warehouseId);
             Add(audit, "@m", materialId);
