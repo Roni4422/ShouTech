@@ -12,6 +12,7 @@ using System.Windows.Documents;
 using System.Windows.Media;
 using ShouTech.App.Configuration;
 using ShouTech.App.Services;
+using ShouTech.App.Reporting.Invoices;
 using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
@@ -812,10 +813,46 @@ public sealed class OrdWin : BaseWin, IWindowMode
                 return;
             }
     
+            var captureDate = DateOnly.FromDateTime(DateTime.Today);
+            var captureDoc = new InvDoc
+            {
+                Kind = InvDocKind.StockIn,
+                DocDate = captureDate.ToDateTime(TimeOnly.MinValue),
+                WarehouseId = receiptWarehouseId is long selectedWarehouse ? checked((int)selectedWarehouse) : null,
+                Lines = receiptLines.Select((line, index) => new InvLine
+                {
+                    LineNo = line.SourceLineNo ?? index + 1,
+                    MaterialId = line.MaterialId,
+                    MaterialCode = line.MaterialCode ?? string.Empty,
+                    Description = line.Description,
+                    Unit = line.Unit ?? string.Empty,
+                    Qty = line.Qty,
+                    UnitPrice = line.UnitPrice,
+                    DiscountPct = line.DiscountPct,
+                    WarehouseId = line.WarehouseId is long lineWarehouse ? checked((int)lineWarehouse) : null
+                }).ToList()
+            };
+            var captures = BatchSerialCaptureSvc.CaptureForPosting(captureDoc, this);
+            if (captures is null) return;
+            receiptLines = receiptLines.Select(line =>
+            {
+                var capture = line.SourceLineNo is int sourceLine && captures.TryGetValue(sourceLine, out var found)
+                    ? found
+                    : null;
+                return capture is null ? line : line with
+                {
+                    BatchAllocations = capture.Batches.Select(batch => new CommercialBatchAllocationDraft(
+                        batch.BatchNo, batch.Qty, batch.ExpiryDate, batch.MfgDate, batch.SupplierBatchNo)).ToArray(),
+                    Serials = capture.Serials.Select(serial => new CommercialSerialSelectionDraft(
+                        serial.SerialNo, serial.BatchNo, serial.WarrantyExpiry)).ToArray(),
+                    AllowExpiredBatchIssue = capture.AllowExpiredBatchIssue
+                };
+            }).ToList();
+
             try
             {
                 var (_, receiptDocNo) = await AppHost.Orders.CreatePurchaseReceiptAsync(
-                    _companyId, _docId.Value, DateOnly.FromDateTime(DateTime.Today), receiptLines, CurrentUserId);
+                    _companyId, _docId.Value, captureDate, receiptLines, CurrentUserId);
                 _lblStatus.Text = $"{T("OrderDoc.ReceiptCreated")}: {receiptDocNo}";
                 await RefreshProgressAsync(_docId.Value);
                 UpdateEditState();

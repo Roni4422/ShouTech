@@ -98,6 +98,15 @@ public sealed record CommercialDocumentLink(
     string TargetDocKind,
     long TargetDocId);
 
+/// <summary>Batch allocation captured for a commercial receipt line, in the line's entered unit.</summary>
+public sealed record CommercialBatchAllocationDraft(
+    string BatchNo, decimal Qty, string? ExpiryDate = null,
+    string? MfgDate = null, string? SupplierBatchNo = null);
+
+/// <summary>Serial identity captured for a commercial receipt line.</summary>
+public sealed record CommercialSerialSelectionDraft(
+    string SerialNo, string? BatchNo = null, string? WarrantyExpiry = null);
+
 /// <summary>A new commercial document line to persist.</summary>
 public sealed record CommercialLineDraft(
     long? MaterialId,
@@ -109,7 +118,10 @@ public sealed record CommercialLineDraft(
     decimal DiscountPct = 0m,
     decimal TaxRate = 0m,
     long? WarehouseId = null,
-    int? SourceLineNo = null);
+    int? SourceLineNo = null,
+    IReadOnlyList<CommercialBatchAllocationDraft>? BatchAllocations = null,
+    IReadOnlyList<CommercialSerialSelectionDraft>? Serials = null,
+    bool AllowExpiredBatchIssue = false);
 
 /// <summary>A new commercial document header to persist with its lines.</summary>
 public sealed record CommercialDocumentDraft(

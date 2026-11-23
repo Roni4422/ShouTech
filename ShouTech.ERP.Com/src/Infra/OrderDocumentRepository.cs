@@ -2012,13 +2012,27 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 var unitCost = equivalent == 1m
                     ? discountedUnitPrice
                     : decimal.Round(discountedUnitPrice / equivalent, 6, MidpointRounding.AwayFromZero);
+                var batchAllocations = line.BatchAllocations?.Select(allocation =>
+                    new BatchAllocationRequest(
+                        allocation.BatchNo,
+                        decimal.Round(allocation.Qty * equivalent, 6, MidpointRounding.AwayFromZero),
+                        allocation.ExpiryDate,
+                        allocation.MfgDate,
+                        allocation.SupplierBatchNo)).ToArray();
+                var serials = line.Serials?.Select(serial =>
+                    new SerialSelection(serial.SerialNo, serial.BatchNo, serial.WarrantyExpiry)).ToArray();
                 StockValuationEngine.Apply(connection, transaction, _provider,
                     new StockMovementRequest(companyCode, warehouseId, materialId,
                         movementDate, purchaseMovementKind ?? CommercialDocKinds.PurchaseInvoice, invoiceDocNo,
                         QtyIn: baseQty, QtyOut: 0m,
                         ReceiptUnitCost: unitCost * FxRates.Resolve(connection, transaction, _provider,
                             order.CompanyId, order.CurrencyCode, invoiceDate, order.ExchangeRate).Rate,
-                        Note: line.Description));
+                        Note: line.Description,
+                        BatchAllocations: batchAllocations,
+                        Serials: serials,
+                        AllowExpiredBatchIssue: line.AllowExpiredBatchIssue,
+                        PartyId: order.PartyId,
+                        Actor: "system"));
             }
         }
         return (companyCode, cogsAmount);
