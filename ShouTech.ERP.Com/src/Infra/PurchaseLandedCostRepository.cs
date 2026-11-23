@@ -141,7 +141,10 @@ public sealed class PurchaseLandedCostRepository : IPurchaseLandedCostRepository
             var allocations = LandedCostAllocator.Allocate(allocatorLines, charges.Select(x =>
                 new LandedCostCharge(x.ChargeCode.Trim(),
                     decimal.Round(x.Amount * effectiveRate, 4, MidpointRounding.AwayFromZero),
-                    x.AllocationBasis, x.ManualAmounts)).ToArray());
+                    x.AllocationBasis,
+                    x.ManualAmounts?.ToDictionary(
+                        item => item.Key,
+                        item => decimal.Round(item.Value * effectiveRate, 4, MidpointRounding.AwayFromZero)))).ToArray());
             var lineById = receiptLines.ToDictionary(x => x.LineId);
             foreach (var allocation in allocations)
             {
