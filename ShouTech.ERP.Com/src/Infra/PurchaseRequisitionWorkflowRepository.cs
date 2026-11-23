@@ -45,8 +45,51 @@ public sealed class PurchaseRequisitionWorkflowRepository:IPurchaseRequisitionWo
     }
     public async Task MarkConvertedAsync(Guid company,long id,long poId,string actor,CancellationToken ct=default)
     {
-        Require(company,id);ArgumentOutOfRangeException.ThrowIfNegativeOrZero(poId);if(string.IsNullOrWhiteSpace(actor))throw new ArgumentException("Actor is required.",nameof(actor));await using var c=Open();await c.OpenAsync(ct).ConfigureAwait(false);await using var t=await c.BeginTransactionAsync(ct).ConfigureAwait(false);
-        try{await using var q=Cmd(c,t,"UPDATE purchase_requisition_workflow SET status='Converted',purchase_order_id=@po,updated_at=CURRENT_TIMESTAMP WHERE company_id=@c AND requisition_doc_id=@id AND (status='Approved' OR (status='Converted' AND purchase_order_id=@po))");Add(q,"@po",poId);Add(q,"@c",Co(company));Add(q,"@id",id);if(await q.ExecuteNonQueryAsync(ct).ConfigureAwait(false)!=1)throw new InvalidOperationException("Only an approved requisition can be converted.");await Event(c,t,company,id,"Converted",actor,$"PO:{poId}",ct);await t.CommitAsync(ct).ConfigureAwait(false);}catch{await t.RollbackAsync(CancellationToken.None).ConfigureAwait(false);throw;}
+        Require(company,id);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(poId);
+        if(string.IsNullOrWhiteSpace(actor))throw new ArgumentException("Actor is required.",nameof(actor));
+        await using var c=Open();
+        await c.OpenAsync(ct).ConfigureAwait(false);
+        await using var t=await c.BeginTransactionAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await using(var current=Cmd(c,t,
+                "SELECT status,purchase_order_id FROM purchase_requisition_workflow WHERE company_id=@c AND requisition_doc_id=@id"+(Pg?" FOR UPDATE":string.Empty)))
+            {
+                Add(current,"@c",Co(company));
+                Add(current,"@id",id);
+                await using var reader=await current.ExecuteReaderAsync(ct).ConfigureAwait(false);
+                if(!await reader.ReadAsync(ct).ConfigureAwait(false))
+                    throw new InvalidOperationException("Purchase requisition workflow was not found.");
+                var status=Text(reader,0);
+                var existingPo=reader.IsDBNull(1)?(long?)null:Num(reader,1);
+                if(string.Equals(status,"Converted",StringComparison.Ordinal))
+                {
+                    if(existingPo!=poId)
+                        throw new InvalidOperationException("A converted requisition cannot be linked to a different purchase order.");
+                    await reader.DisposeAsync().ConfigureAwait(false);
+                    await t.CommitAsync(ct).ConfigureAwait(false);
+                    return;
+                }
+                if(!string.Equals(status,"Approved",StringComparison.Ordinal))
+                    throw new InvalidOperationException("Only an approved requisition can be converted.");
+            }
+            await using(var update=Cmd(c,t,"UPDATE purchase_requisition_workflow SET status='Converted',purchase_order_id=@po,updated_at=CURRENT_TIMESTAMP WHERE company_id=@c AND requisition_doc_id=@id AND status='Approved'"))
+            {
+                Add(update,"@po",poId);
+                Add(update,"@c",Co(company));
+                Add(update,"@id",id);
+                if(await update.ExecuteNonQueryAsync(ct).ConfigureAwait(false)!=1)
+                    throw new InvalidOperationException("The requisition conversion state changed; reload and retry.");
+            }
+            await Event(c,t,company,id,"Converted",actor.Trim(),$"PO:{poId}",ct);
+            await t.CommitAsync(ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            await t.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
     }
     private async Task Event(DbConnection c,DbTransaction t,Guid co,long id,string action,string actor,string? reason,CancellationToken ct){await using var q=Cmd(c,t,"INSERT INTO purchase_requisition_events(company_id,requisition_doc_id,action,actor,reason) VALUES(@c,@id,@a,@u,@r)");Add(q,"@c",Co(co));Add(q,"@id",id);Add(q,"@a",action);Add(q,"@u",actor);Add(q,"@r",(object?)reason??DBNull.Value);await q.ExecuteNonQueryAsync(ct).ConfigureAwait(false);}
     private object Co(Guid id)=>Pg?id:id.ToString("D");
