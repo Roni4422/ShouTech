@@ -100,6 +100,66 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task PurchaseAttachments_AreCompanyScopedAuditedAndSoftDeleted()
+        {
+            var (ordersService, _, companyId, connectionString, cleanup) = await CreateAsync();
+            var storageRoot = Path.Combine(Path.GetTempPath(), $"shoutech-attachments-{Guid.NewGuid():N}");
+            try
+            {
+                var purchaseOrderId = await ordersService.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-ATT-01", 1m, 5m,
+                        partyId: 9, partyCode: "SUP-9"),
+                    "attachment-test");
+                var audit = new System.Collections.Generic.List<string>();
+                var service = new PurchaseDocumentAttachmentService(
+                    new PurchaseDocumentAttachmentRepository("SQLite", connectionString),
+                    ordersService,
+                    _ => true,
+                    (_, action, _) =>
+                    {
+                        audit.Add(action);
+                        return Task.CompletedTask;
+                    },
+                    storageRoot);
+                var payload = new byte[] { 0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34, 0x0A };
+                await using var source = new MemoryStream(payload);
+
+                var uploaded = await service.UploadAsync(
+                    companyId, purchaseOrderId, "supplier-invoice.pdf", "application/pdf",
+                    source, "attachment-test");
+
+                Assert.Equal(payload.Length, uploaded.ByteLength);
+                Assert.Equal("application/pdf", uploaded.MediaType);
+                Assert.Equal(64, uploaded.Sha256.Length);
+                Assert.Single(await service.ListAsync(companyId, purchaseOrderId));
+
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    service.ListAsync(Guid.NewGuid(), purchaseOrderId));
+
+                await using (var opened = await service.OpenReadAsync(companyId, uploaded.Id, "attachment-test"))
+                using (var copy = new MemoryStream())
+                {
+                    await opened.CopyToAsync(copy);
+                    Assert.Equal(payload, copy.ToArray());
+                }
+
+                await service.DeleteAsync(companyId, uploaded.Id, "attachment-test");
+                Assert.Empty(await service.ListAsync(companyId, purchaseOrderId));
+                Assert.Equal(new[]
+                {
+                    "PurchaseAttachment.Upload",
+                    "PurchaseAttachment.Download",
+                    "PurchaseAttachment.Delete"
+                }, audit);
+            }
+            finally
+            {
+                if (Directory.Exists(storageRoot)) Directory.Delete(storageRoot, recursive: true);
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task SalesOrder_SaveReloadPost_PersistsSchedulingFields()
         {
             var (service, orders, companyId, _, cleanup) = await CreateAsync();
