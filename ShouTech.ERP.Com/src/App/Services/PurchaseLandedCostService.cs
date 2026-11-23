@@ -1,5 +1,5 @@
 using ShouTech.Domain.Entities;
-using ShouTech.Infrastructure;
+using ShouTech.Domain.Interfaces;
 
 namespace ShouTech.Application.Services;
 
@@ -9,10 +9,10 @@ namespace ShouTech.Application.Services;
 /// </summary>
 public sealed class PurchaseLandedCostService
 {
-    private readonly PurchaseLandedCostRepository _repository;
+    private readonly IPurchaseLandedCostRepository _repository;
     private readonly Func<string, bool> _hasPermission;
 
-    public PurchaseLandedCostService(PurchaseLandedCostRepository repository, Func<string, bool> hasPermission)
+    public PurchaseLandedCostService(IPurchaseLandedCostRepository repository, Func<string, bool> hasPermission)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _hasPermission = hasPermission ?? throw new ArgumentNullException(nameof(hasPermission));

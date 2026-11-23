@@ -4,6 +4,7 @@ using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Npgsql;
 using ShouTech.Domain.Entities;
+using ShouTech.Domain.Interfaces;
 
 namespace ShouTech.Infrastructure;
 
@@ -12,7 +13,7 @@ namespace ShouTech.Infrastructure;
 /// exact receipt stock movements; posting revalues the matching cost layers,
 /// recognizes the consumed portion in COGS, and posts AP/GL atomically.
 /// </summary>
-public sealed class PurchaseLandedCostRepository
+public sealed class PurchaseLandedCostRepository : IPurchaseLandedCostRepository
 {
     private readonly string _provider;
     private readonly string _connectionString;
