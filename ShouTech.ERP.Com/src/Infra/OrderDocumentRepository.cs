@@ -870,7 +870,10 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                     line.MaterialId, line.MaterialCode, line.Description, line.Unit,
                     explicitRequest.Qty, line.UnitPrice, line.DiscountPct, 0m,
                     explicitRequest.WarehouseId ?? line.WarehouseId,
-                    line.LineNo));
+                    line.LineNo,
+                    explicitRequest.BatchAllocations,
+                    explicitRequest.Serials,
+                    explicitRequest.AllowExpiredBatchIssue));
             }
 
             foreach (var line in order.Lines)
@@ -905,7 +908,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
             _ = await PostConversionStockAsync(
                 connection, transaction, CommercialDocSide.Purchase, order, receiptDraftLines,
-                receiptDocNo.Trim(), receiptDate, cancellationToken, CommercialDocKinds.PurchaseReceipt).ConfigureAwait(false);
+                receiptDocNo.Trim(), receiptDate, cancellationToken, CommercialDocKinds.PurchaseReceipt, userId).ConfigureAwait(false);
 
             var fx = FxRates.Resolve(connection, transaction, _provider,
                 order.CompanyId, order.CurrencyCode, receiptDate, order.ExchangeRate);
@@ -1613,7 +1616,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             {
                 var stockResult = await PostConversionStockAsync(
                     connection, transaction, side, order, invoiceLines,
-                    invoiceDocNo.Trim(), invoiceDate, cancellationToken).ConfigureAwait(false);
+                    invoiceDocNo.Trim(), invoiceDate, cancellationToken, actor: userId).ConfigureAwait(false);
                 stockCompanyCode = stockResult.CompanyCode;
                 cogsAmount = stockResult.CogsAmount;
             }
@@ -1980,7 +1983,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         DbConnection connection, DbTransaction transaction, CommercialDocSide side,
         CommercialDocumentSnapshot order, IReadOnlyList<CommercialLineDraft> invoiceLines,
         string invoiceDocNo, DateOnly invoiceDate, CancellationToken cancellationToken,
-        string? purchaseMovementKind = null)
+        string? purchaseMovementKind = null, string? actor = null)
     {
         var companyCode = await PartyLedger.ResolveCompanyCodeAsync(
             connection, transaction, _provider, order.CompanyId.ToString("D"), cancellationToken).ConfigureAwait(false);
@@ -2032,7 +2035,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                         Serials: serials,
                         AllowExpiredBatchIssue: line.AllowExpiredBatchIssue,
                         PartyId: order.PartyId,
-                        Actor: "system"));
+                        Actor: actor));
             }
         }
         return (companyCode, cogsAmount);
