@@ -713,18 +713,18 @@ public static class StockValuationEngine
               INSERT INTO material_stock_movements
                   (company_id, warehouse_id, material_id, movement_date, movement_type, document_no,
                    qty_in, qty_out, unit_cost, note,
-                   balance_qty_after, valuation_rate, stock_value_after, cost_amount, valuation_method, source_document_line_id)
+                   balance_qty_after, valuation_rate, stock_value_after, cost_amount, valuation_method, source_document_line_id, original_source_document_line_id)
               VALUES (@c, @w, @m, @d, @t, @doc, @qin, @qout, @cost, @note,
-                      @balQty, @rate, @stockVal, @costAmt, @method, @sourceLine)
+                      @balQty, @rate, @stockVal, @costAmt, @method, @sourceLine, @originalSourceLine)
               RETURNING stock_movement_id
               """
             : """
               INSERT INTO material_stock_movements
                   (company_id, warehouse_id, material_id, movement_date, movement_type, document_no,
                    qty_in, qty_out, unit_cost, note,
-                   balance_qty_after, valuation_rate, stock_value_after, cost_amount, valuation_method, source_document_line_id)
+                   balance_qty_after, valuation_rate, stock_value_after, cost_amount, valuation_method, source_document_line_id, original_source_document_line_id)
               VALUES (@c, @w, @m, @d, @t, @doc, @qin, @qout, @cost, @note,
-                      @balQty, @rate, @stockVal, @costAmt, @method, @sourceLine);
+                      @balQty, @rate, @stockVal, @costAmt, @method, @sourceLine, @originalSourceLine);
               SELECT last_insert_rowid();
               """;
         using var cmd = CreateCommand(connection, transaction, sql);
@@ -749,6 +749,7 @@ public static class StockValuationEngine
         Add(cmd, "@costAmt", costAmount);
         Add(cmd, "@method", methodLabel);
         Add(cmd, "@sourceLine", (object?)request.SourceDocumentLineId ?? DBNull.Value);
+        Add(cmd, "@originalSourceLine", (object?)request.OriginalSourceDocumentLineId ?? DBNull.Value);
         return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
