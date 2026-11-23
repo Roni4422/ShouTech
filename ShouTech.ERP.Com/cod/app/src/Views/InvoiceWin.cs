@@ -73,6 +73,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
     private readonly Button _btnVoucher = new();
     /// <summary>Phenix "original" - original invoice when opened from a linked document.</summary>
     private readonly Button _btnOriginal = new();
+    private readonly Button _btnAttachments = new();
 
     // ---- Footer totals (Phenix-style three columns) ----
     private readonly TextBox _txtLinesTotal = new() { IsReadOnly = true };
@@ -499,6 +500,9 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         };
         StyleButton(_btnVoucher, "Invoice.Voucher");
         StyleButton(_btnOriginal, "Invoice.Original");
+        StyleButton(_btnAttachments, "PurchaseAttachments.Open");
+        _btnAttachments.Visibility = _doc.Kind is InvDocKind.PurchaseInvoice or InvDocKind.PurchaseReturn ? Visibility.Visible : Visibility.Collapsed;
+        _btnAttachments.Click += async (_, _) => await OpenPurchaseAttachmentsAsync();
         _btnVoucher.Content = Tf("Invoice.Voucher", "Voucher");
         _btnOriginal.Content = Tf("Invoice.Original", "Original");
         _btnVoucher.IsEnabled = false;
@@ -507,6 +511,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _btnOriginal.Click += (_, _) => OpenOriginal();
         cmdRight.Children.Add(_btnVoucher);
         cmdRight.Children.Add(_btnOriginal);
+        cmdRight.Children.Add(_btnAttachments);
         DockPanel.SetDock(cmdRight, Dock.Right);
         cmdBar.Children.Add(cmdRight);
         _lblStatus.VerticalAlignment = VerticalAlignment.Center;
@@ -1049,6 +1054,29 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         var posted = _doc.Status == InvDocStatus.Posted;
         _btnVoucher.IsEnabled = posted && _doc.DocId > 0;
         _btnOriginal.IsEnabled = _doc.OriginalDocId is > 0;
+    }
+
+    private async Task OpenPurchaseAttachmentsAsync()
+    {
+        if (_doc.Kind is not (InvDocKind.PurchaseInvoice or InvDocKind.PurchaseReturn) || LoadedDocumentId is not long documentId)
+        {
+            MessageBox.Show(this, T("OrderDoc.SaveFirst"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        if (AppHost.PurchaseAttachments is null || AppHost.JournalStore is null)
+        {
+            MessageBox.Show(this, T("PurchaseAttachments.MissingService"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        try
+        {
+            var companyId = await AppHost.JournalStore.ResolveCompanyIdAsync(CurrentCompanyCode);
+            new PurchaseAttachmentsWin(companyId, documentId, CurrentUserId) { Owner = this }.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private void OpenVoucher()
