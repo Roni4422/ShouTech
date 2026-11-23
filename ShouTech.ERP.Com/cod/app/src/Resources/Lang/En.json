@@ -1139,7 +1139,9 @@
       "OpeningBalance": "Opening Balance",
       "RunningBalance": "Running Balance",
       "DebitBase": "Debit (Base)",
-      "CreditBase": "Credit (Base)"
+      "CreditBase": "Credit (Base)",
+      "GrniGlBalance": "GRNI GL Balance (Base)",
+      "GrniDifference": "GRNI Difference (Base)"
     },
     "Filter": {
       "All": "All",
