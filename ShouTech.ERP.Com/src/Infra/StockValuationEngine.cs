@@ -167,9 +167,9 @@ public static class StockValuationEngine
         var balance = LoadBalance(connection, transaction, isPg, stockCompany, warehouseId, materialId);
         var material = LoadMaterial(connection, transaction, isPg, stockCompany, materialId);
         long? layerId = null;
-        decimal originalQty, remainingQty, oldUnitCost;
+        decimal layerRemainingQty = 0m, originalQty, remainingQty, oldUnitCost;
         using (var layer = CreateCommand(connection, transaction, $"""
-            SELECT layer_id, qty_in, qty_remaining, unit_cost
+            SELECT layer_id, qty_remaining, unit_cost
             FROM stock_cost_layers
             WHERE company_id = @c AND warehouse_id = @w AND material_id = @m
               AND source_movement_id = @movement
@@ -185,42 +185,30 @@ public static class StockValuationEngine
             if (reader.Read())
             {
                 layerId = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture);
-                originalQty = ValuationText.ToDecimal(reader.GetValue(1));
-                remainingQty = ValuationText.ToDecimal(reader.GetValue(2));
-                oldUnitCost = ValuationText.ToDecimal(reader.GetValue(3));
+                layerRemainingQty = ValuationText.ToDecimal(reader.GetValue(1));
+                oldUnitCost = ValuationText.ToDecimal(reader.GetValue(2));
             }
             else
             {
                 if (ValuationMath.UsesLayers(ValuationMath.NormalizeMethod(material.CostMethod)))
                     throw new InvalidOperationException("The receipt cost layer was not found for this landed-cost allocation.");
-                originalQty = 0m;
-                remainingQty = 0m;
                 oldUnitCost = 0m;
             }
         }
 
-        decimal receiptBalanceQty = 0m, originalMovementCost = 0m;
-        if (layerId is not null)
+        // Use the full commercial receipt quantity as the allocation
+        // denominator. A FIFO/LIFO receipt may first settle a negative
+        // stock deficit, so its surviving cost layer can be smaller than
+        // the original receipt movement.
+        decimal receiptBalanceQty, originalMovementCost;
+        using (var movement = CreateCommand(connection, transaction, """
+            SELECT qty_in, balance_qty_after, COALESCE(valuation_rate, unit_cost),
+                   COALESCE(cost_amount, 0)
+            FROM material_stock_movements
+            WHERE stock_movement_id = @movement AND company_id = @company
+              AND warehouse_id = @w AND material_id = @m
+            """))
         {
-            using var movementCost = CreateCommand(connection, transaction, """
-                SELECT COALESCE(cost_amount, 0) FROM material_stock_movements
-                WHERE stock_movement_id = @movement AND company_id = @company
-                """);
-            Add(movementCost, "@movement", sourceMovementId);
-            Add(movementCost, "@company", stockCompany);
-            var savedCost = movementCost.ExecuteScalar();
-            if (savedCost is null or DBNull)
-                throw new InvalidOperationException("The source receipt movement cost could not be read.");
-            originalMovementCost = ValuationText.ToDecimal(savedCost);
-        }
-        if (layerId is null)
-        {
-            using var movement = CreateCommand(connection, transaction, """
-                SELECT qty_in, balance_qty_after, COALESCE(valuation_rate, unit_cost), cost_amount
-                FROM material_stock_movements
-                WHERE stock_movement_id = @movement AND company_id = @company
-                  AND warehouse_id = @w AND material_id = @m
-                """);
             Add(movement, "@movement", sourceMovementId);
             Add(movement, "@company", stockCompany);
             Add(movement, "@w", warehouseId);
@@ -230,12 +218,16 @@ public static class StockValuationEngine
                 throw new InvalidOperationException("The source receipt movement is unavailable for landed-cost revaluation.");
             originalQty = ValuationText.ToDecimal(reader.GetValue(0));
             receiptBalanceQty = ValuationText.ToDecimal(reader.GetValue(1));
-            oldUnitCost = ValuationText.ToDecimal(reader.GetValue(2));
             originalMovementCost = ValuationText.ToDecimal(reader.GetValue(3));
-            remainingQty = balance is null || balance.Quantity <= 0m || receiptBalanceQty <= 0m
-                ? 0m
-                : Math.Min(balance.Quantity, Math.Min(originalQty, originalQty * Math.Min(1m, balance.Quantity / receiptBalanceQty)));
+            if (layerId is null)
+                oldUnitCost = ValuationText.ToDecimal(reader.GetValue(2));
         }
+        remainingQty = layerId is not null
+            ? layerRemainingQty
+            : balance is null || balance.Quantity <= 0m || receiptBalanceQty <= 0m
+                ? 0m
+                : Math.Min(balance.Quantity, Math.Min(originalQty,
+                    originalQty * Math.Min(1m, balance.Quantity / receiptBalanceQty)));
         if (originalQty <= 0m || remainingQty < 0m || remainingQty > originalQty)
             throw new InvalidOperationException("The receipt cost source has invalid quantity state.");
 
