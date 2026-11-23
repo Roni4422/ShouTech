@@ -50,6 +50,7 @@ namespace ShouTech.App.Services
         public static ReconciliationService? Reconciliation { get; private set; }
         public static PurchaseMatchService? PurchaseMatch { get; private set; }
         public static PurchaseRequisitionWorkflowService? PurchaseRequisitions { get; private set; }
+        public static PurchaseDocumentAttachmentService? PurchaseAttachments { get; private set; }
         public static MasterCardService? MasterCards { get; private set; }
         public static ChequeService? Cheques { get; private set; }
         public static MfgOrderService? Manufacturing { get; private set; }
@@ -138,6 +139,7 @@ namespace ShouTech.App.Services
 
             // Audit service
             Audit = new AuditService(Logging);
+            PurchaseAttachments = CreatePhase3Service((provider, connection) => new PurchaseDocumentAttachmentService(new PurchaseDocumentAttachmentRepository(provider, connection), Orders!, Permissions.Has, (user, action, details) => Audit.LogUserActionAsync(user, action, details)), "Purchase Attachments");
             PurchaseMatch = CreatePhase3Service((provider, connection) => new PurchaseMatchService(
                 new PurchaseMatchPolicyRepository(provider, connection),
                 Permissions.Has,
@@ -381,6 +383,7 @@ namespace ShouTech.App.Services
         public static PlanningService? Planning => AppHost.Planning;
         public static OrderService? Orders => AppHost.Orders;
         public static PurchaseRequisitionWorkflowService? PurchaseRequisitions => AppHost.PurchaseRequisitions;
+        public static PurchaseDocumentAttachmentService? PurchaseAttachments => AppHost.PurchaseAttachments;
         public static DefinitionService? Definitions => AppHost.Definitions;
         public static OperationsService? Operations => AppHost.Operations;
         public static AccountingStructureRepository? AccountingStructure => AppHost.AccountingStructure;
