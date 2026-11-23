@@ -85,13 +85,31 @@ namespace Kern.Tests
                 Assert.Equal("Approved", approved!.Status);
                 Assert.All(approved.Approvals, step => Assert.Equal("Approved", step.Status));
 
+                await repository.BeginConversionAsync(companyId, requisitionId, "buyer-1");
+                var converting = await workflow.GetAsync(companyId, requisitionId);
+                Assert.NotNull(converting);
+                Assert.Equal("Converting", converting!.Status);
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    repository.BeginConversionAsync(companyId, requisitionId, "buyer-2"));
+                await repository.AbortConversionAsync(companyId, requisitionId, "buyer-1", "Simulated PO draft failure");
+                var restored = await workflow.GetAsync(companyId, requisitionId);
+                Assert.NotNull(restored);
+                Assert.Equal("Approved", restored!.Status);
+
+                await repository.BeginConversionAsync(companyId, requisitionId, "buyer-1");
+                await repository.MarkConvertedAsync(companyId, requisitionId, 9002, "buyer-1");
+                var converted = await workflow.GetAsync(companyId, requisitionId);
+                Assert.NotNull(converted);
+                Assert.Equal("Converted", converted!.Status);
+                Assert.Equal(9002, converted.PurchaseOrderId);
+
                 await using var connection = new SqliteConnection(connectionString);
                 await connection.OpenAsync();
                 await using var events = connection.CreateCommand();
                 events.CommandText = "SELECT COUNT(*) FROM purchase_requisition_events WHERE company_id = $company AND requisition_doc_id = $requisition";
                 events.Parameters.AddWithValue("$company", companyId.ToString("D"));
                 events.Parameters.AddWithValue("$requisition", requisitionId);
-                Assert.Equal(3L, Convert.ToInt64(await events.ExecuteScalarAsync()));
+                Assert.Equal(7L, Convert.ToInt64(await events.ExecuteScalarAsync()));
             }
             finally
             {
