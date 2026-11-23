@@ -21,32 +21,53 @@ namespace ShouTech.Application.Services;
 public sealed class BudgetService
 {
     private readonly IBudgetRepository _repository;
+    private readonly Func<string, bool> _hasPermission;
 
-    public BudgetService(IBudgetRepository repository)
+    public BudgetService(IBudgetRepository repository, Func<string, bool> hasPermission)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _hasPermission = hasPermission ?? throw new ArgumentNullException(nameof(hasPermission));
     }
 
     public Task<IReadOnlyList<Budget>> GetAllAsync(Guid companyId, CancellationToken cancellationToken = default)
-        => _repository.GetAllAsync(RequireCompany(companyId), cancellationToken);
+    {
+        RequirePermission("ACC.BUDGET.VIEW");
+        return _repository.GetAllAsync(RequireCompany(companyId), cancellationToken);
+    }
 
     public Task<IReadOnlyList<BudgetVarianceRow>> GetVarianceAsync(Guid companyId, CancellationToken cancellationToken = default)
-        => _repository.GetVarianceAsync(RequireCompany(companyId), cancellationToken);
+    {
+        RequirePermission("ACC.BUDGET.VIEW");
+        return _repository.GetVarianceAsync(RequireCompany(companyId), cancellationToken);
+    }
 
     public Task<IReadOnlyList<BudgetFiscalYear>> GetFiscalYearsAsync(Guid companyId, CancellationToken cancellationToken = default)
-        => _repository.GetFiscalYearsAsync(RequireCompany(companyId), cancellationToken);
+    {
+        RequirePermission("ACC.BUDGET.VIEW");
+        return _repository.GetFiscalYearsAsync(RequireCompany(companyId), cancellationToken);
+    }
 
     public Task<IReadOnlyList<BudgetAccountOption>> GetAccountsAsync(Guid companyId, CancellationToken cancellationToken = default)
-        => _repository.GetAccountsAsync(RequireCompany(companyId), cancellationToken);
+    {
+        RequirePermission("ACC.BUDGET.VIEW");
+        return _repository.GetAccountsAsync(RequireCompany(companyId), cancellationToken);
+    }
 
     public Task<IReadOnlyList<BudgetDimensionOption>> GetCostCentersAsync(Guid companyId, CancellationToken cancellationToken = default)
-        => _repository.GetCostCentersAsync(RequireCompany(companyId), cancellationToken);
+    {
+        RequirePermission("ACC.BUDGET.VIEW");
+        return _repository.GetCostCentersAsync(RequireCompany(companyId), cancellationToken);
+    }
 
     public Task<IReadOnlyList<BudgetDimensionOption>> GetProjectsAsync(Guid companyId, CancellationToken cancellationToken = default)
-        => _repository.GetProjectsAsync(RequireCompany(companyId), cancellationToken);
+    {
+        RequirePermission("ACC.BUDGET.VIEW");
+        return _repository.GetProjectsAsync(RequireCompany(companyId), cancellationToken);
+    }
 
     public async Task<Guid> SaveAsync(Guid companyId, Budget budget, string userId, CancellationToken cancellationToken = default)
     {
+        RequirePermission("ACC.BUDGET.EDIT");
         RequireCompany(companyId);
         ArgumentNullException.ThrowIfNull(budget);
         if (string.IsNullOrWhiteSpace(budget.Name))
@@ -116,6 +137,7 @@ public sealed class BudgetService
 
     public Task DeleteAsync(Guid companyId, Guid budgetId, string userId, CancellationToken cancellationToken = default)
     {
+        RequirePermission("ACC.BUDGET.EDIT");
         if (budgetId == Guid.Empty)
             throw new ArgumentException("Budget is required.", nameof(budgetId));
         return _repository.SoftDeleteAsync(RequireCompany(companyId), budgetId, RequireUser(userId), cancellationToken);
@@ -123,11 +145,18 @@ public sealed class BudgetService
 
     public Task SetStatusAsync(Guid companyId, Guid budgetId, string status, string userId, CancellationToken cancellationToken = default)
     {
+        RequirePermission("ACC.BUDGET.ACTIVATE");
         if (budgetId == Guid.Empty)
             throw new ArgumentException("Budget is required.", nameof(budgetId));
         if (!BudgetStatuses.All.Contains(status))
             throw new InvalidOperationException($"Unknown budget status '{status}'.");
         return _repository.SetStatusAsync(RequireCompany(companyId), budgetId, status, RequireUser(userId), cancellationToken);
+    }
+
+    private void RequirePermission(string permission)
+    {
+        if (!_hasPermission(permission))
+            throw new UnauthorizedAccessException($"Permission required: {permission}.");
     }
 
     private static Guid RequireCompany(Guid companyId)
