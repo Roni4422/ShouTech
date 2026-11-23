@@ -41,6 +41,21 @@ jobs:
       - name: Run tests
         run: dotnet test tests/Kern.Tests/Kern.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=tests.trx"
 
+      - name: Report failed tests
+        if: failure()
+        shell: pwsh
+        run: |
+          $trx = Get-ChildItem -Path "**/TestResults/*.trx" -Recurse -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $trx) { Write-Host "::error::No trx test results found"; exit 0 }
+          [xml]$x = Get-Content $trx.FullName
+          $ns = @{ t = 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010' }
+          Select-Xml -Xml $x -XPath "//t:UnitTestResult[@outcome='Failed']" -Namespace $ns | ForEach-Object {
+            $n = $_.Node
+            $nm = $n.testName
+            $msg = ($n.Message.InnerText -replace "[\r\n]+", " ")
+            Write-Host ("::error::FAILED TEST: {0} :: {1}" -f $nm, $msg)
+          }
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v6
