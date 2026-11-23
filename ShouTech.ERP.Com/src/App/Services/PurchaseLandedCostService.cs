@@ -18,6 +18,13 @@ public sealed class PurchaseLandedCostService
         _hasPermission = hasPermission ?? throw new ArgumentNullException(nameof(hasPermission));
     }
 
+    public Task<IReadOnlyList<PurchaseLandedCostSummary>> ListAsync(
+        Guid companyId, string? search = null, CancellationToken cancellationToken = default)
+    {
+        Require("PUR.LANDEDCOST.VIEW");
+        return _repository.ListAsync(companyId, search, cancellationToken);
+    }
+
     public Task<Guid> CreateDraftAsync(Guid companyId, long receiptDocumentId, string documentNumber,
         DateOnly documentDate, string currencyCode, decimal exchangeRate,
         IReadOnlyList<PurchaseLandedCostChargeDraft> charges, string actor,
