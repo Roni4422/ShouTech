@@ -36,9 +36,25 @@ public sealed class PurchaseDocumentAttachmentService
         var id=Guid.NewGuid();var storageKey=id.ToString("N");var companyFolder=Path.Combine(_root,companyId.ToString("N"));Directory.CreateDirectory(companyFolder);
         var fullPath=SafePath(companyFolder,storageKey);await File.WriteAllBytesAsync(fullPath,bytes,ct).ConfigureAwait(false);
         var item=new PurchaseDocumentAttachment(id,companyId,documentId,storageKey,safeName,NormalizeMediaType(mediaType,Path.GetExtension(safeName)),length,Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),actor.Trim(),DateTime.UtcNow);
-        try{await _repository.AddAsync(item,ct).ConfigureAwait(false);}
-        catch{File.Delete(fullPath);throw;}
-        await _audit(actor,"PurchaseAttachment.Upload",$"{companyId:D}:{documentId}:{id:D}:{item.Sha256}").ConfigureAwait(false);
+        try
+        {
+            await _repository.AddAsync(item,ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            File.Delete(fullPath);
+            throw;
+        }
+        try
+        {
+            await _audit(actor,"PurchaseAttachment.Upload",$"{companyId:D}:{documentId}:{id:D}:{item.Sha256}").ConfigureAwait(false);
+        }
+        catch
+        {
+            try { await _repository.SoftDeleteAsync(companyId,id,actor,CancellationToken.None).ConfigureAwait(false); }
+            finally { if (File.Exists(fullPath)) File.Delete(fullPath); }
+            throw;
+        }
         return item;
     }
     public async Task<IReadOnlyList<PurchaseDocumentAttachment>> ListAsync(Guid companyId,long documentId,CancellationToken ct=default)
@@ -67,7 +83,21 @@ public sealed class PurchaseDocumentAttachmentService
         return new MemoryStream(bytes,writable:false);
     }
     public async Task DeleteAsync(Guid companyId,Guid attachmentId,string actor,CancellationToken ct=default)
-    {RequireCompany(companyId);RequirePermission("PUR.ATTACH.DELETE");RequireActor(actor);var item=await _repository.FindAsync(companyId,attachmentId,ct).ConfigureAwait(false)??throw new FileNotFoundException("Attachment was not found.");await _repository.SoftDeleteAsync(companyId,attachmentId,actor,ct).ConfigureAwait(false);await _audit(actor,"PurchaseAttachment.Delete",$"{companyId:D}:{item.DocumentId}:{attachmentId:D}:{item.Sha256}").ConfigureAwait(false);}
+    {
+        RequireCompany(companyId);RequirePermission("PUR.ATTACH.DELETE");RequireActor(actor);
+        var item=await _repository.FindAsync(companyId,attachmentId,ct).ConfigureAwait(false)
+            ??throw new FileNotFoundException("Attachment was not found.");
+        await _repository.SoftDeleteAsync(companyId,attachmentId,actor,ct).ConfigureAwait(false);
+        try
+        {
+            await _audit(actor,"PurchaseAttachment.Delete",$"{companyId:D}:{item.DocumentId}:{attachmentId:D}:{item.Sha256}").ConfigureAwait(false);
+        }
+        catch
+        {
+            await _repository.RestoreAsync(companyId,attachmentId,CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
     private void RequirePermission(string code){if(!_hasPermission(code))throw new UnauthorizedAccessException("You do not have permission to access purchase attachments.");}
     private static void RequireCompany(Guid id){if(id==Guid.Empty)throw new ArgumentException("Company is required.",nameof(id));}
     private static void RequireActor(string actor){if(string.IsNullOrWhiteSpace(actor))throw new ArgumentException("Actor is required.",nameof(actor));}
