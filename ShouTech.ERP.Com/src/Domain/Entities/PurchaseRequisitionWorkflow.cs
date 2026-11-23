@@ -18,3 +18,5 @@ public sealed class PurchaseRequisitionApproval
     public DateTime? DecidedAt { get; set; }
 }
 public sealed record PurchaseRequisitionConversion(long PurchaseOrderId,string PurchaseOrderNo);
+
+public sealed record PurchaseRequisitionConversion(long PurchaseOrderId,string PurchaseOrderNo);

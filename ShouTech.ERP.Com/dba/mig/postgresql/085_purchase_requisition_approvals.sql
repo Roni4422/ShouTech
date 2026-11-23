@@ -28,3 +28,13 @@ VALUES('PUR.REQ.CONVERT','Purchase Requisition - Convert','PURCHASING','REQUISIT
 INSERT INTO role_permissions(role_id,permission_id) SELECT r.role_id,p.permission_id FROM roles r CROSS JOIN permissions p WHERE r.role_code='ROLE_ADMINISTRATOR' AND p.permission_code LIKE 'PUR.REQ.%' ON CONFLICT DO NOTHING;
 INSERT INTO role_permissions(role_id,permission_id) SELECT r.role_id,p.permission_id FROM roles r CROSS JOIN permissions p WHERE r.role_code='ROLE_USER' AND p.permission_code IN ('PUR.REQ.VIEW','PUR.REQ.EDIT') ON CONFLICT DO NOTHING;
 INSERT INTO role_permissions(role_id,permission_id) SELECT r.role_id,p.permission_id FROM roles r CROSS JOIN permissions p WHERE r.role_code='ROLE_VIEWER' AND p.permission_code='PUR.REQ.VIEW' ON CONFLICT DO NOTHING;
+
+INSERT INTO permissions(permission_code,permission_name,group_code,feature_code,operation_code,name_ar,name_en,description,display_order,is_sensitive) VALUES
+('PUR.REQ.VIEW','Purchase Requisition - View','PURCHASING','REQUISITION','VIEW','Purchase Requisition - View','Purchase Requisition - View','View requisitions and approval history',520,false),
+('PUR.REQ.EDIT','Purchase Requisition - Edit','PURCHASING','REQUISITION','EDIT','Purchase Requisition - Edit','Purchase Requisition - Edit','Create internal purchase requisition drafts',521,false),
+('PUR.REQ.APPROVE','Purchase Requisition - Approve','PURCHASING','REQUISITION','APPROVE','Purchase Requisition - Approve','Purchase Requisition - Approve','Approve or reject assigned steps',522,true),
+('PUR.REQ.CONVERT','Purchase Requisition - Convert','PURCHASING','REQUISITION','CONVERT','Purchase Requisition - Convert','Purchase Requisition - Convert','Convert approved requests to purchase-order drafts',523,true)
+ON CONFLICT(permission_code) DO NOTHING;
+INSERT INTO role_permissions(role_id,permission_id) SELECT r.role_id,p.permission_id FROM roles r CROSS JOIN permissions p WHERE r.role_code='ROLE_ADMINISTRATOR' AND p.permission_code LIKE 'PUR.REQ.%' ON CONFLICT DO NOTHING;
+INSERT INTO role_permissions(role_id,permission_id) SELECT r.role_id,p.permission_id FROM roles r CROSS JOIN permissions p WHERE r.role_code='ROLE_USER' AND p.permission_code IN ('PUR.REQ.VIEW','PUR.REQ.EDIT') ON CONFLICT DO NOTHING;
+INSERT INTO role_permissions(role_id,permission_id) SELECT r.role_id,p.permission_id FROM roles r CROSS JOIN permissions p WHERE r.role_code='ROLE_VIEWER' AND p.permission_code='PUR.REQ.VIEW' ON CONFLICT DO NOTHING;
