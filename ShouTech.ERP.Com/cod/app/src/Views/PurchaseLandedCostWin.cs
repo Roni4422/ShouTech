@@ -13,7 +13,7 @@ namespace ShouTech.App.Views;
 public sealed class PurchaseLandedCostWin : BaseWin
 {
     private Guid _companyId;
-    private readonly TextBox _number = new(), _receipt = new(), _currency = new() { Text = "SAR" },
+    private readonly TextBox _number = new(), _receipt = new(), _currency = new(),
         _rate = new() { Text = "1" }, _voucherId = new(), _reversalNumber = new(), _reason = new();
     private readonly DatePicker _date = new() { SelectedDate = DateTime.Today };
     private readonly DatePicker _reversalDate = new() { SelectedDate = DateTime.Today };
@@ -220,6 +220,8 @@ public sealed class PurchaseLandedCostWin : BaseWin
             var receipt = await AppHost.Orders!.FindByNumberAsync(
                 CommercialDocSide.Purchase, _companyId, CommercialDocKinds.PurchaseReceipt, _receipt.Text.Trim());
             if (receipt is null) throw new InvalidOperationException(T("PurchaseLandedCost.NoReceipt"));
+            if (string.IsNullOrWhiteSpace(_currency.Text)) _currency.Text = receipt.CurrencyCode;
+            if (_rate.Text == "1" && receipt.ExchangeRate > 0m) _rate.Text = receipt.ExchangeRate.ToString(CultureInfo.InvariantCulture);
             _grid.CommitEdit(DataGridEditingUnit.Cell, true);
             _grid.CommitEdit(DataGridEditingUnit.Row, true);
             var charges = _charges.Select(row =>
