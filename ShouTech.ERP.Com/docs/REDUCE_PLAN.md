@@ -250,7 +250,9 @@ benchmarks to be sellable as enterprise commercial software.
   customer-group scoping and touch/field customization, record
   where ours is ahead (warehouse, price level, permitted users).
 - **GLOBAL Information Window** (owner evidence 2026-11-24
-  17:55, SCOPE CORRECTION 17:59 + EMPHASIS 18:00): NOT a POS-only
+  17:55, SCOPE CORRECTION 17:59 + EMPHASIS 18:00; START DIRECTED
+  2026-11-24 19:01 — phase-gate study committed as
+  docs/INFO_WINDOW_STUDY.md, build in progress): NOT a POS-only
   pane — a program-wide, selection-driven Information Window
   openable from ANY window (a standard affordance in every
   window: shell command + consistent per-window entry), reading
