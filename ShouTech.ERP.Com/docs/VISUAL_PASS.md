@@ -117,4 +117,62 @@ below in the phase record).
 
 ## V3 — MWin Explorer-style shell conversion
 
-(Record appended when the phase runs.)
+Authorized by the owner 2026-11-24. Implemented as a new presentation
+of the SAME navigation map — not a rewrite of navigation:
+
+**What the shell was.** The "ribbon" was already a transient strip:
+the menu bar selects a module, exactly one ribbon tab showed, and any
+button click collapsed it again (ShowRibbonTab / CollapseRibbon).
+Stack: title bar → menu bar → ribbon strip (row 2) → quick access bar
+→ content → docked-window strip → status bar.
+
+**What it is now.**
+- **Navigation pane** (content row, leading column, 236px,
+  collapsible from the command bar): one section per ribbon tab
+  (18 tabs / 63 groups / **264 ribbon entries**), groups as subheads,
+  in the ribbon's own tab/group order — the user's mental map is
+  unchanged.
+- **Command bar** (row 2, where the strip was): pane toggle (MDL2
+  hamburger), the active module's title, and that module's commands
+  as slim buttons with group separators. Menu module clicks
+  (ShowRibbonTab) now expand the module's pane section + fill the
+  command bar; clicking the same module again clears the command bar
+  (the strip's toggle behavior). Any action click clears the command
+  bar, as the strip used to hide (CollapseRibbon).
+- Stack order preserved: menu bar → command bar → quick access bar →
+  content; the quick bar is untouched and routes through the same
+  keys as before.
+
+**Why navigation cannot regress.** The pane and command bar are
+*generated at startup from the ribbon map itself* (the tabs/groups/
+buttons declared in MWin.xaml, walked over the logical tree, so
+nested buttons are included). Every generated item invokes
+`OnRibbonButtonClick` with the ORIGINAL RibbonButton as sender — the
+handler's ReferenceEquals/LocProps routing is literally the same code
+path. Items carry the source button's LocProps key/tooltip key (so
+UiLoczr localizes them exactly like the ribbon's), and mirror the
+source's IsEnabled/Visibility through bindings. The ribbon control
+stays in the tree, permanently collapsed, so all shell state code
+(freeze/unfreeze, GetVisualDescendants sweeps, FindName) keeps
+operating on the same objects:
+- Freeze (pre-login / company switch): tabs/buttons are disabled
+  exactly as before (only File > Open/Exit enabled); the pane mirrors
+  that state through the bindings and is explicitly kept enabled as
+  the pre-login surface with the File section expanded — the role the
+  strip played. The one repointed line: freeze no longer sets the
+  strip Visible.
+- Section headers localize through the same Menu.* keys UiLoczr uses
+  for tab headers; the pane additionally covers TabHR → Menu.HR,
+  which the strip's table missed (the key exists in the catalogs).
+- RTL: the pane is column 0 of the root grid; WPF mirrors grid
+  columns under RightToLeft flow, and ApplyUiDirection sets the
+  pane/command bar direction with the other shell bands — the pane
+  sits on the right in Arabic with no special-case code.
+
+**Kept intact:** menu bar, quick access bar, docked-window strip,
+status bar, recycle-bin layer, shell-context propagation, window
+chrome. RibModMap / RibbonNav are untouched.
+
+**Windows-owed:** the pane/command bar rendering, the pre-login
+freeze flow through the pane, and RTL mirroring must be confirmed in
+a Windows run; headless gates cannot see them.

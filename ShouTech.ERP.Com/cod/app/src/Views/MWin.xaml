@@ -56,6 +56,68 @@
             </Style.Triggers>
         </Style>
 
+        <!-- Explorer shell: navigation-pane item (flat, left-aligned,
+             hover wash from the shell ribbon palette). -->
+        <Style x:Key="NavPaneItemStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="18,0,8,0"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource ShellRibbonHoverBrush}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.45"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Explorer shell: nav section header (module name). -->
+        <Style x:Key="NavSectionHeaderStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="6,0,8,0"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource ShellRibbonHoverBrush}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.45"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Explorer shell: slim command-bar button. -->
+        <Style x:Key="NavCommandButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="10,0"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Foreground" Value="{DynamicResource ShellRibbonForegroundBrush}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource ShellRibbonHoverBrush}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.45"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
     </ribbon:RibbonWindow.Resources>
 
     <Border x:Name="RootBorder"
@@ -73,9 +135,17 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
+            <!-- Explorer-style shell: column 0 hosts the navigation
+                 pane (row 4 only); every full-width band spans both
+                 columns. Under RTL the grid mirrors, so the pane sits
+                 on the right with no extra code. -->
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
             
-            <Border Grid.Row="0"
+            <Border Grid.Row="0" Grid.ColumnSpan="2"
                     Background="{DynamicResource ShellUnifiedLightBrush}"
                     HorizontalAlignment="Stretch"
                     Margin="0"
@@ -127,7 +197,7 @@
 				</Border>
 
             
-            <Menu x:Name="MainMenu" Grid.Row="1"
+            <Menu x:Name="MainMenu" Grid.Row="1" Grid.ColumnSpan="2"
                   Background="Transparent"
                   Foreground="{DynamicResource ShellMenuForegroundBrush}"
                   Height="34"
@@ -182,7 +252,7 @@
             
 
             
-            <ribbon:Ribbon Grid.Row="2" x:Name="RibbonControl"
+            <ribbon:Ribbon Grid.Row="2" Grid.ColumnSpan="2" x:Name="RibbonControl"
                            Background="Transparent"
                            Foreground="{DynamicResource ShellRibbonForegroundBrush}"
                            Visibility="Collapsed"
@@ -635,6 +705,36 @@
 
             </ribbon:Ribbon>
 
+            <!-- Explorer-style command bar (row 2): nav-pane toggle,
+                 the active module's title, and that module's commands
+                 in one slim strip. Its items are generated from the
+                 same ribbon map and route through OnRibbonButtonClick
+                 with the original RibbonButton as sender. -->
+            <Border x:Name="CommandBar" Grid.Row="2" Grid.ColumnSpan="2"
+                    Background="{DynamicResource ShellRibbonBackgroundBrush}"
+                    BorderBrush="{DynamicResource ShellContentBorderBrush}"
+                    BorderThickness="0,0,0,1"
+                    Height="36">
+                <DockPanel LastChildFill="True">
+                    <Button x:Name="NavToggleButton"
+                            Style="{StaticResource NavCommandButtonStyle}"
+                            Width="36" Padding="0"
+                            HorizontalContentAlignment="Center"
+                            Click="OnNavToggleClick">
+                        <TextBlock Text="&#xE700;" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
+                    </Button>
+                    <TextBlock x:Name="CommandBarTitle"
+                               VerticalAlignment="Center"
+                               Margin="4,0,10,0"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource ShellRibbonForegroundBrush}"/>
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Disabled">
+                        <StackPanel x:Name="CommandBarItems" Orientation="Horizontal"/>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
             <!-- Quick Access Bar: always visible, directly under the ribbon.
                  Icon per button is a single settable value: qb:QuickBarProps.Glyph
                  (Segoe MDL2 Assets) today; swap that one attribute to
@@ -642,7 +742,7 @@
                  arrive (see docs/QUICK_ACCESS_BAR.md). Tag = the same navigation
                  key the ribbon uses; routed by OnQuickAccessClick through
                  RibbonReportRouter / RibbonNav / RptNav. -->
-            <Border x:Name="QuickAccessBar" Grid.Row="3" Style="{StaticResource QuickAccessBarStyle}">
+            <Border x:Name="QuickAccessBar" Grid.Row="3" Grid.ColumnSpan="2" Style="{StaticResource QuickAccessBarStyle}">
                 <StackPanel x:Name="QuickAccessPanel" Orientation="Horizontal">
                     <Button Style="{StaticResource QuickAccessButtonStyle}"
                             qb:QuickBarProps.Glyph="&#xE80F;"
@@ -731,7 +831,23 @@
                 </StackPanel>
             </Border>
 
-            <Border Grid.Row="4"
+            <!-- Explorer-style navigation pane (row 4, column 0):
+                 one section per ribbon tab, groups as subheads, every
+                 ribbon entry as an item. Sections/items are generated
+                 in BuildNavShell from the ribbon map itself, so no
+                 entry can drift out of reach. -->
+            <Border x:Name="NavPane" Grid.Row="4" Grid.Column="0"
+                    Width="236"
+                    Background="{DynamicResource ShellBackgroundBrush}"
+                    BorderBrush="{DynamicResource ShellContentBorderBrush}"
+                    BorderThickness="0,0,1,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel x:Name="NavPaneItems" Margin="4,4,4,8"/>
+                </ScrollViewer>
+            </Border>
+
+            <Border Grid.Row="4" Grid.Column="1"
                     Background="{DynamicResource ShellContentBackgroundBrush}"
                     BorderBrush="{DynamicResource ShellContentBorderBrush}"
                     BorderThickness="0"
@@ -742,7 +858,7 @@
 
             
             <Border x:Name="InternalWindowDock"
-                    Grid.Row="5"
+                    Grid.Row="5" Grid.ColumnSpan="2"
                     Margin="8,2,8,4"
                     Height="58"
                     Background="Transparent"
@@ -792,7 +908,7 @@
             </Border>
 
             
-            <StatusBar x:Name="MainStatusBar" Grid.Row="6"
+            <StatusBar x:Name="MainStatusBar" Grid.Row="6" Grid.ColumnSpan="2"
                        Background="{DynamicResource ShellStatusBarBackgroundBrush}"
                        Foreground="{DynamicResource ShellStatusBarForegroundBrush}"
                        Height="26">
@@ -834,7 +950,7 @@
 
             <!-- Archive bin: LTR Canvas so RTL shell does not mirror screen sides -->
             <Canvas x:Name="RecycleBinLayer"
-                    Grid.Row="4"
+                    Grid.Row="4" Grid.ColumnSpan="2"
                     Grid.RowSpan="3"
                     FlowDirection="LeftToRight"
                     

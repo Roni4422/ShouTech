@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Ribbon;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -66,6 +67,7 @@ namespace ShouTech.App.Views
                 ApplyUiDirection();
                 UpdateWindowChromeState();
                 RefreshLocalizedText();
+                BuildNavShell();
 
                 // Apply language direction safely.
                 try
@@ -293,6 +295,12 @@ namespace ShouTech.App.Views
 
             if (RibbonControl != null)
                 RibbonControl.FlowDirection = direction;
+
+            if (NavPane != null)
+                NavPane.FlowDirection = direction;
+
+            if (CommandBar != null)
+                CommandBar.FlowDirection = direction;
 
             if (MainStatusBar != null)
                 MainStatusBar.FlowDirection = direction;
@@ -1229,24 +1237,231 @@ namespace ShouTech.App.Views
         private static extern bool SetForegroundWindow(
             IntPtr hWnd);
 
+        // -------------------------------------------------------------
+        // Explorer-style shell (visual phase V3)
+        //
+        // The navigation pane + command bar are a second presentation
+        // of the SAME ribbon map: both are generated from the ribbon
+        // tabs/groups/buttons declared in MWin.xaml, and every item
+        // routes through OnRibbonButtonClick with the ORIGINAL
+        // RibbonButton as sender, so routing, localization keys and
+        // behavior are identical to the retired ribbon strip. The
+        // ribbon control stays in the tree (permanently collapsed):
+        // shell state code (freeze/unfreeze, GetVisualDescendants,
+        // FindName) keeps operating on the same objects, and the
+        // generated items mirror IsEnabled/Visibility by binding.
+        // -------------------------------------------------------------
+
+        // Tab name -> menu localization key (mirrors UiLoczr's
+        // RibbonTabKeys so pane headers localize identically).
+        private static readonly Dictionary<string, string> NavTabKeys =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["TabFile"] = "Menu.File",
+                ["TabInventory"] = "Menu.Inventory",
+                ["TabAccounts"] = "Menu.Accounts",
+                ["TabBonds"] = "Menu.Bonds",
+                ["TabInvoices"] = "Menu.Invoices",
+                ["TabPOS"] = "Menu.POS",
+                ["TabOrders"] = "Menu.Orders",
+                ["TabCustomers"] = "Menu.Customers",
+                ["TabSalesRep"] = "Menu.SalesRep",
+                ["TabManufacturing"] = "Menu.Manufacturing",
+                ["TabHR"] = "Menu.HR",
+                ["TabBanks"] = "Menu.Banks",
+                ["TabReports"] = "Menu.Reports",
+                ["TabTools"] = "Menu.Tools",
+                ["TabOtherTools"] = "Menu.OtherTools",
+                ["TabView"] = "Menu.View",
+                ["TabExit"] = "Menu.Exit",
+                ["TabHelp"] = "Menu.Help"
+            };
+
+        private readonly Dictionary<string, (Button Header, StackPanel Body)> _navSections =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        private void BuildNavShell()
+        {
+            NavPaneItems.Children.Clear();
+            _navSections.Clear();
+
+            foreach (var tab in RibbonControl.Items.OfType<RibbonTab>())
+            {
+                var body = new StackPanel();
+
+                foreach (var group in tab.Items.OfType<RibbonGroup>())
+                {
+                    var groupLabel = new TextBlock
+                    {
+                        Text = group.Header?.ToString() ?? string.Empty,
+                        FontSize = 11,
+                        FontWeight = FontWeights.SemiBold,
+                        Opacity = 0.65,
+                        Margin = new Thickness(10, 8, 8, 2)
+                    };
+                    var groupKey = LocProps.GetKey(group);
+                    if (!string.IsNullOrWhiteSpace(groupKey))
+                        LocProps.SetKey(groupLabel, groupKey);
+                    BindingOperations.SetBinding(
+                        groupLabel, VisibilityProperty,
+                        new Binding("Visibility") { Source = group });
+                    body.Children.Add(groupLabel);
+
+                    foreach (var source in FindRibbonButtons(group))
+                        body.Children.Add(CreateShellItem(
+                            source, "NavPaneItemStyle"));
+                }
+
+                var headerText = tab.Header?.ToString() ?? tab.Name;
+                string? headerKey = null;
+                if (!string.IsNullOrEmpty(tab.Name) &&
+                    NavTabKeys.TryGetValue(tab.Name, out var menuKey))
+                {
+                    headerKey = menuKey;
+                    headerText = Loc.Get(menuKey, headerText);
+                }
+
+                var header = new Button { Content = headerText };
+                header.SetResourceReference(
+                    StyleProperty, "NavSectionHeaderStyle");
+                if (headerKey != null)
+                    LocProps.SetKey(header, headerKey);
+                BindingOperations.SetBinding(
+                    header, IsEnabledProperty,
+                    new Binding("IsEnabled") { Source = tab });
+
+                var capturedBody = body;
+                header.Click += (_, _) =>
+                    capturedBody.Visibility =
+                        capturedBody.Visibility == Visibility.Visible
+                            ? Visibility.Collapsed
+                            : Visibility.Visible;
+
+                var section = new StackPanel();
+                section.Children.Add(header);
+                section.Children.Add(body);
+                NavPaneItems.Children.Add(section);
+
+                if (!string.IsNullOrEmpty(tab.Name))
+                    _navSections[tab.Name] = (header, body);
+            }
+        }
+
+        private Button CreateShellItem(RibbonButton source, string styleKey)
+        {
+            var item = new Button
+            {
+                Content = source.Label ?? string.Empty,
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            item.SetResourceReference(StyleProperty, styleKey);
+
+            var key = LocProps.GetKey(source);
+            if (!string.IsNullOrWhiteSpace(key))
+                LocProps.SetKey(item, key);
+            var tipKey = LocProps.GetToolTipKey(source);
+            if (!string.IsNullOrWhiteSpace(tipKey))
+                LocProps.SetToolTipKey(item, tipKey);
+
+            BindingOperations.SetBinding(
+                item, IsEnabledProperty,
+                new Binding("IsEnabled") { Source = source });
+            BindingOperations.SetBinding(
+                item, VisibilityProperty,
+                new Binding("Visibility") { Source = source });
+
+            item.Click += (_, e) => OnRibbonButtonClick(source, e);
+            return item;
+        }
+
+        private static IEnumerable<RibbonButton> FindRibbonButtons(
+            DependencyObject root)
+        {
+            foreach (var child in LogicalTreeHelper.GetChildren(root))
+            {
+                if (child is RibbonButton button)
+                    yield return button;
+                else if (child is DependencyObject dep)
+                    foreach (var nested in FindRibbonButtons(dep))
+                        yield return nested;
+            }
+        }
+
+        private void BuildCommandBar(RibbonTab tab)
+        {
+            CommandBarItems.Children.Clear();
+
+            var firstGroup = true;
+            foreach (var group in tab.Items.OfType<RibbonGroup>())
+            {
+                if (!firstGroup)
+                {
+                    var separator = new Border
+                    {
+                        Width = 1,
+                        Margin = new Thickness(6)
+                    };
+                    separator.SetResourceReference(
+                        Border.BackgroundProperty,
+                        "ShellContentBorderBrush");
+                    CommandBarItems.Children.Add(separator);
+                }
+                firstGroup = false;
+
+                foreach (var source in FindRibbonButtons(group))
+                    CommandBarItems.Children.Add(CreateShellItem(
+                        source, "NavCommandButtonStyle"));
+            }
+
+            var title = tab.Header?.ToString() ?? string.Empty;
+            if (!string.IsNullOrEmpty(tab.Name) &&
+                NavTabKeys.TryGetValue(tab.Name, out var titleKey))
+            {
+                CommandBarTitle.Text = Loc.Get(titleKey, title);
+                LocProps.SetKey(CommandBarTitle, titleKey);
+            }
+            else
+            {
+                CommandBarTitle.Text = title;
+            }
+        }
+
+        private void ExpandNavSection(string tabName)
+        {
+            if (NavPane.Visibility != Visibility.Visible)
+                NavPane.Visibility = Visibility.Visible;
+
+            if (_navSections.TryGetValue(tabName, out var section))
+            {
+                section.Body.Visibility = Visibility.Visible;
+                section.Header.BringIntoView();
+            }
+        }
+
+        private void OnNavToggleClick(object sender, RoutedEventArgs e)
+        {
+            NavPane.Visibility = NavPane.Visibility == Visibility.Visible
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+        }
+
         private void ShowRibbonTab(
             string tabName)
         {
             if (RibbonControl == null)
                 return;
 
-            foreach (RibbonTab tab in RibbonControl.Items)
-            {
-                tab.Visibility =
-                    Visibility.Collapsed;
-            }
+            // The ribbon strip is retired as a presentation; the map
+            // now renders in the navigation pane + command bar.
+            RibbonControl.Visibility =
+                Visibility.Collapsed;
 
-            if (_currentTab == tabName &&
-                RibbonControl.Visibility ==
-                    Visibility.Visible)
+            if (_currentTab == tabName)
             {
-                RibbonControl.Visibility =
-                    Visibility.Collapsed;
+                // Same module again: toggle its commands off, exactly
+                // as the strip used to hide on a repeated menu click.
+                CommandBarItems.Children.Clear();
+                CommandBarTitle.Text = string.Empty;
 
                 _currentTab = string.Empty;
 
@@ -1255,15 +1470,12 @@ namespace ShouTech.App.Views
 
             if (FindName(tabName) is RibbonTab selectedTab)
             {
-                selectedTab.Visibility =
-                    Visibility.Visible;
-
                 selectedTab.IsSelected = true;
 
-                RibbonControl.Visibility =
-                    Visibility.Visible;
-
                 _currentTab = tabName;
+
+                ExpandNavSection(tabName);
+                BuildCommandBar(selectedTab);
             }
         }
 
@@ -1375,7 +1587,10 @@ namespace ShouTech.App.Views
                 item.IsEnabled = false;
 
             RibbonControl.IsEnabled = true;
-            RibbonControl.Visibility = Visibility.Visible;
+            // Explorer shell: the strip itself never returns; the
+            // pre-login surface is the navigation pane, whose File
+            // section mirrors the tab/button state set below.
+            RibbonControl.Visibility = Visibility.Collapsed;
 
             foreach (var tab in
                      RibbonControl.Items.OfType<RibbonTab>())
@@ -1410,6 +1625,13 @@ namespace ShouTech.App.Views
                         child.IsEnabled = false;
                 }
             }
+
+            // The row>=4 sweep above disabled the pane with the
+            // content; the pane is the pre-login navigation surface
+            // (its items mirror the frozen ribbon state), so it stays
+            // enabled with the File section expanded.
+            NavPane.IsEnabled = true;
+            ExpandNavSection("TabFile");
 
             MainStatusBar.IsEnabled = false;
             InternalWindowDock.IsEnabled = false;
@@ -1826,6 +2048,13 @@ namespace ShouTech.App.Views
 
             RibbonControl.Visibility =
                 Visibility.Collapsed;
+
+            // Explorer shell: an action click also clears the command
+            // bar, as the ribbon strip used to hide after a click.
+            if (CommandBarItems != null)
+                CommandBarItems.Children.Clear();
+            if (CommandBarTitle != null)
+                CommandBarTitle.Text = string.Empty;
 
             _currentTab = string.Empty;
         }
