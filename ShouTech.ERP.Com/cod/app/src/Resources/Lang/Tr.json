@@ -152,10 +152,9 @@
     "MaterialMoveFailed": "Malzeme hareketleri aktarılamadı.",
     "MaterialMoveCompleted": "Malzeme hareketleri aktarıldı. Kayıt: {0}",
     "MaterialDiscounts": "Malzeme İndirimleri",
- 
     "PurchaseRequisitions": "Satın alma talepleri",
     "LandedCosts": "Ek maliyetler"
-   },
+  },
   "Accounts": {
     "Title": "Hesaplar",
     "ChartOfAccounts": "Hesap Planı",
@@ -610,11 +609,10 @@
       "CreditBase": "Alacak (ana para birimi)",
       "GrniGlBalance": "Faturalanmamış mal kabul GL bakiyesi (ana para birimi)",
       "GrniDifference": "GRNI mutabakat farkı (ana para birimi)",
-   
       "AgeBand": "Yaşlandırma aralığı",
       "GrniGlBalanceCompany": "GRNI defteri kebir bakiyesi (şirket geneli, temel para birimi)",
       "GrniDifferenceCompany": "GRNI farkı (şirket geneli, temel para birimi)"
-     },
+    },
     "Filter": {
       "All": "Tümü",
       "DateFrom": "Başlangıç",
@@ -3337,8 +3335,22 @@
       "Subject": "Konu",
       "ActivityType": "Tür",
       "DueAt": "Bitiş",
-      "AssignedTo": "Atanan"
-    }
+      "AssignedTo": "Atanan",
+      "MaterialCode": "Kod",
+      "Description": "Açıklama",
+      "Qty": "Miktar",
+      "Unit": "Birim",
+      "UnitPrice": "Fiyat",
+      "DiscountPct": "İndirim %",
+      "TaxRate": "Vergi %",
+      "LineTotal": "Satır Toplamı"
+    },
+    "Items": "Fırsat Kalemleri",
+    "AddItem": "Kalem Ekle",
+    "RemoveItem": "Kalemi Kaldır",
+    "ValidTill": "Geçerlilik Tarihi",
+    "LinkExistingTitle": "Mevcut Tarafı Bağla",
+    "LinkExistingParty": "Eşleşen bir kayıt zaten var: {0}. Yeni bir taraf oluşturmak yerine bu adayı mevcut tarafa bağlamak ister misiniz?"
   },
   "HR": {
     "Title": "Insan Kaynaklari",
@@ -3892,8 +3904,7 @@
     "PermissionDenied": "Bu işlevi kullanma izniniz yok.",
     "InvalidInput": "Girilen değerleri kontrol edin.",
     "NoReceipt": "Bu numarayla onaylanmış mal kabul bulunamadı.",
-    "NoVoucher": "Geçerli bir ek maliyet belge kimliği girin."
-  ,
+    "NoVoucher": "Geçerli bir ek maliyet belge kimliği girin.",
     "Search": "Belgelerde ara",
     "Refresh": "Geçmişi yenile",
     "LoadSelected": "Seçileni yükle",

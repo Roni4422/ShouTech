@@ -175,8 +175,52 @@ public sealed class CrmOpportunity
     public Guid? LostReasonId { get; set; }
     public string? LostNotes { get; set; }
 
+    /// <summary>The opportunity's priced lines (migration 092). Loaded
+    /// with the opportunity and saved in the opportunity's save
+    /// transaction. When the list is non-empty, ExpectedAmount IS the
+    /// items total (the service/repository keep them in step).</summary>
+    public List<CrmOpportunityItem> Items { get; set; } = new();
+
     /// <summary>Weighted pipeline value: amount x probability.</summary>
     public decimal WeightedValue => decimal.Round(ExpectedAmount * Probability / 100m, 4, MidpointRounding.AwayFromZero);
+}
+
+/// <summary>One priced line of an opportunity (migration 092,
+/// crm_opportunity_items). Mirrors sales_document_lines conventions:
+/// LineSubtotal is NET of the line discount, LineTax is computed on
+/// the net subtotal, LineTotal = subtotal + tax — all rounded to 4dp
+/// AwayFromZero, the CRM/quotation rounding path. MaterialId is the
+/// materials table's integer identity and is nullable: a free-text
+/// line is legitimate before a material is chosen.</summary>
+public sealed class CrmOpportunityItem
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid OppId { get; set; }
+    public int LineNo { get; set; }
+    public long? MaterialId { get; set; }
+    public string? MaterialCode { get; set; }
+    public string Description { get; set; } = string.Empty;
+    public decimal Qty { get; set; }
+    public string? Unit { get; set; }
+    public decimal UnitPrice { get; set; }
+    public decimal DiscountPct { get; set; }
+    public decimal TaxRate { get; set; }
+
+    public decimal LineSubtotal => decimal.Round(Qty * UnitPrice * (1m - DiscountPct / 100m), 4, MidpointRounding.AwayFromZero);
+    public decimal LineTax => decimal.Round(LineSubtotal * TaxRate / 100m, 4, MidpointRounding.AwayFromZero);
+    public decimal LineTotal => LineSubtotal + LineTax;
+}
+
+/// <summary>A duplicate found for a lead (sales cycle upgrade B1, gap
+/// G1): the same email or phone already exists on another lead or on
+/// a party in the unified master. SourceKind is "Lead" or "Party";
+/// MatchedField is "Email", "Phone" or "Mobile". The CRM-9007 error
+/// message names this match so the user can link instead of
+/// duplicating.</summary>
+public sealed record CrmDuplicateMatch(
+    string SourceKind, Guid MatchId, string DisplayName, string MatchedField, string MatchedValue)
+{
+    public string Describe() => $"{SourceKind} '{DisplayName}' matches on {MatchedField} '{MatchedValue}'";
 }
 
 /// <summary>One recorded stage change (mandate: pipeline movement is
@@ -215,12 +259,15 @@ public sealed class CrmOpportunityDocument
 }
 
 /// <summary>A line for a CRM-created quotation (the caller passes real
-/// material lines when it has them; with no lines the repository writes
-/// one line from the opportunity's title + expected amount, which the
-/// user then edits in InvoiceWin).</summary>
+/// material lines when it has them; with no lines the repository
+/// builds the lines from the opportunity's items — migration 092 —
+/// and only an item-less opportunity falls back to one line from its
+/// title + expected amount, which the user then edits in InvoiceWin).
+/// DiscountPct / TaxRate default to 0 for legacy callers.</summary>
 public sealed record CrmQuotationLine(
     long? MaterialId, string? MaterialCode, string Description,
-    string? Unit, decimal Qty, decimal UnitPrice);
+    string? Unit, decimal Qty, decimal UnitPrice,
+    decimal DiscountPct = 0m, decimal TaxRate = 0m);
 
 /// <summary>The quotation a CRM create produced: the sales_documents id
 /// + number of the Quotation-kind draft.</summary>
