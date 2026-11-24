@@ -89,8 +89,10 @@ public sealed class InvPostCorrectnessTests
         var duplicate = BuildDoc(InvDocKind.PurchaseInvoice, supplier.LedgerId, supplier.Code,
             qty: 2m, price: 30m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
         duplicate.Reference = " sup-inv-2026-001 ";
-        var error = Assert.Throws<InvalidOperationException>(() => InvRepo.SaveDraft(duplicate));
-        Assert.Contains("external reference", error.Message, StringComparison.OrdinalIgnoreCase);
+        // B1/I1: the duplicate now surfaces as the catalogued PUR-1011
+        // error (same code as the order-chain path).
+        var error = Assert.Throws<AppError>(() => InvRepo.SaveDraft(duplicate));
+        Assert.Equal("PUR-1011", error.Code);
 
         var sameReferenceForAnotherSupplier = BuildDoc(
             InvDocKind.PurchaseInvoice, otherSupplier.LedgerId, otherSupplier.Code,

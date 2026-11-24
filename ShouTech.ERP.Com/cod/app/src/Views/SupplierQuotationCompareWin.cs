@@ -96,6 +96,11 @@ public sealed class SupplierQuotationCompareWin : BaseWin
         content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         ConfigureGrid(_offersGrid);
         ConfigureGrid(_linesGrid);
+        // P2 split award: the lines grid allows multi-selection — when
+        // the user selects a proper subset of the chosen offer's lines,
+        // Award creates the PO from those lines only; no selection (or
+        // all lines) keeps the whole-quotation award.
+        _linesGrid.SelectionMode = DataGridSelectionMode.Extended;
         _offersGrid.AutoGeneratingColumn += (_, args) =>
         {
             if (args.PropertyName is nameof(SupplierQuotationOffer.Lines) or nameof(SupplierQuotationOffer.DocId))
@@ -225,8 +230,13 @@ public sealed class SupplierQuotationCompareWin : BaseWin
 
         try
         {
+            // P2: a proper subset selected in the lines grid = split award.
+            var chosen = _linesGrid.SelectedItems.OfType<SupplierQuotationLineOffer>()
+                .Select(line => line.RfqLineNo).ToArray();
+            IReadOnlyCollection<int>? awardedLineNos =
+                chosen.Length > 0 && chosen.Length < selected.Lines.Count ? chosen : null;
             var result = await AppHost.Orders.CreatePurchaseOrderFromSupplierQuotationAsync(
-                selected.DocId, DateOnly.FromDateTime(DateTime.Today), CurrentUserId);
+                selected.DocId, DateOnly.FromDateTime(DateTime.Today), CurrentUserId, awardedLineNos);
             MessageBox.Show(this,
                 Tf("Purchasing.SupplierQuotationComparison.AwardCreated", result.PurchaseOrderNo),
                 Title, MessageBoxButton.OK, MessageBoxImage.Information);

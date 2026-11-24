@@ -5,6 +5,10 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
+using ShouTech.App;
+using ShouTech.App.Configuration;
+using ShouTech.App.Reporting.Invoices;
+using ShouTech.App.Services;
 using ShouTech.Application.Services;
 using ShouTech.Domain;
 using ShouTech.Domain.Entities;
@@ -1186,6 +1190,417 @@ namespace Kern.Tests
             {
                 cleanup();
             }
+        }
+
+        // ------------------------------------------------------------ B1 (purchase-cycle completion)
+
+        private static void ExecSql(string connectionString, string sql)
+        {
+            using var connection = new SqliteConnection(connectionString);
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.ExecuteNonQuery();
+        }
+
+        [Fact]
+        public async Task B1_QcRequiredReceipt_DivertsToQuarantine_AndReleaseMovesAcceptedQty()
+        {
+            var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                ExecSql(connectionString, """
+                    INSERT INTO materials (material_id, company_id, material_code, material_name, base_unit, is_active, quality_check_required)
+                    VALUES (44, 'ORDER-GL', 'MAT-44', 'Item 44', 'PCS', 1, 1);
+                    INSERT INTO material_stock_balances (company_id, warehouse_id, material_id, available_qty, reserved_qty, on_order_qty, avg_cost, stock_value)
+                    VALUES ('ORDER-GL', 1, 44, 0, 0, 0, 10, 0);
+                    """);
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-B1-QC",
+                        new CommercialLineDraft(44, "MAT-44", "Item 44", "PCS", 5m, 10m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+
+                var (receiptId, receiptNo) = await service.CreatePurchaseReceiptAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(44, "MAT-44", "Item 44", "PCS", 5m, 10m) }, Actor, "DN-QC-1");
+
+                // Q1: nothing sellable yet; all 5 sit in quarantine under a Draft inspection.
+                Assert.Equal(0m, BalanceQty(connectionString, 44));
+                Assert.Equal(5m, Scalar(connectionString, """
+                    SELECT COALESCE(available_qty, 0) FROM material_stock_balances
+                    WHERE company_id = 'ORDER-GL' AND material_id = 44
+                      AND warehouse_id = (SELECT warehouse_id FROM warehouses WHERE company_id = 'ORDER-GL' AND is_quarantine = 1);
+                    """));
+                var inspectionId = Guid.Parse(ScalarText(connectionString,
+                    $"SELECT inspection_id FROM quality_inspections WHERE ref_doc_no = '{receiptNo}';"));
+                Assert.Equal("Draft", ScalarText(connectionString,
+                    $"SELECT status FROM quality_inspections WHERE inspection_id = '{inspectionId}';"));
+                // Q3: the delivery-note number is persisted on the receipt header.
+                var receipt = await orders.FindByIdAsync(CommercialDocSide.Purchase, receiptId);
+                Assert.Equal("DN-QC-1", receipt!.DeliveryNoteNo);
+
+                // Existing QC release path: accept 4, reject 1 (stays in quarantine).
+                using (var connection = new SqliteConnection(connectionString))
+                {
+                    connection.Open();
+                    using var tx = connection.BeginTransaction();
+                    ShouTech.Infrastructure.QualityGate.CompleteInTransaction(
+                        connection, tx, "SQLite", CompanyCode, inspectionId,
+                        acceptedQty: 4m, rejectedQty: 1m, disposition: "Quarantine",
+                        inspector: Actor, notes: null, dateText: "2026-11-03");
+                    tx.Commit();
+                }
+                Assert.Equal(4m, BalanceQty(connectionString, 44));
+                Assert.Equal(1m, Scalar(connectionString, """
+                    SELECT COALESCE(available_qty, 0) FROM material_stock_balances
+                    WHERE company_id = 'ORDER-GL' AND material_id = 44
+                      AND warehouse_id = (SELECT warehouse_id FROM warehouses WHERE company_id = 'ORDER-GL' AND is_quarantine = 1);
+                    """));
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task B1_OverReceipt_ToleranceBlocksBeyondAndAllowsWithin()
+        {
+            var (service, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-B1-TOL",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 10m, 12m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+
+                // Default policy (none configured): any over-receipt is blocked (Q4 default 0).
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    service.CreatePurchaseReceiptAsync(companyId, orderId, new DateOnly(2026, 11, 2),
+                        new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 11m, 12m) }, Actor));
+
+                ExecSql(connectionString, """
+                    INSERT INTO purchase_match_policies (company_code, is_enabled, receipt_over_tolerance_pct)
+                    VALUES ('ORDER-GL', 0, 10);
+                    """);
+                // 11 = ordered x 1.10 is allowed...
+                await service.CreatePurchaseReceiptAsync(companyId, orderId, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 11m, 12m) }, Actor);
+                // ...one more unit exceeds the tolerance ceiling.
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    service.CreatePurchaseReceiptAsync(companyId, orderId, new DateOnly(2026, 11, 3),
+                        new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 1m, 12m) }, Actor));
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task B1_StoredPercentages_AndDerivedStatus_Transitions()
+        {
+            var (service, orders, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-B1-PCT",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 10m, 12m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+
+                await service.CreatePurchaseReceiptAsync(companyId, orderId, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 4m, 12m) }, Actor);
+                var snap = await orders.FindByIdAsync(CommercialDocSide.Purchase, orderId);
+                Assert.Equal(40m, snap!.PerReceived);
+                Assert.Equal(0m, snap.PerBilled);
+                Assert.Equal("To Receive and Bill", snap.DerivedOrderStatus);
+
+                await service.CreatePurchaseInvoiceAsync(companyId, orderId, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 4m, 12m) }, Actor);
+                await service.CreatePurchaseReceiptAsync(companyId, orderId, new DateOnly(2026, 11, 3),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 6m, 12m) }, Actor);
+                snap = await orders.FindByIdAsync(CommercialDocSide.Purchase, orderId);
+                Assert.Equal(100m, snap!.PerReceived);
+                Assert.Equal(40m, snap.PerBilled);
+                Assert.Equal("To Bill", snap.DerivedOrderStatus);
+
+                await service.CreatePurchaseInvoiceAsync(companyId, orderId, new DateOnly(2026, 11, 3),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 6m, 12m) }, Actor);
+                snap = await orders.FindByIdAsync(CommercialDocSide.Purchase, orderId);
+                Assert.Equal(100m, snap!.PerBilled);
+                Assert.Equal("Completed", snap.DerivedOrderStatus);
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task B1_CancelCascadesDraftChildren_BlockedByPosted_AndAmendCopies()
+        {
+            var (service, orders, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                // PRQ -> draft PO link: cancelling the PRQ cancels the draft PO in the same transaction (P6).
+                var prqId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseRequisition, "PRQ-B1-1",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 12m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                var childPoId = await orders.CreateLinkedDraftAsync(
+                    CommercialDocSide.Purchase,
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-B1-CHILD",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 12m),
+                        partyId: 9, partyCode: "SUP-1"),
+                    CommercialDocKinds.PurchaseRequisition, prqId, Actor);
+                await service.CancelOrderAsync(CommercialDocSide.Purchase, prqId, Actor);
+                Assert.Equal(CommercialDocumentStatus.Cancelled,
+                    (await orders.FindByIdAsync(CommercialDocSide.Purchase, childPoId))!.Status);
+
+                // Posted downstream blocks the cancel.
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-B1-CXL",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 5m, 12m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+                await service.CreatePurchaseReceiptAsync(companyId, orderId, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 1m, 12m) }, Actor);
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    service.CancelOrderAsync(CommercialDocSide.Purchase, orderId, Actor));
+
+                // Amend: cancel a clean PO, amend it -> new linked draft copy.
+                var order2Id = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-B1-AMD",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 7m, 12m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, order2Id, Actor);
+                await service.CancelOrderAsync(CommercialDocSide.Purchase, order2Id, Actor);
+                var (amendedId, _) = await service.AmendPurchaseOrderAsync(companyId, order2Id, new DateOnly(2026, 11, 5), Actor);
+                var amended = await orders.FindByIdAsync(CommercialDocSide.Purchase, amendedId);
+                Assert.Equal(CommercialDocumentStatus.Draft, amended!.Status);
+                Assert.Equal(order2Id, amended.AmendedFromDocId);
+                Assert.Equal(7m, amended.Lines[0].Qty);
+                Assert.Equal(CommercialDocumentStatus.Cancelled,
+                    (await orders.FindByIdAsync(CommercialDocSide.Purchase, order2Id))!.Status);
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task B1_ChainInvoice_DuplicateBillNo_RejectedWithPur1011()
+        {
+            var (service, orders, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                async Task<long> PostedPoWithReceipt(string docNo)
+                {
+                    var poId = await service.CreateOrderAsync(
+                        Order(companyId, CommercialDocKinds.PurchaseOrder, docNo,
+                            new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 5m, 12m),
+                            partyId: 9, partyCode: "SUP-1"), Actor);
+                    await service.PostOrderAsync(CommercialDocSide.Purchase, poId, Actor);
+                    await service.CreatePurchaseReceiptAsync(companyId, poId, new DateOnly(2026, 11, 2),
+                        new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 5m, 12m) }, Actor);
+                    return poId;
+                }
+
+                var po1 = await PostedPoWithReceipt("PO-B1-BILL1");
+                var (invoiceId, _) = await service.CreatePurchaseInvoiceAsync(
+                    companyId, po1, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 5m, 12m) },
+                    Actor, "BILL-77", new DateOnly(2026, 10, 30));
+                var invoice = await orders.FindByIdAsync(CommercialDocSide.Purchase, invoiceId);
+                Assert.Equal("BILL-77", invoice!.ReferenceNo);
+                Assert.Equal(new DateOnly(2026, 10, 30), invoice.BillDate);
+
+                var po2 = await PostedPoWithReceipt("PO-B1-BILL2");
+                var error = await Assert.ThrowsAsync<AppError>(() =>
+                    service.CreatePurchaseInvoiceAsync(
+                        companyId, po2, new DateOnly(2026, 11, 3),
+                        new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 5m, 12m) },
+                        Actor, " bill-77 ", new DateOnly(2026, 10, 30)));
+                Assert.Equal("PUR-1011", error.Code);
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task B1_ChainInvoice_WritesTaxTransactions()
+        {
+            var (service, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                ExecSql(connectionString, """
+                    INSERT INTO chart_of_accounts (account_id, company_id, account_code, account_name_ar, account_name_en, account_type, is_active)
+                    VALUES (30, 'ORDER-GL', '1205', 'Input VAT', 'Input VAT', 'Asset', 1);
+                    INSERT INTO company_tax_settings (company_code, country_code, tax_enabled, tax_scheme)
+                    VALUES ('ORDER-GL', 'SA', 1, 'VAT');
+                    INSERT INTO company_tax_rules
+                        (company_code, country_code, tax_code, tax_name, tax_type, tax_treatment,
+                         rate, calculation_mode, is_recoverable, output_account_code, input_account_code,
+                         effective_from, is_default, is_active)
+                    VALUES ('ORDER-GL', 'SA', 'VAT15', 'Standard VAT', 'VAT', 'Standard',
+                            15, 'Exclusive', 1, '2205', '1205', '2026-01-01', 1, 1);
+                    """);
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-B1-TAX",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 5m, 12m, TaxRate: 15m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+                await service.CreatePurchaseReceiptAsync(companyId, orderId, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 5m, 12m, TaxRate: 15m) }, Actor);
+                var (invoiceId, _) = await service.CreatePurchaseInvoiceAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 5m, 12m, TaxRate: 15m) }, Actor);
+
+                Assert.Equal(1m, Scalar(connectionString,
+                    $"SELECT COUNT(*) FROM tax_transactions WHERE source_doc_id = {invoiceId} AND direction = 'INPUT';"));
+                Assert.Equal(9m, Scalar(connectionString,
+                    $"SELECT COALESCE(SUM(tax_amount), 0) FROM tax_transactions WHERE source_doc_id = {invoiceId};"));
+                var gl = GlByAccount(connectionString, "PUR", invoiceId);
+                Assert.Equal(9m, gl["1205"].Debit);
+                Assert.Equal(69m, gl["2201"].Credit);
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task B1_RfqInvitations_FlipToQuoted_AndSplitAward()
+        {
+            var (service, orders, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                var rfq = new CommercialDocumentDraft(
+                    companyId, CommercialDocKinds.RequestForQuotation, "RFQ-B1-01",
+                    new DateOnly(2026, 11, 1), null, null, 1, "SAR", 1m, "B1 sourcing",
+                    new[]
+                    {
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 10m, 0m, SourceLineNo: 1),
+                        new CommercialLineDraft(43, "MAT-43", "Item 43", "PCS", 5m, 0m, SourceLineNo: 2)
+                    },
+                    ValidTill: new DateOnly(2026, 11, 15));
+                var rfqId = await service.CreateOrderAsync(rfq, Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, rfqId, Actor);
+
+                await service.InviteSuppliersToRfqAsync(companyId, rfqId,
+                    new[] { (92L, (string?)"SUP-92", (string?)"Supplier 92") }, Actor);
+                var invitations = await service.GetRfqInvitationsAsync(companyId, rfqId);
+                Assert.Single(invitations);
+                Assert.Equal("Invited", invitations[0].Status);
+
+                var (quoteId, _) = await service.CreateSupplierQuotationFromRfqAsync(
+                    rfqId, 92, "SUP-92", "Supplier 92", "Q-B1",
+                    new DateOnly(2026, 11, 4), new DateOnly(2026, 11, 14), "USD", 0.9m,
+                    new[]
+                    {
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 10m, 13m, SourceLineNo: 1),
+                        new CommercialLineDraft(43, "MAT-43", "Item 43", "PCS", 5m, 25m, SourceLineNo: 2)
+                    }, Actor, new DateOnly(2026, 11, 10), "Net 30");
+                await service.PostOrderAsync(CommercialDocSide.Purchase, quoteId, Actor);
+                invitations = await service.GetRfqInvitationsAsync(companyId, rfqId);
+                Assert.Equal("Quoted", invitations[0].Status);
+                Assert.NotNull(invitations[0].RespondedAt);
+
+                // P2 split award: only line 1 -> the PO carries exactly that line.
+                var (poId, _) = await service.CreatePurchaseOrderFromSupplierQuotationAsync(
+                    quoteId, new DateOnly(2026, 11, 5), Actor, new[] { 1 });
+                var po = await orders.FindByIdAsync(CommercialDocSide.Purchase, poId);
+                Assert.Single(po!.Lines);
+                Assert.Equal(42L, po.Lines[0].MaterialId);
+                Assert.Equal("USD", po.CurrencyCode);
+                Assert.Equal("Net 30", po.PaymentTerms);
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task B1_PurchaseReturn_UnwindsMatch_AllowsReinvoicing_AndRewindRestores()
+        {
+            var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
+            var dbPath = connectionString.Replace("Data Source=", "", StringComparison.OrdinalIgnoreCase).Trim().TrimEnd(';');
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-B1-PRT",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 5m, 12m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+                await service.CreatePurchaseReceiptAsync(companyId, orderId, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 5m, 12m) }, Actor);
+                var (invoiceId, invoiceNo) = await service.CreatePurchaseInvoiceAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 5m, 12m) }, Actor);
+                Assert.Equal(5m, Scalar(connectionString,
+                    "SELECT COALESCE(SUM(matched_qty), 0) FROM purchase_receipt_invoice_matches;"));
+
+                // Drive the manual PRT path (InvRepo) against the chain invoice.
+                var settings = AppCfgSvc.Current;
+                settings.ConnectionStrings["Default"] = new ConnectionStringSettings
+                {
+                    Provider = "SQLite",
+                    ConnectionString = dbPath
+                };
+                settings.Database ??= new DatabaseSettings();
+                settings.Database.DefaultProvider = "SQLite";
+                AppState.SetCompany(CompanyCode, "Order GL Test", "Order GL Test");
+                try
+                {
+                    long PostReturn(decimal qty, string creditRef)
+                    {
+                        var doc = new InvDoc
+                        {
+                            Kind = InvDocKind.PurchaseReturn,
+                            DocNo = InvRepo.NextDocNo(InvDocKind.PurchaseReturn),
+                            DocDate = new DateTime(2026, 11, 6),
+                            PartyId = 9,
+                            PartyCode = "SUP-1",
+                            PartyName = "Test Party",
+                            WarehouseId = 1,
+                            CurrencyCode = "SAR",
+                            ExchangeRate = 1m,
+                            PaymentMethod = InvPaymentMethod.Credit,
+                            OriginalDocId = invoiceId,
+                            OriginalDocKind = InvDocKind.PurchaseInvoice,
+                            OriginalDocNo = invoiceNo,
+                            SupplierCreditNoteRef = creditRef,
+                            Lines =
+                            {
+                                new InvLine
+                                {
+                                    LineNo = 1, MaterialId = 42,
+                                    MaterialCode = "MAT-42", Description = "Item 42", Unit = "PCS",
+                                    Qty = qty, UnitPrice = 12m, DiscountPct = 0m,
+                                    TaxRate = 0m, WarehouseId = 1
+                                }
+                            }
+                        };
+                        InvRepo.SaveDraft(doc);
+                        InvRepo.Post(doc.DocId, doc.Kind, Actor);
+                        return doc.DocId;
+                    }
+
+                    var returnId = PostReturn(2m, "CN-SUP-9");
+                    // I5: the PRT carries its OWN supplier credit-note reference.
+                    Assert.Equal("CN-SUP-9", ScalarText(connectionString,
+                        $"SELECT COALESCE(supplier_credit_note_ref, '') FROM purchase_documents WHERE doc_id = {returnId};"));
+                    // I4: matched qty and stored per_billed unwind by the returned qty.
+                    Assert.Equal(3m, Scalar(connectionString,
+                        "SELECT COALESCE(SUM(matched_qty), 0) FROM purchase_receipt_invoice_matches;"));
+                    Assert.Equal(60m, (await orders.FindByIdAsync(CommercialDocSide.Purchase, orderId))!.PerBilled);
+                    Assert.Equal(1m, Scalar(connectionString,
+                        $"SELECT COUNT(*) FROM purchase_return_match_unwinds WHERE return_doc_id = {returnId};"));
+
+                    // Rewind restores the match exactly (PRT reversal path).
+                    InvRepo.RewindPurchaseReturnMatches(returnId, Actor);
+                    Assert.Equal(5m, Scalar(connectionString,
+                        "SELECT COALESCE(SUM(matched_qty), 0) FROM purchase_receipt_invoice_matches;"));
+                    Assert.Equal(100m, (await orders.FindByIdAsync(CommercialDocSide.Purchase, orderId))!.PerBilled);
+
+                    // Return again and re-invoice the returned qty: succeeds only because of the unwind.
+                    PostReturn(2m, "CN-SUP-10");
+                    await service.CreatePurchaseInvoiceAsync(companyId, orderId, new DateOnly(2026, 11, 7),
+                        new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 12m) }, Actor);
+                    Assert.Equal(5m, Scalar(connectionString,
+                        "SELECT COALESCE(SUM(matched_qty), 0) FROM purchase_receipt_invoice_matches;"));
+                    Assert.Equal(100m, (await orders.FindByIdAsync(CommercialDocSide.Purchase, orderId))!.PerBilled);
+                }
+                finally { AppState.ClearCompany(); }
+            }
+            finally { cleanup(); }
         }
 
         // ------------------------------------------------------------ fixture
