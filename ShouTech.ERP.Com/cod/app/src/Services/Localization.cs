@@ -182,13 +182,41 @@ public static class LangDirSv
         private readonly string _resourcesPath;
         private readonly List<string> _availableLanguages = new() { "ar", "en", "fr", "tr" };
 
+        // Lazy-load state (docs/STARTUP_PERF_STUDY.md L3): the
+        // constructor used to parse all four catalogs for the label
+        // index plus the active resources — ~190ms per instance, and
+        // startup constructs two instances. Both loads now happen on
+        // first use; results are identical, only their timing moves.
+        private readonly object _loadGate = new();
+        private bool _resourcesLoaded;
+        private bool _labelIndexBuilt;
+
         public event EventHandler? LanguageChanged;
 
         public LocSvc()
         {
             _resourcesPath = ResolveResourcesPath();
-            BuildLabelIndex();
+        }
+
+        private void EnsureResourcesLoaded()
+        {
+            if (_resourcesLoaded)
+                return;
             LoadResources();
+        }
+
+        private void EnsureLabelIndex()
+        {
+            if (_labelIndexBuilt)
+                return;
+
+            lock (_loadGate)
+            {
+                if (_labelIndexBuilt)
+                    return;
+                BuildLabelIndex();
+                _labelIndexBuilt = true;
+            }
         }
 
         public bool TryResolveKeyFromLabel(string? label, out string key)
@@ -196,6 +224,8 @@ public static class LangDirSv
             key = string.Empty;
             if (string.IsNullOrWhiteSpace(label))
                 return false;
+
+            EnsureLabelIndex();
 
             var trimmed = label.Trim();
             if (_labelToKey.TryGetValue(trimmed, out key!))
@@ -309,11 +339,13 @@ public static class LangDirSv
 
         public string GetString(string key)
         {
+            EnsureResourcesLoaded();
             return _resources.TryGetValue(key, out var value) ? value : key;
         }
 
         public string GetString(string key, string defaultValue)
         {
+            EnsureResourcesLoaded();
             return _resources.TryGetValue(key, out var value) ? value : defaultValue;
         }
 
@@ -425,7 +457,11 @@ public static class LangDirSv
 
         public void LoadResources()
         {
-            LoadLanguage(_currentLanguage);
+            lock (_loadGate)
+            {
+                LoadLanguage(_currentLanguage);
+                _resourcesLoaded = true;
+            }
         }
 
         private void LoadLanguage(string languageCode)

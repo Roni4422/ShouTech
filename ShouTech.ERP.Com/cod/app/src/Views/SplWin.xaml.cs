@@ -1,9 +1,6 @@
 ﻿using System;
-using System.Diagnostics;
 using System.IO;
 using System.Reflection;
-using System.Security.Cryptography;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using ShouTech.App.Configuration;
@@ -15,7 +12,6 @@ namespace ShouTech.App.Views
 {
     public partial class SplWin : Window
     {
-        private const double MaxSplashSeconds = 4.0;
         private bool _started;
         private bool? _hasCompaniesAtStartup;
 
@@ -31,13 +27,11 @@ namespace ShouTech.App.Views
                 return;
             _started = true;
 
-            var sw = Stopwatch.StartNew();
-
             try
             {
                 ApplyConfigTexts();
                 ApplyLocalization();
-                await RunStartupSecurityPipelineAsync(sw);
+                await RunStartupSecurityPipelineAsync();
             }
             catch (Exception ex)
             {
@@ -45,6 +39,8 @@ namespace ShouTech.App.Views
                 SetStatus($"Startup warning: {ex.Message}");
                 await SafeDelay(200);
             }
+
+            StartupTiming.Mark("SplashPipelineDone");
 
             try
             {
@@ -58,9 +54,7 @@ namespace ShouTech.App.Views
                 _hasCompaniesAtStartup = false;
             }
 
-            var remaining = MaxSplashSeconds - sw.Elapsed.TotalSeconds;
-            if (remaining > 0.05)
-                await SafeDelay((int)(remaining * 1000));
+            StartupTiming.Mark("CompaniesChecked");
 
             SetProgress(100);
             SetStatus("Ready.");
@@ -83,26 +77,25 @@ namespace ShouTech.App.Views
             }
         }
 
-        private async Task RunStartupSecurityPipelineAsync(Stopwatch sw)
+        // The splash stays up exactly as long as the real startup work
+        // takes — there is no minimum display time and no step is ever
+        // skipped for exceeding a time budget (the pre-perf behavior
+        // padded every launch to 4.0s and silently dropped late steps
+        // on slow machines; docs/STARTUP_PERF_STUDY.md §1 Phase 3).
+        private async Task RunStartupSecurityPipelineAsync()
         {
-            await RunStepAsync(sw, 8,  "Checking startup files and settings...", VerifyApplicationBinariesAsync);
-            await RunStepAsync(sw, 18, "Checking startup files and settings...", VerifyIntegrityAsync);
-            await RunStepAsync(sw, 30, "Checking startup files and settings...", ScanUnauthorizedModificationsAsync);
-            await RunStepAsync(sw, 42, "Checking startup files and settings...", ValidateConfigAndUserFilesAsync);
-            await RunStepAsync(sw, 55, "Checking device identity and dongle...", CheckDeviceAndDongleAsync);
-            await RunStepAsync(sw, 70, "Checking license...", CheckLicenseAsync);
-            await RunStepAsync(sw, 85, "Preparing local user data...", PrepareUserDataAsync);
-            await RunStepAsync(sw, 95, "Starting background services...", StartBackgroundServicesAsync);
+            await RunStepAsync(8,  "Checking startup files and settings...", VerifyApplicationBinariesAsync);
+            await RunStepAsync(18, "Checking startup files and settings...", VerifyIntegrityAsync);
+            await RunStepAsync(30, "Checking startup files and settings...", ScanUnauthorizedModificationsAsync);
+            await RunStepAsync(42, "Checking startup files and settings...", ValidateConfigAndUserFilesAsync);
+            await RunStepAsync(55, "Checking device identity and dongle...", CheckDeviceAndDongleAsync);
+            await RunStepAsync(70, "Checking license...", CheckLicenseAsync);
+            await RunStepAsync(85, "Preparing local user data...", PrepareUserDataAsync);
+            await RunStepAsync(95, "Starting background services...", StartBackgroundServicesAsync);
         }
 
-        private async Task RunStepAsync(Stopwatch sw, int progressTarget, string message, Func<Task> action)
+        private async Task RunStepAsync(int progressTarget, string message, Func<Task> action)
         {
-            if (sw.Elapsed.TotalSeconds >= MaxSplashSeconds - 0.15)
-            {
-                SetProgress(progressTarget);
-                return;
-            }
-
             SetStatus(message);
             SetProgress(progressTarget - 5 < 0 ? 0 : progressTarget - 5);
 
@@ -118,7 +111,6 @@ namespace ShouTech.App.Views
             }
 
             SetProgress(progressTarget);
-            await SafeDelay(40);
         }
 
         private static Task VerifyApplicationBinariesAsync()
@@ -153,12 +145,13 @@ namespace ShouTech.App.Views
             if (string.IsNullOrWhiteSpace(entry) || !File.Exists(entry))
                 return Task.CompletedTask;
 
-            var bytes = File.ReadAllBytes(entry);
-            if (bytes.Length < 1024)
+            // Only the size floor below is enforced — the SHA-256 this
+            // step used to compute was discarded unread. FileInfo.Length
+            // gives the identical pass/fail without reading and hashing
+            // the whole entry assembly on every launch.
+            if (new FileInfo(entry).Length < 1024)
                 throw new InvalidOperationException("Entry assembly integrity check failed.");
 
-            var hash = SHA256.HashData(bytes);
-            _ = Convert.ToHexString(hash.AsSpan(0, 8));
             return Task.CompletedTask;
         }
 

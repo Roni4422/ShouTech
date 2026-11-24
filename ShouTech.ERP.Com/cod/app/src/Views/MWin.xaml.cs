@@ -1300,37 +1300,29 @@ namespace ShouTech.App.Views
         private readonly Dictionary<string, (Button Header, StackPanel Body)> _navSections =
             new(StringComparer.OrdinalIgnoreCase);
 
+        // Deferred nav bodies (docs/STARTUP_PERF_STUDY.md L4):
+        // BuildNavShell creates every section header plus the first
+        // section's body; each remaining body is populated on first
+        // demand (header click / ExpandNavSection) or by a
+        // Loaded-priority pass right after first render, whichever
+        // comes first. The controls, bindings and behavior are
+        // identical — only their construction time moves out of the
+        // constructor and off the show path.
+        private readonly Dictionary<RibbonTab, StackPanel> _navBodyPanels = new();
+        private readonly HashSet<RibbonTab> _navBodiesBuilt = new();
+
         private void BuildNavShell()
         {
             NavPaneItems.Children.Clear();
             _navSections.Clear();
+            _navBodyPanels.Clear();
+            _navBodiesBuilt.Clear();
 
+            var firstSection = true;
             foreach (var tab in RibbonControl.Items.OfType<RibbonTab>())
             {
                 var body = new StackPanel();
-
-                foreach (var group in tab.Items.OfType<RibbonGroup>())
-                {
-                    var groupLabel = new TextBlock
-                    {
-                        Text = group.Header?.ToString() ?? string.Empty,
-                        FontSize = 11,
-                        FontWeight = FontWeights.SemiBold,
-                        Opacity = 0.65,
-                        Margin = new Thickness(10, 8, 8, 2)
-                    };
-                    var groupKey = LocProps.GetKey(group);
-                    if (!string.IsNullOrWhiteSpace(groupKey))
-                        LocProps.SetKey(groupLabel, groupKey);
-                    BindingOperations.SetBinding(
-                        groupLabel, VisibilityProperty,
-                        new Binding("Visibility") { Source = group });
-                    body.Children.Add(groupLabel);
-
-                    foreach (var source in FindRibbonButtons(group))
-                        body.Children.Add(CreateShellItem(
-                            source, "NavPaneItemStyle"));
-                }
+                _navBodyPanels[tab] = body;
 
                 var headerText = tab.Header?.ToString() ?? tab.Name;
                 string? headerKey = null;
@@ -1350,12 +1342,16 @@ namespace ShouTech.App.Views
                     header, IsEnabledProperty,
                     new Binding("IsEnabled") { Source = tab });
 
+                var capturedTab = tab;
                 var capturedBody = body;
                 header.Click += (_, _) =>
+                {
+                    EnsureNavBody(capturedTab);
                     capturedBody.Visibility =
                         capturedBody.Visibility == Visibility.Visible
                             ? Visibility.Collapsed
                             : Visibility.Visible;
+                };
 
                 var section = new StackPanel();
                 section.Children.Add(header);
@@ -1364,6 +1360,85 @@ namespace ShouTech.App.Views
 
                 if (!string.IsNullOrEmpty(tab.Name))
                     _navSections[tab.Name] = (header, body);
+
+                if (firstSection)
+                {
+                    firstSection = false;
+                    EnsureNavBody(tab);
+                }
+            }
+
+            if (_navBodiesBuilt.Count < _navBodyPanels.Count)
+            {
+                Dispatcher.BeginInvoke(
+                    new Action(BuildRemainingNavBodies),
+                    DispatcherPriority.Loaded);
+            }
+        }
+
+        private void EnsureNavBody(RibbonTab tab)
+        {
+            if (!_navBodyPanels.TryGetValue(tab, out var body))
+                return;
+            if (!_navBodiesBuilt.Add(tab))
+                return;
+            PopulateNavBody(tab, body);
+        }
+
+        private void EnsureNavBodyByName(string tabName)
+        {
+            foreach (var tab in _navBodyPanels.Keys)
+            {
+                if (string.Equals(
+                        tab.Name, tabName, StringComparison.OrdinalIgnoreCase))
+                {
+                    EnsureNavBody(tab);
+                    return;
+                }
+            }
+        }
+
+        private void BuildRemainingNavBodies()
+        {
+            if (_isClosing)
+                return;
+
+            try
+            {
+                foreach (var tab in _navBodyPanels.Keys.ToList())
+                    EnsureNavBody(tab);
+            }
+            catch (Exception exL1304)
+            {
+                AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, exL1304, "MWin.xaml.BuildNavShell");
+                // Non-fatal: any body not built here is still built
+                // on first demand (header click / ExpandNavSection).
+            }
+        }
+
+        private void PopulateNavBody(RibbonTab tab, StackPanel body)
+        {
+            foreach (var group in tab.Items.OfType<RibbonGroup>())
+            {
+                var groupLabel = new TextBlock
+                {
+                    Text = group.Header?.ToString() ?? string.Empty,
+                    FontSize = 11,
+                    FontWeight = FontWeights.SemiBold,
+                    Opacity = 0.65,
+                    Margin = new Thickness(10, 8, 8, 2)
+                };
+                var groupKey = LocProps.GetKey(group);
+                if (!string.IsNullOrWhiteSpace(groupKey))
+                    LocProps.SetKey(groupLabel, groupKey);
+                BindingOperations.SetBinding(
+                    groupLabel, VisibilityProperty,
+                    new Binding("Visibility") { Source = group });
+                body.Children.Add(groupLabel);
+
+                foreach (var source in FindRibbonButtons(group))
+                    body.Children.Add(CreateShellItem(
+                        source, "NavPaneItemStyle"));
             }
         }
 
@@ -1450,6 +1525,8 @@ namespace ShouTech.App.Views
         {
             if (NavPane.Visibility != Visibility.Visible)
                 NavPane.Visibility = Visibility.Visible;
+
+            EnsureNavBodyByName(tabName);
 
             if (_navSections.TryGetValue(tabName, out var section))
             {

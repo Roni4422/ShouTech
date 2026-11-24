@@ -7,6 +7,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
@@ -221,11 +222,88 @@ namespace ShouTech.App
     }
 
     // ========================================================================
+    //  Startup phase timing (docs/STARTUP_PERF_STUDY.md)
+    //
+    //  Permanent, near-zero-cost phase marks for cold-start measurement
+    //  and regression alarms. Marks taken before the LogServ exists
+    //  (AppHost.Initialize) are buffered and flushed in order by
+    //  GoLive(); afterwards each mark writes one LIFE log line:
+    //      STARTUP [MWinShown] t=+1234ms d=56ms
+    //  (t = ms since process start, d = ms since the previous phase).
+    //  Compare these lines in log.log before/after any startup change.
+    //  Timing is diagnostics only: a failure inside it must never
+    //  affect startup, and the logging layer itself may not exist yet
+    //  — the same guarded pattern SchemaBootstrapper.SafeLog* uses.
+    // ========================================================================
+    internal static class StartupTiming
+    {
+        private static readonly Stopwatch Clock = Stopwatch.StartNew();
+        private static readonly List<(string Phase, long Ms)> Buffer = new();
+        private static readonly object Gate = new();
+        private static long _lastMs;
+        private static bool _live;
+
+        /// <summary>Starts the clock (called from the App static constructor).</summary>
+        public static void Touch() => _ = Clock.ElapsedMilliseconds;
+
+        public static void Mark(string phase)
+        {
+            try
+            {
+                var ms = Clock.ElapsedMilliseconds;
+                lock (Gate)
+                {
+                    if (!_live)
+                    {
+                        Buffer.Add((phase, ms));
+                        return;
+                    }
+                }
+
+                Write(phase, ms);
+            }
+            catch { /* diagnostics only — see class note */ }
+        }
+
+        public static void GoLive()
+        {
+            try
+            {
+                List<(string Phase, long Ms)> pending;
+                lock (Gate)
+                {
+                    _live = true;
+                    pending = new List<(string Phase, long Ms)>(Buffer);
+                    Buffer.Clear();
+                }
+
+                foreach (var (phase, ms) in pending)
+                    Write(phase, ms);
+            }
+            catch { /* diagnostics only — see class note */ }
+        }
+
+        private static void Write(string phase, long ms)
+        {
+            var delta = ms - _lastMs;
+            _lastMs = ms;
+            AppHost.Logging?.LogLifecycle("STARTUP", $"[{phase}] t=+{ms}ms d={delta}ms");
+        }
+    }
+
+    // ========================================================================
     //  Application
     // ========================================================================
     public partial class App : System.Windows.Application
     {
         private IServiceProvider? _serviceProvider;
+
+        static App()
+        {
+            // Start the startup-phase clock before the XAML resource
+            // dictionaries are parsed (docs/STARTUP_PERF_STUDY.md).
+            StartupTiming.Touch();
+        }
 
         // ====================================================================
         // GLOBAL LOCALIZATION SERVICE
@@ -313,6 +391,7 @@ namespace ShouTech.App
         // ====================================================================
         protected override void OnStartup(StartupEventArgs e)
         {
+            StartupTiming.Mark("OnStartup.Begin");
             base.OnStartup(e);
 
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -407,6 +486,8 @@ namespace ShouTech.App
                 };
             }
 
+            StartupTiming.Mark("PrefsLoaded");
+
             // Adopt the language immediately (before any window).
             // SetApplicationLanguage sets CurrentLanguageCode + Culture +
             // Localization.SetLanguage (raises LanguageChanged) + ApplyToAllWindows.
@@ -418,14 +499,19 @@ namespace ShouTech.App
             // on; Options saves refresh it live (OptWin.Save).
             NumFmt.Current = pref.ToNumFmtSettings();
 
+            StartupTiming.Mark("LanguageAdopted");
+
             // ---------- Dependency Injection ----------
             var services = new ServiceCollection();
             ConfigureServices(services);
             _serviceProvider = services.BuildServiceProvider();
 
+            StartupTiming.Mark("ContainerBuilt");
+
             try
             {
                 SchemaBootstrapper.EnsureSchema();
+                StartupTiming.Mark("SchemaEnsured");
                 // Install database-level audit triggers before any business screen can mutate data.
                 // A missing/unselected company database must not prevent the application from starting.
                 try
@@ -437,6 +523,8 @@ namespace ShouTech.App
                     try { AppHost.Logging?.LogWarning("Audit", "Delete-audit bootstrap deferred until a company database is available: " + auditEx.Message); } catch (Exception exL393) {
                         AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL393, "App.xaml.OnStartup"); }
                 }
+
+                StartupTiming.Mark("AuditInfraEnsured");
             }
             catch (Exception ex)
             {
@@ -472,6 +560,11 @@ namespace ShouTech.App
 
             // ---------- Initialize Application Host ----------
             AppHost.Initialize();
+
+            // The LogServ exists now: flush the buffered phase marks
+            // in order, then write later marks directly.
+            StartupTiming.GoLive();
+            StartupTiming.Mark("AppHostInitialized");
 
             try
             {
@@ -915,6 +1008,7 @@ namespace ShouTech.App
 
                 splash.Show();
                 splash.Activate();
+                StartupTiming.Mark("SplashShown");
             }
             catch (Exception ex)
             {
@@ -967,6 +1061,7 @@ namespace ShouTech.App
             companyWindow.Show();
             companyWindow.Activate();
             companyWindow.Focus();
+            StartupTiming.Mark("ComWinShown");
         }
 
         // ====================================================================
@@ -1014,12 +1109,15 @@ namespace ShouTech.App
             loginWindow.Show();
             loginWindow.Activate();
             loginWindow.Focus();
+            StartupTiming.Mark("LogWinShown");
         }
 
         // ====================================================================
         // ====================================================================
         public void ShowMainApp()
         {
+            StartupTiming.Mark("LoginCompleted");
+
             if (_serviceProvider is null)
                 throw new InvalidOperationException(
                     "The dependency injection container has not been initialized.");
@@ -1060,11 +1158,20 @@ namespace ShouTech.App
 
             var mainWindow = _serviceProvider.GetRequiredService<MWin>();
 
+            StartupTiming.Mark("MWinConstructed");
+
             MainWindow = mainWindow;
 
             mainWindow.Show();
             mainWindow.Activate();
             mainWindow.Focus();
+            StartupTiming.Mark("MWinShown");
+
+            // First dispatcher idle after the shell is up = the user
+            // can interact; this is the cold-start finish line.
+            mainWindow.Dispatcher.BeginInvoke(
+                DispatcherPriority.ApplicationIdle,
+                new Action(() => StartupTiming.Mark("MWinInteractive")));
         }
 
         // ====================================================================
