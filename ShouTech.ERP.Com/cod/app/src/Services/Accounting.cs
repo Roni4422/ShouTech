@@ -17,6 +17,7 @@ using Microsoft.Data.Sqlite;
 using Npgsql;
 using ShouTech.App.Views;
 using ShouTech.Domain;
+using ShouTech.Domain.Enums;
 
 namespace ShouTech.App.Services
 {
@@ -72,22 +73,22 @@ namespace ShouTech.App.Services
     /// </summary>
     public sealed class AccServ : IAccServ
     {
-        private readonly ILicServ _lic;
+        private readonly IEntitlementService _lic;
         private readonly IPermServ _perm;
 
         private readonly Dictionary<Guid, JournalEntry> _journals = new();
         private readonly object _sync = new();
 
-        public AccServ(ILicServ lic, IPermServ perm)
+        public AccServ(IEntitlementService lic, IPermServ perm)
         {
             _lic = lic ?? throw new ArgumentNullException(nameof(lic));
             _perm = perm ?? throw new ArgumentNullException(nameof(perm));
         }
 
-        public async Task<Guid> CreateJournalAsync(DateOnly entryDate, string description, string userId, CancellationToken ct = default)
+        public Task<Guid> CreateJournalAsync(DateOnly entryDate, string description, string userId, CancellationToken ct = default)
         {
-            await _lic.EnsureCanWriteAsync(ct);
-            await _lic.EnsureModuleAsync(ModKey.Acc, ct);
+            _lic.EnsureCanWrite();
+            _lic.EnsureModule(ModKey.Acc);
 
             if (!_perm.Has(PermKey.AccCreate))
                 throw new UnauthorizedAccessException("You do not have permission to create journal entries.");
@@ -107,15 +108,15 @@ namespace ShouTech.App.Services
             lock (_sync)
                 _journals[journal.Id] = journal;
 
-            return journal.Id;
+            return Task.FromResult(journal.Id);
         }
 
-        public async Task AddJournalLineAsync(
+        public Task AddJournalLineAsync(
             Guid journalId, Guid accountId, decimal debit, decimal credit,
             string? costCenter, string? note, string userId, CancellationToken ct = default)
         {
-            await _lic.EnsureCanWriteAsync(ct);
-            await _lic.EnsureModuleAsync(ModKey.Acc, ct);
+            _lic.EnsureCanWrite();
+            _lic.EnsureModule(ModKey.Acc);
 
             if (!_perm.Has(PermKey.AccCreate))
                 throw new UnauthorizedAccessException("You do not have permission to modify journal entries.");
@@ -139,6 +140,8 @@ namespace ShouTech.App.Services
                     Note = note
                 });
             }
+
+            return Task.CompletedTask;
         }
 
         private JournalEntry GetOpenJournal(Guid journalId)
@@ -151,10 +154,10 @@ namespace ShouTech.App.Services
             return journal;
         }
 
-        public async Task PostJournalAsync(Guid journalId, string userId, CancellationToken ct = default)
+        public Task PostJournalAsync(Guid journalId, string userId, CancellationToken ct = default)
         {
-            await _lic.EnsureCanWriteAsync(ct);
-            await _lic.EnsureModuleAsync(ModKey.Acc, ct);
+            _lic.EnsureCanWrite();
+            _lic.EnsureModule(ModKey.Acc);
 
             if (!_perm.Has(PermKey.AccPost))
                 throw new UnauthorizedAccessException("You do not have permission to post journal entries.");
@@ -184,12 +187,14 @@ namespace ShouTech.App.Services
                 journal.PostedBy = userId;
                 journal.PostedAtUtc = DateTimeOffset.UtcNow;
             }
+
+            return Task.CompletedTask;
         }
 
-        public async Task SoftDeleteDraftJournalAsync(Guid journalId, string userId, CancellationToken ct = default)
+        public Task SoftDeleteDraftJournalAsync(Guid journalId, string userId, CancellationToken ct = default)
         {
-            await _lic.EnsureCanWriteAsync(ct);
-            await _lic.EnsureModuleAsync(ModKey.Acc, ct);
+            _lic.EnsureCanWrite();
+            _lic.EnsureModule(ModKey.Acc);
 
             if (!_perm.Has(PermKey.AccDelete))
                 throw new UnauthorizedAccessException("You do not have permission to delete journal entries.");
@@ -207,6 +212,8 @@ namespace ShouTech.App.Services
                 journal.IsDeleted = true;
                 journal.DeletedBy = userId;
             }
+
+            return Task.CompletedTask;
         }
     }
 

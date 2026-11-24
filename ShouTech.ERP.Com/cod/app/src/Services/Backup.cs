@@ -1242,18 +1242,10 @@ internal static class SteiSvc
 
     public sealed class BkpServ : IBkpServ
     {
-        private readonly ILicServ? _lic;
         private readonly IPermServ? _perm;
         private readonly ILogServ _log;
         private readonly IDevInfoSv? _devInfo;
         private readonly ISyncServ? _sync;
-
-        public BkpServ(ILicServ lic, IPermServ perm, ILogServ log)
-        {
-            _lic = lic;
-            _perm = perm;
-            _log = log;
-        }
 
         public BkpServ(ILogServ log, IDevInfoSv devInfo, ISyncServ sync, IPermServ? perm = null)
         {
@@ -1282,9 +1274,11 @@ internal static class SteiSvc
             string notes,
             CancellationToken ct)
         {
-            if (_lic != null)
-                await _lic.EnsureCanWriteAsync(ct);
-
+            // Licensing build (telemetry study §7.4): creating a
+            // local backup stays ALLOWED in view-only/demo mode —
+            // the customer's data is always theirs to protect. The
+            // retired fake gate (LicServ) is gone; restore is the
+            // state-changing operation and is gated below.
             if (_perm != null && !_perm.Has(PermCat.Backup.Create))
                 throw new UnauthorizedAccessException("You do not have permission to create backups (BACKUP.CREATE).");
 
@@ -1371,8 +1365,10 @@ internal static class SteiSvc
 
         public async Task RestoreBackupAsync(string backupFilePath, CancellationToken ct = default)
         {
-            if (_lic != null)
-                await _lic.EnsureCanWriteAsync(ct);
+            // Restore replaces the entire database — a state-
+            // changing operation, refused in view-only/demo mode by
+            // the one entitlement gate (LIC-8008/LIC-8003 family).
+            AppHost.Entitlements.EnsureCanWrite();
 
             if (_perm != null && !_perm.Has(PermCat.Backup.Restore))
                 throw new UnauthorizedAccessException("You do not have permission to restore backups (BACKUP.RESTORE).");

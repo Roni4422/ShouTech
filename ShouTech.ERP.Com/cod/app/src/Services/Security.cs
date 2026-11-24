@@ -117,6 +117,37 @@ internal static class SecEngInterop
 
     [DllImport(Dll, CallingConvention = CallingConvention.StdCall, ExactSpelling = true, CharSet = CharSet.Unicode)]
     internal static extern uint ST_GetStatusMessage(uint status, char[] buffer, uint bufferSize, out uint requiredSize);
+
+    // ---- Dongle / session surface (licensing build) -------------------
+    // Declared per the dongle/module licensing design §4.2/§5 step 3.
+    // Buffers are passed raw, sized by the native header's static
+    // asserts (ST_DONGLE_INFO = 176 bytes, ST_SESSION_INFO = 848
+    // bytes, sec.h pack(8)); the managed side reads only the fields
+    // whose offsets are fixed by the header layout (cb_size, version,
+    // and the presence/valid byte that follows them). Full struct
+    // marshaling is part of the native productization pass (D5):
+    // until SecEng ships with a real validator, DongleProvider
+    // reports not-applicable and never grants from these calls.
+    internal const int DongleInfoSize = 176;
+    internal const int SessionInfoSize = 848;
+
+    [DllImport(Dll, CallingConvention = CallingConvention.StdCall, ExactSpelling = true)]
+    internal static extern uint ST_DetectDongle(byte[] dongleInfo);
+
+    [DllImport(Dll, CallingConvention = CallingConvention.StdCall, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool ST_IsDonglePresent();
+
+    [DllImport(Dll, CallingConvention = CallingConvention.StdCall, ExactSpelling = true)]
+    internal static extern uint ST_ChallengeDongle(
+        byte[] challenge, uint challengeLen,
+        byte[] response, uint responseBufferSize, out uint responseLen);
+
+    [DllImport(Dll, CallingConvention = CallingConvention.StdCall, ExactSpelling = true)]
+    internal static extern uint ST_ValidateSession(byte[] sessionInfo);
+
+    [DllImport(Dll, CallingConvention = CallingConvention.StdCall, ExactSpelling = true)]
+    internal static extern uint ST_GetEdition();
 }
 
     // ========== SqlIdentifier.cs (Phase 4) ==========

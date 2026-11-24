@@ -73,6 +73,11 @@
     <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.12" />
     <PackageReference Include="Dapper" Version="2.1.44" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+    <!-- Licensing build: WMI reads for the device-fingerprint collector
+         (Win32_BaseBoard / Win32_BIOS / Win32_LogicalDisk serials).
+         Windows-only at runtime; every read is guarded and a failure
+         makes the component absent, never invented. -->
+    <PackageReference Include="System.Management" Version="8.0.0" />
 
   </ItemGroup>
 

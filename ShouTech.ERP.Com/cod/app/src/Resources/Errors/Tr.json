@@ -285,6 +285,84 @@
   "name": "LicenseCheckFailed",
   "message": "Lisans doğrulanamadı."
  },
+ "LIC-8002": {
+  "code": "LIC-8002",
+  "name": "ModuleNotLicensed",
+  "message": "'{0}' modülü bu lisansa dahil değildir.",
+  "hint": "Modül yalnızca görüntüleme modunda kullanılabilir durumda kalır. Lisansa eklemek için satıcınızla iletişime geçin."
+ },
+ "LIC-8003": {
+  "code": "LIC-8003",
+  "name": "LicenseExpired",
+  "message": "Lisans {0} tarihinde sona erdi ve ek süre de doldu.",
+  "hint": "Program yalnızca görüntüleme modunda çalışıyor. Tam işlevi geri yüklemek için lisansı yenileyin."
+ },
+ "LIC-8004": {
+  "code": "LIC-8004",
+  "name": "LicenseNotFound",
+  "message": "Bu kurulum için lisans bulunamadı.",
+  "hint": "Program yalnızca görüntüleme modunda çalışıyor. Lisans penceresinden imzalı bir lisans dosyası içe aktarın."
+ },
+ "LIC-8005": {
+  "code": "LIC-8005",
+  "name": "DongleNotFound",
+  "message": "Lisans, algılanmayan bir dongle'a bağlıdır.",
+  "hint": "Lisans dongle'ını bağlayıp yeniden başlatın veya satıcınızla iletişime geçin."
+ },
+ "LIC-8006": {
+  "code": "LIC-8006",
+  "name": "LicenseBindingMismatch",
+  "message": "Lisans bu cihazla eşleşmiyor.",
+  "hint": "Lisanslar cihaz parmak izine bağlıdır. Bu cihazı yeniden kaydettirmek için satıcınızla iletişime geçin."
+ },
+ "LIC-8007": {
+  "code": "LIC-8007",
+  "name": "LicenseSignatureInvalid",
+  "message": "Lisans dosyası imzası geçersiz.",
+  "hint": "Lisans dosyası değiştirilmiş veya orijinal değil. Orijinal imzalı bir lisans dosyası içe aktarın."
+ },
+ "LIC-8008": {
+  "code": "LIC-8008",
+  "name": "LicenseReadOnly",
+  "message": "Program yalnızca görüntüleme modundayken bu işleme izin verilmiyor.",
+  "hint": "Görüntüleme, yazdırma ve dışa aktarma kullanılabilir durumda kalır. Değişiklik yapmak için geçerli bir lisansı geri yükleyin."
+ },
+ "LIC-8009": {
+  "code": "LIC-8009",
+  "name": "LicenseGracePeriod",
+  "message": "Lisans {0} tarihine kadar ek süre içindedir.",
+  "hint": "Yalnızca görüntüleme modunu önlemek için ek süre dolmadan lisansı yenileyin."
+ },
+ "ONL-8501": {
+  "code": "ONL-8501",
+  "name": "VerdictSignatureInvalid",
+  "message": "Bir sunucu kararı, imzası geçersiz olduğu için atıldı."
+ },
+ "ONL-8502": {
+  "code": "ONL-8502",
+  "name": "VerdictReplayIgnored",
+  "message": "Bir sunucu kararı, uygulanan son karardan daha yeni olmadığı için yok sayıldı."
+ },
+ "ONL-8503": {
+  "code": "ONL-8503",
+  "name": "UploadHashMismatch",
+  "message": "Sunucu, yüklenen bir yedek parçasında karma uyuşmazlığı bildirdi."
+ },
+ "ONL-8504": {
+  "code": "ONL-8504",
+  "name": "FingerprintCollectionFailed",
+  "message": "Cihaz parmak izi bileşenlerinden biri veya daha fazlası toplanamadı."
+ },
+ "ONL-8505": {
+  "code": "ONL-8505",
+  "name": "CheckInFailed",
+  "message": "Uyumluluk bildirimi tamamlanamadı."
+ },
+ "ONL-8506": {
+  "code": "ONL-8506",
+  "name": "BackupUploadFailed",
+  "message": "Günlük yedek yüklemesi tamamlanamadı."
+ },
  "SYS-0001": {
   "code": "SYS-0001",
   "name": "UnknownError",

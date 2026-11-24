@@ -1061,10 +1061,12 @@
       "Workflow"
     ],
     "DongleInfo": {
-      "VendorId": 4660,
-      "ProductId": 22136,
+      "VendorId": 21320,
+      "ProductId": 17746,
       "SerialNumber": ""
     },
+    "DevMode": false,
+    "Providers": [ "Dongle", "LicenseFile", "Online", "DevMode" ],
     "Activation": {
       "RequireOnlineActivation": false,
       "ActivationServer": "",

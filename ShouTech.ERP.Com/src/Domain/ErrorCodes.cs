@@ -16,6 +16,9 @@ namespace ShouTech.Domain;
 ///   INV  6000-6999  inventory / orders
 ///   UI   7000-7999  windows / shell
 ///   LIC  8000-8999  licensing
+///   ONL  8500-8599  online compliance: check-in, verdicts, backup upload
+///                  (sub-range of the LIC block, assigned by the telemetry
+///                  study §8 so the two families never collide)
 ///   CRM  9000-9999  customer relationship management
 ///
 /// RULE: codes are immutable once assigned. A retired code is never
@@ -123,6 +126,28 @@ public static class ErrorCodes
 
     // ---- LIC 8000-8999 -------------------------------------------------
     public const string LicenseCheckFailed = "LIC-8001";
+    // Licensing build (feat/licensing): the entitlement gate's codes, per
+    // the dongle/module licensing design §3.3. LIC-8001 above predates
+    // the build and keeps its meaning (provider machinery failure).
+    public const string ModuleNotLicensed = "LIC-8002";
+    public const string LicenseExpired = "LIC-8003";
+    public const string LicenseNotFound = "LIC-8004";
+    public const string DongleNotFound = "LIC-8005";
+    public const string LicenseBindingMismatch = "LIC-8006";
+    public const string LicenseSignatureInvalid = "LIC-8007";
+    public const string LicenseReadOnly = "LIC-8008";
+    public const string LicenseGracePeriod = "LIC-8009";
+
+    // ---- ONL 8500-8599 (online compliance: check-in / verdict / upload) --
+    // Telemetry study §8: failures of the opportunistic layer-2 channel.
+    // None of these ever blocks local work (offline-first); they surface
+    // in the log and on the license status surface.
+    public const string VerdictSignatureInvalid = "ONL-8501";
+    public const string VerdictReplayIgnored = "ONL-8502";
+    public const string UploadHashMismatch = "ONL-8503";
+    public const string FingerprintCollectionFailed = "ONL-8504";
+    public const string CheckInFailed = "ONL-8505";
+    public const string BackupUploadFailed = "ONL-8506";
 
     // ---- CRM 9000-9999 -------------------------------------------------
     // Phase B 057 (CRM): conversion / pipeline / activity state

@@ -285,6 +285,84 @@
   "name": "LicenseCheckFailed",
   "message": "The license could not be verified."
  },
+ "LIC-8002": {
+  "code": "LIC-8002",
+  "name": "ModuleNotLicensed",
+  "message": "Module '{0}' is not included in this license.",
+  "hint": "The module remains available in view-only mode. Contact your vendor to add it to the license."
+ },
+ "LIC-8003": {
+  "code": "LIC-8003",
+  "name": "LicenseExpired",
+  "message": "The license expired on {0} and the grace period has ended.",
+  "hint": "The program runs in view-only mode. Renew the license to restore full function."
+ },
+ "LIC-8004": {
+  "code": "LIC-8004",
+  "name": "LicenseNotFound",
+  "message": "No license was found for this installation.",
+  "hint": "The program runs in view-only mode. Import a signed license file from the License window."
+ },
+ "LIC-8005": {
+  "code": "LIC-8005",
+  "name": "DongleNotFound",
+  "message": "The license is bound to a dongle that was not detected.",
+  "hint": "Connect the license dongle and restart, or contact your vendor."
+ },
+ "LIC-8006": {
+  "code": "LIC-8006",
+  "name": "LicenseBindingMismatch",
+  "message": "The license does not match this device.",
+  "hint": "Licenses are bound to the device fingerprint. Contact your vendor to re-register this device."
+ },
+ "LIC-8007": {
+  "code": "LIC-8007",
+  "name": "LicenseSignatureInvalid",
+  "message": "The license file signature is invalid.",
+  "hint": "The license file was altered or is not genuine. Import an original signed license file."
+ },
+ "LIC-8008": {
+  "code": "LIC-8008",
+  "name": "LicenseReadOnly",
+  "message": "This operation is not allowed while the program is in view-only mode.",
+  "hint": "Viewing, printing and exporting remain available. Restore a valid license to make changes."
+ },
+ "LIC-8009": {
+  "code": "LIC-8009",
+  "name": "LicenseGracePeriod",
+  "message": "The license is in its grace period until {0}.",
+  "hint": "Renew the license before the grace period ends to avoid view-only mode."
+ },
+ "ONL-8501": {
+  "code": "ONL-8501",
+  "name": "VerdictSignatureInvalid",
+  "message": "A server verdict was discarded because its signature is invalid."
+ },
+ "ONL-8502": {
+  "code": "ONL-8502",
+  "name": "VerdictReplayIgnored",
+  "message": "A server verdict was ignored because it is not newer than the last applied verdict."
+ },
+ "ONL-8503": {
+  "code": "ONL-8503",
+  "name": "UploadHashMismatch",
+  "message": "The server reported a hash mismatch for an uploaded backup part."
+ },
+ "ONL-8504": {
+  "code": "ONL-8504",
+  "name": "FingerprintCollectionFailed",
+  "message": "One or more device fingerprint components could not be collected."
+ },
+ "ONL-8505": {
+  "code": "ONL-8505",
+  "name": "CheckInFailed",
+  "message": "The compliance check-in could not be completed."
+ },
+ "ONL-8506": {
+  "code": "ONL-8506",
+  "name": "BackupUploadFailed",
+  "message": "The daily backup upload could not be completed."
+ },
  "SYS-0001": {
   "code": "SYS-0001",
   "name": "UnknownError",

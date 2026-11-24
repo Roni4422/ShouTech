@@ -32,6 +32,12 @@ namespace ShouTech.App.Services
         public static IConnSvc Connectivity { get; private set; } = null!;
         public static IDevInfoSv DeviceInfo { get; private set; } = null!;
         public static ILicenSvc License { get; private set; } = null!;
+        /// <summary>The one live entitlement gate (licensing build):
+        /// provider chain Dongle → LicenseFile → Online → DevMode,
+        /// snapshot + demo-mode derivation from signed artifacts.
+        /// Initialized during the splash license step; before that it
+        /// reports NotFound (view-only) — never a silent grant.</summary>
+        public static IEntitlementService Entitlements { get; private set; } = null!;
         public static ISyncSvc Sync { get; private set; } = null!;
         public static IOnlCoord OnlineCoordinator { get; private set; } = null!;
 
@@ -145,6 +151,7 @@ namespace ShouTech.App.Services
             Connectivity = new ConnServ(Logging);
             DeviceInfo = new DevInfoSv(Logging);
             License = new LicenSvc(Logging, DeviceInfo);
+            Entitlements = EntitlementService.CreateDefault(Logging, DeviceInfo);
             Sync = new SyncServ(Logging, DeviceInfo);
             Backup = new BkpServ(Logging, DeviceInfo, Sync, Permissions);
 
@@ -415,6 +422,7 @@ namespace ShouTech.App.Services
         public static IConnSvc Connectivity => AppHost.Connectivity;
         public static IDevInfoSv DeviceInfo => AppHost.DeviceInfo;
         public static ILicenSvc License => AppHost.License;
+        public static IEntitlementService Entitlements => AppHost.Entitlements;
         public static ISyncSvc Sync => AppHost.Sync;
         public static IOnlCoord OnlineCoordinator => AppHost.OnlineCoordinator;
         public static ISessionManager Session => AppHost.Session;

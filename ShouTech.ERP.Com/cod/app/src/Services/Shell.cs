@@ -15,6 +15,7 @@ using System.Windows;
 using System;
 using ShouTech.App.Configuration;
 using ShouTech.App.Navigation;
+using ShouTech.Domain.Enums;
 using ShouTech.App.ViewModels;
 using ShouTech.App.Views.Modules;
 
@@ -81,37 +82,38 @@ namespace ShouTech.App.Services
     /// </summary>
     public sealed class ModMenuServ
     {
-        private readonly ILicServ _lic;
+        private readonly IEntitlementService _lic;
 
-        public ModMenuServ(ILicServ lic)
+        public ModMenuServ(IEntitlementService lic)
         {
             _lic = lic ?? throw new ArgumentNullException(nameof(lic));
         }
 
-        public async Task<IReadOnlyList<string>> GetVisibleModulesAsync(CancellationToken ct = default)
+        public Task<IReadOnlyList<string>> GetVisibleModulesAsync(CancellationToken ct = default)
         {
-            var result = await _lic.ValidateAsync(ct);
+            // Licensing build: the visible-module set derives from
+            // the one entitlement snapshot (AppHost.Entitlements).
+            // An unusable snapshot (no license / invalid / expired)
+            // shows no modules; a usable one shows the core bundle
+            // plus every entitled add-on.
+            var snapshot = _lic.Current;
             var list = new List<string>();
 
-            if (!result.IsUsable)
-                return list;
+            if (!snapshot.IsUsable)
+                return Task.FromResult<IReadOnlyList<string>>(list);
 
-            // Core modules – always shown for Core / Demo
-            if (result.Edition is LicEd.Core or LicEd.Demo)
-            {
-                list.Add(ModKey.Acc);
-                list.Add(ModKey.Inv);
-                list.Add(ModKey.Sales);
-                list.Add(ModKey.Purch);
-            }
+            list.Add(ModKey.Acc);
+            list.Add(ModKey.Inv);
+            list.Add(ModKey.Sales);
+            list.Add(ModKey.Purch);
 
-            // Optional modules – only if licensed
             void AddIf(string key)
             {
-                if (_lic.IsModuleEnabled(key))
+                if (_lic.IsEntitled(key))
                     list.Add(key);
             }
 
+            AddIf(ModKey.Crm);
             AddIf(ModKey.Hr);
             AddIf(ModKey.Mfg);
             AddIf(ModKey.Pos);
@@ -120,7 +122,7 @@ namespace ShouTech.App.Services
             AddIf(ModKey.MultiCur);
             AddIf(ModKey.WhiteLabel);
 
-            return list;
+            return Task.FromResult<IReadOnlyList<string>>(list);
         }
     }
 

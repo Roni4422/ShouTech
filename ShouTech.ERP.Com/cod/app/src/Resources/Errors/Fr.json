@@ -285,6 +285,84 @@
   "name": "LicenseCheckFailed",
   "message": "La licence n'a pas pu être vérifiée."
  },
+ "LIC-8002": {
+  "code": "LIC-8002",
+  "name": "ModuleNotLicensed",
+  "message": "Le module '{0}' n'est pas inclus dans cette licence.",
+  "hint": "Le module reste disponible en mode consultation uniquement. Contactez votre fournisseur pour l'ajouter à la licence."
+ },
+ "LIC-8003": {
+  "code": "LIC-8003",
+  "name": "LicenseExpired",
+  "message": "La licence a expiré le {0} et la période de grâce est terminée.",
+  "hint": "Le programme fonctionne en mode consultation uniquement. Renouvelez la licence pour rétablir toutes les fonctions."
+ },
+ "LIC-8004": {
+  "code": "LIC-8004",
+  "name": "LicenseNotFound",
+  "message": "Aucune licence n'a été trouvée pour cette installation.",
+  "hint": "Le programme fonctionne en mode consultation uniquement. Importez un fichier de licence signé depuis la fenêtre Licence."
+ },
+ "LIC-8005": {
+  "code": "LIC-8005",
+  "name": "DongleNotFound",
+  "message": "La licence est liée à un dongle qui n'a pas été détecté.",
+  "hint": "Connectez le dongle de licence et redémarrez, ou contactez votre fournisseur."
+ },
+ "LIC-8006": {
+  "code": "LIC-8006",
+  "name": "LicenseBindingMismatch",
+  "message": "La licence ne correspond pas à cet appareil.",
+  "hint": "Les licences sont liées à l'empreinte de l'appareil. Contactez votre fournisseur pour réenregistrer cet appareil."
+ },
+ "LIC-8007": {
+  "code": "LIC-8007",
+  "name": "LicenseSignatureInvalid",
+  "message": "La signature du fichier de licence n'est pas valide.",
+  "hint": "Le fichier de licence a été modifié ou n'est pas authentique. Importez un fichier de licence signé d'origine."
+ },
+ "LIC-8008": {
+  "code": "LIC-8008",
+  "name": "LicenseReadOnly",
+  "message": "Cette opération n'est pas autorisée tant que le programme est en mode consultation uniquement.",
+  "hint": "L'affichage, l'impression et l'exportation restent disponibles. Restaurez une licence valide pour effectuer des modifications."
+ },
+ "LIC-8009": {
+  "code": "LIC-8009",
+  "name": "LicenseGracePeriod",
+  "message": "La licence est en période de grâce jusqu'au {0}.",
+  "hint": "Renouvelez la licence avant la fin de la période de grâce pour éviter le mode consultation uniquement."
+ },
+ "ONL-8501": {
+  "code": "ONL-8501",
+  "name": "VerdictSignatureInvalid",
+  "message": "Un verdict du serveur a été rejeté car sa signature n'est pas valide."
+ },
+ "ONL-8502": {
+  "code": "ONL-8502",
+  "name": "VerdictReplayIgnored",
+  "message": "Un verdict du serveur a été ignoré car il n'est pas plus récent que le dernier verdict appliqué."
+ },
+ "ONL-8503": {
+  "code": "ONL-8503",
+  "name": "UploadHashMismatch",
+  "message": "Le serveur a signalé une incompatibilité de hachage pour une partie d'une sauvegarde téléversée."
+ },
+ "ONL-8504": {
+  "code": "ONL-8504",
+  "name": "FingerprintCollectionFailed",
+  "message": "Un ou plusieurs composants de l'empreinte de l'appareil n'ont pas pu être collectés."
+ },
+ "ONL-8505": {
+  "code": "ONL-8505",
+  "name": "CheckInFailed",
+  "message": "L'enregistrement de conformité n'a pas pu être terminé."
+ },
+ "ONL-8506": {
+  "code": "ONL-8506",
+  "name": "BackupUploadFailed",
+  "message": "Le téléversement quotidien de la sauvegarde n'a pas pu être terminé."
+ },
  "SYS-0001": {
   "code": "SYS-0001",
   "name": "UnknownError",

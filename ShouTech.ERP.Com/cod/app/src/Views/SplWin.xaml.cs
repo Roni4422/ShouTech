@@ -236,6 +236,20 @@ namespace ShouTech.App.Views
             {
                 AppHost.Errors.Report(ErrorCodes.StartupFailed, exL219, "SplWin.xaml.CheckLicenseAsync");
             }
+
+            // Licensing build: the entitlement chain runs in the same
+            // splash step, with its own catalog reporting so a chain
+            // failure is visible and the snapshot stays NotFound
+            // (view-only) rather than silently granting.
+            try
+            {
+                if (AppHost.Entitlements != null)
+                    await AppHost.Entitlements.InitializeAsync();
+            }
+            catch (Exception exEnt)
+            {
+                AppHost.Errors.Report(ErrorCodes.LicenseCheckFailed, exEnt, "SplWin.xaml.CheckLicenseAsync.Entitlements");
+            }
         }
 
         private static async Task PrepareUserDataAsync()

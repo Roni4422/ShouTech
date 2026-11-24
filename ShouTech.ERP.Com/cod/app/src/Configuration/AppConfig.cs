@@ -855,6 +855,23 @@ public class AppSetng
         public List<string> Features { get; set; } = new();
         public DongleInfoSettings DongleInfo { get; set; } = new();
         public ActivationSettings Activation { get; set; } = new();
+
+        /// <summary>
+        /// Development-mode license grant fence (licensing build).
+        /// Honored ONLY by Debug builds; a Release build ignores this
+        /// flag entirely, so a dev grant can never be switched on in
+        /// the field by editing JSON. The shipped config carries
+        /// false, and tools/verify_devmode_fence.py fails the release
+        /// gate if a shipping config enables it.
+        /// </summary>
+        public bool DevMode { get; set; }
+
+        /// <summary>
+        /// Entitlement provider chain order (licensing design §4.3).
+        /// Names: Dongle, LicenseFile, Online, DevMode. The first
+        /// provider that yields a snapshot wins.
+        /// </summary>
+        public List<string> Providers { get; set; } = new() { "Dongle", "LicenseFile", "Online", "DevMode" };
     }
 
     public class DongleInfoSettings
@@ -931,12 +948,20 @@ public class AppSetng
         public int BackgroundSyncIntervalSeconds { get; set; } = 3600;
         /// <summary>Minimum hours between automatic backups while app is running.</summary>
         public int BackupIntervalHours { get; set; } = 1;
-        /// <summary>Max backup copies kept on server per device (1 or 2).</summary>
-        public int MaxServerBackupCopies { get; set; } = 2;
+        /// <summary>Max backup copies kept on server per company (owner requirement: 3; retention is server-authoritative, telemetry study §6.5).</summary>
+        public int MaxServerBackupCopies { get; set; } = 3;
         public bool BackupOnStartup { get; set; } = true;
         public string SyncEndpoint { get; set; } = "/sync";
         public string BackupUploadEndpoint { get; set; } = "/backup/upload";
         public string DeviceRegisterEndpoint { get; set; } = "/device/register";
         public string LicenseValidateEndpoint { get; set; } = "/license/validate";
+        // Telemetry study §6.1 endpoints (layer-2 check-in contract).
+        public string ReportEndpoint { get; set; } = "/installations/report";
+        public string VerdictEndpoint { get; set; } = "/installations/verdict";
+        public string BackupInitiateEndpoint { get; set; } = "/backup/initiate";
+        /// <summary>URL template: {0} = upload id, {1} = part number.</summary>
+        public string BackupPartEndpoint { get; set; } = "/backup/{0}/parts/{1}";
+        /// <summary>URL template: {0} = upload id.</summary>
+        public string BackupCompleteEndpoint { get; set; } = "/backup/{0}/complete";
     }
 }

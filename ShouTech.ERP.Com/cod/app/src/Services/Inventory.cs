@@ -21,6 +21,7 @@ using ShouTech.App.Views;
 using System.IO;
 
 using ShouTech.Domain;
+using ShouTech.Domain.Enums;
 using ShouTech.Infra;
 using ShouTech.Infrastructure;
 namespace ShouTech.App.Services
@@ -69,23 +70,23 @@ public interface IInvServ
     /// </summary>
     public sealed class InvServ : IInvServ
     {
-        private readonly ILicServ _lic;
+        private readonly IEntitlementService _lic;
         private readonly IPermServ _perm;
         // private readonly IInvRepo _repo; // to be wired with the data layer
 
-        public InvServ(ILicServ lic, IPermServ perm)
+        public InvServ(IEntitlementService lic, IPermServ perm)
         {
             _lic = lic ?? throw new ArgumentNullException(nameof(lic));
             _perm = perm ?? throw new ArgumentNullException(nameof(perm));
         }
 
-        public async Task<Guid> CreateItemAsync(
+        public Task<Guid> CreateItemAsync(
             string code, string name, string? name2, Guid categoryId,
             string unit, decimal cost, decimal price, string userId,
             CancellationToken ct = default)
         {
-            await _lic.EnsureCanWriteAsync(ct);
-            await _lic.EnsureModuleAsync(ModKey.Inv, ct);
+            _lic.EnsureCanWrite();
+            _lic.EnsureModule(ModKey.Inv);
 
             if (!_perm.Has(PermKey.InvCreate))
                 throw new UnauthorizedAccessException("You do not have permission to create items.");
@@ -105,13 +106,13 @@ public interface IInvServ
                 "Use IInvRepo (SqliteInvRepo/SqlInvRepo) for persistence operations.");
         }
 
-        public async Task UpdateItemAsync(
+        public Task UpdateItemAsync(
             Guid id, string name, string? name2, Guid categoryId,
             string unit, decimal cost, decimal price, string userId,
             CancellationToken ct = default)
         {
-            await _lic.EnsureCanWriteAsync(ct);
-            await _lic.EnsureModuleAsync(ModKey.Inv, ct);
+            _lic.EnsureCanWrite();
+            _lic.EnsureModule(ModKey.Inv);
 
             if (!_perm.Has(PermKey.InvCreate))
                 throw new UnauthorizedAccessException("You do not have permission to update items.");
@@ -120,23 +121,27 @@ public interface IInvServ
                 throw new ArgumentException("Invalid item id.");
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentException("Item name is required.");
+
+            return Task.CompletedTask;
         }
 
-        public async Task SoftDeleteItemAsync(Guid id, string userId, CancellationToken ct = default)
+        public Task SoftDeleteItemAsync(Guid id, string userId, CancellationToken ct = default)
         {
-            await _lic.EnsureCanWriteAsync(ct);
-            await _lic.EnsureModuleAsync(ModKey.Inv, ct);
+            _lic.EnsureCanWrite();
+            _lic.EnsureModule(ModKey.Inv);
 
             if (!_perm.Has(PermKey.InvDelete))
                 throw new UnauthorizedAccessException("You do not have permission to delete items.");
 
             if (id == Guid.Empty)
                 throw new ArgumentException("Invalid item id.");
+
+            return Task.CompletedTask;
         }
 
-        public async Task<bool> ItemCodeExistsAsync(string code, Guid? excludeId = null, CancellationToken ct = default)
+        public Task<bool> ItemCodeExistsAsync(string code, Guid? excludeId = null, CancellationToken ct = default)
         {
-            await _lic.EnsureModuleAsync(ModKey.Inv, ct);
+            _lic.EnsureModule(ModKey.Inv);
 
             // Must not return a fake false - it could allow duplicate item codes.
             // The real query is available via IInvRepo.ItemCodeExistsAsync.
@@ -145,12 +150,12 @@ public interface IInvServ
                 "Use IInvRepo.ItemCodeExistsAsync for the real query.");
         }
 
-        public async Task<Guid> PostStockInAsync(
+        public Task<Guid> PostStockInAsync(
             Guid warehouseId, Guid itemId, decimal qty, decimal cost,
             string? refDoc, string userId, CancellationToken ct = default)
         {
-            await _lic.EnsureCanWriteAsync(ct);
-            await _lic.EnsureModuleAsync(ModKey.Inv, ct);
+            _lic.EnsureCanWrite();
+            _lic.EnsureModule(ModKey.Inv);
 
             if (!_perm.Has(PermKey.InvMove))
                 throw new UnauthorizedAccessException("You do not have permission to post stock movements.");
@@ -169,8 +174,8 @@ public interface IInvServ
             Guid warehouseId, Guid itemId, decimal qty,
             string? refDoc, string userId, CancellationToken ct = default)
         {
-            await _lic.EnsureCanWriteAsync(ct);
-            await _lic.EnsureModuleAsync(ModKey.Inv, ct);
+            _lic.EnsureCanWrite();
+            _lic.EnsureModule(ModKey.Inv);
 
             if (!_perm.Has(PermKey.InvMove))
                 throw new UnauthorizedAccessException("You do not have permission to post stock movements.");
@@ -187,9 +192,9 @@ public interface IInvServ
                 "Use IInvRepo.PostStockOutAsync for the real posting.");
         }
 
-        public async Task<decimal> GetAvailableQtyAsync(Guid warehouseId, Guid itemId, CancellationToken ct = default)
+        public Task<decimal> GetAvailableQtyAsync(Guid warehouseId, Guid itemId, CancellationToken ct = default)
         {
-            await _lic.EnsureModuleAsync(ModKey.Inv, ct);
+            _lic.EnsureModule(ModKey.Inv);
 
             // Returning silent 0 would block every stock out with "insufficient".
             // The real query is available via IInvRepo.

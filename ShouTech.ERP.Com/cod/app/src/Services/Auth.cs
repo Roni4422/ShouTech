@@ -591,6 +591,13 @@ public static class SecurityAuditLog
     public const string TaxSettingsEnabled = "TAX_SETTINGS_ENABLED";
     public const string TaxSettingsDisabled = "TAX_SETTINGS_DISABLED";
     public const string TaxRuleSaved = "TAX_RULE_SAVED";
+    // Licensing build (feat/licensing): entitlement lifecycle events.
+    public const string LicenseValidated = "LICENSE_VALIDATED";
+    public const string LicenseBlocked = "LICENSE_BLOCKED";
+    public const string LicenseImported = "LICENSE_IMPORTED";
+    public const string LicenseProviderFallthrough = "LICENSE_PROVIDER_FALLTHROUGH";
+    public const string DemoModeEntered = "DEMO_MODE_ENTERED";
+    public const string DemoModeCleared = "DEMO_MODE_CLEARED";
 
     /// <summary>
     /// Synchronous best-effort audit entry for synchronous business services.
