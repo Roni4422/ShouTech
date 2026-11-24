@@ -238,7 +238,6 @@
   "DefineInvoices": "تعريف الفواتير",
   "SearchInvoices": "بحث الفواتير",
   "CashSales": "فواتير المبيعات النقدية",
-  "CloseCash": "إغلاق الصندوق",
   "Quotation": "عرض سعر",
   "SearchQuotations": "بحث عروض السعر",
   "InvoiceProfits": "أرباح الفواتير",
@@ -3268,23 +3267,6 @@
   "StatementRequired": "احفظ كشف الحساب أولاً.",
   "SelectStatementLine": "اختر سطراً من الكشف أولاً.",
   "SelectBookLine": "اختر سطراً محاسبياً أولاً."
- },
- "CloseCash": {
-  "Title": "إغلاق صندوق نقطة البيع",
-  "PermissionDenied": "ليس لديك صلاحية لإغلاق جلسة نقطة البيع.",
-  "ServiceUnavailable": "خدمة العمليات غير متاحة (قاعدة البيانات غير مهيأة).",
-  "Terminal": "الطرفية",
-  "BusinessDate": "تاريخ العمل",
-  "Opening": "المبلغ الافتتاحي",
-  "Counted": "المبلغ المعدود",
-  "Notes": "ملاحظات",
-  "Expected": "المبلغ المتوقع",
-  "Difference": "الفرق",
-  "Status": "الحالة",
-  "ClosedBy": "أغلقه",
-  "SalesSummary": "مبيعات نقطة البيع لهذا التاريخ",
-  "Save": "حفظ الإغلاق",
-  "Saved": "تم حفظ إغلاق الصندوق."
  },
  "PosSync": {
   "Title": "مزامنة نقطة البيع (الصادر)",

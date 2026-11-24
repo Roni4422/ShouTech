@@ -209,8 +209,8 @@ public sealed class PosRepository : IPosRepository
                 ("@counted", countedCash), ("@expected", z.ExpectedCash), ("@variance", variance),
                 ("@user", userId), ("@company", companyId.Trim()), ("@id", FormatGuid(sessionId))).ConfigureAwait(false);
 
-            // Mirror into the legacy day-close register (migration 037)
-            // so CloseCashWin's history keeps one row per close.
+            // Mirror into the day-close register (migration 037)
+            // so the closings history keeps one row per close.
             var session = await GetSessionInTxAsync(connection, transaction, companyId, sessionId).ConfigureAwait(false);
             // The terminal's separate cashbox-CLOSING account (P4) is
             // recorded on the register row: where the counted cash

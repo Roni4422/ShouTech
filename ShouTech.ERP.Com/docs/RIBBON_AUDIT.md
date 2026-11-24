@@ -69,7 +69,7 @@ indexed / total windows) is reported there.
 - `Bonds.PaymentTypes` → DefManagerWin: generic definition editor (set: PaymentTypes) — window is real and persists; per-set field completeness not yet audited
 - `Bonds.DefinePaymentTypes` → DefManagerWin: generic definition editor (set: PaymentTypes) — window is real and persists; per-set field completeness not yet audited
 - `Invoices.DefineInvoices` → DefManagerWin: generic definition editor (set: InvoiceDefinitions) — window is real and persists; per-set field completeness not yet audited
-- `Invoices.CloseCash` → CloseCashWin: legacy window (standing flag: retirement is the owner's call)
+- `Invoices.CloseCash` → CloseCashWin: legacy window — RETIRED by owner decision (2026-11-24); entry and window removed, POS session close is the only cash-close path
 - `POS.DefinePOS` → DefManagerWin: generic definition editor (set: PosTerminals) — window is real and persists; per-set field completeness not yet audited
 - `POS.POSDiscounts` → DefManagerWin: generic definition editor (set: PosDiscounts) — window is real and persists; per-set field completeness not yet audited **R4: field-complete per docs/R4_STUDY.md → (a).**
 - ~~`POS.SyncPOS` → PosSyncWin~~ **R5 DONE → (a)**: status filter (All/Queued/Sent/Failed), numbered rows (central F2Ui), cataloged error reporting on refresh + retry; outbox viewer + FAILED→QUEUED retry verified real.
@@ -155,7 +155,8 @@ indexed / total windows) is reported there.
   online validation; no runtime toggle or renewal API exists —
   building one now would pre-decide D1/D2/D5). (b) total
   17 → 14 (11 definition entries awaiting module consumers +
-  AddonsWin + LicenseWin + CloseCashWin).
+  AddonsWin + LicenseWin + CloseCashWin). CloseCashWin was
+  RETIRED by owner decision (2026-11-24) → (b) total 13.
 - Comparisons for the remaining (a) windows are recorded
   progressively as their families are touched; a window's
   comparison column flips to "done" only with its table written.
@@ -275,7 +276,7 @@ indexed / total windows) is reported there.
 | 109 | Invoices.DefineInvoices | DefManagerWin | RibbonNav | b | central ✓ | ✓ | pending | generic definition editor (set: InvoiceDefinitions) — window is real and persists; per-set field completeness not yet audited |
 | 110 | Invoices.SearchInvoices | DocSearchWin | RibbonNav | a | central ✓ | — | pending |  |
 | 111 | Invoices.CashSales | PosWin | RptNav | a | central ✓ | — | pending |  |
-| 112 | Invoices.CloseCash | CloseCashWin | RibbonNav | b | central ✓ | ✓ | pending | legacy window (standing flag: retirement is the owner's call) |
+| 112 | Invoices.CloseCash | CloseCashWin | RibbonNav | b | central ✓ | ✓ | pending | RETIRED by owner decision (2026-11-24) — entry + window removed; POS session close is the only cash-close path |
 | 113 | Invoices.Quotation | InvoiceWin | RptNav | a | central ✓ | — | in grid/directory program |  |
 | 114 | Invoices.SearchQuotations | DocSearchWin | RibbonNav | a | central ✓ | — | pending |  |
 | 115 | Invoices.InvoiceProfits | InvoiceProfitsWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |

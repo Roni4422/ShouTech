@@ -110,7 +110,6 @@ public static class RibbonNav
             case "Invoices.DefineInvoices": ShowDef(DefSets.InvoiceDefinitions, owner); return true;
             case "Invoices.SearchInvoices": Show(new DocSearchWin(DocSearchWin.DocSearchMode.Invoices), owner); return true;
             case "Invoices.SearchQuotations": Show(new DocSearchWin(DocSearchWin.DocSearchMode.Quotations), owner); return true;
-            case "Invoices.CloseCash": Show(new CloseCashWin(), owner); return true;
             case "Invoices.InvoiceProfits": Show(new InvoiceProfitsWin(), owner); return true;
             case "Invoices.PackingList": Show(new PackingListWin(), owner); return true;
             case "Invoices.CompressInvoices": Show(new CompressInvoicesWin(), owner); return true;

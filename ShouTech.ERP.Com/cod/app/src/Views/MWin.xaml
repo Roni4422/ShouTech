@@ -429,7 +429,6 @@
                         <ribbon:RibbonButton loc:LocProps.Key="Invoices.DefineInvoices" Label="Define invoices" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Invoices.SearchInvoices" Label="Search invoices" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Invoices.CashSales" Label="Cash sales invoices" Click="OnRibbonButtonClick"/>
-                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.CloseCash" Label="Close cash register" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Invoices.Quotation" Label="Quotation" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Invoices.SearchQuotations" Label="Search quotations" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Invoices.InvoiceProfits" Label="Invoice profits" Click="OnRibbonButtonClick"/>
