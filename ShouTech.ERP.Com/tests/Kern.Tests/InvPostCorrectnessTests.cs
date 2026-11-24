@@ -162,12 +162,299 @@ public sealed class InvPostCorrectnessTests
 
         var secondReturn = BuildReturn(3m);
         InvRepo.SaveDraft(secondReturn);
-        var error = Assert.Throws<InvalidOperationException>(
+        // W6 (item 7): the cumulative cap raises the cataloged
+        // SAL-7021 (ReturnQuantityExceeded), not a plain message.
+        var error = Assert.Throws<AppError>(
             () => InvRepo.Post(secondReturn.DocId, InvDocKind.SalesReturn, Actor));
+        Assert.Equal(ErrorCodes.ReturnQuantityExceeded, error.Code);
         Assert.Contains("exceeds the remaining returnable quantity", error.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(998m, StockQty(db));
         Assert.Equal(1m, Scalar(db,
             "SELECT COUNT(*) FROM sales_documents WHERE doc_kind = 'SRT' AND status = 'Posted' AND original_doc_id = " + original.DocId.ToString(CultureInfo.InvariantCulture)));
+    }
+
+    private static InvDoc BuildW6Return(InvDoc original, decimal quantity, string condition, string reasonCode)
+        => new()
+        {
+            Kind = InvDocKind.SalesReturn,
+            DocNo = InvRepo.NextDocNo(InvDocKind.SalesReturn),
+            DocDate = new DateTime(2026, 11, 12),
+            PartyId = original.PartyId,
+            PartyCode = original.PartyCode,
+            PartyName = original.PartyName,
+            WarehouseId = 1,
+            CurrencyCode = original.CurrencyCode,
+            ExchangeRate = original.ExchangeRate,
+            PaymentMethod = InvPaymentMethod.Credit,
+            OriginalDocId = original.DocId,
+            OriginalDocKind = InvDocKind.SalesInvoice,
+            OriginalDocNo = original.DocNo,
+            ReturnReasonCode = reasonCode,
+            ReturnSourceKind = "INV",
+            Lines =
+            {
+                new InvLine
+                {
+                    LineNo = 1,
+                    MaterialId = original.Lines[0].MaterialId,
+                    MaterialCode = original.Lines[0].MaterialCode,
+                    Description = original.Lines[0].Description,
+                    Unit = original.Lines[0].Unit,
+                    Qty = quantity,
+                    UnitPrice = original.Lines[0].UnitPrice,
+                    DiscountPct = original.Lines[0].DiscountPct,
+                    TaxCode = original.Lines[0].TaxCode,
+                    TaxRate = original.Lines[0].TaxRate,
+                    TaxCalculationMode = original.Lines[0].TaxCalculationMode,
+                    WarehouseId = original.Lines[0].WarehouseId,
+                    ReturnCondition = condition
+                }
+            }
+        };
+
+    [Fact]
+    public async Task SalesReturn_DamagedLine_RequiresInspectionAndPostsNoStockOrCogsReversal()
+    {
+        using var db = await SeededAsync();
+        var party = await SavePartyAsync(db, "C", "CUST-DAMAGED", 100000m);
+        var original = BuildDoc(InvDocKind.SalesInvoice, party.LedgerId, party.Code,
+            qty: 5m, price: 30m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        InvRepo.SaveDraft(original);
+        InvRepo.Post(original.DocId, original.Kind, Actor);
+        Assert.Equal(995m, StockQty(db));
+
+        var damaged = BuildW6Return(original, 2m, "Damaged", "DAMAGEDTRANSIT");
+        InvRepo.SaveDraft(damaged);
+        InvRepo.RestoreSalesReturnLineNumbers(damaged.DocId, new[] { 1 });
+
+        // A Damaged line makes the return inspection-gated (SAL-7022).
+        var gate = Assert.Throws<AppError>(
+            () => InvRepo.Post(damaged.DocId, InvDocKind.SalesReturn, Actor));
+        Assert.Equal(ErrorCodes.ReturnInspectionRequired, gate.Code);
+        Assert.Equal(995m, StockQty(db));
+
+        SrtRepo.RecordInspection(damaged.DocId, new Dictionary<int, string> { [1] = "Damaged" }, Actor);
+        InvRepo.Post(damaged.DocId, InvDocKind.SalesReturn, Actor);
+
+        // Damaged goods never re-enter stock, and the cost side posts
+        // NOTHING: no Dr Inventory, no Cr COGS — the original COGS
+        // stands as the write-off loss (migration 100 treatment).
+        Assert.Equal(995m, StockQty(db));
+        Assert.Equal(0m, Scalar(db,
+            $"SELECT COUNT(*) FROM material_stock_movements WHERE company_id = '{CompanyCode}' AND document_no = '{damaged.DocNo}';"));
+        var gl = SingleEntry(db, "SRT", damaged.DocId).Lines;
+        Assert.Equal(60m, gl.Single(l => l.Code == "302").Debit);
+        Assert.Equal(60m, gl.Single(l => l.Code == "1201").Credit);
+        Assert.DoesNotContain(gl, l => l.Code is "1203" or "401");
+        Assert.Equal(60m, LedgerSum(db, party.LedgerId, "SRT", debit: false));
+    }
+
+    [Fact]
+    public async Task SalesReturn_QuarantineLine_LandsInQuarantineWarehouseAtOriginalCost()
+    {
+        using var db = await SeededAsync();
+        var party = await SavePartyAsync(db, "C", "CUST-QUAR", 100000m);
+        var original = BuildDoc(InvDocKind.SalesInvoice, party.LedgerId, party.Code,
+            qty: 5m, price: 30m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        InvRepo.SaveDraft(original);
+        InvRepo.Post(original.DocId, original.Kind, Actor);
+        Assert.Equal(995m, StockQty(db));
+
+        var quarantine = BuildW6Return(original, 2m, "Quarantine", "DEFECTIVE");
+        InvRepo.SaveDraft(quarantine);
+        InvRepo.RestoreSalesReturnLineNumbers(quarantine.DocId, new[] { 1 });
+        SrtRepo.RecordInspection(quarantine.DocId, new Dictionary<int, string> { [1] = "Quarantine" }, Actor);
+        InvRepo.Post(quarantine.DocId, InvDocKind.SalesReturn, Actor);
+
+        // Available stock is unchanged; the goods sit in quarantine.
+        Assert.Equal(995m, StockQty(db));
+        var quarantineQty = Scalar(db, $"""
+            SELECT COALESCE(b.available_qty, 0) FROM warehouses w
+            LEFT JOIN material_stock_balances b
+              ON b.warehouse_id = w.warehouse_id AND b.company_id = '{CompanyCode}' AND b.material_id = 42
+            WHERE w.company_id = '{CompanyCode}' AND w.is_quarantine = 1;
+            """);
+        Assert.Equal(2m, quarantineQty);
+        // The GL still reverses COGS into Inventory at original cost
+        // (2 x 40): inventory GL follows the valuation wherever the
+        // stock physically sits.
+        var gl = SingleEntry(db, "SRT", quarantine.DocId).Lines;
+        Assert.Equal(80m, gl.Single(l => l.Code == "1203").Debit);
+        Assert.Equal(80m, gl.Single(l => l.Code == "401").Credit);
+    }
+
+    [Fact]
+    public async Task SalesReturn_ApprovalFlagOn_BlocksPostingUntilApproved()
+    {
+        using var db = await SeededAsync();
+        var party = await SavePartyAsync(db, "C", "CUST-APPR", 100000m);
+        var original = BuildDoc(InvDocKind.SalesInvoice, party.LedgerId, party.Code,
+            qty: 5m, price: 30m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        InvRepo.SaveDraft(original);
+        InvRepo.Post(original.DocId, original.Kind, Actor);
+
+        SrtRepo.SaveSettings(new SrtRepo.SrtSettings(ApprovalRequired: true, InspectionAmountThreshold: null), Actor);
+        var gated = BuildW6Return(original, 2m, "Good", "OTHER");
+        InvRepo.SaveDraft(gated);
+        InvRepo.RestoreSalesReturnLineNumbers(gated.DocId, new[] { 1 });
+        Assert.Equal("PendingApproval", InvRepo.Load(gated.DocId, InvDocKind.SalesReturn)!.ApprovalStatus);
+
+        var blocked = Assert.Throws<InvalidOperationException>(
+            () => InvRepo.Post(gated.DocId, InvDocKind.SalesReturn, Actor));
+        Assert.Contains("must be approved", blocked.Message, StringComparison.OrdinalIgnoreCase);
+
+        // Approval itself is permission-gated (SALES.RETURN.APPROVE).
+        Assert.Throws<UnauthorizedAccessException>(() => SrtRepo.Approve(gated.DocId, Actor, _ => false));
+        // Rejection requires a reason.
+        Assert.Throws<ArgumentException>(() => SrtRepo.Reject(gated.DocId, Actor, " ", _ => true));
+
+        SrtRepo.Approve(gated.DocId, Actor, _ => true);
+        InvRepo.Post(gated.DocId, InvDocKind.SalesReturn, Actor);
+        Assert.Equal(997m, StockQty(db));
+    }
+
+    [Fact]
+    public async Task NoInvoiceReturn_PostsPartyCreditAndStockAtCurrentCost()
+    {
+        using var db = await SeededAsync();
+        var party = await SavePartyAsync(db, "C", "CUST-WALKIN", 100000m);
+
+        var walkIn = new InvDoc
+        {
+            Kind = InvDocKind.SalesReturn,
+            DocNo = InvRepo.NextDocNo(InvDocKind.SalesReturn),
+            DocDate = new DateTime(2026, 11, 12),
+            PartyId = party.LedgerId,
+            PartyCode = party.Code,
+            PartyName = party.NameEn,
+            CurrencyCode = "SAR",
+            ExchangeRate = 1m,
+            PaymentMethod = InvPaymentMethod.Credit,
+            ReturnReasonCode = "OTHER",
+            Lines =
+            {
+                new InvLine
+                {
+                    LineNo = 1, MaterialId = 42, MaterialCode = "MAT-42", Description = "Item",
+                    Qty = 3m, UnitPrice = 50m, ReturnCondition = "Good"
+                }
+            }
+        };
+
+        // Only a SALES.RETURN.APPROVE holder may create one.
+        Assert.Throws<UnauthorizedAccessException>(() => SrtRepo.CreateNoInvoiceReturn(walkIn, _ => false));
+        var docId = SrtRepo.CreateNoInvoiceReturn(walkIn, _ => true);
+        var stored = InvRepo.Load(docId, InvDocKind.SalesReturn)!;
+        Assert.True(stored.NoInvoice);
+        Assert.Equal("NONE", stored.ReturnSourceKind);
+
+        InvRepo.Post(docId, InvDocKind.SalesReturn, Actor);
+
+        // Stock re-enters at the CURRENT valuation cost (avg 40 — no
+        // original cost exists); the party is credited the full face
+        // value through the party ledger only.
+        Assert.Equal(1003m, StockQty(db));
+        Assert.Equal(150m, LedgerSum(db, party.LedgerId, "SRT", debit: false));
+        var gl = SingleEntry(db, "SRT", docId).Lines;
+        Assert.Equal(150m, gl.Single(l => l.Code == "302").Debit);
+        Assert.Equal(150m, gl.Single(l => l.Code == "1201").Credit);
+        Assert.Equal(120m, gl.Single(l => l.Code == "1203").Debit);
+        Assert.Equal(120m, gl.Single(l => l.Code == "401").Credit);
+    }
+
+    [Fact]
+    public async Task DeliveryReturn_RelievesDeliveredNotBilledAndCapsCumulativeQuantity()
+    {
+        using var db = await SeededAsync();
+        AccRepo.Save(null, new AccRepo.AccRec(
+            string.Empty, "1215", null, "Stock Delivered Not Billed", "Stock Delivered Not Billed",
+            "Postable", "Active", "Low", "Unspecified",
+            false, false, false, false, false, false, 0m, string.Empty, 0m, 0m, 0m),
+            renumberDescendants: false);
+        var party = await SavePartyAsync(db, "C", "CUST-DLVRET", 100000m);
+        var orderRepository = new OrderDocumentRepository("SQLite", db.ConnectionString);
+        var chainRepository = new CommercialDocumentRepository("SQLite", db.ConnectionString);
+        var service = new OrderService(orderRepository, chainRepository);
+
+        var orderId = await service.CreateOrderAsync(
+            new CommercialDocumentDraft(
+                db.CompanyId, CommercialDocKinds.SalesOrder, "SO-DLVRET",
+                new DateOnly(2026, 11, 10), party.LedgerId, party.NameEn, 1, "SAR", 1m, null,
+                new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 25m, 0m, 0m, 1) },
+                party.Code, new DateOnly(2026, 11, 30), null),
+            Actor);
+        await service.PostOrderAsync(CommercialDocSide.Sales, orderId, Actor);
+        var (deliveryId, deliveryNo) = await service.CreateSalesDeliveryAsync(
+            orderId, new DateOnly(2026, 11, 11), Actor, new Dictionary<int, decimal> { [1] = 3m }, 1);
+        await service.PostSalesDeliveryAsync(deliveryId, Actor);
+        Assert.Equal(997m, StockQty(db));
+
+        InvDoc BuildDeliveryReturn(decimal qty) => new()
+        {
+            Kind = InvDocKind.SalesReturn,
+            DocNo = InvRepo.NextDocNo(InvDocKind.SalesReturn),
+            DocDate = new DateTime(2026, 11, 12),
+            PartyId = party.LedgerId,
+            PartyCode = party.Code,
+            PartyName = party.NameEn,
+            WarehouseId = 1,
+            CurrencyCode = "SAR",
+            ExchangeRate = 1m,
+            PaymentMethod = InvPaymentMethod.Credit,
+            OriginalDocId = deliveryId,
+            OriginalDocNo = deliveryNo,
+            ReturnReasonCode = "WRONGITEM",
+            ReturnSourceKind = "DLV",
+            Lines =
+            {
+                new InvLine
+                {
+                    LineNo = 1, MaterialId = 42, MaterialCode = "MAT-42", Description = "Item 42",
+                    Unit = "PCS", Qty = qty, UnitPrice = 25m, WarehouseId = 1, ReturnCondition = "Good"
+                }
+            }
+        };
+
+        var first = BuildDeliveryReturn(1m);
+        SrtRepo.SaveDeliveryReturn(first);
+        InvRepo.Post(first.DocId, InvDocKind.SalesReturn, Actor);
+
+        // Goods back in stock at the original delivery cost (40); the
+        // ONLY GL is Dr Inventory / Cr 1215 — no revenue, no tax, no
+        // receivable, and no party-ledger row (nothing was billed).
+        Assert.Equal(998m, StockQty(db));
+        var gl = SingleEntry(db, "SRT", first.DocId).Lines;
+        Assert.Equal(40m, gl.Single(l => l.Code == "1203").Debit);
+        Assert.Equal(40m, gl.Single(l => l.Code == "1215").Credit);
+        Assert.DoesNotContain(gl, l => l.Code is "1201" or "301" or "302" or "401");
+        Assert.Equal(0m, LedgerSum(db, party.LedgerId, "SRT", debit: false));
+        Assert.Equal(1m, SrtRepo.GetAlreadyReturnedForDelivery(deliveryId)[1]);
+
+        // Cumulative cap across delivery returns: 1 already returned,
+        // 3 delivered — returning 3 more exceeds the remaining 2.
+        var excessive = BuildDeliveryReturn(3m);
+        SrtRepo.SaveDeliveryReturn(excessive);
+        var error = Assert.Throws<AppError>(
+            () => InvRepo.Post(excessive.DocId, InvDocKind.SalesReturn, Actor));
+        Assert.Equal(ErrorCodes.ReturnQuantityExceeded, error.Code);
+        Assert.Equal(998m, StockQty(db));
+    }
+
+    [Fact]
+    public async Task ReturnReasons_SeededWithDefaultConditionsAndSettingsDefaultOff()
+    {
+        using var db = await SeededAsync();
+        var reasons = SrtRepo.ListReasons();
+        Assert.Contains(reasons, r => r.Code == "DEFECTIVE" && r.DefaultCondition == "Quarantine");
+        Assert.Contains(reasons, r => r.Code == "DAMAGEDTRANSIT" && r.DefaultCondition == "Damaged");
+        Assert.Contains(reasons, r => r.Code == "WRONGITEM" && r.DefaultCondition == "Good");
+        Assert.Contains(reasons, r => r.Code == "CHANGEDMIND" && r.DefaultCondition == "Good");
+        Assert.Contains(reasons, r => r.Code == "EXPIRED" && r.DefaultCondition == "Quarantine");
+        Assert.Contains(reasons, r => r.Code == "OTHER" && r.DefaultCondition == "Good");
+        var settings = SrtRepo.GetSettings();
+        Assert.False(settings.ApprovalRequired);
+        Assert.Null(settings.InspectionAmountThreshold);
+        await Task.CompletedTask;
     }
 
     [Fact]
