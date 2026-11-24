@@ -534,6 +534,7 @@ public class ChequeMfgServiceTests
                     """);
                 ExecMigration(connection, "013_inventory_schema.sql");
                 ExecMigration(connection, "089_smdl.sql");
+                ExecMigration(connection, "090_osml.sql");
                 ExecMigration(connection, "016_material_groups_warehouses.sql");
                 ExecMigration(connection, "053_valuation_engine.sql");
                 ExecMigration(connection, "054_batch_serial.sql");
