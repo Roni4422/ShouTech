@@ -181,10 +181,44 @@ remembered per report.
 
 ## Family 4 — material directory tree (MatDirWin)
 
-Pending batch R2d: tree presentation (categories as folder nodes,
-modern folder glyphs from the central icon approach — Segoe MDL2
-glyphs, NOT legacy bitmap folders; materials as children;
-uncategorized materials at root; empty categories shown).
+**Verdict: DONE (batch R2d), gates ALL-GREEN.**
+
+- The flat ListView (with its Materials/Groups mode radios) is
+  now ONE TreeView: group (category) nodes nest by parent_code,
+  materials attach through material_group_items membership (a
+  material in several groups appears under each), ungrouped
+  materials sit at the root, empty groups show. Folder glyphs
+  are Segoe MDL2 (closed \uE8B7 / open \uE838 by the node's
+  IsExpanded, two-way bound to the TreeViewItem); materials use
+  the document glyph \uE8A5. Search prunes to matches plus their
+  ancestor groups, expanded; a matching group keeps its whole
+  subtree. Picker mode (invoice-grid search) runs on the same
+  tree unchanged.
+- **Defect found and fixed at the cause:** the old Groups mode
+  loaded through reflection against a `MatGroupRepo.LoadAll`
+  method that did not exist — Groups mode silently rendered
+  nothing. `MatGroupRepo.LoadAll` + `LoadMembership` now exist
+  and are called directly; the reflection path is deleted.
+- Al-Ameen evidence for this family now rests on the full
+  classic help text (owner upload 2026-11-24 15:33,
+  `~/workspace/research/al-ameen-help-utf8.txt`): the material
+  directory/card topics confirm the group-tree + card pattern.
+  Limit recorded: classic generation's logic/fields, not
+  Al-Ameen 10's screens.
+
+**Where ShouTech exceeds:** the directory is simultaneously the
+management surface, the invoice-grid search and the POS lookup
+— one tree everywhere; four-language names on every node with
+whole-window RTL mirroring. **Where ShouTech still trails:** no
+drag-and-drop re-grouping (benchmarks' trees allow dragging a
+material onto a group) — named gap for the commercial phase;
+group membership is edited in MatGroupWin meanwhile.
+**Verdict (power + ease):** more powerful — true M2M membership
+shown faithfully (a material under every group it belongs to,
+nested sub-groups by parent code); easier — the user browses
+folders instead of filtering a flat thousand-row list, and
+search keeps the ancestor chain visible so a match is never
+orphaned from its context.
 
 ## Family 5 — chart of accounts + account card (CoaWin + AccCard)
 

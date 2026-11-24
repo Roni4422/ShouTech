@@ -67,13 +67,13 @@
 
     </Style>
 
-    <Style TargetType="ListViewItem">
+    <Style TargetType="TreeViewItem">
 
         <Setter Property="Padding"
-                Value="4,6"/>
+                Value="2,3"/>
 
-        <Setter Property="HorizontalContentAlignment"
-                Value="Stretch"/>
+        <Setter Property="IsExpanded"
+                Value="{Binding IsExpanded, Mode=TwoWay}"/>
 
     </Style>
 
@@ -98,34 +98,12 @@
         <Grid>
 
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <StackPanel Grid.Column="0"
-                        Orientation="Horizontal"
-                        VerticalAlignment="Center"
-                        Margin="0,0,8,0">
-
-                <RadioButton x:Name="RbItem"
-                             Content="Material"
-                             IsChecked="True"
-                             GroupName="Mode"
-                             Margin="0,0,12,0"
-                             VerticalAlignment="Center"
-                             Checked="Mode_Changed"/>
-
-                <RadioButton x:Name="RbClass"
-                             Content="Group"
-                             GroupName="Mode"
-                             VerticalAlignment="Center"
-                             Checked="Mode_Changed"/>
-
-            </StackPanel>
-
             <TextBox x:Name="TxtSearch"
-                     Grid.Column="1"
+                     Grid.Column="0"
                     
                      VerticalContentAlignment="Center"
                      Padding="7,0"
@@ -136,7 +114,7 @@
                      TextChanged="TxtSearch_TextChanged"/>
 
             <Button x:Name="BtnSearch"
-                    Grid.Column="2"
+                    Grid.Column="1"
                     Style="{StaticResource SearchButton}"
                     Content="Search"
                     loc:LocProps.Key="Buttons.Search"
@@ -185,40 +163,54 @@
 
     </Border>
 
-    <!-- Material and group list -->
-    <ListView x:Name="LvItems"
+    <!-- Material directory TREE (owner grid spec item 6): groups
+         (categories) are folder nodes — modern Segoe MDL2 folder
+         glyphs, open when expanded / closed when collapsed —
+         materials are their children; a group may be empty and a
+         material with no group sits at the root. -->
+    <TreeView x:Name="TvItems"
               Grid.Row="2"
               BorderThickness="0"
               Background="{DynamicResource BackgroundBrush}"
               Foreground="{DynamicResource TextBrush}"
-              SelectionMode="Single"
-              MouseDoubleClick="Lv_DoubleClick"
-              KeyDown="Lv_KeyDown">
+              MouseDoubleClick="Tv_DoubleClick"
+              KeyDown="Tv_KeyDown">
 
-        <ListView.View>
+        <TreeView.Resources>
+            <HierarchicalDataTemplate DataType="{x:Type local:MatDirNode}"
+                                      ItemsSource="{Binding Children}">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock x:Name="NodeGlyph"
+                               FontFamily="Segoe MDL2 Assets"
+                               FontSize="14"
+                               VerticalAlignment="Center"
+                               Margin="0,0,6,0"
+                               Text="&#xE8B7;"/>
+                    <TextBlock Text="{Binding Item.Code}"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding Item.DisplayName}"
+                               Margin="8,0,0,0"
+                               VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding Item.StatusLabel}"
+                               Margin="8,0,0,0"
+                               Opacity="0.65"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+                <HierarchicalDataTemplate.Triggers>
+                    <!-- Open folder while the group node is expanded. -->
+                    <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                        <Setter TargetName="NodeGlyph" Property="Text" Value="&#xE838;"/>
+                    </DataTrigger>
+                    <!-- Materials are documents, not folders. -->
+                    <DataTrigger Binding="{Binding IsGroup}" Value="False">
+                        <Setter TargetName="NodeGlyph" Property="Text" Value="&#xE8A5;"/>
+                    </DataTrigger>
+                </HierarchicalDataTemplate.Triggers>
+            </HierarchicalDataTemplate>
+        </TreeView.Resources>
 
-            <GridView>
-
-                <GridViewColumn x:Name="ColCode"
-                                Header="Code"
-                                Width="90"
-                                DisplayMemberBinding="{Binding Code}"/>
-
-                <GridViewColumn x:Name="ColName"
-                                Header="Name"
-                                Width="200"
-                                DisplayMemberBinding="{Binding DisplayName}"/>
-
-                <GridViewColumn x:Name="ColStatus"
-                                Header="Status"
-                                Width="70"
-                                DisplayMemberBinding="{Binding StatusLabel}"/>
-
-            </GridView>
-
-        </ListView.View>
-
-        <ListView.ContextMenu>
+        <TreeView.ContextMenu>
 
             <ContextMenu x:Name="ItemsContextMenu"
                          Opened="Ctx_Opened">
@@ -275,9 +267,9 @@
 
             </ContextMenu>
 
-        </ListView.ContextMenu>
+        </TreeView.ContextMenu>
 
-    </ListView>
+    </TreeView>
 
 </Grid>
 

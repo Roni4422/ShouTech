@@ -12,6 +12,72 @@ namespace ShouTech.App.Services;
 
 public static class MatGroupRepo
 {
+    public sealed record MatGroupRec(long Id, string Code, string Name, string NameEn, string? ParentCode, string Status);
+
+    public sealed record MatGroupMember(long GroupId, long MaterialId);
+
+    /// <summary>
+    /// All material groups of the current company. This is the
+    /// method MatDirWin's group loading always expected — it did
+    /// not exist, so the directory's Groups mode silently rendered
+    /// nothing (the call went through reflection and found no
+    /// method). The material directory tree consumes it directly.
+    /// </summary>
+    public static List<MatGroupRec> LoadAll()
+    {
+        var company = RequireCompany();
+        using var connection = OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT group_id, group_code, group_name, group_name_en, parent_code, status
+            FROM material_groups
+            WHERE company_id = @company
+              AND COALESCE(is_deleted, 0) = 0
+            ORDER BY group_code;
+            """;
+        Add(command, "@company", company);
+
+        var result = new List<MatGroupRec>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            result.Add(new MatGroupRec(
+                Convert.ToInt64(reader.GetValue(0), System.Globalization.CultureInfo.InvariantCulture),
+                reader.GetValue(1)?.ToString() ?? "",
+                reader.GetValue(2)?.ToString() ?? "",
+                reader.GetValue(3)?.ToString() ?? "",
+                reader.IsDBNull(4) ? null : reader.GetValue(4)?.ToString(),
+                reader.GetValue(5)?.ToString() ?? "Active"));
+        }
+        return result;
+    }
+
+    /// <summary>Every (group, material) membership pair of the
+    /// current company — the tree's child linkage.</summary>
+    public static List<MatGroupMember> LoadMembership()
+    {
+        var company = RequireCompany();
+        using var connection = OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT group_id, material_id
+            FROM material_group_items
+            WHERE company_id = @company
+            ORDER BY group_id, material_id;
+            """;
+        Add(command, "@company", company);
+
+        var result = new List<MatGroupMember>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            result.Add(new MatGroupMember(
+                Convert.ToInt64(reader.GetValue(0), System.Globalization.CultureInfo.InvariantCulture),
+                Convert.ToInt64(reader.GetValue(1), System.Globalization.CultureInfo.InvariantCulture)));
+        }
+        return result;
+    }
+
     public static HashSet<long> LoadMemberIds(long groupId)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(groupId);

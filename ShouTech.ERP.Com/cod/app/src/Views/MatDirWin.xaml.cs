@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -56,6 +56,40 @@ public string StatusLabel =>
 }
 
 /// <summary>
+/// One node of the material directory tree (owner grid spec
+/// item 6): a group (category) node carries child groups and
+/// materials; a material node is a leaf. IsExpanded binds two-way
+/// to the TreeViewItem so the template can swap the folder glyph
+/// (closed / open) — modern Segoe MDL2 glyphs, per the owner's
+/// modern-visuals rule.
+/// </summary>
+public sealed class MatDirNode : System.ComponentModel.INotifyPropertyChanged
+{
+    public MatDirNode(MatDirListItem item) => Item = item;
+
+    public MatDirListItem Item { get; }
+
+    public ObservableCollection<MatDirNode> Children { get; } = new();
+
+    public bool IsGroup => Item.ItemKind == MatDirListItem.Kind.Group;
+
+    private bool _isExpanded;
+    public bool IsExpanded
+    {
+        get => _isExpanded;
+        set
+        {
+            if (_isExpanded == value)
+                return;
+            _isExpanded = value;
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsExpanded)));
+        }
+    }
+
+    public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+}
+
+/// <summary>
 /// Material and group directory.
 /// </summary>
 public partial class MatDirWin : BaseWin
@@ -64,9 +98,12 @@ public partial class MatDirWin : BaseWin
 
 private readonly ObservableCollection<MatDirListItem> _all = new();
 private readonly ObservableCollection<MatDirListItem> _view = new();
+private readonly ObservableCollection<MatDirNode> _roots = new();
 
-
-private bool _modeItem = true;
+// Raw load state for tree building: groups with their parent
+// linkage, and the (group, material) membership pairs.
+private List<MatGroupRepo.MatGroupRec> _groups = new();
+private List<MatGroupRepo.MatGroupMember> _membership = new();
 
 // ------------------------------------------------------------------
 // Picker mode (owner grid spec 2026-11-24 15:07 item 3): document
@@ -91,8 +128,6 @@ public static MatDirListItem? ShowPicker(Window owner, string? initialSearch)
 private void BeginPick(string? initialSearch)
 {
     _pickerMode = true;
-    _modeItem = true;
-    RbItem.IsChecked = true;
     BtnAdd.Visibility = Visibility.Collapsed;
     BtnRemove.Visibility = Visibility.Collapsed;
     Reload();
@@ -111,7 +146,7 @@ public MatDirWin()
 
     ApplyDirection();
 
-    LvItems.ItemsSource = _view;
+    TvItems.ItemsSource = _roots;
 
     Reload();
 }
@@ -140,17 +175,6 @@ private void ApplyDirection()
         "Inventory.MaterialTree",
         "Material Directory");
 
-    RbItem.Content = Loc.Get(
-        "Inventory.MaterialTreeTexts.Material",
-        "Material");
-	RbClass.Content = Loc.Get(
-		"Inventory.Group",
-		"Group");
-
-    RbItem.Content = Loc.Get(
-		"Inventory.Material",
-		"Material");
-
     BtnSearch.Content = Loc.Get(
         "Buttons.Search",
         "Search");
@@ -170,18 +194,6 @@ private void ApplyDirection()
     BtnPrint.Content = Loc.Get(
         "Buttons.Print",
         "Print");
-
-    ColCode.Header = Loc.Get(
-        "MatCard.Code",
-        "Code");
-
-    ColName.Header = Loc.Get(
-        "MatCard.Name",
-        "Name");
-
-    ColStatus.Header = Loc.Get(
-        "MatCard.Status",
-        "Status");
 
     CtxOpen.Header = Loc.Get(
         "Inventory.MaterialTreeTexts.OpenCard",
@@ -221,45 +233,52 @@ private void OnLanguageChanged(object? sender, EventArgs e)
     ApplyDirection();
 }
 
-private void Mode_Changed(
-    object sender,
-    RoutedEventArgs e)
-{
-    if (!IsLoaded)
-        return;
-
-    _modeItem = RbItem.IsChecked == true;
-
-    Reload();
-}
+private MatDirListItem? SelectedItem
+    => (TvItems.SelectedItem as MatDirNode)?.Item;
 
 private void Reload()
 {
     _all.Clear();
+    _groups = new();
+    _membership = new();
 
     try
     {
-        if (_modeItem)
+        // One unified load for the tree: materials, groups and
+        // their membership. (The old two-mode load called a
+        // MatGroupRepo.LoadAll that did not exist — through
+        // reflection — so Groups mode silently showed nothing.
+        // The repo method exists now and is called directly.)
+        foreach (var m in MatRepo.LoadAll()
+                     .OrderBy(
+                         x => x.Code,
+                         StringComparer.Ordinal))
         {
-            foreach (var m in MatRepo.LoadAll()
-                         .OrderBy(
-                             x => x.Code,
-                             StringComparer.Ordinal))
+            _all.Add(new MatDirListItem
             {
-                _all.Add(new MatDirListItem
-                {
-                    ItemKind = MatDirListItem.Kind.Material,
-                    Id = m.Id,
-                    Code = m.Code,
-                    Name = m.Name,
-                    NameEn = m.NameEn,
-                    Status = m.Status
-                });
-            }
+                ItemKind = MatDirListItem.Kind.Material,
+                Id = m.Id,
+                Code = m.Code,
+                Name = m.Name,
+                NameEn = m.NameEn,
+                Status = m.Status
+            });
         }
-        else
+
+        _groups = MatGroupRepo.LoadAll();
+        _membership = MatGroupRepo.LoadMembership();
+
+        foreach (var g in _groups)
         {
-            LoadGroups();
+            _all.Add(new MatDirListItem
+            {
+                ItemKind = MatDirListItem.Kind.Group,
+                Id = g.Id,
+                Code = g.Code,
+                Name = g.Name,
+                NameEn = g.NameEn,
+                Status = g.Status
+            });
         }
     }
     catch (Exception ex)
@@ -276,108 +295,123 @@ private void Reload()
     ApplyFilter();
 }
 
-private void LoadGroups()
-{
-    try
-    {
-        var gt =
-            Type.GetType(
-                "ShouTech.App.Services.MatGroupRepo")
-            ?? AppDomain.CurrentDomain
-                .GetAssemblies()
-                .Select(
-                    a => a.GetType(
-                        "ShouTech.App.Services.MatGroupRepo"))
-                .FirstOrDefault(
-                    x => x != null);
+// ------------------------------------------------------------------
+// Tree building (owner grid spec item 6). Groups nest by their
+// parent_code; materials attach through material_group_items
+// membership (a material in several groups appears under each);
+// a material with no membership sits at the root; a group may be
+// empty. With a search query the tree prunes to matches plus
+// their ancestor groups, expanded; a group that itself matches
+// keeps all of its children.
+// ------------------------------------------------------------------
 
-        if (gt == null)
-            return;
-
-        var load = gt.GetMethod(
-            "LoadAll",
-            System.Reflection.BindingFlags.Public |
-            System.Reflection.BindingFlags.Static);
-
-        var list =
-            load?.Invoke(null, null)
-            as System.Collections.IEnumerable;
-
-        if (list == null)
-            return;
-
-        foreach (var item in list)
-        {
-            var type = item.GetType();
-
-            var code =
-                type.GetProperty("Code")?
-                    .GetValue(item)?
-                    .ToString() ?? "";
-
-            if (string.IsNullOrWhiteSpace(code))
-                continue;
-
-            _all.Add(new MatDirListItem
-            {
-                ItemKind = MatDirListItem.Kind.Group,
-
-                Id = Convert.ToInt64(
-                    type.GetProperty("Id")?.GetValue(item) ?? 0,
-                    CultureInfo.InvariantCulture),
-
-                Code = code,
-
-                Name =
-                    type.GetProperty("Name")?
-                        .GetValue(item)?
-                        .ToString() ?? "",
-
-                NameEn =
-                    type.GetProperty("NameEn")?
-                        .GetValue(item)?
-                        .ToString() ?? "",
-
-                Status =
-                    type.GetProperty("Status")?
-                        .GetValue(item)?
-                        .ToString() ?? "Active"
-            });
-        }
-    }
-    catch (Exception ex)
-    {
-        // Groups are optional in the filter, but the failure is reported.
-        AppHost.Logging?.LogError("MatDirWin", "LoadGroups failed", ex);
-    }
-}
+private static bool Matches(MatDirListItem item, string q)
+    => (item.Code?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+       || (item.Name?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+       || (item.NameEn?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false);
 
 private void ApplyFilter()
 {
     var q = TxtSearch.Text?.Trim() ?? "";
 
+    _roots.Clear();
     _view.Clear();
 
-    IEnumerable<MatDirListItem> source = _all;
+    var materialsById = _all
+        .Where(x => x.ItemKind == MatDirListItem.Kind.Material)
+        .ToDictionary(x => x.Id);
 
-    if (!string.IsNullOrEmpty(q))
+    // Group nodes keyed by code (parent linkage is by code).
+    var groupNodes = new Dictionary<string, MatDirNode>(StringComparer.OrdinalIgnoreCase);
+    foreach (var g in _groups.OrderBy(x => x.Code, StringComparer.Ordinal))
     {
-        source = _all.Where(x =>
-            (x.Code?.Contains(
-                q,
-                StringComparison.OrdinalIgnoreCase) ?? false) ||
-
-            (x.Name?.Contains(
-                q,
-                StringComparison.OrdinalIgnoreCase) ?? false) ||
-
-            (x.NameEn?.Contains(
-                q,
-                StringComparison.OrdinalIgnoreCase) ?? false));
+        var item = _all.First(x => x.ItemKind == MatDirListItem.Kind.Group && x.Id == g.Id);
+        groupNodes[g.Code] = new MatDirNode(item);
     }
 
-    foreach (var item in source)
-        _view.Add(item);
+    // Nest sub-groups under their parents; orphans go to the root.
+    var nested = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    foreach (var g in _groups)
+    {
+        if (!string.IsNullOrWhiteSpace(g.ParentCode)
+            && groupNodes.TryGetValue(g.ParentCode!, out var parent)
+            && groupNodes.TryGetValue(g.Code, out var child)
+            && !ReferenceEquals(parent, child))
+        {
+            parent.Children.Add(child);
+            nested.Add(g.Code);
+        }
+    }
+
+    var memberIds = new HashSet<long>();
+    foreach (var pair in _membership)
+    {
+        memberIds.Add(pair.MaterialId);
+        var group = _groups.FirstOrDefault(x => x.Id == pair.GroupId);
+        if (group is null || !groupNodes.TryGetValue(group.Code, out var groupNode))
+            continue;
+        if (materialsById.TryGetValue(pair.MaterialId, out var material))
+            groupNode.Children.Add(new MatDirNode(material));
+    }
+
+    var topLevel = new List<MatDirNode>();
+    foreach (var g in _groups.OrderBy(x => x.Code, StringComparer.Ordinal))
+    {
+        if (!nested.Contains(g.Code))
+            topLevel.Add(groupNodes[g.Code]);
+    }
+    foreach (var m in _all.Where(x => x.ItemKind == MatDirListItem.Kind.Material && !memberIds.Contains(x.Id))
+                 .OrderBy(x => x.Code, StringComparer.Ordinal))
+    {
+        topLevel.Add(new MatDirNode(m));
+    }
+
+    foreach (var node in topLevel)
+    {
+        var kept = string.IsNullOrEmpty(q) ? node : Prune(node, q);
+        if (kept is not null)
+        {
+            _roots.Add(kept);
+            FlattenInto(kept, _view);
+        }
+    }
+}
+
+/// <summary>Returns the node to keep under a search filter (the
+/// node itself, with pruned children), or null to drop it.</summary>
+private static MatDirNode? Prune(MatDirNode node, string q)
+{
+    if (!node.IsGroup)
+        return Matches(node.Item, q) ? node : null;
+
+    if (Matches(node.Item, q))
+    {
+        node.IsExpanded = true;
+        return node; // a matching group keeps all of its children
+    }
+
+    var keptChildren = new List<MatDirNode>();
+    foreach (var child in node.Children)
+    {
+        var kept = Prune(child, q);
+        if (kept is not null)
+            keptChildren.Add(kept);
+    }
+    if (keptChildren.Count == 0)
+        return null;
+
+    node.Children.Clear();
+    foreach (var child in keptChildren)
+        node.Children.Add(child);
+    node.IsExpanded = true;
+    return node;
+}
+
+private static void FlattenInto(MatDirNode node, ObservableCollection<MatDirListItem> target)
+{
+    target.Add(node.Item);
+    foreach (var child in node.Children)
+        FlattenInto(child, target);
 }
 
 private void TxtSearch_TextChanged(
@@ -405,23 +439,24 @@ private void Add_Click(
     object sender,
     RoutedEventArgs e)
 {
-    if (_modeItem)
+    // With a group selected, New manages that group (the old
+    // Groups-mode add path); otherwise it creates a material.
+    if (SelectedItem is { ItemKind: MatDirListItem.Kind.Group } group)
     {
-        var window = new MatCard
-        {
-            Owner = this,
-            WindowStartupLocation =
-                WindowStartupLocation.CenterOwner
-        };
-
-        window.Closed += (_, _) => Reload();
-
-        window.Show();
+        OpenGroupsWindow(group.Id);
+        return;
     }
-    else
+
+    var window = new MatCard
     {
-        OpenGroupsWindow();
-    }
+        Owner = this,
+        WindowStartupLocation =
+            WindowStartupLocation.CenterOwner
+    };
+
+    window.Closed += (_, _) => Reload();
+
+    window.Show();
 }
 
 private void Open_Click(
@@ -431,14 +466,14 @@ private void Open_Click(
     OpenSelected();
 }
 
-private void Lv_DoubleClick(
+private void Tv_DoubleClick(
     object sender,
     MouseButtonEventArgs e)
 {
     OpenSelected();
 }
 
-private void Lv_KeyDown(
+private void Tv_KeyDown(
     object sender,
     KeyEventArgs e)
 {
@@ -462,7 +497,7 @@ private void Lv_KeyDown(
 
 private void OpenSelected()
 {
-    if (LvItems.SelectedItem is not MatDirListItem item)
+    if (SelectedItem is not { } item)
         return;
 
     // Picker mode (document-grid material search): double-click /
@@ -501,7 +536,7 @@ private void Remove_Click(
     object sender,
     RoutedEventArgs e)
 {
-    if (LvItems.SelectedItem is not MatDirListItem item)
+    if (SelectedItem is not { } item)
         return;
 
     if (item.ItemKind != MatDirListItem.Kind.Material)
@@ -613,7 +648,7 @@ private void Ctx_Opened(
     RoutedEventArgs e)
 {
     var hasSelection =
-        LvItems.SelectedItem is MatDirListItem;
+        SelectedItem is not null;
 
     if (sender is not ContextMenu contextMenu)
         return;
@@ -644,7 +679,7 @@ private void CopyCode_Click(
     object sender,
     RoutedEventArgs e)
 {
-    if (LvItems.SelectedItem is MatDirListItem item &&
+    if (SelectedItem is { } item &&
         !string.IsNullOrEmpty(item.Code))
     {
         Clipboard.SetText(item.Code);
@@ -655,7 +690,7 @@ private void CopyName_Click(
     object sender,
     RoutedEventArgs e)
 {
-    if (LvItems.SelectedItem is MatDirListItem item)
+    if (SelectedItem is { } item)
     {
         Clipboard.SetText(item.DisplayName ?? "");
     }
