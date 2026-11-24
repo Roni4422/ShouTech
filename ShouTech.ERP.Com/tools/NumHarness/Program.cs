@@ -194,5 +194,15 @@ var emp2 = await hrRepo.NextEmployeeCodeAsync(CompanyCode);
 Check("K1 employee codes allocate sequentially",
     emp1 == "EMP-0001" && emp2 == "EMP-0002", $"{emp1} / {emp2}");
 
+var seriesRows = SeqSvc.LoadSeries();
+Check("L1 SeqSvc lists the series catalog with counters",
+    seriesRows.Count >= 20 && seriesRows.Any(r => r.Key == "JV" && r.CurrentValue == 2),
+    $"rows={seriesRows.Count}");
+var jvRow = seriesRows.First(r => r.Key == "JV");
+SeqSvc.SaveSeries(new[] { jvRow with { Prefix = "JX", Padding = 3, StartValue = 50 } }, Actor);
+var jx = journalRepo.NextDocumentNumber(CompanyCode, "JV", DateOnly.FromDateTime(DateTime.Today));
+Check("L2 saved OptWin config drives the next allocation (prefix/padding/start)",
+    jx == $"JX-{year}-050", jx);
+
 Console.WriteLine($"== NumHarness: {pass} PASS / {fail} FAIL ==");
 return fail == 0 ? 0 : 1;

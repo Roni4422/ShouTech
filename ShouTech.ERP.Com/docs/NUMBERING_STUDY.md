@@ -176,3 +176,26 @@ P2pHarness 39/39, W1Harness 36/36, BinHarness 22/22).
 The same standing debt: WPF click-through of the Numbering section and
 the pre-filled number fields, Kern.Tests execution, and a live
 PostgreSQL run of migration 123 + the allocation paths.
+
+## 6. Implementation addendum (as built, N1–N5)
+- **RCV is one shared series**: chain purchase receipts and cash
+  receipt vouchers both print `RCV-` numbers and now share one
+  counter, so a printed RCV number is unique across both families
+  (their records live in different tables; the shared counter is the
+  conservative choice).
+- **MAT (per material-group prefix) and WH (warehouse code) are not
+  rows in the OptWin grid**: MAT series are created on demand per
+  group prefix (an open set, not a fixed catalog) and WH codes are
+  bare integers with no printed format to configure. Both still
+  allocate through the same counters and honor a config row's
+  start floor if one is ever written.
+- **CRM quotations** keep their existing allocation code path, which
+  already writes the same QUO counter row; the QUO configuration row
+  applies to the InvRepo path (InvoiceWin quotations). Recorded as a
+  known nuance, not a divergence in counters.
+- Allocation points as built: documents at window open (existing),
+  chain documents in NextDocNoAsync, journals/vouchers at window
+  reset, POS sessions at open, MFG at GetNextDocNoAsync, materials
+  at NextCode, warehouses at save, party/employee codes pre-filled
+  at card reset and consumed at allocation (editable before save).
+

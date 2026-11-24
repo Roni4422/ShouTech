@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using ShouTech.App.Configuration;
@@ -69,6 +71,13 @@ public sealed class OptWin : BaseWin
     private readonly TextBlock _lblBackupWarn = new();
     private readonly Button _btnBackup = new();
     private int _backupSection = -1;
+
+    // Numbering section (NUMBERING_STUDY §3.4): per-series prefix /
+    // padding / yearly reset / start, effective for future numbers.
+    private readonly DataGrid _numGrid = new();
+    private readonly TextBlock _numHint = new();
+    private readonly ObservableCollection<NumRowVm> _numRows = new();
+    private int _numberingSection = -1;
 
     private UsrPref _pref = UsrPref.Load();
 
@@ -187,6 +196,17 @@ public sealed class OptWin : BaseWin
         Grid.SetColumn(_btnBackup, 1);
         backup.Children.Add(_btnBackup);
 
+        // ---- Numbering (per-series configuration) -------------------
+        var numbering = BeginSection("Options.NumberingSection");
+        _numberingSection = _sectionPanels.Count - 1;
+        AddReadout(numbering, _numHint);
+        BuildNumberingGrid();
+        var numRow = numbering.RowDefinitions.Count;
+        numbering.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetRow(_numGrid, numRow);
+        Grid.SetColumn(_numGrid, 1);
+        numbering.Children.Add(_numGrid);
+
         // Rail + body host (rail on the start side; mirrors in RTL).
         var middle = new Grid();
         middle.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) });
@@ -224,6 +244,89 @@ public sealed class OptWin : BaseWin
             _rail.SelectedIndex = index;
         if (index == _backupSection)
             RefreshBackupInfo();
+        if (index == _numberingSection)
+            LoadNumbering();
+    }
+
+    /// <summary>One editable row of the Numbering grid.</summary>
+    private sealed class NumRowVm
+    {
+        public string Key { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Prefix { get; set; } = string.Empty;
+        public int Padding { get; set; }
+        public bool Yearly { get; set; }
+        public long StartValue { get; set; }
+        public long CurrentValue { get; set; }
+    }
+
+    private void BuildNumberingGrid()
+    {
+        _numGrid.AutoGenerateColumns = false;
+        _numGrid.CanUserAddRows = false;
+        _numGrid.CanUserDeleteRows = false;
+        _numGrid.Height = 320;
+        _numGrid.ItemsSource = _numRows;
+        _numGrid.Columns.Add(new DataGridTextColumn { Binding = new System.Windows.Data.Binding(nameof(NumRowVm.Name)) { Mode = System.Windows.Data.BindingMode.OneWay }, Width = 170, IsReadOnly = true });
+        _numGrid.Columns.Add(new DataGridTextColumn { Binding = new System.Windows.Data.Binding(nameof(NumRowVm.Prefix)), Width = 70 });
+        _numGrid.Columns.Add(new DataGridTextColumn { Binding = new System.Windows.Data.Binding(nameof(NumRowVm.Padding)), Width = 60 });
+        _numGrid.Columns.Add(new DataGridCheckBoxColumn { Binding = new System.Windows.Data.Binding(nameof(NumRowVm.Yearly)), Width = 70 });
+        _numGrid.Columns.Add(new DataGridTextColumn { Binding = new System.Windows.Data.Binding(nameof(NumRowVm.StartValue)), Width = 80 });
+        _numGrid.Columns.Add(new DataGridTextColumn { Binding = new System.Windows.Data.Binding(nameof(NumRowVm.CurrentValue)) { Mode = System.Windows.Data.BindingMode.OneWay }, Width = 80, IsReadOnly = true });
+    }
+
+    private void LoadNumbering()
+    {
+        _numHint.Text = T("Numbering.Hint");
+        var headers = new[] { "Numbering.Series", "Numbering.Prefix", "Numbering.Padding", "Numbering.Yearly", "Numbering.StartValue", "Numbering.CurrentValue" };
+        for (var i = 0; i < headers.Length && i < _numGrid.Columns.Count; i++)
+            _numGrid.Columns[i].Header = T(headers[i]);
+        _numRows.Clear();
+        try
+        {
+            foreach (var row in SeqSvc.LoadSeries())
+                _numRows.Add(new NumRowVm
+                {
+                    Key = row.Key,
+                    Name = T(row.NameKey),
+                    Prefix = row.Prefix,
+                    Padding = row.Padding,
+                    Yearly = row.Yearly,
+                    StartValue = row.StartValue,
+                    CurrentValue = row.CurrentValue
+                });
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OptWin.LoadNumbering");
+        }
+    }
+
+    private bool SaveNumbering()
+    {
+        if (_numRows.Count == 0)
+            return true;
+        try
+        {
+            var actor = AppState.CurrentUser?.Username ?? "anonymous";
+            SeqSvc.SaveSeries(
+                _numRows.Select(r => new SeqSvc.SeriesRow(r.Key, string.Empty, r.Prefix, r.Padding, r.Yearly, r.StartValue, r.CurrentValue)),
+                actor);
+            return true;
+        }
+        catch (AppError ex)
+        {
+            AppHost.Errors.Report(ex.Code, ex, "OptWin.SaveNumbering");
+            var info = AppHost.Errors.Resolve(ex.Code, ex.Args.ToArray());
+            MessageBox.Show(this, info.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OptWin.SaveNumbering");
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+            return false;
+        }
     }
 
     private void RefreshBackupInfo()
@@ -389,6 +492,12 @@ public sealed class OptWin : BaseWin
             !TryInt(_txtDecimals, "Options.DecimalPlaces", out var decimals) ||
             !TryInt(_txtAutoSave, "Options.AutoSaveInterval", out var autoSave) ||
             !TryInt(_txtAutoLock, "Options.AutoLock", out var autoLock))
+            return;
+
+        // Numbering configuration validates and persists first: an
+        // invalid series row aborts the whole save (NUM-8302).
+        _numGrid.CommitEdit();
+        if (!SaveNumbering())
             return;
 
         var oldLang = _pref.Lang;
