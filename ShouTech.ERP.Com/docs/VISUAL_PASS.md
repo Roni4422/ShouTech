@@ -320,3 +320,24 @@ placement is left exactly as it is.
 
 **Flagged, not restructured:** PosWin (and PosCheckoutWin) keep
 the POS touch layout, per the directive.
+
+## V6 — Card windows open smaller (owner directive 2026-11-24 14:30)
+
+The master-data card family opens ~10% smaller (default Width ×
+Height; minimums untouched, free resizing/maximizing unchanged,
+the central ≤50%-of-screen opening cap still applies on top):
+
+| Window | Before | After | Note |
+|---|---|---|---|
+| MatCard | 920×620 | 830×560 | |
+| CstCard | 820×560 | 740×505 | |
+| CurCard | 860×500 | 775×450 | |
+| BnkCard | 720×460 | 650×415 | |
+| RepCard | 720×400 | 650×360 | |
+| CcCard | 700×430 | 630×390 | cost-center card |
+| AccCard | 700×560 | 700×505 | width NOT shrunk: verify_screenfit pins AccCard at 700 wide (Step-12 fix — its eight-button WrapPanel bar stays on one row at 700; below that it wraps). Height took the full −10%. Recorded per the directive's "shrink only what fits" clause. |
+
+verify_screenfit stays green: no content was reflowed, only the
+default opening size changed, and every new default remains at or
+above the window's own minimum (the size screen-fit is checked
+against).

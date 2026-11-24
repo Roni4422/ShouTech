@@ -51,8 +51,8 @@ public sealed class CcCard : BaseWin
 
     public CcCard()
     {
-        Width = 700;
-        Height = 430;
+        Width = 630;
+        Height = 390;
         MinWidth = 620;
         MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;

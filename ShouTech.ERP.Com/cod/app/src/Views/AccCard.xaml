@@ -5,7 +5,7 @@
         xmlns:loc="clr-namespace:ShouTech.App.Localization"
         loc:LocProps.WindowKey="AccountCard"
         Title="Account card"
-        Width="700" Height="560"
+        Width="700" Height="505"
         MinWidth="660" MinHeight="360"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource BackgroundBrush}"

@@ -40,8 +40,8 @@ public sealed class BnkCard : BaseWin
 
     public BnkCard()
     {
-        Width = 720;
-        Height = 460;
+        Width = 650;
+        Height = 415;
         MinWidth = 620;
         MinHeight = 380;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;

@@ -47,8 +47,8 @@ public sealed class CurCard : BaseWin
 
     public CurCard()
     {
-        Width = 860;
-        Height = 500;
+        Width = 775;
+        Height = 450;
         MinWidth = 660;
         MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;

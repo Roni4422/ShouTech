@@ -39,8 +39,8 @@ public sealed class RepCard : BaseWin
 
     public RepCard()
     {
-        Width = 720;
-        Height = 400;
+        Width = 650;
+        Height = 360;
         MinWidth = 640;
         MinHeight = 320;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
