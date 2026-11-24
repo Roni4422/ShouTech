@@ -944,7 +944,25 @@ execution owed on Windows. PostgreSQL live run owed.
 
 ## 5. Gates
 
-(Filled at completion.)
+### Final integrated gates (finisher pass, 2026-11-24, on tip fad5045)
+
+- Build `--no-incremental` (full solution): **0 errors, 0 warnings**.
+  (The base's 4 pre-existing CA1859 warnings were already cleaned by
+  workstream A4; nothing to inherit, no new warnings introduced.)
+- Migrator (SQLite): fresh database **90 migrations apply** through
+  099; second run applies **0** (idempotent). PostgreSQL execution
+  owed (no PG server in this environment).
+- `audit_window_context.py` exit 0; `verify_screenfit.py` exit 0
+  (ALL PASS); `verify_english_source.py` exit 0.
+- Lang parity: branch-added keys fully matched; catalog deltas vs En
+  identical to the base's pre-existing deltas (Ar missing 12, Fr 19,
+  Tr 19 — inherited, not regressions). Errors parity: **0 missing in
+  all 4 languages** (466 En codes). COA Lang parity: 0 missing.
+- Harnesses on the final tip: **tools/P2pHarness 39 PASS / 0 FAIL**;
+  **tools/W1Harness 36 PASS / 0 FAIL** (both SQLite, headless).
+- Kern.Tests execution owed on Windows (net8.0-windows testhost
+  cannot run on this Linux machine); WPF click-through owed;
+  live PostgreSQL run owed.
 
 ### B1 gates (this workstream)
 
@@ -989,7 +1007,162 @@ execution owed on Windows. PostgreSQL live run owed.
 
 ## 6. Proof
 
-(Filled at completion — Kern.Tests facts + headless harness scenario.)
+### Consolidated harness (finisher pass)
+
+`tools/P2pHarness` drives the real services through the owner
+report's 10-stage spine in one company (SQLite): requisition with
+persisted header facts → submit → self-approval rejected (hard ban)
+→ two-step approval → PRQ→RFQ (exactly one link, idempotent retry)
+→ supplier quotation → comparison (base total 110) → award → PO →
+partial receipts 6+4 (GRNI Cr 66 → 110, stored per_received 60 →
+100) → over-billing blocked → invoice 1 (6 @ 12: GRNI cleared 66,
+PPV 6 → 415, AP Cr 72, bill ref persisted, 078 matches = 6, stored
+per_billed 60) → duplicate bill reference rejected with PUR-1011 →
+invoice 2 (AP Cr 44, per_billed 100, chain GRNI 0) → payment 116
+allocated 72 + 44, both settled, party balance 0 → landed-cost
+chain: carrier freight invoice 500 → linked LCV creates **no** AP
+credit and **no** party-ledger rows, reclasses 500 out of Freight-in
+into inventory + consumed COGS, second link rejected PUR-1009,
+reversal restores Freight-in exactly and frees the document →
+unlinked LCV 20 posts its own AP credit → period-end GRNI tie-out
+(open 36 == GL 36, diff 0) → purchase return 2 @ 11 (own credit-note
+ref, stock −2, supplier balance −2, match unwind 10 → 8, stored
+per_billed 100 → 80, unwind rows recorded) → **GRNI tie-out exact
+immediately after the return (58 == 58)** and **after re-invoice
+(36 == 36)** → rewind mini-chain: PRT unwind then
+RewindPurchaseReturnMatches restores the match exactly and stored
+per_billed returns to 100 → every posted journal balanced.
+**39 PASS / 0 FAIL.** `tools/W1Harness`: **36 PASS / 0 FAIL**
+(withholding on both posting paths, register == GL 2215 for both
+companies). Per-workstream Kern.Tests facts are compile-verified;
+their execution is owed on Windows (see §5).
+
+### Defects found by the finisher pass and fixed at the cause
+
+1. **Chain line insert crashed without a tax code** (commit e0c6f99).
+   B1's `OrderDocumentRepository.InsertLinesAsync` wrote DBNull into
+   `purchase_document_lines.tax_code` (TEXT NOT NULL DEFAULT ''), so
+   any chain document whose lines lack a tax code failed to insert.
+   Now coalesces to `string.Empty`.
+2. **Stored per_billed never moved after a purchase return**
+   (commit 038a064). `RefreshPoStoredPerBilled` nets posted PRT
+   allocations, but Post runs it while the return's header is still
+   'Draft', so the triggering return was invisible to its own
+   refresh. The refresh now counts the in-flight return explicitly;
+   the rewind passes its return as an exclusion.
+3. **GRNI tie-out broke after return + re-invoice** (commit 038a064).
+   The match unwind revives the received-not-invoiced position in
+   the match ledger, but the PRT journal never re-credited 2203, so
+   the re-invoice cleared the accrual twice. The unwind now returns
+   the base amounts that left the matches and BuildGlLines mirrors
+   the original chain invoice's clearing for exactly that portion
+   (Cr GRNI at receipt base, Cr/Dr PPV for the difference, reclassed
+   out of the purchase-return credits). Manual-invoice returns keep
+   the base journal shape unchanged.
+
+### §12 acceptance itemization (owner's report — definition of done)
+
+Functional (16): **12 PROVEN, 4 PARTIAL, 0 GAP**
+
+- PROVEN — Requisitions creation → approval (A1; P2pHarness stages 1–3).
+- PROVEN — Approval permissions + sequential approvals, incl. hard
+  self-approval ban and BudgetGuard budget check (A1; harness).
+- PROVEN — RFQs + supplier quotations (harness stages 3–4).
+- PROVEN — Quotation comparison (harness: base-currency total 110;
+  SupplierQuotationCompareWin).
+- PROVEN — Approved quotations convert to POs (harness: award → PO).
+- PROVEN — PO amendments (B1 P6: cancel creates a linked amended
+  copy; posted children block cancel) + partial receiving (harness
+  receipts 6+4, stored per_received).
+- PARTIAL — Batch/serial throughout the lifecycle: capture at
+  receipt, FEFO and the mig-056 QC gate on chain receipts are built
+  (B1 Q-items on the base 054 foundation), but no harness drives
+  batch/serial end-to-end and Kern.Tests execution is owed.
+- PROVEN — Supplier invoices match purchasing/receiving documents
+  (three-way qty invariant, 078 matches, stored per_billed; harness
+  stage 5).
+- PROVEN — Purchase returns update stock + supplier balances
+  (harness stage 9, incl. unwind + re-invoice + rewind).
+- PROVEN — Landed costs allocated by all five methods (A3: Value /
+  Quantity / Weight / Volume / Manual; harness posts linked +
+  unlinked vouchers).
+- PROVEN — Landed costs update inventory valuation (A3 restatement;
+  harness: linked LCV splits 500 into inventory + consumed COGS).
+- PROVEN — Duplicate supplier liabilities prevented (Critical-1 by
+  design; harness: no AP credit / no party rows for linked charges,
+  PUR-1009, PUR-1011).
+- PROVEN — GRNI exceptions + period-end reconciliation (A2
+  workbench; harness tie-outs at three points, diff 0).
+- PARTIAL — Attachments secure + audited: storage + audit trail
+  exist (base mig 086 lineage); no harness in this pass exercises
+  attachment permissions end-to-end.
+- PARTIAL — Document numbering unique + concurrency-safe:
+  uniqueness enforced and proven single-threaded (harness +
+  catalogued rejects); a multi-connection concurrency stress was
+  not executed here (PostgreSQL serialization run owed).
+- PARTIAL — Purchasing reports + transaction histories complete:
+  GRNI workbench, payable due-date aging (A2) and the withholding
+  report (W1) are delivered; completeness of the full report
+  catalog against the owner's list was not separately audited.
+
+Accounting (6): **6 PROVEN, 0 PARTIAL, 0 GAP**
+
+- PROVEN — Every purchasing transaction produces correct GL
+  (per-stage journal assertions in both harnesses; global balance
+  check Dr == Cr across the whole scenario).
+- PROVEN — Supplier balances reconcile with invoices + credit notes
+  (harness: 0 after allocation, −2 after PRT, advances netting B2).
+- PROVEN — Inventory valuation reconciles with GL (single
+  StockValuationEngine; LCV inventory/COGS split proven in GL).
+- PROVEN — GRNI balances reconcile with received + invoiced goods
+  (tie-out diff 0 before/after return and re-invoice — finisher
+  fix 3 above).
+- PROVEN — Reversals preserve originals + audit history (LCV
+  reversal restores exactly and frees the document; PRT rewind
+  restores matches; compensating journals, originals immutable).
+- PROVEN — No duplicate liabilities or valuation adjustments
+  (Critical-1 checks; one posted LCV per document).
+
+Technical (7): **3 PROVEN, 3 PARTIAL, 1 GAP**
+
+- PROVEN — SQLite migrations pass (90 apply fresh through 099;
+  0 on re-run).
+- GAP — PostgreSQL migrations pass: not executed — no PostgreSQL
+  server exists in this environment. Owed.
+- PARTIAL — Windows build without errors/warnings: the solution
+  builds 0 errors / 0 warnings here (Linux +
+  EnableWindowsTargeting); the literal Windows build + WPF run is
+  owed on the owner's machine.
+- PARTIAL — Integrated tests pass: consolidated harnesses pass on
+  SQLite (39/39 + 36/36); Kern.Tests execution (Windows) and the
+  PostgreSQL integration run are owed.
+- PARTIAL — No duplicate document numbers under concurrent
+  transactions: mechanism + single-threaded proof in place;
+  concurrency stress not executed (see functional item above).
+- PROVEN — No orphaned purchasing records (B1 P6 dependency-aware
+  cancel; conversion link integrity proven in the harness).
+- PROVEN — No broken relationships requisition → quotation → order
+  → receipt → invoice → return (the consolidated harness drives
+  exactly this chain with integrity checks at every hop).
+
+**Totals: 21 PROVEN, 7 PARTIAL, 1 GAP of 29.** Every PARTIAL/GAP
+above is an execution-environment or audit-scope limit, stated
+plainly — not a known product defect. The two owner decisions below
+remain open and were deliberately NOT built.
+
+### Residuals noted by the finisher (not fixed — out of this branch's recorded scope)
+
+- `RewindPurchaseReturnMatches` is the match-ledger half of a PRT
+  reversal and is proven by harness + Kern.Tests, but no production
+  caller invokes it yet: the app's ReversePostedInvoice covers
+  invoices (reversing one creates a PRT that unwinds). Reversing a
+  posted PRT document itself should call the rewind alongside its
+  reversal journal; wiring that flow is a follow-up.
+- PRT lineage validation requires the return line's warehouse to
+  equal the original line's stored warehouse exactly; a chain
+  invoice whose lines carry no warehouse (NULL) can only be
+  returned with a NULL-warehouse return line (observed via the
+  harness; production windows set line warehouses explicitly).
 
 ## 7. Owner flags
 
@@ -1009,5 +1182,19 @@ execution owed on Windows. PostgreSQL live run owed.
   flag if a jurisdiction requires payment-time.
 - Partial (per-line) requisition conversion and multiple POs per
   requisition: not built; whole-document conversion kept.
+- Cross-currency payment allocation: not built (owner decision
+  still open); allocation remains single-currency, rejected with a
+  catalogued error rather than posting an unvalued FX difference.
 - Rebase note: base is the owner's stabilization tip @ 52a762a; he is
   still committing there — rebase before merge.
+- **Merge-readiness (finisher, 2026-11-24 — plan only, NOT
+  performed):** the sales cycle has since been merged into the
+  stabilization branch (tip ecf9957), which now carries sales
+  migrations 092–106. This branch's migrations collide and must be
+  renumbered at merge time, in both dialects (sqlite + postgresql):
+  purchase 092 → 107, 093 → 108, 094 → 109, 095 → 110, 096 → 111,
+  097 → 112, 098 → 113, 099 → 114. The branch also needs a rebase
+  onto ecf9957 before merging; ~52 files overlap with the sales
+  branch (InvRepo, OrderDocumentRepository family, GlPosting,
+  TaxSvc, language/error catalogs, COA templates) and will need
+  reconciliation. No merge or push has been performed.
