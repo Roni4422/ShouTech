@@ -237,7 +237,6 @@
   "DefineInvoices": "Fatura Tanımla",
   "SearchInvoices": "Fatura Ara",
   "CashSales": "Peşin Satış Faturaları",
-  "CloseCash": "Kasayı Kapat",
   "Quotation": "Teklif",
   "SearchQuotations": "Teklif Ara",
   "InvoiceProfits": "Fatura Kârları",
@@ -3170,23 +3169,6 @@
   "StatementRequired": "Önce banka ekstresini kaydedin.",
   "SelectStatementLine": "Önce bir ekstre satırı seçin.",
   "SelectBookLine": "Önce bir defter satırı seçin."
- },
- "CloseCash": {
-  "Title": "POS Kasa Kapanışı",
-  "PermissionDenied": "POS oturumu kapatma yetkiniz yok.",
-  "ServiceUnavailable": "İşlem hizmeti kullanılamıyor (veritabanı yapılandırılmadı).",
-  "Terminal": "Terminal",
-  "BusinessDate": "İş tarihi",
-  "Opening": "Açılış tutarı",
-  "Counted": "Sayılan tutar",
-  "Notes": "Notlar",
-  "Expected": "Beklenen tutar",
-  "Difference": "Fark",
-  "Status": "Durum",
-  "ClosedBy": "Kapatan",
-  "SalesSummary": "Günün POS satışları",
-  "Save": "Kapanışı kaydet",
-  "Saved": "Kasa kapanışı kaydedildi."
  },
  "PosSync": {
   "Title": "POS Senkronizasyonu (Giden Kutusu)",

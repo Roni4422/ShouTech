@@ -237,7 +237,6 @@
   "DefineInvoices": "Définir les Factures",
   "SearchInvoices": "Rechercher des Factures",
   "CashSales": "Ventes au Comptant",
-  "CloseCash": "Fermer la Caisse",
   "Quotation": "Devis",
   "SearchQuotations": "Rechercher des Devis",
   "InvoiceProfits": "Profits des Factures",
@@ -3170,23 +3169,6 @@
   "StatementRequired": "Enregistrez d'abord le relevé bancaire.",
   "SelectStatementLine": "Sélectionnez d'abord une ligne du relevé.",
   "SelectBookLine": "Sélectionnez d'abord une ligne comptable."
- },
- "CloseCash": {
-  "Title": "Clôture de caisse PDV",
-  "PermissionDenied": "Vous n'avez pas l'autorisation de clôturer une session PDV.",
-  "ServiceUnavailable": "Le service des opérations est indisponible (base de données non configurée).",
-  "Terminal": "Terminal",
-  "BusinessDate": "Date d'activité",
-  "Opening": "Fond de caisse",
-  "Counted": "Montant compté",
-  "Notes": "Remarques",
-  "Expected": "Montant attendu",
-  "Difference": "Différence",
-  "Status": "Statut",
-  "ClosedBy": "Clôturé par",
-  "SalesSummary": "Ventes PDV du jour",
-  "Save": "Enregistrer la clôture",
-  "Saved": "Clôture de caisse enregistrée."
  },
  "PosSync": {
   "Title": "Synchronisation PDV (boîte d'envoi)",

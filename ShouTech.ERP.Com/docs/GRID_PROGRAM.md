@@ -310,7 +310,10 @@ palette (97 windows / 97 tints after the INV1 sweep; RptBase report
 family shares Silver by design). Full record: docs/INVOICE_FAMILY.md.
 The unified Tools window (TOOLS_WINDOW_STUDY, feat/tools-window) takes
 Hickory — the one palette tint no window had claimed (98 windows /
-98 tints).
+98 tints). CloseCashWin (Coral) was retired by owner decision
+(2026-11-24) in favour of the POS session close — the census
+returns to 97 windows / 97 tints and Coral is again the palette's
+unclaimed tint.
 
 | Window | Tint |
 |---|---|
@@ -330,7 +333,6 @@ Hickory — the one palette tint no window had claimed (98 windows /
 | CcListWin | Orchid |
 | ChqListWin | Indigo |
 | ChqWin | Periwinkle |
-| CloseCashWin | Coral |
 | CoaWin | Lavender |
 | CommWin | Tundra |
 | CompressInvoicesWin | Solace |

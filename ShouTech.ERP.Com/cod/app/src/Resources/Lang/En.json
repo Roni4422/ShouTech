@@ -522,7 +522,6 @@
  },
  "Invoices": {
   "CashSales": "Cash Sales Invoices",
-  "CloseCash": "Close Cash",
   "CompressInvoices": "Compress Invoices",
   "DefineInvoices": "Define Invoices",
   "InventoryCount": "Inventory Count Invoice",
@@ -3184,23 +3183,6 @@
   "StatementRequired": "Save the bank statement first.",
   "SelectStatementLine": "Select a statement line first.",
   "SelectBookLine": "Select a book line first."
- },
- "CloseCash": {
-  "Title": "POS Cash Closing",
-  "PermissionDenied": "You do not have permission to close a POS session.",
-  "ServiceUnavailable": "Operations service is unavailable (database not configured).",
-  "Terminal": "Terminal",
-  "BusinessDate": "Business date",
-  "Opening": "Opening float",
-  "Counted": "Counted amount",
-  "Notes": "Notes",
-  "Expected": "Expected amount",
-  "Difference": "Difference",
-  "Status": "Status",
-  "ClosedBy": "Closed by",
-  "SalesSummary": "POS sales for the date",
-  "Save": "Save closing",
-  "Saved": "Cash closing saved."
  },
  "PosSync": {
   "Title": "POS Sync (Outbox)",

@@ -16,8 +16,10 @@ namespace ShouTech.App.Views;
 /// with its live Z figures, and closes it with the counted cash —
 /// expected and variance are computed from the session's real tenders
 /// by PosRepository, never typed. Past sessions are listed below.
-/// The legacy CloseCashWin day-close remains for history; sessions
-/// supersede it (its expected formula counted the wrong documents).
+/// Sessions are the program's only cash-close path: the legacy
+/// day-close window was retired by owner decision (2026-11-24;
+/// its expected formula counted the wrong documents). Its register
+/// rows remain in pos_cash_closings as history.
 /// </summary>
 public sealed class PosSessionWin : BaseWin
 {

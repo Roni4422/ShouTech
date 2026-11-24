@@ -156,6 +156,16 @@ for a non-trivial cause is reverted and marked SKIPPED with the reason.
   windows; HelpWin takes the topic key and lands on a matching
   section or shows the graceful topic-pending note
   (Help.TopicPending ×4). Gates: ALL-GREEN.
+- **CloseCashWin retirement — DONE** (owner decision 2026-11-24
+  21:11, on the closecash audit's recommendation): the legacy
+  day-close window is removed (window, `Invoices.CloseCash`
+  ribbon entry, Lang keys ×4 + COA ×4); the POS session close
+  (+ Z report) is now the program's only cash-close path.
+  `pos_cash_closings` (migration 037) and its history are KEPT —
+  session closes mirror one row per close into it. Accepted
+  consequence, chosen by the owner with the audit in front of
+  him: the session-less selling mode (optional, off by default)
+  loses its legacy day-close log; no replacement is built.
 
 ## Standing rule (owner, 2026-11-24 15:54)
 
