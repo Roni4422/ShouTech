@@ -165,6 +165,16 @@ public static class ErrorCodes
     public const string HrEmployeeNotPayable = "HR-1009";
     public const string HrMasterCodeDuplicate = "HR-1010";
 
+    // ---- PUR 1001-1999 (purchase requisition completion, migration 092) --
+    // The purchasing workflow module takes its own prefix block, like
+    // MFG / HR / POS. Budget overruns at requisition submit reuse the
+    // BudgetGuard codes ACC-5018/5019 (identical Stop semantics).
+    public const string RequisitionNotEditable = "PUR-1001";
+    public const string RequisitionCancelBlocked = "PUR-1002";
+    public const string RequisitionCloseInvalid = "PUR-1003";
+    public const string RequisitionStateInvalid = "PUR-1004";
+    public const string RequisitionReasonRequired = "PUR-1005";
+
     // ---- POS 1001-1999 (POS full build, migration 066) ------------------
     // The POS module takes its own prefix block, like MFG / HR.
     public const string PosNoOpenSession = "POS-1001";

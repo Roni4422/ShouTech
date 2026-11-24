@@ -1,3 +1,4 @@
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
 namespace ShouTech.Application.Services;
@@ -38,8 +39,27 @@ public sealed class PurchaseRequisitionWorkflowService
         if(draft.Lines.Any(x=>x.Qty<=0||x.UnitPrice<0||string.IsNullOrWhiteSpace(x.Description)))
             throw new InvalidOperationException("Requisition lines require descriptions, positive quantities, and non-negative estimates.");
         var workflow=await _repository.GetAsync(companyId,id,ct).ConfigureAwait(false);
-        if(workflow is not null)throw new InvalidOperationException("A requisition cannot be edited after it has been submitted.");
+        // R3 (migration 092): a rejected requisition returns to editable
+        // draft state so it can be corrected and resubmitted as a new
+        // approval round. Every other workflow state locks the document.
+        if(workflow is not null&&workflow.Status!="Rejected")
+            throw new AppError(ErrorCodes.RequisitionNotEditable,"A requisition can only be edited before submission or after rejection.");
         await _orders.UpdatePurchaseRequisitionDraftAsync(id,draft,RequireActor(actor),ct).ConfigureAwait(false);
+    }
+
+    public Task CancelAsync(Guid companyId,long id,string actor,string? reason,CancellationToken ct=default)
+    {
+        RequirePermission("PUR.REQ.CANCEL");
+        RequireCompany(companyId);ArgumentOutOfRangeException.ThrowIfNegativeOrZero(id);
+        if(string.IsNullOrWhiteSpace(reason))throw new AppError(ErrorCodes.RequisitionReasonRequired,"A cancellation reason is required.");
+        return _repository.CancelAsync(companyId,id,RequireActor(actor),reason.Trim(),ct);
+    }
+
+    public Task CloseAsync(Guid companyId,long id,string actor,CancellationToken ct=default)
+    {
+        RequirePermission("PUR.REQ.CLOSE");
+        RequireCompany(companyId);ArgumentOutOfRangeException.ThrowIfNegativeOrZero(id);
+        return _repository.CloseAsync(companyId,id,RequireActor(actor),ct);
     }
 
 
@@ -113,6 +133,62 @@ public sealed class PurchaseRequisitionWorkflowService
             {
                 throw new AggregateException(
                     "Purchase-order creation failed and the requisition conversion state could not be reconciled.",
+                    conversionError,rollbackError);
+            }
+            throw;
+        }
+    }
+    /// <summary>R4 (migration 092): convert an approved requisition into
+    /// a supplier-neutral RFQ draft, with the same reservation /
+    /// idempotency discipline as the PO conversion: an existing RFQ link
+    /// is returned instead of duplicated, the conversion is claimed via
+    /// BeginConversionAsync, and a failed creation aborts the claim.</summary>
+    public async Task<PurchaseRequisitionRfqConversion> ConvertToRequestForQuotationDraftAsync(Guid companyId,long requisitionId,long? warehouseId,string actor,CancellationToken ct=default)
+    {
+        RequirePermission("PUR.REQ.CONVERT");
+        RequireCompany(companyId);ArgumentOutOfRangeException.ThrowIfNegativeOrZero(requisitionId);
+        var workflow=await _repository.GetAsync(companyId,requisitionId,ct).ConfigureAwait(false)??throw new InvalidOperationException("Purchase requisition workflow was not found.");
+        if(workflow.Status=="Converted"&&workflow.RfqDocId is long existingRfqId)
+        {
+            var existing=await _orders.FindByIdAsync(CommercialDocSide.Purchase,existingRfqId,ct).ConfigureAwait(false)??throw new InvalidOperationException("Linked request for quotation is missing.");
+            return new(existing.DocId,existing.DocNo);
+        }
+        var link=(await _orders.Orders.GetLinksFromAsync(companyId,requisitionId,ct).ConfigureAwait(false))
+            .FirstOrDefault(x=>x.SourceDocKind==CommercialDocKinds.PurchaseRequisition&&x.TargetDocKind==CommercialDocKinds.RequestForQuotation);
+        if(link is not null)
+        {
+            var existing=await _orders.FindByIdAsync(CommercialDocSide.Purchase,link.TargetDocId,ct).ConfigureAwait(false)??throw new InvalidOperationException("Linked request for quotation is missing.");
+            await _repository.MarkConvertedToRfqAsync(companyId,requisitionId,existing.DocId,RequireActor(actor),ct).ConfigureAwait(false);
+            return new(existing.DocId,existing.DocNo);
+        }
+        if(workflow.Status!="Approved")throw new InvalidOperationException("Only an approved requisition that is not already converting can be converted.");
+        var requisition=await _orders.FindByIdAsync(CommercialDocSide.Purchase,requisitionId,ct).ConfigureAwait(false)
+            ??throw new InvalidOperationException("Purchase requisition document was not found.");
+        if(requisition.DocKind!=CommercialDocKinds.PurchaseRequisition)throw new InvalidOperationException("Source document is not a purchase requisition.");
+        var number=await _orders.NextDocNoAsync(CommercialDocSide.Purchase,companyId,CommercialDocKinds.RequestForQuotation,ct).ConfigureAwait(false);
+        var lines=requisition.Lines.Select(x=>new CommercialLineDraft(x.MaterialId,x.MaterialCode,x.Description,x.Unit,x.Qty,x.UnitPrice,x.DiscountPct,0m,x.WarehouseId??warehouseId,x.LineNo)).ToArray();
+        var draft=new CommercialDocumentDraft(companyId,CommercialDocKinds.RequestForQuotation,number,DateOnly.FromDateTime(DateTime.Today),null,null,warehouseId,requisition.CurrencyCode,requisition.ExchangeRate,$"Created from requisition {requisition.DocNo}",lines);
+        var conversionActor=RequireActor(actor);
+        await _repository.BeginConversionAsync(companyId,requisitionId,conversionActor,ct).ConfigureAwait(false);
+        try
+        {
+            var rfqId=await _orders.Orders.CreateLinkedDraftAsync(
+                CommercialDocSide.Purchase,draft,CommercialDocKinds.PurchaseRequisition,
+                requisitionId,conversionActor,ct).ConfigureAwait(false);
+            await _repository.MarkConvertedToRfqAsync(companyId,requisitionId,rfqId,conversionActor,ct).ConfigureAwait(false);
+            return new(rfqId,number);
+        }
+        catch(Exception conversionError)
+        {
+            try
+            {
+                await _repository.AbortConversionAsync(companyId,requisitionId,conversionActor,
+                    conversionError.Message,CancellationToken.None).ConfigureAwait(false);
+            }
+            catch(Exception rollbackError)
+            {
+                throw new AggregateException(
+                    "RFQ creation failed and the requisition conversion state could not be reconciled.",
                     conversionError,rollbackError);
             }
             throw;

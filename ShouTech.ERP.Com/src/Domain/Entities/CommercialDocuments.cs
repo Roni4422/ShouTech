@@ -152,7 +152,12 @@ public sealed record CommercialDocumentSnapshot(
     string? CustomsRef = null,
     string? VesselFlight = null,
     decimal? GrossWeight = null,
-    decimal? NetWeight = null)
+    decimal? NetWeight = null,
+    // Migration 092 (requisition completion R5/R6): header facts carried
+    // for purchase requisitions; null for every other document kind.
+    DateOnly? RequiredByDate = null,
+    string? RequestType = null,
+    string? Department = null)
 {
     /// <summary>Derived chain status (sales orders); the raw status for every other document.</summary>
     public string DerivedStatus => SalesChainDerivedStatus.Derive(DocKind, Status, PerDelivered, PerBilled);
@@ -294,7 +299,11 @@ public sealed record CommercialDocumentDraft(
     // Y3: explicit payment due date for purchase invoices (migration 094,
     // renumbered 109). Null means "derive at insert": doc date + the
     // supplier's credit_days.
-    DateOnly? DueDate = null);
+    DateOnly? DueDate = null,
+    // Migration 092: requisition header facts (see CommercialDocumentSnapshot).
+    DateOnly? RequiredByDate = null,
+    string? RequestType = null,
+    string? Department = null);
 
 /// <summary>Header-only projection used by document search / order tracking lists.</summary>
 public sealed record CommercialDocumentSummary(

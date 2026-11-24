@@ -202,6 +202,145 @@ public static class BudgetGuard
         return warnings;
     }
 
+    /// <summary>
+    /// Commitment check for a non-posting document (purchase requisition
+    /// completion R1, migration 092): the requisition posts no journal
+    /// entry, so <see cref="Check"/> has nothing to measure. This entry
+    /// point applies the SAME budgets, horizons, actuals and Stop/Warn
+    /// semantics to a bare amount, charged to one account dimension —
+    /// the caller passes the canonical Purchases account (GlAccounts
+    /// .Purchases, "402"), which is where an approved requisition's
+    /// spend lands at invoice posting, because a requisition carries no
+    /// account or cost-center coding of its own. CostCenter and Project
+    /// budgets cannot be charged by a requisition (no center/project
+    /// attribution exists on it) and are skipped, exactly as the posting
+    /// guard skips unattributable lines. Actuals are the posted-GL
+    /// actuals the posting guard enforces (net of reversals), so a
+    /// requisition and the journal that later fulfils it are measured
+    /// against the same headroom. Stop throws the same cataloged
+    /// AppError (ACC-5018/5019) after filling blockedSink (the caller
+    /// records the Blocked events after its rollback via
+    /// <see cref="RecordBlockedEvents"/>, JournalEntryId = Guid.Empty);
+    /// Warn returns the warnings and records Warned budget-control
+    /// events (journal_entry_id NULL) inside the caller's transaction.
+    /// </summary>
+    public static IReadOnlyList<BudgetWarning> CheckCommitment(
+        DbConnection connection, DbTransaction transaction, string provider,
+        Guid companyId, DateOnly commitmentDate, string accountCode, decimal amount,
+        string actor, List<BudgetViolation>? blockedSink = null)
+    {
+        var prov = GlPosting.NormalizeProvider(provider);
+        var warnings = new List<BudgetWarning>();
+        if (amount <= 0m)
+            return warnings;
+        if (!PartyLedger.TableExists(connection, transaction, prov, "budgets"))
+            return warnings;
+
+        // The fiscal period containing the commitment date decides the
+        // fiscal year and the accumulated-monthly horizon, exactly as
+        // the entry's period does for a posting. No period -> the guard
+        // has nothing to measure against.
+        long fiscalYearId;
+        int periodNumber;
+        using (var period = GlPosting.CreateCommand(connection, transaction,
+            """
+            SELECT fiscal_year_id, period_number FROM fiscal_periods
+            WHERE company_id = @company AND @date BETWEEN start_date AND end_date
+            ORDER BY start_date LIMIT 1
+            """))
+        {
+            GlPosting.Add(period, "@company", GlPosting.FormatGuid(prov, companyId));
+            GlPosting.Add(period, "@date", commitmentDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            using var reader = period.ExecuteReader();
+            if (!reader.Read())
+                return warnings;
+            fiscalYearId = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture);
+            periodNumber = Convert.ToInt32(reader.GetValue(1), CultureInfo.InvariantCulture);
+        }
+
+        var budgets = LoadActiveBudgets(connection, transaction, prov, companyId, fiscalYearId);
+        if (budgets.Count == 0)
+            return warnings;
+
+        // Resolve the commitment account and its budget opt-in flag (the
+        // same chart flag the posting guard honours). On a pre-059
+        // database the flag column does not exist and no account is
+        // flagged — the guard enforces nothing there.
+        if (!PartyLedger.ColumnExists(connection, transaction, prov, "chart_of_accounts", "budget"))
+            return warnings;
+        var notDeleted = prov == "PostgreSQL" ? "is_deleted = false" : "is_deleted = 0";
+        var companyCode = ResolveCompanyCode(connection, transaction, prov, companyId);
+        Guid accountId;
+        bool flagged;
+        using (var account = GlPosting.CreateCommand(connection, transaction,
+            $"""
+            SELECT account_id, COALESCE(budget, 0) FROM chart_of_accounts
+            WHERE account_code = @code AND {notDeleted}
+              AND (@coCode IS NULL OR company_id = @coGuid OR company_id = @coCode)
+            ORDER BY account_code LIMIT 1
+            """))
+        {
+            GlPosting.Add(account, "@code", accountCode);
+            GlPosting.Add(account, "@coGuid", GlPosting.FormatGuid(prov, companyId));
+            GlPosting.Add(account, "@coCode", (object?)companyCode ?? DBNull.Value);
+            using var reader = account.ExecuteReader();
+            if (!reader.Read())
+                return warnings;
+            accountId = Guid.Parse(Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture)!);
+            flagged = Convert.ToBoolean(reader.GetValue(1), CultureInfo.InvariantCulture);
+        }
+        if (!flagged)
+            return warnings;
+
+        var distributions = LoadDistributions(connection, transaction, prov,
+            budgets.SelectMany(b => b.Lines).Select(l => l.Id).ToList());
+        var violations = new List<BudgetViolation>();
+
+        foreach (var budget in budgets)
+        {
+            if (budget.BudgetAgainst != BudgetAgainstKinds.Account)
+                continue; // No center/project attribution on a requisition.
+            foreach (var line in budget.Lines)
+            {
+                if (line.AccountId != accountId)
+                    continue;
+                var annualBefore = ActualByLines(connection, transaction, prov, companyId,
+                    fiscalYearId, null, accountId, excludeEntryId: null);
+                var monthlyBefore = ActualByLines(connection, transaction, prov, companyId,
+                    fiscalYearId, periodNumber, accountId, excludeEntryId: null);
+                var monthlyLimit = AccumulatedDistribution(
+                    distributions.TryGetValue(line.Id, out var rows) ? rows : null,
+                    line.AnnualAmount, periodNumber);
+                Evaluate(budget, line, "Annual", budget.ActionAnnual,
+                    line.AnnualAmount, annualBefore, amount, violations, warnings);
+                Evaluate(budget, line, "Monthly", budget.ActionMonthly,
+                    monthlyLimit, monthlyBefore, amount, violations, warnings);
+            }
+        }
+
+        if (violations.Count > 0)
+        {
+            blockedSink?.AddRange(violations.Select(v => v with { JournalEntryId = Guid.Empty }));
+            var first = violations[0];
+            var code = first.Horizon == "Annual"
+                ? ErrorCodes.BudgetExceededAnnual
+                : ErrorCodes.BudgetExceededMonthly;
+            var message = first.Horizon == "Annual"
+                ? $"Submitting this requisition would exceed the annual budget '{first.BudgetName}'. Limit: {first.BudgetAmount}; actual before this requisition: {first.ActualBefore}; this requisition: {first.EntryAmount}; overage: {first.Overage}."
+                : $"Submitting this requisition would exceed the accumulated monthly budget '{first.BudgetName}' through this month. Limit: {first.BudgetAmount}; actual before this requisition: {first.ActualBefore}; this requisition: {first.EntryAmount}; overage: {first.Overage}.";
+            throw new AppError(code, message,
+                first.BudgetName, first.BudgetAmount, first.ActualBefore, first.EntryAmount, first.Overage);
+        }
+
+        foreach (var warning in warnings)
+            InsertEvent(connection, transaction, prov, companyId, warning.BudgetId,
+                warning.BudgetLineId, null, "Warned", warning.Horizon,
+                warning.BudgetAmount, warning.ActualBefore + warning.EntryAmount,
+                warning.Overage, actor, reason: null);
+
+        return warnings;
+    }
+
     /// <summary>Records Blocked events for a posting the guard refused.
     /// Called by the repository boundary on the same connection AFTER
     /// the posting transaction rolled back (its own transaction).</summary>
@@ -558,7 +697,7 @@ public static class BudgetGuard
 
     private static void InsertEvent(
         DbConnection connection, DbTransaction? transaction, string prov,
-        Guid companyId, Guid budgetId, Guid budgetLineId, Guid journalEntryId,
+        Guid companyId, Guid budgetId, Guid budgetLineId, Guid? journalEntryId,
         string actionTaken, string horizon, decimal budgetAmount, decimal actualAmount,
         decimal overage, string? actor, string? reason)
     {
@@ -574,7 +713,12 @@ public static class BudgetGuard
         GlPosting.Add(command, "@company", GlPosting.FormatGuid(prov, companyId));
         GlPosting.Add(command, "@budget", GlPosting.FormatGuid(prov, budgetId));
         GlPosting.Add(command, "@line", GlPosting.FormatGuid(prov, budgetLineId));
-        GlPosting.Add(command, "@entry", GlPosting.FormatGuid(prov, journalEntryId));
+        // A commitment check (requisition) has no journal entry: the
+        // column is nullable and stores NULL, as does a Blocked event
+        // recorded for one (JournalEntryId = Guid.Empty in the sink).
+        GlPosting.Add(command, "@entry", journalEntryId is { } entryId && entryId != Guid.Empty
+            ? GlPosting.FormatGuid(prov, entryId)
+            : (object)DBNull.Value);
         GlPosting.Add(command, "@action", actionTaken);
         GlPosting.Add(command, "@horizon", horizon);
         GlPosting.Add(command, "@budgetAmount", budgetAmount);

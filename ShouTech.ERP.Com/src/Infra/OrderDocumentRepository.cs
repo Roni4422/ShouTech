@@ -85,7 +85,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         decimal exchangeRate, subtotal, discountAmount, taxAmount, grandTotal, paidAmount;
         decimal extraAmount, perDelivered, perBilled;
         string? cancelReason, cancelledBy, cancelledAt;
-        DateOnly? deliveryDate, validTill;
+        DateOnly? deliveryDate, validTill, requiredByDate;
+        string? requestType, department;
         decimal deliveryCost;
         int revisionNo;
         string approvalState;
@@ -103,7 +104,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                    currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total,
                    paid_amount, status, notes, party_code, branch_name, sales_rep_name, cost_center,
                    warehouse_name, delivery_date, valid_till, extra_amount, {progressColumns},
-                   cancel_reason, cancelled_by, cancelled_at, {deliveryCostColumn}, {revisionColumn}, {approvalColumn}
+                   cancel_reason, cancelled_by, cancelled_at, {deliveryCostColumn}, {revisionColumn}, {approvalColumn},
+                   required_by_date, request_type, department
             FROM {docs}
             WHERE is_deleted = 0
               AND (@docId IS NULL OR doc_id = @docId)
@@ -154,6 +156,9 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             deliveryCost = Convert.ToDecimal(reader.GetValue(30), CultureInfo.InvariantCulture);
             revisionNo = Convert.ToInt32(reader.GetValue(31), CultureInfo.InvariantCulture);
             approvalState = reader.IsDBNull(32) ? SalesApprovalState.NotRequired : reader.GetString(32);
+            requiredByDate = reader.IsDBNull(33) ? null : DateOnly.Parse(Convert.ToString(reader.GetValue(33), CultureInfo.InvariantCulture)!, CultureInfo.InvariantCulture);
+            requestType = reader.IsDBNull(34) ? null : reader.GetString(34);
+            department = reader.IsDBNull(35) ? null : reader.GetString(35);
         }
 
         var lineList = new List<CommercialLineSnapshot>();
@@ -193,7 +198,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             paidAmount, status, notes, lineList.AsReadOnly(),
             partyCode, branchName, salesRepName, costCenter, warehouseName, deliveryDate, validTill,
             extraAmount, perDelivered, perBilled, cancelReason, cancelledBy, cancelledAt, deliveryCost,
-            revisionNo, approvalState);
+            revisionNo, approvalState, RequiredByDate: requiredByDate, RequestType: requestType, Department: department);
     }
 
     // ----------------------------------------------------------------- write
@@ -228,7 +233,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         var validPair = (sourceDocKind, draft.DocKind) is
             (CommercialDocKinds.RequestForQuotation, CommercialDocKinds.SupplierQuotation) or
             (CommercialDocKinds.SupplierQuotation, CommercialDocKinds.PurchaseOrder) or
-            (CommercialDocKinds.PurchaseRequisition, CommercialDocKinds.PurchaseOrder);
+            (CommercialDocKinds.PurchaseRequisition, CommercialDocKinds.PurchaseOrder) or
+            (CommercialDocKinds.PurchaseRequisition, CommercialDocKinds.RequestForQuotation);
         if (!validPair)
             throw new InvalidOperationException("Unsupported purchasing document conversion.");
 
@@ -349,7 +355,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                     exchange_rate = @rate, subtotal = @subtotal, discount_amount = @discount,
                     extra_amount = @extra, tax_amount = @tax, grand_total = @total, {deliveryCostSet}
                     notes = @notes, delivery_date = @deliveryDate, valid_till = @validTill,
-                    cost_center = @costCenter, branch_name = @branchName, sales_rep_name = @salesRepName
+                    cost_center = @costCenter, branch_name = @branchName, sales_rep_name = @salesRepName,
+                    required_by_date = @requiredBy, request_type = @requestType, department = @department
                 WHERE doc_id = @doc AND status = @draft AND is_deleted = 0
                 """))
             {
@@ -377,6 +384,9 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 Add(update, "@costCenter", (object?)draft.CostCenter ?? DBNull.Value);
                 Add(update, "@branchName", (object?)draft.BranchName ?? DBNull.Value);
                 Add(update, "@salesRepName", (object?)draft.SalesRepName ?? DBNull.Value);
+                Add(update, "@requiredBy", (object?)draft.RequiredByDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? DBNull.Value);
+                Add(update, "@requestType", (object?)draft.RequestType ?? DBNull.Value);
+                Add(update, "@department", (object?)draft.Department ?? DBNull.Value);
                 Add(update, "@doc", docId);
                 Add(update, "@draft", CommercialDocumentStatus.Draft);
                 if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
@@ -2699,8 +2709,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         var deliveryCostColumn = side == CommercialDocSide.Sales ? ", delivery_cost, contract_id" : string.Empty;
         var deliveryCostValue = side == CommercialDocSide.Sales ? ", @deliveryCost, @contractId" : string.Empty;
         await using (var insertHeader = CreateCommand(connection, transaction,
-            $"INSERT INTO {docs} (company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id, currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total, status, notes, created_by, party_code, delivery_date, valid_till, cost_center, branch_name, sales_rep_name, warehouse_name, posted_by, posted_at, extra_amount{deliveryCostColumn}) " +
-            $"VALUES (@company, @kind, @no, @date, @party, @partyName, @warehouse, @currency, @rate, @subtotal, @discount, @tax, @total, @status, @notes, @actor, @partyCode, @deliveryDate, @validTill, @costCenter, @branchName, @salesRepName, @warehouseName, @postedBy, @postedAt, @extra{deliveryCostValue})" +
+            $"INSERT INTO {docs} (company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id, currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total, status, notes, created_by, party_code, delivery_date, valid_till, cost_center, branch_name, sales_rep_name, warehouse_name, posted_by, posted_at, extra_amount{deliveryCostColumn}, required_by_date, request_type, department) " +
+            $"VALUES (@company, @kind, @no, @date, @party, @partyName, @warehouse, @currency, @rate, @subtotal, @discount, @tax, @total, @status, @notes, @actor, @partyCode, @deliveryDate, @validTill, @costCenter, @branchName, @salesRepName, @warehouseName, @postedBy, @postedAt, @extra{deliveryCostValue}, @requiredBy, @requestType, @department)" +
             (_provider == "PostgreSQL" ? " RETURNING doc_id" : "; SELECT last_insert_rowid();")))
         {
             if (side == CommercialDocSide.Sales)
@@ -2732,6 +2742,9 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             Add(insertHeader, "@branchName", (object?)draft.BranchName ?? DBNull.Value);
             Add(insertHeader, "@salesRepName", (object?)draft.SalesRepName ?? DBNull.Value);
             Add(insertHeader, "@warehouseName", (object?)draft.WarehouseName ?? DBNull.Value);
+            Add(insertHeader, "@requiredBy", (object?)draft.RequiredByDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? DBNull.Value);
+            Add(insertHeader, "@requestType", (object?)draft.RequestType ?? DBNull.Value);
+            Add(insertHeader, "@department", (object?)draft.Department ?? DBNull.Value);
             var posted = status == CommercialDocumentStatus.Posted;
             Add(insertHeader, "@postedBy", posted ? userId.Trim() : DBNull.Value);
             Add(insertHeader, "@postedAt", posted ? DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) : DBNull.Value);
