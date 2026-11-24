@@ -446,6 +446,7 @@
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.SalesRepTargets" Header="Targets">
                         <ribbon:RibbonButton loc:LocProps.Key="SalesRep.AssignSalesRepTargets" Label="Assign sales rep targets" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="SalesRep.SalesRepTargetsReport" Label="Sales rep targets report" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="SalesRep.Commissions" Label="Sales commissions" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.SalesRepFollowUp" Header="Follow-up">
                         <ribbon:RibbonButton loc:LocProps.Key="SalesRep.SearchCustomers" Label="Search customers" Click="OnRibbonButtonClick"/>

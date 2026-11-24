@@ -433,6 +433,12 @@ namespace ShouTech.App.Services
             public const string InvoiceRepost = "SALES.INVOICE.REPOST";
 
             public const string ReportsView = "SALES.REPORTS.VIEW";
+
+            // Phase 09 commissions (migration 097 seeds).
+            public const string CommissionView = "SALES.COMMISSION.VIEW";
+            public const string CommissionManage = "SALES.COMMISSION.MANAGE";
+            public const string CommissionApprove = "SALES.COMMISSION.APPROVE";
+            public const string CommissionPay = "SALES.COMMISSION.PAY";
         }
 
         // =====================================================================

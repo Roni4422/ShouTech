@@ -29,6 +29,18 @@ public sealed class OrderService
 
     internal IOrderDocumentRepository Orders => _orders;
 
+    /// <summary>
+    /// Sales-commission generation hook (Phase 09, W7b), invoked after a
+    /// chain SALES INVOICE posts: (companyKey, docId, userId) -&gt; task.
+    /// Set by the composition root (AppHost) to CommService generation.
+    /// The hook is FAIL-SOFT by contract: the delegate catches and
+    /// reports its own failures, because a commission problem must never
+    /// break invoice posting. Null (tests, headless hosts) disables
+    /// generation on this path; the commission window's period actions
+    /// and the native InvoiceWin hook cover the other paths.
+    /// </summary>
+    public Func<string, long, string, CancellationToken, Task>? CommissionHook { get; set; }
+
     public static CommercialDocSide SideFor(string docKind) => docKind switch
     {
         CommercialDocKinds.SalesOrder or CommercialDocKinds.SalesQuotation or CommercialDocKinds.DeliveryNote or CommercialDocKinds.SalesInvoice => CommercialDocSide.Sales,
@@ -162,6 +174,12 @@ public sealed class OrderService
     {
         await _chain.PostSalesAsync(documentId, userId, cancellationToken).ConfigureAwait(false);
         await RefreshStoredChainProgressAsync(documentId, cancellationToken).ConfigureAwait(false);
+        if (CommissionHook is not null)
+        {
+            var posted = await _chain.FindSalesByIdAsync(documentId, cancellationToken).ConfigureAwait(false);
+            if (posted is not null && posted.DocKind == CommercialDocKinds.SalesInvoice)
+                await CommissionHook(posted.CompanyId.ToString("D", CultureInfo.InvariantCulture), documentId, userId, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     /// <summary>
