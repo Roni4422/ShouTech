@@ -3446,7 +3446,20 @@
     "ConfirmPurge": "Selected items will be permanently deleted and cannot be restored.\n\nContinue?",
     "Purged": "Permanently deleted {0:N0} item(s).",
     "PurgedPartial": "Permanently deleted {0:N0} item(s). {1:N0} failed.{2}{3}",
-    "PermissionDenied": "You do not have permission to permanently delete items. This action requires an administrator."
+    "PermissionDenied": "You do not have permission to permanently delete items. This action requires an administrator.",
+    "Status": "Status",
+    "Posted": "Posted",
+    "Draft": "Draft",
+    "FilterAll": "All",
+    "FilterFrom": "From",
+    "FilterTo": "To",
+    "ApplyFilter": "Filter",
+    "ClearFilter": "Clear",
+    "DeleteToBin": "Delete",
+    "ConfirmDeleteDocument": "Delete this document? It will be moved to the recycle bin, and its posting effects will be reversed while it is there.",
+    "ConfirmDeleteJournal": "Delete this journal entry? It will be moved to the recycle bin, and its posting effects will be reversed while it is there.",
+    "MovedToBin": "Moved to the recycle bin.",
+    "DeleteFailed": "The delete could not be completed."
   },
   "Cards": {
     "NotFound": "The record was not found in the database.",

@@ -6,6 +6,7 @@ using Microsoft.Data.Sqlite;
 using Npgsql;
 using ShouTech.App;
 using ShouTech.App.Configuration;
+using ShouTech.App.Reporting.Invoices;
 
 using ShouTech.Domain;
 namespace ShouTech.App.Services;
@@ -24,6 +25,14 @@ public sealed class RecycleBinItem
     public string? DeletedAt { get; init; }
     public string? DeletedBy { get; init; }
     public required string CompanyCode { get; init; }
+
+    /// <summary>Lifecycle state of the binned row ("Posted" / "Draft" for
+    /// documents and journals; the row's own status text for cards).</summary>
+    public string Status { get; init; } = string.Empty;
+
+    /// <summary>Document kind code (SAL, PUR, …) for commercial
+    /// documents; routes restore/purge through DocBinSvc.</summary>
+    public string DocKindCode { get; init; } = string.Empty;
 }
 
 /// <summary>Outcome of a restore or purge operation for a single bin item.</summary>
@@ -51,15 +60,26 @@ public static class RecycleBinSvc
         bool CompanyIdIsCode = false,
         bool DraftOnly = false);
 
-    /// <summary>Master-data tables only. Transactional tables are intentionally excluded.</summary>
+    /// <summary>Reviewed catalog. Master-data tables restore/purge through
+    /// the generic flag path below; commercial documents and journal
+    /// entries are listed here too but their restore/purge ROUTES to
+    /// DocBinSvc, which owns their posting semantics (SOFT_DELETE_STUDY).
+    /// Posted accounting/inventory LEDGER rows (journal clones, party
+    /// rows, stock movements) are never listed: they are the audit trail.</summary>
     private static readonly BinTableDefinition[] Catalog =
     [
         new("sales_documents", "Sales invoices",
             ["doc_no", "party_name", "doc_id"],
-            ["doc_id"], CompanyIdIsCode: true, DraftOnly: true),
+            ["doc_id"], CompanyIdIsCode: true),
         new("purchase_documents", "Purchase invoices",
             ["doc_no", "party_name", "doc_id"],
-            ["doc_id"], CompanyIdIsCode: true, DraftOnly: true),
+            ["doc_id"], CompanyIdIsCode: true),
+        new("journal_entries", "Journal entries",
+            ["document_number", "description", "journal_entry_id"],
+            ["journal_entry_id"]),
+        new("cheques", "Cheques",
+            ["cheque_no", "party_name", "id"],
+            ["id"]),
         new("products", "Products",
             ["product_name_ar", "product_name_en", "product_name", "name", "code", "barcode"],
             ["product_id", "id"]),
@@ -166,6 +186,8 @@ public static class RecycleBinSvc
     {
         ArgumentNullException.ThrowIfNull(item);
         ValidateCatalogItem(item);
+        if (IsRoutedTable(item.TableName))
+            return RouteMutation(item, purge: false);
 
         try
         {
@@ -250,7 +272,7 @@ public static class RecycleBinSvc
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             LogError($"Restore failed | table={item.TableName} | pk={item.PrimaryKeyValue} | {ex.Message}", ex);
-            return Failed(item, ex.Message);
+            return Failed(item, FriendlyFailure(ex, restore: true));
         }
     }
 
@@ -274,6 +296,8 @@ public static class RecycleBinSvc
     {
         ArgumentNullException.ThrowIfNull(item);
         ValidateCatalogItem(item);
+        if (IsRoutedTable(item.TableName))
+            return RouteMutation(item, purge: true);
 
         try
         {
@@ -339,7 +363,7 @@ public static class RecycleBinSvc
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             LogError($"Purge failed | table={item.TableName} | pk={item.PrimaryKeyValue} | {ex.Message}", ex);
-            return Failed(item, ex.Message);
+            return Failed(item, FriendlyFailure(ex, restore: false));
         }
     }
 
@@ -385,6 +409,14 @@ public static class RecycleBinSvc
             selectList.Add(Quote(deletedAtColumn));
         if (deletedByColumn is not null)
             selectList.Add(Quote(deletedByColumn));
+        // Documents/journals carry their kind + lifecycle state so the
+        // bin can show them and route their restore/purge (DocBinSvc).
+        var docKindColumn = FindColumn(columns, "doc_kind");
+        var statusTextColumn = FindColumn(columns, "status");
+        if (docKindColumn is not null)
+            selectList.Add(Quote(docKindColumn));
+        if (statusTextColumn is not null)
+            selectList.Add(Quote(statusTextColumn));
 
         var predicates = new List<string>
         {
@@ -426,7 +458,28 @@ public static class RecycleBinSvc
                 ordinal++;
             }
             if (deletedByColumn is not null)
+            {
                 deletedBy = ReadString(reader, ordinal);
+                ordinal++;
+            }
+            var docKindCode = string.Empty;
+            var status = string.Empty;
+            if (docKindColumn is not null)
+            {
+                docKindCode = ReadString(reader, ordinal) ?? string.Empty;
+                ordinal++;
+            }
+            if (statusTextColumn is not null)
+            {
+                var rawStatus = ReadString(reader, ordinal);
+                status = rawStatus switch
+                {
+                    "1" => "Posted",
+                    "0" => "Draft",
+                    _ => rawStatus ?? string.Empty
+                };
+                ordinal++;
+            }
 
             items.Add(new RecycleBinItem
             {
@@ -437,7 +490,9 @@ public static class RecycleBinSvc
                 DisplayLabel = label!,
                 DeletedAt = deletedAt,
                 DeletedBy = deletedBy,
-                CompanyCode = companyCode
+                CompanyCode = companyCode,
+                Status = status,
+                DocKindCode = docKindCode
             });
         }
 
@@ -734,7 +789,104 @@ public static class RecycleBinSvc
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
-       private static void ValidateCatalogItem(RecycleBinItem item)
+   
+    // ------------------------------------------------------------------
+    // Documents + journals route to DocBinSvc (posting semantics).
+    // ------------------------------------------------------------------
+    private static bool IsRoutedTable(string tableName)
+        => tableName.Equals("sales_documents", StringComparison.OrdinalIgnoreCase)
+           || tableName.Equals("purchase_documents", StringComparison.OrdinalIgnoreCase)
+           || tableName.Equals("journal_entries", StringComparison.OrdinalIgnoreCase);
+
+    private static RecycleBinMutationResult RouteMutation(RecycleBinItem item, bool purge)
+    {
+        var actor = AppState.CurrentUser?.Username ?? Environment.UserName;
+        try
+        {
+            if (item.TableName.Equals("journal_entries", StringComparison.OrdinalIgnoreCase))
+            {
+                var entryId = Guid.Parse(item.PrimaryKeyValue);
+                if (purge) DocBinSvc.PurgeJournal(entryId, actor);
+                else DocBinSvc.RestoreJournal(entryId, actor);
+            }
+            else
+            {
+                var docId = long.Parse(item.PrimaryKeyValue, CultureInfo.InvariantCulture);
+                var isSalesSide = item.TableName.Equals("sales_documents", StringComparison.OrdinalIgnoreCase);
+                if (ParseKindCode(item.DocKindCode) is { } kind)
+                {
+                    if (purge) DocBinSvc.PurgeDocument(docId, kind, actor);
+                    else DocBinSvc.RestoreDocument(docId, kind, actor);
+                }
+                else if (!string.IsNullOrWhiteSpace(item.DocKindCode))
+                {
+                    // Chain kinds (SO/PO/RFQ/SQ/DLV/RCV/RCR) share the
+                    // tables and effect stores under their own codes.
+                    if (purge) DocBinSvc.PurgeChainDocument(isSalesSide, docId, item.DocKindCode, actor);
+                    else DocBinSvc.RestoreChainDocument(isSalesSide, docId, item.DocKindCode, actor);
+                }
+                else
+                {
+                    throw new AppError(ErrorCodes.BinItemNotFound,
+                        "The binned document's kind is unknown.");
+                }
+            }
+            LogOperation(purge ? "Purge" : "Restore",
+                $"table={item.TableName} pk={item.PrimaryKeyValue} label={item.DisplayLabel} company={item.CompanyCode} (DocBinSvc)");
+            return new RecycleBinMutationResult { Item = item, Succeeded = true };
+        }
+        catch (AppError ex)
+        {
+            AppHost.Errors.Report(ex.Code, ex, "RecycleBinSvc.RouteMutation");
+            var info = AppHost.Errors.Resolve(ex.Code, ex.Args.ToArray());
+            return Failed(item, $"{info.Message} (Error {info.Code})");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            LogError($"Routed {(purge ? "purge" : "restore")} failed | table={item.TableName} | pk={item.PrimaryKeyValue} | {ex.Message}", ex);
+            return Failed(item, ex.Message);
+        }
+    }
+
+    private static InvDocKind? ParseKindCode(string? code) => code?.Trim().ToUpperInvariant() switch
+    {
+        "SAL" => InvDocKind.SalesInvoice,
+        "SRT" => InvDocKind.SalesReturn,
+        "POS" => InvDocKind.PosSale,
+        "PUR" => InvDocKind.PurchaseInvoice,
+        "PRT" => InvDocKind.PurchaseReturn,
+        "ENT" => InvDocKind.StockIn,
+        "EXT" => InvDocKind.StockOut,
+        "TRN" => InvDocKind.StockTransfer,
+        "OPN" => InvDocKind.OpeningStock,
+        "CNT" => InvDocKind.InventoryCount,
+        "QUO" => InvDocKind.Quotation,
+        _ => null
+    };
+
+    /// <summary>Maps raw constraint failures on the card path to the
+    /// cataloged bin errors (restore unique conflict / purge still
+    /// referenced) instead of leaking database text to the user.</summary>
+    private static string FriendlyFailure(Exception ex, bool restore)
+    {
+        var message = ex.Message ?? string.Empty;
+        if (restore && (message.Contains("UNIQUE constraint", StringComparison.OrdinalIgnoreCase)
+                        || message.Contains("violates unique", StringComparison.OrdinalIgnoreCase)
+                        || message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase)))
+        {
+            var info = AppHost.Errors.Resolve(ErrorCodes.BinRestoreConflict);
+            return $"{info.Message} (Error {info.Code})";
+        }
+        if (!restore && (message.Contains("FOREIGN KEY constraint", StringComparison.OrdinalIgnoreCase)
+                         || message.Contains("violates foreign key", StringComparison.OrdinalIgnoreCase)))
+        {
+            var info = AppHost.Errors.Resolve(ErrorCodes.BinPurgeStillReferenced);
+            return $"{info.Message} (Error {info.Code})";
+        }
+        return message;
+    }
+
+    private static void ValidateCatalogItem(RecycleBinItem item)
 		{
 			if (!SqlIdentifier.IsSafe(item.TableName) || !SqlIdentifier.IsSafe(item.PrimaryKeyColumn))
 				throw new InvalidOperationException("Invalid identifier in recycle bin item.");

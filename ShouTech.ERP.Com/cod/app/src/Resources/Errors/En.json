@@ -892,5 +892,53 @@
     "name": "DesignPayloadInvalid",
     "message": "The design file '{0}' was read but its contents are not a usable design.",
     "hint": "Re-export the design from a current version of the program, then import it again."
+  },
+  "BIN-8201": {
+    "code": "BIN-8201",
+    "name": "BinItemNotFound",
+    "message": "The item was not found in the recycle bin.",
+    "hint": "Refresh the recycle bin and try again; the item may already have been restored or permanently deleted."
+  },
+  "BIN-8202": {
+    "code": "BIN-8202",
+    "name": "BinBlockedByAllocations",
+    "message": "This document cannot be moved to the recycle bin because payments are allocated to it.",
+    "hint": "Unallocate the payments in the reconciliation window first, then delete the document."
+  },
+  "BIN-8203": {
+    "code": "BIN-8203",
+    "name": "BinBlockedByLinks",
+    "message": "This document cannot be moved to the recycle bin because other documents are linked to it.",
+    "hint": "Undo or delete the linked documents (deliveries, receipts, returns) through their own windows first."
+  },
+  "BIN-8204": {
+    "code": "BIN-8204",
+    "name": "BinKindExcluded",
+    "message": "This kind of document cannot be moved to the recycle bin.",
+    "hint": "POS sales are corrected inside the POS session flow (returns and voids), not through the recycle bin."
+  },
+  "BIN-8205": {
+    "code": "BIN-8205",
+    "name": "BinPostedJournalPurgeBlocked",
+    "message": "A posted journal entry cannot be permanently deleted.",
+    "hint": "Restore it from the bin instead; posted journals are part of the accounting audit trail."
+  },
+  "BIN-8206": {
+    "code": "BIN-8206",
+    "name": "BinRestoreConflict",
+    "message": "The item cannot be restored because a live record already uses the same code.",
+    "hint": "Rename or remove the conflicting live record first, then restore."
+  },
+  "BIN-8207": {
+    "code": "BIN-8207",
+    "name": "BinPurgeStillReferenced",
+    "message": "The item cannot be permanently deleted because other records still reference it.",
+    "hint": "Remove or reassign the referencing records first, then delete it permanently."
+  },
+  "BIN-8208": {
+    "code": "BIN-8208",
+    "name": "BinStateConflict",
+    "message": "The item's recycle-bin state does not allow this operation.",
+    "hint": "Refresh the recycle bin; the item may already have been deleted or restored."
   }
 }

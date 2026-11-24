@@ -120,6 +120,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
     private readonly Button _btnSave = new();
     private readonly Button _btnPost = new();
     private readonly Button _btnReverse = new();
+    private readonly Button _btnDelete = new();
     private readonly Button _btnPrint = new();
     private readonly Button _btnPdf = new();
     private readonly Button _btnAddLine = new();
@@ -455,6 +456,9 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         StyleButton(_btnReverse, "Invoice.Reverse");
         _btnReverse.IsEnabled = false;
         _btnReverse.Click += (_, _) => ReverseCurrentDocument();
+        StyleButton(_btnDelete, "RecycleBin.DeleteToBin");
+        _btnDelete.IsEnabled = false;
+        _btnDelete.Click += (_, _) => DeleteCurrentDocument();
         StyleButton(_btnPrint, "Invoice.Print");
         StyleButton(_btnPdf, "Invoice.Pdf");
         StyleButton(_btnAddLine, "Invoice.AddLine");
@@ -510,7 +514,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             }
         };
         _btnFindMaterial.Click += (_, _) => PickMaterial();
-        foreach (var b in new[] { _btnSave, _btnPost, _btnReverse, _btnPrint, _btnPdf, _btnCollect, _btnAddLine, _btnRemoveLine, _btnFindMaterial, _btnSubmitApproval, _btnApproveDoc, _btnRejectDoc })
+        foreach (var b in new[] { _btnSave, _btnPost, _btnReverse, _btnDelete, _btnPrint, _btnPdf, _btnCollect, _btnAddLine, _btnRemoveLine, _btnFindMaterial, _btnSubmitApproval, _btnApproveDoc, _btnRejectDoc })
             toolbar.Children.Add(b);
         // Explorer-style bottom command bar: flat, transparent, subtle 1px top divider.
         var actionBar = new Border
@@ -1550,6 +1554,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             catch (Exception exL743) {
                 AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL743, "InvoiceWin.ApplyDoc"); _btnReverse.IsEnabled = false; }
         }
+        _btnDelete.IsEnabled = doc.DocId > 0;
         _btnPost.IsEnabled = !locked;
         // Collect (Phenix reference): receipt allocation against a
         // POSTED sales invoice, through the existing PayRecWin path.
@@ -2025,6 +2030,36 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         catch (Exception ex)
         {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "InvoiceWin.ReverseCurrentDocument");
+            MessageBox.Show(this, ex.Message, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>Soft delete (SOFT_DELETE_STUDY): the document moves to
+    /// the recycle bin; DocBinSvc reverses its posting effects while it
+    /// is binned and reinstates them on restore. The window closes —
+    /// the document no longer exists in working lists.</summary>
+    private void DeleteCurrentDocument()
+    {
+        if (_doc.DocId <= 0) return;
+        if (!AskConfirm("RecycleBin.ConfirmDeleteDocument")) return;
+        try
+        {
+            DocBinSvc.SoftDeleteDocument(
+                _doc.DocId,
+                _doc.Kind,
+                AppState.CurrentUser?.Username ?? Environment.UserName);
+            ShowInfo("RecycleBin.MovedToBin");
+            Close();
+        }
+        catch (AppError ex)
+        {
+            AppHost.Errors.Report(ex.Code, ex, "InvoiceWin.DeleteCurrentDocument");
+            var info = AppHost.Errors.Resolve(ex.Code, ex.Args.ToArray());
+            MessageBox.Show(this, $"{info.Message} (Error {info.Code})", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "InvoiceWin.DeleteCurrentDocument");
             MessageBox.Show(this, ex.Message, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

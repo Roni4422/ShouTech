@@ -16,6 +16,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -35,8 +36,21 @@
                    Margin="0,0,0,10"
                    Text="Soft-deleted master data for the active company. Restore returns items to working lists. Permanent delete cannot be undone."/>
 
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock x:Name="FilterDatasetLabel" Text="Dataset" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <ComboBox x:Name="FilterDatasetBox" Width="170" Margin="0,0,12,0"/>
+            <TextBlock x:Name="FilterByLabel" Text="Deleted by" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <TextBox x:Name="FilterByBox" Width="110" Margin="0,0,12,0"/>
+            <TextBlock x:Name="FilterFromLabel" Text="From" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <DatePicker x:Name="FilterFromPicker" Width="130" Margin="0,0,12,0"/>
+            <TextBlock x:Name="FilterToLabel" Text="To" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <DatePicker x:Name="FilterToPicker" Width="130" Margin="0,0,12,0"/>
+            <Button x:Name="FilterButton" Content="Filter" MinWidth="{StaticResource ButtonMinWidth}" Margin="0,0,8,0" Click="Filter_Click"/>
+            <Button x:Name="ClearFilterButton" Content="Clear" MinWidth="{StaticResource ButtonMinWidth}" Click="ClearFilter_Click"/>
+        </StackPanel>
+
         <DataGrid x:Name="ItemsGrid"
-                  Grid.Row="2"
+                  Grid.Row="3"
                   AutoGenerateColumns="False"
                   IsReadOnly="True"
                   SelectionMode="Extended"
@@ -48,6 +62,7 @@
             <DataGrid.Columns>
                 <DataGridTextColumn x:Name="DatasetColumn" Header="Dataset" Binding="{Binding DatasetKey}" Width="120"/>
                 <DataGridTextColumn x:Name="LabelColumn" Header="Label" Binding="{Binding DisplayLabel}" Width="*"/>
+                <DataGridTextColumn x:Name="StatusColumn" Header="Status" Binding="{Binding Status}" Width="80"/>
                 <DataGridTextColumn x:Name="TableColumn" Header="Table" Binding="{Binding TableName}" Width="130"/>
                 <DataGridTextColumn x:Name="DeletedAtColumn" Header="Deleted at" Binding="{Binding DeletedAt}" Width="150"/>
                 <DataGridTextColumn x:Name="DeletedByColumn" Header="Deleted by" Binding="{Binding DeletedBy}" Width="110"/>
@@ -55,12 +70,12 @@
         </DataGrid>
 
         <TextBlock x:Name="StatusText"
-                   Grid.Row="3"
+                   Grid.Row="4"
                    Margin="0,10,0,10"
                    Opacity="0.88"
                    TextWrapping="Wrap"/>
 
-        <DockPanel Grid.Row="4" LastChildFill="False">
+        <DockPanel Grid.Row="5" LastChildFill="False">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                 <Button x:Name="RefreshButton" Content="Refresh" MinWidth="{StaticResource ButtonMinWidth}" Margin="0,0,8,0" Click="Refresh_Click"/>
                 <Button x:Name="RestoreButton" Content="Restore selected" MinWidth="{StaticResource ButtonMinWidth}" Margin="0,0,8,0" Click="Restore_Click"/>

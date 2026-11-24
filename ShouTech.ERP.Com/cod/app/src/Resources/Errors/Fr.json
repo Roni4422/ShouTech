@@ -892,5 +892,53 @@
     "name": "DesignPayloadInvalid",
     "message": "Le fichier de modèle '{0}' a été lu, mais son contenu n'est pas un modèle utilisable.",
     "hint": "Réexportez le modèle depuis une version actuelle du programme, puis importez-le à nouveau."
+  },
+  "BIN-8201": {
+    "code": "BIN-8201",
+    "name": "BinItemNotFound",
+    "message": "L'élément est introuvable dans la corbeille.",
+    "hint": "Actualisez la corbeille et réessayez ; l'élément a peut-être déjà été restauré ou supprimé définitivement."
+  },
+  "BIN-8202": {
+    "code": "BIN-8202",
+    "name": "BinBlockedByAllocations",
+    "message": "Ce document ne peut pas être déplacé vers la corbeille car des paiements lui sont affectés.",
+    "hint": "Annulez d'abord l'affectation des paiements dans la fenêtre de rapprochement, puis supprimez le document."
+  },
+  "BIN-8203": {
+    "code": "BIN-8203",
+    "name": "BinBlockedByLinks",
+    "message": "Ce document ne peut pas être déplacé vers la corbeille car d'autres documents y sont liés.",
+    "hint": "Annulez ou supprimez d'abord les documents liés (livraisons, encaissements, retours) depuis leurs propres fenêtres."
+  },
+  "BIN-8204": {
+    "code": "BIN-8204",
+    "name": "BinKindExcluded",
+    "message": "Ce type de document ne peut pas être déplacé vers la corbeille.",
+    "hint": "Les ventes au point de vente se corrigent dans le flux de session du point de vente (retours et annulations), pas via la corbeille."
+  },
+  "BIN-8205": {
+    "code": "BIN-8205",
+    "name": "BinPostedJournalPurgeBlocked",
+    "message": "Une écriture comptable validée ne peut pas être supprimée définitivement.",
+    "hint": "Restaurez-la depuis la corbeille ; les écritures validées font partie de la piste d'audit comptable."
+  },
+  "BIN-8206": {
+    "code": "BIN-8206",
+    "name": "BinRestoreConflict",
+    "message": "L'élément ne peut pas être restauré car un enregistrement actif utilise déjà le même code.",
+    "hint": "Renommez ou supprimez d'abord l'enregistrement actif en conflit, puis restaurez."
+  },
+  "BIN-8207": {
+    "code": "BIN-8207",
+    "name": "BinPurgeStillReferenced",
+    "message": "L'élément ne peut pas être supprimé définitivement car d'autres enregistrements y font encore référence.",
+    "hint": "Supprimez ou réaffectez d'abord les enregistrements référents, puis supprimez définitivement."
+  },
+  "BIN-8208": {
+    "code": "BIN-8208",
+    "name": "BinStateConflict",
+    "message": "L'état de l'élément dans la corbeille ne permet pas cette opération.",
+    "hint": "Actualisez la corbeille ; l'élément a peut-être déjà été supprimé ou restauré."
   }
 }

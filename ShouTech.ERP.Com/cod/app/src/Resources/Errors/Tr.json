@@ -892,5 +892,53 @@
     "name": "DesignPayloadInvalid",
     "message": "'{0}' tasarım dosyası okundu ancak içeriği kullanılabilir bir tasarım değil.",
     "hint": "Tasarımı programın güncel bir sürümünden yeniden dışa aktarın ve tekrar içe aktarın."
+  },
+  "BIN-8201": {
+    "code": "BIN-8201",
+    "name": "BinItemNotFound",
+    "message": "Öğe geri dönüşüm kutusunda bulunamadı.",
+    "hint": "Geri dönüşüm kutusunu yenileyip tekrar deneyin; öğe geri yüklenmiş veya kalıcı olarak silinmiş olabilir."
+  },
+  "BIN-8202": {
+    "code": "BIN-8202",
+    "name": "BinBlockedByAllocations",
+    "message": "Bu belgeye ödemeler tahsis edildiği için geri dönüşüm kutusuna taşınamaz.",
+    "hint": "Önce mutabakat penceresinden ödeme tahsislerini kaldırın, sonra belgeyi silin."
+  },
+  "BIN-8203": {
+    "code": "BIN-8203",
+    "name": "BinBlockedByLinks",
+    "message": "Bu belgeye başka belgeler bağlı olduğu için geri dönüşüm kutusuna taşınamaz.",
+    "hint": "Önce bağlı belgeleri (teslimatlar, tahsilatlar, iadeler) kendi pencerelerinden geri alın veya silin."
+  },
+  "BIN-8204": {
+    "code": "BIN-8204",
+    "name": "BinKindExcluded",
+    "message": "Bu belge türü geri dönüşüm kutusuna taşınamaz.",
+    "hint": "POS satışları, POS oturum akışı içinde (iade ve iptaller) düzeltilir; geri dönüşüm kutusu kullanılmaz."
+  },
+  "BIN-8205": {
+    "code": "BIN-8205",
+    "name": "BinPostedJournalPurgeBlocked",
+    "message": "Kaydedilmiş bir yevmiye kaydı kalıcı olarak silinemez.",
+    "hint": "Bunun yerine geri dönüşüm kutusundan geri yükleyin; kaydedilmiş yevmiyeler muhasebe denetim izinin parçasıdır."
+  },
+  "BIN-8206": {
+    "code": "BIN-8206",
+    "name": "BinRestoreConflict",
+    "message": "Canlı bir kayıt aynı kodu kullandığı için öğe geri yüklenemiyor.",
+    "hint": "Önce çakışan canlı kaydı yeniden adlandırın veya kaldırın, sonra geri yükleyin."
+  },
+  "BIN-8207": {
+    "code": "BIN-8207",
+    "name": "BinPurgeStillReferenced",
+    "message": "Başka kayıtlar hâlâ bu öğeye başvurduğu için kalıcı olarak silinemez.",
+    "hint": "Önce başvuran kayıtları kaldırın veya yeniden atayın, sonra kalıcı olarak silin."
+  },
+  "BIN-8208": {
+    "code": "BIN-8208",
+    "name": "BinStateConflict",
+    "message": "Öğenin geri dönüşüm kutusundaki durumu bu işleme izin vermiyor.",
+    "hint": "Geri dönüşüm kutusunu yenileyin; öğe silinmiş veya geri yüklenmiş olabilir."
   }
 }

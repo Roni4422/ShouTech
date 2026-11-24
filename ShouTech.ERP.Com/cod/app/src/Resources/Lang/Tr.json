@@ -3432,7 +3432,20 @@
     "ConfirmPurge": "Seçili öğeler kalıcı olarak silinecek ve geri yüklenemeyecek.\n\nDevam edilsin mi?",
     "Purged": "{0:N0} öğe kalıcı olarak silindi.",
     "PurgedPartial": "{0:N0} öğe kalıcı olarak silindi. {1:N0} başarısız.{2}{3}",
-    "PermissionDenied": "Öğeleri kalıcı olarak silme izniniz yok. Bu işlem bir yönetici gerektirir."
+    "PermissionDenied": "Öğeleri kalıcı olarak silme izniniz yok. Bu işlem bir yönetici gerektirir.",
+    "Status": "Durum",
+    "Posted": "Kaydedildi",
+    "Draft": "Taslak",
+    "FilterAll": "Tümü",
+    "FilterFrom": "Başlangıç",
+    "FilterTo": "Bitiş",
+    "ApplyFilter": "Filtrele",
+    "ClearFilter": "Temizle",
+    "DeleteToBin": "Sil",
+    "ConfirmDeleteDocument": "Bu belge silinsin mi? Geri dönüşüm kutusuna taşınacak ve oradayken muhasebe etkileri tersine çevrilecek.",
+    "ConfirmDeleteJournal": "Bu yevmiye kaydı silinsin mi? Geri dönüşüm kutusuna taşınacak ve oradayken muhasebe etkileri tersine çevrilecek.",
+    "MovedToBin": "Geri dönüşüm kutusuna taşındı.",
+    "DeleteFailed": "Silme işlemi tamamlanamadı."
   },
   "Cards": {
     "NotFound": "Kayıt veritabanında bulunamadı.",

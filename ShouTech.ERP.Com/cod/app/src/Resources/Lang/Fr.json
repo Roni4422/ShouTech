@@ -3432,7 +3432,20 @@
     "ConfirmPurge": "Les éléments sélectionnés seront supprimés définitivement et ne pourront pas être restaurés.\n\nContinuer ?",
     "Purged": "{0:N0} élément(s) supprimé(s) définitivement.",
     "PurgedPartial": "{0:N0} élément(s) supprimé(s) définitivement. {1:N0} échec(s).{2}{3}",
-    "PermissionDenied": "Vous n'avez pas l'autorisation de supprimer définitivement des éléments. Cette action requiert un administrateur."
+    "PermissionDenied": "Vous n'avez pas l'autorisation de supprimer définitivement des éléments. Cette action requiert un administrateur.",
+    "Status": "Statut",
+    "Posted": "Validé",
+    "Draft": "Brouillon",
+    "FilterAll": "Tous",
+    "FilterFrom": "Du",
+    "FilterTo": "Au",
+    "ApplyFilter": "Filtrer",
+    "ClearFilter": "Effacer",
+    "DeleteToBin": "Supprimer",
+    "ConfirmDeleteDocument": "Supprimer ce document ? Il sera placé dans la corbeille et ses effets comptables seront contre-passés tant qu'il y restera.",
+    "ConfirmDeleteJournal": "Supprimer cette écriture ? Elle sera placée dans la corbeille et ses effets comptables seront contre-passés tant qu'elle y restera.",
+    "MovedToBin": "Placé dans la corbeille.",
+    "DeleteFailed": "La suppression n'a pas pu être terminée."
   },
   "Cards": {
     "NotFound": "L'enregistrement est introuvable dans la base de données.",

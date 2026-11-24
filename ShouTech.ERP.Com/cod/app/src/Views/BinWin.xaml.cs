@@ -14,13 +14,15 @@ using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 /// <summary>
-/// Company recycle bin for soft-deleted master data.
+/// Company recycle bin: soft-deleted documents, journal entries and
+/// cards for the active company (SOFT_DELETE_STUDY).
 /// Restore returns rows to working sets; permanent delete is irreversible.
 /// </summary>
 public partial class BinWin : BaseWin
 {
     protected override string? ScheduleTintName => "Bronze";
     private bool _busy;
+    private IReadOnlyList<RecycleBinItem> _allItems = Array.Empty<RecycleBinItem>();
 
     // CA1863: cache CompositeFormat instances for repeatedly used format strings.
     private static readonly ConcurrentDictionary<string, CompositeFormat> CompositeFormats =
@@ -71,9 +73,16 @@ public partial class BinWin : BaseWin
             "Soft-deleted master data for the active company. Restore returns items to working lists. Permanent delete cannot be undone.");
         DatasetColumn.Header = Loc.Get("RecycleBin.Dataset", "Dataset");
         LabelColumn.Header = Loc.Get("RecycleBin.Label", "Label");
+        StatusColumn.Header = Loc.Get("RecycleBin.Status", "Status");
         TableColumn.Header = Loc.Get("RecycleBin.Table", "Table");
         DeletedAtColumn.Header = Loc.Get("RecycleBin.DeletedAt", "Deleted at");
         DeletedByColumn.Header = Loc.Get("RecycleBin.DeletedBy", "Deleted by");
+        FilterDatasetLabel.Text = Loc.Get("RecycleBin.Dataset", "Dataset");
+        FilterByLabel.Text = Loc.Get("RecycleBin.DeletedBy", "Deleted by");
+        FilterFromLabel.Text = Loc.Get("RecycleBin.FilterFrom", "From");
+        FilterToLabel.Text = Loc.Get("RecycleBin.FilterTo", "To");
+        FilterButton.Content = Loc.Get("RecycleBin.ApplyFilter", "Filter");
+        ClearFilterButton.Content = Loc.Get("RecycleBin.ClearFilter", "Clear");
         RefreshButton.Content = Loc.Get("RecycleBin.Refresh", "Refresh");
         RestoreButton.Content = Loc.Get("RecycleBin.RestoreSelected", "Restore selected");
         PurgeButton.Content = Loc.Get("RecycleBin.DeletePermanently", "Delete permanently");
@@ -104,17 +113,14 @@ public partial class BinWin : BaseWin
             }
 
             var items = await RecycleBinSvc.ListAsync(companyCode).ConfigureAwait(true);
-            ItemsGrid.ItemsSource = items;
-            StatusText.Text = items.Count == 0
-                ? Loc.Get("RecycleBin.Empty", "The recycle bin is empty for this company.")
-                : FormatLocalized(
-                    Loc.Get("RecycleBin.ItemCount", "{0:N0} item(s) in the recycle bin for company {1}."),
-                    items.Count,
-                    companyCode);
+            _allItems = items;
+            RebuildDatasetFilter(items);
+            ApplyFilters();
         }
         catch (Exception ex)
         {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "BinWin.xaml.ReloadAsync");
+            _allItems = Array.Empty<RecycleBinItem>();
             ItemsGrid.ItemsSource = Array.Empty<RecycleBinItem>();
             StatusText.Text = Loc.Get("RecycleBin.LoadFailed", "Failed to load the recycle bin.");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
@@ -123,6 +129,81 @@ public partial class BinWin : BaseWin
         {
             SetBusy(false);
         }
+    }
+
+    /// <summary>Dataset filter choices: "All" plus the datasets present
+    /// in the current bin content; the selection survives reloads.</summary>
+    private void RebuildDatasetFilter(IReadOnlyList<RecycleBinItem> items)
+    {
+        var selected = FilterDatasetBox.SelectedItem as string;
+        var choices = new List<string> { Loc.Get("RecycleBin.FilterAll", "All") };
+        choices.AddRange(items.Select(item => item.DatasetKey)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(key => key, StringComparer.CurrentCultureIgnoreCase));
+        FilterDatasetBox.ItemsSource = choices;
+        FilterDatasetBox.SelectedItem = selected is not null && choices.Contains(selected)
+            ? selected
+            : choices[0];
+    }
+
+    /// <summary>Client-side filters over the loaded bin: dataset,
+    /// deleted-by (contains), and the deletion date range.</summary>
+    private void ApplyFilters()
+    {
+        var companyCode = AppState.CurrentCompanyCode ?? string.Empty;
+        IEnumerable<RecycleBinItem> view = _allItems;
+
+        var dataset = FilterDatasetBox.SelectedItem as string;
+        var allLabel = Loc.Get("RecycleBin.FilterAll", "All");
+        if (!string.IsNullOrEmpty(dataset) && !string.Equals(dataset, allLabel, StringComparison.Ordinal))
+            view = view.Where(item => string.Equals(item.DatasetKey, dataset, StringComparison.OrdinalIgnoreCase));
+
+        var by = FilterByBox.Text?.Trim();
+        if (!string.IsNullOrEmpty(by))
+            view = view.Where(item => (item.DeletedBy ?? string.Empty)
+                .Contains(by, StringComparison.OrdinalIgnoreCase));
+
+        var from = FilterFromPicker.SelectedDate?.Date;
+        var to = FilterToPicker.SelectedDate?.Date;
+        if (from is not null || to is not null)
+            view = view.Where(item =>
+            {
+                if (!TryDeletedDate(item, out var date)) return false;
+                if (from is not null && date < from.Value) return false;
+                if (to is not null && date > to.Value) return false;
+                return true;
+            });
+
+        var list = view.ToList();
+        ItemsGrid.ItemsSource = list;
+        StatusText.Text = _allItems.Count == 0
+            ? Loc.Get("RecycleBin.Empty", "The recycle bin is empty for this company.")
+            : FormatLocalized(
+                Loc.Get("RecycleBin.ItemCount", "{0:N0} item(s) in the recycle bin for company {1}."),
+                list.Count,
+                companyCode);
+    }
+
+    private static bool TryDeletedDate(RecycleBinItem item, out DateTime date)
+    {
+        date = default;
+        var text = item.DeletedAt;
+        if (string.IsNullOrWhiteSpace(text) || text.Length < 10)
+            return false;
+        return DateTime.TryParseExact(text[..10], "yyyy-MM-dd",
+            CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
+    }
+
+    private void Filter_Click(object sender, RoutedEventArgs e) => ApplyFilters();
+
+    private void ClearFilter_Click(object sender, RoutedEventArgs e)
+    {
+        FilterByBox.Text = string.Empty;
+        FilterFromPicker.SelectedDate = null;
+        FilterToPicker.SelectedDate = null;
+        if (FilterDatasetBox.Items.Count > 0)
+            FilterDatasetBox.SelectedIndex = 0;
+        ApplyFilters();
     }
 
     private async void Refresh_Click(object sender, RoutedEventArgs e)

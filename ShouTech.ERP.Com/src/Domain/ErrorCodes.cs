@@ -202,6 +202,28 @@ public static class ErrorCodes
     // The file decrypted but its payload is not a usable design.
     public const string DesignPayloadInvalid = "DSG-8103";
 
+    // ---- BIN 8201-8299 (recycle bin completion, SOFT_DELETE_STUDY) -----
+    // The bin item (document, journal or card) was not found, or is not
+    // in the recycle bin where the operation requires it to be.
+    public const string BinItemNotFound = "BIN-8201";
+    // Soft delete blocked: the document still has payment allocations.
+    public const string BinBlockedByAllocations = "BIN-8202";
+    // Soft delete blocked: the document participates in downstream chain
+    // links or a completed reversal pair.
+    public const string BinBlockedByLinks = "BIN-8203";
+    // The document kind is excluded from the recycle bin (POS sales are
+    // corrected inside the POS session flow, never binned).
+    public const string BinKindExcluded = "BIN-8204";
+    // A posted journal entry can be restored from the bin but never
+    // permanently deleted; only draft journals purge completely.
+    public const string BinPostedJournalPurgeBlocked = "BIN-8205";
+    // Restore would collide with a live row reusing the same unique key.
+    public const string BinRestoreConflict = "BIN-8206";
+    // Permanent delete blocked: other records still reference this row.
+    public const string BinPurgeStillReferenced = "BIN-8207";
+    // Bin state conflict: already binned / not binned (exactly-once guard).
+    public const string BinStateConflict = "BIN-8208";
+
     // ---- POS 1001-1999 (POS full build, migration 066) ------------------
     // The POS module takes its own prefix block, like MFG / HR.
     public const string PosNoOpenSession = "POS-1001";
