@@ -686,5 +686,41 @@
     "name": "AllocationExceedsOpenAmount",
     "message": "The allocation exceeds the open amount of document '{0}'.",
     "hint": "Reduce the allocation to the open amount shown for the document."
+  },
+  "SAL-7011": {
+    "code": "SAL-7011",
+    "name": "StockReservationInvalid",
+    "message": "The reservation for '{0}' exceeds the available stock.",
+    "hint": "Reduce the reserved quantity to the available quantity."
+  },
+  "SAL-7012": {
+    "code": "SAL-7012",
+    "name": "PickingExceedsRemaining",
+    "message": "The picked quantity for '{0}' exceeds the remaining quantity to deliver.",
+    "hint": "Reduce the picked quantity to the remaining amount on the order."
+  },
+  "SAL-7013": {
+    "code": "SAL-7013",
+    "name": "CommissionPolicyInvalid",
+    "message": "Commission policy '{0}' is invalid or incomplete.",
+    "hint": "Complete the policy basis, rate and validity period, then save again."
+  },
+  "SAL-7014": {
+    "code": "SAL-7014",
+    "name": "CommissionSettlementInvalid",
+    "message": "Commission settlement '{0}' cannot be processed in its current state.",
+    "hint": "Approve the commission entries before settling them."
+  },
+  "SAL-7015": {
+    "code": "SAL-7015",
+    "name": "ContractQuantityExceeded",
+    "message": "The quantity for '{0}' exceeds the remaining contracted quantity.",
+    "hint": "Reduce the quantity to the remaining amount under the contract."
+  },
+  "SAL-7016": {
+    "code": "SAL-7016",
+    "name": "ApprovalStateInvalid",
+    "message": "Document '{0}' cannot change approval state from its current state.",
+    "hint": "Refresh the document and check its approval status before acting."
   }
 }

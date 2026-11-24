@@ -686,5 +686,41 @@
     "name": "AllocationExceedsOpenAmount",
     "message": "L'affectation dépasse le montant ouvert du document '{0}'.",
     "hint": "Réduisez l'affectation au montant ouvert indiqué pour le document."
+  },
+  "SAL-7011": {
+    "code": "SAL-7011",
+    "name": "StockReservationInvalid",
+    "message": "La réservation pour '{0}' dépasse le stock disponible.",
+    "hint": "Réduisez la quantité réservée à la quantité disponible."
+  },
+  "SAL-7012": {
+    "code": "SAL-7012",
+    "name": "PickingExceedsRemaining",
+    "message": "La quantité prélevée pour '{0}' dépasse la quantité restante à livrer.",
+    "hint": "Réduisez la quantité prélevée au montant restant sur la commande."
+  },
+  "SAL-7013": {
+    "code": "SAL-7013",
+    "name": "CommissionPolicyInvalid",
+    "message": "La politique de commission '{0}' est invalide ou incomplète.",
+    "hint": "Complétez la base, le taux et la période de validité de la politique, puis enregistrez à nouveau."
+  },
+  "SAL-7014": {
+    "code": "SAL-7014",
+    "name": "CommissionSettlementInvalid",
+    "message": "Le règlement de commission '{0}' ne peut pas être traité dans son état actuel.",
+    "hint": "Approuvez les écritures de commission avant de les régler."
+  },
+  "SAL-7015": {
+    "code": "SAL-7015",
+    "name": "ContractQuantityExceeded",
+    "message": "La quantité pour '{0}' dépasse la quantité contractuelle restante.",
+    "hint": "Réduisez la quantité au montant restant au titre du contrat."
+  },
+  "SAL-7016": {
+    "code": "SAL-7016",
+    "name": "ApprovalStateInvalid",
+    "message": "Le document '{0}' ne peut pas changer d'état d'approbation depuis son état actuel.",
+    "hint": "Actualisez le document et vérifiez son état d'approbation avant d'agir."
   }
 }

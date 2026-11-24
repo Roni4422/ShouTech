@@ -190,4 +190,12 @@ public static class ErrorCodes
     public const string QuotationExpired = "SAL-7008";
     public const string DeliveryCostAllocationFailed = "SAL-7009";
     public const string AllocationExceedsOpenAmount = "SAL-7010";
+    // Phase 2 (owner sales spec): reservation / picking / commissions /
+    // contracts / approvals.
+    public const string StockReservationInvalid = "SAL-7011";
+    public const string PickingExceedsRemaining = "SAL-7012";
+    public const string CommissionPolicyInvalid = "SAL-7013";
+    public const string CommissionSettlementInvalid = "SAL-7014";
+    public const string ContractQuantityExceeded = "SAL-7015";
+    public const string ApprovalStateInvalid = "SAL-7016";
 }

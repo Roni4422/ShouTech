@@ -686,5 +686,41 @@
     "name": "AllocationExceedsOpenAmount",
     "message": "Tahsis, '{0}' belgesinin açık tutarını aşıyor.",
     "hint": "Tahsisi belgede gösterilen açık tutara düşürün."
+  },
+  "SAL-7011": {
+    "code": "SAL-7011",
+    "name": "StockReservationInvalid",
+    "message": "'{0}' için rezervasyon, mevcut stoğu aşıyor.",
+    "hint": "Rezerve edilen miktarı mevcut miktara düşürün."
+  },
+  "SAL-7012": {
+    "code": "SAL-7012",
+    "name": "PickingExceedsRemaining",
+    "message": "'{0}' için toplanan miktar, teslim edilecek kalan miktarı aşıyor.",
+    "hint": "Toplanan miktarı siparişteki kalan tutara düşürün."
+  },
+  "SAL-7013": {
+    "code": "SAL-7013",
+    "name": "CommissionPolicyInvalid",
+    "message": "'{0}' komisyon politikası geçersiz veya eksik.",
+    "hint": "Politika esasını, oranını ve geçerlilik dönemini tamamlayıp tekrar kaydedin."
+  },
+  "SAL-7014": {
+    "code": "SAL-7014",
+    "name": "CommissionSettlementInvalid",
+    "message": "'{0}' komisyon mutabakatı mevcut durumunda işlenemez.",
+    "hint": "Komisyon kayıtlarını mutabakattan önce onaylayın."
+  },
+  "SAL-7015": {
+    "code": "SAL-7015",
+    "name": "ContractQuantityExceeded",
+    "message": "'{0}' için miktar, kalan sözleşme miktarını aşıyor.",
+    "hint": "Miktarı sözleşme kapsamındaki kalan tutara düşürün."
+  },
+  "SAL-7016": {
+    "code": "SAL-7016",
+    "name": "ApprovalStateInvalid",
+    "message": "'{0}' belgesi mevcut durumundan onay durumunu değiştiremez.",
+    "hint": "Belgeyi yenileyin ve işlem yapmadan önce onay durumunu kontrol edin."
   }
 }
