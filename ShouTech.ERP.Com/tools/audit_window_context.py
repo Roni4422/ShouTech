@@ -14,7 +14,7 @@ such as numeric/code fields are reported, not failed).
 Usage:
     python3 tools/audit_window_context.py [--write-doc]
 
-With --write-doc, (re)generates docs/WINDOW_CONTEXT_AUDIT.md.
+With --write-doc, (re)generates docs/window-field-persistence-audit.md.
 Exit code is non-zero when a window-level LTR pin is found.
 """
 
@@ -150,8 +150,8 @@ def main():
     text = "\n".join(out) + "\n"
     print(text)
     if "--write-doc" in sys.argv:
-        (ROOT / "docs" / "WINDOW_CONTEXT_AUDIT.md").write_text(text, encoding="utf-8")
-        print(f"[wrote docs/WINDOW_CONTEXT_AUDIT.md]", file=sys.stderr)
+        (ROOT / "docs" / "window-field-persistence-audit.md").write_text(text, encoding="utf-8")
+        print(f"[wrote docs/window-field-persistence-audit.md]", file=sys.stderr)
     return 1 if window_pins else 0
 
 

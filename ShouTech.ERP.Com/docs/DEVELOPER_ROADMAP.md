@@ -179,7 +179,7 @@ Use **Not started**, **In progress**, **Blocked**, **Implemented — unverified*
 - [Database Migrations](DATABASE_MIGRATIONS.md) — migration workflow and safeguards.
 - [Accounting Reversals and Outbox](ACCOUNTING_CHART_PERIODS_YEAR_CLOSE.md) — posting and delivery invariants.
 - [Multi-country Tax Roadmap](MULTI-COUNTRY-TAX-ENGINE-ROADMAP.md) — jurisdiction package requirements.
-- [Window and Ribbon Inventories](WINDOW-INVENTORY.md), [Ribbon Completion Inventory](RIBBON_COMPLETION_INVENTORY.md) — UI coverage and gaps.
+- [Window and Ribbon Inventories](RIBBON_COMPLETION_INVENTORY.md), [Ribbon Completion Inventory](RIBBON_COMPLETION_INVENTORY.md) — UI coverage and gaps.
 
 ## 8. Roadmap maintenance
 

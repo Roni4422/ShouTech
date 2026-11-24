@@ -1,3 +1,5 @@
+<!-- source: docs/RIBBON_COMPLETION_INVENTORY.md -->
+
 # Ribbon Completion Inventory — ShouTech ERP
 
 Branch: `feat/ribbon-windows-complete` (from main @ 9c8dea8). Date: 2026-11-17.
@@ -628,3 +630,675 @@ No window hardcodes language, direction, company, currency, or formats.
 - **Cheque-paper print layouts** and **bank statement file import** were not built (no paper-layout spec / file-format spec exists yet); cheque lifecycle + posting are complete.
 - **Cost-center allocation** application at posting time is deferred; allocations persist and balances report from posted journal lines by cost-center code.
 - Report simplifications documented inline per window (no batch expiry dates in schema → ExpiredWin uses has_expiry + last movement; cash/bank accounts identified by name heuristic — no flag column; CashFlowWin is a labeled indirect approximation; BankEstimateWin aggregates due cheques — cheques carry no GL link).
+
+---
+
+<!-- source: docs/WINDOW-INVENTORY.md -->
+
+# WPF Window and View Inventory
+
+**Branch:** `work/full-app-stabilization-2026-11-18`  
+**Inventory snapshot:** 2026-11-18
+
+This is a source-file inventory, not a claim that every type is an independently navigable window. XAML code-behind files are detected using the `.xaml.cs` suffix.
+
+## Inventory summary
+
+- Unique view/source basenames: 159
+- XAML + code-behind pairs: 23
+- C#-only basenames: 136
+- XAML without same-basename code-behind: 0
+- Report basenames: 63
+- Existing Modules basenames: 4
+
+A C#-only file may be a programmatic WPF window, helper, base class, view model, or support type. Inspect declared types and callers before treating it as a window or moving it.
+
+## Main views and non-report views
+
+| Basename | C# / code-behind | XAML |
+|---|---:|---:|
+| `AccCard` | Yes | Yes |
+| `ActivityLogWin` | Yes | No |
+| `AddonsWin` | Yes | No |
+| `AppState` | Yes | No |
+| `AssetWin` | Yes | No |
+| `BankRecWin` | Yes | No |
+| `BarWin` | Yes | No |
+| `BaseWin` | Yes | No |
+| `BatchSerialPickerWin` | Yes | No |
+| `BcdDesWin` | Yes | No |
+| `BcdGenWin` | Yes | No |
+| `BinWin` | Yes | Yes |
+| `BkpWin` | Yes | Yes |
+| `BnkCard` | Yes | No |
+| `BomWin` | Yes | No |
+| `BudgetWin` | Yes | No |
+| `CalculatorWin` | Yes | No |
+| `CashDrawer` | Yes | No |
+| `CatWin` | Yes | Yes |
+| `CcCard` | Yes | No |
+| `CcListWin` | Yes | No |
+| `ChangePasswordWin` | Yes | No |
+| `ChqListWin` | Yes | No |
+| `ChqWin` | Yes | No |
+| `CloseCashWin` | Yes | No |
+| `CoaWin` | Yes | Yes |
+| `ColChsWin` | Yes | Yes |
+| `ComWin` | Yes | Yes |
+| `CompressInvoicesWin` | Yes | No |
+| `CrmActivitiesWin` | Yes | No |
+| `CrmLeadWin` | Yes | No |
+| `CrmOppWin` | Yes | No |
+| `CrmPipelineWin` | Yes | No |
+| `CshWin` | Yes | No |
+| `CstCard` | Yes | No |
+| `CurCard` | Yes | No |
+| `CustomReportsWin` | Yes | No |
+| `DatWin` | Yes | Yes |
+| `DefManagerWin` | Yes | No |
+| `DeliveryDeskWin` | Yes | No |
+| `DocSearchWin` | Yes | No |
+| `F2WinUi` | Yes | No |
+| `FinancialAnalysisWin` | Yes | No |
+| `GroupManagerWin` | Yes | No |
+| `HelpWin` | Yes | No |
+| `HrAttendanceWin` | Yes | No |
+| `HrEmployeeWin` | Yes | No |
+| `HrLeaveWin` | Yes | No |
+| `HrOrgWins` | Yes | No |
+| `HrPayrollWin` | Yes | No |
+| `HrStructureWin` | Yes | No |
+| `InstallmentsWin` | Yes | No |
+| `InvoiceWin` | Yes | No |
+| `JrnWin` | Yes | No |
+| `Lang` | Yes | Yes |
+| `LicenseWin` | Yes | No |
+| `LogWin` | Yes | Yes |
+| `LoyaltyWin` | Yes | No |
+| `MWin` | Yes | Yes |
+| `MaintenanceWin` | Yes | No |
+| `MatCard` | Yes | Yes |
+| `MatDirWin` | Yes | Yes |
+| `MatGroupWin` | Yes | Yes |
+| `MfgListWin` | Yes | No |
+| `MfgPlanWin` | Yes | No |
+| `MfgWin` | Yes | No |
+| `OrdWin` | Yes | No |
+| `OrderTrackWin` | Yes | No |
+| `PartyManagerWin` | Yes | No |
+| `PartySearchWin` | Yes | No |
+| `PayRecWin` | Yes | No |
+| `PosCheckoutWin` | Yes | No |
+| `PosReturnWin` | Yes | No |
+| `PosSessionWin` | Yes | No |
+| `PosSyncWin` | Yes | No |
+| `PosWin` | Yes | No |
+| `PrmWin` | Yes | Yes |
+| `ProjWin` | Yes | No |
+| `QcAlertWin` | Yes | No |
+| `QcInspectWin` | Yes | No |
+| `QcTemplateWin` | Yes | No |
+| `RepCard` | Yes | No |
+| `RepostWin` | Yes | No |
+| `RestoreCoWin` | Yes | Yes |
+| `RolloverWin` | Yes | No |
+| `RptBase` | Yes | No |
+| `SerWin` | Yes | Yes |
+| `SplWin` | Yes | Yes |
+| `StpWiz` | Yes | Yes |
+| `SupportWin` | Yes | No |
+| `UpdatesWin` | Yes | No |
+| `WhsWin` | Yes | Yes |
+
+## Report views
+
+| Basename | C# / code-behind | XAML |
+|---|---:|---:|
+| `Reports/AccBalWin` | Yes | No |
+| `Reports/AccCompareWin` | Yes | No |
+| `Reports/AccMoveChartWin` | Yes | No |
+| `Reports/AccStmtWin` | Yes | No |
+| `Reports/AvgRateWin` | Yes | No |
+| `Reports/BalSheetWin` | Yes | No |
+| `Reports/BankBalancesWin` | Yes | No |
+| `Reports/BankEstimateWin` | Yes | No |
+| `Reports/BatchBalWin` | Yes | No |
+| `Reports/BranchAccMoveWin` | Yes | No |
+| `Reports/BranchMatWin` | Yes | No |
+| `Reports/BudgetVarWin` | Yes | No |
+| `Reports/CashFlowWin` | Yes | No |
+| `Reports/CashJournalWin` | Yes | No |
+| `Reports/ClosingAccountsWin` | Yes | No |
+| `Reports/CollectionRatesWin` | Yes | No |
+| `Reports/CostCenterRptWin` | Yes | No |
+| `Reports/CostCenterTrialWin` | Yes | No |
+| `Reports/CustAgingWin` | Yes | No |
+| `Reports/CustBalWin` | Yes | No |
+| `Reports/CustomerDueWin` | Yes | No |
+| `Reports/DormantWin` | Yes | No |
+| `Reports/EndOfPeriodWin` | Yes | No |
+| `Reports/ExchangeDiffWin` | Yes | No |
+| `Reports/ExpiredWin` | Yes | No |
+| `Reports/HrReports` | Yes | No |
+| `Reports/IncStmtWin` | Yes | No |
+| `Reports/InvCustomersWin` | Yes | No |
+| `Reports/InvoiceAgeWin` | Yes | No |
+| `Reports/InvoiceProfitsWin` | Yes | No |
+| `Reports/ItemProfitWin` | Yes | No |
+| `Reports/JrnListWin` | Yes | No |
+| `Reports/MatCompareWin` | Yes | No |
+| `Reports/MatListWin` | Yes | No |
+| `Reports/MatMoveChartWin` | Yes | No |
+| `Reports/MatMoveWin` | Yes | No |
+| `Reports/MatStatsWin` | Yes | No |
+| `Reports/MfgCostsWin` | Yes | No |
+| `Reports/MfgFeasibilityWin` | Yes | No |
+| `Reports/MfgVarianceWin` | Yes | No |
+| `Reports/MostActiveWin` | Yes | No |
+| `Reports/NegativeStockWin` | Yes | No |
+| `Reports/OrderPaymentsWin` | Yes | No |
+| `Reports/PackingListWin` | Yes | No |
+| `Reports/PosCashRptWin` | Yes | No |
+| `Reports/PosZReportWin` | Yes | No |
+| `Reports/PriceHistoryWin` | Yes | No |
+| `Reports/PriceListWin` | Yes | No |
+| `Reports/PurListWin` | Yes | No |
+| `Reports/QcSummaryWin` | Yes | No |
+| `Reports/RepCollectionsWin` | Yes | No |
+| `Reports/RepMovementWin` | Yes | No |
+| `Reports/RptWinUtil` | Yes | No |
+| `Reports/SalListWin` | Yes | No |
+| `Reports/ServiceMatWin` | Yes | No |
+| `Reports/ShortListWin` | Yes | No |
+| `Reports/StagnantWin` | Yes | No |
+| `Reports/StkAdjRptWin` | Yes | No |
+| `Reports/StkBalWin` | Yes | No |
+| `Reports/SupAgingWin` | Yes | No |
+| `Reports/SupBalWin` | Yes | No |
+| `Reports/TargetsRptWin` | Yes | No |
+| `Reports/TrialBalanceWin` | Yes | No |
+
+## Existing Modules views
+
+| Basename | C# / code-behind | XAML |
+|---|---:|---:|
+| `Modules/DashVw` | Yes | Yes |
+| `Modules/LangVM` | Yes | No |
+| `Modules/ModuleWorkspaceView` | Yes | Yes |
+| `Modules/ReportGridVw` | Yes | Yes |
+
+## Mandatory checks before moving a view
+
+1. Inspect declared window/view types, namespaces, constructors, dependencies and public entry points.
+2. Find every construction, Show/ShowDialog call, navigation route, Ribbon action key, menu click handler, reflection lookup and DI registration.
+3. Map service/repository dependencies and the tables/queries each view reads or writes.
+4. Check localization keys, language dictionaries, styles, merged resource dictionaries, icons, templates and dynamic resource references.
+5. Check x:Class, StartupUri, ResourceDictionary Source, relative paths, pack URIs, component resource references and runtime file paths.
+6. Check MainApp.csproj and build/publish scripts. The WPF project disables SDK default compile/page discovery and uses recursive **\\*.cs and **\\*.xaml includes; resource URIs may change after a move even when compilation succeeds.
+7. Move each existing XAML/code-behind pair together. Do not split large code-behind files merely to reduce line count.
+8. Preserve public types, namespaces and runtime behavior unless a separately reviewed compatibility change is required.
+9. Build Debug and Release after each bounded move; run focused tests and launch/navigation smoke tests before proceeding.
+10. Record old path, new path, route, dependencies, migration commit and verification evidence here.
+
+## Proposed destination layout
+
+Keep cohesive source files intact. Organize by business capability, not file size:
+
+- Views/Platform/: main shell, company, users, roles, permissions, settings, backup, restore, licensing and diagnostics.
+- Views/Inventory/: item/material cards, categories, warehouses, barcode, transfers, counts, adjustments, batch/serial and inventory operations.
+- Views/Sales/: quotations, sales orders, invoices, returns, delivery and customer-facing sales workflows.
+- Views/Purchasing/: purchase orders, receipts, supplier invoices and purchase returns.
+- Views/Accounting/: chart of accounts, journals, vouchers, receipts, payments, cash, banks and reconciliation.
+- Views/Manufacturing/: BOM, production orders, planning, routing and quality.
+- Views/HR/: employees, organization, attendance, leave and payroll.
+- Views/CRM/: leads, opportunities, pipeline and activities.
+- Views/Reports/<module>/: reports grouped by owning module, preserving each report class/file intact.
+
+These are target folders, not permission to move all files in one batch. The first actual move must be a small, fully traced slice with all XAML/resource references checked.
+
+## Migration status
+
+- [x] Source inventory generated from the branch tree.
+- [ ] Type/caller/route/dependency mapping completed.
+- [ ] First bounded move selected and reviewed.
+- [ ] First move built and smoke-tested.
+- [ ] Remaining modules migrated in bounded waves.
+- [ ] All routes and windows covered by automated or documented manual smoke tests.
+- [ ] Final Debug/Release, database, and end-to-end regression matrix passed.
+
+
+## First bounded migration wave: Material Card
+
+**Status:** Source relocation committed; runtime verification pending.
+
+| Item | Result |
+|---|---|
+| Previous XAML | `cod/app/src/Views/MatCard.xaml` |
+| New XAML | `cod/app/src/Views/Inventory/MatCard.xaml` |
+| Previous code-behind | `cod/app/src/Views/MatCard.xaml.cs` |
+| New code-behind | `cod/app/src/Views/Inventory/MatCard.xaml.cs` |
+| Type and namespace | `ShouTech.App.Views.MatCard` preserved |
+| XAML class | `ShouTech.App.Views.MatCard` preserved |
+| Main-window route | `MWin.xaml.cs` -> `OpenMaterialCard()` -> `new MatCard` preserved |
+| Ribbon entry | Material Card button in `MWin.xaml` preserved |
+| Localization | Existing `Inventory.MaterialCard` and `MatCard.*` keys preserved |
+| Project inclusion | Recursive Compile and Page globs include the new subdirectory |
+| Source splitting | None; both original files moved intact |
+
+**Checks still required:** Windows CI build and test results for the move commit; runtime XAML resource loading; open/close/reopen; create/edit/search/delete behavior; SQLite persistence; PostgreSQL parity if supported by this card workflow. No runtime pass is claimed yet.
+
+## Current migration status
+
+- [x] Source inventory generated.
+- [x] First bounded XAML/code-behind pair moved together.
+- [ ] First move passes Windows Debug/Release build and automated tests.
+- [ ] Material Card runtime smoke test and persistence verification.
+- [ ] Remaining windows mapped and moved in bounded waves.
+- [ ] All Ribbon/menu routes verified.
+- [ ] Final full regression matrix passed.
+
+
+## Test baseline discovered before the first view move
+
+The Windows CI run for the pre-move baseline commit `38b22a8e8ef28cbe77b3d6bb0b8b011330e9c053` completed with a successful restore and build, but the test step failed: **72 failed, 242 passed, 0 skipped (314 total)**. This run predates the Material Card relocation and therefore is not evidence that the relocation caused these failures.
+
+The failure log shows recurring test-fixture/schema and isolation problems that must be triaged independently of the view moves, including:
+
+- Fixture SQL expects `warehouses.name`, while the migrated SQLite schema does not expose that column.
+- Fixture SQL expects `mfg_orders.bom_id`, which is absent in the schema used by the test.
+- SQLite test databases intermittently fail to open.
+- Several fixtures cannot resolve seeded companies, materials, warehouses, accounts, parties or cost centers.
+- Some tests encounter duplicate account numbers during setup.
+- COA tests contain SQL syntax failures near alias `a`.
+- STEI import round-trip lacks the expected `DATA.IMPORT` permission in its test context.
+
+These are observed failure signatures, not yet proven root causes. Fixes must align fixtures with authoritative migrations and isolate each test's database/session/company state; do not weaken production validation to make tests pass.
+
+The Windows CI run for the Material Card move commit `cc9eec898508f7620246ddc94720c26296f7c059` is running separately. Its final restore/build/test result must be recorded before this first relocation is marked verified.
+
+---
+
+<!-- source: docs/MISSING_WINDOWS_INVENTORY.md -->
+
+# ShouTech ERP — Missing Windows Inventory (Phase 3)
+
+*Compiled 2026-11-17 on branch `feat/missing-windows-phase3` (base: `ready/combined-2026-11-17`).*
+
+Sources used: `dba/sys/NAV_README.md` (the `dba/sys/nav.sql` + `dba/sds/sds_nav.sql`
+SQL Server catalog described there is **legacy/reference only** — it is not in the
+active SQLite/PostgreSQL tree; the live catalog is the MWin ribbon, 242 ribbon
+elements in `MWin.xaml`), `cod/app/src/Navigation/RibModMap.cs` (17 tabs →
+modules), `cod/app/src/Services/RptNav.cs` (the live command router),
+`cod/app/src/Services/RibbonReportRouter.cs`, `cod/app/src/Services/Data.cs`
+module definitions, a grep for `ShowOperationUnavailable` /
+`ShowPersistenceUnavailable` across `cod/app/src/Views`, and
+`docs/COMPETITIVE_GAP_ASSESSMENT_2026-11-21.md`.
+
+## 1. How navigation actually works today
+
+Ribbon/menu action keys are routed by `RptNav.TryHandle` (~70 keys) and
+`RibbonReportRouter.TryHandle` (5 keys) to concrete windows. Anything not routed
+falls through to the generic `ModuleWorkspaceView` placeholder. The nav database
+catalog in `dba/sys/NAV_README.md` (17 menus · 17 tabs · 55 groups · 215 items ·
+209 permissions) describes the *intended* catalog; the table below maps every
+routed command family to its window and status.
+
+Status key: ✅ window exists and is data-backed · 🟡 window exists but a core
+action is a placeholder (`ShowOperationUnavailable` / `ShowPersistenceUnavailable`)
+· 🔀 routed to a neighbouring window (no distinct window) · ❌ missing entirely.
+
+## 2. Command → window map (RptNav + RibbonReportRouter + MWin direct)
+
+| Command family (action keys) | Window | Status |
+|---|---|---|
+| Trial balance (`Accounts.TrialBalance`, `Reports.TrialBalance`, `Reports.Statistics`) | `TrialBalanceWin` | ✅ |
+| Account balance | `AccBalWin` | ✅ |
+| Balance sheet | `BalSheetWin` | ✅ |
+| Income statement | `IncStmtWin` | ✅ |
+| Ledger / account statement / customer statement | `AccStmtWin` | ✅ |
+| General journal / journal list | `JrnListWin` | ✅ |
+| Stock balances / warehouse inventory / material overview | `StkBalWin` | ✅ |
+| Material movement / cost-center material movement | `MatMoveWin` | ✅ |
+| Stock adjustment report | `StkAdjRptWin` | ✅ |
+| Item profitability | `ItemProfitWin` | ✅ |
+| Customer balances / overview | `CustBalWin` | ✅ |
+| Customer aging | `CustAgingWin` | ✅ |
+| Supplier balances | `SupBalWin` | ✅ |
+| Supplier aging | `SupAgingWin` | ✅ |
+| Material profits (`Inventory.MaterialProfits`) | `ItemProfitWin` | 🔀 router alias |
+| Material group movement | `MatMoveWin` | 🔀 router alias |
+| Sales report (`Inventory.SalesReport`) | `SalListWin` | 🔀 router alias |
+| Aging receivables (`Accounts.AgingReceivables`) | `CustAgingWin` | 🔀 router alias |
+| Daily report (`Accounts.DailyReport`) | `JrnListWin` | 🔀 router alias |
+| POS / cash sales (`Invoices.CashSales`, `POS.OpenCashier`) | `PosWin` (+ `PosCheckoutWin`) | ✅ |
+| Sales invoice / sales return | `InvoiceWin(SalesInvoice/SalesReturn)` | ✅ |
+| Purchase invoice / purchase return | `InvoiceWin(PurchaseInvoice/PurchaseReturn)` | ✅ |
+| Sales / purchase invoice lists | `SalListWin` / `PurListWin` | ✅ |
+| Stock transfer, opening stock, stock in/out, inventory count, quotation | `InvoiceWin(kind)` | ✅ |
+| Journal voucher | `JrnWin` | 🟡 Print = `ShowOperationUnavailable` |
+| Receipt / payment voucher | `CshWin(Receipt/Payment)` | 🟡 Save has no persistence (`ShowPersistenceUnavailable` on some actions) |
+| Cheque voucher | `ChqWin` | 🟡 Print = placeholder; some actions unpersisted |
+| Customer / supplier card | `CstCard` | 🟡 Statement action = placeholder; some actions unpersisted |
+| Cost-center card | `CcCard` | 🟡 Save/Delete = `ShowPersistenceUnavailable` (no DB wiring at all) |
+| Currency card | `CurCard` | 🟡 some actions unpersisted |
+| Bank card | `BnkCard` | 🟡 some actions unpersisted |
+| Sales-rep card | `RepCard` | 🟡 some actions unpersisted |
+| Manufacturing order | `MfgWin` | 🟡 some actions unpersisted |
+| Sales / purchase order | `OrdWin(Sales/Purchase)` | 🟡 Print + Convert-to-invoice = placeholders; some actions unpersisted |
+| Barcode create / generate / design | `BarWin` / `BcdGenWin` / `BcdDesWin` | ✅ |
+| Material list / search | `MatListWin` | ✅ |
+| Price list | `PriceListWin` | ✅ |
+| Shortage list | `ShortListWin` | ✅ |
+| Material card, material groups, material directory, categories, warehouses, stock count | `MatCard`, `MatGroupWin`, `MatDirWin`, `CatWin`, `WhsWin` (+ `StockCountDialog`, `MatMergeWin`) | ✅ (opened from MWin) |
+| Chart of accounts, account card | `CoaWin`, `AccCard` | ✅ |
+| Permissions | `PrmWin` | ✅ |
+| Data import/export | `DatWin` | ✅ |
+| Backup / restore, recycle bin, company restore | `BkpWin`, `BinWin`, `RestoreCoWin` | ✅ |
+| Serials (`SerWin`) | `SerWin` | ✅ |
+| Cash drawer options | `CashDrawerOptionsWin` | ✅ |
+| Company / login / language / splash / setup wizard | `ComWin`, `LogWin`, `Lang`, `SplWin`, `StpWiz` | ✅ startup flow |
+| **Payment reconciliation** (`Accounts` gap) | — | ❌ **built in Phase 3** |
+| **Projects** | — | ❌ **built in Phase 3** |
+| **Assets register + depreciation** | — | ❌ **built in Phase 3** |
+| **CRM opportunity pipeline** | — | ❌ backlog (after Phase 3 core) |
+| **Quality management** | — | ❌ backlog |
+| Budgets (`Accounts` gap) | — (`AccCard` has a budget flag only) | ❌ backlog |
+| Batch/serial tracking, stock valuation (FIFO/Moving Avg), stock ledger audit | partial (`SerWin` exists) | ❌ backlog (engine work, not just windows) |
+| RFQ → PO → receipt chain (`Buying` gap) | `OrdWin(Purchase)` + `InvoiceWin` only; `document_links` schema exists (migration 024) | 🟡 chain windows partial — backlog |
+| Quotation → SO → delivery → invoice chain | `InvoiceWin(Quotation)`, `OrdWin(Sales)`; `document_links` schema exists | 🟡 Convert action is a placeholder in `OrdWin` — backlog |
+| MRP / job cards (`Manufacturing` gap) | `MfgWin` only | ❌ backlog |
+| Projects timesheets | — | ❌ backlog (Projects window built; timesheets not) |
+| Maintenance, Support/Helpdesk, Subcontracting | — | ❌ backlog (low priority per roadmap) |
+| Bank statement import, e-invoicing (Kuwait NIC/PACS) | outbox webhooks only | ❌ backlog |
+| Payroll & leave (HRMS) | basic HR folder only | ❌ backlog |
+| AI Report Copilot | design doc only (`docs/UI_2030_AI_REPORT_ASSISTANT.md`) | ❌ backlog |
+
+## 3. Counts
+
+- Routed command keys: ~75 (`RptNav` ~70 + `RibbonReportRouter` 5).
+- Distinct windows/views in `cod/app/src/Views`: 23 XAML windows + 3 module
+  views, 17 code-built windows/cards, 19 report windows (incl. `StkAdjRptWin`),
+  plus nested `StockCountDialog` / `MatMergeWin` / `CashDrawerOptionsWin`.
+- ✅ exists & data-backed: **38** window families.
+- 🟡 exists but placeholder/unpersisted actions: **9** (`JrnWin` print,
+  `CshWin`, `ChqWin`, `CstCard`, `CcCard`, `CurCard`, `BnkCard`, `RepCard`,
+  `MfgWin`, `OrdWin` — 10 files, counted as 9 families since CshWin covers two
+  voucher kinds).
+- 🔀 alias-routed (no distinct window): **5** commands.
+- ❌ missing entirely at inventory time: **11** module areas (payment
+  reconciliation, projects, assets, CRM pipeline, quality, budgets, batch/serial
+  + valuation engine, MRP/job cards, maintenance, helpdesk, subcontracting,
+  bank import/e-invoice, payroll/leave, AI copilot) — Phase 3 builds the top 3.
+
+## 4. Roadmap gap → schema / service / window (at inventory time)
+
+| Gap | Schema? | Service? | Window? |
+|---|---|---|---|
+| Payment reconciliation | Partial: `party_ledger` (010), `sales_documents.paid_amount`, `document_links` is doc-chain only — a dedicated `payment_allocations` table is needed | No | No |
+| Projects | No | No | No |
+| Assets + depreciation | No | No | No |
+| CRM opportunities | Leads exist in CRM folder; no pipeline tables | Partial | No |
+| Quality | No | No | No |
+| Budgets | No (flag on account card) | No | No |
+| Batch/serial + valuation | Serials partial | Partial | `SerWin` only |
+
+## 5. Buttons-to-bottom sweep (user rule: action buttons at the BOTTOM)
+
+Legend: ✅ moved in Phase 3 · ⏸ deliberately left (reason) · ✔ already at bottom.
+
+| Window | Before | Phase 3 |
+|---|---|---|
+| `JrnWin` | Toolbar top; totals footer bottom | ✅ toolbar moved to bottom bar directly above totals footer |
+| `InvoiceWin` | Toolbar in grid row 0 | ✅ toolbar moved to new bottom row under the totals/notes band |
+| `CshWin` (receipt/payment) | Toolbar top; totals footer bottom | ✅ above footer |
+| `ChqWin` | Toolbar top; totals footer bottom | ✅ above footer |
+| `MfgWin` | Toolbar top; cost footer bottom | ✅ above footer |
+| `OrdWin` | Toolbar top; totals footer bottom | ✅ above footer |
+| `BnkCard` | Toolbar top; metrics bottom | ✅ above metrics bar |
+| `CcCard` | Toolbar top; metrics bottom | ✅ above metrics bar |
+| `CstCard` | Toolbar top; metrics bottom | ✅ above metrics bar |
+| `RepCard` | Toolbar top; metrics bottom | ✅ above metrics bar |
+| `CurCard` | Toolbar top; no footer | ✅ bottom bar |
+| `BarWin` | Toolbar top; no footer | ✅ bottom bar |
+| `BcdGenWin` | Action toolbar top; status line bottom | ✅ action bar moved above status line (prefix input travels with its actions) |
+| `BcdDesWin` | Toolbar added first, un-docked (defaulted to left in DockPanel) | ✅ explicitly docked bottom |
+| `RptBase` (all 19 report windows) | Refresh/Columns/Export/Print in title row | ✅ moved to a bottom action bar under the status line |
+| `MatDirWin` (XAML) | Toolbar border in row 1 (top) | ✅ moved to new bottom row 3, right-aligned |
+| `CoaWin` (XAML) | Export/Import/Refresh under search (top) | ✅ moved into the bottom row next to Close/status |
+| `CatWin` (XAML) | Refresh in header | ✅ moved into the bottom action bar; New/Edit/Delete/Save/Close were already bottom |
+| `AccCard`, `MatCard`, `WhsWin`, `MatGroupWin`, `BinWin`, `BkpWin`, `ColChsWin`, `PrmWin`, `SerWin`, `RestoreCoWin`, `DatWin`, `PosCheckoutWin` | — | ✔ already at bottom (record-navigation arrows in `AccCard`/`WhsWin` headers are navigation, not actions) |
+| `MWin` shell | Ribbon + menus | ⏸ exception per instructions (shell) |
+| `SplWin`, `Lang`, `LogWin`, `ComWin`, `StpWiz` | Startup flow | ⏸ exception (no top toolbar; primary buttons are in content flow / wizard footer) |
+| `PosWin` | Checkout/Clear already in bottom action row of the summary panel; payment methods in totals panel | ⏸ left: retail layout is function-driven; "Add item" stays with the scan/header area cashiers use |
+| `CashDrawerOptionsWin` | Save/Test/Close in content-flow panel at the end of the form | ⏸ left: buttons already render last (bottom of the form) |
+| `DatWin` Start button | In content flow (starts the import/export operation it configures) | ⏸ left: it is the operation's own execute control inside its card; Close/Details are bottom |
+| `ModuleWorkspaceView`, `ReportGridVw`, `DashVw` | Embedded views in the shell, not windows | ⏸ left: header bands belong to the shell workspace layout |
+| New: `PayRecWin`, `ProjWin`, `AssetWin` | — | ✅ built with bottom action bars from the start |
+
+## 6. Phase 3 build results (this branch)
+
+### 6.1 JrnWin Print — BUILT (`6e1f71a`)
+`PrintJournal_Click` now prints a real A4 voucher page (company header, doc no/date,
+narrative, account lines with debit/credit, totals, balance state) through a
+`PrintDialog`, following the `InvPrn` invoice print pattern; labels via existing
+`Vouchers.*` Lang keys. No schema/service needed (prints the loaded journal).
+
+### 6.2 Payment Reconciliation — BUILT (`df1d3b2`, `6ea07bc`, fix `2b15216`)
+- **Schema**: `dba/mig/{sqlite,postgresql}/025_payment_allocations.sql` — new
+  `payment_allocations` table (the only schema needed; documents/ledger already
+  existed). Model: a posted sales document debits the customer in `party_ledger`,
+  a purchase document credits the supplier; money-in is a credit entry (customer)
+  / debit entry (supplier). Allocation links a payment entry to an open document.
+- **Domain**: `OpenDocumentRow`/`UnallocatedPaymentRow` records +
+  `IReconciliationRepository` (`src/ShouTech.Domain`).
+- **Infrastructure**: `ReconciliationRepository` — provider-neutral; lists capped
+  at 500; `AllocateAsync` runs in ONE transaction and re-reads/re-validates the
+  payment balance, document status (Posted), same-party rule, and open amount
+  before inserting the allocation and increasing `paid_amount` (the settlement
+  source of truth). Over-allocation and double submission are rejected inside
+  the transaction (proven by a runtime smoke test against a migrated SQLite DB).
+- **Service**: `ReconciliationService` (input validation) in `src/ShouTech.Application`.
+- **Window**: `Views/PayRecWin.cs` (BaseWin) — two schedule grids (open documents /
+  unallocated payments), party-kind selector + amount in the content area,
+  Allocate/Refresh/Close in the bottom command bar, status bar with counts/totals.
+- **RBAC**: `ACC.PAYREC.VIEW` / `ACC.PAYREC.ALLOCATE` (PermCat.Accounting), seeded
+  by migration 028 with role grants (Admin all, User all, Viewer view-only).
+- **Nav**: ribbon `Accounts.PaymentReconciliation` (TabAccounts → Analysis group)
+  → `RptNav.OpenPaymentReconciliation`. **Lang**: `PaymentReconciliation.*` in all
+  4 files (En complete; Ar/Fr/Tr translated).
+
+### 6.3 Projects — BUILT (`6ea07bc`, `df1d3b2`)
+- **Schema**: `026_projects.sql` (both providers): `projects` + `project_tasks`,
+  partial unique index on (company, code) among live rows, audit columns,
+  soft delete.
+- **Domain/Service**: `Project`, `ProjectTask`, statuses; `IProjectRepository`;
+  `ProjectService` validates code/name required, budget ≥ 0, end ≥ start, known
+  statuses; `ProjectRepository` is transactional with in-transaction uniqueness
+  re-checks and company scoping on every statement.
+- **Window**: `Views/ProjWin.cs` — project list (main content) + editor in the
+  content area + tasks grid/editor below; New/Save/Delete/AddTask/DeleteTask/
+  Refresh/Close in the bottom command bar; status bar with count + total budget.
+- **RBAC**: `PRJ.PROJECT.VIEW/CREATE/UPDATE/DELETE`, `PRJ.TASK.MANAGE` (migration
+  028 grants). **Nav**: ribbon `Projects.Projects` (TabOrders → General group).
+  **Lang**: `Projects.*` ×4.
+
+### 6.4 Fixed Assets — BUILT (`6ea07bc`, `df1d3b2`)
+- **Schema**: `027_fixed_assets.sql` (both providers): register only —
+  depreciation is computed, never stored.
+- **Domain/Service**: `FixedAsset`, `DepreciationMethods`, `AssetStatuses`;
+  `AssetService` validates (cost ≥ 0, 0 ≤ salvage ≤ cost, life ≥ 1, known
+  method/status) and computes schedules: straight-line and double-declining
+  balance, final year lands exactly on salvage, accumulated depreciation
+  pro-rated by whole months and capped at the depreciable base.
+- **Window**: `Views/AssetWin.cs` — register list + editor + computed
+  depreciation schedule grid; read-only accumulated/book-value fields; status
+  bar with total cost + total book value.
+- **RBAC**: `AST.ASSET.VIEW/CREATE/UPDATE/DELETE` (migration 028). **Nav**:
+  ribbon `Assets.Assets` (TabAccounts → General group). **Lang**: `Assets.*` ×4.
+
+### 6.5 Permissions seed — migration 028 (both providers)
+11 new permissions + role grants, insert-or-update / `ON CONFLICT` idempotent.
+Verified on SQLite: fresh migrator run applies, second run SKIPs; with roles
+present the grants resolve to Administrator 11 / User 9 / Viewer 3 and are
+idempotent on re-run.
+
+### 6.6 NOT built in Phase 3 (deliberate)
+- **OrdWin Convert-to-invoice**: blocked on order persistence — OrdWin itself
+  has no storage (Save is `ShowPersistenceUnavailable`), so a solid Convert
+  cannot exist yet. It is backlog #1 (wire card/voucher/order persistence,
+  CcCard first, then Convert via the `document_links` schema).
+- **CRM pipeline / Quality (priority 5)**: not started — priorities 1–4 plus
+  verification consumed the phase, per the task's own stop rule.
+
+## 6b. How the File Explorer reference was applied (per window type)
+- **All swept windows**: the bottom action bar is an Explorer-style command bar
+  moved to the bottom — flat `Border` with transparent background, subtle 1px
+  top divider (`BorderBrush`), commands right-aligned (mirrored in RTL), sitting
+  directly above any totals/status footer. No colored toolbar blocks remain in
+  secondary windows.
+- **List/manager windows (ProjWin, AssetWin, PayRecWin, card windows)**: the
+  list is the main content; details/editing live in the content area; a slim
+  status bar at the very bottom shows counts/totals (Explorer status-bar logic).
+- **Document windows (JrnWin, InvoiceWin, CshWin, ChqWin, MfgWin, OrdWin)**:
+  header fields and line grid keep the content area; the command bar sits above
+  the existing totals/balance footer, which stays the last element.
+- **Report windows (RptBase)**: Refresh/Columns/Export/Print form the bottom
+  command bar under the grid; the totals bar is the footer.
+- Surfaces/padding: windows keep the central Surface brushes; new windows use
+  12px outer padding and the central implicit control styles. MWin/ribbon were
+  NOT redone (separate follow-up, per instructions).
+
+## 6c. The Al-Ameen V10 schedule pattern, as implemented here
+Implemented centrally, not per window:
+- **RptBase (all 19 report windows)**: strong header row (central DataGrid
+  styles), banded rows, sortable + resizable + **reorderable** columns, numeric
+  columns right-aligned, date columns centered, and a **totals footer pinned at
+  the bottom** (bold, `SurfaceSecondaryBrush`). Reports that supply their own
+  Totals dictionary keep them; reports that pass none now get totals computed
+  from the bound rows for numeric columns (`RenderTotals` fallback).
+- **Exceptions (documented)**: `BalSheetWin` and `IncStmtWin` opt out of computed
+  totals (`AllowComputedTotals = false`) — their rows are statement sections and
+  subtotals, so summing every row would double-count. Editable line grids
+  (JrnWin/InvoiceWin) keep sorting/reordering off to preserve document line
+  order; they already carry bottom totals footers.
+- **New windows**: ProjWin/AssetWin/PayRecWin grids use the same pattern
+  (sortable/resizable/reorderable, numeric right-aligned, dates centered,
+  standard context menu via `DataGridTableBehavior`, totals in the status bar).
+- Print/Export stay reachable from the RptBase bottom action bar.
+
+## 6d. Heavy-duty checklist (per shipped item)
+| Item | Transactions | Validation | RBAC | Audit | Migrations (SQLite+PG) | Tests |
+|---|---|---|---|---|---|---|
+| Payment allocations | Single tx; balances re-read + re-validated inside tx; rollback on failure | Service + repository (amount > 0, Posted doc, same party/kind, open & available caps) | `ACC.PAYREC.VIEW/ALLOCATE`, checked in window + Allocate handler | `allocated_by`/`allocated_at` on every allocation row | 025 both providers, idempotent (double-run proven) | Service validation tests; runtime smoke test incl. over-allocation rejection |
+| Projects + tasks | Single tx per save; in-tx uniqueness + parent checks | Service (code/name, budget ≥ 0, dates, statuses) + partial unique index | `PRJ.*` checked on open/save/delete/task actions | created_by/at, updated_by/at columns; soft delete only | 026 both providers | Service validation + round-trip tests; repository smoke test |
+| Fixed assets | Single tx per save; in-tx uniqueness check | Service (cost/salvage/life/method/status) + CHECK constraints | `AST.*` checked on open/save/delete | created_by/at, updated_by/at; soft delete only | 027 both providers | Depreciation math tests (SL, DB, pro-rata, caps) + validation tests |
+| Permissions 028 | Migrator per-file tx | Insert-or-update / ON CONFLICT | — (it IS the RBAC seed) | — | 028 both providers; grants proven 11/9/3, idempotent | Migrator double-run + grant re-run check |
+| JrnWin Print | N/A (read-only print) | Prints only a loaded journal | Existing journal perms apply | N/A | N/A | Build-verified; visual check needs Windows run |
+| Buttons sweep + RptBase schedules | N/A (layout) | N/A | N/A | N/A | N/A | Build + XAML parse verified |
+
+Notes: `dotnet test` cannot execute on this Linux VM (testhost targets
+net8.0-windows) — the test project compiles green and must be run on Windows.
+PostgreSQL migrations are written to the same patterns as the existing PG set
+and parse-checked, but only SQLite was executed here (no live PostgreSQL).
+
+## 7. Remaining backlog (priority order)
+
+1. Wire persistence for the 🟡 card/voucher windows (`CcCard` first — it has no
+   DB wiring at all; then `BnkCard`, `CurCard`, `RepCard`, `CshWin`, `ChqWin`,
+   `MfgWin` save paths) and `OrdWin` Convert-to-invoice using `document_links`.
+2. `JrnWin` / `ChqWin` / `OrdWin` Print via the existing reporting engine
+   (`RptRend` / `InvPrn` patterns) instead of `ShowOperationUnavailable`.
+3. CRM opportunity pipeline window (+ activity logging).
+4. Quality management window (inspections + non-conformance).
+5. Budgets window + budget-vs-actual report.
+6. Batch/serial + valuation engine (FIFO/Moving Average) and stock ledger audit.
+7. MRP planning + job cards for manufacturing.
+8. Bank statement import (CSV/MT940) with auto-matching; Kuwait e-invoicing.
+9. Payroll & leave (HRMS parity).
+10. AI Report Copilot (per `docs/UI_2030_AI_REPORT_ASSISTANT.md`).
+11. Maintenance, Support/Helpdesk, Subcontracting (low priority, offline desktop).
+
+---
+
+<!-- source: docs/FILE-INVENTORY.md -->
+
+# Repository File Inventory and Missing-File Audit
+
+**Repository:** `Roni4422/ShouTech`  
+**Audited branch:** `work/full-app-stabilization-2026-11-18`  
+**Audit commit:** `60df7663e42e88315f4c77b9df63bd6b287551df`  
+**Compared with:** `main` at `31ebc1c936d8f9de94b0c91751859e2a9feb3458`  
+**Audit date:** 2026-11-18
+
+## 1. Tracked-file totals
+
+| Measure | Count |
+|---|---:|
+| Tracked files on development branch | 751 |
+| Tracked files on main | 749 |
+| Net difference | +2 |
+| Directories containing tracked files | 62 |
+| C# source files (`.cs`) | 407 |
+| SQL migration/schema files (`.sql`) | 159 |
+| Markdown documents (`.md`) | 65 |
+| XAML files in repository | 27 |
+| WPF view XAML files under `cod/app/src/Views` | 23 |
+| WPF view code-behind files (`.xaml.cs`) | 23 |
+| Matched WPF XAML/code-behind pairs | 23 |
+| WPF view XAML without same-basename code-behind | 0 |
+| WPF view code-behind without same-basename XAML | 0 |
+| C# project files (`.csproj`) | 8 |
+
+Other tracked extensions: 20 JSON, 18 C++, 16 SHC, 6 H, 5 YML, 5 SYS, 4 PY, 3 PNG, and one each of GITIGNORE, PROPS, TXT (2), SLN, CONFIG, HYBRID and VCXPROJ.
+
+## 2. Comparison with main: missing or renamed files
+
+The path comparison accounts for all 127 paths that differ on main:
+
+- Domain project folder renamed from `src/ShouTech.Domain` to `src/Domain`.
+- Application project folder renamed from `src/ShouTech.Application` to `src/App`.
+- Infrastructure project folder renamed from `src/ShouTech.Infrastructure` to `src/Infra`.
+- The three project files were renamed consistently to `Domain.csproj`, `App.csproj` and `Infra.csproj`.
+- `Services/RptQuery.cs` was renamed to `Services/Rpt.cs`.
+- `Views/MatCard.xaml` and `Views/MatCard.xaml.cs` were moved together to `Views/Inventory/`.
+
+**Comparison result:** 0 main-branch tracked files are unaccounted for after applying those explicit path mappings. The branch has two additional tracked files, both audit/refactoring documents: `docs/REFACTOR.md` and `docs/WINDOW-INVENTORY.md`. This is why the branch has 751 files versus 749 on main; it is not evidence of two missing source files.
+
+## 3. Project and solution reference audit
+
+- All 8 `.csproj` files were inspected.
+- 13 explicit file/project references were resolved against the branch tree.
+- Missing explicit references after cleanup: **0**.
+- Solution project paths were checked against the repository tree.
+- The WPF project uses recursive XAML and C# globs, so the new `Views/Inventory` folder is included by the existing project rules.
+
+### Stale optional includes found and removed
+
+`MainApp.csproj` contained two conditional source includes pointing to files that do not exist:
+
+- `../../../cfg/AppSettings.cs`
+- `../../../cfg/CompanyInfo.cs`
+
+These were stale references, not missing implementation files: the settings model `AppSetng` and `CompanyInfo` type are already defined in `cod/app/src/Configuration/AppConfig.cs`, which is compiled by the project's recursive C# include. The only tracked file under `cfg` is `appset.json`.
+
+The two obsolete conditional Compile entries were removed from `MainApp.csproj`. The remaining explicit project/file references all resolve.
+
+## 4. WPF view-pair audit
+
+Under `cod/app/src/Views`, all 23 XAML files have matching `.xaml.cs` code-behind files, and all 23 code-behind files have matching XAML files. No unmatched XAML/code-behind pair was found.
+
+This check verifies file pairing only. It does not prove that every window is reachable from the Ribbon, has correct permissions, loads all resources, or works against the database. Those require route-level and runtime tests and remain part of the window migration gate.
+
+## 5. Remaining verification
+
+- [x] Compare complete tracked-file trees on the development branch and main.
+- [x] Account for all renamed/moved paths.
+- [x] Count files by extension and directory.
+- [x] Check XAML/code-behind pairing.
+- [x] Check explicit project/file references.
+- [x] Remove the two stale optional source includes.
+- [ ] Run Windows Debug and Release build after this audit commit.
+- [ ] Complete runtime window navigation and data-persistence tests.
+- [ ] Complete SQLite/PostgreSQL integration regression.
+
+**Conclusion:** No tracked source file from `main` is currently unaccounted for after the documented renames and moves. The static project-reference audit now reports zero missing explicit references. Runtime completeness is not yet established; the outstanding window and database tests must still pass.

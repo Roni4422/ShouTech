@@ -73,4 +73,4 @@ For each module change, record:
 
 ## Current status policy
 
-This catalog does not assign unverified completion percentages. The detailed evidence and gaps are tracked in the existing [ERP Process Parity Matrix](COMPETITIVE_GAP_ASSESSMENT_2026-11-21.md), [Window Inventory](WINDOW-INVENTORY.md), [Ribbon Completion Inventory](RIBBON_COMPLETION_INVENTORY.md), and the relevant feature status documents. Update those inventories when a feature is verified.
+This catalog does not assign unverified completion percentages. The detailed evidence and gaps are tracked in the existing [ERP Process Parity Matrix](COMPETITIVE_GAP_ASSESSMENT_2026-11-21.md), [Window Inventory](RIBBON_COMPLETION_INVENTORY.md), [Ribbon Completion Inventory](RIBBON_COMPLETION_INVENTORY.md), and the relevant feature status documents. Update those inventories when a feature is verified.

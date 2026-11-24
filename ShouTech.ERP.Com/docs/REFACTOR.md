@@ -255,7 +255,7 @@ Large, established source files are valuable project assets and are not refactor
 
 ## 13. Window inventory and migration
 
-The source-level inventory is maintained in [WINDOW-INVENTORY.md](WINDOW-INVENTORY.md). It is a starting index only: a filename is not proof that a type is a live window, and a C#-only file may be a programmatic window or a support type.
+The source-level inventory is maintained in [RIBBON_COMPLETION_INVENTORY.md](RIBBON_COMPLETION_INVENTORY.md). It is a starting index only: a filename is not proof that a type is a live window, and a C#-only file may be a programmatic window or a support type.
 
 ### 13.1 Migration rules
 

@@ -686,7 +686,7 @@ The following official product pages and documentation were used as the public b
 - [Enterprise security controls](SECURITY_ENTERPRISE.md)
 - [Accounting reversals and outbox](ACCOUNTING_CHART_PERIODS_YEAR_CLOSE.md)
 - [Ribbon completion inventory](RIBBON_COMPLETION_INVENTORY.md)
-- [Window inventory](WINDOW-INVENTORY.md)
+- [Window inventory](RIBBON_COMPLETION_INVENTORY.md)
 
 ---
 

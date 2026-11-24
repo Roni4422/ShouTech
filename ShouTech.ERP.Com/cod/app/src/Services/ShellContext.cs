@@ -42,7 +42,7 @@ namespace ShouTech.App.Services;
 ///     context is never stale either. Windows that snapshot brushes in
 ///     code at construction time (VisuId.ResolveBrushResource) keep the
 ///     accent they were opened with until reopened — see
-///     docs/WINDOW_CONTEXT_AUDIT.md for the per-window classification.
+///     docs/window-field-persistence-audit.md for the per-window classification.
 /// </summary>
 public static class ShellContext
 {
