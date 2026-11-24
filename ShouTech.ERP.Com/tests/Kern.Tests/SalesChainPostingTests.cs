@@ -338,7 +338,7 @@ namespace Kern.Tests
 
                 var firstInvoiceId = await service.CreateFromSourceAsync(
                     deliveryId, "SAL-B4-PART-1", new DateOnly(2026, 10, 22), "posting-test",
-                    quantityByMaterialId: new Dictionary<long, decimal> { [42] = 3m });
+                    quantityBySourceLine: new Dictionary<int, decimal> { [1] = 3m });
                 await service.PostAsync(firstInvoiceId, "posting-test");
 
                 Assert.Equal(99.99m, GlSum(connection, companyId, "SAL", firstInvoiceId, "401", debit: true));
@@ -347,7 +347,7 @@ namespace Kern.Tests
 
                 var secondInvoiceId = await service.CreateFromSourceAsync(
                     deliveryId, "SAL-B4-PART-2", new DateOnly(2026, 10, 23), "posting-test",
-                    quantityByMaterialId: new Dictionary<long, decimal> { [42] = 7m });
+                    quantityBySourceLine: new Dictionary<int, decimal> { [1] = 7m });
                 await service.PostAsync(secondInvoiceId, "posting-test");
 
                 Assert.Equal(233.31m, GlSum(connection, companyId, "SAL", secondInvoiceId, "401", debit: true));
@@ -533,7 +533,7 @@ namespace Kern.Tests
                 // the chain service.
                 var partialId = await chain.CreateFromSourceAsync(
                     deliveryId, "SAL-B4-ORD-1", new DateOnly(2026, 10, 22), "posting-test",
-                    quantityByMaterialId: new Dictionary<long, decimal> { [42] = 4m });
+                    quantityBySourceLine: new Dictionary<int, decimal> { [1] = 4m });
                 await chain.PostAsync(partialId, "posting-test");
 
                 // The pre-B4 service refused ANY further invoice once one
