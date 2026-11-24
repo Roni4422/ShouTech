@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
@@ -15,6 +15,11 @@ namespace ShouTech.App.Views;
 /// offers a real Backup Now through AppHost.Backup (IBkpServ.CreateBackupAsync)
 /// and SQLite VACUUM/ANALYZE through OperationsService. On PostgreSQL the
 /// VACUUM action is disabled with an honest explanation — nothing is faked.
+/// B5 adds the two Al-Ameen-style audits that map to real engines:
+/// Recalculate Costs (StockRecalculationService via OperationsService,
+/// from the picked date, whole company) and a read-only trial-balance
+/// integrity audit (per-period posted Dr=Cr, orphan lines, empty
+/// posted entries).
 /// </summary>
 public sealed class MaintenanceWin : BaseWin
 {
@@ -26,7 +31,11 @@ public sealed class MaintenanceWin : BaseWin
     private readonly Button _runButton = new();
     private readonly Button _backupButton = new();
     private readonly Button _vacuumButton = new();
+    private readonly Button _recalcButton = new();
+    private readonly Button _tbAuditButton = new();
     private readonly Button _closeButton = new();
+    private readonly DatePicker _recalcFrom = new();
+    private readonly TextBlock _recalcFromLabel = new();
 
     public MaintenanceWin()
     {
@@ -61,18 +70,34 @@ public sealed class MaintenanceWin : BaseWin
         F2Ui.StyleButton(_runButton, "Maintenance.RunChecks");
         F2Ui.StyleButton(_backupButton, "Maintenance.BackupNow");
         F2Ui.StyleButton(_vacuumButton, "Maintenance.Vacuum");
+        F2Ui.StyleButton(_recalcButton, "Maintenance.RecalculateCosts");
+        F2Ui.StyleButton(_tbAuditButton, "Maintenance.TbAudit");
         F2Ui.StyleButton(_closeButton, "Common.Close");
         _runButton.Click += async (_, _) => await RunChecksAsync();
         _backupButton.Click += async (_, _) => await BackupAsync();
         _vacuumButton.Click += async (_, _) => await VacuumAsync();
+        _recalcButton.Click += async (_, _) => await RecalculateCostsAsync();
+        _tbAuditButton.Click += async (_, _) => await TrialBalanceAuditAsync();
         _closeButton.Click += (_, _) => Close();
-        root.Children.Add(F2Ui.BottomBar(_runButton, _backupButton, _vacuumButton, _closeButton));
+        root.Children.Add(F2Ui.BottomBar(_runButton, _backupButton, _vacuumButton, _recalcButton, _tbAuditButton, _closeButton));
 
         var content = new DockPanel();
         _vacuumNote.Margin = new Thickness(0, 0, 0, 8);
         _vacuumNote.TextWrapping = TextWrapping.Wrap;
         DockPanel.SetDock(_vacuumNote, Dock.Top);
         content.Children.Add(_vacuumNote);
+
+        // Recalculate Costs scope row: replay from this date onward.
+        var recalcRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+        _recalcFromLabel.VerticalAlignment = VerticalAlignment.Center;
+        _recalcFromLabel.Margin = new Thickness(0, 0, 8, 0);
+        recalcRow.Children.Add(_recalcFromLabel);
+        _recalcFrom.SelectedDate = new DateTime(DateTime.Today.Year, 1, 1);
+        _recalcFrom.Width = 160;
+        recalcRow.Children.Add(_recalcFrom);
+        DockPanel.SetDock(recalcRow, Dock.Top);
+        content.Children.Add(recalcRow);
+
         content.Children.Add(_results);
         root.Children.Add(content);
 
@@ -83,7 +108,8 @@ public sealed class MaintenanceWin : BaseWin
     protected override void ApplyLocalizedText()
     {
         Title = T("Maintenance.Title");
-        F2Ui.ApplyTexts(_labels, new List<(DataGridColumn, string)>(), new[] { _runButton, _backupButton, _vacuumButton, _closeButton }, T);
+        _recalcFromLabel.Text = T("Maintenance.RecalcFrom");
+        F2Ui.ApplyTexts(_labels, new List<(DataGridColumn, string)>(), new[] { _runButton, _backupButton, _vacuumButton, _recalcButton, _tbAuditButton, _closeButton }, T);
     }
 
     private async Task RunChecksAsync()
@@ -160,6 +186,88 @@ public sealed class MaintenanceWin : BaseWin
                 _vacuumButton.IsEnabled = true;
             }
             await RunChecksAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// Recalculate Costs (B5): replays the company's stock valuation
+    /// from the picked date onward. The engine records the job and
+    /// refuses ranges touching a closed fiscal period; its cataloged
+    /// error surfaces here unchanged. GL entries are NOT restated
+    /// (documented engine behavior).
+    /// </summary>
+    private async Task RecalculateCostsAsync()
+    {
+        try
+        {
+            if (_service is null)
+                throw new InvalidOperationException(T("Maintenance.ServiceUnavailable"));
+            if (_recalcFrom.SelectedDate is not DateTime picked)
+                throw new InvalidOperationException(T("Maintenance.RecalcFromRequired"));
+            _recalcButton.IsEnabled = false;
+            try
+            {
+                var outcome = await _service.RecalculateCostsAsync(
+                    CurrentCompanyCode,
+                    DateOnly.FromDateTime(picked),
+                    T("Maintenance.RecalcReason"),
+                    CurrentUserId);
+                _results.Items.Add(Tf("Maintenance.RecalcResult",
+                    outcome.MovementsReplayed, F2Ui.Fmt(outcome.ValueDelta), outcome.JobId));
+                _statusBar.Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
+            }
+            finally
+            {
+                _recalcButton.IsEnabled = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// Trial-balance integrity audit (B5, read-only): per-period
+    /// posted Dr=Cr lines, then every anomaly in detail — unbalanced
+    /// entries, orphan lines, posted entries without lines.
+    /// </summary>
+    private async Task TrialBalanceAuditAsync()
+    {
+        try
+        {
+            if (_service is null)
+                throw new InvalidOperationException(T("Maintenance.ServiceUnavailable"));
+            _tbAuditButton.IsEnabled = false;
+            try
+            {
+                var audit = await _service.GetTrialBalanceIntegrityAsync(CurrentCompanyCode);
+                _results.Items.Add($"--- {T("Maintenance.TbAudit")} ---");
+                foreach (var period in audit.Periods)
+                {
+                    var name = string.IsNullOrWhiteSpace(period.Period) ? T("Maintenance.NoPeriod") : period.Period;
+                    _results.Items.Add(Tf("Maintenance.TbPeriodLine",
+                        name, period.Entries, F2Ui.Fmt(period.Debit), F2Ui.Fmt(period.Credit),
+                        period.IsBalanced ? T("Maintenance.TbBalanced") : T("Maintenance.TbUnbalanced")));
+                }
+                foreach (var entry in audit.UnbalancedEntries)
+                {
+                    _results.Items.Add(Tf("Maintenance.TbEntryLine",
+                        entry.EntryId, entry.EntryDate, F2Ui.Fmt(entry.Debit), F2Ui.Fmt(entry.Credit)));
+                }
+                _results.Items.Add(Tf("Maintenance.TbOrphans", audit.OrphanLineCount));
+                _results.Items.Add(Tf("Maintenance.TbNoLines", audit.PostedEntriesWithoutLines));
+                _results.Items.Add(audit.IsClean ? T("Maintenance.TbOk") : T("Maintenance.TbFailed"));
+                _statusBar.Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
+            }
+            finally
+            {
+                _tbAuditButton.IsEnabled = true;
+            }
         }
         catch (Exception ex)
         {

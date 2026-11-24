@@ -3119,7 +3119,22 @@
     "HealthUnavailable": "Le service de santé de la base est indisponible.",
     "BackupUnavailable": "Le service de sauvegarde est indisponible.",
     "BackupCreated": "Sauvegarde créée",
-    "ServiceUnavailable": "Le service des opérations est indisponible (base de données non configurée)."
+    "ServiceUnavailable": "Le service des opérations est indisponible (base de données non configurée).",
+    "RecalculateCosts": "Recalculer les coûts",
+    "RecalcFrom": "Recalculer à partir du :",
+    "RecalcFromRequired": "Choisissez d'abord la date de début du recalcul.",
+    "RecalcReason": "Fenêtre de maintenance",
+    "RecalcResult": "Recalcul des coûts terminé : {0} mouvements rejoués, écart de valeur {1} (tâche {2}).",
+    "TbAudit": "Audit d'intégrité de la balance",
+    "TbPeriodLine": "Période {0} : {1} écritures comptabilisées, Débit {2}, Crédit {3} — {4}",
+    "TbBalanced": "équilibrée",
+    "TbUnbalanced": "NON ÉQUILIBRÉE",
+    "TbEntryLine": "Écriture non équilibrée {0} ({1}) : Débit {2}, Crédit {3}",
+    "TbOrphans": "Lignes de journal orphelines (sans écriture) : {0}",
+    "TbNoLines": "Écritures comptabilisées sans lignes : {0}",
+    "TbOk": "Intégrité de la balance : OK — chaque période comptabilisée est équilibrée.",
+    "TbFailed": "Intégrité de la balance : PROBLÈMES TROUVÉS — voir les lignes ci-dessus.",
+    "NoPeriod": "(aucune période)"
   },
   "Rollover": {
     "Title": "Report d'exercice",

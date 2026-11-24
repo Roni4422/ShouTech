@@ -134,3 +134,11 @@ for a non-trivial cause is reverted and marked SKIPPED with the reason.
   0/0; migrator fresh through 117 + second run 0; 4 audit scripts
   exit 0; Errors parity pass; P2pHarness 39/39; W1Harness 36/36;
   Lang parity for touched keys 0 missing).
+- **Services B5 — DONE** (Maintenance completion; no migration):
+  Recalculate Costs window action (engine via OperationsService)
+  + trial-balance integrity audit in MaintenanceWin; see
+  SERVICES_GAP_INVENTORY.md B5 outcome. Gates: ALL-GREEN.
+- **RTL mirroring sweep — DONE** (owner directive 2026-11-24
+  14:55): docs/RTL_MIRROR_AUDIT.md — central FlowAlign end/start
+  alignment applied to 96 physical-pin sites (incl. F2Ui.BottomBar
+  and RptBase); CatWin verified explicitly. Gates: ALL-GREEN.

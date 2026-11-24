@@ -205,6 +205,46 @@ public sealed record CompressCounts(int SalesDrafts, int PurchaseDrafts)
     public int Total => SalesDrafts + PurchaseDrafts;
 }
 
+/// <summary>One fiscal period's posted totals in the trial-balance
+/// integrity audit (Maintenance, services phase B5).</summary>
+public sealed class TrialBalancePeriodRow
+{
+    /// <summary>Period name, or the no-period bucket label.</summary>
+    public string Period { get; set; } = string.Empty;
+    public int Entries { get; set; }
+    public decimal Debit { get; set; }
+    public decimal Credit { get; set; }
+    public bool IsBalanced => Math.Abs(Debit - Credit) <= 0.004m;
+}
+
+/// <summary>One posted journal entry whose lines do not balance
+/// (trial-balance integrity audit detail).</summary>
+public sealed class UnbalancedEntryRow
+{
+    public string EntryId { get; set; } = string.Empty;
+    public string EntryDate { get; set; } = string.Empty;
+    public decimal Debit { get; set; }
+    public decimal Credit { get; set; }
+}
+
+/// <summary>Outcome of one Recalculate Costs job (the valuation
+/// replay engine's result, projected into the App layer).</summary>
+public sealed record RecalculationOutcome(string JobId, int MovementsReplayed, decimal ValueDelta);
+
+/// <summary>Read-only trial-balance integrity audit result: per-period
+/// posted Dr=Cr verification, orphan journal lines (a line whose entry
+/// no longer exists), and posted entries carrying no lines at all.</summary>
+public sealed class TrialBalanceIntegrityResult
+{
+    public IReadOnlyList<TrialBalancePeriodRow> Periods { get; set; } = Array.Empty<TrialBalancePeriodRow>();
+    public IReadOnlyList<UnbalancedEntryRow> UnbalancedEntries { get; set; } = Array.Empty<UnbalancedEntryRow>();
+    public int OrphanLineCount { get; set; }
+    public int PostedEntriesWithoutLines { get; set; }
+    public bool IsClean =>
+        OrphanLineCount == 0 && PostedEntriesWithoutLines == 0 &&
+        UnbalancedEntries.Count == 0 && Periods.All(p => p.IsBalanced);
+}
+
 /// <summary>Stored vs recomputed totals of one commercial document (repost).</summary>
 public sealed class DocumentTotalsRow
 {

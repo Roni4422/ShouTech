@@ -14,8 +14,24 @@ namespace ShouTech.Application.Services;
 public sealed class OperationsService
 {
     private readonly IOperationsRepository _repository;
-    public OperationsService(IOperationsRepository repository)
-        => _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+
+    /// <summary>
+    /// The Recalculate Costs engine lives in the Infrastructure layer,
+    /// which this App-layer service must not reference; the host
+    /// (AppHost) injects it as a delegate bound to the same
+    /// provider/connection as the repository. Null in unit tests that
+    /// do not exercise recalculation.
+    /// </summary>
+    private readonly Func<string, DateOnly, string?, string, CancellationToken, Task<RecalculationOutcome>>? _recalculateCosts;
+
+    public OperationsService(
+        IOperationsRepository repository,
+        Func<string, DateOnly, string?, string, CancellationToken, Task<RecalculationOutcome>>? recalculateCosts = null)
+    {
+        _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _recalculateCosts = recalculateCosts;
+    }
+
     internal IOperationsRepository Repository => _repository;
 
     // ------------------------------------------------------------ Bank rec
@@ -267,6 +283,28 @@ public sealed class OperationsService
 
     public Task VacuumAnalyzeAsync(CancellationToken ct = default) => _repository.VacuumAnalyzeAsync(ct);
     public Task<string> GetIntegritySummaryAsync(CancellationToken ct = default) => _repository.GetIntegritySummaryAsync(ct);
+
+    /// <summary>Read-only trial-balance integrity audit (B5).</summary>
+    public Task<TrialBalanceIntegrityResult> GetTrialBalanceIntegrityAsync(string companyId, CancellationToken ct = default)
+        => _repository.GetTrialBalanceIntegrityAsync(RequireCompany(companyId), ct);
+
+    /// <summary>
+    /// Recalculate Costs (B5): replays stock valuation for the whole
+    /// company from <paramref name="fromDate"/> onward through the
+    /// injected engine. The engine records the job itself
+    /// (stock_revaluation_jobs) and refuses ranges touching a closed
+    /// fiscal period (INV-6004).
+    /// </summary>
+    public async Task<RecalculationOutcome> RecalculateCostsAsync(
+        string companyId, DateOnly fromDate, string? reason, string userId, CancellationToken ct = default)
+    {
+        var company = RequireCompany(companyId);
+        if (string.IsNullOrWhiteSpace(userId))
+            throw new ArgumentException("A user is required.", nameof(userId));
+        if (_recalculateCosts is null)
+            throw new InvalidOperationException("Recalculate Costs is not configured for this host.");
+        return await _recalculateCosts(company, fromDate, reason, userId.Trim(), ct).ConfigureAwait(false);
+    }
 
     public Task<IReadOnlyList<FiscalYearRow>> GetFiscalYearsAsync(string companyId, CancellationToken ct = default)
         => _repository.GetFiscalYearsAsync(RequireCompany(companyId), ct);

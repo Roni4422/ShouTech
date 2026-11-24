@@ -3133,7 +3133,22 @@
     "HealthUnavailable": "Database health service is unavailable.",
     "BackupUnavailable": "Backup service is unavailable.",
     "BackupCreated": "Backup created",
-    "ServiceUnavailable": "Operations service is unavailable (database not configured)."
+    "ServiceUnavailable": "Operations service is unavailable (database not configured).",
+    "RecalculateCosts": "Recalculate costs",
+    "RecalcFrom": "Recalculate from:",
+    "RecalcFromRequired": "Pick the recalculation start date first.",
+    "RecalcReason": "Maintenance window",
+    "RecalcResult": "Recalculate Costs done: {0} movements replayed, value delta {1} (job {2}).",
+    "TbAudit": "Trial-balance audit",
+    "TbPeriodLine": "Period {0}: {1} posted entries, Dr {2}, Cr {3} — {4}",
+    "TbBalanced": "balanced",
+    "TbUnbalanced": "UNBALANCED",
+    "TbEntryLine": "Unbalanced entry {0} ({1}): Dr {2}, Cr {3}",
+    "TbOrphans": "Orphan journal lines (no entry): {0}",
+    "TbNoLines": "Posted entries without lines: {0}",
+    "TbOk": "Trial-balance integrity: OK — every posted period balances.",
+    "TbFailed": "Trial-balance integrity: PROBLEMS FOUND — see the lines above.",
+    "NoPeriod": "(no period)"
   },
   "Rollover": {
     "Title": "Fiscal Year Roll-over",

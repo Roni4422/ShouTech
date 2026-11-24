@@ -233,6 +233,32 @@ audited in code on this branch — every "exists" below names the file.
   line check, read-only). FX-parity audit: NOT built — ShouTech has
   no parity-rate revaluation engine to audit against; recorded as a
   gap, not faked.
+  **Outcome (2026-11-24): DONE, gates ALL-GREEN** (build 0/0;
+  migrator through 117 idempotent — no new migration; 4 audit
+  scripts exit 0; Errors parity pass; P2pHarness 39/39; W1Harness
+  36/36; Lang parity for touched keys 0 missing). Recalculate
+  Costs: OperationsService.RecalculateCostsAsync validates
+  company/user and delegates to the engine through a delegate
+  injected by AppHost (the App layer must not reference the
+  Infrastructure project; the delegate binds the same
+  provider/connection as OperationsRepository). MaintenanceWin
+  picks the from-date (default: 1 January of the current year),
+  whole-company scope; the engine records the job in
+  stock_revaluation_jobs and refuses closed-period ranges
+  (INV-6004, surfaced unchanged); the result line shows movements
+  replayed, value delta and job id. GL entries are NOT restated —
+  the engine's documented behavior, stated in the window doc
+  comment. Trial-balance audit: OperationsRepository.
+  GetTrialBalanceIntegrityAsync (read-only, parameterized) returns
+  per-period posted Dr/Cr totals (fiscal_periods name, no-period
+  bucket localized by the window), every individually unbalanced
+  posted entry (no cap), orphan journal-line count, and
+  posted-entries-without-lines count; MaintenanceWin renders them
+  with a final OK / PROBLEMS FOUND verdict. 15 new Maintenance
+  keys ×4 languages (32 keys, parity 0 missing). CA1863 warnings
+  during the build were fixed at the cause via BaseWin's central
+  Tf() cached-CompositeFormat helper. Windows-owed: WPF
+  click-through of the two new actions; live PostgreSQL run.
 
 ## Not built (recorded, with reasons)
 

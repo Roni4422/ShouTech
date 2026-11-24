@@ -86,6 +86,10 @@ public interface IOperationsRepository
     /// <summary>Provider integrity summary (SQLite PRAGMA integrity_check, or PostgreSQL version + table count).</summary>
     Task<string> GetIntegritySummaryAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>Read-only trial-balance integrity audit (B5): per-period posted Dr=Cr totals,
+    /// unbalanced posted entries, orphan journal lines, posted entries without lines.</summary>
+    Task<TrialBalanceIntegrityResult> GetTrialBalanceIntegrityAsync(string companyId, CancellationToken cancellationToken = default);
+
     // ------------------------------------------------------------ Fiscal roll-over
     Task<IReadOnlyList<FiscalYearRow>> GetFiscalYearsAsync(string companyId, CancellationToken cancellationToken = default);
     Task CreateNextFiscalYearAsync(string companyId, string userId, CancellationToken cancellationToken = default);

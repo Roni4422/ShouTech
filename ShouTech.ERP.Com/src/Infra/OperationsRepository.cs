@@ -851,6 +851,118 @@ public sealed class OperationsRepository : IOperationsRepository
         }
     }
 
+    /// <summary>
+    /// Trial-balance integrity audit (B5, read-only): posted entries
+    /// (status = 1) must balance per fiscal period and individually;
+    /// journal lines must never be orphaned; a posted entry must carry
+    /// lines. journal_entries is Guid-keyed (059 unification) while
+    /// callers pass the company code — the dual condition matches the
+    /// fiscal-year queries above.
+    /// </summary>
+    public async Task<TrialBalanceIntegrityResult> GetTrialBalanceIntegrityAsync(string companyId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var chart = await ResolveChartCompanyAsync(connection, companyId, cancellationToken).ConfigureAwait(false);
+        const string companyCond = "(e.company_id = @company OR CAST(e.company_id AS TEXT) = @chart)";
+        var hasPeriodCol = await ColumnExistsAsync(connection, "journal_entries", "fiscal_period_id").ConfigureAwait(false);
+        var hasPeriods = await TableExistsAsync(connection, "fiscal_periods").ConfigureAwait(false);
+        var periodExpr = hasPeriodCol && hasPeriods ? "COALESCE(fp.period_name, '')" : "''";
+        var periodJoin = hasPeriodCol && hasPeriods
+            ? "LEFT JOIN fiscal_periods fp ON fp.fiscal_period_id = e.fiscal_period_id"
+            : string.Empty;
+
+        var result = new TrialBalanceIntegrityResult();
+
+        // Per-period posted totals (entries without lines contribute 0
+        // through the LEFT JOIN and are counted separately below).
+        var periods = new List<TrialBalancePeriodRow>();
+        await using (var cmd = CreateCommand(connection, null, $"""
+            SELECT {periodExpr} AS period, COUNT(DISTINCT e.journal_entry_id) AS entries,
+                   COALESCE(SUM(l.debit), 0) AS dr, COALESCE(SUM(l.credit), 0) AS cr
+            FROM journal_entries e
+            {periodJoin}
+            LEFT JOIN journal_entry_lines l ON l.journal_entry_id = e.journal_entry_id
+            WHERE {companyCond} AND e.status = 1
+            GROUP BY period
+            ORDER BY period
+            """))
+        {
+            Add(cmd, "@company", companyId.Trim());
+            Add(cmd, "@chart", chart);
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                periods.Add(new TrialBalancePeriodRow
+                {
+                    Period = ReadString(reader, 0) ?? string.Empty,
+                    Entries = Convert.ToInt32(reader.GetValue(1), CultureInfo.InvariantCulture),
+                    Debit = Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture),
+                    Credit = Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture)
+                });
+            }
+        }
+        result.Periods = periods;
+
+        // Individually unbalanced posted entries (no cap: an integrity
+        // failure list must be complete, however long).
+        var unbalanced = new List<UnbalancedEntryRow>();
+        await using (var cmd = CreateCommand(connection, null, $"""
+            SELECT e.journal_entry_id, CAST(e.entry_date AS TEXT),
+                   COALESCE(SUM(l.debit), 0) AS dr, COALESCE(SUM(l.credit), 0) AS cr
+            FROM journal_entries e
+            JOIN journal_entry_lines l ON l.journal_entry_id = e.journal_entry_id
+            WHERE {companyCond} AND e.status = 1
+            GROUP BY e.journal_entry_id, e.entry_date
+            HAVING ABS(COALESCE(SUM(l.debit), 0) - COALESCE(SUM(l.credit), 0)) > 0.004
+            ORDER BY e.entry_date, e.journal_entry_id
+            """))
+        {
+            Add(cmd, "@company", companyId.Trim());
+            Add(cmd, "@chart", chart);
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                unbalanced.Add(new UnbalancedEntryRow
+                {
+                    EntryId = ReadString(reader, 0) ?? string.Empty,
+                    EntryDate = ReadString(reader, 1) ?? string.Empty,
+                    Debit = Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture),
+                    Credit = Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture)
+                });
+            }
+        }
+        result.UnbalancedEntries = unbalanced;
+
+        // Orphan lines: a line whose entry no longer exists (the FK
+        // should make this impossible — that is the point of the check).
+        await using (var cmd = CreateCommand(connection, null, """
+            SELECT COUNT(*) FROM journal_entry_lines l
+            LEFT JOIN journal_entries e ON e.journal_entry_id = l.journal_entry_id
+            WHERE e.journal_entry_id IS NULL
+            """))
+        {
+            var value = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            result.OrphanLineCount = Convert.ToInt32(value, CultureInfo.InvariantCulture);
+        }
+
+        // Posted entries carrying no lines at all.
+        await using (var cmd = CreateCommand(connection, null, $"""
+            SELECT COUNT(*) FROM journal_entries e
+            WHERE {companyCond} AND e.status = 1
+              AND NOT EXISTS (SELECT 1 FROM journal_entry_lines l WHERE l.journal_entry_id = e.journal_entry_id)
+            """))
+        {
+            Add(cmd, "@company", companyId.Trim());
+            Add(cmd, "@chart", chart);
+            var value = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            result.PostedEntriesWithoutLines = Convert.ToInt32(value, CultureInfo.InvariantCulture);
+        }
+
+        return result;
+    }
+
     // ------------------------------------------------------------ Fiscal roll-over
 
     public async Task<IReadOnlyList<FiscalYearRow>> GetFiscalYearsAsync(string companyId, CancellationToken cancellationToken = default)

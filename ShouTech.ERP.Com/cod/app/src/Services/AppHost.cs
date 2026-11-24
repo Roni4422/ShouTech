@@ -128,7 +128,17 @@ namespace ShouTech.App.Services
             Orders = CreatePhase3Service((provider, connection) => CreateOrderService(provider, connection), "Orders");
             PurchaseRequisitions = CreatePhase3Service((provider, connection) => new PurchaseRequisitionWorkflowService(new PurchaseRequisitionWorkflowRepository(provider, connection), Orders!, Permissions.Has), "Purchase Requisitions");
             Definitions = CreatePhase3Service((provider, connection) => new DefinitionService(new DefinitionRepository(provider, connection)), "Definitions");
-            Operations = CreatePhase3Service((provider, connection) => new OperationsService(new OperationsRepository(provider, connection)), "Operations");
+            Operations = CreatePhase3Service((provider, connection) => new OperationsService(
+                new OperationsRepository(provider, connection),
+                async (company, from, reason, user, ct) =>
+                {
+                    // Recalculate Costs engine (B5), bound to the same
+                    // provider/connection as the operations repository.
+                    var result = await new StockRecalculationService(provider, connection)
+                        .RecalculateAsync(company, null, null, from, reason, user, ct);
+                    return new ShouTech.Domain.Entities.RecalculationOutcome(
+                        result.JobId, result.MovementsReplayed, result.ValueDelta);
+                }), "Operations");
             AccountingStructure = CreateAccountingStructureRepository();
             DatabaseHealth = CreateDatabaseHealth();
 

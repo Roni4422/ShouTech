@@ -3119,7 +3119,22 @@
     "HealthUnavailable": "Veritabanı sağlık hizmeti kullanılamıyor.",
     "BackupUnavailable": "Yedekleme hizmeti kullanılamıyor.",
     "BackupCreated": "Yedek oluşturuldu",
-    "ServiceUnavailable": "İşlem hizmeti kullanılamıyor (veritabanı yapılandırılmadı)."
+    "ServiceUnavailable": "İşlem hizmeti kullanılamıyor (veritabanı yapılandırılmadı).",
+    "RecalculateCosts": "Maliyetleri yeniden hesapla",
+    "RecalcFrom": "Yeniden hesaplama başlangıcı:",
+    "RecalcFromRequired": "Önce yeniden hesaplama başlangıç tarihini seçin.",
+    "RecalcReason": "Bakım penceresi",
+    "RecalcResult": "Maliyet yeniden hesaplama tamamlandı: {0} hareket yeniden oynatıldı, değer farkı {1} (görev {2}).",
+    "TbAudit": "Mizan bütünlük denetimi",
+    "TbPeriodLine": "Dönem {0}: {1} işlenmiş kayıt, Borç {2}, Alacak {3} — {4}",
+    "TbBalanced": "dengeli",
+    "TbUnbalanced": "DENGESİZ",
+    "TbEntryLine": "Dengesiz kayıt {0} ({1}): Borç {2}, Alacak {3}",
+    "TbOrphans": "Sahipsiz yevmiye satırları (kayıtsız): {0}",
+    "TbNoLines": "Satırı olmayan işlenmiş kayıtlar: {0}",
+    "TbOk": "Mizan bütünlüğü: TAMAM — her işlenmiş dönem dengeli.",
+    "TbFailed": "Mizan bütünlüğü: SORUN BULUNDU — yukarıdaki satırlara bakın.",
+    "NoPeriod": "(dönem yok)"
   },
   "Rollover": {
     "Title": "Mali Yıl Devri",
