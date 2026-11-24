@@ -181,6 +181,10 @@ public static class ErrorCodes
     public const string LandedCostReceiptSelectionInvalid = "PUR-1008";
     public const string LandedCostDocumentAlreadyLinked = "PUR-1009";
     public const string LandedCostLinkedDocumentInvalid = "PUR-1010";
+    // Supplier advances (migration 095). PUR-1011 is reserved for a
+    // parallel purchase workstream; the advance codes start at 1012.
+    public const string AdvancePurchaseOrderMismatch = "PUR-1012";
+    public const string AdvanceReversalBlockedWhileConsumed = "PUR-1013";
 
     // ---- POS 1001-1999 (POS full build, migration 066) ------------------
     // The POS module takes its own prefix block, like MFG / HR.

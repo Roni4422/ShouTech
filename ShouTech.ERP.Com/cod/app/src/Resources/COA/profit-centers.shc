@@ -252,6 +252,24 @@
       }
     },
     {
+      "id": 47,
+      "number": 1215,
+      "code": "1215",
+      "parentId": null,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "سلف الموردين",
+        "en": "Advances to Suppliers"
+      }
+    },
+    {
       "id": 12,
       "number": 13,
       "code": "13",

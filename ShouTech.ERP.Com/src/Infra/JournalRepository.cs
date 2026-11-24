@@ -633,8 +633,16 @@ public sealed class JournalRepository : IJournalRepository
                 string? linkCompany = null, linkKind = null, linkDocKind = null, linkDocNo = null, linkCurrency = null;
                 long linkParty = 0;
                 decimal linkAmount = 0m;
+                // Supplier advances (migration 095): the link may flag the
+                // voucher as an advance against one PO. Fixtures predating
+                // 095 have no advance columns and simply never advance.
+                var hasAdvanceCols = PartyLedger.ColumnExists(connection, transaction, _provider, "voucher_party_links", "po_doc_id");
+                long? linkPoDocId = null;
+                var linkIsAdvance = false;
                 await using (var link = CreateCommand(connection, transaction,
-                    "SELECT company_id, party_kind, party_id, doc_kind, doc_no, amount, currency_code FROM voucher_party_links WHERE journal_entry_id = @id"))
+                    "SELECT company_id, party_kind, party_id, doc_kind, doc_no, amount, currency_code"
+                    + (hasAdvanceCols ? ", po_doc_id, is_advance" : "")
+                    + " FROM voucher_party_links WHERE journal_entry_id = @id"))
                 {
                     Add(link, "@id", FormatGuid(journalEntryId));
                     await using var reader = await link.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -647,6 +655,11 @@ public sealed class JournalRepository : IJournalRepository
                         linkDocNo = Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture);
                         linkAmount = Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture);
                         linkCurrency = reader.IsDBNull(6) ? "SAR" : Convert.ToString(reader.GetValue(6), CultureInfo.InvariantCulture);
+                        if (hasAdvanceCols)
+                        {
+                            linkPoDocId = reader.IsDBNull(7) ? null : Convert.ToInt64(reader.GetValue(7), CultureInfo.InvariantCulture);
+                            linkIsAdvance = !reader.IsDBNull(8) && Convert.ToBoolean(reader.GetValue(8), CultureInfo.InvariantCulture);
+                        }
                     }
                 }
 
@@ -678,7 +691,37 @@ public sealed class JournalRepository : IJournalRepository
                             throw new InvalidOperationException("The linked customer or supplier no longer exists in this company.");
                     }
 
-                    var controlAccount = linkKind == "C" ? GlAccounts.Receivable : GlAccounts.Payable;
+                    // Advance exception (Y1): a PAY voucher flagged as an
+                    // advance must name a live PO of THIS company whose
+                    // supplier is the linked party; its settlement debit
+                    // then goes to Advances to Suppliers (1215), never to
+                    // AP control (2201) — the money is a prepayment asset
+                    // until PayRecWin allocation clears it against an
+                    // invoice of that same PO.
+                    if (linkIsAdvance)
+                    {
+                        if (linkDocKind != "PAY" || linkKind != "S" || linkPoDocId is null)
+                            throw new AppError(ErrorCodes.AdvancePurchaseOrderMismatch,
+                                "A supplier advance must be a payment voucher linked to a purchase order.", linkDocNo ?? string.Empty);
+                        await using var po = CreateCommand(connection, transaction,
+                            "SELECT party_id, status FROM purchase_documents WHERE doc_id = @po AND doc_kind = 'PO' AND "
+                            + (_provider == "PostgreSQL" ? "is_deleted = FALSE" : "is_deleted = 0")
+                            + " AND CAST(company_id AS TEXT) IN (@companyCode, @companyGuid)");
+                        Add(po, "@po", linkPoDocId.Value);
+                        Add(po, "@companyCode", linkCompany.Trim());
+                        Add(po, "@companyGuid", FormatGuid(companyId));
+                        await using var poReader = await po.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                        if (!await poReader.ReadAsync(cancellationToken).ConfigureAwait(false)
+                            || poReader.IsDBNull(0)
+                            || Convert.ToInt64(poReader.GetValue(0), CultureInfo.InvariantCulture) != linkParty
+                            || !string.Equals(Convert.ToString(poReader.GetValue(1), CultureInfo.InvariantCulture), "Posted", StringComparison.OrdinalIgnoreCase))
+                            throw new AppError(ErrorCodes.AdvancePurchaseOrderMismatch,
+                                $"The advance purchase order '{linkPoDocId.Value}' is not a posted purchase order of the linked supplier in this company.", linkPoDocId.Value.ToString(CultureInfo.InvariantCulture));
+                    }
+
+                    var controlAccount = linkIsAdvance
+                        ? GlAccounts.SupplierAdvances
+                        : linkKind == "C" ? GlAccounts.Receivable : GlAccounts.Payable;
                     decimal totalDebit, totalCredit, controlDebit, controlCredit;
                     await using (var control = CreateCommand(connection, transaction, """
                         SELECT COALESCE(SUM(l.debit), 0), COALESCE(SUM(l.credit), 0),
@@ -715,11 +758,16 @@ public sealed class JournalRepository : IJournalRepository
                     // Step 7: the settlement inherits the voucher's own
                     // currency + header rate, so its base amount is the
                     // converted amount, never the raw foreign sum.
+                    // An advance writes its party-ledger entry under the
+                    // ADV kind against the advance account's settlement:
+                    // the supplier statement shows the debit (prepayment)
+                    // entry, and PayRecWin offers it as an advance source
+                    // — never as a normal AP payment.
                     PartyLedger.WriteEntry(connection, transaction, _provider,
-                        linkCompany, linkKind, linkParty, linkDocKind, null, linkDocNo,
+                        linkCompany, linkKind, linkParty, linkIsAdvance ? "ADV" : linkDocKind, null, linkDocNo,
                         entryDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                         debit, credit, linkCurrency ?? entryCurrency,
-                        "Cash voucher settlement",
+                        linkIsAdvance ? "Supplier advance" : "Cash voucher settlement",
                         journalEntryId.ToString("D"),
                         exchangeRate: entryRate);
                 }

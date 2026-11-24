@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Globalization;
+using ShouTech.Domain;
 
 namespace ShouTech.Infrastructure;
 
@@ -238,7 +239,7 @@ public static class PartyLedger
             // recomputation at today's rate), so the pair nets to zero
             // in base exactly. Rows without stored base fall through to
             // rate resolution at the original row's rate.
-            if (row.DocKind is "RCV" or "PAY")
+            if (row.DocKind is "RCV" or "PAY" or "ADV")
                 UnallocateVoucherPayments(connection, transaction, provider, row.Company, company, originalEntryId, reversalEntryId, userId);
 
             WriteEntry(connection, transaction, provider, company, row.Kind, row.Party,
@@ -270,7 +271,7 @@ public static class PartyLedger
 
         long paymentLedgerId;
         using (var payment = Create(connection, transaction,
-            "SELECT ledger_id FROM party_ledger WHERE company_id = @company AND journal_entry_id = @journal AND doc_kind IN ('RCV','PAY')"
+            "SELECT ledger_id FROM party_ledger WHERE company_id = @company AND journal_entry_id = @journal AND doc_kind IN ('RCV','PAY','ADV')"
             + (IsPostgres(provider) ? " FOR UPDATE" : "")))
         {
             Add(payment, "@company", ledgerCompanyId);
@@ -285,11 +286,20 @@ public static class PartyLedger
         var companyExpression = hasDocumentCompany
             ? "COALESCE(document_company_id, company_id)"
             : "company_id";
+        // Supplier advances (migration 095): an advance allocation is
+        // NOT released by reversing the advance voucher — the clearing
+        // journal (Dr AP / Cr Advances) belongs to the allocation, so a
+        // consumed advance blocks the voucher reversal until each
+        // advance allocation is itself reversed in PayRecWin
+        // (ReconciliationRepository.UnallocateAsync).
+        var hasSourceKind = ColumnExists(connection, transaction, provider,
+            "payment_allocations", "source_kind");
         var allocations = new List<(string AllocationId, string Table, long DocumentId,
             string DocumentCompany, decimal Amount, string? AllocatedBy, string? Note)>();
         using (var load = Create(connection, transaction,
             $"""
             SELECT allocation_id, doc_table, doc_id, {companyExpression}, amount, allocated_by, note
+            {(hasSourceKind ? ", source_kind" : "")}
             FROM payment_allocations
             WHERE company_id = @company AND payment_ledger_id = @payment
             ORDER BY allocation_id
@@ -303,6 +313,11 @@ public static class PartyLedger
                 var table = Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? string.Empty;
                 if (table is not ("SALES" or "PURCHASE"))
                     throw new InvalidOperationException($"Unsupported allocated document table '{table}' during voucher reversal.");
+                if (hasSourceKind && !reader.IsDBNull(7)
+                    && string.Equals(Convert.ToString(reader.GetValue(7), CultureInfo.InvariantCulture), "ADVANCE", StringComparison.OrdinalIgnoreCase))
+                    throw new AppError(ErrorCodes.AdvanceReversalBlockedWhileConsumed,
+                        "This supplier advance is partly consumed by invoice allocations and cannot be reversed until those allocations are reversed.",
+                        paymentLedgerId.ToString(CultureInfo.InvariantCulture));
                 allocations.Add((
                     Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty,
                     table,

@@ -57,6 +57,12 @@ public static class GlAccounts
     // reportable. Seeded by migration 093 into existing companies and by
     // the COA templates (cod/app/src/Resources/COA/*.shc) for new ones.
     public const string PurchasePriceVariance = "415";
+    // Supplier advances (migration 095): a PAY- voucher flagged as an
+    // advance against a PO debits this current-asset account instead of
+    // AP control (2201); allocation of the advance to that PO's invoice
+    // clears it (Dr 2201 / Cr 1215). Seeded by migration 095 into
+    // existing companies and by the COA templates for new ones.
+    public const string SupplierAdvances = "1215";
     public const string DepreciationExpense = "505";
     // Manufacturing (Build 058): carried by the industrial / job-orders /
     // continuous-inventory templates. The staged manufacturing posting
