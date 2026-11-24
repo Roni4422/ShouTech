@@ -36,7 +36,7 @@ namespace Kern.Tests
     /// Execution requires Windows (net8.0-windows testhost); the same
     /// scenarios are verified headlessly by
     /// ~/workspace/research/fix-step9/step9_harness.py
-    /// (see docs/FIX_PHASE_STEP9.md).
+    /// (see docs/FIX_PHASE_STEP1.md).
     /// </summary>
     public class OrderChainStep9Tests
     {

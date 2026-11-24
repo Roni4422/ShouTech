@@ -24,7 +24,7 @@ namespace ShouTech.Infrastructure;
 /// from-date are read (to build the opening state) but never
 /// rewritten, and the job refuses to run when its range touches a
 /// closed fiscal period (INV-6004). GL entries of already-posted
-/// documents are NOT restated — see docs/FIX_PHASE_STEP6.md flag F-2.
+/// documents are NOT restated — see docs/FIX_PHASE_STEP1.md flag F-2.
 /// </summary>
 public sealed class StockRecalculationService
 {

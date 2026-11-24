@@ -34,7 +34,7 @@ namespace Kern.Tests;
 /// databases. Execution requires Windows (net8.0-windows testhost); the
 /// same scenarios — plus the pre-unification fixture upgrade — are
 /// verified headlessly by ~/workspace/research/fix-step2/coa_harness.py
-/// (27/27 PASS; see docs/FIX_PHASE_STEP2.md).
+/// (27/27 PASS; see docs/FIX_PHASE_STEP1.md).
 /// </summary>
 public class CoaUnificationTests
 {

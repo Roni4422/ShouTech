@@ -349,7 +349,7 @@ public sealed class ChequeService
     /// balances stay exact, and each sibling later gets its own
     /// compensating entry (or, for the last one, the same treatment;
     /// the shared entry itself is never split or fabricated away —
-    /// see FIX_PHASE_STEP8.md for the historical treatment).
+    /// see FIX_PHASE_STEP1.md for the historical treatment).
     /// </summary>
     private async Task ReverseOwnOrCompensateAsync(
         string companyId, Cheque cheque, Guid entryId, DateOnly eventDate, string userId,

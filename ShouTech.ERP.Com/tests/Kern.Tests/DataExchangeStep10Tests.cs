@@ -30,7 +30,7 @@ namespace Kern.Tests;
 ///     (accounts) imports WITHOUT recreating that table.
 /// Execution requires Windows (net8.0-windows test host, DPAPI signing
 /// key); the same scenarios are verified headlessly on any OS by the
-/// Step 10 harness described in docs/FIX_PHASE_STEP10.md.
+/// Step 10 harness described in docs/FIX_PHASE_STEP1.md.
 /// </summary>
 public class DataExchangeStep10Tests
 {

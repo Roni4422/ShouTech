@@ -37,7 +37,7 @@ namespace Kern.Tests;
 ///     and a cost_required account without a center fails with ACC-5010.
 /// Execution requires Windows (net8.0-windows testhost); the same
 /// scenarios are verified headlessly by
-/// ~/workspace/research/fix-step3/gl_harness.py (see docs/FIX_PHASE_STEP3.md).
+/// ~/workspace/research/fix-step3/gl_harness.py (see docs/FIX_PHASE_STEP1.md).
 /// </summary>
 public class GlPostingTests
 {

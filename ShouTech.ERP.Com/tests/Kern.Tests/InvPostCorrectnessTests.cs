@@ -41,7 +41,7 @@ namespace Kern.Tests;
 /// Execution requires Windows (net8.0-windows testhost); the same
 /// scenarios are verified headlessly by
 /// ~/workspace/research/fix-step5/invpost_harness.py
-/// (see docs/FIX_PHASE_STEP5.md).
+/// (see docs/FIX_PHASE_STEP1.md).
 /// </summary>
 public sealed class InvPostCorrectnessTests
 {

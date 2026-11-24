@@ -164,7 +164,7 @@ public static class DataExportSvc
     // a table that EXISTS in the current schema (post Steps 2/4/8) and
     // carries a company scope — its own company_id column, a parent
     // document join for line tables, or the companies row itself.
-    // Removed seeds (table does not exist; see docs/FIX_PHASE_STEP10.md
+    // Removed seeds (table does not exist; see docs/FIX_PHASE_STEP1.md
     // for the per-seed reconciliation): Branches, AccountTypes,
     // ProductClassAttributes, ProductUnits, CustomerContacts,
     // CustomerAddresses, SupplierContacts, Employees, Departments,

@@ -37,7 +37,7 @@ namespace Kern.Tests;
 /// Execution requires Windows (net8.0-windows testhost); the same
 /// scenarios are verified headlessly by
 /// ~/workspace/research/fix-step8/step8_harness.py (see
-/// docs/FIX_PHASE_STEP8.md).
+/// docs/FIX_PHASE_STEP1.md).
 /// </summary>
 public class ChequeBankRecStep8Tests
 {

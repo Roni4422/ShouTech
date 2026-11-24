@@ -38,7 +38,7 @@ namespace Kern.Tests;
 /// databases. Execution requires Windows (net8.0-windows testhost); the
 /// same scenarios are verified headlessly by
 /// ~/workspace/research/fix-step11/step11_harness.py (65/65 PASS; see
-/// docs/FIX_PHASE_STEP11.md).
+/// docs/FIX_PHASE_STEP1.md).
 /// </summary>
 public class RouterMfgStep11Tests
 {

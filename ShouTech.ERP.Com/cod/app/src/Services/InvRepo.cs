@@ -2930,7 +2930,7 @@ public static class InvRepo
     // the company configured them postable (the seeded templates carry
     // 1205/2205 as non-postable groups); otherwise tax stays inside the
     // revenue / purchase leg so the entry still balances on the totals
-    // the document layer produced. Full table: docs/FIX_PHASE_STEP3.md.
+    // the document layer produced. Full table: docs/FIX_PHASE_STEP1.md.
     // ------------------------------------------------------------------
 
     private sealed record MaterialGlInfo(
@@ -5237,7 +5237,7 @@ internal static class InvDocKindExt
 /// Step 5, sweep I-2). ONE definition, enforced inside
 /// <see cref="InvRepo.Post"/> at the repository layer, so no caller can
 /// post a kind into effects it must not have. The full matrix is in
-/// docs/FIX_PHASE_STEP5.md §3.
+/// docs/FIX_PHASE_STEP1.md §3.
 ///
 /// - SalesInvoice / PosSale: GL + party ledger (customer debit) + stock
 ///   out + settlement of money collected at posting + credit guard.

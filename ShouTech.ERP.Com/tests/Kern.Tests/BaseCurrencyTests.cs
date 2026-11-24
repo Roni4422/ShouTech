@@ -39,7 +39,7 @@ namespace Kern.Tests;
 /// Execution requires Windows (net8.0-windows testhost); the same
 /// scenarios are verified headlessly by
 /// ~/workspace/research/fix-step7/fx_harness.py (see
-/// docs/FIX_PHASE_STEP7.md).
+/// docs/FIX_PHASE_STEP1.md).
 /// </summary>
 public class BaseCurrencyTests
 {

@@ -34,7 +34,7 @@ namespace Kern.Tests;
 ///     throws the cataloged INV-6002.
 /// Execution requires Windows (net8.0-windows testhost); the same
 /// scenarios are verified headlessly on Linux by the Step 6 harness
-/// (see docs/FIX_PHASE_STEP6.md).
+/// (see docs/FIX_PHASE_STEP1.md).
 /// </summary>
 public class ValuationEngineTests
 {
