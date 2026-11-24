@@ -910,6 +910,12 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             await RefreshSourceOrderProgressAsync(
                 connection, transaction, companyId, docKind, docId, cancellationToken).ConfigureAwait(false);
 
+            // W8: unified document event (migration 103), same transaction.
+            DocEvents.Write(connection, transaction, _provider,
+                companyId, "SALES", docKind, docId, docNo,
+                DocEventTypes.Posted, userId,
+                $"grand_total={grandTotal.ToString(CultureInfo.InvariantCulture)} {currencyCode}");
+
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch
@@ -1170,6 +1176,11 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
 
             await RefreshSourceOrderProgressAsync(
                 connection, transaction, companyText, docKind, docId, cancellationToken).ConfigureAwait(false);
+
+            // W8: unified document event (migration 103), same transaction.
+            DocEvents.Write(connection, transaction, _provider,
+                companyText, "SALES", docKind, docId, docNo,
+                DocEventTypes.Reversed, actor, reason);
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }

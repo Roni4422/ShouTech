@@ -1195,6 +1195,13 @@ public static class InvRepo
         // (Inventory effects were applied before the GL block above —
         // Step 6 ordering, so COGS reads the engine's movement costs.)
 
+        // W8: unified document event (migration 103), same transaction.
+        if (doc is not null)
+            DocEvents.Write(connection, tx, postProvider, guidKey,
+                isSales ? "SALES" : "PURCHASE", doc.KindCode, docId, doc.DocNo,
+                DocEventTypes.Posted, userId,
+                $"grand_total={doc.GrandTotal.ToString(CultureInfo.InvariantCulture)} {doc.CurrencyCode}");
+
         tx.Commit();
     }
 

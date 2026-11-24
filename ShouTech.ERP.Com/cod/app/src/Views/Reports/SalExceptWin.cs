@@ -38,6 +38,15 @@ namespace ShouTech.App.Views.Reports;
 /// delivery notes' recorded delivery cost. The From/To filters apply
 /// to this section only; the two exception sections keep their
 /// all-open-documents scope from B5.
+///
+/// Reconciliation (sales cycle W8, mirroring the GRNI workbench's
+/// subledger-vs-GL control pattern): ArReconciliation compares the
+/// customer party-ledger subledger (base amounts) with the AR control
+/// account 1201 in the GL; InventoryReconciliation compares the stock
+/// valuation total (StockValuationEngine balances) with the inventory
+/// control accounts 1203/1211/1212/1215. Each renders ONE row whose
+/// Difference column is the flagged variance (0 = reconciled). The To
+/// filter is the as-of date for both sections.
 /// </summary>
 public sealed class SalExceptWin : RptBase
 {
@@ -65,6 +74,9 @@ public sealed class SalExceptWin : RptBase
             new() { Key = "OnTimePct", HeaderTextKey = "Reports.Col.OnTimePct", Type = RptColType.Percent, Width = 90 },
             new() { Key = "AvgDeliveryDays", HeaderTextKey = "Reports.Col.AvgDeliveryDays", Type = RptColType.FractionalNumber, Width = 110, Format = "N1" },
             new() { Key = "DeliveryCost", HeaderTextKey = "Reports.Col.DeliveryCost", Type = RptColType.Money, Width = 110, Format = "N2" },
+            new() { Key = "SubledgerBase", HeaderTextKey = "Reports.Col.SubledgerBase", Type = RptColType.Money, Width = 135, Format = "N2" },
+            new() { Key = "GlBalanceBase", HeaderTextKey = "Reports.Col.GlBalanceBase", Type = RptColType.Money, Width = 135, Format = "N2" },
+            new() { Key = "DifferenceBase", HeaderTextKey = "Reports.Col.DifferenceBase", Type = RptColType.Money, Width = 135, Format = "N2" },
         },
         Filters = new RptFlt[]
         {
@@ -75,7 +87,9 @@ public sealed class SalExceptWin : RptBase
                 {
                     new KeyValuePair<string, string>("OrderedNotDelivered", "Reports.SectionOrderedNotDelivered"),
                     new KeyValuePair<string, string>("DeliveredNotInvoiced", "Reports.SectionDeliveredNotInvoiced"),
-                    new KeyValuePair<string, string>("DeliveryPerformance", "Reports.SectionDeliveryPerformance")
+                    new KeyValuePair<string, string>("DeliveryPerformance", "Reports.SectionDeliveryPerformance"),
+                    new KeyValuePair<string, string>("ArReconciliation", "Reports.SectionArReconciliation"),
+                    new KeyValuePair<string, string>("InventoryReconciliation", "Reports.SectionInventoryReconciliation")
                 },
                 DefaultValue = "OrderedNotDelivered"
             },
@@ -88,6 +102,40 @@ public sealed class SalExceptWin : RptBase
     protected override async Task<RptData> LoadDataAsync(RptFltValues filters, CancellationToken ct)
     {
         var section = filters.GetString("Section");
+        if (string.Equals(section, "ArReconciliation", StringComparison.Ordinal) ||
+            string.Equals(section, "InventoryReconciliation", StringComparison.Ordinal))
+        {
+            var asOf = filters.GetDateOr("To", DateTime.Today);
+            var recon = string.Equals(section, "ArReconciliation", StringComparison.Ordinal)
+                ? await RptQuery.AccountsReceivableReconciliationAsync(asOf, ct)
+                : await RptQuery.InventoryReconciliationAsync(asOf, ct);
+            var label = string.Equals(section, "ArReconciliation", StringComparison.Ordinal)
+                ? T("Reports.SectionArReconciliation")
+                : T("Reports.SectionInventoryReconciliation");
+            var reconRows = recon.Select(r => (IReadOnlyDictionary<string, object?>)new Dictionary<string, object?>
+            {
+                ["Section"] = label,
+                ["DocDate"] = asOf.Date,
+                ["SubledgerBase"] = RptWinUtil.Dec(r.GetValueOrDefault("SubledgerBase")),
+                ["GlBalanceBase"] = RptWinUtil.Dec(r.GetValueOrDefault("GlBalanceBase")),
+                ["DifferenceBase"] = RptWinUtil.Dec(r.GetValueOrDefault("DifferenceBase")),
+                ["Overdue"] = Math.Abs(RptWinUtil.Dec(r.GetValueOrDefault("DifferenceBase"))) > 0.005m
+                    ? T("Reports.VarianceFlag")
+                    : string.Empty,
+            }).ToList();
+            return new RptData
+            {
+                Columns = BuildDefinition().Columns,
+                Rows = reconRows,
+                Totals = new Dictionary<string, object?>
+                {
+                    ["Section"] = T("Reports.Totals"),
+                    ["SubledgerBase"] = reconRows.Sum(x => RptWinUtil.Dec(x.GetValueOrDefault("SubledgerBase"))),
+                    ["GlBalanceBase"] = reconRows.Sum(x => RptWinUtil.Dec(x.GetValueOrDefault("GlBalanceBase"))),
+                    ["DifferenceBase"] = reconRows.Sum(x => RptWinUtil.Dec(x.GetValueOrDefault("DifferenceBase"))),
+                }
+            };
+        }
         if (string.Equals(section, "DeliveryPerformance", StringComparison.Ordinal))
         {
             var perfRows = await LoadDeliveryPerformanceAsync(filters, ct);

@@ -753,6 +753,100 @@ public static class RptQuery
             ("$asOf", DateStart(asOf)));
     }
 
+    /// <summary>
+    /// W8 reconciliation (a), mirroring the GRNI control pattern above:
+    /// the customer subledger (party_ledger, kind C, BASE amounts —
+    /// migration 062 basis) against the AR control account 1201 in the
+    /// GL (posted + reversed originals, status 1/2, so a reversed pair
+    /// nets to zero exactly as in the GRNI query). One row:
+    /// SubledgerBase / GlBalanceBase / DifferenceBase, all as of the
+    /// given date. A non-zero difference is the exception the report
+    /// exists to flag.
+    /// </summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> AccountsReceivableReconciliationAsync(
+        DateTime asOf, CancellationToken ct)
+    {
+        DocSchema.Ensure();
+        const string sql = """
+            WITH subledger AS (
+                SELECT COALESCE(SUM(COALESCE(l.base_debit, l.debit) -
+                                    COALESCE(l.base_credit, l.credit)), 0) AS SubledgerBase
+                FROM party_ledger l
+                WHERE l.company_id = $company AND l.party_kind = 'C'
+                  AND l.entry_date <= $asOf
+            ),
+            gl_control AS (
+                SELECT COALESCE(SUM(COALESCE(l.base_debit, l.debit) -
+                                    COALESCE(l.base_credit, l.credit)), 0) AS GlBalanceBase
+                FROM journal_entries j
+                INNER JOIN companies co ON co.company_id = j.company_id
+                INNER JOIN journal_entry_lines l ON l.journal_entry_id = j.journal_entry_id
+                INNER JOIN chart_of_accounts a
+                  ON a.account_id = l.account_id AND a.company_id = j.company_id
+                WHERE co.company_code = $company
+                  AND a.account_code = '1201'
+                  AND j.status IN (1, 2)
+                  AND j.entry_date <= $asOf
+            )
+            SELECT subledger.SubledgerBase,
+                   gl_control.GlBalanceBase,
+                   subledger.SubledgerBase - gl_control.GlBalanceBase AS DifferenceBase
+            FROM subledger CROSS JOIN gl_control;
+            """;
+        return await QueryAsync(sql, ct,
+            ("$company", Company),
+            ("$asOf", DateStart(asOf)));
+    }
+
+    /// <summary>
+    /// W8 reconciliation (b): the StockValuationEngine's valuation total
+    /// against the inventory control accounts in the GL. The valuation
+    /// side is the engine-maintained material_stock_balances snapshot
+    /// (stock_value, falling back to qty x average_cost exactly as the
+    /// stock reports compute Value) — a CURRENT snapshot, so the AsOf
+    /// filter applies to the GL side and the report is exact when run
+    /// as of today. The GL account set is the 1203 family the valuation
+    /// code posts to: 1203 Inventory, 1211 WIP, 1212 Finished Goods and
+    /// 1215 Stock Delivered But Not Billed (migration 094: a posted
+    /// delivery debits 1215 while the goods still sit in the balances
+    /// until invoiced, so 1215 belongs to the control total).
+    /// </summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> InventoryReconciliationAsync(
+        DateTime asOf, CancellationToken ct)
+    {
+        DocSchema.Ensure();
+        var sql = """
+            WITH valuation AS (
+                SELECT COALESCE(SUM(CASE WHEN COALESCE(s.stock_value, 0) <> 0 THEN s.stock_value
+                                         ELSE COALESCE(s.available_qty, 0) * COALESCE(s.average_cost, 0) END), 0) AS ValuationBase
+                FROM material_stock_balances s
+                WHERE s.company_id = $company AND s.is_deleted = 0
+            ),
+            gl_control AS (
+                SELECT COALESCE(SUM(COALESCE(l.base_debit, l.debit) -
+                                    COALESCE(l.base_credit, l.credit)), 0) AS GlBalanceBase
+                FROM journal_entries j
+                INNER JOIN companies co ON co.company_id = j.company_id
+                INNER JOIN journal_entry_lines l ON l.journal_entry_id = j.journal_entry_id
+                INNER JOIN chart_of_accounts a
+                  ON a.account_id = l.account_id AND a.company_id = j.company_id
+                WHERE co.company_code = $company
+                  AND a.account_code IN ('1203', '1211', '1212', '1215')
+                  AND j.status IN (1, 2)
+                  AND j.entry_date <= $asOf
+            )
+            SELECT valuation.ValuationBase AS SubledgerBase,
+                   gl_control.GlBalanceBase,
+                   valuation.ValuationBase - gl_control.GlBalanceBase AS DifferenceBase
+            FROM valuation CROSS JOIN gl_control;
+            """;
+        if (DatabaseRuntime.IsPostgreSql())
+            sql = sql.Replace("s.is_deleted = 0", "s.is_deleted = FALSE", StringComparison.Ordinal);
+        return await QueryAsync(sql, ct,
+            ("$company", Company),
+            ("$asOf", DateStart(asOf)));
+    }
+
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> PartyAgingAsync(
         bool customers, CancellationToken ct)
     {

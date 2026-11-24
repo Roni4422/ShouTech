@@ -619,6 +619,9 @@
       "AgeBand": "شريحة التقادم",
       "GrniGlBalanceCompany": "رصيد حساب المستلم غير المفوتر (إجمالي الشركة، بالعملة الأساسية)",
       "GrniDifferenceCompany": "فرق تسوية المستلم غير المفوتر (إجمالي الشركة، بالعملة الأساسية)",
+      "SubledgerBase": "دفتر الأستاذ الفرعي (أساسي)",
+      "GlBalanceBase": "رصيد الأستاذ العام (أساسي)",
+      "DifferenceBase": "الفرق (أساسي)",
       "Name": "الاسم",
       "WeightedAmount": "المبلغ المرجح",
       "WinRate": "معدل الفوز",
@@ -731,6 +734,9 @@
     "SectionOrderedNotDelivered": "مطلوب ولم يُسلَّم",
     "SectionDeliveredNotInvoiced": "سُلِّم ولم يُفوتر",
     "SectionDeliveryPerformance": "أداء التوصيل",
+    "SectionArReconciliation": "مطابقة الذمم المدينة",
+    "SectionInventoryReconciliation": "مطابقة المخزون",
+    "VarianceFlag": "يوجد فرق",
     "Unassigned": "غير مُسند",
     "StatusLost": "مفقود",
     "StatusExpired": "منتهي"
@@ -2614,7 +2620,16 @@
     "ServiceUnavailable": "خدمة تسوية المدفوعات غير متاحة (لا يوجد اتصال بقاعدة البيانات).",
     "PermissionDenied": "ليس لديك صلاحية تخصيص المدفوعات (ACC.PAYREC.ALLOCATE).",
     "Note": "ملاحظة",
-    "Kind": "النوع"
+    "Kind": "النوع",
+    "DueDate": "تاريخ الاستحقاق",
+    "Suggest": "اقتراح",
+    "AllocAmount": "مبلغ التخصيص",
+    "DocAmount": "مبلغ المستند",
+    "Discount": "الخصم",
+    "SelectPayment": "اختر دفعة أولاً.",
+    "SuggestedOk": "تم ملء التخصيصات المقترحة",
+    "DiscountPermissionDenied": "ليس لديك صلاحية منح خصم تسوية (SALES.SETTLEMENT.DISCOUNT).",
+    "DocAmountRequired": "يتطلب التخصيص بعملة مختلفة مبلغ المستند (DocAmount) لكل صف مُدخل."
   },
   "Projects": {
     "Title": "المشاريع",
@@ -2780,6 +2795,11 @@
     "TitleInvoices": "بحث الفواتير",
     "TitleOrders": "بحث الطلبات",
     "TitleQuotations": "بحث عروض الأسعار",
+    "Events": "الأحداث",
+    "EventDate": "تاريخ الحدث",
+    "EventType": "الحدث",
+    "Actor": "المستخدم",
+    "Details": "التفاصيل",
     "To": "إلى"
   },
   "Definitions": {

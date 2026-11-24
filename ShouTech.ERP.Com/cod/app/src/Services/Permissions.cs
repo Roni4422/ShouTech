@@ -15,6 +15,8 @@ using System;
 using Microsoft.Data.Sqlite;
 using Npgsql;
 using NpgsqlTypes;
+using ShouTech.Domain;
+using ShouTech.Infrastructure;
 
 namespace ShouTech.App.Services
 {
@@ -61,6 +63,18 @@ namespace ShouTech.App.Services
         /// Returns true if the current user has the given permission.
         /// </summary>
         bool Has(string permissionKey);
+
+        /// <summary>
+        /// Audited permission check for ACTION seams (W8, migration
+        /// 103): like <see cref="Has"/>, but a denial is recorded as an
+        /// AccessDenied row in sau_document_events (with the document
+        /// context when the caller supplies one) before returning false.
+        /// Plain <see cref="Has"/> stays the probe for UI state — it is
+        /// called speculatively all over the shell and must never write.
+        /// Action handlers that gate a real write call Require instead,
+        /// which makes this the single central denial-logging hook.
+        /// </summary>
+        bool Require(string permissionKey, string docSide = "SALES", string? docKind = null, long docId = 0, string? docNo = null);
 
         /// <summary>
         /// Returns true if the current user has ALL of the given permissions.
@@ -453,6 +467,11 @@ namespace ShouTech.App.Services
             public const string AttachView = "SALES.ATTACH.VIEW";
             public const string AttachUpload = "SALES.ATTACH.UPLOAD";
             public const string AttachDelete = "SALES.ATTACH.DELETE";
+
+            /// <summary>W8 (migration 103): grants a settlement
+            /// (early-payment) discount while allocating a receipt or
+            /// payment in PayRecWin. Sensitive, administrator-seeded.</summary>
+            public const string SettlementDiscount = "SALES.SETTLEMENT.DISCOUNT";
 
             // Phase 09 commissions (migration 097 seeds).
             public const string CommissionView = "SALES.COMMISSION.VIEW";
@@ -866,6 +885,38 @@ public sealed class PermServ : IPermServ
         if (string.IsNullOrWhiteSpace(permissionKey))
             return false;
         return _perms.Contains(permissionKey.Trim());
+    }
+
+    /// <summary>
+    /// Audited action-seam check (W8): a denial writes an AccessDenied
+    /// row to sau_document_events (migration 103) naming the permission,
+    /// the actor and the document context, then returns false. The
+    /// denial stands even when the audit write itself fails — that
+    /// failure is reported through the central error mechanism
+    /// (DB-1005), never swallowed.
+    /// </summary>
+    public bool Require(string permissionKey, string docSide = "SALES", string? docKind = null, long docId = 0, string? docNo = null)
+    {
+        if (Has(permissionKey))
+            return true;
+        try
+        {
+            var connectionString = DatabaseRuntime.GetConnectionString();
+            if (!string.IsNullOrWhiteSpace(connectionString))
+            {
+                DocEvents.RecordStandalone(
+                    DatabaseRuntime.GetProvider(), connectionString,
+                    AppState.CurrentCompanyCode ?? string.Empty,
+                    docSide, docKind ?? string.Empty, docId, docNo,
+                    DocEventTypes.AccessDenied, _currentUserId ?? string.Empty,
+                    $"permission={permissionKey.Trim()}");
+            }
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.DatabaseQueryFailed, ex, "PermServ.Require.AccessDeniedLog");
+        }
+        return false;
     }
 
     public bool HasAll(params string[] permissionKeys)

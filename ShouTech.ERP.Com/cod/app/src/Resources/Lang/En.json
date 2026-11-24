@@ -1151,6 +1151,9 @@
       "AgeBand": "Aging band",
       "GrniGlBalanceCompany": "GRNI GL balance (company-wide, base)",
       "GrniDifferenceCompany": "GRNI difference (company-wide, base)",
+      "SubledgerBase": "Subledger (base)",
+      "GlBalanceBase": "GL balance (base)",
+      "DifferenceBase": "Difference (base)",
       "Name": "Name",
       "WeightedAmount": "Weighted Amount",
       "WinRate": "Win Rate",
@@ -1263,6 +1266,9 @@
     "SectionOrderedNotDelivered": "Ordered Not Delivered",
     "SectionDeliveredNotInvoiced": "Delivered Not Invoiced",
     "SectionDeliveryPerformance": "Delivery Performance",
+    "SectionArReconciliation": "AR Reconciliation",
+    "SectionInventoryReconciliation": "Inventory Reconciliation",
+    "VarianceFlag": "Variance",
     "Unassigned": "Unassigned",
     "StatusLost": "Lost",
     "StatusExpired": "Expired"
@@ -2530,7 +2536,16 @@
     "ServiceUnavailable": "Payment reconciliation service is unavailable (no database connection).",
     "PermissionDenied": "You do not have permission to allocate payments (ACC.PAYREC.ALLOCATE).",
     "Note": "Note",
-    "Kind": "Type"
+    "Kind": "Type",
+    "DueDate": "Due date",
+    "Suggest": "Suggest",
+    "AllocAmount": "Alloc. amount",
+    "DocAmount": "Doc amount",
+    "Discount": "Discount",
+    "SelectPayment": "Select a payment first.",
+    "SuggestedOk": "Suggested allocations filled",
+    "DiscountPermissionDenied": "You do not have permission to grant a settlement discount (SALES.SETTLEMENT.DISCOUNT).",
+    "DocAmountRequired": "A cross-currency allocation needs the document amount (DocAmount) for every filled row."
   },
   "Projects": {
     "Title": "Projects",
@@ -2696,6 +2711,11 @@
     "TitleInvoices": "Search Invoices",
     "TitleOrders": "Search Orders",
     "TitleQuotations": "Search Quotations",
+    "Events": "Events",
+    "EventDate": "Event date",
+    "EventType": "Event",
+    "Actor": "Actor",
+    "Details": "Details",
     "To": "To"
   },
   "Definitions": {

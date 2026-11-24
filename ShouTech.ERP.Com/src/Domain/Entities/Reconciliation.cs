@@ -17,9 +17,15 @@ public sealed record OpenDocumentRow(
     string CurrencyCode,
     decimal Total,
     decimal Paid,
-    decimal Allocated)
+    decimal Allocated,
+    DateOnly? DueDate = null)
 {
     public decimal OpenAmount => Total - Paid;
+
+    /// <summary>FIFO ordering basis for allocation suggestions (W8):
+    /// the due date when the document carries one (sales documents,
+    /// migration 095), else the document date.</summary>
+    public DateOnly FifoDate => DueDate ?? DocDate;
 }
 
 /// <summary>
