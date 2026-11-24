@@ -29,3 +29,10 @@ public sealed record GlPostingResult(Guid JournalEntryId, string DocumentNumber)
     /// budget never reaches a result — it throws ACC-5018/5019.</summary>
     public IReadOnlyList<BudgetWarning> BudgetWarnings { get; init; } = Array.Empty<BudgetWarning>();
 }
+
+/// <summary>An authorized credit override for one posting (W1, migration
+/// 095): the actor who holds SALES.CREDIT.OVERRIDE and the document
+/// identity the credit_overrides audit row is recorded against. Lives in
+/// Domain so repository contracts can carry it; PartyCreditGuard (Infra)
+/// consumes it.</summary>
+public sealed record CreditOverrideContext(string Actor, string? DocKind, string? DocNo);

@@ -389,6 +389,23 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         Add(insertHeader, "@warehouseName", (object?)draft.WarehouseName ?? DBNull.Value);
         docId = Convert.ToInt64(await insertHeader.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
 
+        // W1 (migration 095): a SAL invoice's due date is doc_date + the
+        // party's credit_days, set at creation when not already set.
+        if (draft.DocKind == CommercialDocKinds.SalesInvoice && draft.PartyId is not null
+            && PartyLedger.ColumnExists(connection, transaction, _provider, "sales_documents", "due_date"))
+        {
+            var due = await PartyLedger.ComputeDueDateAsync(connection, transaction, _provider,
+                draft.CompanyId.ToString("D"), draft.PartyId.Value, draft.DocDate, cancellationToken).ConfigureAwait(false);
+            if (due is not null)
+            {
+                await using var dueCmd = CreateCommand(connection, transaction,
+                    "UPDATE sales_documents SET due_date = @due WHERE doc_id = @doc AND due_date IS NULL");
+                Add(dueCmd, "@due", due.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                Add(dueCmd, "@doc", docId);
+                await dueCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+
         var lineNumber = 0;
         var usedLineNumbers = new HashSet<int>();
         for (var index = 0; index < draft.Lines.Count; index++)

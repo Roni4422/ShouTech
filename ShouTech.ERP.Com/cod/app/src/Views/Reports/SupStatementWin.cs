@@ -12,6 +12,10 @@ namespace ShouTech.App.Views.Reports;
 /// <summary>Supplier ledger statement with base-currency opening and running balances.</summary>
 public sealed class SupStatementWin : RptBase
 {
+    /// <summary>Optional pre-filter (a party code) applied ahead of the
+    /// filter bar's Search value (W1: CstCard's Statement button).</summary>
+    public string? InitialSearch { get; set; }
+
     protected override RptDef BuildDefinition() => new()
     {
         ReportKey = "AP.SupplierStatement",
@@ -45,7 +49,8 @@ public sealed class SupStatementWin : RptBase
         if (from.Date > to.Date)
             throw new ArgumentException("The start date must not be after the end date.");
 
-        var raw = await RptQuery.SupplierStatementAsync(from, to, filters.GetString("Search"), ct);
+        var search = string.IsNullOrWhiteSpace(InitialSearch) ? filters.GetString("Search") : InitialSearch;
+        var raw = await RptQuery.SupplierStatementAsync(from, to, search, ct);
         var rows = RptWinUtil.Map(raw, BuildDefinition().Columns);
         var openingBySupplier = rows
             .GroupBy(row => Convert.ToString(row.GetValueOrDefault("SupplierCode"), CultureInfo.InvariantCulture) ?? string.Empty)

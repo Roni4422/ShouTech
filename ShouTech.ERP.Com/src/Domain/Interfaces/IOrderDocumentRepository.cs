@@ -34,7 +34,7 @@ public interface IOrderDocumentRepository
     Task UpdateDraftAsync(CommercialDocSide side, long docId, CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default);
 
     /// <summary>Posts an order/quotation (status flip only — orders have no GL/stock side effects).</summary>
-    Task PostOrderAsync(CommercialDocSide side, long docId, string userId, CancellationToken cancellationToken = default);
+    Task PostOrderAsync(CommercialDocSide side, long docId, string userId, CancellationToken cancellationToken = default, CreditOverrideContext? creditOverride = null);
 
     /// <summary>Creates and posts a partial goods receipt against a posted purchase order. Stock, GRNI journal, receipt document, and source link commit atomically.</summary>
     /// <summary>Creates a posted supplier invoice from received quantities, records line-level receipt matching and price variance, and clears GRNI atomically.</summary>

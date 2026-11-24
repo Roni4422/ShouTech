@@ -228,6 +228,15 @@ public sealed class MasterCardService
             throw new InvalidOperationException("Credit days must be between 0 and 3650.");
         if (!string.IsNullOrWhiteSpace(party.Email) && !IsPlausibleEmail(party.Email))
             throw new InvalidOperationException("Email address is not valid.");
+        // W1 (migration 095): currency + risk + blacklist invariants.
+        if (!string.IsNullOrWhiteSpace(party.DefaultCurrency))
+            party.DefaultCurrency = NormalizeCurrencyCode(party.DefaultCurrency, "Party default currency");
+        if (!string.IsNullOrWhiteSpace(party.RiskClass) && !PartyRiskClasses.IsValid(party.RiskClass.Trim()))
+            throw new InvalidOperationException("Risk class must be Low, Medium or High.");
+        if (!string.IsNullOrWhiteSpace(party.RiskClass))
+            party.RiskClass = party.RiskClass.Trim();
+        if (party.IsBlacklisted && string.IsNullOrWhiteSpace(party.BlacklistReason))
+            throw new InvalidOperationException("A blacklist reason is required when a party is blacklisted.");
         party.Code = party.Code.Trim();
         party.NameEn = party.NameEn.Trim();
         await _repository.SavePartyAsync(companyId, party, RequireUser(userId), cancellationToken).ConfigureAwait(false);
@@ -247,6 +256,105 @@ public sealed class MasterCardService
 
     public Task<LedgerBalance> GetPartyBalanceAsync(string companyId, string kind, string code, CancellationToken cancellationToken = default)
         => _repository.GetPartyBalanceAsync(RequireCompany(companyId), NormalizeKind(kind), RequireCode(code, "Party"), cancellationToken);
+
+    // ------------------------------------------- Party structure (W1, mig 095)
+
+    public Task<IReadOnlyList<PartyContact>> GetPartyContactsAsync(string companyId, Guid partyId, CancellationToken cancellationToken = default)
+    {
+        if (partyId == Guid.Empty) throw new ArgumentException("Party is required.", nameof(partyId));
+        return _repository.GetPartyContactsAsync(RequireCompany(companyId), partyId, cancellationToken);
+    }
+
+    public async Task<Guid> SavePartyContactAsync(string companyId, PartyContact contact, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        ArgumentNullException.ThrowIfNull(contact);
+        if (contact.PartyId == Guid.Empty)
+            throw new InvalidOperationException("A contact must name its party.");
+        if (string.IsNullOrWhiteSpace(contact.Name))
+            throw new InvalidOperationException("Contact name is required.");
+        if (!string.IsNullOrWhiteSpace(contact.Email) && !IsPlausibleEmail(contact.Email))
+            throw new InvalidOperationException("Email address is not valid.");
+        contact.Name = contact.Name.Trim();
+        await _repository.SavePartyContactAsync(companyId, contact, RequireUser(userId), cancellationToken).ConfigureAwait(false);
+        return contact.Id;
+    }
+
+    public Task DeletePartyContactAsync(string companyId, Guid id, string userId, CancellationToken cancellationToken = default)
+    {
+        if (id == Guid.Empty) throw new ArgumentException("Contact is required.", nameof(id));
+        return _repository.SoftDeletePartyContactAsync(RequireCompany(companyId), id, RequireUser(userId), cancellationToken);
+    }
+
+    public Task<IReadOnlyList<PartyAddress>> GetPartyAddressesAsync(string companyId, Guid partyId, CancellationToken cancellationToken = default)
+    {
+        if (partyId == Guid.Empty) throw new ArgumentException("Party is required.", nameof(partyId));
+        return _repository.GetPartyAddressesAsync(RequireCompany(companyId), partyId, cancellationToken);
+    }
+
+    public async Task<Guid> SavePartyAddressAsync(string companyId, PartyAddress address, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        ArgumentNullException.ThrowIfNull(address);
+        if (address.PartyId == Guid.Empty)
+            throw new InvalidOperationException("An address must name its party.");
+        address.Kind = (address.Kind ?? string.Empty).Trim();
+        if (!PartyAddressKinds.IsValid(address.Kind))
+            throw new InvalidOperationException("Address kind must be Delivery, Billing or Other.");
+        await _repository.SavePartyAddressAsync(companyId, address, RequireUser(userId), cancellationToken).ConfigureAwait(false);
+        return address.Id;
+    }
+
+    public Task DeletePartyAddressAsync(string companyId, Guid id, string userId, CancellationToken cancellationToken = default)
+    {
+        if (id == Guid.Empty) throw new ArgumentException("Address is required.", nameof(id));
+        return _repository.SoftDeletePartyAddressAsync(RequireCompany(companyId), id, RequireUser(userId), cancellationToken);
+    }
+
+    public Task<IReadOnlyList<PartyBranch>> GetPartyBranchesAsync(string companyId, Guid partyId, CancellationToken cancellationToken = default)
+    {
+        if (partyId == Guid.Empty) throw new ArgumentException("Party is required.", nameof(partyId));
+        return _repository.GetPartyBranchesAsync(RequireCompany(companyId), partyId, cancellationToken);
+    }
+
+    public async Task<Guid> SavePartyBranchAsync(string companyId, PartyBranch branch, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        ArgumentNullException.ThrowIfNull(branch);
+        if (branch.PartyId == Guid.Empty)
+            throw new InvalidOperationException("A branch must name its party.");
+        if (string.IsNullOrWhiteSpace(branch.Name))
+            throw new InvalidOperationException("Branch name is required.");
+        branch.Name = branch.Name.Trim();
+        await _repository.SavePartyBranchAsync(companyId, branch, RequireUser(userId), cancellationToken).ConfigureAwait(false);
+        return branch.Id;
+    }
+
+    public Task DeletePartyBranchAsync(string companyId, Guid id, string userId, CancellationToken cancellationToken = default)
+    {
+        if (id == Guid.Empty) throw new ArgumentException("Branch is required.", nameof(id));
+        return _repository.SoftDeletePartyBranchAsync(RequireCompany(companyId), id, RequireUser(userId), cancellationToken);
+    }
+
+    /// <summary>
+    /// Posts the party's opening balance (W1): signedAmount is the
+    /// party-balance orientation — positive means the party OWES the
+    /// company for a customer (debit) / the company owes the supplier
+    /// (credit). One opening per party; the repository blocks a second.
+    /// Returns the posted journal entry id.
+    /// </summary>
+    public async Task<string> PostPartyOpeningBalanceAsync(string companyId, string kind, string code, decimal signedAmount, DateOnly openingDate, string? currencyCode, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        var party = await _repository.GetPartyByCodeAsync(companyId, NormalizeKind(kind), RequireCode(code, "Party"), cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException($"Party '{code.Trim()}' was not found for this company.");
+        if (party.OpeningBalanceAmount.HasValue)
+            throw new InvalidOperationException($"Party '{code.Trim()}' already has an opening balance; a second opening is blocked.");
+        if (signedAmount == 0m)
+            throw new InvalidOperationException("Opening balance amount cannot be zero.");
+        var currency = string.IsNullOrWhiteSpace(currencyCode) ? party.DefaultCurrency : NormalizeCurrencyCode(currencyCode, "Opening balance currency");
+        return await _repository.PostPartyOpeningBalanceAsync(companyId, party.Kind, party.Code, signedAmount, openingDate, currency ?? "SAR", RequireUser(userId), cancellationToken).ConfigureAwait(false);
+    }
 
     // ------------------------------------------------------------ Party groups
 

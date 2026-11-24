@@ -703,7 +703,7 @@ public sealed class MasterCardRepository : IMasterCardRepository
 
     // ----------------------------------------------------------------- Parties
 
-    private const string PartyColumns = "id, kind, code, name_en, name_ar, party_group_id, tax_no, commercial_reg_no, credit_limit, credit_days, price_tier, gl_account_code, phone, mobile, email, address, is_active, notes, ledger_id";
+    private const string PartyColumns = "id, kind, code, name_en, name_ar, party_group_id, tax_no, commercial_reg_no, credit_limit, credit_days, price_tier, gl_account_code, phone, mobile, email, address, is_active, notes, ledger_id, default_currency, risk_class, is_blacklisted, blacklist_reason, blacklisted_at, blacklisted_by, opening_balance_amount, opening_balance_date, opening_journal_id";
 
     public async Task<IReadOnlyList<Party>> GetPartiesAsync(string companyId, string? kind = null, CancellationToken cancellationToken = default)
     {
@@ -798,14 +798,14 @@ public sealed class MasterCardRepository : IMasterCardRepository
                 // stranger's balance.
                 party.LedgerId = await NextLedgerIdAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
                 await using var insert = CreateCommand(connection, transaction,
-                    "INSERT INTO parties (id, company_id, kind, code, name_en, name_ar, party_group_id, tax_no, commercial_reg_no, credit_limit, credit_days, price_tier, gl_account_code, phone, mobile, email, address, is_active, notes, created_by, ledger_id) VALUES (@id, @company, @kind, @code, @nameEn, @nameAr, @group, @taxNo, @regNo, @creditLimit, @creditDays, @priceTier, @gl, @phone, @mobile, @email, @address, @isActive, @notes, @user, @ledgerId)");
+                    "INSERT INTO parties (id, company_id, kind, code, name_en, name_ar, party_group_id, tax_no, commercial_reg_no, credit_limit, credit_days, price_tier, gl_account_code, phone, mobile, email, address, is_active, notes, created_by, ledger_id, default_currency, risk_class, is_blacklisted, blacklist_reason, blacklisted_at, blacklisted_by) VALUES (@id, @company, @kind, @code, @nameEn, @nameAr, @group, @taxNo, @regNo, @creditLimit, @creditDays, @priceTier, @gl, @phone, @mobile, @email, @address, @isActive, @notes, @user, @ledgerId, @defaultCurrency, @riskClass, @isBlacklisted, @blacklistReason, @blacklistedAt, @blacklistedBy)");
                 BindParty(insert, companyId, party, userId);
                 await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
             else
             {
                 await using var update = CreateCommand(connection, transaction,
-                    $"UPDATE parties SET kind = @kind, code = @code, name_en = @nameEn, name_ar = @nameAr, party_group_id = @group, tax_no = @taxNo, commercial_reg_no = @regNo, credit_limit = @creditLimit, credit_days = @creditDays, price_tier = @priceTier, gl_account_code = @gl, phone = @phone, mobile = @mobile, email = @email, address = @address, is_active = @isActive, notes = @notes, updated_by = @user, updated_at = {NowExpr} WHERE company_id = @company AND id = @id AND {NotDeleted}");
+                    $"UPDATE parties SET kind = @kind, code = @code, name_en = @nameEn, name_ar = @nameAr, party_group_id = @group, tax_no = @taxNo, commercial_reg_no = @regNo, credit_limit = @creditLimit, credit_days = @creditDays, price_tier = @priceTier, gl_account_code = @gl, phone = @phone, mobile = @mobile, email = @email, address = @address, is_active = @isActive, notes = @notes, default_currency = @defaultCurrency, risk_class = @riskClass, is_blacklisted = @isBlacklisted, blacklist_reason = @blacklistReason, blacklisted_at = @blacklistedAt, blacklisted_by = @blacklistedBy, updated_by = @user, updated_at = {NowExpr} WHERE company_id = @company AND id = @id AND {NotDeleted}");
                 BindParty(update, companyId, party, userId);
                 if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
                     throw new InvalidOperationException("Party could not be updated (missing or deleted).");
@@ -861,6 +861,449 @@ public sealed class MasterCardRepository : IMasterCardRepository
             balance.Credit = ReadDecimal(reader, 1);
         }
         return balance;
+    }
+
+    // ------------------------------------------- Party structure (W1, mig 095)
+
+    public async Task<IReadOnlyList<PartyContact>> GetPartyContactsAsync(string companyId, Guid partyId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = CreateCommand(connection, null,
+            $"SELECT id, party_id, name, role, phone, mobile, email, is_primary, is_active, notes FROM party_contacts WHERE company_id = @company AND party_id = @party AND {NotDeleted} ORDER BY is_primary DESC, name");
+        Add(command, "@company", companyId.Trim());
+        Add(command, "@party", FormatGuid(partyId));
+        var result = new List<PartyContact>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            result.Add(new PartyContact
+            {
+                Id = ReadGuid(reader, 0), PartyId = ReadGuid(reader, 1),
+                Name = ReadString(reader, 2) ?? string.Empty, Role = ReadString(reader, 3),
+                Phone = ReadString(reader, 4), Mobile = ReadString(reader, 5), Email = ReadString(reader, 6),
+                IsPrimary = ReadBool(reader, 7), IsActive = ReadBool(reader, 8), Notes = ReadString(reader, 9)
+            });
+        return result;
+    }
+
+    public async Task SavePartyContactAsync(string companyId, PartyContact contact, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        ArgumentNullException.ThrowIfNull(contact);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (!await ExistsByIdAsync(connection, transaction, "parties", companyId, contact.PartyId, cancellationToken).ConfigureAwait(false))
+                throw new InvalidOperationException("The party was not found for this company.");
+            var exists = await ExistsByIdAsync(connection, transaction, "party_contacts", companyId, contact.Id, cancellationToken).ConfigureAwait(false);
+            if (!exists)
+            {
+                await using var insert = CreateCommand(connection, transaction,
+                    "INSERT INTO party_contacts (id, company_id, party_id, name, role, phone, mobile, email, is_primary, is_active, notes, created_by) VALUES (@id, @company, @party, @name, @role, @phone, @mobile, @email, @primary, @active, @notes, @user)");
+                BindContact(insert, companyId, contact, userId);
+                await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await using var update = CreateCommand(connection, transaction,
+                    $"UPDATE party_contacts SET name = @name, role = @role, phone = @phone, mobile = @mobile, email = @email, is_primary = @primary, is_active = @active, notes = @notes, updated_by = @user, updated_at = {NowExpr} WHERE company_id = @company AND id = @id AND {NotDeleted}");
+                BindContact(update, companyId, contact, userId);
+                if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+                    throw new InvalidOperationException("Party contact could not be updated (missing or deleted).");
+            }
+            if (contact.IsPrimary)
+                await ClearOtherPrimariesAsync(connection, transaction, companyId, "party_contacts", "is_primary", contact.PartyId, contact.Id, cancellationToken).ConfigureAwait(false);
+            await SyncPartySummaryAsync(connection, transaction, companyId, contact.PartyId, cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch { await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false); throw; }
+    }
+
+    public async Task SoftDeletePartyContactAsync(string companyId, Guid id, string userId, CancellationToken cancellationToken = default)
+    {
+        await SoftDeleteChildAsync("party_contacts", companyId, id, userId, cancellationToken).ConfigureAwait(false);
+        await ResyncPartySummaryAsync(companyId, id, "party_contacts", cancellationToken).ConfigureAwait(false);
+    }
+
+    private void BindContact(DbCommand command, string companyId, PartyContact contact, string userId)
+    {
+        Add(command, "@id", FormatGuid(contact.Id));
+        Add(command, "@company", companyId.Trim());
+        Add(command, "@party", FormatGuid(contact.PartyId));
+        Add(command, "@name", contact.Name.Trim());
+        Add(command, "@role", (object?)NullIfBlank(contact.Role) ?? DBNull.Value);
+        Add(command, "@phone", (object?)NullIfBlank(contact.Phone) ?? DBNull.Value);
+        Add(command, "@mobile", (object?)NullIfBlank(contact.Mobile) ?? DBNull.Value);
+        Add(command, "@email", (object?)NullIfBlank(contact.Email) ?? DBNull.Value);
+        Add(command, "@primary", DbBool(contact.IsPrimary));
+        Add(command, "@active", DbBool(contact.IsActive));
+        Add(command, "@notes", (object?)NullIfBlank(contact.Notes) ?? DBNull.Value);
+        Add(command, "@user", userId);
+    }
+
+    public async Task<IReadOnlyList<PartyAddress>> GetPartyAddressesAsync(string companyId, Guid partyId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = CreateCommand(connection, null,
+            $"SELECT id, party_id, kind, city, country, postal_code, address, is_default, is_active, notes FROM party_addresses WHERE company_id = @company AND party_id = @party AND {NotDeleted} ORDER BY is_default DESC, kind");
+        Add(command, "@company", companyId.Trim());
+        Add(command, "@party", FormatGuid(partyId));
+        var result = new List<PartyAddress>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            result.Add(new PartyAddress
+            {
+                Id = ReadGuid(reader, 0), PartyId = ReadGuid(reader, 1),
+                Kind = ReadString(reader, 2) ?? PartyAddressKinds.Delivery,
+                City = ReadString(reader, 3), Country = ReadString(reader, 4), PostalCode = ReadString(reader, 5),
+                Address = ReadString(reader, 6), IsDefault = ReadBool(reader, 7), IsActive = ReadBool(reader, 8),
+                Notes = ReadString(reader, 9)
+            });
+        return result;
+    }
+
+    public async Task SavePartyAddressAsync(string companyId, PartyAddress address, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        ArgumentNullException.ThrowIfNull(address);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (!await ExistsByIdAsync(connection, transaction, "parties", companyId, address.PartyId, cancellationToken).ConfigureAwait(false))
+                throw new InvalidOperationException("The party was not found for this company.");
+            var exists = await ExistsByIdAsync(connection, transaction, "party_addresses", companyId, address.Id, cancellationToken).ConfigureAwait(false);
+            if (!exists)
+            {
+                await using var insert = CreateCommand(connection, transaction,
+                    "INSERT INTO party_addresses (id, company_id, party_id, kind, city, country, postal_code, address, is_default, is_active, notes, created_by) VALUES (@id, @company, @party, @kind, @city, @country, @postal, @address, @isDefault, @active, @notes, @user)");
+                BindAddress(insert, companyId, address, userId);
+                await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await using var update = CreateCommand(connection, transaction,
+                    $"UPDATE party_addresses SET kind = @kind, city = @city, country = @country, postal_code = @postal, address = @address, is_default = @isDefault, is_active = @active, notes = @notes, updated_by = @user, updated_at = {NowExpr} WHERE company_id = @company AND id = @id AND {NotDeleted}");
+                BindAddress(update, companyId, address, userId);
+                if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+                    throw new InvalidOperationException("Party address could not be updated (missing or deleted).");
+            }
+            if (address.IsDefault)
+                await ClearOtherPrimariesAsync(connection, transaction, companyId, "party_addresses", "is_default", address.PartyId, address.Id, cancellationToken).ConfigureAwait(false);
+            await SyncPartySummaryAsync(connection, transaction, companyId, address.PartyId, cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch { await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false); throw; }
+    }
+
+    public async Task SoftDeletePartyAddressAsync(string companyId, Guid id, string userId, CancellationToken cancellationToken = default)
+    {
+        await SoftDeleteChildAsync("party_addresses", companyId, id, userId, cancellationToken).ConfigureAwait(false);
+        await ResyncPartySummaryAsync(companyId, id, "party_addresses", cancellationToken).ConfigureAwait(false);
+    }
+
+    private void BindAddress(DbCommand command, string companyId, PartyAddress address, string userId)
+    {
+        Add(command, "@id", FormatGuid(address.Id));
+        Add(command, "@company", companyId.Trim());
+        Add(command, "@party", FormatGuid(address.PartyId));
+        Add(command, "@kind", address.Kind.Trim());
+        Add(command, "@city", (object?)NullIfBlank(address.City) ?? DBNull.Value);
+        Add(command, "@country", (object?)NullIfBlank(address.Country) ?? DBNull.Value);
+        Add(command, "@postal", (object?)NullIfBlank(address.PostalCode) ?? DBNull.Value);
+        Add(command, "@address", (object?)NullIfBlank(address.Address) ?? DBNull.Value);
+        Add(command, "@isDefault", DbBool(address.IsDefault));
+        Add(command, "@active", DbBool(address.IsActive));
+        Add(command, "@notes", (object?)NullIfBlank(address.Notes) ?? DBNull.Value);
+        Add(command, "@user", userId);
+    }
+
+    public async Task<IReadOnlyList<PartyBranch>> GetPartyBranchesAsync(string companyId, Guid partyId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = CreateCommand(connection, null,
+            $"SELECT id, party_id, name, address, phone, is_active, notes FROM party_branches WHERE company_id = @company AND party_id = @party AND {NotDeleted} ORDER BY name");
+        Add(command, "@company", companyId.Trim());
+        Add(command, "@party", FormatGuid(partyId));
+        var result = new List<PartyBranch>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            result.Add(new PartyBranch
+            {
+                Id = ReadGuid(reader, 0), PartyId = ReadGuid(reader, 1),
+                Name = ReadString(reader, 2) ?? string.Empty, Address = ReadString(reader, 3),
+                Phone = ReadString(reader, 4), IsActive = ReadBool(reader, 5), Notes = ReadString(reader, 6)
+            });
+        return result;
+    }
+
+    public async Task SavePartyBranchAsync(string companyId, PartyBranch branch, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        ArgumentNullException.ThrowIfNull(branch);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (!await ExistsByIdAsync(connection, transaction, "parties", companyId, branch.PartyId, cancellationToken).ConfigureAwait(false))
+                throw new InvalidOperationException("The party was not found for this company.");
+            var exists = await ExistsByIdAsync(connection, transaction, "party_branches", companyId, branch.Id, cancellationToken).ConfigureAwait(false);
+            if (!exists)
+            {
+                await using var insert = CreateCommand(connection, transaction,
+                    "INSERT INTO party_branches (id, company_id, party_id, name, address, phone, is_active, notes, created_by) VALUES (@id, @company, @party, @name, @address, @phone, @active, @notes, @user)");
+                BindBranch(insert, companyId, branch, userId);
+                await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await using var update = CreateCommand(connection, transaction,
+                    $"UPDATE party_branches SET name = @name, address = @address, phone = @phone, is_active = @active, notes = @notes, updated_by = @user, updated_at = {NowExpr} WHERE company_id = @company AND id = @id AND {NotDeleted}");
+                BindBranch(update, companyId, branch, userId);
+                if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+                    throw new InvalidOperationException("Party branch could not be updated (missing or deleted).");
+            }
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch { await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false); throw; }
+    }
+
+    public Task SoftDeletePartyBranchAsync(string companyId, Guid id, string userId, CancellationToken cancellationToken = default)
+        => SoftDeleteChildAsync("party_branches", companyId, id, userId, cancellationToken);
+
+    private void BindBranch(DbCommand command, string companyId, PartyBranch branch, string userId)
+    {
+        Add(command, "@id", FormatGuid(branch.Id));
+        Add(command, "@company", companyId.Trim());
+        Add(command, "@party", FormatGuid(branch.PartyId));
+        Add(command, "@name", branch.Name.Trim());
+        Add(command, "@address", (object?)NullIfBlank(branch.Address) ?? DBNull.Value);
+        Add(command, "@phone", (object?)NullIfBlank(branch.Phone) ?? DBNull.Value);
+        Add(command, "@active", DbBool(branch.IsActive));
+        Add(command, "@notes", (object?)NullIfBlank(branch.Notes) ?? DBNull.Value);
+        Add(command, "@user", userId);
+    }
+
+    private async Task SoftDeleteChildAsync(string table, string companyId, Guid id, string userId, CancellationToken cancellationToken)
+    {
+        RequireCompany(companyId);
+        if (id == Guid.Empty)
+            throw new ArgumentException("Record is required.", nameof(id));
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = CreateCommand(connection, null,
+            $"UPDATE {table} SET is_deleted = {DeletedValue}, updated_by = @user, updated_at = {NowExpr} WHERE company_id = @company AND id = @id AND {NotDeleted}");
+        Add(command, "@company", companyId.Trim());
+        Add(command, "@id", FormatGuid(id));
+        Add(command, "@user", userId);
+        if (await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+            throw new InvalidOperationException("Record was not found or is already deleted.");
+    }
+
+    private async Task ClearOtherPrimariesAsync(DbConnection connection, DbTransaction transaction, string companyId, string table, string flagColumn, Guid partyId, Guid keepId, CancellationToken cancellationToken)
+    {
+        var falseValue = _provider == "PostgreSQL" ? "false" : "0";
+        await using var command = CreateCommand(connection, transaction,
+            $"UPDATE {table} SET {flagColumn} = {falseValue} WHERE company_id = @company AND party_id = @party AND id <> @id AND {NotDeleted}");
+        Add(command, "@company", companyId.Trim());
+        Add(command, "@party", FormatGuid(partyId));
+        Add(command, "@id", FormatGuid(keepId));
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Keeps the party row's legacy single fields as the PRIMARY
+    /// contact / DEFAULT address summary (W1 sync rule): the primary
+    /// contact mirrors phone/mobile/email, the default address mirrors
+    /// the address text. When no primary/default row exists the summary
+    /// is left untouched (the card fields remain the summary of record).</summary>
+    private async Task SyncPartySummaryAsync(DbConnection connection, DbTransaction transaction, string companyId, Guid partyId, CancellationToken cancellationToken)
+    {
+        string? phone = null, mobile = null, email = null;
+        var hasContact = false;
+        await using (var find = CreateCommand(connection, transaction,
+            $"SELECT phone, mobile, email FROM party_contacts WHERE company_id = @company AND party_id = @party AND {NotDeleted} AND is_primary = {( _provider == "PostgreSQL" ? "true" : "1")} LIMIT 1"))
+        {
+            Add(find, "@company", companyId.Trim());
+            Add(find, "@party", FormatGuid(partyId));
+            await using var reader = await find.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                hasContact = true;
+                phone = ReadString(reader, 0); mobile = ReadString(reader, 1); email = ReadString(reader, 2);
+            }
+        }
+        if (hasContact)
+        {
+            await using var update = CreateCommand(connection, transaction,
+                $"UPDATE parties SET phone = @phone, mobile = @mobile, email = @email, updated_at = {NowExpr} WHERE company_id = @company AND id = @id AND {NotDeleted}");
+            Add(update, "@company", companyId.Trim());
+            Add(update, "@id", FormatGuid(partyId));
+            Add(update, "@phone", (object?)phone ?? DBNull.Value);
+            Add(update, "@mobile", (object?)mobile ?? DBNull.Value);
+            Add(update, "@email", (object?)email ?? DBNull.Value);
+            await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        string? address = null;
+        var hasAddress = false;
+        await using (var find = CreateCommand(connection, transaction,
+            $"SELECT address FROM party_addresses WHERE company_id = @company AND party_id = @party AND {NotDeleted} AND is_default = {(_provider == "PostgreSQL" ? "true" : "1")} LIMIT 1"))
+        {
+            Add(find, "@company", companyId.Trim());
+            Add(find, "@party", FormatGuid(partyId));
+            await using var reader = await find.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                hasAddress = true;
+                address = ReadString(reader, 0);
+            }
+        }
+        if (hasAddress)
+        {
+            await using var update = CreateCommand(connection, transaction,
+                $"UPDATE parties SET address = @address, updated_at = {NowExpr} WHERE company_id = @company AND id = @id AND {NotDeleted}");
+            Add(update, "@company", companyId.Trim());
+            Add(update, "@id", FormatGuid(partyId));
+            Add(update, "@address", (object?)address ?? DBNull.Value);
+            await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async Task ResyncPartySummaryAsync(string companyId, Guid childId, string childTable, CancellationToken cancellationToken)
+    {
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        Guid partyId;
+        await using (var find = CreateCommand(connection, null,
+            $"SELECT party_id FROM {childTable} WHERE company_id = @company AND id = @id"))
+        {
+            Add(find, "@company", companyId.Trim());
+            Add(find, "@id", FormatGuid(childId));
+            var value = await find.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            if (value is null or DBNull)
+                return;
+            partyId = ReadGuidValue(value);
+        }
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await SyncPartySummaryAsync(connection, transaction, companyId, partyId, cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch { await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false); throw; }
+    }
+
+    private static Guid ReadGuidValue(object value)
+        => value is Guid g ? g : Guid.Parse(Convert.ToString(value, CultureInfo.InvariantCulture)!);
+
+    /// <summary>
+    /// Posts the party's opening balance in ONE transaction: a GL journal
+    /// through GlPosting (Dr party control / Cr retained earnings 32 for
+    /// a customer debit opening; mirrored for credits and for suppliers),
+    /// the matching party_ledger row (doc_kind 'OPN'), and the marker on
+    /// the party row. The marker is the one-opening guard: while it is
+    /// set, a second opening is refused (corrections go through a normal
+    /// journal, never a silent re-opening).
+    /// </summary>
+    public async Task<string> PostPartyOpeningBalanceAsync(string companyId, string kind, string code, decimal signedAmount, DateOnly openingDate, string currencyCode, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        if (signedAmount == 0m)
+            throw new InvalidOperationException("Opening balance amount cannot be zero.");
+        var partyKind = kind.Trim().ToUpperInvariant();
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            Party? party = null;
+            await using (var find = CreateCommand(connection, transaction,
+                $"SELECT {PartyColumns} FROM parties WHERE company_id = @company AND kind = @kind AND code = @code AND {NotDeleted}"))
+            {
+                Add(find, "@company", companyId.Trim());
+                Add(find, "@kind", partyKind);
+                Add(find, "@code", code.Trim());
+                await using var reader = await find.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    party = MapParty(reader);
+            }
+            if (party is null)
+                throw new InvalidOperationException($"Party '{code.Trim()}' was not found for this company.");
+            if (party.OpeningBalanceAmount.HasValue || !string.IsNullOrWhiteSpace(party.OpeningJournalId))
+                throw new InvalidOperationException($"Party '{code.Trim()}' already has an opening balance ({party.OpeningBalanceAmount}); a second opening is blocked. Post a correcting journal instead.");
+            if (party.LedgerId <= 0)
+                throw new InvalidOperationException("The party has no ledger identity; save the card first.");
+
+            var companyGuid = await ResolveCompanyGuidAsync(connection, transaction, companyId, cancellationToken).ConfigureAwait(false);
+            var controlAccount = !string.IsNullOrWhiteSpace(party.GlAccountCode)
+                ? party.GlAccountCode!.Trim()
+                : partyKind == PartyKinds.Customer ? GlAccounts.Receivable : GlAccounts.Payable;
+            var amount = Math.Abs(signedAmount);
+            // Orientation: a customer opening DEBIT (receivable) is
+            // Dr control / Cr equity; a customer credit opening mirrors.
+            // Suppliers mirror customers (a payable opening is a credit).
+            var controlIsDebit = (partyKind == PartyKinds.Customer) == (signedAmount > 0);
+            var lines = new[]
+            {
+                new GlLineRequest(controlAccount, controlIsDebit ? amount : 0m, controlIsDebit ? 0m : amount, null, $"Opening balance — {party.Code}"),
+                new GlLineRequest(GlAccounts.OpeningBalanceEquity, controlIsDebit ? 0m : amount, controlIsDebit ? amount : 0m, null, $"Opening balance — {party.Code}")
+            };
+            var sourceNo = $"OPN-{partyKind}-{party.Code}";
+            var result = GlPosting.PostInTransaction(connection, transaction, _provider,
+                new GlDocumentRequest(companyGuid, openingDate,
+                    $"Opening balance — {partyKind} {party.Code} {party.NameEn}",
+                    "OPN", party.Id.ToString("D"), sourceNo,
+                    string.IsNullOrWhiteSpace(currencyCode) ? "SAR" : currencyCode.Trim().ToUpperInvariant(), 0m, lines),
+                userId);
+
+            var companyCode = await PartyLedger.ResolveCompanyCodeAsync(connection, transaction, _provider, companyId, cancellationToken).ConfigureAwait(false);
+            var ledgerDebit = partyKind == PartyKinds.Customer ? (signedAmount > 0 ? amount : 0m) : (signedAmount > 0 ? 0m : amount);
+            var ledgerCredit = partyKind == PartyKinds.Customer ? (signedAmount > 0 ? 0m : amount) : (signedAmount > 0 ? amount : 0m);
+            // Supplier signedAmount convention: positive = amount owed
+            // (a credit balance), so the ledger row is a credit; the GL
+            // above already mirrors through controlIsDebit.
+            PartyLedger.WriteEntry(connection, transaction, _provider, companyCode, partyKind, party.LedgerId,
+                "OPN", null, sourceNo, openingDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                ledgerDebit, ledgerCredit,
+                string.IsNullOrWhiteSpace(currencyCode) ? "SAR" : currencyCode.Trim().ToUpperInvariant(),
+                "Opening balance", result.JournalEntryId.ToString("D"));
+
+            await using (var mark = CreateCommand(connection, transaction,
+                $"UPDATE parties SET opening_balance_amount = @amount, opening_balance_date = @date, opening_journal_id = @journal, updated_by = @user, updated_at = {NowExpr} WHERE company_id = @company AND id = @id AND {NotDeleted}"))
+            {
+                Add(mark, "@amount", signedAmount);
+                Add(mark, "@date", openingDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                Add(mark, "@journal", result.JournalEntryId.ToString("D"));
+                Add(mark, "@user", userId);
+                Add(mark, "@company", companyId.Trim());
+                Add(mark, "@id", FormatGuid(party.Id));
+                if (await mark.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+                    throw new InvalidOperationException("The opening-balance marker could not be stored.");
+            }
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return result.JournalEntryId.ToString("D");
+        }
+        catch { await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false); throw; }
+    }
+
+    private async Task<Guid> ResolveCompanyGuidAsync(DbConnection connection, DbTransaction transaction, string companyId, CancellationToken cancellationToken)
+    {
+        await using var command = CreateCommand(connection, transaction,
+            "SELECT company_id FROM companies WHERE company_code = @code");
+        Add(command, "@code", companyId.Trim());
+        var value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        if (value is null or DBNull || !Guid.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), out var guid))
+            throw new InvalidOperationException($"Company '{companyId.Trim()}' has no Guid identity in the companies registry; the opening balance cannot post to GL.");
+        return guid;
     }
 
     /// <summary>
@@ -927,6 +1370,12 @@ public sealed class MasterCardRepository : IMasterCardRepository
         Add(command, "@notes", (object?)NullIfBlank(party.Notes) ?? DBNull.Value);
         Add(command, "@user", userId);
         Add(command, "@ledgerId", party.LedgerId);
+        Add(command, "@defaultCurrency", (object?)NullIfBlank(party.DefaultCurrency) ?? DBNull.Value);
+        Add(command, "@riskClass", (object?)NullIfBlank(party.RiskClass) ?? DBNull.Value);
+        Add(command, "@isBlacklisted", DbBool(party.IsBlacklisted));
+        Add(command, "@blacklistReason", (object?)NullIfBlank(party.BlacklistReason) ?? DBNull.Value);
+        Add(command, "@blacklistedAt", (object?)NullIfBlank(party.BlacklistedAt) ?? DBNull.Value);
+        Add(command, "@blacklistedBy", (object?)NullIfBlank(party.BlacklistedBy) ?? DBNull.Value);
     }
 
     private static Party MapParty(DbDataReader reader) => new()
@@ -949,7 +1398,16 @@ public sealed class MasterCardRepository : IMasterCardRepository
         Address = ReadString(reader, 15),
         IsActive = ReadBool(reader, 16),
         Notes = ReadString(reader, 17),
-        LedgerId = reader.IsDBNull(18) ? 0 : Convert.ToInt64(reader.GetValue(18), CultureInfo.InvariantCulture)
+        LedgerId = reader.IsDBNull(18) ? 0 : Convert.ToInt64(reader.GetValue(18), CultureInfo.InvariantCulture),
+        DefaultCurrency = ReadString(reader, 19),
+        RiskClass = ReadString(reader, 20),
+        IsBlacklisted = ReadBool(reader, 21),
+        BlacklistReason = ReadString(reader, 22),
+        BlacklistedAt = ReadString(reader, 23),
+        BlacklistedBy = ReadString(reader, 24),
+        OpeningBalanceAmount = reader.IsDBNull(25) ? null : ReadDecimal(reader, 25),
+        OpeningBalanceDate = ReadString(reader, 26),
+        OpeningJournalId = ReadString(reader, 27)
     };
 
     // ------------------------------------------------------------ Party groups

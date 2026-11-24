@@ -1,6 +1,7 @@
 using System.Data.Common;
 using System.Globalization;
 using ShouTech.Domain;
+using ShouTech.Domain.Entities;
 
 namespace ShouTech.Infrastructure;
 
@@ -36,12 +37,14 @@ namespace ShouTech.Infrastructure;
 ///   via COALESCE) and every caller passes the document's BASE total
 ///   (stored total x effective rate). A foreign-currency document can
 ///   no longer slip under a base-currency limit at face value.
-/// - Violation is a HARD BLOCK (ACC-5006). No override is honored: the
-///   permission seeds contain no credit-override permission
-///   (SALES.PRICE.OVERRIDE / SALES.DISCOUNT.OVERRIDE govern price and
-///   discount, not credit exposure). If a SALES.CREDIT.OVERRIDE
-///   permission is seeded in the future, the override belongs here, with
-///   an audit entry, not at the call sites.
+/// - Violation is a HARD BLOCK (ACC-5006) unless the caller supplies an
+///   authorized override (W1, migration 095): when a
+///   <see cref="CreditOverrideContext"/> is present (the posting user
+///   holds SALES.CREDIT.OVERRIDE), the breach is recorded in
+///   credit_overrides (actor + amounts) instead of throwing. Call sites
+///   derive the context from the posting user's permissions; where
+///   permissions are not visible the parameter stays null and the hard
+///   block is unchanged.
 /// </summary>
 public static class PartyCreditGuard
 {
@@ -64,6 +67,21 @@ public static class PartyCreditGuard
         => EnsureWithinLimitAsync(connection, transaction, provider, companyKey, partyKind, partyId, partyCode, newDocumentTotal, paramPrefix)
             .GetAwaiter().GetResult();
 
+    /// <summary>Override-aware synchronous wrapper (W1).</summary>
+    public static void EnsureWithinLimit(
+        DbConnection connection,
+        DbTransaction transaction,
+        string provider,
+        string companyKey,
+        string partyKind,
+        long partyId,
+        string? partyCode,
+        decimal newDocumentTotal,
+        string paramPrefix,
+        CreditOverrideContext? creditOverride)
+        => EnsureWithinLimitAsync(connection, transaction, provider, companyKey, partyKind, partyId, partyCode, newDocumentTotal, paramPrefix, creditOverride)
+            .GetAwaiter().GetResult();
+
     public static async Task EnsureWithinLimitAsync(
         DbConnection connection,
         DbTransaction transaction,
@@ -74,6 +92,20 @@ public static class PartyCreditGuard
         string? partyCode,
         decimal newDocumentTotal,
         string paramPrefix,
+        CancellationToken cancellationToken = default)
+        => await EnsureWithinLimitAsync(connection, transaction, provider, companyKey, partyKind, partyId, partyCode, newDocumentTotal, paramPrefix, null, cancellationToken).ConfigureAwait(false);
+
+    public static async Task EnsureWithinLimitAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        string provider,
+        string companyKey,
+        string partyKind,
+        long partyId,
+        string? partyCode,
+        decimal newDocumentTotal,
+        string paramPrefix,
+        CreditOverrideContext? creditOverride,
         CancellationToken cancellationToken = default)
     {
         if (partyId <= 0 || newDocumentTotal <= 0)
@@ -183,9 +215,29 @@ public static class PartyCreditGuard
         }
 
         if (balance + newDocumentTotal > limit.Value)
+        {
+            if (creditOverride is not null && !string.IsNullOrWhiteSpace(creditOverride.Actor)
+                && PartyLedger.TableExists(connection, transaction, provider, "credit_overrides"))
+            {
+                await using var audit = Create(
+                    $"INSERT INTO credit_overrides (id, company_id, party_kind, party_id, doc_kind, doc_no, current_balance, document_amount, credit_limit, actor) VALUES ({p}id, {p}co, {p}kind, {p}party, {p}dk, {p}dn, {p}bal, {p}amt, {p}lim, {p}actor)");
+                Add(audit, $"{p}id", Guid.NewGuid().ToString("D"));
+                Add(audit, $"{p}co", companyCode);
+                Add(audit, $"{p}kind", kind);
+                Add(audit, $"{p}party", partyId);
+                Add(audit, $"{p}dk", (object?)creditOverride.DocKind ?? DBNull.Value);
+                Add(audit, $"{p}dn", (object?)creditOverride.DocNo ?? DBNull.Value);
+                Add(audit, $"{p}bal", balance);
+                Add(audit, $"{p}amt", newDocumentTotal);
+                Add(audit, $"{p}lim", limit.Value);
+                Add(audit, $"{p}actor", creditOverride.Actor.Trim());
+                await audit.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                return;
+            }
             throw new AppError(
                 ErrorCodes.CreditLimitExceeded,
                 $"Posting this document would exceed the party credit limit. Limit: {limit.Value}; current balance: {balance}; document total: {newDocumentTotal}.",
                 limit.Value, balance, newDocumentTotal);
+        }
     }
 }

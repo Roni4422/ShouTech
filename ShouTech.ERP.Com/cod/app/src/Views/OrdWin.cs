@@ -331,7 +331,18 @@ public sealed class OrdWin : BaseWin, IWindowMode
     private void ResolveParty()
     {
         if (_loading) return;
-        var found = TaxSvc.ResolveParty(_txtPartyCode.Text.Trim(), _kind == OrdKind.Sales);
+        (long? Id, string Name)? found;
+        try
+        {
+            found = TaxSvc.ResolveParty(_txtPartyCode.Text.Trim(), _kind == OrdKind.Sales);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // W1: blacklisted party — clear rejection, party not applied.
+            ShowWarningMessage(ex.Message);
+            _partyId = null;
+            return;
+        }
         if (found is { } party)
         {
             _partyId = party.Id;
@@ -602,6 +613,30 @@ public sealed class OrdWin : BaseWin, IWindowMode
             UpdateEditState();
             RefreshTotals();
             if (!IsRfq) await RefreshProgressAsync(_docId.Value);
+        }
+        catch (ShouTech.Domain.AppError ex) when (ex.Code == ShouTech.Domain.ErrorCodes.CreditLimitExceeded
+            && _kind == OrdKind.Sales
+            && AppHost.Permissions.Has(PermCat.Sales.CreditOverride))
+        {
+            // W1: the posting user holds SALES.CREDIT.OVERRIDE — offer the
+            // audited override instead of a dead-end block. The guard
+            // records actor + amounts in credit_overrides on the retry.
+            if (MessageBox.Show(this, $"{ex.Message}\n\n{T("OrderDoc.CreditOverrideConfirm")}", Title,
+                    MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                return;
+            try
+            {
+                await AppHost.Orders.PostOrderAsync(Side, _docId.Value, CurrentUserId,
+                    new ShouTech.Domain.Entities.CreditOverrideContext(CurrentUserId, null, null));
+                _status = CommercialDocumentStatus.Posted;
+                UpdateEditState();
+                RefreshTotals();
+                if (!IsRfq) await RefreshProgressAsync(_docId.Value);
+            }
+            catch (Exception retryEx)
+            {
+                ShowWarningMessage(retryEx.Message);
+            }
         }
         catch (Exception ex)
         {

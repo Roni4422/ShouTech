@@ -27,6 +27,8 @@ public static class RptNav
                 OpenGoodsReceivedNotInvoiced(owner); return true;
             case "Reports.SupplierStatement":
                 OpenSupplierStatement(owner); return true;
+            case "Reports.CustomerStatement":
+                OpenCustomerStatement(owner); return true;
             case "Accounts.TrialBalance":
             case "Reports.TrialBalance":
                 OpenTrialBalance(owner); return true;
@@ -37,9 +39,12 @@ public static class RptNav
             case "Accounts.IncomeStatement":
                 OpenIncomeStatement(owner); return true;
             case "Accounts.Ledger":
-            case "Accounts.CustomerStatement":
             case "Reports.AccountStatement":
                 OpenAccountStatement(owner); return true;
+            // W1: the customer statement is the party-ledger statement
+            // (CustStmtWin), not the GL account statement it used to open.
+            case "Accounts.CustomerStatement":
+                OpenCustomerStatement(owner); return true;
             case "Accounts.GeneralJournal":
             case "Reports.JournalList":
                 OpenJournalList(owner); return true;
@@ -212,6 +217,8 @@ public static class RptNav
     public static void OpenPaymentReconciliation(Window? owner = null) => Show(new PayRecWin(), owner);
     public static void OpenGoodsReceivedNotInvoiced(Window? owner = null) => Show(new GrniWin(), owner);
     public static void OpenSupplierStatement(Window? owner = null) => Show(new SupStatementWin(), owner);
+    public static void OpenCustomerStatement(Window? owner = null, string? partyCode = null)
+        => Show(new CustStmtWin { InitialSearch = partyCode }, owner);
     public static void OpenProjects(Window? owner = null) => Show(new ProjWin(), owner);
     public static void OpenAssets(Window? owner = null) => Show(new AssetWin(), owner);
     public static void OpenAccountBalance(Window? owner = null) => Show(new AccBalWin(), owner);

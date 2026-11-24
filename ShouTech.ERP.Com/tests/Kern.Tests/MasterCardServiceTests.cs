@@ -293,6 +293,95 @@ public class MasterCardServiceTests
 
     // ------------------------------------------------------------------ TestDb
 
+    // ------------------------------------------------------------ W1 (mig 095)
+
+    [Fact]
+    public async Task Party_HeaderAdditions_RoundTrip()
+    {
+        await using var db = await TestDb.CreateAsync();
+        var service = db.Service;
+        var party = new Party
+        {
+            Kind = PartyKinds.Customer, Code = "C-900", NameEn = "Risky Customer",
+            DefaultCurrency = "USD", RiskClass = PartyRiskClasses.High,
+            IsBlacklisted = true, BlacklistReason = "Unpaid judgments",
+            BlacklistedAt = "2026-01-02 03:04:05", BlacklistedBy = User
+        };
+        await service.SavePartyAsync(Company, party, User);
+        var loaded = await service.GetPartyByCodeAsync(Company, "C", "C-900");
+        Assert.NotNull(loaded);
+        Assert.Equal("USD", loaded!.DefaultCurrency);
+        Assert.Equal(PartyRiskClasses.High, loaded.RiskClass);
+        Assert.True(loaded.IsBlacklisted);
+        Assert.Equal("Unpaid judgments", loaded.BlacklistReason);
+        Assert.Equal(User, loaded.BlacklistedBy);
+        Assert.Null(loaded.OpeningBalanceAmount);
+    }
+
+    [Fact]
+    public async Task Party_BlacklistWithoutReason_IsRejected()
+    {
+        await using var db = await TestDb.CreateAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            db.Service.SavePartyAsync(Company, new Party
+            {
+                Kind = PartyKinds.Customer, Code = "C-901", NameEn = "No Reason",
+                IsBlacklisted = true
+            }, User));
+    }
+
+    [Fact]
+    public async Task PartyContactsAddressesBranches_RoundTrip_AndPrimaryMirror()
+    {
+        await using var db = await TestDb.CreateAsync();
+        var service = db.Service;
+        var party = new Party { Kind = PartyKinds.Customer, Code = "C-910", NameEn = "Structured Customer" };
+        await service.SavePartyAsync(Company, party, User);
+
+        var contact = new PartyContact
+        {
+            PartyId = party.Id, Name = "Sara Buyer", Role = "Purchasing",
+            Phone = "111", Mobile = "222", Email = "sara@example.com", IsPrimary = true
+        };
+        await service.SavePartyContactAsync(Company, contact, User);
+        var second = new PartyContact { PartyId = party.Id, Name = "Omar Ops", Phone = "333" };
+        await service.SavePartyContactAsync(Company, second, User);
+
+        var address = new PartyAddress
+        {
+            PartyId = party.Id, Kind = PartyAddressKinds.Delivery,
+            City = "Riyadh", Country = "SA", PostalCode = "12345",
+            Address = "King Fahd Rd 10", IsDefault = true
+        };
+        await service.SavePartyAddressAsync(Company, address, User);
+
+        var branch = new PartyBranch { PartyId = party.Id, Name = "Jeddah Branch", Address = "Corniche", Phone = "444" };
+        await service.SavePartyBranchAsync(Company, branch, User);
+
+        Assert.Equal(2, (await service.GetPartyContactsAsync(Company, party.Id)).Count);
+        Assert.Single(await service.GetPartyAddressesAsync(Company, party.Id));
+        Assert.Single(await service.GetPartyBranchesAsync(Company, party.Id));
+
+        // Primary contact / default address mirror onto the party summary.
+        var loaded = await service.GetPartyByCodeAsync(Company, "C", "C-910");
+        Assert.NotNull(loaded);
+        Assert.Equal("111", loaded!.Phone);
+        Assert.Equal("222", loaded.Mobile);
+        Assert.Equal("sara@example.com", loaded.Email);
+        Assert.Equal("King Fahd Rd 10", loaded.Address);
+
+        // A second primary replaces the first as THE primary.
+        second.IsPrimary = true;
+        await service.SavePartyContactAsync(Company, second, User);
+        var contacts = await service.GetPartyContactsAsync(Company, party.Id);
+        Assert.Single(contacts, c => c.IsPrimary);
+        Assert.Equal("Omar Ops", contacts.Single(c => c.IsPrimary).Name);
+
+        // Soft delete removes the row from reads.
+        await service.DeletePartyBranchAsync(Company, branch.Id, User);
+        Assert.Empty(await service.GetPartyBranchesAsync(Company, party.Id));
+    }
+
     private sealed class TestDb : IAsyncDisposable
     {
         private readonly string _path;
@@ -313,6 +402,20 @@ public class MasterCardServiceTests
             await db.ExecuteAsync(ReadMigration031());
             // Migration 061 adds the canonical party ledger identity.
             await db.ExecuteAsync("ALTER TABLE parties ADD COLUMN ledger_id INTEGER;");
+            // W1 (migration 095): stubs for the tables 095 touches that
+            // the light fixture does not otherwise build.
+            await db.ExecuteAsync("""
+                CREATE TABLE permissions (
+                    permission_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    permission_code TEXT UNIQUE, permission_name TEXT, group_code TEXT,
+                    feature_code TEXT, operation_code TEXT, name_ar TEXT, name_en TEXT,
+                    description TEXT, display_order INTEGER, is_sensitive INTEGER, is_active INTEGER DEFAULT 1
+                );
+                CREATE TABLE roles (role_id INTEGER PRIMARY KEY AUTOINCREMENT, role_code TEXT, is_active INTEGER DEFAULT 1);
+                CREATE TABLE role_permissions (role_id INTEGER, permission_id INTEGER);
+                CREATE TABLE sales_documents (doc_id INTEGER PRIMARY KEY AUTOINCREMENT, company_id TEXT);
+                """);
+            await db.ExecuteAsync(ReadMigration095());
             // Core ledger shapes (from migrations 001/009/010) needed by the
             // balance and delete-guard queries.
             await db.ExecuteAsync("""
@@ -368,6 +471,17 @@ public class MasterCardServiceTests
                 );
                 """);
             return db;
+        }
+
+        private static string ReadMigration095()
+        {
+            var root = new DirectoryInfo(AppContext.BaseDirectory);
+            while (root is not null && !Directory.Exists(Path.Combine(root.FullName, "dba", "mig")))
+                root = root.Parent;
+            Assert.NotNull(root);
+            var path = Path.Combine(root!.FullName, "dba", "mig", "sqlite", "095_party_structure.sql");
+            Assert.True(File.Exists(path), $"Migration 095 not found: {path}");
+            return File.ReadAllText(path);
         }
 
         private static string ReadMigration031()
@@ -472,6 +586,16 @@ public class MasterCardServiceTests
         public Task SoftDeletePartyAsync(string companyId, Guid id, string userId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<int> CountPartyLedgerRefsAsync(string companyId, string kind, string code, CancellationToken cancellationToken = default) => Task.FromResult(0);
         public Task<LedgerBalance> GetPartyBalanceAsync(string companyId, string kind, string code, CancellationToken cancellationToken = default) => Task.FromResult(new LedgerBalance());
+        public Task<IReadOnlyList<PartyContact>> GetPartyContactsAsync(string companyId, Guid partyId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<PartyContact>>(Array.Empty<PartyContact>());
+        public Task SavePartyContactAsync(string companyId, PartyContact contact, string userId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SoftDeletePartyContactAsync(string companyId, Guid id, string userId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<IReadOnlyList<PartyAddress>> GetPartyAddressesAsync(string companyId, Guid partyId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<PartyAddress>>(Array.Empty<PartyAddress>());
+        public Task SavePartyAddressAsync(string companyId, PartyAddress address, string userId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SoftDeletePartyAddressAsync(string companyId, Guid id, string userId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<IReadOnlyList<PartyBranch>> GetPartyBranchesAsync(string companyId, Guid partyId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<PartyBranch>>(Array.Empty<PartyBranch>());
+        public Task SavePartyBranchAsync(string companyId, PartyBranch branch, string userId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SoftDeletePartyBranchAsync(string companyId, Guid id, string userId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<string> PostPartyOpeningBalanceAsync(string companyId, string kind, string code, decimal signedAmount, DateOnly openingDate, string currencyCode, string userId, CancellationToken cancellationToken = default) => Task.FromResult(Guid.NewGuid().ToString("D"));
         public Task<IReadOnlyList<PartyGroup>> GetPartyGroupsAsync(string companyId, string? kind = null, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<PartyGroup>>(Array.Empty<PartyGroup>());
         public Task<PartyGroup?> GetPartyGroupByCodeAsync(string companyId, string kind, string code, CancellationToken cancellationToken = default) => Task.FromResult<PartyGroup?>(null);
         public Task SavePartyGroupAsync(string companyId, PartyGroup group, string userId, CancellationToken cancellationToken = default) => Task.CompletedTask;

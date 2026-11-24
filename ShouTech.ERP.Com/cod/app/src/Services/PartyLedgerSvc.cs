@@ -41,6 +41,44 @@ public static class PartyLedgerSvc
         if (string.IsNullOrWhiteSpace(cs)) return null;
         var company = AppState.CurrentCompanyCode ?? "";
 
+        // W1 (migration 095): a BLACKLISTED party is rejected at
+        // resolution for new documents, with the reason — its balances
+        // stay visible in reports, but no new document may name it.
+        // NOTE: no catalogued error code exists for this rejection yet
+        // (ACC-5020 requested — see W1 report).
+        try
+        {
+            using var connection = Open(cs);
+            using var cmd = connection.CreateCommand();
+            var deletedPredicate = DatabaseRuntime.IsPostgreSql() ? "is_deleted = FALSE" : "is_deleted = 0";
+            var blacklistedPredicate = DatabaseRuntime.IsPostgreSql() ? "is_blacklisted = TRUE" : "COALESCE(is_blacklisted, 0) = 1";
+            cmd.CommandText = $"""
+                SELECT blacklist_reason
+                FROM parties
+                WHERE company_id=$c AND kind=$kind AND code=$code AND {deletedPredicate} AND {blacklistedPredicate}
+                LIMIT 1;
+                """;
+            Add(cmd, "$c", company);
+            Add(cmd, "$kind", kind.Trim().ToUpperInvariant());
+            Add(cmd, "$code", code.Trim());
+            using var reader = cmd.ExecuteReader();
+            if (reader.Read())
+            {
+                var reason = reader.IsDBNull(0) ? null : Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture);
+                throw new InvalidOperationException(
+                    $"Party '{code.Trim()}' is blacklisted and cannot be used on new documents." +
+                    (string.IsNullOrWhiteSpace(reason) ? string.Empty : $" Reason: {reason}"));
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "PartyLedgerSvc.ResolveParty.Blacklist");
+        }
+
         try
         {
             using var connection = Open(cs);

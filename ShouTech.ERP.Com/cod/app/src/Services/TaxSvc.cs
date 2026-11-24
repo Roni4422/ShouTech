@@ -507,6 +507,45 @@ public static class TaxSvc
         if (string.IsNullOrWhiteSpace(cs)) return null;
         var company = AppState.CurrentCompanyCode ?? "";
 
+        // W1 (migration 095): a BLACKLISTED party must not resolve onto
+        // a NEW sales document even though it is active. Checked first
+        // and thrown directly (the resolution catch below would
+        // otherwise swallow it); callers surface the message.
+        // NOTE: no catalogued error code exists for this rejection yet
+        // (ACC-5020 requested — see W1 report).
+        try
+        {
+            using var connection = Open(cs);
+            using var cmd = connection.CreateCommand();
+            var deletedPredicate = DatabaseRuntime.IsPostgreSql() ? "is_deleted = FALSE" : "is_deleted = 0";
+            var blacklistedPredicate = DatabaseRuntime.IsPostgreSql() ? "is_blacklisted = TRUE" : "COALESCE(is_blacklisted, 0) = 1";
+            cmd.CommandText = $"""
+                SELECT blacklist_reason
+                FROM parties
+                WHERE company_id=$c AND kind=$kind AND code=$code AND {deletedPredicate} AND {blacklistedPredicate}
+                LIMIT 1;
+                """;
+            Add(cmd, "$c", company);
+            Add(cmd, "$kind", customer ? "C" : "S");
+            Add(cmd, "$code", code.Trim());
+            using var reader = cmd.ExecuteReader();
+            if (reader.Read())
+            {
+                var reason = reader.IsDBNull(0) ? null : Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture);
+                throw new InvalidOperationException(
+                    $"Party '{code.Trim()}' is blacklisted and cannot be used on new sales documents." +
+                    (string.IsNullOrWhiteSpace(reason) ? string.Empty : $" Reason: {reason}"));
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
+        catch (Exception exBlk)
+        {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exBlk, "TaxSvc.ResolveParty.Blacklist");
+        }
+
         try
         {
             using var connection = Open(cs);

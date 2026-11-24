@@ -274,6 +274,36 @@ public static class InvRepo
             cmd.ExecuteNonQuery();
         }
 
+        // W1 (migration 095): a SAL invoice's due date is doc_date + the
+        // party's credit_days, set at save when not already set (the
+        // native InvoiceWin path; the chain path sets it in
+        // CommercialDocumentRepository).
+        if (isSales && doc.KindCode == "SAL" && doc.PartyId is not null)
+        {
+            try
+            {
+                var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+                if (PartyLedger.ColumnExists(connection, tx, provider, headerTable, "due_date"))
+                {
+                    var due = PartyLedger.ComputeDueDate(connection, tx, provider, Company,
+                        doc.PartyId.Value, DateOnly.FromDateTime(doc.DocDate));
+                    if (due is not null)
+                    {
+                        using var dueCmd = connection.CreateCommand();
+                        dueCmd.Transaction = tx;
+                        dueCmd.CommandText = $"UPDATE {headerTable} SET due_date=$due WHERE doc_id=$id AND due_date IS NULL;";
+                        Add(dueCmd, "$due", due.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                        Add(dueCmd, "$id", docId);
+                        dueCmd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (Exception exDue)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exDue, "InvRepo.SaveDraft.DueDate");
+            }
+        }
+
         tx.Commit();
         doc.DocId = docId;
         doc.Status = InvDocStatus.Draft;
