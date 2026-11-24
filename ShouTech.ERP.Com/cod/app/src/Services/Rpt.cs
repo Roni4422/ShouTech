@@ -674,9 +674,22 @@ public static class RptQuery
 
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> GoodsReceivedNotInvoicedReconciliationAsync(
         DateTime asOf, CancellationToken ct)
+        => await GoodsReceivedNotInvoicedReconciliationAsync(null, asOf, ct);
+
+    /// <summary>
+    /// GRNI tie-out whose receipt scope ALIGNS with the detail query (Y2
+    /// defect fix): when a from-date is supplied it bounds BOTH the open
+    /// receipt lines and the GL 2203 balance, so the difference the report
+    /// shows can always be explained by the rows above it. A null from-date
+    /// is unbounded, matching the detail query's new default.
+    /// </summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> GoodsReceivedNotInvoicedReconciliationAsync(
+        DateTime? from, DateTime asOf, CancellationToken ct)
     {
         DocSchema.Ensure();
-        const string sql = """
+        var receiptFrom = from.HasValue ? "AND r.doc_date >= $from" : string.Empty;
+        var glFrom = from.HasValue ? "AND j.entry_date >= $from" : string.Empty;
+        var sql = $"""
             WITH open_receipt_lines AS (
                 SELECT l.line_subtotal * r.exchange_rate *
                     CASE WHEN l.qty > 0 AND l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0) > 0
@@ -724,6 +737,7 @@ public static class RptQuery
                   AND r.doc_kind = 'RCV'
                   AND r.status = 'Posted'
                   AND CAST(r.is_deleted AS TEXT) IN ('0', 'false')
+                  {receiptFrom}
                   AND r.doc_date <= $asOf
             ),
             receipt_control AS (
@@ -741,12 +755,121 @@ public static class RptQuery
                 WHERE co.company_code = $company
                   AND a.account_code = '2203'
                   AND j.status IN (1, 2)
+                  {glFrom}
                   AND j.entry_date <= $asOf
             )
             SELECT receipt_control.OpenReceiptBase,
                    gl_control.GlBalanceBase,
                    receipt_control.OpenReceiptBase - gl_control.GlBalanceBase AS DifferenceBase
             FROM receipt_control CROSS JOIN gl_control;
+            """;
+        var args = new List<(string, object?)>
+        {
+            ("$company", Company),
+            ("$asOf", DateStart(asOf))
+        };
+        if (from.HasValue)
+            args.Add(("$from", DateStart(from.Value)));
+        return await QueryAsync(sql, ct, args.ToArray());
+    }
+
+    /// <summary>
+    /// Y2 exception (c): the GL 2203 tie-out broken down per period
+    /// (calendar month). ReceiptBase is the still-open receipt value of
+    /// receipts dated in the period (valued as of the as-of date, exactly
+    /// like the reconciliation CTE); GlMovementBase is the net posted
+    /// movement of account 2203 in the period. The window accumulates both
+    /// sides and flags every period whose cumulative difference is not
+    /// zero. Company-scoped, parameterized, provider-neutral (period is a
+    /// plain yyyy-MM prefix of the ISO date text on both providers).
+    /// </summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> GrniTieOutByPeriodAsync(
+        DateTime asOf, CancellationToken ct)
+    {
+        DocSchema.Ensure();
+        const string sql = """
+            WITH open_receipt_lines AS (
+                SELECT substr(CAST(r.doc_date AS TEXT), 1, 7) AS Period,
+                       l.line_subtotal * r.exchange_rate *
+                       CASE WHEN l.qty > 0 AND l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0) > 0
+                            THEN (l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0)) / l.qty
+                            ELSE 0 END AS OpenBaseAmount
+                FROM purchase_documents r
+                INNER JOIN companies co ON CAST(co.company_id AS TEXT) = r.company_id
+                INNER JOIN purchase_document_lines l ON l.doc_id = r.doc_id
+                INNER JOIN document_links dl
+                  ON dl.company_id = r.company_id
+                 AND dl.source_doc_kind = 'PO'
+                 AND dl.target_doc_kind = 'RCV'
+                 AND dl.target_doc_id = r.doc_id
+                LEFT JOIN (
+                    SELECT m.company_id, m.receipt_doc_id, m.receipt_line_id,
+                           SUM(m.matched_qty) AS MatchedQty
+                    FROM purchase_receipt_invoice_matches m
+                    INNER JOIN purchase_documents inv
+                      ON inv.company_id = m.company_id
+                     AND inv.doc_id = m.invoice_doc_id
+                     AND inv.doc_kind = 'PUR'
+                     AND inv.status = 'Posted'
+                     AND CAST(inv.is_deleted AS TEXT) IN ('0', 'false')
+                     AND inv.doc_date <= $asOf
+                    GROUP BY m.company_id, m.receipt_doc_id, m.receipt_line_id
+                ) m ON m.company_id = r.company_id
+                   AND m.receipt_doc_id = r.doc_id
+                   AND m.receipt_line_id = l.line_id
+                LEFT JOIN (
+                    SELECT a.company_id, a.original_doc_id, a.original_line_id,
+                           SUM(a.returned_qty) AS ReturnedQty
+                    FROM purchase_receipt_return_line_allocations a
+                    INNER JOIN purchase_documents rd
+                      ON rd.company_id = a.company_id
+                     AND rd.doc_id = a.return_doc_id
+                     AND rd.doc_kind = 'RCR'
+                     AND rd.status = 'Posted'
+                     AND CAST(rd.is_deleted AS TEXT) IN ('0', 'false')
+                     AND rd.doc_date <= $asOf
+                    GROUP BY a.company_id, a.original_doc_id, a.original_line_id
+                ) rt ON rt.company_id = r.company_id
+                    AND rt.original_doc_id = r.doc_id
+                    AND rt.original_line_id = l.line_id
+                WHERE co.company_code = $company
+                  AND r.doc_kind = 'RCV'
+                  AND r.status = 'Posted'
+                  AND CAST(r.is_deleted AS TEXT) IN ('0', 'false')
+                  AND r.doc_date <= $asOf
+            ),
+            receipt_by_period AS (
+                SELECT Period, SUM(OpenBaseAmount) AS ReceiptBase
+                FROM open_receipt_lines
+                GROUP BY Period
+            ),
+            gl_by_period AS (
+                SELECT substr(CAST(j.entry_date AS TEXT), 1, 7) AS Period,
+                       SUM(COALESCE(l.base_credit, l.credit) -
+                           COALESCE(l.base_debit, l.debit)) AS GlMovementBase
+                FROM journal_entries j
+                INNER JOIN companies co ON co.company_id = j.company_id
+                INNER JOIN journal_entry_lines l ON l.journal_entry_id = j.journal_entry_id
+                INNER JOIN chart_of_accounts a
+                  ON a.account_id = l.account_id AND a.company_id = j.company_id
+                WHERE co.company_code = $company
+                  AND a.account_code = '2203'
+                  AND j.status IN (1, 2)
+                  AND j.entry_date <= $asOf
+                GROUP BY substr(CAST(j.entry_date AS TEXT), 1, 7)
+            ),
+            periods AS (
+                SELECT Period FROM receipt_by_period
+                UNION
+                SELECT Period FROM gl_by_period
+            )
+            SELECT p.Period AS Period,
+                   COALESCE(r.ReceiptBase, 0) AS ReceiptBase,
+                   COALESCE(g.GlMovementBase, 0) AS GlMovementBase
+            FROM periods p
+            LEFT JOIN receipt_by_period r ON r.Period = p.Period
+            LEFT JOIN gl_by_period g ON g.Period = p.Period
+            ORDER BY p.Period;
             """;
         return await QueryAsync(sql, ct,
             ("$company", Company),
@@ -847,8 +970,65 @@ public static class RptQuery
             ("$asOf", DateStart(asOf)));
     }
 
+    /// <summary>
+    /// Y2 exception (b): posted purchase invoices that have NO rows in
+    /// purchase_receipt_invoice_matches (migration 078) — the manual
+    /// InvoiceWin/InvRepo path creates such invoices whenever the
+    /// three-way-match policy is off, and nothing flagged them before.
+    /// The match check keys on the invoice doc_id alone: doc_id is the
+    /// table's primary key, unique across both company-key spellings
+    /// (code for the manual path, Guid for the chain path). Company scope
+    /// uses the dual-key companies join, as in PurchaseInvoiceListAsync.
+    /// Amounts are document currency plus the base-currency restatement
+    /// (grand_total × exchange_rate), the report family's base basis.
+    /// </summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> InvoicedWithoutReceiptAsync(
+        DateTime asOf, CancellationToken ct)
+    {
+        DocSchema.Ensure();
+        const string sql = """
+            SELECT d.doc_no AS InvoiceNo,
+                   d.doc_date AS InvoiceDate,
+                   COALESCE(s.code, '') AS SupplierCode,
+                   COALESCE(NULLIF(s.name_en, ''), s.name_ar, d.party_name, '') AS SupplierName,
+                   COALESCE(d.currency_code, '') AS CurrencyCode,
+                   COALESCE(d.grand_total, 0) AS InvoiceAmount,
+                   COALESCE(d.grand_total, 0) * COALESCE(NULLIF(d.exchange_rate, 0), 1) AS InvoiceBaseAmount,
+                   COALESCE(d.paid_amount, 0) AS PaidAmount
+            FROM purchase_documents d
+            INNER JOIN companies co
+              ON co.company_code = $company
+             AND (CAST(co.company_id AS TEXT) = CAST(d.company_id AS TEXT)
+                  OR d.company_id = co.company_code)
+            LEFT JOIN parties s
+              ON s.ledger_id = d.party_id AND s.company_id = $company AND s.kind = 'S'
+            WHERE d.doc_kind = 'PUR'
+              AND d.status = 'Posted'
+              AND CAST(d.is_deleted AS TEXT) IN ('0', 'false')
+              AND d.doc_date <= $asOf
+              AND NOT EXISTS (
+                    SELECT 1 FROM purchase_receipt_invoice_matches m
+                    WHERE m.invoice_doc_id = d.doc_id)
+            ORDER BY d.doc_date, d.doc_no;
+            """;
+        return await QueryAsync(sql, ct,
+            ("$company", Company),
+            ("$asOf", FmtDate(asOf)));
+    }
+
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> PartyAgingAsync(
         bool customers, CancellationToken ct)
+        => await PartyAgingAsync(customers, DateTime.Today, ct);
+
+    /// <summary>
+    /// Y3: the entry-date aging gains an as-of date — entries after the
+    /// as-of date are excluded and ages are measured against it, so a past
+    /// period-end aging can be reproduced exactly. The no-as-of overload
+    /// above keeps the historical "age against today" behaviour for the
+    /// customer side.
+    /// </summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> PartyAgingAsync(
+        bool customers, DateTime asOf, CancellationToken ct)
     {
         DocSchema.Ensure();
         var partyKind = customers ? "C" : "S";
@@ -871,8 +1051,8 @@ public static class RptQuery
         // supplier aging keeps the entry-date basis.
         var ageBasis = customers ? "COALESCE(d.due_date, l.entry_date)" : "l.entry_date";
         var ageDays = DatabaseRuntime.IsPostgreSql()
-            ? $"(CURRENT_DATE - CAST({ageBasis} AS DATE))"
-            : $"(julianday('now') - julianday({ageBasis}))";
+            ? $"(CAST($asOf AS DATE) - CAST({ageBasis} AS DATE))"
+            : $"(julianday($asOf) - julianday({ageBasis}))";
         var sql = $"""
             SELECT p.code AS Code,
                    COALESCE(NULLIF(p.name_en, ''), p.name_ar, '') AS Name,
@@ -884,14 +1064,66 @@ public static class RptQuery
             FROM parties p
             LEFT JOIN party_ledger l
               ON l.party_id = p.ledger_id AND l.company_id = p.company_id AND l.party_kind = $pk
+             AND l.entry_date <= $asOf
             LEFT JOIN {docTable} d
               ON d.doc_id = l.doc_id
-            WHERE p.company_id = $company AND p.kind = $pk AND p.is_deleted = 0
+            WHERE p.company_id = $company AND p.kind = $pk AND p.is_deleted = 0 AND p.is_active = 1
             GROUP BY p.code, p.name_en, p.name_ar
             HAVING ABS(COALESCE(SUM({amount}), 0)) > 0.0001
             ORDER BY p.code;
             """;
-        return await QueryAsync(sql, ct, ("$company", Company), ("$pk", partyKind));
+        return await QueryAsync(sql, ct, ("$company", Company), ("$pk", partyKind), ("$asOf", FmtDate(asOf)));
+    }
+
+    /// <summary>
+    /// Y3: open purchase invoices aged by DUE DATE as of a given date —
+    /// one row per invoice (ERPNext Accounts Payable shape), not a
+    /// supplier-level ledger aggregate. The due date is
+    /// purchase_documents.due_date (migration 094), falling back to the
+    /// document date for invoices that predate the column. Open amount is
+    /// the stored grand_total − paid_amount; buckets and DaysOverdue are
+    /// computed in SQL from the as-of date with the provider-aware day
+    /// difference, on the BASE amount (open × exchange_rate), matching
+    /// the entry-date mode's base basis. An invoice not yet due has
+    /// negative DaysOverdue and lands in the 0-30 bucket.
+    /// </summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> PayableDueDateAgingAsync(
+        DateTime asOf, CancellationToken ct)
+    {
+        DocSchema.Ensure();
+        var daysOverdue = DatabaseRuntime.IsPostgreSql()
+            ? "(CAST($asOf AS DATE) - CAST(COALESCE(d.due_date, d.doc_date) AS DATE))"
+            : "CAST(julianday($asOf) - julianday(COALESCE(d.due_date, d.doc_date)) AS INTEGER)";
+        var sql = $"""
+            SELECT d.doc_no AS InvoiceNo,
+                   d.doc_date AS InvoiceDate,
+                   COALESCE(d.due_date, d.doc_date) AS DueDate,
+                   COALESCE(s.code, '') AS SupplierCode,
+                   COALESCE(NULLIF(s.name_en, ''), s.name_ar, d.party_name, '') AS SupplierName,
+                   COALESCE(d.currency_code, '') AS CurrencyCode,
+                   COALESCE(d.grand_total, 0) - COALESCE(d.paid_amount, 0) AS OpenAmount,
+                   (COALESCE(d.grand_total, 0) - COALESCE(d.paid_amount, 0))
+                       * COALESCE(NULLIF(d.exchange_rate, 0), 1) AS OpenBaseAmount,
+                   {daysOverdue} AS DaysOverdue,
+                   CASE WHEN {daysOverdue} <= 30 THEN 'Bucket0_30'
+                        WHEN {daysOverdue} <= 60 THEN 'Bucket31_60'
+                        WHEN {daysOverdue} <= 90 THEN 'Bucket61_90'
+                        ELSE 'Bucket90Plus' END AS Bucket
+            FROM purchase_documents d
+            INNER JOIN companies co
+              ON co.company_code = $company
+             AND (CAST(co.company_id AS TEXT) = CAST(d.company_id AS TEXT)
+                  OR d.company_id = co.company_code)
+            LEFT JOIN parties s
+              ON s.ledger_id = d.party_id AND s.company_id = $company AND s.kind = 'S'
+            WHERE d.doc_kind = 'PUR'
+              AND d.status = 'Posted'
+              AND CAST(d.is_deleted AS TEXT) IN ('0', 'false')
+              AND d.doc_date <= $asOf
+              AND COALESCE(d.grand_total, 0) - COALESCE(d.paid_amount, 0) > 0.0001
+            ORDER BY COALESCE(d.due_date, d.doc_date), d.doc_no;
+            """;
+        return await QueryAsync(sql, ct, ("$company", Company), ("$asOf", FmtDate(asOf)));
     }
 
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> ItemProfitabilityAsync(
