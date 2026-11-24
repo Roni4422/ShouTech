@@ -403,7 +403,7 @@ public class ChequeMfgServiceTests
         public Task<JournalEntrySnapshot?> FindByDocumentNumberAsync(Guid companyId, string documentNumber, CancellationToken cancellationToken = default)
             => Task.FromResult<JournalEntrySnapshot?>(null);
 
-        public Task SaveDraftAsync(Guid companyId, JournalEntry entry, string userId, CancellationToken cancellationToken = default)
+        public Task SaveDraftAsync(Guid companyId, JournalEntry entry, string userId, CancellationToken cancellationToken = default, VoucherPartyLinkRequest? partyLink = null)
         {
             _drafts[entry.Id] = entry;
             return Task.CompletedTask;

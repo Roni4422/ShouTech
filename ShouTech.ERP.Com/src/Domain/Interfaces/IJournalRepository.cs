@@ -5,7 +5,11 @@ namespace ShouTech.Domain.Interfaces;
 public interface IJournalRepository
 {
     Task<JournalEntrySnapshot?> FindByDocumentNumberAsync(Guid companyId, string documentNumber, CancellationToken cancellationToken = default);
-    Task SaveDraftAsync(Guid companyId, JournalEntry entry, string userId, CancellationToken cancellationToken = default);
+    /// <summary>Saves a draft journal entry in ONE transaction. When
+    /// <paramref name="partyLink"/> is supplied (cash vouchers, G23) the
+    /// voucher_party_links row is written inside that same transaction,
+    /// so a draft can never exist without its intended party link.</summary>
+    Task SaveDraftAsync(Guid companyId, JournalEntry entry, string userId, CancellationToken cancellationToken = default, VoucherPartyLinkRequest? partyLink = null);
     Task UpdateDraftAsync(Guid companyId, Guid journalEntryId, JournalEntry entry, string userId, CancellationToken cancellationToken = default);
     /// <summary>Posts a draft entry. Returns the budget warnings the
     /// posting produced in Warn mode (Phase B 055, BudgetGuard) —

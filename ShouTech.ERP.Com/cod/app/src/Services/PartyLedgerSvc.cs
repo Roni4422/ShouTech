@@ -24,7 +24,14 @@ public static class PartyLedgerSvc
 {
     public sealed record VoucherPartyLink(
         string PartyKind, long PartyId, string PartyCode,
-        string DocKind, string DocNo, decimal Amount, string CurrencyCode);
+        string DocKind, string DocNo, decimal Amount, string CurrencyCode)
+    {
+        /// <summary>G23: the domain request JournalRepository writes
+        /// inside the draft-creation transaction. <paramref name="companyCode"/>
+        /// is the current company code — the key voucher_party_links carries.</summary>
+        public ShouTech.Domain.Entities.VoucherPartyLinkRequest ToRequest(string companyCode)
+            => new(companyCode, PartyKind, PartyId, PartyCode, DocKind, DocNo, Amount, CurrencyCode);
+    }
 
     public static (long LedgerId, string Name)? ResolveParty(string code, string kind)
     {
@@ -61,6 +68,11 @@ public static class PartyLedgerSvc
         }
     }
 
+    /// <summary>Legacy standalone link write, kept for callers that
+    /// already hold a committed draft id. New voucher saves must NOT
+    /// use this: CshWin passes the link through JournalService.CreateDraftAsync
+    /// so it is written inside the draft transaction (G23) — a draft
+    /// must never exist without its intended party link.</summary>
     public static void SaveVoucherLink(
         Guid journalEntryId, string docKind, string docNo, decimal amount,
         string currencyCode, VoucherPartyLink link, string userId)

@@ -166,7 +166,7 @@ public static class InvRepo
                      payment_method, receipt_no, reference_no, branch_name, sales_rep_name, cost_center,
                      party_account_name, goods_account_name,
                      original_doc_id, original_doc_kind, original_doc_no, journal_doc_no,
-                     target_warehouse_id, target_warehouse_name,
+                     target_warehouse_id, target_warehouse_name, valid_till,
                      created_by, is_deleted)
                     VALUES
                     ($company, $kind, $no, $date, $party, $pcode, $pname, $wh,
@@ -175,7 +175,7 @@ public static class InvRepo
                      $pay, $receipt, $ref, $branch, $rep, $cc,
                      $pacc, $gacc,
                      $origId, $origKind, $origNo, $jrn,
-                     $twh, $twhname,
+                     $twh, $twhname, $validTill,
                      $user, 0);
                     SELECT last_insert_rowid();
                     """;
@@ -189,7 +189,7 @@ public static class InvRepo
                          payment_method, receipt_no, reference_no, branch_name, sales_rep_name, cost_center,
                          party_account_name, goods_account_name,
                          original_doc_id, original_doc_kind, original_doc_no, journal_doc_no,
-                         target_warehouse_id, target_warehouse_name,
+                         target_warehouse_id, target_warehouse_name, valid_till,
                          created_by, is_deleted)
                         VALUES
                         ($company, $kind, $no, $date, $party, $pcode, $pname, $wh,
@@ -198,7 +198,7 @@ public static class InvRepo
                          $pay, $receipt, $ref, $branch, $rep, $cc,
                          $pacc, $gacc,
                          $origId, $origKind, $origNo, $jrn,
-                         $twh, $twhname,
+                         $twh, $twhname, $validTill,
                          $user, 0)
                         RETURNING doc_id;
                         """;
@@ -222,7 +222,7 @@ public static class InvRepo
                       payment_method=$pay, receipt_no=$receipt, reference_no=$ref, branch_name=$branch,
                       sales_rep_name=$rep, cost_center=$cc, party_account_name=$pacc, goods_account_name=$gacc,
                       original_doc_id=$origId, original_doc_kind=$origKind, original_doc_no=$origNo, journal_doc_no=$jrn,
-                      target_warehouse_id=$twh, target_warehouse_name=$twhname
+                      target_warehouse_id=$twh, target_warehouse_name=$twhname, valid_till=$validTill
                     WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND status='Draft' AND is_deleted=0;
                     """;
                 BindHeader(cmd, doc);
@@ -624,6 +624,9 @@ public static class InvRepo
         // receivable and stock documents credited a supplier (sweep I-2).
         // The amount is the STORED grand total (doc.PostingTotal) — the
         // same figure the GL above and the credit guard below consume.
+        // G16/G17: a sales return's ledger id is captured so the credit
+        // note can be auto-allocated to its origin invoice below.
+        long? salesReturnLedgerId = null;
         if (effects.PartyLedger && doc.PartyId is long partyId)
         {
             var partyKind = isSales ? "C" : "S";
@@ -661,6 +664,26 @@ public static class InvRepo
             // the transaction amounts (migration 062), at the same
             // effective rate the GL used.
             var ledgerHasBase = PartyLedger.ColumnExists(connection, tx, fxProvider, "party_ledger", "base_debit");
+            if (kind == InvDocKind.SalesReturn)
+            {
+                // G16/G17: the credit note's own ledger row is written
+                // through the shared PartyLedger writer so its id is
+                // known — it becomes the allocation SOURCE that settles
+                // the origin invoice (and, later, other open invoices
+                // through PayRecWin). Amounts and base conversion are
+                // identical to the raw insert below (same stored total,
+                // same effective rate).
+                salesReturnLedgerId = PartyLedger.WriteEntry(
+                    connection, tx, fxProvider,
+                    Company, partyKind, partyId,
+                    doc.KindCode, docId, doc.DocNo,
+                    doc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    debit, credit, doc.CurrencyCode,
+                    "Auto post",
+                    exchangeRate: fx.Rate);
+            }
+            else
+            {
             using var led = connection.CreateCommand();
             led.Transaction = tx;
             led.CommandText = ledgerHasBase
@@ -694,6 +717,7 @@ public static class InvRepo
                 Add(led, "$rate", fx.Rate);
             }
             led.ExecuteNonQuery();
+            }
 
             // Settlement at posting (Step 4, sweep B-03): money collected
             // on the document itself (paid_amount — POS cash sales carry
@@ -745,10 +769,149 @@ public static class InvRepo
             }
         }
 
+        // G16/G17/G18: an ordinary sales return (native window path —
+        // not a POS-context return, whose unsettling above already
+        // mirrors its settlement, and not a generated full reversal,
+        // whose UnsettleOriginalOnReversal owns the original's
+        // settlement) settles its origin invoice in THIS transaction:
+        // the cash-refunded part leaves as a party-ledger debit mirror
+        // (the POS-return pattern), and the remaining net credit is
+        // auto-allocated from the credit note to the origin invoice so
+        // its paid_amount — hence its open amount — falls by exactly
+        // the credit the GL took off Receivable.
+        if (kind == InvDocKind.SalesReturn
+            && pos is null
+            && salesReturnLedgerId is long creditNoteLedgerId
+            && doc.OriginalDocKind == InvDocKind.SalesInvoice
+            && doc.OriginalDocId is long originDocId
+            && doc.PartyId is long returnPartyId
+            && !IsGeneratedFullReversal(connection, tx, doc))
+        {
+            SettleSalesReturnAgainstOriginal(
+                connection, tx, guidKey, doc, creditNoteLedgerId,
+                originDocId, returnPartyId, fx.Rate, userId);
+        }
+
         // (Inventory effects were applied before the GL block above —
         // Step 6 ordering, so COGS reads the engine's movement costs.)
 
         tx.Commit();
+    }
+
+    /// <summary>
+    /// G16/G17/G18 settlement of an ordinary sales return against its
+    /// origin invoice, inside the return's posting transaction:
+    /// 1. A cash/bank refund (PaidAmount &gt; 0) writes a party-ledger
+    ///    DEBIT mirror on the return document — the exact mirror the
+    ///    POS-return path writes for a refunded settlement — so the
+    ///    party's net credit from this return is total − refund,
+    ///    matching the GL (Cr cash/bank for the refund, Cr Receivable
+    ///    only for the remainder, per BuildGlLines).
+    /// 2. The remaining net credit is auto-allocated to the origin
+    ///    invoice: a payment_allocations row whose SOURCE is the credit
+    ///    note's own party-ledger entry (the G17 model — the same row
+    ///    PayRecWin can later allocate to other invoices), capped at
+    ///    the origin's open amount, and the origin's paid_amount rises
+    ///    by the allocated amount in the same transaction. Document
+    ///    position and party-ledger position therefore agree.
+    /// </summary>
+    private static void SettleSalesReturnAgainstOriginal(
+        DbConnection connection, DbTransaction tx, string companyGuidKey,
+        InvDoc returnDoc, long creditNoteLedgerId,
+        long originDocId, long partyId, decimal effectiveRate, string userId)
+    {
+        var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+        var notDeleted = provider == "PostgreSQL" ? "is_deleted = FALSE" : "is_deleted = 0";
+
+        string originCompanyKey;
+        string originDocNo;
+        decimal originTotal, originPaid;
+        using (var origin = connection.CreateCommand())
+        {
+            origin.Transaction = tx;
+            origin.CommandText = $"""
+                SELECT CAST(company_id AS TEXT), doc_no, grand_total, paid_amount
+                FROM sales_documents
+                WHERE doc_id = $id AND (company_id = $company OR company_id = $guid)
+                  AND status = 'Posted' AND {notDeleted}
+                {(provider == "PostgreSQL" ? "FOR UPDATE" : string.Empty)}
+                """;
+            Add(origin, "$id", originDocId);
+            Add(origin, "$company", Company);
+            Add(origin, "$guid", companyGuidKey);
+            using var reader = origin.ExecuteReader();
+            if (!reader.Read())
+                throw new InvalidOperationException("The origin invoice was not found as posted in the current company; the return was rolled back.");
+            originCompanyKey = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? Company;
+            originDocNo = Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? string.Empty;
+            originTotal = Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture);
+            originPaid = Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture);
+        }
+
+        var refund = Math.Min(Math.Max(returnDoc.PaidAmount, 0m), returnDoc.PostingTotal);
+        if (refund > 0m)
+        {
+            PartyLedger.WriteEntry(
+                connection, tx, provider,
+                Company, "C", partyId,
+                returnDoc.KindCode, returnDoc.DocId, returnDoc.DocNo,
+                returnDoc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                refund, 0m, returnDoc.CurrencyCode,
+                "Sales return refund paid to customer",
+                exchangeRate: effectiveRate);
+        }
+
+        var netCredit = returnDoc.PostingTotal - refund;
+        var openAmount = Math.Max(0m, originTotal - originPaid);
+        var allocate = Math.Min(netCredit, openAmount);
+        if (allocate <= 0m) return;
+
+        var hasDocumentCompany = PartyLedger.ColumnExists(
+            connection, tx, provider, "payment_allocations", "document_company_id");
+        using (var alloc = connection.CreateCommand())
+        {
+            alloc.Transaction = tx;
+            alloc.CommandText = hasDocumentCompany
+                ? """
+                  INSERT INTO payment_allocations
+                      (allocation_id, company_id, document_company_id, party_kind, party_id, payment_ledger_id, doc_table, doc_id, doc_no, amount, allocated_by, note)
+                  VALUES
+                      ($id, $company, $documentCompany, 'C', $party, $payment, 'SALES', $did, $dno, $amount, $user, $note);
+                  """
+                : """
+                  INSERT INTO payment_allocations
+                      (allocation_id, company_id, party_kind, party_id, payment_ledger_id, doc_table, doc_id, doc_no, amount, allocated_by, note)
+                  VALUES
+                      ($id, $company, 'C', $party, $payment, 'SALES', $did, $dno, $amount, $user, $note);
+                  """;
+            Add(alloc, "$id", Guid.NewGuid().ToString("D"));
+            Add(alloc, "$company", Company);
+            if (hasDocumentCompany)
+                Add(alloc, "$documentCompany", originCompanyKey);
+            Add(alloc, "$party", partyId);
+            Add(alloc, "$payment", creditNoteLedgerId);
+            Add(alloc, "$did", originDocId);
+            Add(alloc, "$dno", originDocNo);
+            Add(alloc, "$amount", allocate);
+            Add(alloc, "$user", userId);
+            Add(alloc, "$note", $"Credit note {returnDoc.DocNo} auto-allocated to origin invoice");
+            alloc.ExecuteNonQuery();
+        }
+
+        using (var settle = connection.CreateCommand())
+        {
+            settle.Transaction = tx;
+            settle.CommandText = $"""
+                UPDATE sales_documents
+                SET paid_amount = paid_amount + $amount
+                WHERE doc_id = $id AND CAST(company_id AS TEXT) = $documentCompany AND {notDeleted};
+                """;
+            Add(settle, "$amount", allocate);
+            Add(settle, "$id", originDocId);
+            Add(settle, "$documentCompany", originCompanyKey);
+            if (settle.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException("The origin invoice could not be settled by the credit note; the return was rolled back.");
+        }
     }
 
     // ---------------------------------------------------------------
@@ -1640,7 +1803,7 @@ public static class InvRepo
                        discount_amount, extra_amount, paid_amount, payment_method, receipt_no, reference_no,
                        branch_name, sales_rep_name, cost_center, party_account_name, goods_account_name,
                        original_doc_id, original_doc_kind, original_doc_no, journal_doc_no,
-                       target_warehouse_id, target_warehouse_name
+                       target_warehouse_id, target_warehouse_name, valid_till
                 FROM {headerTable}
                 WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND is_deleted=0;
                 """;
@@ -1697,6 +1860,7 @@ public static class InvRepo
                 JournalDocNo = ReadString(reader, "journal_doc_no"),
                 TargetWarehouseId = (int?)ReadLongNullable(reader, "target_warehouse_id"),
                 TargetWarehouseName = ReadString(reader, "target_warehouse_name"),
+                ValidTill = ParseValidTill(reader),
             };
         }
 
@@ -2985,6 +3149,7 @@ public static class InvRepo
         Add(cmd, "$jrn", doc.JournalDocNo);
         Add(cmd, "$twh", doc.TargetWarehouseId);
         Add(cmd, "$twhname", doc.TargetWarehouseName);
+        Add(cmd, "$validTill", doc.ValidTill?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         Add(cmd, "$user", AppState.CurrentUser?.Username ?? Environment.UserName);
     }
 
@@ -3303,11 +3468,12 @@ public static class InvRepo
         decimal originalExchangeRate;
         decimal originalDiscountAmount;
         decimal originalExtraAmount;
+        decimal originalPaidAmount;
         using (var original = connection.CreateCommand())
         {
             original.Transaction = transaction;
             original.CommandText = $"""
-                SELECT doc_no, doc_kind, status, party_id, party_code, currency_code, exchange_rate, discount_amount, extra_amount
+                SELECT doc_no, doc_kind, status, party_id, party_code, currency_code, exchange_rate, discount_amount, extra_amount, paid_amount
                 FROM sales_documents
                 WHERE doc_id = $originalId
                   AND (company_id = $company OR company_id = $guid)
@@ -3330,6 +3496,7 @@ public static class InvRepo
             originalExchangeRate = reader.IsDBNull(6) ? 1m : Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture);
             originalDiscountAmount = reader.IsDBNull(7) ? 0m : Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture);
             originalExtraAmount = reader.IsDBNull(8) ? 0m : Convert.ToDecimal(reader.GetValue(8), CultureInfo.InvariantCulture);
+            originalPaidAmount = reader.IsDBNull(9) ? 0m : Convert.ToDecimal(reader.GetValue(9), CultureInfo.InvariantCulture);
         }
 
         if (returnDoc.PartyId != originalPartyId ||
@@ -3424,6 +3591,66 @@ public static class InvRepo
         if (returnDoc.PaidAmount < 0m || returnDoc.PaidAmount > returnDoc.GrandTotal)
             throw new InvalidOperationException("The sales return refund cannot exceed its credit note total.");
 
+        // G18 (SAL-7010): a cash refund can only hand back money the
+        // customer actually PAID toward the original invoice — real-money
+        // allocations (RCV/PAY/INS sources) against it, less refunds
+        // already paid out by earlier posted returns. Credit-note
+        // allocations (SRT sources) are not cash and never raise the
+        // refundable amount. When the invoice carries no allocations at
+        // all (legacy rows), its stored paid_amount is the evidence.
+        if (returnDoc.PaidAmount > 0m)
+        {
+            var refundableBase = originalPaidAmount;
+            var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+            if (PartyLedger.TableExists(connection, transaction, provider, "payment_allocations")
+                && PartyLedger.TableExists(connection, transaction, provider, "party_ledger"))
+            {
+                using var paidCmd = connection.CreateCommand();
+                paidCmd.Transaction = transaction;
+                paidCmd.CommandText = """
+                    SELECT COUNT(*), COALESCE(SUM(a.amount), 0)
+                    FROM payment_allocations a
+                    INNER JOIN party_ledger l ON l.ledger_id = a.payment_ledger_id
+                    WHERE a.company_id IN ($company, $guid) AND a.doc_table = 'SALES'
+                      AND a.doc_id = $originalId AND l.doc_kind IN ('RCV', 'PAY', 'INS')
+                    """;
+                Add(paidCmd, "$company", Company);
+                Add(paidCmd, "$guid", guidKey);
+                Add(paidCmd, "$originalId", originalDocId);
+                using var paidReader = paidCmd.ExecuteReader();
+                if (paidReader.Read() && Convert.ToInt64(paidReader.GetValue(0), CultureInfo.InvariantCulture) > 0)
+                    refundableBase = Convert.ToDecimal(paidReader.GetValue(1), CultureInfo.InvariantCulture);
+            }
+
+            decimal priorRefunds;
+            using (var refunds = connection.CreateCommand())
+            {
+                refunds.Transaction = transaction;
+                refunds.CommandText = $"""
+                    SELECT COALESCE(SUM(paid_amount), 0)
+                    FROM sales_documents
+                    WHERE (company_id = $company OR company_id = $guid)
+                      AND doc_kind = 'SRT' AND original_doc_id = $originalId
+                      AND status = 'Posted' AND {notDeleted}
+                      AND doc_id <> $returnId
+                    """;
+                Add(refunds, "$company", Company);
+                Add(refunds, "$guid", guidKey);
+                Add(refunds, "$originalId", originalDocId);
+                Add(refunds, "$returnId", returnDoc.DocId);
+                priorRefunds = Convert.ToDecimal(refunds.ExecuteScalar(), CultureInfo.InvariantCulture);
+            }
+
+            var refundable = Math.Max(0m, refundableBase - priorRefunds);
+            var refundCap = Math.Min(returnDoc.PostingTotal, refundable);
+            if (returnDoc.PaidAmount > refundCap + 0.005m)
+                throw new AppError(
+                    ErrorCodes.AllocationExceedsOpenAmount,
+                    $"The sales return refund {returnDoc.PaidAmount} exceeds the amount the customer paid toward invoice '{originalDocNo}' that has not already been refunded ({refundable}).",
+                    returnDoc.PaidAmount.ToString(CultureInfo.InvariantCulture),
+                    refundable.ToString(CultureInfo.InvariantCulture));
+        }
+
         foreach (var line in returnDoc.Lines)
         {
             if (!sourceLines.TryGetValue(line.LineNo, out var source))
@@ -3487,6 +3714,34 @@ public static class InvRepo
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
         return Enum.TryParse<InvDocKind>(value, ignoreCase: true, out var kind) ? kind : null;
+    }
+
+    /// <summary>Reads the valid_till column (migration 032, TEXT date)
+    /// selected by Load. A missing/unparseable value is reported through
+    /// the error catalog like the other tolerant readers and loads as
+    /// null rather than failing the whole document open.</summary>
+    private static DateTime? ParseValidTill(DbDataReader reader)
+    {
+        try
+        {
+            var ord = reader.GetOrdinal("valid_till");
+            if (reader.IsDBNull(ord)) return null;
+            var value = reader.GetValue(ord);
+            return value switch
+            {
+                DateTime dt => dt,
+                DateOnly d => d.ToDateTime(TimeOnly.MinValue),
+                _ => DateTime.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture),
+                        CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed)
+                    ? parsed
+                    : null
+            };
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, ex, "InvRepo.ParseValidTill");
+            return null;
+        }
     }
 }
 

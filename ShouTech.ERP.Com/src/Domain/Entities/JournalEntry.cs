@@ -77,6 +77,25 @@ public enum JournalEntryStatus
     Reversed
 }
 
+/// <summary>
+/// The resolved party a cash voucher settles (sales-cycle G23,
+/// migration 061 <c>voucher_party_links</c>). Carried INTO
+/// <see cref="ShouTech.Domain.Interfaces.IJournalRepository.SaveDraftAsync"/>
+/// so the link row is written inside the journal draft transaction —
+/// a draft voucher must never exist without its intended party link.
+/// CompanyCode is the company CODE (the key voucher_party_links and
+/// party_ledger carry); DocKind is RCV (customer) or PAY (supplier).
+/// </summary>
+public sealed record VoucherPartyLinkRequest(
+    string CompanyCode,
+    string PartyKind,
+    long PartyId,
+    string PartyCode,
+    string DocKind,
+    string DocNo,
+    decimal Amount,
+    string CurrencyCode);
+
 public sealed class JournalLine
 {
     public Guid AccountId { get; }

@@ -151,6 +151,9 @@ public sealed class PayRecWin : BaseWin
         ConfigureGrid(_payGrid);
         _payGrid.Columns.Add(TextCol("PaymentReconciliation.Date", nameof(UnallocatedPaymentRow.EntryDate), 90, center: true));
         _payGrid.Columns.Add(TextCol("PaymentReconciliation.DocNo", nameof(UnallocatedPaymentRow.DocNo), 90));
+        // G17: the source kind distinguishes credit notes (SRT) from
+        // cash receipts/payments (RCV/PAY/INS) in the source list.
+        _payGrid.Columns.Add(TextCol("PaymentReconciliation.Kind", nameof(UnallocatedPaymentRow.DocKind), 70, center: true));
         // Step 4: the payments grid names its party and currency — rows
         // mix parties of the kind, and an unnamed payment cannot be
         // matched to a document responsibly (cash-payments MAJOR).

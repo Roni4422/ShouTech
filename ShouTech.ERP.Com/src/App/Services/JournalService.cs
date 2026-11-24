@@ -34,7 +34,8 @@ public sealed class JournalService
         string? referenceNumber = null,
         string currencyCode = "SAR",
         decimal exchangeRate = 1m,
-        string? documentNumber = null)
+        string? documentNumber = null,
+        VoucherPartyLinkRequest? partyLink = null)
     {
         ArgumentNullException.ThrowIfNull(lines);
 
@@ -43,7 +44,7 @@ public sealed class JournalService
             entry.AddLine(line.AccountId, line.Debit, line.Credit, line.Note, line.CostCenter);
 
         entry.EnsureBalanced();
-        await _repository.SaveDraftAsync(companyId, entry, userId, cancellationToken).ConfigureAwait(false);
+        await _repository.SaveDraftAsync(companyId, entry, userId, cancellationToken, partyLink).ConfigureAwait(false);
         return entry.Id;
     }
 

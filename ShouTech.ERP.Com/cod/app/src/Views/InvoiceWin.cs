@@ -42,6 +42,10 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
     private readonly TextBox _txtReceiptNo = new();
     private readonly TextBox _txtReference = new();
     private readonly TextBox _txtBranch = new();
+    /// <summary>G4: quotation validity deadline — shown ONLY for the
+    /// Quotation kind (the StockTransfer target-warehouse pattern) and
+    /// round-tripped through InvDoc.ValidTill / InvRepo.</summary>
+    private readonly DatePicker _dtValidTill = new();
 
     // ---- Middle header ----
     private readonly TextBox _txtPartyCode = new();
@@ -577,6 +581,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
 
         Size(_cmbPayment);
         Size(_dtDate);
+        Size(_dtValidTill);
         Size(_txtCurrency);
         Size(_txtTaxRate);
         Size(_cmbTaxCode);
@@ -599,9 +604,11 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        // Payment / document column
+        // Payment / document column — a Quotation carries a ninth row:
+        // its Valid Till date (G4; other kinds never show the field).
         var payment = new Grid { Margin = new Thickness(gap) };
-        for (var i = 0; i < 8; i++)
+        var paymentRows = _doc.Kind == InvDocKind.Quotation ? 9 : 8;
+        for (var i = 0; i < paymentRows; i++)
             payment.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         AddLabeledCell(payment, 0, Tf("Invoice.PaymentMethod", "Payment method"), _cmbPayment);
         AddLabeledCell(payment, 1, Tf("Invoice.Date", "Date"), _dtDate);
@@ -611,6 +618,8 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         AddLabeledCell(payment, 5, Tf("Invoice.Reference", "Reference"), _txtReference);
         AddLabeledCell(payment, 6, Tf("Invoice.Branch", "Branch"), _txtBranch);
         AddLabeledCell(payment, 7, Tf("Invoice.TaxSystem", "Tax system"), _cmbTaxCode);
+        if (_doc.Kind == InvDocKind.Quotation)
+            AddLabeledCell(payment, 8, Tf("Invoice.ValidTill", "Valid till"), _dtValidTill);
 
         // Party / warehouse column
         var party = new Grid { Margin = new Thickness(gap) };
@@ -884,6 +893,10 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             ? ParseDec(_txtTaxRate.Text, TaxSvc.GetDefaultRate())
             : 0m;
         _doc.Notes = _txtNotes.Text;
+        // G4: Valid Till is captured only for quotations (the only kind
+        // that shows the field); clearing the picker clears the date.
+        if (_doc.Kind == InvDocKind.Quotation)
+            _doc.ValidTill = _dtValidTill.SelectedDate;
         _doc.ReceiptNo = _txtReceiptNo.Text.Trim();
         _doc.Reference = _txtReference.Text.Trim();
         _doc.BranchName = _txtBranch.Text.Trim();
@@ -969,6 +982,8 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _doc.LinesDiscountAmount = doc.LinesDiscountAmount;
         _doc.LinesExtraAmount = doc.LinesExtraAmount;
         _doc.PaidAmount = doc.PaidAmount;
+        _doc.ValidTill = doc.ValidTill;
+        _dtValidTill.SelectedDate = doc.ValidTill;
         _doc.OriginalDocId = doc.OriginalDocId;
         _doc.OriginalDocKind = doc.OriginalDocKind;
         _doc.OriginalDocNo = doc.OriginalDocNo;
@@ -1174,8 +1189,34 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         }
     }
 
+    /// <summary>
+    /// G20: sales-document RBAC, following the CshWin/PayRecWin pattern
+    /// (deny + report, never silent). Sales-side kinds check the
+    /// SALES.INVOICE.* keys (quotations their SALES.QUOTATION.* create /
+    /// update keys); other kinds keep their existing behaviour.
+    /// Returns false when the action must not proceed.
+    /// </summary>
+    private bool EnsureSalesPermission(string action, string operation)
+    {
+        if (!_doc.IsSalesSide) return true;
+        var permission = action switch
+        {
+            "create" => _doc.Kind == InvDocKind.Quotation ? PermCat.Sales.QuotationCreate : PermCat.Sales.InvoiceCreate,
+            "update" => _doc.Kind == InvDocKind.Quotation ? PermCat.Sales.QuotationUpdate : PermCat.Sales.InvoiceUpdate,
+            "post" => PermCat.Sales.InvoicePost,
+            "reverse" => PermCat.Sales.InvoiceReverse,
+            _ => action
+        };
+        if (AppHost.Permissions.Has(permission)) return true;
+        var denied = new UnauthorizedAccessException($"Permission {permission} is required for {operation}.");
+        AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, denied, $"InvoiceWin.{operation}");
+        MessageBox.Show(this, T("Invoice.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        return false;
+    }
+
     private void SaveDraft()
     {
+        if (!EnsureSalesPermission(_doc.DocId > 0 ? "update" : "create", "SaveDraft")) return;
         try
         {
             ResolveParty();
@@ -1196,6 +1237,10 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
 
     private void PostDoc()
     {
+        if (!EnsureSalesPermission("post", "PostDoc")) return;
+        // Posting a never-saved document saves it first (below), so the
+        // create right is required for that path as well.
+        if (_doc.DocId <= 0 && !EnsureSalesPermission("create", "PostDoc")) return;
         if (!AskConfirm("Invoice.ConfirmPost")) return;
         try
         {
@@ -1263,6 +1308,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
     private void ReverseCurrentDocument()
     {
         if (_doc.DocId <= 0) return;
+        if (!EnsureSalesPermission("reverse", "ReverseCurrentDocument")) return;
         if (!AskConfirm("Invoice.ConfirmReverse")) return;
         try
         {

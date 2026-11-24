@@ -207,9 +207,27 @@ public sealed class JournalRepository : IJournalRepository
             linesResult.AsReadOnly());
     }
 
-    public async Task SaveDraftAsync(Guid companyId, JournalEntry entry, string userId, CancellationToken cancellationToken = default)
+    public async Task SaveDraftAsync(Guid companyId, JournalEntry entry, string userId, CancellationToken cancellationToken = default, VoucherPartyLinkRequest? partyLink = null)
     {
         ArgumentNullException.ThrowIfNull(entry);
+        if (partyLink is not null)
+        {
+            // G23: validate the link BEFORE opening the transaction so a
+            // malformed link never starts a draft write at all; the row
+            // itself is inserted inside the transaction below.
+            if (string.IsNullOrWhiteSpace(partyLink.CompanyCode))
+                throw new ArgumentException("The voucher party link requires a company code.", nameof(partyLink));
+            if (partyLink.PartyKind is not ("C" or "S"))
+                throw new ArgumentException("The voucher party link party kind must be 'C' or 'S'.", nameof(partyLink));
+            if (partyLink.PartyId <= 0)
+                throw new ArgumentException("The voucher party link requires a resolved party.", nameof(partyLink));
+            if (partyLink.Amount <= 0)
+                throw new ArgumentException("The voucher party link amount must be greater than zero.", nameof(partyLink));
+            if (!((partyLink.DocKind == "RCV" && partyLink.PartyKind == "C")
+                  || (partyLink.DocKind == "PAY" && partyLink.PartyKind == "S")))
+                throw new ArgumentException(
+                    "Cash receipt vouchers must be linked to customers and payment vouchers must be linked to suppliers.", nameof(partyLink));
+        }
         if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
         if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
         entry.EnsureBalanced();
@@ -301,6 +319,37 @@ public sealed class JournalRepository : IJournalRepository
             }
 
             await AddAuditAsync(connection, transaction, entry.Id, 1, userId, "Draft created", cancellationToken).ConfigureAwait(false);
+
+            // G23: the voucher party link is written INSIDE this draft
+            // transaction (previously PartyLedgerSvc wrote it on a
+            // separate connection after the draft committed, so a crash
+            // left a silently unlinked draft whose posting then settled
+            // no party). A missing links table fails the whole draft —
+            // fail closed, never a link-less voucher.
+            if (partyLink is not null)
+            {
+                if (!PartyLedger.TableExists(connection, transaction, _provider, "voucher_party_links"))
+                    throw new InvalidOperationException(
+                        "Voucher party-link schema is missing. Apply database migration 061 before saving a party-linked voucher.");
+                await using var link = CreateCommand(connection, transaction, """
+                    INSERT INTO voucher_party_links
+                        (journal_entry_id, company_id, party_kind, party_id, party_code, doc_kind, doc_no, amount, currency_code, created_by)
+                    VALUES
+                        (@id, @company, @kind, @party, @code, @docKind, @docNo, @amount, @currency, @user)
+                    """);
+                Add(link, "@id", FormatGuid(entry.Id));
+                Add(link, "@company", partyLink.CompanyCode.Trim());
+                Add(link, "@kind", partyLink.PartyKind);
+                Add(link, "@party", partyLink.PartyId);
+                Add(link, "@code", partyLink.PartyCode.Trim());
+                Add(link, "@docKind", partyLink.DocKind);
+                Add(link, "@docNo", partyLink.DocNo.Trim());
+                Add(link, "@amount", partyLink.Amount);
+                Add(link, "@currency", string.IsNullOrWhiteSpace(partyLink.CurrencyCode) ? "SAR" : partyLink.CurrencyCode.Trim());
+                Add(link, "@user", userId.Trim());
+                await link.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch
