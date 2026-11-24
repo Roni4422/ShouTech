@@ -16,6 +16,7 @@ using System;
 using Microsoft.Data.Sqlite;
 using Npgsql;
 using ShouTech.App.Views;
+using ShouTech.Domain;
 
 namespace ShouTech.App.Services
 {
@@ -391,6 +392,60 @@ internal static class AccRepo
         while (reader.Read())
             result.Add(Read(reader));
         return result;
+    }
+
+    public enum AccountMatchKind { None, Exact, UniquePartial, Ambiguous }
+
+    public sealed record AccountMatch(AccountMatchKind Kind, AccRec? Account, int MatchCount);
+
+    /// <summary>
+    /// The voucher-grid account matcher (owner grid spec item 5,
+    /// mirroring the material matcher of item 3): an exact code or
+    /// exact name resolves immediately; a partial name with exactly
+    /// one POSTABLE match resolves; anything else reports Ambiguous
+    /// (with the candidate count) or None so the caller can open the
+    /// chart as the search window. Summary (group) accounts never
+    /// match — journal lines post to leaf accounts only. In-memory
+    /// over LoadAll: the chart is a bounded directory, and this
+    /// keeps the matcher dialect-free. Failures are reported
+    /// centrally and degrade to None, never thrown.
+    /// </summary>
+    public static AccountMatch MatchAccount(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return new AccountMatch(AccountMatchKind.None, null, 0);
+        try
+        {
+            var needle = text.Trim();
+            var postable = LoadAll()
+                .Where(a => string.Equals(a.PostingMode, "Postable", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            var exact = postable.Where(a =>
+                string.Equals(a.Code, needle, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(a.Name, needle, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(a.NameEn, needle, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (exact.Count == 1)
+                return new AccountMatch(AccountMatchKind.Exact, exact[0], 1);
+            if (exact.Count > 1)
+                return new AccountMatch(AccountMatchKind.Ambiguous, null, exact.Count);
+
+            var partial = postable.Where(a =>
+                a.Name.Contains(needle, StringComparison.OrdinalIgnoreCase)
+                || a.NameEn.Contains(needle, StringComparison.OrdinalIgnoreCase)
+                || a.Code.Contains(needle, StringComparison.OrdinalIgnoreCase)).ToList();
+            return partial.Count switch
+            {
+                1 => new AccountMatch(AccountMatchKind.UniquePartial, partial[0], 1),
+                > 1 => new AccountMatch(AccountMatchKind.Ambiguous, null, partial.Count),
+                _ => new AccountMatch(AccountMatchKind.None, null, 0),
+            };
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "AccRepo.MatchAccount");
+            return new AccountMatch(AccountMatchKind.None, null, 0);
+        }
     }
 
     public static AccRec? FindById(string id)

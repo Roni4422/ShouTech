@@ -98,8 +98,11 @@ cannot carry a complete-pillars surface.
   invoice/voucher/report grid standard, MatDirWin tree, CoaWin
   tree + account card — these carry the four-system comparisons
   for their families (docs/GRID_PROGRAM.md). **R2a (invoice
-  family) DONE (2026-11-24), gates ALL-GREEN**; R2b vouchers,
-  R2c reports, R2d MatDirWin tree, R2e CoaWin + AccCard follow.
+  family) and R2b (voucher family) DONE (2026-11-24), gates
+  ALL-GREEN**; R2c reports, R2d MatDirWin tree, R2e CoaWin +
+  AccCard follow. After the grid program: the POS family
+  workstream (owner, 15:31 — terminal definition, session
+  opening, session sales, close/Z integration), then R3–R5.
 - **R3 — router approximations (5)**: give each its dedicated
   report window or formally adopt the mapped report (owner-visible
   choice per report).

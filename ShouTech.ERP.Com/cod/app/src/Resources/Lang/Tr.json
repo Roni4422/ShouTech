@@ -2308,7 +2308,8 @@
     "SaveFailedMsg": "İşlem başarısız oldu ve başarılı olarak gösterilmedi.\n[{0}] {1}",
     "SaveFailedTitle": "Kayıt Kaydedilemedi",
     "AdvanceForPo": "Satın alma siparişi avansı",
-    "PurchaseOrderNo": "Satın Alma Sipariş No."
+    "PurchaseOrderNo": "Satın Alma Sipariş No.",
+    "AccountNotMatched": "Hesap eşleşmedi: {0}"
   },
   "CustCard": {
     "DefaultCurrency": "Varsayılan Para Birimi",

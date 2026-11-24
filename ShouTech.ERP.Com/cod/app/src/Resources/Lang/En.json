@@ -1950,7 +1950,8 @@
     "SaveFailedMsg": "The operation did not succeed and was not shown as a success.\n[{0}] {1}",
     "SaveFailedTitle": "Failed to Save Entry",
     "AdvanceForPo": "Advance for PO",
-    "PurchaseOrderNo": "Purchase Order No."
+    "PurchaseOrderNo": "Purchase Order No.",
+    "AccountNotMatched": "Account not matched: {0}"
   },
   "CustCard": {
     "DefaultCurrency": "Default Currency",

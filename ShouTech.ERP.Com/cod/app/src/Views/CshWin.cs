@@ -11,6 +11,7 @@ using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Media;
 using ShouTech.App.Configuration;
+using ShouTech.App.Interaction;
 using ShouTech.App.Services;
 using ShouTech.Application.Services;
 using ShouTech.Domain;
@@ -78,6 +79,17 @@ public sealed class CshWin : BaseWin, IWindowMode
     private readonly TextBlock _lblStatus = new();
 
     private readonly DataGrid _grid = new();
+
+    // Grid columns by identity (owner grid spec): account first;
+    // CostCenter/InvoiceRef/Memo are the optional (chooser) columns.
+    private DataGridTextColumn _accountCodeColumn = null!;
+    private DataGridTextColumn _accountNameColumn = null!;
+    private DataGridTextColumn _amountColumn = null!;
+    private DataGridTextColumn _costCenterColumn = null!;
+    private DataGridTextColumn _invoiceRefColumn = null!;
+    private DataGridTextColumn _memoColumn = null!;
+    private readonly Button _btnColumns = new();
+
     private readonly ObservableCollection<CshLineVm> _lines = new();
     private Guid? _currentJournalId;
     private bool _isPosted;
@@ -227,16 +239,45 @@ public sealed class CshWin : BaseWin, IWindowMode
         _grid.SetResourceReference(DataGrid.RowBackgroundProperty, "TableSurfaceBrush");
         _grid.SetResourceReference(DataGrid.AlternatingRowBackgroundProperty, "TableAlternateRowBrush");
         _grid.ItemsSource = _lines;
-        _grid.Columns.Add(TextCol(nameof(CshLineVm.LineNo), 45, readOnly: true));
-        _grid.Columns.Add(TextCol(nameof(CshLineVm.AccountCode), 120));
-        _grid.Columns.Add(TextCol(nameof(CshLineVm.AccountName), 220));
-        _grid.Columns.Add(TextCol(nameof(CshLineVm.AmountText), 110));
-        _grid.Columns.Add(TextCol(nameof(CshLineVm.CostCenter), 110));
-        _grid.Columns.Add(TextCol(nameof(CshLineVm.InvoiceRef), 100));
-        _grid.Columns.Add(TextCol(nameof(CshLineVm.Memo), 200));
-        _grid.CellEditEnding += (_, _) => Dispatcher.BeginInvoke(RefreshCalculations);
-        Grid.SetRow(_grid, 1);
-        body.Children.Add(_grid);
+        // Excel-like grid (owner spec item 1): line numbers live in
+        // the fixed row-header column now; the LineNo data column is
+        // dropped from the grid (LineNo is still maintained in code
+        // and persisted as before). Account first (item 5), then the
+        // amount, then the optional chooser columns (item 4).
+        DataGridTableBehavior.SetShowRowNumbers(_grid, true);
+        _accountCodeColumn = TextCol(nameof(CshLineVm.AccountCode), 120);
+        _accountNameColumn = TextCol(nameof(CshLineVm.AccountName), 220);
+        _amountColumn = TextCol(nameof(CshLineVm.AmountText), 110);
+        _costCenterColumn = TextCol(nameof(CshLineVm.CostCenter), 110);
+        _invoiceRefColumn = TextCol(nameof(CshLineVm.InvoiceRef), 100);
+        _memoColumn = TextCol(nameof(CshLineVm.Memo), 200);
+        _grid.Columns.Add(_accountCodeColumn);
+        _grid.Columns.Add(_accountNameColumn);
+        _grid.Columns.Add(_amountColumn);
+        _grid.Columns.Add(_costCenterColumn);
+        _grid.Columns.Add(_invoiceRefColumn);
+        _grid.Columns.Add(_memoColumn);
+        ApplySavedColumnLayout();
+
+        _grid.CellEditEnding += OnCellEditEnding;
+
+        // Column chooser at the END of the grid header strip.
+        var chooserStrip = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 0, 0, 4)
+        };
+        FlowAlign.SetAlignEnd(chooserStrip, true);
+        StyleButton(_btnColumns, "Common.Columns");
+        _btnColumns.Click += OnColumnsClick;
+        chooserStrip.Children.Add(_btnColumns);
+        var gridHost = new DockPanel();
+        DockPanel.SetDock(chooserStrip, Dock.Top);
+        gridHost.Children.Add(chooserStrip);
+        gridHost.Children.Add(_grid);
+
+        Grid.SetRow(gridHost, 1);
+        body.Children.Add(gridHost);
 
         root.Children.Add(body);
         Content = root;
@@ -754,16 +795,13 @@ public sealed class CshWin : BaseWin, IWindowMode
     protected override void ApplyLocalizedText()
     {
         Title = T(_kind == CshKind.Receipt ? "Vouchers.ReceiptTitle" : "Vouchers.PaymentTitle");
-        if (_grid.Columns.Count >= 7)
-        {
-            _grid.Columns[0].Header = "#";
-            _grid.Columns[1].Header = T("Vouchers.AccountCode");
-            _grid.Columns[2].Header = T("Vouchers.AccountName");
-            _grid.Columns[3].Header = T("MfgOrder.Amount");
-            _grid.Columns[4].Header = T("Vouchers.CostCenter");
-            _grid.Columns[5].Header = T("Vouchers.RefNo");
-            _grid.Columns[6].Header = T("Vouchers.Memo");
-        }
+        // Headers bind by column identity (chooser-safe).
+        _accountCodeColumn.Header = T("Vouchers.AccountCode");
+        _accountNameColumn.Header = T("Vouchers.AccountName");
+        _amountColumn.Header = T("MfgOrder.Amount");
+        _costCenterColumn.Header = T("Vouchers.CostCenter");
+        _invoiceRefColumn.Header = T("Vouchers.RefNo");
+        _memoColumn.Header = T("Vouchers.Memo");
         if (_cbPartyKind.Items.Count == 2)
         {
             if (_cbPartyKind.Items[0] is ComboBoxItem customer) customer.Content = T("CustCard.Customer");
@@ -771,6 +809,144 @@ public sealed class CshWin : BaseWin, IWindowMode
         }
         RefreshLocalizedContent(Content as DependencyObject);
         RefreshCalculations();
+    }
+
+    // ------------------------------------------------------------------
+    // Account entry (owner grid spec item 5, mirroring material
+    // entry): committing the ACCOUNT cell resolves a typed code or
+    // (partial) name immediately when unambiguous; otherwise the
+    // chart of accounts opens as the search window, pre-filtered.
+    // ------------------------------------------------------------------
+
+    private void OnCellEditEnding(object? sender, DataGridCellEditEndingEventArgs e)
+    {
+        if (e.EditAction != DataGridEditAction.Commit) return;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (e.Row.Item is CshLineVm line && ReferenceEquals(e.Column, _accountCodeColumn))
+                ResolveAccountEntry(line);
+            RefreshCalculations();
+        }));
+    }
+
+    private void ResolveAccountEntry(CshLineVm line)
+    {
+        var text = line.AccountCode?.Trim() ?? string.Empty;
+        if (text.Length == 0)
+            return;
+        if (string.Equals(text, line.LastAccountText, StringComparison.Ordinal))
+            return;
+        line.LastAccountText = text;
+
+        var match = AccRepo.MatchAccount(text);
+        if (match is { Kind: AccRepo.AccountMatchKind.Exact or AccRepo.AccountMatchKind.UniquePartial, Account: not null })
+        {
+            ApplyAccount(line, match.Account.Code, AccountDisplayName(match.Account));
+            return;
+        }
+
+        var pick = CoaWin.ShowPicker(this, text);
+        if (pick is not null)
+        {
+            ApplyAccount(line, pick.Code, pick.DisplayName);
+        }
+        else if (string.IsNullOrWhiteSpace(line.AccountName))
+        {
+            _lblStatus.Text = Tf("Vouchers.AccountNotMatched", text);
+        }
+    }
+
+    private static void ApplyAccount(CshLineVm line, string code, string displayName)
+    {
+        line.AccountCode = code;
+        line.AccountName = displayName;
+        line.LastAccountText = code;
+    }
+
+    private static string AccountDisplayName(AccRepo.AccRec account)
+        => string.Equals(App.CurrentLanguageCode, "ar", StringComparison.OrdinalIgnoreCase)
+            ? (!string.IsNullOrWhiteSpace(account.Name) ? account.Name : account.NameEn)
+            : (!string.IsNullOrWhiteSpace(account.NameEn) ? account.NameEn : account.Name);
+
+    // ------------------------------------------------------------------
+    // Optional columns (spec item 4) via the shared ColChsWin;
+    // per-user persistence through WinPref (scope per voucher kind).
+    // ------------------------------------------------------------------
+
+    private sealed record OptionalColumn(string Key, DataGridColumn Column, string HeaderKey);
+
+    private List<OptionalColumn> OptionalColumns() => new()
+    {
+        new("CostCenter", _costCenterColumn, "Vouchers.CostCenter"),
+        new("InvoiceRef", _invoiceRefColumn, "Vouchers.RefNo"),
+        new("Memo", _memoColumn, "Vouchers.Memo"),
+    };
+
+    private string ColumnScope()
+    {
+        var user = AppState.CurrentUser?.Username ?? "anonymous";
+        var company = AppState.CurrentCompanyCode ?? "no-company";
+        return $"{company}/{user}/Vch:CshWin:{_kind}";
+    }
+
+    private void ApplySavedColumnLayout()
+    {
+        var saved = WinPref.LoadReportColumns(ColumnScope());
+        if (saved is null || saved.Count == 0)
+            return;
+        var optionals = OptionalColumns();
+        foreach (var rec in saved)
+        {
+            var opt = optionals.FirstOrDefault(o => string.Equals(o.Key, rec.Key, StringComparison.Ordinal));
+            if (opt is null)
+                continue;
+            opt.Column.Visibility = rec.Visible ? Visibility.Visible : Visibility.Collapsed;
+            opt.Column.DisplayIndex = 3 + Math.Max(0, rec.Order);
+            if (rec.Width is >= 30 and <= 600)
+                opt.Column.Width = new DataGridLength(rec.Width);
+        }
+    }
+
+    private void OnColumnsClick(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var optionals = OptionalColumns();
+            var items = optionals
+                .OrderBy(o => o.Column.DisplayIndex)
+                .Select(o => new ColChsWin.Item
+                {
+                    Key = o.Key,
+                    Header = T(o.HeaderKey),
+                    Visible = o.Column.Visibility == Visibility.Visible,
+                    Locked = false
+                })
+                .ToList();
+            var win = new ColChsWin(items) { Owner = this };
+            if (win.ShowDialog() != true || win.Result is null)
+                return;
+
+            var recs = new List<WinPref.ColumnRec>();
+            for (var i = 0; i < win.Result.Count; i++)
+            {
+                var chosen = win.Result[i];
+                var opt = optionals.First(o => string.Equals(o.Key, chosen.Key, StringComparison.Ordinal));
+                opt.Column.Visibility = chosen.Visible ? Visibility.Visible : Visibility.Collapsed;
+                opt.Column.DisplayIndex = 3 + i;
+                recs.Add(new WinPref.ColumnRec
+                {
+                    Key = opt.Key,
+                    Visible = chosen.Visible,
+                    Order = i,
+                    Width = opt.Column.ActualWidth > 0 ? opt.Column.ActualWidth : opt.Column.Width.Value
+                });
+            }
+            WinPref.SaveReportColumns(ColumnScope(), recs);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "CshWin.OnColumnsClick");
+        }
     }
 
     private string PartyKind => _cbPartyKind.SelectedIndex == 1 ? "S" : "C";
@@ -812,6 +988,10 @@ public sealed class CshWin : BaseWin, IWindowMode
 
         public int LineNo { get => _lineNo; set { _lineNo = value; OnChanged(); } }
         public string AccountCode { get => _accCode; set { _accCode = value; OnChanged(); } }
+
+        /// <summary>UI state only (never persisted): the last typed
+        /// account text the entry matcher already processed.</summary>
+        public string? LastAccountText { get; set; }
         public string AccountName { get => _accName; set { _accName = value; OnChanged(); } }
         public string CostCenter { get => _costCenter; set { _costCenter = value; OnChanged(); } }
         public string InvoiceRef { get => _invoiceRef; set { _invoiceRef = value; OnChanged(); } }

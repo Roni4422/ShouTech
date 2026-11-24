@@ -11,6 +11,7 @@ using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Media;
 using ShouTech.App.Configuration;
+using ShouTech.App.Interaction;
 using ShouTech.App.Services;
 using ShouTech.Domain.Entities;
 
@@ -64,6 +65,19 @@ public sealed class ChqWin : BaseWin, IWindowMode
     private readonly TextBlock _lblStatus = new();
 
     private readonly DataGrid _grid = new();
+
+    // Grid columns by identity (owner grid spec): row numbers live
+    // in the row-header column; the account column carries the
+    // account-entry lookup (item 5).
+    private DataGridTextColumn _chequeNoColumn = null!;
+    private DataGridTextColumn _bankColumn = null!;
+    private DataGridTextColumn _branchColumn = null!;
+    private DataGridTextColumn _dueDateColumn = null!;
+    private DataGridTextColumn _amountColumn = null!;
+    private DataGridTextColumn _drawerColumn = null!;
+    private DataGridTextColumn _accountColumn = null!;
+    private DataGridTextColumn _statusColumn = null!;
+    private DataGridTextColumn _memoColumn = null!;
     private readonly ObservableCollection<ChqVm> _cheques = new();
     private bool _saved;
 
@@ -220,17 +234,30 @@ public sealed class ChqWin : BaseWin, IWindowMode
         _grid.SetResourceReference(DataGrid.RowBackgroundProperty, "TableSurfaceBrush");
         _grid.SetResourceReference(DataGrid.AlternatingRowBackgroundProperty, "TableAlternateRowBrush");
         _grid.ItemsSource = _cheques;
-        _grid.Columns.Add(TextCol(nameof(ChqVm.LineNo), 45, readOnly: true));
-        _grid.Columns.Add(TextCol(nameof(ChqVm.ChequeNo), 110));
-        _grid.Columns.Add(TextCol(nameof(ChqVm.BankName), 140));
-        _grid.Columns.Add(TextCol(nameof(ChqVm.Branch), 100));
-        _grid.Columns.Add(TextCol(nameof(ChqVm.DueDateText), 100));
-        _grid.Columns.Add(TextCol(nameof(ChqVm.AmountText), 110));
-        _grid.Columns.Add(TextCol(nameof(ChqVm.Drawer), 150));
-        _grid.Columns.Add(TextCol(nameof(ChqVm.AccountCode), 100));
-        _grid.Columns.Add(TextCol(nameof(ChqVm.Status), 100, readOnly: true));
-        _grid.Columns.Add(TextCol(nameof(ChqVm.Memo), 160));
-        _grid.CellEditEnding += (_, _) => Dispatcher.BeginInvoke(RefreshSummary);
+        // Excel-like grid (owner spec item 1): the LineNo data
+        // column is dropped — numbers live in the fixed row-header
+        // column (LineNo is still maintained by Renumber() and
+        // persisted as before).
+        DataGridTableBehavior.SetShowRowNumbers(_grid, true);
+        _chequeNoColumn = TextCol(nameof(ChqVm.ChequeNo), 110);
+        _bankColumn = TextCol(nameof(ChqVm.BankName), 140);
+        _branchColumn = TextCol(nameof(ChqVm.Branch), 100);
+        _dueDateColumn = TextCol(nameof(ChqVm.DueDateText), 100);
+        _amountColumn = TextCol(nameof(ChqVm.AmountText), 110);
+        _drawerColumn = TextCol(nameof(ChqVm.Drawer), 150);
+        _accountColumn = TextCol(nameof(ChqVm.AccountCode), 100);
+        _statusColumn = TextCol(nameof(ChqVm.Status), 100, readOnly: true);
+        _memoColumn = TextCol(nameof(ChqVm.Memo), 160);
+        _grid.Columns.Add(_chequeNoColumn);
+        _grid.Columns.Add(_bankColumn);
+        _grid.Columns.Add(_branchColumn);
+        _grid.Columns.Add(_dueDateColumn);
+        _grid.Columns.Add(_amountColumn);
+        _grid.Columns.Add(_drawerColumn);
+        _grid.Columns.Add(_accountColumn);
+        _grid.Columns.Add(_statusColumn);
+        _grid.Columns.Add(_memoColumn);
+        _grid.CellEditEnding += OnCellEditEnding;
         Grid.SetRow(_grid, 1);
         body.Children.Add(_grid);
 
@@ -497,21 +524,60 @@ public sealed class ChqWin : BaseWin, IWindowMode
     protected override void ApplyLocalizedText()
     {
         Title = T(_kind == ChqKind.Incoming ? "Cheques.IncomingTitle" : "Cheques.OutgoingTitle");
-        if (_grid.Columns.Count >= 10)
-        {
-            _grid.Columns[0].Header = "#";
-            _grid.Columns[1].Header = T("Vouchers.ChequeNo");
-            _grid.Columns[2].Header = T("Vouchers.Bank");
-            _grid.Columns[3].Header = T("BankCard.Branch");
-            _grid.Columns[4].Header = T("Vouchers.DueDate");
-            _grid.Columns[5].Header = T("MfgOrder.Amount");
-            _grid.Columns[6].Header = T("Vouchers.Drawer");
-            _grid.Columns[7].Header = T("Vouchers.AccountCode");
-            _grid.Columns[8].Header = T("Vouchers.Status");
-            _grid.Columns[9].Header = T("Vouchers.Memo");
-        }
+        // Headers bind by column identity (the LineNo column is gone).
+        _chequeNoColumn.Header = T("Vouchers.ChequeNo");
+        _bankColumn.Header = T("Vouchers.Bank");
+        _branchColumn.Header = T("BankCard.Branch");
+        _dueDateColumn.Header = T("Vouchers.DueDate");
+        _amountColumn.Header = T("MfgOrder.Amount");
+        _drawerColumn.Header = T("Vouchers.Drawer");
+        _accountColumn.Header = T("Vouchers.AccountCode");
+        _statusColumn.Header = T("Vouchers.Status");
+        _memoColumn.Header = T("Vouchers.Memo");
         RefreshLocalizedContent(Content as DependencyObject);
         RefreshSummary();
+    }
+
+    // Account entry (owner grid spec item 5): committing the
+    // ACCOUNT cell resolves a typed code or (partial) name
+    // immediately when unambiguous; otherwise the chart of accounts
+    // opens as the search window, pre-filtered. The cheque row
+    // carries no account-name field, so a match canonicalizes the
+    // code; an unresolved code is caught by save-time resolution.
+    private void OnCellEditEnding(object? sender, DataGridCellEditEndingEventArgs e)
+    {
+        if (e.EditAction != DataGridEditAction.Commit) return;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (e.Row.Item is ChqVm row && ReferenceEquals(e.Column, _accountColumn))
+                ResolveAccountEntry(row);
+            RefreshSummary();
+        }));
+    }
+
+    private void ResolveAccountEntry(ChqVm row)
+    {
+        var text = row.AccountCode?.Trim() ?? string.Empty;
+        if (text.Length == 0)
+            return;
+        if (string.Equals(text, row.LastAccountText, StringComparison.Ordinal))
+            return;
+        row.LastAccountText = text;
+
+        var match = AccRepo.MatchAccount(text);
+        if (match is { Kind: AccRepo.AccountMatchKind.Exact or AccRepo.AccountMatchKind.UniquePartial, Account: not null })
+        {
+            row.AccountCode = match.Account.Code;
+            row.LastAccountText = match.Account.Code;
+            return;
+        }
+
+        var pick = CoaWin.ShowPicker(this, text);
+        if (pick is not null)
+        {
+            row.AccountCode = pick.Code;
+            row.LastAccountText = pick.Code;
+        }
     }
 
     private static void RefreshLocalizedContent(DependencyObject? parent)
@@ -557,6 +623,10 @@ public sealed class ChqWin : BaseWin, IWindowMode
         public string Branch { get => _branch; set { _branch = value; OnChanged(); } }
         public string Drawer { get => _drawer; set { _drawer = value; OnChanged(); } }
         public string AccountCode { get => _accCode; set { _accCode = value; OnChanged(); } }
+
+        /// <summary>UI state only (never persisted): the last typed
+        /// account text the entry matcher already processed.</summary>
+        public string? LastAccountText { get; set; }
         public string Memo { get => _memo; set { _memo = value; OnChanged(); } }
         public string Status { get => _status; set { _status = value; OnChanged(); } }
 

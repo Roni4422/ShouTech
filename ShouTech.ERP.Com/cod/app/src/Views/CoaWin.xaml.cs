@@ -48,6 +48,45 @@ public partial class CoaWin : BaseWin
     private readonly ObservableCollection<AccountNode> _allRoots = new();
     private AccountNode? _selected;
 
+    // Picker mode (owner grid spec item 5): the chart IS the account
+    // search window for voucher grids — the same directory-as-search
+    // pattern as MatDirWin for materials. Editing actions hide;
+    // double-click / Enter on a postable (leaf) account accepts it.
+    private bool _pickerMode;
+    public AccountNode? PickedAccount { get; private set; }
+
+    public static AccountNode? ShowPicker(Window owner, string? initialSearch = null)
+    {
+        var win = new CoaWin { Owner = owner, _pickerMode = true };
+        win.ActionButtonsPanel.Visibility = Visibility.Collapsed;
+        if (!string.IsNullOrWhiteSpace(initialSearch))
+            win.TxtSearch.Text = initialSearch;
+        return win.ShowDialog() == true ? win.PickedAccount : null;
+    }
+
+    private void TryAcceptPick()
+    {
+        if (!_pickerMode || _selected is null)
+            return;
+        if (IsGroupMode(_selected.TypeLabel))
+            return; // group/summary accounts are not postable
+        PickedAccount = _selected;
+        DialogResult = true;
+        Close();
+    }
+
+    private void TvAccounts_MouseDoubleClick(object sender, MouseButtonEventArgs e) => TryAcceptPick();
+
+    private void TvAccounts_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            TryAcceptPick();
+            if (_pickerMode)
+                e.Handled = true;
+        }
+    }
+
     public CoaWin()
     {
         InitializeComponent();

@@ -2308,7 +2308,8 @@
     "SaveFailedMsg": "L'opération n'a pas abouti et n'a pas été présentée comme un succès.\n[{0}] {1}",
     "SaveFailedTitle": "Échec de l'enregistrement de l'écriture",
     "AdvanceForPo": "Avance sur commande d'achat",
-    "PurchaseOrderNo": "N° de commande d'achat"
+    "PurchaseOrderNo": "N° de commande d'achat",
+    "AccountNotMatched": "Compte introuvable : {0}"
   },
   "CustCard": {
     "DefaultCurrency": "Devise par défaut",

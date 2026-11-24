@@ -2042,7 +2042,8 @@
     "SaveFailedMsg": "لم تنجح العملية ولم يتم عرضها كناجحة.\n[{0}] {1}",
     "SaveFailedTitle": "فشل حفظ القيد",
     "AdvanceForPo": "دفعة مقدمة لأمر شراء",
-    "PurchaseOrderNo": "رقم أمر الشراء"
+    "PurchaseOrderNo": "رقم أمر الشراء",
+    "AccountNotMatched": "الحساب غير مطابق: {0}"
   },
   "CustCard": {
     "DefaultCurrency": "العملة الافتراضية",

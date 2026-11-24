@@ -456,7 +456,9 @@ public sealed class PayRecWin : BaseWin
         grid.CanUserResizeColumns = true;
         grid.SelectionMode = DataGridSelectionMode.Single;
         grid.SelectionUnit = DataGridSelectionUnit.FullRow;
-        grid.RowHeaderWidth = 0;
+        // Excel-like grids (owner spec item 1): numbered row
+        // headers on the read-only allocation grids too.
+        DataGridTableBehavior.SetShowRowNumbers(grid, true);
         grid.GridLinesVisibility = DataGridGridLinesVisibility.Horizontal;
         grid.AlternationCount = 2;
         DataGridTableBehavior.SetEnableStandardContextMenu(grid, true);

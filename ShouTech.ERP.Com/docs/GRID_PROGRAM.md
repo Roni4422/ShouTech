@@ -71,11 +71,85 @@ Evidence strength: ERPNext/Odoo — documented product behavior
 (strong). Al-Ameen 10 — help-index level (thin; stated plainly).
 Phenix v10 — vendor material (medium).
 
+**Where ShouTech exceeds the benchmarks:** whole-window RTL
+mirroring with live language switching (the web benchmarks reload;
+the legacy desktop benchmarks are Arabic-first UIs of their era);
+per-window zebra tints in a modern Windows 11 surface; the
+directory-as-search pattern reuses the SAME MatDirWin the user
+manages materials in — one surface to learn, not a separate
+lookup dialog per window.
+**Where ShouTech still trails:** no scan-gun continuous-entry
+mode (barcode wedge auto-advance row) — named gap for the
+commercial-readiness phase; ERPNext's per-line warehouse/SO
+linkage prompts are richer on the sales side.
+**Verdict (power + ease):** more powerful — every optional column
+is backed by a real persisted field and the matcher resolves
+codes, five unit barcodes, GTIN and names in one pass; easier —
+type part of a name and the line fills itself (unit, tax, price),
+the search opens only when the match is genuinely ambiguous, and
+the five core columns never move.
+
 ## Family 2 — voucher grids (JrnWin, CshWin, PayRecWin, ChqWin)
 
-Pending batch R2b: account-first column + account lookup mirroring
-item 3 (PartySearchWin exists for parties/accounts), row numbers,
-chooser where the pattern fits.
+**Verdict: DONE (batch R2b), gates ALL-GREEN.**
+
+- Row numbers: all four windows now use the central
+  ShowRowNumbers. JrnWin/CshWin/ChqWin each carried a LineNo DATA
+  column duplicating the row header — dropped from the grids
+  (LineNo is still maintained in code and persisted exactly as
+  before). PayRecWin's two read-only allocation grids had
+  RowHeaderWidth=0 — now numbered.
+- Account-first: JrnWin/CshWin already led with the account
+  (code + read-only name) — conformed. ChqWin's account column
+  sits mid-grid by the cheque register's nature (cheque number
+  first) — kept, with the lookup added.
+- Account entry: NEW `AccRepo.MatchAccount` (postable accounts
+  only; exact code/name, then unique contains) mirrors the
+  material matcher. Committing the account cell in JrnWin,
+  CshWin and ChqWin fills code + name immediately on an exact or
+  unique-partial match; ambiguous/no match opens CoaWin as the
+  search window (new picker mode: editing actions hidden,
+  double-click/Enter accepts a postable account, pre-filtered
+  with the typed text). Per-line processed-text guards prevent
+  tab-through re-opens. Unmatched text reports into the window's
+  status line (Vouchers.AccountNotMatched ×4 languages).
+- Column chooser: JrnWin (CostCenter, Memo) and CshWin
+  (CostCenter, InvoiceRef, Memo) gained the ColChsWin chooser +
+  WinPref per-user persistence (Vch: scopes), with headers
+  converted from index-based to identity-based. ChqWin: the only
+  candidate was Memo — chooser does not fit a one-column case;
+  recorded as not fitting. PayRecWin grids are fixed allocation
+  layouts — chooser not applicable.
+- PartySearchWin remains the party picker where windows ask for
+  a party explicitly; the voucher account cell uses the chart,
+  because under the canonical model parties ARE chart accounts
+  and one matcher covers both (spec item 5's "one logic").
+
+### Four-system comparison — voucher grids
+
+| Dimension | ERPNext | Odoo | Al-Ameen 10 | Phenix v10 | ShouTech after R2b |
+|---|---|---|---|---|---|
+| First field | account (Journal Entry) | account label search | account code/name | account | account code + name, first |
+| Account lookup | link-field search dialog | autocomplete dropdown | directory search | chart lookup | type-ahead match; chart-as-search on ambiguity |
+| Row numbers | idx column | sequence handle | # column | numbered | fixed row-header numbers |
+| Optional columns | grid config | optional columns | column settings | per-user show/hide | ColChsWin + WinPref (Jrn/Csh) |
+| Balance feedback | totals + difference row | totals bar | bottom totals | bottom bar | live totals + balanced badge (Jrn), totals/status (Csh) |
+
+**Where ShouTech exceeds:** the chart-as-search reuses the real
+CoaWin (the user sees the whole tree with balances, not a flat
+lookup list); matching covers Arabic and Latin names equally in
+a four-language UI; live re-mirroring on language switch.
+**Where ShouTech still trails:** no account-balance preview
+inline in the account cell while typing (benchmarks show the
+account's current balance in the lookup) — buildable, recorded
+as a gap for the commercial-readiness phase; journal templates /
+recurring entries are a separate feature family, out of scope.
+**Verdict (power + ease):** more powerful — one matcher over the
+canonical chart (parties and GL accounts unified), postable-only
+so a summary account can never be posted to by accident; easier —
+partial-name typing fills the account, the full chart opens only
+when needed, and the balanced badge confirms the entry before
+saving.
 
 ## Family 3 — report grids (RptBase family)
 
