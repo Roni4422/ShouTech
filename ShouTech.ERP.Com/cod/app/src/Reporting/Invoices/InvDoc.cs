@@ -142,6 +142,12 @@ public sealed class InvDoc
     public decimal ExchangeRate { get; set; } = 1m;
     public string? TaxCode { get; set; }
     public decimal DefaultTaxRate { get; set; }
+    /// <summary>Quotation validity deadline (ERPNext "Valid Till",
+    /// sales-cycle G4): persisted in sales_documents.valid_till
+    /// (migration 032) by InvRepo for every native document kind, but
+    /// only meaningful — and only shown in InvoiceWin — for
+    /// quotations. Null = no expiry set.</summary>
+    public DateTime? ValidTill { get; set; }
     public string? Notes { get; set; }
     public InvDocStatus Status { get; set; } = InvDocStatus.Draft;
     public List<InvLine> Lines { get; set; } = new();

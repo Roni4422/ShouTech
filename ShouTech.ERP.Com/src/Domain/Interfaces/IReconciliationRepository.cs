@@ -7,7 +7,9 @@ public interface IReconciliationRepository
     /// <summary>partyKind: "C" = customers (sales documents), "S" = suppliers (purchase documents).</summary>
     Task<IReadOnlyList<OpenDocumentRow>> GetOpenDocumentsAsync(string companyId, string partyKind, CancellationToken cancellationToken = default);
 
-    /// <summary>partyKind: "C" = customers (credit-side ledger entries), "S" = suppliers (debit-side entries).</summary>
+    /// <summary>partyKind: "C" = customers (credit-side ledger entries), "S" = suppliers (debit-side entries).
+    /// For customers the list also carries posted credit notes (SRT, G17) at their net credit
+    /// (gross credit minus refunds already paid out on the same return document).</summary>
     Task<IReadOnlyList<UnallocatedPaymentRow>> GetPaymentsAsync(string companyId, string partyKind, CancellationToken cancellationToken = default);
 
     /// <summary>

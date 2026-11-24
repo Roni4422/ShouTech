@@ -390,13 +390,16 @@ public sealed class CshWin : BaseWin, IWindowMode
             var description = string.IsNullOrWhiteSpace(_txtMemo.Text)
                 ? $"{(_kind == CshKind.Receipt ? T("Vouchers.ReceiptTitle") : T("Vouchers.PaymentTitle"))} — {_txtParty.Text.Trim()}"
                 : _txtMemo.Text.Trim();
+            // G23: the party link travels INTO the draft creation, so
+            // JournalRepository writes voucher_party_links inside the
+            // same transaction as the draft — no separate-connection
+            // write afterwards, no link-less draft on a crash.
             var id = await journal.CreateDraftAsync(
                 companyId, DateOnly.FromDateTime(selectedDate), description, actor, requests,
                 referenceNumber: string.IsNullOrWhiteSpace(_txtRefNo.Text) ? null : _txtRefNo.Text.Trim(),
                 currencyCode: currency, exchangeRate: rate,
-                documentNumber: _txtDocNo.Text.Trim());
-            if (partyLink is not null)
-                PartyLedgerSvc.SaveVoucherLink(id, partyLink.DocKind, partyLink.DocNo, partyLink.Amount, currency, partyLink, actor);
+                documentNumber: _txtDocNo.Text.Trim(),
+                partyLink: partyLink?.ToRequest(CurrentCompanyCode));
             _currentJournalId = id;
             _btnSave.IsEnabled = false;
             SetReadOnly(true);

@@ -23,8 +23,15 @@ namespace ShouTech.Infrastructure;
 /// Step 4 discipline (sweep L-10, cash-payments MAJORs):
 /// - Only genuine payment entries are allocatable: doc_kind RCV (cash
 ///   receipt / collected at invoice posting), PAY (cash payment) and INS
-///   (installment collection). Return credits/debits (SRT/PRT) are NOT
+///   (installment collection). Purchase-return debits (PRT) are NOT
 ///   payments and can no longer be allocated as if they were cash.
+/// - Sales-cycle G17 exception: a posted customer credit note (SRT) IS
+///   an allocatable credit SOURCE for customers. Its allocatable amount
+///   is its NET credit: the SRT credit row minus the SRT debit rows of
+///   the same return document (cash refunds already paid out and
+///   settlement mirrors), so refunded money can never be allocated
+///   twice. It is a credit, never cash: allocation only settles other
+///   open documents of the same customer in the same currency.
 /// - Only real trade documents are settleable: SAL/POS on the sales side,
 ///   PUR on the purchase side — returns and stock kinds are excluded.
 /// - No row caps: the lists are the full open sets (unlimited-rows rule);
@@ -121,18 +128,25 @@ public sealed class ReconciliationRepository : IReconciliationRepository
               ))
               """
             : string.Empty;
+        // G17: customer credit notes (SRT credit rows) are allocation
+        // sources alongside receipts; supplier sources stay PAY/INS.
+        var sourceKinds = partyKind == "C" ? "('RCV', 'INS', 'SRT')" : "('PAY', 'INS')";
         await using var command = CreateCommand(connection, null,
             $"""
             SELECT l.ledger_id, l.entry_date, l.doc_kind, l.doc_no, l.party_id, l.note, {amountExpr} AS amount,
                    COALESCE((SELECT SUM(a.amount) FROM payment_allocations a
                              WHERE a.company_id = l.company_id AND a.payment_ledger_id = l.ledger_id), 0) AS allocated,
                    COALESCE(NULLIF(p.name_en, ''), p.name_ar, '') AS party_name,
-                   COALESCE(l.currency_code, 'SAR') AS currency_code
+                   COALESCE(l.currency_code, 'SAR') AS currency_code,
+                   CASE WHEN l.doc_kind = 'SRT' THEN COALESCE((SELECT SUM(r.debit) FROM party_ledger r
+                             WHERE r.company_id = l.company_id AND r.party_kind = l.party_kind
+                               AND r.party_id = l.party_id AND r.doc_kind = 'SRT'
+                               AND r.doc_id = l.doc_id AND r.debit > 0), 0) ELSE 0 END AS refunded
             FROM party_ledger l
             LEFT JOIN parties p
               ON p.company_id = l.company_id AND p.kind = l.party_kind AND p.ledger_id = l.party_id
             WHERE l.company_id = @company AND l.party_kind = @kind AND {sidePredicate}
-              AND l.doc_kind IN ('RCV', 'PAY', 'INS')
+              AND l.doc_kind IN {sourceKinds}
               {activeJournalPredicate}
             ORDER BY l.entry_date, l.ledger_id
             """);
@@ -149,7 +163,10 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                 DocNo: ReadString(reader, 3),
                 PartyId: Convert.ToInt64(reader.GetValue(4), CultureInfo.InvariantCulture),
                 Note: ReadString(reader, 5),
-                Amount: ReadDecimal(reader, 6),
+                // G17: a credit note's allocatable amount is its net
+                // credit (gross credit minus refunds/mirrors on the
+                // same return document, read as column 10).
+                Amount: ReadDecimal(reader, 6) - ReadDecimal(reader, 10),
                 Allocated: ReadDecimal(reader, 7),
                 PartyName: ReadString(reader, 8),
                 CurrencyCode: ReadString(reader, 9) ?? "SAR");
@@ -204,10 +221,11 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                   ))
                   """
                 : string.Empty;
+            long? paymentDocId = null;
             await using (var pay = CreateCommand(connection, transaction,
                 $"""
                 SELECT l.party_kind, l.party_id, l.debit, l.credit, l.doc_kind,
-                       COALESCE(l.currency_code, 'SAR')
+                       COALESCE(l.currency_code, 'SAR'), l.doc_id
                 FROM party_ledger l
                 WHERE l.company_id = @company AND l.ledger_id = @id
                   {activeJournalPredicate}
@@ -225,11 +243,37 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                 paymentAmount = partyKind == "C" ? credit : debit;
                 paymentDocKind = ReadString(reader, 4);
                 paymentCurrency = ReadString(reader, 5) ?? "SAR";
+                paymentDocId = reader.IsDBNull(6) ? null : Convert.ToInt64(reader.GetValue(6), CultureInfo.InvariantCulture);
             }
-            // Step 4 (L-10): returns and other non-payment entries are not
-            // allocatable payments, even if they sit on the payment side.
-            if (paymentDocKind is not ("RCV" or "PAY" or "INS"))
-                throw new InvalidOperationException("The selected ledger entry is not a payment (only receipt, payment and installment-collection entries can be allocated).");
+            // Step 4 (L-10): purchase returns and other non-payment
+            // entries are not allocatable payments, even if they sit on
+            // the payment side. G17: a customer credit note (SRT) is the
+            // one return that IS an allocation source — for customers
+            // only, and only up to its NET credit (gross credit minus
+            // the refunds/settlement mirrors already paid out on the
+            // same return document, which sit as SRT debit rows).
+            var isCreditNote = paymentDocKind == "SRT" && partyKind == "C";
+            if (paymentDocKind is not ("RCV" or "PAY" or "INS") && !isCreditNote)
+                throw new InvalidOperationException("The selected ledger entry is not a payment (only receipt, payment, installment-collection and customer credit-note entries can be allocated).");
+            if (isCreditNote)
+            {
+                if (paymentDocId is not long creditDocId)
+                    throw new InvalidOperationException("The credit note entry is not linked to its return document and cannot be allocated.");
+                await using var refunds = CreateCommand(connection, transaction,
+                    """
+                    SELECT COALESCE(SUM(debit), 0) FROM party_ledger
+                    WHERE company_id = @company AND party_kind = @kind AND party_id = @party
+                      AND doc_kind = 'SRT' AND doc_id = @doc AND debit > 0
+                    """);
+                Add(refunds, "@company", companyId.Trim());
+                Add(refunds, "@kind", partyKind);
+                Add(refunds, "@party", paymentParty);
+                Add(refunds, "@doc", creditDocId);
+                var refunded = Convert.ToDecimal(await refunds.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+                paymentAmount -= refunded;
+                if (paymentAmount <= 0)
+                    throw new InvalidOperationException("The credit note has no remaining credit (it was fully refunded in cash).");
+            }
             if (!string.Equals(paymentKind, partyKind, StringComparison.Ordinal))
                 throw new InvalidOperationException("The payment entry belongs to a different party kind.");
             if (paymentAmount <= 0)

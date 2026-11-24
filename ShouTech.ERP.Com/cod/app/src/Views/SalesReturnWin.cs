@@ -24,6 +24,12 @@ public sealed class SalesReturnWin : BaseWin
     private readonly List<(DataGridColumn Column, string Key)> _headers = new();
     private readonly TextBox _invoiceNo = new();
     private readonly TextBox _reason = new();
+    /// <summary>G18: cash-refund inputs. Refund amount 0 (the default)
+    /// keeps the historical pure-credit return; a positive amount with
+    /// a Cash/Card/Checks method is wired into the return document's
+    /// PaidAmount/PaymentMethod and InvRepo posts the settlement leg.</summary>
+    private readonly ComboBox _refundMethod = new();
+    private readonly TextBox _refundAmount = new() { Text = "0" };
     private readonly TextBlock _invoiceInfo = new();
     private readonly TextBlock _returnTotal = new();
     private readonly TextBlock _statusBar = new();
@@ -43,6 +49,18 @@ public sealed class SalesReturnWin : BaseWin
         MinHeight = 380;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         BuildUi();
+        Loaded += OnLoaded;
+    }
+
+    /// <summary>G20: SALES.RETURN.VIEW gates the window on load
+    /// (CshWin/PayRecWin pattern: deny + report, then close).</summary>
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        if (AppHost.Permissions.Has(PermCat.Sales.ReturnView)) return;
+        var denied = new UnauthorizedAccessException($"Permission {PermCat.Sales.ReturnView} is required to open this window.");
+        AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, denied, "SalesReturnWin.OnLoaded");
+        MessageBox.Show(this, T("SalesReturn.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        Close();
     }
 
     private void BuildUi()
@@ -63,6 +81,15 @@ public sealed class SalesReturnWin : BaseWin
         form.Margin = new Thickness(0, 0, 0, 6);
         F2Ui.AddField(_labels, form, 0, 0, "SalesReturn.OriginalInvoice", _invoiceNo);
         F2Ui.AddField(_labels, form, 0, 1, "SalesReturn.Reason", _reason);
+        // G18: refund method + amount on a second form row (the action
+        // buttons stay in the bottom bar, per the layout rule).
+        _refundMethod.Items.Add(new ComboBoxItem { Tag = "Credit" });
+        _refundMethod.Items.Add(new ComboBoxItem { Tag = "Cash" });
+        _refundMethod.Items.Add(new ComboBoxItem { Tag = "Card" });
+        _refundMethod.Items.Add(new ComboBoxItem { Tag = "Checks" });
+        _refundMethod.SelectedIndex = 0;
+        F2Ui.AddField(_labels, form, 1, 0, "SalesReturn.RefundMethod", _refundMethod);
+        F2Ui.AddField(_labels, form, 1, 1, "SalesReturn.RefundAmount", _refundAmount);
         DockPanel.SetDock(form, Dock.Top);
         content.Children.Add(form);
 
@@ -99,6 +126,45 @@ public sealed class SalesReturnWin : BaseWin
     {
         Title = T("SalesReturn.Title");
         F2Ui.ApplyTexts(_labels, _headers, new[] { _loadButton, _postButton, _closeButton }, T);
+        if (_refundMethod.Items.Count == 4)
+        {
+            if (_refundMethod.Items[0] is ComboBoxItem credit) credit.Content = T("SalesReturn.RefundCredit");
+            if (_refundMethod.Items[1] is ComboBoxItem cash) cash.Content = T("SalesReturn.RefundCash");
+            if (_refundMethod.Items[2] is ComboBoxItem card) card.Content = T("SalesReturn.RefundCard");
+            if (_refundMethod.Items[3] is ComboBoxItem checks) checks.Content = T("SalesReturn.RefundChecks");
+        }
+    }
+
+    /// <summary>G20 deny + report helper (CshWin/PayRecWin pattern).</summary>
+    private bool EnsurePermission(string permission, string operation)
+    {
+        if (AppHost.Permissions.Has(permission)) return true;
+        var denied = new UnauthorizedAccessException($"Permission {permission} is required for {operation}.");
+        AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, denied, $"SalesReturnWin.{operation}");
+        MessageBox.Show(this, T("SalesReturn.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        return false;
+    }
+
+    private (decimal Amount, InvPaymentMethod Method) CaptureRefund()
+    {
+        var text = _refundAmount.Text.Trim();
+        if (!decimal.TryParse(text, NumberStyles.Number, CultureInfo.CurrentCulture, out var amount)
+            && !decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out amount))
+            throw new InvalidOperationException(T("SalesReturn.RefundInvalid"));
+        if (amount < 0m)
+            throw new InvalidOperationException(T("SalesReturn.RefundInvalid"));
+        var tag = (_refundMethod.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "Credit";
+        if (amount == 0m)
+            return (0m, InvPaymentMethod.Credit);
+        return tag switch
+        {
+            "Cash" => (amount, InvPaymentMethod.Cash),
+            "Card" => (amount, InvPaymentMethod.Card),
+            "Checks" => (amount, InvPaymentMethod.Checks),
+            // A positive refund with the credit-only method chosen is a
+            // contradiction — refuse instead of silently dropping it.
+            _ => throw new InvalidOperationException(T("SalesReturn.RefundInvalid"))
+        };
     }
 
     private void LoadInvoice()
@@ -181,6 +247,8 @@ public sealed class SalesReturnWin : BaseWin
 
     private void PostReturn()
     {
+        // G20: creating the return document requires SALES.RETURN.CREATE.
+        if (!EnsurePermission(PermCat.Sales.ReturnCreate, "PostReturn")) return;
         try
         {
             if (_original is null)
@@ -201,6 +269,9 @@ public sealed class SalesReturnWin : BaseWin
             }
             if (!AskConfirm("SalesReturn.Confirm"))
                 return;
+
+            // G18: the refund the user entered (0 = pure credit note).
+            var refund = CaptureRefund();
 
             var selected = _original.Lines
                 .Where(line => quantities.TryGetValue(line.LineNo, out var quantity) && quantity > 0m)
@@ -233,8 +304,8 @@ public sealed class SalesReturnWin : BaseWin
                     _original.LinesDiscountAmount, selectedSubtotal, LinesSubtotal(_original)),
                 LinesExtraAmount = PosTenderMath.ProRata(
                     _original.LinesExtraAmount, selectedSubtotal, LinesSubtotal(_original)),
-                PaidAmount = 0m,
-                PaymentMethod = InvPaymentMethod.Credit,
+                PaidAmount = refund.Amount,
+                PaymentMethod = refund.Method,
                 OriginalDocId = _original.DocId,
                 OriginalDocKind = InvDocKind.SalesInvoice,
                 OriginalDocNo = _original.DocNo,
@@ -266,6 +337,8 @@ public sealed class SalesReturnWin : BaseWin
             var captures = BatchSerialCaptureSvc.CaptureForPosting(returnDoc, this);
             if (captures is null)
                 return;
+            // G20: posting the return requires SALES.RETURN.POST.
+            if (!EnsurePermission(PermCat.Sales.ReturnPost, "PostReturn")) return;
             InvRepo.Post(returnDoc.DocId, InvDocKind.SalesReturn, CurrentUserId, captures);
 
             ShowInfo("SalesReturn.Posted");

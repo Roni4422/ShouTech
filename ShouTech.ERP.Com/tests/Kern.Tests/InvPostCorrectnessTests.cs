@@ -921,6 +921,241 @@ public sealed class InvPostCorrectnessTests
         Assert.False(InvPostingPolicy.For(InvDocKind.InventoryCount).PartyLedger);
     }
 
+    // ------------------------------------------------------------ B3 (G16/G17/G18/G4/G23)
+
+    private static InvDoc BuildReturn(InvDoc original, Party party, decimal qty, decimal refund, InvPaymentMethod method)
+        => new()
+        {
+            Kind = InvDocKind.SalesReturn,
+            DocNo = InvRepo.NextDocNo(InvDocKind.SalesReturn),
+            DocDate = new DateTime(2026, 3, 12),
+            PartyId = party.LedgerId,
+            PartyCode = party.Code,
+            PartyName = party.NameEn,
+            WarehouseId = 1,
+            CurrencyCode = original.CurrencyCode,
+            ExchangeRate = original.ExchangeRate,
+            PaidAmount = refund,
+            PaymentMethod = refund > 0m ? method : InvPaymentMethod.Credit,
+            OriginalDocId = original.DocId,
+            OriginalDocKind = InvDocKind.SalesInvoice,
+            OriginalDocNo = original.DocNo,
+            Notes = "Customer return",
+            Lines =
+            {
+                new InvLine
+                {
+                    LineNo = 1,
+                    MaterialId = original.Lines[0].MaterialId,
+                    MaterialCode = original.Lines[0].MaterialCode,
+                    Description = original.Lines[0].Description,
+                    Unit = original.Lines[0].Unit,
+                    Qty = qty,
+                    UnitPrice = original.Lines[0].UnitPrice,
+                    DiscountPct = original.Lines[0].DiscountPct,
+                    TaxCode = original.Lines[0].TaxCode,
+                    TaxRate = original.Lines[0].TaxRate,
+                    TaxCalculationMode = original.Lines[0].TaxCalculationMode,
+                    WarehouseId = original.Lines[0].WarehouseId
+                }
+            }
+        };
+
+    [Fact]
+    public async Task PartialReturn_AutoAllocatesCreditNote_AndReducesOriginalOpenAmount()
+    {
+        using var db = await SeededAsync();
+        var party = await SavePartyAsync(db, "C", "CUST-B3-1", 100000m);
+        var original = BuildDoc(InvDocKind.SalesInvoice, party.LedgerId, party.Code,
+            qty: 5m, price: 30m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        InvRepo.SaveDraft(original);
+        InvRepo.Post(original.DocId, original.Kind, Actor);
+        Assert.Equal(150m, Scalar(db, $"SELECT grand_total - paid_amount FROM sales_documents WHERE doc_id = {original.DocId};"));
+
+        var creditNote = BuildReturn(original, party, qty: 2m, refund: 0m, InvPaymentMethod.Credit);
+        InvRepo.SaveDraft(creditNote);
+        InvRepo.Post(creditNote.DocId, InvDocKind.SalesReturn, Actor);
+
+        // G16: the origin's open amount fell by the return's total (60),
+        // settled by an allocation whose source is the credit note's
+        // own party-ledger entry (G17's model).
+        Assert.Equal(60m, Scalar(db, $"SELECT paid_amount FROM sales_documents WHERE doc_id = {original.DocId};"));
+        Assert.Equal(90m, Scalar(db, $"SELECT grand_total - paid_amount FROM sales_documents WHERE doc_id = {original.DocId};"));
+        var creditLedgerId = Scalar(db,
+            $"SELECT ledger_id FROM party_ledger WHERE doc_kind = 'SRT' AND doc_id = {creditNote.DocId} AND credit > 0;");
+        Assert.Equal(60m, Scalar(db,
+            $"SELECT amount FROM payment_allocations WHERE payment_ledger_id = {creditLedgerId} AND doc_table = 'SALES' AND doc_id = {original.DocId};"));
+
+        // Party-ledger position agrees with the document position: 90 owed.
+        var repo = new MasterCardRepository("SQLite", db.ConnectionString);
+        Assert.Equal(90m, (await repo.GetPartyBalanceAsync(CompanyCode, "C", party.Code)).Balance);
+    }
+
+    [Fact]
+    public async Task CreditNote_IsAllocatable_ToASecondInvoice()
+    {
+        using var db = await SeededAsync();
+        var party = await SavePartyAsync(db, "C", "CUST-B3-2", 100000m);
+
+        // Invoice 1 fully paid at posting (open 0), so the return's
+        // credit cannot auto-allocate to it and stays fully available.
+        var first = BuildDoc(InvDocKind.SalesInvoice, party.LedgerId, party.Code,
+            qty: 5m, price: 20m, taxRate: 0m, discount: 0m, extra: 0m, paid: 100m,
+            method: InvPaymentMethod.Cash);
+        InvRepo.SaveDraft(first);
+        InvRepo.Post(first.DocId, first.Kind, Actor);
+
+        var creditNote = BuildReturn(first, party, qty: 2m, refund: 0m, InvPaymentMethod.Credit);
+        InvRepo.SaveDraft(creditNote);
+        InvRepo.Post(creditNote.DocId, InvDocKind.SalesReturn, Actor);
+
+        var second = BuildDoc(InvDocKind.SalesInvoice, party.LedgerId, party.Code,
+            qty: 4m, price: 20m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        InvRepo.SaveDraft(second);
+        InvRepo.Post(second.DocId, second.Kind, Actor);
+
+        var reconciliation = new ReconciliationRepository("SQLite", db.ConnectionString);
+        var payments = await reconciliation.GetPaymentsAsync(CompanyCode, "C");
+        var creditRow = Assert.Single(payments, row => row.DocKind == "SRT");
+        Assert.Equal(40m, creditRow.Amount);
+        Assert.Equal(40m, creditRow.Available);
+
+        await reconciliation.AllocateAsync(CompanyCode, "C", creditRow.LedgerId,
+            "SALES", second.DocId, 40m, Actor);
+        Assert.Equal(40m, Scalar(db, $"SELECT paid_amount FROM sales_documents WHERE doc_id = {second.DocId};"));
+
+        // The credit is exhausted: nothing remains to allocate.
+        var after = await reconciliation.GetPaymentsAsync(CompanyCode, "C");
+        Assert.DoesNotContain(after, row => row.DocKind == "SRT");
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            reconciliation.AllocateAsync(CompanyCode, "C", creditRow.LedgerId,
+                "SALES", second.DocId, 1m, Actor));
+    }
+
+    [Fact]
+    public async Task RefundReturn_PostsCashLeg_AndLedgerMirror()
+    {
+        using var db = await SeededAsync();
+        var party = await SavePartyAsync(db, "C", "CUST-B3-3", 100000m);
+        var original = BuildDoc(InvDocKind.SalesInvoice, party.LedgerId, party.Code,
+            qty: 5m, price: 40m, taxRate: 0m, discount: 0m, extra: 0m, paid: 120m,
+            method: InvPaymentMethod.Cash);
+        InvRepo.SaveDraft(original);
+        InvRepo.Post(original.DocId, original.Kind, Actor);
+
+        // Return total 80, of which 30 is handed back in cash.
+        var creditNote = BuildReturn(original, party, qty: 2m, refund: 30m, InvPaymentMethod.Cash);
+        InvRepo.SaveDraft(creditNote);
+        InvRepo.Post(creditNote.DocId, InvDocKind.SalesReturn, Actor);
+
+        // GL: returns debit 80; cash credited for the refund, receivable
+        // credited only for the remaining net credit (50).
+        var entry = SingleEntry(db, "SRT", creditNote.DocId);
+        Assert.Equal(80m, entry.Lines.Where(l => l.Code == "302").Sum(l => l.Debit));
+        Assert.Equal(30m, entry.Lines.Where(l => l.Code == "131").Sum(l => l.Credit));
+        Assert.Equal(50m, entry.Lines.Where(l => l.Code == "1201").Sum(l => l.Credit));
+        Assert.Equal(entry.Lines.Sum(l => l.Debit), entry.Lines.Sum(l => l.Credit));
+
+        // Party ledger: full credit 80 mirrored by a refund debit 30.
+        Assert.Equal(80m, Scalar(db,
+            $"SELECT COALESCE(SUM(credit), 0) FROM party_ledger WHERE doc_kind = 'SRT' AND doc_id = {creditNote.DocId};"));
+        Assert.Equal(30m, Scalar(db,
+            $"SELECT COALESCE(SUM(debit), 0) FROM party_ledger WHERE doc_kind = 'SRT' AND doc_id = {creditNote.DocId};"));
+
+        // The net credit (50) settled the origin: 120 + 50 paid, 30
+        // open, and the party balance agrees (200 − 120 − 50 = 30).
+        Assert.Equal(170m, Scalar(db, $"SELECT paid_amount FROM sales_documents WHERE doc_id = {original.DocId};"));
+        var repo = new MasterCardRepository("SQLite", db.ConnectionString);
+        Assert.Equal(30m, (await repo.GetPartyBalanceAsync(CompanyCode, "C", party.Code)).Balance);
+    }
+
+    [Fact]
+    public async Task RefundReturn_AboveAmountActuallyPaid_IsRefusedWithSal7010()
+    {
+        using var db = await SeededAsync();
+        var party = await SavePartyAsync(db, "C", "CUST-B3-4", 100000m);
+        var original = BuildDoc(InvDocKind.SalesInvoice, party.LedgerId, party.Code,
+            qty: 2m, price: 50m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        InvRepo.SaveDraft(original);
+        InvRepo.Post(original.DocId, original.Kind, Actor);
+
+        // The customer paid nothing toward this invoice: any cash
+        // refund is refused with SAL-7010 and the return stays a draft
+        // with no ledger effects.
+        var creditNote = BuildReturn(original, party, qty: 1m, refund: 10m, InvPaymentMethod.Cash);
+        InvRepo.SaveDraft(creditNote);
+        var error = Assert.Throws<AppError>(() => InvRepo.Post(creditNote.DocId, InvDocKind.SalesReturn, Actor));
+        Assert.Equal(ErrorCodes.AllocationExceedsOpenAmount, error.Code);
+        Assert.Equal("SAL-7010", error.Code);
+        Assert.Equal(InvDocStatus.Draft, InvRepo.Load(creditNote.DocId, InvDocKind.SalesReturn)!.Status);
+        Assert.Equal(0m, Scalar(db, $"SELECT COUNT(*) FROM party_ledger WHERE doc_id = {creditNote.DocId};"));
+        Assert.Equal(0m, Scalar(db, $"SELECT paid_amount FROM sales_documents WHERE doc_id = {original.DocId};"));
+    }
+
+    [Fact]
+    public async Task Quotation_ValidTill_RoundTripsThroughInvRepo()
+    {
+        using var db = await SeededAsync();
+        var party = await SavePartyAsync(db, "C", "CUST-B3-5", 100000m);
+        var quote = BuildDoc(InvDocKind.Quotation, party.LedgerId, party.Code,
+            qty: 1m, price: 10m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        quote.ValidTill = new DateTime(2026, 12, 31);
+        InvRepo.SaveDraft(quote);
+
+        var loaded = InvRepo.Load(quote.DocId, InvDocKind.Quotation);
+        Assert.NotNull(loaded);
+        Assert.Equal(new DateTime(2026, 12, 31), loaded!.ValidTill);
+
+        loaded.ValidTill = new DateTime(2027, 1, 15);
+        InvRepo.SaveDraft(loaded);
+        Assert.Equal(new DateTime(2027, 1, 15),
+            InvRepo.Load(quote.DocId, InvDocKind.Quotation)!.ValidTill);
+
+        var cleared = InvRepo.Load(quote.DocId, InvDocKind.Quotation)!;
+        cleared.ValidTill = null;
+        InvRepo.SaveDraft(cleared);
+        Assert.Null(InvRepo.Load(quote.DocId, InvDocKind.Quotation)!.ValidTill);
+    }
+
+    [Fact]
+    public async Task JournalDraft_WithPartyLink_WritesLinkInsideTheDraftTransaction()
+    {
+        using var db = await SeededAsync();
+        var party = await SavePartyAsync(db, "C", "CUST-B3-6", 100000m);
+        var store = new JournalRepository("SQLite", db.ConnectionString);
+        Guid AccountId(string code)
+        {
+            using var connection = new SqliteConnection(db.ConnectionString);
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "SELECT account_id FROM chart_of_accounts WHERE company_id = $company AND account_code = $code;";
+            cmd.Parameters.AddWithValue("$company", db.CompanyId.ToString("D"));
+            cmd.Parameters.AddWithValue("$code", code);
+            var value = Convert.ToString(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+            Assert.False(string.IsNullOrWhiteSpace(value), $"Account {code} missing from the fixture chart.");
+            return Guid.Parse(value!);
+        }
+
+        var linked = new ShouTech.Domain.Entities.JournalEntry(new DateOnly(2026, 3, 10), "Receipt with party link", null, "SAR", 1m, "RCV-B3-1");
+        linked.AddLine(AccountId("131"), 100m, 0m);
+        linked.AddLine(AccountId("301"), 0m, 100m);
+        var link = new VoucherPartyLinkRequest(
+            CompanyCode, "C", party.LedgerId, party.Code, "RCV", "RCV-B3-1", 100m, "SAR");
+        await store.SaveDraftAsync(db.CompanyId, linked, Actor, default, link);
+
+        Assert.Equal(1m, Scalar(db,
+            $"SELECT COUNT(*) FROM voucher_party_links WHERE journal_entry_id = '{linked.Id:D}';"));
+        Assert.Equal(100m, Scalar(db,
+            $"SELECT amount FROM voucher_party_links WHERE journal_entry_id = '{linked.Id:D}';"));
+
+        var unlinked = new ShouTech.Domain.Entities.JournalEntry(new DateOnly(2026, 3, 10), "Plain draft", null, "SAR", 1m, "JV-B3-2");
+        unlinked.AddLine(AccountId("131"), 50m, 0m);
+        unlinked.AddLine(AccountId("301"), 0m, 50m);
+        await store.SaveDraftAsync(db.CompanyId, unlinked, Actor);
+        Assert.Equal(0m, Scalar(db,
+            $"SELECT COUNT(*) FROM voucher_party_links WHERE journal_entry_id = '{unlinked.Id:D}';"));
+    }
+
     // ------------------------------------------------------------ fixture
 
     // Step 9 (DS-02 / I-8): DocSearch opens the document it found.
