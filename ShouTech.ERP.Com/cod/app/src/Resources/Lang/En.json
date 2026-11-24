@@ -808,6 +808,7 @@
     "OperationCompleted": "Operation completed successfully."
   },
   "Orders": {
+    "RecurringSchedules": "Recurring Schedules",
     "DefineOrders": "Define Orders",
     "OrderPayments": "Order Payments",
     "OrderReceiptDelivery": "Order Receipt and Delivery Invoices",
@@ -4108,6 +4109,39 @@
     "Submitted": "Requisition submitted for approval.",
     "DecisionSaved": "Approval decision saved.",
     "Converted": "Purchase order draft created."
+  },
+  "Recur": {
+    "Title": "Recurring Sales Schedules",
+    "PermissionDenied": "You do not have permission to use recurring sales schedules.",
+    "ServiceUnavailable": "The recurring sales service is unavailable.",
+    "SchedulesStatus": "{0} schedule(s)",
+    "CreatedStatus": "Schedule created from template {0}; next run {1}.",
+    "GeneratedStatus": "Generated {0} document(s), posted {1}, failures {2}.",
+    "TemplateRequired": "Enter the template document number.",
+    "TemplateNotFound": "Template document '{0}' was not found.",
+    "SelectSchedule": "Select a schedule first.",
+    "Create": "Create Schedule",
+    "Pause": "Pause",
+    "Resume": "Resume",
+    "CancelSchedule": "Cancel Schedule",
+    "RunNow": "Run Now",
+    "GenerateDue": "Generate Due",
+    "TemplateKind": "Template Kind",
+    "TemplateDocNo": "Template Document No.",
+    "StartDate": "Start Date",
+    "EndDate": "End Date",
+    "MaxOccurrences": "Max Occurrences",
+    "Col": {
+      "Template": "Template",
+      "Kind": "Kind",
+      "Interval": "Interval",
+      "Every": "Every",
+      "NextRun": "Next Run",
+      "Occurrences": "Occurrences",
+      "AutoPost": "Auto Post",
+      "Status": "Status",
+      "LastRun": "Last Run"
+    }
   },
   "Comm": {
     "Title": "Sales Commissions",

@@ -414,6 +414,7 @@
     "WarehouseRequired": "Configurez un entrepôt actif pour ce terminal POS avant d’ouvrir une session."
   },
   "Orders": {
+    "RecurringSchedules": "Planifications récurrentes",
     "Title": "Commandes",
     "PurchaseOrder": "Commande d'Achat",
     "SalesOrder": "Commande de Vente",
@@ -4099,6 +4100,39 @@
     "Submitted": "Demande soumise à approbation.",
     "DecisionSaved": "Décision enregistrée.",
     "Converted": "Brouillon de bon de commande créé."
+  },
+  "Recur": {
+    "Title": "Planifications de ventes récurrentes",
+    "PermissionDenied": "Vous n'avez pas l'autorisation d'utiliser les planifications de ventes récurrentes.",
+    "ServiceUnavailable": "Le service de ventes récurrentes est indisponible.",
+    "SchedulesStatus": "{0} planification(s)",
+    "CreatedStatus": "Planification créée à partir du modèle {0} ; prochaine exécution {1}.",
+    "GeneratedStatus": "{0} document(s) généré(s), {1} comptabilisé(s), {2} échec(s).",
+    "TemplateRequired": "Saisissez le numéro du document modèle.",
+    "TemplateNotFound": "Le document modèle '{0}' est introuvable.",
+    "SelectSchedule": "Sélectionnez d'abord une planification.",
+    "Create": "Créer la planification",
+    "Pause": "Suspendre",
+    "Resume": "Reprendre",
+    "CancelSchedule": "Annuler la planification",
+    "RunNow": "Exécuter maintenant",
+    "GenerateDue": "Générer les échéances",
+    "TemplateKind": "Type de modèle",
+    "TemplateDocNo": "N° du document modèle",
+    "StartDate": "Date de début",
+    "EndDate": "Date de fin",
+    "MaxOccurrences": "Occurrences max.",
+    "Col": {
+      "Template": "Modèle",
+      "Kind": "Type",
+      "Interval": "Intervalle",
+      "Every": "Tous les",
+      "NextRun": "Prochaine exécution",
+      "Occurrences": "Occurrences",
+      "AutoPost": "Comptabilisation auto",
+      "Status": "Statut",
+      "LastRun": "Dernière exécution"
+    }
   },
   "Comm": {
     "Title": "Commissions de vente",

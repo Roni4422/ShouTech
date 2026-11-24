@@ -459,6 +459,10 @@ namespace ShouTech.App.Services
             public const string CommissionManage = "SALES.COMMISSION.MANAGE";
             public const string CommissionApprove = "SALES.COMMISSION.APPROVE";
             public const string CommissionPay = "SALES.COMMISSION.PAY";
+
+            // W11 recurring schedules (migration 106 seeds).
+            public const string RecurringView = "SALES.RECURRING.VIEW";
+            public const string RecurringManage = "SALES.RECURRING.MANAGE";
         }
 
         // =====================================================================

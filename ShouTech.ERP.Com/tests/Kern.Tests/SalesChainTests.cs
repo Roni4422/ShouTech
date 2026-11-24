@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using ShouTech.Application.Services;
@@ -1114,7 +1115,7 @@ namespace Kern.Tests
             return Task.FromResult<(SalesChainService Service, ShouTech.Infrastructure.CommercialDocumentRepository Repository, Guid CompanyId, string ConnectionString, Action Cleanup)>((service, repository, companyId, connectionString, cleanup));
         }
 
-        private static void ApplySqliteMigrations(string databasePath)
+        internal static void ApplySqliteMigrations(string databasePath)
         {
             var root = new DirectoryInfo(AppContext.BaseDirectory);
             while (root is not null && !Directory.Exists(Path.Combine(root.FullName, "dba", "mig")))
@@ -1150,6 +1151,371 @@ namespace Kern.Tests
             var errors = stderr.GetAwaiter().GetResult();
             Assert.True(process.ExitCode == 0,
                 $"Applying SQLite DBA migrations failed (exit {process.ExitCode}).\n{output}\n{errors}");
+        }
+    }
+
+    /// <summary>
+    /// Recurring sales engine tests (W11, migration 106): template
+    /// validation (SAL-7024), month-end clamp arithmetic, clone fidelity,
+    /// generation IDEMPOTENCY (a second pass for the same date creates
+    /// zero extra documents), catch-up + completion, auto-post, and the
+    /// recorded-failure path for a blocked auto-post.
+    /// </summary>
+    public class RecurringScheduleTests
+    {
+        private const string CompanyCode = "SC-TEST";
+
+        [Fact]
+        public void RecurMath_MonthEndClamp_AndIntervals()
+        {
+            // Month-end stays on month-ends (the ERPNext convention).
+            var jan31 = new DateOnly(2026, 1, 31);
+            var feb = RecurScheduleMath.Advance(jan31, RecurIntervalTypes.Monthly, 1);
+            Assert.Equal(new DateOnly(2026, 2, 28), feb);
+            Assert.Equal(new DateOnly(2026, 3, 31), RecurScheduleMath.Advance(feb, RecurIntervalTypes.Monthly, 1));
+            // Leap year.
+            Assert.Equal(new DateOnly(2024, 2, 29),
+                RecurScheduleMath.Advance(new DateOnly(2024, 1, 31), RecurIntervalTypes.Monthly, 1));
+            // A mid-month day that overflows the target month clamps once.
+            Assert.Equal(new DateOnly(2026, 2, 28),
+                RecurScheduleMath.Advance(new DateOnly(2026, 1, 30), RecurIntervalTypes.Monthly, 1));
+            // A plain mid-month date is untouched.
+            Assert.Equal(new DateOnly(2026, 2, 15),
+                RecurScheduleMath.Advance(new DateOnly(2026, 1, 15), RecurIntervalTypes.Monthly, 1));
+            Assert.Equal(new DateOnly(2027, 1, 31),
+                RecurScheduleMath.Advance(jan31, RecurIntervalTypes.Yearly, 1));
+            Assert.Equal(new DateOnly(2026, 2, 7),
+                RecurScheduleMath.Advance(jan31, RecurIntervalTypes.Weekly, 1));
+            Assert.Equal(new DateOnly(2026, 2, 3),
+                RecurScheduleMath.Advance(jan31, RecurIntervalTypes.Daily, 3));
+            var bad = Assert.Throws<AppError>(() => RecurScheduleMath.Advance(jan31, "Fortnightly", 1));
+            Assert.Equal(ErrorCodes.RecurringScheduleInvalid, bad.Code);
+        }
+
+        [Fact]
+        public async Task CreateSchedule_ValidationFailures_AreSAL7024()
+        {
+            var (service, repository, companyId, _, cleanup) = await CreateRecurAsync();
+            try
+            {
+                var start = new DateOnly(2026, 1, 1);
+                var quotationId = await repository.CreateSalesDraftAsync(
+                    Template(companyId, CommercialDocKinds.SalesQuotation, "QT-REC-1"), "recur-test");
+                var orderId = await repository.CreateSalesDraftAsync(
+                    Template(companyId, CommercialDocKinds.SalesOrder, "SO-REC-1"), "recur-test");
+
+                // A quotation cannot be a recurring template.
+                var kindError = await Assert.ThrowsAsync<AppError>(() =>
+                    service.CreateScheduleAsync(CompanyCode, quotationId, RecurIntervalTypes.Monthly, 1, start, null, null, false, "recur-test"));
+                Assert.Equal(ErrorCodes.RecurringScheduleInvalid, kindError.Code);
+                // Unknown interval type.
+                var intervalError = await Assert.ThrowsAsync<AppError>(() =>
+                    service.CreateScheduleAsync(CompanyCode, orderId, "Fortnightly", 1, start, null, null, false, "recur-test"));
+                Assert.Equal(ErrorCodes.RecurringScheduleInvalid, intervalError.Code);
+                // Non-positive interval count.
+                var countError = await Assert.ThrowsAsync<AppError>(() =>
+                    service.CreateScheduleAsync(CompanyCode, orderId, RecurIntervalTypes.Monthly, 0, start, null, null, false, "recur-test"));
+                Assert.Equal(ErrorCodes.RecurringScheduleInvalid, countError.Code);
+                // End before start.
+                var endError = await Assert.ThrowsAsync<AppError>(() =>
+                    service.CreateScheduleAsync(CompanyCode, orderId, RecurIntervalTypes.Monthly, 1, start, start.AddDays(-1), null, false, "recur-test"));
+                Assert.Equal(ErrorCodes.RecurringScheduleInvalid, endError.Code);
+                // Another company's key cannot adopt the template.
+                var companyError = await Assert.ThrowsAsync<AppError>(() =>
+                    service.CreateScheduleAsync("OTHER-CO", orderId, RecurIntervalTypes.Monthly, 1, start, null, null, false, "recur-test"));
+                Assert.Equal(ErrorCodes.RecurringScheduleInvalid, companyError.Code);
+                // Missing template.
+                var missingError = await Assert.ThrowsAsync<AppError>(() =>
+                    service.CreateScheduleAsync(CompanyCode, 999999, RecurIntervalTypes.Monthly, 1, start, null, null, false, "recur-test"));
+                Assert.Equal(ErrorCodes.RecurringScheduleInvalid, missingError.Code);
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task GenerateDue_ClonesTemplate_AndSecondRunCreatesNothing()
+        {
+            var (service, repository, companyId, connectionString, cleanup) = await CreateRecurAsync();
+            try
+            {
+                var templateId = await repository.CreateSalesDraftAsync(
+                    Template(companyId, CommercialDocKinds.SalesOrder, "SO-REC-TPL"), "recur-test");
+                var schedule = await service.CreateScheduleAsync(CompanyCode, templateId,
+                    RecurIntervalTypes.Monthly, 1, new DateOnly(2026, 1, 31), null, null, false, "recur-test");
+
+                var first = await service.GenerateDueAsync(new DateOnly(2026, 2, 15), "recur-test");
+                Assert.Equal(1, first.DocumentsCreated);
+                Assert.Equal(0, first.DocumentsPosted);
+                Assert.Equal(0, first.Failures);
+
+                var stored = Assert.Single(await service.GetSchedulesAsync(CompanyCode));
+                Assert.Equal(1, stored.OccurrencesCreated);
+                // Month-end clamp in situ: Jan 31 -> Feb 28.
+                Assert.Equal(new DateOnly(2026, 2, 28), stored.NextRunDate);
+                Assert.Equal(RecurScheduleStatus.Active, stored.Status);
+                Assert.Equal(RecurRunOutcome.Draft, stored.LastRunStatus);
+                Assert.NotNull(stored.LastGeneratedDocId);
+
+                var generated = await repository.FindSalesByIdAsync(stored.LastGeneratedDocId!.Value);
+                Assert.NotNull(generated);
+                Assert.Equal(CommercialDocKinds.SalesOrder, generated!.DocKind);
+                Assert.Equal(CommercialDocumentStatus.Draft, generated.Status);
+                Assert.NotEqual("SO-REC-TPL", generated.DocNo);
+                Assert.Equal(new DateOnly(2026, 1, 31), generated.DocDate);
+                Assert.Equal(250m, generated.GrandTotal);
+                var line = Assert.Single(generated.Lines);
+                Assert.Equal(10m, line.Qty);
+                Assert.Equal(25m, line.UnitPrice);
+
+                // The generated document is stamped with its schedule and
+                // linked template -> generated in document_links.
+                using (var check = new SqliteConnection(connectionString))
+                {
+                    check.Open();
+                    using var stampCmd = check.CreateCommand();
+                    stampCmd.CommandText = "SELECT recurring_schedule_id FROM sales_documents WHERE doc_id = $doc";
+                    stampCmd.Parameters.AddWithValue("$doc", generated.DocId);
+                    Assert.Equal(schedule.Id.ToString("D"), Convert.ToString(stampCmd.ExecuteScalar()));
+                    using var linkCmd = check.CreateCommand();
+                    linkCmd.CommandText = "SELECT COUNT(*) FROM document_links WHERE source_doc_id = $tpl AND target_doc_id = $gen";
+                    linkCmd.Parameters.AddWithValue("$tpl", templateId);
+                    linkCmd.Parameters.AddWithValue("$gen", generated.DocId);
+                    Assert.Equal(1L, Convert.ToInt64(linkCmd.ExecuteScalar()));
+                }
+                var links = await repository.GetSalesLinksFromAsync(companyId, templateId);
+                Assert.Contains(links, l => l.TargetDocId == generated.DocId && l.SourceDocKind == CommercialDocKinds.SalesOrder);
+
+                // IDEMPOTENCY: the same as-of date again creates nothing.
+                var second = await service.GenerateDueAsync(new DateOnly(2026, 2, 15), "recur-test");
+                Assert.Equal(0, second.DocumentsCreated);
+                var after = Assert.Single(await service.GetSchedulesAsync(CompanyCode));
+                Assert.Equal(1, after.OccurrencesCreated);
+                var runs = await service.GetRunsAsync(CompanyCode, schedule.Id);
+                Assert.Single(runs);
+
+                // The next due date generates exactly the next occurrence.
+                var third = await service.GenerateDueAsync(new DateOnly(2026, 2, 28), "recur-test");
+                Assert.Equal(1, third.DocumentsCreated);
+                var afterThird = Assert.Single(await service.GetSchedulesAsync(CompanyCode));
+                Assert.Equal(2, afterThird.OccurrencesCreated);
+                Assert.Equal(new DateOnly(2026, 3, 31), afterThird.NextRunDate);
+                Assert.NotEqual(generated.DocId, afterThird.LastGeneratedDocId);
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task GenerateDue_CatchUp_CompletesAtMaxOccurrences()
+        {
+            var (service, repository, companyId, _, cleanup) = await CreateRecurAsync();
+            try
+            {
+                var templateId = await repository.CreateSalesDraftAsync(
+                    Template(companyId, CommercialDocKinds.SalesOrder, "SO-REC-CAP"), "recur-test");
+                await service.CreateScheduleAsync(CompanyCode, templateId,
+                    RecurIntervalTypes.Daily, 1, new DateOnly(2026, 3, 1), null, 3, false, "recur-test");
+
+                var sweep = await service.GenerateDueAsync(new DateOnly(2026, 3, 20), "recur-test");
+                Assert.Equal(3, sweep.DocumentsCreated);
+                Assert.Equal(1, sweep.SchedulesCompleted);
+                var stored = Assert.Single(await service.GetSchedulesAsync(CompanyCode));
+                Assert.Equal(RecurScheduleStatus.Completed, stored.Status);
+                Assert.Equal(3, stored.OccurrencesCreated);
+
+                var again = await service.GenerateDueAsync(new DateOnly(2026, 4, 1), "recur-test");
+                Assert.Equal(0, again.DocumentsCreated);
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task GenerateDue_AutoPost_PostsTheClone()
+        {
+            var (service, repository, companyId, _, cleanup) = await CreateRecurAsync();
+            try
+            {
+                var templateId = await repository.CreateSalesDraftAsync(
+                    Template(companyId, CommercialDocKinds.SalesOrder, "SO-REC-AP"), "recur-test");
+                await repository.PostSalesAsync(templateId, "recur-test");
+                await service.CreateScheduleAsync(CompanyCode, templateId,
+                    RecurIntervalTypes.Weekly, 1, new DateOnly(2026, 1, 5), null, null, true, "recur-test");
+
+                var sweep = await service.GenerateDueAsync(new DateOnly(2026, 1, 5), "recur-test");
+                Assert.Equal(1, sweep.DocumentsCreated);
+                Assert.Equal(1, sweep.DocumentsPosted);
+                var stored = Assert.Single(await service.GetSchedulesAsync(CompanyCode));
+                Assert.Equal(RecurRunOutcome.Posted, stored.LastRunStatus);
+                var generated = await repository.FindSalesByIdAsync(stored.LastGeneratedDocId!.Value);
+                Assert.Equal(CommercialDocumentStatus.Posted, generated!.Status);
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task GenerateDue_AutoPostFailure_LeavesDraftAndRecordsFailure()
+        {
+            var (service, repository, companyId, _, cleanup) = await CreateRecurAsync(postBlocking: true);
+            try
+            {
+                var templateId = await repository.CreateSalesDraftAsync(
+                    Template(companyId, CommercialDocKinds.SalesInvoice, "SAL-REC-APF"), "recur-test");
+                var schedule = await service.CreateScheduleAsync(CompanyCode, templateId,
+                    RecurIntervalTypes.Monthly, 1, new DateOnly(2026, 1, 15), null, null, true, "recur-test");
+
+                var sweep = await service.GenerateDueAsync(new DateOnly(2026, 1, 15), "recur-test");
+                Assert.Equal(1, sweep.DocumentsCreated);
+                Assert.Equal(0, sweep.DocumentsPosted);
+                Assert.Equal(1, sweep.Failures);
+
+                var stored = Assert.Single(await service.GetSchedulesAsync(CompanyCode));
+                Assert.StartsWith(RecurRunOutcome.PostFailed, stored.LastRunStatus);
+                var generated = await repository.FindSalesByIdAsync(stored.LastGeneratedDocId!.Value);
+                Assert.NotNull(generated);
+                Assert.Equal(CommercialDocumentStatus.Draft, generated!.Status);
+                var run = Assert.Single(await service.GetRunsAsync(CompanyCode, schedule.Id));
+                Assert.Equal(RecurRunOutcome.PostFailed, run.Outcome);
+                Assert.Contains("post blocked", run.ErrorText);
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task ScheduleLifecycle_PauseResumeCancel_GuardStates()
+        {
+            var (service, repository, companyId, _, cleanup) = await CreateRecurAsync();
+            try
+            {
+                var templateId = await repository.CreateSalesDraftAsync(
+                    Template(companyId, CommercialDocKinds.SalesOrder, "SO-REC-LC"), "recur-test");
+                var schedule = await service.CreateScheduleAsync(CompanyCode, templateId,
+                    RecurIntervalTypes.Daily, 1, new DateOnly(2026, 1, 1), null, null, false, "recur-test");
+
+                await service.PauseScheduleAsync(CompanyCode, schedule.Id, "recur-test");
+                var pausedRun = await service.GenerateDueAsync(new DateOnly(2026, 1, 2), "recur-test");
+                Assert.Equal(0, pausedRun.DocumentsCreated); // paused schedules never generate
+                var resumeError = await Assert.ThrowsAsync<AppError>(() =>
+                    service.PauseScheduleAsync(CompanyCode, schedule.Id, "recur-test"));
+                Assert.Equal(ErrorCodes.RecurringScheduleInvalid, resumeError.Code);
+
+                await service.ResumeScheduleAsync(CompanyCode, schedule.Id, "recur-test");
+                var runNow = await service.RunScheduleNowAsync(CompanyCode, schedule.Id, new DateOnly(2026, 1, 1), "recur-test");
+                Assert.Equal(1, runNow.DocumentsCreated);
+
+                await service.CancelScheduleAsync(CompanyCode, schedule.Id, "recur-test");
+                var stored = Assert.Single(await service.GetSchedulesAsync(CompanyCode));
+                Assert.Equal(RecurScheduleStatus.Cancelled, stored.Status);
+                var cancelError = await Assert.ThrowsAsync<AppError>(() =>
+                    service.RunScheduleNowAsync(CompanyCode, schedule.Id, new DateOnly(2026, 1, 3), "recur-test"));
+                Assert.Equal(ErrorCodes.RecurringScheduleInvalid, cancelError.Code);
+            }
+            finally { cleanup(); }
+        }
+
+        private static CommercialDocumentDraft Template(Guid companyId, string kind, string docNo) =>
+            new(companyId, kind, docNo, new DateOnly(2026, 1, 10), 7, "Chain Test Customer", 1, "SAR", 1m, null,
+                new[] { new CommercialLineDraft(42, "MAT-42", "Chain test item", "PCS", 10m, 25m) },
+                PartyCode: "CUST-7");
+
+        private static Task<(RecurService Service, ShouTech.Infrastructure.CommercialDocumentRepository Repository, Guid CompanyId, string ConnectionString, Action Cleanup)>
+            CreateRecurAsync(bool postBlocking = false)
+        {
+            var databasePath = Path.Combine(Path.GetTempPath(), $"shoutech-recur-{Guid.NewGuid():N}.sqlite3");
+            var connectionString = $"Data Source={databasePath};";
+            var companyId = Guid.NewGuid();
+
+            SalesChainTests.ApplySqliteMigrations(databasePath);
+
+            using (var seed = new SqliteConnection(connectionString))
+            {
+                seed.Open();
+                using var command = seed.CreateCommand();
+                command.CommandText = """
+                    INSERT INTO companies
+                        (company_id, company_code, company_name_ar, company_name_en)
+                    VALUES ($companyId, 'SC-TEST', 'Sales Chain Test', 'Sales Chain Test');
+
+                    INSERT INTO warehouses
+                        (warehouse_id, company_id, warehouse_code, warehouse_name_ar, warehouse_name_en, is_active, is_deleted)
+                    VALUES (1, $companyId, 1, 'Main', 'Main', 1, 0);
+
+                    INSERT INTO materials
+                        (material_id, company_id, code, name_ar, name_en, is_stocked, is_deleted)
+                    VALUES (42, $companyId, 'MAT-42', 'Chain test item', 'Chain test item', 1, 0);
+
+                    INSERT INTO material_stock_balances
+                        (company_id, warehouse_id, material_id, available_qty, average_cost, last_cost)
+                    VALUES ('SC-TEST', 1, 42, 1000, 40, 40);
+                    """;
+                command.Parameters.AddWithValue("$companyId", companyId.ToString("D"));
+                command.ExecuteNonQuery();
+            }
+
+            var repository = new ShouTech.Infrastructure.CommercialDocumentRepository("SQLite", connectionString);
+            ICommercialDocumentRepository documents = postBlocking
+                ? new PostBlockingDocuments(repository)
+                : repository;
+            var service = new RecurService(
+                new RecurRepository("SQLite", connectionString),
+                documents,
+                new ShouTech.Infrastructure.OrderDocumentRepository("SQLite", connectionString));
+            Action cleanup = () =>
+            {
+                SqliteConnection.ClearAllPools();
+                if (File.Exists(databasePath)) File.Delete(databasePath);
+                foreach (var suffix in new[] { "-wal", "-shm" })
+                {
+                    var sidecar = databasePath + suffix;
+                    if (File.Exists(sidecar)) File.Delete(sidecar);
+                }
+            };
+            return Task.FromResult<(RecurService Service, ShouTech.Infrastructure.CommercialDocumentRepository Repository, Guid CompanyId, string ConnectionString, Action Cleanup)>(
+                (service, repository, companyId, connectionString, cleanup));
+        }
+
+        /// <summary>Delegating stub whose post path always fails, to prove
+        /// a blocked auto-post leaves the draft and records the failure.</summary>
+        private sealed class PostBlockingDocuments : ICommercialDocumentRepository
+        {
+            private readonly ICommercialDocumentRepository _inner;
+            public PostBlockingDocuments(ICommercialDocumentRepository inner) => _inner = inner;
+
+            public Task PostSalesAsync(long docId, string userId, CancellationToken cancellationToken = default, PriceOverrideContext? priceOverride = null)
+                => throw new InvalidOperationException("post blocked by test stub");
+
+            public Task<CommercialDocumentSnapshot?> FindSalesByIdAsync(long docId, CancellationToken cancellationToken = default)
+                => _inner.FindSalesByIdAsync(docId, cancellationToken);
+            public Task<long> CreateSalesDraftAsync(CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default)
+                => _inner.CreateSalesDraftAsync(draft, userId, cancellationToken);
+            public Task<long> CreateSalesDraftWithLinkAsync(CommercialDocumentDraft draft, string sourceDocKind, long sourceDocId, string userId, CancellationToken cancellationToken = default)
+                => _inner.CreateSalesDraftWithLinkAsync(draft, sourceDocKind, sourceDocId, userId, cancellationToken);
+            public Task ReverseChainDocumentAsync(Guid companyId, long docId, string reason, string actor, CancellationToken cancellationToken = default)
+                => _inner.ReverseChainDocumentAsync(companyId, docId, reason, actor, cancellationToken);
+            public Task<int> AmendSalesDocumentAsync(long docId, CommercialDocumentDraft amended, int expectedRevision, string userId, string? reason = null, CancellationToken cancellationToken = default)
+                => _inner.AmendSalesDocumentAsync(docId, amended, expectedRevision, userId, reason, cancellationToken);
+            public Task<IReadOnlyList<DocumentRevisionSnapshot>> GetRevisionsAsync(long docId, CancellationToken cancellationToken = default)
+                => _inner.GetRevisionsAsync(docId, cancellationToken);
+            public Task SubmitForApprovalAsync(long docId, string userId, CancellationToken cancellationToken = default)
+                => _inner.SubmitForApprovalAsync(docId, userId, cancellationToken);
+            public Task ApproveDocumentAsync(long docId, string userId, CancellationToken cancellationToken = default)
+                => _inner.ApproveDocumentAsync(docId, userId, cancellationToken);
+            public Task RejectDocumentAsync(long docId, string userId, string reason, CancellationToken cancellationToken = default)
+                => _inner.RejectDocumentAsync(docId, userId, reason, cancellationToken);
+            public Task<IReadOnlyList<ApprovalHistoryEntry>> GetApprovalHistoryAsync(long docId, CancellationToken cancellationToken = default)
+                => _inner.GetApprovalHistoryAsync(docId, cancellationToken);
+            public Task<bool> IsApprovalRequiredAsync(Guid companyId, CancellationToken cancellationToken = default)
+                => _inner.IsApprovalRequiredAsync(companyId, cancellationToken);
+            public Task SetApprovalRequiredAsync(Guid companyId, bool required, string userId, CancellationToken cancellationToken = default)
+                => _inner.SetApprovalRequiredAsync(companyId, required, userId, cancellationToken);
+            public Task AddLinkAsync(Guid companyId, string sourceDocKind, long sourceDocId, string targetDocKind, long targetDocId, string userId, CancellationToken cancellationToken = default)
+                => _inner.AddLinkAsync(companyId, sourceDocKind, sourceDocId, targetDocKind, targetDocId, userId, cancellationToken);
+            public Task<IReadOnlyList<CommercialDocumentLink>> GetSalesLinksFromAsync(Guid companyId, long sourceDocId, CancellationToken cancellationToken = default)
+                => _inner.GetSalesLinksFromAsync(companyId, sourceDocId, cancellationToken);
+            public Task<IReadOnlyList<CommercialDocumentLink>> GetSalesLinksToAsync(Guid companyId, long targetDocId, CancellationToken cancellationToken = default)
+                => _inner.GetSalesLinksToAsync(companyId, targetDocId, cancellationToken);
+            public Task<IReadOnlyDictionary<long, decimal>> GetFulfilledQuantitiesAsync(Guid companyId, long sourceDocId, string targetDocKind, CancellationToken cancellationToken = default)
+                => _inner.GetFulfilledQuantitiesAsync(companyId, sourceDocId, targetDocKind, cancellationToken);
+            public Task<IReadOnlyDictionary<int, decimal>> GetFulfilledQuantitiesBySourceLineAsync(Guid companyId, long sourceDocId, string targetDocKind, CancellationToken cancellationToken = default)
+                => _inner.GetFulfilledQuantitiesBySourceLineAsync(companyId, sourceDocId, targetDocKind, cancellationToken);
         }
     }
 }
