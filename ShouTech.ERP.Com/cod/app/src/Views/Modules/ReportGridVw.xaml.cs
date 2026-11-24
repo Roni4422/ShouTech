@@ -12,6 +12,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows;
+using ShouTech.App.Interaction;
 using ShouTech.App.Reporting;
 
 namespace ShouTech.App.Views.Modules
@@ -24,6 +25,9 @@ namespace ShouTech.App.Views.Modules
         public ReportGridVw()
         {
             InitializeComponent();
+            // Excel-like grids (owner spec item 1): numbered row
+            // headers on the custom-report grid as well.
+            DataGridTableBehavior.SetShowRowNumbers(ReportGrid, true);
         }
 
         public void Bind(ReportDesignerVM vm)

@@ -153,9 +153,31 @@ saving.
 
 ## Family 3 — report grids (RptBase family)
 
-Pending batch R2c: RptBase already has the chooser + WinPref
-persistence (conformed for item 4) and zebra/totals; row numbers
-to be switched on centrally there.
+**Verdict: DONE (batch R2c), gates ALL-GREEN.**
+
+RptBase already conformed on the chooser + WinPref per-user
+persistence (item 4), zebra rows with per-report tints, totals
+footers and unlimited rows. The one deviation was row headers:
+`HeadersVisibility = Column` hid them. Fixed centrally —
+`DataGridTableBehavior.SetShowRowNumbers` in RptBase's grid
+setup covers all 71 RptBase-derived report windows at once, and
+the custom-report grid (ReportGridVw, used by CustomReportsWin)
+got the same switch in its constructor. No other report surface
+builds its own grid.
+
+**Where ShouTech exceeds:** one central switch modernized 72
+report surfaces at once; report designs (B2) carry cell-level
+formulas and encrypted .strd portability none of the four
+benchmarks offer in this form; the chooser persists per user
+per report. **Where ShouTech still trails:** in-grid grouping
+by drag-to-group-header (Odoo/ERPNext web grids) is not in the
+desktop grid — grouping lives in the report definition instead;
+recorded as a named gap, not papered over.
+**Verdict (power + ease):** more powerful — the same grid the
+user reads is the grid the designer shapes (columns, formulas,
+totals), exportable encrypted; easier — row numbers, zebra and
+totals are simply always there, and a user's column layout is
+remembered per report.
 
 ## Family 4 — material directory tree (MatDirWin)
 

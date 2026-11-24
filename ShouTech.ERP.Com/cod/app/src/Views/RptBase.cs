@@ -11,6 +11,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Media;
+using ShouTech.App.Interaction;
 using ShouTech.App.Reporting;
 using ShouTech.App.Services;
 
@@ -194,7 +195,10 @@ public abstract class RptBase : BaseWin
         _grid.CanUserSortColumns = true;
         _grid.SelectionMode = DataGridSelectionMode.Single;
         _grid.SelectionUnit = DataGridSelectionUnit.FullRow;
-        _grid.HeadersVisibility = DataGridHeadersVisibility.Column;
+        // Excel-like grids (owner spec item 1): numbered row
+        // headers on every report grid — one central switch here
+        // covers all 71 RptBase-derived report windows.
+        DataGridTableBehavior.SetShowRowNumbers(_grid, true);
         _grid.AlternationCount = 2;
         _grid.SetResourceReference(StyleProperty, "VisuDataGridStyle");
         _grid.SetResourceReference(DataGrid.ColumnHeaderStyleProperty, "VisuDataGridHeaderStyle");
