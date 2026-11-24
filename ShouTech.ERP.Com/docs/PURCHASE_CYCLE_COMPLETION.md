@@ -811,6 +811,137 @@ PurchaseMatchPolicyRepository in place.
   the returned qty succeeds. InvPostCorrectnessTests' duplicate
   reference fact now expects AppError PUR-1011.
 
+### Workstream W1 — Withholding tax / TDS — branch `feat/p2p-w1-withholding`
+
+Migration **099** (SQLite + PostgreSQL). Built on the existing tax
+engine (migrations 067–091) — no parallel tax system, no country
+hard-coding, no jurisdiction rates seeded anywhere.
+
+**Configuration.** A tax rule (`company_tax_rules`) can be marked
+withholding (`is_withholding`): rate, withholding PAYABLE control
+account (`withholding_account_code`), optional threshold amount +
+mode (`withholding_threshold_mode` = `PerDocument` | `Cumulative`).
+Configured in TaxSetupWin (existing window, extended: withholding
+checkbox, payable account, threshold, mode — under the existing
+`ACC.TAX.MANAGE` permission and the existing TaxRuleSaved audit
+event). Supplier-level default: `parties.withholding_tax_code`.
+Determination at invoice posting, in order: (1) invoice-level
+selection (`purchase_documents.withholding_tax_code`, set on the
+manual path's draft header), (2) supplier default, (3) the company's
+single default withholding rule. Withholding rules are excluded from
+the ordinary VAT determination (`TaxSvc.LoadCodes` /
+`TryLoadActiveRate` filter them out).
+
+**Base definition.** The withholding base EXCLUDES VAT — manual
+path: grand total − tax total; chain path: lines subtotal — which is
+the engine's existing VAT-exclusive base mechanics. Thresholds:
+`PerDocument` — an invoice whose base is below the threshold is not
+withheld (the evaluation is still recorded, amount 0, so the register
+shows it was evaluated); `Cumulative` — the supplier's calendar-year
+withholding bases (stored register rows) accumulate and only the
+excess above the threshold is withheld on the crossing invoice.
+
+**GL shape of a withheld invoice** (base 10,000, VAT 15%, WHT 5%):
+Dr Purchases/GRNI 10,000 (+ Dr non-recoverable VAT where applicable),
+Dr Input VAT recoverable 1,500, **Cr AP 2201 GROSS 11,500**,
+**Dr AP 2201 500** (the deduction leg), **Cr withholding payable
+(rule account; seeded default 2215) 500**. The entry balances; the
+supplier's party-ledger credit is **NET 11,000** — the amount actually
+payable — so statements, open amounts and allocation all see net.
+Settlement at posting (paid-at-posting) is likewise capped at net.
+Withholding above the gross payable is rejected (PUR-1015).
+
+**Register.** One row per evaluated invoice in `tax_transactions`:
+`tax_type='WITHHOLDING'`, `tax_treatment='Withholding'`,
+`tax_direction='INPUT'`, `is_recoverable=0`, `line_no=0` (header
+level, additive extension of the register vocabulary), base/rate/
+amount stored. The computed outcome also persists on
+`purchase_documents` (`withholding_tax_code/rate/base/amount/
+account_code`) for audit and cumulative evaluation.
+
+**Allocation / advances.** `ReconciliationRepository` open amount =
+total − withholding − paid (both the open-documents list and
+`AllocateAsync`); allocating the net fully settles; allocating above
+net is rejected by the existing open-amount check and writes nothing.
+Advances interplay unchanged and proven: an advance (Dr 1215) consumed
+against a withheld invoice clears Dr 2201 / Cr 1215 against the NET
+open amount only — the withheld portion is never allocatable.
+
+**Reversal.** Reversing a withheld invoice mirrors the deduction:
+the journal reversal debits the withholding payable and re-credits
+AP (the manual path's return/reversal flow posts the mirrored GL and
+a NET party debit), and a NEGATIVE withholding register row is
+written under the reversing document — original rows stay immutable.
+
+**Reporting / certificates.** TaxReportWin gains a Withholding tab
+(existing window extended; `TaxReportingSvc.LoadWithholding`,
+permission `ACC.TAX.REPORT.VIEW` unchanged): per supplier per period —
+taxable base, rate, amount withheld, invoice references (register
+rows joined to `purchase_documents`), and a certificate reference
+derived from the register rows (`WHT-<period>-<supplier>-<tax code>`).
+Data comes from `tax_transactions` only.
+
+**Errors.** PUR-1014 WithholdingConfigurationInvalid, PUR-1015
+WithholdingExceedsPayable, PUR-1016 WithholdingRuleNotFound — in
+ErrorCodes.cs, all 4 Errors catalogs (123 codes ×4, real
+translations), docs/ERROR_CATALOG.md. No new permissions were needed:
+configuration uses `ACC.TAX.MANAGE`, reporting `ACC.TAX.REPORT.VIEW`
+(the existing TAX patterns).
+
+**Seeded account.** Migration 099 seeds **2215 Withholding Tax
+Payable** (LIABILITY, under AP's parent) into every company already
+carrying 2201, and the account is appended to the 15 `.shc` COA
+templates that carry 2201 — justified because the mechanism needs a
+sensible default payable target while remaining fully configurable
+per rule. Representation note: `chart_of_accounts` carries only
+`account_name` + `name_ar` columns and the templates only ar/en
+(+fr in simple-french), so the template entry carries the names in
+the languages the template format supports; no 4-language name store
+exists in the COA to extend.
+
+Pillars checklist:
+- **UI** ✓ — TaxSetupWin (rule configuration) + TaxReportWin
+  (withholding tab) extended in place; no new window; size caps
+  untouched (both already ≤ cap; screenfit ALL PASS).
+- **DB (both providers)** ✓ — migration 099 SQLite + PostgreSQL,
+  idempotent (`@if-column-missing` guards, seed guarded); SqlMigrator
+  double-run: APPLY+OK once, second run SKIP/0.
+- **Linking** ✓ — determination chains invoice → supplier default →
+  company default rule; register rows link to the source document;
+  report joins register → documents → parties.
+- **Posting** ✓ — both invoice paths (chain
+  `OrderDocumentRepository.CreatePurchaseInvoiceAsync`, manual
+  `InvRepo.Post`) withhold identically through the shared
+  `WithholdingTax` evaluator (`src/Infra/Withholding.cs` — new file,
+  justified: the evaluator must serve both the infra-layer chain
+  repository and the app-layer InvRepo, and TaxSvc is app-layer);
+  reversal mirrors on the manual path.
+- **Persistence** ✓ — rule config, supplier default, per-invoice
+  outcome and register rows all stored; originals immutable.
+- **Downstream report** ✓ — withholding tab totals tie to the
+  register sum and to the GL 2215 movement (proven in harness (f)).
+
+**Invoice-time, not payment-time.** ERPNext's TDS model withholds on
+the invoice (the liability to the authority arises when the expense
+is booked), which is what is built. Payment-time TDS (withhold when
+the payment voucher posts, common where the law keys on payment) is
+the deliberate alternative NOT built: it would need the allocation
+layer to split every payment and re-open withheld invoices; flagged
+for the owner if a jurisdiction requires it.
+
+**Proof.** Executed headless harness `tools/W1Harness` (real
+assemblies, SQLite): **36 PASS / 0 FAIL** — (a) manual invoice GL
+shape above + net party balance + register rows; (b) net allocation
+settles, above-net rejected writing nothing; (c) reversal mirrors GL
++ register, frees the allocation, originals intact; (d)
+below-threshold evaluated with amount 0; (e) cumulative crossing
+withholds the excess only (6,000 → 0, next 6,000 → 100); (f) register
+totals == GL 2215 movement for both companies; (g) chain-path invoice
+withholds identically via the supplier default, and an advance
+consumed against it nets correctly. Kern.Tests mirror:
+`tests/Kern.Tests/WithholdingTaxTests.cs` (8 facts) — compile-verified,
+execution owed on Windows. PostgreSQL live run owed.
+
 ## 5. Gates
 
 (Filled at completion.)
@@ -842,27 +973,40 @@ PurchaseMatchPolicyRepository in place.
   PurchaseLandedCostWin itself passes.
 - Kern.Tests execution owed on Windows (net8.0-windows testhost).
 
+### W1 gates (this workstream)
+
+- Build `--no-incremental`: 0 errors, 0 warnings (solution + Kern.Tests project).
+- Migrator (SQLite): fresh run APPLY+OK 099; second run SKIP (0 new);
+  099 columns verified on company_tax_rules / parties /
+  purchase_documents. PostgreSQL execution owed (no PG server here).
+- `audit_window_context.py` exit 0; `verify_screenfit.py` exit 0
+  (ALL PASS); `verify_english_source.py` exit 0.
+- Errors parity: 123 codes ×4 languages, 0 missing, no duplicate
+  keys, valid JSON. Lang parity for touched keys: 0 missing ×4
+  (pre-existing base deltas unchanged: Ar 12 / Fr 19 / Tr 19).
+- Executed harness tools/W1Harness: 36 PASS / 0 FAIL.
+- Kern.Tests execution owed on Windows (net8.0-windows testhost).
+
 ## 6. Proof
 
 (Filled at completion — Kern.Tests facts + headless harness scenario.)
 
 ## 7. Owner flags
 
-- Withholding/TDS: **exclusion LIFTED by owner decision 2026-11-24** —
-  now a build workstream (W1) on top of the existing tax-engine foundation
-  (migrations 067-091), no parallel tax system. Scope: withholding
-  configuration (rate per tax code / supplier / document type, threshold
-  where the jurisdiction model supports it); deduction at supplier-invoice
-  posting (ERPNext TDS model: withheld category on the invoice, liability
-  to a withholding payable account, supplier paid net); GL integration (AP
-  gross, withholding liability credited, supplier balance net); payment
-  allocation consistent with netted balances; reversal restoring withheld
-  amounts; per-supplier per-period withholding reporting / certificate
-  data from the tax register; permissions + audit. Country specifics are
-  implemented as a configurable generic mechanism (rate + threshold +
-  liability account per jurisdiction/tax code); the country-pack question
-  is flagged, not hard-coded. Sequenced after B1 (shared invoice-posting
-  and allocation files).
+- Withholding/TDS: **DECIDED-BUILD (owner decision 2026-11-24) and
+  DELIVERED** by workstream W1 (see §4 W1, migration 099): generic
+  configurable mechanism on the existing tax engine — withholding tax
+  rules (rate, payable account, PerDocument/Cumulative threshold),
+  supplier defaults, invoice-time deduction on BOTH posting paths (AP
+  gross, withholding payable credited, supplier balance net), net
+  allocation, reversal mirror, per-supplier per-period withholding
+  report + certificate reference from the tax register. **Remaining
+  open item — the country-pack question:** jurisdiction-specific
+  CONTENT (which rates/thresholds/accounts a given country's pack
+  should ship) is still the owner's call; nothing country-specific is
+  seeded. Payment-time TDS (withhold at payment instead of invoice)
+  was deliberately not built — invoice-time is the ERPNext model;
+  flag if a jurisdiction requires payment-time.
 - Partial (per-line) requisition conversion and multiple POs per
   requisition: not built; whole-document conversion kept.
 - Rebase note: base is the owner's stabilization tip @ 52a762a; he is
