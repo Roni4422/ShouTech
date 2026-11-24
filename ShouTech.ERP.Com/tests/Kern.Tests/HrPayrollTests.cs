@@ -32,7 +32,7 @@ namespace Kern.Tests;
 /// Execution requires Windows (net8.0-windows testhost); the same
 /// scenarios are verified headlessly by
 /// ~/workspace/research/build-hr/hr_harness.py (see
-/// docs/BUILD_HR_PAYROLL.md).
+/// docs/BUILD_HR_DESIGN.md).
 /// </summary>
 public class HrPayrollTests
 {

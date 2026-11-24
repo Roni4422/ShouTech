@@ -38,7 +38,7 @@ namespace Kern.Tests;
 /// Execution requires Windows (net8.0-windows testhost); the same
 /// scenarios are verified headlessly by
 /// ~/workspace/research/fix-step55/budget55_harness.py
-/// (see docs/BUILD_PHASEB_055.md).
+/// (see docs/BUILD_PHASEB_054.md).
 /// </summary>
 public class BudgetGuardTests
 {

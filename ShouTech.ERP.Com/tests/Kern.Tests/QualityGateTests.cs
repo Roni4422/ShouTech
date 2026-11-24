@@ -36,7 +36,7 @@ namespace Kern.Tests;
 /// Execution requires Windows (net8.0-windows testhost); the same
 /// scenarios are verified headlessly by
 /// ~/workspace/research/fix-step56/quality56_harness.py
-/// (see docs/BUILD_PHASEB_056.md).
+/// (see docs/BUILD_PHASEB_054.md).
 /// </summary>
 public class QualityGateTests
 {

@@ -9,7 +9,7 @@ namespace ShouTech.Domain.Interfaces;
 /// quotation document row (see CreateQuotationAsync): the step-9 chain
 /// requires the Guid company key on sales_documents, and InvRepo.Load
 /// accepts both keys, so the Guid-keyed row stays openable in
-/// InvoiceWin (decision C3, docs/BUILD_PHASEB_057.md).
+/// InvoiceWin (decision C3, docs/BUILD_PHASEB_054.md).
 ///
 /// NO entitlement gate exists here by design: licensing/entitlement
 /// work is postponed by the owner, and CRM is governed by the CRM.*
