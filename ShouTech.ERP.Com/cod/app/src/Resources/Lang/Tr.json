@@ -617,6 +617,9 @@
       "AgeBand": "Yaşlandırma aralığı",
       "GrniGlBalanceCompany": "GRNI defteri kebir bakiyesi (şirket geneli, temel para birimi)",
       "GrniDifferenceCompany": "GRNI farkı (şirket geneli, temel para birimi)",
+      "SubledgerBase": "Yardımcı defter (baz)",
+      "GlBalanceBase": "GL bakiyesi (baz)",
+      "DifferenceBase": "Fark (baz)",
       "Name": "Ad",
       "WeightedAmount": "Ağırlıklı Tutar",
       "WinRate": "Kazanma Oranı",
@@ -729,6 +732,9 @@
     "SectionOrderedNotDelivered": "Sipariş Edildi Teslim Edilmedi",
     "SectionDeliveredNotInvoiced": "Teslim Edildi Faturalanmadı",
     "SectionDeliveryPerformance": "Teslimat Performansı",
+    "SectionArReconciliation": "Alacak Mutabakatı",
+    "SectionInventoryReconciliation": "Stok Mutabakatı",
+    "VarianceFlag": "Fark var",
     "Unassigned": "Atanmamış",
     "StatusLost": "Kayıp",
     "StatusExpired": "Süresi Dolmuş"
@@ -2463,7 +2469,16 @@
     "ServiceUnavailable": "Ödeme mutabakatı hizmeti kullanılamıyor (veritabanı bağlantısı yok).",
     "PermissionDenied": "Ödeme dağıtma izniniz yok (ACC.PAYREC.ALLOCATE).",
     "Note": "Not",
-    "Kind": "Tür"
+    "Kind": "Tür",
+    "DueDate": "Vade tarihi",
+    "Suggest": "Öner",
+    "AllocAmount": "Tahsis tutarı",
+    "DocAmount": "Belge tutarı",
+    "Discount": "İskonto",
+    "SelectPayment": "Önce bir ödeme seçin.",
+    "SuggestedOk": "Önerilen tahsisler dolduruldu",
+    "DiscountPermissionDenied": "Uzlaşma iskontosu verme izniniz yok (SALES.SETTLEMENT.DISCOUNT).",
+    "DocAmountRequired": "Farklı para birimi tahsisi, doldurulan her satır için belge tutarı (DocAmount) gerektirir."
   },
   "Projects": {
     "Title": "Projeler",
@@ -2629,6 +2644,11 @@
     "TitleInvoices": "Fatura Ara",
     "TitleOrders": "Sipariş Ara",
     "TitleQuotations": "Teklif Ara",
+    "Events": "Olaylar",
+    "EventDate": "Olay tarihi",
+    "EventType": "Olay",
+    "Actor": "Kullanıcı",
+    "Details": "Ayrıntılar",
     "To": "Bitiş"
   },
   "OrderDoc": {

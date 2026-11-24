@@ -234,7 +234,7 @@ public class Phase3ServiceTests
             => Task.FromResult<IReadOnlyList<OpenDocumentRow>>(Array.Empty<OpenDocumentRow>());
         public Task<IReadOnlyList<UnallocatedPaymentRow>> GetPaymentsAsync(string companyId, string partyKind, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<UnallocatedPaymentRow>>(Array.Empty<UnallocatedPaymentRow>());
-        public Task<Guid> AllocateAsync(string companyId, string partyKind, long paymentLedgerId, string docTable, long docId, decimal amount, string userId, string? note = null, CancellationToken cancellationToken = default)
+        public Task<Guid> AllocateAsync(string companyId, string partyKind, long paymentLedgerId, string docTable, long docId, decimal amount, string userId, string? note = null, decimal discountAmount = 0m, decimal? docAmount = null, CancellationToken cancellationToken = default)
         {
             LastCall = (paymentLedgerId, docTable, docId, amount);
             return Task.FromResult(Guid.NewGuid());

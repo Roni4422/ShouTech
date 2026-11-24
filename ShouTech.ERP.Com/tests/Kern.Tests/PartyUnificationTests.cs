@@ -382,6 +382,192 @@ public sealed class PartyUnificationTests
         Assert.Equal(700m, Convert.ToDecimal(rows[1]["RunningBalanceBase"], CultureInfo.InvariantCulture));
     }
 
+    // ------------------------------------------------------------ W8 receipts completion
+
+    /// <summary>Adds the W8 allocation accounts (305/306/509) the seed
+    /// does not carry, through the same AccRepo path the seed uses.</summary>
+    private static void EnsureW8Accounts()
+    {
+        foreach (var (code, name) in new[]
+        {
+            ("305", "Sales Discounts"), ("306", "Other Income"), ("509", "Foreign Exchange Losses")
+        })
+        {
+            AccRepo.Save(null, new AccRepo.AccRec(
+                string.Empty, code, null, name, name, "Postable", "Active", "Low", "Unspecified",
+                false, false, false, false, false, false, 0m, string.Empty, 0m, 0m, 0m),
+                renumberDescendants: false);
+        }
+    }
+
+    private static void SetBaseSar(TestDb db)
+        => Exec(db, $"UPDATE companies SET currency_code = 'SAR' WHERE company_code = '{CompanyCode}';");
+
+    /// <summary>Net (debit - credit) posted on one account by ALLOC
+    /// journals only — the allocation journal is denominated in base
+    /// currency at rate 1, so transaction and base amounts agree.</summary>
+    private static decimal AllocJournalNet(TestDb db, string accountCode)
+        => ExecScalar(db, $"""
+            SELECT COALESCE(SUM(l.debit - l.credit), 0)
+            FROM journal_entry_lines l
+            JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
+            JOIN chart_of_accounts a ON a.account_id = l.account_id
+            WHERE a.account_code = '{accountCode}' AND j.source_doc_type = 'ALLOC' AND j.status = 1;
+            """);
+
+    private static long SeedPostedInvoice(TestDb db, long partyLedgerId, string docNo, string currency, decimal total, decimal storedRate)
+    {
+        var docId = (long)ExecScalar(db,
+            $"INSERT INTO sales_documents (company_id, doc_kind, doc_no, doc_date, party_id, party_name, currency_code, exchange_rate, grand_total, paid_amount, status) VALUES ('{CompanyCode}', 'SAL', '{docNo}', '2026-03-01', {partyLedgerId}, 'Fx Customer', '{currency}', {storedRate.ToString(CultureInfo.InvariantCulture)}, {total.ToString(CultureInfo.InvariantCulture)}, 0, 'Posted'); SELECT last_insert_rowid();");
+        var baseTotal = total * storedRate;
+        Exec(db, $"INSERT INTO party_ledger (company_id, party_kind, party_id, doc_kind, doc_id, doc_no, entry_date, debit, credit, currency_code, base_debit, base_credit, exchange_rate) VALUES ('{CompanyCode}', 'C', {partyLedgerId}, 'SAL', {docId}, '{docNo}', '2026-03-01', {total.ToString(CultureInfo.InvariantCulture)}, 0, '{currency}', {baseTotal.ToString(CultureInfo.InvariantCulture)}, 0, {storedRate.ToString(CultureInfo.InvariantCulture)});");
+        return docId;
+    }
+
+    private static long SeedReceipt(TestDb db, long partyLedgerId, string docNo, string currency, decimal amount, decimal rate)
+    {
+        var baseAmount = amount * rate;
+        return (long)ExecScalar(db,
+            $"INSERT INTO party_ledger (company_id, party_kind, party_id, doc_kind, doc_no, entry_date, debit, credit, currency_code, base_debit, base_credit, exchange_rate) VALUES ('{CompanyCode}', 'C', {partyLedgerId}, 'RCV', '{docNo}', '2026-03-05', 0, {amount.ToString(CultureInfo.InvariantCulture)}, '{currency}', 0, {baseAmount.ToString(CultureInfo.InvariantCulture)}, {rate.ToString(CultureInfo.InvariantCulture)}); SELECT last_insert_rowid();");
+    }
+
+    [Fact]
+    public async Task SettlementDiscount_PostsBalancedJournal_AndSettlesDocument()
+    {
+        using var db = await SeededAsync();
+        SetBaseSar(db);
+        EnsureW8Accounts();
+        var party = await SavePartyAsync(db, "W8-DISC", "Discount Customer", creditLimit: 0m);
+        var docId = SeedPostedInvoice(db, party.LedgerId, "W8-INV-1", "SAR", 1000m, 1m);
+        var receiptId = SeedReceipt(db, party.LedgerId, "W8-RCV-1", "SAR", 950m, 1m);
+
+        var recon = new ReconciliationRepository("SQLite", db.ConnectionString);
+        await recon.AllocateAsync(CompanyCode, "C", receiptId, "SALES", docId, 950m, Actor,
+            discountAmount: 50m);
+
+        // The document settles by payment + discount.
+        Assert.Equal(1000m, ExecScalar(db, $"SELECT paid_amount FROM sales_documents WHERE doc_id = {docId};"));
+        Assert.Equal(50m, ExecScalar(db, "SELECT discount_amount FROM payment_allocations WHERE doc_table = 'SALES' AND doc_id = " + docId + ";"));
+        Assert.Equal(0m, ExecScalar(db, "SELECT fx_amount FROM payment_allocations WHERE doc_table = 'SALES' AND doc_id = " + docId + ";"));
+        // Journal: Dr 305 Sales Discounts 50 / Cr 1201 Receivable 50, balanced.
+        Assert.Equal(50m, AllocJournalNet(db, "305"));
+        Assert.Equal(-50m, AllocJournalNet(db, "1201"));
+        Assert.Equal(0m, ExecScalar(db, """
+            SELECT COALESCE(SUM(l.debit - l.credit), 0) FROM journal_entry_lines l
+            JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
+            WHERE j.source_doc_type = 'ALLOC' AND j.status = 1;
+            """));
+        // The allocation wrote its unified document event.
+        Assert.Equal(1m, ExecScalar(db, $"SELECT COUNT(*) FROM sau_document_events WHERE doc_id = {docId} AND event_type = 'Allocated';"));
+    }
+
+    [Fact]
+    public async Task SettlementDiscount_ServiceRequiresAuthorization()
+    {
+        using var db = await SeededAsync();
+        SetBaseSar(db);
+        EnsureW8Accounts();
+        var party = await SavePartyAsync(db, "W8-AUTH", "Auth Customer", creditLimit: 0m);
+        var docId = SeedPostedInvoice(db, party.LedgerId, "W8-INV-2", "SAR", 100m, 1m);
+        var receiptId = SeedReceipt(db, party.LedgerId, "W8-RCV-2", "SAR", 90m, 1m);
+
+        var service = new ReconciliationService(new ReconciliationRepository("SQLite", db.ConnectionString));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.AllocateAsync(CompanyCode, "C", receiptId, "SALES", docId, 90m, Actor,
+                discountAmount: 10m, settlementDiscountAuthorized: false));
+        Assert.Equal(0m, ExecScalar(db, $"SELECT paid_amount FROM sales_documents WHERE doc_id = {docId};"));
+
+        await service.AllocateAsync(CompanyCode, "C", receiptId, "SALES", docId, 90m, Actor,
+            discountAmount: 10m, settlementDiscountAuthorized: true);
+        Assert.Equal(100m, ExecScalar(db, $"SELECT paid_amount FROM sales_documents WHERE doc_id = {docId};"));
+    }
+
+    [Fact]
+    public async Task CrossCurrency_FxLoss_PostsToFxLossAccount()
+    {
+        using var db = await SeededAsync();
+        SetBaseSar(db);
+        EnsureW8Accounts();
+        var party = await SavePartyAsync(db, "W8-FXL", "Fx Loss Customer", creditLimit: 0m);
+        // Invoice USD 100 booked at 3.75 (base 375). Receipt EUR 80
+        // booked at 4.00 (base 320). Settling the full invoice with the
+        // receipt realizes a 55 base loss: 375 - 320.
+        var docId = SeedPostedInvoice(db, party.LedgerId, "W8-INV-3", "USD", 100m, 3.75m);
+        var receiptId = SeedReceipt(db, party.LedgerId, "W8-RCV-3", "EUR", 80m, 4.00m);
+
+        var recon = new ReconciliationRepository("SQLite", db.ConnectionString);
+        await recon.AllocateAsync(CompanyCode, "C", receiptId, "SALES", docId, 80m, Actor,
+            docAmount: 100m);
+
+        Assert.Equal(100m, ExecScalar(db, $"SELECT paid_amount FROM sales_documents WHERE doc_id = {docId};"));
+        Assert.Equal(100m, ExecScalar(db, "SELECT doc_amount FROM payment_allocations WHERE doc_table = 'SALES' AND doc_id = " + docId + ";"));
+        Assert.Equal(55m, ExecScalar(db, "SELECT fx_amount FROM payment_allocations WHERE doc_table = 'SALES' AND doc_id = " + docId + ";"));
+        // Dr 509 Foreign Exchange Losses 55 / Cr 1201 Receivable 55.
+        Assert.Equal(55m, AllocJournalNet(db, "509"));
+        Assert.Equal(-55m, AllocJournalNet(db, "1201"));
+        Assert.Equal(0m, AllocJournalNet(db, "306"));
+    }
+
+    [Fact]
+    public async Task CrossCurrency_FxGain_PostsToOtherIncome()
+    {
+        using var db = await SeededAsync();
+        SetBaseSar(db);
+        EnsureW8Accounts();
+        var party = await SavePartyAsync(db, "W8-FXG", "Fx Gain Customer", creditLimit: 0m);
+        // Invoice USD 100 booked at 3.75 (base 375). Receipt EUR 100
+        // booked at 4.00 (base 400). Settling realizes a 25 base gain.
+        var docId = SeedPostedInvoice(db, party.LedgerId, "W8-INV-4", "USD", 100m, 3.75m);
+        var receiptId = SeedReceipt(db, party.LedgerId, "W8-RCV-4", "EUR", 100m, 4.00m);
+
+        var recon = new ReconciliationRepository("SQLite", db.ConnectionString);
+        await recon.AllocateAsync(CompanyCode, "C", receiptId, "SALES", docId, 100m, Actor,
+            docAmount: 100m);
+
+        Assert.Equal(100m, ExecScalar(db, $"SELECT paid_amount FROM sales_documents WHERE doc_id = {docId};"));
+        Assert.Equal(-25m, ExecScalar(db, "SELECT fx_amount FROM payment_allocations WHERE doc_table = 'SALES' AND doc_id = " + docId + ";"));
+        // Dr 1201 Receivable 25 / Cr 306 Other Income 25.
+        Assert.Equal(25m, AllocJournalNet(db, "1201"));
+        Assert.Equal(-25m, AllocJournalNet(db, "306"));
+        Assert.Equal(0m, AllocJournalNet(db, "509"));
+    }
+
+    [Fact]
+    public void SuggestFifo_OldestDueFirst_SameCurrencyOnly()
+    {
+        OpenDocumentRow Doc(long id, long party, string currency, decimal total, DateOnly docDate, DateOnly? due)
+            => new(id, "SALES", $"INV-{id}", docDate, party, "P", currency, total, 0m, 0m, due);
+        var docs = new[]
+        {
+            Doc(1, 7, "SAR", 100m, new DateOnly(2026, 1, 10), new DateOnly(2026, 2, 1)),
+            Doc(2, 7, "SAR", 100m, new DateOnly(2026, 1, 5), new DateOnly(2026, 1, 1)),
+            Doc(3, 7, "USD", 50m, new DateOnly(2025, 12, 1), new DateOnly(2025, 12, 1)),
+            Doc(4, 9, "SAR", 500m, new DateOnly(2025, 1, 1), new DateOnly(2025, 1, 1)),
+        };
+
+        var plan = ReconciliationService.SuggestFifo(docs, partyId: 7, paymentCurrency: "SAR", paymentAvailable: 150m);
+
+        Assert.Equal(2, plan.Count);
+        Assert.Equal(2L, plan[0].Document.DocId);
+        Assert.Equal(100m, plan[0].Amount);
+        Assert.Equal(1L, plan[1].Document.DocId);
+        Assert.Equal(50m, plan[1].Amount);
+    }
+
+    [Fact]
+    public async Task DeniedDiscountCheck_LogsAccessDeniedEvent()
+    {
+        using var db = await SeededAsync();
+        var perms = new PermServ();
+        Assert.False(perms.Has(PermCat.Sales.SettlementDiscount));
+
+        var allowed = perms.Require(PermCat.Sales.SettlementDiscount, "SALES", "SAL", 42, "SAL-42");
+
+        Assert.False(allowed);
+        Assert.Equal(1m, ExecScalar(db, "SELECT COUNT(*) FROM sau_document_events WHERE event_type = 'AccessDenied' AND doc_id = 42;"));
+        Assert.Equal(1m, ExecScalar(db, "SELECT COUNT(*) FROM sau_document_events WHERE event_type = 'AccessDenied' AND details LIKE '%SALES.SETTLEMENT.DISCOUNT%';"));
+    }
+
     private static async Task<Party> SavePartyAsync(TestDb db, string code, string name, decimal creditLimit)
     {
         var repo = new MasterCardRepository("SQLite", db.ConnectionString);

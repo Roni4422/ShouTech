@@ -21,6 +21,17 @@ namespace ShouTech.App.Views;
 /// content area, Allocate in the Explorer-style bottom command bar, and a
 /// slim status bar with counts/totals. The allocation itself runs in ONE
 /// repository transaction that re-validates both balances before writing.
+///
+/// W8 (migration 103): the document grid is an editable ALLOCATION PLAN —
+/// Suggest fills it FIFO by due date for the selected payment's party
+/// (one-shot multi-invoice distribution), the user edits the Alloc /
+/// DocAmount / Discount cells, and Allocate saves every filled row
+/// through the same service path. Alloc is the payment-currency amount
+/// consumed from the payment; DocAmount is the document-currency amount
+/// settled on a CROSS-CURRENCY document (blank = same as Alloc);
+/// Discount is a per-document settlement discount (document currency),
+/// gated by SALES.SETTLEMENT.DISCOUNT through the audited
+/// PermServ.Require, whose denials land in sau_document_events.
 /// </summary>
 public sealed class PayRecWin : BaseWin
 {
@@ -28,6 +39,7 @@ public sealed class PayRecWin : BaseWin
 
     private readonly ReconciliationService? _service;
     private readonly List<OpenDocumentRow> _documents = new();
+    private readonly List<DocAllocRow> _docRows = new();
     private readonly List<UnallocatedPaymentRow> _payments = new();
     private readonly List<(TextBlock Label, string Key)> _labels = new();
     private readonly List<(DataGridColumn Column, string Key)> _headers = new();
@@ -41,8 +53,31 @@ public sealed class PayRecWin : BaseWin
     private readonly TextBlock _paysHeader = new();
     private readonly TextBlock _statusBar = new();
     private readonly Button _allocateButton = new();
+    private readonly Button _suggestButton = new();
     private readonly Button _refreshButton = new();
     private readonly Button _closeButton = new();
+
+    /// <summary>One editable allocation-plan row over an open document.</summary>
+    private sealed class DocAllocRow
+    {
+        public required OpenDocumentRow Doc { get; init; }
+        public string DocNo => Doc.DocNo;
+        public DateOnly DocDate => Doc.DocDate;
+        public DateOnly DueDate => Doc.FifoDate;
+        public string? PartyName => Doc.PartyName;
+        public string CurrencyCode => Doc.CurrencyCode;
+        public decimal Total => Doc.Total;
+        public decimal Paid => Doc.Paid;
+        public decimal Allocated => Doc.Allocated;
+        public decimal OpenAmount => Doc.OpenAmount;
+        /// <summary>Payment-currency amount to allocate from the payment.</summary>
+        public decimal AllocAmount { get; set; }
+        /// <summary>Document-currency amount settled (cross-currency only;
+        /// 0 = same as AllocAmount).</summary>
+        public decimal DocAmount { get; set; }
+        /// <summary>Settlement discount in document currency.</summary>
+        public decimal DiscountAmount { get; set; }
+    }
 
     public PayRecWin()
     {
@@ -84,12 +119,15 @@ public sealed class PayRecWin : BaseWin
 
         var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         StyleButton(_allocateButton, "PaymentReconciliation.Allocate");
+        StyleButton(_suggestButton, "PaymentReconciliation.Suggest");
         StyleButton(_refreshButton, "Common.Refresh");
         StyleButton(_closeButton, "Common.Close");
         _allocateButton.Click += async (_, _) => await AllocateAsync();
+        _suggestButton.Click += (_, _) => SuggestAllocations();
         _refreshButton.Click += async (_, _) => await RefreshAsync();
         _closeButton.Click += (_, _) => Close();
         bar.Children.Add(_allocateButton);
+        bar.Children.Add(_suggestButton);
         bar.Children.Add(_refreshButton);
         bar.Children.Add(_closeButton);
         var barBorder = new Border
@@ -131,13 +169,19 @@ public sealed class PayRecWin : BaseWin
         DockPanel.SetDock(_docsHeader, Dock.Top);
         docPanel.Children.Add(_docsHeader);
         ConfigureGrid(_docGrid);
-        _docGrid.Columns.Add(TextCol("PaymentReconciliation.DocNo", nameof(OpenDocumentRow.DocNo), 90));
-        _docGrid.Columns.Add(TextCol("PaymentReconciliation.Date", nameof(OpenDocumentRow.DocDate), 90, center: true));
-        _docGrid.Columns.Add(TextCol("PaymentReconciliation.Party", nameof(OpenDocumentRow.PartyName), 140));
-        _docGrid.Columns.Add(TextCol("PaymentReconciliation.Total", nameof(OpenDocumentRow.Total), 100, numeric: true));
-        _docGrid.Columns.Add(TextCol("PaymentReconciliation.Paid", nameof(OpenDocumentRow.Paid), 90, numeric: true));
-        _docGrid.Columns.Add(TextCol("PaymentReconciliation.Allocated", nameof(OpenDocumentRow.Allocated), 90, numeric: true));
-        _docGrid.Columns.Add(TextCol("PaymentReconciliation.Open", nameof(OpenDocumentRow.OpenAmount), 100, numeric: true));
+        _docGrid.IsReadOnly = false;
+        _docGrid.Columns.Add(TextCol("PaymentReconciliation.DocNo", nameof(DocAllocRow.DocNo), 90));
+        _docGrid.Columns.Add(TextCol("PaymentReconciliation.Date", nameof(DocAllocRow.DocDate), 90, center: true));
+        _docGrid.Columns.Add(TextCol("PaymentReconciliation.DueDate", nameof(DocAllocRow.DueDate), 90, center: true));
+        _docGrid.Columns.Add(TextCol("PaymentReconciliation.Party", nameof(DocAllocRow.PartyName), 140));
+        _docGrid.Columns.Add(TextCol("PaymentReconciliation.Currency", nameof(DocAllocRow.CurrencyCode), 70, center: true));
+        _docGrid.Columns.Add(TextCol("PaymentReconciliation.Total", nameof(DocAllocRow.Total), 100, numeric: true));
+        _docGrid.Columns.Add(TextCol("PaymentReconciliation.Paid", nameof(DocAllocRow.Paid), 90, numeric: true));
+        _docGrid.Columns.Add(TextCol("PaymentReconciliation.Allocated", nameof(DocAllocRow.Allocated), 90, numeric: true));
+        _docGrid.Columns.Add(TextCol("PaymentReconciliation.Open", nameof(DocAllocRow.OpenAmount), 100, numeric: true));
+        _docGrid.Columns.Add(EditCol("PaymentReconciliation.AllocAmount", nameof(DocAllocRow.AllocAmount), 100));
+        _docGrid.Columns.Add(EditCol("PaymentReconciliation.DocAmount", nameof(DocAllocRow.DocAmount), 100));
+        _docGrid.Columns.Add(EditCol("PaymentReconciliation.Discount", nameof(DocAllocRow.DiscountAmount), 90));
         _docGrid.SelectionChanged += (_, _) => SuggestAmount();
         docPanel.Children.Add(_docGrid);
         Grid.SetColumn(docPanel, 0);
@@ -186,7 +230,7 @@ public sealed class PayRecWin : BaseWin
             label.Text = T(key);
         foreach (var (column, key) in _headers)
             column.Header = T(key);
-        foreach (var b in new[] { _allocateButton, _refreshButton, _closeButton })
+        foreach (var b in new[] { _allocateButton, _suggestButton, _refreshButton, _closeButton })
             if (b.Tag is string key)
                 b.Content = T(key);
         UpdateStatusBar();
@@ -205,10 +249,12 @@ public sealed class PayRecWin : BaseWin
             var pays = await _service.GetPaymentsAsync(CurrentCompanyCode, PartyKind);
             _documents.Clear();
             _documents.AddRange(docs);
+            _docRows.Clear();
+            _docRows.AddRange(docs.Select(d => new DocAllocRow { Doc = d }));
             _payments.Clear();
             _payments.AddRange(pays);
             _docGrid.ItemsSource = null;
-            _docGrid.ItemsSource = _documents;
+            _docGrid.ItemsSource = _docRows;
             _payGrid.ItemsSource = null;
             _payGrid.ItemsSource = _payments;
             UpdateStatusBar();
@@ -222,8 +268,41 @@ public sealed class PayRecWin : BaseWin
 
     private void SuggestAmount()
     {
-        if (_docGrid.SelectedItem is OpenDocumentRow doc && _payGrid.SelectedItem is UnallocatedPaymentRow pay)
-            _amount.Text = Math.Min(doc.OpenAmount, pay.Available).ToString("0.##", CultureInfo.CurrentCulture);
+        if (_docGrid.SelectedItem is DocAllocRow row && _payGrid.SelectedItem is UnallocatedPaymentRow pay)
+            _amount.Text = Math.Min(row.OpenAmount, pay.Available).ToString("0.##", CultureInfo.CurrentCulture);
+    }
+
+    /// <summary>
+    /// W8 one-shot distribution: fills the plan grid FIFO by due date
+    /// for the selected payment's party, up to the payment's available
+    /// amount. Same-currency documents only (the service's SuggestFifo
+    /// owns the rule); cross-currency rows stay for manual DocAmount
+    /// entry. Nothing is saved until Allocate.
+    /// </summary>
+    private void SuggestAllocations()
+    {
+        try
+        {
+            if (_payGrid.SelectedItem is not UnallocatedPaymentRow pay)
+                throw new InvalidOperationException(T("PaymentReconciliation.SelectPayment"));
+            foreach (var row in _docRows)
+            {
+                row.AllocAmount = 0m;
+                row.DocAmount = 0m;
+            }
+            var plan = ReconciliationService.SuggestFifo(_documents, pay.PartyId, pay.CurrencyCode, pay.Available);
+            var byId = _docRows.ToDictionary(r => r.Doc.DocId);
+            foreach (var (doc, amount) in plan)
+                if (byId.TryGetValue(doc.DocId, out var row))
+                    row.AllocAmount = amount;
+            _docGrid.Items.Refresh();
+            _statusBar.Text = $"{T("PaymentReconciliation.SuggestedOk")}: {plan.Count}";
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PayRecWin.SuggestAllocations");
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private async Task AllocateAsync()
@@ -232,16 +311,59 @@ public sealed class PayRecWin : BaseWin
         {
             if (_service is null)
                 throw new InvalidOperationException(T("PaymentReconciliation.ServiceUnavailable"));
-            if (!AppHost.Permissions.Has(PermCat.Accounting.PaymentReconciliationAllocate))
-                throw new InvalidOperationException(T("PaymentReconciliation.PermissionDenied"));
-            if (_docGrid.SelectedItem is not OpenDocumentRow doc || _payGrid.SelectedItem is not UnallocatedPaymentRow pay)
+            if (_payGrid.SelectedItem is not UnallocatedPaymentRow pay)
                 throw new InvalidOperationException(T("PaymentReconciliation.SelectBoth"));
-            var amount = ParseDecimal(_amount.Text);
+            var selected = _docGrid.SelectedItem as DocAllocRow;
+
+            // Audited action-seam checks (W8): a denial is written to
+            // sau_document_events by PermServ.Require before we refuse.
+            if (!AppHost.Permissions.Require(PermCat.Accounting.PaymentReconciliationAllocate,
+                    PartyKind == "C" ? "SALES" : "PURCHASE", null, selected?.Doc.DocId ?? 0, selected?.Doc.DocNo))
+                throw new InvalidOperationException(T("PaymentReconciliation.PermissionDenied"));
+
+            // Commit any in-progress cell edit before reading the plan.
+            _docGrid.CommitEdit(DataGridEditingUnit.Row, true);
+            var plan = _docRows.Where(r => r.AllocAmount > 0).ToList();
+            if (plan.Count == 0)
+            {
+                // Legacy single-document path: selected row + amount box.
+                if (selected is null)
+                    throw new InvalidOperationException(T("PaymentReconciliation.SelectBoth"));
+                selected.AllocAmount = ParseDecimal(_amount.Text);
+                plan.Add(selected);
+            }
+
+            var hasDiscount = plan.Any(r => r.DiscountAmount > 0);
+            var discountAuthorized = false;
+            if (hasDiscount)
+            {
+                var firstDiscounted = plan.First(r => r.DiscountAmount > 0);
+                discountAuthorized = AppHost.Permissions.Require(PermCat.Sales.SettlementDiscount,
+                    PartyKind == "C" ? "SALES" : "PURCHASE", null, firstDiscounted.Doc.DocId, firstDiscounted.Doc.DocNo);
+                if (!discountAuthorized)
+                    throw new InvalidOperationException(T("PaymentReconciliation.DiscountPermissionDenied"));
+            }
+
             _allocateButton.IsEnabled = false;
             try
             {
-                await _service.AllocateAsync(CurrentCompanyCode, PartyKind, pay.LedgerId, doc.DocTable, doc.DocId, amount, CurrentUserId,
-                    string.IsNullOrWhiteSpace(_note.Text) ? null : _note.Text.Trim());
+                foreach (var row in plan)
+                {
+                    var cross = !string.Equals(row.Doc.CurrencyCode.Trim(), pay.CurrencyCode.Trim(), StringComparison.OrdinalIgnoreCase);
+                    decimal? docAmount = null;
+                    if (cross)
+                    {
+                        if (row.DocAmount <= 0)
+                            throw new InvalidOperationException(T("PaymentReconciliation.DocAmountRequired"));
+                        docAmount = row.DocAmount;
+                    }
+                    await _service.AllocateAsync(CurrentCompanyCode, PartyKind, pay.LedgerId, row.Doc.DocTable, row.Doc.DocId,
+                        row.AllocAmount, CurrentUserId,
+                        string.IsNullOrWhiteSpace(_note.Text) ? null : _note.Text.Trim(),
+                        discountAmount: row.DiscountAmount,
+                        docAmount: docAmount,
+                        settlementDiscountAuthorized: discountAuthorized);
+                }
                 _note.Clear();
             }
             finally
@@ -287,12 +409,27 @@ public sealed class PayRecWin : BaseWin
         var column = new DataGridTextColumn
         {
             Binding = new Binding(path),
-            Width = new DataGridLength(width)
+            Width = new DataGridLength(width),
+            IsReadOnly = true
         };
         if (numeric)
             column.ElementStyle = RightAlignStyle;
         else if (center)
             column.ElementStyle = CenterAlignStyle;
+        _headers.Add((column, key));
+        return column;
+    }
+
+    /// <summary>An editable plan cell (W8): two-way binding, right-aligned.</summary>
+    private DataGridTextColumn EditCol(string key, string path, double width)
+    {
+        var column = new DataGridTextColumn
+        {
+            Binding = new Binding(path) { Mode = BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged },
+            Width = new DataGridLength(width),
+            IsReadOnly = false
+        };
+        column.ElementStyle = RightAlignStyle;
         _headers.Add((column, key));
         return column;
     }

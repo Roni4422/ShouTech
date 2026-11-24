@@ -36,6 +36,36 @@ namespace ShouTech.Infrastructure;
 ///   PUR on the purchase side — returns and stock kinds are excluded.
 /// - No row caps: the lists are the full open sets (unlimited-rows rule);
 ///   settled rows are filtered in SQL, not after a LIMIT.
+///
+/// W8 (migration 103) additions, all inside the same allocation
+/// transaction:
+/// - SETTLEMENT DISCOUNTS: an allocation may settle a document by
+///   payment + discount (discount in document currency, recorded on the
+///   allocation row). The discount posts in BASE currency — Dr 305 Sales
+///   Discounts / Cr 1201 Receivable for customers, Dr 2201 Payable /
+///   Cr 405 Purchase Discounts for suppliers — in the allocation journal
+///   below. Authorization (SALES.SETTLEMENT.DISCOUNT) is enforced by the
+///   caller chain (window via PermServ.Require, service as backstop);
+///   the repository records what it was told to post.
+/// - CROSS-CURRENCY ALLOCATION: the pre-W8 hard currency block is gone.
+///   `amount` stays the PAYMENT-currency amount consumed from the
+///   payment (the payment list's availability math is unchanged);
+///   `docAmount` is the DOCUMENT-currency amount settled on the document
+///   (defaults to `amount`; required to be meaningful only when the
+///   currencies differ, and forced equal when they do not). The realized
+///   FX difference — settled base (docAmount x document rate) minus paid
+///   base (amount x payment rate, the payment row's stored base ratio
+///   first, FxRates master resolution as fallback) — posts in the SAME
+///   base-currency allocation journal: for customers a positive
+///   difference is a loss (Dr 509 Foreign Exchange Losses / Cr 1201) and
+///   a negative one a gain (Dr 1201 / Cr 306 Other Income — no template
+///   carries a dedicated FX-gain account); suppliers mirror. The signed
+///   difference is stored on the allocation row (fx_amount).
+/// - The allocation journal exists ONLY when a discount or an FX
+///   difference is non-zero; a plain single-currency allocation writes
+///   no journal, exactly as before W8.
+/// - Every successful allocation writes an Allocated row to
+///   sau_document_events (migration 103) in the same transaction.
 /// </summary>
 public sealed class ReconciliationRepository : IReconciliationRepository
 {
@@ -65,18 +95,25 @@ public sealed class ReconciliationRepository : IReconciliationRepository
         var kindFilter = PartyKindToDocTable(partyKind) == "SALES"
             ? "d.doc_kind IN ('SAL', 'POS')"
             : "d.doc_kind IN ('PUR')";
+        // W8 FIFO basis: sales documents age by due_date (migration 095:
+        // doc_date + party credit_days) falling back to doc_date;
+        // purchase documents carry no due_date and keep doc_date order.
+        var dueExpr = PartyKindToDocTable(partyKind) == "SALES"
+            ? "COALESCE(d.due_date, d.doc_date)"
+            : "d.doc_date";
         await using var command = CreateCommand(connection, null,
             $"""
             SELECT d.doc_id, d.doc_no, d.doc_date, d.party_id, d.party_name, d.currency_code, d.grand_total, d.paid_amount,
                    COALESCE((SELECT SUM(a.amount) FROM payment_allocations a
                              WHERE a.company_id = @company AND a.doc_table = @docTable AND a.doc_id = d.doc_id
                                AND (a.document_company_id = CAST(d.company_id AS TEXT)
-                                    OR (a.document_company_id IS NULL AND a.company_id = CAST(d.company_id AS TEXT)))), 0) AS allocated
+                                    OR (a.document_company_id IS NULL AND a.company_id = CAST(d.company_id AS TEXT)))), 0) AS allocated,
+                   {dueExpr} AS due_date
             FROM {table} d
             WHERE CAST(d.company_id AS TEXT) IN (@company, @documentCompany)
               AND d.{NotDeleted} AND d.status = 'Posted' AND d.party_id IS NOT NULL
               AND {kindFilter} AND d.grand_total - d.paid_amount > 0.005
-            ORDER BY d.doc_date, d.doc_id
+            ORDER BY {dueExpr}, d.doc_id
             """);
         Add(command, "@company", companyId.Trim());
         Add(command, "@documentCompany", documentCompanyKey);
@@ -95,7 +132,8 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                 CurrencyCode: ReadString(reader, 5) ?? "SAR",
                 Total: ReadDecimal(reader, 6),
                 Paid: ReadDecimal(reader, 7),
-                Allocated: ReadDecimal(reader, 8));
+                Allocated: ReadDecimal(reader, 8),
+                DueDate: ReadDate(reader, 9));
             if (row.OpenAmount > Tolerance)
                 result.Add(row);
         }
@@ -176,7 +214,7 @@ public sealed class ReconciliationRepository : IReconciliationRepository
         return result;
     }
 
-    public async Task<Guid> AllocateAsync(string companyId, string partyKind, long paymentLedgerId, string docTable, long docId, decimal amount, string userId, string? note = null, CancellationToken cancellationToken = default)
+    public async Task<Guid> AllocateAsync(string companyId, string partyKind, long paymentLedgerId, string docTable, long docId, decimal amount, string userId, string? note = null, decimal discountAmount = 0m, decimal? docAmount = null, CancellationToken cancellationToken = default)
     {
         RequireCompany(companyId);
         RequirePartyKind(partyKind);
@@ -185,6 +223,10 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             throw new InvalidOperationException($"Documents of table '{docTable}' cannot be reconciled against party kind '{partyKind}'.");
         if (amount <= 0)
             throw new InvalidOperationException("Allocation amount must be greater than zero.");
+        if (discountAmount < 0)
+            throw new InvalidOperationException("Settlement discount cannot be negative.");
+        if (docAmount is <= 0)
+            throw new InvalidOperationException("Document allocation amount must be greater than zero.");
         var table = DocumentTable(docTable);
         var invoiceKindFilter = docTable == "SALES" ? "doc_kind IN ('SAL', 'POS')" : "doc_kind = 'PUR'";
 
@@ -222,10 +264,22 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                   """
                 : string.Empty;
             long? paymentDocId = null;
+            // W8: the payment's date + stored rate/base (migration 062)
+            // price the realized-FX leg of a cross-currency allocation.
+            var paymentDate = DateOnly.FromDateTime(DateTime.Today);
+            var paymentStoredRate = 0m;
+            decimal? paymentBaseSide = null;
+            var hasBaseAmounts = PartyLedger.ColumnExists(
+                connection, transaction, _provider, "party_ledger", "base_debit");
+            var paymentBaseSelect = hasBaseAmounts ? ", l.base_debit, l.base_credit" : ", NULL, NULL";
+            var paymentRateSelect = PartyLedger.ColumnExists(
+                connection, transaction, _provider, "party_ledger", "exchange_rate")
+                ? "COALESCE(l.exchange_rate, 0)" : "0";
             await using (var pay = CreateCommand(connection, transaction,
                 $"""
                 SELECT l.party_kind, l.party_id, l.debit, l.credit, l.doc_kind,
-                       COALESCE(l.currency_code, 'SAR'), l.doc_id
+                       COALESCE(l.currency_code, 'SAR'), l.doc_id, l.entry_date,
+                       {paymentRateSelect}{paymentBaseSelect}
                 FROM party_ledger l
                 WHERE l.company_id = @company AND l.ledger_id = @id
                   {activeJournalPredicate}
@@ -244,6 +298,13 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                 paymentDocKind = ReadString(reader, 4);
                 paymentCurrency = ReadString(reader, 5) ?? "SAR";
                 paymentDocId = reader.IsDBNull(6) ? null : Convert.ToInt64(reader.GetValue(6), CultureInfo.InvariantCulture);
+                paymentDate = ReadDate(reader, 7) ?? paymentDate;
+                paymentStoredRate = ReadDecimal(reader, 8);
+                if (hasBaseAmounts)
+                {
+                    var baseSide = partyKind == "C" ? ReadDecimal(reader, 10) : ReadDecimal(reader, 9);
+                    paymentBaseSide = baseSide > 0 ? baseSide : null;
+                }
             }
             // Step 4 (L-10): purchase returns and other non-payment
             // entries are not allocatable payments, even if they sit on
@@ -298,8 +359,10 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             decimal docTotal, docPaid;
             string docStatus;
             string documentCurrency;
+            string docKind = string.Empty;
+            var docStoredRate = 0m;
             await using (var doc = CreateCommand(connection, transaction,
-                $"SELECT CAST(company_id AS TEXT), doc_no, party_id, grand_total, paid_amount, status, COALESCE(currency_code, 'SAR') FROM {table} WHERE CAST(company_id AS TEXT) IN (@company, @documentCompany) AND doc_id = @doc AND {invoiceKindFilter} AND {NotDeleted}"
+                $"SELECT CAST(company_id AS TEXT), doc_no, party_id, grand_total, paid_amount, status, COALESCE(currency_code, 'SAR'), doc_kind, COALESCE(exchange_rate, 0) FROM {table} WHERE CAST(company_id AS TEXT) IN (@company, @documentCompany) AND doc_id = @doc AND {invoiceKindFilter} AND {NotDeleted}"
                 + (_provider == "PostgreSQL" ? " FOR UPDATE" : "")))
             {
                 Add(doc, "@company", companyId.Trim());
@@ -315,6 +378,8 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                 docPaid = ReadDecimal(reader, 4);
                 docStatus = ReadString(reader, 5) ?? string.Empty;
                 documentCurrency = ReadString(reader, 6) ?? "SAR";
+                docKind = ReadString(reader, 7) ?? string.Empty;
+                docStoredRate = ReadDecimal(reader, 8);
             }
             if (!string.Equals(docStatus, "Posted", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Only posted documents can be reconciled.");
@@ -323,11 +388,18 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             openAmount = docTotal - docPaid;
             if (docParty != paymentParty)
                 throw new InvalidOperationException("The payment and the document belong to different parties.");
-            if (!string.Equals(paymentCurrency.Trim(), documentCurrency.Trim(), StringComparison.OrdinalIgnoreCase))
+            // W8: cross-currency allocation is ALLOWED (the pre-W8 hard
+            // block is removed). `amount` is consumed from the payment in
+            // payment currency; `settledDoc` settles the document in
+            // document currency. Same currency: the two must agree, so
+            // single-currency behavior is byte-identical to before.
+            var crossCurrency = !string.Equals(paymentCurrency.Trim(), documentCurrency.Trim(), StringComparison.OrdinalIgnoreCase);
+            var settledDoc = docAmount ?? amount;
+            if (!crossCurrency && settledDoc != amount)
                 throw new InvalidOperationException(
-                    $"The payment currency '{paymentCurrency}' does not match the document currency '{documentCurrency}'. Convert the funds or use a payment in the document currency before allocating.");
-            if (amount > openAmount + Tolerance)
-                throw new InvalidOperationException("Allocation exceeds the document's open amount.");
+                    "The document amount must equal the payment amount when both share a currency.");
+            if (settledDoc + discountAmount > openAmount + Tolerance)
+                throw new InvalidOperationException("Allocation plus settlement discount exceeds the document's open amount.");
 
             // An enabled company policy fails closed: a supplier invoice without
             // a current evaluation cannot be paid through reconciliation.
@@ -411,12 +483,99 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                 }
             }
 
-            // 3) Insert the allocation and settle it against the document.
-            var allocationId = Guid.NewGuid();
-            await using (var insert = CreateCommand(connection, transaction,
-                "INSERT INTO payment_allocations (allocation_id, company_id, document_company_id, party_kind, party_id, payment_ledger_id, doc_table, doc_id, doc_no, amount, allocated_by, note) VALUES (@id, @company, @documentCompany, @kind, @party, @payment, @docTable, @doc, @docNo, @amount, @user, @note)"))
+            // The allocation id is minted before the journal so the
+            // journal's source link (ALLOC / allocation id) is stable.
+            var allocationIdForJournal = Guid.NewGuid();
+
+            // 3) Price the settlement in base currency (W8). The document
+            // rate resolves through the ONE FxRates path (document rate,
+            // else currency_rates master, else ACC-5015). The payment rate
+            // is the rate the payment was BOOKED at: its stored base ratio
+            // when migration 062 amounts exist, else the same FxRates
+            // resolution over the payment's own date/rate.
+            // The allocation journal is dated on the PAYMENT's entry
+            // date: the realized FX is priced at the rates the money was
+            // booked at, and the entry lands in the payment's own fiscal
+            // period instead of failing when "today" sits in a period
+            // the receipt never belonged to.
+            var allocationDate = paymentDate;
+            var fxBase = 0m;
+            var discountBase = 0m;
+            if (discountAmount > 0 || crossCurrency)
             {
-                Add(insert, "@id", FormatGuid(allocationId));
+                // The GL world keys by company Guid: the resolved
+                // document company key (legacy document rows may store
+                // the company CODE in company_id, which is not a Guid).
+                var companyGuid = Guid.Parse(documentCompanyKey);
+                var docFx = FxRates.Resolve(connection, transaction, _provider,
+                    companyGuid, documentCurrency, allocationDate, docStoredRate);
+                discountBase = discountAmount > 0 ? FxRates.ToBase(discountAmount, docFx.Rate) : 0m;
+                if (crossCurrency)
+                {
+                    decimal payRate;
+                    if (paymentBaseSide is decimal storedBase && paymentAmount > 0)
+                        payRate = storedBase / paymentAmount;
+                    else
+                        payRate = FxRates.ResolveByCompanyCode(connection, transaction, _provider,
+                            companyId.Trim(), paymentCurrency, paymentDate, paymentStoredRate).Rate;
+                    fxBase = FxRates.ToBase(settledDoc, docFx.Rate) - FxRates.ToBase(amount, payRate);
+                }
+
+                // The allocation journal (base currency, rate 1): the
+                // discount leg and the realized-FX leg. The receipt
+                // voucher already credited the control account for the
+                // cash; these legs credit it for the discount/FX part of
+                // the settlement, so control == settled total exactly.
+                var lines = new List<GlLineRequest>();
+                var controlAccount = partyKind == "C" ? GlAccounts.Receivable : GlAccounts.Payable;
+                if (discountBase > 0)
+                {
+                    if (partyKind == "C")
+                    {
+                        lines.Add(new GlLineRequest(GlAccounts.SalesDiscounts, discountBase, 0m));
+                        lines.Add(new GlLineRequest(GlAccounts.Receivable, 0m, discountBase));
+                    }
+                    else
+                    {
+                        lines.Add(new GlLineRequest(GlAccounts.Payable, discountBase, 0m));
+                        lines.Add(new GlLineRequest(GlAccounts.PurchaseDiscounts, 0m, discountBase));
+                    }
+                }
+                if (Math.Abs(fxBase) > Tolerance)
+                {
+                    // Customers: settled base above paid base is a LOSS.
+                    // Suppliers mirror: settling more base than was paid
+                    // out is a GAIN.
+                    var isLoss = partyKind == "C" ? fxBase > 0 : fxBase < 0;
+                    var magnitude = Math.Abs(fxBase);
+                    if (isLoss)
+                    {
+                        lines.Add(new GlLineRequest(GlAccounts.ForeignExchangeLosses, magnitude, 0m));
+                        lines.Add(new GlLineRequest(controlAccount, 0m, magnitude));
+                    }
+                    else
+                    {
+                        lines.Add(new GlLineRequest(controlAccount, magnitude, 0m));
+                        lines.Add(new GlLineRequest(GlAccounts.OtherIncome, 0m, magnitude));
+                    }
+                }
+                if (lines.Count >= 2)
+                {
+                    var baseCurrency = FxRates.ResolveBaseCurrency(connection, transaction, _provider, companyGuid);
+                    GlPosting.PostInTransaction(connection, transaction, _provider,
+                        new GlDocumentRequest(companyGuid, allocationDate,
+                            $"Allocation {docNo}: payment {amount:0.####} {paymentCurrency.Trim()}, settled {settledDoc:0.####} {documentCurrency.Trim()}, discount {discountAmount:0.####}, FX {fxBase:0.####}",
+                            "ALLOC", allocationIdForJournal.ToString("D"), docNo,
+                            baseCurrency ?? documentCurrency.Trim(), 1m, lines),
+                        userId);
+                }
+            }
+
+            // 4) Insert the allocation and settle it against the document.
+            await using (var insert = CreateCommand(connection, transaction,
+                "INSERT INTO payment_allocations (allocation_id, company_id, document_company_id, party_kind, party_id, payment_ledger_id, doc_table, doc_id, doc_no, amount, allocated_by, note, discount_amount, doc_amount, fx_amount) VALUES (@id, @company, @documentCompany, @kind, @party, @payment, @docTable, @doc, @docNo, @amount, @user, @note, @discount, @docAmount, @fx)"))
+            {
+                Add(insert, "@id", FormatGuid(allocationIdForJournal));
                 Add(insert, "@company", companyId.Trim());
                 Add(insert, "@documentCompany", actualDocumentCompanyKey);
                 Add(insert, "@kind", partyKind);
@@ -428,21 +587,31 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                 Add(insert, "@amount", amount);
                 Add(insert, "@user", userId);
                 Add(insert, "@note", (object?)NullIfBlank(note) ?? DBNull.Value);
+                Add(insert, "@discount", discountAmount);
+                Add(insert, "@docAmount", crossCurrency ? (object)settledDoc : DBNull.Value);
+                Add(insert, "@fx", fxBase);
                 await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
             await using (var settle = CreateCommand(connection, transaction,
                 $"UPDATE {table} SET paid_amount = paid_amount + @amount WHERE CAST(company_id AS TEXT) = @documentCompany AND doc_id = @doc AND {NotDeleted}"))
             {
-                Add(settle, "@amount", amount);
+                Add(settle, "@amount", settledDoc + discountAmount);
                 Add(settle, "@documentCompany", actualDocumentCompanyKey);
                 Add(settle, "@doc", docId);
                 if (await settle.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
                     throw new InvalidOperationException("The document could not be settled (missing or deleted).");
             }
 
+            // W8: the unified document event, inside the same transaction
+            // (company keyed by the resolved Guid, like the chain events).
+            DocEvents.Write(connection, transaction, _provider,
+                documentCompanyKey, docTable, docKind, docId, docNo,
+                DocEventTypes.Allocated, userId,
+                $"payment_ledger_id={paymentLedgerId}; amount={amount.ToString(CultureInfo.InvariantCulture)} {paymentCurrency.Trim()}; doc_amount={settledDoc.ToString(CultureInfo.InvariantCulture)} {documentCurrency.Trim()}; discount={discountAmount.ToString(CultureInfo.InvariantCulture)}; fx_base={fxBase.ToString(CultureInfo.InvariantCulture)}");
+
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return allocationId;
+            return allocationIdForJournal;
         }
         catch
         {

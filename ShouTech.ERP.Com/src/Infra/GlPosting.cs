@@ -38,6 +38,17 @@ public static class GlAccounts
     public const string AccumulatedDepreciation = "1190";
     public const string SalesRevenue = "301";
     public const string SalesReturns = "302";
+    // W8 (migration 103): settlement discounts + realized FX at payment
+    // allocation. Every seeded template carries all four codes as
+    // postable accounts (verified across cod/app/src/Resources/COA/*.shc):
+    // 305 Sales Discounts (debit-balance contra revenue), 405 Purchase
+    // Discounts (credit-balance), 509 Foreign Exchange Losses (expense),
+    // 306 Other Income (revenue). No template carries a dedicated
+    // FX-gain account, so realized FX gains credit Other Income.
+    public const string SalesDiscounts = "305";
+    public const string OtherIncome = "306";
+    public const string PurchaseDiscounts = "405";
+    public const string ForeignExchangeLosses = "509";
     public const string Cogs = "401";
     public const string Purchases = "402";
     public const string PurchaseReturns = "403";

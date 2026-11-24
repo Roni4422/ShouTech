@@ -617,6 +617,9 @@
       "AgeBand": "Tranche d’ancienneté",
       "GrniGlBalanceCompany": "Solde GRNI du grand livre (toute la société, devise de base)",
       "GrniDifferenceCompany": "Écart GRNI (toute la société, devise de base)",
+      "SubledgerBase": "Grand livre auxiliaire (base)",
+      "GlBalanceBase": "Solde GL (base)",
+      "DifferenceBase": "Différence (base)",
       "Name": "Nom",
       "WeightedAmount": "Montant pondéré",
       "WinRate": "Taux de réussite",
@@ -729,6 +732,9 @@
     "SectionOrderedNotDelivered": "Commandé non livré",
     "SectionDeliveredNotInvoiced": "Livré non facturé",
     "SectionDeliveryPerformance": "Performance de livraison",
+    "SectionArReconciliation": "Rapprochement clients",
+    "SectionInventoryReconciliation": "Rapprochement des stocks",
+    "VarianceFlag": "Écart",
     "Unassigned": "Non affecté",
     "StatusLost": "Perdu",
     "StatusExpired": "Expiré"
@@ -2463,7 +2469,16 @@
     "ServiceUnavailable": "Le service de rapprochement est indisponible (aucune connexion à la base de données).",
     "PermissionDenied": "Vous n'avez pas l'autorisation d'affecter des paiements (ACC.PAYREC.ALLOCATE).",
     "Note": "Note",
-    "Kind": "Type"
+    "Kind": "Type",
+    "DueDate": "Date d'échéance",
+    "Suggest": "Suggérer",
+    "AllocAmount": "Montant d'affectation",
+    "DocAmount": "Montant du document",
+    "Discount": "Escompte",
+    "SelectPayment": "Sélectionnez d'abord un paiement.",
+    "SuggestedOk": "Affectations suggérées remplies",
+    "DiscountPermissionDenied": "Vous n'avez pas l'autorisation d'accorder un escompte de règlement (SALES.SETTLEMENT.DISCOUNT).",
+    "DocAmountRequired": "Une affectation multi-devises exige le montant du document (DocAmount) pour chaque ligne remplie."
   },
   "Projects": {
     "Title": "Projets",
@@ -2629,6 +2644,11 @@
     "TitleInvoices": "Rechercher des factures",
     "TitleOrders": "Rechercher des commandes",
     "TitleQuotations": "Rechercher des devis",
+    "Events": "Événements",
+    "EventDate": "Date de l'événement",
+    "EventType": "Événement",
+    "Actor": "Acteur",
+    "Details": "Détails",
     "To": "À"
   },
   "OrderDoc": {

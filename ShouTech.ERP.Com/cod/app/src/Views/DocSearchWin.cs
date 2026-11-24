@@ -51,8 +51,11 @@ public sealed class DocSearchWin : BaseWin, IWindowMode
     private readonly Button _btnSetLost = new();
     private readonly Button _btnConvertOrder = new();
     private readonly Button _btnReverse = new();
+    private readonly Button _btnEvents = new();
     private readonly Button _btnClose = new();
     private readonly DataGrid _grid = new();
+    private readonly DataGrid _eventsGrid = new();
+    private readonly ObservableCollection<ShouTech.Infrastructure.DocEventRow> _events = new();
     private readonly TextBlock _lblStatus = new();
     private readonly ObservableCollection<DocRow> _rows = new();
     private Guid _companyId;
@@ -80,14 +83,16 @@ public sealed class DocSearchWin : BaseWin, IWindowMode
         StyleButton(_btnSetLost, "DocSearch.SetLost");
         StyleButton(_btnConvertOrder, "DocSearch.ConvertToOrder");
         StyleButton(_btnReverse, "DocSearch.Reverse");
+        StyleButton(_btnEvents, "DocSearch.Events");
         StyleButton(_btnClose, "Common.Close");
         _btnSearch.Click += async (_, _) => await SearchAsync();
         _btnOpen.Click += (_, _) => OpenSelected();
         _btnSetLost.Click += async (_, _) => await SetLostAsync();
         _btnConvertOrder.Click += async (_, _) => await ConvertToOrderAsync();
         _btnReverse.Click += async (_, _) => await ReverseAsync();
+        _btnEvents.Click += async (_, _) => await ShowEventsAsync();
         _btnClose.Click += (_, _) => Close();
-        foreach (var b in new[] { _btnSearch, _btnOpen, _btnSetLost, _btnConvertOrder, _btnReverse, _btnClose })
+        foreach (var b in new[] { _btnSearch, _btnOpen, _btnSetLost, _btnConvertOrder, _btnReverse, _btnEvents, _btnClose })
             toolbar.Children.Add(b);
         _btnSetLost.Visibility = _mode == DocSearchMode.Quotations ? Visibility.Visible : Visibility.Collapsed;
         _btnConvertOrder.Visibility = _mode == DocSearchMode.Quotations ? Visibility.Visible : Visibility.Collapsed;
@@ -120,6 +125,7 @@ public sealed class DocSearchWin : BaseWin, IWindowMode
         var body = new Grid();
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         // Filter bar = one shared column grid (4 pairs), side labels,
         // equal quarters aligned to one grid (Phenix rule).
@@ -156,8 +162,65 @@ public sealed class DocSearchWin : BaseWin, IWindowMode
         Grid.SetRow(_grid, 1);
         body.Children.Add(_grid);
 
+        // W8: unified document events (sau_document_events, migration
+        // 103) for the selected document — a read-only history strip
+        // under the results grid, filled on demand by the Events button.
+        _eventsGrid.AutoGenerateColumns = false;
+        _eventsGrid.CanUserAddRows = false;
+        _eventsGrid.IsReadOnly = true;
+        _eventsGrid.AlternationCount = 2;
+        _eventsGrid.Height = 150;
+        _eventsGrid.Margin = new Thickness(0, 8, 0, 0);
+        _eventsGrid.Visibility = Visibility.Collapsed;
+        _eventsGrid.SetResourceReference(StyleProperty, "VisuDataGridStyle");
+        _eventsGrid.SetResourceReference(DataGrid.ColumnHeaderStyleProperty, "VisuDataGridHeaderStyle");
+        _eventsGrid.SetResourceReference(DataGrid.RowStyleProperty, "VisuDataGridRowStyle");
+        _eventsGrid.SetResourceReference(DataGrid.CellStyleProperty, "VisuDataGridCellStyle");
+        _eventsGrid.SetResourceReference(DataGrid.RowBackgroundProperty, "TableSurfaceBrush");
+        _eventsGrid.SetResourceReference(DataGrid.AlternatingRowBackgroundProperty, "TableAlternateRowBrush");
+        _eventsGrid.ItemsSource = _events;
+        _eventsGrid.Columns.Add(TextCol(nameof(ShouTech.Infrastructure.DocEventRow.CreatedAt), 150));
+        _eventsGrid.Columns.Add(TextCol(nameof(ShouTech.Infrastructure.DocEventRow.EventType), 110));
+        _eventsGrid.Columns.Add(TextCol(nameof(ShouTech.Infrastructure.DocEventRow.Actor), 120));
+        _eventsGrid.Columns.Add(TextCol(nameof(ShouTech.Infrastructure.DocEventRow.Details), 420));
+        Grid.SetRow(_eventsGrid, 2);
+        body.Children.Add(_eventsGrid);
+
         root.Children.Add(body);
         Content = root;
+    }
+
+    /// <summary>Loads the selected document's unified event history
+    /// (W8) into the events strip. Company keys: the document Guid key
+    /// (chain/native events) and the company code (denial rows written
+    /// before a document context existed) — the reader matches either.</summary>
+    private async Task ShowEventsAsync()
+    {
+        if (_grid.SelectedItem is not DocRow row) return;
+        try
+        {
+            var cs = DatabaseRuntime.GetConnectionString();
+            if (string.IsNullOrWhiteSpace(cs))
+            {
+                _lblStatus.Text = T("OrderDoc.ServiceUnavailable");
+                return;
+            }
+            var events = await ShouTech.Infrastructure.DocEvents.GetForDocumentAsync(
+                DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite", cs,
+                new[] { _companyId.ToString("D"), CurrentCompanyCode },
+                row.Side == CommercialDocSide.Sales ? "SALES" : "PURCHASE",
+                row.DocKind, row.DocId);
+            _events.Clear();
+            foreach (var ev in events)
+                _events.Add(ev);
+            _eventsGrid.Visibility = Visibility.Visible;
+            _lblStatus.Text = $"{T("DocSearch.Events")}: {_events.Count}";
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "DocSearchWin.ShowEvents");
+            _lblStatus.Text = ex.Message;
+        }
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -472,6 +535,13 @@ public sealed class DocSearchWin : BaseWin, IWindowMode
             _grid.Columns[4].Header = T("Invoice.Total");
             _grid.Columns[5].Header = T("OrderDoc.Status");
             _grid.Columns[6].Header = T("OrderDoc.DeliveryDate");
+        }
+        if (_eventsGrid.Columns.Count >= 4)
+        {
+            _eventsGrid.Columns[0].Header = T("DocSearch.EventDate");
+            _eventsGrid.Columns[1].Header = T("DocSearch.EventType");
+            _eventsGrid.Columns[2].Header = T("DocSearch.Actor");
+            _eventsGrid.Columns[3].Header = T("DocSearch.Details");
         }
         RefreshLocalizedContent(Content as DependencyObject);
     }
