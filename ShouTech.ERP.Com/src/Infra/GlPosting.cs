@@ -16,6 +16,19 @@ public static class GlAccounts
     public const string Bank = "132";
     public const string Receivable = "1201";
     public const string Inventory = "1203";
+    // Stock Delivered But Not Billed (sales cycle B4, migration 094):
+    // the delivered-but-unbilled asset a posted delivery note debits and
+    // a delivery-linked invoice credits when COGS is released. The plan
+    // named this account 1204, but 1204 is "Prepaid Expenses" in every
+    // seeded template and chart codes are unique per company, so the
+    // first free inventory-family code is used: 1215 (1210 raw materials,
+    // 1211 WIP, 1212 finished goods, 1213 spare parts). Only the
+    // industrial-family templates carry 1211/1212 and most charts will
+    // not carry 1215 until migration 094 reaches them, so posting code
+    // resolves it with TryResolveAccount and falls back to Inventory
+    // (1203) — the manufacturing optional-leg pattern — and a legacy
+    // chart never breaks.
+    public const string StockDeliveredNotBilled = "1215";
     public const string InputVat = "1205";
     public const string Payable = "2201";
     // GRNI accrual is carried in the existing accrued-liabilities control (2203).

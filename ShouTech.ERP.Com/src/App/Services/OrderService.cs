@@ -129,6 +129,13 @@ public sealed class OrderService
                 $"The source document '{delivery.DocNo}' must be posted before it can be converted.",
                 delivery.DocNo);
 
+        // Partial invoicing (sales cycle B4, gap G14): a delivery may be
+        // billed by several invoices over time, so a posted invoice no
+        // longer blocks creating the next one — the posting path
+        // allocates the delivery cost pro-rata and refuses quantities
+        // beyond what was delivered (SAL-7009). Only a duplicate DRAFT
+        // for the same delivery is blocked: two open drafts would race
+        // for the same uninvoiced quantity.
         var existingLinks = await _chain.GetSalesLinksFromAsync(
             delivery.CompanyId, deliveryDocId, cancellationToken).ConfigureAwait(false);
         foreach (var existingLink in existingLinks.Where(link =>
@@ -137,9 +144,9 @@ public sealed class OrderService
             var existingInvoice = await _chain.FindSalesByIdAsync(
                 existingLink.TargetDocId, cancellationToken).ConfigureAwait(false);
             if (existingInvoice is not null &&
-                existingInvoice.Status != CommercialDocumentStatus.Cancelled)
+                existingInvoice.Status == CommercialDocumentStatus.Draft)
                 throw new InvalidOperationException(
-                    $"Delivery note '{delivery.DocNo}' already has an active sales invoice '{existingInvoice.DocNo}'.");
+                    $"Delivery note '{delivery.DocNo}' already has a draft sales invoice '{existingInvoice.DocNo}'. Post or cancel it before creating another.");
         }
 
         var invoiceDocNo = await _orders.NextDocNoAsync(
@@ -155,6 +162,22 @@ public sealed class OrderService
     {
         await _chain.PostSalesAsync(documentId, userId, cancellationToken).ConfigureAwait(false);
         await RefreshStoredChainProgressAsync(documentId, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reverses a posted chain delivery note or sales invoice (stock +
+    /// GL + party ledger compensated, document cancelled, reversal
+    /// audited). The repository enforces the dependency guards
+    /// (SAL-7005 downstream invoice, SAL-7006 payments, SAL-7007 state).
+    /// </summary>
+    public async Task ReverseSalesChainDocumentAsync(long documentId, string reason, string userId, CancellationToken cancellationToken = default)
+    {
+        if (documentId <= 0) throw new ArgumentOutOfRangeException(nameof(documentId));
+        if (string.IsNullOrWhiteSpace(reason)) throw new ArgumentException("A reversal reason is required.", nameof(reason));
+        var document = await _chain.FindSalesByIdAsync(documentId, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Sales document was not found.");
+        await _chain.ReverseChainDocumentAsync(
+            document.CompanyId, documentId, reason, userId, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Posts a delivery note through the stock-valuation chain in one transaction.</summary>

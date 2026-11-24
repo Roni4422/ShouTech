@@ -2546,6 +2546,10 @@
     "SelectOrder": "Once bir uretim emri secin."
   },
   "DocSearch": {
+    "Reverse": "Ters Kaydet",
+    "ReverseTitle": "Belgeyi Ters Kaydet",
+    "Reason": "Neden",
+    "Reversed": "Ters Kaydedildi",
     "ConfirmLost": "Bu teklif kayıp olarak işaretlensin mi?",
     "ConvertToOrder": "Siparişe Dönüştür",
     "ConvertedToOrder": "Satış siparişine dönüştürüldü (taslak)",
@@ -3658,6 +3662,13 @@
     }
   },
   "SalesDelivery": {
+    "Reverse": "Teslimatı Ters Kaydet",
+    "ReverseTitle": "Teslimat Notunu Ters Kaydet",
+    "Reason": "Neden",
+    "Reversed": "Ters Kaydedildi",
+    "CancelDraft": "Taslağı İptal Et",
+    "ConfirmCancelDraft": "Bu taslak teslimat notu iptal edilsin mi?",
+    "Cancelled": "İptal Edildi",
     "Title": "Satış İrsaliyesi",
     "OrderNo": "Satış Sipariş No.",
     "DeliveryNo": "İrsaliye No.",

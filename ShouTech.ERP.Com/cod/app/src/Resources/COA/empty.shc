@@ -269,6 +269,24 @@
       }
     },
     {
+      "id": 15,
+      "number": 1215,
+      "code": "1215",
+      "parentId": 3,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": null,
+      "names": {
+        "ar": "بضاعة مسلّمة غير مفوترة",
+        "en": "Stock Delivered But Not Billed"
+      }
+    },
+    {
       "id": 14,
       "number": 2205,
       "code": "2205",

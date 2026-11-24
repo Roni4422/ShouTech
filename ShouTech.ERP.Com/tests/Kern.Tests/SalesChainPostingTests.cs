@@ -1,11 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Globalization;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using ShouTech.Application.Services;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
+using ShouTech.Infrastructure;
 using Xunit;
 
 namespace Kern.Tests
@@ -273,6 +276,370 @@ namespace Kern.Tests
             });
     }
 
+    /// <summary>
+    /// Sales cycle B4 (gaps G12/G13/G14): delivery-note GL
+    /// (Dr 1215 Stock Delivered But Not Billed / Cr 1203 Inventory at
+    /// movement cost), partial invoicing of one delivery with pro-rata
+    /// delivery-cost allocation (final invoice takes the rounding plug),
+    /// and chain reversal of posted DLV / SAL documents with the
+    /// SAL-7005 / SAL-7006 dependency guards.
+    /// Fixture: material 42, 1000 units on hand at average cost 40
+    /// (seeded by ChainTests); the standard chain draft is 10 units.
+    /// </summary>
+    public class SalesChainDeliveryGlTests
+    {
+        [Fact]
+        public async Task PostingDeliveryNote_PostsDeliveredNotBilledGlAtMovementCost()
+        {
+            var (service, _, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                var deliveryId = await PostedDeliveryAsync(service, companyId, "B4-GL");
+
+                await using var connection = new SqliteConnection(connectionString);
+                await connection.OpenAsync();
+
+                // Movement cost: 10 units x average cost 40 = 400.
+                Assert.Equal(400m, GlSum(connection, companyId, "DLV", deliveryId, "1215", debit: true));
+                Assert.Equal(400m, GlSum(connection, companyId, "DLV", deliveryId, "1203", debit: false));
+                // Delivered-but-unbilled position is visible in the 1215 balance.
+                Assert.Equal(400m, AccountNetDebit(connection, companyId, "1215"));
+                Assert.Equal(-400m, AccountNetDebit(connection, companyId, "1203"));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task PartialInvoices_SplitDeliveryCostProRata_AndSumExactlyToDeliveryCost()
+        {
+            var (service, _, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                // Revalue the fixture stock to 33.33 so the delivery cost
+                // (333.30 for 10 units) does not divide evenly: the first
+                // invoice (3 units) releases 99.99 pro-rata and the
+                // completing invoice (7 units) takes the 233.31 plug.
+                await using (var seed = new SqliteConnection(connectionString))
+                {
+                    await seed.OpenAsync();
+                    await using var update = seed.CreateCommand();
+                    update.CommandText = "UPDATE material_stock_balances SET average_cost = 33.33, last_cost = 33.33 WHERE material_id = 42 AND warehouse_id = 1";
+                    Assert.Equal(1, await update.ExecuteNonQueryAsync());
+                }
+
+                var deliveryId = await PostedDeliveryAsync(service, companyId, "B4-PART");
+
+                await using var connection = new SqliteConnection(connectionString);
+                await connection.OpenAsync();
+                Assert.Equal(333.30m, AccountNetDebit(connection, companyId, "1215"));
+
+                var firstInvoiceId = await service.CreateFromSourceAsync(
+                    deliveryId, "SAL-B4-PART-1", new DateOnly(2026, 10, 22), "posting-test",
+                    quantityByMaterialId: new Dictionary<long, decimal> { [42] = 3m });
+                await service.PostAsync(firstInvoiceId, "posting-test");
+
+                Assert.Equal(99.99m, GlSum(connection, companyId, "SAL", firstInvoiceId, "401", debit: true));
+                Assert.Equal(99.99m, GlSum(connection, companyId, "SAL", firstInvoiceId, "1215", debit: false));
+                Assert.Equal(233.31m, AccountNetDebit(connection, companyId, "1215"));
+
+                var secondInvoiceId = await service.CreateFromSourceAsync(
+                    deliveryId, "SAL-B4-PART-2", new DateOnly(2026, 10, 23), "posting-test",
+                    quantityByMaterialId: new Dictionary<long, decimal> { [42] = 7m });
+                await service.PostAsync(secondInvoiceId, "posting-test");
+
+                Assert.Equal(233.31m, GlSum(connection, companyId, "SAL", secondInvoiceId, "401", debit: true));
+                Assert.Equal(233.31m, GlSum(connection, companyId, "SAL", secondInvoiceId, "1215", debit: false));
+                // Both invoices together released the delivery cost to the cent.
+                Assert.Equal(0m, AccountNetDebit(connection, companyId, "1215"));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task DeliveryReversal_NetsStockAndGlToZero()
+        {
+            var (service, repository, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                var deliveryId = await PostedDeliveryAsync(service, companyId, "B4-REV");
+
+                await repository.ReverseChainDocumentAsync(
+                    companyId, deliveryId, "Customer refused the goods", "reversal-test");
+
+                await using var connection = new SqliteConnection(connectionString);
+                await connection.OpenAsync();
+
+                Assert.Equal(1000m, Scalar(connection,
+                    "SELECT available_qty FROM material_stock_balances WHERE material_id = 42 AND warehouse_id = 1"));
+                // Issue and reversal receipt net to zero quantity and cost.
+                Assert.Equal(0m, Scalar(connection,
+                    "SELECT COALESCE(SUM(qty_in - qty_out), 0) FROM material_stock_movements WHERE document_no IN ('DLV-B4-REV', 'DLV-B4-REV-REV')"));
+                Assert.Equal(0m, Scalar(connection,
+                    "SELECT COALESCE(SUM(cost_amount), 0) FROM material_stock_movements WHERE document_no IN ('DLV-B4-REV', 'DLV-B4-REV-REV')"));
+                Assert.Equal(0m, AccountNetDebit(connection, companyId, "1215"));
+                Assert.Equal(0m, AccountNetDebit(connection, companyId, "1203"));
+                Assert.Equal("Cancelled", Text(connection,
+                    $"SELECT status FROM sales_documents WHERE doc_id = {deliveryId}"));
+                Assert.Equal(1, (int)Scalar(connection,
+                    $"SELECT COUNT(*) FROM document_reversals WHERE original_doc_kind = 'DLV' AND original_doc_id = {deliveryId} AND reason = 'Customer refused the goods' AND actor = 'reversal-test' AND status = 'Completed'"));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task DeliveryReversal_WithPostedInvoice_ThrowsSal7005()
+        {
+            var (service, repository, companyId, _, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                var deliveryId = await PostedDeliveryAsync(service, companyId, "B4-GRD");
+                var invoiceId = await service.CreateFromSourceAsync(
+                    deliveryId, "SAL-B4-GRD", new DateOnly(2026, 10, 22), "posting-test");
+                await service.PostAsync(invoiceId, "posting-test");
+
+                var error = await Assert.ThrowsAsync<AppError>(() =>
+                    repository.ReverseChainDocumentAsync(companyId, deliveryId, "Too late", "reversal-test"));
+                Assert.Equal(ErrorCodes.ChainReversalBlockedDownstream, error.Code);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task InvoiceReversal_WithPaidAmount_ThrowsSal7006()
+        {
+            var (service, repository, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                var deliveryId = await PostedDeliveryAsync(service, companyId, "B4-PAID");
+                var invoiceId = await service.CreateFromSourceAsync(
+                    deliveryId, "SAL-B4-PAID", new DateOnly(2026, 10, 22), "posting-test");
+                await service.PostAsync(invoiceId, "posting-test");
+
+                await using (var seed = new SqliteConnection(connectionString))
+                {
+                    await seed.OpenAsync();
+                    await using var update = seed.CreateCommand();
+                    update.CommandText = $"UPDATE sales_documents SET paid_amount = 25 WHERE doc_id = {invoiceId}";
+                    Assert.Equal(1, await update.ExecuteNonQueryAsync());
+                }
+
+                var error = await Assert.ThrowsAsync<AppError>(() =>
+                    repository.ReverseChainDocumentAsync(companyId, invoiceId, "Paid already", "reversal-test"));
+                Assert.Equal(ErrorCodes.ChainReversalBlockedPayments, error.Code);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task InvoiceReversal_WithPaymentAllocation_ThrowsSal7006()
+        {
+            var (service, repository, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                var deliveryId = await PostedDeliveryAsync(service, companyId, "B4-ALLOC");
+                var invoiceId = await service.CreateFromSourceAsync(
+                    deliveryId, "SAL-B4-ALLOC", new DateOnly(2026, 10, 22), "posting-test");
+                await service.PostAsync(invoiceId, "posting-test");
+
+                await using (var seed = new SqliteConnection(connectionString))
+                {
+                    await seed.OpenAsync();
+                    await using var insert = seed.CreateCommand();
+                    insert.CommandText = """
+                        INSERT INTO payment_allocations
+                            (allocation_id, company_id, document_company_id, party_kind, party_id,
+                             payment_ledger_id, doc_table, doc_id, doc_no, amount, allocated_by)
+                        VALUES ('alloc-b4-1', 'CHAIN-GL', $company, 'C', 7, 1, 'SALES', $doc, 'SAL-B4-ALLOC', 25, 'posting-test')
+                        """;
+                    insert.Parameters.AddWithValue("$company", companyId.ToString("D"));
+                    insert.Parameters.AddWithValue("$doc", invoiceId);
+                    Assert.Equal(1, await insert.ExecuteNonQueryAsync());
+                }
+
+                var error = await Assert.ThrowsAsync<AppError>(() =>
+                    repository.ReverseChainDocumentAsync(companyId, invoiceId, "Allocated already", "reversal-test"));
+                Assert.Equal(ErrorCodes.ChainReversalBlockedPayments, error.Code);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task InvoiceReversal_MirrorsGlAndPartyLedger()
+        {
+            var (service, repository, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                var deliveryId = await PostedDeliveryAsync(service, companyId, "B4-SREV");
+                var invoiceId = await service.CreateFromSourceAsync(
+                    deliveryId, "SAL-B4-SREV", new DateOnly(2026, 10, 22), "posting-test");
+                await service.PostAsync(invoiceId, "posting-test");
+
+                await repository.ReverseChainDocumentAsync(
+                    companyId, invoiceId, "Invoice issued in error", "reversal-test");
+
+                await using var connection = new SqliteConnection(connectionString);
+                await connection.OpenAsync();
+
+                // Party ledger debit (250) mirrored by an equal credit.
+                Assert.Equal(0m, Scalar(connection,
+                    "SELECT COALESCE(SUM(debit - credit), 0) FROM party_ledger WHERE doc_no = 'SAL-B4-SREV'"));
+                // Receivable and revenue net to zero across post + reversal.
+                Assert.Equal(0m, AccountNetDebit(connection, companyId, "1201"));
+                Assert.Equal(0m, AccountNetDebit(connection, companyId, "301"));
+                // COGS reversal returns the cost to delivered-not-billed:
+                // the delivery still stands, so 1215 carries the 400 again.
+                Assert.Equal(400m, AccountNetDebit(connection, companyId, "1215"));
+                Assert.Equal("Cancelled", Text(connection,
+                    $"SELECT status FROM sales_documents WHERE doc_id = {invoiceId}"));
+                Assert.Equal(1, (int)Scalar(connection,
+                    $"SELECT COUNT(*) FROM document_reversals WHERE original_doc_kind = 'SAL' AND original_doc_id = {invoiceId} AND status = 'Completed'"));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task CreateInvoiceFromDelivery_BlocksDuplicateDraft_ButAllowsNextAfterPartialPosted()
+        {
+            var (_, repository, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                var chain = new SalesChainService(repository);
+                var orders = new OrderService(
+                    new OrderDocumentRepository("SQLite", connectionString), repository);
+                var deliveryId = await PostedDeliveryAsync(chain, companyId, "B4-ORD");
+
+                // A partial invoice (4 of 10) is created and posted through
+                // the chain service.
+                var partialId = await chain.CreateFromSourceAsync(
+                    deliveryId, "SAL-B4-ORD-1", new DateOnly(2026, 10, 22), "posting-test",
+                    quantityByMaterialId: new Dictionary<long, decimal> { [42] = 4m });
+                await chain.PostAsync(partialId, "posting-test");
+
+                // The pre-B4 service refused ANY further invoice once one
+                // active invoice existed; now the next invoice for the
+                // remaining 6 units is created normally (gap G14).
+                var next = await orders.CreateSalesInvoiceFromDeliveryAsync(
+                    deliveryId, new DateOnly(2026, 10, 23), "posting-test");
+                Assert.True(next.InvoiceId > 0);
+                Assert.NotEqual(partialId, next.InvoiceId);
+
+                // But a second open DRAFT for the same delivery is a
+                // duplicate and is blocked.
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    orders.CreateSalesInvoiceFromDeliveryAsync(
+                        deliveryId, new DateOnly(2026, 10, 23), "posting-test"));
+
+                // The created draft bills exactly the remaining quantity.
+                var snapshot = await repository.FindSalesByIdAsync(next.InvoiceId);
+                Assert.NotNull(snapshot);
+                Assert.Single(snapshot!.Lines);
+                Assert.Equal(6m, snapshot.Lines[0].Qty);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        /// <summary>Builds QT -> SO -> DLV for the standard 10-unit draft and posts the delivery.</summary>
+        private static async Task<long> PostedDeliveryAsync(SalesChainService service, Guid companyId, string suffix)
+        {
+            var quotationId = await service.CreateQuotationAsync(Draft(companyId, $"QT-{suffix}"), "posting-test");
+            var orderId = await service.CreateFromSourceAsync(quotationId, $"SO-{suffix}", new DateOnly(2026, 10, 20), "posting-test");
+            await service.PostAsync(orderId, "posting-test");
+            var deliveryId = await service.CreateFromSourceAsync(orderId, $"DLV-{suffix}", new DateOnly(2026, 10, 21), "posting-test");
+            await service.PostAsync(deliveryId, "posting-test");
+            return deliveryId;
+        }
+
+        private static CommercialDocumentDraft Draft(Guid companyId, string docNo) => new(
+            companyId,
+            CommercialDocKinds.SalesQuotation,
+            docNo,
+            new DateOnly(2026, 10, 16),
+            PartyId: 7,
+            PartyName: "Posting Test Customer",
+            WarehouseId: 1,
+            CurrencyCode: "SAR",
+            ExchangeRate: 1m,
+            Notes: null,
+            new[]
+            {
+                new CommercialLineDraft(42, "MAT-42", "Posting test item", "PCS", 10m, 25m)
+            });
+
+        /// <summary>Sum of one side (debit or credit) of one account on one document's live GL entry.</summary>
+        private static decimal GlSum(SqliteConnection connection, Guid companyId, string sourceKind, long sourceDocId, string accountCode, bool debit)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                SELECT COALESCE(SUM(l.{(debit ? "debit" : "credit")}), 0)
+                FROM journal_entries e
+                JOIN journal_entry_lines l ON l.journal_entry_id = e.journal_entry_id
+                JOIN chart_of_accounts a ON a.account_id = l.account_id
+                WHERE e.company_id = $company AND e.source_doc_type = $kind
+                  AND e.source_doc_id = $source AND e.reversal_of_entry_id IS NULL
+                  AND a.company_id = $company AND a.account_code = $account
+                """;
+            command.Parameters.AddWithValue("$company", companyId.ToString("D"));
+            command.Parameters.AddWithValue("$kind", sourceKind);
+            command.Parameters.AddWithValue("$source", sourceDocId.ToString(CultureInfo.InvariantCulture));
+            command.Parameters.AddWithValue("$account", accountCode);
+            return Convert.ToDecimal(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>Net debit (debits - credits) of one account across all live entries of the company.</summary>
+        private static decimal AccountNetDebit(SqliteConnection connection, Guid companyId, string accountCode)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT COALESCE(SUM(l.debit - l.credit), 0)
+                FROM journal_entry_lines l
+                JOIN journal_entries e ON e.journal_entry_id = l.journal_entry_id
+                JOIN chart_of_accounts a ON a.account_id = l.account_id
+                WHERE e.company_id = $company AND a.company_id = $company AND a.account_code = $account
+                """;
+            command.Parameters.AddWithValue("$company", companyId.ToString("D"));
+            command.Parameters.AddWithValue("$account", accountCode);
+            return Convert.ToDecimal(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+        }
+
+        private static decimal Scalar(SqliteConnection connection, string sql)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            return Convert.ToDecimal(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+        }
+
+        private static string Text(SqliteConnection connection, string sql)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            return Convert.ToString(command.ExecuteScalar(), CultureInfo.InvariantCulture) ?? string.Empty;
+        }
+    }
+
     internal sealed class ChainTests
     {
         public static Task<(SalesChainService Service, ShouTech.Infrastructure.CommercialDocumentRepository Repository, Guid CompanyId, string ConnectionString, Action Cleanup)> CreateAsync()
@@ -353,6 +720,7 @@ namespace Kern.Tests
             foreach (var (code, name, type) in new[]
             {
                 ("1201", "Trade Accounts Receivable", "ASSET"), ("1203", "Merchandise Inventory", "ASSET"),
+                ("1215", "Stock Delivered But Not Billed", "ASSET"),
                 ("2201", "Trade Accounts Payable", "LIABILITY"), ("301", "Goods Sales Revenue", "REVENUE"),
                 ("401", "Cost of Goods Sold", "EXPENSE"), ("402", "Merchandise Purchases", "EXPENSE"),
                 ("131", "Cash on Hand", "ASSET")

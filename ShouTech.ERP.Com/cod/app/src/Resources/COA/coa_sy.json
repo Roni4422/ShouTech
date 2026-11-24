@@ -369,6 +369,14 @@
       "balance": "Debit",
       "posting": true,
       "cardType": null
+    },
+    {
+      "code": "1215",
+      "parent": "12",
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": null
     }
   ],
   "nameKey": "COA.S.Title"

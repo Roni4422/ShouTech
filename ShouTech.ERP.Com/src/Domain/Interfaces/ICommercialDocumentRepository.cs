@@ -24,6 +24,18 @@ public interface ICommercialDocumentRepository
     /// <summary>Moves a sales document from Draft to Posted; throws when not a draft.</summary>
     Task PostSalesAsync(long docId, string userId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Reverses a posted chain document (DLV or SAL) in one transaction:
+    /// compensating stock movements at the original movement cost (DLV),
+    /// a compensating journal for the document's GL entry, a mirrored
+    /// party-ledger entry (SAL), the document is marked Cancelled and a
+    /// document_reversals audit row is recorded. Reason and actor are
+    /// mandatory. Guards: SAL-7005 (posted downstream invoice on a DLV),
+    /// SAL-7006 (paid amount or payment allocations on a SAL),
+    /// SAL-7007 (document kind/status is not reversible).
+    /// </summary>
+    Task ReverseChainDocumentAsync(Guid companyId, long docId, string reason, string actor, CancellationToken cancellationToken = default);
+
     /// <summary>Records that the target document was created from the source document.</summary>
     Task AddLinkAsync(Guid companyId, string sourceDocKind, long sourceDocId, string targetDocKind, long targetDocId, string userId, CancellationToken cancellationToken = default);
 
