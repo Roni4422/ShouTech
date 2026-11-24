@@ -2,9 +2,48 @@ using System.Collections.Generic;
 using ShouTech.App.Navigation;
 using ShouTech.App.Interaction;
 using CommunityToolkit.Mvvm.Input;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using System.Windows;
 
 namespace ShouTech.App.ViewModels
 {
+// ---- merged from cod/app/src/ViewModels/BaseVM.cs ----
+    public abstract class BaseVM : INotifyPropertyChanged
+    {
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+        {
+            if (EqualityComparer<T>.Default.Equals(field, value))
+                return false;
+
+            field = value;
+            OnPropertyChanged(propertyName);
+            return true;
+        }
+    }
+
+// ---- merged from cod/app/src/ViewModels/DockedWinItem.cs ----
+    public sealed class DockedWinItem
+    {
+        public required string Title { get; init; }
+        public required Window Window { get; init; }
+
+        // ═══════════════════════════════════════════════════════════
+        // v0.2.0 additions — Canvas positioning (used by MWin docking)
+        // ═══════════════════════════════════════════════════════════
+        public double Left { get; set; }
+        public double Top { get; set; } = 4;
+        public double ItemWidth { get; set; } = 180;
+        public int ZIndex { get; set; }
+    }
+
     public class ModWsVM : BaseVM
     {
 		public ModWsVM(string title, string moduleKey, string actionTitle)

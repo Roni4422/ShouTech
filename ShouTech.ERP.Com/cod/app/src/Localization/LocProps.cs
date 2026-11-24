@@ -1,7 +1,26 @@
 using System.Windows;
+using ShouTech.App.Services;
 
 namespace ShouTech.App.Localization
 {
+// ---- merged from cod/app/src/Localization/Loc.cs ----
+    public static class Loc
+    {
+        public static string Get(string key) =>
+            Resolve().GetString(key);
+
+        public static string Get(string key, string defaultValue) =>
+            Resolve().GetString(key, defaultValue);
+
+        private static ILocSvc Resolve()
+        {
+            if (System.Windows.Application.Current is App app)
+                return app.Localization;
+
+            return AppHost.Localization;
+        }
+    }
+
     /// <summary>
     /// Attached properties used by the centralized ShouTech localization engine.
     /// These properties only declare localization metadata.
