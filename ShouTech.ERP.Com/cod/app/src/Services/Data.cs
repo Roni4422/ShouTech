@@ -1173,7 +1173,8 @@ internal static class SqliteSchemaBootstrapper
             PermCat.System.UsersDisable, PermCat.System.UsersDelete,
             PermCat.System.RolesView, PermCat.System.RolesCreate, PermCat.System.RolesUpdate, PermCat.System.RolesDelete,
             PermCat.System.PermissionsView, PermCat.System.PermissionsManage, PermCat.System.PermissionTemplatesManage,
-            PermCat.System.Admin, PermCat.System.FiscalRollForward
+            PermCat.System.Admin, PermCat.System.FiscalRollForward,
+            PermCat.System.PeriodClose, PermCat.System.PeriodReopen
         };
 
         // Prefix → group mapping

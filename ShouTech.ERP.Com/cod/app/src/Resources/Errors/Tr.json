@@ -964,5 +964,41 @@
   "name": "InfoLoadFailed",
   "message": "Bilgiler yüklenemedi.",
   "hint": "Veritabanı bağlantısını kontrol edip tekrar deneyin."
+ },
+ "ACC-5021": {
+  "code": "ACC-5021",
+  "name": "Dönem deftere nakle kapalı",
+  "message": "Deftere nakil yapılamaz: {0} mali dönemi ({1} - {2}) durumu {3}.",
+  "hint": "Belgeyi açık bir dönemde nakledin veya dönem yeniden açma iznine sahip bir kullanıcıdan dönemi yeniden açmasını isteyin."
+ },
+ "ACC-5022": {
+  "code": "ACC-5022",
+  "name": "Dönemde nakledilmemiş öğeler var",
+  "message": "{0} mali dönemi kapatılamaz çünkü içinde tarihli {1} nakledilmemiş öğe bulunuyor.",
+  "hint": "Listelenen taslakları ve belgeleri nakledin veya silin, ardından dönemi tekrar kapatın."
+ },
+ "ACC-5023": {
+  "code": "ACC-5023",
+  "name": "Önceki dönem hâlâ açık",
+  "message": "Önceki dönem {1} hâlâ açıkken {0} mali dönemi kapatılamaz.",
+  "hint": "Dönemleri kronolojik sırayla kapatın."
+ },
+ "ACC-5024": {
+  "code": "ACC-5024",
+  "name": "Dönem kapatılamaz",
+  "message": "{0} mali dönemi geçerli durumundan ({1}) kapatılamaz.",
+  "hint": "Yalnızca geçerli şirketin açık bir dönemi kapatılabilir."
+ },
+ "ACC-5025": {
+  "code": "ACC-5025",
+  "name": "Yeniden açma nedeni gerekli",
+  "message": "{0} mali döneminin yeniden açılması kayıtlı bir neden gerektirir.",
+  "hint": "Yeniden açma nedenini yazın; dönem olay defterine ve güvenlik denetim günlüğüne kaydedilir."
+ },
+ "ACC-5026": {
+  "code": "ACC-5026",
+  "name": "Dönemde dengesiz yevmiyeler var",
+  "message": "{0} mali dönemi kapatılamaz çünkü içindeki {1} nakledilmiş yevmiye dengeli değil.",
+  "hint": "Dengesiz yevmiyeleri düzeltin, ardından dönemi tekrar kapatın."
  }
 }

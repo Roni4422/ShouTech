@@ -964,5 +964,41 @@
   "name": "InfoLoadFailed",
   "message": "The information could not be loaded.",
   "hint": "Check the database connection and try again."
+ },
+ "ACC-5021": {
+  "code": "ACC-5021",
+  "name": "Period closed for posting",
+  "message": "Posting is not allowed: fiscal period {0} ({1} to {2}) is {3}.",
+  "hint": "Post the document in an open period, or ask a user with the period-reopen permission to reopen the period."
+ },
+ "ACC-5022": {
+  "code": "ACC-5022",
+  "name": "Period has unposted items",
+  "message": "Fiscal period {0} cannot be closed because {1} unposted item(s) are still dated inside it.",
+  "hint": "Post or delete the listed drafts and documents, then close the period again."
+ },
+ "ACC-5023": {
+  "code": "ACC-5023",
+  "name": "Earlier period still open",
+  "message": "Fiscal period {0} cannot be closed while the earlier period {1} is still open.",
+  "hint": "Close the periods in chronological order."
+ },
+ "ACC-5024": {
+  "code": "ACC-5024",
+  "name": "Period cannot be closed",
+  "message": "Fiscal period {0} cannot be closed from its current state ({1}).",
+  "hint": "Only an open period of the current company can be closed."
+ },
+ "ACC-5025": {
+  "code": "ACC-5025",
+  "name": "Reopen reason required",
+  "message": "Reopening fiscal period {0} requires a recorded reason.",
+  "hint": "Type the reason for reopening; it is stored in the period event ledger and the security audit log."
+ },
+ "ACC-5026": {
+  "code": "ACC-5026",
+  "name": "Unbalanced journals in period",
+  "message": "Fiscal period {0} cannot be closed because {1} posted journal(s) in it are not balanced.",
+  "hint": "Correct the unbalanced journals, then close the period again."
  }
 }

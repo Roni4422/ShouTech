@@ -964,5 +964,41 @@
   "name": "InfoLoadFailed",
   "message": "Les informations n'ont pas pu être chargées.",
   "hint": "Vérifiez la connexion à la base de données et réessayez."
+ },
+ "ACC-5021": {
+  "code": "ACC-5021",
+  "name": "Période clôturée pour la comptabilisation",
+  "message": "Comptabilisation impossible : la période fiscale {0} ({1} au {2}) est {3}.",
+  "hint": "Comptabilisez le document dans une période ouverte, ou demandez à un utilisateur disposant du droit de réouverture de rouvrir la période."
+ },
+ "ACC-5022": {
+  "code": "ACC-5022",
+  "name": "Éléments non comptabilisés dans la période",
+  "message": "La période fiscale {0} ne peut pas être clôturée car {1} élément(s) non comptabilisé(s) y sont encore datés.",
+  "hint": "Comptabilisez ou supprimez les brouillons et documents listés, puis clôturez à nouveau la période."
+ },
+ "ACC-5023": {
+  "code": "ACC-5023",
+  "name": "Période antérieure encore ouverte",
+  "message": "La période fiscale {0} ne peut pas être clôturée tant que la période antérieure {1} est encore ouverte.",
+  "hint": "Clôturez les périodes dans l'ordre chronologique."
+ },
+ "ACC-5024": {
+  "code": "ACC-5024",
+  "name": "Période non clôturable",
+  "message": "La période fiscale {0} ne peut pas être clôturée depuis son état actuel ({1}).",
+  "hint": "Seule une période ouverte de la société courante peut être clôturée."
+ },
+ "ACC-5025": {
+  "code": "ACC-5025",
+  "name": "Motif de réouverture requis",
+  "message": "La réouverture de la période fiscale {0} exige un motif enregistré.",
+  "hint": "Saisissez le motif de la réouverture ; il est conservé dans le journal des événements de période et le journal d'audit de sécurité."
+ },
+ "ACC-5026": {
+  "code": "ACC-5026",
+  "name": "Écritures déséquilibrées dans la période",
+  "message": "La période fiscale {0} ne peut pas être clôturée car {1} écriture(s) comptabilisée(s) y sont déséquilibrées.",
+  "hint": "Corrigez les écritures déséquilibrées, puis clôturez à nouveau la période."
  }
 }

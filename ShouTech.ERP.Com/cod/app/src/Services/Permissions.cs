@@ -164,6 +164,10 @@ namespace ShouTech.App.Services
             public const string Maintenance = "SYS.MAINTENANCE";
             public const string CustomFieldsManage = "SYS.CUSTOM_FIELDS.MANAGE";
             public const string FiscalRollForward = "ACC.FISCAL.ROLL_FORWARD";
+            // Period close (migration 127): protected like FiscalRollForward —
+            // seeded into the catalog, withheld from the default user role.
+            public const string PeriodClose = "ACC.PERIOD.CLOSE";
+            public const string PeriodReopen = "ACC.PERIOD.REOPEN";
             public const string PluginsManage = "SYS.PLUGINS.MANAGE";
         }
 

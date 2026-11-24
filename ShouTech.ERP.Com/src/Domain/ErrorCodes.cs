@@ -93,6 +93,15 @@ public static class ErrorCodes
     public const string BudgetExceededAnnual = "ACC-5018";
     public const string BudgetExceededMonthly = "ACC-5019";
     public const string PartyBlacklisted = "ACC-5020";
+    // Period close (migration 127, docs/PERIOD_CLOSE_STUDY.md): the posting
+    // guard names the closed period; the close engine maps its refusals to
+    // catalog codes instead of raw exception text.
+    public const string PeriodClosedPosting = "ACC-5021";
+    public const string PeriodCloseUnpostedItems = "ACC-5022";
+    public const string PeriodCloseOutOfOrder = "ACC-5023";
+    public const string PeriodNotClosable = "ACC-5024";
+    public const string PeriodReopenReasonRequired = "ACC-5025";
+    public const string PeriodCloseUnbalancedJournals = "ACC-5026";
 
     // ---- INV 6000-6999 -------------------------------------------------
     public const string InventoryOperationFailed = "INV-6001";
