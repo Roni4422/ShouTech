@@ -964,5 +964,41 @@
   "name": "InfoLoadFailed",
   "message": "Bilgiler yüklenemedi.",
   "hint": "Veritabanı bağlantısını kontrol edip tekrar deneyin."
+ },
+ "PRM-8501": {
+  "code": "PRM-8501",
+  "name": "PermissionTemplateLoadFailed",
+  "message": "İzin şablonları yüklenemedi.",
+  "hint": "Veritabanı bağlantısını kontrol edip tekrar deneyin."
+ },
+ "PRM-8502": {
+  "code": "PRM-8502",
+  "name": "PermissionTemplateSaveFailed",
+  "message": "İzin şablonu kaydedilemedi.",
+  "hint": "Veritabanı bağlantısını kontrol edip tekrar deneyin."
+ },
+ "PRM-8503": {
+  "code": "PRM-8503",
+  "name": "PermissionTemplateCodeDuplicate",
+  "message": "Bu kodla bir izin şablonu zaten var.",
+  "hint": "Farklı bir şablon kodu seçin."
+ },
+ "PRM-8504": {
+  "code": "PRM-8504",
+  "name": "PermissionTemplateSystemImmutable",
+  "message": "Sistem şablonları değiştirilemez veya silinemez.",
+  "hint": "Düzenlenebilir bir şirket şablonu oluşturmak için sistem şablonunu kopyalayın."
+ },
+ "PRM-8505": {
+  "code": "PRM-8505",
+  "name": "PermissionTemplateCompanyMismatch",
+  "message": "Bir şablon yalnızca kendi şirketinin kullanıcılarına atanabilir.",
+  "hint": "Şablonun şirketine ait kullanıcıları seçin."
+ },
+ "PRM-8506": {
+  "code": "PRM-8506",
+  "name": "PermissionTemplateNotFound",
+  "message": "İzin şablonu bulunamadı.",
+  "hint": "Silinmiş olabilir. Listeyi yenileyip tekrar deneyin."
  }
 }

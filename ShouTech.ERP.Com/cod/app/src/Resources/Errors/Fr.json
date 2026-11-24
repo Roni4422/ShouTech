@@ -964,5 +964,41 @@
   "name": "InfoLoadFailed",
   "message": "Les informations n'ont pas pu être chargées.",
   "hint": "Vérifiez la connexion à la base de données et réessayez."
+ },
+ "PRM-8501": {
+  "code": "PRM-8501",
+  "name": "PermissionTemplateLoadFailed",
+  "message": "Les modèles d'autorisations n'ont pas pu être chargés.",
+  "hint": "Vérifiez la connexion à la base de données et réessayez."
+ },
+ "PRM-8502": {
+  "code": "PRM-8502",
+  "name": "PermissionTemplateSaveFailed",
+  "message": "Le modèle d'autorisations n'a pas pu être enregistré.",
+  "hint": "Vérifiez la connexion à la base de données et réessayez."
+ },
+ "PRM-8503": {
+  "code": "PRM-8503",
+  "name": "PermissionTemplateCodeDuplicate",
+  "message": "Un modèle d'autorisations avec ce code existe déjà.",
+  "hint": "Choisissez un autre code de modèle."
+ },
+ "PRM-8504": {
+  "code": "PRM-8504",
+  "name": "PermissionTemplateSystemImmutable",
+  "message": "Les modèles système ne peuvent être ni modifiés ni supprimés.",
+  "hint": "Copiez le modèle système pour créer un modèle de société modifiable."
+ },
+ "PRM-8505": {
+  "code": "PRM-8505",
+  "name": "PermissionTemplateCompanyMismatch",
+  "message": "Un modèle ne peut être attribué qu'aux utilisateurs de sa propre société.",
+  "hint": "Sélectionnez des utilisateurs appartenant à la société du modèle."
+ },
+ "PRM-8506": {
+  "code": "PRM-8506",
+  "name": "PermissionTemplateNotFound",
+  "message": "Le modèle d'autorisations est introuvable.",
+  "hint": "Il a peut-être été supprimé. Actualisez la liste et réessayez."
  }
 }

@@ -237,6 +237,20 @@ public static class ErrorCodes
     // The information sheet could not be loaded from the data stores.
     public const string InfoLoadFailed = "INF-8402";
 
+    // ---- PRM 8501-8599 (permission templates, PERMISSIONS_STUDY) --------
+    // The permission-template data could not be loaded.
+    public const string PermissionTemplateLoadFailed = "PRM-8501";
+    // The permission-template change could not be saved.
+    public const string PermissionTemplateSaveFailed = "PRM-8502";
+    // A template with the same code already exists in this company.
+    public const string PermissionTemplateCodeDuplicate = "PRM-8503";
+    // Seeded system templates are immutable; copy one to adapt it.
+    public const string PermissionTemplateSystemImmutable = "PRM-8504";
+    // A template may only be assigned to users of its own company.
+    public const string PermissionTemplateCompanyMismatch = "PRM-8505";
+    // The permission template no longer exists.
+    public const string PermissionTemplateNotFound = "PRM-8506";
+
     // ---- POS 1001-1999 (POS full build, migration 066) ------------------
     // The POS module takes its own prefix block, like MFG / HR.
     public const string PosNoOpenSession = "POS-1001";

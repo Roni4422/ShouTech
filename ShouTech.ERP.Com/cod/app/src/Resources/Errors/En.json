@@ -964,5 +964,41 @@
   "name": "InfoLoadFailed",
   "message": "The information could not be loaded.",
   "hint": "Check the database connection and try again."
+ },
+ "PRM-8501": {
+  "code": "PRM-8501",
+  "name": "PermissionTemplateLoadFailed",
+  "message": "The permission templates could not be loaded.",
+  "hint": "Check the database connection and try again."
+ },
+ "PRM-8502": {
+  "code": "PRM-8502",
+  "name": "PermissionTemplateSaveFailed",
+  "message": "The permission template could not be saved.",
+  "hint": "Check the database connection and try again."
+ },
+ "PRM-8503": {
+  "code": "PRM-8503",
+  "name": "PermissionTemplateCodeDuplicate",
+  "message": "A permission template with this code already exists.",
+  "hint": "Choose a different template code."
+ },
+ "PRM-8504": {
+  "code": "PRM-8504",
+  "name": "PermissionTemplateSystemImmutable",
+  "message": "System templates cannot be changed or deleted.",
+  "hint": "Copy the system template to create an editable company template."
+ },
+ "PRM-8505": {
+  "code": "PRM-8505",
+  "name": "PermissionTemplateCompanyMismatch",
+  "message": "A template can only be assigned to users of its own company.",
+  "hint": "Select users that belong to the template's company."
+ },
+ "PRM-8506": {
+  "code": "PRM-8506",
+  "name": "PermissionTemplateNotFound",
+  "message": "The permission template was not found.",
+  "hint": "It may have been deleted. Refresh the list and try again."
  }
 }

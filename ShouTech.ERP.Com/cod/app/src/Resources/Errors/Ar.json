@@ -964,5 +964,41 @@
   "name": "InfoLoadFailed",
   "message": "تعذر تحميل المعلومات.",
   "hint": "تحقق من اتصال قاعدة البيانات وحاول مجدداً."
+ },
+ "PRM-8501": {
+  "code": "PRM-8501",
+  "name": "PermissionTemplateLoadFailed",
+  "message": "تعذر تحميل قوالب الصلاحيات.",
+  "hint": "تحقق من اتصال قاعدة البيانات وحاول مجدداً."
+ },
+ "PRM-8502": {
+  "code": "PRM-8502",
+  "name": "PermissionTemplateSaveFailed",
+  "message": "تعذر حفظ قالب الصلاحيات.",
+  "hint": "تحقق من اتصال قاعدة البيانات وحاول مجدداً."
+ },
+ "PRM-8503": {
+  "code": "PRM-8503",
+  "name": "PermissionTemplateCodeDuplicate",
+  "message": "يوجد قالب صلاحيات بهذا الرمز مسبقاً.",
+  "hint": "اختر رمزاً مختلفاً للقالب."
+ },
+ "PRM-8504": {
+  "code": "PRM-8504",
+  "name": "PermissionTemplateSystemImmutable",
+  "message": "لا يمكن تعديل قوالب النظام أو حذفها.",
+  "hint": "انسخ قالب النظام لإنشاء قالب شركة قابل للتعديل."
+ },
+ "PRM-8505": {
+  "code": "PRM-8505",
+  "name": "PermissionTemplateCompanyMismatch",
+  "message": "لا يمكن إسناد القالب إلا لمستخدمي شركته.",
+  "hint": "حدّد مستخدمين ينتمون إلى شركة القالب."
+ },
+ "PRM-8506": {
+  "code": "PRM-8506",
+  "name": "PermissionTemplateNotFound",
+  "message": "لم يتم العثور على قالب الصلاحيات.",
+  "hint": "قد يكون محذوفاً. حدّث القائمة وحاول مجدداً."
  }
 }
