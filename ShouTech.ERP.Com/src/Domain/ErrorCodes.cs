@@ -237,6 +237,15 @@ public static class ErrorCodes
     // The information sheet could not be loaded from the data stores.
     public const string InfoLoadFailed = "INF-8402";
 
+    // ---- TLS 8501-8599 (unified Tools window, TOOLS_WINDOW_STUDY) -------
+    // Tools settings could not be persisted because no configuration
+    // file is loaded (the app is running on built-in defaults).
+    public const string ToolsSettingsNotPersisted = "TLS-8501";
+    // A Tools window health check failed to read its data store.
+    public const string ToolsHealthCheckFailed = "TLS-8502";
+    // A backup action launched from the Tools window failed.
+    public const string ToolsBackupActionFailed = "TLS-8503";
+
     // ---- POS 1001-1999 (POS full build, migration 066) ------------------
     // The POS module takes its own prefix block, like MFG / HR.
     public const string PosNoOpenSession = "POS-1001";

@@ -288,6 +288,10 @@ public sealed class OperationsService
     public Task<TrialBalanceIntegrityResult> GetTrialBalanceIntegrityAsync(string companyId, CancellationToken ct = default)
         => _repository.GetTrialBalanceIntegrityAsync(RequireCompany(companyId), ct);
 
+    /// <summary>Applied-migration facts (count + highest id) for the Tools health panel.</summary>
+    public Task<SchemaVersionInfo> GetSchemaVersionAsync(CancellationToken ct = default)
+        => _repository.GetSchemaVersionAsync(ct);
+
     /// <summary>
     /// Recalculate Costs (B5): replays stock valuation for the whole
     /// company from <paramref name="fromDate"/> onward through the
