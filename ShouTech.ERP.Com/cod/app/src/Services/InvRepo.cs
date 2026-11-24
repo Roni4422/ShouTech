@@ -147,6 +147,38 @@ public static class InvRepo
         var headerTable = isSales ? "sales_documents" : "purchase_documents";
         var lineTable = isSales ? "sales_document_lines" : "purchase_document_lines";
 
+        // W6 (migration 100): sales-return workflow stamps. Computed
+        // here, at save time, from the line conditions and the company
+        // settings, so every creation path (window, SrtRepo, POS,
+        // reversals) stores a consistent inspection / approval state
+        // that InvRepo.Post then enforces. Pre-100 databases (columns
+        // absent) keep the legacy behaviour untouched.
+        var w6Provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+        var hasW6Header = PartyLedger.ColumnExists(connection, tx, w6Provider, headerTable, "return_reason_code");
+        var hasW6Lines = PartyLedger.ColumnExists(connection, tx, w6Provider, lineTable, "return_condition");
+        if (doc.Kind == InvDocKind.SalesReturn && hasW6Header)
+        {
+            var settings = SrtRepo.ReadSettings(connection, tx);
+            var needsInspection = doc.Lines.Any(l => l.ReturnCondition is "Quarantine" or "Damaged")
+                || (settings.InspectionAmountThreshold is decimal threshold && doc.InvoiceValue >= threshold);
+            if (doc.InspectionStatus != "Inspected")
+                doc.InspectionStatus = needsInspection ? "PendingInspection" : "NotRequired";
+            if (settings.ApprovalRequired)
+            {
+                // An Approved stamp survives re-saves; a Rejected
+                // return that is edited goes back to PendingApproval
+                // (resubmission), as does any undecided one.
+                if (doc.ApprovalStatus != "Approved")
+                    doc.ApprovalStatus = "PendingApproval";
+            }
+            else if (doc.ApprovalStatus == "PendingApproval")
+            {
+                doc.ApprovalStatus = "NotRequired";
+            }
+            if (string.IsNullOrWhiteSpace(doc.ReturnSourceKind))
+                doc.ReturnSourceKind = doc.NoInvoice ? "NONE" : "INV";
+        }
+
         EnsureUniqueSupplierInvoiceReference(connection, tx, doc);
 
         long docId = doc.DocId;
@@ -158,6 +190,16 @@ public static class InvRepo
             using (var cmd = connection.CreateCommand())
             {
                 cmd.Transaction = tx;
+                // W6 columns ride at the end of the column list when
+                // migration 100 has been applied (see the stamp block
+                // above); the parameter values are bound after
+                // BindHeader under the same condition.
+                var w6Columns = hasW6Header
+                    ? ", return_reason_code, return_source_kind, no_invoice, inspection_status, approval_status"
+                    : string.Empty;
+                var w6Values = hasW6Header
+                    ? ", $rreason, $rsource, $noinv, $insp, $appr"
+                    : string.Empty;
                 cmd.CommandText = $"""
                     INSERT INTO {headerTable}
                     (company_id, doc_kind, doc_no, doc_date, party_id, party_code, party_name, warehouse_id,
@@ -167,7 +209,7 @@ public static class InvRepo
                      party_account_name, goods_account_name,
                      original_doc_id, original_doc_kind, original_doc_no, journal_doc_no,
                      target_warehouse_id, target_warehouse_name, valid_till,
-                     created_by, is_deleted)
+                     created_by, is_deleted{w6Columns})
                     VALUES
                     ($company, $kind, $no, $date, $party, $pcode, $pname, $wh,
                      $whname, $cur, $fx, $sub, $disc, $extra,
@@ -176,7 +218,7 @@ public static class InvRepo
                      $pacc, $gacc,
                      $origId, $origKind, $origNo, $jrn,
                      $twh, $twhname, $validTill,
-                     $user, 0);
+                     $user, 0{w6Values});
                     SELECT last_insert_rowid();
                     """;
                 if (DatabaseRuntime.IsPostgreSql())
@@ -190,7 +232,7 @@ public static class InvRepo
                          party_account_name, goods_account_name,
                          original_doc_id, original_doc_kind, original_doc_no, journal_doc_no,
                          target_warehouse_id, target_warehouse_name, valid_till,
-                         created_by, is_deleted)
+                         created_by, is_deleted{w6Columns})
                         VALUES
                         ($company, $kind, $no, $date, $party, $pcode, $pname, $wh,
                          $whname, $cur, $fx, $sub, $disc, $extra,
@@ -199,11 +241,12 @@ public static class InvRepo
                          $pacc, $gacc,
                          $origId, $origKind, $origNo, $jrn,
                          $twh, $twhname, $validTill,
-                         $user, 0)
+                         $user, 0{w6Values})
                         RETURNING doc_id;
                         """;
                 }
                 BindHeader(cmd, doc);
+                if (hasW6Header) BindW6Header(cmd, doc);
                 docId = Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
             }
         }
@@ -223,9 +266,11 @@ public static class InvRepo
                       sales_rep_name=$rep, cost_center=$cc, party_account_name=$pacc, goods_account_name=$gacc,
                       original_doc_id=$origId, original_doc_kind=$origKind, original_doc_no=$origNo, journal_doc_no=$jrn,
                       target_warehouse_id=$twh, target_warehouse_name=$twhname, valid_till=$validTill
+                      {(hasW6Header ? ", return_reason_code=$rreason, return_source_kind=$rsource, no_invoice=$noinv, inspection_status=$insp, approval_status=$appr" : string.Empty)}
                     WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND status='Draft' AND is_deleted=0;
                     """;
                 BindHeader(cmd, doc);
+                if (hasW6Header) BindW6Header(cmd, doc);
                 Add(cmd, "$guid", ResolveCompanyGuidOrNull(connection, tx)?.ToString("D") ?? Company);
                 Add(cmd, "$id", docId);
                 var affected = cmd.ExecuteNonQuery();
@@ -249,11 +294,18 @@ public static class InvRepo
             cmd.CommandText = $"""
                 INSERT INTO {lineTable}
                 (doc_id, line_no, material_id, material_code, description, unit, qty, unit_price,
-                 discount_pct, tax_code, tax_rate, tax_calculation_mode, line_subtotal, line_tax, line_total, warehouse_id, warehouse_name)
+                 discount_pct, tax_code, tax_rate, tax_calculation_mode, line_subtotal, line_tax, line_total, warehouse_id, warehouse_name
+                 {(hasW6Lines ? ", return_condition, return_reason_code" : string.Empty)})
                 VALUES
                 ($doc, $no, $mid, $mcode, $desc, $unit, $qty, $price,
-                 $disc, $tcode, $trate, $taxMode, $sub, $ltax, $ltot, $wh, $whname);
+                 $disc, $tcode, $trate, $taxMode, $sub, $ltax, $ltot, $wh, $whname
+                 {(hasW6Lines ? ", $rcond, $rreason" : string.Empty)});
                 """;
+            if (hasW6Lines)
+            {
+                Add(cmd, "$rcond", string.IsNullOrWhiteSpace(line.ReturnCondition) ? "Good" : line.ReturnCondition);
+                Add(cmd, "$rreason", line.ReturnReasonCode);
+            }
             Add(cmd, "$doc", docId);
             Add(cmd, "$no", line.LineNo);
             Add(cmd, "$mid", line.MaterialId);
@@ -351,6 +403,13 @@ public static class InvRepo
         // Step 9: dual company key (code or Guid), as in Load.
         var guidKey = ResolveCompanyGuidOrNull(connection, tx)?.ToString("D") ?? Company;
 
+        // W6 (migration 100): the return workflow columns ride along
+        // when present; a pre-100 database posts exactly as before.
+        var postProvider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+        var hasW6Header = PartyLedger.ColumnExists(connection, tx, postProvider, headerTable, "return_reason_code");
+        var hasW6Lines = PartyLedger.ColumnExists(connection, tx, postProvider,
+            isSales ? "sales_document_lines" : "purchase_document_lines", "return_condition");
+
         InvDoc? doc;
         using (var cmd = connection.CreateCommand())
         {
@@ -361,6 +420,7 @@ public static class InvRepo
                        discount_amount, extra_amount,
                        paid_amount, payment_method, cost_center,
                        original_doc_id, original_doc_kind, original_doc_no
+                       {(hasW6Header ? ", return_reason_code, return_source_kind, no_invoice, inspection_status, approval_status" : string.Empty)}
                 FROM {headerTable}
                 WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND is_deleted=0;
                 """;
@@ -412,6 +472,15 @@ public static class InvRepo
                 StoredTaxAmount = reader.IsDBNull(reader.GetOrdinal("tax_amount")) ? null : Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("tax_amount")), CultureInfo.InvariantCulture),
                 StoredGrandTotal = reader.IsDBNull(reader.GetOrdinal("grand_total")) ? null : Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("grand_total")), CultureInfo.InvariantCulture),
             };
+            if (hasW6Header)
+            {
+                doc.ReturnReasonCode = ReadString(reader, "return_reason_code");
+                doc.ReturnSourceKind = ReadString(reader, "return_source_kind");
+                var noInvoiceValue = reader.GetValue(reader.GetOrdinal("no_invoice"));
+                doc.NoInvoice = noInvoiceValue is bool b ? b : Convert.ToInt32(noInvoiceValue, CultureInfo.InvariantCulture) != 0;
+                doc.InspectionStatus = string.IsNullOrWhiteSpace(ReadString(reader, "inspection_status")) ? "NotRequired" : ReadString(reader, "inspection_status");
+                doc.ApprovalStatus = string.IsNullOrWhiteSpace(ReadString(reader, "approval_status")) ? "NotRequired" : ReadString(reader, "approval_status");
+            }
         }
 
         // The legacy InvoiceWin/InvRepo purchase path has no PO/receipt
@@ -477,6 +546,7 @@ public static class InvRepo
             lineCmd.CommandText = $"""
                 SELECT line_no, material_id, material_code, description, unit, qty, unit_price,
                        discount_pct, tax_code, tax_rate, tax_calculation_mode, warehouse_id
+                       {(hasW6Lines ? ", return_condition, return_reason_code" : string.Empty)}
                 FROM {lineTable} WHERE doc_id=$id ORDER BY line_no;
                 """;
             Add(lineCmd, "$id", docId);
@@ -497,12 +567,32 @@ public static class InvRepo
                     TaxRate = Convert.ToDecimal(lr.GetValue(9), CultureInfo.InvariantCulture),
                     TaxCalculationMode = lr.IsDBNull(10) ? "Exclusive" : Convert.ToString(lr.GetValue(10), CultureInfo.InvariantCulture) ?? "Exclusive",
                     WarehouseId = lr.IsDBNull(11) ? null : Convert.ToInt32(lr.GetValue(11), CultureInfo.InvariantCulture),
+                    ReturnCondition = hasW6Lines && !lr.IsDBNull(12) ? Convert.ToString(lr.GetValue(12), CultureInfo.InvariantCulture) ?? "Good" : "Good",
+                    ReturnReasonCode = hasW6Lines && !lr.IsDBNull(13) ? Convert.ToString(lr.GetValue(13), CultureInfo.InvariantCulture) : null,
                 });
             }
         }
 
         if (kind == InvDocKind.SalesReturn)
-            ValidateSalesReturnAgainstOriginal(connection, tx, guidKey, doc);
+        {
+            // W6 source branching: a no-invoice (walk-in) return and a
+            // delivery-sourced return validate against their own
+            // shapes; everything else keeps the Part I invoice
+            // validation (which now raises SAL-7021 on over-return).
+            if (doc.NoInvoice)
+                ValidateNoInvoiceSalesReturn(doc);
+            else if (string.Equals(doc.ReturnSourceKind, "DLV", StringComparison.OrdinalIgnoreCase))
+                ValidateDeliverySalesReturn(connection, tx, guidKey, doc);
+            else
+                ValidateSalesReturnAgainstOriginal(connection, tx, guidKey, doc);
+
+            // W6 gates: inspection (SAL-7022) and — when the company
+            // flag is on — approval. POS-context returns settle at the
+            // till in one step and generated full reversals are system
+            // documents; neither is held by the back-office gates.
+            if (pos is null && !IsGeneratedFullReversal(connection, tx, doc))
+                EnforceSalesReturnGates(connection, tx, doc);
+        }
         if (kind == InvDocKind.PurchaseReturn)
             ValidateAndAllocatePurchaseReturnAgainstOriginal(connection, tx, guidKey, doc, userId);
 
@@ -656,8 +746,13 @@ public static class InvRepo
         // same figure the GL above and the credit guard below consume.
         // G16/G17: a sales return's ledger id is captured so the credit
         // note can be auto-allocated to its origin invoice below.
+        // W6: a delivery-sourced return (DLV) has NO party-ledger
+        // effect — nothing was ever billed, so there is no receivable
+        // to credit; its only GL is the 1215 relief in BuildGlLines.
         long? salesReturnLedgerId = null;
-        if (effects.PartyLedger && doc.PartyId is long partyId)
+        var isDeliveryReturn = kind == InvDocKind.SalesReturn
+            && string.Equals(doc.ReturnSourceKind, "DLV", StringComparison.OrdinalIgnoreCase);
+        if (effects.PartyLedger && !isDeliveryReturn && doc.PartyId is long partyId)
         {
             var partyKind = isSales ? "C" : "S";
             decimal debit = 0, credit = 0;
@@ -1823,6 +1918,10 @@ public static class InvRepo
         // quotation) opened from DocSearch loaded as "not found" and
         // InvoiceWin silently presented a blank new document instead.
         var guidKey = ResolveCompanyGuidOrNull(connection, null)?.ToString("D") ?? Company;
+        // W6 (migration 100): workflow columns load when present.
+        var loadProvider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+        var hasW6Header = PartyLedger.ColumnExists(connection, null, loadProvider, headerTable, "return_reason_code");
+        var hasW6Lines = PartyLedger.ColumnExists(connection, null, loadProvider, lineTable, "return_condition");
         InvDoc doc;
         using (var cmd = connection.CreateCommand())
         {
@@ -1834,6 +1933,7 @@ public static class InvRepo
                        branch_name, sales_rep_name, cost_center, party_account_name, goods_account_name,
                        original_doc_id, original_doc_kind, original_doc_no, journal_doc_no,
                        target_warehouse_id, target_warehouse_name, valid_till
+                       {(hasW6Header ? ", return_reason_code, return_source_kind, no_invoice, inspection_status, approval_status" : string.Empty)}
                 FROM {headerTable}
                 WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND is_deleted=0;
                 """;
@@ -1892,6 +1992,15 @@ public static class InvRepo
                 TargetWarehouseName = ReadString(reader, "target_warehouse_name"),
                 ValidTill = ParseValidTill(reader),
             };
+            if (hasW6Header)
+            {
+                doc.ReturnReasonCode = ReadString(reader, "return_reason_code");
+                doc.ReturnSourceKind = ReadString(reader, "return_source_kind");
+                var noInvoiceValue = reader.GetValue(reader.GetOrdinal("no_invoice"));
+                doc.NoInvoice = noInvoiceValue is bool nb ? nb : Convert.ToInt32(noInvoiceValue, CultureInfo.InvariantCulture) != 0;
+                doc.InspectionStatus = string.IsNullOrWhiteSpace(ReadString(reader, "inspection_status")) ? "NotRequired" : ReadString(reader, "inspection_status");
+                doc.ApprovalStatus = string.IsNullOrWhiteSpace(ReadString(reader, "approval_status")) ? "NotRequired" : ReadString(reader, "approval_status");
+            }
         }
 
         using (var cmd = connection.CreateCommand())
@@ -1899,6 +2008,7 @@ public static class InvRepo
             cmd.CommandText = $"""
                 SELECT line_no, material_id, material_code, description, unit, qty, unit_price,
                        discount_pct, tax_code, tax_rate, tax_calculation_mode, warehouse_id, warehouse_name
+                       {(hasW6Lines ? ", return_condition, return_reason_code" : string.Empty)}
                 FROM {lineTable} WHERE doc_id=$id ORDER BY line_no;
                 """;
             Add(cmd, "$id", docId);
@@ -1922,6 +2032,12 @@ public static class InvRepo
                     WarehouseName = reader.FieldCount > 12 && !reader.IsDBNull(12)
                         ? Convert.ToString(reader.GetValue(12), CultureInfo.InvariantCulture) ?? ""
                         : "",
+                    ReturnCondition = hasW6Lines && reader.FieldCount > 13 && !reader.IsDBNull(13)
+                        ? Convert.ToString(reader.GetValue(13), CultureInfo.InvariantCulture) ?? "Good"
+                        : "Good",
+                    ReturnReasonCode = hasW6Lines && reader.FieldCount > 14 && !reader.IsDBNull(14)
+                        ? Convert.ToString(reader.GetValue(14), CultureInfo.InvariantCulture)
+                        : null,
                 });
             }
         }
@@ -2050,6 +2166,11 @@ public static class InvRepo
                 OriginalDocId = original.DocId,
                 OriginalDocKind = original.Kind,
                 OriginalDocNo = original.DocNo,
+                // W6: a generated reversal is a system return; its
+                // mandatory reversal reason (above) is the reason of
+                // record, and the master reason is stamped OTHER.
+                ReturnReasonCode = "OTHER",
+                ReturnSourceKind = "INV",
                 Notes = $"Automatic reversal of {original.DocNo} (ID {original.DocId}). Reason: {reason}",
                 Lines = original.Lines.Select(line => new InvLine
                 {
@@ -2765,6 +2886,104 @@ public static class InvRepo
                 .GroupBy(l => l.MaterialId!.Value)
                 .ToDictionary(g => g.Key, g => g.Count());
 
+            // Step 7: the engine's cost_amount is denominated in
+            // BASE currency (stock values are base-currency, Step 6),
+            // while GlLineRequest amounts are TRANSACTION currency —
+            // GlPosting converts every line back to base at the
+            // document's effective rate. Dividing the base cost by
+            // the rate here makes the COGS leg's base amount land
+            // EXACTLY on the engine's cost (rate 1 documents are
+            // unchanged), instead of inflating COGS by the rate.
+            void EmitCost(MaterialGlInfo info, decimal cost)
+            {
+                if (cost <= 0) return;
+                if (effectiveRate != 1m)
+                {
+                    // Retain precision in this bridge conversion. GlPosting
+                    // converts the line back to base currency at 4dp; a
+                    // 4dp intermediate can create a one-unit rounding loss
+                    // (for example 80 / 3.75 * 3.75 = 79.9999).
+                    cost = decimal.Round(cost / effectiveRate, 8, MidpointRounding.AwayFromZero);
+                    if (cost <= 0) return;
+                }
+                var cogs = CodeOr(info.AccCogs, GlAccounts.Cogs);
+                var inventory = CodeOr(info.AccInventory, GlAccounts.Inventory);
+                if (reverse) { Add(inventory, cost, 0); Add(cogs, 0, cost); }
+                else { Add(cogs, cost, 0); Add(inventory, 0, cost); }
+            }
+
+            if (reverse)
+            {
+                // W6 condition routing (migration 100) for sales
+                // returns. DAMAGED lines post NO cost leg at all: no
+                // stock movement exists for them, and COGS is NOT
+                // credited back — the original sale's COGS stands as
+                // the write-off loss of the worthless goods, so the
+                // journal balances and Inventory GL == stock valuation
+                // (neither moves). QUARANTINE lines moved into the
+                // quarantine warehouse, so their movement is keyed by
+                // that warehouse, not the line's. Every movement must
+                // be consumed exactly once across the document's lines
+                // (the pre-W6 single-key lookup double-counted when a
+                // material appeared on two lines / two warehouses):
+                // exact-warehouse matches first, then the material's
+                // remaining movement cost is shared across its
+                // remaining lines by quantity, residue on the last.
+                var quarantineWarehouseId = QualityGate.FindQuarantineWarehouse(connection, tx, provider, Company) ?? 0;
+                var remainingByMaterial = new Dictionary<long, decimal>(byMaterial);
+                var assigned = new decimal?[doc.Lines.Count];
+                for (var i = 0; i < doc.Lines.Count; i++)
+                {
+                    var line = doc.Lines[i];
+                    var info = infos[i];
+                    if (!info.Stockable || line.Qty == 0) continue;
+                    if (line.ReturnCondition == "Damaged") continue;
+                    if (info.MaterialId is not long mid) continue;
+                    var warehouse = line.ReturnCondition == "Quarantine" && quarantineWarehouseId > 0
+                        ? quarantineWarehouseId
+                        : (long)(line.WarehouseId ?? doc.WarehouseId ?? 0);
+                    if (byKey.TryGetValue((mid, warehouse), out var moved))
+                    {
+                        assigned[i] = moved;
+                        remainingByMaterial[mid] = remainingByMaterial.GetValueOrDefault(mid) - moved;
+                        byKey.Remove((mid, warehouse));
+                    }
+                }
+                var unassignedByMaterial = doc.Lines
+                    .Select((line, index) => (line, index))
+                    .Where(x => assigned[x.index] is null && infos[x.index].Stockable && x.line.Qty != 0
+                        && x.line.ReturnCondition != "Damaged" && infos[x.index].MaterialId is not null)
+                    .GroupBy(x => infos[x.index].MaterialId!.Value);
+                foreach (var group in unassignedByMaterial)
+                {
+                    var remaining = remainingByMaterial.GetValueOrDefault(group.Key);
+                    var members = group.ToList();
+                    if (remaining <= 0m)
+                    {
+                        // No movement for this material at all (legacy
+                        // rows): the pre-posting average fallback.
+                        foreach (var (line, index) in members)
+                            if (infos[index].AvgCost > 0)
+                                EmitCost(infos[index], decimal.Round(line.Qty * infos[index].AvgCost, 4, MidpointRounding.AwayFromZero));
+                        continue;
+                    }
+                    var totalQty = members.Sum(x => x.line.Qty);
+                    var allocated = 0m;
+                    for (var k = 0; k < members.Count; k++)
+                    {
+                        var share = k == members.Count - 1
+                            ? remaining - allocated
+                            : decimal.Round(remaining * members[k].line.Qty / totalQty, 4, MidpointRounding.AwayFromZero);
+                        allocated += share;
+                        EmitCost(infos[members[k].index], share);
+                    }
+                }
+                for (var i = 0; i < doc.Lines.Count; i++)
+                    if (assigned[i] is decimal exact)
+                        EmitCost(infos[i], exact);
+                return;
+            }
+
             for (var i = 0; i < doc.Lines.Count; i++)
             {
                 var line = doc.Lines[i];
@@ -2775,41 +2994,20 @@ public static class InvRepo
                 if (info.MaterialId is long mid
                     && byKey.TryGetValue((mid, warehouse), out var moved))
                 {
-                    cost = reverse ? moved : -moved;
+                    cost = -moved;
                 }
                 else if (info.MaterialId is long midOnly
                          && linesPerMaterial.GetValueOrDefault(midOnly) == 1
                          && byMaterial.TryGetValue(midOnly, out var movedTotal))
                 {
-                    cost = reverse ? movedTotal : -movedTotal;
+                    cost = -movedTotal;
                 }
                 else if (info.AvgCost > 0)
                 {
                     cost = decimal.Round(line.Qty * info.AvgCost, 4, MidpointRounding.AwayFromZero);
                 }
                 else continue;
-                if (cost <= 0) continue;
-                // Step 7: the engine's cost_amount is denominated in
-                // BASE currency (stock values are base-currency, Step 6),
-                // while GlLineRequest amounts are TRANSACTION currency —
-                // GlPosting converts every line back to base at the
-                // document's effective rate. Dividing the base cost by
-                // the rate here makes the COGS leg's base amount land
-                // EXACTLY on the engine's cost (rate 1 documents are
-                // unchanged), instead of inflating COGS by the rate.
-                if (effectiveRate != 1m)
-                {
-                    // Retain precision in this bridge conversion. GlPosting
-                    // converts the line back to base currency at 4dp; a
-                    // 4dp intermediate can create a one-unit rounding loss
-                    // (for example 80 / 3.75 * 3.75 = 79.9999).
-                    cost = decimal.Round(cost / effectiveRate, 8, MidpointRounding.AwayFromZero);
-                    if (cost <= 0) continue;
-                }
-                var cogs = CodeOr(info.AccCogs, GlAccounts.Cogs);
-                var inventory = CodeOr(info.AccInventory, GlAccounts.Inventory);
-                if (reverse) { Add(inventory, cost, 0); Add(cogs, 0, cost); }
-                else { Add(cogs, cost, 0); Add(inventory, 0, cost); }
+                EmitCost(info, cost);
             }
         }
 
@@ -2856,6 +3054,68 @@ public static class InvRepo
             }
             case InvDocKind.SalesReturn:
             {
+                if (string.Equals(doc.ReturnSourceKind, "DLV", StringComparison.OrdinalIgnoreCase))
+                {
+                    // W6 delivery-sourced return: the goods came back
+                    // from a posted delivery that was never invoiced,
+                    // so there is NO revenue / tax / receivable effect
+                    // to reverse — the only GL is the relief of Stock
+                    // Delivered But Not Billed: Dr Inventory / Cr 1215
+                    // at the ORIGINAL DELIVERY cost, read from this
+                    // return's own stock movements (StkPost re-entered
+                    // the goods at the delivery's issue rate, so the
+                    // movement cost IS that cost; damaged lines wrote
+                    // no movement and relieve nothing — their 1215
+                    // share stays parked until disposition, exactly
+                    // like their COGS treatment). Charts without a
+                    // postable 1215 fall back to Inventory (1203), the
+                    // B4 delivery pattern; when the fallback makes both
+                    // legs the same account the entry is a wash that
+                    // keeps the audit trail uniform. Per-material
+                    // inventory overrides (acc_inventory) still win for
+                    // the debit leg, aggregated by account.
+                    var deliveredAccount = GlPosting.TryResolveAccount(connection, tx, provider, companyGuid,
+                        GlAccounts.StockDeliveredNotBilled) is not null
+                            ? GlAccounts.StockDeliveredNotBilled
+                            : GlAccounts.Inventory;
+                    var reliefByAccount = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+                    using (var mc = connection.CreateCommand())
+                    {
+                        mc.Transaction = tx;
+                        mc.CommandText = DatabaseRuntime.IsPostgreSql()
+                            ? "SELECT material_id, COALESCE(SUM(cost_amount), 0) FROM material_stock_movements WHERE company_id=$c AND document_no=$doc AND movement_type='SRT' AND is_deleted=FALSE GROUP BY material_id;"
+                            : "SELECT material_id, COALESCE(SUM(cost_amount), 0) FROM material_stock_movements WHERE company_id=$c AND document_no=$doc AND movement_type='SRT' AND is_deleted=0 GROUP BY material_id;";
+                        foreach (var (name, value) in new (string, object)[]
+                                 { ("$c", Company), ("$doc", doc.DocNo ?? string.Empty) })
+                        {
+                            var p = mc.CreateParameter();
+                            p.ParameterName = name;
+                            p.Value = value;
+                            mc.Parameters.Add(p);
+                        }
+                        using var mr = mc.ExecuteReader();
+                        while (mr.Read())
+                        {
+                            var mat = Convert.ToInt64(mr.GetValue(0), CultureInfo.InvariantCulture);
+                            var amount = Convert.ToDecimal(mr.GetValue(1), CultureInfo.InvariantCulture);
+                            if (amount <= 0) continue;
+                            var info = infos.FirstOrDefault(x => x.MaterialId == mat);
+                            var inventoryAccount = CodeOr(info?.AccInventory, GlAccounts.Inventory);
+                            reliefByAccount[inventoryAccount] = reliefByAccount.GetValueOrDefault(inventoryAccount) + amount;
+                        }
+                    }
+                    var reliefTotal = 0m;
+                    foreach (var (account, amount) in reliefByAccount)
+                    {
+                        var amountTxn = effectiveRate != 1m
+                            ? decimal.Round(amount / effectiveRate, 8, MidpointRounding.AwayFromZero)
+                            : amount;
+                        Add(account, amountTxn, 0);
+                        reliefTotal += amountTxn;
+                    }
+                    Add(deliveredAccount, 0, reliefTotal);
+                    break;
+                }
                 // A generated full reversal must mirror the original revenue
                 // account exactly. A customer-initiated commercial return
                 // remains classified in the contra-revenue account.
@@ -3181,6 +3441,19 @@ public static class InvRepo
         Add(cmd, "$twhname", doc.TargetWarehouseName);
         Add(cmd, "$validTill", doc.ValidTill?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         Add(cmd, "$user", AppState.CurrentUser?.Username ?? Environment.UserName);
+    }
+
+    /// <summary>W6 (migration 100) header bindings, kept apart from
+    /// BindHeader because the columns exist only once migration 100
+    /// has been applied; SaveDraft binds them under the same
+    /// ColumnExists condition that extends its SQL.</summary>
+    private static void BindW6Header(DbCommand cmd, InvDoc doc)
+    {
+        Add(cmd, "$rreason", string.IsNullOrWhiteSpace(doc.ReturnReasonCode) ? null : doc.ReturnReasonCode.Trim());
+        Add(cmd, "$rsource", string.IsNullOrWhiteSpace(doc.ReturnSourceKind) ? null : doc.ReturnSourceKind.Trim());
+        Add(cmd, "$noinv", DatabaseRuntime.IsPostgreSql() ? (object)doc.NoInvoice : (doc.NoInvoice ? 1 : 0));
+        Add(cmd, "$insp", string.IsNullOrWhiteSpace(doc.InspectionStatus) ? "NotRequired" : doc.InspectionStatus);
+        Add(cmd, "$appr", string.IsNullOrWhiteSpace(doc.ApprovalStatus) ? "NotRequired" : doc.ApprovalStatus);
     }
 
     private static DbConnection Open(string connectionString)
@@ -3694,11 +3967,234 @@ public static class InvRepo
                 !string.Equals(line.TaxCalculationMode ?? "Exclusive", source.TaxMode, StringComparison.OrdinalIgnoreCase) ||
                 line.WarehouseId != source.WarehouseId)
                 throw new InvalidOperationException($"Return line {line.LineNo} must retain the original material, unit, price, discount and tax settings.");
-            if (line.Qty <= 0m ||
-                previouslyReturned.GetValueOrDefault(line.LineNo) + line.Qty > source.Qty)
+            if (line.Qty <= 0m)
                 throw new InvalidOperationException(
-                    $"Return quantity for original line {line.LineNo} exceeds the remaining returnable quantity on invoice '{originalDocNo}'.");
+                    $"Return quantity for original line {line.LineNo} must be positive.");
+            if (line.ReturnCondition is not ("Good" or "Quarantine" or "Damaged"))
+                throw new InvalidOperationException($"Return line {line.LineNo} carries an unknown condition '{line.ReturnCondition}'.");
+            // W6 (item 7): the cumulative cap — this return plus every
+            // previously posted return against the same source line —
+            // raises the cataloged SAL-7021, not a plain message.
+            if (previouslyReturned.GetValueOrDefault(line.LineNo) + line.Qty > source.Qty)
+                throw new AppError(
+                    ErrorCodes.ReturnQuantityExceeded,
+                    "The returned quantity exceeds the remaining returnable quantity on the source document line.",
+                    line.LineNo.ToString(CultureInfo.InvariantCulture), originalDocNo);
         }
+    }
+
+    /// <summary>
+    /// W6: shape validation for an authorized no-invoice (walk-in)
+    /// return. There is no source document to validate against: the
+    /// return must name the party it credits, carry at least one
+    /// positive line, and be a pure credit note (no cash refund —
+    /// there is no collected payment to hand back, and no invoice for
+    /// the Part I settlement machinery to settle). Stock re-enters at
+    /// the CURRENT valuation rate (StkPost finds no original document,
+    /// so the engine's unlinked-receipt rule applies) and the GL takes
+    /// the standard returns path (Dr Sales Returns / Cr Receivable).
+    /// The SALES.RETURN.APPROVE authorization itself is enforced at
+    /// creation (SrtRepo.CreateNoInvoiceReturn).
+    /// </summary>
+    private static void ValidateNoInvoiceSalesReturn(InvDoc returnDoc)
+    {
+        if (returnDoc.OriginalDocId is not null || returnDoc.OriginalDocKind is not null)
+            throw new InvalidOperationException("A no-invoice return must not reference a source document; use the invoice return path instead.");
+        if (returnDoc.PartyId is null or <= 0)
+            throw new InvalidOperationException("A no-invoice return requires the customer it credits.");
+        if (returnDoc.PaidAmount != 0m)
+            throw new InvalidOperationException("A no-invoice return is a credit note only; it cannot carry a cash refund.");
+        if (returnDoc.Lines.Count == 0)
+            throw new InvalidOperationException("A no-invoice return requires at least one line.");
+        foreach (var line in returnDoc.Lines)
+        {
+            if (line.Qty <= 0m)
+                throw new InvalidOperationException($"Return line {line.LineNo} must have a positive quantity.");
+            if (line.ReturnCondition is not ("Good" or "Quarantine" or "Damaged"))
+                throw new InvalidOperationException($"Return line {line.LineNo} carries an unknown condition '{line.ReturnCondition}'.");
+        }
+    }
+
+    /// <summary>
+    /// W6: validation for a return sourced from a posted delivery note
+    /// that has NOT been invoiced yet. The delivery is the source of
+    /// truth for party / currency / lines; cumulative returned
+    /// quantity per delivery line is capped exactly like the invoice
+    /// path (SAL-7021). A delivery that has since been invoiced is
+    /// refused here — its returns belong to the invoice (returning
+    /// against the delivery as well would double-relieve 1215).
+    /// Delivery returns carry no tax (nothing was billed) and no
+    /// header discount/extra allocation.
+    /// </summary>
+    private static void ValidateDeliverySalesReturn(
+        DbConnection connection,
+        DbTransaction transaction,
+        string guidKey,
+        InvDoc returnDoc)
+    {
+        if (returnDoc.OriginalDocId is not long deliveryId || deliveryId <= 0)
+            throw new InvalidOperationException("A delivery-sourced return must reference its source delivery.");
+        var notDeleted = DatabaseRuntime.IsPostgreSql() ? "is_deleted = FALSE" : "is_deleted = 0";
+
+        string deliveryDocNo;
+        long? deliveryPartyId;
+        string deliveryCurrency;
+        decimal deliveryExchangeRate;
+        using (var delivery = connection.CreateCommand())
+        {
+            delivery.Transaction = transaction;
+            delivery.CommandText = $"""
+                SELECT doc_no, status, party_id, currency_code, exchange_rate
+                FROM sales_documents
+                WHERE doc_id = $deliveryId AND doc_kind = 'DLV'
+                  AND (company_id = $company OR company_id = $guid)
+                  AND {notDeleted}
+                {(DatabaseRuntime.IsPostgreSql() ? "FOR UPDATE" : string.Empty)}
+                """;
+            Add(delivery, "$deliveryId", deliveryId);
+            Add(delivery, "$company", Company);
+            Add(delivery, "$guid", guidKey);
+            using var reader = delivery.ExecuteReader();
+            if (!reader.Read())
+                throw new InvalidOperationException("The source delivery was not found in the current company.");
+            deliveryDocNo = reader.GetString(0);
+            if (!string.Equals(reader.GetString(1), "Posted", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Only a posted delivery can be returned.");
+            deliveryPartyId = reader.IsDBNull(2) ? null : Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture);
+            deliveryCurrency = reader.IsDBNull(3) ? "SAR" : Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture) ?? "SAR";
+            deliveryExchangeRate = reader.IsDBNull(4) ? 1m : Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture);
+        }
+
+        // Invoiced since delivery? A posted SAL whose document_links
+        // name this delivery as source means the goods are billed —
+        // returns must go against that invoice instead.
+        using (var billed = connection.CreateCommand())
+        {
+            billed.Transaction = transaction;
+            billed.CommandText = """
+                SELECT COUNT(*)
+                FROM document_links link
+                INNER JOIN sales_documents invoice
+                    ON invoice.doc_id = link.target_doc_id AND invoice.doc_kind = 'SAL'
+                WHERE link.source_doc_id = $deliveryId AND link.source_doc_kind = 'DLV'
+                  AND link.target_doc_kind = 'SAL' AND invoice.status = 'Posted'
+                """;
+            Add(billed, "$deliveryId", deliveryId);
+            if (Convert.ToInt64(billed.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture) > 0)
+                throw new InvalidOperationException(
+                    $"Delivery '{deliveryDocNo}' has already been invoiced; return the goods against the invoice instead.");
+        }
+
+        if (returnDoc.PartyId != deliveryPartyId ||
+            !string.Equals(returnDoc.CurrencyCode, deliveryCurrency, StringComparison.OrdinalIgnoreCase) ||
+            returnDoc.ExchangeRate != deliveryExchangeRate)
+            throw new InvalidOperationException("The delivery return must use the delivery's customer and currency.");
+        if (returnDoc.PaidAmount != 0m)
+            throw new InvalidOperationException("A delivery return cannot carry a cash refund; nothing was collected against the delivery.");
+        if (returnDoc.PostingTaxAmount != 0m || returnDoc.Lines.Any(line => line.TaxRate != 0m || line.LineTax != 0m))
+            throw new InvalidOperationException("A delivery return carries no tax; the delivery was never billed.");
+        if (returnDoc.LinesDiscountAmount != 0m || returnDoc.LinesExtraAmount != 0m)
+            throw new InvalidOperationException("A delivery return cannot carry header discount or extra charges.");
+
+        var sourceLines = new Dictionary<int, (long? MaterialId, string Unit, decimal Qty, int? WarehouseId)>();
+        using (var lines = connection.CreateCommand())
+        {
+            lines.Transaction = transaction;
+            lines.CommandText = """
+                SELECT line_no, material_id, unit, qty, warehouse_id
+                FROM sales_document_lines
+                WHERE doc_id = $deliveryId
+                ORDER BY line_no
+                """;
+            Add(lines, "$deliveryId", deliveryId);
+            using var reader = lines.ExecuteReader();
+            while (reader.Read())
+            {
+                sourceLines[Convert.ToInt32(reader.GetValue(0), CultureInfo.InvariantCulture)] = (
+                    reader.IsDBNull(1) ? null : Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture),
+                    reader.IsDBNull(2) ? string.Empty : Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture) ?? string.Empty,
+                    Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture),
+                    reader.IsDBNull(4) ? null : Convert.ToInt32(reader.GetValue(4), CultureInfo.InvariantCulture));
+            }
+        }
+        if (sourceLines.Count == 0)
+            throw new InvalidOperationException("The source delivery has no returnable lines.");
+
+        var previouslyReturned = new Dictionary<int, decimal>();
+        using (var returned = connection.CreateCommand())
+        {
+            returned.Transaction = transaction;
+            returned.CommandText = $"""
+                SELECT line.line_no, COALESCE(SUM(line.qty), 0)
+                FROM sales_documents header
+                INNER JOIN sales_document_lines line ON line.doc_id = header.doc_id
+                WHERE (header.company_id = $company OR header.company_id = $guid)
+                  AND header.doc_kind = 'SRT'
+                  AND header.return_source_kind = 'DLV'
+                  AND header.original_doc_id = $deliveryId
+                  AND header.status = 'Posted'
+                  AND {notDeleted.Replace("is_deleted", "header.is_deleted", StringComparison.Ordinal)}
+                  AND header.doc_id <> $returnId
+                GROUP BY line.line_no
+                """;
+            Add(returned, "$company", Company);
+            Add(returned, "$guid", guidKey);
+            Add(returned, "$deliveryId", deliveryId);
+            Add(returned, "$returnId", returnDoc.DocId);
+            using var reader = returned.ExecuteReader();
+            while (reader.Read())
+                previouslyReturned[Convert.ToInt32(reader.GetValue(0), CultureInfo.InvariantCulture)] =
+                    Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
+        }
+
+        if (returnDoc.Lines.Count == 0)
+            throw new InvalidOperationException("A delivery return requires at least one delivery line.");
+        if (returnDoc.Lines.GroupBy(line => line.LineNo).Any(group => group.Count() > 1))
+            throw new InvalidOperationException("A delivery return can contain each delivery line only once.");
+        foreach (var line in returnDoc.Lines)
+        {
+            if (!sourceLines.TryGetValue(line.LineNo, out var source))
+                throw new InvalidOperationException($"Return line {line.LineNo} does not exist on delivery '{deliveryDocNo}'.");
+            if (line.MaterialId != source.MaterialId ||
+                !string.Equals(line.Unit ?? string.Empty, source.Unit, StringComparison.OrdinalIgnoreCase) ||
+                line.WarehouseId != source.WarehouseId)
+                throw new InvalidOperationException($"Return line {line.LineNo} must retain the original material, unit and warehouse of delivery '{deliveryDocNo}'.");
+            if (line.Qty <= 0m)
+                throw new InvalidOperationException($"Return quantity for delivery line {line.LineNo} must be positive.");
+            if (line.ReturnCondition is not ("Good" or "Quarantine" or "Damaged"))
+                throw new InvalidOperationException($"Return line {line.LineNo} carries an unknown condition '{line.ReturnCondition}'.");
+            if (previouslyReturned.GetValueOrDefault(line.LineNo) + line.Qty > source.Qty)
+                throw new AppError(
+                    ErrorCodes.ReturnQuantityExceeded,
+                    "The returned quantity exceeds the remaining returnable quantity on the source document line.",
+                    line.LineNo.ToString(CultureInfo.InvariantCulture), deliveryDocNo);
+        }
+    }
+
+    /// <summary>
+    /// W6 posting gates for a sales return (skipped for POS-context
+    /// returns and generated full reversals by the caller):
+    /// inspection — a return with any Quarantine / Damaged line, or at
+    /// / over the company amount threshold, must carry a recorded
+    /// inspection decision (SAL-7022); approval — when the company
+    /// flag (srt_return_settings.approval_required, shared-flag note:
+    /// W23's parallel settings work must reuse this same flag rather
+    /// than seed a second one) is ON, the return must be Approved by
+    /// a SALES.RETURN.APPROVE holder before posting.
+    /// </summary>
+    private static void EnforceSalesReturnGates(DbConnection connection, DbTransaction tx, InvDoc doc)
+    {
+        var settings = SrtRepo.ReadSettings(connection, tx);
+        var needsInspection = doc.Lines.Any(line => line.ReturnCondition is "Quarantine" or "Damaged")
+            || (settings.InspectionAmountThreshold is decimal threshold && doc.PostingTotal >= threshold);
+        if (needsInspection && !string.Equals(doc.InspectionStatus, "Inspected", StringComparison.OrdinalIgnoreCase))
+            throw new AppError(
+                ErrorCodes.ReturnInspectionRequired,
+                "This return requires an inspection decision before it can be posted.",
+                doc.DocNo);
+        if (settings.ApprovalRequired && !string.Equals(doc.ApprovalStatus, "Approved", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                $"Sales return '{doc.DocNo}' must be approved by a holder of {PermCat.Sales.ReturnApprove} before posting (current approval state: '{doc.ApprovalStatus}').");
     }
 
     private static decimal CalculateSalesReturnLineSubtotal(

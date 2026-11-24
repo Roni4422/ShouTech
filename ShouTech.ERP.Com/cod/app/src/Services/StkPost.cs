@@ -204,6 +204,15 @@ public static class StkPost
             IReadOnlyList<SerialSelection>? serials =
                 line.Serials.Count > 0 ? line.Serials : null;
 
+            // W6 condition routing (migration 100) for sales returns:
+            // a DAMAGED line never re-enters stock — no movement is
+            // written, so valuation and the Inventory GL both stay
+            // put and the original sale's COGS stands as the loss.
+            // (Service / non-stock materials already returned above
+            // via TryGetStockableMaterial: they never move either.)
+            if (qtyIn > 0 && doc.Kind == InvDocKind.SalesReturn && line.ReturnCondition == "Damaged")
+                continue;
+
             // Incoming diversion (Phase B 056, decision Q2): a receipt
             // of a QC-required material lands in the QUARANTINE
             // warehouse — not in sellable stock — and a Draft
@@ -219,6 +228,19 @@ public static class StkPost
                     effectiveWarehouseId = quarantineId;
                     diverted = true;
                 }
+            }
+            else if (qtyIn > 0 && doc.Kind == InvDocKind.SalesReturn && line.ReturnCondition == "Quarantine")
+            {
+                // W6: a return line inspected/routed as Quarantine
+                // lands in the same quarantine warehouse. The return's
+                // OWN inspection decision (migration 100) governs it,
+                // so no QC inspection row is created here (diverted
+                // stays false); the linked original rate above was
+                // resolved against the document warehouse, as with the
+                // QC diversion.
+                var quarantineId = QualityGate.EnsureQuarantineWarehouse(connection, tx, ProviderName, company);
+                if (quarantineId > 0)
+                    effectiveWarehouseId = quarantineId;
             }
 
             if (quarantineDraw > 0)

@@ -142,6 +142,10 @@ public static class PosPosting
             OriginalDocId = original.DocId,
             OriginalDocKind = InvDocKind.PosSale,
             OriginalDocNo = original.DocNo,
+            // W6: the till collects its reason as free text (Notes);
+            // the master reason code is stamped OTHER.
+            ReturnReasonCode = "OTHER",
+            ReturnSourceKind = "INV",
             Notes = $"POS return of {original.DocNo}. Reason: {reason}".Trim(),
             Lines = lines
         };

@@ -412,6 +412,9 @@ namespace ShouTech.App.Services
             public const string ReturnView = "SALES.RETURN.VIEW";
             public const string ReturnCreate = "SALES.RETURN.CREATE";
             public const string ReturnPost = "SALES.RETURN.POST";
+            /// <summary>W6 (migration 100): approves/rejects a sales
+            /// return before posting and authorizes no-invoice returns.</summary>
+            public const string ReturnApprove = "SALES.RETURN.APPROVE";
 
             public const string QuotationView = "SALES.QUOTATION.VIEW";
             public const string QuotationCreate = "SALES.QUOTATION.CREATE";

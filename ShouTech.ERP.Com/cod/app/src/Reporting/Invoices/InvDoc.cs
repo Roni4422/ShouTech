@@ -63,6 +63,18 @@ public sealed class InvLine
     public int? WarehouseId { get; set; }
     public string WarehouseName { get; set; } = string.Empty;
 
+    // ---- Sales-return routing (W6, migration 100) ----------------------
+    /// <summary>Condition the returned goods are in: Good (back to
+    /// available stock), Quarantine (into the quarantine warehouse) or
+    /// Damaged (never returns to stock; no cost reversal posts).
+    /// Meaningful on SalesReturn lines only; persisted in
+    /// sales_document_lines.return_condition.</summary>
+    public string ReturnCondition { get; set; } = "Good";
+    /// <summary>Optional per-line return-reason override (a code from
+    /// srt_return_reasons); null/empty = the header reason applies.
+    /// Persisted in sales_document_lines.return_reason_code.</summary>
+    public string? ReturnReasonCode { get; set; }
+
     // ---- Batch/serial capture (Phase B 054) ---------------------------
     // Captured at posting time by the batch/serial picker (quantities in
     // the line's chosen unit for batches — StkPost restates them per
@@ -176,6 +188,31 @@ public sealed class InvDoc
     public long? OriginalDocId { get; set; }
     public InvDocKind? OriginalDocKind { get; set; }
     public string OriginalDocNo { get; set; } = string.Empty;
+
+    // ---- Sales-return completion (W6, migration 100) -------------------
+    /// <summary>Header return-reason code (srt_return_reasons.code).
+    /// Required on every sales return created through the supported
+    /// paths (SalesReturnWin picker, SrtRepo, POS returns and generated
+    /// reversals stamp OTHER). Persisted in
+    /// sales_documents.return_reason_code.</summary>
+    public string ReturnReasonCode { get; set; } = string.Empty;
+    /// <summary>Source shape of a sales return: "INV" (invoice / POS
+    /// sale), "DLV" (posted delivery with no invoice yet — OriginalDocId
+    /// then points at the delivery, whose doc_kind is 'DLV' and which
+    /// has no InvDocKind), or "NONE" (no-invoice walk-in return).
+    /// Empty on legacy / non-return documents; persisted in
+    /// sales_documents.return_source_kind.</summary>
+    public string ReturnSourceKind { get; set; } = string.Empty;
+    /// <summary>True for an authorized no-invoice (walk-in) return:
+    /// no source document, credit goes to the party ledger only.
+    /// Persisted in sales_documents.no_invoice.</summary>
+    public bool NoInvoice { get; set; }
+    /// <summary>Inspection workflow state (migration 100):
+    /// NotRequired / PendingInspection / Inspected.</summary>
+    public string InspectionStatus { get; set; } = "NotRequired";
+    /// <summary>Approval workflow state (migration 100):
+    /// NotRequired / PendingApproval / Approved / Rejected.</summary>
+    public string ApprovalStatus { get; set; } = "NotRequired";
 
     /// <summary>
     /// Journal voucher number created when the invoice is posted.
