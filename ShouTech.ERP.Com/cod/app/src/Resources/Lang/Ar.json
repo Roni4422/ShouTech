@@ -614,7 +614,21 @@
    
       "AgeBand": "شريحة التقادم",
       "GrniGlBalanceCompany": "رصيد حساب المستلم غير المفوتر (إجمالي الشركة، بالعملة الأساسية)",
-      "GrniDifferenceCompany": "فرق تسوية المستلم غير المفوتر (إجمالي الشركة، بالعملة الأساسية)"
+      "GrniDifferenceCompany": "فرق تسوية المستلم غير المفوتر (إجمالي الشركة، بالعملة الأساسية)",
+      "Name": "الاسم",
+      "WeightedAmount": "المبلغ المرجح",
+      "WinRate": "معدل الفوز",
+      "Won": "فائز",
+      "Lost": "خاسر",
+      "DaysIdle": "أيام الخمول",
+      "LastActivity": "آخر نشاط",
+      "ValidTill": "صالح حتى",
+      "OrderedQty": "الكمية المطلوبة",
+      "DeliveredQty": "الكمية المسلّمة",
+      "UninvoicedValue": "قيمة غير مفوترة",
+      "DeliveryDate": "تاريخ التسليم",
+      "Overdue": "متأخر",
+      "ExpectedClose": "الإغلاق المتوقع"
      },
     "Filter": {
       "All": "الكل",
@@ -624,6 +638,8 @@
       "Warehouse": "المستودع",
       "MaterialCode": "رمز المادة",
       "AsOf": "حتى تاريخ",
+      "Section": "القسم",
+      "StaleDays": "أيام الركود",
       "Year": "السنة",
       "Days": "الأيام",
       "Limit": "الحد",
@@ -693,7 +709,17 @@
     "BudgetVariance": "انحراف الموازنة",
     "QualitySummary": "ملخص فحوصات الجودة",
     "GoodsReceivedNotInvoiced": "البضائع المستلمة غير المفوترة (GRNI)",
-    "SupplierStatement": "كشف حساب المورد"
+    "SupplierStatement": "كشف حساب المورد",
+    "CrmFunnel": "قمع إدارة علاقات العملاء",
+    "SalesChainExceptions": "استثناءات سلسلة المبيعات",
+    "SectionPipeline": "خط الفرص حسب المرحلة",
+    "SectionWinRate": "معدل الفوز حسب مندوب المبيعات",
+    "SectionStale": "الفرص الراكدة",
+    "SectionLostQuotes": "عروض الأسعار المفقودة والمنتهية",
+    "SectionOrderedNotDelivered": "مطلوب ولم يُسلَّم",
+    "SectionDeliveredNotInvoiced": "سُلِّم ولم يُفوتر",
+    "StatusLost": "مفقود",
+    "StatusExpired": "منتهي"
   },
   "Tools": {
     "Title": "أدوات",

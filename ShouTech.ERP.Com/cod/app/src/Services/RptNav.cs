@@ -65,6 +65,11 @@ public static class RptNav
             case "Customers.CustomerAging":
             case "Reports.CustomerAging":
                 OpenCustomerAging(owner); return true;
+            case "CRM.FunnelReport":
+            case "Reports.CrmFunnel":
+                OpenCrmFunnel(owner); return true;
+            case "Reports.SalesChainExceptions":
+                OpenSalesChainExceptions(owner); return true;
             case "Suppliers.SupplierBalance":
             case "Reports.SupplierBalances":
                 OpenSupplierBalances(owner); return true;
@@ -271,6 +276,36 @@ public static class RptNav
     public static void OpenPriceList(Window? owner = null) => Show(new PriceListWin(), owner);
     public static void OpenShortageList(Window? owner = null) => Show(new ShortListWin(), owner);
     public static void OpenCustomerAging(Window? owner = null) => Show(new CustAgingWin(), owner);
+
+    // Sales cycle B5 (G22): the two new reports gate on the same view
+    // permissions as their neighbouring windows — CRM.OPP.VIEW (the
+    // CrmPipelineWin/CrmOppWin check) for the funnel and
+    // SALES.ORDER.VIEW (the sales order windows) for chain exceptions.
+    // The check lives here so a denied user never sees the window flash
+    // open before RptBase starts loading.
+    public static void OpenCrmFunnel(Window? owner = null)
+    {
+        if (!AppHost.Permissions.Has(PermCat.Crm.OppView))
+        {
+            MessageBox.Show(owner,
+                AppServiceHost.Localization.GetString("Crm.PermissionDenied") ?? "Crm.PermissionDenied",
+                "ShouTech ERP", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        Show(new CrmFunnelWin(), owner);
+    }
+
+    public static void OpenSalesChainExceptions(Window? owner = null)
+    {
+        if (!AppHost.Permissions.Has(PermCat.Sales.OrderView))
+        {
+            MessageBox.Show(owner,
+                AppServiceHost.Localization.GetString("OrderDoc.PermissionDenied") ?? "OrderDoc.PermissionDenied",
+                "ShouTech ERP", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        Show(new SalExceptWin(), owner);
+    }
     public static void OpenSupplierAging(Window? owner = null) => Show(new SupAgingWin(), owner);
     public static void OpenItemProfitability(Window? owner = null) => Show(new ItemProfitWin(), owner);
     public static void OpenStockAdjustment(Window? owner = null) => Show(new StkAdjRptWin(), owner);

@@ -2192,6 +2192,237 @@ public static class RptQuery
     }
 
 
+    // ==================================================================
+    // Sales cycle upgrade B5 (G22): CRM funnel + sales-chain exception
+    // reports. All read-only, company-scoped and parameterized.
+    // CRM tables key company_id by company CODE (migration 057 note);
+    // sales_documents rows may carry EITHER the code or the company Guid
+    // (the chain repositories require the Guid key — Fix Phase Step 9),
+    // so document queries resolve the company through the companies
+    // registry accepting both keys, exactly like PurchaseInvoiceList.
+    // ==================================================================
+
+    /// <summary>Open pipeline per stage: opportunity count, raw expected
+    /// total and probability-weighted total (expected_amount x the
+    /// opportunity's own probability %, the CrmOpportunity.WeightedValue
+    /// rule). Only Open stages: Won/Lost stages are outcomes, not
+    /// pipeline. Stages with no opportunities still appear (LEFT JOIN).</summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> CrmPipelineByStageAsync(
+        CancellationToken ct)
+    {
+        DocSchema.Ensure();
+        var sql = PgBoolFix("""
+            SELECT COALESCE(NULLIF(s.name_en, ''), s.name_ar, '') AS Stage,
+                   COALESCE(s.name_ar, '') AS StageAr,
+                   COUNT(o.opp_id) AS OppCount,
+                   COALESCE(SUM(COALESCE(o.expected_amount, 0)), 0) AS RawTotal,
+                   COALESCE(SUM(COALESCE(o.expected_amount, 0) * COALESCE(o.probability, 0) / 100.0), 0) AS WeightedTotal
+            FROM crm_stages s
+            LEFT JOIN crm_opportunities o
+              ON o.company_id = s.company_id AND o.stage_id = s.stage_id AND o.is_deleted = 0
+            WHERE s.company_id = $company AND s.is_deleted = 0 AND s.is_active = 1 AND s.stage_type = 'Open'
+            GROUP BY s.stage_id, s.name_en, s.name_ar, s.sequence
+            ORDER BY s.sequence;
+            """);
+        return await QueryAsync(sql, ct, ("$company", Company));
+    }
+
+    /// <summary>Closed outcomes per sales rep over [from, to]: opportunities
+    /// whose CURRENT stage is Won/Lost and whose last update (stage moves
+    /// stamp updated_at in CrmRepository.MoveStageAsync) falls in the
+    /// period. The window derives the win rate won / (won + lost).</summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> CrmWinRateByRepAsync(
+        DateTime from, DateTime to, CancellationToken ct)
+    {
+        DocSchema.Ensure();
+        var sql = PgBoolFix("""
+            SELECT COALESCE(NULLIF(o.assigned_rep_code, ''), '') AS Rep,
+                   SUM(CASE WHEN s.stage_type = 'Won' THEN 1 ELSE 0 END) AS Won,
+                   SUM(CASE WHEN s.stage_type = 'Lost' THEN 1 ELSE 0 END) AS Lost,
+                   COALESCE(SUM(COALESCE(o.expected_amount, 0)), 0) AS ClosedAmount
+            FROM crm_opportunities o
+            INNER JOIN crm_stages s
+              ON s.company_id = o.company_id AND s.stage_id = o.stage_id AND s.is_deleted = 0
+            WHERE o.company_id = $company AND o.is_deleted = 0
+              AND s.stage_type IN ('Won', 'Lost')
+              AND COALESCE(o.updated_at, o.created_at) >= $from
+              AND COALESCE(o.updated_at, o.created_at) < $toEx
+            GROUP BY o.assigned_rep_code
+            ORDER BY Rep;
+            """);
+        return await QueryAsync(sql, ct,
+            ("$company", Company),
+            ("$from", DateStart(from)),
+            ("$toEx", DateEndExclusive(to)));
+    }
+
+    /// <summary>Every OPEN opportunity with its last touch: the latest
+    /// activity timestamp recorded against it (crm_activities, any
+    /// status — a scheduled or completed follow-up both count as
+    /// activity), falling back to the opportunity's own updated_at /
+    /// created_at when it has no activities. The window applies the
+    /// stale-days threshold so the day math stays provider-neutral.</summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> CrmOpenOpportunitiesAsync(
+        CancellationToken ct)
+    {
+        DocSchema.Ensure();
+        var sql = PgBoolFix("""
+            SELECT o.title AS Title,
+                   COALESCE(NULLIF(p.name_en, ''), p.name_ar, '') AS PartyName,
+                   COALESCE(p.name_ar, '') AS PartyNameAr,
+                   COALESCE(o.expected_amount, 0) AS Amount,
+                   o.expected_close_date AS ExpectedClose,
+                   act.LastActivity AS LastActivity,
+                   COALESCE(o.updated_at, o.created_at) AS UpdatedAt
+            FROM crm_opportunities o
+            INNER JOIN crm_stages s
+              ON s.company_id = o.company_id AND s.stage_id = o.stage_id AND s.stage_type = 'Open'
+            LEFT JOIN parties p
+              ON p.id = o.party_id AND p.company_id = o.company_id AND p.is_deleted = 0
+            LEFT JOIN (
+                SELECT opp_id, MAX(COALESCE(completed_at, created_at)) AS LastActivity
+                FROM crm_activities
+                WHERE company_id = $company AND is_deleted = 0 AND opp_id IS NOT NULL
+                GROUP BY opp_id
+            ) act ON act.opp_id = o.opp_id
+            WHERE o.company_id = $company AND o.is_deleted = 0
+            ORDER BY o.expected_close_date, o.title;
+            """);
+        return await QueryAsync(sql, ct, ("$company", Company));
+    }
+
+    /// <summary>Lost and expired quotations in [from, to]: QUO documents
+    /// marked Lost (DocSearchWin SetLost) or Expired, plus Posted
+    /// quotations whose valid_till is already past (they read as expired
+    /// even before any status sweep flips them).</summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> CrmLostExpiredQuotationsAsync(
+        DateTime from, DateTime to, DateTime today, CancellationToken ct)
+    {
+        DocSchema.Ensure();
+        const string sql = """
+            SELECT d.doc_no AS DocNo,
+                   d.doc_date AS DocDate,
+                   COALESCE(NULLIF(d.party_name, ''), '') AS PartyName,
+                   COALESCE(d.grand_total, 0) AS Total,
+                   COALESCE(d.status, '') AS Status,
+                   d.valid_till AS ValidTill
+            FROM sales_documents d
+            INNER JOIN companies co
+              ON co.company_code = $company
+             AND (CAST(co.company_id AS TEXT) = CAST(d.company_id AS TEXT)
+                  OR d.company_id = co.company_code)
+            WHERE d.doc_kind = 'QUO'
+              AND CAST(d.is_deleted AS TEXT) IN ('0', 'false')
+              AND d.doc_date >= $from AND d.doc_date <= $to
+              AND (d.status IN ('Lost', 'Expired')
+                   OR (d.status = 'Posted'
+                       AND COALESCE(d.valid_till, '') <> ''
+                       AND d.valid_till < $today))
+            ORDER BY d.doc_date DESC, d.doc_no DESC;
+            """;
+        return await QueryAsync(sql, ct,
+            ("$company", Company),
+            ("$from", FmtDate(from)),
+            ("$to", FmtDate(to)),
+            ("$today", FmtDate(today)));
+    }
+
+    /// <summary>Lines of every Posted sales order of the current company.
+    /// The exceptions window allocates the linked delivered quantities
+    /// against these lines with the same material-key, line-order
+    /// consumption OrderDocumentRepository.GetProgressAsync uses.</summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> SalesOrderLinesAsync(
+        CancellationToken ct)
+    {
+        DocSchema.Ensure();
+        const string sql = """
+            SELECT d.doc_id AS DocId,
+                   d.doc_no AS DocNo,
+                   d.doc_date AS DocDate,
+                   COALESCE(NULLIF(d.party_name, ''), '') AS PartyName,
+                   d.delivery_date AS DeliveryDate,
+                   l.line_no AS LineNo,
+                   l.material_id AS MaterialId,
+                   COALESCE(l.qty, 0) AS Qty
+            FROM sales_documents d
+            INNER JOIN companies co
+              ON co.company_code = $company
+             AND (CAST(co.company_id AS TEXT) = CAST(d.company_id AS TEXT)
+                  OR d.company_id = co.company_code)
+            INNER JOIN sales_document_lines l ON l.doc_id = d.doc_id
+            WHERE d.doc_kind = 'SO' AND d.status = 'Posted'
+              AND CAST(d.is_deleted AS TEXT) IN ('0', 'false')
+            ORDER BY d.doc_date, d.doc_no, l.line_no;
+            """;
+        return await QueryAsync(sql, ct, ("$company", Company));
+    }
+
+    /// <summary>Lines of every Posted delivery note of the current
+    /// company, with line totals so the window can value the uninvoiced
+    /// remainder at the delivery lines' own prices.</summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> SalesDeliveryLinesAsync(
+        CancellationToken ct)
+    {
+        DocSchema.Ensure();
+        const string sql = """
+            SELECT d.doc_id AS DocId,
+                   d.doc_no AS DocNo,
+                   d.doc_date AS DocDate,
+                   COALESCE(NULLIF(d.party_name, ''), '') AS PartyName,
+                   l.line_no AS LineNo,
+                   l.material_id AS MaterialId,
+                   COALESCE(l.qty, 0) AS Qty,
+                   COALESCE(l.line_total, 0) AS LineTotal
+            FROM sales_documents d
+            INNER JOIN companies co
+              ON co.company_code = $company
+             AND (CAST(co.company_id AS TEXT) = CAST(d.company_id AS TEXT)
+                  OR d.company_id = co.company_code)
+            INNER JOIN sales_document_lines l ON l.doc_id = d.doc_id
+            WHERE d.doc_kind = 'DLV' AND d.status = 'Posted'
+              AND CAST(d.is_deleted AS TEXT) IN ('0', 'false')
+            ORDER BY d.doc_date, d.doc_no, l.line_no;
+            """;
+        return await QueryAsync(sql, ct, ("$company", Company));
+    }
+
+    /// <summary>Quantities carried from Posted chain documents into a
+    /// target kind, aggregated per source document + target line
+    /// (material_id, line_no) — the raw shape of
+    /// OrderDocumentRepository.LinkedQuantitiesAsync, set-based over
+    /// the whole company instead of per document. Used with
+    /// (SO -&gt; DLV) for delivered quantities and (DLV -&gt; SAL) for
+    /// invoiced quantities.</summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> SalesLinkedQuantitiesAsync(
+        string sourceKind, string targetKind, CancellationToken ct)
+    {
+        DocSchema.Ensure();
+        const string sql = """
+            SELECT dl.source_doc_id AS SourceId,
+                   l.material_id AS MaterialId,
+                   l.line_no AS LineNo,
+                   COALESCE(SUM(l.qty), 0) AS Qty
+            FROM document_links dl
+            INNER JOIN companies co
+              ON co.company_code = $company
+             AND (CAST(co.company_id AS TEXT) = CAST(dl.company_id AS TEXT)
+                  OR dl.company_id = co.company_code)
+            INNER JOIN sales_documents td
+              ON td.company_id = dl.company_id
+             AND td.doc_id = dl.target_doc_id
+             AND td.doc_kind = dl.target_doc_kind
+             AND td.status = 'Posted'
+             AND CAST(td.is_deleted AS TEXT) IN ('0', 'false')
+            INNER JOIN sales_document_lines l ON l.doc_id = td.doc_id
+            WHERE dl.source_doc_kind = $sk AND dl.target_doc_kind = $tk
+            GROUP BY dl.source_doc_id, l.material_id, l.line_no;
+            """;
+        return await QueryAsync(sql, ct,
+            ("$company", Company),
+            ("$sk", sourceKind),
+            ("$tk", targetKind));
+    }
+
     private static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> QueryAsync(
         string sql, CancellationToken ct, params (string Name, object? Value)[] args)
     {
