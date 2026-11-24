@@ -207,6 +207,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
         _txtWarehouse.Text = _doc.WarehouseName;
         _txtGoodsAccount.Text = _doc.GoodsAccountName;
         _txtPartyAccount.Text = _doc.PartyAccountName;
+        ApplyAccountGate();
 
         _lines.Add(new LineVm
         {
@@ -426,6 +427,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
 
         // Always editable
         _txtPartyAccount.IsReadOnly = false;
+        ApplyAccountGate();
     }
 
     private void BuildUi()
@@ -1108,8 +1110,9 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
         {
             if (!optionals.TryGetValue(rec.Key, out var opt))
                 continue;
-            // The margin column only exists on sales/quotation docs.
-            if (opt.Key == "Margin" && !MarginApplies)
+            // The margin column only exists on sales/quotation docs
+            // for holders of the DOC.FIELDS right (PERM L5).
+            if (opt.Key == "Margin" && (!MarginApplies || !HasFieldsPermission()))
                 continue;
             opt.Column.Visibility = rec.Visible ? Visibility.Visible : Visibility.Collapsed;
             opt.Column.DisplayIndex = 6 + rec.Order;
@@ -1121,7 +1124,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
     private void OnColumnsClick(object sender, RoutedEventArgs e)
     {
         var optionals = OptionalColumns()
-            .Where(o => o.Key != "Margin" || MarginApplies)
+            .Where(o => o.Key != "Margin" || (MarginApplies && HasFieldsPermission()))
             .OrderBy(o => o.Column.DisplayIndex)
             .ToList();
         var items = optionals.Select(o => new ColChsWin.Item
@@ -1298,6 +1301,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
     private void RefreshMarginDisplay()
     {
         if (!MarginApplies) return;
+        if (!HasFieldsPermission()) { _txtTotalMargin.Text = "—"; return; }
         try
         {
             var anyCost = false;
@@ -1343,6 +1347,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
     /// the built-in layout inside DocDesignRepo (reported there).</summary>
     private async Task PrintWithDesignAsync(bool pdf)
     {
+        if (!EnsureDocPermission("print", "PrintWithDesignAsync")) return;
         try
         {
             var doc = CaptureDoc();
@@ -1532,6 +1537,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
         _txtCostCenter.Text = doc.CostCenter;
         _txtPartyAccount.Text = doc.PartyAccountName;
         _txtGoodsAccount.Text = _doc.GoodsAccountName;
+        ApplyAccountGate();
         _txtLinesDiscount.Text = FormatAmt(doc.LinesDiscountAmount);
         _txtLinesExtra.Text = FormatAmt(doc.LinesExtraAmount);
         _txtPaid.Text = FormatAmt(doc.PaidAmount);
@@ -1840,22 +1846,173 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
     /// update keys); other kinds keep their existing behaviour.
     /// Returns false when the action must not proceed.
     /// </summary>
-    private bool EnsureSalesPermission(string action, string operation)
+    /// <summary>The DOC kind code of this window's document type
+    /// (migration 125 family), or null for a kind outside the matrix.</summary>
+    private static string? DocKindCodeOf(InvDocKind kind) => kind switch
     {
-        if (!_doc.IsSalesSide) return true;
-        var permission = action switch
+        InvDocKind.SalesInvoice => "SAL",
+        InvDocKind.SalesReturn => "SRT",
+        InvDocKind.PosSale => "POS",
+        InvDocKind.PurchaseInvoice => "PUR",
+        InvDocKind.PurchaseReturn => "PRT",
+        InvDocKind.StockIn => "ENT",
+        InvDocKind.StockOut => "EXT",
+        InvDocKind.StockTransfer => "TRN",
+        InvDocKind.OpeningStock => "OPN",
+        InvDocKind.InventoryCount => "CNT",
+        InvDocKind.Quotation => "QUO",
+        _ => null
+    };
+
+    /// <summary>The pre-existing generic family key for an action on
+    /// this window's document kind — the DOC matrix's fallback. The
+    /// sales-side mappings are exactly the ones this window always
+    /// enforced; purchase and stock kinds (previously ungated here)
+    /// fall back to their family keys.</summary>
+    private string GenericPermissionFor(string action) => _doc.Kind switch
+    {
+        InvDocKind.SalesInvoice => action switch
         {
-            "create" => _doc.Kind == InvDocKind.Quotation ? PermCat.Sales.QuotationCreate : PermCat.Sales.InvoiceCreate,
-            "update" => _doc.Kind == InvDocKind.Quotation ? PermCat.Sales.QuotationUpdate : PermCat.Sales.InvoiceUpdate,
+            "create" => PermCat.Sales.InvoiceCreate,
+            "update" => PermCat.Sales.InvoiceUpdate,
             "post" => PermCat.Sales.InvoicePost,
+            "delete" => PermCat.Sales.InvoiceDelete,
             "reverse" => PermCat.Sales.InvoiceReverse,
-            _ => action
-        };
-        if (AppHost.Permissions.Has(permission)) return true;
-        var denied = new UnauthorizedAccessException($"Permission {permission} is required for {operation}.");
+            _ => PermCat.Sales.InvoiceView
+        },
+        InvDocKind.SalesReturn => action switch
+        {
+            "create" => PermCat.Sales.ReturnCreate,
+            "update" => PermCat.Sales.ReturnCreate,
+            "post" => PermCat.Sales.ReturnPost,
+            "delete" => PermCat.Sales.ReturnCreate,
+            "reverse" => PermCat.Sales.InvoiceReverse,
+            _ => PermCat.Sales.ReturnView
+        },
+        InvDocKind.PosSale => action switch
+        {
+            "create" => PermCat.Pos.InvoiceCreate,
+            "update" => PermCat.Pos.InvoiceCreate,
+            "post" => PermCat.Pos.InvoiceCreate,
+            "delete" => PermCat.Pos.InvoiceDelete,
+            _ => PermCat.Pos.ReportsView
+        },
+        InvDocKind.PurchaseInvoice => action switch
+        {
+            "create" => PermCat.Purchasing.InvoiceCreate,
+            "update" => PermCat.Purchasing.InvoiceUpdate,
+            "post" => PermCat.Purchasing.InvoicePost,
+            "delete" => PermCat.Purchasing.InvoiceDelete,
+            _ => PermCat.Purchasing.InvoiceView
+        },
+        InvDocKind.PurchaseReturn => action switch
+        {
+            "create" => PermCat.Purchasing.ReturnCreate,
+            "update" => PermCat.Purchasing.ReturnCreate,
+            "post" => PermCat.Purchasing.ReturnPost,
+            "delete" => PermCat.Purchasing.ReturnCreate,
+            _ => PermCat.Purchasing.ReturnView
+        },
+        InvDocKind.StockTransfer => action switch
+        {
+            "create" => PermCat.Inventory.StockTransfer,
+            "update" => PermCat.Inventory.StockTransfer,
+            "post" => PermCat.Inventory.StockTransfer,
+            "delete" => PermCat.Inventory.StockAdjust,
+            _ => PermCat.Inventory.StockView
+        },
+        InvDocKind.InventoryCount => action switch
+        {
+            "create" => PermCat.Inventory.StockCount,
+            "update" => PermCat.Inventory.StockCount,
+            "post" => PermCat.Inventory.StockAdjust,
+            "delete" => PermCat.Inventory.StockAdjust,
+            _ => PermCat.Inventory.StockView
+        },
+        InvDocKind.Quotation => action switch
+        {
+            "create" => PermCat.Sales.QuotationCreate,
+            "update" => PermCat.Sales.QuotationUpdate,
+            "post" => PermCat.Sales.InvoicePost,
+            "delete" => PermCat.Sales.QuotationDelete,
+            "reverse" => PermCat.Sales.InvoiceReverse,
+            _ => PermCat.Sales.QuotationView
+        },
+        _ => action switch
+        {
+            // Stock entry / exit / opening: the INV.STOCK family.
+            "create" => PermCat.Inventory.StockAdjust,
+            "update" => PermCat.Inventory.StockAdjust,
+            "post" => PermCat.Inventory.StockAdjust,
+            "delete" => PermCat.Inventory.StockAdjust,
+            _ => PermCat.Inventory.StockView
+        }
+    };
+
+    /// <summary>
+    /// Per-document-type action gate (PERM L5, study section 2.3):
+    /// allowed iff the DOC key for this window's kind is NOT
+    /// explicitly denied AND the user holds the DOC key OR the
+    /// generic family key. Denials are audited through RequireDoc's
+    /// AccessDenied event. "reverse" has no DOC operation — it keeps
+    /// the generic-only path (and, off the sales side, the historical
+    /// no-gate behavior).
+    /// </summary>
+    private bool EnsureDocPermission(string action, string operation)
+    {
+        var generic = GenericPermissionFor(action);
+        var docCode = DocKindCodeOf(_doc.Kind);
+        bool allowed;
+        if (action == "reverse")
+        {
+            allowed = !_doc.IsSalesSide || AppHost.Permissions.Has(generic);
+        }
+        else if (docCode is not null)
+        {
+            var docKey = PermCat.Documents.Key(docCode, action.ToUpperInvariant());
+            allowed = AppHost.Permissions.RequireDoc(docKey, generic,
+                _doc.IsSalesSide ? "SALES" : "PURCHASE", _doc.Kind.ToString(), _doc.DocId, _txtDocNo.Text);
+        }
+        else
+        {
+            allowed = AppHost.Permissions.Has(generic);
+        }
+        if (allowed) return true;
+        var denied = new UnauthorizedAccessException($"Permission {generic} is required for {operation}.");
         AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, denied, $"InvoiceWin.{operation}");
         MessageBox.Show(this, T("Invoice.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         return false;
+    }
+
+    /// <summary>DOC.FIELDS probe: margin figures (the sensitive
+    /// cost-derived fields) show only with the FIELDS right for this
+    /// document kind or its generic family view.</summary>
+    private bool HasFieldsPermission()
+    {
+        var docCode = DocKindCodeOf(_doc.Kind);
+        if (docCode is null) return true;
+        var generic = _doc.Kind == InvDocKind.Quotation ? PermCat.Sales.QuotationView : PermCat.Sales.InvoiceView;
+        return AppHost.Permissions.HasDoc(PermCat.Documents.Key(docCode, "FIELDS"), generic);
+    }
+
+    /// <summary>DOC.ACCOUNT gate: the party/goods account fields are
+    /// editable only with the ACCOUNT right for this document kind
+    /// (generic fallback: the family update key). Reapplied wherever
+    /// the fields are (re)initialized.</summary>
+    private void ApplyAccountGate()
+    {
+        var docCode = DocKindCodeOf(_doc.Kind);
+        if (docCode is null) return;
+        var generic = _doc.Kind switch
+        {
+            InvDocKind.PurchaseInvoice or InvDocKind.PurchaseReturn => PermCat.Purchasing.InvoiceUpdate,
+            InvDocKind.StockIn or InvDocKind.StockOut or InvDocKind.StockTransfer
+                or InvDocKind.OpeningStock or InvDocKind.InventoryCount => PermCat.Inventory.StockAdjust,
+            _ => PermCat.Sales.InvoiceUpdate
+        };
+        var allowed = AppHost.Permissions.HasDoc(PermCat.Documents.Key(docCode, "ACCOUNT"), generic);
+        _txtPartyAccount.IsEnabled = allowed;
+        _txtGoodsAccount.IsEnabled = allowed;
     }
 
     /// <summary>
@@ -1889,7 +2046,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
 
     private void SaveDraft()
     {
-        if (!EnsureSalesPermission(_doc.DocId > 0 ? "update" : "create", "SaveDraft")) return;
+        if (!EnsureDocPermission(_doc.DocId > 0 ? "update" : "create", "SaveDraft")) return;
         try
         {
             ResolveParty();
@@ -1947,10 +2104,10 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
 
     private void PostDoc()
     {
-        if (!EnsureSalesPermission("post", "PostDoc")) return;
+        if (!EnsureDocPermission("post", "PostDoc")) return;
         // Posting a never-saved document saves it first (below), so the
         // create right is required for that path as well.
-        if (_doc.DocId <= 0 && !EnsureSalesPermission("create", "PostDoc")) return;
+        if (_doc.DocId <= 0 && !EnsureDocPermission("create", "PostDoc")) return;
         if (!AskConfirm("Invoice.ConfirmPost")) return;
         TryPost(null);
     }
@@ -2038,7 +2195,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
     private void ReverseCurrentDocument()
     {
         if (_doc.DocId <= 0) return;
-        if (!EnsureSalesPermission("reverse", "ReverseCurrentDocument")) return;
+        if (!EnsureDocPermission("reverse", "ReverseCurrentDocument")) return;
         if (!AskConfirm("Invoice.ConfirmReverse")) return;
         try
         {
@@ -2065,6 +2222,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
     private void DeleteCurrentDocument()
     {
         if (_doc.DocId <= 0) return;
+        if (!EnsureDocPermission("delete", "DeleteCurrentDocument")) return;
         if (!AskConfirm("RecycleBin.ConfirmDeleteDocument")) return;
         try
         {

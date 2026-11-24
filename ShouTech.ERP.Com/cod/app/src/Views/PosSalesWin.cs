@@ -57,7 +57,22 @@ public sealed class PosSalesWin : BaseWin
         MinWidth = 660;
         MinHeight = 360;
         BuildUi();
-        Loaded += async (_, _) => await RefreshSessionsAsync();
+        Loaded += OnLoaded;
+    }
+
+    /// <summary>PERM L5: the session-sales list is the DOC.POS.VIEW
+    /// surface (generic fallback POS.REPORTS.VIEW); without it the
+    /// window denies and closes, like the other guarded windows.</summary>
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        if (!AppHost.Permissions.HasDoc(PermCat.Documents.PosView, PermCat.Pos.ReportsView))
+        {
+            AppHost.Errors.Report(ErrorCodes.PermissionDenied, null, "PosSalesWin.OnLoaded");
+            MessageBox.Show(this, T("Permissions.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            Close();
+            return;
+        }
+        await RefreshSessionsAsync();
     }
 
     private PosSession? SelectedSession

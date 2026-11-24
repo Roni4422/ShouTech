@@ -136,9 +136,33 @@ public sealed class OrdWin : BaseWin, IWindowMode
     private CommercialDocSide Side => _kind == OrdKind.Sales ? CommercialDocSide.Sales : CommercialDocSide.Purchase;
     private string ViewPermission => _kind == OrdKind.Sales ? PermCat.Sales.OrderView : PermCat.Purchasing.OrderView;
 
+    /// <summary>The DOC kind code for orders (migration 125):
+    /// sales orders are SO, purchase orders PO; an RFQ has no DOC
+    /// kind and keeps the generic-only gates.</summary>
+    private string? DocKind => _kind switch
+    {
+        OrdKind.Sales => "SO",
+        OrdKind.Purchase => "PO",
+        _ => null
+    };
+
+    /// <summary>UI probe for the DOC matrix (PERM L5): the DOC key
+    /// decides with the generic family key as fallback.</summary>
+    private bool HasDocPermission(string op, string generic)
+        => DocKind is { } k
+            ? AppHost.Permissions.HasDoc(PermCat.Documents.Key(k, op), generic)
+            : AppHost.Permissions.Has(generic);
+
+    /// <summary>Audited action gate for the DOC matrix (PERM L5).</summary>
+    private bool RequireDocPermission(string op, string generic)
+        => DocKind is { } k
+            ? AppHost.Permissions.RequireDoc(PermCat.Documents.Key(k, op), generic,
+                _kind == OrdKind.Sales ? "SALES" : "PURCHASE", DocKindCode, _docId ?? 0)
+            : AppHost.Permissions.Has(generic);
+
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
-        if (!AppHost.Permissions.Has(ViewPermission))
+        if (!HasDocPermission("VIEW", ViewPermission))
         {
             MessageBox.Show(this, T("OrderDoc.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             Close();
@@ -601,6 +625,11 @@ public sealed class OrdWin : BaseWin, IWindowMode
     private void DeleteOrder()
     {
         if (_docId is null) return;
+        if (!RequireDocPermission("DELETE", _kind == OrdKind.Sales ? PermCat.Sales.OrderUpdate : PermCat.Purchasing.OrderUpdate))
+        {
+            ShowWarningMessage(T("OrderDoc.PermissionDenied"));
+            return;
+        }
         var confirm = MessageBox.Show(this, T("RecycleBin.ConfirmDeleteDocument"), Title,
             MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
         if (confirm != MessageBoxResult.Yes) return;
@@ -635,7 +664,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
         var permission = _docId is null
             ? (_kind == OrdKind.Sales ? PermCat.Sales.OrderCreate : PermCat.Purchasing.OrderCreate)
             : (_kind == OrdKind.Sales ? PermCat.Sales.OrderUpdate : PermCat.Purchasing.OrderUpdate);
-        if (!AppHost.Permissions.Has(permission))
+        if (!RequireDocPermission(_docId is null ? "CREATE" : "UPDATE", permission))
         {
             ShowWarningMessage(T("OrderDoc.PermissionDenied"));
             return;
@@ -736,7 +765,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
     private async Task PostAsync()
     {
         var permission = _kind == OrdKind.Sales ? PermKey.SalesPost : PermKey.PurchPost;
-        if (!AppHost.Permissions.Has(permission))
+        if (!RequireDocPermission("POST", permission))
         {
             ShowWarningMessage(T("OrderDoc.PermissionDenied"));
             return;
@@ -1405,7 +1434,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
 
     private async Task SetStatusAsync(string newStatus, string permission)
     {
-        if (!AppHost.Permissions.Has(permission))
+        if (!RequireDocPermission("UPDATE", permission))
         {
             ShowWarningMessage(T("OrderDoc.PermissionDenied"));
             return;
@@ -1634,7 +1663,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
         _txtNotes.IsEnabled = editable;
         _btnSave.IsEnabled = editable;
         var postPermission = _kind == OrdKind.Sales ? PermKey.SalesPost : PermKey.PurchPost;
-        _btnPost.IsEnabled = editable && _docId is not null && AppHost.Permissions.Has(postPermission);
+        _btnPost.IsEnabled = editable && _docId is not null && HasDocPermission("POST", postPermission);
         _btnConvert.IsEnabled = !IsRfq && !_isConverting && !_isReceiving && _status == CommercialDocumentStatus.Posted;
         _btnReceipt.IsEnabled = !_isReceiving && !_isConverting && _kind == OrdKind.Purchase && _status == CommercialDocumentStatus.Posted && _docId is not null;
         _btnClose.IsEnabled = _status == CommercialDocumentStatus.Posted;

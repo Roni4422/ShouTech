@@ -1187,6 +1187,11 @@ public sealed class PosWin : BaseWin, IInfoContextProvider
 
     private async void Checkout()
     {
+        // PERM L5: completing a sale is the DOC.POS.POST action
+        // (generic fallback POS.INVOICE.CREATE); the denial is
+        // audited through RequireDoc's AccessDenied event.
+        if (!AppHost.Permissions.RequireDoc(PermCat.Documents.PosPost, PermCat.Pos.InvoiceCreate, "SALES", "POS"))
+        { SetStatus(Local("StatusPostDenied", "Completing a sale needs the POS post permission."), true); return; }
         _grid.CommitEdit(DataGridEditingUnit.Cell, true);
         _grid.CommitEdit(DataGridEditingUnit.Row, true);
         if (_cart.Count == 0) { SetStatus("Add at least one item before continuing.", true); _scan.Focus(); return; }
