@@ -404,7 +404,8 @@
     "Title": "Help",
     "UpdateFromFile": "Update from File",
     "PermissionDenied": "You do not have permission to view help.",
-    "ManualNotFound": "The shipped manual (docs/SHOUTECH_ERP_EN.md) was not found in this installation."
+    "ManualNotFound": "The shipped manual (docs/SHOUTECH_ERP_EN.md) was not found in this installation.",
+    "TopicPending": "The help topic for {0} is being prepared — the full manual is shown meanwhile."
   },
   "Inventory": {
     "Barcode": "Barcode",

@@ -878,7 +878,8 @@
     "RenewLicense": "تجديد الترخيص",
     "About": "حول البرنامج",
     "PermissionDenied": "ليس لديك صلاحية لعرض المساعدة.",
-    "ManualNotFound": "لم يتم العثور على الدليل المرفق (docs/SHOUTECH_ERP_EN.md) في هذا التثبيت."
+    "ManualNotFound": "لم يتم العثور على الدليل المرفق (docs/SHOUTECH_ERP_EN.md) في هذا التثبيت.",
+    "TopicPending": "موضوع المساعدة الخاص بـ {0} قيد الإعداد — يُعرض الدليل الكامل في هذه الأثناء."
   },
   "Messages": {
     "ConfirmExit": "هل أنت متأكد من الخروج؟",

@@ -877,7 +877,8 @@
     "RenewLicense": "Lisansı Yenile",
     "About": "Program Hakkında",
     "PermissionDenied": "Yardımı görüntüleme yetkiniz yok.",
-    "ManualNotFound": "Birlikte gelen kılavuz (docs/SHOUTECH_ERP_EN.md) bu kurulumda bulunamadı."
+    "ManualNotFound": "Birlikte gelen kılavuz (docs/SHOUTECH_ERP_EN.md) bu kurulumda bulunamadı.",
+    "TopicPending": "{0} için yardım konusu hazırlanıyor — bu arada tam kılavuz gösteriliyor."
   },
   "Messages": {
     "ConfirmExit": "Çıkmak istediğinize emin misiniz?",

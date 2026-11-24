@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -14,6 +15,15 @@ namespace ShouTech.App.Views;
 /// as a readable FlowDocument. The section list navigates to headings.
 /// If neither manual is present in the deployment, the window reports that
 /// accurately instead of showing placeholder content.
+///
+/// Owner help decision (2026-11-24): this markdown viewer is the
+/// INTERIM surface. F1 already arrives here carrying the calling
+/// window's topic key (BaseWin.HelpTopicKey / the App class
+/// handler): when the manual has no section for the topic yet,
+/// the status bar shows the graceful topic-pending note over the
+/// full manual — never an error, never a dead key. The commercial
+/// phase replaces the markdown source with the encrypted .sthx
+/// package + Contents/Index/Search viewer (docs/REDUCE_PLAN.md).
 /// </summary>
 public sealed class HelpWin : BaseWin
 {
@@ -22,9 +32,16 @@ public sealed class HelpWin : BaseWin
     private readonly Dictionary<string, Paragraph> _headingParagraphs = new(StringComparer.Ordinal);
     private readonly TextBlock _statusBar = new();
     private readonly Button _closeButton = new();
+    private readonly string? _topicKey;
 
     public HelpWin()
+        : this(null)
     {
+    }
+
+    public HelpWin(string? topicKey)
+    {
+        _topicKey = topicKey;
         Width = 1080;
         Height = 680;
         MinWidth = 660;
@@ -137,6 +154,24 @@ public sealed class HelpWin : BaseWin
         _reader.Document = document;
         _sections.ItemsSource = sections;
         _statusBar.Text = path;
+
+        // Context-sensitive landing (interim): if a section title
+        // names the F1 topic, select it (the list scrolls the
+        // reader to the heading); otherwise show the graceful
+        // topic-pending note over the full manual.
+        if (!string.IsNullOrWhiteSpace(_topicKey))
+        {
+            var section = sections.FirstOrDefault(s =>
+                s.Contains(_topicKey, StringComparison.OrdinalIgnoreCase));
+            if (section is not null)
+            {
+                _sections.SelectedItem = section;
+            }
+            else
+            {
+                _statusBar.Text = Tf("Help.TopicPending", _topicKey);
+            }
+        }
     }
 
     private static string StripInline(string line)

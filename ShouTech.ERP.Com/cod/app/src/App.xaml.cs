@@ -347,6 +347,18 @@ namespace ShouTech.App
                     FrameworkElement.UnloadedEvent,
                     new RoutedEventHandler(GlobalWindowUnloaded),
                     handledEventsToo: true);
+
+                // F1 help for windows that do NOT derive from BaseWin
+                // (startup dialogs): BaseWin windows route their own
+                // F1 and mark it handled; this class handler covers
+                // the rest so no window has a dead F1 key (owner
+                // help decision 2026-11-24: every window maps to a
+                // help topic — see HelpWin / docs/REDUCE_PLAN.md).
+                EventManager.RegisterClassHandler(
+                    typeof(Window),
+                    UIElement.PreviewKeyDownEvent,
+                    new KeyEventHandler(GlobalWindowHelpKeyDown),
+                    handledEventsToo: false);
             }
             catch (Exception exL329)
             {
@@ -648,6 +660,29 @@ namespace ShouTech.App
             catch (Exception exL589)
             {
                 AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL589, "App.xaml.GlobalWindowLoaded");
+            }
+        }
+
+        /// <summary>
+        /// F1 routing for non-BaseWin windows (owner help decision
+        /// 2026-11-24): every window maps to a help topic — the
+        /// topic key is the window's class name by convention —
+        /// and HelpWin answers gracefully (topic page or the
+        /// topic-pending note over the manual), never a dead key.
+        /// </summary>
+        private static void GlobalWindowHelpKeyDown(object sender, KeyEventArgs e)
+        {
+            try
+            {
+                if (e.Key != Key.F1 || e.IsRepeat || sender is not Window window || window is HelpWin)
+                    return;
+                e.Handled = true;
+                var help = new HelpWin(window.GetType().Name) { Owner = window };
+                help.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "App.GlobalWindowHelpKeyDown");
             }
         }
 

@@ -83,6 +83,16 @@ public abstract class BaseWin : Window
         Closed += OnBaseClosed;
     }
 
+    /// <summary>
+    /// The window's F1 help topic key (owner help decision
+    /// 2026-11-24): by convention the window's class name; a window
+    /// overrides this only when its topic deliberately differs.
+    /// The audit's topic-key column is the enforcement mechanism —
+    /// every window has a key, and the commercial-phase help index
+    /// maps each key to its topic, index entry and keywords.
+    /// </summary>
+    public virtual string HelpTopicKey => GetType().Name;
+
     private void OnHelpPreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.F1 || e.IsRepeat || this is HelpWin)
@@ -91,7 +101,7 @@ public abstract class BaseWin : Window
         e.Handled = true;
         try
         {
-            var help = new HelpWin { Owner = this };
+            var help = new HelpWin(HelpTopicKey) { Owner = this };
             help.ShowDialog();
         }
         catch (Exception ex)

@@ -142,3 +142,44 @@ for a non-trivial cause is reverted and marked SKIPPED with the reason.
   14:55): docs/RTL_MIRROR_AUDIT.md — central FlowAlign end/start
   alignment applied to 96 physical-pin sites (incl. F2Ui.BottomBar
   and RptBase); CatWin verified explicitly. Gates: ALL-GREEN.
+- **Ribbon audit + R1 — DONE:** docs/RIBBON_AUDIT.md (216 (a) /
+  36 (b) / 4 (c) / 9 shell commands); the (c) language entries
+  wired to the live language switch. Gates: ALL-GREEN.
+- **Grid program R2a–R2d — DONE:** docs/GRID_PROGRAM.md — invoice
+  grids, voucher grids, report grids, MatDirWin tree. R2e
+  (CoaWin + AccCard) follows.
+- **Bottom-buttons audit V5 + card sizes V6 — DONE** (see
+  VISUAL_PASS.md; ComWin is the owner's named exception).
+- **H1 F1 help routing — DONE** (owner decisions 2026-11-24
+  15:36 + 15:38, action 1): BaseWin.HelpTopicKey (default =
+  class name) + App-level F1 class handler for non-BaseWin
+  windows; HelpWin takes the topic key and lands on a matching
+  section or shows the graceful topic-pending note
+  (Help.TopicPending ×4). Gates: ALL-GREEN.
+
+## Commercial-phase workstreams (registered, not in this branch's scope)
+
+- **Help system (owner decisions 2026-11-24 15:36 + 15:38):**
+  the manual becomes the F1 help system. (a) Encrypted help
+  package — AES-256-GCM + integrity, same discipline as
+  DesignFileSvc, proprietary extension **.sthx**, opened only by
+  ShouTech; (b) the built-in viewer gains the three navigation
+  modes — Contents tree, **Index** (keyword index like a CHM
+  Index tab), full-text Search — replacing the interim markdown
+  surface in HelpWin; (c) per-window INDEX: every window has an
+  index entry mapping it to its topic(s) with keywords per topic
+  per help language; index coverage (windows indexed / total
+  windows) is reported in the commercial-phase report; a window
+  without an index entry is a defect (the audit's topic-key
+  column is the enforcement mechanism — H1 landed the keys and
+  the routing); (d) the same content exportable as a
+  permission-protected PDF (official printable/archive copy) —
+  true digital signing is a RELEASE-PROCESS item unless in-stack
+  signing tooling is confirmed in the commercial phase; the
+  protected PDF ships, the signature step is not faked;
+  (e) content authored per window as windows finalize, Arabic +
+  English first. Source material: the owner's uploaded manuals,
+  incl. the Al-Ameen classic help text for benchmark structure.
+- **POS family completion** (owner workstream 2026-11-24 15:31):
+  sequenced in this branch after the grid program — see
+  RIBBON_AUDIT.md batch plan.

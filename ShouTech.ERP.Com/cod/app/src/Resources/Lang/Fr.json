@@ -877,7 +877,8 @@
     "RenewLicense": "Renouveler la Licence",
     "About": "À Propos du Programme",
     "PermissionDenied": "Vous n'avez pas l'autorisation de consulter l'aide.",
-    "ManualNotFound": "Le manuel livré (docs/SHOUTECH_ERP_EN.md) est introuvable dans cette installation."
+    "ManualNotFound": "Le manuel livré (docs/SHOUTECH_ERP_EN.md) est introuvable dans cette installation.",
+    "TopicPending": "Le sujet d'aide pour {0} est en préparation — le manuel complet est affiché en attendant."
   },
   "Messages": {
     "ConfirmExit": "Êtes-vous sûr de vouloir quitter ?",

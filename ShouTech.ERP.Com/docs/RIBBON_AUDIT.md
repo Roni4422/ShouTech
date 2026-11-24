@@ -18,6 +18,23 @@ window classes, all central). Classification is evidence-based;
 "thin" means the target's XAML+code totals under 150 lines, which
 cannot carry a complete-pillars surface.
 
+**F1 help topic-key column (owner decisions 2026-11-24 15:36 +
+15:38):** every window's topic key is its class name by
+convention — `BaseWin.HelpTopicKey` (virtual, default
+`GetType().Name`) for BaseWin windows, the same class-name rule
+applied by the App-level F1 class handler for non-BaseWin
+windows. So the topic key of every entry in this audit IS the
+target window class named in its row; a window without a key
+cannot exist under the convention, and any future override is a
+code-visible exception. F1 routing landed in batch H1 (gates
+ALL-GREEN): BaseWin F1 → `HelpWin(topicKey)`; non-BaseWin F1 →
+the App class handler → `HelpWin(className)`; an unwritten topic
+shows the graceful topic-pending note over the manual — never an
+error, never a dead key. The per-window INDEX (index entry +
+keywords per topic, per language) is maintained with the help
+content in the commercial phase; index coverage (windows
+indexed / total windows) is reported there.
+
 ## Verdict summary
 
 - **(a) complete: 216** — dedicated, substantive window or report.
