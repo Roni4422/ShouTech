@@ -244,6 +244,53 @@ both directions (features denied by the guides exist; the parity matrix's
 | GL credit | expense accounts of charges | always AP payable | L1 payee + L2 already-booked mode |
 | Cancel | reverses valuation + GL | mirrored voucher, split recomputed | L3 exact |
 
+## 3b. Owner's report reconciliation (scope amendment, 2026-11-24)
+
+The owner supplied his full implementation report
+(`~/workspace/user/files/Purchase_cycle.txt`, the ChatGPT-side record of the
+stabilization work). Where it differs from §1-§3 above, **it supersedes**.
+Adopted wholesale:
+
+- **Definition of done = the report's §12 acceptance criteria** (16
+  functional / 6 accounting / 7 technical checkboxes). The final report for
+  this branch itemizes every checkbox as proven (with evidence) or an
+  explicit gap. Nothing weaker counts as "complete".
+- **Work order = the report's §11 outstanding list**, Criticals first:
+  (1) landed-cost liability duplication, (2) landed-cost posting/reversal
+  verification across **all five allocation methods — Value / Quantity /
+  Weight / Volume / Manual** (the audit found only amount/qty/manual wired;
+  Weight/Volume are build-or-prove items), (3) valuation + COGS integration
+  verification, (4) GRNI exception workbench + period-end GL reconciliation,
+  (11) consolidated integration tests on **both** SQLite and PostgreSQL
+  paths. High: (5) batch/serial identity across receipts/returns/all
+  movements incl. partials, (6) requisition permission enforcement + full
+  approval scenarios incl. PostgreSQL concurrency serialization (base
+  commit d12eb0ac), (7) attachment audit history + secure storage +
+  permissions verification, (8) supplier invoice ↔ receiving reconciliation,
+  (9) returns + supplier credit-note accounting verification, (10) document
+  numbering uniqueness + concurrency-safety across ALL purchasing
+  documents, (12) final comparison against **four** systems.
+- **Critical 1 design (supersedes L2's account-only mode):** a landed-cost
+  charge may LINK to an existing posted supplier document that already
+  carries the liability. A linked charge creates **no** new party liability
+  and **no** new AP credit; posting reclasses the cost out of the account
+  the linked document originally debited (read from its posted journal).
+  A document can be consumed by at most one posted LCV (catalogued error
+  otherwise); LCV reversal releases the link and restores accounts exactly;
+  the linked document is never modified. Unlinked charges keep the L1
+  per-charge-payee liability path.
+- **Comparison (§12 of the report):** §3's tables are extended per stage
+  to four systems — ERPNext, Odoo, Al-Ameen 10, Phenix v10 — before the
+  branch is called done.
+- The report's 10-stage cycle (Requisition → Approval → RFQ → Quotation
+  Comparison → PO → Goods Receipt → Supplier Invoice → Landed Costs →
+  Inventory/Accounting Posting → Returns & Reconciliation) is the harness
+  scenario's spine.
+- The report states comprehensive purchasing tests were deliberately
+  postponed and are NOT confirmed — the consolidated harness on this
+  branch is that test pass. Windows/PostgreSQL execution remains owed and
+  will be stated as such.
+
 ## 4. Build results
 
 (Filled per workstream as the build lands — pillars checklist per window:
