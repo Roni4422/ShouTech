@@ -203,13 +203,16 @@ SchemaMigrator-built SQLite database. Filled in as landings proceed:
 
 | Segment | Before | After | Note |
 |---------|--------|-------|------|
-| LocSvc construct + SetLanguage("en") | _pending_ | _pending_ | L3 |
-| LocSvc construct + SetLanguage("ar") | _pending_ | _pending_ | L3 |
-| LocSvc label-index build (all 4 catalogs) | _pending_ | deferred to first use | L3 |
-| `EnsureDatabase` on a migrated DB (re-seed) | _pending_ | unchanged (by ruling) | §1 note |
-| `SchemaMigrator.ApplyAllAsync`, all applied | _pending_ | unchanged (not on path) | §1 |
-| Entry-assembly full read + SHA-256 (harness file equivalent) | _pending_ | `FileInfo.Length` only | L2 |
-| Manifest resources of built MainApp assembly | `dba.lite.sql` **absent** (proof of §1/2.6) | — | — |
+| LocSvc construct + SetLanguage("en") | **196.3 ms** | _pending L3_ | per instance; startup constructs two |
+| LocSvc construct + SetLanguage("ar") | **189.2 ms** | _pending L3_ | per instance |
+| LocSvc label-index build (all 4 catalogs) | inside the ≈190 ms ctor above (fresh-instance `TryResolveKeyFromLabel` segment: 133.3 ms, ctor-dominated) | deferred to first use | L3 |
+| `EnsureDatabase` on a migrated DB (re-seed) | **530.3 ms** | unchanged (by ruling) | §1 note + §6.2 |
+| `SchemaMigrator.ApplyAllAsync`, all applied | **48.6 ms** | unchanged (not on path) | §1 |
+| Entry-assembly full read + SHA-256 (8,985,088-byte file) | **98.7 ms** | `FileInfo.Length`: **0.2 ms** | L2 |
+| Manifest resources of built MainApp assembly | `dba.lite.sql` **ABSENT** (1 resource total) — proof of §1/2.6 | — | — |
+
+Baseline run: PerfHarness against base code (commit `627ec0a2` +
+harness), this VM, warm-up instance first for the LocSvc segments.
 
 Gate set per landing (branch standard): solution build
 `--no-incremental` = 0 errors / 0 warnings; SqlMigrator fresh-apply
@@ -223,9 +226,16 @@ BinHarness 22/22, NumHarness 27/27, InfoHarness 35/35.
 1. **PublishReadyToRun** — packaging decision; changes published
    artifacts; unverifiable from this VM. Expected to cut Phase 0
    JIT cost meaningfully on the owner's laptop.
-2. **Permission seed probe** (`EnsureDatabase` re-seed skip when a
-   stored seed version matches) — removes the self-heal property;
-   a behavior change, needs the owner's call.
+2. **Permission re-seed cheapening** (`EnsureDatabase`, measured
+   **530.3 ms** per call on a migrated DB): two candidates, both
+   deliberately NOT landed here — (a) a seed-version probe that
+   skips the re-seed removes its self-heal property (a behavior
+   change, owner's call); (b) running the same statements inside
+   one transaction (identical end state on success) touches the
+   exact permission tables the parallel permissions workstream is
+   building on (its migration 125) — landing it here invites a
+   merge collision for a segment that is not on the shipped-config
+   startup path. Quantified for a future, coordinated landing.
 3. **Lazy ribbon construction in MWin.xaml** — the retained ribbon
    is the nav state source; virtualizing it is a shell redesign,
    not a timing tweak.

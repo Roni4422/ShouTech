@@ -173,6 +173,9 @@
          (SteiSvc/SteiCrypto) end-to-end against real SQLite databases. -->
     <InternalsVisibleTo Include="Kern.Tests" />
     <InternalsVisibleTo Include="NumHarness" />
+    <!-- Lets PerfHarness time the internal startup-path segments
+         (SqliteSchemaBootstrapper.EnsureDatabase) headlessly. -->
+    <InternalsVisibleTo Include="PerfHarness" />
   </ItemGroup>
 
   <ItemGroup>
