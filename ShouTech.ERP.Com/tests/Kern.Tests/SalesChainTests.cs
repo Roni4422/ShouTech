@@ -1488,6 +1488,8 @@ namespace Kern.Tests
                 => _inner.CreateSalesDraftAsync(draft, userId, cancellationToken);
             public Task<long> CreateSalesDraftWithLinkAsync(CommercialDocumentDraft draft, string sourceDocKind, long sourceDocId, string userId, CancellationToken cancellationToken = default)
                 => _inner.CreateSalesDraftWithLinkAsync(draft, sourceDocKind, sourceDocId, userId, cancellationToken);
+            public Task<long> CreateSalesDraftWithLinksAsync(CommercialDocumentDraft draft, IReadOnlyList<CommercialDocumentSourceRef> sources, string userId, CancellationToken cancellationToken = default)
+                => _inner.CreateSalesDraftWithLinksAsync(draft, sources, userId, cancellationToken);
             public Task ReverseChainDocumentAsync(Guid companyId, long docId, string reason, string actor, CancellationToken cancellationToken = default)
                 => _inner.ReverseChainDocumentAsync(companyId, docId, reason, actor, cancellationToken);
             public Task<int> AmendSalesDocumentAsync(long docId, CommercialDocumentDraft amended, int expectedRevision, string userId, string? reason = null, CancellationToken cancellationToken = default)
