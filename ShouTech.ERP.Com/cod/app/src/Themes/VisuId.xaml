@@ -51,10 +51,10 @@
          accent service in Services/VisuId.cs replaces the accent
          BRUSHES at application level when the user switches
          accent, so components keep referencing the brushes). ===== -->
-    <Color x:Key="AccentPrimaryColor">#607D8B</Color>
-    <Color x:Key="AccentDarkColor">#455A64</Color>
-    <Color x:Key="AccentLightColor">#ECEFF1</Color>
-    <Color x:Key="AccentHoverColor">#CFD8DC</Color>
+    <Color x:Key="AccentPrimaryColor">#0067C0</Color>
+    <Color x:Key="AccentDarkColor">#005A9E</Color>
+    <Color x:Key="AccentLightColor">#E5F1FB</Color>
+    <Color x:Key="AccentHoverColor">#D6EBF9</Color>
 
     <!-- ===== Layer 1: primitive status colors + light tints ===== -->
     <Color x:Key="SuccessColor">#198754</Color>
@@ -74,13 +74,13 @@
     <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="{StaticResource NeutralWhiteColor}"/>
     <SolidColorBrush x:Key="SurfaceSunkenBrush" Color="{StaticResource Neutral200Color}"/>
     <SolidColorBrush x:Key="SurfaceFlyoutBrush" Color="{StaticResource NeutralWhiteColor}"/>
-    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="{StaticResource Neutral200Color}"/>
-    <SolidColorBrush x:Key="SurfacePressedBrush" Color="{StaticResource Neutral250Color}"/>
+    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="{StaticResource Neutral150Color}"/>
+    <SolidColorBrush x:Key="SurfacePressedBrush" Color="{StaticResource Neutral200Color}"/>
     <!-- Accent-tinted selection wash. Services/VisuId.cs refreshes
          this brush (and AccentSubtleBrush / FocusRingBrush /
          FieldBorderFocusBrush) whenever the accent changes. -->
-    <SolidColorBrush x:Key="SurfaceSelectedBrush" Color="#26607D8B"/>
-    <SolidColorBrush x:Key="AccentSubtleBrush" Color="#26607D8B"/>
+    <SolidColorBrush x:Key="SurfaceSelectedBrush" Color="#260067C0"/>
+    <SolidColorBrush x:Key="AccentSubtleBrush" Color="#260067C0"/>
 
     <!-- ===== Layer 2: semantic text tokens ===== -->
     <SolidColorBrush x:Key="TextTertiaryBrush" Color="{StaticResource TextTertiaryColor}"/>
@@ -312,23 +312,23 @@
 
     <SolidColorBrush
         x:Key="ChromeBackgroundBrush"
-        Color="#607D8B"/>
+        Color="{StaticResource Neutral100Color}"/>
 
     <SolidColorBrush
         x:Key="ChromeForegroundBrush"
-        Color="#FFFFFF"/>
+        Color="{StaticResource Neutral900Color}"/>
 
     <SolidColorBrush
         x:Key="ChromeBorderBrush"
-        Color="#455A64"/>
+        Color="#D5D9DE"/>
 
     <SolidColorBrush
         x:Key="ChromeButtonHoverBrush"
-        Color="#78909C"/>
+        Color="#E8EAED"/>
 
     <SolidColorBrush
         x:Key="ChromeButtonPressedBrush"
-        Color="#455A64"/>
+        Color="#D5D9DE"/>
 
     <SolidColorBrush
         x:Key="ChromeCloseHoverBrush"
@@ -496,7 +496,7 @@
 
     <SolidColorBrush
         x:Key="TableHeaderBorderBrush"
-        Color="#78909C"/>
+        Color="#D5D9DE"/>
 
     <SolidColorBrush
         x:Key="TableHoverBrush"
@@ -603,7 +603,7 @@
 
     <SolidColorBrush
         x:Key="TableHeaderOpeningStockBrush"
-        Color="#455A64"/>
+        Color="#005A9E"/>
 
     <SolidColorBrush
         x:Key="TableHeaderStockCountBrush"
@@ -690,7 +690,7 @@
 
     <SolidColorBrush
         x:Key="PrimaryTransparentBrush"
-        Color="#33607D8B"/>
+        Color="#330067C0"/>
 
     <SolidColorBrush
         x:Key="ShellMenuForegroundBrush"

@@ -51,11 +51,11 @@
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Setter TargetName="ChromeButtonBorder" Property="Background"
-                                            Value="{DynamicResource ShellRibbonHoverBrush}"/>
+                                            Value="{DynamicResource ChromeButtonHoverBrush}"/>
                                 </Trigger>
                                 <Trigger Property="IsPressed" Value="True">
                                     <Setter TargetName="ChromeButtonBorder" Property="Background"
-                                            Value="{DynamicResource BorderDarkBrush}"/>
+                                            Value="{DynamicResource ChromeButtonPressedBrush}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>

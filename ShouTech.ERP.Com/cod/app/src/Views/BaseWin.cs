@@ -383,6 +383,7 @@ public abstract class BaseWin : Window
 
     private void OnBaseLoaded(object sender, RoutedEventArgs e)
     {
+        ApplyBackdropKind();
         ApplyFlowDirection();
         ApplyScheduleTint();
         ApplyLocalizedText();
@@ -390,6 +391,21 @@ public abstract class BaseWin : Window
         HookLanguageChanged();
         WireGeometryPersistence();
         ClampToWorkArea();
+    }
+
+    // Windows 11 backdrop layering: the shell window keeps the full
+    // Mica backdrop (the central WindowBackdropKind token); secondary
+    // windows — everything the shell owns — use Mica Alt, the flatter
+    // transient-window material Windows 11 itself uses for dialogs,
+    // so the shell reads as the surface behind its tools. Best effort:
+    // Win11Chrome no-ops where the DWM backdrop is unsupported.
+    private void ApplyBackdropKind()
+    {
+        Win11Chrome.SetBackdrop(
+            this,
+            Owner != null
+                ? Win11Chrome.BackdropKind.MicaAlt
+                : Win11Chrome.ResolveBackdropKind());
     }
 
     // ================================================================
