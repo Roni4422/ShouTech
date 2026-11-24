@@ -1,4 +1,4 @@
-{
+﻿{
   "Pricing": {
     "Resolved": "Prix {0} depuis {1}",
     "OverrideConfirm": "Comptabiliser quand même avec une dérogation de prix ? La dérogation sera enregistrée."
@@ -306,6 +306,14 @@
     "CustomerNotFound": "Le code client saisi est introuvable.",
     "CreditNeedsCustomer": "Sélectionnez un client avant de terminer une vente à crédit.",
     "CashDrawerOptionsTitle": "Options du tiroir-caisse POS",
+    "CashDrawerPrinter": "Imprimante du tiroir-caisse",
+    "CashDrawerPrinterHint": "Choisissez l'imprimante de reçus physiquement connectée au tiroir-caisse. L'imprimante doit prendre en charge la commande d'ouverture ESC/POS.",
+    "CashDrawerTest": "Tester / Ouvrir le tiroir",
+    "CashDrawerSaved": "Réglage de l'imprimante du tiroir-caisse enregistré.",
+    "CashDrawerNoPrinters": "Aucune imprimante Windows n'a été trouvée. Installez d'abord l'imprimante de reçus, puis rouvrez cet écran.",
+    "CashDrawerNoPrinterSelected": "Aucune imprimante de tiroir-caisse n'est sélectionnée. Ouvrez Outils > Options et sélectionnez l'imprimante connectée au tiroir-caisse.",
+    "CashDrawerOpened": "Commande d'ouverture du tiroir-caisse envoyée à '{0}'.",
+    "CashDrawerOpenFailed": "Impossible d'ouvrir le tiroir-caisse : {0}",
     "Sessions": "Sessions PDV",
     "ZReport": "Rapport Z de session",
     "SessionTitle": "Sessions PDV",

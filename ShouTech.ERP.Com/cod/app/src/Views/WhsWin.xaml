@@ -26,11 +26,6 @@
     -->
 
     <views:BaseWin.Resources>
-        <Style x:Key="VisuFieldLabelStyle" TargetType="{x:Type TextBlock}">
-            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
-            <Setter Property="FontSize" Value="{DynamicResource FontSize12}"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
         <Style x:Key="VisuCodeBoxStyle" TargetType="{x:Type TextBox}"
                BasedOn="{StaticResource VisuTextBoxStyle}">
             <Setter Property="Height" Value="{DynamicResource SmallControlHeight}"/>
@@ -73,7 +68,7 @@
                 <!-- Code navigator: [First][Prev] CODE [Next][Last] — left aligned -->
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock x:Name="LblAutoCode"
-                               Style="{DynamicResource VisuFieldLabelStyle}"
+                               Style="{DynamicResource VisuTextBlockLabelStyle}"
                                Margin="0,0,8,0"
                                VerticalAlignment="Center"/>
 
@@ -167,7 +162,7 @@
                             Orientation="Horizontal"
                             VerticalAlignment="Center">
                     <TextBlock x:Name="LblAdvanced"
-                               Style="{DynamicResource VisuFieldLabelStyle}"
+                               Style="{DynamicResource VisuTextBlockLabelStyle}"
                                Margin="0,0,8,0"/>
                     <ToggleButton x:Name="TglAdvanced"
                                   Width="48" Height="26"
@@ -297,21 +292,21 @@
                             </Grid.RowDefinitions>
 
                             <TextBlock x:Name="LblCardNo" Grid.Row="0" Grid.Column="0"
-                                       Style="{DynamicResource VisuFieldLabelStyle}"/>
+                                       Style="{DynamicResource VisuTextBlockLabelStyle}"/>
                             <TextBox x:Name="TxtCardNo" Grid.Row="0" Grid.Column="1"
                                      Style="{DynamicResource VisuCodeBoxStyle}"
                                      MaxLength="12"
                                      TextChanged="Field_Changed"/>
 
                             <TextBlock x:Name="LblName" Grid.Row="1" Grid.Column="0"
-                                       Style="{DynamicResource VisuFieldLabelStyle}"/>
+                                       Style="{DynamicResource VisuTextBlockLabelStyle}"/>
                             <TextBox x:Name="TxtName" Grid.Row="1" Grid.Column="1"
                                      Style="{DynamicResource VisuTextBoxStyle}"
                                      MaxLength="200"
                                      TextChanged="Field_Changed"/>
 
                             <TextBlock x:Name="LblNameEn" Grid.Row="2" Grid.Column="0"
-                                       Style="{DynamicResource VisuFieldLabelStyle}"/>
+                                       Style="{DynamicResource VisuTextBlockLabelStyle}"/>
                             <TextBox x:Name="TxtNameEn" Grid.Row="2" Grid.Column="1"
                                      Style="{DynamicResource VisuTextBoxStyle}"
                                      MaxLength="200"
@@ -321,7 +316,7 @@
                                      TextChanged="Field_Changed"/>
 
                             <TextBlock x:Name="LblParent" Grid.Row="3" Grid.Column="0"
-                                       Style="{DynamicResource VisuFieldLabelStyle}"/>
+                                       Style="{DynamicResource VisuTextBlockLabelStyle}"/>
                             <Border Grid.Row="3" Grid.Column="1"
                                     Background="{DynamicResource FieldBackgroundBrush}"
                                     BorderBrush="{DynamicResource BorderBrush}"
@@ -382,42 +377,42 @@
                             </Grid.RowDefinitions>
 
                             <TextBlock x:Name="LblAddress" Grid.Row="0" Grid.Column="0"
-                                       Style="{DynamicResource VisuFieldLabelStyle}"/>
+                                       Style="{DynamicResource VisuTextBlockLabelStyle}"/>
                             <TextBox x:Name="TxtAddress" Grid.Row="0" Grid.Column="1"
                                      Style="{DynamicResource VisuTextBoxStyle}"
                                      MaxLength="300"
                                      TextChanged="Field_Changed"/>
 
                             <TextBlock x:Name="LblCity" Grid.Row="1" Grid.Column="0"
-                                       Style="{DynamicResource VisuFieldLabelStyle}"/>
+                                       Style="{DynamicResource VisuTextBlockLabelStyle}"/>
                             <TextBox x:Name="TxtCity" Grid.Row="1" Grid.Column="1"
                                      Style="{DynamicResource VisuTextBoxStyle}"
                                      MaxLength="100"
                                      TextChanged="Field_Changed"/>
 
                             <TextBlock x:Name="LblRegion" Grid.Row="2" Grid.Column="0"
-                                       Style="{DynamicResource VisuFieldLabelStyle}"/>
+                                       Style="{DynamicResource VisuTextBlockLabelStyle}"/>
                             <TextBox x:Name="TxtRegion" Grid.Row="2" Grid.Column="1"
                                      Style="{DynamicResource VisuTextBoxStyle}"
                                      MaxLength="100"
                                      TextChanged="Field_Changed"/>
 
                             <TextBlock x:Name="LblCountry" Grid.Row="3" Grid.Column="0"
-                                       Style="{DynamicResource VisuFieldLabelStyle}"/>
+                                       Style="{DynamicResource VisuTextBlockLabelStyle}"/>
                             <TextBox x:Name="TxtCountry" Grid.Row="3" Grid.Column="1"
                                      Style="{DynamicResource VisuTextBoxStyle}"
                                      MaxLength="100"
                                      TextChanged="Field_Changed"/>
 
                             <TextBlock x:Name="LblPhone" Grid.Row="4" Grid.Column="0"
-                                       Style="{DynamicResource VisuFieldLabelStyle}"/>
+                                       Style="{DynamicResource VisuTextBlockLabelStyle}"/>
                             <TextBox x:Name="TxtPhone" Grid.Row="4" Grid.Column="1"
                                      Style="{DynamicResource VisuCodeBoxStyle}"
                                      MaxLength="50"
                                      TextChanged="Field_Changed"/>
 
                             <TextBlock x:Name="LblLocation" Grid.Row="5" Grid.Column="0"
-                                       Style="{DynamicResource VisuFieldLabelStyle}"/>
+                                       Style="{DynamicResource VisuTextBlockLabelStyle}"/>
                             <Grid Grid.Row="5" Grid.Column="1" Margin="0,0,0,8">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -438,7 +433,7 @@
                             </Grid>
 
                             <TextBlock x:Name="LblNotes" Grid.Row="6" Grid.Column="0"
-                                       Style="{DynamicResource VisuFieldLabelStyle}"
+                                       Style="{DynamicResource VisuTextBlockLabelStyle}"
                                        VerticalAlignment="Top" Margin="0,6,10,0"/>
                             <TextBox x:Name="TxtNotes" Grid.Row="6" Grid.Column="1"
                                      Style="{DynamicResource VisuTextBoxStyle}"

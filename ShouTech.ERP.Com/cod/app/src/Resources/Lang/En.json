@@ -1,4 +1,4 @@
-{
+﻿{
   "Pricing": {
     "Resolved": "Price {0} from {1}",
     "OverrideConfirm": "Post anyway with a price override? The override will be recorded."
@@ -897,6 +897,14 @@
     "CustomerNotFound": "The entered customer code could not be found.",
     "CreditNeedsCustomer": "Select a customer before completing a credit sale.",
     "CashDrawerOptionsTitle": "POS Cash Drawer Options",
+    "CashDrawerPrinter": "Cash drawer printer",
+    "CashDrawerPrinterHint": "Choose the receipt printer physically connected to the cash drawer. The printer must support an ESC/POS drawer-kick command.",
+    "CashDrawerTest": "Test / Open drawer",
+    "CashDrawerSaved": "Cash drawer printer setting saved.",
+    "CashDrawerNoPrinters": "No Windows printers were found. Install the receipt printer first, then reopen this screen.",
+    "CashDrawerNoPrinterSelected": "No cash drawer printer is selected. Open Tools > Options and select the printer connected to the cash drawer.",
+    "CashDrawerOpened": "Cash-drawer open command sent to '{0}'.",
+    "CashDrawerOpenFailed": "Unable to open cash drawer: {0}",
     "Sessions": "POS sessions",
     "ZReport": "Session Z report",
     "SessionTitle": "POS sessions",

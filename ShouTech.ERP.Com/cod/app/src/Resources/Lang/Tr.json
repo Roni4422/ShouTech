@@ -1,4 +1,4 @@
-{
+﻿{
   "Pricing": {
     "Resolved": "Fiyat {0}, kaynak {1}",
     "OverrideConfirm": "Fiyat aşımı ile yine de kaydedilsin mi? Aşım kayıt altına alınacak."
@@ -306,6 +306,14 @@
     "CustomerNotFound": "Girilen müşteri kodu bulunamadı.",
     "CreditNeedsCustomer": "Veresiye satışını tamamlamadan önce bir müşteri seçin.",
     "CashDrawerOptionsTitle": "POS Kasa Çekmecesi Seçenekleri",
+    "CashDrawerPrinter": "Para çekmecesi yazıcısı",
+    "CashDrawerPrinterHint": "Para çekmecesine fiziksel olarak bağlı fiş yazıcısını seçin. Yazıcı, ESC/POS çekmece açma komutunu desteklemelidir.",
+    "CashDrawerTest": "Test et / Çekmeceyi aç",
+    "CashDrawerSaved": "Para çekmecesi yazıcı ayarı kaydedildi.",
+    "CashDrawerNoPrinters": "Windows yazıcısı bulunamadı. Önce fiş yazıcısını kurun, sonra bu ekranı yeniden açın.",
+    "CashDrawerNoPrinterSelected": "Para çekmecesi yazıcısı seçili değil. Araçlar > Seçenekler'i açın ve para çekmecesine bağlı yazıcıyı seçin.",
+    "CashDrawerOpened": "Para çekmecesi açma komutu '{0}' yazıcısına gönderildi.",
+    "CashDrawerOpenFailed": "Para çekmecesi açılamadı: {0}",
     "Sessions": "POS oturumları",
     "ZReport": "Oturum Z raporu",
     "SessionTitle": "POS oturumları",

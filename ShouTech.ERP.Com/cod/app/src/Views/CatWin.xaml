@@ -26,23 +26,16 @@
 				 DataTrigger. No hardcoded alignment anywhere.
 				 ========================================================= -->
 
-			<Style x:Key="FieldLabel" TargetType="TextBlock">
+			<!-- Compact-card label: inherits the central form-label
+				 contract (font, trimming, field-adjacent alignment
+				 triggers) from VisuTextBlockLabelStyle; only this
+				 card's compact deltas stay local. -->
+			<Style x:Key="FieldLabel" TargetType="TextBlock"
+				   BasedOn="{StaticResource VisuTextBlockLabelStyle}">
 				<Setter Property="FontSize" Value="{DynamicResource FontSize11}"/>
 				<Setter Property="FontWeight" Value="SemiBold"/>
 				<Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
 				<Setter Property="Margin" Value="0,0,0,3"/>
-				<Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-				<Setter Property="TextAlignment" Value="Left"/>
-				<Style.Triggers>
-					<DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-								 Value="RightToLeft">
-						<Setter Property="TextAlignment" Value="Right"/>
-					</DataTrigger>
-					<DataTrigger Binding="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-								 Value="LeftToRight">
-						<Setter Property="TextAlignment" Value="Left"/>
-					</DataTrigger>
-				</Style.Triggers>
 			</Style>
 
 			<Style x:Key="FieldBox" TargetType="TextBox"

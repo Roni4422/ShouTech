@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -7,6 +9,7 @@ using System.Text.Json;
 using System.Printing;
 
 using ShouTech.Domain;
+using ShouTech.App.Localization;
 namespace ShouTech.App.Services;
 
 /// <summary>Per-user cash drawer printer configuration and ESC/POS drawer kick.</summary>
@@ -14,6 +17,14 @@ public static class CashDrawerService
 {
     private sealed class Settings { public string PrinterName { get; set; } = string.Empty; }
     private static readonly object Gate = new();
+    private static readonly ConcurrentDictionary<string, System.Text.CompositeFormat> CompositeFormats = new();
+
+    /// <summary>Formats a localized pattern (cached CompositeFormat, CA1863-safe).</summary>
+    private static string FormatLocalized(string pattern, params object?[] args)
+    {
+        var compositeFormat = CompositeFormats.GetOrAdd(pattern, static value => System.Text.CompositeFormat.Parse(value));
+        return string.Format(CultureInfo.CurrentCulture, compositeFormat, args);
+    }
     private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
     private static readonly string SettingsPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ShouTech", "pos-settings.json");
@@ -52,7 +63,7 @@ public static class CashDrawerService
         var printer = SelectedPrinterName;
         if (string.IsNullOrWhiteSpace(printer))
         {
-            message = "No cash drawer printer is selected. Open Tools > Options and select the printer connected to the cash drawer.";
+            message = Loc.Get("POS.CashDrawerNoPrinterSelected", "No cash drawer printer is selected. Open Tools > Options and select the printer connected to the cash drawer.");
             return false;
         }
 
@@ -76,11 +87,11 @@ public static class CashDrawerService
                 finally { EndPagePrinter(handle); }
             }
             finally { EndDocPrinter(handle); }
-            message = $"Cash-drawer open command sent to '{printer}'.";
+            message = FormatLocalized(Loc.Get("POS.CashDrawerOpened", "Cash-drawer open command sent to '{0}'."), printer);
             return true;
         }
         catch (Exception ex) {
-            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "CashDrawerService.TryOpenDrawer"); message = $"Unable to open cash drawer: {ex.Message}"; return false; }
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "CashDrawerService.TryOpenDrawer"); message = FormatLocalized(Loc.Get("POS.CashDrawerOpenFailed", "Unable to open cash drawer: {0}"), ex.Message); return false; }
         finally { if (handle != IntPtr.Zero) ClosePrinter(handle); }
     }
 

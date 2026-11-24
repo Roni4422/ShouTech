@@ -102,6 +102,54 @@ What changed:
 5. **OptWin**: the accent combo's empty-value fallback is "slate";
    the picker lists the new palette from VisuId.AvailableAccents.
 
+## V4 — Window content pass (owner directive 2026-11-24 14:01)
+
+Improve window CONTENT — fields, buttons, texts — presentation and
+wording only; no functionality, binding or persistence changes.
+Method: audit first, fix what deviates from the proportions
+standard (docs/WINDOW_PROPORTIONS.md) and the central form-label
+contract.
+
+**Audit results (what was already standard):** BaseWin form helpers
+share one margin set (FormFieldMargin / FormLabelMargin); command
+buttons across the windows are built with the ButtonMinWidth /
+PrimaryButtonMinWidth tokens; the central label styles implement
+the field-adjacent alignment contract with live FlowDirection
+triggers; XAML forms pair design-time Content with LocProps keys.
+Windows checked and found localized at runtime despite English
+design-time strings: BinWin, BcdDesWin, AccCard.
+
+**Deviations found and fixed:**
+
+1. **WhsWin** defined a local `VisuFieldLabelStyle` — a partial
+   copy of the central label style (secondary color, no alignment
+   triggers, no trimming), exactly the local-copy pattern the
+   label contract forbids. Removed; all 13 usages now take the
+   central `VisuTextBlockLabelStyle`.
+2. **CatWin** (the owner's compact card) duplicated the alignment
+   triggers in its local `FieldLabel`. The style is now BasedOn
+   the central `VisuTextBlockLabelStyle` and keeps only the card's
+   compact deltas (FontSize11, SemiBold, secondary foreground,
+   3px bottom margin). The card's compact 28px field height is
+   the owner's own layout choice for this card and is unchanged.
+3. **CashDrawerOptionsWin** was English-only below the title (its
+   own comment admitted the keys were missing): heading, hint,
+   buttons and status texts were hardcoded, and the status line
+   sat BELOW the button row. All strings now resolve through the
+   Lang catalogs — new POS.CashDrawer* keys in all 4 languages,
+   Save/Close via Common.* — the drawer service's three
+   user-facing messages are localized the same way (Loc.Get with
+   cached CompositeFormat patterns), and the status line moved
+   above the buttons so the action row is the window's bottom
+   element, per the bottom-button rule.
+
+**Not changed, deliberately:** StpWiz's WizardLabelStyle (a wizard
+idiom built on the central margin tokens, side labels — not a form
+label copy); WhsWin's 24px code boxes (SmallControlHeight, the
+sanctioned dense-toolbar variant); BaseWin's 26px grid-cell
+steppers (in-cell controls, not form fields); PosWin (touch
+surface exception in the proportions standard).
+
 ## V2 — Phenix v10 invoices/vouchers + Sahli Soft reports
 
 ### Research (public sources, 2026-11-24)
