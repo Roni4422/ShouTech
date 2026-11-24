@@ -172,3 +172,130 @@ per_delivered) → partial invoice (AR + revenue + tax, per_billed) → partial
 payment → remaining delivery + invoice → return against the original invoice at
 original cost → all ledgers reconcile. Kern.Tests execution on Windows remains
 owed._
+
+---
+
+# Part II — Owner Specification Coverage (Sales_Cycle.txt)
+
+The owner supplied a complete sales-cycle specification (`Sales_Cycle.txt`,
+§§1–19 + Arabic appendix L1–L4) which **supersedes the ERPNext-chain framing of
+Part I** wherever they differ. Its §18 checklists are the definition of done;
+its §17 phase order is the build order. A full spec-coverage audit was run
+against the base branch (four read-only audits, file:line evidence). Verdicts
+below are pre-build (B1–B5 workstreams from Part I are in flight and map to
+Phases 01/02/03/04/05/06/07/12/13).
+
+## Spec coverage summary (before phase-2 builds)
+
+| Spec section | State | Headlines |
+|---|---|---|
+| §1 Customers (22 fn) | 5 exist, 11 partial, 6 absent | Cards/groups/history/aging/allocation exist. **Dead data:** price tier, `customer_prices`, CUSTOMER `discount_rules` and `credit_days` are stored but consumed by nothing. No branches, multi-address, multi-contact, per-customer currency, risk class, opening balances, party attachments; no customer statement (suppliers have one); blacklist = `is_active` only, and deactivation hides balances from reports |
+| §2 Quotations | Partial | Chain + CRM paths exist (Part I G1–G10). No revisions/version preservation, no approve/reject-with-reason, no direct QUO→invoice conversion, no sales attachments, no email send |
+| §3 Orders | Chain exists; controls absent | Reservation ABSENT (`reserved_qty` column never written), approval ABSENT (no `SALES.*.APPROVE` anywhere), amendments/revisions ABSENT for all documents, recurring ABSENT, cancel reason ABSENT (B2 fixing), no availability display/gate at entry, credit check only at invoice posting |
+| §4 Delivery | DLV exists; fulfilment layer absent | Picking ABSENT; packing = printout only; DeliveryDesk (`delivery_requests`) is a **separate unlinked world** (free-text driver, no vehicle per delivery, no proof-of-delivery/signature, no delivery costing); returned deliveries ABSENT; performance reports ABSENT |
+| §5 Invoices | Core exists | 10 types: order/delivery/direct exist; cash/credit/partial/service are modes; **consolidated, recurring, export ABSENT**; no approval step; no e-invoice; attachments purchase-only; live margin absent (report only); extra charges = one lump sum |
+| §6 POS | Substantially built (066) | Terminals/sessions/tenders/held bills/returns/Z exist. ABSENT: scale integration, exchanges, cash expenses, true offline sync (PosSyncWin is a message-queue viewer). Cashier = current user's name; discount control binary, no numeric limits; performance report groups date+warehouse only |
+| §7 Returns | Core exists (native path) | Against invoice only; no delivery-sourced returns, no authorized no-invoice returns, no inspection/condition routing (good/quarantine/damaged), reasons stuffed into Notes, no approval workflow, no RMA |
+| §8 Receipts | Core exists | Cash/bank/cheque receipts, advances as unallocated credit, allocation + history exist; bounced cheques unwind GL. ABSENT: settlement discounts, cross-currency allocation + FX differences (hard-blocked), multi-method receipt vouchers, due-date-based auto-suggestion (no due dates exist), one-shot multi-invoice distribution, cheque→invoice allocation linkage |
+| §9 Commissions | **Engine absent** | Rep master + flat % fields only; `sales_rep_targets.commission_earned` is a dead column. Nothing is calculated, adjusted, approved, settled, or paid |
+| §10 Contracts | **Absent** | No entity/table/window/ribbon. `customer_prices` is the only neighbour and is not wired into pricing |
+| §11 Pricing & Promotions | **No engine** | No price resolution anywhere: invoice prices are free-typed. Price lists/customer prices/tiers/rules are data-only. Promotions/BXGY/bundles ABSENT. `price_min`, `margin_target_pct`, `discount_max_pct` unenforced; `SALES.PRICE.OVERRIDE`/`SALES.DISCOUNT.OVERRIDE` **defined but never checked** |
+| §12 Accounting | Posting table CONFORMS | All six standard postings verified in `InvRepo.BuildGlLines`/`GlPosting`. ABSENT: FX gain/loss posting, discount account (discount is netted into revenue), project dimension on sales docs/GL, AR subledger↔GL reconciliation, inventory valuation↔GL reconciliation (the purchase GRNI recon proves the pattern) |
+| §13 Reports | 65 report windows | Categories absent: Returns, Contracts. Partial: Sales summary, Product Groups, Warehouses, Orders, Deliveries, Pricing analysis. Report framework filters cannot do customer-picker, rep, cost-center, project, or currency. Excel/PDF/print uniform via `RptBase` |
+| §14 Permissions & Audit | Partial | Keys exist for most actions; ABSENT: `SALES.CREDIT.OVERRIDE` (hard block by design, documented in `PartyCreditGuard.cs`), discount limits, `SALES.RETURN.APPROVE`; **no unified document-events table**, no sales cancellation reasons, **no denied-access logging** |
+| §15 Ribbon | No Sales tab | Sales is spread over Invoices/POS/Orders/Customers/SalesRep/Bonds tabs. Deliveries, Commissions, Contracts groups have **zero ribbon presence** |
+| §16 Database | Mostly conforms | Standalone SQL in `dba/mig/{sqlite,postgresql}` 000–091. Spec prefixes not adopted (accepted — existing tables cover cus/sin/spr/pos; sqt/sor/sdl/srt/sre are kind-rows in shared tables by design). **sco and sct have no tables at all; sau (sales audit) absent** |
+| Appendix L3 | Partial | CRM pipeline/leads/activities exist (057); campaigns = free-text field only; loyalty EXISTS (036); territories + visit routes + targets EXIST. Warranty = a `warranty_months` material attribute only; RMA ABSENT; after-sales = internal support tickets, not customer service |
+| Appendix L4 | Absent | Intercompany, multi-country sales structure, drop shipping, consignment, subscriptions, e-commerce, sales forecasting — none exist |
+
+## Phase-2 build plan (§17 order; after B1–B5 merge)
+
+- **W1 — Customers (Phase 01):** contacts/addresses/branches tables + CstCard
+  tabs; per-customer currency + risk classification; opening-balance posting;
+  party-ledger customer statement (mirror the supplier one); suspension model
+  (blacklist flag + reason, enforced, balances stay visible); credit check at
+  quotation/order stage + `SALES.CREDIT.OVERRIDE` permission and override path
+  in `PartyCreditGuard`; due dates from `credit_days` (due_date on documents,
+  aging can use it); party attachments (generalize the 086 infrastructure).
+- **W23 — Document lifecycle (Phases 02/03):** generic revision preservation
+  (prior-version snapshots on amendment), quotation + order + invoice approval
+  workflow (approve/reject-with-reason, `*.APPROVE` permissions, approval
+  history), posted-order amendment via revision + controlled unpost (no posted
+  downstream), QUO→invoice authorized conversion, sales-document attachments
+  (with W1's generalization).
+- **W4 — Delivery fulfilment (Phase 04):** picking requests from orders +
+  pick confirmation; `delivery_requests` linked to DLVs (document reference)
+  with dispatch from the delivery window; proof of delivery (delivered_at,
+  received_by, signature image); delivery cost on the DLV; returned-delivery
+  flow on the desk; delivery performance report.
+- **W5 — Invoice completion (Phase 05):** consolidated invoicing
+  (multi-delivery → one invoice); export-invoice header fields (Incoterms,
+  ports, customs reference); live gross-profit/margin on InvoiceWin.
+- **W6 — Returns completion (Phase 06):** structured return reasons master;
+  condition routing (good → available, quarantine → QC warehouse, damaged →
+  non-sellable location); inspection step; return approval workflow
+  (`SALES.RETURN.APPROVE`); authorized no-invoice returns (permission-gated);
+  delivery-sourced returns for uninvoiced deliveries.
+- **W7a — Pricing & promotions (Phase 08):** one price-resolution path
+  (contract → customer_prices → material_price_list by validity/unit/currency
+  → tier columns → material price) consulted at InvoiceWin/OrdWin/POS entry;
+  quantity-break + volume-discount application from `discount_rules`; BXGY
+  from the dormant `bonus_*` fields; enforcement of `price_min`,
+  `discount_max_pct`, `margin_target_pct` with `SALES.PRICE.OVERRIDE` /
+  `SALES.DISCOUNT.OVERRIDE` checks at save and post; master price-change
+  audit log.
+- **W7b — Commissions (Phase 09):** `sco` tables (policies incl. tiered
+  slabs, commission entries, settlements); entries generated at invoice
+  posting (sales/profit basis) and at allocation (collection basis);
+  return-adjusted; approval; settlement paid via voucher; commission window
+  + rep performance figures.
+- **W7c — Contracts (Phase 10):** `sct` tables (contracts + lines with
+  agreed prices, contracted quantities, schedule); contract prices feed W7a
+  resolution; orders link to contracts with draw-down; scheduled-delivery
+  order generation; renewals; expiration alerts; fulfillment + profitability
+  views.
+- **W8 — Receipts remainder + audit & reconciliation (Phases 07/13):**
+  settlement discounts at allocation (authorized, posted to a discount
+  account); cross-currency allocation with realized FX gain/loss posting;
+  due-date FIFO auto-suggestion + one-shot multi-invoice distribution in
+  PayRecWin; `sau` document-events table written by the sales posting paths
+  with a history viewer; denied-access logging; AR subledger↔GL and
+  inventory↔GL reconciliation reports (mirroring the GRNI pattern).
+- **W9 — POS remainder (Phase 11):** cash expenses/paid-outs in the session
+  expected-cash math + Z report; exchanges (return + resale netted);
+  numeric cashier discount limits; per-terminal/per-cashier performance
+  grouping.
+- **W10 — L3 extensions:** CRM campaigns master; warranty registration from
+  sold serials + claims; RMA requests converting to authorized returns;
+  pipeline-based sales forecast view.
+- **Recurring engine (Phases 03/05, with W4):** schedule table + template
+  documents + due-document generation for recurring orders/invoices (also
+  the mechanical basis for subscription billing).
+
+## Owner decisions flagged (Part II — not invented)
+
+1. **E-invoice format/country** (ZATCA clearance etc.) — legal/format choice;
+   no submission channel built.
+2. **Email sending** for quotations/invoices — needs SMTP configuration and
+   a sending policy.
+3. **Weighing-scale hardware protocol** (POS) — device-dependent.
+4. **Offline POS architecture** — store-and-forward target (central server?)
+   is a product/infrastructure decision; the desktop app posts to its DB
+   directly today.
+5. **Intercompany sales model** and **e-commerce platform** (L4) — external
+   system choices.
+6. **Drop shipping / consignment models** (L4) — stock-ownership and
+   purchase-chain policies; drop-ship also overlaps the parallel
+   purchase-cycle branch.
+7. **Discount-account and FX gain/loss account numbers** will follow the
+   existing COA template structure (discount netted today; the spec's §12
+   account list requires both accounts) — implemented in W7a/W8 using the
+   template's next consistent codes and recorded in the completion record.
+
+## §18 completion checklist — scoring
+
+_Scored at the end of the build (Part III completion record): every checkbox
+from the spec's §18 (13 functional / 10 technical / 10 accounting-inventory /
+8 final-testing) itemized as PROVEN with evidence or an explicit GAP with the
+reason, followed by the four-system comparison (Al-Ameen 10 / Phenix v10 /
+ERPNext / Odoo) the spec requires._
