@@ -230,6 +230,26 @@ benchmarks to be sellable as enterprise commercial software.
   IN PROGRESS in this branch — docs/POS_FAMILY.md (audit, P1
   terminal definition DONE; P2 session picker, P3 session sales
   follow).
+- **Phenix-verified named gaps** (owner's own install, 2026-11-24
+  17:47; full annex in docs/PHENIX_V10_EVIDENCE.md): document
+  audit (تدقيق المستندات), task scheduling (جدولة المهام),
+  automated-report options, permission templates, glossary,
+  helper phrases, external tools, the DELIVERY family (driver
+  card, delivery prices, pickup orders, delivery search, driver
+  cash-box closing), and the manufacturing report gaps (four
+  cost-variance reports, manufactured-material costs, feasibility,
+  re-posting of manufacturing operations). Recorded for the
+  commercial-phase/comparison backlog — owner's decision; NOT
+  scoped into the bin/numbering workstreams.
+- **PosTermWin comparison + gap build** (owner directive
+  2026-11-24 17:50): QUEUED immediately after the numbering
+  workstream — field-by-field vs the verified Phenix «تعريف نقاط
+  البيع» window; build the genuine gaps (per-point document-type
+  binding, separate cashbox-closing account, per-point currency,
+  per-point print designs bound to doc_designs/.stid), weigh
+  customer-group scoping and touch/field customization, record
+  where ours is ahead (warehouse, price level, permitted users).
+
 
 ## Commercial-readiness phase (owner go-ahead 2026-11-24 16:22) — PLAN
 
