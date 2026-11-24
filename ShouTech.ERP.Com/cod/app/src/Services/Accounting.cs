@@ -260,7 +260,17 @@ internal static class AccRepo
         string Description,
         decimal Balance,
         decimal Debit,
-        decimal Credit);
+        decimal Credit,
+        // Account-card completion fields (migration 118, R2e):
+        // optional parameters so existing constructions (incl.
+        // Kern.Tests) keep compiling unchanged.
+        string? ClosingCode = null,
+        string WarningSide = "NONE",
+        string AccountSide = "BOTH",
+        decimal EstimatedBudget = 0,
+        string? CurrencyCode = null,
+        decimal ExchangeParity = 1,
+        string? ReconciliationDate = null);
 
     internal sealed record AccountGuard(bool CanDelete, bool CanDisable, IReadOnlyList<string> Reasons);
 
@@ -362,9 +372,15 @@ internal static class AccRepo
                a.risk, a.cost_center_mode, a.allow_reconcile,
                a.taxable, a.foreign_currency, a.cost_required, a.budget, a.is_default,
                a.tax_rate, a.description,
-               COALESCE(bal.d, 0), COALESCE(bal.cr, 0)
+               COALESCE(bal.d, 0), COALESCE(bal.cr, 0),
+               cl.account_code,
+               COALESCE(a.warning_side, 'NONE'), COALESCE(a.account_side, 'BOTH'),
+               COALESCE(a.estimated_budget, 0), a.currency_code,
+               COALESCE(a.exchange_parity, 1),
+               CAST(a.reconciliation_date AS TEXT)
         FROM chart_of_accounts a
         LEFT JOIN chart_of_accounts p ON p.account_id = a.parent_account_id
+        LEFT JOIN chart_of_accounts cl ON cl.account_id = a.closing_account_id
         LEFT JOIN (
             SELECT l.account_id AS aid, SUM(l.debit) AS d, SUM(l.credit) AS cr
             FROM journal_entry_lines l
@@ -524,6 +540,7 @@ internal static class AccRepo
             }
 
             var parentId = ResolveParentId(connection, transaction, companyGuid, value.ParentCode, current?.Id);
+            var closingId = ResolveParentId(connection, transaction, companyGuid, value.ClosingCode, current?.Id);
 
             if (current is null)
             {
@@ -533,7 +550,7 @@ internal static class AccRepo
                 using var insert = connection.CreateCommand();
                 insert.Transaction = transaction;
                 insert.CommandText = InsertSql();
-                Bind(insert, value, newId.ToString("D"), companyGuid, parentId);
+                Bind(insert, value, newId.ToString("D"), companyGuid, parentId, closingId);
                 insert.ExecuteNonQuery();
                 transaction.Commit();
                 return newId.ToString("D");
@@ -556,7 +573,7 @@ internal static class AccRepo
             using var update = connection.CreateCommand();
             update.Transaction = transaction;
             update.CommandText = UpdateSql();
-            Bind(update, value, current.Id, companyGuid, parentId);
+            Bind(update, value, current.Id, companyGuid, parentId, closingId);
             if (update.ExecuteNonQuery() != 1)
                 throw new InvalidOperationException("The account could not be saved because it no longer exists in the current company.");
             // When the code changes WITHOUT renumbering, children keep their
@@ -978,19 +995,23 @@ internal static class AccRepo
     private static string InsertSql() => $"""
         INSERT INTO chart_of_accounts(account_id,company_id,account_code,account_name,name_ar,account_type,
             parent_account_id,is_postable,is_active,is_deleted,risk,cost_center_mode,
-            allow_reconcile,taxable,foreign_currency,cost_required,budget,is_default,tax_rate,description)
-        VALUES($id,$company,$code,$en,$ar,$type,$parent,$postable,$active,{FalseLiteral},$risk,$cc,$reconcile,$taxable,$foreign,$costreq,$budget,$default,$tax,$desc);
+            allow_reconcile,taxable,foreign_currency,cost_required,budget,is_default,tax_rate,description,
+            closing_account_id,warning_side,account_side,estimated_budget,currency_code,exchange_parity,reconciliation_date)
+        VALUES($id,$company,$code,$en,$ar,$type,$parent,$postable,$active,{FalseLiteral},$risk,$cc,$reconcile,$taxable,$foreign,$costreq,$budget,$default,$tax,$desc,
+            $closing,$warnside,$accside,$estbudget,$currency,$parity,$recdate);
         """;
 
     private static string UpdateSql() => $"""
         UPDATE chart_of_accounts SET account_code=$code,account_name=$en,name_ar=$ar,account_type=$type,
             parent_account_id=$parent,is_postable=$postable,is_active=$active,risk=$risk,cost_center_mode=$cc,
             allow_reconcile=$reconcile,taxable=$taxable,foreign_currency=$foreign,cost_required=$costreq,
-            budget=$budget,is_default=$default,tax_rate=$tax,description=$desc,updated_at=CURRENT_TIMESTAMP
+            budget=$budget,is_default=$default,tax_rate=$tax,description=$desc,
+            closing_account_id=$closing,warning_side=$warnside,account_side=$accside,estimated_budget=$estbudget,
+            currency_code=$currency,exchange_parity=$parity,reconciliation_date=$recdate,updated_at=CURRENT_TIMESTAMP
         WHERE company_id=$company AND account_id=$id AND is_deleted={FalseLiteral};
         """;
 
-    private static void Bind(DbCommand command, AccRec value, string id, string companyGuid, string? parentId)
+    private static void Bind(DbCommand command, AccRec value, string id, string companyGuid, string? parentId, string? closingId)
     {
         Add(command, "$id", AccountValue(id));
         Add(command, "$company", CompanyValue(companyGuid));
@@ -1011,6 +1032,13 @@ internal static class AccRepo
         Add(command, "$default", value.IsDefault);
         Add(command, "$tax", value.TaxRate);
         Add(command, "$desc", value.Description);
+        Add(command, "$closing", closingId is null ? null : AccountValue(closingId));
+        Add(command, "$warnside", string.IsNullOrWhiteSpace(value.WarningSide) ? "NONE" : value.WarningSide);
+        Add(command, "$accside", string.IsNullOrWhiteSpace(value.AccountSide) ? "BOTH" : value.AccountSide);
+        Add(command, "$estbudget", value.EstimatedBudget);
+        Add(command, "$currency", string.IsNullOrWhiteSpace(value.CurrencyCode) ? null : value.CurrencyCode);
+        Add(command, "$parity", value.ExchangeParity <= 0 ? 1m : value.ExchangeParity);
+        Add(command, "$recdate", string.IsNullOrWhiteSpace(value.ReconciliationDate) ? null : value.ReconciliationDate);
     }
 
     private static bool CodeExistsOnConnection(DbConnection connection, DbTransaction transaction, string companyGuid, string code, string? excludeId)
@@ -1042,7 +1070,13 @@ internal static class AccRepo
             Convert.ToBoolean(reader.GetValue(14), System.Globalization.CultureInfo.InvariantCulture),
             Convert.ToDecimal(reader.GetValue(15), System.Globalization.CultureInfo.InvariantCulture),
             reader.IsDBNull(16) ? string.Empty : reader.GetString(16),
-            debit - credit, debit, credit);
+            debit - credit, debit, credit,
+            reader.IsDBNull(19) ? null : reader.GetString(19),
+            reader.GetString(20), reader.GetString(21),
+            Convert.ToDecimal(reader.GetValue(22), System.Globalization.CultureInfo.InvariantCulture),
+            reader.IsDBNull(23) ? null : reader.GetString(23),
+            Convert.ToDecimal(reader.GetValue(24), System.Globalization.CultureInfo.InvariantCulture),
+            reader.IsDBNull(25) ? null : Convert.ToString(reader.GetValue(25), System.Globalization.CultureInfo.InvariantCulture));
     }
 
     private static DbConnection Open(string connectionString)

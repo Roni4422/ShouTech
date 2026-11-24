@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Globalization;
+using ShouTech.App.Configuration;
 using ShouTech.App.Services;
 using ShouTech.App.Localization;
 
@@ -86,28 +87,43 @@ public partial class AccCard : BaseWin
     private void InitializeLists()
     {
         var rows = AccRepo.LoadAll();
-        CmbParent.ItemsSource = rows
+        var accountItems = rows
             .OrderBy(x => x.Code, StringComparer.Ordinal)
             .Select(x => x.Code + " - " + x.Name)
             .ToList();
+        CmbParent.ItemsSource = accountItems;
+        CmbClosing.ItemsSource = accountItems;
+        // Editable currency combo: seeded with the company currency
+        // (no central currency-list API exists in the app layer;
+        // free entry of any ISO code stays possible).
+        var companyCurrency = UsrPref.Load().CurrencyCode;
+        CmbCurrency.ItemsSource = string.IsNullOrWhiteSpace(companyCurrency)
+            ? new List<string>()
+            : new List<string> { companyCurrency };
         RefreshOptionLists();
     }
 
-    /// <summary>Rebuilds the four value lists in the active language, preserving each selection by canonical value.</summary>
+    /// <summary>Rebuilds the value lists in the active language, preserving each selection by canonical value.</summary>
     private void RefreshOptionLists()
     {
         var status = SelectedValue(CmbStatus);
         var risk = SelectedValue(CmbRisk);
         var posting = SelectedValue(CmbPostingMode);
         var cost = SelectedValue(CmbCostCenter);
+        var warning = SelectedValue(CmbWarningSide);
+        var side = SelectedValue(CmbAccountSide);
         CmbStatus.ItemsSource = Options(("Active", "AccCard.StatusActive"), ("Disabled", "AccCard.StatusDisabled"));
         CmbRisk.ItemsSource = Options(("Low", "AccCard.RiskLow"), ("Medium", "AccCard.RiskMedium"), ("High", "AccCard.RiskHigh"));
         CmbPostingMode.ItemsSource = Options(("Postable", "AccCard.PostingPostable"), ("Summary", "AccCard.PostingSummary"));
         CmbCostCenter.ItemsSource = Options(("Unspecified", "AccCard.CostUnspecified"), ("Required", "AccCard.CostRequiredOption"), ("Optional", "AccCard.CostOptional"));
+        CmbWarningSide.ItemsSource = Options(("NONE", "AccCard.WarningNone"), ("DEBIT", "AccCard.Debit"), ("CREDIT", "AccCard.Credit"));
+        CmbAccountSide.ItemsSource = Options(("DEBIT", "AccCard.Debit"), ("CREDIT", "AccCard.Credit"), ("BOTH", "AccCard.SideBoth"));
         if (status != null) SelectValue(CmbStatus, status);
         if (risk != null) SelectValue(CmbRisk, risk);
         if (posting != null) SelectValue(CmbPostingMode, posting);
         if (cost != null) SelectValue(CmbCostCenter, cost);
+        if (warning != null) SelectValue(CmbWarningSide, warning);
+        if (side != null) SelectValue(CmbAccountSide, side);
     }
 
     private void LoadRecord()
@@ -131,6 +147,13 @@ public partial class AccCard : BaseWin
             ChkCostRequired.IsChecked = false;
             ChkBudget.IsChecked = false;
             ChkDefault.IsChecked = false;
+            SelectClosing(null);
+            SelectValue(CmbWarningSide, "NONE");
+            SelectValue(CmbAccountSide, "BOTH");
+            TxtEstBudget.Text = "0";
+            CmbCurrency.Text = UsrPref.Load().CurrencyCode;
+            TxtParity.Text = "1.00000";
+            DtReconcile.SelectedDate = null;
             SelectParent(_initialParentCode);
             if (!string.IsNullOrWhiteSpace(_initialParentCode))
                 GenerateNextCode(_initialParentCode);
@@ -154,6 +177,15 @@ public partial class AccCard : BaseWin
         ChkBudget.IsChecked = _current.Budget;
         ChkDefault.IsChecked = _current.IsDefault;
         TxtTaxRate.Text = _current.TaxRate.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        SelectClosing(_current.ClosingCode);
+        SelectValue(CmbWarningSide, _current.WarningSide);
+        SelectValue(CmbAccountSide, _current.AccountSide);
+        TxtEstBudget.Text = _current.EstimatedBudget.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        CmbCurrency.Text = _current.CurrencyCode ?? string.Empty;
+        TxtParity.Text = _current.ExchangeParity.ToString("0.00000", System.Globalization.CultureInfo.InvariantCulture);
+        DtReconcile.SelectedDate = DateTime.TryParse(_current.ReconciliationDate, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var recDate)
+            ? recDate
+            : null;
         TxtDescription.Text = _current.Description;
         TxtBalance.Text = _current.Balance.ToString("N2", CultureInfo.InvariantCulture);
         TxtDebit.Text = _current.Debit.ToString("N2", CultureInfo.InvariantCulture);
@@ -170,6 +202,21 @@ public partial class AccCard : BaseWin
     private string? SelectedParentCode()
     {
         var text = CmbParent.SelectedItem?.ToString();
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        var dash = text.IndexOf(" -", StringComparison.Ordinal);
+        return dash > 0 ? text[..dash].Trim() : text.Trim();
+    }
+
+    private void SelectClosing(string? closingCode)
+    {
+        if (string.IsNullOrWhiteSpace(closingCode)) { CmbClosing.SelectedIndex = -1; return; }
+        var match = CmbClosing.Items.Cast<object>().FirstOrDefault(x => x.ToString()?.StartsWith(closingCode + " -", StringComparison.OrdinalIgnoreCase) == true);
+        CmbClosing.SelectedItem = match;
+    }
+
+    private string? SelectedClosingCode()
+    {
+        var text = CmbClosing.SelectedItem?.ToString();
         if (string.IsNullOrWhiteSpace(text)) return null;
         var dash = text.IndexOf(" -", StringComparison.Ordinal);
         return dash > 0 ? text[..dash].Trim() : text.Trim();
@@ -305,6 +352,25 @@ public partial class AccCard : BaseWin
             return;
         }
 
+        if (!decimal.TryParse(TxtEstBudget.Text.Trim(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var estBudget) || estBudget < 0)
+        {
+            MessageBox.Show(this, T("AccCard.MsgTaxRange"), T("AccCard.EstimatedBudget"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (!decimal.TryParse(TxtParity.Text.Trim(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var parity) || parity <= 0)
+        {
+            MessageBox.Show(this, T("AccCard.MsgTaxRange"), T("AccCard.ExchangeParity"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var closing = SelectedClosingCode();
+        if (closing != null && code == closing)
+        {
+            MessageBox.Show(this, T("AccCard.MsgOwnParent"), T("AccCard.ClosingAccount"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         var value = new AccRepo.AccRec(
             _current?.Id ?? string.Empty, code, parent, nameAr, TxtNameEn.Text.Trim(),
             SelectedValue(CmbPostingMode) ?? "Postable",
@@ -312,7 +378,14 @@ public partial class AccCard : BaseWin
             SelectedValue(CmbCostCenter) ?? "Unspecified", ChkReconcile.IsChecked == true,
             ChkTaxable.IsChecked == true, ChkForeign.IsChecked == true, ChkCostRequired.IsChecked == true,
             ChkBudget.IsChecked == true, ChkDefault.IsChecked == true, taxRate, TxtDescription.Text.Trim(),
-            ParseAmount(TxtBalance.Text), ParseAmount(TxtDebit.Text), ParseAmount(TxtCredit.Text));
+            ParseAmount(TxtBalance.Text), ParseAmount(TxtDebit.Text), ParseAmount(TxtCredit.Text),
+            ClosingCode: closing,
+            WarningSide: SelectedValue(CmbWarningSide) ?? "NONE",
+            AccountSide: SelectedValue(CmbAccountSide) ?? "BOTH",
+            EstimatedBudget: estBudget,
+            CurrencyCode: string.IsNullOrWhiteSpace(CmbCurrency.Text) ? null : CmbCurrency.Text.Trim(),
+            ExchangeParity: parity,
+            ReconciliationDate: DtReconcile.SelectedDate?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
 
         var codeChanged = _current != null && !string.Equals(_current.Code, code, StringComparison.OrdinalIgnoreCase);
         var renumber = false;

@@ -142,6 +142,7 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
@@ -173,10 +174,33 @@
                     <TextBlock Grid.Row="5" Grid.Column="2" Text="Tax rate (%)" loc:LocProps.Key="AccCard.TaxRate" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <TextBox x:Name="TxtTaxRate" Grid.Row="5" Grid.Column="3" Margin="{StaticResource MarginFormField}" Text="0"/>
 
-                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Description" loc:LocProps.Key="AccCard.Description" FontWeight="SemiBold" VerticalAlignment="Top" Margin="0,4,0,5"/>
-                    <TextBox x:Name="TxtDescription" Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="3" Height="{StaticResource MultilineFieldHeight}" Margin="{StaticResource MarginFormField}" AcceptsReturn="True" TextWrapping="Wrap"/>
+                    <!-- Account-card completion (migration 118, R2e): the
+                         fields of the Al-Ameen 2004 reference card that the
+                         schema lacked — closing account, warning side,
+                         account side, estimated budget, currency + parity,
+                         reconciliation date. -->
+                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Closing account" loc:LocProps.Key="AccCard.ClosingAccount" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="CmbClosing" Grid.Row="6" Grid.Column="1" Margin="{StaticResource MarginFormField}"/>
+                    <TextBlock Grid.Row="6" Grid.Column="2" Text="Warning" loc:LocProps.Key="AccCard.WarningSide" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="CmbWarningSide" Grid.Row="6" Grid.Column="3" Margin="{StaticResource MarginFormField}"/>
 
-                    <Grid Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="4" Margin="0,3,0,0">
+                    <TextBlock Grid.Row="7" Grid.Column="0" Text="Account side" loc:LocProps.Key="AccCard.AccountSide" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="CmbAccountSide" Grid.Row="7" Grid.Column="1" Margin="{StaticResource MarginFormField}"/>
+                    <TextBlock Grid.Row="7" Grid.Column="2" Text="Estimated budget" loc:LocProps.Key="AccCard.EstimatedBudget" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBox x:Name="TxtEstBudget" Grid.Row="7" Grid.Column="3" Margin="{StaticResource MarginFormField}" Text="0"/>
+
+                    <TextBlock Grid.Row="8" Grid.Column="0" Text="Currency" loc:LocProps.Key="AccCard.Currency" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="CmbCurrency" Grid.Row="8" Grid.Column="1" Margin="{StaticResource MarginFormField}" IsEditable="True"/>
+                    <TextBlock Grid.Row="8" Grid.Column="2" Text="Exchange parity" loc:LocProps.Key="AccCard.ExchangeParity" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBox x:Name="TxtParity" Grid.Row="8" Grid.Column="3" Margin="{StaticResource MarginFormField}" Text="1.00000"/>
+
+                    <TextBlock Grid.Row="9" Grid.Column="0" Text="Reconciliation date" loc:LocProps.Key="AccCard.ReconciliationDate" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <DatePicker x:Name="DtReconcile" Grid.Row="9" Grid.Column="1" Margin="{StaticResource MarginFormField}"/>
+
+                    <TextBlock Grid.Row="10" Grid.Column="0" Text="Description" loc:LocProps.Key="AccCard.Description" FontWeight="SemiBold" VerticalAlignment="Top" Margin="0,4,0,5"/>
+                    <TextBox x:Name="TxtDescription" Grid.Row="10" Grid.Column="1" Grid.ColumnSpan="3" Height="{StaticResource MultilineFieldHeight}" Margin="{StaticResource MarginFormField}" AcceptsReturn="True" TextWrapping="Wrap"/>
+
+                    <Grid Grid.Row="11" Grid.Column="0" Grid.ColumnSpan="4" Margin="0,3,0,0">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                         <Border Grid.Column="0" Margin="0,0,4,0" Padding="7" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="5">
                             <StackPanel><TextBlock Text="Balance" loc:LocProps.Key="AccCard.Balance" Foreground="{DynamicResource TextSecondaryBrush}"/><TextBlock x:Name="TxtBalance" Text="0.00" FontSize="{DynamicResource FontSize15}" FontWeight="SemiBold"/></StackPanel>

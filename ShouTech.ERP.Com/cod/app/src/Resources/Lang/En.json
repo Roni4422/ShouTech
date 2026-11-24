@@ -1642,7 +1642,9 @@
     "ValStaStructure": "Unsupported .sta JSON structure.",
     "ValStaEmpty": "Encrypted JSON payload is empty.",
     "ValStaChunk": "Invalid .sta chunk size.",
-    "ValStaIncomplete": "Incomplete .sta file."
+    "ValStaIncomplete": "Incomplete .sta file.",
+    "Levels": "Levels",
+    "ExpandToLevel": "Expand to this level"
   },
   "AccCard": {
     "Code": "Code",
@@ -1701,7 +1703,16 @@
     "MsgDisableFailed": "Could not verify the account status.\n{0}",
     "MsgCannotDelete": "The account cannot be deleted because it is not completely empty:\n\n{0}",
     "MsgConfirmDelete": "The account will be permanently deleted:\n\n{0} - {1}\n\nThis operation cannot be undone. Do you want to continue?",
-    "MsgDeleteFailed": "Could not delete the account.\n{0}"
+    "MsgDeleteFailed": "Could not delete the account.\n{0}",
+    "ClosingAccount": "Closing account",
+    "WarningSide": "Warning",
+    "WarningNone": "None",
+    "AccountSide": "Account side",
+    "SideBoth": "Both",
+    "EstimatedBudget": "Estimated budget",
+    "Currency": "Currency",
+    "ExchangeParity": "Exchange parity",
+    "ReconciliationDate": "Reconciliation date"
   },
   "COA": {
     "Template": {

@@ -1166,7 +1166,9 @@
     "ValStaIncomplete": "Eksik .sta dosyası.",
     "ValStaInvalid": "Geçersiz .sta dosyası veya bir ShouTech paketi değil.",
     "ValStaStructure": "Desteklenmeyen .sta JSON yapısı.",
-    "ValStaVersion": "Desteklenmeyen .sta dosya sürümü: {0}."
+    "ValStaVersion": "Desteklenmeyen .sta dosya sürümü: {0}.",
+    "Levels": "Düzeyler",
+    "ExpandToLevel": "Bu düzeye kadar genişlet"
   },
   "AccCard": {
     "AccountNumberTitle": "Hesap numarası",
@@ -1225,7 +1227,16 @@
     "StatusDisabled": "Devre dışı",
     "TaxRate": "Vergi oranı (%)",
     "TaxRateTitle": "Vergi oranı",
-    "Taxable": "Vergiye tabi"
+    "Taxable": "Vergiye tabi",
+    "ClosingAccount": "Kapanış hesabı",
+    "WarningSide": "Uyarı",
+    "WarningNone": "Yok",
+    "AccountSide": "Hesap niteliği",
+    "SideBoth": "İkisi de",
+    "EstimatedBudget": "Tahmini bütçe",
+    "Currency": "Para birimi",
+    "ExchangeParity": "Döviz paritesi",
+    "ReconciliationDate": "Mutabakat tarihi"
   },
   "COA": {
     "Template": {

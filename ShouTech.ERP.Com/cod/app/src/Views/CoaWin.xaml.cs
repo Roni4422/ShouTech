@@ -410,6 +410,28 @@ public partial class CoaWin : BaseWin
         SetExpanded(_selected, false);
     }
 
+    // Level indicators 1-5 (owner spec item 7, modelled on the
+    // Al-Ameen 2004 chart): expand the tree to exactly N levels —
+    // nodes above the level open, nodes at or below it close.
+    // Acts on the currently displayed roots (search clones incl.).
+    private void Level_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string tag }
+            || !int.TryParse(tag, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var level))
+            return;
+        if (TvAccounts.ItemsSource is not IEnumerable<AccountNode> roots)
+            return;
+        foreach (var root in roots)
+            SetLevelRecursive(root, 1, level);
+    }
+
+    private static void SetLevelRecursive(AccountNode node, int depth, int targetLevel)
+    {
+        node.IsExpanded = depth < targetLevel;
+        foreach (var child in node.Children)
+            SetLevelRecursive(child, depth + 1, targetLevel);
+    }
+
     private void ExpandAll_Click(object sender, RoutedEventArgs e) => SetExpandedAll(true);
     private void CollapseAll_Click(object sender, RoutedEventArgs e) => SetExpandedAll(false);
 

@@ -1148,7 +1148,9 @@
     "ValStaIncomplete": "Fichier .sta incomplet.",
     "ValStaInvalid": "Fichier .sta non valide ou n'est pas un package ShouTech.",
     "ValStaStructure": "Structure JSON .sta non prise en charge.",
-    "ValStaVersion": "Version du fichier .sta non prise en charge : {0}."
+    "ValStaVersion": "Version du fichier .sta non prise en charge : {0}.",
+    "Levels": "Niveaux",
+    "ExpandToLevel": "Développer jusqu'à ce niveau"
   },
   "AccCard": {
     "AccountNumberTitle": "Numéro de compte",
@@ -1207,7 +1209,16 @@
     "StatusDisabled": "Désactivé",
     "TaxRate": "Taux de taxe (%)",
     "TaxRateTitle": "Taux de taxe",
-    "Taxable": "Taxable"
+    "Taxable": "Taxable",
+    "ClosingAccount": "Compte de clôture",
+    "WarningSide": "Alerte",
+    "WarningNone": "Aucune",
+    "AccountSide": "Nature du compte",
+    "SideBoth": "Les deux",
+    "EstimatedBudget": "Budget estimé",
+    "Currency": "Devise",
+    "ExchangeParity": "Parité de change",
+    "ReconciliationDate": "Date de rapprochement"
   },
   "COA": {
     "Template": {

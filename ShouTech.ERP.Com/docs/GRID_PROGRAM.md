@@ -222,11 +222,83 @@ orphaned from its context.
 
 ## Family 5 — chart of accounts + account card (CoaWin + AccCard)
 
-Pending batch R2e: tree + level indicators 1–5 + search (logic
-modelled on the Al-Ameen 2004 reference image; visuals modern
-central), account card inside the directory family with the
-image's field set checked against chart_of_accounts — missing
-fields (estimated budget, reconciliation date, confidentiality
-level, warning side, account side, closing account) go through a
-migration as part of the complete-pillars build, flagged in the
-batch report. Phenix v9 consulted as the additional reference.
+**Verdict: DONE (batch R2e), gates ALL-GREEN (incl. migration
+118).**
+
+Reference split (owner 15:19/15:20): the screenshot is
+**Al-Ameen 2004** — structure/content/logic only (tree
+organization, level indicators, card fields, balance panel,
+navigator). All visuals are the modern central system (Win11
+surfaces, slate accent, Segoe MDL2 glyphs). Phenix v9 stands as
+the additional account-card reference the owner named; its
+screens are not publicly documented in comparable detail, so
+the field-level model follows the Al-Ameen 2004 image, which we
+hold. Al-Ameen's classic help text (owner upload 15:33) backs
+the account-card topics (168 mentions) with the same limit:
+classic-generation logic/fields, not Al-Ameen 10's screens.
+
+What already conformed (verified, unchanged): CoaWin was
+already a TreeView with search-at-top, hierarchical numbering,
+expand/collapse-all, and AccCard opened from within the chart;
+AccCard already carried the record navigator (first/prev/next/
+last), the CURRENT BALANCE panel (debit/credit/balance from
+posted journal lines), bottom buttons, parent lookup, Latin
+name, posting-mode (type) dropdown, and the risk/confidentiality
+level with its colored indicator.
+
+Built in R2e:
+- **Folder glyphs** in the CoaWin tree template: group accounts
+  show the closed folder (E8B7) / open folder (E838 while
+  expanded, MultiDataTrigger on TypeLabel + IsExpanded);
+  postable accounts show the document glyph (E8A5).
+- **Level indicators 1–5** above the tree (header row, end
+  aligned, FlowAlign): one click expands the displayed tree to
+  exactly N levels (works on search-filtered clones too).
+- **Migration 118 (BOTH dialects) — schema additions, flagged
+  explicitly per the owner's instruction:** chart_of_accounts
+  gains `closing_account_id`, `warning_side` (NONE/DEBIT/CREDIT),
+  `account_side` (DEBIT/CREDIT/BOTH), `estimated_budget`,
+  `currency_code`, `exchange_parity`, `reconciliation_date` —
+  the reference card's fields the schema lacked. AccRepo reads
+  and writes them end-to-end (closing resolved by code like the
+  parent; AccRec gains them as optional trailing parameters so
+  existing constructions, incl. Kern.Tests, are untouched).
+- **AccCard** gains the seven fields as real persisted inputs:
+  closing-account combo (same account list as parent), warning
+  side combo, account side combo, estimated budget, currency
+  (editable combo seeded with the company currency — no central
+  currency-list API exists in the app layer; free ISO entry
+  stays possible), exchange parity (validated > 0, shown at
+  5 decimals as in the reference), reconciliation date picker.
+  Validation mirrors the card's existing rules; the new-field
+  labels are Lang keys ×4.
+
+### Four-system comparison — chart + account card
+
+| Dimension | ERPNext | Odoo | Al-Ameen 2004 (reference) | Phenix v9 | ShouTech after R2e |
+|---|---|---|---|---|---|
+| Chart presentation | tree (web) | list/tree views | tree + level indicators 1–5 | tree (vendor claim) | tree + level indicators 1–5 + search |
+| Node glyphs | web icons | web icons | legacy folder bitmaps | — | modern MDL2 folder/document glyphs |
+| Card inside directory | separate form | separate form | panel within the chart window | card from chart | AccCard opened from CoaWin (same family) |
+| Card fields | name, type, parent, currency, frozen | name, type, parent, reconcile | code, names, type, parent, closing, warning, budget, currency/parity, side, reconcile date, confidentiality, notes | comparable card (thin public evidence) | all of the reference set (118 added the missing seven) |
+| Balance panel | on-account balances | balances in list | debit/credit/balance panel | — | debit/credit/balance panel from posted lines |
+| Navigator | list prev/next | pager | first/prev/next/last | — | first/prev/next/last |
+
+**Where ShouTech exceeds:** the same chart doubles as the
+voucher grids' account search (picker mode) — no benchmark
+reuses its chart that way; whole-window RTL mirroring and live
+language switching on a desktop chart; balances computed from
+posted journal lines only (never cached counters).
+**Where ShouTech still trails:** the closing account is stored
+but the year-end closing routine does not yet consume it
+(closing entries exist as a report family; wiring the card's
+closing_account_id into the fiscal-close posting is a named
+commercial-phase gap); warning_side is persisted but not yet
+enforced at journal posting (same gap class).
+**Verdict (power + ease):** more powerful — the card now holds
+the full reference field set with real persistence, and the
+chart's levels/glyphs/search make a 7-root, deep chart
+navigable at a glance; easier — one click sets the exact tree
+depth, the card opens in place from the chart with its balance
+in front of the user, and nothing about the legacy reference
+look was copied.

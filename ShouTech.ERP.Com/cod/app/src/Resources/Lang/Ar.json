@@ -1168,7 +1168,9 @@
     "ValStaIncomplete": "ملف .sta غير مكتمل.",
     "ValStaInvalid": "ملف .sta غير صالح أو ليس حزمة ShouTech.",
     "ValStaStructure": "بنية JSON في ملف .sta غير مدعومة.",
-    "ValStaVersion": "إصدار ملف .sta غير مدعوم: {0}."
+    "ValStaVersion": "إصدار ملف .sta غير مدعوم: {0}.",
+    "Levels": "المستويات",
+    "ExpandToLevel": "توسيع حتى هذا المستوى"
   },
   "AccCard": {
     "AccountNumberTitle": "رقم الحساب",
@@ -1227,7 +1229,16 @@
     "StatusDisabled": "معطل",
     "TaxRate": "نسبة الضريبة (%)",
     "TaxRateTitle": "نسبة الضريبة",
-    "Taxable": "خاضع للضريبة"
+    "Taxable": "خاضع للضريبة",
+    "ClosingAccount": "حساب الإقفال",
+    "WarningSide": "التنبيه",
+    "WarningNone": "بدون",
+    "AccountSide": "طبيعة الحساب",
+    "SideBoth": "كلاهما",
+    "EstimatedBudget": "الموازنة التقديرية",
+    "Currency": "العملة",
+    "ExchangeParity": "معادل الصرف",
+    "ReconciliationDate": "تاريخ المطابقة"
   },
   "COA": {
     "Template": {
