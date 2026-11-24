@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Data.Sqlite;
+using Microsoft.Win32;
 using Npgsql;
 using ShouTech.App.Reporting;
 using ShouTech.App.Services;
@@ -57,6 +58,17 @@ public sealed class CustomReportsWin : BaseWin
     private readonly ComboBox _dataSource = new();
     private readonly ComboBox _visibility = new();
     private readonly TextBox _columnsInfo = new();
+    private readonly ComboBox _pageSize = new();
+    private readonly CheckBox _landscape = new();
+    private readonly TextBox _marginMm = new();
+    private readonly TextBox _titleSize = new();
+    private readonly TextBox _headerBack = new();
+    private readonly TextBox _headerText = new();
+    private readonly TextBox _banding = new();
+    private readonly TextBox _bodySize = new();
+    private readonly CheckBox _gridLines = new();
+    private readonly CheckBox _companyAddress = new();
+    private readonly TextBox _totalsFormulas = new();
     private readonly DataGrid _runGrid = new();
     private readonly TextBlock _statusBar = new();
     private readonly Button _runButton = new();
@@ -64,9 +76,17 @@ public sealed class CustomReportsWin : BaseWin
     private readonly Button _editButton = new();
     private readonly Button _saveButton = new();
     private readonly Button _refreshButton = new();
+    private readonly Button _printButton = new();
+    private readonly Button _pdfButton = new();
+    private readonly Button _excelButton = new();
+    private readonly Button _exportDesignButton = new();
+    private readonly Button _importDesignButton = new();
     private readonly Button _closeButton = new();
 
     private ReportDefinition? _editing;
+    private ReportDefinition? _lastRunDef;
+    private IReadOnlyList<ReportRow>? _lastRunRows;
+    private Dictionary<string, object?>? _lastRunTotals;
 
     public CustomReportsWin()
     {
@@ -109,6 +129,9 @@ public sealed class CustomReportsWin : BaseWin
         _dataSource.SelectedIndex = 0;
         _visibility.ItemsSource = Enum.GetNames<ReportVisibility>();
         _visibility.SelectedItem = ReportVisibility.Private.ToString();
+        _pageSize.ItemsSource = new[] { "A4", "A5", "Letter" };
+        _pageSize.SelectedItem = "A4";
+        LoadStyleIntoForm(new ReportDefinition());
         await LoadKeysAsync();
         await RefreshAsync();
     }
@@ -123,14 +146,25 @@ public sealed class CustomReportsWin : BaseWin
         F2Ui.StyleButton(_editButton, "CustomReports.Edit");
         F2Ui.StyleButton(_saveButton, "Common.Save");
         F2Ui.StyleButton(_refreshButton, "Common.Refresh");
+        F2Ui.StyleButton(_printButton, "Common.Print");
+        F2Ui.StyleButton(_pdfButton, "Export.Pdf");
+        F2Ui.StyleButton(_excelButton, "Export.Excel");
+        F2Ui.StyleButton(_exportDesignButton, "CustomReports.ExportDesign");
+        F2Ui.StyleButton(_importDesignButton, "CustomReports.ImportDesign");
         F2Ui.StyleButton(_closeButton, "Common.Close");
         _runButton.Click += async (_, _) => await RunAsync();
         _newButton.Click += (_, _) => NewDefinition();
         _editButton.Click += async (_, _) => await EditAsync();
         _saveButton.Click += async (_, _) => await SaveAsync();
         _refreshButton.Click += async (_, _) => await RefreshAsync();
+        _printButton.Click += async (_, _) => await PrintRunAsync();
+        _pdfButton.Click += async (_, _) => await ExportRunAsync(pdf: true);
+        _excelButton.Click += async (_, _) => await ExportRunAsync(pdf: false);
+        _exportDesignButton.Click += async (_, _) => await ExportDesignAsync();
+        _importDesignButton.Click += async (_, _) => await ImportDesignAsync();
         _closeButton.Click += (_, _) => Close();
-        root.Children.Add(F2Ui.BottomBar(_runButton, _newButton, _editButton, _saveButton, _refreshButton, _closeButton));
+        root.Children.Add(F2Ui.BottomBar(_runButton, _newButton, _editButton, _saveButton, _refreshButton,
+            _printButton, _pdfButton, _excelButton, _exportDesignButton, _importDesignButton, _closeButton));
 
         var content = new Grid();
         // Step 12 screen-fit: the run-results row was a fixed 190 DIP
@@ -175,6 +209,21 @@ public sealed class CustomReportsWin : BaseWin
         _columnsInfo.Height = 90;
         _columnsInfo.TextWrapping = TextWrapping.Wrap;
         F2Ui.AddField(_labels, designer, 4, 0, "CustomReports.Columns", _columnsInfo);
+        // B2 styling + page setup (migration 115 columns).
+        F2Ui.AddField(_labels, designer, 5, 0, "CustomReports.PageSize", _pageSize);
+        F2Ui.AddField(_labels, designer, 6, 0, "CustomReports.Landscape", _landscape);
+        F2Ui.AddField(_labels, designer, 7, 0, "CustomReports.MarginMm", _marginMm);
+        F2Ui.AddField(_labels, designer, 8, 0, "CustomReports.TitleFontSize", _titleSize);
+        F2Ui.AddField(_labels, designer, 9, 0, "CustomReports.HeaderBackColor", _headerBack);
+        F2Ui.AddField(_labels, designer, 10, 0, "CustomReports.HeaderTextColor", _headerText);
+        F2Ui.AddField(_labels, designer, 11, 0, "CustomReports.BandingColor", _banding);
+        F2Ui.AddField(_labels, designer, 12, 0, "CustomReports.BodyFontSize", _bodySize);
+        F2Ui.AddField(_labels, designer, 13, 0, "CustomReports.GridLines", _gridLines);
+        F2Ui.AddField(_labels, designer, 14, 0, "CustomReports.CompanyAddress", _companyAddress);
+        _totalsFormulas.AcceptsReturn = true;
+        _totalsFormulas.Height = 64;
+        _totalsFormulas.TextWrapping = TextWrapping.Wrap;
+        F2Ui.AddField(_labels, designer, 15, 0, "CustomReports.TotalsFormulas", _totalsFormulas);
         var designerScroll = new ScrollViewer { Content = designer, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Grid.SetRow(designerScroll, 0);
         Grid.SetColumn(designerScroll, 1);
@@ -196,7 +245,11 @@ public sealed class CustomReportsWin : BaseWin
     protected override void ApplyLocalizedText()
     {
         Title = T("CustomReports.Title");
-        F2Ui.ApplyTexts(_labels, _headers, new[] { _runButton, _newButton, _editButton, _saveButton, _refreshButton, _closeButton }, T);
+        F2Ui.ApplyTexts(_labels, _headers, new[]
+        {
+            _runButton, _newButton, _editButton, _saveButton, _refreshButton,
+            _printButton, _pdfButton, _excelButton, _exportDesignButton, _importDesignButton, _closeButton
+        }, T);
     }
 
     private string SelectedKey => (_reportKey.SelectedItem as string) ?? _reportKey.Text.Trim();
@@ -236,9 +289,8 @@ public sealed class CustomReportsWin : BaseWin
             : new SqliteConnection(cs);
         await connection.OpenAsync();
         await using var cmd = connection.CreateCommand();
-        cmd.CommandText = isPg
-            ? "SELECT DISTINCT ReportKey FROM CustomReportDefinitions WHERE IsDeleted = FALSE ORDER BY ReportKey"
-            : "SELECT DISTINCT ReportKey FROM CustomReportDefinitions WHERE IsDeleted = 0 ORDER BY ReportKey";
+        cmd.CommandText =
+            "SELECT DISTINCT ReportKey FROM CustomReportDefinitions WHERE IsDeleted = 0 ORDER BY ReportKey";
         var result = new List<string>();
         await using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
@@ -280,7 +332,76 @@ public sealed class CustomReportsWin : BaseWin
         _dataSource.SelectedIndex = 0;
         _visibility.SelectedItem = ReportVisibility.Private.ToString();
         _columnsInfo.Text = T("CustomReports.ColumnsSeededOnSave");
+        LoadStyleIntoForm(new ReportDefinition());
     }
+
+    /// <summary>Pushes a definition's B2 styling + page setup into
+    /// the designer form (also used to reset the form to defaults).</summary>
+    private void LoadStyleIntoForm(ReportDefinition def)
+    {
+        _pageSize.SelectedItem = string.IsNullOrWhiteSpace(def.PageSize) ? "A4" : def.PageSize;
+        _landscape.IsChecked = def.IsLandscape;
+        _marginMm.Text = def.MarginMm.ToString(CultureInfo.InvariantCulture);
+        _titleSize.Text = def.TitleFontSize.ToString(CultureInfo.InvariantCulture);
+        _headerBack.Text = def.HeaderBackColor ?? string.Empty;
+        _headerText.Text = def.HeaderTextColor ?? string.Empty;
+        _banding.Text = def.BandingColor ?? string.Empty;
+        _bodySize.Text = def.BodyFontSize.ToString(CultureInfo.InvariantCulture);
+        _gridLines.IsChecked = def.ShowGridLines;
+        _companyAddress.IsChecked = def.ShowCompanyAddress;
+        _totalsFormulas.Text = string.Join(Environment.NewLine,
+            def.Columns
+                .Where(c => !string.IsNullOrWhiteSpace(c.TotalsFormula))
+                .OrderBy(c => c.DisplayOrder)
+                .Select(c => $"{c.FieldKey} = {c.TotalsFormula}"));
+    }
+
+    /// <summary>Reads the B2 styling + page setup back from the form
+    /// into the definition, including the totals-formula editor (one
+    /// "FieldKey = expression" per line; expressions are validated
+    /// by ReportRepo at save).</summary>
+    private void ApplyStyleFromForm(ReportDefinition def)
+    {
+        def.PageSize = _pageSize.SelectedItem as string ?? "A4";
+        def.IsLandscape = _landscape.IsChecked == true;
+        if (double.TryParse(_marginMm.Text.Trim(), NumberStyles.Number,
+                CultureInfo.InvariantCulture, out var margin) && margin >= 0)
+            def.MarginMm = margin;
+        if (double.TryParse(_titleSize.Text.Trim(), NumberStyles.Number,
+                CultureInfo.InvariantCulture, out var titleSize) && titleSize > 0)
+            def.TitleFontSize = titleSize;
+        if (double.TryParse(_bodySize.Text.Trim(), NumberStyles.Number,
+                CultureInfo.InvariantCulture, out var bodySize) && bodySize > 0)
+            def.BodyFontSize = bodySize;
+        def.HeaderBackColor = NullIfBlank(_headerBack.Text);
+        def.HeaderTextColor = NullIfBlank(_headerText.Text);
+        def.BandingColor = NullIfBlank(_banding.Text);
+        def.ShowGridLines = _gridLines.IsChecked == true;
+        def.ShowCompanyAddress = _companyAddress.IsChecked == true;
+
+        foreach (var col in def.Columns)
+            col.TotalsFormula = null;
+        foreach (var rawLine in _totalsFormulas.Text.Split('\n'))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0)
+                continue;
+            var eq = line.IndexOf('=');
+            if (eq <= 0)
+                throw new InvalidOperationException(
+                    FormatLocalized(T("CustomReports.TotalsFormulaUnknownField"), line));
+            var field = line[..eq].Trim();
+            var col = def.Columns.FirstOrDefault(c =>
+                string.Equals(c.FieldKey, field, StringComparison.OrdinalIgnoreCase));
+            if (col is null)
+                throw new InvalidOperationException(
+                    FormatLocalized(T("CustomReports.TotalsFormulaUnknownField"), field));
+            col.TotalsFormula = line[(eq + 1)..].Trim();
+        }
+    }
+
+    private static string? NullIfBlank(string text)
+        => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
 
     private async Task EditAsync()
     {
@@ -299,6 +420,7 @@ public sealed class CustomReportsWin : BaseWin
             _dataSource.SelectedItem = loaded.DataSourceKey;
             _visibility.SelectedItem = loaded.Visibility.ToString();
             _columnsInfo.Text = string.Join(", ", loaded.Columns.OrderBy(c => c.DisplayOrder).Select(c => c.FieldKey));
+            LoadStyleIntoForm(loaded);
             _statusBar.Text = loaded.ReportName;
         }
         catch (Exception ex)
@@ -345,6 +467,8 @@ public sealed class CustomReportsWin : BaseWin
                 }
             }
 
+            ApplyStyleFromForm(def);
+
             var companyGuid = await ResolveCompanyGuidAsync();
             var id = await ReportRepo.SaveReportAsync(def, companyGuid, UserId);
             def.ReportDefID = id;
@@ -382,6 +506,13 @@ public sealed class CustomReportsWin : BaseWin
             var vm = new ReportDesignerVM(loaded, companyGuid, UserId);
             vm.SetData(rows.Select(r => new Dictionary<string, object?>(r)));
 
+            // B2: totals = plain aggregates + cell-level totals
+            // formulas, computed over the full result set.
+            var totals = loaded.ShowTotalsRow ? vm.ComputeTotals(vm.Rows) : null;
+            _lastRunDef = loaded;
+            _lastRunRows = vm.Rows;
+            _lastRunTotals = totals;
+
             var table = new DataTable();
             var fields = loaded.VisibleColumns.Select(c => c.FieldKey).ToList();
             if (fields.Count == 0 && vm.Rows.Count > 0)
@@ -395,8 +526,180 @@ public sealed class CustomReportsWin : BaseWin
                     dataRow[field] = row.TryGetValue(field, out var v) ? v ?? DBNull.Value : DBNull.Value;
                 table.Rows.Add(dataRow);
             }
+            if (totals != null)
+            {
+                var totalRow = table.NewRow();
+                foreach (var field in fields)
+                    totalRow[field] = totals.TryGetValue(field, out var v) ? v ?? DBNull.Value : DBNull.Value;
+                table.Rows.Add(totalRow);
+            }
             _runGrid.ItemsSource = table.DefaultView;
-            _statusBar.Text = $"{loaded.ReportName} · {table.Rows.Count}";
+            _statusBar.Text = $"{loaded.ReportName} · {vm.Rows.Count}";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task PrintRunAsync()
+    {
+        try
+        {
+            var model = await BuildExportModelAsync();
+            if (model != null)
+                XptServ.Print(this, model);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task ExportRunAsync(bool pdf)
+    {
+        try
+        {
+            var model = await BuildExportModelAsync();
+            if (model == null)
+                return;
+            if (pdf)
+                XptServ.ExportPdf(this, model);
+            else
+                XptServ.ExportExcel(this, model);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>Builds the export/print model for the last run,
+    /// carrying the design's style + totals through the real report
+    /// path (XptServ → RptRend).</summary>
+    private async Task<XptServ.ExportModel?> BuildExportModelAsync()
+    {
+        if (_lastRunDef is null || _lastRunRows is null)
+        {
+            _statusBar.Text = T("CustomReports.RunFirst");
+            return null;
+        }
+
+        var def = _lastRunDef;
+        var cols = def.VisibleColumns.Select(c => new RptCol
+        {
+            Key = c.FieldKey,
+            HeaderTextKey = string.IsNullOrWhiteSpace(c.CaptionEN) ? c.FieldKey : c.CaptionEN!,
+            Type = c.DataFormat switch
+            {
+                ReportDataFormat.Money => RptColType.Money,
+                ReportDataFormat.Qty => RptColType.FractionalNumber,
+                ReportDataFormat.Percent => RptColType.Percent,
+                ReportDataFormat.Date => RptColType.Date,
+                ReportDataFormat.DateTime => RptColType.DateTime,
+                _ => RptColType.Text
+            },
+            Width = c.ColumnWidth
+        }).ToList();
+
+        return new XptServ.ExportModel
+        {
+            ReportKey = def.ReportKey,
+            Title = def.ReportName,
+            CompanyName = CurrentCompanyDisplay,
+            GeneratedBy = CurrentUserDisplay,
+            FilterSummary = string.Empty,
+            Columns = cols,
+            Rows = _lastRunRows.Select(r => (IReadOnlyDictionary<string, object?>)r).ToList(),
+            Totals = _lastRunTotals,
+            Rtl = FlowDirection == FlowDirection.RightToLeft,
+            Translate = key => T(key),
+            Style = def.ToStyle(),
+            CompanyAddress = def.ShowCompanyAddress ? await CompanyAddressAsync() : null
+        };
+    }
+
+    private static async Task<string?> CompanyAddressAsync()
+    {
+        try
+        {
+            var companies = await CoLocalStore.LoadAsync();
+            var rec = companies.FirstOrDefault(c =>
+                string.Equals(c.Code, CurrentCompanyCode, StringComparison.OrdinalIgnoreCase));
+            if (rec is null)
+                return null;
+            var cityCountry = string.Join(", ",
+                new[] { rec.City, rec.Country }.Where(s => !string.IsNullOrWhiteSpace(s)));
+            var parts = new[] { rec.AddressLine1, rec.AddressLine2, cityCountry }
+                .Where(s => !string.IsNullOrWhiteSpace(s));
+            var text = string.Join("\n", parts);
+            return text.Length == 0 ? null : text;
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.DatabaseQueryFailed, ex, "CustomReportsWin.CompanyAddressAsync");
+            return null;
+        }
+    }
+
+    /// <summary>Exports the selected design as an encrypted .strd
+    /// file (B0 mechanism) — readable only by ShouTech.</summary>
+    private async Task ExportDesignAsync()
+    {
+        try
+        {
+            if (_listGrid.SelectedItem is not ReportDefinition selected || selected.ReportDefID is not int id)
+                throw new InvalidOperationException(T("CustomReports.SelectFirst"));
+            var loaded = await ReportRepo.LoadReportAsync(id, UserId);
+            if (loaded is null)
+                throw new InvalidOperationException(T("CustomReports.NotFound"));
+            var dialog = new SaveFileDialog
+            {
+                Filter = DesignFileSvc.FilterFor(DesignFileSvc.Kind.Report),
+                DefaultExt = DesignFileSvc.ExtensionFor(DesignFileSvc.Kind.Report),
+                AddExtension = true,
+                OverwritePrompt = true,
+                FileName = loaded.ReportKey + DesignFileSvc.ExtensionFor(DesignFileSvc.Kind.Report)
+            };
+            if (dialog.ShowDialog(this) != true)
+                return;
+            if (!DesignFileSvc.Export(dialog.FileName, DesignFileSvc.Kind.Report,
+                    loaded.ReportName, ReportDesignJson.Serialize(loaded)))
+                throw new InvalidOperationException(T("CustomReports.DesignExportFailed"));
+            _statusBar.Text = T("CustomReports.DesignExported");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>Imports an encrypted .strd design as a NEW private
+    /// design owned by the current user.</summary>
+    private async Task ImportDesignAsync()
+    {
+        try
+        {
+            if (!AppHost.Permissions.Has(PermCat.Reporting.CustomManage) &&
+                !AppHost.Permissions.Has(PermCat.Reporting.DesignerManage))
+                throw new InvalidOperationException(T("CustomReports.PermissionDenied"));
+            var dialog = new OpenFileDialog
+            {
+                Filter = DesignFileSvc.FilterFor(DesignFileSvc.Kind.Report)
+            };
+            if (dialog.ShowDialog(this) != true)
+                return;
+            var json = DesignFileSvc.Import(dialog.FileName, DesignFileSvc.Kind.Report, out _);
+            var def = json is null ? null : ReportDesignJson.Deserialize(json, UserId);
+            if (def is null)
+                throw new InvalidOperationException(T("CustomReports.DesignImportFailed"));
+            var companyGuid = await ResolveCompanyGuidAsync();
+            await ReportRepo.SaveReportAsync(def, companyGuid, UserId);
+            _statusBar.Text = T("CustomReports.DesignImported");
+            await LoadKeysAsync();
+            if (_reportKey.ItemsSource is IEnumerable<string> keys && keys.Contains(def.ReportKey))
+                _reportKey.SelectedItem = def.ReportKey;
+            await RefreshAsync();
         }
         catch (Exception ex)
         {

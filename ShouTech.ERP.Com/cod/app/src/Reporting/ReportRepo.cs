@@ -47,7 +47,12 @@ namespace ShouTech.App.Reporting
             var rows = await db.QueryAsync<ReportDefRow>(new CommandDefinition($"""
                 SELECT ReportDefID, ReportKey, ReportName, Description, LanguageCode,
                        OwnerUserID, Visibility, DataSourceKey, PageOrientation,
-                       ShowTotalsRow, ShowHeaderInfo, FreezeFirstColumn, IsFavorite, IsSystem
+                       ShowTotalsRow, ShowHeaderInfo, FreezeFirstColumn, IsFavorite, IsSystem,
+                       TitleFontFamily, TitleFontSize, TitleBold, HeaderFontFamily,
+                       HeaderFontSize, HeaderBold, HeaderBackColor, HeaderTextColor,
+                       BodyFontFamily, BodyFontSize, TotalsFontFamily, TotalsFontSize,
+                       TotalsBold, BandingColor, ShowGridLines, PageSize, MarginMm,
+                       ShowCompanyAddress
                 FROM CustomReportDefinitions
                 WHERE IsDeleted = 0 AND ReportKey = @reportKey
                   AND (OwnerUserID = @userId OR Visibility <> 'PRIVATE')
@@ -66,7 +71,12 @@ namespace ShouTech.App.Reporting
             var head = await db.QuerySingleOrDefaultAsync<ReportDefRow>(new CommandDefinition("""
                 SELECT ReportDefID, ReportKey, ReportName, Description, LanguageCode,
                        OwnerUserID, Visibility, DataSourceKey, PageOrientation,
-                       ShowTotalsRow, ShowHeaderInfo, FreezeFirstColumn, IsFavorite, IsSystem
+                       ShowTotalsRow, ShowHeaderInfo, FreezeFirstColumn, IsFavorite, IsSystem,
+                       TitleFontFamily, TitleFontSize, TitleBold, HeaderFontFamily,
+                       HeaderFontSize, HeaderBold, HeaderBackColor, HeaderTextColor,
+                       BodyFontFamily, BodyFontSize, TotalsFontFamily, TotalsFontSize,
+                       TotalsBold, BandingColor, ShowGridLines, PageSize, MarginMm,
+                       ShowCompanyAddress
                 FROM CustomReportDefinitions
                 WHERE IsDeleted = 0 AND ReportDefID = @reportDefId
                   AND (OwnerUserID = @userId OR Visibility <> 'PRIVATE')
@@ -79,7 +89,7 @@ namespace ShouTech.App.Reporting
 
             var cols = await db.QueryAsync<ReportColRow>(new CommandDefinition("""
                 SELECT FieldKey, CaptionAR, CaptionEN, DisplayOrder, ColumnWidth,
-                       IsVisible, IsLocked, ColumnType, FormulaText, DataFormat,
+                       IsVisible, IsLocked, ColumnType, FormulaText, TotalsFormula, DataFormat,
                        DecimalPlaces, AggregateFunc, NegativeInRed
                 FROM CustomReportColumns
                 WHERE IsDeleted = 0 AND ReportDefID = @reportDefId
@@ -99,6 +109,7 @@ namespace ShouTech.App.Reporting
                     IsLocked = c.IsLocked,
                     ColumnType = ParseColumnType(c.ColumnType),
                     FormulaText = c.FormulaText,
+                    TotalsFormula = c.TotalsFormula,
                     DataFormat = ParseFormat(c.DataFormat),
                     DecimalPlaces = c.DecimalPlaces,
                     AggregateFunc = c.AggregateFunc,
@@ -162,6 +173,13 @@ namespace ShouTech.App.Reporting
                         $"Invalid formula in column '{col.CaptionAR}': {err}");
             }
 
+            foreach (var col in def.Columns.Where(c => !string.IsNullOrWhiteSpace(c.TotalsFormula)))
+            {
+                if (!CompiledFormula.TryCompile(col.TotalsFormula!, out var err))
+                    throw new InvalidOperationException(
+                        $"Invalid totals formula in column '{col.CaptionAR}': {err}");
+            }
+
             await using var db = Open();
             await db.OpenAsync(ct);
             await using var tx = await db.BeginTransactionAsync(ct);
@@ -180,6 +198,15 @@ namespace ShouTech.App.Reporting
                             ShowTotalsRow = @ShowTotalsRow, ShowHeaderInfo = @ShowHeaderInfo,
                             FreezeFirstColumn = @FreezeFirstColumn,
                             IsFavorite = @IsFavorite,
+                            TitleFontFamily = @TitleFontFamily, TitleFontSize = @TitleFontSize,
+                            TitleBold = @TitleBold, HeaderFontFamily = @HeaderFontFamily,
+                            HeaderFontSize = @HeaderFontSize, HeaderBold = @HeaderBold,
+                            HeaderBackColor = @HeaderBackColor, HeaderTextColor = @HeaderTextColor,
+                            BodyFontFamily = @BodyFontFamily, BodyFontSize = @BodyFontSize,
+                            TotalsFontFamily = @TotalsFontFamily, TotalsFontSize = @TotalsFontSize,
+                            TotalsBold = @TotalsBold, BandingColor = @BandingColor,
+                            ShowGridLines = @ShowGridLines, PageSize = @PageSize,
+                            MarginMm = @MarginMm, ShowCompanyAddress = @ShowCompanyAddress,
                             UpdatedBy = @UpdatedBy, UpdatedAt = {Now}
                         WHERE ReportDefID = @ReportDefID
                           AND OwnerUserID = @OwnerUserID AND IsDeleted = 0 AND IsSystem = 0
@@ -201,12 +228,22 @@ namespace ShouTech.App.Reporting
                             (CompanyID, ReportKey, ReportName, Description, LanguageCode,
                              OwnerUserID, Visibility, DataSourceKey, PageOrientation,
                              ShowTotalsRow, ShowHeaderInfo, FreezeFirstColumn,
-                             IsFavorite, IsSystem, CreatedBy)
+                             IsFavorite, IsSystem,
+                             TitleFontFamily, TitleFontSize, TitleBold, HeaderFontFamily,
+                             HeaderFontSize, HeaderBold, HeaderBackColor, HeaderTextColor,
+                             BodyFontFamily, BodyFontSize, TotalsFontFamily, TotalsFontSize,
+                             TotalsBold, BandingColor, ShowGridLines, PageSize, MarginMm,
+                             ShowCompanyAddress, CreatedBy)
                         VALUES
                             (@CompanyID, @ReportKey, @ReportName, @Description, @LanguageCode,
                              @OwnerUserID, @Visibility, @DataSourceKey, @Orientation,
                              @ShowTotalsRow, @ShowHeaderInfo, @FreezeFirstColumn,
-                             @IsFavorite, 0, @CreatedBy)
+                             @IsFavorite, 0,
+                             @TitleFontFamily, @TitleFontSize, @TitleBold, @HeaderFontFamily,
+                             @HeaderFontSize, @HeaderBold, @HeaderBackColor, @HeaderTextColor,
+                             @BodyFontFamily, @BodyFontSize, @TotalsFontFamily, @TotalsFontSize,
+                             @TotalsBold, @BandingColor, @ShowGridLines, @PageSize, @MarginMm,
+                             @ShowCompanyAddress, @CreatedBy)
                         {(IsPg ? "RETURNING ReportDefID" : "; SELECT last_insert_rowid()")}
                         """,
                         HeadParams(def, companyId, userId), tx, cancellationToken: ct));
@@ -265,6 +302,24 @@ namespace ShouTech.App.Reporting
             def.ShowHeaderInfo,
             def.FreezeFirstColumn,
             def.IsFavorite,
+            def.TitleFontFamily,
+            def.TitleFontSize,
+            def.TitleBold,
+            def.HeaderFontFamily,
+            def.HeaderFontSize,
+            def.HeaderBold,
+            def.HeaderBackColor,
+            def.HeaderTextColor,
+            def.BodyFontFamily,
+            def.BodyFontSize,
+            def.TotalsFontFamily,
+            def.TotalsFontSize,
+            def.TotalsBold,
+            def.BandingColor,
+            def.ShowGridLines,
+            def.PageSize,
+            def.MarginMm,
+            def.ShowCompanyAddress,
             CreatedBy = companyId,
             UpdatedBy = companyId
         };
@@ -295,12 +350,12 @@ namespace ShouTech.App.Reporting
                     INSERT INTO CustomReportColumns
                         (CompanyID, ReportDefID, FieldKey, CaptionAR, CaptionEN,
                          DisplayOrder, ColumnWidth, IsVisible, IsLocked, ColumnType,
-                         FormulaText, DataFormat, DecimalPlaces, AggregateFunc,
+                         FormulaText, TotalsFormula, DataFormat, DecimalPlaces, AggregateFunc,
                          NegativeInRed, CreatedBy)
                     VALUES
                         (@CompanyID, @ReportDefID, @FieldKey, @CaptionAR, @CaptionEN,
                          @DisplayOrder, @ColumnWidth, @IsVisible, @IsLocked, @ColumnType,
-                         @FormulaText, @DataFormat, @DecimalPlaces, @AggregateFunc,
+                         @FormulaText, @TotalsFormula, @DataFormat, @DecimalPlaces, @AggregateFunc,
                          @NegativeInRed, @CreatedBy)
                     """,
                     new
@@ -322,6 +377,7 @@ namespace ShouTech.App.Reporting
                             _ => "DATA"
                         },
                         col.FormulaText,
+                        col.TotalsFormula,
                         DataFormat = col.DataFormat switch
                         {
                             ReportDataFormat.Money => "MONEY",
@@ -409,7 +465,25 @@ namespace ShouTech.App.Reporting
             ShowHeaderInfo = r.ShowHeaderInfo,
             FreezeFirstColumn = r.FreezeFirstColumn,
             IsFavorite = r.IsFavorite,
-            IsSystem = r.IsSystem
+            IsSystem = r.IsSystem,
+            TitleFontFamily = r.TitleFontFamily,
+            TitleFontSize = r.TitleFontSize,
+            TitleBold = r.TitleBold,
+            HeaderFontFamily = r.HeaderFontFamily,
+            HeaderFontSize = r.HeaderFontSize,
+            HeaderBold = r.HeaderBold,
+            HeaderBackColor = r.HeaderBackColor,
+            HeaderTextColor = r.HeaderTextColor,
+            BodyFontFamily = r.BodyFontFamily,
+            BodyFontSize = r.BodyFontSize,
+            TotalsFontFamily = r.TotalsFontFamily,
+            TotalsFontSize = r.TotalsFontSize,
+            TotalsBold = r.TotalsBold,
+            BandingColor = r.BandingColor,
+            ShowGridLines = r.ShowGridLines,
+            PageSize = string.IsNullOrWhiteSpace(r.PageSize) ? "A4" : r.PageSize,
+            MarginMm = r.MarginMm,
+            ShowCompanyAddress = r.ShowCompanyAddress
         };
 
         private static ReportColumnType ParseColumnType(string? v) => v switch
@@ -447,6 +521,24 @@ namespace ShouTech.App.Reporting
             public bool FreezeFirstColumn { get; set; }
             public bool IsFavorite { get; set; }
             public bool IsSystem { get; set; }
+            public string? TitleFontFamily { get; set; }
+            public double TitleFontSize { get; set; } = 20;
+            public bool TitleBold { get; set; } = true;
+            public string? HeaderFontFamily { get; set; }
+            public double HeaderFontSize { get; set; } = 10.5;
+            public bool HeaderBold { get; set; } = true;
+            public string? HeaderBackColor { get; set; }
+            public string? HeaderTextColor { get; set; }
+            public string? BodyFontFamily { get; set; }
+            public double BodyFontSize { get; set; } = 10;
+            public string? TotalsFontFamily { get; set; }
+            public double TotalsFontSize { get; set; } = 10;
+            public bool TotalsBold { get; set; } = true;
+            public string? BandingColor { get; set; }
+            public bool ShowGridLines { get; set; } = true;
+            public string? PageSize { get; set; }
+            public double MarginMm { get; set; } = 12;
+            public bool ShowCompanyAddress { get; set; }
         }
 
         private sealed class ReportColRow
@@ -460,6 +552,7 @@ namespace ShouTech.App.Reporting
             public bool IsLocked { get; set; }
             public string? ColumnType { get; set; }
             public string? FormulaText { get; set; }
+            public string? TotalsFormula { get; set; }
             public string? DataFormat { get; set; }
             public int DecimalPlaces { get; set; }
             public string? AggregateFunc { get; set; }
@@ -484,6 +577,293 @@ namespace ShouTech.App.Reporting
             public string? ValueTo { get; set; }
             public bool IsPrompted { get; set; }
             public bool IsRequired { get; set; }
+        }
+    }
+
+    /// <summary>
+    /// JSON transfer shape for report designs — the payload carried
+    /// inside the encrypted .strd files of DesignFileSvc (B0/B2).
+    /// Versioned independently of the DB schema; unknown versions are
+    /// rejected by the importer (the caller surfaces DSG-8103).
+    /// </summary>
+    public static class ReportDesignJson
+    {
+        public const int CurrentVersion = 1;
+
+        public sealed class DesignDto
+        {
+            public int Version { get; set; } = CurrentVersion;
+            public string ReportKey { get; set; } = string.Empty;
+            public string ReportName { get; set; } = string.Empty;
+            public string? Description { get; set; }
+            public string LanguageCode { get; set; } = "en";
+            public string DataSourceKey { get; set; } = string.Empty;
+            public bool IsLandscape { get; set; }
+            public bool ShowTotalsRow { get; set; } = true;
+            public bool ShowHeaderInfo { get; set; } = true;
+            public bool FreezeFirstColumn { get; set; }
+            public string? TitleFontFamily { get; set; }
+            public double TitleFontSize { get; set; } = 20;
+            public bool TitleBold { get; set; } = true;
+            public string? HeaderFontFamily { get; set; }
+            public double HeaderFontSize { get; set; } = 10.5;
+            public bool HeaderBold { get; set; } = true;
+            public string? HeaderBackColor { get; set; }
+            public string? HeaderTextColor { get; set; }
+            public string? BodyFontFamily { get; set; }
+            public double BodyFontSize { get; set; } = 10;
+            public string? TotalsFontFamily { get; set; }
+            public double TotalsFontSize { get; set; } = 10;
+            public bool TotalsBold { get; set; } = true;
+            public string? BandingColor { get; set; }
+            public bool ShowGridLines { get; set; } = true;
+            public string PageSize { get; set; } = "A4";
+            public double MarginMm { get; set; } = 12;
+            public bool ShowCompanyAddress { get; set; }
+            public List<ColumnDto> Columns { get; set; } = new();
+            public List<GroupingDto> Groupings { get; set; } = new();
+            public List<FilterDto> Filters { get; set; } = new();
+        }
+
+        public sealed class ColumnDto
+        {
+            public string FieldKey { get; set; } = string.Empty;
+            public string CaptionAR { get; set; } = string.Empty;
+            public string? CaptionEN { get; set; }
+            public int DisplayOrder { get; set; }
+            public double ColumnWidth { get; set; } = 120;
+            public bool IsVisible { get; set; } = true;
+            public bool IsLocked { get; set; }
+            public string ColumnType { get; set; } = "DATA";
+            public string? FormulaText { get; set; }
+            public string? TotalsFormula { get; set; }
+            public string DataFormat { get; set; } = "TEXT";
+            public int DecimalPlaces { get; set; } = 2;
+            public string? AggregateFunc { get; set; }
+            public bool NegativeInRed { get; set; } = true;
+        }
+
+        public sealed class GroupingDto
+        {
+            public string FieldKey { get; set; } = string.Empty;
+            public int GroupLevel { get; set; }
+            public bool ShowSubTotals { get; set; } = true;
+            public bool StartOnNewPage { get; set; }
+            public string SortDirection { get; set; } = "ASC";
+        }
+
+        public sealed class FilterDto
+        {
+            public string FilterKey { get; set; } = string.Empty;
+            public string FilterLabelAR { get; set; } = string.Empty;
+            public string Operator { get; set; } = "EQ";
+            public string? ValueFrom { get; set; }
+            public string? ValueTo { get; set; }
+            public bool IsPrompted { get; set; }
+            public bool IsRequired { get; set; }
+        }
+
+        private static readonly System.Text.Json.JsonSerializerOptions JsonOptions = new()
+        {
+            WriteIndented = false
+        };
+
+        public static string Serialize(ReportDefinition def)
+        {
+            var dto = new DesignDto
+            {
+                ReportKey = def.ReportKey,
+                ReportName = def.ReportName,
+                Description = def.Description,
+                LanguageCode = def.LanguageCode,
+                DataSourceKey = def.DataSourceKey,
+                IsLandscape = def.IsLandscape,
+                ShowTotalsRow = def.ShowTotalsRow,
+                ShowHeaderInfo = def.ShowHeaderInfo,
+                FreezeFirstColumn = def.FreezeFirstColumn,
+                TitleFontFamily = def.TitleFontFamily,
+                TitleFontSize = def.TitleFontSize,
+                TitleBold = def.TitleBold,
+                HeaderFontFamily = def.HeaderFontFamily,
+                HeaderFontSize = def.HeaderFontSize,
+                HeaderBold = def.HeaderBold,
+                HeaderBackColor = def.HeaderBackColor,
+                HeaderTextColor = def.HeaderTextColor,
+                BodyFontFamily = def.BodyFontFamily,
+                BodyFontSize = def.BodyFontSize,
+                TotalsFontFamily = def.TotalsFontFamily,
+                TotalsFontSize = def.TotalsFontSize,
+                TotalsBold = def.TotalsBold,
+                BandingColor = def.BandingColor,
+                ShowGridLines = def.ShowGridLines,
+                PageSize = def.PageSize,
+                MarginMm = def.MarginMm,
+                ShowCompanyAddress = def.ShowCompanyAddress,
+                Columns = def.Columns.OrderBy(c => c.DisplayOrder).Select(c => new ColumnDto
+                {
+                    FieldKey = c.FieldKey,
+                    CaptionAR = c.CaptionAR,
+                    CaptionEN = c.CaptionEN,
+                    DisplayOrder = c.DisplayOrder,
+                    ColumnWidth = c.ColumnWidth,
+                    IsVisible = c.IsVisible,
+                    IsLocked = c.IsLocked,
+                    ColumnType = c.ColumnType switch
+                    {
+                        ReportColumnType.Formula => "FORMULA",
+                        ReportColumnType.RunningTotal => "RUNNING_TOTAL",
+                        ReportColumnType.RowNumber => "ROW_NUMBER",
+                        _ => "DATA"
+                    },
+                    FormulaText = c.FormulaText,
+                    TotalsFormula = c.TotalsFormula,
+                    DataFormat = c.DataFormat switch
+                    {
+                        ReportDataFormat.Money => "MONEY",
+                        ReportDataFormat.Qty => "QTY",
+                        ReportDataFormat.Percent => "PERCENT",
+                        ReportDataFormat.Date => "DATE",
+                        ReportDataFormat.DateTime => "DATETIME",
+                        _ => "TEXT"
+                    },
+                    DecimalPlaces = c.DecimalPlaces,
+                    AggregateFunc = c.AggregateFunc,
+                    NegativeInRed = c.NegativeInRed
+                }).ToList(),
+                Groupings = def.Groupings.Select(g => new GroupingDto
+                {
+                    FieldKey = g.FieldKey,
+                    GroupLevel = g.GroupLevel,
+                    ShowSubTotals = g.ShowSubTotals,
+                    StartOnNewPage = g.StartOnNewPage,
+                    SortDirection = g.SortDirection
+                }).ToList(),
+                Filters = def.Filters.Select(f => new FilterDto
+                {
+                    FilterKey = f.FilterKey,
+                    FilterLabelAR = f.FilterLabelAR,
+                    Operator = f.Operator,
+                    ValueFrom = f.ValueFrom,
+                    ValueTo = f.ValueTo,
+                    IsPrompted = f.IsPrompted,
+                    IsRequired = f.IsRequired
+                }).ToList()
+            };
+            return System.Text.Json.JsonSerializer.Serialize(dto, JsonOptions);
+        }
+
+        /// <summary>Parses a design payload. Returns null when the
+        /// payload is not a supported design (caller reports
+        /// DSG-8103). The result is always a NEW unsaved definition;
+        /// ownership/visibility are the caller's to assign.</summary>
+        public static ReportDefinition? Deserialize(string payloadJson, int ownerUserId)
+        {
+            DesignDto? dto;
+            try
+            {
+                dto = System.Text.Json.JsonSerializer.Deserialize<DesignDto>(payloadJson, JsonOptions);
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                return null;
+            }
+
+            if (dto is null || dto.Version != CurrentVersion ||
+                string.IsNullOrWhiteSpace(dto.ReportKey) || dto.Columns.Count == 0)
+                return null;
+
+            var def = new ReportDefinition
+            {
+                ReportDefID = null,
+                ReportKey = dto.ReportKey,
+                ReportName = dto.ReportName,
+                Description = dto.Description,
+                LanguageCode = dto.LanguageCode,
+                OwnerUserID = ownerUserId,
+                Visibility = ReportVisibility.Private,
+                DataSourceKey = dto.DataSourceKey,
+                IsLandscape = dto.IsLandscape,
+                ShowTotalsRow = dto.ShowTotalsRow,
+                ShowHeaderInfo = dto.ShowHeaderInfo,
+                FreezeFirstColumn = dto.FreezeFirstColumn,
+                IsFavorite = false,
+                IsSystem = false,
+                TitleFontFamily = dto.TitleFontFamily,
+                TitleFontSize = dto.TitleFontSize,
+                TitleBold = dto.TitleBold,
+                HeaderFontFamily = dto.HeaderFontFamily,
+                HeaderFontSize = dto.HeaderFontSize,
+                HeaderBold = dto.HeaderBold,
+                HeaderBackColor = dto.HeaderBackColor,
+                HeaderTextColor = dto.HeaderTextColor,
+                BodyFontFamily = dto.BodyFontFamily,
+                BodyFontSize = dto.BodyFontSize,
+                TotalsFontFamily = dto.TotalsFontFamily,
+                TotalsFontSize = dto.TotalsFontSize,
+                TotalsBold = dto.TotalsBold,
+                BandingColor = dto.BandingColor,
+                ShowGridLines = dto.ShowGridLines,
+                PageSize = string.IsNullOrWhiteSpace(dto.PageSize) ? "A4" : dto.PageSize,
+                MarginMm = dto.MarginMm,
+                ShowCompanyAddress = dto.ShowCompanyAddress
+            };
+
+            foreach (var c in dto.Columns)
+            {
+                def.Columns.Add(new ReportColumnDef
+                {
+                    FieldKey = c.FieldKey,
+                    CaptionAR = c.CaptionAR,
+                    CaptionEN = c.CaptionEN,
+                    DisplayOrder = c.DisplayOrder,
+                    ColumnWidth = c.ColumnWidth,
+                    IsVisible = c.IsVisible,
+                    IsLocked = c.IsLocked,
+                    ColumnType = c.ColumnType switch
+                    {
+                        "FORMULA" => ReportColumnType.Formula,
+                        "RUNNING_TOTAL" => ReportColumnType.RunningTotal,
+                        "ROW_NUMBER" => ReportColumnType.RowNumber,
+                        _ => ReportColumnType.Data
+                    },
+                    FormulaText = c.FormulaText,
+                    TotalsFormula = c.TotalsFormula,
+                    DataFormat = c.DataFormat switch
+                    {
+                        "MONEY" => ReportDataFormat.Money,
+                        "QTY" => ReportDataFormat.Qty,
+                        "PERCENT" => ReportDataFormat.Percent,
+                        "DATE" => ReportDataFormat.Date,
+                        "DATETIME" => ReportDataFormat.DateTime,
+                        _ => ReportDataFormat.Text
+                    },
+                    DecimalPlaces = c.DecimalPlaces,
+                    AggregateFunc = c.AggregateFunc,
+                    NegativeInRed = c.NegativeInRed
+                });
+            }
+
+            def.Groupings.AddRange(dto.Groupings.Select(g => new ReportGroupingDef
+            {
+                FieldKey = g.FieldKey,
+                GroupLevel = g.GroupLevel,
+                ShowSubTotals = g.ShowSubTotals,
+                StartOnNewPage = g.StartOnNewPage,
+                SortDirection = g.SortDirection
+            }));
+
+            def.Filters.AddRange(dto.Filters.Select(f => new ReportFilterDef
+            {
+                FilterKey = f.FilterKey,
+                FilterLabelAR = f.FilterLabelAR,
+                Operator = f.Operator,
+                ValueFrom = f.ValueFrom,
+                ValueTo = f.ValueTo,
+                IsPrompted = f.IsPrompted,
+                IsRequired = f.IsRequired
+            }));
+
+            return def;
         }
     }
 }

@@ -97,4 +97,30 @@ for a non-trivial cause is reverted and marked SKIPPED with the reason.
 
 ## Outcomes
 
-(Filled at completion — per-group result, final counts, final gate results.)
+(Filled in as each phase lands; final summary at branch completion.)
+
+- **Consolidation G1–G20 — DONE.** Tracked files 950 → 765 (−185).
+  Applied migrations 001–114 untouched throughout. Gates green per
+  group (build 0/0, migrator idempotent, audit scripts exit 0).
+- **Visual V1–V3 — DONE** (see VISUAL_PASS.md): central Win11 pass;
+  Phenix v10 invoices/vouchers + Sahli Soft reports modelling; MWin
+  Explorer-style shell, all 264 nav entries routed via RibbonNav.
+- **Color (owner directive 2026-11-24 14:01) — DONE** (commit
+  4ec471e): default accent = BLUE-GRAY slate (#51708E family) in
+  VisuId palette + VisuId.xaml tokens; UsrPref default "slate";
+  explicitly stored choices keep working. Supersedes the 13:59
+  "keep gray" answer. Gates: ALL-GREEN.
+- **Window content pass V4 — DONE** (commit b46b0a2): central-style
+  audit + per-window cleanup (WhsWin/CatWin local label styles
+  re-based on the central contract; CashDrawerOptionsWin fully
+  localized, status line above the bottom button row). Presentation
+  + wording only. Gates: ALL-GREEN.
+- **Services B0 — DONE:** DesignFileSvc encrypted design files
+  (AES-256-GCM; .strd/.stid/.stld; errors DSG-8101..8103 ×4).
+- **Services B1 — DONE:** OptWin options window over UsrPref with
+  live language/accent apply; Tools.Options routes to it.
+- **Services B2 — DONE** (Report Designer completion; migration
+  115): see SERVICES_GAP_INVENTORY.md B2 outcome. Gates: ALL-GREEN
+  (build 0/0; migrator fresh through 115 + second run 0; 4 audit
+  scripts exit 0; Errors parity 736 ×4; P2pHarness 39/39;
+  W1Harness 36/36; Lang parity for touched keys 0 missing).

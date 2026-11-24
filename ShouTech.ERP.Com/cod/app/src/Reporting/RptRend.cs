@@ -38,6 +38,14 @@ public static class RptRend
         public required bool Rtl { get; init; }
         public required Func<string, string> Translate { get; init; }
         public IReadOnlyDictionary<string, object?>? Totals { get; init; }
+
+        /// <summary>Optional design styling (B2). Null = the
+        /// built-in look, byte-for-byte as before.</summary>
+        public RptStyle? Style { get; init; }
+
+        /// <summary>Company address block lines, rendered under the
+        /// company name when the style asks for them.</summary>
+        public string? CompanyAddress { get; init; }
     }
 
     private const double Margin = 36;
@@ -47,19 +55,65 @@ public static class RptRend
     /// <summary>Rows that fit on one page below the report header.</summary>
     public static int RowsPerPage => 34;
 
+    /// <summary>Effective page size for a style (A4 default).</summary>
+    public static Size PageSizeFor(RptStyle? style)
+    {
+        var size = (style?.PageSize ?? "A4").Trim().ToUpperInvariant() switch
+        {
+            "A5" => new Size(559.4, 793.7),
+            "LETTER" => new Size(816, 1056),
+            _ => PageSize
+        };
+        return style is { IsLandscape: true } ? new Size(size.Height, size.Width) : size;
+    }
+
+    /// <summary>Rows per page for a style's page size + margins.</summary>
+    public static int RowsPerPageFor(RptStyle? style)
+    {
+        if (style == null)
+            return RowsPerPage;
+        var usable = PageSizeFor(style).Height - 2 * MmToDip(style.MarginMm) - 120;
+        return Math.Max(5, (int)(usable / RowHeight));
+    }
+
+    private static double MmToDip(double mm) => Math.Max(0, mm) * 96.0 / 25.4;
+
+    private static FontFamily? Family(string? name)
+        => string.IsNullOrWhiteSpace(name) ? null : new FontFamily(name);
+
+    private static Brush ParseBrush(string? hex, Brush fallback)
+    {
+        if (string.IsNullOrWhiteSpace(hex))
+            return fallback;
+        try
+        {
+            return new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex.Trim()));
+        }
+        catch (FormatException)
+        {
+            return fallback;
+        }
+    }
+
     /// <summary>Builds the visual tree for a single page.</summary>
     public static FrameworkElement BuildPage(PageModel model)
     {
         var bg = Brush("BackgroundBrush", Brushes.White);
         var fg = Brush("TextBrush", Brushes.Black);
-        var accent = Brush("AccentBrush", new SolidColorBrush(Color.FromRgb(0x00, 0x67, 0xC0)));
-        var zebra = ZebraBrush();
+        // Slate (blue-gray) fallback — the app default accent.
+        var accent = Brush("AccentBrush", new SolidColorBrush(Color.FromRgb(0x51, 0x70, 0x8E)));
+        var style = model.Style;
+        var pageSize = PageSizeFor(style);
+        var margin = style != null ? MmToDip(style.MarginMm) : Margin;
+        var zebra = style != null ? ParseBrush(style.BandingColor, ZebraBrush()) : ZebraBrush();
+        var headerFill = style != null ? ParseBrush(style.HeaderBackColor, accent) : accent;
+        var headerFg = style != null ? ParseBrush(style.HeaderTextColor, Brushes.White) : Brushes.White;
 
-        var root = new Grid { Width = PageSize.Width, Height = PageSize.Height, Background = bg };
+        var root = new Grid { Width = pageSize.Width, Height = pageSize.Height, Background = bg };
         if (model.Rtl)
             root.FlowDirection = FlowDirection.RightToLeft;
 
-        var stack = new StackPanel { Margin = new Thickness(Margin) };
+        var stack = new StackPanel { Margin = new Thickness(margin) };
         root.Children.Add(stack);
 
         // ---- Report header ------------------------------------------------
@@ -74,11 +128,26 @@ public static class RptRend
             FontSize = 13,
             Foreground = fg
         });
+        if (style is { ShowCompanyAddress: true } &&
+            !string.IsNullOrWhiteSpace(model.CompanyAddress))
+        {
+            titleStack.Children.Add(new TextBlock
+            {
+                Text = model.CompanyAddress,
+                FontSize = 10,
+                Foreground = fg,
+                Opacity = 0.75,
+                TextWrapping = TextWrapping.Wrap
+            });
+        }
         titleStack.Children.Add(new TextBlock
         {
             Text = model.ReportTitle,
-            FontSize = 20,
-            FontWeight = FontWeights.SemiBold,
+            FontSize = style?.TitleFontSize ?? 20,
+            FontWeight = style != null
+                ? (style.TitleBold ? FontWeights.Bold : FontWeights.Normal)
+                : FontWeights.SemiBold,
+            FontFamily = Family(style?.TitleFontFamily),
             Foreground = fg,
             Margin = new Thickness(0, 2, 0, 2)
         });
@@ -109,13 +178,25 @@ public static class RptRend
         stack.Children.Add(new Border { Height = 2, Background = accent, Margin = new Thickness(0, 0, 0, 8) });
 
         // ---- Table ---------------------------------------------------------
-        var widths = ColumnWidths(model.Columns);
-        stack.Children.Add(BuildRow(model.Columns, widths, null, accent, Brushes.White, bold: true, model));
+        var widths = ColumnWidths(model.Columns, pageSize.Width - margin * 2);
+        var gridLines = style is { ShowGridLines: true };
+        stack.Children.Add(WrapRow(
+            BuildRow(model.Columns, widths, null, headerFill, headerFg, bold: true, model,
+                fontSize: style?.HeaderFontSize,
+                fontWeight: style != null
+                    ? (style.HeaderBold ? FontWeights.Bold : FontWeights.Normal)
+                    : null,
+                fontFamily: Family(style?.HeaderFontFamily)),
+            gridLines));
 
         for (var i = 0; i < model.Rows.Count; i++)
         {
             var fill = (i % 2) == 1 ? zebra : Brushes.Transparent;
-            stack.Children.Add(BuildRow(model.Columns, widths, model.Rows[i], fill, fg, bold: false, model));
+            stack.Children.Add(WrapRow(
+                BuildRow(model.Columns, widths, model.Rows[i], fill, fg, bold: false, model,
+                    fontSize: style?.BodyFontSize,
+                    fontFamily: Family(style?.BodyFontFamily)),
+                gridLines));
         }
 
         // ---- Totals ---------------------------------------------------------
@@ -127,8 +208,15 @@ public static class RptRend
             var totalsFill = accent is SolidColorBrush accentSolid
                 ? new SolidColorBrush(Color.FromArgb(0x22, accentSolid.Color.R, accentSolid.Color.G, accentSolid.Color.B))
                 : accent;
-            stack.Children.Add(BuildRow(model.Columns, widths, model.Totals,
-                totalsFill, fg, bold: true, model));
+            stack.Children.Add(WrapRow(
+                BuildRow(model.Columns, widths, model.Totals,
+                    totalsFill, fg, bold: true, model,
+                    fontSize: style?.TotalsFontSize,
+                    fontWeight: style != null
+                        ? (style.TotalsBold ? FontWeights.Bold : FontWeights.Normal)
+                        : null,
+                    fontFamily: Family(style?.TotalsFontFamily)),
+                gridLines));
         }
 
         // ---- Footer ---------------------------------------------------------
@@ -142,22 +230,37 @@ public static class RptRend
             Margin = new Thickness(0, 0, 0, 10),
             Text = $"{model.Translate("Report.Page")} {model.PageIndex + 1} / {model.PageCount}"
         };
-        var footerHost = new Grid { Width = PageSize.Width, Height = PageSize.Height };
+        var footerHost = new Grid { Width = pageSize.Width, Height = pageSize.Height };
         footerHost.Children.Add(root);
         footerHost.Children.Add(footer);
         return footerHost;
     }
 
-    /// <summary>Rasterizes a page visual to a JPEG byte array.</summary>
-    public static byte[] RenderJpeg(FrameworkElement page, int quality = 92)
+    /// <summary>Wraps a table row in a hairline bottom border when
+    /// the design asks for grid lines (B2).</summary>
+    private static UIElement WrapRow(Grid row, bool gridLines)
     {
-        page.Measure(new Size(PageSize.Width, PageSize.Height));
-        page.Arrange(new Rect(0, 0, PageSize.Width, PageSize.Height));
+        if (!gridLines)
+            return row;
+        return new Border
+        {
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC9, 0xD4, 0xDE)),
+            BorderThickness = new Thickness(0, 0, 0, 0.75),
+            Child = row
+        };
+    }
+
+    /// <summary>Rasterizes a page visual to a JPEG byte array.</summary>
+    public static byte[] RenderJpeg(FrameworkElement page, int quality = 92, Size? size = null)
+    {
+        var pageSize = size ?? PageSize;
+        page.Measure(new Size(pageSize.Width, pageSize.Height));
+        page.Arrange(new Rect(0, 0, pageSize.Width, pageSize.Height));
         page.UpdateLayout();
 
         var bmp = new RenderTargetBitmap(
-            (int)(PageSize.Width * RenderScale),
-            (int)(PageSize.Height * RenderScale),
+            (int)(pageSize.Width * RenderScale),
+            (int)(pageSize.Height * RenderScale),
             96 * RenderScale, 96 * RenderScale,
             PixelFormats.Pbgra32);
         bmp.Render(page);
@@ -180,7 +283,10 @@ public static class RptRend
         Brush fill,
         Brush foreground,
         bool bold,
-        PageModel model)
+        PageModel model,
+        double? fontSize = null,
+        FontWeight? fontWeight = null,
+        FontFamily? fontFamily = null)
     {
         var grid = new Grid { Background = fill, Height = values == null ? HeaderHeight : RowHeight };
         for (var i = 0; i < columns.Count; i++)
@@ -196,8 +302,9 @@ public static class RptRend
             var block = new TextBlock
             {
                 Text = text,
-                FontSize = values == null ? 10.5 : 10,
-                FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
+                FontSize = fontSize ?? (values == null ? 10.5 : 10),
+                FontWeight = fontWeight ?? (bold ? FontWeights.SemiBold : FontWeights.Normal),
+                FontFamily = fontFamily,
                 Foreground = foreground,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(6, 0, 6, 0),
@@ -238,10 +345,10 @@ public static class RptRend
     public static bool IsNumeric(RptColType type)
         => type is RptColType.WholeNumber or RptColType.FractionalNumber or RptColType.Money or RptColType.Percent;
 
-    private static List<GridLength> ColumnWidths(IReadOnlyList<RptCol> columns)
+    private static List<GridLength> ColumnWidths(IReadOnlyList<RptCol> columns, double? availableWidth = null)
     {
         var total = columns.Sum(c => Math.Max(c.Width, 40));
-        var available = PageSize.Width - Margin * 2;
+        var available = availableWidth ?? (PageSize.Width - Margin * 2);
         var result = new List<GridLength>(columns.Count);
         foreach (var c in columns)
         {

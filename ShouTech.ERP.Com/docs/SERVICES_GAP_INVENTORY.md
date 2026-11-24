@@ -95,6 +95,36 @@ audited in code on this branch — every "exists" below names the file.
   4. **Encrypted export/import** of a design (`.strd`) in
      CustomReportsWin; an import lands as a new private design of
      the importing user in the current company store.
+  - **B2 OUTCOME (built, gated):** all four items landed. Migration
+    115 (both dialects) — discovery while building: the four
+    CustomReport* tables had never been created by ANY migration
+    (the designer core shipped without its schema), so 115 creates
+    them IF NOT EXISTS in the exact shape ReportRepo expects, then
+    adds the 18 style/page columns + TotalsFormula (guarded ALTERs).
+    ReportDefinition carries the style and projects it to RptStyle;
+    ReportRepo maps + persists it and validates TotalsFormula at
+    save (CompiledFormula.TryCompile, same as body formulas);
+    ReportDesignerVM.ComputeTotals evaluates aggregates first, then
+    totals formulas in display order over the aggregate map (a
+    formula result feeds later formulas); RptRend honors the style
+    (page size A4/A5/Letter × orientation, mm margins, title/header/
+    body/totals fonts, header colors, banding override, grid-line
+    hairlines, company address block) — a null style reproduces the
+    previous rendering exactly, and the renderer's stale #0067C0
+    accent fallback became slate #51708E. XptServ threads Style +
+    CompanyAddress through print/PDF (page size + rows-per-page
+    follow the style). CustomReportsWin: style fields + totals-
+    formula editor in the designer form, totals row on run, new
+    Print / PDF / Excel buttons rendering the last run through the
+    real path, Export/Import design buttons over DesignFileSvc
+    (.strd) with ReportDesignJson (versioned DTO) as the payload.
+    19 new CustomReports.* Lang keys × 4 languages (parity verified:
+    35 keys, 0 missing). Gates: ALL-GREEN (build 0/0; migrator fresh
+    through 115 + idempotent; 4 audit scripts exit 0; Errors parity
+    736 ×4; P2pHarness 39/39; W1Harness 36/36). Schema smoke check:
+    fresh DB carries the 4 tables (40/21/12/14 columns) with all B2
+    columns present. Windows-owed: WPF click-through of the designer
+    + styled print/PDF; live PostgreSQL run of migration 115.
 - **B3 — Invoice Designer (InvDesWin)** (owner spec 13:07).
   Model choice (researched): Phenix's document designer is a
   fixed-form layout editor; modern banded designers (FastReport /

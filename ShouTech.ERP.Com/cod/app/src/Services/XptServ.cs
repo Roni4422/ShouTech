@@ -38,6 +38,14 @@ public static class XptServ
         public required bool Rtl { get; init; }
         public required Func<string, string> Translate { get; init; }
         public string? DatasetIdentityHeader { get; init; }
+
+        /// <summary>Optional design styling (B2) — only designed
+        /// (custom) reports carry one; built-ins keep the stock look.</summary>
+        public RptStyle? Style { get; init; }
+
+        /// <summary>Company address lines for the header block when
+        /// the design enables them.</summary>
+        public string? CompanyAddress { get; init; }
     }
 
     // ------------------------------------------------------------------
@@ -114,11 +122,14 @@ public static class XptServ
                     Rows = model.Rows,
                     Totals = model.Totals,
                     Rtl = model.Rtl,
-                    Translate = model.Translate
+                    Translate = model.Translate,
+                    Style = model.Style,
+                    CompanyAddress = model.CompanyAddress
                 };
                 pages.AddRange(RenderPages(pageModel));
             }
-            PdfWrt.Write(path, pages, RptRend.PageSize.Width * 72.0 / 96.0, RptRend.PageSize.Height * 72.0 / 96.0);
+            var pdfSize = RptRend.PageSizeFor(model.Style);
+            PdfWrt.Write(path, pages, pdfSize.Width * 72.0 / 96.0, pdfSize.Height * 72.0 / 96.0);
             NotifySuccess(owner, path);
             return true;
         }
@@ -188,7 +199,10 @@ public static class XptServ
 
         var pageCount = PageCount(model);
         var paginator = new RptPaginator(pageCount, i =>
-            RptRend.BuildPage(BuildPageModel(model, i, pageCount)));
+            RptRend.BuildPage(BuildPageModel(model, i, pageCount)))
+        {
+            PageSize = RptRend.PageSizeFor(model.Style)
+        };
         dialog.PrintDocument(paginator, $"{model.Title} - {model.CompanyName}");
     }
 
@@ -197,13 +211,14 @@ public static class XptServ
     // ------------------------------------------------------------------
 
     private static int PageCount(ExportModel model)
-        => Math.Max(1, (int)Math.Ceiling(model.Rows.Count / (double)RptRend.RowsPerPage));
+        => Math.Max(1, (int)Math.Ceiling(model.Rows.Count / (double)RptRend.RowsPerPageFor(model.Style)));
 
     private static RptRend.PageModel BuildPageModel(ExportModel model, int pageIndex, int pageCount)
     {
+        var perPage = RptRend.RowsPerPageFor(model.Style);
         var rows = model.Rows
-            .Skip(pageIndex * RptRend.RowsPerPage)
-            .Take(RptRend.RowsPerPage)
+            .Skip(pageIndex * perPage)
+            .Take(perPage)
             .ToList();
 
         return new RptRend.PageModel
@@ -219,7 +234,9 @@ public static class XptServ
             PageCount = pageCount,
             Rtl = model.Rtl,
             Translate = model.Translate,
-            Totals = model.Totals
+            Totals = model.Totals,
+            Style = model.Style,
+            CompanyAddress = model.CompanyAddress
         };
     }
 
@@ -228,7 +245,9 @@ public static class XptServ
         var count = PageCount(model);
         var pages = new List<byte[]>(count);
         for (var i = 0; i < count; i++)
-            pages.Add(RptRend.RenderJpeg(RptRend.BuildPage(BuildPageModel(model, i, count))));
+            pages.Add(RptRend.RenderJpeg(
+                RptRend.BuildPage(BuildPageModel(model, i, count)),
+                size: RptRend.PageSizeFor(model.Style)));
         return pages;
     }
 

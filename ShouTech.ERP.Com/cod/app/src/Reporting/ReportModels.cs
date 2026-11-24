@@ -100,6 +100,35 @@ public sealed class RptData
     public IReadOnlyDictionary<string, object?>? Totals { get; init; }
 }
 
+/// <summary>
+/// Optional print styling for a report page set (B2). A null style
+/// on the render/export models means "the built-in look, unchanged"
+/// — only designed (custom) reports carry one. Colors are CSS hex
+/// strings ("#51708E"); empty font family means the app font.
+/// </summary>
+public sealed class RptStyle
+{
+    public string? TitleFontFamily { get; init; }
+    public double TitleFontSize { get; init; } = 20;
+    public bool TitleBold { get; init; } = true;
+    public string? HeaderFontFamily { get; init; }
+    public double HeaderFontSize { get; init; } = 10.5;
+    public bool HeaderBold { get; init; } = true;
+    public string? HeaderBackColor { get; init; }
+    public string? HeaderTextColor { get; init; }
+    public string? BodyFontFamily { get; init; }
+    public double BodyFontSize { get; init; } = 10;
+    public string? TotalsFontFamily { get; init; }
+    public double TotalsFontSize { get; init; } = 10;
+    public bool TotalsBold { get; init; } = true;
+    public string? BandingColor { get; init; }
+    public bool ShowGridLines { get; init; } = true;
+    public string PageSize { get; init; } = "A4";
+    public double MarginMm { get; init; } = 12;
+    public bool IsLandscape { get; init; }
+    public bool ShowCompanyAddress { get; init; }
+}
+
 /// <summary>Static description of a report, produced by the concrete report window.</summary>
 public sealed class RptDef
 {
@@ -153,6 +182,15 @@ public sealed class RptDef
 
         public string? FormulaText { get; set; }
 
+        /// <summary>
+        /// Cell-level formula for the totals row / group subtotals
+        /// (B2): an expression over the column aggregates, referenced
+        /// by field key (e.g. [Profit] / [Sales] * 100 where the
+        /// bracketed keys resolve to the columns' aggregate values).
+        /// Evaluated at render time; validated on save.
+        /// </summary>
+        public string? TotalsFormula { get; set; }
+
         public ReportDataFormat DataFormat { get; set; } = ReportDataFormat.Text;
         public int DecimalPlaces { get; set; } = 2;
         public string? AggregateFunc { get; set; }      // SUM | AVG | MIN | MAX | COUNT
@@ -179,6 +217,7 @@ public sealed class RptDef
             IsLocked = IsLocked,
             ColumnType = ColumnType,
             FormulaText = FormulaText,
+            TotalsFormula = TotalsFormula,
             DataFormat = DataFormat,
             DecimalPlaces = DecimalPlaces,
             AggregateFunc = AggregateFunc,
@@ -225,6 +264,51 @@ public sealed class RptDef
         public bool IsFavorite { get; set; }
         public bool IsSystem { get; set; }
 
+        // ── B2 styling + page setup (migration 115) ──
+        public string? TitleFontFamily { get; set; }
+        public double TitleFontSize { get; set; } = 20;
+        public bool TitleBold { get; set; } = true;
+        public string? HeaderFontFamily { get; set; }
+        public double HeaderFontSize { get; set; } = 10.5;
+        public bool HeaderBold { get; set; } = true;
+        public string? HeaderBackColor { get; set; }
+        public string? HeaderTextColor { get; set; }
+        public string? BodyFontFamily { get; set; }
+        public double BodyFontSize { get; set; } = 10;
+        public string? TotalsFontFamily { get; set; }
+        public double TotalsFontSize { get; set; } = 10;
+        public bool TotalsBold { get; set; } = true;
+        public string? BandingColor { get; set; }
+        public bool ShowGridLines { get; set; } = true;
+        public string PageSize { get; set; } = "A4";
+        public double MarginMm { get; set; } = 12;
+        public bool ShowCompanyAddress { get; set; }
+
+        /// <summary>Projects the stored styling onto the renderer's
+        /// style contract (RptRend / XptServ).</summary>
+        public RptStyle ToStyle() => new()
+        {
+            TitleFontFamily = TitleFontFamily,
+            TitleFontSize = TitleFontSize,
+            TitleBold = TitleBold,
+            HeaderFontFamily = HeaderFontFamily,
+            HeaderFontSize = HeaderFontSize,
+            HeaderBold = HeaderBold,
+            HeaderBackColor = HeaderBackColor,
+            HeaderTextColor = HeaderTextColor,
+            BodyFontFamily = BodyFontFamily,
+            BodyFontSize = BodyFontSize,
+            TotalsFontFamily = TotalsFontFamily,
+            TotalsFontSize = TotalsFontSize,
+            TotalsBold = TotalsBold,
+            BandingColor = BandingColor,
+            ShowGridLines = ShowGridLines,
+            PageSize = PageSize,
+            MarginMm = MarginMm,
+            IsLandscape = IsLandscape,
+            ShowCompanyAddress = ShowCompanyAddress
+        };
+
         public ObservableCollection<ReportColumnDef> Columns { get; } = new();
         public List<ReportGroupingDef> Groupings { get; } = new();
         public List<ReportFilterDef> Filters { get; } = new();
@@ -249,7 +333,25 @@ public sealed class RptDef
                 ShowHeaderInfo = ShowHeaderInfo,
                 FreezeFirstColumn = FreezeFirstColumn,
                 IsFavorite = false,
-                IsSystem = false
+                IsSystem = false,
+                TitleFontFamily = TitleFontFamily,
+                TitleFontSize = TitleFontSize,
+                TitleBold = TitleBold,
+                HeaderFontFamily = HeaderFontFamily,
+                HeaderFontSize = HeaderFontSize,
+                HeaderBold = HeaderBold,
+                HeaderBackColor = HeaderBackColor,
+                HeaderTextColor = HeaderTextColor,
+                BodyFontFamily = BodyFontFamily,
+                BodyFontSize = BodyFontSize,
+                TotalsFontFamily = TotalsFontFamily,
+                TotalsFontSize = TotalsFontSize,
+                TotalsBold = TotalsBold,
+                BandingColor = BandingColor,
+                ShowGridLines = ShowGridLines,
+                PageSize = PageSize,
+                MarginMm = MarginMm,
+                ShowCompanyAddress = ShowCompanyAddress
             };
 
             foreach (var col in Columns)

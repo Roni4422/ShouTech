@@ -87,6 +87,32 @@ namespace ShouTech.App.Reporting
 
         public bool HasFormulaError => !string.IsNullOrEmpty(_formulaError);
 
+        private string _totalsFormulaError = string.Empty;
+
+        /// <summary>Cell-level formula for this column's totals /
+        /// subtotal cell (B2): an expression over the column
+        /// aggregates, validated as it is typed.</summary>
+        public string TotalsFormula
+        {
+            get => _def.TotalsFormula ?? string.Empty;
+            set
+            {
+                _def.TotalsFormula = value;
+                TotalsFormulaError = string.IsNullOrWhiteSpace(value)
+                    ? string.Empty
+                    : CompiledFormula.TryCompile(value, out var err) ? string.Empty : err!;
+                OnChanged();
+            }
+        }
+
+        public string TotalsFormulaError
+        {
+            get => _totalsFormulaError;
+            private set { _totalsFormulaError = value; OnChanged(); OnChanged(nameof(HasTotalsFormulaError)); }
+        }
+
+        public bool HasTotalsFormulaError => !string.IsNullOrEmpty(_totalsFormulaError);
+
         public event PropertyChangedEventHandler? PropertyChanged;
         private void OnChanged([CallerMemberName] string? name = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
@@ -209,6 +235,82 @@ namespace ShouTech.App.Reporting
             {
                 foreach (var (key, formula) in compiled)
                     row[key] = formula.Evaluate(row);
+            }
+        }
+
+        /// <summary>
+        /// Computes the totals line for a row scope (the whole result
+        /// set for the grand total, one group for a subtotal): first
+        /// the plain aggregates (AggregateFunc per column), then the
+        /// cell-level TotalsFormulas in display order — each formula
+        /// reads the aggregates (and earlier formula results) by
+        /// field key through the formula engine.
+        /// </summary>
+        public Dictionary<string, object?> ComputeTotals(IEnumerable<ReportRow> scope)
+        {
+            var rows = scope as IReadOnlyCollection<ReportRow> ?? scope.ToList();
+            var totals = new ReportRow();
+
+            foreach (var col in _definition.Columns)
+            {
+                if (string.IsNullOrWhiteSpace(col.AggregateFunc))
+                    continue;
+
+                var values = new List<decimal>();
+                foreach (var row in rows)
+                {
+                    if (row.TryGetValue(col.FieldKey, out var raw) && TryToDecimal(raw, out var d))
+                        values.Add(d);
+                }
+
+                totals[col.FieldKey] = col.AggregateFunc.Trim().ToUpperInvariant() switch
+                {
+                    "SUM" => values.Sum(),
+                    "AVG" => values.Count > 0 ? values.Average() : null,
+                    "MIN" => values.Count > 0 ? values.Min() : null,
+                    "MAX" => values.Count > 0 ? values.Max() : null,
+                    "COUNT" => (decimal)values.Count,
+                    _ => null
+                };
+            }
+
+            foreach (var col in _definition.Columns.OrderBy(c => c.DisplayOrder))
+            {
+                if (string.IsNullOrWhiteSpace(col.TotalsFormula))
+                    continue;
+
+                try
+                {
+                    var compiled = CompiledFormula.Compile(col.TotalsFormula);
+                    totals[col.FieldKey] = compiled.Evaluate(totals);
+                }
+                catch (FormulaException ex)
+                {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "ReportDesignerVM.ComputeTotals");
+                    StatusMessage = $"Error in the totals formula of column '{col.CaptionAR}': {ex.Message}";
+                }
+            }
+
+            return totals;
+        }
+
+        private static bool TryToDecimal(object? raw, out decimal value)
+        {
+            value = 0m;
+            switch (raw)
+            {
+                case null or DBNull: return false;
+                case decimal d: value = d; return true;
+                case double db: value = (decimal)db; return true;
+                case float f: value = (decimal)f; return true;
+                case int i: value = i; return true;
+                case long l: value = l; return true;
+                case short s: value = s; return true;
+                case byte b: value = b; return true;
+                case string str when decimal.TryParse(str, System.Globalization.NumberStyles.Number,
+                    System.Globalization.CultureInfo.InvariantCulture, out var parsed):
+                    value = parsed; return true;
+                default: return false;
             }
         }
 
@@ -389,6 +491,16 @@ namespace ShouTech.App.Reporting
                 if (!CompiledFormula.TryCompile(col.FormulaText, out var err))
                 {
                     StatusMessage = $"The formula of column '{col.CaptionAR}' is invalid: {err}";
+                    return false;
+                }
+            }
+
+            foreach (var col in _definition.Columns.Where(
+                         c => !string.IsNullOrWhiteSpace(c.TotalsFormula)))
+            {
+                if (!CompiledFormula.TryCompile(col.TotalsFormula!, out var err))
+                {
+                    StatusMessage = $"The totals formula of column '{col.CaptionAR}' is invalid: {err}";
                     return false;
                 }
             }
