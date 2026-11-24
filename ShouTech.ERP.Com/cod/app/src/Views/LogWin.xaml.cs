@@ -31,11 +31,9 @@ namespace ShouTech.App.Views
             SourceInitialized += (_, _) => ApplyCustomTitleBarColor();
             DataContext = _viewModel;
             ApplyWindowDirection();
-            ApplyButtonOrder();
             Loaded += (_, _) =>
             {
                 ApplyWindowDirection();
-                ApplyButtonOrder();
             };
 
             Loaded += OnLoaded;
@@ -189,29 +187,6 @@ namespace ShouTech.App.Views
             catch (Exception exL185)
             {
                 AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL185, "LogWin.xaml.ApplyWindowDirection");
-            }
-        }
-
-        /// <summary>
-        /// Document order OK|Cancel; full-window RTL mirrors the layout for Arabic.
-        /// </summary>
-        private void ApplyButtonOrder()
-        {
-            try
-            {
-                if (btnBar != null)
-                {
-                    btnBar.ClearValue(FrameworkElement.FlowDirectionProperty);
-                    btnBar.HorizontalAlignment = HorizontalAlignment.Right;
-                    if (btnOk != null)
-                        System.Windows.Controls.Grid.SetColumn(btnOk, 0);
-                    if (btnCancel != null)
-                        System.Windows.Controls.Grid.SetColumn(btnCancel, 2);
-                }
-            }
-            catch (Exception exL205)
-            {
-                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL205, "LogWin.xaml.ApplyButtonOrder");
             }
         }
 

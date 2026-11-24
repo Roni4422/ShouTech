@@ -359,6 +359,26 @@ namespace ShouTech.App
                     UIElement.PreviewKeyDownEvent,
                     new KeyEventHandler(GlobalWindowHelpKeyDown),
                     handledEventsToo: false);
+
+                // Popups (context menus, tooltips) live OUTSIDE the
+                // window's visual tree, so they do not inherit its
+                // FlowDirection: without this, a context menu in an
+                // Arabic window opens LTR while the window is fully
+                // mirrored. One central Opened handler syncs every
+                // popup's direction from its placement target at open
+                // time (so it also follows live language switches) —
+                // no per-window menu sync is needed anywhere.
+                EventManager.RegisterClassHandler(
+                    typeof(ContextMenu),
+                    ContextMenu.OpenedEvent,
+                    new RoutedEventHandler(GlobalPopupOpened),
+                    handledEventsToo: true);
+
+                EventManager.RegisterClassHandler(
+                    typeof(ToolTip),
+                    ToolTip.OpenedEvent,
+                    new RoutedEventHandler(GlobalPopupOpened),
+                    handledEventsToo: true);
             }
             catch (Exception exL329)
             {
@@ -666,6 +686,40 @@ namespace ShouTech.App
             catch (Exception exL589)
             {
                 AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL589, "App.xaml.GlobalWindowLoaded");
+            }
+        }
+
+        /// <summary>
+        /// Popup direction sync (RTL sweep 2026-11-24): a ContextMenu
+        /// or ToolTip is a popup outside the window tree and does not
+        /// inherit the window's FlowDirection. At open time, take the
+        /// direction of the element the popup is placed on (which does
+        /// inherit the live window direction); fall back to the
+        /// application's current language direction when there is no
+        /// placement target.
+        /// </summary>
+        private static void GlobalPopupOpened(
+            object sender,
+            RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is not FrameworkElement popup)
+                    return;
+
+                var target = popup switch
+                {
+                    ContextMenu menu => menu.PlacementTarget as FrameworkElement,
+                    ToolTip tip => tip.PlacementTarget as FrameworkElement,
+                    _ => null
+                };
+
+                popup.FlowDirection = target?.FlowDirection
+                    ?? LangDirSv.GetFlowDirection(CurrentLanguageCode);
+            }
+            catch (Exception exL591)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL591, "App.xaml.GlobalPopupOpened");
             }
         }
 

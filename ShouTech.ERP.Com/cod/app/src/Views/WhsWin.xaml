@@ -310,9 +310,8 @@
                             <TextBox x:Name="TxtNameEn" Grid.Row="2" Grid.Column="1"
                                      Style="{DynamicResource VisuTextBoxStyle}"
                                      MaxLength="200"
-                                     FlowDirection="LeftToRight"
+                                     views:FlowAlign.LtrContent="True"
                                      TextAlignment="Left"
-                                     Language="en-US"
                                      TextChanged="Field_Changed"/>
 
                             <TextBlock x:Name="LblParent" Grid.Row="3" Grid.Column="0"

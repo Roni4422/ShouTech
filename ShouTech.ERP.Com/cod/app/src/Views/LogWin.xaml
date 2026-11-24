@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:conv="clr-namespace:ShouTech.App.Converters"
         xmlns:loc="clr-namespace:ShouTech.App.Localization"
+        xmlns:local="clr-namespace:ShouTech.App.Views"
         Title="{Binding WindowTitle}"
         Width="560" Height="330"
         WindowStartupLocation="CenterScreen"
@@ -135,7 +136,7 @@
                             <TextBlock Text="{Binding UsernameLabel}"
                                        FontSize="{DynamicResource FontSize12}"
                                        Foreground="{DynamicResource TextSecondaryBrush}"
-                                       HorizontalAlignment="Right"
+                                       local:FlowAlign.AlignEnd="True"
                                        Margin="0,0,0,2"/>
                             <TextBox x:Name="txtUsername"
                                     
@@ -156,7 +157,7 @@
                         <TextBlock Text="{Binding PasswordLabel}"
                                    FontSize="{DynamicResource FontSize12}"
                                    Foreground="{DynamicResource TextSecondaryBrush}"
-                                   HorizontalAlignment="Right"
+                                   local:FlowAlign.AlignEnd="True"
                                    Margin="0,6,0,2"/>
                         <Grid Height="{StaticResource ControlHeight}">
                             <PasswordBox x:Name="txtPassword"
@@ -226,13 +227,16 @@
                                   Margin="0,6,0,0"
                                   FontSize="{DynamicResource FontSize11}"
                                   Foreground="{DynamicResource TextSecondaryBrush}"
-                                  HorizontalAlignment="Right"
+                                  local:FlowAlign.AlignEnd="True"
                                   IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBoolean}}"/>
 
-                        <!-- LTR default: OK/SignIn left, Cancel right. Arabic swaps in code-behind. -->
+                        <!-- Document order OK | Cancel; the bar anchors to the
+                             layout END via the central FlowAlign binding
+                             (right in LTR, left in RTL) and the grid mirrors
+                             with the window — no code-behind swap. -->
                         <Grid x:Name="btnBar"
-                              HorizontalAlignment="Right"
-                             
+                              local:FlowAlign.AlignEnd="True"
+
                               Margin="0,10,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="180"/>

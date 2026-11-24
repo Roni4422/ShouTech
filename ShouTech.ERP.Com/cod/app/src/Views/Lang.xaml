@@ -1,6 +1,7 @@
 ﻿<Window x:Class="ShouTech.App.Views.Lang"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:ShouTech.App.Views"
         Title="Select Language"
         Width="420"
         Height="290"
@@ -133,10 +134,12 @@
 
     <DockPanel Margin="16" LastChildFill="True">
 
-		<!-- Document order OK | Cancel; full-window RTL mirrors for Arabic preview -->
+		<!-- Document order OK | Cancel; full-window RTL mirrors for Arabic preview.
+		     The bar anchors to the layout END via the central FlowAlign
+		     binding (right in LTR, left in RTL) — never a physical pin. -->
 		<Grid x:Name="btnBar"
 			  DockPanel.Dock="Bottom"
-			  HorizontalAlignment="Right"
+			  local:FlowAlign.AlignEnd="True"
 			  Width="220"
 			  Margin="0,16,0,0">
 

@@ -153,7 +153,7 @@
                     <TextBlock Grid.Row="0" Grid.Column="0" Text="Name" loc:LocProps.Key="AccCard.Name" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <TextBox x:Name="TxtNameAr" Grid.Row="0" Grid.Column="1" Margin="{StaticResource MarginFormField}"/>
                     <TextBlock Grid.Row="0" Grid.Column="2" Text="English Name" loc:LocProps.Key="AccCard.EnglishName" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    <TextBox x:Name="TxtNameEn" Grid.Row="0" Grid.Column="3" Margin="{StaticResource MarginFormField}" FlowDirection="LeftToRight"/>
+                    <TextBox x:Name="TxtNameEn" Grid.Row="0" Grid.Column="3" Margin="{StaticResource MarginFormField}" local:FlowAlign.LtrContent="True"/>
 
                     <TextBlock Grid.Row="1" Grid.Column="0" Text="Parent account" loc:LocProps.Key="AccCard.ParentAccount" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <ComboBox x:Name="CmbParent" Grid.Row="1" Grid.Column="1" Margin="{StaticResource MarginFormField}" SelectionChanged="CmbParent_SelectionChanged"/>

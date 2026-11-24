@@ -70,18 +70,10 @@ namespace ShouTech.App.Views
         {
             try
             {
+                // The button bar needs no code-side handling: its XAML
+                // anchors it to the layout end (FlowAlign.AlignEnd) and
+                // the grid mirrors with the window.
                 LangDirSv.ApplyToWindow(this, languageCode);
-
-                if (btnBar != null)
-                {
-                    btnBar.ClearValue(FrameworkElement.FlowDirectionProperty);
-                    btnBar.HorizontalAlignment = HorizontalAlignment.Right;
-                }
-
-                if (btnOk != null)
-                    Grid.SetColumn(btnOk, 0);
-                if (btnCancel != null)
-                    Grid.SetColumn(btnCancel, 2);
             }
             catch (Exception exL83)
             {

@@ -356,7 +356,6 @@ namespace ShouTech.App.Views
                 if (width <= 0) return;
 
                 progressBarIndicator.Width = width * value / 100.0;
-                progressBarIndicator.HorizontalAlignment = HorizontalAlignment.Left;
             }
             catch (Exception exL323)
             {

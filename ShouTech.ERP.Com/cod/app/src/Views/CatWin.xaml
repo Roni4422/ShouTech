@@ -59,14 +59,14 @@
 			</Style>
 
 			<!--
-				Left-to-right content (codes, Latin names).
-				FlowDirection is fixed LTR so the characters render in reading
+				Left-to-right content (codes, Latin names), via the central
+				FlowAlign.LtrContent bundle: the characters render in reading
 				order, but TextAlignment still follows the window language:
 				right in Arabic, left in English.
 			-->
 			<Style x:Key="FieldBoxLtr" TargetType="TextBox"
 				   BasedOn="{StaticResource FieldBox}">
-				<Setter Property="FlowDirection" Value="LeftToRight"/>
+				<Setter Property="local:FlowAlign.LtrContent" Value="True"/>
 			</Style>
 
 			<Style x:Key="FieldCombo" TargetType="ComboBox"
@@ -189,7 +189,7 @@
                                    FontWeight="SemiBold"
                                    FontSize="{DynamicResource FontSize11}"
                                    Foreground="{DynamicResource AccentDark}"
-                                   FlowDirection="LeftToRight"
+                                   local:FlowAlign.LtrContent="True"
                                    MinWidth="50"
                                    TextAlignment="Center"/>
                     </Border>
@@ -387,7 +387,7 @@
                                        Foreground="{DynamicResource AccentDark}"
                                        VerticalAlignment="Center"
                                        Margin="0,0,6,0"
-                                       FlowDirection="LeftToRight"/>
+                                       local:FlowAlign.LtrContent="True"/>
                             <TextBlock Text="Category Tree"
 									   loc:LocProps.Key="CatWin.TreeTitle"
 									   FontWeight="SemiBold"

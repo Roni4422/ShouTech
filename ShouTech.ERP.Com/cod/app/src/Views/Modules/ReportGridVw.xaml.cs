@@ -96,7 +96,10 @@ namespace ShouTech.App.Views.Modules
                     {
                         var style = new Style(typeof(TextBlock));
                         style.Setters.Add(new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Right));
-                        style.Setters.Add(new Setter(FrameworkElement.FlowDirectionProperty, FlowDirection.LeftToRight));
+                        // Numeric run keeps LTR reading order via the
+                        // central bundle (FlowAlign.LtrContent) — the
+                        // grid itself mirrors with the window.
+                        style.Setters.Add(new Setter(ShouTech.App.Views.FlowAlign.LtrContentProperty, true));
                         if (col.NegativeInRed)
                         {
                             style.Setters.Add(new Setter(TextBlock.ForegroundProperty,

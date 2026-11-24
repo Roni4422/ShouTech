@@ -53,19 +53,14 @@
 
 
         <!--
-            Codes / numbers remain LTR even when the application is Arabic.
+            Codes / numbers remain LTR even when the application is Arabic,
+            via the central FlowAlign.LtrContent bundle.
         -->
         <Style x:Key="CodeBox"
                TargetType="TextBox"
                BasedOn="{StaticResource FieldBox}">
 
-            <Setter Property="FlowDirection"
-                    Value="LeftToRight"/>
-
-            <Setter Property="Language" Value="en-US"/>
-            <Setter Property="NumberSubstitution.CultureSource" Value="Override"/>
-            <Setter Property="NumberSubstitution.CultureOverride" Value="en-US"/>
-            <Setter Property="NumberSubstitution.Substitution" Value="European"/>
+            <Setter Property="local:FlowAlign.LtrContent" Value="True"/>
 
             <Setter Property="TextAlignment"
                     Value="Left"/>
@@ -281,7 +276,7 @@
             <Setter Property="TextAlignment" Value="Right"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Padding" Value="1,0"/>
-            <Setter Property="FlowDirection" Value="LeftToRight"/>
+            <Setter Property="local:FlowAlign.LtrContent" Value="True"/>
         </Style>
 
         <Style x:Key="UnitIndexTextStyle" TargetType="TextBlock" BasedOn="{StaticResource UnitNumberTextStyle}">
@@ -298,7 +293,7 @@
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="HorizontalAlignment" Value="Stretch"/>
             <Setter Property="VerticalAlignment" Value="Stretch"/>
-            <Setter Property="FlowDirection" Value="LeftToRight"/>
+            <Setter Property="local:FlowAlign.LtrContent" Value="True"/>
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         </Style>
 
@@ -788,9 +783,7 @@
                                      Grid.Column="1"
                                      Grid.ColumnSpan="4"
                                      Style="{StaticResource CodeBox}"
-                                     FlowDirection="LeftToRight"
                                      TextAlignment="Left"
-                                     Language="en-US"
                                      VerticalContentAlignment="Center"
                                      Margin="0,3,0,3"/>
 
@@ -835,7 +828,6 @@
                                      Margin="4,0"
                                      Style="{StaticResource CodeBox}"
                                      TextAlignment="Center"
-                                     FlowDirection="LeftToRight"
                                      VerticalContentAlignment="Center"
                                      KeyDown="TxtItemNo_KeyDown"
                                      loc:LocProps.ToolTipKey="MatCard.ItemNo"/>

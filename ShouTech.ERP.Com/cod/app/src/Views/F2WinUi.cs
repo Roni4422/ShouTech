@@ -4,6 +4,8 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Markup;
+using System.Windows.Media;
 using ShouTech.App.Interaction;
 using ShouTech.App.Services;
 using ShouTech.Domain;
@@ -318,5 +320,57 @@ public static class FlowAlign
             Start(element);
         else
             BindingOperations.ClearBinding(element, FrameworkElement.HorizontalAlignmentProperty);
+    }
+
+    // ================================================================
+    //  LtrContent — THE central direction bundle for direction-neutral
+    //  CONTENT inside a mirrored window (codes, Latin/English names,
+    //  barcodes, numeric runs). Setting this attached property — in
+    //  XAML, in a style setter, or in code — is the ONLY sanctioned
+    //  way to pin an element LeftToRight; the literal setter must
+    //  never appear in a window file (RTL sweep 2026-11-24, see
+    //  docs/RTL_MIRROR_AUDIT.md). The bundle mirrors what
+    //  LangDirSv.ApplyToWindow does at window level, scoped to the
+    //  element: LTR reading order, en-US input language, Western
+    //  digits. Layout around the element still mirrors with the
+    //  window; only the content run keeps its reading order.
+    // ================================================================
+
+    public static readonly DependencyProperty LtrContentProperty =
+        DependencyProperty.RegisterAttached("LtrContent", typeof(bool), typeof(FlowAlign),
+            new PropertyMetadata(false, OnLtrContentChanged));
+
+    public static bool GetLtrContent(DependencyObject obj) => (bool)obj.GetValue(LtrContentProperty);
+
+    public static void SetLtrContent(DependencyObject obj, bool value) => obj.SetValue(LtrContentProperty, value);
+
+    private static void OnLtrContentChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not FrameworkElement element)
+            return;
+
+        if (e.NewValue is true)
+        {
+            element.FlowDirection = FlowDirection.LeftToRight;
+            try
+            {
+                element.Language = XmlLanguage.GetLanguage("en-US");
+                NumberSubstitution.SetCultureSource(element, NumberCultureSource.Override);
+                NumberSubstitution.SetCultureOverride(element, CultureInfo.GetCultureInfo("en-US"));
+                NumberSubstitution.SetSubstitution(element, NumberSubstitutionMethod.European);
+            }
+            catch (CultureNotFoundException ex)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "FlowAlign.LtrContent");
+            }
+        }
+        else
+        {
+            element.ClearValue(FrameworkElement.FlowDirectionProperty);
+            element.ClearValue(FrameworkElement.LanguageProperty);
+            element.ClearValue(NumberSubstitution.CultureSourceProperty);
+            element.ClearValue(NumberSubstitution.CultureOverrideProperty);
+            element.ClearValue(NumberSubstitution.SubstitutionProperty);
+        }
     }
 }

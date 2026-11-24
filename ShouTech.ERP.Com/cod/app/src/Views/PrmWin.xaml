@@ -18,7 +18,7 @@
             <DockPanel>
                 <TextBlock Text="User permissions" loc:LocProps.Key="Permissions.Title" FontSize="{DynamicResource FontSize21}" FontWeight="SemiBold" DockPanel.Dock="Right"/>
                 <TextBlock Text="{Binding UserId}" Margin="16,4,0,0" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                <TextBlock Text="{Binding Status}" HorizontalAlignment="Left" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Text="{Binding Status}" local:FlowAlign.AlignStart="True" Foreground="{DynamicResource TextSecondaryBrush}"/>
             </DockPanel>
         </Border>
         <TabControl Grid.Row="1" ItemsSource="{Binding Tabs}" Margin="0,0,0,12" Background="{DynamicResource SurfaceBrush}">
