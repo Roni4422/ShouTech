@@ -238,14 +238,16 @@ services):
 - Settings round-trip: `AppCfgSvc.Load(tempAppset)` → change the six
   Store-A values through the same facade the window uses → `Save()` →
   reload → values identical.
-- Consumer proof: with a fabricated company backup folder state, the
-  due-rule the engine implements (`IsBackupDue` semantics for the current
-  company, as derived in §3) flips correctly across Enabled / AutoBackup /
-  interval combinations; rotation rule keeps exactly MaxBackups newest
-  files (the `PruneOldBackups` rule, exercised through
-  `CreateBackupAsync` on the temp company where the harness environment
-  allows, else through the same derivation the service applies — the
-  harness report states which).
+- Consumer proof (as run, 30 PASS / 0 FAIL): the due rule flips
+  correctly across Enabled / AutoBackup / interval combinations against
+  real *.stb files in the real company backup folder, through the real
+  `BkpServ.IsBackupDue()`. The create / rotate / verify legs call the
+  real `CreateBackupAsync` / `PruneOldBackups` / `ValidateBackupAsync`;
+  on this Linux VM they are reported as a named SKIP — never a pass —
+  because the STEI package password is protected with Windows DPAPI
+  (`System.Security.Cryptography.ProtectedData` is a Windows-only
+  assembly). They execute for real on Windows, where they belong to the
+  Windows-owed list below.
 - Health derivation: seeded temp DB → schema-version query returns the
   applied count/highest id; integrity summary non-empty; TB integrity
   verdict object returned.
