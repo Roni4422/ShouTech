@@ -215,6 +215,9 @@ public sealed class MasterCardService
     public Task<IReadOnlyList<Party>> SearchPartiesAsync(string companyId, string? kind, string query, CancellationToken cancellationToken = default)
         => _repository.SearchPartiesAsync(RequireCompany(companyId), NormalizeKindOrNull(kind), query ?? string.Empty, cancellationToken);
 
+    public Task<string> NextPartyCodeAsync(string companyId, string kind, CancellationToken cancellationToken = default)
+        => _repository.NextPartyCodeAsync(RequireCompany(companyId), NormalizeKind(kind), cancellationToken);
+
     public async Task<Guid> SavePartyAsync(string companyId, Party party, string userId, CancellationToken cancellationToken = default)
     {
         RequireCompany(companyId);

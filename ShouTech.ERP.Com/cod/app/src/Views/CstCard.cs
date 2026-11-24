@@ -9,6 +9,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using ShouTech.App.Services;
 using ShouTech.App.Views.Reports;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 
 namespace ShouTech.App.Views;
@@ -674,6 +675,28 @@ public sealed class CstCard : BaseWin
         }
     }
 
+    /// <summary>Pre-fills the next sequential party code from the
+    /// central allocator (NUMBERING_STUDY) for a NEW party; the field
+    /// stays editable before first save (it doubles as the load key).
+    /// Failures are reported through the error catalog and leave the
+    /// field empty.</summary>
+    private async Task PrefillNextCodeAsync()
+    {
+        try
+        {
+            if (_loadedId is not null || !string.IsNullOrWhiteSpace(_txtCode.Text)) return;
+            var service = AppHost.MasterCards;
+            if (service is null) return;
+            var code = await service.NextPartyCodeAsync(CurrentCompanyCode, PartyKind);
+            if (_loadedId is null && string.IsNullOrWhiteSpace(_txtCode.Text))
+                _txtCode.Text = code;
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.NumberingAllocationFailed, ex, "CstCard.PrefillNextCode");
+        }
+    }
+
     private void ResetCard()
     {
         _loadedId = null;
@@ -704,6 +727,7 @@ public sealed class CstCard : BaseWin
         _addresses.Clear();
         _branches.Clear();
         UpdateBalances(0, 0);
+        _ = PrefillNextCodeAsync();
     }
 
     private void UpdateBalances(decimal debit, decimal credit)

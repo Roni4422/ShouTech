@@ -72,6 +72,7 @@ await structure.CreateFiscalYearAsync(companyId, 2026, Actor);
 Exec($"INSERT INTO warehouses (warehouse_id, company_id, warehouse_code, warehouse_name_ar, warehouse_name_en, is_active, is_deleted) VALUES (1, '{CompanyCode}', 'WH-01', 'Main', 'Main', 1, 0);");
 Exec($"INSERT INTO materials (material_id, company_id, code, name_ar, name_en, is_stocked, is_service, cost_method, allow_negative, is_deleted) VALUES (42, '{CompanyCode}', 'MAT-42', 'Item 42', 'Item 42', 1, 0, 'WeightedAvg', 0, 0);");
 Exec($"INSERT INTO material_stock_balances (company_id, warehouse_id, material_id, available_qty, reserved_qty, average_cost, last_cost, stock_value, is_deleted) VALUES ('{CompanyCode}', 1, 42, 100, 0, 10, 10, 1000, 0);");
+Exec($"INSERT INTO parties (id, company_id, kind, code, name_en, credit_limit, is_active, is_deleted, created_by, ledger_id) VALUES ('{Guid.NewGuid():D}', '{CompanyCode}', 'C', 'CUS-1', 'Num Customer', 0, 1, 0, '{Actor}', 7);");
 
 // ------------------------------------------------- A: allocator basics
 long Alloc(string series, int segment, long seed = 0, long startFloor = 0)
@@ -178,6 +179,20 @@ var rcv1 = journalRepo.NextDocumentNumber(CompanyCode, "RCV", DateOnly.FromDateT
 Check("I1 journal/voucher numbers are sequential per series (no timestamps)",
     jv1 == $"JV-{year}-0001" && jv2 == $"JV-{year}-0002" && rcv1 == $"RCV-{year}-0001",
     $"{jv1} / {jv2} / {rcv1}");
+
+var masterRepo = new MasterCardRepository("SQLite", cs);
+var cus1 = await masterRepo.NextPartyCodeAsync(CompanyCode, "C");
+var cus2 = await masterRepo.NextPartyCodeAsync(CompanyCode, "C");
+var sup1 = await masterRepo.NextPartyCodeAsync(CompanyCode, "S");
+Check("J1 party codes allocate per kind, seeded above existing CUS-1",
+    cus1 == "CUS-0002" && cus2 == "CUS-0003" && sup1 == "SUP-0001",
+    $"{cus1} / {cus2} / {sup1}");
+
+var hrRepo = new HrRepository("SQLite", cs);
+var emp1 = await hrRepo.NextEmployeeCodeAsync(CompanyCode);
+var emp2 = await hrRepo.NextEmployeeCodeAsync(CompanyCode);
+Check("K1 employee codes allocate sequentially",
+    emp1 == "EMP-0001" && emp2 == "EMP-0002", $"{emp1} / {emp2}");
 
 Console.WriteLine($"== NumHarness: {pass} PASS / {fail} FAIL ==");
 return fail == 0 ? 0 : 1;

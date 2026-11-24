@@ -322,6 +322,26 @@ public sealed class HrEmployeeWin : BaseWin
         _dateOfBirth.SelectedDate = null; _terminationDate.SelectedDate = null;
         _hireDate.SelectedDate = DateTime.Today;
         _assignmentInfo.Text = string.Empty;
+        _ = PrefillNextCodeAsync();
+    }
+
+    /// <summary>Pre-fills the next sequential employee code from the
+    /// central allocator (NUMBERING_STUDY) for a NEW employee; the
+    /// field stays editable before first save. Failures are reported
+    /// through the error catalog and leave the field empty.</summary>
+    private async Task PrefillNextCodeAsync()
+    {
+        try
+        {
+            if (_selectedId is not null || !string.IsNullOrWhiteSpace(_code.Text) || _service is null) return;
+            var code = await _service.NextEmployeeCodeAsync(CurrentCompanyCode);
+            if (_selectedId is null && string.IsNullOrWhiteSpace(_code.Text))
+                _code.Text = code;
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.NumberingAllocationFailed, ex, "HrEmployeeWin.PrefillNextCode");
+        }
     }
 
     private HrEmployee BuildEmployee()

@@ -22,6 +22,7 @@ public interface IHrRepository
     Task<IReadOnlyList<HrEmployee>> GetEmployeesAsync(string companyId, string? status = null, CancellationToken cancellationToken = default);
     Task<HrEmployee?> GetEmployeeAsync(string companyId, Guid employeeId, CancellationToken cancellationToken = default);
     Task SaveEmployeeAsync(string companyId, HrEmployee employee, string userId, CancellationToken cancellationToken = default);
+    Task<string> NextEmployeeCodeAsync(string companyId, CancellationToken cancellationToken = default);
     Task SoftDeleteEmployeeAsync(string companyId, Guid employeeId, string userId, CancellationToken cancellationToken = default);
 
     // ---- Attendance ----------------------------------------------------------

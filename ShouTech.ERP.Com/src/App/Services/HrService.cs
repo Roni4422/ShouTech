@@ -94,6 +94,9 @@ public sealed class HrService
         return _repository.GetEmployeeAsync(RequireCompany(companyId), employeeId, cancellationToken);
     }
 
+    public Task<string> NextEmployeeCodeAsync(string companyId, CancellationToken cancellationToken = default)
+        => _repository.NextEmployeeCodeAsync(RequireCompany(companyId), cancellationToken);
+
     public async Task<Guid> SaveEmployeeAsync(string companyId, HrEmployee employee, string userId, CancellationToken cancellationToken = default)
     {
         RequireCompany(companyId);

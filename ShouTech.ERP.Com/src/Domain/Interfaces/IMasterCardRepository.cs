@@ -52,6 +52,7 @@ public interface IMasterCardRepository
     Task<Party?> GetPartyByCodeAsync(string companyId, string kind, string code, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Party>> SearchPartiesAsync(string companyId, string? kind, string query, CancellationToken cancellationToken = default);
     Task SavePartyAsync(string companyId, Party party, string userId, CancellationToken cancellationToken = default);
+    Task<string> NextPartyCodeAsync(string companyId, string kind, CancellationToken cancellationToken = default);
     Task SoftDeletePartyAsync(string companyId, Guid id, string userId, CancellationToken cancellationToken = default);
     Task<int> CountPartyLedgerRefsAsync(string companyId, string kind, string code, CancellationToken cancellationToken = default);
     Task<LedgerBalance> GetPartyBalanceAsync(string companyId, string kind, string code, CancellationToken cancellationToken = default);
