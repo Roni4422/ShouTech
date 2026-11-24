@@ -96,10 +96,19 @@ indexed / total windows) is reported there.
 
 ## Inverse gaps (windows with no ribbon entry)
 
-- **RestoreCoWin** — a real company-restore window that no entry
-  opens (restore is reached through BkpWin instead). Recorded;
-  wiring or retiring it is an owner-visible decision in the
-  completion plan.
+- **RestoreCoWin** — RESOLVED on re-inspection (2026-11-24):
+  the window IS wired — TabOtherTools → Administration carries
+  a "Restore company" button whose key routes through the
+  generic path to RibbonNav case
+  `OtherTools.RestoreCompany.Restore` → RestoreCoWin (restore a
+  DELETED COMPANY; it is not the backup-restore window). The
+  original audit line conflated it with backup restore, which
+  lives in BkpWin and is reached from the File tab's
+  reference-handled Backup / Restore Backup buttons
+  (OnRibbonButtonClick → OpenBackupWindow). One wart fixed in
+  the same pass: the File tab's Restore Backup button took its
+  localized label from RestoreCompany.Restore ("Restore"); it
+  now uses the dedicated Menu.RestoreBackup key (×4).
 - The remaining untargeted window classes are sub-dialogs opened
   from parent windows (BatchSerialPickerWin, PosCheckoutWin,
   PosReturnWin, PurchaseAttachmentsWin, QcInspectWin/QcAlertWin/

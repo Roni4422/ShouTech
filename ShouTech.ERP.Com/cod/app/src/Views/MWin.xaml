@@ -267,7 +267,7 @@
                     </ribbon:RibbonGroup>
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.FileBackup" Header="Backup">
                         <ribbon:RibbonButton x:Name="RibbonBackupButton" loc:LocProps.Key="Tools.Backup" Label="Backup" Click="OnRibbonButtonClick"/>
-                        <ribbon:RibbonButton x:Name="RibbonRestoreBackupButton" loc:LocProps.Key="RestoreCompany.Restore" Label="Restore backup" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton x:Name="RibbonRestoreBackupButton" loc:LocProps.Key="Menu.RestoreBackup" Label="Restore backup" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.FileExit" Header="Exit">
                         <ribbon:RibbonButton x:Name="RibbonExitButton" loc:LocProps.Key="Menu.Exit" Label="Exit" Click="OnRibbonButtonClick"/>

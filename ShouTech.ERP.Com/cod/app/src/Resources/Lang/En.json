@@ -785,7 +785,8 @@
     "SaveAll": "Save All",
     "Tools": "Tools",
     "View": "View",
-    "General": "General"
+    "General": "General",
+    "RestoreBackup": "Restore backup"
   },
   "Messages": {
     "ConfirmDelete": "Are you sure you want to delete?",

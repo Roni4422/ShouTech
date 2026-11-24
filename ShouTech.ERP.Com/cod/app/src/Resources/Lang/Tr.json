@@ -42,7 +42,8 @@
     "OtherTools": "Diğer Araçlar",
     "View": "Görünüm",
     "Help": "Yardım",
-    "General": "Genel"
+    "General": "Genel",
+    "RestoreBackup": "Yedeği geri yükle"
   },
   "Inventory": {
     "Title": "Envanter",

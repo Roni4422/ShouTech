@@ -43,7 +43,8 @@
     "OtherTools": "أدوات أخرى",
     "View": "عرض",
     "Help": "مساعدة",
-    "General": "عام"
+    "General": "عام",
+    "RestoreBackup": "استعادة النسخة الاحتياطية"
   },
   "Inventory": {
     "Title": "المستودعات",

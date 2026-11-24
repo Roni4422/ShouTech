@@ -42,7 +42,8 @@
     "OtherTools": "Autres Outils",
     "View": "Voir",
     "Help": "Aide",
-    "General": "Général"
+    "General": "Général",
+    "RestoreBackup": "Restaurer la sauvegarde"
   },
   "Inventory": {
     "Title": "Inventaire",
