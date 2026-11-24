@@ -488,6 +488,8 @@ public sealed class PurchaseLandedCostRepository : IPurchaseLandedCostRepository
                       AND sm.document_no = d.doc_no AND sm.movement_type = 'RCV'
                       AND sm.qty_in > 0 AND sm.is_deleted = {(Pg ? "FALSE" : "0")}) AS MovementQty
             FROM purchase_landed_cost_allocations a
+            JOIN purchase_landed_cost_charges c
+              ON c.charge_id = a.charge_id AND c.landed_cost_id = a.landed_cost_id
             JOIN purchase_documents d ON d.doc_id = a.receipt_doc_id AND d.company_id = a.company_id
             WHERE a.company_id = @company AND a.landed_cost_id = @landed
             ORDER BY a.receipt_line_id, a.allocation_id
