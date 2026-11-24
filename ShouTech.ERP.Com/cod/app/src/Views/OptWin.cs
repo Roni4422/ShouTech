@@ -63,7 +63,7 @@ public sealed class OptWin : BaseWin
         Width = 760;
         Height = 620;
         MinWidth = 620;
-        MinHeight = 480;
+        MinHeight = 360;
         BuildUi();
         LoadFields();
     }
