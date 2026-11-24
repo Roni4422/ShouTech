@@ -601,6 +601,86 @@ NO new liability) — never both.
   ✓; "reversals preserve original transactions and audit history" ✓
   (mirrored voucher + events, linked document never modified).
 
+### Workstream B2 — Supplier advances (Y1) — branch `feat/p2p-b2-advances`
+
+Migration **095** (SQLite + PostgreSQL). A payment voucher can now be
+recorded as an advance against one purchase order and consumed by that
+order's invoices, with the prepayment carried in its own asset account
+instead of inside Accounts Payable.
+
+Pillars checklist — supplier advances:
+- **UI** ✓ — CshWin (Payment mode only) gains an "Advance for PO"
+  checkbox + Purchase Order No. field in the header form (bottom action
+  bar unchanged; an empty settlement-line account defaults to 1215);
+  PayRecWin's payments grid gains the Advance PO column and a "Reverse
+  advance allocation" bottom-bar action; OrdWin's PO status line shows
+  advance total / consumed / remaining. All keys in 4 languages.
+- **DB (both providers)** ✓ — migration 095: `po_doc_id` + `is_advance`
+  on `voucher_party_links`; `source_kind` ('PAYMENT' default /
+  'ADVANCE'), `advance_po_doc_id`, `clearing_journal_id` on
+  `payment_allocations`; new COA account **1215 Advances to
+  Suppliers** seeded into every existing company carrying the purchase
+  group (402), under the same parent as Inventory 1203 (1210–1214 are
+  manufacturing inventory codes in the industrial templates, so 1215
+  is the first code free in every template), and added to all 15 COA
+  `.shc` templates that carry 402.
+- **Linking** ✓ — the advance link follows the existing
+  `voucher_party_links` pattern (resolved party + amount snapshot at
+  draft save, now + PO); shell context inherited via BaseWin as
+  before; the invoice's PO is resolved through the existing
+  `document_links` chain (PO → invoice, or PO → receipt → invoice).
+- **Posting** ✓ — posting an advance voucher enforces, inside the
+  journal transaction, a Posted PO of the same supplier/company
+  (PUR-1012) and debits **1215 for exactly the linked amount** (the
+  2201 control enforcement learns the advance exception); the party
+  ledger writes an `ADV` settlement entry (supplier debit) so the
+  supplier statement shows the prepayment. Allocation of the advance
+  in PayRecWin posts, in the allocation transaction, **Dr AP 2201 /
+  Cr Advances 1215** (GlPosting, source `ADV_ALLOC`, entry id stored
+  on the allocation row) and increments the invoice `paid_amount`
+  exactly like a normal allocation. RBAC unchanged (existing voucher
+  + `ACC.PAYREC.ALLOCATE` permissions; no new action).
+- **Persistence** ✓ — advance flag/PO, allocation source/PO/clearing
+  journal are stored columns; OrdWin reads totals back from them.
+- **Downstream** ✓ — supplier statement/party balance net the ADV
+  entry against the payable; advances appear in PayRecWin as their
+  own allocatable source (never as a normal payment: consumed counts
+  only `source_kind='ADVANCE'` allocations and vice versa).
+- **Reversal symmetry** ✓ — reversing an advance allocation
+  (PayRecWin action / `ReconciliationRepository.UnallocateAsync`)
+  mirrors the clearing entry, releases `paid_amount`, writes the
+  migration-079 audit row and deletes the allocation, restoring the
+  advance balance exactly. Reversing the advance voucher itself while
+  any of it is consumed is blocked with **PUR-1013** (thrown inside
+  the shared reversal core, so the whole reversal rolls back); after
+  unallocation the voucher reversal mirrors the ADV settlement like
+  any other voucher. Cross-PO consumption is blocked with
+  **PUR-1012** (advance for PO-A cannot pay PO-B's invoice, nor a
+  manual invoice with no PO). PUR-1011 is reserved for a parallel
+  workstream; the advance codes are 1012/1013.
+
+Proof: Kern.Tests `PartyUnificationTests` gains 5 advance facts
+(advance posts Dr 1215 / never AP + supplier balance nets −600;
+advance voucher debiting 2201 rejected; cross-PO allocation throws
+PUR-1012 and writes nothing; own-PO allocation clears 250, sets
+paid_amount, advance remainder 150; allocation reversal restores the
+advance, voucher reversal blocked with PUR-1013 while consumed and
+allowed after unallocation with the party ledger netting to zero) —
+compile-verified here, execution owed on Windows. The same scenarios
+were also executed headlessly on this Linux host through the real
+`JournalRepository`/`ReconciliationRepository` against a
+SqlMigrator-built SQLite database: **22/22 checks PASS**, including
+the PUR-1012/PUR-1013 paths. Gates: build `--no-incremental`
+0 errors / 0 warnings; SqlMigrator double-run idempotent (095 applies
+once; seeded-company run produces 1215 with 1203's parent, second run
+applies 0); `audit_window_context.py`, `verify_english_source.py`,
+`verify_screenfit.py` all exit 0; Lang parity for touched keys
+0 missing ×4 (catalog deltas vs En unchanged from base: Ar 12,
+Fr/Tr 19 pre-existing); Errors parity 119 codes ×4, 0 missing.
+PostgreSQL execution of migration 095 and the new queries is
+code-reviewed (provider-neutral SQL, BOOLEAN/TRUE forms) but, like
+all PG verification on this branch, still owes a live PostgreSQL run.
+
 ## 5. Gates
 
 (Filled at completion.)
