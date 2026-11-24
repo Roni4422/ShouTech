@@ -166,7 +166,23 @@ benchmarks, global products, documented best practice), adopted
 and adapted — never the familiar or first option by default.
 Comparison notes record what was chosen, what was rejected, and
 why the chosen one is better on the owner's criterion: POWER +
-EASE for the user (2026-11-24 15:30). Commercial bar (15:29):
+EASE for the user (2026-11-24 15:30).
+
+**Benchmark pool + weighting (owner, 2026-11-24 16:31 + 16:32):**
+the four benchmarks (ERPNext, Odoo, Al-Ameen, Phenix) are the
+CLOSEST to what ShouTech aims to be and remain the PRIMARY
+reference in every study. The pool is not closed: each phase
+study also scans for any other world-class product leading in
+that phase's area (SAP/Dynamics/QuickBooks/Sage/Tally/Zoho,
+global SaaS UX, as the area suggests) — but an outside product
+enters only per-item, when demonstrably better on a specific
+feature or pattern, and then only that piece is taken. Default
+to the four; extras earn their place item by item, never by
+general reputation. Each study records which products were
+added beyond the core four and what was taken from each.
+Criteria for every comparison (phase-gate rule, 16:28): POWER,
+FLEXIBILITY, USER-FRIENDLINESS, FORM (fields/buttons counted,
+shapes and proportions compared). Commercial bar (15:29):
 ShouTech must compete with and be better than the four
 benchmarks to be sellable as enterprise commercial software.
 
