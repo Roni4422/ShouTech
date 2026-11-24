@@ -239,7 +239,7 @@ public sealed class PartyUnificationTests
         Assert.Empty(await recon.GetPaymentsAsync(CompanyCode, "S"));
     }
 
-    // ------------------------------------------------------------ supplier advances (Y1, migration 095)
+    // ------------------------------------------------------------ supplier advances (Y1, migration 110)
 
     private async Task<Party> SaveSupplierAsync(TestDb db, string code, string name)
     {

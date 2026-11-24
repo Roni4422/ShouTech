@@ -80,8 +80,8 @@ decimal PartyBalance(long partyId, string company)
 
 // ---------------------------------------------------------------- setup
 var migration = await SchemaMigrator.ApplyAllAsync("SQLite", dbPath);
-Check("schema migrates (through 099)", migration.Success, migration.Message);
-Check("migration 099 columns exist",
+Check("schema migrates (through 114)", migration.Success, migration.Message);
+Check("migration 114 columns exist",
     Scalar("SELECT COUNT(*) FROM pragma_table_info('company_tax_rules') WHERE name IN ('is_withholding','withholding_account_code','withholding_threshold_amount','withholding_threshold_mode')") == 4
     && Scalar("SELECT COUNT(*) FROM pragma_table_info('purchase_documents') WHERE name LIKE 'withholding%'") == 5
     && Scalar("SELECT COUNT(*) FROM pragma_table_info('parties') WHERE name='withholding_tax_code'") == 1);

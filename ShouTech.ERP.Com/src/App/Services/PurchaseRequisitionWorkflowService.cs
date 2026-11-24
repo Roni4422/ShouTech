@@ -39,7 +39,7 @@ public sealed class PurchaseRequisitionWorkflowService
         if(draft.Lines.Any(x=>x.Qty<=0||x.UnitPrice<0||string.IsNullOrWhiteSpace(x.Description)))
             throw new InvalidOperationException("Requisition lines require descriptions, positive quantities, and non-negative estimates.");
         var workflow=await _repository.GetAsync(companyId,id,ct).ConfigureAwait(false);
-        // R3 (migration 092): a rejected requisition returns to editable
+        // R3 (migration 107): a rejected requisition returns to editable
         // draft state so it can be corrected and resubmitted as a new
         // approval round. Every other workflow state locks the document.
         if(workflow is not null&&workflow.Status!="Rejected")
@@ -138,7 +138,7 @@ public sealed class PurchaseRequisitionWorkflowService
             throw;
         }
     }
-    /// <summary>R4 (migration 092): convert an approved requisition into
+    /// <summary>R4 (migration 107): convert an approved requisition into
     /// a supplier-neutral RFQ draft, with the same reservation /
     /// idempotency discipline as the PO conversion: an existing RFQ link
     /// is returned instead of duplicated, the conversion is claimed via

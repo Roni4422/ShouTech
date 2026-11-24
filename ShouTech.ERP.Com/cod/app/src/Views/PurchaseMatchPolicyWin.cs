@@ -147,7 +147,7 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
         AddThresholdField(fields, 0, 1, "PurchaseMatch.TaxBlock", _taxBlock);
         AddThresholdField(fields, 1, 1, "PurchaseMatch.BaseWarning", _baseWarning);
         AddThresholdField(fields, 2, 1, "PurchaseMatch.BaseBlock", _baseBlock);
-        // Q4: receipt over-delivery tolerance % (mig 096) — receipts
+        // Q4: receipt over-delivery tolerance % (mig 111) — receipts
         // beyond ordered x (1 + tolerance) are hard-blocked.
         AddThresholdField(fields, 0, 2, "PurchaseMatch.ReceiptTolerance", _receiptTolerance);
         settingsPanel.Children.Add(fields);

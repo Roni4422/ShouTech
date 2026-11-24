@@ -286,7 +286,7 @@ public static class PartyLedger
         var companyExpression = hasDocumentCompany
             ? "COALESCE(document_company_id, company_id)"
             : "company_id";
-        // Supplier advances (migration 095): an advance allocation is
+        // Supplier advances (migration 110): an advance allocation is
         // NOT released by reversing the advance voucher — the clearing
         // journal (Dr AP / Cr Advances) belongs to the allocation, so a
         // consumed advance blocks the voucher reversal until each

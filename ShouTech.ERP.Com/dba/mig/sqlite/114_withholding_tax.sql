@@ -1,10 +1,10 @@
--- 099 - Withholding tax / TDS (SQLite, W1). Withholding is a first-class
+-- 114 - Withholding tax / TDS (SQLite, W1). Withholding is a first-class
 -- category of the EXISTING tax engine (migrations 067-091): a company tax
 -- rule may be marked as a withholding rule, carrying its own rate, the
 -- withholding PAYABLE (liability) control account it credits, and an
 -- optional threshold. No country rates are seeded: every value is
 -- configured per company / jurisdiction, exactly like the VAT rules.
--- PostgreSQL counterpart: postgresql/099_withholding_tax.sql.
+-- PostgreSQL counterpart: postgresql/114_withholding_tax.sql.
 --
 -- Model (ERPNext invoice-time TDS): when a posted supplier invoice
 -- carries a withholding rule, the invoice posts AP control 2201 GROSS,

@@ -11,6 +11,15 @@ verified against code, not trusted from the docs — the docs proved stale in
 both directions (features denied by the guides exist; the parity matrix's
 "Partial / verify" hides both finished work and real defects).
 
+> **Merge renumbering (2026-11-24):** this cycle was merged into
+> `work/full-app-stabilization-2026-11-18` on top of the sales cycle
+> (tip `ecf9957`), which already owned migrations 092-106. The purchase
+> migrations were renumbered in BOTH dialects: 092->107, 093->108,
+> 094->109, 095->110, 096->111, 097->112, 098->113, 099->114. Every
+> migration number cited in this document is the NEW (post-merge)
+> number. The purchase branch was never merged or released before
+> this, so no database had applied the old numbers.
+
 ## 1. Audit verdict per stage
 
 | Stage | Verdict | One-line summary |
@@ -306,7 +315,7 @@ Pillars checklist — PurchaseRequisitionWin / requisition workflow:
   so prior rounds stay visible; minimum compacted 900×600 → 660×372 with
   a ScrollViewer guard (PosCheckoutWin pattern) — `verify_screenfit.py`
   PASS for this window.
-- **DB (both providers)** ✓ — migration 092: `required_by_date`,
+- **DB (both providers)** ✓ — migration 107: `required_by_date`,
   `request_type`, `department` on the document store; workflow status
   CHECK widened with Cancelled/Closed; `round_no` on workflow +
   approvals (uniqueness moves to round+step); `rfq_doc_id`; PRQ→RFQ
@@ -322,7 +331,7 @@ Pillars checklist — PurchaseRequisitionWin / requisition workflow:
   still post no journal; R1 adds the budget control at submit (below).
 - **Persistence** ✓ — required-by / type / department / warehouse all
   round-trip create → update → load (harness + Kern.Tests proof);
-  department no longer smuggled into Notes, and migration 092 moves
+  department no longer smuggled into Notes, and migration 107 moves
   trivially parseable legacy `Department: …`-prefixed Notes values into
   the column (verified against the migrated schema).
 - **Downstream** ✓ — conversion targets are real RFQ/PO drafts on the
@@ -395,7 +404,7 @@ multiple POs per requisition (whole-document conversion kept, as
 flagged in §7); request types other than Purchase persist and display
 but do not yet convert to stock entries / work orders (their downstream
 documents are other workstreams' scope); PostgreSQL execution of
-migration 092 and the new writes is code-reviewed against the SQLite
+migration 107 and the new writes is code-reviewed against the SQLite
 run and the d12eb0ac discipline but, like all PG verification on this
 branch, still owes a live PostgreSQL run on Windows.
 
@@ -518,7 +527,7 @@ or **Linked** (the liability already exists on a posted supplier
 document; posting reclasses the cost out of that document and creates
 NO new liability) — never both.
 
-- **L1 Per-charge payee.** Migration 093 adds `payee_party_id`
+- **L1 Per-charge payee.** Migration 108 adds `payee_party_id`
   (parties.ledger_id) per charge; the window charge grid has a parties
   picker (default = receipt supplier). Posting writes one party-ledger
   credit per effective payee; the GL credit stays on AP control 2201.
@@ -538,8 +547,8 @@ NO new liability) — never both.
   releases the document for a future voucher; the linked document
   itself is never modified. The interim `AlreadyBooked` mode is no
   longer creatable (superseded by Linked); its PostCore branch is kept
-  only so interim-093 drafts remain postable.
-- **L3 Exact reversal.** Migration 093 stores `inventory_amount` /
+  only so interim-108 drafts remain postable.
+- **L3 Exact reversal.** Migration 108 stores `inventory_amount` /
   `consumed_amount` per allocation at post time; reversal allocations
   copy the negated split and `StockValuationEngine` replays it (new
   `storedInventoryAdjustment` parameter) instead of recomputing from
@@ -553,7 +562,7 @@ NO new liability) — never both.
   (`ListReceiptLinesAsync` — stock-valued lines only, so service /
   non-stock lines can never enter landed cost); the repository takes
   receipt selections, allocations stay keyed per receipt line, and
-  migration 093 adds the `purchase_landed_cost_receipts` link table
+  migration 108 adds the `purchase_landed_cost_receipts` link table
   (header `receipt_doc_id` remains the primary receipt). Manual
   allocations are keyed by global line ID across receipts.
 - **L5 PPV account.** New dedicated account **415 Purchase Price
@@ -565,7 +574,7 @@ NO new liability) — never both.
   `GlLineRequest`s) now post to 415 instead of Purchases 402.
 - **Window pillars.** UI: receipt picker + line grid + payee /
   credit-mode / linked-document charge columns, all localized in 4
-  languages (54 PurchaseLandedCost keys at parity). DB: migration 093
+  languages (54 PurchaseLandedCost keys at parity). DB: migration 108
   both providers. Linking: shell context unchanged (company/language
   via BaseWin), link table + linked-document relationship persisted.
   Posting: one transaction for post/reverse as before; RBAC unchanged
@@ -615,7 +624,7 @@ Pillars checklist — supplier advances:
   PayRecWin's payments grid gains the Advance PO column and a "Reverse
   advance allocation" bottom-bar action; OrdWin's PO status line shows
   advance total / consumed / remaining. All keys in 4 languages.
-- **DB (both providers)** ✓ — migration 095: `po_doc_id` + `is_advance`
+- **DB (both providers)** ✓ — migration 110: `po_doc_id` + `is_advance`
   on `voucher_party_links`; `source_kind` ('PAYMENT' default /
   'ADVANCE'), `advance_po_doc_id`, `clearing_journal_id` on
   `payment_allocations`; new COA account **1215 Advances to
@@ -677,7 +686,7 @@ applies 0); `audit_window_context.py`, `verify_english_source.py`,
 `verify_screenfit.py` all exit 0; Lang parity for touched keys
 0 missing ×4 (catalog deltas vs En unchanged from base: Ar 12,
 Fr/Tr 19 pre-existing); Errors parity 119 codes ×4, 0 missing.
-PostgreSQL execution of migration 095 and the new queries is
+PostgreSQL execution of migration 110 and the new queries is
 code-reviewed (provider-neutral SQL, BOOLEAN/TRUE forms) but, like
 all PG verification on this branch, still owes a live PostgreSQL run.
 ### B1 — Shared document core: PO/RFQ/SQ, receipt, invoice/match (P1–P7, Q1–Q4, I1–I5) — branch `feat/p2p-b1-core`
@@ -703,7 +712,7 @@ PurchaseMatchPolicyRepository in place.
   reach the gate (existing stockable guard).
 - **Q2 Rejected qty at receipt.** Per-line rejected qty + reason in
   the OrdWin receipt dialog, persisted on the receipt line
-  (`rejected_qty` / `reject_reason`, mig 096; reason required when
+  (`rejected_qty` / `reject_reason`, mig 111; reason required when
   qty > 0). **Model decision:** rejected-at-the-gate goods are
   recorded but NOT received — no stock, no GL, no PO progress —
   because they never enter the books; goods rejected later by QC
@@ -711,31 +720,31 @@ PurchaseMatchPolicyRepository in place.
 - **Q3 Receipt date + delivery note.** The receipt dialog date is
   editable (default today) and posts on the picked date; the
   supplier delivery-note number is persisted on the receipt header
-  (`delivery_note_no`, mig 096).
+  (`delivery_note_no`, mig 111).
 - **Q4 Over-receipt tolerance.** `receipt_over_tolerance_pct` on
-  `purchase_match_policies` (mig 096), editable in
+  `purchase_match_policies` (mig 111), editable in
   PurchaseMatchPolicyWin; the receipt hard block applies beyond
   ordered × (1 + tolerance) at material, per-source-line and
   allocation level. Default 0 = previous behaviour.
 - **P5 Stored percentages + derived status.** `per_received` /
-  `per_billed` stored on the document header (mig 096) and
+  `per_billed` stored on the document header (mig 111) and
   maintained inside the receipt, receipt-return, chain-invoice and
   PRT posting transactions (PRT via InvRepo's refresh); backfilled
-  for existing POs by mig 097. Derived status (To Receive and Bill /
+  for existing POs by mig 112. Derived status (To Receive and Bill /
   To Bill / To Receive / Completed) computed from the stored values,
   shown in the OrdWin header progress line and as a column in
   OrderTrackWin.
 - **P3 PO header completeness.** `payment_terms` + `incoterm`
-  persisted (mig 096); currency + exchange rate editable in OrdWin
+  persisted (mig 111); currency + exchange rate editable in OrdWin
   for PO/RFQ (no longer forced to user-pref/0; empty rate keeps the
   master-rate fallback). SQ award carries the SQ's currency, rate,
   payment terms, incoterm and supplier reference onto the PO.
 - **P4 Stored UOM factor + per-line required-by.** `uom_factor`
   snapshotted from the material card (`UnitEquivalents`) at line
-  entry, persisted per line (mig 096) and carried onto derived
+  entry, persisted per line (mig 111) and carried onto derived
   receipt/invoice lines; `line_required_by` per line, defaulting to
   the header date.
-- **P1 RFQ invitations.** `rfq_invitations` (mig 097): OrdWin RFQ
+- **P1 RFQ invitations.** `rfq_invitations` (mig 112): OrdWin RFQ
   mode gains an invitations dialog (invite by supplier code, status
   grid, decline action); creating an SQ against the RFQ flips that
   supplier's invitation to Quoted with `responded_at`.
@@ -747,7 +756,7 @@ PurchaseMatchPolicyRepository in place.
   cancels its DRAFT downstream documents in the same transaction
   (posted downstream already blocked). Amend on a cancelled PO
   creates a new draft PO copying header + lines, linked via
-  `amended_from_doc_id` (mig 096) + a document_links row; OrdWin
+  `amended_from_doc_id` (mig 111) + a document_links row; OrdWin
   Amend button (cancelled POs, `PUR.ORDER.CREATE`).
 - **P7 Budget check at PO posting.** Posting a draft PO runs
   `BudgetGuard.CheckCommitment` on the PO total (base amount) with
@@ -755,7 +764,7 @@ PurchaseMatchPolicyRepository in place.
   are recorded after rollback, mirroring the journal pattern.
 - **I1 Chain bill identity.** The OrdWin invoice dialog captures the
   supplier bill number + bill date; persisted to `reference_no` +
-  new `bill_date` (mig 096). Uniqueness per (company, supplier,
+  new `bill_date` (mig 111). Uniqueness per (company, supplier,
   normalized ref) enforced on the chain path with **PUR-1011**; the
   manual path's plain `InvalidOperationException` in
   `InvRepo.EnsureUniqueSupplierInvoiceReference` now throws the same
@@ -781,7 +790,7 @@ PurchaseMatchPolicyRepository in place.
   and lock discipline as the allocation validation) decrements the
   mig-078 receipt↔invoice matched quantities FIFO per invoice line
   and refreshes the PO's stored per_billed, recording every unwind
-  in `purchase_return_match_unwinds` (mig 098) so returned goods can
+  in `purchase_return_match_unwinds` (mig 113) so returned goods can
   be re-invoiced. `InvRepo.RewindPurchaseReturnMatches` replays the
   stored unwinds exactly. **Leftover:** the base has no PRT-reversal
   UI/entry point (ReversePostedInvoice covers SAL/PUR originals
@@ -790,7 +799,7 @@ PurchaseMatchPolicyRepository in place.
 - **I5 PRT own reference.** PurchaseReturnWin no longer copies the
   original invoice's reference; a new optional "Supplier Credit
   Note Ref." field is stored on the PRT header
-  (`supplier_credit_note_ref`, mig 096; 4-language key).
+  (`supplier_credit_note_ref`, mig 111; 4-language key).
 - **Proof (Kern.Tests, SQLite; compile-verified here, execution
   owed on Windows).** New B1 facts in OrderChainStep9Tests:
   QC-required receipt diverts to quarantine (sellable stock
@@ -888,7 +897,7 @@ translations), docs/ERROR_CATALOG.md. No new permissions were needed:
 configuration uses `ACC.TAX.MANAGE`, reporting `ACC.TAX.REPORT.VIEW`
 (the existing TAX patterns).
 
-**Seeded account.** Migration 099 seeds **2215 Withholding Tax
+**Seeded account.** Migration 114 seeds **2215 Withholding Tax
 Payable** (LIABILITY, under AP's parent) into every company already
 carrying 2201, and the account is appended to the 15 `.shc` COA
 templates that carry 2201 — justified because the mechanism needs a
@@ -903,7 +912,7 @@ Pillars checklist:
 - **UI** ✓ — TaxSetupWin (rule configuration) + TaxReportWin
   (withholding tab) extended in place; no new window; size caps
   untouched (both already ≤ cap; screenfit ALL PASS).
-- **DB (both providers)** ✓ — migration 099 SQLite + PostgreSQL,
+- **DB (both providers)** ✓ — migration 114 SQLite + PostgreSQL,
   idempotent (`@if-column-missing` guards, seed guarded); SqlMigrator
   double-run: APPLY+OK once, second run SKIP/0.
 - **Linking** ✓ — determination chains invoice → supplier default →
@@ -1125,7 +1134,7 @@ Accounting (6): **6 PROVEN, 0 PARTIAL, 0 GAP**
 
 Technical (7): **3 PROVEN, 3 PARTIAL, 1 GAP**
 
-- PROVEN — SQLite migrations pass (90 apply fresh through 099;
+- PROVEN — SQLite migrations pass (105 apply fresh through 114;
   0 on re-run).
 - GAP — PostgreSQL migrations pass: not executed — no PostgreSQL
   server exists in this environment. Owed.
@@ -1167,7 +1176,7 @@ remain open and were deliberately NOT built.
 ## 7. Owner flags
 
 - Withholding/TDS: **DECIDED-BUILD (owner decision 2026-11-24) and
-  DELIVERED** by workstream W1 (see §4 W1, migration 099): generic
+  DELIVERED** by workstream W1 (see §4 W1, migration 114): generic
   configurable mechanism on the existing tax engine — withholding tax
   rules (rate, payable account, PerDocument/Cumulative threshold),
   supplier defaults, invoice-time deduction on BOTH posting paths (AP

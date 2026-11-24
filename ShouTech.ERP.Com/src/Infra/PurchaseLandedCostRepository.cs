@@ -14,7 +14,7 @@ namespace ShouTech.Infrastructure;
 /// exact receipt stock movements; posting revalues the matching cost layers,
 /// recognizes the consumed portion in COGS, and posts AP/GL atomically.
 ///
-/// Completion (migration 093): charges carry a per-charge payee and credit
+/// Completion (migration 108): charges carry a per-charge payee and credit
 /// mode (Payable / AlreadyBooked); the inventory/consumed split is stored
 /// per allocation at post time and replayed exactly by reversals; a
 /// voucher may draw lines from several receipts with per-line exclusion.

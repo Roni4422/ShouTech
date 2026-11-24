@@ -30,7 +30,7 @@ public static class TaxSvc
         string OutputAccountCode, string InputAccountCode,
         DateTime EffectiveFrom, DateTime? EffectiveTo,
         bool IsDefault, bool IsActive, string DataStatus, string SourceUrl, string SourceReference,
-        // Withholding (W1, migration 099): a rule may be a withholding
+        // Withholding (W1, migration 114): a rule may be a withholding
         // category rule with its own payable account + threshold.
         bool IsWithholding = false, string WithholdingAccountCode = "",
         decimal? WithholdingThresholdAmount = null, string WithholdingThresholdMode = "PerDocument");

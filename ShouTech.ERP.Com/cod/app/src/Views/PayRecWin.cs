@@ -207,7 +207,7 @@ public sealed class PayRecWin : BaseWin
         // matched to a document responsibly (cash-payments MAJOR).
         _payGrid.Columns.Add(TextCol("PaymentReconciliation.Party", nameof(UnallocatedPaymentRow.PartyName), 140));
         _payGrid.Columns.Add(TextCol("PaymentReconciliation.Currency", nameof(UnallocatedPaymentRow.CurrencyCode), 70, center: true));
-        // Supplier advances (migration 095) carry the PO they belong to;
+        // Supplier advances (migration 110) carry the PO they belong to;
         // the column is empty for normal payments.
         _payGrid.Columns.Add(TextCol("PaymentReconciliation.AdvancePo", nameof(UnallocatedPaymentRow.PoDocNo), 90));
         _payGrid.Columns.Add(TextCol("PaymentReconciliation.Amount", nameof(UnallocatedPaymentRow.Amount), 110, numeric: true));
@@ -387,7 +387,7 @@ public sealed class PayRecWin : BaseWin
     }
 
     /// <summary>Reverses the most recent advance allocation between the
-    /// selected advance and the selected document (migration 095): the
+    /// selected advance and the selected document (migration 110): the
     /// clearing entry is mirrored, paid_amount is released and the
     /// advance balance is restored, with a 079 audit row.</summary>
     private async Task UnallocateAdvanceAsync()

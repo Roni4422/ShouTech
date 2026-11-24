@@ -1085,7 +1085,7 @@ public static class RptQuery
     /// Y3: open purchase invoices aged by DUE DATE as of a given date —
     /// one row per invoice (ERPNext Accounts Payable shape), not a
     /// supplier-level ledger aggregate. The due date is
-    /// purchase_documents.due_date (migration 094), falling back to the
+    /// purchase_documents.due_date (migration 109), falling back to the
     /// document date for invoices that predate the column. Open amount is
     /// the stored grand_total − paid_amount; buckets and DaysOverdue are
     /// computed in SQL from the as-of date with the provider-aware day

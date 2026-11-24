@@ -1,4 +1,4 @@
--- 098 - PRT match unwind audit (PostgreSQL, I4). See the SQLite
+-- 113 - PRT match unwind audit (PostgreSQL, I4). See the SQLite
 -- companion for the design note.
 
 CREATE TABLE IF NOT EXISTS purchase_return_match_unwinds (

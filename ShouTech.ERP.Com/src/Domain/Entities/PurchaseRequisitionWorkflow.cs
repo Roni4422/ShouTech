@@ -1,7 +1,7 @@
 namespace ShouTech.Domain.Entities;
 public sealed record PurchaseRequisitionApprovalStep(int StepNo,string ApproverUserId);
 
-/// <summary>Requisition purpose (migration 092, R5), modelled on the
+/// <summary>Requisition purpose (migration 107, R5), modelled on the
 /// ERPNext Material Request types ShouTech supports. Stored as text on
 /// the document header; only Purchase converts to RFQ/PO in this build.</summary>
 public static class PurchaseRequisitionRequestTypes
@@ -23,9 +23,9 @@ public sealed class PurchaseRequisitionWorkflow
     public Guid CompanyId { get; set; }
     public string Status { get; set; } = "Draft";
     public long? PurchaseOrderId { get; set; }
-    /// <summary>The RFQ created by PRQ -> RFQ conversion (migration 092, R4).</summary>
+    /// <summary>The RFQ created by PRQ -> RFQ conversion (migration 107, R4).</summary>
     public long? RfqDocId { get; set; }
-    /// <summary>Current approval round (migration 092, R3). Round 1 is the
+    /// <summary>Current approval round (migration 107, R3). Round 1 is the
     /// first submission; resubmission after rejection starts round 2+.</summary>
     public int RoundNo { get; set; } = 1;
     public List<PurchaseRequisitionApproval> Approvals { get; set; } = new();
@@ -35,7 +35,7 @@ public sealed class PurchaseRequisitionWorkflow
 public sealed class PurchaseRequisitionApproval
 {
     public long ApprovalId { get; set; }
-    /// <summary>Approval round this step belongs to (migration 092, R3).</summary>
+    /// <summary>Approval round this step belongs to (migration 107, R3).</summary>
     public int RoundNo { get; set; } = 1;
     public int StepNo { get; set; }
     public string ApproverUserId { get; set; } = "";

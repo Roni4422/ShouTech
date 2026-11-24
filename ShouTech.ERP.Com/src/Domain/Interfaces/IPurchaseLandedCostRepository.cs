@@ -34,7 +34,7 @@ public interface IPurchaseLandedCostRepository
         Guid companyId, CancellationToken cancellationToken = default);
 
     /// <summary>Creates a draft voucher with its charges and receipt-line allocations in one transaction.
-    /// A voucher may draw lines from several receipts (migration 093).</summary>
+    /// A voucher may draw lines from several receipts (migration 108).</summary>
     Task<Guid> CreateDraftAsync(
         Guid companyId, IReadOnlyList<PurchaseLandedCostReceiptSelection> receipts, string documentNumber, DateOnly documentDate,
         string currencyCode, decimal exchangeRate,

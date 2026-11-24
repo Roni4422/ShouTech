@@ -1,4 +1,4 @@
--- 092 - Purchase requisition completion (PostgreSQL): R2 cancel/close
+-- 107 - Purchase requisition completion (PostgreSQL): R2 cancel/close
 -- states, R3 approval rounds, R4 RFQ conversion target, R5 required-by
 -- date + request type, R6 real department column (stops the Notes
 -- smuggling). Companion to docs/PURCHASE_CYCLE_COMPLETION.md section 2.

@@ -633,7 +633,7 @@ public sealed class JournalRepository : IJournalRepository
                 string? linkCompany = null, linkKind = null, linkDocKind = null, linkDocNo = null, linkCurrency = null;
                 long linkParty = 0;
                 decimal linkAmount = 0m;
-                // Supplier advances (migration 095): the link may flag the
+                // Supplier advances (migration 110): the link may flag the
                 // voucher as an advance against one PO. Fixtures predating
                 // 095 have no advance columns and simply never advance.
                 var hasAdvanceCols = PartyLedger.ColumnExists(connection, transaction, _provider, "voucher_party_links", "po_doc_id");

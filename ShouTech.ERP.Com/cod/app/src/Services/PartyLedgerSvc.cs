@@ -25,7 +25,7 @@ public static class PartyLedgerSvc
     public sealed record VoucherPartyLink(
         string PartyKind, long PartyId, string PartyCode,
         string DocKind, string DocNo, decimal Amount, string CurrencyCode,
-        // Supplier advances (migration 095): a PAY link may name the PO
+        // Supplier advances (migration 110): a PAY link may name the PO
         // it is an advance for; posting then debits Advances (1215).
         long? PoDocId = null, bool IsAdvance = false, string? PoDocNo = null)
     {

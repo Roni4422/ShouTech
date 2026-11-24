@@ -944,7 +944,7 @@ public static class InvRepo
         // returned by the posting engine. Kinds with no GL effect
         // (quotation, opening stock) build no lines and keep an empty
         // journal number.
-        // Withholding tax (W1, migration 099): evaluated ONCE here, on
+        // Withholding tax (W1, migration 114): evaluated ONCE here, on
         // the VAT-excluding base (stored grand total − stored tax), so
         // the GL legs, the party ledger and the tax register all carry
         // the same figure. A purchase return that reverses a withheld
@@ -3814,7 +3814,7 @@ public static class InvRepo
     }
 
     /// <summary>
-    /// I4 (migration 098): decrements the mig-078 receipt↔invoice
+    /// I4 (migration 113): decrements the mig-078 receipt↔invoice
     /// matched quantities for every line this purchase return allocates
     /// against its original invoice, recording the exact decrement per
     /// match row in purchase_return_match_unwinds so a later reversal
@@ -4267,7 +4267,7 @@ public static class InvRepo
     }
 
     /// <summary>
-    /// Y3 (migration 094): stamp purchase_documents.due_date for a purchase
+    /// Y3 (migration 109): stamp purchase_documents.due_date for a purchase
     /// invoice inside the SaveDraft transaction. An explicit due date on the
     /// document wins; otherwise the supplier's payment terms
     /// (parties.credit_days, resolved by the canonical ledger_id the header

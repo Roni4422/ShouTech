@@ -19,7 +19,7 @@ public sealed record OpenDocumentRow(
     decimal Paid,
     decimal Allocated,
     DateOnly? DueDate = null,
-    // Withholding tax (W1, migration 099): the part of a purchase
+    // Withholding tax (W1, migration 114): the part of a purchase
     // invoice's total that was withheld at posting. It is owed to the
     // tax authority, never to the supplier, so it is NOT allocatable:
     // paying (Total − Withholding − Paid) settles the invoice fully.
@@ -48,7 +48,7 @@ public sealed record UnallocatedPaymentRow(
     decimal Allocated,
     string? PartyName = null,
     string CurrencyCode = "SAR",
-    // Supplier advances (migration 095): an 'ADV' ledger entry is an
+    // Supplier advances (migration 110): an 'ADV' ledger entry is an
     // advance against one PO; PoDocId/PoDocNo name that PO and the row
     // may only be allocated to invoices of that PO.
     bool IsAdvance = false,

@@ -1,6 +1,6 @@
 namespace ShouTech.Domain.Entities;
 
-/// <summary>Per-charge credit modes for landed-cost vouchers (migration 093).
+/// <summary>Per-charge credit modes for landed-cost vouchers (migration 108).
 /// A charge is either Unlinked (<see cref="Payable"/>: the voucher creates
 /// the liability to its payee) or <see cref="Linked"/> (the liability
 /// already exists on a posted supplier document; posting reclasses the
@@ -19,7 +19,7 @@ public static class LandedCostCreditModes
     /// payable can arise.</summary>
     public const string Linked = "Linked";
 
-    /// <summary>Legacy interim-093 mode, superseded by <see cref="Linked"/>.
+    /// <summary>Legacy interim-108 mode, superseded by <see cref="Linked"/>.
     /// No longer creatable; retained only so drafts written by the interim
     /// build remain postable.</summary>
     public const string AlreadyBooked = "AlreadyBooked";
@@ -46,7 +46,7 @@ public sealed record PurchaseLandedCostChargeDraft(
     long? LinkedDocumentId = null);
 
 /// <summary>One receipt contributing lines to a landed-cost voucher
-/// (migration 093, L4). A null <see cref="IncludedLineIds"/> includes every
+/// (migration 108, L4). A null <see cref="IncludedLineIds"/> includes every
 /// eligible stock-valued line of the receipt; otherwise only the listed
 /// receipt line ids are allocated.</summary>
 public sealed record PurchaseLandedCostReceiptSelection(

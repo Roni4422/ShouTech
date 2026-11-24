@@ -204,7 +204,7 @@ public static class BudgetGuard
 
     /// <summary>
     /// Commitment check for a non-posting document (purchase requisition
-    /// completion R1, migration 092): the requisition posts no journal
+    /// completion R1, migration 107): the requisition posts no journal
     /// entry, so <see cref="Check"/> has nothing to measure. This entry
     /// point applies the SAME budgets, horizons, actuals and Stop/Warn
     /// semantics to a bare amount, charged to one account dimension —

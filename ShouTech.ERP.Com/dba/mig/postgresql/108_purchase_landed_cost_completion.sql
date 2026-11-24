@@ -1,7 +1,7 @@
--- 093 - Landed-cost completion (PostgreSQL): per-charge payee + credit
+-- 108 - Landed-cost completion (PostgreSQL): per-charge payee + credit
 -- mode, stored inventory/consumed split per allocation, multi-receipt
 -- vouchers, and the dedicated Purchase Price Variance account (415).
--- SQLite counterpart: sqlite/093_purchase_landed_cost_completion.sql.
+-- SQLite counterpart: sqlite/108_purchase_landed_cost_completion.sql.
 
 -- L1/L2: per-charge payee (parties.ledger_id; NULL = receipt supplier)
 -- and credit mode: 'Payable' (default; voucher creates the liability) or
@@ -9,7 +9,7 @@
 -- supplier document; posting reclasses out of linked_account_code, the
 -- account that document originally debited, and creates NO new
 -- liability). 'AlreadyBooked' remains in the CHECK only so drafts
--- written by the interim 093 build stay postable.
+-- written by the interim 108 build stay postable.
 ALTER TABLE purchase_landed_cost_charges ADD COLUMN IF NOT EXISTS payee_party_id BIGINT;
 ALTER TABLE purchase_landed_cost_charges ADD COLUMN IF NOT EXISTS credit_mode TEXT NOT NULL DEFAULT 'Payable'
     CHECK (credit_mode IN ('Payable','AlreadyBooked','Linked'));
@@ -45,7 +45,7 @@ ON CONFLICT DO NOTHING;
 INSERT INTO chart_of_accounts
     (account_id, company_id, account_code, account_name, name_ar, account_type,
      parent_account_id, is_postable, is_active, is_deleted)
-SELECT md5(c.company_id::text || ':093:' || '415')::uuid,
+SELECT md5(c.company_id::text || ':108:' || '415')::uuid,
        c.company_id,
        '415',
        'Purchase Price Variance',

@@ -11,7 +11,7 @@ using ShouTech.Domain.Interfaces;
 namespace ShouTech.App.Views;
 
 /// <summary>Creates, posts and reverses supplier landed-cost vouchers.
-/// Completion (migration 093): receipts are picked from the posted-receipt
+/// Completion (migration 108): receipts are picked from the posted-receipt
 /// list (several receipts per voucher, per-line inclusion), and each charge
 /// carries a payee and a credit mode (Payable / AlreadyBooked).</summary>
 public sealed class PurchaseLandedCostWin : BaseWin

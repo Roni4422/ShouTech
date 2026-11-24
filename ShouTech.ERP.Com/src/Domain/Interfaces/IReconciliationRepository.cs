@@ -31,7 +31,7 @@ public interface IReconciliationRepository
     Task<Guid> AllocateAsync(string companyId, string partyKind, long paymentLedgerId, string docTable, long docId, decimal amount, string userId, string? note = null, decimal discountAmount = 0m, decimal? docAmount = null, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Reverses ONE advance allocation (migration 095) in one transaction:
+    /// Reverses ONE advance allocation (migration 110) in one transaction:
     /// mirrors its clearing journal, releases the document's paid_amount,
     /// writes a migration-079 audit row, and deletes the allocation —
     /// restoring the advance's available balance. Advance allocations

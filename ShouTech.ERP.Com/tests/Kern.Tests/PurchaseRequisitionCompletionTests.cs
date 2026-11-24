@@ -14,7 +14,7 @@ using Xunit;
 namespace Kern.Tests
 {
     /// <summary>
-    /// Purchase requisition completion (P2P workstream A1, migration 092,
+    /// Purchase requisition completion (P2P workstream A1, migration 107,
     /// docs/PURCHASE_CYCLE_COMPLETION.md R1-R6), against real migrated
     /// SQLite databases:
     ///   * R1: a Stop budget on the Purchases account blocks submit with

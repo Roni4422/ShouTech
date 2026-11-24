@@ -104,7 +104,7 @@ public sealed record CommercialLineSnapshot(
     // single-source chain lines (line_no keeps the source identity).
     long? SourceDocId = null,
     int? SourceLineNo = null,
-    // B1 (migration 096): stored UOM factor snapshot, per-line
+    // B1 (migration 111): stored UOM factor snapshot, per-line
     // required-by, rejected qty at receipt, per-line tax code.
     decimal? UomFactor = null,
     DateOnly? LineRequiredBy = null,
@@ -160,12 +160,12 @@ public sealed record CommercialDocumentSnapshot(
     string? VesselFlight = null,
     decimal? GrossWeight = null,
     decimal? NetWeight = null,
-    // Migration 092 (requisition completion R5/R6): header facts carried
+    // Migration 107 (requisition completion R5/R6): header facts carried
     // for purchase requisitions; null for every other document kind.
     DateOnly? RequiredByDate = null,
     string? RequestType = null,
     string? Department = null,
-    // B1 (migration 096): P3 header facts, Q3 delivery note, I1 bill
+    // B1 (migration 111): P3 header facts, Q3 delivery note, I1 bill
     // identity, I5 PRT own credit-note reference, P5 stored received
     // percentage, P6 amend link. Null/0 for kinds that do not carry
     // them. The P3 incoterm rides the export block's Incoterm above
@@ -288,7 +288,7 @@ public sealed record CommercialLineDraft(
     // conversions leave both null and keep the line_no identity.
     long? SourceDocId = null,
     int? SourceRefLineNo = null,
-    // B1 (migration 096): Q2 rejected qty + reason (receipt lines);
+    // B1 (migration 111): Q2 rejected qty + reason (receipt lines);
     // P4 stored UOM factor + per-line required-by; I2 per-line tax code.
     decimal RejectedQty = 0m,
     string? RejectReason = null,
@@ -333,15 +333,15 @@ public sealed record CommercialDocumentDraft(
     string? VesselFlight = null,
     decimal? GrossWeight = null,
     decimal? NetWeight = null,
-    // Y3: explicit payment due date for purchase invoices (migration 094,
+    // Y3: explicit payment due date for purchase invoices (migration 109,
     // renumbered 109). Null means "derive at insert": doc date + the
     // supplier's credit_days.
     DateOnly? DueDate = null,
-    // Migration 092: requisition header facts (see CommercialDocumentSnapshot).
+    // Migration 107: requisition header facts (see CommercialDocumentSnapshot).
     DateOnly? RequiredByDate = null,
     string? RequestType = null,
     string? Department = null,
-    // B1 (migration 096): see CommercialDocumentSnapshot.
+    // B1 (migration 111): see CommercialDocumentSnapshot.
     string? PaymentTerms = null,
     string? Incoterm = null,
     string? ReferenceNo = null,
@@ -376,7 +376,7 @@ public sealed record CommercialDocumentSummary(
             : "To Receive and Bill";
 }
 
-/// <summary>One supplier invited to quote against an RFQ (P1, mig 097).</summary>
+/// <summary>One supplier invited to quote against an RFQ (P1, mig 112).</summary>
 public sealed record RfqInvitation(
     long InvitationId,
     long RfqDocId,

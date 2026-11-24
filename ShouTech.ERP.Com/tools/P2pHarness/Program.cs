@@ -84,7 +84,7 @@ async Task<Exception?> Capture(Func<Task> action)
 
 // ---------------------------------------------------------------- setup
 var migration = await SchemaMigrator.ApplyAllAsync("SQLite", dbPath);
-Check("schema migrates (through 099)", migration.Success, migration.Message);
+Check("schema migrates (through 114)", migration.Success, migration.Message);
 
 var settings = AppCfgSvc.Current;
 settings.ConnectionStrings["Default"] = new ConnectionStringSettings { Provider = "SQLite", ConnectionString = dbPath };

@@ -145,7 +145,7 @@ public sealed class InvDoc
     public DateTime DocDate { get; set; } = DateTime.Today;
 
     /// <summary>
-    /// Payment due date (purchase invoices only, migration 094). Null at
+    /// Payment due date (purchase invoices only, migration 109). Null at
     /// capture time means SaveDraft derives it: document date + the
     /// supplier's payment terms (parties.credit_days), else the document
     /// date. Persisted on purchase_documents.due_date and read back by
@@ -177,7 +177,7 @@ public sealed class InvDoc
     public InvPaymentMethod PaymentMethod { get; set; } = InvPaymentMethod.Cash;
     public string ReceiptNo { get; set; } = string.Empty;
     public string Reference { get; set; } = string.Empty;
-    /// <summary>I5 (migration 096): a purchase return's OWN supplier
+    /// <summary>I5 (migration 111): a purchase return's OWN supplier
     /// credit-note reference, stored on the PRT header in its own column
     /// — never copied from the original invoice's Reference.</summary>
     public string SupplierCreditNoteRef { get; set; } = string.Empty;

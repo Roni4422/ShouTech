@@ -34,7 +34,7 @@ public sealed class PurchaseRequisitionWorkflowRepository:IPurchaseRequisitionWo
             await using(var current=Cmd(c,t,"SELECT status,round_no FROM purchase_requisition_workflow WHERE company_id=@c AND requisition_doc_id=@id"+(Pg?" FOR UPDATE":string.Empty))){Add(current,"@c",Co(company));Add(current,"@id",id);await using var r=await current.ExecuteReaderAsync(ct).ConfigureAwait(false);if(await r.ReadAsync(ct).ConfigureAwait(false)){existingStatus=Text(r,0);round=Convert.ToInt32(r.GetValue(1),CultureInfo.InvariantCulture);}}
             if(existingStatus is not null&&existingStatus!="Rejected")
                 throw new AppError(ErrorCodes.RequisitionStateInvalid,"Only a draft or rejected requisition can be submitted.");
-            // R1 (migration 092): budget check at submit, inside the
+            // R1 (migration 107): budget check at submit, inside the
             // submit transaction so a Stop rolls the whole submission
             // back. The requisition carries no account coding, so the
             // commitment is charged to the canonical Purchases account

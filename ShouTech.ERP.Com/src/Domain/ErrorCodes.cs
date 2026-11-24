@@ -165,7 +165,7 @@ public static class ErrorCodes
     public const string HrEmployeeNotPayable = "HR-1009";
     public const string HrMasterCodeDuplicate = "HR-1010";
 
-    // ---- PUR 1001-1999 (purchase requisition completion, migration 092) --
+    // ---- PUR 1001-1999 (purchase requisition completion, migration 107) --
     // The purchasing workflow module takes its own prefix block, like
     // MFG / HR / POS. Budget overruns at requisition submit reuse the
     // BudgetGuard codes ACC-5018/5019 (identical Stop semantics).
@@ -174,21 +174,21 @@ public static class ErrorCodes
     public const string RequisitionCloseInvalid = "PUR-1003";
     public const string RequisitionStateInvalid = "PUR-1004";
     public const string RequisitionReasonRequired = "PUR-1005";
-    // Landed-cost completion (migration 093). Renumbered 1006-1010 at
+    // Landed-cost completion (migration 108). Renumbered 1006-1010 at
     // integration: 1001-1005 were already taken by the requisition codes.
     public const string LandedCostAlreadyBookedNeedsAccount = "PUR-1006";
     public const string LandedCostPayeeNotFound = "PUR-1007";
     public const string LandedCostReceiptSelectionInvalid = "PUR-1008";
     public const string LandedCostDocumentAlreadyLinked = "PUR-1009";
     public const string LandedCostLinkedDocumentInvalid = "PUR-1010";
-    // B1 chain completion (migration 096): the supplier bill reference is
+    // B1 chain completion (migration 111): the supplier bill reference is
     // unique per (company, supplier, normalized reference) on BOTH the
     // chain and the manual invoice paths.
     public const string SupplierBillReferenceDuplicate = "PUR-1011";
-    // Supplier advances (migration 095).
+    // Supplier advances (migration 110).
     public const string AdvancePurchaseOrderMismatch = "PUR-1012";
     public const string AdvanceReversalBlockedWhileConsumed = "PUR-1013";
-    // Withholding tax / TDS (migration 099, W1).
+    // Withholding tax / TDS (migration 114, W1).
     public const string WithholdingConfigurationInvalid = "PUR-1014";
     public const string WithholdingExceedsPayable = "PUR-1015";
     public const string WithholdingRuleNotFound = "PUR-1016";

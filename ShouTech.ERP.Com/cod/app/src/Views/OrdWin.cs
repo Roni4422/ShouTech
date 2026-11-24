@@ -571,7 +571,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             var statusText = _kind == OrdKind.Purchase ? StatusText(_status) : DerivedStatusText(progress.DerivedStatus);
             var derived = _kind == OrdKind.Purchase ? $" | {T("OrderDoc.DerivedStatus")}: {progress.DerivedStatus}" : string.Empty;
             _lblStatus.Text = $"{T("OrderDoc.Status")}: {statusText} | {T("OrderDoc.Fulfilled")}: {progress.PerFulfilled:N1}% | {T("OrderDoc.Billed")}: {progress.PerBilled:N1}%{derived}";
-            // Supplier advances (Y1, migration 095): a PO shows its
+            // Supplier advances (Y1, migration 110): a PO shows its
             // advance total / consumed / remaining, read from the
             // voucher links + advance allocations (display only).
             if (_kind == OrdKind.Purchase && !IsRfq)

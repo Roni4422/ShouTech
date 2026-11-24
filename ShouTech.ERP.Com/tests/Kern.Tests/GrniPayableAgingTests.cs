@@ -33,7 +33,7 @@ namespace Kern.Tests;
 ///  * due_date capture: InvRepo.SaveDraft stamps doc date + supplier
 ///    credit_days when no explicit due date is given, persists an
 ///    explicit one verbatim, and Load reads it back; the order-chain
-///    invoice conversion stamps the same default (migration 094);
+///    invoice conversion stamps the same default (migration 109);
 ///  * period-end reconciliation (owner report §5/§11.4/§12): chain
 ///    receipts + invoices across two periods tie GRNI to the real
 ///    GL 2203 balance as of period-1 end, exclude period-2 activity

@@ -1,4 +1,4 @@
--- 097 - RFQ supplier invitations (P1) + P5 backfill (SQLite).
+-- 112 - RFQ supplier invitations (P1) + P5 backfill (SQLite).
 -- Invitations record which suppliers were invited to quote against an
 -- RFQ and how each responded; SQ creation flips the invitation to
 -- Quoted. Dispatch by email is out of scope (no mail infrastructure

@@ -1,9 +1,9 @@
--- 095 - Supplier advances (SQLite): a PAY- cash voucher may be flagged as
+-- 110 - Supplier advances (SQLite): a PAY- cash voucher may be flagged as
 -- an advance against one purchase order; the advance posts to the new
 -- Advances to Suppliers account (1215) instead of AP control (2201), and
 -- PayRecWin allocation consumes it (Dr AP 2201 / Cr Advances 1215) only
 -- against invoices of that same PO.
--- PostgreSQL counterpart: postgresql/095_supplier_advances.sql.
+-- PostgreSQL counterpart: postgresql/110_supplier_advances.sql.
 
 -- Advance marking on the voucher's party link (migration 061 table):
 -- po_doc_id = purchase_documents.doc_id of the PO the advance belongs to;

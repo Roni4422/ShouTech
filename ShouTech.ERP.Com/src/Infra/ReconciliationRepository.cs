@@ -178,7 +178,7 @@ public sealed class ReconciliationRepository : IReconciliationRepository
         // G17: customer credit notes (SRT credit rows) are allocation
         // sources alongside receipts; supplier sources stay PAY/INS.
         var sourceKinds = partyKind == "C" ? "('RCV', 'INS', 'SRT')" : "('PAY', 'INS', 'ADV')";
-        // Supplier advances (migration 095) appear as their own allocatable
+        // Supplier advances (migration 110) appear as their own allocatable
         // source: doc_kind 'ADV' rows, flagged with their PO. Their
         // consumed part counts ONLY advance allocations (source_kind
         // 'ADVANCE'); normal payments count only 'PAYMENT' allocations —
@@ -342,7 +342,7 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                 }
                 paymentJournalId = ReadString(reader, 11);
             }
-            // Supplier advances (migration 095) are allocatable ONLY as
+            // Supplier advances (migration 110) are allocatable ONLY as
             // advances: an 'ADV' entry takes the advance branch below
             // (same-PO enforcement + Dr AP / Cr Advances clearing).
             var isAdvance = string.Equals(paymentDocKind, "ADV", StringComparison.OrdinalIgnoreCase);
@@ -587,7 +587,7 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             // journal's source link (ALLOC / allocation id) is stable.
             var allocationIdForJournal = Guid.NewGuid();
 
-            // Advance clearing (migration 095), inside THIS allocation
+            // Advance clearing (migration 110), inside THIS allocation
             // transaction: Dr AP control 2201 (the invoice liability is
             // settled by the prepayment) / Cr Advances 1215 (the advance
             // is consumed). The entry id is stored on the allocation so
@@ -749,7 +749,7 @@ public sealed class ReconciliationRepository : IReconciliationRepository
     }
 
     /// <summary>
-    /// Reverses ONE advance allocation (migration 095) in one transaction:
+    /// Reverses ONE advance allocation (migration 110) in one transaction:
     /// the allocation's clearing journal (Dr AP / Cr Advances) is mirrored
     /// by the shared reversal core, the invoice's paid_amount is released,
     /// a migration-079 audit row preserves the allocation's provenance,

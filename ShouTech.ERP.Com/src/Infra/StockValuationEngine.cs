@@ -275,7 +275,7 @@ public static class StockValuationEngine
         decimal inventoryAdjustment, consumedAdjustment;
         if (storedInventoryAdjustment is decimal storedInventory)
         {
-            // L3 exact reversal (migration 093): replay the inventory share
+            // L3 exact reversal (migration 108): replay the inventory share
             // stored on the allocation at post time. The split is NOT
             // recomputed from the quantity remaining now, so a reversal
             // after further consumption mirrors the original posting

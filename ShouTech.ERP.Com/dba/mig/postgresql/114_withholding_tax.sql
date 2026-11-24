@@ -1,4 +1,4 @@
--- 099 - Withholding tax / TDS (PostgreSQL, W1). See the SQLite
+-- 114 - Withholding tax / TDS (PostgreSQL, W1). See the SQLite
 -- companion for the design note: withholding as a category of the
 -- existing tax engine, deducted at supplier-invoice posting, AP gross
 -- with a deduction leg to the withholding payable account, supplier
@@ -39,7 +39,7 @@ CREATE INDEX IF NOT EXISTS ix_tax_transactions_withholding
 INSERT INTO chart_of_accounts
     (account_id, company_id, account_code, account_name, name_ar, account_type,
      parent_account_id, is_postable, is_active, is_deleted)
-SELECT md5(c.company_id::text || ':099:' || '2215')::uuid,
+SELECT md5(c.company_id::text || ':114:' || '2215')::uuid,
        c.company_id,
        '2215',
        'Withholding Tax Payable',

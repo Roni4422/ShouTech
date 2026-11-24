@@ -1,7 +1,7 @@
--- 093 - Landed-cost completion (SQLite): per-charge payee + credit mode,
+-- 108 - Landed-cost completion (SQLite): per-charge payee + credit mode,
 -- stored inventory/consumed split per allocation, multi-receipt vouchers,
 -- and the dedicated Purchase Price Variance account (415).
--- PostgreSQL counterpart: postgresql/093_purchase_landed_cost_completion.sql.
+-- PostgreSQL counterpart: postgresql/108_purchase_landed_cost_completion.sql.
 
 -- L1/L2: a charge may be owed to a payee party other than the receipt
 -- supplier (payee_party_id = parties.ledger_id; NULL = receipt supplier).
@@ -10,7 +10,7 @@
 -- supplier document — linked_document_id; posting reclasses the cost out
 -- of the account that document originally debited, stored resolved in
 -- linked_account_code, and creates NO new liability). 'AlreadyBooked'
--- remains in the CHECK only so drafts written by the interim 093 build
+-- remains in the CHECK only so drafts written by the interim 108 build
 -- stay postable; the application no longer creates it.
 ALTER TABLE purchase_landed_cost_charges ADD COLUMN payee_party_id INTEGER;
 ALTER TABLE purchase_landed_cost_charges ADD COLUMN credit_mode TEXT NOT NULL DEFAULT 'Payable'

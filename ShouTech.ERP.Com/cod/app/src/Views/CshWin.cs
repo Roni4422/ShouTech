@@ -58,7 +58,7 @@ public sealed class CshWin : BaseWin, IWindowMode
     private readonly TextBox _txtRefNo = new();
     private readonly TextBox _txtCc = new();
     private readonly TextBox _txtMemo = new();
-    // Supplier advances (migration 095, Payment mode only): flag the
+    // Supplier advances (migration 110, Payment mode only): flag the
     // voucher as an advance for one PO; posting debits Advances (1215).
     private readonly CheckBox _chkAdvance = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBox _txtPoNo = new();

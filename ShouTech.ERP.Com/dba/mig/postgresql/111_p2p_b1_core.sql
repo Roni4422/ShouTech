@@ -1,4 +1,4 @@
--- 096 - Purchase-cycle completion B1 core (PostgreSQL): P3 PO header
+-- 111 - Purchase-cycle completion B1 core (PostgreSQL): P3 PO header
 -- facts, P4 stored line UOM factor + per-line required-by, P5 stored
 -- per_received / per_billed, Q2 rejected qty at receipt, Q3 receipt
 -- delivery-note number + bill identity (I1 bill_date), I5 PRT own

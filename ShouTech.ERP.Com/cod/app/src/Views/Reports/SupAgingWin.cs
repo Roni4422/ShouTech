@@ -16,7 +16,7 @@ namespace ShouTech.App.Views.Reports;
 ///    party_ledger entry dates, now measured against a user-chosen
 ///    as-of date instead of always "today" (Y3).
 ///  - Due date (Y3): one row per OPEN purchase invoice, aged by its
-///    due_date (migration 094; doc date fallback for older invoices)
+///    due_date (migration 109; doc date fallback for older invoices)
 ///    into the same four buckets, base-currency amounts.
 /// </summary>
 public sealed class SupAgingWin : RptBase

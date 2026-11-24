@@ -993,7 +993,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
     }
 
     /// <summary>
-    /// P5 (migration 096): recomputes a purchase order's STORED
+    /// P5 (migration 111): recomputes a purchase order's STORED
     /// per_received / per_billed from the same linked-quantity semantics
     /// as <see cref="GetProgressAsync"/> (per-line capped, qty-weighted),
     /// net of PRT match unwinds (I4), and writes them inside the caller's
@@ -1267,7 +1267,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 throw new InvalidOperationException("The purchase order must identify a supplier before receiving goods.");
 
             // Q4: the receipt over-delivery tolerance % from the
-            // purchase match policy (mig 082 table, mig 096 column).
+            // purchase match policy (mig 082 table, mig 111 column).
             // Default 0 = the historical hard block at 100%.
             var tolerancePct = 0m;
             var companyCodeForPolicy = await ResolveCompanyCodeAsync(connection, transaction, companyId, cancellationToken).ConfigureAwait(false);
@@ -2136,7 +2136,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
             ComputeTotals(invoiceLines, out var invoiceSubtotal, out var invoiceTax, out var grandTotal);
 
-            // Withholding tax (W1, migration 099): same shared evaluator
+            // Withholding tax (W1, migration 114): same shared evaluator
             // as the manual path, on the VAT-excluding base (the lines
             // subtotal). Determination here is supplier default ->
             // company default withholding rule (chain invoices carry no
@@ -3506,7 +3506,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
     }
 
     /// <summary>
-    /// Y3 (migration 094): every purchase invoice carries a due date so the
+    /// Y3 (migration 109): every purchase invoice carries a due date so the
     /// payable aging report can age by due date instead of entry date. An
     /// explicit draft due date wins; otherwise the due date is the document
     /// date plus the supplier's payment terms (parties.credit_days, resolved

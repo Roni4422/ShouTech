@@ -10,7 +10,7 @@ public sealed record PurchaseMatchPolicy(
     decimal BaseVarianceWarningAmount,
     decimal BaseVarianceBlockAmount,
     int PolicyVersion,
-    // Q4 (migration 096): receipt over-delivery tolerance %. 0 = the
+    // Q4 (migration 111): receipt over-delivery tolerance %. 0 = the
     // historical hard block at exactly the ordered quantity.
     decimal ReceiptOverTolerancePct = 0m)
 {

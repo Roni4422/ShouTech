@@ -44,7 +44,7 @@ public interface IOrderDocumentRepository
     /// <summary>P6: creates a new DRAFT purchase order copying a cancelled PO, linked via amended_from_doc_id + document_links.</summary>
     Task<long> AmendPurchaseOrderAsync(Guid companyId, long cancelledPoId, string newDocNo, DateOnly docDate, string userId, CancellationToken cancellationToken = default);
 
-    /// <summary>P1: RFQ supplier invitations (migration 097).</summary>
+    /// <summary>P1: RFQ supplier invitations (migration 112).</summary>
     Task<IReadOnlyList<RfqInvitation>> GetRfqInvitationsAsync(Guid companyId, long rfqDocId, CancellationToken cancellationToken = default);
     Task AddRfqInvitationsAsync(Guid companyId, long rfqDocId, IReadOnlyList<(long PartyId, string? PartyCode, string? PartyName)> suppliers, string userId, CancellationToken cancellationToken = default);
     Task SetRfqInvitationStatusAsync(Guid companyId, long rfqDocId, long partyId, string status, string userId, CancellationToken cancellationToken = default);

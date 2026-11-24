@@ -52,21 +52,21 @@ public static class GlAccounts
     public const string Cogs = "401";
     public const string Purchases = "402";
     public const string PurchaseReturns = "403";
-    // Landed-cost completion (migration 093): invoice-vs-receipt price
+    // Landed-cost completion (migration 108): invoice-vs-receipt price
     // variance posts here instead of Purchases (402) so PPV is separately
-    // reportable. Seeded by migration 093 into existing companies and by
+    // reportable. Seeded by migration 108 into existing companies and by
     // the COA templates (cod/app/src/Resources/COA/*.shc) for new ones.
     public const string PurchasePriceVariance = "415";
-    // Supplier advances (migration 095): a PAY- voucher flagged as an
+    // Supplier advances (migration 110): a PAY- voucher flagged as an
     // advance against a PO debits this current-asset account instead of
     // AP control (2201); allocation of the advance to that PO's invoice
-    // clears it (Dr 2201 / Cr 1215). Seeded by migration 095 into
+    // clears it (Dr 2201 / Cr 1215). Seeded by migration 110 into
     // existing companies and by the COA templates for new ones.
     public const string SupplierAdvances = "1215";
-    // Withholding tax (migration 099): the DEFAULT withholding payable
+    // Withholding tax (migration 114): the DEFAULT withholding payable
     // (liability) account a withholding tax rule may point at; the rule's
     // configured withholding_account_code is authoritative when set.
-    // Seeded by migration 099 into existing companies and by the COA
+    // Seeded by migration 114 into existing companies and by the COA
     // templates for new ones.
     public const string WithholdingPayable = "2215";
     public const string DepreciationExpense = "505";

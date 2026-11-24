@@ -1,9 +1,9 @@
--- 095 - Supplier advances (PostgreSQL): a PAY- cash voucher may be
+-- 110 - Supplier advances (PostgreSQL): a PAY- cash voucher may be
 -- flagged as an advance against one purchase order; the advance posts
 -- to the new Advances to Suppliers account (1215) instead of AP control
 -- (2201), and PayRecWin allocation consumes it (Dr AP 2201 / Cr
 -- Advances 1215) only against invoices of that same PO.
--- SQLite counterpart: sqlite/095_supplier_advances.sql.
+-- SQLite counterpart: sqlite/110_supplier_advances.sql.
 
 -- Advance marking on the voucher's party link (migration 061 table).
 ALTER TABLE voucher_party_links ADD COLUMN IF NOT EXISTS po_doc_id BIGINT;
@@ -31,7 +31,7 @@ CREATE INDEX IF NOT EXISTS ix_payment_allocations_advance_po
 INSERT INTO chart_of_accounts
     (account_id, company_id, account_code, account_name, name_ar, account_type,
      parent_account_id, is_postable, is_active, is_deleted)
-SELECT md5(c.company_id::text || ':095:' || '1215')::uuid,
+SELECT md5(c.company_id::text || ':110:' || '1215')::uuid,
        c.company_id,
        '1215',
        'Advances to Suppliers',
