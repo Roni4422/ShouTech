@@ -1,0 +1,100 @@
+# REDUCE Plan — file-count consolidation on branch `reduce`
+
+Owner directive (2026-11-24): reorganize/consolidate the repo to reduce the
+total file count as much as safely possible, across ALL file types, even if
+files get somewhat bigger. Work slowly and carefully on the new branch
+`reduce` (base: stabilization tip `d7ff5d0`); the stabilization branch stays
+untouched as the fallback. This is a file-layout change only: zero behavior
+change, zero renames of types/members/namespaces/resource keys/public APIs.
+Every merged file keeps the dominant (largest / natural-anchor) file's
+existing name, in the repo's short-name style.
+
+## Baseline inventory (tracked files at d7ff5d0)
+
+Total: **950**
+
+| Category | Count | Notes |
+|---|---|---|
+| .cs | 480 | app 335 in cod/, libraries 157 in src/, tests 50, tools/svc ~14 |
+| .sql | 259 | 213 in dba/mig (OFF LIMITS), 45 in archive/, 1 stray in dba/sys |
+| .md | 89 | 80 in docs/, rest root/dba/archive READMEs |
+| .xaml | 27 | all paired with .xaml.cs — excluded |
+| .json | 20 | Lang/Errors/COA catalogs + configs — loader-addressed, excluded |
+| .cpp/.h | 24 | sec/ native library — excluded (see below) |
+| .shc | 16 | COA templates, loaded by filename — excluded |
+| .csproj/.sln/.props | 12 | project structure — excluded |
+| .yml | 5 | CI workflows — excluded |
+| .sys | 5 | dba schema descriptors — kept |
+| .py | 4 | tools/ audit scripts — kept (gate tooling) |
+| other | ~14 | png/txt/config/misc — kept |
+
+## Hard exclusions (not candidates, with reason)
+
+1. **Applied migrations dba/mig/{sqlite,postgresql} 001–114 (213 files)** —
+   OFF LIMITS: they exist in real databases' applied ledgers (the owner's
+   company DBs run this branch). No merge/rename/renumber/delete. (A
+   fresh-install-only consolidation would be theoretically possible but is
+   excluded by the owner's constraint.)
+2. **Lang/Errors catalog JSONs and COA/Currencies resources** — the loaders
+   address them by language/filename; structure must stay.
+3. **XAML + code-behind pairs (27 xaml)** — x:Class pairing forbids merging.
+4. **sec/ C++ library (26 files)** — native toolchain (MSVC/CMake) cannot be
+   build-verified in this environment; an unverifiable merge violates the
+   green-branch rule. Skipped.
+5. **svc/WebhookSigner.cs** — linked by path from tests/Kern.Tests.csproj
+   (`Compile Include="..\..\svc\WebhookSigner.cs"`); merging it would break
+   the test project's file link.
+6. **docs/USER_GUIDE_EN.md** — copied to build output by explicit path in
+   MainApp.csproj; the path must stay valid.
+7. **CI workflows (.github)** — merging changes trigger semantics; not a
+   layout-only change.
+8. **tls/frp/kern_tests.cs** — not code at all (a V9 spec note with a .cs
+   extension); harmless, out of build. Left as-is.
+9. **Large cohesive single-class files** (Infra repositories, giant app
+   services like InvRepo/Rpt/Inventory, main feature windows) — merging
+   them would create mega-files with no organizational gain.
+
+Verified mechanics: MainApp.csproj globs `**\*.cs` (EnableDefaultCompileItems
+is false but a single glob Compile item covers everything), and Domain /
+Infra / App / Kern.Tests / inv / svc projects use default compile items —
+so C# file merges need **no csproj edits**. Both migrators (SqlMigrator
+tool and app SchMig) read **only** `dba/mig/{provider}` — proven from source.
+
+## Consolidation groups (safest first; gates after EACH group)
+
+Gate set after every group: `dotnet build ShouTech.sln --no-incremental`
+= 0 errors / 0 warnings; SqlMigrator fresh apply through 114 + second run 0;
+tools/audit_window_context.py, verify_screenfit.py,
+verify_english_source.py, schema_audit.py exit 0; tools/P2pHarness 39/39;
+tools/W1Harness 36/36; Errors parity 0 missing. A group that fails gates
+for a non-trivial cause is reverted and marked SKIPPED with the reason.
+
+| # | Group | Files in → out | Δ | Rationale / risk |
+|---|---|---|---|---|
+| G1 | dba/sys duplicate | 1 → 0 | −1 | dba/sys/023_invoice_header_fields_postgresql.sql is byte-identical to the applied dba/mig/postgresql/023 file; both migrators read only dba/mig (proven); zero references anywhere. Delete the stray copy only. |
+| G2 | Docs: fix-phase records | 13 → 1 | −12 | FIX_PHASE_STEP1..13.md are sequential chapters of one fix-phase record → FIX_PHASE.md. |
+| G3 | Docs: build records | 10 → 3 | −7 | BUILD_PHASEB_054..057 → BUILD_PHASEB.md (−3); BUILD_HR_DESIGN + BUILD_HR_PAYROLL → BUILD_HR_PAYROLL.md (−1); BATCH2 + BATCH3 + MERGE_BATCH1 → MERGE_BATCH1_FOUNDATION.md (−2); BUILD_MANUFACTURING + BUILD_POS stay (distinct builds). |
+| G4 | Docs: topical pairs + root logs + V9 stubs | 15 → 6 | −9 | DOCUMENT_NUMBERING pair → DOCUMENT_NUMBERING.md (−1); ENGLISH_ONLY pair → ENGLISH_ONLY_MIGRATION_PLAN.md (−1); PURCHASE_TO_PAY_CYCLE + _WORKFLOW + THREE_WAY_MATCH → PURCHASE_TO_PAY_CYCLE.md (−2); ACCOUNTING_CHART pair → ACCOUNTING_CHART_PERIODS_YEAR_CLOSE.md (−1); root CLEANUP_LOG + PHASE6_CHANGELOG → CLEANUP_LOG.md (−1); V9 stubs arc/api/sec → usr.md (−3). |
+| G5 | Docs: competitive set | 6 → 1 | −5 | COMPETITIVE_GAP_ASSESSMENT (dominant) absorbs ERP-COMPETITIVE-ROADMAP, PHENIX10-COMPETITIVE-ROADMAP, ERPNEXT_PARITY_ROADMAP, MANAGER-IO-COMPETITIVE-BENCHMARK, ERP-PROCESS-PARITY-MATRIX — one competitive-analysis corpus. |
+| G6 | Docs: inventories & audits | 7 → 2 | −5 | Window inventories (WINDOW-INVENTORY, MISSING_WINDOWS_INVENTORY, FILE-INVENTORY) → RIBBON_COMPLETION_INVENTORY.md (−3); window audits (WINDOW_CONTEXT_AUDIT, WINDOW_DB_FIELD_AUDIT) → window-field-persistence-audit.md (−2). |
+| G7 | Archive legacy SQL | 45 → 11 | −34 | archive/legacy_sqlserver per-folder concatenation (ai/fin/hr/inv/mfg/pos/post/root/sys/tmpl → 1 file each) + legacy_schema_snapshots lite+pg → 1 file. Content preserved verbatim with file-boundary markers; nothing executes archive SQL (schema_audit.py only inventories it, by prefix). READMEs kept. |
+| G8 | cod/cor (ShouTech.Core.Inv) | 7 → 1 | −6 | The whole legacy mini-project is 203 lines in one namespace (Models/Security/invmod/invrep/invsvc/invuow) → navrep.cs (dominant). |
+| G9 | Domain enums | 5 → 1 | −4 | AppMode/LicenseType/LicStat/LicEd → ModKey.cs; one namespace ShouTech.Domain.Enums, 70 lines total. |
+| G10a | Domain interfaces: core + finance | 16 → 2 | −14 | IMasterCardRepository.cs absorbs IDefinition/IAsset/IProject/IFYear/ICompany/ICom/IUser/IUsrRepo/IDatabaseHealth/INavigation/ILicProv (−11); IReconciliationRepository.cs absorbs IJournal/ICheque/IBudget (−3). All one namespace. |
+| G10b | Domain interfaces: purchase + operations | 11 → 2 | −9 | ICommercialDocumentRepository.cs absorbs IOrderDocument/IPurchaseRequisitionWorkflow/IPurchaseDocumentAttachment/IPurchaseMatchPolicy/IPurchaseLandedCost (−5); IOperationsRepository.cs absorbs IPlanning/IBom/IMfgOrder/IQuality/IPos (−5 → recount: 6 files → 1 = −5). ICrm/IHr stay standalone. |
+| G11 | Domain entities (small) | 10 → 4 | −6 | Rol.cs absorbs RolPerm + Perm (−2); JournalEntry.cs absorbs JournalEntrySnapshot + GlPosting (−2); PurchaseMatchPolicy.cs absorbs PurchaseMatchEvaluationSnapshot (−1); PurchaseLandedCost.cs absorbs PurchaseDocumentAttachment (−1). |
+| G12 | Reports windows: financial | 19 → 1 | −18 | Uniform code-only RptBase subclasses, one class per file, one namespace, no xaml, no partials → ClosingAccountsWin.cs (dominant). |
+| G13 | Reports windows: inventory | 19 → 1 | −18 | Same pattern → MatMoveWin.cs (dominant). |
+| G14 | Reports windows: party/sales/purchase | 17 → 1 | −16 | Same pattern → SupAgingWin.cs (dominant). |
+| G15 | Reports windows: operations | 9 → 1 | −8 | Mfg/POS/QC/targets/price-list → PriceListWin.cs (dominant). GrniWin, CrmFunnelWin, HrReports, SalExceptWin, RptWinUtil stay standalone (large/feature-specific). |
+| G16 | src/App services clusters | 11 → 2 | −9 | Purchase services (LandedCost/Match/Attachment) → PurchaseDocumentAttachmentService.cs (−3); platform services (Usr/FYear/Lic/ErpPlan/ModMenu/Com) → ErpSvc.cs (−6). One namespace ShouTech.Application.Services. |
+| G17 | Infra landed-cost pair | 2 → 1 | −1 | LandedCostConsumptionAllocator → LandedCostAllocator.cs. |
+| G18 | cod/app small helpers | 9 → 4 | −5 | BaseVM + DockedWinItem → ModWsVM.cs (−2); Localization Loc.cs → LocProps.cs (−1); EntityContextAction → QuickBarProps.cs (−1); RptDef → ReportModels.cs (−1). |
+| G19 | svc host | 2 → 1 | −1 | ServiceHealth → Program.cs (host anchor). WebhookSigner excluded (test link); OutboundMessageWorker stays. |
+| G20 | Tests: subject pairs | 7 → 3 | −4 | LandedCostAllocatorTests absorbs LandedCostConsumptionAllocatorTests (−1); PurchaseMatchServiceTests absorbs PurchaseMatchPolicyEvaluatorTests (−1); SchemaMigratorTests absorbs ErpPlanTests + BudgetServicePermissionTests (−2). |
+
+**Projected total: 950 → ~758 files (−192, ≈ −20%).**
+
+## Outcomes
+
+(Filled at completion — per-group result, final counts, final gate results.)
