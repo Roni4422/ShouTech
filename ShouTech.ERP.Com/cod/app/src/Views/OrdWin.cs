@@ -79,6 +79,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
     private readonly Button _btnRequisitions = new();
     private readonly Button _btnClose = new();
     private readonly Button _btnCancel = new();
+    private readonly Button _btnDelete = new();
     private readonly Button _btnAddLine = new();
     private readonly Button _btnRemLine = new();
     private readonly Button _btnPrint = new();
@@ -188,6 +189,8 @@ public sealed class OrdWin : BaseWin, IWindowMode
         _btnConvert.Visibility = IsRfq ? Visibility.Collapsed : Visibility.Visible;
         StyleButton(_btnClose, "OrderDoc.CloseOrder");
         StyleButton(_btnCancel, "OrderDoc.CancelOrder");
+        StyleButton(_btnDelete, "RecycleBin.DeleteToBin");
+        _btnDelete.Click += (_, _) => DeleteOrder();
         StyleButton(_btnAmend, "OrderDoc.Amend");
         _btnAmend.Visibility = _kind == OrdKind.Purchase ? Visibility.Visible : Visibility.Collapsed;
         _btnAmend.Click += async (_, _) => await AmendAsync();
@@ -260,7 +263,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             }
         };
 
-        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnConvert, _btnReceipt, _btnAttachments, _btnSubmitApproval, _btnApproveDoc, _btnRejectDoc, _btnRequisitions, _btnAddSupplierQuote, _btnCompareQuotes, _btnInvitations, _btnClose, _btnCancel, _btnAmend, _btnAddLine, _btnRemLine, _btnPrint })
+        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnConvert, _btnReceipt, _btnAttachments, _btnSubmitApproval, _btnApproveDoc, _btnRejectDoc, _btnRequisitions, _btnAddSupplierQuote, _btnCompareQuotes, _btnInvitations, _btnClose, _btnCancel, _btnDelete, _btnAmend, _btnAddLine, _btnRemLine, _btnPrint })
             toolbar.Children.Add(b);
 
         var actionBar = new Border
@@ -588,6 +591,37 @@ public sealed class OrdWin : BaseWin, IWindowMode
             // loaded — but the failure is reported centrally (Step 9),
             // never swallowed silently.
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OrdWin.RefreshProgress");
+        }
+    }
+
+    /// <summary>Soft delete (SOFT_DELETE_STUDY): the order moves to the
+    /// recycle bin through DocBinSvc's chain-document path; linked or
+    /// allocated orders are refused by the bin guards. The window
+    /// closes — the order no longer exists in working lists.</summary>
+    private void DeleteOrder()
+    {
+        if (_docId is null) return;
+        var confirm = MessageBox.Show(this, T("RecycleBin.ConfirmDeleteDocument"), Title,
+            MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+        if (confirm != MessageBoxResult.Yes) return;
+        try
+        {
+            DocBinSvc.SoftDeleteChainDocument(
+                _kind == OrdKind.Sales, _docId.Value, DocKindCode,
+                string.IsNullOrWhiteSpace(CurrentUserId) ? "system" : CurrentUserId);
+            MessageBox.Show(this, T("RecycleBin.MovedToBin"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            Close();
+        }
+        catch (AppError ex)
+        {
+            AppHost.Errors.Report(ex.Code, ex, "OrdWin.DeleteOrder");
+            var info = AppHost.Errors.Resolve(ex.Code, ex.Args.ToArray());
+            ShowWarningMessage($"{info.Message} (Error {info.Code})");
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OrdWin.DeleteOrder");
+            ShowWarningMessage(ex.Message);
         }
     }
 
@@ -1605,6 +1639,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
         _btnReceipt.IsEnabled = !_isReceiving && !_isConverting && _kind == OrdKind.Purchase && _status == CommercialDocumentStatus.Posted && _docId is not null;
         _btnClose.IsEnabled = _status == CommercialDocumentStatus.Posted;
         _btnCancel.IsEnabled = _status is CommercialDocumentStatus.Draft or CommercialDocumentStatus.Posted;
+        _btnDelete.IsEnabled = _docId is not null && _status is CommercialDocumentStatus.Draft or CommercialDocumentStatus.Posted;
         // P6: Amend is offered exactly for a cancelled purchase order.
         _btnAmend.IsEnabled = _kind == OrdKind.Purchase && _status == CommercialDocumentStatus.Cancelled && _docId is not null;
         _btnInvitations.IsEnabled = IsRfq && _docId is not null;

@@ -93,7 +93,7 @@ touched, inside one transaction:
 | GL (`journal_entries`) | New posted JE cloning each of the doc's JEs with debit/credit swapped, `reversal_of_entry_id` → original, source preserved, doc no `BIN-…`, **same entry_date** (the pair nets to zero in the doc's own period, so period reports are clean too) | New posted JE cloning the **original** lines as-is, `reversal_of_entry_id` → the bin JE, doc no `BIN-R-…` |
 | Party ledger | Mirror rows: same doc_kind/doc_id, debit/credit swapped, note `BIN:NEUTRALIZE <event>` | Mirror rows again (swap back), note `BIN:REINSTATE <event>` — additive both ways, trail complete |
 | Stock (`StockValuationEngine`) | For each **original** movement row of the document: an inverse movement through the one engine (qty_in/qty_out swapped; a re-entry carries the original movement's unit cost as `ReceiptUnitCost`), so balances/layers/average cost move through the same code that posted them | The original movements re-applied through the engine from the stored original rows |
-| Tax register (`tax_transactions`) | Mirror rows with negated amounts under `source_doc_kind = '<KIND>-BIN'` (the register's unique key forbids a same-kind mirror; the register itself is append-only) | The `<KIND>-BIN` rows are **deleted** — the one bounded exception to append-only, forced by the register's unique key and recorded here; net register state returns to exactly the original rows |
+| Tax register (`tax_transactions`) | Mirror rows with negated amounts under `source_doc_kind = '<KIND>-BIN'` (the register's unique key forbids a same-kind mirror; the register itself is append-only) | **Additive too**: the register's immutability triggers forbid UPDATE/DELETE of ANY row, so reinstatement inserts the mirror amounts negated again under `'<KIND>-BINR'`. Repeated cycles take fresh kinds (`-BIN2`, `-BIN2R`, …) because the unique key forbids reusing a kind for the same document; the NEUTRALIZE bin event's note records the mirror kind it used. Net register state is exact at every step and the full cycle history stays in the register |
 | Settlement | Blocked upstream (see guards) — a document with payment allocations is never binned, so no allocation is ever left dangling | — |
 
 Exactly-once is enforced by a new table **`bin_posting_events`**
@@ -111,6 +111,15 @@ under the `status = 1` paths. Status-preserving compensation nets to zero
 under **both** conventions and matches the already-proven return-document
 arithmetic. Recorded as a deliberate deviation from the journal-reversal
 engine, for ledger-report consistency.
+
+**Clone linkage (implementation refinement):** `journal_entries.
+reversal_of_entry_id` carries a UNIQUE index — an entry can be the
+target of exactly one compensation. Bin clones therefore form a chain:
+each neutralization anchors at the chain head (the entry whose effects
+are currently live) and each reinstatement anchors at its own cycle's
+neutralization clone (found exactly via the `[BIN <eventId>]` marker in
+the clone description). Clone document numbers carry a per-event suffix
+for the same uniqueness reason, following GlPosting's own convention.
 
 **Closed periods:** the compensation JE carries the original entry_date.
 The pair nets to zero in every period report, so no period total changes;
@@ -178,6 +187,13 @@ is gone; the audit log keeps what it was.
 - **Delete actions added** to InvoiceWin, OrdWin, JrnWin, CshWin,
   PayRecWin (bottom button bars, confirmation first). Binned journals
   disappear from JrnWin's list (read paths gain the `is_deleted` filter).
+  *Implementation note:* PayRecWin is the allocation/reconciliation
+  surface — it owns no document or journal of its own (the vouchers it
+  allocates are created in CshWin, which carries the Delete action), so
+  no button was added there; it is instead the place the BIN-8202 guard
+  sends the user to unallocate. CshWin's previously disabled placeholder
+  Delete button ("JournalService has no draft delete") is now wired to
+  the mechanism.
 - **BinWin**: posted documents + journals listed with a status marker;
   filters for dataset/type, deleted-by, and deletion date range; purge
   gated on `SYS.ADMIN`.

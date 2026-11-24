@@ -102,11 +102,15 @@ public sealed class JournalRepository : IJournalRepository
 
         await using (var header = connection.CreateCommand())
         {
-            header.CommandText = """
+            // Recycle bin (migration 122): a binned entry is invisible
+            // to the voucher windows — it can only come back through
+            // the bin's restore.
+            var notDeleted = _provider == "PostgreSQL" ? "is_deleted=false" : "is_deleted=0";
+            header.CommandText = $"""
                 SELECT journal_entry_id, company_id, entry_date, description, status,
                        reference_number, currency_code, exchange_rate, document_number
                 FROM journal_entries
-                WHERE company_id = @company AND document_number = @documentNumber
+                WHERE company_id = @company AND document_number = @documentNumber AND {notDeleted}
                 """;
             Add(header, "@company", FormatGuid(companyId));
             Add(header, "@documentNumber", documentNumber.Trim());

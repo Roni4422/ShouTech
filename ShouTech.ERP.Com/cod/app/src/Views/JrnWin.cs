@@ -45,6 +45,7 @@ public sealed class JrnWin : BaseWin
     private readonly Button _btnSave = new();
     private readonly Button _btnPost = new();
     private readonly Button _btnReverse = new();
+    private readonly Button _btnDelete = new();
     private readonly Button _btnPrint = new();
     private readonly Button _btnAddLine = new();
     private readonly Button _btnRemoveLine = new();
@@ -115,6 +116,9 @@ public sealed class JrnWin : BaseWin
         _btnSave.Click += async (_, _) => await SaveVoucherAsync();
         _btnPost.Click += async (_, _) => await PostVoucherAsync();
         _btnReverse.Click += async (_, _) => await ReverseVoucherAsync();
+        StyleButton(_btnDelete, "RecycleBin.DeleteToBin");
+        _btnDelete.IsEnabled = false;
+        _btnDelete.Click += (_, _) => DeleteVoucher();
         _btnPrint.Click += (_, _) => PrintVoucher();
         _btnAddLine.Click += (_, _) =>
         {
@@ -134,7 +138,7 @@ public sealed class JrnWin : BaseWin
         };
         _btnAutoBal.Click += (_, _) => AutoBalance();
 
-        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnReverse, _btnPrint, _btnAddLine, _btnRemoveLine, _btnAutoBal })
+        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnReverse, _btnDelete, _btnPrint, _btnAddLine, _btnRemoveLine, _btnAutoBal })
             toolbar.Children.Add(b);
 
         // Explorer-style bottom command bar: flat, transparent, subtle 1px top divider.
@@ -270,6 +274,7 @@ public sealed class JrnWin : BaseWin
     {
         _txtDocNo.Text = "JV-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
         _currentJournalId = null;
+        _btnDelete.IsEnabled = false;
         _loadedDraft = false;
         _journalPosted = false;
         _journalReversed = false;
@@ -406,6 +411,7 @@ public sealed class JrnWin : BaseWin
             _btnSave.IsEnabled = isDraft;
             _btnPost.IsEnabled = isDraft;
             _btnReverse.IsEnabled = snapshot.Status == ShouTech.Domain.Entities.JournalEntryStatus.Posted;
+            _btnDelete.IsEnabled = snapshot.Status != ShouTech.Domain.Entities.JournalEntryStatus.Reversed;
             SetVoucherReadOnly(!isDraft);
             RefreshBalances();
 
@@ -615,6 +621,32 @@ public sealed class JrnWin : BaseWin
             if (ex is not ShouTech.Domain.AppError)
                 AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "JrnWin.PostVoucherAsync");
             ReportPersistenceFailure("Post", ex);
+        }
+    }
+
+    /// <summary>Soft delete (SOFT_DELETE_STUDY): the entry moves to the
+    /// recycle bin; DocBinSvc reverses its posting effects while it is
+    /// binned and reinstates them on restore. The form resets — the
+    /// entry no longer exists in working lists.</summary>
+    private void DeleteVoucher()
+    {
+        if (!_currentJournalId.HasValue || _journalReversed)
+            return;
+        if (!AskConfirm("RecycleBin.ConfirmDeleteJournal"))
+            return;
+
+        try
+        {
+            var user = ShouTech.App.Services.UsrSession.Current;
+            var actor = !string.IsNullOrWhiteSpace(user?.Id) ? user.Id : ShouTech.App.Services.AppHost.Session.CurrentUser;
+            DocBinSvc.SoftDeleteJournal(_currentJournalId.Value, actor ?? "system");
+            ShowInfo("RecycleBin.MovedToBin");
+            ResetVoucher();
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "JrnWin.DeleteVoucher");
+            ReportPersistenceFailure("Delete", ex);
         }
     }
 

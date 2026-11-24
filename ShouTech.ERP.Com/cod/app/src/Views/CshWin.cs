@@ -133,13 +133,14 @@ public sealed class CshWin : BaseWin, IWindowMode
         StyleButton(_btnPrint, "Invoice.Print");
         StyleButton(_btnAddLine, "Invoice.AddLine");
         StyleButton(_btnRemoveLine, "Invoice.RemoveLine");
-        _btnDelete.IsEnabled = false; // JournalService has no draft delete; see footer note.
+        _btnDelete.IsEnabled = false; // Enabled when a voucher is loaded.
 
         _btnNew.Click += (_, _) => ResetVoucher();
         _btnLoad.Click += async (_, _) => await LoadVoucherAsync();
         _btnSave.Click += async (_, _) => await SaveVoucherAsync();
         _btnPost.Click += async (_, _) => await PostVoucherAsync();
         _btnReverse.Click += async (_, _) => await ReverseVoucherAsync();
+        _btnDelete.Click += (_, _) => DeleteVoucher();
         _btnPrint.Click += (_, _) => PrintVoucher();
         _btnAddLine.Click += (_, _) =>
         {
@@ -303,6 +304,7 @@ public sealed class CshWin : BaseWin, IWindowMode
         _txtPoNo.Text = string.Empty;
         _cbPartyKind.SelectedIndex = _kind == CshKind.Receipt ? 0 : 1;
         _btnReverse.IsEnabled = false;
+        _btnDelete.IsEnabled = false;
         _txtAmount.Text = "0.00";
         _txtRefNo.Text = string.Empty;
         _txtCc.Text = string.Empty;
@@ -575,6 +577,26 @@ public sealed class CshWin : BaseWin, IWindowMode
         }
     }
 
+    /// <summary>Soft delete (SOFT_DELETE_STUDY): the voucher moves to
+    /// the recycle bin; DocBinSvc reverses its posting effects while it
+    /// is binned and reinstates them on restore. The form resets.</summary>
+    private void DeleteVoucher()
+    {
+        if (!_currentJournalId.HasValue) return;
+        if (!AskConfirm("RecycleBin.ConfirmDeleteJournal")) return;
+        try
+        {
+            DocBinSvc.SoftDeleteJournal(_currentJournalId.Value,
+                string.IsNullOrWhiteSpace(CurrentUserId) ? "system" : CurrentUserId);
+            MessageBox.Show(this, T("RecycleBin.MovedToBin"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            ResetVoucher();
+        }
+        catch (Exception ex)
+        {
+            ReportFailure("Delete", ex);
+        }
+    }
+
     private async Task LoadVoucherAsync()
     {
         var documentNumber = _txtDocNo.Text.Trim();
@@ -600,6 +622,7 @@ public sealed class CshWin : BaseWin, IWindowMode
                 _txtPoNo.Text = link.PoDocNo ?? string.Empty;
             }
             _btnReverse.IsEnabled = _isPosted && snapshot.Status == JournalEntryStatus.Posted;
+            _btnDelete.IsEnabled = snapshot.Status != JournalEntryStatus.Reversed;
             _dtDate.SelectedDate = snapshot.EntryDate.ToDateTime(TimeOnly.MinValue);
             _txtRefNo.Text = snapshot.ReferenceNumber ?? string.Empty;
             _txtCur.Text = snapshot.CurrencyCode;

@@ -134,9 +134,10 @@ public static class DocBinSvc
             if (doc.Status == "Posted")
             {
                 var eventId = Guid.NewGuid();
-                var firstClone = NeutralizeDocument(connection, tx, doc, kindCode, eventId, actor);
+                var (firstClone, taxMirrorKind) = NeutralizeDocument(connection, tx, doc, kindCode, eventId, actor);
                 WriteEvent(connection, tx, Company, "DOC", table, kindCode,
-                    docId.ToString(CultureInfo.InvariantCulture), "NEUTRALIZE", firstClone, actor, eventId);
+                    docId.ToString(CultureInfo.InvariantCulture), "NEUTRALIZE", firstClone, actor, eventId,
+                    taxMirrorKind);
             }
             FlipDocumentDeleted(connection, tx, table, docId, deleted: true, actor);
             tx.Commit();
@@ -181,7 +182,7 @@ public static class DocBinSvc
                 ReinstateDocument(connection, tx, doc, kindCode, openEvent.Value, eventId, actor);
                 WriteEvent(connection, tx, Company, "DOC", table, kindCode,
                     docId.ToString(CultureInfo.InvariantCulture), "REINSTATE", null, actor, eventId,
-                    $"OF {openEvent.Value:D}");
+                    $"OF {openEvent.Value.Id:D}");
             }
             FlipDocumentDeleted(connection, tx, table, docId, deleted: false, actor);
             tx.Commit();
@@ -259,8 +260,9 @@ public static class DocBinSvc
             {
                 var eventId = Guid.NewGuid();
                 var cloneId = CloneJournalEntry(connection, tx, entry, swapped: true,
-                    "BIN-" + entry.DocumentNumber, actor,
-                    $"Recycle bin neutralization of {entry.DocumentNumber}");
+                    "BIN-" + entry.DocumentNumber + "-" + eventId.ToString("N")[..6], actor,
+                    $"Recycle bin neutralization of {entry.DocumentNumber} [BIN {eventId:D}]",
+                    ChainHead(connection, tx, entry));
                 MirrorPartyRowsForJournal(connection, tx, entry.Id, cloneId,
                     $"BIN:NEUTRALIZE {eventId:D}");
                 WriteEvent(connection, tx, entry.CompanyKey, "JOURNAL", "journal_entries",
@@ -295,13 +297,14 @@ public static class DocBinSvc
                 if (openEvent is null) throw StateConflict();
                 var eventId = Guid.NewGuid();
                 var cloneId = CloneJournalEntry(connection, tx, entry, swapped: false,
-                    "BIN-R-" + entry.DocumentNumber, actor,
-                    $"Recycle bin reinstatement of {entry.DocumentNumber}");
-                MirrorPartyRowsWithNote(connection, tx, $"BIN:NEUTRALIZE {openEvent.Value:D}",
+                    "BIN-R-" + entry.DocumentNumber + "-" + eventId.ToString("N")[..6], actor,
+                    $"Recycle bin reinstatement of {entry.DocumentNumber} [BIN {eventId:D}]",
+                    FindBinClone(connection, tx, entry, openEvent.Value.Id));
+                MirrorPartyRowsWithNote(connection, tx, $"BIN:NEUTRALIZE {openEvent.Value.Id:D}",
                     cloneId, $"BIN:REINSTATE {eventId:D}");
                 WriteEvent(connection, tx, entry.CompanyKey, "JOURNAL", "journal_entries",
                     entry.SourceDocType ?? "JRN", entryId.ToString("D"), "REINSTATE",
-                    cloneId, actor, eventId, $"OF {openEvent.Value:D}");
+                    cloneId, actor, eventId, $"OF {openEvent.Value.Id:D}");
             }
             FlipJournalDeleted(connection, tx, entryId, deleted: false, actor);
             tx.Commit();
@@ -327,6 +330,12 @@ public static class DocBinSvc
                     "A posted journal entry cannot be permanently deleted.");
             using (var del = Cmd(connection, tx,
                 "DELETE FROM journal_entry_lines WHERE journal_entry_id=$id;"))
+            { Add(del, "$id", GuidParam(entryId)); del.ExecuteNonQuery(); }
+            // The entry's own lifecycle audit rows belong to the record
+            // being purged; the purge itself is captured by the
+            // deletion_audit_log trigger snapshot of the header row.
+            using (var del = Cmd(connection, tx,
+                "DELETE FROM journal_audit_events WHERE journal_entry_id=$id;"))
             { Add(del, "$id", GuidParam(entryId)); del.ExecuteNonQuery(); }
             using (var del = Cmd(connection, tx,
                 "DELETE FROM journal_entries WHERE journal_entry_id=$id;"))
@@ -396,12 +405,15 @@ public static class DocBinSvc
     private static void GuardDocumentBinning(DbConnection c, DbTransaction tx, string table, long docId, string kindCode)
     {
         var guid = ResolveCompanyGuid(c, tx)?.ToString("D") ?? Company;
+        // payment_allocations keys documents by side, not by table name
+        // (CHECK constraint: doc_table IN ('SALES','PURCHASE')).
+        var allocTable = table == "sales_documents" ? "SALES" : "PURCHASE";
         long Count(string sql)
         {
             using var cmd = Cmd(c, tx, sql);
             Add(cmd, "$id", docId);
             Add(cmd, "$kind", kindCode);
-            Add(cmd, "$table", table);
+            Add(cmd, "$table", allocTable);
             Add(cmd, "$company", Company);
             Add(cmd, "$guid", guid);
             return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
@@ -478,12 +490,13 @@ public static class DocBinSvc
     }
 
     /// <summary>The NEUTRALIZE event not yet answered by a REINSTATE
-    /// (the REINSTATE row names it in its note: 'OF &lt;eventId&gt;').</summary>
-    private static Guid? FindOpenEvent(DbConnection c, DbTransaction tx, string companyKey,
+    /// (the REINSTATE row names it in its note: 'OF &lt;eventId&gt;').
+    /// The NEUTRALIZE note carries the tax mirror kind it used.</summary>
+    private static (Guid Id, string? Note)? FindOpenEvent(DbConnection c, DbTransaction tx, string companyKey,
         string subjectKind, string docTable, string docKey)
     {
         using var cmd = Cmd(c, tx, """
-            SELECT n.event_id FROM bin_posting_events n
+            SELECT n.event_id, n.note FROM bin_posting_events n
             WHERE n.company_key=$ck AND n.subject_kind=$sk AND n.doc_table=$dt AND n.doc_key=$dk
               AND n.action='NEUTRALIZE'
               AND NOT EXISTS (
@@ -497,10 +510,11 @@ public static class DocBinSvc
         Add(cmd, "$sk", subjectKind);
         Add(cmd, "$dt", docTable);
         Add(cmd, "$dk", docKey);
-        var value = cmd.ExecuteScalar();
-        return value is not null and not DBNull
-            && Guid.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), out var id)
-            ? id : null;
+        using var reader = cmd.ExecuteReader();
+        if (!reader.Read()) return null;
+        if (!Guid.TryParse(Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture), out var id))
+            return null;
+        return (id, reader.IsDBNull(1) ? null : Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture));
     }
 
     // ------------------------------------------------------------------
@@ -565,6 +579,50 @@ public static class DocBinSvc
         IsDeleted = Convert.ToBoolean(reader.GetValue(14), CultureInfo.InvariantCulture),
     };
 
+    /// <summary>Walks the reversal chain from an entry to its current
+    /// head. journal_entries.reversal_of_entry_id is UNIQUE — an entry
+    /// can be the target of exactly one compensation — so each new bin
+    /// clone anchors at the head of the chain (the entry whose effects
+    /// are currently live), forming orig ← N1 ← R1 ← N2 ← R2 …</summary>
+    private static object ChainHead(DbConnection c, DbTransaction tx, JournalRow start)
+    {
+        var current = start.IdRaw;
+        for (var i = 0; i < 100; i++)
+        {
+            using var cmd = Cmd(c, tx,
+                "SELECT journal_entry_id FROM journal_entries WHERE reversal_of_entry_id=$target LIMIT 1;");
+            Add(cmd, "$target", current);
+            var value = cmd.ExecuteScalar();
+            if (value is null or DBNull) return current;
+            current = value;
+        }
+        return current;
+    }
+
+    /// <summary>Finds one specific bin clone of an entry by the event
+    /// marker in its description ('[BIN &lt;eventId&gt;]'), walking the
+    /// entry's own reversal chain — one event can neutralize several
+    /// entries of the same document, and each keeps its own chain.</summary>
+    private static object? FindBinClone(DbConnection c, DbTransaction tx, JournalRow src, Guid eventId)
+    {
+        var marker = $"[BIN {eventId:D}]";
+        var current = src.IdRaw;
+        for (var i = 0; i < 100; i++)
+        {
+            using var cmd = Cmd(c, tx,
+                "SELECT journal_entry_id, description FROM journal_entries WHERE reversal_of_entry_id=$target LIMIT 1;");
+            Add(cmd, "$target", current);
+            using var reader = cmd.ExecuteReader();
+            if (!reader.Read()) return null;
+            var childId = reader.GetValue(0);
+            var description = reader.IsDBNull(1) ? string.Empty : Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture);
+            if (description is not null && description.Contains(marker, StringComparison.Ordinal))
+                return childId;
+            current = childId;
+        }
+        return null;
+    }
+
     /// <summary>Inserts a posted clone of a journal entry — amounts
     /// swapped (neutralize) or as-is (reinstate) — linked back through
     /// reversal_of_entry_id. The source entry is never modified.</summary>
@@ -573,13 +631,15 @@ public static class DocBinSvc
         object? reversalOfRaw = null)
     {
         var newId = Guid.NewGuid();
+        // The database enforces the product lifecycle (insert as draft,
+        // add lines, then post) — the clone follows it exactly.
         using (var cmd = Cmd(c, tx, $"""
             INSERT INTO journal_entries
                 (journal_entry_id, company_id, entry_date, description, status, created_by,
-                 posted_by, posted_at, reversal_of_entry_id, fiscal_period_id, reference_number,
+                 reversal_of_entry_id, fiscal_period_id, reference_number,
                  currency_code, exchange_rate, document_number, source_doc_type, source_doc_id,
                  source_doc_no, base_currency_code, is_deleted)
-            VALUES ($id, $company, $date, $desc, 1, $actor, $actor, CURRENT_TIMESTAMP, $revof,
+            VALUES ($id, $company, $date, $desc, 0, $actor, $revof,
                     $period, $ref, $currency, $rate, $docno, $stype, $sid, $sno, $basecur,
                     {(IsPg ? "FALSE" : "0")});
             """))
@@ -622,11 +682,10 @@ public static class DocBinSvc
         {
             using var cmd = Cmd(c, tx, """
                 INSERT INTO journal_entry_lines
-                    (journal_entry_line_id, journal_entry_id, line_number, account_id,
+                    (journal_entry_id, line_number, account_id,
                      debit, credit, cost_center, note, base_debit, base_credit, exchange_rate)
-                VALUES ($lid, $eid, $no, $account, $debit, $credit, $cc, $note, $bdebit, $bcredit, $rate);
+                VALUES ($eid, $no, $account, $debit, $credit, $cc, $note, $bdebit, $bcredit, $rate);
                 """);
-            Add(cmd, "$lid", GuidParam(Guid.NewGuid()));
             Add(cmd, "$eid", GuidParam(newId));
             Add(cmd, "$no", line[0]);
             Add(cmd, "$account", line[1]);
@@ -638,6 +697,15 @@ public static class DocBinSvc
             Add(cmd, "$bcredit", swapped ? line[6] : line[7]);
             Add(cmd, "$rate", line[8] is DBNull ? null : line[8]);
             cmd.ExecuteNonQuery();
+        }
+        using (var post = Cmd(c, tx, """
+            UPDATE journal_entries SET status=1, posted_by=$actor, posted_at=CURRENT_TIMESTAMP
+            WHERE journal_entry_id=$id AND status=0;
+            """))
+        {
+            Add(post, "$id", GuidParam(newId));
+            Add(post, "$actor", actor);
+            if (post.ExecuteNonQuery() == 0) throw StateConflict();
         }
         return newId;
     }
@@ -744,6 +812,7 @@ public static class DocBinSvc
                    qty_in, qty_out, unit_cost, valuation_rate
             FROM material_stock_movements
             WHERE company_id=$company AND document_no=$docno AND is_deleted=0
+              AND (note IS NULL OR note NOT LIKE 'BIN:%')
               AND movement_type IN ({inList})
             ORDER BY stock_movement_id;
             """))
@@ -816,12 +885,52 @@ public static class DocBinSvc
     }
 
     // ------------------------------------------------------------------
-    // Tax register mirrors (source kind '<KIND>-BIN', negated amounts).
-    // Reinstatement deletes the mirror rows: the register's unique key
-    // forbids a second same-kind set, and the net register state must
-    // return to exactly the original rows (SOFT_DELETE_STUDY §3.2).
+    // Tax register mirrors. The register is append-only BY TRIGGER
+    // (no UPDATE, no DELETE of any row), so both directions are
+    // additive: neutralization inserts negated rows under a per-cycle
+    // kind '<KIND>-BIN' ('-BIN2', '-BIN3', … — the register's unique
+    // key forbids reusing a kind for the same document), and
+    // reinstatement inserts the mirror amounts negated again under
+    // '<mirror kind>R'. Net register state is exact at every step and
+    // the full cycle history stays visible in the register itself.
+    // The NEUTRALIZE bin event's note carries the mirror kind used.
     // ------------------------------------------------------------------
-    private static void MirrorTaxRows(DbConnection c, DbTransaction tx, DocRow doc, string kindCode, string actor)
+    private static string? MirrorTaxRows(DbConnection c, DbTransaction tx, DocRow doc, string kindCode, string actor)
+    {
+        if (CountTaxRows(c, tx, doc, kindCode) == 0) return null;
+        var cycle = 1;
+        var mirrorKind = kindCode + "-BIN";
+        while (CountTaxRows(c, tx, doc, mirrorKind) > 0)
+        {
+            cycle++;
+            mirrorKind = kindCode + "-BIN" + cycle.ToString(CultureInfo.InvariantCulture);
+        }
+        CopyTaxRows(c, tx, doc, kindCode, mirrorKind, actor);
+        return mirrorKind;
+    }
+
+    private static void ReinstateTaxRows(DbConnection c, DbTransaction tx, DocRow doc, string? mirrorKind, string actor)
+    {
+        if (string.IsNullOrWhiteSpace(mirrorKind)) return;
+        CopyTaxRows(c, tx, doc, mirrorKind, mirrorKind + "R", actor);
+    }
+
+    private static long CountTaxRows(DbConnection c, DbTransaction tx, DocRow doc, string sourceKind)
+    {
+        using var cmd = Cmd(c, tx, """
+            SELECT COUNT(*) FROM tax_transactions
+            WHERE company_code=$company AND source_doc_kind=$kind AND source_doc_id=$id;
+            """);
+        Add(cmd, "$company", Company);
+        Add(cmd, "$kind", sourceKind);
+        Add(cmd, "$id", doc.DocId);
+        return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>Copies a document's register rows from one source kind
+    /// to another with every amount negated.</summary>
+    private static void CopyTaxRows(DbConnection c, DbTransaction tx, DocRow doc,
+        string sourceKind, string targetKind, string actor)
     {
         var rows = new List<object[]>();
         using (var cmd = Cmd(c, tx, """
@@ -834,7 +943,7 @@ public static class DocBinSvc
             """))
         {
             Add(cmd, "$company", Company);
-            Add(cmd, "$kind", kindCode);
+            Add(cmd, "$kind", sourceKind);
             Add(cmd, "$id", doc.DocId);
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
@@ -848,21 +957,20 @@ public static class DocBinSvc
         {
             using var cmd = Cmd(c, tx, """
                 INSERT INTO tax_transactions
-                    (tax_transaction_id, company_code, country_code, source_doc_kind, source_doc_id,
+                    (company_code, country_code, source_doc_kind, source_doc_id,
                      source_doc_no, line_no, tax_code, tax_type, tax_treatment, tax_rate,
                      taxable_amount, tax_amount, is_recoverable, tax_direction, tax_account_code,
                      currency_code, exchange_rate, base_tax_amount, journal_doc_no, posted_at,
                      created_by, document_date)
-                VALUES ($tid, $company, $country, $kind, $id,
+                VALUES ($company, $country, $kind, $id,
                         $sno, $line, $tcode, $ttype, $ttreat, $trate,
                         $taxable, $tax, $recoverable, $direction, $taccount,
                         $currency, $rate, $basetax, $jno, $posted,
                         $actor, $docdate);
                 """);
-            Add(cmd, "$tid", Guid.NewGuid().ToString("D"));
             Add(cmd, "$company", row[0]);
             Add(cmd, "$country", row[1] is DBNull ? null : row[1]);
-            Add(cmd, "$kind", kindCode + "-BIN");
+            Add(cmd, "$kind", targetKind);
             Add(cmd, "$id", doc.DocId);
             Add(cmd, "$sno", row[2] is DBNull ? null : row[2]);
             Add(cmd, "$line", row[3]);
@@ -886,63 +994,43 @@ public static class DocBinSvc
         }
     }
 
-    private static void DeleteTaxMirrors(DbConnection c, DbTransaction tx, DocRow doc, string kindCode)
-    {
-        using var cmd = Cmd(c, tx, """
-            DELETE FROM tax_transactions
-            WHERE company_code=$company AND source_doc_kind=$kind AND source_doc_id=$id;
-            """);
-        Add(cmd, "$company", Company);
-        Add(cmd, "$kind", kindCode + "-BIN");
-        Add(cmd, "$id", doc.DocId);
-        cmd.ExecuteNonQuery();
-    }
-
     // ------------------------------------------------------------------
     // Document neutralize / reinstate orchestration
     // ------------------------------------------------------------------
-    private static Guid? NeutralizeDocument(DbConnection c, DbTransaction tx, DocRow doc,
+    private static (Guid? FirstClone, string? TaxMirrorKind) NeutralizeDocument(
+        DbConnection c, DbTransaction tx, DocRow doc,
         string kindCode, Guid eventId, string actor)
     {
         Guid? firstClone = null;
         foreach (var entry in FindDocumentEntries(c, tx, doc.DocId, kindCode))
         {
             var cloneId = CloneJournalEntry(c, tx, entry, swapped: true,
-                "BIN-" + entry.DocumentNumber, actor,
-                $"Recycle bin neutralization of {entry.DocumentNumber}");
+                "BIN-" + entry.DocumentNumber + "-" + eventId.ToString("N")[..6], actor,
+                $"Recycle bin neutralization of {entry.DocumentNumber} [BIN {eventId:D}]",
+                ChainHead(c, tx, entry));
             firstClone ??= cloneId;
         }
         MirrorPartyRowsForDocument(c, tx, doc, kindCode, firstClone, $"BIN:NEUTRALIZE {eventId:D}");
         ApplyStockMirrors(c, tx, doc, kindCode, invert: true, $"BIN:NEUTRALIZE {eventId:D}", actor);
-        MirrorTaxRows(c, tx, doc, kindCode, actor);
-        return firstClone;
+        var taxMirrorKind = MirrorTaxRows(c, tx, doc, kindCode, actor);
+        return (firstClone, taxMirrorKind);
     }
 
     private static void ReinstateDocument(DbConnection c, DbTransaction tx, DocRow doc,
-        string kindCode, Guid openEventId, Guid eventId, string actor)
+        string kindCode, (Guid Id, string? Note) openEvent, Guid eventId, string actor)
     {
         Guid? firstClone = null;
         foreach (var entry in FindDocumentEntries(c, tx, doc.DocId, kindCode))
         {
-            object? reversalOf = null;
-            using (var find = Cmd(c, tx, """
-                SELECT journal_entry_id FROM journal_entries
-                WHERE reversal_of_entry_id=$src AND status=1 AND document_number LIKE 'BIN-%'
-                ORDER BY posted_at DESC LIMIT 1;
-                """))
-            {
-                Add(find, "$src", entry.IdRaw);
-                var value = find.ExecuteScalar();
-                if (value is not null and not DBNull) reversalOf = value;
-            }
+            var reversalOf = FindBinClone(c, tx, entry, openEvent.Id);
             var cloneId = CloneJournalEntry(c, tx, entry, swapped: false,
-                "BIN-R-" + entry.DocumentNumber, actor,
-                $"Recycle bin reinstatement of {entry.DocumentNumber}", reversalOf);
+                "BIN-R-" + entry.DocumentNumber + "-" + eventId.ToString("N")[..6], actor,
+                $"Recycle bin reinstatement of {entry.DocumentNumber} [BIN {eventId:D}]", reversalOf);
             firstClone ??= cloneId;
         }
-        MirrorPartyRowsWithNote(c, tx, $"BIN:NEUTRALIZE {openEventId:D}",
+        MirrorPartyRowsWithNote(c, tx, $"BIN:NEUTRALIZE {openEvent.Id:D}",
             firstClone, $"BIN:REINSTATE {eventId:D}");
         ApplyStockMirrors(c, tx, doc, kindCode, invert: false, $"BIN:REINSTATE {eventId:D}", actor);
-        DeleteTaxMirrors(c, tx, doc, kindCode);
+        ReinstateTaxRows(c, tx, doc, openEvent.Note, actor);
     }
 }
