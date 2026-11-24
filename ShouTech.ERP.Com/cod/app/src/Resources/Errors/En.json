@@ -850,5 +850,11 @@
     "name": "AdvanceReversalBlockedWhileConsumed",
     "message": "Supplier advance '{0}' is partly consumed and cannot be reversed.",
     "hint": "Reverse the advance allocations in Payment Reconciliation first; the advance voucher can be reversed once none of it is consumed."
+  },
+  "PUR-1011": {
+    "code": "PUR-1011",
+    "name": "SupplierBillReferenceDuplicate",
+    "message": "Supplier bill '{0}' already exists for this supplier on invoice {1}.",
+    "hint": "A supplier bill number may be used only once per supplier. Check the existing invoice, or correct the bill number / bill date from the supplier's document."
   }
 }

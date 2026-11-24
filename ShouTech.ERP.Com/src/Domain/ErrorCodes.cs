@@ -181,8 +181,11 @@ public static class ErrorCodes
     public const string LandedCostReceiptSelectionInvalid = "PUR-1008";
     public const string LandedCostDocumentAlreadyLinked = "PUR-1009";
     public const string LandedCostLinkedDocumentInvalid = "PUR-1010";
-    // Supplier advances (migration 095). PUR-1011 is reserved for a
-    // parallel purchase workstream; the advance codes start at 1012.
+    // B1 chain completion (migration 096): the supplier bill reference is
+    // unique per (company, supplier, normalized reference) on BOTH the
+    // chain and the manual invoice paths.
+    public const string SupplierBillReferenceDuplicate = "PUR-1011";
+    // Supplier advances (migration 095).
     public const string AdvancePurchaseOrderMismatch = "PUR-1012";
     public const string AdvanceReversalBlockedWhileConsumed = "PUR-1013";
 

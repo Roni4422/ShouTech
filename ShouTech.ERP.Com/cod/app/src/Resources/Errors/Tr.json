@@ -850,5 +850,11 @@
     "name": "AdvanceReversalBlockedWhileConsumed",
     "message": "Tedarikçi avansı '{0}' kısmen tüketilmiş ve geri alınamaz.",
     "hint": "Önce Ödeme Mutabakatı'nda avans dağıtımlarını geri alın; avansın hiçbiri tüketilmediğinde avans belgesi geri alınabilir."
+  },
+  "PUR-1011": {
+    "code": "PUR-1011",
+    "name": "SupplierBillReferenceDuplicate",
+    "message": "'{0}' tedarikçi faturası bu tedarikçi için {1} faturasında zaten var.",
+    "hint": "Bir tedarikçi fatura numarası tedarikçi başına yalnızca bir kez kullanılabilir. Mevcut faturayı kontrol edin veya fatura numarasını / tarihini tedarikçinin belgesinden düzeltin."
   }
 }

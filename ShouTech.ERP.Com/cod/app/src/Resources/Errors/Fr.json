@@ -850,5 +850,11 @@
     "name": "AdvanceReversalBlockedWhileConsumed",
     "message": "L'avance fournisseur '{0}' est partiellement consommée et ne peut pas être annulée.",
     "hint": "Annulez d'abord les affectations de l'avance dans le rapprochement des paiements ; le bon d'avance pourra être annulé une fois qu'il n'en reste rien de consommé."
+  },
+  "PUR-1011": {
+    "code": "PUR-1011",
+    "name": "SupplierBillReferenceDuplicate",
+    "message": "La facture fournisseur '{0}' existe déjà pour ce fournisseur sur la facture {1}.",
+    "hint": "Un numéro de facture fournisseur ne peut être utilisé qu'une seule fois par fournisseur. Vérifiez la facture existante ou corrigez le numéro / la date à partir du document du fournisseur."
   }
 }
