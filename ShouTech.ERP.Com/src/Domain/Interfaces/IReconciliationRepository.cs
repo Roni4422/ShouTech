@@ -43,3 +43,102 @@ public interface IReconciliationRepository
     /// payment/advance entry and one document (the PayRecWin action).</summary>
     Task<Guid> UnallocateLatestAdvanceAsync(string companyId, long paymentLedgerId, string docTable, long docId, string userId, CancellationToken cancellationToken = default);
 }
+
+// ---- merged from src/Domain/Interfaces/IJournalRepository.cs ----
+public interface IJournalRepository
+{
+    Task<JournalEntrySnapshot?> FindByDocumentNumberAsync(Guid companyId, string documentNumber, CancellationToken cancellationToken = default);
+    /// <summary>Saves a draft journal entry in ONE transaction. When
+    /// <paramref name="partyLink"/> is supplied (cash vouchers, G23) the
+    /// voucher_party_links row is written inside that same transaction,
+    /// so a draft can never exist without its intended party link.</summary>
+    Task SaveDraftAsync(Guid companyId, JournalEntry entry, string userId, CancellationToken cancellationToken = default, VoucherPartyLinkRequest? partyLink = null);
+    Task UpdateDraftAsync(Guid companyId, Guid journalEntryId, JournalEntry entry, string userId, CancellationToken cancellationToken = default);
+    /// <summary>Posts a draft entry. Returns the budget warnings the
+    /// posting produced in Warn mode (Phase B 055, BudgetGuard) —
+    /// empty when no budget warned; a Stop-mode budget refuses the
+    /// posting with a cataloged AppError (ACC-5018/5019) instead.</summary>
+    Task<IReadOnlyList<BudgetWarning>> PostAsync(Guid journalEntryId, string userId, CancellationToken cancellationToken = default);
+    Task<Guid> ReverseAsync(Guid journalEntryId, string userId, string? details = null, CancellationToken cancellationToken = default);
+
+    /// <summary>Posts a source document to the GL in its own transaction
+    /// through the Step-3 GlPosting engine (source link, migration 060;
+    /// dual base amounts, migration 062). Implemented by
+    /// JournalRepository; cheque postings (Step 8) go through here so
+    /// every cheque event is its own journal entry.</summary>
+    Task<GlPostingResult> PostDocumentAsync(GlDocumentRequest request, string userId, CancellationToken cancellationToken = default);
+}
+
+// ---- merged from src/Domain/Interfaces/IChequeRepository.cs ----
+/// <summary>
+/// Persistence contract for the Cheque module (ribbon completion pass).
+/// Implemented provider-neutrally (SQLite + PostgreSQL) in Infrastructure.
+/// Company id here is the company code stored in cheques.company_id (the same
+/// convention as projects / material stock); journal company/account
+/// resolution to GUIDs is exposed separately for the journal engine.
+/// </summary>
+public interface IChequeRepository
+{
+    Task<IReadOnlyList<Cheque>> GetAllAsync(string companyId, string? status = null, string? direction = null, CancellationToken cancellationToken = default);
+
+    Task<Cheque?> GetByIdAsync(string companyId, Guid chequeId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Inserts a batch in one transaction. The duplicate guard
+    /// (company + bank + drawer + cheque no among live rows) is re-checked
+    /// inside the transaction in addition to the partial unique index.
+    /// </summary>
+    Task InsertBatchAsync(string companyId, IReadOnlyList<Cheque> cheques, string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Compare-and-swap lifecycle update: succeeds only when the stored status
+    /// still equals <paramref name="expectedStatus"/> inside the transaction,
+    /// so a stale window can never move a cheque twice.
+    /// </summary>
+    Task UpdateTransitionAsync(string companyId, Cheque cheque, string expectedStatus, string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Resolves a company code to the GUID used by journal_entries.</summary>
+    Task<Guid> ResolveCompanyGuidAsync(string companyCode, CancellationToken cancellationToken = default);
+
+    /// <summary>Resolves an active, postable GL account code to its GUID.</summary>
+    Task<Guid> ResolveAccountIdAsync(Guid companyGuid, string accountCode, CancellationToken cancellationToken = default);
+
+    /// <summary>How many live cheques reference the given journal entry.
+    /// Step 8 posts one entry per cheque, so a count above 1 identifies a
+    /// historical (pre-Step-8) batch entry shared by siblings — such an
+    /// entry must never be reversed for a single cheque.</summary>
+    Task<int> CountByJournalEntryAsync(string companyId, Guid journalEntryId, CancellationToken cancellationToken = default);
+}
+
+// ---- merged from src/Domain/Interfaces/IBudgetRepository.cs ----
+/// <summary>Budget persistence (migration 055). Budgets live in the
+/// journal world, so every method keys the company by its Guid —
+/// unlike the master-card repositories, which key by company code.
+/// The code-keyed lookups (cost centers, projects) resolve the code
+/// from the companies registry inside the repository.</summary>
+public interface IBudgetRepository
+{
+    /// <summary>All live budgets of the company with their lines and
+    /// monthly distributions loaded.</summary>
+    Task<IReadOnlyList<Budget>> GetAllAsync(Guid companyId, CancellationToken cancellationToken = default);
+
+    /// <summary>Creates or replaces a budget (header + lines +
+    /// distributions) in one transaction, and sets the chart budget
+    /// opt-in flag on every account that gains a line.</summary>
+    Task SaveAsync(Guid companyId, Budget budget, string userId, CancellationToken cancellationToken = default);
+
+    Task SoftDeleteAsync(Guid companyId, Guid budgetId, string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Moves a budget between Draft / Active / Closed.</summary>
+    Task SetStatusAsync(Guid companyId, Guid budgetId, string status, string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Budget vs actual for every live budget line, computed
+    /// by the same actuals implementation the posting guard enforces
+    /// (BudgetGuard.GetLineActuals).</summary>
+    Task<IReadOnlyList<BudgetVarianceRow>> GetVarianceAsync(Guid companyId, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<BudgetFiscalYear>> GetFiscalYearsAsync(Guid companyId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<BudgetAccountOption>> GetAccountsAsync(Guid companyId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<BudgetDimensionOption>> GetCostCentersAsync(Guid companyId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<BudgetDimensionOption>> GetProjectsAsync(Guid companyId, CancellationToken cancellationToken = default);
+}
