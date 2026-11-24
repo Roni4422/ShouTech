@@ -407,6 +407,14 @@
       "cardType": null
     },
     {
+      "code": "1215",
+      "parent": "12",
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": null
+    },
+    {
       "code": "2205",
       "parent": "22",
       "type": "Liability",

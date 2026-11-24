@@ -2679,6 +2679,10 @@
     "SelectOrder": "اختر امر تصنيع اولا."
   },
   "DocSearch": {
+    "Reverse": "عكس",
+    "ReverseTitle": "عكس المستند",
+    "Reason": "السبب",
+    "Reversed": "تم العكس",
     "ConfirmLost": "تعيين عرض السعر هذا كمفقود؟",
     "ConvertToOrder": "تحويل إلى طلب مبيعات",
     "ConvertedToOrder": "تم التحويل إلى طلب مبيعات (مسودة)",
@@ -3731,6 +3735,13 @@
     }
   },
   "SalesDelivery": {
+    "Reverse": "عكس الإذن",
+    "ReverseTitle": "عكس إذن التسليم",
+    "Reason": "السبب",
+    "Reversed": "تم العكس",
+    "CancelDraft": "إلغاء المسودة",
+    "ConfirmCancelDraft": "إلغاء مسودة إذن التسليم هذه؟",
+    "Cancelled": "تم الإلغاء",
     "Title": "إشعار تسليم المبيعات",
     "OrderNo": "رقم أمر البيع",
     "DeliveryNo": "رقم إشعار التسليم",

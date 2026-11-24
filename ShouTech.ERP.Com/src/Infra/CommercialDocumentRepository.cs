@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Npgsql;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
 
@@ -509,6 +510,56 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                             Note: $"Delivery note {docNo} posting",
                             AutoAllocateSerials: true));
                 }
+
+                // Delivery GL (sales cycle B4, gap G12): under perpetual
+                // inventory the delivery itself is an accounting event —
+                // the stock has left Inventory (1203) but is not yet
+                // billed, so its movement cost is parked in Stock
+                // Delivered But Not Billed (1215) until a linked invoice
+                // releases it to COGS. Posted in THIS transaction from
+                // the movements just written, so stock ledger and GL can
+                // never diverge. Charts without a postable 1215 fall back
+                // to Inventory (the manufacturing optional-leg pattern);
+                // when the fallback makes both legs the same account the
+                // entry is a documented wash that keeps the delivery's
+                // GL audit trail and reversal path uniform. A zero-cost
+                // delivery (e.g. service lines only) posts no GL.
+                var deliveryCompanyCode = PartyLedger.ResolveCompanyCode(
+                    connection, transaction, _provider, companyId);
+                decimal deliveryMovementCost;
+                await using (var cost = CreateCommand(connection, transaction, """
+                    SELECT COALESCE(SUM(cost_amount), 0)
+                    FROM material_stock_movements
+                    WHERE company_id = @companyCode AND document_no = @deliveryNo
+                    """))
+                {
+                    Add(cost, "@companyCode", deliveryCompanyCode);
+                    Add(cost, "@deliveryNo", docNo);
+                    deliveryMovementCost = Math.Max(0m, -Convert.ToDecimal(
+                        await cost.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
+                        CultureInfo.InvariantCulture));
+                }
+                if (deliveryMovementCost > 0m)
+                {
+                    var companyGuid = Guid.Parse(companyId);
+                    var deliveredAccount = GlPosting.TryResolveAccount(
+                        connection, transaction, _provider, companyGuid,
+                        GlAccounts.StockDeliveredNotBilled) is not null
+                            ? GlAccounts.StockDeliveredNotBilled
+                            : GlAccounts.Inventory;
+                    GlPosting.PostInTransaction(connection, transaction, _provider,
+                        new GlDocumentRequest(companyGuid,
+                            DateOnly.Parse(docDate, CultureInfo.InvariantCulture),
+                            $"DLV {docNo}", CommercialDocKinds.DeliveryNote,
+                            docId.ToString(CultureInfo.InvariantCulture), docNo,
+                            currencyCode, exchangeRate,
+                            new List<GlLineRequest>
+                            {
+                                new(deliveredAccount, deliveryMovementCost, 0m),
+                                new(GlAccounts.Inventory, 0m, deliveryMovementCost)
+                            }),
+                        userId);
+                }
             }
             else if (docKind == CommercialDocKinds.SalesInvoice && partyId is not null)
             {
@@ -550,15 +601,18 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             // Real GL posting (Step 3, J-2): a posted chain SALES INVOICE
             // creates its balanced journal entry in this same transaction
             // (Dr Receivable / Cr Revenue, tax split only when a postable
-            // VAT account is configured). DLV/QUO/SO keep no GL entry —
-            // the delivery note moves stock without amounts, and the
-            // invoice is the chain's accounting document.
+            // VAT account is configured). Since sales cycle B4 the DLV
+            // carries its own GL entry (Dr 1215 / Cr 1203 at movement
+            // cost, above); QUO/SO keep no GL entry.
             if (docKind == CommercialDocKinds.SalesInvoice)
             {
                 // A DLV-linked invoice does not issue stock again. Its COGS
                 // is released from the cost already captured by the delivery
-                // note's stock movements, exactly once.
-                var deliveryCogs = await GetDeliveryCogsForInvoiceAsync(
+                // note's stock movements, allocated pro-rata per material
+                // across every invoice that bills the delivery, and credited
+                // against Stock Delivered But Not Billed (1215) — or against
+                // Inventory (1203) when the delivery itself fell back to it.
+                var (deliveryCogs, deliveryCogsCreditAccount) = await GetDeliveryCogsForInvoiceAsync(
                     connection, transaction, docId, companyId, cancellationToken).ConfigureAwait(false);
 
                 if (grandTotal > 0m || deliveryCogs > 0m)
@@ -577,7 +631,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                     if (deliveryCogs > 0m)
                     {
                         glLines.Add(new GlLineRequest(GlAccounts.Cogs, deliveryCogs, 0m, costCenter));
-                        glLines.Add(new GlLineRequest(GlAccounts.Inventory, 0m, deliveryCogs));
+                        glLines.Add(new GlLineRequest(deliveryCogsCreditAccount, 0m, deliveryCogs));
                     }
 
                     GlPosting.PostInTransaction(connection, transaction, _provider,
@@ -614,6 +668,378 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                 // Transaction is already completed; do not mask the root error.
             }
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Reverses a posted chain document (sales cycle B4, gap G13) in ONE
+    /// transaction — the chain counterpart of InvRepo's invoice reversal:
+    /// - DLV: the delivery's stock movements are reversed through
+    ///   StockValuationEngine at the ORIGINAL movement cost (a receipt
+    ///   per material/warehouse with ReceiptCostAmount = the original
+    ///   cost and OriginalDocumentNo set, so batch/serial allocations
+    ///   mirror the original issue and net to zero), its GL entry
+    ///   (Dr 1215 / Cr 1203) is reversed with a compensating journal,
+    ///   and the document is marked Cancelled.
+    /// - SAL: its GL entry (receivable / revenue / VAT / COGS legs) is
+    ///   reversed with a compensating journal and the party-ledger debit
+    ///   is mirrored by an equal credit in the same transaction.
+    /// A document_reversals row (reason + actor mandatory) records the
+    /// reversal, and the source sales order's stored per_delivered /
+    /// per_billed are recomputed when those columns exist.
+    /// Guards: a DLV with any posted linked invoice → SAL-7005; a SAL
+    /// with paid_amount &gt; 0 or existing payment allocations →
+    /// SAL-7006; any other kind/status, a company mismatch, or an
+    /// already-recorded reversal → SAL-7007.
+    /// </summary>
+    public async Task ReverseChainDocumentAsync(
+        Guid companyId, long docId, string reason, string actor,
+        CancellationToken cancellationToken = default)
+    {
+        if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
+        if (docId <= 0) throw new ArgumentException("Document is required.", nameof(docId));
+        if (string.IsNullOrWhiteSpace(reason)) throw new ArgumentException("A reversal reason is required.", nameof(reason));
+        reason = reason.Trim();
+        if (reason.Length > 1000) throw new ArgumentException("The reversal reason cannot exceed 1000 characters.", nameof(reason));
+        if (string.IsNullOrWhiteSpace(actor)) throw new ArgumentException("Actor is required.", nameof(actor));
+        actor = actor.Trim();
+
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            string companyText, docKind, docNo, docDate, currencyCode, status;
+            long? partyId;
+            decimal grandTotal, paidAmount, exchangeRate;
+            await using (var header = CreateCommand(connection, transaction, """
+                SELECT company_id, doc_kind, doc_no, doc_date, party_id, currency_code,
+                       grand_total, paid_amount, status, exchange_rate
+                FROM sales_documents
+                WHERE doc_id = @doc AND is_deleted = 0
+                """))
+            {
+                Add(header, "@doc", docId);
+                await using var reader = await header.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    throw new AppError(ErrorCodes.ChainDocumentNotReversible,
+                        "The document was not found and cannot be reversed.",
+                        docId.ToString(CultureInfo.InvariantCulture));
+                companyText = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture)!;
+                docKind = reader.GetString(1);
+                docNo = reader.GetString(2);
+                docDate = Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture)!;
+                partyId = reader.IsDBNull(4) ? null : Convert.ToInt64(reader.GetValue(4), CultureInfo.InvariantCulture);
+                currencyCode = reader.GetString(5);
+                grandTotal = Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture);
+                paidAmount = Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture);
+                status = reader.GetString(8);
+                exchangeRate = reader.IsDBNull(9) ? 0m : Convert.ToDecimal(reader.GetValue(9), CultureInfo.InvariantCulture);
+            }
+
+            if (!string.Equals(companyText, companyId.ToString("D"), StringComparison.OrdinalIgnoreCase) ||
+                status != CommercialDocumentStatus.Posted ||
+                docKind is not (CommercialDocKinds.DeliveryNote or CommercialDocKinds.SalesInvoice))
+                throw new AppError(ErrorCodes.ChainDocumentNotReversible,
+                    $"Only a posted delivery note or sales invoice can be reversed; document '{docNo}' is a {docKind} in status '{status}'.",
+                    docNo, docKind, status);
+
+            await using (var existing = CreateCommand(connection, transaction, """
+                SELECT COUNT(*) FROM document_reversals
+                WHERE company_id = @company AND original_doc_kind = @kind AND original_doc_id = @doc
+                """))
+            {
+                Add(existing, "@company", companyId.ToString("D"));
+                Add(existing, "@kind", docKind);
+                Add(existing, "@doc", docId);
+                if (Convert.ToInt64(await existing.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
+                        CultureInfo.InvariantCulture) > 0)
+                    throw new AppError(ErrorCodes.ChainDocumentNotReversible,
+                        $"Document '{docNo}' has already been reversed.", docNo);
+            }
+
+            if (docKind == CommercialDocKinds.DeliveryNote)
+            {
+                // Dependency guard: a posted invoice already released
+                // this delivery's COGS — it must be reversed first.
+                await using var downstream = CreateCommand(connection, transaction, """
+                    SELECT COUNT(*)
+                    FROM document_links link
+                    INNER JOIN sales_documents invoice
+                        ON invoice.company_id = link.company_id
+                       AND invoice.doc_id = link.target_doc_id
+                       AND invoice.doc_kind = link.target_doc_kind
+                    WHERE link.company_id = @company
+                      AND link.source_doc_kind = @deliveryKind
+                      AND link.source_doc_id = @doc
+                      AND link.target_doc_kind = @invoiceKind
+                      AND invoice.status = @posted
+                      AND CAST(invoice.is_deleted AS TEXT) IN ('0', 'false')
+                    """);
+                Add(downstream, "@company", companyText);
+                Add(downstream, "@deliveryKind", CommercialDocKinds.DeliveryNote);
+                Add(downstream, "@doc", docId);
+                Add(downstream, "@invoiceKind", CommercialDocKinds.SalesInvoice);
+                Add(downstream, "@posted", CommercialDocumentStatus.Posted);
+                if (Convert.ToInt64(await downstream.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
+                        CultureInfo.InvariantCulture) > 0)
+                    throw new AppError(ErrorCodes.ChainReversalBlockedDownstream,
+                        $"Delivery note '{docNo}' cannot be reversed while a posted sales invoice is linked to it. Reverse the invoice first.",
+                        docNo);
+
+                // Stock reversal at the ORIGINAL movement cost, grouped
+                // per material/warehouse exactly as the delivery issued.
+                var stockCompany = PartyLedger.ResolveCompanyCode(
+                    connection, transaction, _provider, companyText);
+                var originalMovements = new List<(long MaterialId, long WarehouseId, decimal Qty, decimal Cost)>();
+                await using (var movements = CreateCommand(connection, transaction, """
+                    SELECT material_id, warehouse_id, SUM(qty_out), SUM(-cost_amount)
+                    FROM material_stock_movements
+                    WHERE company_id = @companyCode AND document_no = @deliveryNo AND qty_out > 0
+                    GROUP BY material_id, warehouse_id
+                    """))
+                {
+                    Add(movements, "@companyCode", stockCompany);
+                    Add(movements, "@deliveryNo", docNo);
+                    await using var reader = await movements.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                    while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    {
+                        originalMovements.Add((
+                            Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+                            Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture),
+                            Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture),
+                            Math.Max(0m, Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture))));
+                    }
+                }
+                foreach (var (materialId, warehouseId, qty, cost) in originalMovements)
+                {
+                    if (qty <= 0m)
+                        continue;
+                    StockValuationEngine.Apply(connection, transaction, _provider,
+                        new StockMovementRequest(stockCompany, warehouseId, materialId,
+                            docDate, CommercialDocKinds.DeliveryNote, docNo + "-REV",
+                            QtyIn: qty, QtyOut: 0m,
+                            ReceiptCostAmount: cost,
+                            Note: $"Reversal of delivery note {docNo}: {reason}",
+                            OriginalDocumentNo: docNo,
+                            Actor: actor));
+                }
+            }
+            else
+            {
+                // Payment guard: money already received or allocated
+                // against this invoice must be unallocated / refunded
+                // through the payment workflow first.
+                if (paidAmount > 0m)
+                    throw new AppError(ErrorCodes.ChainReversalBlockedPayments,
+                        $"Sales invoice '{docNo}' cannot be reversed: it carries a paid amount of {paidAmount}. Reverse its payments first.",
+                        docNo);
+                if (PartyLedger.TableExists(connection, transaction, _provider, "payment_allocations"))
+                {
+                    var ledgerCompany = PartyLedger.ResolveCompanyCode(
+                        connection, transaction, _provider, companyText);
+                    await using var allocations = CreateCommand(connection, transaction, """
+                        SELECT COUNT(*) FROM payment_allocations
+                        WHERE doc_table = 'SALES' AND doc_id = @doc
+                          AND (company_id = @companyCode OR company_id = @companyGuid
+                               OR document_company_id = @companyGuid)
+                        """);
+                    Add(allocations, "@doc", docId);
+                    Add(allocations, "@companyCode", ledgerCompany);
+                    Add(allocations, "@companyGuid", companyId.ToString("D"));
+                    if (Convert.ToInt64(await allocations.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
+                            CultureInfo.InvariantCulture) > 0)
+                        throw new AppError(ErrorCodes.ChainReversalBlockedPayments,
+                            $"Sales invoice '{docNo}' cannot be reversed: payments are allocated to it. Unallocate them first.",
+                            docNo);
+                }
+            }
+
+            // GL reversal: the compensating journal mirrors every leg of
+            // the document's own entry (delivery 1215/1203, or invoice
+            // receivable / revenue / VAT / COGS) in the same transaction.
+            var glEntryId = GlPosting.FindEntryBySource(connection, transaction, _provider,
+                companyId, docKind, docId.ToString(CultureInfo.InvariantCulture));
+            if (glEntryId is not null)
+                GlPosting.ReverseInTransaction(connection, transaction, _provider,
+                    glEntryId.Value, actor, $"Chain reversal of {docKind} {docNo}: {reason}");
+
+            if (docKind == CommercialDocKinds.SalesInvoice && partyId is not null)
+            {
+                // Mirror the party-ledger debit written at posting with
+                // an equal credit (the chain rows carry no journal link,
+                // so GlPosting's journal mirror does not touch them).
+                var fx = FxRates.Resolve(connection, transaction, _provider,
+                    companyId, currencyCode,
+                    DateOnly.Parse(docDate, CultureInfo.InvariantCulture), exchangeRate);
+                var ledgerCompany = await PartyLedger.ResolveCompanyCodeAsync(
+                    connection, transaction, _provider, companyText, cancellationToken).ConfigureAwait(false);
+                PartyLedger.WriteEntry(connection, transaction, _provider,
+                    ledgerCompany, "C", partyId.Value,
+                    CommercialDocKinds.SalesInvoice, docId, docNo, docDate,
+                    0m, grandTotal, currencyCode,
+                    $"Reversal of sales invoice {docNo}: {reason}",
+                    exchangeRate: fx.Rate);
+            }
+
+            await using (var update = CreateCommand(connection, transaction,
+                "UPDATE sales_documents SET status = @cancelled WHERE doc_id = @doc AND status = @posted AND is_deleted = 0"))
+            {
+                Add(update, "@cancelled", CommercialDocumentStatus.Cancelled);
+                Add(update, "@doc", docId);
+                Add(update, "@posted", CommercialDocumentStatus.Posted);
+                if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+                    throw new AppError(ErrorCodes.ChainDocumentNotReversible,
+                        $"Document '{docNo}' changed status while its reversal was being recorded.", docNo);
+            }
+
+            await using (var reversal = CreateCommand(connection, transaction, """
+                INSERT INTO document_reversals
+                    (reversal_id, company_id, original_doc_kind, original_doc_id,
+                     reversal_doc_kind, reversal_doc_id, reason, actor, created_at, status)
+                VALUES (@rid, @company, @kind, @doc, @kind, NULL, @reason, @actor, @createdAt, 'Completed')
+                """))
+            {
+                Add(reversal, "@rid", Guid.NewGuid().ToString("N"));
+                Add(reversal, "@company", companyId.ToString("D"));
+                Add(reversal, "@kind", docKind);
+                Add(reversal, "@doc", docId);
+                Add(reversal, "@reason", reason);
+                Add(reversal, "@actor", actor);
+                Add(reversal, "@createdAt", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture));
+                await reversal.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            await RefreshSourceOrderProgressAsync(
+                connection, transaction, companyText, docKind, docId, cancellationToken).ConfigureAwait(false);
+
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            try
+            {
+                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException)
+            {
+                // Transaction is already completed; do not mask the root error.
+            }
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Recomputes the stored per_delivered / per_billed of the source
+    /// sales order(s) of a just-reversed chain document, using the same
+    /// quantity-weighted formula as OrderDocumentRepository.GetProgressAsync.
+    /// The columns are added by a parallel workstream (sales cycle B2)
+    /// and do not exist on every branch yet, so the update runs only
+    /// when both columns are present — on a base without them the
+    /// computed-on-read progress already reflects the reversal because
+    /// the reversed document is no longer Posted.
+    /// </summary>
+    private async Task RefreshSourceOrderProgressAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        string companyId,
+        string targetDocKind,
+        long targetDocId,
+        CancellationToken cancellationToken)
+    {
+        if (!PartyLedger.ColumnExists(connection, transaction, _provider, "sales_documents", "per_delivered") ||
+            !PartyLedger.ColumnExists(connection, transaction, _provider, "sales_documents", "per_billed"))
+            return;
+
+        // Source orders of the reversed document: direct SO -> target
+        // links, plus SO -> DLV -> SAL when an invoice is reversed.
+        var orderIds = new List<long>();
+        async Task CollectSourceOrdersAsync(string sourceKind, long fromDocId)
+        {
+            await using var links = CreateCommand(connection, transaction, """
+                SELECT source_doc_id FROM document_links
+                WHERE company_id = @company AND source_doc_kind = @sourceKind
+                  AND target_doc_id = @targetId
+                """);
+            Add(links, "@company", companyId);
+            Add(links, "@sourceKind", sourceKind);
+            Add(links, "@targetId", fromDocId);
+            await using var reader = await links.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var id = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture);
+                if (!orderIds.Contains(id))
+                    orderIds.Add(id);
+            }
+        }
+        await CollectSourceOrdersAsync(CommercialDocKinds.SalesOrder, targetDocId).ConfigureAwait(false);
+        if (targetDocKind == CommercialDocKinds.SalesInvoice)
+        {
+            var deliveryIds = new List<long>();
+            await using (var links = CreateCommand(connection, transaction, """
+                SELECT source_doc_id FROM document_links
+                WHERE company_id = @company AND source_doc_kind = @deliveryKind
+                  AND target_doc_kind = @invoiceKind AND target_doc_id = @targetId
+                """))
+            {
+                Add(links, "@company", companyId);
+                Add(links, "@deliveryKind", CommercialDocKinds.DeliveryNote);
+                Add(links, "@invoiceKind", CommercialDocKinds.SalesInvoice);
+                Add(links, "@targetId", targetDocId);
+                await using var reader = await links.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    deliveryIds.Add(Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture));
+            }
+            foreach (var deliveryId in deliveryIds)
+                await CollectSourceOrdersAsync(CommercialDocKinds.SalesOrder, deliveryId).ConfigureAwait(false);
+        }
+
+        async Task<decimal> SumLinkedPostedQtyAsync(long orderId, string linkedKind)
+        {
+            await using var command = CreateCommand(connection, transaction, """
+                SELECT COALESCE(SUM(line.qty), 0)
+                FROM document_links link
+                INNER JOIN sales_documents target
+                    ON target.company_id = link.company_id
+                   AND target.doc_id = link.target_doc_id
+                   AND target.doc_kind = link.target_doc_kind
+                INNER JOIN sales_document_lines line ON line.doc_id = target.doc_id
+                WHERE link.company_id = @company
+                  AND link.source_doc_kind = @orderKind
+                  AND link.source_doc_id = @orderId
+                  AND link.target_doc_kind = @linkedKind
+                  AND target.status = @posted
+                  AND CAST(target.is_deleted AS TEXT) IN ('0', 'false')
+                """);
+            Add(command, "@company", companyId);
+            Add(command, "@orderKind", CommercialDocKinds.SalesOrder);
+            Add(command, "@orderId", orderId);
+            Add(command, "@linkedKind", linkedKind);
+            Add(command, "@posted", CommercialDocumentStatus.Posted);
+            return Convert.ToDecimal(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
+                CultureInfo.InvariantCulture);
+        }
+
+        foreach (var orderId in orderIds)
+        {
+            decimal orderedQty;
+            await using (var ordered = CreateCommand(connection, transaction,
+                "SELECT COALESCE(SUM(qty), 0) FROM sales_document_lines WHERE doc_id = @orderId"))
+            {
+                Add(ordered, "@orderId", orderId);
+                orderedQty = Convert.ToDecimal(await ordered.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
+                    CultureInfo.InvariantCulture);
+            }
+            var deliveredQty = await SumLinkedPostedQtyAsync(orderId, CommercialDocKinds.DeliveryNote).ConfigureAwait(false);
+            var billedQty = await SumLinkedPostedQtyAsync(orderId, CommercialDocKinds.SalesInvoice).ConfigureAwait(false);
+            var perDelivered = orderedQty <= 0m ? 0m : decimal.Round(100m * deliveredQty / orderedQty, 2);
+            var perBilled = orderedQty <= 0m ? 0m : decimal.Round(100m * billedQty / orderedQty, 2);
+            await using var update = CreateCommand(connection, transaction,
+                "UPDATE sales_documents SET per_delivered = @delivered, per_billed = @billed WHERE doc_id = @orderId");
+            Add(update, "@delivered", perDelivered);
+            Add(update, "@billed", perBilled);
+            Add(update, "@orderId", orderId);
+            await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -890,12 +1316,27 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
     }
 
     /// <summary>
-    /// Returns the cost of a delivery linked to this sales invoice. The
-    /// delivery is locked and must be invoiced in one posted invoice until
-    /// line-level cost allocations are available; this prevents duplicated
-    /// COGS when two invoices target the same delivery.
+    /// Allocates the delivery cost released by this sales invoice
+    /// (sales cycle B4, gap G14: partial / multiple invoicing of one
+    /// delivery). Per material, the delivery's total stock-movement cost
+    /// is spread over the delivered BASE quantity (movement qty_out, so
+    /// unit equivalence is already applied): unit cost = movement cost /
+    /// delivered qty. This invoice releases unit cost × its invoiced base
+    /// qty, rounded to cents; the invoice that completes a material takes
+    /// the exact remaining cost (movement cost − what earlier invoices
+    /// released, each derived with the same formula), so the COGS of all
+    /// invoices against one delivery sums to the delivery's movement
+    /// cost to the cent. Already-invoiced quantities are read from the
+    /// OTHER posted invoices linked to the same delivery; the delivery
+    /// row is locked first so two invoices cannot allocate concurrently.
+    /// Failures (invoicing more than was delivered, or a stocked
+    /// material the delivery never moved) throw SAL-7009.
+    /// Returns the COGS amount and the account to credit: Stock
+    /// Delivered But Not Billed (1215) when the delivery's own GL entry
+    /// debited it, otherwise Inventory (1203) — the delivery fell back
+    /// to 1203 on a chart without 1215, or predates delivery GL.
     /// </summary>
-    private async Task<decimal> GetDeliveryCogsForInvoiceAsync(
+    private async Task<(decimal Cogs, string CreditAccount)> GetDeliveryCogsForInvoiceAsync(
         DbConnection connection,
         DbTransaction transaction,
         long invoiceDocId,
@@ -922,7 +1363,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         }
 
         if (deliveryDocId is null)
-            return 0m;
+            return (0m, GlAccounts.Inventory);
 
         string deliveryNo;
         await using (var deliveryLock = CreateCommand(connection, transaction,
@@ -953,39 +1394,71 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             deliveryNo = Convert.ToString(value, CultureInfo.InvariantCulture)!;
         }
 
-        async Task<Dictionary<(long MaterialId, string Unit), decimal>> ReadQuantitiesAsync(
-            string sql, params (string Name, object Value)[] parameters)
+        var companyCode = await PartyLedger.ResolveCompanyCodeAsync(
+            connection, transaction, _provider, companyId, cancellationToken).ConfigureAwait(false);
+
+        // The delivery's valued stock movements, per material: base
+        // quantity out and its total cost (cost_amount is negative on
+        // issues). Service / non-stock lines wrote no movement and
+        // release no COGS.
+        var deliveredByMaterial = new Dictionary<long, (decimal BaseQty, decimal Cost)>();
+        await using (var movements = CreateCommand(connection, transaction, """
+            SELECT material_id, SUM(qty_out), SUM(-cost_amount)
+            FROM material_stock_movements
+            WHERE company_id = @companyCode AND document_no = @deliveryNo AND qty_out > 0
+            GROUP BY material_id
+            """))
         {
-            var result = new Dictionary<(long MaterialId, string Unit), decimal>();
-            await using var command = CreateCommand(connection, transaction, sql);
-            foreach (var (name, value) in parameters)
-                Add(command, name, value);
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            Add(movements, "@companyCode", companyCode);
+            Add(movements, "@deliveryNo", deliveryNo);
+            await using var reader = await movements.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                var materialId = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture);
-                var unit = Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? string.Empty;
-                result[(materialId, unit)] = Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture);
+                deliveredByMaterial[Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture)] =
+                    (Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture),
+                     Math.Max(0m, Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture)));
+            }
+        }
+        if (deliveredByMaterial.Count == 0)
+            return (0m, GlAccounts.Inventory);
+
+        // Line quantities of one document converted to base units, per
+        // material (the same equivalence rule delivery posting applies).
+        async Task<Dictionary<long, decimal>> ReadBaseQuantitiesAsync(long docId)
+        {
+            var rows = new List<(long MaterialId, string? Unit, decimal Qty)>();
+            await using (var lines = CreateCommand(connection, transaction,
+                "SELECT material_id, unit, qty FROM sales_document_lines WHERE doc_id = @doc AND material_id IS NOT NULL"))
+            {
+                Add(lines, "@doc", docId);
+                await using var reader = await lines.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    rows.Add((Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+                              reader.IsDBNull(1) ? null : reader.GetString(1),
+                              Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture)));
+                }
+            }
+            var result = new Dictionary<long, decimal>();
+            foreach (var (materialId, unit, qty) in rows)
+            {
+                var equivalent = await ResolveUnitEquivalentAsync(
+                    connection, transaction, materialId, unit, cancellationToken).ConfigureAwait(false);
+                result[materialId] = result.GetValueOrDefault(materialId) + qty * equivalent;
             }
             return result;
         }
 
-        const string byMaterialAndUnit = """
-            SELECT COALESCE(material_id, -1), COALESCE(unit, ''), SUM(qty)
-            FROM sales_document_lines
-            WHERE doc_id = @docId
-            GROUP BY material_id, unit
-            """;
-        var delivered = await ReadQuantitiesAsync(byMaterialAndUnit, ("@docId", deliveryDocId.Value)).ConfigureAwait(false);
-        var invoiced = await ReadQuantitiesAsync(byMaterialAndUnit, ("@docId", invoiceDocId)).ConfigureAwait(false);
-        var previouslyInvoiced = await ReadQuantitiesAsync("""
-            SELECT COALESCE(line.material_id, -1), COALESCE(line.unit, ''), SUM(line.qty)
+        // Earlier posted invoices against this delivery, kept per invoice
+        // so each one's released cost can be re-derived exactly.
+        var previousInvoiceIds = new List<long>();
+        await using (var previous = CreateCommand(connection, transaction, """
+            SELECT invoice.doc_id
             FROM document_links link
             INNER JOIN sales_documents invoice
                 ON invoice.company_id = link.company_id
                AND invoice.doc_id = link.target_doc_id
                AND invoice.doc_kind = link.target_doc_kind
-            INNER JOIN sales_document_lines line ON line.doc_id = invoice.doc_id
             WHERE link.company_id = @company
               AND link.source_doc_kind = @deliveryKind
               AND link.source_doc_id = @deliveryId
@@ -993,35 +1466,106 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
               AND invoice.status = @posted
               AND CAST(invoice.is_deleted AS TEXT) IN ('0', 'false')
               AND invoice.doc_id <> @currentId
-            GROUP BY line.material_id, line.unit
-            """,
-            ("@company", companyId),
-            ("@deliveryKind", CommercialDocKinds.DeliveryNote),
-            ("@deliveryId", deliveryDocId.Value),
-            ("@invoiceKind", CommercialDocKinds.SalesInvoice),
-            ("@posted", CommercialDocumentStatus.Posted),
-            ("@currentId", invoiceDocId)).ConfigureAwait(false);
+            ORDER BY invoice.doc_id
+            """))
+        {
+            Add(previous, "@company", companyId);
+            Add(previous, "@deliveryKind", CommercialDocKinds.DeliveryNote);
+            Add(previous, "@deliveryId", deliveryDocId.Value);
+            Add(previous, "@invoiceKind", CommercialDocKinds.SalesInvoice);
+            Add(previous, "@posted", CommercialDocumentStatus.Posted);
+            Add(previous, "@currentId", invoiceDocId);
+            await using var reader = await previous.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                previousInvoiceIds.Add(Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture));
+        }
 
-        if (previouslyInvoiced.Values.Any(quantity => quantity > 0m))
-            throw new InvalidOperationException("A delivery note must be invoiced in one document until partial delivery-cost allocation is enabled.");
+        var previouslyInvoiced = new Dictionary<long, decimal>();
+        var previouslyAllocated = new Dictionary<long, decimal>();
+        foreach (var previousId in previousInvoiceIds)
+        {
+            var quantities = await ReadBaseQuantitiesAsync(previousId).ConfigureAwait(false);
+            foreach (var (materialId, baseQty) in quantities)
+            {
+                if (!deliveredByMaterial.TryGetValue(materialId, out var delivered) || delivered.BaseQty <= 0m)
+                    continue;
+                previouslyInvoiced[materialId] = previouslyInvoiced.GetValueOrDefault(materialId) + baseQty;
+                // No earlier invoice can have taken the completion plug
+                // for a material this invoice still bills (that would
+                // mean the material was already fully billed), so the
+                // pro-rata derivation reproduces its released cost.
+                previouslyAllocated[materialId] = previouslyAllocated.GetValueOrDefault(materialId)
+                    + decimal.Round(delivered.Cost / delivered.BaseQty * baseQty, 2, MidpointRounding.AwayFromZero);
+            }
+        }
 
-        if (delivered.Count != invoiced.Count ||
-            delivered.Any(pair => invoiced.GetValueOrDefault(pair.Key) != pair.Value))
-            throw new InvalidOperationException("The sales invoice must include the complete remaining quantity from its delivery note.");
+        var thisInvoice = await ReadBaseQuantitiesAsync(invoiceDocId).ConfigureAwait(false);
+        const decimal qtyTolerance = 0.0001m;
+        var totalCogs = 0m;
+        foreach (var (materialId, thisBaseQty) in thisInvoice)
+        {
+            if (thisBaseQty <= 0m)
+                continue;
+            if (!deliveredByMaterial.TryGetValue(materialId, out var delivered) || delivered.BaseQty <= 0m)
+            {
+                // A stocked material the delivery never moved has no
+                // delivery cost to release; a service / non-stock
+                // material legitimately releases none.
+                if (await IsStockableAsync(connection, transaction, materialId, cancellationToken).ConfigureAwait(false))
+                    throw new AppError(ErrorCodes.DeliveryCostAllocationFailed,
+                        $"Sales invoice material '{materialId}' was not delivered by delivery note '{deliveryNo}'; its delivery cost cannot be allocated.",
+                        materialId.ToString(CultureInfo.InvariantCulture), deliveryNo);
+                continue;
+            }
 
-        var companyCode = await PartyLedger.ResolveCompanyCodeAsync(
-            connection, transaction, _provider, companyId, cancellationToken).ConfigureAwait(false);
-        await using var cost = CreateCommand(connection, transaction, """
-            SELECT COALESCE(SUM(cost_amount), 0)
-            FROM material_stock_movements
-            WHERE company_id = @companyCode AND document_no = @deliveryNo
-            """);
-        Add(cost, "@companyCode", companyCode);
-        Add(cost, "@deliveryNo", deliveryNo);
-        var movementCost = Convert.ToDecimal(
-            await cost.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
-            CultureInfo.InvariantCulture);
-        return Math.Max(0m, -movementCost);
+            var previousQty = previouslyInvoiced.GetValueOrDefault(materialId);
+            if (previousQty + thisBaseQty > delivered.BaseQty + qtyTolerance)
+                throw new AppError(ErrorCodes.DeliveryCostAllocationFailed,
+                    $"Sales invoice quantity for material '{materialId}' exceeds the quantity delivered by delivery note '{deliveryNo}'.",
+                    materialId.ToString(CultureInfo.InvariantCulture), deliveryNo);
+
+            var unitCost = delivered.Cost / delivered.BaseQty;
+            var completesMaterial = previousQty + thisBaseQty >= delivered.BaseQty - qtyTolerance;
+            var allocated = completesMaterial
+                // Completion plug: take the exact remaining cost so the
+                // invoices against this delivery sum to its movement
+                // cost to the cent. Clamped at zero for the pathological
+                // case where repeated round-ups already released a cent
+                // more than the material's cost.
+                ? Math.Max(0m, delivered.Cost - previouslyAllocated.GetValueOrDefault(materialId))
+                : decimal.Round(unitCost * thisBaseQty, 2, MidpointRounding.AwayFromZero);
+            totalCogs += allocated;
+        }
+
+        // Credit the account the delivery actually debited: 1215 when
+        // its GL entry carries a 1215 debit (and the account is still
+        // postable), else Inventory 1203.
+        var creditAccount = GlAccounts.Inventory;
+        if (GlPosting.TryResolveAccount(connection, transaction, _provider,
+                Guid.Parse(companyId), GlAccounts.StockDeliveredNotBilled) is not null)
+        {
+            await using var entry = CreateCommand(connection, transaction, """
+                SELECT COUNT(*)
+                FROM journal_entries e
+                JOIN journal_entry_lines l ON l.journal_entry_id = e.journal_entry_id
+                JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = e.company_id
+                WHERE e.company_id = @companyGuid
+                  AND e.source_doc_type = @deliveryKind
+                  AND e.source_doc_id = @deliveryId
+                  AND e.reversal_of_entry_id IS NULL
+                  AND e.status = 1
+                  AND a.account_code = @deliveredAccount
+                  AND l.debit > 0
+                """);
+            Add(entry, "@companyGuid", GlPosting.FormatGuid(_provider, Guid.Parse(companyId)));
+            Add(entry, "@deliveryKind", CommercialDocKinds.DeliveryNote);
+            Add(entry, "@deliveryId", deliveryDocId.Value.ToString(CultureInfo.InvariantCulture));
+            Add(entry, "@deliveredAccount", GlAccounts.StockDeliveredNotBilled);
+            if (Convert.ToInt64(await entry.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
+                    CultureInfo.InvariantCulture) > 0)
+                creditAccount = GlAccounts.StockDeliveredNotBilled;
+        }
+        return (totalCogs, creditAccount);
     }
 
     private static DbCommand CreateCommand(DbConnection connection, DbTransaction transaction, string sql)

@@ -31,6 +31,8 @@ public sealed class SalesDeliveryWin : BaseWin
     private readonly Button _btnCreate = new();
     private readonly Button _btnPost = new();
     private readonly Button _btnInvoice = new();
+    private readonly Button _btnReverse = new();
+    private readonly Button _btnCancelDraft = new();
     private readonly DataGrid _grid = new();
     private readonly TextBlock _lblStatus = new();
     private readonly ObservableCollection<DeliveryLineVm> _lines = new();
@@ -62,6 +64,8 @@ public sealed class SalesDeliveryWin : BaseWin
         _btnCreate.Content = T("SalesDelivery.CreateDraft");
         _btnPost.Content = T("OrderDoc.Post");
         _btnInvoice.Content = T("SalesDelivery.CreateInvoice");
+        _btnReverse.Content = T("SalesDelivery.Reverse");
+        _btnCancelDraft.Content = T("SalesDelivery.CancelDraft");
 
         foreach (var (label, key) in _headerLabels)
             label.Text = T(key);
@@ -121,16 +125,22 @@ public sealed class SalesDeliveryWin : BaseWin
         StyleButton(_btnCreate, "SalesDelivery.CreateDraft");
         StyleButton(_btnPost, "OrderDoc.Post");
         StyleButton(_btnInvoice, "SalesDelivery.CreateInvoice");
+        StyleButton(_btnReverse, "SalesDelivery.Reverse");
+        StyleButton(_btnCancelDraft, "SalesDelivery.CancelDraft");
         _btnNew.Click += (_, _) => ResetWindow();
         _btnLoad.Click += async (_, _) => await LoadOrderAsync();
         _btnCreate.Click += async (_, _) => await CreateDeliveryAsync();
         _btnPost.Click += async (_, _) => await PostDeliveryAsync();
         _btnInvoice.Click += async (_, _) => await CreateInvoiceAsync();
+        _btnReverse.Click += async (_, _) => await ReverseDeliveryAsync();
+        _btnCancelDraft.Click += async (_, _) => await CancelDraftAsync();
         actions.Children.Add(_btnNew);
         actions.Children.Add(_btnLoad);
         actions.Children.Add(_btnCreate);
         actions.Children.Add(_btnPost);
         actions.Children.Add(_btnInvoice);
+        actions.Children.Add(_btnReverse);
+        actions.Children.Add(_btnCancelDraft);
 
         var actionBorder = new Border
         {
@@ -442,6 +452,102 @@ public sealed class SalesDeliveryWin : BaseWin
         }
     }
 
+    /// <summary>
+    /// Reverses the posted delivery note (sales cycle B4, gap G13):
+    /// stock returns at the original movement cost, the delivery GL is
+    /// compensated, and the document is cancelled with an audited
+    /// reason. The repository blocks the reversal while a posted sales
+    /// invoice is linked (SAL-7005).
+    /// </summary>
+    private async Task ReverseDeliveryAsync()
+    {
+        if (!AppHost.Permissions.Has(PermCat.Sales.OrderConvert))
+        {
+            ShowWarningMessage(T("OrderDoc.PermissionDenied"));
+            return;
+        }
+        if (_busy || _deliveryId is null || _deliveryStatus != CommercialDocumentStatus.Posted || AppHost.Orders is null)
+        {
+            ShowWarningMessage(T("SalesDelivery.PostDeliveryFirst"));
+            return;
+        }
+
+        var input = PromptDialog.Show(this, T("SalesDelivery.ReverseTitle"),
+            (T("SalesDelivery.Reason"), string.Empty));
+        if (input is null || string.IsNullOrWhiteSpace(input[0]))
+            return;
+
+        try
+        {
+            _busy = true;
+            UpdateState();
+            await AppHost.Orders.ReverseSalesChainDocumentAsync(_deliveryId.Value, input[0], CurrentUserId);
+            _deliveryStatus = CommercialDocumentStatus.Cancelled;
+            _lblStatus.Text = $"{T("SalesDelivery.Reversed")}: {_txtDeliveryNo.Text}";
+            if (_orderId is not null)
+            {
+                var progress = await AppHost.Orders.GetProgressAsync(CommercialDocSide.Sales, _orderId.Value);
+                for (var index = 0; index < _lines.Count && index < progress.Lines.Count; index++)
+                {
+                    _lines[index].DeliveredQty = progress.Lines[index].FulfilledQty;
+                    _lines[index].RemainingQty = Math.Max(0m, _lines[index].OrderedQty - _lines[index].DeliveredQty);
+                    _lines[index].QtyToDeliver = _lines[index].RemainingQty;
+                }
+            }
+        }
+        catch (AppError ex)
+        {
+            AppHost.Errors.Report(ex.Code, ex, "SalesDeliveryWin.ReverseDelivery");
+            var info = AppHost.Errors.Resolve(ex.Code, ex.Args.ToArray());
+            ShowWarningMessage($"{info.Message} (Error {info.Code})");
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "SalesDeliveryWin.ReverseDelivery");
+            ShowWarningMessage(ex.Message);
+        }
+        finally
+        {
+            _busy = false;
+            UpdateState();
+        }
+    }
+
+    /// <summary>Cancels the draft delivery note (no posting effects exist yet).</summary>
+    private async Task CancelDraftAsync()
+    {
+        if (!AppHost.Permissions.Has(PermCat.Sales.OrderConvert))
+        {
+            ShowWarningMessage(T("OrderDoc.PermissionDenied"));
+            return;
+        }
+        if (_busy || _deliveryId is null || _deliveryStatus != CommercialDocumentStatus.Draft || AppHost.Orders is null)
+            return;
+
+        var confirm = MessageBox.Show(this, T("SalesDelivery.ConfirmCancelDraft"), Title,
+            MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        try
+        {
+            _busy = true;
+            UpdateState();
+            await AppHost.Orders.CancelOrderAsync(CommercialDocSide.Sales, _deliveryId.Value, CurrentUserId);
+            _deliveryStatus = CommercialDocumentStatus.Cancelled;
+            _lblStatus.Text = $"{T("SalesDelivery.Cancelled")}: {_txtDeliveryNo.Text}";
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "SalesDeliveryWin.CancelDraft");
+            ShowWarningMessage(ex.Message);
+        }
+        finally
+        {
+            _busy = false;
+            UpdateState();
+        }
+    }
+
     private void ShowWarningMessage(string message)
         => MessageBox.Show(this, message, T("Common.Warning"),
             MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -450,10 +556,47 @@ public sealed class SalesDeliveryWin : BaseWin
     {
         _btnLoad.IsEnabled = !_busy;
         _btnInvoice.IsEnabled = !_busy && _deliveryId is not null && _deliveryStatus == CommercialDocumentStatus.Posted;
-        var canStartDelivery = _deliveryId is null || _deliveryStatus == CommercialDocumentStatus.Posted;
+        _btnReverse.IsEnabled = !_busy && _deliveryId is not null && _deliveryStatus == CommercialDocumentStatus.Posted;
+        _btnCancelDraft.IsEnabled = !_busy && _deliveryId is not null && _deliveryStatus == CommercialDocumentStatus.Draft;
+        var canStartDelivery = _deliveryId is null || _deliveryStatus == CommercialDocumentStatus.Posted || _deliveryStatus == CommercialDocumentStatus.Cancelled;
         _btnCreate.IsEnabled = !_busy && _orderId is not null && canStartDelivery && _lines.Any(line => line.RemainingQty > 0m);
         _btnPost.IsEnabled = !_busy && _deliveryId is not null && _deliveryStatus == CommercialDocumentStatus.Draft;
         _grid.IsEnabled = !_busy && _orderId is not null && canStartDelivery;
+    }
+
+    /// <summary>Minimal modal prompt for the reversal reason (ChqListWin pattern).</summary>
+    private static class PromptDialog
+    {
+        public static string[]? Show(Window owner, string title, params (string Label, string Value)[] fields)
+        {
+            var dialog = new Window
+            {
+                Title = title,
+                Width = 420,
+                SizeToContent = SizeToContent.Height,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ResizeMode = ResizeMode.NoResize
+            };
+            var panel = new StackPanel { Margin = new Thickness(12) };
+            var boxes = new List<TextBox>();
+            foreach (var (label, value) in fields)
+            {
+                panel.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+                var box = new TextBox { Text = value, Margin = new Thickness(0, 0, 0, 10) };
+                boxes.Add(box);
+                panel.Children.Add(box);
+            }
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var ok = new Button { Content = T("Common.OK"), MinWidth = 84, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
+            var cancel = new Button { Content = T("Common.Cancel"), MinWidth = 84, IsCancel = true };
+            ok.Click += (_, _) => dialog.DialogResult = true;
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+            return dialog.ShowDialog() == true ? boxes.Select(b => b.Text.Trim()).ToArray() : null;
+        }
     }
 
     private sealed class DeliveryLineVm : INotifyPropertyChanged

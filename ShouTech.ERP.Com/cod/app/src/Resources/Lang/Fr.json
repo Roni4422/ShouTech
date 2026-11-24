@@ -2548,6 +2548,10 @@
     "SelectOrder": "Selectionnez d'abord un ordre de fabrication."
   },
   "DocSearch": {
+    "Reverse": "Extourner",
+    "ReverseTitle": "Extourner le document",
+    "Reason": "Motif",
+    "Reversed": "Extourné",
     "ConfirmLost": "Marquer ce devis comme perdu ?",
     "ConvertToOrder": "Convertir en commande",
     "ConvertedToOrder": "Converti en commande de vente (brouillon)",
@@ -3639,6 +3643,13 @@
     }
   },
   "SalesDelivery": {
+    "Reverse": "Extourner la livraison",
+    "ReverseTitle": "Extourner le bon de livraison",
+    "Reason": "Motif",
+    "Reversed": "Extourné",
+    "CancelDraft": "Annuler le brouillon",
+    "ConfirmCancelDraft": "Annuler ce brouillon de bon de livraison ?",
+    "Cancelled": "Annulé",
     "Title": "Bon de livraison client",
     "OrderNo": "N° commande client",
     "DeliveryNo": "N° bon de livraison",

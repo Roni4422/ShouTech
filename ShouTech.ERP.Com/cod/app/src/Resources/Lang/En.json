@@ -2595,6 +2595,10 @@
     "SelectOrder": "Select a manufacturing order first."
   },
   "DocSearch": {
+    "Reverse": "Reverse",
+    "ReverseTitle": "Reverse Document",
+    "Reason": "Reason",
+    "Reversed": "Reversed",
     "ConfirmLost": "Mark this quotation as lost?",
     "ConvertToOrder": "Convert to Order",
     "ConvertedToOrder": "Converted to sales order (draft)",
@@ -3648,6 +3652,13 @@
     }
   },
   "SalesDelivery": {
+    "Reverse": "Reverse Delivery",
+    "ReverseTitle": "Reverse Delivery Note",
+    "Reason": "Reason",
+    "Reversed": "Reversed",
+    "CancelDraft": "Cancel Draft",
+    "ConfirmCancelDraft": "Cancel this draft delivery note?",
+    "Cancelled": "Cancelled",
     "Title": "Sales Delivery Note",
     "OrderNo": "Sales Order No.",
     "DeliveryNo": "Delivery Note No.",

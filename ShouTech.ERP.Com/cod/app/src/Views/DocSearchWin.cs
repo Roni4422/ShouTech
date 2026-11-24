@@ -50,6 +50,7 @@ public sealed class DocSearchWin : BaseWin, IWindowMode
     private readonly Button _btnOpen = new();
     private readonly Button _btnSetLost = new();
     private readonly Button _btnConvertOrder = new();
+    private readonly Button _btnReverse = new();
     private readonly Button _btnClose = new();
     private readonly DataGrid _grid = new();
     private readonly TextBlock _lblStatus = new();
@@ -78,16 +79,19 @@ public sealed class DocSearchWin : BaseWin, IWindowMode
         StyleButton(_btnOpen, "DocSearch.Open");
         StyleButton(_btnSetLost, "DocSearch.SetLost");
         StyleButton(_btnConvertOrder, "DocSearch.ConvertToOrder");
+        StyleButton(_btnReverse, "DocSearch.Reverse");
         StyleButton(_btnClose, "Common.Close");
         _btnSearch.Click += async (_, _) => await SearchAsync();
         _btnOpen.Click += (_, _) => OpenSelected();
         _btnSetLost.Click += async (_, _) => await SetLostAsync();
         _btnConvertOrder.Click += async (_, _) => await ConvertToOrderAsync();
+        _btnReverse.Click += async (_, _) => await ReverseAsync();
         _btnClose.Click += (_, _) => Close();
-        foreach (var b in new[] { _btnSearch, _btnOpen, _btnSetLost, _btnConvertOrder, _btnClose })
+        foreach (var b in new[] { _btnSearch, _btnOpen, _btnSetLost, _btnConvertOrder, _btnReverse, _btnClose })
             toolbar.Children.Add(b);
         _btnSetLost.Visibility = _mode == DocSearchMode.Quotations ? Visibility.Visible : Visibility.Collapsed;
         _btnConvertOrder.Visibility = _mode == DocSearchMode.Quotations ? Visibility.Visible : Visibility.Collapsed;
+        _btnReverse.Visibility = _mode == DocSearchMode.Invoices ? Visibility.Visible : Visibility.Collapsed;
 
         var actionBar = new Border
         {
@@ -332,6 +336,84 @@ public sealed class DocSearchWin : BaseWin, IWindowMode
         {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "DocSearchWin.ConvertToOrder");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    /// <summary>
+    /// Reverses a posted CHAIN sales invoice (sales cycle B4, gap G13):
+    /// the GL entry and the party-ledger debit are compensated, the
+    /// document is cancelled and the reversal is audited with a reason.
+    /// The repository blocks reversal when payments are allocated
+    /// (SAL-7006). Native invoices keep their own reversal workflow in
+    /// InvoiceWin and are refused here by kind: only sales_documents
+    /// chain invoices (kind SAL on the sales side) are eligible.
+    /// </summary>
+    private async Task ReverseAsync()
+    {
+        if (_grid.SelectedItem is not DocRow row || AppHost.Orders is null) return;
+        if (row.Side != CommercialDocSide.Sales || row.DocKind != CommercialDocKinds.SalesInvoice ||
+            row.StatusText != CommercialDocumentStatus.Posted)
+            return;
+        if (!AppHost.Permissions.Has(PermCat.Sales.OrderConvert))
+        {
+            MessageBox.Show(this, T("OrderDoc.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        var input = PromptDialog.Show(this, T("DocSearch.ReverseTitle"),
+            (T("DocSearch.Reason"), string.Empty));
+        if (input is null || string.IsNullOrWhiteSpace(input[0]))
+            return;
+        try
+        {
+            await AppHost.Orders.ReverseSalesChainDocumentAsync(row.DocId, input[0], CurrentUserId);
+            _lblStatus.Text = $"{T("DocSearch.Reversed")}: {row.DocNo}";
+            await SearchAsync();
+        }
+        catch (AppError ex)
+        {
+            AppHost.Errors.Report(ex.Code, ex, "DocSearchWin.Reverse");
+            var info = AppHost.Errors.Resolve(ex.Code, ex.Args.ToArray());
+            MessageBox.Show(this, $"{info.Message} (Error {info.Code})", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "DocSearchWin.Reverse");
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    /// <summary>Minimal modal prompt for the reversal reason (ChqListWin pattern).</summary>
+    private static class PromptDialog
+    {
+        public static string[]? Show(Window owner, string title, params (string Label, string Value)[] fields)
+        {
+            var dialog = new Window
+            {
+                Title = title,
+                Width = 420,
+                SizeToContent = SizeToContent.Height,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ResizeMode = ResizeMode.NoResize
+            };
+            var panel = new StackPanel { Margin = new Thickness(12) };
+            var boxes = new System.Collections.Generic.List<TextBox>();
+            foreach (var (label, value) in fields)
+            {
+                panel.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+                var box = new TextBox { Text = value, Margin = new Thickness(0, 0, 0, 10) };
+                boxes.Add(box);
+                panel.Children.Add(box);
+            }
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var ok = new Button { Content = T("Common.OK"), MinWidth = 84, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
+            var cancel = new Button { Content = T("Common.Cancel"), MinWidth = 84, IsCancel = true };
+            ok.Click += (_, _) => dialog.DialogResult = true;
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+            return dialog.ShowDialog() == true ? boxes.Select(b => b.Text.Trim()).ToArray() : null;
         }
     }
 
