@@ -287,8 +287,33 @@ public sealed class CrmLeadWin : BaseWin
                 throw new InvalidOperationException(T("Crm.SelectLead"));
             if (!AppHost.Permissions.Has(PermCat.Crm.LeadConvert))
                 throw new InvalidOperationException(T("Crm.PermissionDenied"));
-            var result = await _service.ConvertLeadAsync(CurrentCompanyCode, id, CurrentUserId,
-                UsrPref.Load().CurrencyCode);
+            var lead = _leads.FirstOrDefault(l => l.Id == id)
+                ?? throw new InvalidOperationException(T("Crm.SelectLead"));
+
+            // Duplicate detection (gap G1/G2): when the lead's email or
+            // phone already belongs to an existing PARTY, offer to link
+            // that party instead of creating a duplicate. A duplicate
+            // LEAD (or no match) keeps the normal path, where the
+            // service's CRM-9007 check is the backstop.
+            var duplicate = await _service.FindLeadDuplicateAsync(CurrentCompanyCode, lead);
+            CrmConversionResult result;
+            if (duplicate is { SourceKind: "Party" })
+            {
+                var choice = MessageBox.Show(this,
+                    Tf("Crm.LinkExistingParty", duplicate.Describe()),
+                    T("Crm.LinkExistingTitle"),
+                    MessageBoxButton.YesNo, MessageBoxImage.Question);
+                result = choice == MessageBoxResult.Yes
+                    ? await _service.ConvertLeadToExistingPartyAsync(CurrentCompanyCode, id, duplicate.MatchId, CurrentUserId,
+                        UsrPref.Load().CurrencyCode)
+                    : await _service.ConvertLeadAsync(CurrentCompanyCode, id, CurrentUserId,
+                        UsrPref.Load().CurrencyCode);
+            }
+            else
+            {
+                result = await _service.ConvertLeadAsync(CurrentCompanyCode, id, CurrentUserId,
+                    UsrPref.Load().CurrencyCode);
+            }
             _statusBar.Text = Tf("Crm.ConvertedLine", result.PartyCode);
             await RefreshAsync();
         }

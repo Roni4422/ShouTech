@@ -29,7 +29,12 @@ namespace Kern.Tests;
 ///     lead/opportunity/party (CRM-9005);
 ///   * an opportunity quotation is a Quotation-kind Draft linked both
 ///     ways with NO party-ledger / GL / stock effects (Step 5 policy);
-///   * every CRM field round-trips (fully populated lead + opportunity).
+///   * every CRM field round-trips (fully populated lead + opportunity);
+///   * B1 (G1/G2/G3): opportunity items round-trip and define the
+///     expected amount (invalid items are CRM-9008); a quotation built
+///     from items carries price/discount/tax with correct totals, a
+///     sequence number and valid-till; duplicate leads are CRM-9007;
+///     link-existing conversion creates no new party.
 /// Execution requires Windows (net8.0-windows testhost); the same
 /// scenarios are verified headlessly by
 /// ~/workspace/research/phaseb-057/crm57_harness.py
@@ -287,6 +292,192 @@ public class CrmPipelineTests
         Assert.Equal(opp.AssignedRepCode, loaded.AssignedRepCode);
     }
 
+    [Fact]
+    public async Task OpportunityItems_RoundTrip_AndDefineExpectedAmount()
+    {
+        using var db = await SeededAsync();
+        var opp = new CrmOpportunity
+        {
+            Title = "Priced deal",
+            ExpectedAmount = 999m, // must be replaced by the items total
+            CurrencyCode = "SAR",
+            Items =
+            {
+                new CrmOpportunityItem { Description = "Implementation", Qty = 2m, Unit = "DAY", UnitPrice = 100m, DiscountPct = 10m, TaxRate = 15m },
+                new CrmOpportunityItem { MaterialCode = "LIC-1", Description = "Licence", Qty = 1m, Unit = "PCS", UnitPrice = 50m }
+            }
+        };
+        await db.Crm.SaveOpportunityAsync(CO, opp, Actor);
+
+        // Line math: 2 x 100 x 0.9 = 180, tax 27, total 207; 50 + 0 = 50.
+        var loaded = await db.Crm.GetOpportunityAsync(CO, opp.Id);
+        Assert.NotNull(loaded);
+        Assert.Equal(257m, loaded!.ExpectedAmount);
+        Assert.Equal(2, loaded.Items.Count);
+        var first = loaded.Items[0];
+        Assert.Equal(1, first.LineNo);
+        Assert.Equal("Implementation", first.Description);
+        Assert.Equal(2m, first.Qty);
+        Assert.Equal("DAY", first.Unit);
+        Assert.Equal(100m, first.UnitPrice);
+        Assert.Equal(10m, first.DiscountPct);
+        Assert.Equal(15m, first.TaxRate);
+        Assert.Equal(180m, first.LineSubtotal);
+        Assert.Equal(27m, first.LineTax);
+        Assert.Equal(207m, first.LineTotal);
+        Assert.Equal("LIC-1", loaded.Items[1].MaterialCode);
+        Assert.Equal(2, loaded.Items[1].LineNo);
+
+        // Update: change a qty, drop the second line — both persist.
+        loaded.Items[0].Qty = 3m;
+        loaded.Items.RemoveAt(1);
+        await db.Crm.SaveOpportunityAsync(CO, loaded, Actor);
+        var reloaded = await db.Crm.GetOpportunityAsync(CO, opp.Id);
+        Assert.NotNull(reloaded);
+        var only = Assert.Single(reloaded!.Items);
+        Assert.Equal(3m, only.Qty);
+        Assert.Equal(310.5m, reloaded.ExpectedAmount); // 3 x 100 x 0.9 = 270, +15% tax = 310.5
+        Assert.Equal(1, db.ScalarLong(
+            $"SELECT COUNT(*) FROM crm_opportunity_items WHERE company_id = '{CO}' AND opportunity_id = '{opp.Id:D}' AND is_deleted = 0"));
+    }
+
+    [Fact]
+    public async Task OpportunityItem_Invalid_IsCrm9008()
+    {
+        using var db = await SeededAsync();
+        var opp = new CrmOpportunity
+        {
+            Title = "Bad items",
+            CurrencyCode = "SAR",
+            Items = { new CrmOpportunityItem { Description = "Zero qty", Qty = 0m, UnitPrice = 10m } }
+        };
+        var ex = await Assert.ThrowsAsync<AppError>(() => db.Crm.SaveOpportunityAsync(CO, opp, Actor));
+        Assert.Equal(ErrorCodes.CrmOpportunityItemInvalid, ex.Code);
+
+        opp.Items[0].Qty = 1m;
+        opp.Items[0].UnitPrice = -1m;
+        ex = await Assert.ThrowsAsync<AppError>(() => db.Crm.SaveOpportunityAsync(CO, opp, Actor));
+        Assert.Equal(ErrorCodes.CrmOpportunityItemInvalid, ex.Code);
+    }
+
+    [Fact]
+    public async Task Quotation_FromItems_CarriesPriceDiscountTax_AndTotals()
+    {
+        using var db = await SeededAsync();
+        var lead = new CrmLead
+        {
+            LeadName = "Buyer One",
+            Organization = "Buyer Co",
+            Email = "buyer@co.example",
+            Phone = "+100-1",
+            Status = CrmLeadStatuses.Qualified
+        };
+        await db.Crm.SaveLeadAsync(CO, lead, Actor);
+        var conversion = await db.Crm.ConvertLeadAsync(CO, lead.Id, Actor, "SAR");
+
+        var opp = await db.Crm.GetOpportunityAsync(CO, conversion.OpportunityId);
+        Assert.NotNull(opp);
+        opp!.Items.Add(new CrmOpportunityItem { Description = "Implementation", Qty = 2m, Unit = "DAY", UnitPrice = 100m, DiscountPct = 10m, TaxRate = 15m });
+        opp.Items.Add(new CrmOpportunityItem { MaterialCode = "LIC-1", Description = "Licence", Qty = 1m, Unit = "PCS", UnitPrice = 50m, TaxRate = 15m });
+        await db.Crm.SaveOpportunityAsync(CO, opp, Actor);
+
+        // No explicit lines: the repository builds them from the items.
+        var validTill = new DateOnly(2027, 1, 31);
+        var quote = await db.Crm.CreateQuotationAsync(CO, opp.Id, Actor, null, validTill);
+        Assert.StartsWith("QUO-", quote.DocNo);
+
+        // Header: subtotal 180 + 50 = 230, tax 27 + 7.5 = 34.5, grand 264.5.
+        Assert.Equal(1, db.ScalarLong(
+            $"SELECT COUNT(*) FROM sales_documents WHERE doc_id = {quote.DocId} AND doc_kind = 'QUO' AND subtotal = 230 AND tax_amount = 34.5 AND grand_total = 264.5 AND valid_till = '2027-01-31'"));
+        // Lines carry discount and tax (never forced to 0).
+        Assert.Equal(1, db.ScalarLong(
+            $"SELECT COUNT(*) FROM sales_document_lines WHERE doc_id = {quote.DocId} AND line_no = 1 AND description = 'Implementation' AND qty = 2 AND unit_price = 100 AND discount_pct = 10 AND tax_rate = 15 AND line_subtotal = 180 AND line_tax = 27 AND line_total = 207"));
+        Assert.Equal(1, db.ScalarLong(
+            $"SELECT COUNT(*) FROM sales_document_lines WHERE doc_id = {quote.DocId} AND line_no = 2 AND material_code = 'LIC-1' AND qty = 1 AND unit_price = 50 AND discount_pct = 0 AND tax_rate = 15 AND line_total = 57.5"));
+        // No fabricated title line.
+        Assert.Equal(2, db.ScalarLong($"SELECT COUNT(*) FROM sales_document_lines WHERE doc_id = {quote.DocId}"));
+        Assert.Equal(0, db.ScalarLong(
+            $"SELECT COUNT(*) FROM sales_document_lines WHERE doc_id = {quote.DocId} AND description = 'Buyer Co'"));
+
+        // A second quotation gets the NEXT sequence number, not a recount.
+        var quote2 = await db.Crm.CreateQuotationAsync(CO, opp.Id, Actor);
+        Assert.NotEqual(quote.DocNo, quote2.DocNo);
+    }
+
+    [Fact]
+    public async Task DuplicateLead_SameEmailOrPhone_IsCrm9007()
+    {
+        using var db = await SeededAsync();
+        var first = new CrmLead { LeadName = "First", Email = "dup@example.com", Phone = "+200-1", Status = CrmLeadStatuses.New };
+        await db.Crm.SaveLeadAsync(CO, first, Actor);
+
+        var sameEmail = new CrmLead { LeadName = "Second", Email = "DUP@example.com", Status = CrmLeadStatuses.New };
+        var ex = await Assert.ThrowsAsync<AppError>(() => db.Crm.SaveLeadAsync(CO, sameEmail, Actor));
+        Assert.Equal(ErrorCodes.CrmDuplicateLeadOrParty, ex.Code);
+        Assert.Contains("First", ex.Message);
+
+        var samePhone = new CrmLead { LeadName = "Third", Mobile = "+200-1", Status = CrmLeadStatuses.New };
+        ex = await Assert.ThrowsAsync<AppError>(() => db.Crm.SaveLeadAsync(CO, samePhone, Actor));
+        Assert.Equal(ErrorCodes.CrmDuplicateLeadOrParty, ex.Code);
+
+        // Editing the original lead itself is not a duplicate.
+        first.LeadName = "First Renamed";
+        await db.Crm.SaveLeadAsync(CO, first, Actor);
+
+        // Converting is refused too when a duplicate appears AFTER the
+        // lead was saved (here: a party created through master data).
+        var solo = new CrmLead { LeadName = "Solo", Email = "solo@example.com", Status = CrmLeadStatuses.Qualified };
+        await db.Crm.SaveLeadAsync(CO, solo, Actor);
+        db.Exec($"INSERT INTO parties (id, company_id, kind, code, name_en, email, ledger_id) VALUES ('{Guid.NewGuid():D}', '{CO}', 'C', 'CUST-9002', 'Solo Party Co', 'solo@example.com', 9002);");
+        ex = await Assert.ThrowsAsync<AppError>(() => db.Crm.ConvertLeadAsync(CO, solo.Id, Actor, "SAR"));
+        Assert.Equal(ErrorCodes.CrmDuplicateLeadOrParty, ex.Code);
+    }
+
+    [Fact]
+    public async Task DuplicateLead_AgainstExistingParty_IsCrm9007_NamingTheParty()
+    {
+        using var db = await SeededAsync();
+        var partyId = Guid.NewGuid();
+        db.Exec($"INSERT INTO parties (id, company_id, kind, code, name_en, email, phone, ledger_id) VALUES ('{partyId:D}', '{CO}', 'C', 'CUST-9001', 'Existing Customer Co', 'party@example.com', '+300-9', 9001);");
+
+        var lead = new CrmLead { LeadName = "New Lead", Email = "party@example.com", Status = CrmLeadStatuses.New };
+        var ex = await Assert.ThrowsAsync<AppError>(() => db.Crm.SaveLeadAsync(CO, lead, Actor));
+        Assert.Equal(ErrorCodes.CrmDuplicateLeadOrParty, ex.Code);
+        Assert.Contains("Existing Customer Co", ex.Message);
+    }
+
+    [Fact]
+    public async Task ConvertLead_LinkExistingParty_CreatesNoNewParty()
+    {
+        using var db = await SeededAsync();
+        var partyId = Guid.NewGuid();
+        db.Exec($"INSERT INTO parties (id, company_id, kind, code, name_en, email, phone, ledger_id) VALUES ('{partyId:D}', '{CO}', 'C', 'CUST-9001', 'Existing Customer Co', 'link@example.com', '+300-9', 9001);");
+
+        // The lead predates the party (it was created before the
+        // duplicate existed), so its row is inserted directly —
+        // SaveLeadAsync would now refuse it as a duplicate.
+        var leadId = Guid.NewGuid();
+        db.Exec($"INSERT INTO crm_leads (lead_id, company_id, lead_name, email, phone, status) VALUES ('{leadId:D}', '{CO}', 'Link Me', 'link@example.com', '+300-9', 'Qualified');");
+
+        var result = await db.Crm.ConvertLeadToExistingPartyAsync(CO, leadId, partyId, Actor, "SAR");
+        Assert.Equal(partyId, result.PartyId);
+        Assert.Equal(9001, result.PartyLedgerId);
+        Assert.Equal("CUST-9001", result.PartyCode);
+
+        // No new party was created.
+        Assert.Equal(1, db.ScalarLong($"SELECT COUNT(*) FROM parties WHERE company_id = '{CO}'"));
+
+        // The opportunity is against the existing party; the lead is stamped.
+        var opp = await db.Crm.GetOpportunityAsync(CO, result.OpportunityId);
+        Assert.NotNull(opp);
+        Assert.Equal(partyId, opp!.PartyId);
+        Assert.Equal(leadId, opp.LeadId);
+        var lead = await db.Crm.GetLeadAsync(CO, leadId);
+        Assert.Equal(CrmLeadStatuses.Converted, lead!.Status);
+        Assert.Equal(partyId, lead.ConvertedPartyId);
+        Assert.Equal(result.OpportunityId, lead.ConvertedOpportunityId);
+    }
+
     private static CrmLead FullLead() => new()
     {
         LeadName = "Sara Haddad",
@@ -344,6 +535,15 @@ public class CrmPipelineTests
             using var cmd = c.CreateCommand();
             cmd.CommandText = sql;
             return Convert.ToInt64(cmd.ExecuteScalar());
+        }
+
+        public void Exec(string sql)
+        {
+            using var c = new SqliteConnection(Cs);
+            c.Open();
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.ExecuteNonQuery();
         }
 
         public void Dispose()

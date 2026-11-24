@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
@@ -44,9 +45,12 @@ public sealed class CrmOppWin : BaseWin, IWindowMode
     private readonly DataGrid _grid = new();
     private readonly DataGrid _historyGrid = new();
     private readonly DataGrid _documentsGrid = new();
+    private readonly DataGrid _itemsGrid = new();
+    private readonly ObservableCollection<CrmOpportunityItem> _items = new();
     private readonly TextBlock _oppsHeader = new();
     private readonly TextBlock _historyHeader = new();
     private readonly TextBlock _documentsHeader = new();
+    private readonly TextBlock _itemsHeader = new();
     private readonly TextBlock _statusBar = new();
     private readonly TextBox _title = new();
     private readonly ComboBox _party = new();
@@ -63,6 +67,9 @@ public sealed class CrmOppWin : BaseWin, IWindowMode
     private readonly TextBox _lostNotes = new();
     private readonly TextBox _linkDocId = new();
     private readonly ComboBox _linkType = new();
+    private readonly DatePicker _validTill = new();
+    private readonly Button _addItemButton = new();
+    private readonly Button _removeItemButton = new();
     private readonly Button _newButton = new();
     private readonly Button _saveButton = new();
     private readonly Button _deleteButton = new();
@@ -189,6 +196,7 @@ public sealed class CrmOppWin : BaseWin, IWindowMode
         AddFormField(_labels, form, 10, 0, "Crm.Col.Probability", _probability);
         AddFormField(_labels, form, 11, 0, "Crm.LostReason", _lostReason);
         AddFormField(_labels, form, 12, 0, "Crm.LostNotes", _lostNotes);
+        AddFormField(_labels, form, 13, 0, "Crm.ValidTill", _validTill);
         _party.DisplayMemberPath = nameof(CrmPartyOption.Name);
         _oppType.ItemsSource = CrmOpportunityTypes.All;
         _source.ItemsSource = CrmSources.All;
@@ -198,9 +206,49 @@ public sealed class CrmOppWin : BaseWin, IWindowMode
         _lostReason.DisplayMemberPath = nameof(CrmLostReason.NameEn);
         _currency.Text = UsrPref.Load().CurrencyCode;
         var formScroll = new ScrollViewer { Content = form, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        Grid.SetColumn(formScroll, 1);
-        Grid.SetRow(formScroll, 0);
-        content.Children.Add(formScroll);
+
+        // Items grid (migration 092): the opportunity's priced lines.
+        // Editable in place — ENTER moves horizontally through the
+        // central DataGridTableBehavior attached by the grid style —
+        // and saved with the opportunity card (Save button, bottom bar).
+        var itemsPanel = new DockPanel { Margin = new Thickness(0, 8, 0, 0), Height = 190 };
+        _itemsHeader.FontWeight = FontWeights.SemiBold;
+        _itemsHeader.Margin = new Thickness(0, 0, 0, 6);
+        DockPanel.SetDock(_itemsHeader, Dock.Top);
+        itemsPanel.Children.Add(_itemsHeader);
+        var itemBar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+        StyleButton(_addItemButton, "Crm.AddItem");
+        StyleButton(_removeItemButton, "Crm.RemoveItem");
+        _addItemButton.Click += (_, _) => AddItemRow();
+        _removeItemButton.Click += (_, _) => RemoveItemRow();
+        itemBar.Children.Add(_addItemButton);
+        itemBar.Children.Add(_removeItemButton);
+        DockPanel.SetDock(itemBar, Dock.Bottom);
+        itemsPanel.Children.Add(itemBar);
+        ConfigureGrid(_itemsGrid);
+        _itemsGrid.IsReadOnly = false;
+        _itemsGrid.CanUserAddRows = false;
+        _itemsGrid.CanUserDeleteRows = false;
+        _itemsGrid.Columns.Add(EditCol("Crm.Col.MaterialCode", nameof(CrmOpportunityItem.MaterialCode), 80));
+        _itemsGrid.Columns.Add(EditCol("Crm.Col.Description", nameof(CrmOpportunityItem.Description), 170));
+        _itemsGrid.Columns.Add(EditCol("Crm.Col.Qty", nameof(CrmOpportunityItem.Qty), 60));
+        _itemsGrid.Columns.Add(EditCol("Crm.Col.Unit", nameof(CrmOpportunityItem.Unit), 60));
+        _itemsGrid.Columns.Add(EditCol("Crm.Col.UnitPrice", nameof(CrmOpportunityItem.UnitPrice), 80));
+        _itemsGrid.Columns.Add(EditCol("Crm.Col.DiscountPct", nameof(CrmOpportunityItem.DiscountPct), 60));
+        _itemsGrid.Columns.Add(EditCol("Crm.Col.TaxRate", nameof(CrmOpportunityItem.TaxRate), 60));
+        var totalColumn = TextCol("Crm.Col.LineTotal", nameof(CrmOpportunityItem.LineTotal), 90);
+        totalColumn.IsReadOnly = true;
+        _itemsGrid.Columns.Add(totalColumn);
+        _itemsGrid.ItemsSource = _items;
+        itemsPanel.Children.Add(_itemsGrid);
+
+        var rightColumn = new DockPanel();
+        DockPanel.SetDock(itemsPanel, Dock.Bottom);
+        rightColumn.Children.Add(itemsPanel);
+        rightColumn.Children.Add(formScroll);
+        Grid.SetColumn(rightColumn, 1);
+        Grid.SetRow(rightColumn, 0);
+        content.Children.Add(rightColumn);
 
         var historyPanel = new DockPanel { Margin = new Thickness(0, 0, 12, 0) };
         _historyHeader.FontWeight = FontWeights.SemiBold;
@@ -259,11 +307,12 @@ public sealed class CrmOppWin : BaseWin, IWindowMode
         _oppsHeader.Text = T("Crm.OpportunitiesTitle");
         _historyHeader.Text = T("Crm.StageHistory");
         _documentsHeader.Text = T("Crm.Documents");
+        _itemsHeader.Text = T("Crm.Items");
         foreach (var (label, key) in _labels)
             label.Text = T(key);
         foreach (var (column, key) in _headers)
             column.Header = T(key);
-        foreach (var b in new[] { _newButton, _saveButton, _moveButton, _quotationButton, _deleteButton, _refreshButton, _closeButton, _linkButton, _openDocButton })
+        foreach (var b in new[] { _newButton, _saveButton, _moveButton, _quotationButton, _deleteButton, _refreshButton, _closeButton, _linkButton, _openDocButton, _addItemButton, _removeItemButton })
             if (b.Tag is string key)
                 b.Content = T(key);
     }
@@ -326,6 +375,9 @@ public sealed class CrmOppWin : BaseWin, IWindowMode
         _probability.Text = opp.Probability.ToString("0.##", CultureInfo.InvariantCulture);
         _lostReason.SelectedItem = (_lostReason.ItemsSource as IReadOnlyList<CrmLostReason>)?.FirstOrDefault(r => r.Id == opp.LostReasonId);
         _lostNotes.Text = opp.LostNotes ?? string.Empty;
+        _items.Clear();
+        foreach (var item in opp.Items)
+            _items.Add(item);
         await RefreshDetailAsync(opp.Id);
     }
 
@@ -362,8 +414,42 @@ public sealed class CrmOppWin : BaseWin, IWindowMode
         _probability.Text = "0";
         _lostReason.SelectedItem = null;
         _lostNotes.Text = string.Empty;
+        _validTill.SelectedDate = null;
+        _items.Clear();
         _historyGrid.ItemsSource = null;
         _documentsGrid.ItemsSource = null;
+    }
+
+    private void AddItemRow()
+    {
+        var item = new CrmOpportunityItem
+        {
+            OppId = _selectedId ?? Guid.Empty,
+            LineNo = _items.Count + 1,
+            Qty = 1m
+        };
+        _items.Add(item);
+        _itemsGrid.SelectedItem = item;
+        _itemsGrid.CurrentCell = new DataGridCellInfo(item, _itemsGrid.Columns[1]);
+        _itemsGrid.BeginEdit();
+    }
+
+    private void RemoveItemRow()
+    {
+        if (_itemsGrid.SelectedItem is CrmOpportunityItem item)
+            _items.Remove(item);
+    }
+
+    /// <summary>Commits any in-progress grid edit and returns the
+    /// editor's items renumbered in display order.</summary>
+    private List<CrmOpportunityItem> CollectItems()
+    {
+        _itemsGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        _itemsGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        var result = _items.ToList();
+        for (var i = 0; i < result.Count; i++)
+            result[i].LineNo = i + 1;
+        return result;
     }
 
     private async Task SaveAsync()
@@ -385,6 +471,9 @@ public sealed class CrmOppWin : BaseWin, IWindowMode
             opp.Source = NullIfBlank(_source.Text);
             opp.Campaign = NullIfBlank(_campaign.Text);
             opp.AssignedRepCode = NullIfBlank(_rep.Text);
+            opp.Items = CollectItems();
+            if (opp.Items.Count > 0)
+                opp.ExpectedAmount = opp.Items.Sum(i => i.LineTotal);
             if (existing is null)
             {
                 opp.StageId = (_stage.SelectedItem as CrmStage)?.Id;
@@ -434,7 +523,16 @@ public sealed class CrmOppWin : BaseWin, IWindowMode
                 throw new InvalidOperationException(T("Crm.SelectOpportunity"));
             if (!AppHost.Permissions.Has(PermCat.Crm.OppEdit))
                 throw new InvalidOperationException(T("Crm.PermissionDenied"));
-            var result = await _service.CreateQuotationAsync(CurrentCompanyCode, id, CurrentUserId);
+            // Pass the editor's items so the quotation is built from
+            // real lines (the service/repository fall back to the
+            // stored items, then to the title line, when empty).
+            var items = CollectItems();
+            var lines = items.Count > 0
+                ? items.Select(i => new CrmQuotationLine(i.MaterialId, i.MaterialCode, i.Description,
+                    i.Unit, i.Qty, i.UnitPrice, i.DiscountPct, i.TaxRate)).ToList()
+                : null;
+            var validTill = _validTill.SelectedDate is DateTime till ? DateOnly.FromDateTime(till) : (DateOnly?)null;
+            var result = await _service.CreateQuotationAsync(CurrentCompanyCode, id, CurrentUserId, lines, validTill);
             _statusBar.Text = Tf("Crm.QuotationCreated", result.DocNo);
             await RefreshDetailAsync(id);
             var win = new InvoiceWin(result.DocId, InvDocKind.Quotation) { Owner = this };
@@ -530,6 +628,17 @@ public sealed class CrmOppWin : BaseWin, IWindowMode
         var column = new DataGridTextColumn
         {
             Binding = new Binding(path),
+            Width = new DataGridLength(width)
+        };
+        _headers.Add((column, key));
+        return column;
+    }
+
+    private DataGridTextColumn EditCol(string key, string path, double width)
+    {
+        var column = new DataGridTextColumn
+        {
+            Binding = new Binding(path) { Mode = BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.LostFocus },
             Width = new DataGridLength(width)
         };
         _headers.Add((column, key));

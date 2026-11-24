@@ -792,10 +792,9 @@
     "PleaseWait": "Please wait...",
     "RequiredField": "This field is required",
     "SaveSuccess": "Saved successfully",
- 
     "PurchaseRequisitions": "Purchase requisitions",
     "LandedCosts": "Landed costs"
-   },
+  },
   "Notifications": {
     "BackupCreated": "Backup created successfully.",
     "ChangesSaved": "Changes saved successfully.",
@@ -1145,11 +1144,10 @@
       "CreditBase": "Credit (Base)",
       "GrniGlBalance": "GRNI GL Balance (Base)",
       "GrniDifference": "GRNI Difference (Base)",
-   
       "AgeBand": "Aging band",
       "GrniGlBalanceCompany": "GRNI GL balance (company-wide, base)",
       "GrniDifferenceCompany": "GRNI difference (company-wide, base)"
-     },
+    },
     "Filter": {
       "All": "All",
       "DateFrom": "From",
@@ -3336,8 +3334,22 @@
       "Subject": "Subject",
       "ActivityType": "Type",
       "DueAt": "Due",
-      "AssignedTo": "Assigned To"
-    }
+      "AssignedTo": "Assigned To",
+      "MaterialCode": "Code",
+      "Description": "Description",
+      "Qty": "Qty",
+      "Unit": "Unit",
+      "UnitPrice": "Price",
+      "DiscountPct": "Disc %",
+      "TaxRate": "Tax %",
+      "LineTotal": "Line Total"
+    },
+    "Items": "Opportunity Items",
+    "AddItem": "Add Item",
+    "RemoveItem": "Remove Item",
+    "ValidTill": "Valid Till",
+    "LinkExistingTitle": "Link Existing Party",
+    "LinkExistingParty": "A matching record already exists: {0}. Link this lead to the existing party instead of creating a new one?"
   },
   "HR": {
     "Title": "Human Resources",
@@ -3901,8 +3913,7 @@
     "PermissionDenied": "You do not have permission to use this function.",
     "InvalidInput": "Check the entered values.",
     "NoReceipt": "No posted goods receipt was found with that number.",
-    "NoVoucher": "Enter a valid landed-cost voucher ID."
-  ,
+    "NoVoucher": "Enter a valid landed-cost voucher ID.",
     "Search": "Search vouchers",
     "Refresh": "Refresh history",
     "LoadSelected": "Load selected",
