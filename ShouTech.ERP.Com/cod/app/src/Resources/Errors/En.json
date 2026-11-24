@@ -614,5 +614,77 @@
     "name": "PosSessionlessNotAllowed",
     "message": "Session-less selling is enabled but this user may not bypass sessions.",
     "hint": "Ask an administrator for the POS.SESSION.BYPASS permission, or open a session."
+  },
+  "CRM-9007": {
+    "code": "CRM-9007",
+    "name": "CrmDuplicateLeadOrParty",
+    "message": "A lead or customer with the same email or phone already exists: '{0}'.",
+    "hint": "Link the existing record instead of creating a duplicate."
+  },
+  "CRM-9008": {
+    "code": "CRM-9008",
+    "name": "CrmOpportunityItemInvalid",
+    "message": "Opportunity item '{0}' must have a quantity greater than zero and a non-negative price.",
+    "hint": "Correct the item quantity and price, then save again."
+  },
+  "SAL-7001": {
+    "code": "SAL-7001",
+    "name": "ChainSourceNotPosted",
+    "message": "The source document '{0}' must be posted before it can be converted.",
+    "hint": "Post the source document, then convert it."
+  },
+  "SAL-7002": {
+    "code": "SAL-7002",
+    "name": "ChainQuantityExceedsRemaining",
+    "message": "The requested quantity for '{0}' exceeds the remaining quantity on the source document.",
+    "hint": "Reduce the quantity to the remaining amount shown on the source document."
+  },
+  "SAL-7003": {
+    "code": "SAL-7003",
+    "name": "ChainSourceFullyFulfilled",
+    "message": "The source document '{0}' is already fully fulfilled.",
+    "hint": "Choose another source document, or close this one."
+  },
+  "SAL-7004": {
+    "code": "SAL-7004",
+    "name": "ChainTransitionNotAllowed",
+    "message": "Documents cannot be converted from '{0}' to '{1}'.",
+    "hint": "Follow the chain: quotation to order, order to delivery, delivery to invoice."
+  },
+  "SAL-7005": {
+    "code": "SAL-7005",
+    "name": "ChainReversalBlockedDownstream",
+    "message": "Document '{0}' cannot be reversed while posted downstream documents are linked to it.",
+    "hint": "Reverse or cancel the downstream documents first."
+  },
+  "SAL-7006": {
+    "code": "SAL-7006",
+    "name": "ChainReversalBlockedPayments",
+    "message": "Document '{0}' cannot be reversed while payments are allocated to it.",
+    "hint": "Unallocate the payments first, then reverse the document."
+  },
+  "SAL-7007": {
+    "code": "SAL-7007",
+    "name": "ChainDocumentNotReversible",
+    "message": "Document '{0}' cannot be reversed in its current state.",
+    "hint": "Only a posted delivery note or sales invoice in the document chain can be reversed."
+  },
+  "SAL-7008": {
+    "code": "SAL-7008",
+    "name": "QuotationExpired",
+    "message": "Quotation '{0}' expired on {1} and can no longer be converted.",
+    "hint": "Create a new quotation, or extend the validity of this one before it expires."
+  },
+  "SAL-7009": {
+    "code": "SAL-7009",
+    "name": "DeliveryCostAllocationFailed",
+    "message": "The delivery cost for document '{0}' could not be allocated to this invoice.",
+    "hint": "Check that the delivery is posted and its stock movements carry cost, then post again."
+  },
+  "SAL-7010": {
+    "code": "SAL-7010",
+    "name": "AllocationExceedsOpenAmount",
+    "message": "The allocation exceeds the open amount of document '{0}'.",
+    "hint": "Reduce the allocation to the open amount shown for the document."
   }
 }

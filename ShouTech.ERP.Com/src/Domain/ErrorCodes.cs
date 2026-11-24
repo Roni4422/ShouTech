@@ -134,6 +134,10 @@ public static class ErrorCodes
     public const string CrmQuotationPartyMissing = "CRM-9004";
     public const string CrmActivityTargetInvalid = "CRM-9005";
     public const string CrmLostReasonRequired = "CRM-9006";
+    // Sales-cycle upgrade (feat/sales-cycle-erpnext): duplicate detection
+    // and opportunity-item validation.
+    public const string CrmDuplicateLeadOrParty = "CRM-9007";
+    public const string CrmOpportunityItemInvalid = "CRM-9008";
 
     // ---- MFG 1001-1999 (manufacturing build-out, migration 058) --------
     // The manufacturing module takes its own prefix block. Codes are
@@ -172,4 +176,18 @@ public static class ErrorCodes
     public const string PosHeldBillNotFound = "POS-1008";
     public const string PosHeldBillStateInvalid = "POS-1009";
     public const string PosSessionlessNotAllowed = "POS-1010";
+
+    // ---- SAL 7001-7999 (sales cycle upgrade, feat/sales-cycle-erpnext) --
+    // Chain conversion / progress / reversal violations for the
+    // QUO -> SO -> DLV -> SAL document chain and payment allocation.
+    public const string ChainSourceNotPosted = "SAL-7001";
+    public const string ChainQuantityExceedsRemaining = "SAL-7002";
+    public const string ChainSourceFullyFulfilled = "SAL-7003";
+    public const string ChainTransitionNotAllowed = "SAL-7004";
+    public const string ChainReversalBlockedDownstream = "SAL-7005";
+    public const string ChainReversalBlockedPayments = "SAL-7006";
+    public const string ChainDocumentNotReversible = "SAL-7007";
+    public const string QuotationExpired = "SAL-7008";
+    public const string DeliveryCostAllocationFailed = "SAL-7009";
+    public const string AllocationExceedsOpenAmount = "SAL-7010";
 }

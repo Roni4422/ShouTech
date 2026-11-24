@@ -614,5 +614,77 @@
     "name": "PosSessionlessNotAllowed",
     "message": "Oturumsuz satış etkin ancak bu kullanıcının atlama yetkisi yok.",
     "hint": "Yöneticiden POS.SESSION.BYPASS yetkisi isteyin veya oturum açın."
+  },
+  "CRM-9007": {
+    "code": "CRM-9007",
+    "name": "CrmDuplicateLeadOrParty",
+    "message": "Aynı e-posta veya telefona sahip bir aday veya müşteri zaten var: '{0}'.",
+    "hint": "Yinelenen kayıt oluşturmak yerine mevcut kaydı bağlayın."
+  },
+  "CRM-9008": {
+    "code": "CRM-9008",
+    "name": "CrmOpportunityItemInvalid",
+    "message": "'{0}' fırsat kalemi sıfırdan büyük bir miktara ve negatif olmayan bir fiyata sahip olmalıdır.",
+    "hint": "Kalem miktarını ve fiyatını düzeltip tekrar kaydedin."
+  },
+  "SAL-7001": {
+    "code": "SAL-7001",
+    "name": "ChainSourceNotPosted",
+    "message": "Kaynak belge '{0}' dönüştürülmeden önce onaylanmalıdır.",
+    "hint": "Kaynak belgeyi onaylayın, sonra dönüştürün."
+  },
+  "SAL-7002": {
+    "code": "SAL-7002",
+    "name": "ChainQuantityExceedsRemaining",
+    "message": "'{0}' için istenen miktar, kaynak belgedeki kalan miktarı aşıyor.",
+    "hint": "Miktarı kaynak belgede gösterilen kalan tutara düşürün."
+  },
+  "SAL-7003": {
+    "code": "SAL-7003",
+    "name": "ChainSourceFullyFulfilled",
+    "message": "Kaynak belge '{0}' zaten tamamen karşılanmış.",
+    "hint": "Başka bir kaynak belge seçin veya bunu kapatın."
+  },
+  "SAL-7004": {
+    "code": "SAL-7004",
+    "name": "ChainTransitionNotAllowed",
+    "message": "Belgeler '{0}' türünden '{1}' türüne dönüştürülemez.",
+    "hint": "Zinciri izleyin: teklif siparişe, sipariş teslimata, teslimat faturaya."
+  },
+  "SAL-7005": {
+    "code": "SAL-7005",
+    "name": "ChainReversalBlockedDownstream",
+    "message": "'{0}' belgesi, ona bağlı onaylanmış sonraki belgeler varken ters çevrilemez.",
+    "hint": "Önce sonraki belgeleri ters çevirin veya iptal edin."
+  },
+  "SAL-7006": {
+    "code": "SAL-7006",
+    "name": "ChainReversalBlockedPayments",
+    "message": "'{0}' belgesi, ona tahsis edilmiş ödemeler varken ters çevrilemez.",
+    "hint": "Önce ödemelerin tahsisini kaldırın, sonra belgeyi ters çevirin."
+  },
+  "SAL-7007": {
+    "code": "SAL-7007",
+    "name": "ChainDocumentNotReversible",
+    "message": "'{0}' belgesi mevcut durumunda ters çevrilemez.",
+    "hint": "Yalnızca belge zincirindeki onaylanmış bir teslimat veya satış faturası ters çevrilebilir."
+  },
+  "SAL-7008": {
+    "code": "SAL-7008",
+    "name": "QuotationExpired",
+    "message": "'{0}' teklifi {1} tarihinde sona erdi ve artık dönüştürülemez.",
+    "hint": "Yeni bir teklif oluşturun veya bunun geçerliliğini sona ermeden uzatın."
+  },
+  "SAL-7009": {
+    "code": "SAL-7009",
+    "name": "DeliveryCostAllocationFailed",
+    "message": "'{0}' belgesinin teslimat maliyeti bu faturaya tahsis edilemedi.",
+    "hint": "Teslimatın onaylandığını ve stok hareketlerinin maliyet taşıdığını kontrol edip tekrar onaylayın."
+  },
+  "SAL-7010": {
+    "code": "SAL-7010",
+    "name": "AllocationExceedsOpenAmount",
+    "message": "Tahsis, '{0}' belgesinin açık tutarını aşıyor.",
+    "hint": "Tahsisi belgede gösterilen açık tutara düşürün."
   }
 }
