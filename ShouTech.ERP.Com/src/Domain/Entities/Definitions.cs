@@ -392,9 +392,12 @@ public static class DeliveryStatuses
     public const string Assigned = "Assigned";
     public const string Delivered = "Delivered";
     public const string Cancelled = "Cancelled";
-    public static readonly IReadOnlyList<string> All = new[] { Pending, Assigned, Delivered, Cancelled };
+    public const string Returned = "Returned";
+    public static readonly IReadOnlyList<string> All = new[] { Pending, Assigned, Delivered, Cancelled, Returned };
 
-    /// <summary>Allowed forward transitions (status flow enforced in the service).</summary>
+    /// <summary>Allowed forward transitions (status flow enforced in the service).
+    /// Returned (sales cycle W4): a dispatched (Assigned) or completed
+    /// (Delivered) run whose goods came back; terminal like Cancelled.</summary>
     public static bool CanTransition(string from, string to) => (from, to) switch
     {
         (Pending, Assigned) => true,
@@ -402,6 +405,8 @@ public static class DeliveryStatuses
         (Assigned, Delivered) => true,
         (Assigned, Cancelled) => true,
         (Assigned, Pending) => true,
+        (Assigned, Returned) => true,
+        (Delivered, Returned) => true,
         _ => false
     };
 }
@@ -418,6 +423,21 @@ public sealed class DeliveryRequest
     public string Status { get; set; } = DeliveryStatuses.Pending;
     public decimal Amount { get; set; }
     public string? Notes { get; set; }
+
+    // Sales cycle W4 (migration 096): traceability to the shipped sales
+    // document, the vehicle used, and proof of delivery.
+    /// <summary>sales_documents.doc_id of the shipped document, when linked.</summary>
+    public long? SalesDocId { get; set; }
+    /// <summary>Kind of the shipped sales document ('DLV').</summary>
+    public string? SalesDocKind { get; set; }
+    /// <summary>Vehicle that carried the delivery; defaults from the assigned driver's card, editable.</summary>
+    public string? VehicleNo { get; set; }
+    /// <summary>Proof-of-delivery timestamp (ISO text), stamped when the request is delivered.</summary>
+    public string? DeliveredAt { get; set; }
+    /// <summary>Name of the person who received the goods (proof of delivery).</summary>
+    public string? ReceivedBy { get; set; }
+    /// <summary>Optional receiver signature image (PNG bytes).</summary>
+    public byte[]? SignatureImage { get; set; }
 }
 
 public sealed class DriverSettlement

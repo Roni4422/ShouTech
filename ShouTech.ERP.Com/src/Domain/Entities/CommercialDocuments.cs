@@ -107,7 +107,8 @@ public sealed record CommercialDocumentSnapshot(
     decimal PerBilled = 0m,
     string? CancelReason = null,
     string? CancelledBy = null,
-    string? CancelledAt = null)
+    string? CancelledAt = null,
+    decimal DeliveryCost = 0m)
 {
     /// <summary>Derived chain status (sales orders); the raw status for every other document.</summary>
     public string DerivedStatus => SalesChainDerivedStatus.Derive(DocKind, Status, PerDelivered, PerBilled);
@@ -184,7 +185,8 @@ public sealed record CommercialDocumentDraft(
     string? SalesRepName = null,
     string? WarehouseName = null,
     decimal DiscountAmount = 0m,
-    decimal ExtraAmount = 0m);
+    decimal ExtraAmount = 0m,
+    decimal DeliveryCost = 0m);
 
 /// <summary>Header-only projection used by document search / order tracking lists.</summary>
 public sealed record CommercialDocumentSummary(
@@ -226,6 +228,42 @@ public sealed record OrderProgress(
     /// <summary>Derived chain status (sales orders); the raw status for every other document.</summary>
     public string DerivedStatus => SalesChainDerivedStatus.Derive(DocKind, Status, PerFulfilled, PerBilled);
 }
+
+/// <summary>Statuses stored in sales_picking.status (sales cycle W4, spec §4).</summary>
+public static class SalesPickingStatus
+{
+    public const string Draft = "Draft";
+    public const string Confirmed = "Confirmed";
+    public const string Cancelled = "Cancelled";
+}
+
+/// <summary>One picked line of a sales picking: the order line identity
+/// (material + source line number), what was ordered, and what the
+/// warehouse actually picked.</summary>
+public sealed record SalesPickingLineSnapshot(
+    long PickingLineId,
+    int SourceLineNo,
+    long? MaterialId,
+    string? MaterialCode,
+    string Description,
+    string? Unit,
+    decimal OrderedQty,
+    decimal PickedQty,
+    long? WarehouseId);
+
+/// <summary>A warehouse picking staged from a posted sales order. A
+/// confirmed picking feeds delivery-note creation with its picked
+/// quantities; it posts nothing by itself.</summary>
+public sealed record SalesPickingSnapshot(
+    long PickingId,
+    Guid CompanyId,
+    long SalesOrderId,
+    string Status,
+    string? CreatedBy,
+    string? CreatedAt,
+    string? ConfirmedBy,
+    string? ConfirmedAt,
+    IReadOnlyList<SalesPickingLineSnapshot> Lines);
 
 /// <summary>One quoted item, normalized to the company's base currency for comparison.</summary>
 public sealed record SupplierQuotationLineOffer(

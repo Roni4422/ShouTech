@@ -62,6 +62,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         string? cancelReason;
         string? cancelledBy;
         string? cancelledAt;
+        decimal deliveryCost;
 
         await using (var header = connection.CreateCommand())
         {
@@ -70,7 +71,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                        currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total,
                        paid_amount, status, notes, party_code, branch_name, sales_rep_name, cost_center,
                        warehouse_name, delivery_date, valid_till, extra_amount, per_delivered, per_billed,
-                       cancel_reason, cancelled_by, cancelled_at
+                       cancel_reason, cancelled_by, cancelled_at, delivery_cost
                 FROM sales_documents
                 WHERE doc_id = @docId AND is_deleted = 0
                 """;
@@ -110,6 +111,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             cancelReason = reader.IsDBNull(27) ? null : reader.GetString(27);
             cancelledBy = reader.IsDBNull(28) ? null : reader.GetString(28);
             cancelledAt = reader.IsDBNull(29) ? null : Convert.ToString(reader.GetValue(29), CultureInfo.InvariantCulture);
+            deliveryCost = Convert.ToDecimal(reader.GetValue(30), CultureInfo.InvariantCulture);
         }
 
         var lines = new List<CommercialLineSnapshot>();
@@ -149,7 +151,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             currencyCode, exchangeRate, subtotal, discountAmount, taxAmount, grandTotal,
             paidAmount, status, notes, lines.AsReadOnly(),
             partyCode, branchName, salesRepName, costCenter, warehouseName, deliveryDate, validTill,
-            extraAmount, perDelivered, perBilled, cancelReason, cancelledBy, cancelledAt);
+            extraAmount, perDelivered, perBilled, cancelReason, cancelledBy, cancelledAt, deliveryCost);
     }
 
     public async Task<long> CreateSalesDraftAsync(CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default)
@@ -334,6 +336,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
     {
         if (draft.DiscountAmount < 0m) throw new InvalidOperationException("Header discount cannot be negative.");
         if (draft.ExtraAmount < 0m) throw new InvalidOperationException("Header extra charges cannot be negative.");
+        if (draft.DeliveryCost < 0m) throw new InvalidOperationException("Delivery cost cannot be negative.");
         var docDateText = draft.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         decimal subtotal = 0m, taxAmount = 0m;
         var computed = new List<(decimal Subtotal, decimal Tax, decimal Total)>();
@@ -355,8 +358,8 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
 
         long docId;
         var insertHeader = CreateCommand(connection, transaction,
-            "INSERT INTO sales_documents (company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id, currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total, status, notes, created_by, party_code, delivery_date, valid_till, cost_center, branch_name, sales_rep_name, warehouse_name, extra_amount) " +
-            "VALUES (@company, @kind, @no, @date, @party, @partyName, @warehouse, @currency, @rate, @subtotal, @discount, @tax, @total, @status, @notes, @actor, @partyCode, @deliveryDate, @validTill, @costCenter, @branchName, @salesRepName, @warehouseName, @extra)" +
+            "INSERT INTO sales_documents (company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id, currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total, status, notes, created_by, party_code, delivery_date, valid_till, cost_center, branch_name, sales_rep_name, warehouse_name, extra_amount, delivery_cost) " +
+            "VALUES (@company, @kind, @no, @date, @party, @partyName, @warehouse, @currency, @rate, @subtotal, @discount, @tax, @total, @status, @notes, @actor, @partyCode, @deliveryDate, @validTill, @costCenter, @branchName, @salesRepName, @warehouseName, @extra, @deliveryCost)" +
             (_provider == "PostgreSQL" ? " RETURNING doc_id" : "; SELECT last_insert_rowid();"));
         Add(insertHeader, "@company", draft.CompanyId.ToString("D"));
         Add(insertHeader, "@kind", draft.DocKind.Trim());
@@ -375,6 +378,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         Add(insertHeader, "@subtotal", decimal.Round(subtotal, 2));
         Add(insertHeader, "@discount", draft.DiscountAmount);
         Add(insertHeader, "@extra", draft.ExtraAmount);
+        Add(insertHeader, "@deliveryCost", draft.DeliveryCost);
         Add(insertHeader, "@tax", decimal.Round(taxAmount, 2));
         Add(insertHeader, "@total", grandTotal);
         Add(insertHeader, "@status", CommercialDocumentStatus.Draft);

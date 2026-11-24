@@ -2440,7 +2440,8 @@ public static class RptQuery
                    l.line_no AS LineNo,
                    l.material_id AS MaterialId,
                    COALESCE(l.qty, 0) AS Qty,
-                   COALESCE(l.line_total, 0) AS LineTotal
+                   COALESCE(l.line_total, 0) AS LineTotal,
+                   COALESCE(d.delivery_cost, 0) AS DeliveryCost
             FROM sales_documents d
             INNER JOIN companies co
               ON co.company_code = $company
@@ -2489,6 +2490,41 @@ public static class RptQuery
             ("$company", Company),
             ("$sk", sourceKind),
             ("$tk", targetKind));
+    }
+
+    /// <summary>Delivery-desk requests of the current company in the
+    /// date range (sales cycle W4): one row per request with its driver,
+    /// status, request date, proof-of-delivery timestamp, and the linked
+    /// delivery note's recorded delivery cost. The exceptions window
+    /// aggregates these per driver into the Delivery Performance
+    /// section. delivery_requests.company_id carries the company CODE
+    /// (the definitions family's convention).</summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> DeliveryPerformanceAsync(
+        DateTime from, DateTime to, CancellationToken ct)
+    {
+        DocSchema.Ensure();
+        const string sql = """
+            SELECT COALESCE(NULLIF(r.driver_code, ''), '') AS DriverCode,
+                   COALESCE(r.status, '') AS Status,
+                   r.request_date AS RequestDate,
+                   r.delivered_at AS DeliveredAt,
+                   COALESCE(d.delivery_cost, 0) AS DeliveryCost
+            FROM delivery_requests r
+            LEFT JOIN companies co
+              ON co.company_code = $company
+            LEFT JOIN sales_documents d
+              ON d.doc_id = r.sales_doc_id
+             AND (CAST(co.company_id AS TEXT) = CAST(d.company_id AS TEXT)
+                  OR d.company_id = co.company_code)
+            WHERE r.company_id = $company
+              AND CAST(r.is_deleted AS TEXT) IN ('0', 'false')
+              AND r.request_date >= $from AND r.request_date <= $to
+            ORDER BY r.driver_code, r.request_date;
+            """;
+        return await QueryAsync(sql, ct,
+            ("$company", Company),
+            ("$from", FmtDate(from)),
+            ("$to", FmtDate(to)));
     }
 
     private static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> QueryAsync(

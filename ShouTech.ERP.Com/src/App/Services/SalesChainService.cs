@@ -49,8 +49,10 @@ public sealed class SalesChainService
         string userId,
         IReadOnlyDictionary<int, decimal>? quantityBySourceLine = null,
         long? warehouseId = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        decimal deliveryCost = 0m)
     {
+        if (deliveryCost < 0m) throw new InvalidOperationException("Delivery cost cannot be negative.");
         if (sourceDocId <= 0) throw new ArgumentException("Source document is required.", nameof(sourceDocId));
         if (string.IsNullOrWhiteSpace(docNo)) throw new ArgumentException("Document number is required.", nameof(docNo));
         if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
@@ -163,7 +165,10 @@ public sealed class SalesChainService
             source.SalesRepName,
             source.WarehouseName,
             discountAmount,
-            extraAmount);
+            extraAmount,
+            // Delivery cost (W4) is entered per delivery note, never
+            // carried from the source document.
+            DeliveryCost: targetKind == CommercialDocKinds.DeliveryNote ? deliveryCost : 0m);
 
         return await _repository.CreateSalesDraftWithLinkAsync(
             draft, source.DocKind, sourceDocId, userId, cancellationToken).ConfigureAwait(false);

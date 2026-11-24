@@ -30,6 +30,14 @@ namespace ShouTech.App.Views.Reports;
 /// over the whole company — no per-document repository loop.
 /// Access is gated on SALES.ORDER.VIEW in
 /// RptNav.OpenSalesChainExceptions, the key the sales order windows use.
+///
+/// Delivery Performance (sales cycle W4, spec §4): per driver (and
+/// unassigned) over the From/To request-date range — request /
+/// delivered / returned counts, on-time % (delivered_at date on or
+/// before the request date), average delivery days, and the linked
+/// delivery notes' recorded delivery cost. The From/To filters apply
+/// to this section only; the two exception sections keep their
+/// all-open-documents scope from B5.
 /// </summary>
 public sealed class SalExceptWin : RptBase
 {
@@ -50,6 +58,13 @@ public sealed class SalExceptWin : RptBase
             new() { Key = "UninvoicedValue", HeaderTextKey = "Reports.Col.UninvoicedValue", Type = RptColType.Money, Width = 125, Format = "N2" },
             new() { Key = "DeliveryDate", HeaderTextKey = "Reports.Col.DeliveryDate", Type = RptColType.Date, Width = 105 },
             new() { Key = "Overdue", HeaderTextKey = "Reports.Col.Overdue", Type = RptColType.Text, Width = 80 },
+            new() { Key = "Driver", HeaderTextKey = "Reports.Col.Driver", Type = RptColType.Text, Width = 130 },
+            new() { Key = "RequestsCount", HeaderTextKey = "Reports.Col.RequestsCount", Type = RptColType.WholeNumber, Width = 95 },
+            new() { Key = "DeliveredCount", HeaderTextKey = "Reports.Col.DeliveredCount", Type = RptColType.WholeNumber, Width = 95 },
+            new() { Key = "ReturnedCount", HeaderTextKey = "Reports.Col.ReturnedCount", Type = RptColType.WholeNumber, Width = 95 },
+            new() { Key = "OnTimePct", HeaderTextKey = "Reports.Col.OnTimePct", Type = RptColType.Percent, Width = 90 },
+            new() { Key = "AvgDeliveryDays", HeaderTextKey = "Reports.Col.AvgDeliveryDays", Type = RptColType.FractionalNumber, Width = 110, Format = "N1" },
+            new() { Key = "DeliveryCost", HeaderTextKey = "Reports.Col.DeliveryCost", Type = RptColType.Money, Width = 110, Format = "N2" },
         },
         Filters = new RptFlt[]
         {
@@ -59,17 +74,43 @@ public sealed class SalExceptWin : RptBase
                 Choices = new[]
                 {
                     new KeyValuePair<string, string>("OrderedNotDelivered", "Reports.SectionOrderedNotDelivered"),
-                    new KeyValuePair<string, string>("DeliveredNotInvoiced", "Reports.SectionDeliveredNotInvoiced")
+                    new KeyValuePair<string, string>("DeliveredNotInvoiced", "Reports.SectionDeliveredNotInvoiced"),
+                    new KeyValuePair<string, string>("DeliveryPerformance", "Reports.SectionDeliveryPerformance")
                 },
                 DefaultValue = "OrderedNotDelivered"
             },
+            new() { Key = "From", LabelTextKey = "Reports.Filter.DateFrom", Kind = RptFltKind.DateFrom, DefaultValue = new DateTime(DateTime.Today.Year, 1, 1) },
+            new() { Key = "To", LabelTextKey = "Reports.Filter.DateTo", Kind = RptFltKind.DateTo, DefaultValue = DateTime.Today },
             new() { Key = "Search", LabelTextKey = "Reports.Filter.Search", Kind = RptFltKind.Text },
         }
     };
 
     protected override async Task<RptData> LoadDataAsync(RptFltValues filters, CancellationToken ct)
     {
-        var delivered = string.Equals(filters.GetString("Section"), "DeliveredNotInvoiced", StringComparison.Ordinal);
+        var section = filters.GetString("Section");
+        if (string.Equals(section, "DeliveryPerformance", StringComparison.Ordinal))
+        {
+            var perfRows = await LoadDeliveryPerformanceAsync(filters, ct);
+            var perfSearch = filters.GetString("Search")?.Trim();
+            if (!string.IsNullOrWhiteSpace(perfSearch))
+                perfRows = perfRows.Where(row =>
+                    Convert.ToString(row.GetValueOrDefault("Driver"), CultureInfo.InvariantCulture)?.Contains(perfSearch, StringComparison.OrdinalIgnoreCase) == true).ToList();
+            return new RptData
+            {
+                Columns = BuildDefinition().Columns,
+                Rows = perfRows,
+                Totals = new Dictionary<string, object?>
+                {
+                    ["Driver"] = T("Reports.Totals"),
+                    ["RequestsCount"] = perfRows.Sum(x => RptWinUtil.Dec(x.GetValueOrDefault("RequestsCount"))),
+                    ["DeliveredCount"] = perfRows.Sum(x => RptWinUtil.Dec(x.GetValueOrDefault("DeliveredCount"))),
+                    ["ReturnedCount"] = perfRows.Sum(x => RptWinUtil.Dec(x.GetValueOrDefault("ReturnedCount"))),
+                    ["DeliveryCost"] = perfRows.Sum(x => RptWinUtil.Dec(x.GetValueOrDefault("DeliveryCost"))),
+                }
+            };
+        }
+
+        var delivered = string.Equals(section, "DeliveredNotInvoiced", StringComparison.Ordinal);
         var rows = delivered
             ? await LoadDeliveredNotInvoicedAsync(ct)
             : await LoadOrderedNotDeliveredAsync(ct);
@@ -92,8 +133,48 @@ public sealed class SalExceptWin : RptBase
                 ["InvoicedQty"] = rows.Sum(x => RptWinUtil.Dec(x.GetValueOrDefault("InvoicedQty"))),
                 ["RemainingQty"] = rows.Sum(x => RptWinUtil.Dec(x.GetValueOrDefault("RemainingQty"))),
                 ["UninvoicedValue"] = rows.Sum(x => RptWinUtil.Dec(x.GetValueOrDefault("UninvoicedValue"))),
+                ["DeliveryCost"] = rows.Sum(x => RptWinUtil.Dec(x.GetValueOrDefault("DeliveryCost"))),
             }
         };
+    }
+
+    private static async Task<List<IReadOnlyDictionary<string, object?>>> LoadDeliveryPerformanceAsync(RptFltValues filters, CancellationToken ct)
+    {
+        var from = filters.GetDateOr("From", new DateTime(DateTime.Today.Year, 1, 1));
+        var to = filters.GetDateOr("To", DateTime.Today);
+        var requests = await RptQuery.DeliveryPerformanceAsync(from, to, ct);
+        var rows = new List<IReadOnlyDictionary<string, object?>>();
+
+        foreach (var group in requests.GroupBy(r => Text(r, "DriverCode")))
+        {
+            var deliveredRows = group.Where(r => Text(r, "Status") == "Delivered").ToList();
+            var onTime = 0;
+            var totalDays = 0m;
+            var timedDeliveries = 0;
+            foreach (var request in deliveredRows)
+            {
+                var requestDate = RptWinUtil.ParseDate(request.GetValueOrDefault("RequestDate"))?.Date;
+                var deliveredAt = RptWinUtil.ParseDate(request.GetValueOrDefault("DeliveredAt"))?.Date;
+                if (requestDate is null || deliveredAt is null)
+                    continue;
+                if (deliveredAt.Value <= requestDate.Value)
+                    onTime++;
+                totalDays += (decimal)(deliveredAt.Value - requestDate.Value).TotalDays;
+                timedDeliveries++;
+            }
+            rows.Add(new Dictionary<string, object?>
+            {
+                ["Section"] = T("Reports.SectionDeliveryPerformance"),
+                ["Driver"] = group.Key.Length == 0 ? T("Reports.Unassigned") : group.Key,
+                ["RequestsCount"] = group.Count(),
+                ["DeliveredCount"] = deliveredRows.Count,
+                ["ReturnedCount"] = group.Count(r => Text(r, "Status") == "Returned"),
+                ["OnTimePct"] = timedDeliveries == 0 ? null : (object)((decimal)onTime / timedDeliveries),
+                ["AvgDeliveryDays"] = timedDeliveries == 0 ? null : (object)(totalDays / timedDeliveries),
+                ["DeliveryCost"] = group.Sum(r => RptWinUtil.Dec(r.GetValueOrDefault("DeliveryCost"))),
+            });
+        }
+        return rows.OrderBy(r => Text(r, "Driver")).ToList();
     }
 
     private static async Task<List<IReadOnlyDictionary<string, object?>>> LoadOrderedNotDeliveredAsync(CancellationToken ct)
@@ -170,6 +251,7 @@ public sealed class SalExceptWin : RptBase
                 ["InvoicedQty"] = invoicedQty,
                 ["RemainingQty"] = remaining,
                 ["UninvoicedValue"] = uninvoicedValue,
+                ["DeliveryCost"] = RptWinUtil.Dec(first.GetValueOrDefault("DeliveryCost")),
             });
         }
         return rows;

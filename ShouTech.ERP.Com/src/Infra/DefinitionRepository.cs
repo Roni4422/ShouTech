@@ -749,7 +749,7 @@ public sealed class DefinitionRepository : IDefinitionRepository
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var command = CreateCommand(connection, null,
-            $"SELECT id, doc_no, request_date, party_code, address, area_code, driver_code, status, amount, notes FROM delivery_requests WHERE company_id = @company AND {NotDeleted} ORDER BY doc_no DESC LIMIT {ListLimit}");
+            $"SELECT id, doc_no, request_date, party_code, address, area_code, driver_code, status, amount, notes, sales_doc_id, sales_doc_kind, vehicle_no, delivered_at, received_by, signature_image FROM delivery_requests WHERE company_id = @company AND {NotDeleted} ORDER BY doc_no DESC LIMIT {ListLimit}");
         Add(command, "@company", companyId.Trim());
         var result = new List<DeliveryRequest>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -767,6 +767,18 @@ public sealed class DefinitionRepository : IDefinitionRepository
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            // Vehicle (W4): default from the assigned driver's card when
+            // the desk did not enter one explicitly.
+            if (string.IsNullOrWhiteSpace(request.VehicleNo) && !string.IsNullOrWhiteSpace(request.DriverCode))
+            {
+                await using var vehicle = CreateCommand(connection, transaction,
+                    $"SELECT vehicle_no FROM drivers WHERE company_id = @company AND code = @driver AND {NotDeleted}");
+                Add(vehicle, "@company", companyId.Trim());
+                Add(vehicle, "@driver", request.DriverCode.Trim());
+                var value = await vehicle.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                if (value is not null and not DBNull)
+                    request.VehicleNo = Convert.ToString(value, CultureInfo.InvariantCulture);
+            }
             var isNew = string.IsNullOrWhiteSpace(request.Id);
             if (isNew)
             {
@@ -788,15 +800,15 @@ public sealed class DefinitionRepository : IDefinitionRepository
                         throw new InvalidOperationException($"Delivery request number {request.DocNo} already exists for this company.");
                 }
                 await using var insert = CreateCommand(connection, transaction,
-                    @"INSERT INTO delivery_requests (id, company_id, doc_no, request_date, party_code, address, area_code, driver_code, status, amount, notes, created_by)
-                      VALUES (@id, @company, @doc, @date, @party, @address, @area, @driver, @status, @amount, @notes, @actor)");
+                    @"INSERT INTO delivery_requests (id, company_id, doc_no, request_date, party_code, address, area_code, driver_code, status, amount, notes, sales_doc_id, sales_doc_kind, vehicle_no, delivered_at, received_by, signature_image, created_by)
+                      VALUES (@id, @company, @doc, @date, @party, @address, @area, @driver, @status, @amount, @notes, @salesDoc, @salesKind, @vehicle, @deliveredAt, @receivedBy, @signature, @actor)");
                 BindDelivery(insert, companyId, request, actor);
                 await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
             else
             {
                 await using var update = CreateCommand(connection, transaction,
-                    $@"UPDATE delivery_requests SET request_date = @date, party_code = @party, address = @address, area_code = @area, driver_code = @driver, amount = @amount, notes = @notes, updated_by = @actor, updated_at = {NowExpr}
+                    $@"UPDATE delivery_requests SET request_date = @date, party_code = @party, address = @address, area_code = @area, driver_code = @driver, amount = @amount, notes = @notes, sales_doc_id = @salesDoc, sales_doc_kind = @salesKind, vehicle_no = @vehicle, delivered_at = @deliveredAt, received_by = @receivedBy, signature_image = @signature, updated_by = @actor, updated_at = {NowExpr}
                        WHERE company_id = @company AND id = @id AND {NotDeleted}");
                 BindDelivery(update, companyId, request, actor);
                 if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
@@ -812,7 +824,7 @@ public sealed class DefinitionRepository : IDefinitionRepository
         }
     }
 
-    public async Task SetDeliveryStatusAsync(string companyId, string requestId, string newStatus, string? driverCode, string actor, CancellationToken cancellationToken = default)
+    public async Task SetDeliveryStatusAsync(string companyId, string requestId, string newStatus, string? driverCode, string actor, CancellationToken cancellationToken = default, string? receivedBy = null, byte[]? signatureImage = null)
     {
         RequireCompany(companyId);
         await using var connection = CreateConnection();
@@ -836,10 +848,28 @@ public sealed class DefinitionRepository : IDefinitionRepository
             if (newStatus == DeliveryStatuses.Assigned && string.IsNullOrWhiteSpace(driverCode))
                 throw new InvalidOperationException("A driver is required to assign a delivery request.");
 
+            // Proof of delivery (W4): the Delivered transition stamps
+            // delivered_at automatically and stores the receiver name /
+            // signature when the caller captured them (the desk's POD
+            // flow requires the name — DefinitionService.DeliverWithProof).
+            // Assigning a driver defaults the vehicle from the driver's
+            // card when the request has none yet.
+            var podSet = newStatus == DeliveryStatuses.Delivered
+                ? ", delivered_at = @deliveredAt, received_by = COALESCE(@receivedBy, received_by), signature_image = COALESCE(@signature, signature_image)"
+                : string.Empty;
+            var vehicleSet = newStatus == DeliveryStatuses.Assigned
+                ? $", vehicle_no = COALESCE(NULLIF(vehicle_no, ''), (SELECT vehicle_no FROM drivers WHERE company_id = @company AND code = @driver AND {NotDeleted}))"
+                : string.Empty;
             await using var update = CreateCommand(connection, transaction,
-                $"UPDATE delivery_requests SET status = @status, driver_code = COALESCE(@driver, driver_code), updated_by = @actor, updated_at = {NowExpr} WHERE company_id = @company AND id = @id AND {NotDeleted}");
+                $"UPDATE delivery_requests SET status = @status, driver_code = COALESCE(@driver, driver_code){podSet}{vehicleSet}, updated_by = @actor, updated_at = {NowExpr} WHERE company_id = @company AND id = @id AND {NotDeleted}");
             Add(update, "@status", newStatus);
             Add(update, "@driver", (object?)NullIfBlank(driverCode) ?? DBNull.Value);
+            if (newStatus == DeliveryStatuses.Delivered)
+            {
+                Add(update, "@deliveredAt", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+                Add(update, "@receivedBy", (object?)NullIfBlank(receivedBy) ?? DBNull.Value);
+                Add(update, "@signature", (object?)signatureImage ?? DBNull.Value);
+            }
             Add(update, "@actor", actor);
             Add(update, "@company", companyId.Trim());
             Add(update, "@id", requestId);
@@ -930,6 +960,12 @@ public sealed class DefinitionRepository : IDefinitionRepository
         Add(command, "@status", request.Status);
         Add(command, "@amount", request.Amount);
         Add(command, "@notes", (object?)NullIfBlank(request.Notes) ?? DBNull.Value);
+        Add(command, "@salesDoc", (object?)request.SalesDocId ?? DBNull.Value);
+        Add(command, "@salesKind", (object?)NullIfBlank(request.SalesDocKind) ?? DBNull.Value);
+        Add(command, "@vehicle", (object?)NullIfBlank(request.VehicleNo) ?? DBNull.Value);
+        Add(command, "@deliveredAt", (object?)NullIfBlank(request.DeliveredAt) ?? DBNull.Value);
+        Add(command, "@receivedBy", (object?)NullIfBlank(request.ReceivedBy) ?? DBNull.Value);
+        Add(command, "@signature", (object?)request.SignatureImage ?? DBNull.Value);
         Add(command, "@actor", actor);
     }
 
@@ -956,7 +992,13 @@ public sealed class DefinitionRepository : IDefinitionRepository
         DriverCode = ReadString(reader, 6),
         Status = ReadString(reader, 7) ?? DeliveryStatuses.Pending,
         Amount = ReadDecimal(reader, 8),
-        Notes = ReadString(reader, 9)
+        Notes = ReadString(reader, 9),
+        SalesDocId = reader.IsDBNull(10) ? null : ReadLong(reader, 10),
+        SalesDocKind = ReadString(reader, 11),
+        VehicleNo = ReadString(reader, 12),
+        DeliveredAt = ReadString(reader, 13),
+        ReceivedBy = ReadString(reader, 14),
+        SignatureImage = reader.IsDBNull(15) ? null : (byte[])reader.GetValue(15)
     };
 
     /// <summary>

@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Npgsql;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
 
@@ -85,17 +86,19 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         decimal extraAmount, perDelivered, perBilled;
         string? cancelReason, cancelledBy, cancelledAt;
         DateOnly? deliveryDate, validTill;
+        decimal deliveryCost;
 
         // per_delivered / per_billed exist only on sales_documents
-        // (migration 093); the purchase family reads constants so one
-        // projection serves both tables.
+        // (migration 093), delivery_cost likewise (migration 096); the
+        // purchase family reads constants so one projection serves both.
         var progressColumns = side == CommercialDocSide.Sales ? "per_delivered, per_billed" : "0, 0";
+        var deliveryCostColumn = side == CommercialDocSide.Sales ? "delivery_cost" : "0";
         await using (var header = CreateCommand(connection, transaction, $"""
             SELECT doc_id, company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id,
                    currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total,
                    paid_amount, status, notes, party_code, branch_name, sales_rep_name, cost_center,
                    warehouse_name, delivery_date, valid_till, extra_amount, {progressColumns},
-                   cancel_reason, cancelled_by, cancelled_at
+                   cancel_reason, cancelled_by, cancelled_at, {deliveryCostColumn}
             FROM {docs}
             WHERE is_deleted = 0
               AND (@docId IS NULL OR doc_id = @docId)
@@ -143,6 +146,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             cancelReason = reader.IsDBNull(27) ? null : reader.GetString(27);
             cancelledBy = reader.IsDBNull(28) ? null : reader.GetString(28);
             cancelledAt = reader.IsDBNull(29) ? null : Convert.ToString(reader.GetValue(29), CultureInfo.InvariantCulture);
+            deliveryCost = Convert.ToDecimal(reader.GetValue(30), CultureInfo.InvariantCulture);
         }
 
         var lineList = new List<CommercialLineSnapshot>();
@@ -181,7 +185,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             currencyCode, exchangeRate, subtotal, discountAmount, taxAmount, grandTotal,
             paidAmount, status, notes, lineList.AsReadOnly(),
             partyCode, branchName, salesRepName, costCenter, warehouseName, deliveryDate, validTill,
-            extraAmount, perDelivered, perBilled, cancelReason, cancelledBy, cancelledAt);
+            extraAmount, perDelivered, perBilled, cancelReason, cancelledBy, cancelledAt, deliveryCost);
     }
 
     // ----------------------------------------------------------------- write
@@ -325,12 +329,14 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             var computed = ComputeTotals(draft.Lines, out var subtotal, out var taxAmount, out _);
             var grandTotal = decimal.Round(subtotal - draft.DiscountAmount + taxAmount + draft.ExtraAmount, 2);
 
+            // delivery_cost exists only on sales_documents (migration 096).
+            var deliveryCostSet = side == CommercialDocSide.Sales ? "delivery_cost = @deliveryCost," : string.Empty;
             await using (var update = CreateCommand(connection, transaction, $"""
                 UPDATE {docs}
                 SET doc_date = @date, party_id = @party, party_name = @partyName, party_code = @partyCode,
                     warehouse_id = @warehouse, warehouse_name = @warehouseName, currency_code = @currency,
                     exchange_rate = @rate, subtotal = @subtotal, discount_amount = @discount,
-                    extra_amount = @extra, tax_amount = @tax, grand_total = @total,
+                    extra_amount = @extra, tax_amount = @tax, grand_total = @total, {deliveryCostSet}
                     notes = @notes, delivery_date = @deliveryDate, valid_till = @validTill,
                     cost_center = @costCenter, branch_name = @branchName, sales_rep_name = @salesRepName
                 WHERE doc_id = @doc AND status = @draft AND is_deleted = 0
@@ -338,6 +344,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             {
                 Add(update, "@discount", draft.DiscountAmount);
                 Add(update, "@extra", draft.ExtraAmount);
+                if (side == CommercialDocSide.Sales)
+                    Add(update, "@deliveryCost", draft.DeliveryCost);
                 Add(update, "@date", draft.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
                 Add(update, "@party", (object?)draft.PartyId ?? DBNull.Value);
                 Add(update, "@partyName", (object?)draft.PartyName ?? DBNull.Value);
@@ -2306,6 +2314,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         if (draft.Lines.Count == 0) throw new InvalidOperationException("A commercial document requires at least one line.");
         if (draft.DiscountAmount < 0m) throw new InvalidOperationException("Header discount cannot be negative.");
         if (draft.ExtraAmount < 0m) throw new InvalidOperationException("Header extra charges cannot be negative.");
+        if (draft.DeliveryCost < 0m) throw new InvalidOperationException("Delivery cost cannot be negative.");
     }
 
     private async Task PersistPurchaseMatchEvaluationAsync(
@@ -2517,11 +2526,16 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         // the header money; it is never silently zeroed.
         var grandTotal = decimal.Round(subtotal - draft.DiscountAmount + taxAmount + draft.ExtraAmount, 2);
         long docId;
+        // delivery_cost exists only on sales_documents (migration 096).
+        var deliveryCostColumn = side == CommercialDocSide.Sales ? ", delivery_cost" : string.Empty;
+        var deliveryCostValue = side == CommercialDocSide.Sales ? ", @deliveryCost" : string.Empty;
         await using (var insertHeader = CreateCommand(connection, transaction,
-            $"INSERT INTO {docs} (company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id, currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total, status, notes, created_by, party_code, delivery_date, valid_till, cost_center, branch_name, sales_rep_name, warehouse_name, posted_by, posted_at, extra_amount) " +
-            "VALUES (@company, @kind, @no, @date, @party, @partyName, @warehouse, @currency, @rate, @subtotal, @discount, @tax, @total, @status, @notes, @actor, @partyCode, @deliveryDate, @validTill, @costCenter, @branchName, @salesRepName, @warehouseName, @postedBy, @postedAt, @extra)" +
+            $"INSERT INTO {docs} (company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id, currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total, status, notes, created_by, party_code, delivery_date, valid_till, cost_center, branch_name, sales_rep_name, warehouse_name, posted_by, posted_at, extra_amount{deliveryCostColumn}) " +
+            $"VALUES (@company, @kind, @no, @date, @party, @partyName, @warehouse, @currency, @rate, @subtotal, @discount, @tax, @total, @status, @notes, @actor, @partyCode, @deliveryDate, @validTill, @costCenter, @branchName, @salesRepName, @warehouseName, @postedBy, @postedAt, @extra{deliveryCostValue})" +
             (_provider == "PostgreSQL" ? " RETURNING doc_id" : "; SELECT last_insert_rowid();")))
         {
+            if (side == CommercialDocSide.Sales)
+                Add(insertHeader, "@deliveryCost", draft.DeliveryCost);
             Add(insertHeader, "@company", draft.CompanyId.ToString("D"));
             Add(insertHeader, "@kind", draft.DocKind.Trim());
             Add(insertHeader, "@no", draft.DocNo.Trim());
@@ -2607,6 +2621,265 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             Add(insertLine, "@warehouse", (object?)line.WarehouseId ?? DBNull.Value);
             await insertLine.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    // ------------------------------------------------------------- picking (W4)
+    // Warehouse picking staged from a posted sales order (spec §4). A
+    // picking posts nothing: it records what the warehouse picked per
+    // source line, and a Confirmed picking feeds delivery-note creation
+    // in SalesDeliveryWin. Remaining quantities always come from the one
+    // progress computation, inside the caller's transaction.
+
+    public async Task<long> CreatePickingFromOrderAsync(long salesOrderId, string userId, CancellationToken cancellationToken = default)
+    {
+        if (salesOrderId <= 0) throw new ArgumentOutOfRangeException(nameof(salesOrderId));
+        if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var order = await ReadSnapshotAsync(connection, transaction, CommercialDocSide.Sales, salesOrderId, null, null, null, cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("Sales order was not found.");
+            if (order.DocKind != CommercialDocKinds.SalesOrder)
+                throw new AppError(ErrorCodes.ChainTransitionNotAllowed,
+                    $"Documents cannot be converted from '{order.DocKind}' to a picking.",
+                    order.DocKind, "Picking");
+            if (order.Status != CommercialDocumentStatus.Posted)
+                throw new AppError(ErrorCodes.ChainSourceNotPosted,
+                    $"The source document '{order.DocNo}' must be posted before it can be converted.",
+                    order.DocNo);
+
+            var progress = await ComputeProgressAsync(connection, transaction, CommercialDocSide.Sales, salesOrderId, cancellationToken).ConfigureAwait(false);
+            var remainingByLine = progress.Lines.ToDictionary(line => line.LineNo, line => line.RemainingToFulfill);
+
+            long pickingId;
+            await using (var insert = CreateCommand(connection, transaction,
+                "INSERT INTO sales_picking (company_id, sales_order_id, status, created_by, created_at) " +
+                "VALUES (@company, @order, @status, @actor, @now)" +
+                (_provider == "PostgreSQL" ? " RETURNING picking_id" : "; SELECT last_insert_rowid();")))
+            {
+                Add(insert, "@company", order.CompanyId.ToString("D"));
+                Add(insert, "@order", salesOrderId);
+                Add(insert, "@status", SalesPickingStatus.Draft);
+                Add(insert, "@actor", userId.Trim());
+                Add(insert, "@now", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+                pickingId = Convert.ToInt64(await insert.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+            }
+
+            var inserted = 0;
+            foreach (var line in order.Lines)
+            {
+                var remaining = remainingByLine.GetValueOrDefault(line.LineNo);
+                if (remaining <= 0m)
+                    continue;
+                await using var insertLine = CreateCommand(connection, transaction, """
+                    INSERT INTO sales_picking_lines
+                        (picking_id, source_line_no, material_id, material_code, description, unit, ordered_qty, picked_qty, warehouse_id)
+                    VALUES (@picking, @lineNo, @material, @materialCode, @description, @unit, @ordered, @picked, @warehouse)
+                    """);
+                Add(insertLine, "@picking", pickingId);
+                Add(insertLine, "@lineNo", line.LineNo);
+                Add(insertLine, "@material", (object?)line.MaterialId ?? DBNull.Value);
+                Add(insertLine, "@materialCode", (object?)line.MaterialCode ?? DBNull.Value);
+                Add(insertLine, "@description", line.Description);
+                Add(insertLine, "@unit", (object?)line.Unit ?? DBNull.Value);
+                Add(insertLine, "@ordered", line.Qty);
+                Add(insertLine, "@picked", remaining);
+                Add(insertLine, "@warehouse", (object?)(line.WarehouseId ?? order.WarehouseId) ?? DBNull.Value);
+                await insertLine.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                inserted++;
+            }
+            if (inserted == 0)
+                throw new AppError(ErrorCodes.ChainSourceFullyFulfilled,
+                    $"The source document '{order.DocNo}' is already fully fulfilled.",
+                    order.DocNo);
+
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return pickingId;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    public async Task<SalesPickingSnapshot?> GetPickingAsync(long pickingId, CancellationToken cancellationToken = default)
+    {
+        if (pickingId <= 0) throw new ArgumentOutOfRangeException(nameof(pickingId));
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        return await ReadPickingAsync(connection, null, pickingId, null, null, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<SalesPickingSnapshot?> FindConfirmedPickingAsync(Guid companyId, long salesOrderId, CancellationToken cancellationToken = default)
+    {
+        if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
+        if (salesOrderId <= 0) throw new ArgumentOutOfRangeException(nameof(salesOrderId));
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        long? pickingId = null;
+        await using (var command = CreateCommand(connection, null, """
+            SELECT picking_id FROM sales_picking
+            WHERE company_id = @company AND sales_order_id = @order AND status = @confirmed
+            ORDER BY picking_id DESC LIMIT 1
+            """))
+        {
+            Add(command, "@company", companyId.ToString("D"));
+            Add(command, "@order", salesOrderId);
+            Add(command, "@confirmed", SalesPickingStatus.Confirmed);
+            var value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            if (value is not null and not DBNull)
+                pickingId = Convert.ToInt64(value, CultureInfo.InvariantCulture);
+        }
+        if (pickingId is null)
+            return null;
+        return await ReadPickingAsync(connection, null, pickingId.Value, null, null, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task ConfirmPickingAsync(long pickingId, IReadOnlyDictionary<int, decimal> pickedBySourceLine, string userId, CancellationToken cancellationToken = default)
+    {
+        if (pickingId <= 0) throw new ArgumentOutOfRangeException(nameof(pickingId));
+        ArgumentNullException.ThrowIfNull(pickedBySourceLine);
+        if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var picking = await ReadPickingAsync(connection, transaction, pickingId, null, null, cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("Picking was not found.");
+            if (picking.Status != SalesPickingStatus.Draft)
+                throw new InvalidOperationException($"Only a draft picking can be confirmed; picking '{pickingId}' is '{picking.Status}'.");
+
+            // Over-pick guard (SAL-7012): the picked quantity of a line
+            // may never exceed what the order still has to deliver,
+            // recomputed inside this transaction from posted deliveries.
+            var progress = await ComputeProgressAsync(connection, transaction, CommercialDocSide.Sales, picking.SalesOrderId, cancellationToken).ConfigureAwait(false);
+            var remainingByLine = progress.Lines.ToDictionary(line => line.LineNo, line => line.RemainingToFulfill);
+
+            foreach (var line in picking.Lines)
+            {
+                var picked = pickedBySourceLine.TryGetValue(line.SourceLineNo, out var requested)
+                    ? requested
+                    : line.PickedQty;
+                if (picked < 0m)
+                    throw new InvalidOperationException("Picked quantities cannot be negative.");
+                var remaining = remainingByLine.GetValueOrDefault(line.SourceLineNo);
+                if (picked > remaining)
+                    throw new AppError(ErrorCodes.PickingExceedsRemaining,
+                        $"The picked quantity for '{line.Description}' exceeds the remaining quantity to deliver.",
+                        line.Description);
+                await using var updateLine = CreateCommand(connection, transaction,
+                    "UPDATE sales_picking_lines SET picked_qty = @picked WHERE picking_line_id = @id");
+                Add(updateLine, "@picked", picked);
+                Add(updateLine, "@id", line.PickingLineId);
+                await updateLine.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            await using (var update = CreateCommand(connection, transaction, """
+                UPDATE sales_picking
+                SET status = @confirmed, confirmed_by = @actor, confirmed_at = @now
+                WHERE picking_id = @id AND status = @draft
+                """))
+            {
+                Add(update, "@confirmed", SalesPickingStatus.Confirmed);
+                Add(update, "@draft", SalesPickingStatus.Draft);
+                Add(update, "@actor", userId.Trim());
+                Add(update, "@now", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+                Add(update, "@id", pickingId);
+                if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+                    throw new InvalidOperationException("Picking could not be confirmed.");
+            }
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    public async Task CancelPickingAsync(long pickingId, string userId, CancellationToken cancellationToken = default)
+    {
+        if (pickingId <= 0) throw new ArgumentOutOfRangeException(nameof(pickingId));
+        if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var update = CreateCommand(connection, null, """
+            UPDATE sales_picking SET status = @cancelled
+            WHERE picking_id = @id AND status IN (@draft, @confirmed)
+            """);
+        Add(update, "@cancelled", SalesPickingStatus.Cancelled);
+        Add(update, "@draft", SalesPickingStatus.Draft);
+        Add(update, "@confirmed", SalesPickingStatus.Confirmed);
+        Add(update, "@id", pickingId);
+        if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+            throw new InvalidOperationException("Picking was not found or is already cancelled.");
+    }
+
+    private async Task<SalesPickingSnapshot?> ReadPickingAsync(
+        DbConnection connection, DbTransaction? transaction, long pickingId,
+        Guid? companyId, long? salesOrderId, CancellationToken cancellationToken)
+    {
+        long foundId, foundOrderId;
+        Guid foundCompany;
+        string status;
+        string? createdBy, createdAt, confirmedBy, confirmedAt;
+        await using (var header = CreateCommand(connection, transaction, """
+            SELECT picking_id, company_id, sales_order_id, status, created_by, created_at, confirmed_by, confirmed_at
+            FROM sales_picking
+            WHERE picking_id = @id
+              AND (@company IS NULL OR company_id = @company)
+              AND (@order IS NULL OR sales_order_id = @order)
+            """))
+        {
+            Add(header, "@id", pickingId);
+            Add(header, "@company", (object?)companyId?.ToString("D") ?? DBNull.Value);
+            Add(header, "@order", (object?)salesOrderId ?? DBNull.Value);
+            await using var reader = await header.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                return null;
+            foundId = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture);
+            if (!Guid.TryParse(Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture), out foundCompany))
+                throw new InvalidOperationException("The saved picking has an invalid company identifier.");
+            foundOrderId = Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture);
+            status = reader.GetString(3);
+            createdBy = reader.IsDBNull(4) ? null : reader.GetString(4);
+            createdAt = reader.IsDBNull(5) ? null : Convert.ToString(reader.GetValue(5), CultureInfo.InvariantCulture);
+            confirmedBy = reader.IsDBNull(6) ? null : reader.GetString(6);
+            confirmedAt = reader.IsDBNull(7) ? null : Convert.ToString(reader.GetValue(7), CultureInfo.InvariantCulture);
+        }
+
+        var lines = new List<SalesPickingLineSnapshot>();
+        await using (var lineCommand = CreateCommand(connection, transaction, """
+            SELECT picking_line_id, source_line_no, material_id, material_code, description, unit,
+                   ordered_qty, picked_qty, warehouse_id
+            FROM sales_picking_lines
+            WHERE picking_id = @id
+            ORDER BY source_line_no
+            """))
+        {
+            Add(lineCommand, "@id", foundId);
+            await using var reader = await lineCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                lines.Add(new SalesPickingLineSnapshot(
+                    Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+                    Convert.ToInt32(reader.GetValue(1), CultureInfo.InvariantCulture),
+                    reader.IsDBNull(2) ? null : Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture),
+                    reader.IsDBNull(3) ? null : reader.GetString(3),
+                    reader.GetString(4),
+                    reader.IsDBNull(5) ? null : reader.GetString(5),
+                    Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture),
+                    reader.IsDBNull(8) ? null : Convert.ToInt64(reader.GetValue(8), CultureInfo.InvariantCulture)));
+            }
+        }
+        return new SalesPickingSnapshot(
+            foundId, foundCompany, foundOrderId, status, createdBy, createdAt,
+            confirmedBy, confirmedAt, lines.AsReadOnly());
     }
 
     private DbConnection CreateConnection() => _provider == "SQLite"

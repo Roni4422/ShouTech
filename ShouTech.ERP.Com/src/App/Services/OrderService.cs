@@ -93,8 +93,10 @@ public sealed class OrderService
         string userId,
         IReadOnlyDictionary<int, decimal>? quantityBySourceLine = null,
         long? warehouseId = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        decimal deliveryCost = 0m)
     {
+        if (deliveryCost < 0m) throw new InvalidOperationException("Delivery cost cannot be negative.");
         if (salesOrderId <= 0) throw new ArgumentOutOfRangeException(nameof(salesOrderId));
         var order = await _chain.FindSalesByIdAsync(salesOrderId, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException("Sales order was not found.");
@@ -112,8 +114,68 @@ public sealed class OrderService
         var chain = new SalesChainService(_chain);
         var deliveryId = await chain.CreateFromSourceAsync(
             salesOrderId, deliveryDocNo, deliveryDate, userId,
-            quantityBySourceLine, warehouseId, cancellationToken).ConfigureAwait(false);
+            quantityBySourceLine, warehouseId, cancellationToken, deliveryCost).ConfigureAwait(false);
         return (deliveryId, deliveryDocNo);
+    }
+
+    // ------------------------------------------------------------- picking (W4)
+
+    /// <summary>
+    /// Stages a warehouse picking for a posted sales order (spec §4):
+    /// lines pre-filled with the remaining-to-deliver quantity per
+    /// source line. The picking posts nothing; confirming it records
+    /// what was actually picked, and a confirmed picking feeds
+    /// delivery-note creation in the delivery window.
+    /// </summary>
+    public async Task<long> CreatePickingFromOrderAsync(long salesOrderId, string userId, CancellationToken cancellationToken = default)
+    {
+        if (salesOrderId <= 0) throw new ArgumentOutOfRangeException(nameof(salesOrderId));
+        var order = await _orders.FindByIdAsync(CommercialDocSide.Sales, salesOrderId, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Sales order was not found.");
+        if (order.DocKind != CommercialDocKinds.SalesOrder)
+            throw new AppError(ErrorCodes.ChainTransitionNotAllowed,
+                $"Documents cannot be converted from '{order.DocKind}' to a picking.",
+                order.DocKind, "Picking");
+        if (order.Status != CommercialDocumentStatus.Posted)
+            throw new AppError(ErrorCodes.ChainSourceNotPosted,
+                $"The source document '{order.DocNo}' must be posted before it can be converted.",
+                order.DocNo);
+        return await _orders.CreatePickingFromOrderAsync(salesOrderId, userId, cancellationToken).ConfigureAwait(false);
+    }
+
+    public Task<SalesPickingSnapshot?> GetPickingAsync(long pickingId, CancellationToken cancellationToken = default)
+        => _orders.GetPickingAsync(pickingId, cancellationToken);
+
+    /// <summary>The order's latest confirmed picking, whose picked
+    /// quantities delivery creation defaults from; null when none.</summary>
+    public Task<SalesPickingSnapshot?> FindConfirmedPickingAsync(Guid companyId, long salesOrderId, CancellationToken cancellationToken = default)
+        => _orders.FindConfirmedPickingAsync(companyId, salesOrderId, cancellationToken);
+
+    /// <summary>Confirms a draft picking. Picking more than the order's
+    /// remaining-to-deliver quantity on a line fails with SAL-7012.</summary>
+    public Task ConfirmPickingAsync(long pickingId, IReadOnlyDictionary<int, decimal> pickedBySourceLine, string userId, CancellationToken cancellationToken = default)
+        => _orders.ConfirmPickingAsync(pickingId, pickedBySourceLine, userId, cancellationToken);
+
+    public Task CancelPickingAsync(long pickingId, string userId, CancellationToken cancellationToken = default)
+        => _orders.CancelPickingAsync(pickingId, userId, cancellationToken);
+
+    /// <summary>True when a posted sales invoice is linked to the
+    /// delivery note — the gate the delivery desk's Returned flow uses
+    /// to decide between reversing the DLV and the invoice-return
+    /// route.</summary>
+    public async Task<bool> HasPostedSalesInvoiceAsync(long deliveryDocId, CancellationToken cancellationToken = default)
+    {
+        if (deliveryDocId <= 0) throw new ArgumentOutOfRangeException(nameof(deliveryDocId));
+        var delivery = await _chain.FindSalesByIdAsync(deliveryDocId, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Delivery note was not found.");
+        var links = await _chain.GetSalesLinksFromAsync(delivery.CompanyId, deliveryDocId, cancellationToken).ConfigureAwait(false);
+        foreach (var link in links.Where(link => link.TargetDocKind == CommercialDocKinds.SalesInvoice))
+        {
+            var invoice = await _chain.FindSalesByIdAsync(link.TargetDocId, cancellationToken).ConfigureAwait(false);
+            if (invoice is not null && invoice.Status == CommercialDocumentStatus.Posted)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>
