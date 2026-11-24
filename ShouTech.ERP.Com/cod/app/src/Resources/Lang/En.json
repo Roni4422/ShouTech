@@ -542,7 +542,9 @@
     "SearchInvoices": "Search Invoices",
     "SearchQuotations": "Search Quotations",
     "Title": "Invoices",
-    "Transfer": "Transfer"
+    "Transfer": "Transfer",
+    "Warranty": "Warranties",
+    "RmaRequests": "RMA Requests"
   },
   "Login": {
     "Cancel": "Cancel",
@@ -1314,7 +1316,8 @@
     "VarianceFlag": "Variance",
     "Unassigned": "Unassigned",
     "StatusLost": "Lost",
-    "StatusExpired": "Expired"
+    "StatusExpired": "Expired",
+    "SectionForecast": "Forecast"
   },
   "RestoreCompany": {
     "Close": "Close",
@@ -3519,7 +3522,8 @@
     "RemoveItem": "Remove Item",
     "ValidTill": "Valid Till",
     "LinkExistingTitle": "Link Existing Party",
-    "LinkExistingParty": "A matching record already exists: {0}. Link this lead to the existing party instead of creating a new one?"
+    "LinkExistingParty": "A matching record already exists: {0}. Link this lead to the existing party instead of creating a new one?",
+    "Campaigns": "CRM Campaigns"
   },
   "HR": {
     "Title": "Human Resources",
@@ -4292,6 +4296,116 @@
       "Invoiced": "Invoiced",
       "Remaining": "Remaining",
       "NextDelivery": "Next Delivery"
+    }
+  },
+  "Campaign": {
+    "Title": "CRM Campaigns",
+    "Campaigns": "Campaigns",
+    "Outcomes": "Outcomes",
+    "PermissionDenied": "You do not have permission for this campaign operation.",
+    "Saved": "Campaign saved.",
+    "SelectCampaign": "Select a campaign first.",
+    "StatusLine": "{0} campaigns",
+    "TargetNotes": "Target notes",
+    "Col": {
+      "Name": "Name",
+      "Kind": "Kind",
+      "Status": "Status",
+      "Budget": "Budget",
+      "Start": "Start",
+      "End": "End",
+      "Leads": "Leads",
+      "Opportunities": "Opportunities",
+      "WonValue": "Won Value"
+    }
+  },
+  "Warranty": {
+    "Title": "Warranties & Claims",
+    "Warranties": "Warranties",
+    "Claims": "Claims",
+    "PermissionDenied": "You do not have permission for this warranty operation.",
+    "ServiceUnavailable": "The warranty service is unavailable.",
+    "InvoiceNo": "Invoice / POS no",
+    "DefaultMonths": "Default months",
+    "SerialNo": "Serial no",
+    "ManualMonths": "Months",
+    "Terms": "Terms",
+    "RegisterFromInvoice": "Register warranties",
+    "RegisterManual": "Register serial",
+    "Void": "Void",
+    "StatusLine": "{0} warranties",
+    "RegisteredStatus": "{0} warranties registered, {1} skipped.",
+    "ManualRegisteredStatus": "Warranty registered for serial {0}; expiry {1}.",
+    "InvoiceRequired": "Enter the invoice / POS document number first.",
+    "SerialRequired": "Enter the serial number first.",
+    "SelectWarranty": "Select a warranty first.",
+    "SelectClaim": "Select a claim first.",
+    "ClaimIssue": "Issue",
+    "ClaimDate": "Claim date",
+    "ClaimAction": "Action",
+    "ResolutionNote": "Resolution note",
+    "FileClaim": "File claim",
+    "ApproveClaim": "Approve",
+    "RejectClaim": "Reject",
+    "IssueRequired": "Describe the claim issue first.",
+    "ClaimDateRequired": "Pick the claim date.",
+    "ClaimFiled": "Claim filed.",
+    "ClaimDecided": "Claim decided.",
+    "Col": {
+      "Serial": "Serial",
+      "Material": "Material",
+      "Party": "Customer",
+      "SourceDoc": "Source Doc",
+      "SaleDate": "Sale Date",
+      "Months": "Months",
+      "Expiry": "Expiry",
+      "Status": "Status",
+      "ClaimDate": "Claim Date",
+      "Issue": "Issue",
+      "Decision": "Decision",
+      "Action": "Action",
+      "Resolution": "Resolution",
+      "Rma": "RMA"
+    }
+  },
+  "Rma": {
+    "Title": "RMA Requests",
+    "PermissionDenied": "You do not have permission for this RMA operation.",
+    "Create": "Create RMA",
+    "Approve": "Approve",
+    "Reject": "Reject",
+    "Convert": "Convert to return",
+    "LoadSource": "Load source",
+    "SourceKind": "Source kind",
+    "SourceDoc": "Source document",
+    "PartyId": "Customer ID",
+    "Notes": "Notes",
+    "StatusLine": "{0} RMA requests",
+    "SourceLoadedStatus": "{0} source lines loaded.",
+    "CreatedStatus": "RMA {0} created.",
+    "ConvertedStatus": "RMA {0} converted to draft return document {1}.",
+    "SourceRequired": "Enter the source document number first.",
+    "SourceNotFound": "The source document was not found.",
+    "SourceNotPosted": "The source invoice is not posted.",
+    "NoSourceToLoad": "A no-source RMA has nothing to load; type its lines directly.",
+    "LoadSourceFirst": "Load the source document first so its lines fill the request.",
+    "ReasonRequired": "Select a return reason.",
+    "SelectRequest": "Select an RMA request first.",
+    "Col": {
+      "No": "RMA No",
+      "Party": "Customer",
+      "SourceKind": "Source",
+      "SourceDoc": "Source Doc",
+      "Reason": "Reason",
+      "Status": "Status",
+      "Lines": "Lines",
+      "ReturnDoc": "Return Doc",
+      "SourceLine": "Src Line",
+      "Material": "Material",
+      "Description": "Description",
+      "Unit": "Unit",
+      "Qty": "Qty",
+      "Price": "Price"
     }
   }
 }

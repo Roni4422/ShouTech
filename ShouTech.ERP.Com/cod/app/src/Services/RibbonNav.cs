@@ -53,6 +53,11 @@ public static class RibbonNav
             case "CRM.Pipeline": Show(new CrmPipelineWin(), owner); return true;
             case "CRM.Opportunities": Show(new CrmOppWin(), owner); return true;
             case "CRM.Activities": Show(new CrmActivitiesWin(), owner); return true;
+            case "CRM.Campaigns": Show(new CrmCampaignWin(), owner); return true;
+
+            // ------------------------------------------------ After-sales (W10 Level 3, migration 105; CommWin pattern)
+            case "Invoices.Warranty": Show(new WarrantyWin(), owner); return true;
+            case "Invoices.RmaRequests": Show(new RmaWin(), owner); return true;
 
             // ------------------------------------------------ HR / Payroll (Build HR 065; HR.* keys, HR.* RBAC)
             case "HR.Employees": Show(new HrEmployeeWin(), owner); return true;

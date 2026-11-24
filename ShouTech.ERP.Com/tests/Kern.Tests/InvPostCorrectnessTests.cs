@@ -173,6 +173,91 @@ public sealed class InvPostCorrectnessTests
             "SELECT COUNT(*) FROM sales_documents WHERE doc_kind = 'SRT' AND status = 'Posted' AND original_doc_id = " + original.DocId.ToString(CultureInfo.InvariantCulture)));
     }
 
+    // ------------------------------------------------------------------
+    // W10 (migration 105): RMA requests ride the W6 return machinery —
+    // approval reuses SALES.RETURN.APPROVE, conversion creates a DRAFT
+    // return through the same paths SalesReturnWin uses, and state
+    // violations are the cataloged SAL-7025.
+    // ------------------------------------------------------------------
+    [Fact]
+    public async Task Rma_InvoiceSource_ApproveConvert_CreatesLinkedDraftReturn_SecondConvertIsSal7025()
+    {
+        using var db = await SeededAsync();
+        var party = await SavePartyAsync(db, "C", "CUST-RMA", 100000m);
+        var original = BuildDoc(InvDocKind.SalesInvoice, party.LedgerId, party.Code,
+            qty: 5m, price: 30m, taxRate: 0m, discount: 0m, extra: 0m, paid: 0m);
+        InvRepo.SaveDraft(original);
+        InvRepo.Post(original.DocId, original.Kind, Actor);
+
+        var rmaId = SrtRepo.CreateRma(
+            party.LedgerId, party.NameEn, "INV", original.DocId, original.DocNo,
+            "DEFECTIVE", "Two units failed in the first week",
+            new[] { new SrtRepo.RmaLine(1, original.Lines[0].MaterialId, original.Lines[0].MaterialCode,
+                original.Lines[0].Description, original.Lines[0].Unit, 2m, original.Lines[0].UnitPrice) },
+            Actor);
+        var requested = SrtRepo.GetRma(rmaId);
+        Assert.NotNull(requested);
+        Assert.Equal(SrtRepo.RmaStatuses.Requested, requested!.Status);
+        Assert.Equal($"RMA-{rmaId}", requested.RmaNo);
+        Assert.Single(requested.Lines);
+
+        // Converting before approval is SAL-7025.
+        var early = Assert.Throws<AppError>(() => SrtRepo.ConvertRma(rmaId, Actor, _ => true));
+        Assert.Equal(ErrorCodes.RmaStateInvalid, early.Code);
+
+        SrtRepo.DecideRma(rmaId, approve: true, Actor, null, _ => true);
+        var returnDocId = SrtRepo.ConvertRma(rmaId, Actor, _ => true);
+
+        // The conversion produced a DRAFT return against the invoice,
+        // pre-filled from the RMA through the InvRepo draft path.
+        var draft = InvRepo.Load(returnDocId, InvDocKind.SalesReturn);
+        Assert.NotNull(draft);
+        Assert.Equal(InvDocStatus.Draft, draft!.Status);
+        Assert.Equal(original.DocId, draft.OriginalDocId);
+        Assert.Equal("DEFECTIVE", draft.ReturnReasonCode);
+        Assert.Equal("INV", draft.ReturnSourceKind);
+        var line = Assert.Single(draft.Lines);
+        Assert.Equal(1, line.LineNo);
+        Assert.Equal(2m, line.Qty);
+        Assert.Equal(original.Lines[0].MaterialId, line.MaterialId);
+        Assert.Equal("Quarantine", line.ReturnCondition); // DEFECTIVE routes to Quarantine (W6)
+
+        var converted = SrtRepo.GetRma(rmaId);
+        Assert.Equal(SrtRepo.RmaStatuses.Converted, converted!.Status);
+        Assert.Equal(returnDocId, converted.LinkedReturnDocId);
+
+        // Converting twice and deciding a converted RMA are SAL-7025.
+        var twice = Assert.Throws<AppError>(() => SrtRepo.ConvertRma(rmaId, Actor, _ => true));
+        Assert.Equal(ErrorCodes.RmaStateInvalid, twice.Code);
+        var decide = Assert.Throws<AppError>(() => SrtRepo.DecideRma(rmaId, true, Actor, null, _ => true));
+        Assert.Equal(ErrorCodes.RmaStateInvalid, decide.Code);
+
+        // Without the approve permission the workflow refuses outright.
+        Assert.Throws<UnauthorizedAccessException>(() => SrtRepo.DecideRma(rmaId, true, Actor, null, _ => false));
+    }
+
+    [Fact]
+    public async Task Rma_NoSource_ApproveConvert_CreatesNoInvoiceDraftReturn()
+    {
+        using var db = await SeededAsync();
+        var party = await SavePartyAsync(db, "C", "CUST-RMA-NONE", 100000m);
+        var rmaId = SrtRepo.CreateRma(
+            party.LedgerId, party.NameEn, "NONE", null, string.Empty,
+            "WRONGITEM", null,
+            new[] { new SrtRepo.RmaLine(0, 42, "MAT-42", "Item", string.Empty, 1m, 30m) },
+            Actor);
+        SrtRepo.DecideRma(rmaId, approve: true, Actor, null, _ => true);
+        var returnDocId = SrtRepo.ConvertRma(rmaId, Actor, _ => true);
+
+        var draft = InvRepo.Load(returnDocId, InvDocKind.SalesReturn);
+        Assert.NotNull(draft);
+        Assert.Equal(InvDocStatus.Draft, draft!.Status);
+        Assert.True(draft.NoInvoice);
+        Assert.Equal("NONE", draft.ReturnSourceKind);
+        Assert.Equal(party.LedgerId, draft.PartyId);
+        Assert.Equal(returnDocId, SrtRepo.GetRma(rmaId)!.LinkedReturnDocId);
+    }
+
     private static InvDoc BuildW6Return(InvDoc original, decimal quantity, string condition, string reasonCode)
         => new()
         {

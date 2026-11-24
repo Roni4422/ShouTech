@@ -242,7 +242,9 @@
     "InvoiceProfits": "Profits des Factures",
     "PackingList": "Liste de Colisage",
     "CompressInvoices": "Compresser les Factures",
-    "RepostInvoices": "Reposter les Factures"
+    "RepostInvoices": "Reposter les Factures",
+    "Warranty": "Garanties",
+    "RmaRequests": "Demandes RMA"
   },
   "POS": {
     "Title": "ShouTech | Point de vente",
@@ -781,7 +783,8 @@
     "VarianceFlag": "Écart",
     "Unassigned": "Non affecté",
     "StatusLost": "Perdu",
-    "StatusExpired": "Expiré"
+    "StatusExpired": "Expiré",
+    "SectionForecast": "Prévisions"
   },
   "Tools": {
     "Title": "Outils",
@@ -3520,7 +3523,8 @@
     "RemoveItem": "Supprimer la ligne",
     "ValidTill": "Valide jusqu'au",
     "LinkExistingTitle": "Lier un tiers existant",
-    "LinkExistingParty": "Un enregistrement correspondant existe déjà : {0}. Lier ce prospect au tiers existant au lieu d'en créer un nouveau ?"
+    "LinkExistingParty": "Un enregistrement correspondant existe déjà : {0}. Lier ce prospect au tiers existant au lieu d'en créer un nouveau ?",
+    "Campaigns": "Campagnes CRM"
   },
   "HR": {
     "Title": "Ressources humaines",
@@ -4283,6 +4287,116 @@
       "Invoiced": "Facturé",
       "Remaining": "Restant",
       "NextDelivery": "Prochaine livraison"
+    }
+  },
+  "Campaign": {
+    "Title": "Campagnes CRM",
+    "Campaigns": "Campagnes",
+    "Outcomes": "Résultats",
+    "PermissionDenied": "Vous n'avez pas l'autorisation pour cette opération de campagne.",
+    "Saved": "Campagne enregistrée.",
+    "SelectCampaign": "Sélectionnez d'abord une campagne.",
+    "StatusLine": "{0} campagnes",
+    "TargetNotes": "Notes sur la cible",
+    "Col": {
+      "Name": "Nom",
+      "Kind": "Type",
+      "Status": "Statut",
+      "Budget": "Budget",
+      "Start": "Début",
+      "End": "Fin",
+      "Leads": "Prospects",
+      "Opportunities": "Opportunités",
+      "WonValue": "Valeur gagnée"
+    }
+  },
+  "Warranty": {
+    "Title": "Garanties et réclamations",
+    "Warranties": "Garanties",
+    "Claims": "Réclamations",
+    "PermissionDenied": "Vous n'avez pas l'autorisation pour cette opération de garantie.",
+    "ServiceUnavailable": "Le service de garantie est indisponible.",
+    "InvoiceNo": "N° facture / PDV",
+    "DefaultMonths": "Mois par défaut",
+    "SerialNo": "N° de série",
+    "ManualMonths": "Mois",
+    "Terms": "Conditions",
+    "RegisterFromInvoice": "Enregistrer les garanties",
+    "RegisterManual": "Enregistrer le série",
+    "Void": "Annuler",
+    "StatusLine": "{0} garanties",
+    "RegisteredStatus": "{0} garanties enregistrées, {1} ignorées.",
+    "ManualRegisteredStatus": "Garantie enregistrée pour le série {0} ; expiration {1}.",
+    "InvoiceRequired": "Saisissez d'abord le numéro du document facture / PDV.",
+    "SerialRequired": "Saisissez d'abord le numéro de série.",
+    "SelectWarranty": "Sélectionnez d'abord une garantie.",
+    "SelectClaim": "Sélectionnez d'abord une réclamation.",
+    "ClaimIssue": "Problème",
+    "ClaimDate": "Date de réclamation",
+    "ClaimAction": "Action",
+    "ResolutionNote": "Note de résolution",
+    "FileClaim": "Déposer la réclamation",
+    "ApproveClaim": "Approuver",
+    "RejectClaim": "Rejeter",
+    "IssueRequired": "Décrivez d'abord le problème de la réclamation.",
+    "ClaimDateRequired": "Choisissez la date de réclamation.",
+    "ClaimFiled": "Réclamation déposée.",
+    "ClaimDecided": "Réclamation tranchée.",
+    "Col": {
+      "Serial": "Série",
+      "Material": "Article",
+      "Party": "Client",
+      "SourceDoc": "Doc source",
+      "SaleDate": "Date de vente",
+      "Months": "Mois",
+      "Expiry": "Expiration",
+      "Status": "Statut",
+      "ClaimDate": "Date réclam.",
+      "Issue": "Problème",
+      "Decision": "Décision",
+      "Action": "Action",
+      "Resolution": "Résolution",
+      "Rma": "RMA"
+    }
+  },
+  "Rma": {
+    "Title": "Demandes RMA",
+    "PermissionDenied": "Vous n'avez pas l'autorisation pour cette opération RMA.",
+    "Create": "Créer RMA",
+    "Approve": "Approuver",
+    "Reject": "Rejeter",
+    "Convert": "Convertir en retour",
+    "LoadSource": "Charger la source",
+    "SourceKind": "Type de source",
+    "SourceDoc": "Document source",
+    "PartyId": "ID client",
+    "Notes": "Notes",
+    "StatusLine": "{0} demandes RMA",
+    "SourceLoadedStatus": "{0} lignes source chargées.",
+    "CreatedStatus": "RMA {0} créé.",
+    "ConvertedStatus": "RMA {0} converti en retour brouillon {1}.",
+    "SourceRequired": "Saisissez d'abord le numéro du document source.",
+    "SourceNotFound": "Le document source est introuvable.",
+    "SourceNotPosted": "La facture source n'est pas comptabilisée.",
+    "NoSourceToLoad": "Un RMA sans source n'a rien à charger ; saisissez ses lignes directement.",
+    "LoadSourceFirst": "Chargez d'abord le document source pour remplir la demande.",
+    "ReasonRequired": "Sélectionnez un motif de retour.",
+    "SelectRequest": "Sélectionnez d'abord une demande RMA.",
+    "Col": {
+      "No": "N° RMA",
+      "Party": "Client",
+      "SourceKind": "Source",
+      "SourceDoc": "Doc source",
+      "Reason": "Motif",
+      "Status": "Statut",
+      "Lines": "Lignes",
+      "ReturnDoc": "Doc retour",
+      "SourceLine": "Ligne src",
+      "Material": "Article",
+      "Description": "Description",
+      "Unit": "Unité",
+      "Qty": "Qté",
+      "Price": "Prix"
     }
   }
 }

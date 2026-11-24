@@ -350,6 +350,8 @@
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.InvoicesSales" Header="Sales">
                         <ribbon:RibbonButton loc:LocProps.Key="Invoices.SalesInvoice" Label="Sales invoice" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Invoices.SalesReturn" Label="Sales return invoice" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.RmaRequests" Label="RMA requests" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.Warranty" Label="Warranties" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Invoices.InventoryCount" Label="Inventory count invoice" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Invoices.PrintBarcode" Label="Print Barcode" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
@@ -428,6 +430,7 @@
                         <ribbon:RibbonButton loc:LocProps.Key="CRM.Pipeline" Label="CRM pipeline" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="CRM.Opportunities" Label="CRM opportunities" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="CRM.Activities" Label="CRM activities" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="CRM.Campaigns" Label="CRM campaigns" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Reports.CrmFunnel" Label="CRM funnel" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.CustomersReports" Header="Reports">

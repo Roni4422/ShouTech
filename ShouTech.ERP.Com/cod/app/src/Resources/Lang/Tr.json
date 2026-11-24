@@ -242,7 +242,9 @@
     "InvoiceProfits": "Fatura Kârları",
     "PackingList": "Paketleme Listesi",
     "CompressInvoices": "Faturaları Sıkıştır",
-    "RepostInvoices": "Faturaları Yeniden Gönder"
+    "RepostInvoices": "Faturaları Yeniden Gönder",
+    "Warranty": "Garantiler",
+    "RmaRequests": "RMA Talepleri"
   },
   "POS": {
     "Title": "ShouTech | Satış Noktası",
@@ -781,7 +783,8 @@
     "VarianceFlag": "Fark var",
     "Unassigned": "Atanmamış",
     "StatusLost": "Kayıp",
-    "StatusExpired": "Süresi Dolmuş"
+    "StatusExpired": "Süresi Dolmuş",
+    "SectionForecast": "Tahmin"
   },
   "Tools": {
     "Title": "Araçlar",
@@ -3520,7 +3523,8 @@
     "RemoveItem": "Kalemi Kaldır",
     "ValidTill": "Geçerlilik Tarihi",
     "LinkExistingTitle": "Mevcut Tarafı Bağla",
-    "LinkExistingParty": "Eşleşen bir kayıt zaten var: {0}. Yeni bir taraf oluşturmak yerine bu adayı mevcut tarafa bağlamak ister misiniz?"
+    "LinkExistingParty": "Eşleşen bir kayıt zaten var: {0}. Yeni bir taraf oluşturmak yerine bu adayı mevcut tarafa bağlamak ister misiniz?",
+    "Campaigns": "CRM Kampanyaları"
   },
   "HR": {
     "Title": "Insan Kaynaklari",
@@ -4283,6 +4287,116 @@
       "Invoiced": "Faturalı",
       "Remaining": "Kalan",
       "NextDelivery": "Sonraki Teslim"
+    }
+  },
+  "Campaign": {
+    "Title": "CRM Kampanyaları",
+    "Campaigns": "Kampanyalar",
+    "Outcomes": "Sonuçlar",
+    "PermissionDenied": "Bu kampanya işlemi için yetkiniz yok.",
+    "Saved": "Kampanya kaydedildi.",
+    "SelectCampaign": "Önce bir kampanya seçin.",
+    "StatusLine": "{0} kampanya",
+    "TargetNotes": "Hedef notları",
+    "Col": {
+      "Name": "Ad",
+      "Kind": "Tür",
+      "Status": "Durum",
+      "Budget": "Bütçe",
+      "Start": "Başlangıç",
+      "End": "Bitiş",
+      "Leads": "Adaylar",
+      "Opportunities": "Fırsatlar",
+      "WonValue": "Kazanılan Değer"
+    }
+  },
+  "Warranty": {
+    "Title": "Garantiler ve Talepler",
+    "Warranties": "Garantiler",
+    "Claims": "Talepler",
+    "PermissionDenied": "Bu garanti işlemi için yetkiniz yok.",
+    "ServiceUnavailable": "Garanti hizmeti kullanılamıyor.",
+    "InvoiceNo": "Fatura / POS no",
+    "DefaultMonths": "Varsayılan ay",
+    "SerialNo": "Seri no",
+    "ManualMonths": "Ay",
+    "Terms": "Koşullar",
+    "RegisterFromInvoice": "Garantileri kaydet",
+    "RegisterManual": "Seriyi kaydet",
+    "Void": "İptal et",
+    "StatusLine": "{0} garanti",
+    "RegisteredStatus": "{0} garanti kaydedildi, {1} atlandı.",
+    "ManualRegisteredStatus": "{0} serisi için garanti kaydedildi; bitiş {1}.",
+    "InvoiceRequired": "Önce fatura / POS belge numarasını girin.",
+    "SerialRequired": "Önce seri numarasını girin.",
+    "SelectWarranty": "Önce bir garanti seçin.",
+    "SelectClaim": "Önce bir talep seçin.",
+    "ClaimIssue": "Sorun",
+    "ClaimDate": "Talep tarihi",
+    "ClaimAction": "İşlem",
+    "ResolutionNote": "Çözüm notu",
+    "FileClaim": "Talep oluştur",
+    "ApproveClaim": "Onayla",
+    "RejectClaim": "Reddet",
+    "IssueRequired": "Önce talep sorununu açıklayın.",
+    "ClaimDateRequired": "Talep tarihini seçin.",
+    "ClaimFiled": "Talep oluşturuldu.",
+    "ClaimDecided": "Talep karara bağlandı.",
+    "Col": {
+      "Serial": "Seri",
+      "Material": "Malzeme",
+      "Party": "Müşteri",
+      "SourceDoc": "Kaynak Belge",
+      "SaleDate": "Satış Tarihi",
+      "Months": "Ay",
+      "Expiry": "Bitiş",
+      "Status": "Durum",
+      "ClaimDate": "Talep Tarihi",
+      "Issue": "Sorun",
+      "Decision": "Karar",
+      "Action": "İşlem",
+      "Resolution": "Çözüm",
+      "Rma": "RMA"
+    }
+  },
+  "Rma": {
+    "Title": "RMA Talepleri",
+    "PermissionDenied": "Bu RMA işlemi için yetkiniz yok.",
+    "Create": "RMA oluştur",
+    "Approve": "Onayla",
+    "Reject": "Reddet",
+    "Convert": "İadeye dönüştür",
+    "LoadSource": "Kaynağı yükle",
+    "SourceKind": "Kaynak türü",
+    "SourceDoc": "Kaynak belge",
+    "PartyId": "Müşteri ID",
+    "Notes": "Notlar",
+    "StatusLine": "{0} RMA talebi",
+    "SourceLoadedStatus": "{0} kaynak satırı yüklendi.",
+    "CreatedStatus": "RMA {0} oluşturuldu.",
+    "ConvertedStatus": "RMA {0}, taslak iade belgesi {1} olarak dönüştürüldü.",
+    "SourceRequired": "Önce kaynak belge numarasını girin.",
+    "SourceNotFound": "Kaynak belge bulunamadı.",
+    "SourceNotPosted": "Kaynak fatura muhasebeleştirilmemiş.",
+    "NoSourceToLoad": "Kaynaksız bir RMA'da yüklenecek bir şey yok; satırlarını doğrudan yazın.",
+    "LoadSourceFirst": "Talebi doldurmak için önce kaynak belgeyi yükleyin.",
+    "ReasonRequired": "Bir iade nedeni seçin.",
+    "SelectRequest": "Önce bir RMA talebi seçin.",
+    "Col": {
+      "No": "RMA No",
+      "Party": "Müşteri",
+      "SourceKind": "Kaynak",
+      "SourceDoc": "Kaynak Belge",
+      "Reason": "Neden",
+      "Status": "Durum",
+      "Lines": "Satırlar",
+      "ReturnDoc": "İade Belgesi",
+      "SourceLine": "Kaynak Satır",
+      "Material": "Malzeme",
+      "Description": "Açıklama",
+      "Unit": "Birim",
+      "Qty": "Miktar",
+      "Price": "Fiyat"
     }
   }
 }

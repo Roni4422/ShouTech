@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Globalization;
+using System.Linq;
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Npgsql;
 using ShouTech.App.Reporting.Invoices;
@@ -408,6 +410,422 @@ public static class SrtRepo
         for (var i = 0; i < doc.Lines.Count; i++)
             doc.Lines[i].LineNo = originalLineNumbers[i];
         return doc.DocId;
+    }
+
+    // ------------------------------------------------------------------
+    // RMA requests (migration 105, sales Level 3)
+    // ------------------------------------------------------------------
+
+    /// <summary>One requested RMA line. SourceLineNo is the line number
+    /// on the source invoice / delivery the line refers to (0 when the
+    /// RMA has no source document); the remaining fields snapshot what
+    /// was requested so the request stays readable even if the source
+    /// document is later amended.</summary>
+    public sealed record RmaLine(
+        int SourceLineNo, long? MaterialId, string MaterialCode, string Description,
+        string Unit, decimal Qty, decimal UnitPrice);
+
+    /// <summary>One RMA request (srt_rma_requests). Status flow:
+    /// Requested -> Approved / Rejected (SALES.RETURN.APPROVE) ->
+    /// Converted, when ConvertRma has created the DRAFT sales return
+    /// stamped in LinkedReturnDocId.</summary>
+    public sealed record RmaRequest(
+        long RmaId, string RmaNo, long? PartyId, string PartyName,
+        string SourceKind, long? SourceDocId, string SourceDocNo,
+        string ReasonCode, string? Notes, string Status,
+        string? RequestedBy, string? DecidedBy, string? DecidedAt, string? DecisionNote,
+        long? LinkedReturnDocId, List<RmaLine> Lines);
+
+    public static class RmaStatuses
+    {
+        public const string Requested = "Requested";
+        public const string Approved = "Approved";
+        public const string Rejected = "Rejected";
+        public const string Converted = "Converted";
+    }
+
+    /// <summary>Creates an RMA request in status Requested. The reason
+    /// must be a live W6 return reason; an INV / DLV request must name
+    /// its source document; a NONE request must name the party. Lines
+    /// are stored as one JSON snapshot (migration 098 precedent).</summary>
+    public static long CreateRma(
+        long? partyId, string partyName, string sourceKind, long? sourceDocId, string sourceDocNo,
+        string reasonCode, string? notes, IReadOnlyList<RmaLine> lines, string requestedBy)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        if (string.IsNullOrWhiteSpace(requestedBy))
+            throw new ArgumentException("The requesting user is required.", nameof(requestedBy));
+        if (sourceKind is not ("INV" or "DLV" or "NONE"))
+            throw new ArgumentException($"Unknown RMA source kind '{sourceKind}'.", nameof(sourceKind));
+        if (sourceKind is "INV" or "DLV" && sourceDocId is not > 0)
+            throw new InvalidOperationException("An invoice/delivery RMA must reference its source document.");
+        if (sourceKind == "NONE" && partyId is not > 0)
+            throw new InvalidOperationException("A no-source RMA must name the customer asking for the return.");
+        if (lines.Count == 0)
+            throw new InvalidOperationException("An RMA request needs at least one requested line.");
+        foreach (var line in lines)
+        {
+            if (line.Qty <= 0m)
+                throw new InvalidOperationException("Every RMA line quantity must be positive.");
+            if (line.UnitPrice < 0m)
+                throw new InvalidOperationException("An RMA line price cannot be negative.");
+        }
+        var reason = ListReasons().FirstOrDefault(r => string.Equals(r.Code, reasonCode, StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException($"Return reason '{reasonCode}' is not a live return reason.");
+
+        var cs = DatabaseRuntime.GetConnectionString()
+            ?? throw new InvalidOperationException("No database connection.");
+        using var connection = Open(cs);
+        using var tx = connection.BeginTransaction();
+        if (!PartyLedger.TableExists(connection, tx, Provider, "srt_rma_requests"))
+            throw new InvalidOperationException("RMA requests are unavailable: apply migration 105 first.");
+        long rmaId;
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = IsPg
+                ? """
+                  INSERT INTO srt_rma_requests (company_id, party_id, party_name, source_kind, source_doc_id, source_doc_no,
+                      reason_code, notes, lines_json, status, requested_by, created_by)
+                  VALUES ($company, $party, $partyName, $kind, $docId, $docNo, $reason, $notes, $lines, 'Requested', $user, $user)
+                  RETURNING rma_id;
+                  """
+                : """
+                  INSERT INTO srt_rma_requests (company_id, party_id, party_name, source_kind, source_doc_id, source_doc_no,
+                      reason_code, notes, lines_json, status, requested_by, created_by)
+                  VALUES ($company, $party, $partyName, $kind, $docId, $docNo, $reason, $notes, $lines, 'Requested', $user, $user);
+                  SELECT last_insert_rowid();
+                  """;
+            Add(cmd, "$company", Company);
+            Add(cmd, "$party", partyId);
+            Add(cmd, "$partyName", partyName?.Trim() ?? string.Empty);
+            Add(cmd, "$kind", sourceKind);
+            Add(cmd, "$docId", sourceDocId);
+            Add(cmd, "$docNo", sourceDocNo?.Trim() ?? string.Empty);
+            Add(cmd, "$reason", reason.Code);
+            Add(cmd, "$notes", string.IsNullOrWhiteSpace(notes) ? null : notes.Trim());
+            Add(cmd, "$lines", JsonSerializer.Serialize(lines));
+            Add(cmd, "$user", requestedBy.Trim());
+            rmaId = Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+        }
+        using (var stamp = connection.CreateCommand())
+        {
+            stamp.Transaction = tx;
+            stamp.CommandText = "UPDATE srt_rma_requests SET rma_no = $no WHERE rma_id = $id AND company_id = $company;";
+            Add(stamp, "$no", $"RMA-{rmaId}");
+            Add(stamp, "$id", rmaId);
+            Add(stamp, "$company", Company);
+            stamp.ExecuteNonQuery();
+        }
+        tx.Commit();
+        return rmaId;
+    }
+
+    public static IReadOnlyList<RmaRequest> ListRma(string? status = null)
+    {
+        var cs = DatabaseRuntime.GetConnectionString()
+            ?? throw new InvalidOperationException("No database connection.");
+        using var connection = Open(cs);
+        var result = new List<RmaRequest>();
+        if (!PartyLedger.TableExists(connection, null, Provider, "srt_rma_requests"))
+            return result;
+        using var cmd = connection.CreateCommand();
+        var sql = $"""
+            SELECT rma_id, rma_no, party_id, party_name, source_kind, source_doc_id, source_doc_no,
+                   reason_code, notes, status, requested_by, decided_by, decided_at, decision_note,
+                   linked_return_doc_id, lines_json
+            FROM srt_rma_requests
+            WHERE company_id = $company AND is_deleted = {(IsPg ? "FALSE" : "0")}
+            """;
+        if (!string.IsNullOrWhiteSpace(status)) sql += " AND status = $status";
+        sql += " ORDER BY created_at DESC, rma_id DESC;";
+        cmd.CommandText = sql;
+        Add(cmd, "$company", Company);
+        if (!string.IsNullOrWhiteSpace(status)) Add(cmd, "$status", status.Trim());
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read()) result.Add(ReadRma(reader));
+        return result;
+    }
+
+    public static RmaRequest? GetRma(long rmaId)
+    {
+        var cs = DatabaseRuntime.GetConnectionString()
+            ?? throw new InvalidOperationException("No database connection.");
+        using var connection = Open(cs);
+        return ReadRma(connection, null, rmaId);
+    }
+
+    /// <summary>Approves or rejects a Requested RMA. Requires
+    /// SALES.RETURN.APPROVE (the W6 permission — no duplicate key).
+    /// Deciding an RMA that is not Requested is SAL-7025.</summary>
+    public static void DecideRma(long rmaId, bool approve, string userId, string? note, Func<string, bool>? permissionCheck = null)
+    {
+        EnsureApprovePermission(permissionCheck);
+        if (string.IsNullOrWhiteSpace(userId))
+            throw new ArgumentException("The deciding user is required.", nameof(userId));
+        if (!approve && string.IsNullOrWhiteSpace(note))
+            throw new ArgumentException("Rejecting an RMA requires a decision note.", nameof(note));
+        var cs = DatabaseRuntime.GetConnectionString()
+            ?? throw new InvalidOperationException("No database connection.");
+        using var connection = Open(cs);
+        using var tx = connection.BeginTransaction();
+        using var cmd = connection.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = IsPg
+            ? """
+              UPDATE srt_rma_requests SET status = $status, decided_by = $by, decided_at = NOW()::text,
+                  decision_note = $note, updated_by = $by, updated_at = NOW()
+              WHERE rma_id = $id AND company_id = $company AND status = 'Requested' AND is_deleted = FALSE;
+              """
+            : """
+              UPDATE srt_rma_requests SET status = $status, decided_by = $by, decided_at = datetime('now'),
+                  decision_note = $note, updated_by = $by, updated_at = datetime('now')
+              WHERE rma_id = $id AND company_id = $company AND status = 'Requested' AND is_deleted = 0;
+              """;
+        Add(cmd, "$status", approve ? RmaStatuses.Approved : RmaStatuses.Rejected);
+        Add(cmd, "$by", userId.Trim());
+        Add(cmd, "$note", string.IsNullOrWhiteSpace(note) ? null : note.Trim());
+        Add(cmd, "$id", rmaId);
+        Add(cmd, "$company", Company);
+        if (cmd.ExecuteNonQuery() == 0)
+            throw new AppError(ErrorCodes.RmaStateInvalid,
+                "Only a Requested RMA can be decided; this RMA was already decided or converted.",
+                rmaId.ToString(CultureInfo.InvariantCulture));
+        tx.Commit();
+    }
+
+    /// <summary>Converts an Approved RMA into a DRAFT sales return
+    /// through the existing returns machinery — the SAME draft paths
+    /// SalesReturnWin uses (InvRepo.SaveDraft + line-number restore for
+    /// invoice sources, SrtRepo.SaveDeliveryReturn for deliveries,
+    /// SrtRepo.CreateNoInvoiceReturn for source-less requests) — and
+    /// stamps the link on the RMA. Converting a non-Approved RMA, or
+    /// converting twice, is SAL-7025. Requires SALES.RETURN.APPROVE.
+    /// The return is a DRAFT: posting (with its inspection / approval /
+    /// quantity gates) stays the return window's job.</summary>
+    public static long ConvertRma(long rmaId, string userId, Func<string, bool>? permissionCheck = null)
+    {
+        EnsureApprovePermission(permissionCheck);
+        var rma = GetRma(rmaId)
+            ?? throw new AppError(ErrorCodes.RmaStateInvalid, "The RMA request does not exist for this company.",
+                rmaId.ToString(CultureInfo.InvariantCulture));
+        if (rma.Status != RmaStatuses.Approved || rma.LinkedReturnDocId is not null)
+            throw new AppError(ErrorCodes.RmaStateInvalid,
+                $"RMA {rma.RmaNo} cannot be converted from status '{rma.Status}'" +
+                (rma.LinkedReturnDocId is not null ? $" (already converted to return document {rma.LinkedReturnDocId})." : "."),
+                rma.RmaNo);
+
+        var reason = ListReasons().FirstOrDefault(r => string.Equals(r.Code, rma.ReasonCode, StringComparison.OrdinalIgnoreCase));
+        var doc = new InvDoc
+        {
+            Kind = InvDocKind.SalesReturn,
+            DocNo = InvRepo.NextDocNo(InvDocKind.SalesReturn),
+            DocDate = DateTime.Today,
+            ReturnReasonCode = rma.ReasonCode,
+            PaymentMethod = InvPaymentMethod.Credit,
+            Notes = string.IsNullOrWhiteSpace(rma.Notes) ? $"RMA {rma.RmaNo}" : $"RMA {rma.RmaNo}: {rma.Notes}"
+        };
+
+        long returnDocId;
+        switch (rma.SourceKind)
+        {
+            case "INV":
+            {
+                var original = InvRepo.Load(rma.SourceDocId!.Value, InvDocKind.SalesInvoice)
+                    ?? throw new InvalidOperationException($"Source invoice {rma.SourceDocNo} was not found.");
+                if (original.Status != InvDocStatus.Posted)
+                    throw new InvalidOperationException($"Source invoice {rma.SourceDocNo} is not posted; an RMA return needs a posted source.");
+                doc.PartyId = original.PartyId;
+                doc.PartyCode = original.PartyCode;
+                doc.PartyName = original.PartyName;
+                doc.WarehouseId = original.WarehouseId;
+                doc.WarehouseName = original.WarehouseName;
+                doc.CurrencyCode = original.CurrencyCode;
+                doc.ExchangeRate = original.ExchangeRate;
+                doc.TaxCode = original.TaxCode;
+                doc.DefaultTaxRate = original.DefaultTaxRate;
+                doc.OriginalDocId = original.DocId;
+                doc.OriginalDocKind = InvDocKind.SalesInvoice;
+                doc.OriginalDocNo = original.DocNo;
+                doc.ReturnSourceKind = "INV";
+                foreach (var line in rma.Lines)
+                {
+                    // Lines normally key on the source line number; a
+                    // line without one (warranty-claim RMAs know the
+                    // material, not the invoice line) matches the first
+                    // source line carrying that material.
+                    var source = (line.SourceLineNo > 0
+                            ? original.Lines.FirstOrDefault(l => l.LineNo == line.SourceLineNo)
+                            : original.Lines.FirstOrDefault(l => l.MaterialId == line.MaterialId))
+                        ?? throw new InvalidOperationException(
+                            $"RMA line refers to source line {line.SourceLineNo}, which is not on invoice {original.DocNo}.");
+                    doc.Lines.Add(new InvLine
+                    {
+                        LineNo = source.LineNo,
+                        MaterialId = source.MaterialId,
+                        MaterialCode = source.MaterialCode,
+                        Description = source.Description,
+                        Unit = source.Unit,
+                        Qty = line.Qty,
+                        UnitPrice = source.UnitPrice,
+                        DiscountPct = source.DiscountPct,
+                        TaxCode = source.TaxCode,
+                        TaxRate = source.TaxRate,
+                        TaxCalculationMode = source.TaxCalculationMode,
+                        WarehouseId = source.WarehouseId,
+                        WarehouseName = source.WarehouseName,
+                        ReturnCondition = reason?.DefaultCondition ?? "Good"
+                    });
+                }
+                var originalLineNumbers = doc.Lines.Select(l => l.LineNo).ToList();
+                InvRepo.SaveDraft(doc);
+                InvRepo.RestoreSalesReturnLineNumbers(doc.DocId, originalLineNumbers);
+                returnDocId = doc.DocId;
+                break;
+            }
+            case "DLV":
+            {
+                var delivery = LoadDelivery(rma.SourceDocNo)
+                    ?? throw new InvalidOperationException($"Source delivery {rma.SourceDocNo} was not found or is not posted.");
+                doc.PartyId = delivery.PartyId;
+                doc.PartyCode = delivery.PartyCode;
+                doc.PartyName = delivery.PartyName;
+                doc.WarehouseId = delivery.WarehouseId;
+                doc.WarehouseName = delivery.WarehouseName;
+                doc.CurrencyCode = delivery.CurrencyCode;
+                doc.ExchangeRate = delivery.ExchangeRate;
+                doc.OriginalDocId = delivery.DocId;
+                doc.OriginalDocNo = delivery.DocNo;
+                doc.ReturnSourceKind = "DLV";
+                foreach (var line in rma.Lines)
+                {
+                    var source = (line.SourceLineNo > 0
+                            ? delivery.Lines.FirstOrDefault(l => l.LineNo == line.SourceLineNo)
+                            : delivery.Lines.FirstOrDefault(l => l.MaterialId == line.MaterialId))
+                        ?? throw new InvalidOperationException(
+                            $"RMA line refers to source line {line.SourceLineNo}, which is not on delivery {delivery.DocNo}.");
+                    doc.Lines.Add(new InvLine
+                    {
+                        LineNo = source.LineNo,
+                        MaterialId = source.MaterialId,
+                        MaterialCode = source.MaterialCode,
+                        Description = source.Description,
+                        Unit = source.Unit,
+                        Qty = line.Qty,
+                        UnitPrice = source.UnitPrice,
+                        DiscountPct = source.DiscountPct,
+                        WarehouseId = source.WarehouseId,
+                        WarehouseName = source.WarehouseName,
+                        ReturnCondition = reason?.DefaultCondition ?? "Good"
+                    });
+                }
+                returnDocId = SaveDeliveryReturn(doc);
+                break;
+            }
+            default: // NONE
+            {
+                doc.PartyId = rma.PartyId;
+                doc.PartyName = rma.PartyName;
+                foreach (var line in rma.Lines)
+                {
+                    if (string.IsNullOrWhiteSpace(line.MaterialCode))
+                        throw new InvalidOperationException("A source-less RMA line must name the material being returned.");
+                    doc.Lines.Add(new InvLine
+                    {
+                        LineNo = line.SourceLineNo > 0 ? line.SourceLineNo : doc.Lines.Count + 1,
+                        MaterialId = line.MaterialId,
+                        MaterialCode = line.MaterialCode,
+                        Description = line.Description,
+                        Unit = line.Unit,
+                        Qty = line.Qty,
+                        UnitPrice = line.UnitPrice,
+                        ReturnCondition = reason?.DefaultCondition ?? "Good"
+                    });
+                }
+                returnDocId = CreateNoInvoiceReturn(doc, permissionCheck);
+                break;
+            }
+        }
+
+        // Claim the conversion: the guarded UPDATE is the second line
+        // of defence against a double convert (the status read above
+        // is the first). If it claims nothing, the RMA was converted
+        // concurrently — SAL-7025, and the just-created draft remains
+        // as an ordinary editable draft the user can delete.
+        var cs = DatabaseRuntime.GetConnectionString()
+            ?? throw new InvalidOperationException("No database connection.");
+        using (var connection = Open(cs))
+        using (var tx = connection.BeginTransaction())
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = IsPg
+                ? """
+                  UPDATE srt_rma_requests SET status = 'Converted', linked_return_doc_id = $doc,
+                      updated_by = $by, updated_at = NOW()
+                  WHERE rma_id = $id AND company_id = $company AND status = 'Approved'
+                    AND linked_return_doc_id IS NULL AND is_deleted = FALSE;
+                  """
+                : """
+                  UPDATE srt_rma_requests SET status = 'Converted', linked_return_doc_id = $doc,
+                      updated_by = $by, updated_at = datetime('now')
+                  WHERE rma_id = $id AND company_id = $company AND status = 'Approved'
+                    AND linked_return_doc_id IS NULL AND is_deleted = 0;
+                  """;
+            Add(cmd, "$doc", returnDocId);
+            Add(cmd, "$by", userId.Trim());
+            Add(cmd, "$id", rmaId);
+            Add(cmd, "$company", Company);
+            if (cmd.ExecuteNonQuery() == 0)
+                throw new AppError(ErrorCodes.RmaStateInvalid,
+                    $"RMA {rma.RmaNo} was already converted.", rma.RmaNo);
+            tx.Commit();
+        }
+        return returnDocId;
+    }
+
+    private static RmaRequest? ReadRma(DbConnection connection, DbTransaction? tx, long rmaId)
+    {
+        if (!PartyLedger.TableExists(connection, tx, Provider, "srt_rma_requests"))
+            return null;
+        using var cmd = connection.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = $"""
+            SELECT rma_id, rma_no, party_id, party_name, source_kind, source_doc_id, source_doc_no,
+                   reason_code, notes, status, requested_by, decided_by, decided_at, decision_note,
+                   linked_return_doc_id, lines_json
+            FROM srt_rma_requests
+            WHERE rma_id = $id AND company_id = $company AND is_deleted = {(IsPg ? "FALSE" : "0")};
+            """;
+        Add(cmd, "$id", rmaId);
+        Add(cmd, "$company", Company);
+        using var reader = cmd.ExecuteReader();
+        return reader.Read() ? ReadRma(reader) : null;
+    }
+
+    private static RmaRequest ReadRma(DbDataReader reader)
+    {
+        var linesJson = ReadText(reader, 15);
+        var lines = string.IsNullOrWhiteSpace(linesJson)
+            ? new List<RmaLine>()
+            : JsonSerializer.Deserialize<List<RmaLine>>(linesJson) ?? new List<RmaLine>();
+        return new RmaRequest(
+            Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+            ReadText(reader, 1),
+            reader.IsDBNull(2) ? null : Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture),
+            ReadText(reader, 3),
+            ReadText(reader, 4),
+            reader.IsDBNull(5) ? null : Convert.ToInt64(reader.GetValue(5), CultureInfo.InvariantCulture),
+            ReadText(reader, 6),
+            ReadText(reader, 7),
+            reader.IsDBNull(8) ? null : ReadText(reader, 8),
+            ReadText(reader, 9),
+            reader.IsDBNull(10) ? null : ReadText(reader, 10),
+            reader.IsDBNull(11) ? null : ReadText(reader, 11),
+            reader.IsDBNull(12) ? null : ReadText(reader, 12),
+            reader.IsDBNull(13) ? null : ReadText(reader, 13),
+            reader.IsDBNull(14) ? null : Convert.ToInt64(reader.GetValue(14), CultureInfo.InvariantCulture),
+            lines);
     }
 
     // ------------------------------------------------------------------

@@ -24,6 +24,9 @@ namespace ShouTech.App.Views.Reports;
 ///   LostQuotes— QUO documents with status Lost/Expired plus Posted
 ///               quotations whose valid_till is in the past
 ///               (RptQuery.CrmLostExpiredQuotationsAsync).
+///   Forecast  — open opportunities by expected close month and owner
+///               rep, weighted by STAGE probability (W10 Level 3;
+///               RptQuery.CrmForecastByMonthAsync).
 /// Access is gated on CRM.OPP.VIEW in RptNav.OpenCrmFunnel, the same
 /// key the CRM pipeline/opportunity windows require.
 /// </summary>
@@ -60,7 +63,8 @@ public sealed class CrmFunnelWin : RptBase
                     new KeyValuePair<string, string>("Pipeline", "Reports.SectionPipeline"),
                     new KeyValuePair<string, string>("WinRate", "Reports.SectionWinRate"),
                     new KeyValuePair<string, string>("Stale", "Reports.SectionStale"),
-                    new KeyValuePair<string, string>("LostQuotes", "Reports.SectionLostQuotes")
+                    new KeyValuePair<string, string>("LostQuotes", "Reports.SectionLostQuotes"),
+                    new KeyValuePair<string, string>("Forecast", "Reports.SectionForecast")
                 },
                 DefaultValue = "Pipeline"
             },
@@ -78,7 +82,34 @@ public sealed class CrmFunnelWin : RptBase
             "WinRate" => await LoadWinRateAsync(filters, ct),
             "Stale" => await LoadStaleAsync(filters, ct),
             "LostQuotes" => await LoadLostQuotesAsync(filters, ct),
+            "Forecast" => await LoadForecastAsync(ct),
             _ => await LoadPipelineAsync(ct)
+        };
+    }
+
+    private async Task<RptData> LoadForecastAsync(CancellationToken ct)
+    {
+        var raw = await RptQuery.CrmForecastByMonthAsync(ct);
+        var rows = raw.Select(r => (IReadOnlyDictionary<string, object?>)new Dictionary<string, object?>
+        {
+            ["Section"] = T("Reports.SectionForecast"),
+            ["Name"] = Convert.ToString(r.GetValueOrDefault("CloseMonth"), CultureInfo.InvariantCulture) ?? string.Empty,
+            ["PartyName"] = Convert.ToString(r.GetValueOrDefault("Rep"), CultureInfo.InvariantCulture) is { Length: > 0 } rep ? rep : "—",
+            ["Count"] = RptWinUtil.Dec(r.GetValueOrDefault("OppCount")),
+            ["Amount"] = RptWinUtil.Dec(r.GetValueOrDefault("RawTotal")),
+            ["WeightedAmount"] = RptWinUtil.Dec(r.GetValueOrDefault("WeightedTotal")),
+        }).ToList();
+        return new RptData
+        {
+            Columns = BuildDefinition().Columns,
+            Rows = rows,
+            Totals = new Dictionary<string, object?>
+            {
+                ["Section"] = T("Reports.Totals"),
+                ["Count"] = rows.Sum(x => RptWinUtil.Dec(x["Count"])),
+                ["Amount"] = rows.Sum(x => RptWinUtil.Dec(x["Amount"])),
+                ["WeightedAmount"] = rows.Sum(x => RptWinUtil.Dec(x["WeightedAmount"])),
+            }
         };
     }
 

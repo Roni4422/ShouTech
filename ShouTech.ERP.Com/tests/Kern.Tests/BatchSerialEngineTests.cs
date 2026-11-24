@@ -273,6 +273,112 @@ public class BatchSerialEngineTests
         db.Dispose();
     }
 
+    // ------------------------------------------------------------------
+    // W10 (migration 105): warranty registration derives from the sold
+    // serial records above; claims enforce SAL-7026.
+    // ------------------------------------------------------------------
+    [Fact]
+    public async Task Warranty_RegisterFromDocument_UsesCardTerm_IsIdempotent_AndClaimsGateOnExpiry()
+    {
+        var db = await SeededAsync();
+        SeedMaterial(db, 71, hasSerial: true);
+        ExecSql(db, "UPDATE materials SET warranty_months = 24 WHERE material_id = 71;");
+        Apply(db, Req(71, "2026-01-10", "PUR", "P-W1", qtyIn: 2m, receiptCost: 50m,
+            serials: new[] { new SerialSelection("SN-W1"), new SerialSelection("SN-W2") }));
+        // The posted invoice the serials leave on (header row only —
+        // the scan keys on the document number + its serial movements).
+        ExecSql(db, """
+            INSERT INTO sales_documents (company_id, doc_kind, doc_no, doc_date, status, party_id, party_name)
+            VALUES ('B54', 'SAL', 'S-W1', '2026-01-15', 'Posted', 7, 'Customer One');
+            """);
+        Apply(db, Req(71, "2026-01-15", "SAL", "S-W1", qtyOut: 2m,
+            serials: new[] { new SerialSelection("SN-W1"), new SerialSelection("SN-W2") }));
+        db.Commit();
+
+        var service = new WarrantyService("SQLite", db.ConnectionString);
+        var first = service.RegisterFromDocument(CompanyCode, null, "S-W1", 12, null, "w10-test");
+        Assert.Equal(2, first.Registered);
+        Assert.Equal(0, first.Skipped);
+
+        var warranties = service.ListWarranties(CompanyCode);
+        Assert.Equal(2, warranties.Count);
+        var w1 = Assert.Single(warranties, w => w.SerialNo == "SN-W1");
+        Assert.Equal(24, w1.WarrantyMonths);            // card term wins over the 12-month default
+        Assert.Equal("2026-01-15", w1.SaleDate);
+        Assert.Equal("2028-01-15", w1.ExpiryDate);      // sale date + 24 months, computed once
+        Assert.Equal(7, w1.PartyId);
+        Assert.Equal("S-W1", w1.SourceDocNo);
+        Assert.Equal(WarrantyStatuses.Active, w1.EffectiveStatus(new DateOnly(2027, 1, 1)));
+        Assert.Equal(WarrantyStatuses.Expired, w1.EffectiveStatus(new DateOnly(2028, 2, 1)));
+
+        // Idempotent: a re-scan registers nothing twice.
+        var second = service.RegisterFromDocument(CompanyCode, null, "S-W1", 12, null, "w10-test");
+        Assert.Equal(0, second.Registered);
+        Assert.Equal(2, second.Skipped);
+        Assert.Equal(2, service.ListWarranties(CompanyCode).Count);
+
+        // A claim inside cover files and decides; deciding twice is SAL-7026.
+        var claimId = service.FileClaim(CompanyCode, w1.Id, "Fan stopped", "2026-06-01", "w10-test");
+        service.DecideClaim(CompanyCode, claimId, true, WarrantyClaimActions.Repair, "Fan replaced", "w10-test");
+        var claim = Assert.Single(service.ListClaims(CompanyCode, w1.Id));
+        Assert.Equal(WarrantyClaimDecisions.Approved, claim.Decision);
+        Assert.Equal(WarrantyClaimActions.Repair, claim.Action);
+        var redecide = Assert.Throws<AppError>(() =>
+            service.DecideClaim(CompanyCode, claimId, true, WarrantyClaimActions.Repair, "again", "w10-test"));
+        Assert.Equal(ErrorCodes.WarrantyClaimInvalid, redecide.Code);
+
+        // A claim dated after expiry is SAL-7026.
+        var expired = Assert.Throws<AppError>(() =>
+            service.FileClaim(CompanyCode, w1.Id, "Too late", "2028-02-01", "w10-test"));
+        Assert.Equal(ErrorCodes.WarrantyClaimInvalid, expired.Code);
+        db.Dispose();
+    }
+
+    [Fact]
+    public async Task Warranty_ManualRegistration_Void_AndReturnClaimLink()
+    {
+        var db = await SeededAsync();
+        SeedMaterial(db, 72, hasSerial: true);
+        Apply(db, Req(72, "2026-02-01", "PUR", "P-W2", qtyIn: 1m, receiptCost: 80m,
+            serials: new[] { new SerialSelection("SN-W3") }));
+        Apply(db, Req(72, "2026-02-03", "SAL", "S-W2", qtyOut: 1m,
+            serials: new[] { new SerialSelection("SN-W3") }));
+        db.Commit();
+
+        var service = new WarrantyService("SQLite", db.ConnectionString);
+        var manual = service.RegisterManual(CompanyCode, "SN-W3", 6, null, "w10-test");
+        Assert.Equal("S-W2", manual.SourceDocNo);       // from the serial's last outbound movement
+        Assert.Equal("2026-02-03", manual.SaleDate);
+        Assert.Equal("2026-08-03", manual.ExpiryDate);
+        // Idempotent: the same serial returns the same warranty.
+        Assert.Equal(manual.Id, service.RegisterManual(CompanyCode, "SN-W3", 6, null, "w10-test").Id);
+        Assert.Throws<InvalidOperationException>(() =>
+            service.RegisterManual(CompanyCode, "SN-UNKNOWN", 6, null, "w10-test"));
+
+        // A Return approval needs the RMA link (SAL-7026 without it).
+        var claimId = service.FileClaim(CompanyCode, manual.Id, "Dead on arrival", "2026-02-10", "w10-test");
+        var noRma = Assert.Throws<AppError>(() =>
+            service.DecideClaim(CompanyCode, claimId, true, WarrantyClaimActions.Return, "Send it back", "w10-test"));
+        Assert.Equal(ErrorCodes.WarrantyClaimInvalid, noRma.Code);
+        service.DecideClaim(CompanyCode, claimId, true, WarrantyClaimActions.Return, "Send it back", "w10-test", rmaId: 42);
+        Assert.Equal(42, Assert.Single(service.ListClaims(CompanyCode, manual.Id)).RmaId);
+
+        // Void is terminal: no further claims (SAL-7026).
+        service.VoidWarranty(CompanyCode, manual.Id, "w10-test");
+        var voided = Assert.Throws<AppError>(() =>
+            service.FileClaim(CompanyCode, manual.Id, "Another", "2026-02-11", "w10-test"));
+        Assert.Equal(ErrorCodes.WarrantyClaimInvalid, voided.Code);
+        db.Dispose();
+    }
+
+    private static void ExecSql(TestDb db, string sql)
+    {
+        using var cmd = db.Connection.CreateCommand();
+        cmd.Transaction = db.Tx;
+        cmd.CommandText = sql;
+        cmd.ExecuteNonQuery();
+    }
+
     // ---------------- Helpers ----------------
 
     private static StockMovementRequest Req(

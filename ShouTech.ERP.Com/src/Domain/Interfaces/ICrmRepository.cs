@@ -139,6 +139,17 @@ public interface ICrmRepository
     Task CompleteActivityAsync(string companyId, Guid activityId, string? resultNotes, string userId, CancellationToken cancellationToken = default);
     Task SoftDeleteActivityAsync(string companyId, Guid activityId, string userId, CancellationToken cancellationToken = default);
 
+    // ---- Campaigns (migration 105, sales Level 3) -------------------------------
+    /// <summary>The company's campaigns in name order.</summary>
+    Task<IReadOnlyList<CrmCampaign>> GetCampaignsAsync(string companyId, CancellationToken cancellationToken = default);
+    Task SaveCampaignAsync(string companyId, CrmCampaign campaign, string userId, CancellationToken cancellationToken = default);
+    Task SoftDeleteCampaignAsync(string companyId, Guid campaignId, string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Outcome roll-up per campaign: linked leads, linked
+    /// opportunities, and the expected amount of linked opportunities
+    /// whose stage type is Won.</summary>
+    Task<IReadOnlyList<CrmCampaignOutcome>> GetCampaignOutcomesAsync(string companyId, CancellationToken cancellationToken = default);
+
     // ---- Lookups the windows offer ----------------------------------------------
     /// <summary>Live parties of the company (the unified master) for
     /// opportunity / activity pickers: Guid id, code, name, ledger id.</summary>

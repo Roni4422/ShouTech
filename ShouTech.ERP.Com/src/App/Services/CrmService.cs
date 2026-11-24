@@ -64,6 +64,36 @@ public sealed class CrmService
         return _repository.SaveLostReasonAsync(RequireCompany(companyId), reason, RequireUser(userId), cancellationToken);
     }
 
+    // ---- Campaigns (migration 105, sales Level 3) ----------------------------
+    public Task<IReadOnlyList<CrmCampaign>> GetCampaignsAsync(string companyId, CancellationToken cancellationToken = default)
+        => _repository.GetCampaignsAsync(RequireCompany(companyId), cancellationToken);
+
+    public Task SaveCampaignAsync(string companyId, CrmCampaign campaign, string userId, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(campaign);
+        if (string.IsNullOrWhiteSpace(campaign.Name))
+            throw new InvalidOperationException("Campaign name is required.");
+        if (!CrmCampaignKinds.All.Contains(campaign.Kind))
+            throw new InvalidOperationException($"Unknown campaign kind '{campaign.Kind}'.");
+        if (!CrmCampaignStatuses.All.Contains(campaign.Status))
+            throw new InvalidOperationException($"Unknown campaign status '{campaign.Status}'.");
+        if (campaign.Budget < 0m)
+            throw new InvalidOperationException("Campaign budget cannot be negative.");
+        if (!string.IsNullOrWhiteSpace(campaign.StartDate) && !string.IsNullOrWhiteSpace(campaign.EndDate)
+            && string.CompareOrdinal(campaign.EndDate.Trim(), campaign.StartDate.Trim()) < 0)
+            throw new InvalidOperationException("Campaign end date cannot be before its start date.");
+        return _repository.SaveCampaignAsync(RequireCompany(companyId), campaign, RequireUser(userId), cancellationToken);
+    }
+
+    public Task DeleteCampaignAsync(string companyId, Guid campaignId, string userId, CancellationToken cancellationToken = default)
+    {
+        if (campaignId == Guid.Empty) throw new ArgumentException("Campaign is required.", nameof(campaignId));
+        return _repository.SoftDeleteCampaignAsync(RequireCompany(companyId), campaignId, RequireUser(userId), cancellationToken);
+    }
+
+    public Task<IReadOnlyList<CrmCampaignOutcome>> GetCampaignOutcomesAsync(string companyId, CancellationToken cancellationToken = default)
+        => _repository.GetCampaignOutcomesAsync(RequireCompany(companyId), cancellationToken);
+
     // ---- Leads --------------------------------------------------------------
     public Task<IReadOnlyList<CrmLead>> GetLeadsAsync(string companyId, string? status = null, CancellationToken cancellationToken = default)
         => _repository.GetLeadsAsync(RequireCompany(companyId), status, cancellationToken);

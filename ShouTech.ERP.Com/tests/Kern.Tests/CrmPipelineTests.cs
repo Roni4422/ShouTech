@@ -478,6 +478,115 @@ public class CrmPipelineTests
         Assert.Equal(result.OpportunityId, lead.ConvertedOpportunityId);
     }
 
+    // ------------------------------------------------------------------
+    // W10 (migration 105): campaigns master, campaign_id linkage and
+    // the outcome roll-up.
+    // ------------------------------------------------------------------
+    [Fact]
+    public async Task Campaign_RoundTrips_AndLinksLeadOpportunityAndConversion()
+    {
+        using var db = await SeededAsync();
+        var campaign = new CrmCampaign
+        {
+            Name = "Q4 Outreach",
+            Kind = CrmCampaignKinds.Exhibition,
+            StartDate = "2026-10-01",
+            EndDate = "2026-12-31",
+            Budget = 5000m,
+            TargetNotes = "Trade fair push",
+            Status = CrmCampaignStatuses.Active
+        };
+        await db.Crm.SaveCampaignAsync(CO, campaign, Actor);
+        var saved = Assert.Single(await db.Crm.GetCampaignsAsync(CO));
+        Assert.Equal(campaign.Id, saved.Id);
+        Assert.Equal("Q4 Outreach", saved.Name);
+        Assert.Equal(CrmCampaignKinds.Exhibition, saved.Kind);
+        Assert.Equal("2026-10-01", saved.StartDate);
+        Assert.Equal("2026-12-31", saved.EndDate);
+        Assert.Equal(5000m, saved.Budget);
+        Assert.Equal("Trade fair push", saved.TargetNotes);
+        Assert.Equal(CrmCampaignStatuses.Active, saved.Status);
+
+        // The lead carries the structured link next to the legacy text.
+        var lead = FullLead();
+        lead.CampaignId = campaign.Id;
+        await db.Crm.SaveLeadAsync(CO, lead, Actor);
+        var loadedLead = await db.Crm.GetLeadAsync(CO, lead.Id);
+        Assert.Equal(campaign.Id, loadedLead!.CampaignId);
+        Assert.Equal("Q4 Outreach", loadedLead.Campaign);
+
+        // Conversion propagates the link to the created opportunity.
+        lead.Status = CrmLeadStatuses.Qualified;
+        await db.Crm.SaveLeadAsync(CO, lead, Actor);
+        var conversion = await db.Crm.ConvertLeadAsync(CO, lead.Id, Actor, "SAR");
+        var convertedOpp = await db.Crm.GetOpportunityAsync(CO, conversion.OpportunityId);
+        Assert.Equal(campaign.Id, convertedOpp!.CampaignId);
+
+        // A directly saved opportunity round-trips the link too.
+        var opp = new CrmOpportunity
+        {
+            Title = "Campaign deal", ExpectedAmount = 8000m, CurrencyCode = "SAR",
+            CampaignId = campaign.Id, Campaign = campaign.Name
+        };
+        await db.Crm.SaveOpportunityAsync(CO, opp, Actor);
+        Assert.Equal(campaign.Id, (await db.Crm.GetOpportunityAsync(CO, opp.Id))!.CampaignId);
+    }
+
+    [Fact]
+    public async Task CampaignOutcome_RollUp_CountsLeadsOpportunitiesAndWonValue()
+    {
+        using var db = await SeededAsync();
+        var campaign = new CrmCampaign { Name = "Rollup", Status = CrmCampaignStatuses.Active };
+        await db.Crm.SaveCampaignAsync(CO, campaign, Actor);
+        var empty = new CrmCampaign { Name = "Empty", Status = CrmCampaignStatuses.Planned };
+        await db.Crm.SaveCampaignAsync(CO, empty, Actor);
+
+        var lead = FullLead();
+        lead.CampaignId = campaign.Id;
+        await db.Crm.SaveLeadAsync(CO, lead, Actor);
+
+        var stages = await db.Crm.GetStagesAsync(CO);
+        var won = stages.Single(s => s.StageType == CrmStageTypes.Won);
+        var wonOpp = new CrmOpportunity
+        {
+            Title = "Won deal", ExpectedAmount = 8000m, CurrencyCode = "SAR", CampaignId = campaign.Id
+        };
+        await db.Crm.SaveOpportunityAsync(CO, wonOpp, Actor);
+        await db.Crm.MoveStageAsync(CO, wonOpp.Id, won.Id, null, null, null, Actor);
+        var openOpp = new CrmOpportunity
+        {
+            Title = "Open deal", ExpectedAmount = 2000m, CurrencyCode = "SAR", CampaignId = campaign.Id
+        };
+        await db.Crm.SaveOpportunityAsync(CO, openOpp, Actor);
+        var unlinked = new CrmOpportunity { Title = "Unlinked", ExpectedAmount = 9999m, CurrencyCode = "SAR" };
+        await db.Crm.SaveOpportunityAsync(CO, unlinked, Actor);
+
+        var outcomes = await db.Crm.GetCampaignOutcomesAsync(CO);
+        var rollup = Assert.Single(outcomes, o => o.CampaignId == campaign.Id);
+        Assert.Equal(1, rollup.LeadCount);
+        Assert.Equal(2, rollup.OpportunityCount);
+        Assert.Equal(8000m, rollup.WonValue);
+        var emptyRollup = Assert.Single(outcomes, o => o.CampaignId == empty.Id);
+        Assert.Equal(0, emptyRollup.LeadCount);
+        Assert.Equal(0, emptyRollup.OpportunityCount);
+        Assert.Equal(0m, emptyRollup.WonValue);
+    }
+
+    [Fact]
+    public async Task Campaign_InvalidKindStatusOrNegativeBudget_IsRefused()
+    {
+        using var db = await SeededAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            db.Crm.SaveCampaignAsync(CO, new CrmCampaign { Name = "Bad", Kind = "Bogus" }, Actor));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            db.Crm.SaveCampaignAsync(CO, new CrmCampaign { Name = "Bad", Status = "Bogus" }, Actor));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            db.Crm.SaveCampaignAsync(CO, new CrmCampaign { Name = "Bad", Budget = -1m }, Actor));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            db.Crm.SaveCampaignAsync(CO, new CrmCampaign { Name = "Bad", StartDate = "2026-12-31", EndDate = "2026-01-01" }, Actor));
+        Assert.Empty(await db.Crm.GetCampaignsAsync(CO));
+    }
+
     private static CrmLead FullLead() => new()
     {
         LeadName = "Sara Haddad",

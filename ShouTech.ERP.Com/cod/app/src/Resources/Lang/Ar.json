@@ -243,7 +243,9 @@
     "InvoiceProfits": "أرباح الفواتير",
     "PackingList": "لائحة التعبئة",
     "CompressInvoices": "ضغط الفواتير",
-    "RepostInvoices": "إعادة ترحيل الفواتير"
+    "RepostInvoices": "إعادة ترحيل الفواتير",
+    "Warranty": "الضمانات",
+    "RmaRequests": "طلبات إرجاع RMA"
   },
   "POS": {
     "Title": "شو تيك | نقاط البيع",
@@ -782,7 +784,8 @@
     "VarianceFlag": "يوجد فرق",
     "Unassigned": "غير مُسند",
     "StatusLost": "مفقود",
-    "StatusExpired": "منتهي"
+    "StatusExpired": "منتهي",
+    "SectionForecast": "التوقعات"
   },
   "Tools": {
     "Title": "أدوات",
@@ -3603,7 +3606,8 @@
     "RemoveItem": "حذف البند",
     "ValidTill": "صالح حتى",
     "LinkExistingTitle": "ربط طرف موجود",
-    "LinkExistingParty": "يوجد سجل مطابق بالفعل: {0}. هل تريد ربط هذا العميل المحتمل بالطرف الموجود بدلاً من إنشاء طرف جديد؟"
+    "LinkExistingParty": "يوجد سجل مطابق بالفعل: {0}. هل تريد ربط هذا العميل المحتمل بالطرف الموجود بدلاً من إنشاء طرف جديد؟",
+    "Campaigns": "حملات إدارة العملاء"
   },
   "HR": {
     "Title": "الموارد البشرية",
@@ -4375,6 +4379,116 @@
       "Invoiced": "المفوتر",
       "Remaining": "المتبقي",
       "NextDelivery": "التسليم التالي"
+    }
+  },
+  "Campaign": {
+    "Title": "حملات إدارة العملاء",
+    "Campaigns": "الحملات",
+    "Outcomes": "النتائج",
+    "PermissionDenied": "ليس لديك صلاحية لعملية الحملة هذه.",
+    "Saved": "تم حفظ الحملة.",
+    "SelectCampaign": "اختر حملة أولاً.",
+    "StatusLine": "{0} حملة",
+    "TargetNotes": "ملاحظات الهدف",
+    "Col": {
+      "Name": "الاسم",
+      "Kind": "النوع",
+      "Status": "الحالة",
+      "Budget": "الميزانية",
+      "Start": "البداية",
+      "End": "النهاية",
+      "Leads": "العملاء المحتملون",
+      "Opportunities": "الفرص",
+      "WonValue": "قيمة الفوز"
+    }
+  },
+  "Warranty": {
+    "Title": "الضمانات والمطالبات",
+    "Warranties": "الضمانات",
+    "Claims": "المطالبات",
+    "PermissionDenied": "ليس لديك صلاحية لعملية الضمان هذه.",
+    "ServiceUnavailable": "خدمة الضمان غير متاحة.",
+    "InvoiceNo": "رقم الفاتورة / نقطة البيع",
+    "DefaultMonths": "الأشهر الافتراضية",
+    "SerialNo": "الرقم التسلسلي",
+    "ManualMonths": "الأشهر",
+    "Terms": "الشروط",
+    "RegisterFromInvoice": "تسجيل الضمانات",
+    "RegisterManual": "تسجيل الرقم التسلسلي",
+    "Void": "إلغاء",
+    "StatusLine": "{0} ضمان",
+    "RegisteredStatus": "تم تسجيل {0} ضمان، وتخطي {1}.",
+    "ManualRegisteredStatus": "تم تسجيل ضمان الرقم التسلسلي {0}؛ ينتهي في {1}.",
+    "InvoiceRequired": "أدخل رقم مستند الفاتورة / نقطة البيع أولاً.",
+    "SerialRequired": "أدخل الرقم التسلسلي أولاً.",
+    "SelectWarranty": "اختر ضماناً أولاً.",
+    "SelectClaim": "اختر مطالبة أولاً.",
+    "ClaimIssue": "المشكلة",
+    "ClaimDate": "تاريخ المطالبة",
+    "ClaimAction": "الإجراء",
+    "ResolutionNote": "ملاحظة الحل",
+    "FileClaim": "تقديم مطالبة",
+    "ApproveClaim": "اعتماد",
+    "RejectClaim": "رفض",
+    "IssueRequired": "صِف مشكلة المطالبة أولاً.",
+    "ClaimDateRequired": "اختر تاريخ المطالبة.",
+    "ClaimFiled": "تم تقديم المطالبة.",
+    "ClaimDecided": "تم البت في المطالبة.",
+    "Col": {
+      "Serial": "التسلسلي",
+      "Material": "المادة",
+      "Party": "العميل",
+      "SourceDoc": "المستند المصدر",
+      "SaleDate": "تاريخ البيع",
+      "Months": "الأشهر",
+      "Expiry": "الانتهاء",
+      "Status": "الحالة",
+      "ClaimDate": "تاريخ المطالبة",
+      "Issue": "المشكلة",
+      "Decision": "القرار",
+      "Action": "الإجراء",
+      "Resolution": "الحل",
+      "Rma": "RMA"
+    }
+  },
+  "Rma": {
+    "Title": "طلبات الإرجاع RMA",
+    "PermissionDenied": "ليس لديك صلاحية لعملية طلب الإرجاع هذه.",
+    "Create": "إنشاء طلب",
+    "Approve": "اعتماد",
+    "Reject": "رفض",
+    "Convert": "تحويل إلى مرتجع",
+    "LoadSource": "تحميل المصدر",
+    "SourceKind": "نوع المصدر",
+    "SourceDoc": "المستند المصدر",
+    "PartyId": "رقم العميل",
+    "Notes": "ملاحظات",
+    "StatusLine": "{0} طلب إرجاع",
+    "SourceLoadedStatus": "تم تحميل {0} سطر من المصدر.",
+    "CreatedStatus": "تم إنشاء الطلب {0}.",
+    "ConvertedStatus": "تم تحويل الطلب {0} إلى مسودة مرتجع رقم {1}.",
+    "SourceRequired": "أدخل رقم المستند المصدر أولاً.",
+    "SourceNotFound": "لم يتم العثور على المستند المصدر.",
+    "SourceNotPosted": "الفاتورة المصدر غير مرحّلة.",
+    "NoSourceToLoad": "طلب الإرجاع بلا مصدر لا يحتاج تحميلاً؛ اكتب سطوره مباشرة.",
+    "LoadSourceFirst": "حمّل المستند المصدر أولاً لتعبئة سطور الطلب.",
+    "ReasonRequired": "اختر سبب الإرجاع.",
+    "SelectRequest": "اختر طلب إرجاع أولاً.",
+    "Col": {
+      "No": "رقم الطلب",
+      "Party": "العميل",
+      "SourceKind": "المصدر",
+      "SourceDoc": "المستند المصدر",
+      "Reason": "السبب",
+      "Status": "الحالة",
+      "Lines": "السطور",
+      "ReturnDoc": "مستند المرتجع",
+      "SourceLine": "سطر المصدر",
+      "Material": "المادة",
+      "Description": "الوصف",
+      "Unit": "الوحدة",
+      "Qty": "الكمية",
+      "Price": "السعر"
     }
   }
 }
