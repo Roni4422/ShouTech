@@ -74,7 +74,7 @@ public sealed class CrmService
         return _repository.GetLeadAsync(RequireCompany(companyId), leadId, cancellationToken);
     }
 
-    public Task SaveLeadAsync(string companyId, CrmLead lead, string userId, CancellationToken cancellationToken = default)
+    public async Task SaveLeadAsync(string companyId, CrmLead lead, string userId, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(lead);
         if (string.IsNullOrWhiteSpace(lead.LeadName))
@@ -85,8 +85,28 @@ public sealed class CrmService
             throw new AppError(ErrorCodes.CrmLeadStateInvalid,
                 "A lead becomes Converted only through conversion, never by editing its status.", lead.LeadName);
         lead.LeadName = lead.LeadName.Trim();
-        return _repository.SaveLeadAsync(RequireCompany(companyId), lead, RequireUser(userId), cancellationToken);
+        var company = RequireCompany(companyId);
+        // Duplicate detection (gap G1, CRM-9007): the repository
+        // re-checks inside its save transaction.
+        var duplicate = await _repository.FindLeadDuplicateAsync(company, lead, cancellationToken).ConfigureAwait(false);
+        if (duplicate is not null)
+            throw DuplicateError(lead, duplicate);
+        await _repository.SaveLeadAsync(company, lead, RequireUser(userId), cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>Finds a duplicate for a lead (same email or phone on
+    /// another lead or an existing party); null when there is none.
+    /// The lead window uses this to offer the link-existing path.</summary>
+    public Task<CrmDuplicateMatch?> FindLeadDuplicateAsync(string companyId, CrmLead lead, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(lead);
+        return _repository.FindLeadDuplicateAsync(RequireCompany(companyId), lead, cancellationToken);
+    }
+
+    internal static AppError DuplicateError(CrmLead lead, CrmDuplicateMatch duplicate)
+        => new(ErrorCodes.CrmDuplicateLeadOrParty,
+            $"Lead '{lead.LeadName}' duplicates an existing record: {duplicate.Describe()}. Link the existing record instead of creating a duplicate.",
+            duplicate.Describe());
 
     public Task DeleteLeadAsync(string companyId, Guid leadId, string userId, CancellationToken cancellationToken = default)
     {
@@ -94,10 +114,33 @@ public sealed class CrmService
         return _repository.SoftDeleteLeadAsync(RequireCompany(companyId), leadId, RequireUser(userId), cancellationToken);
     }
 
-    public Task<CrmConversionResult> ConvertLeadAsync(string companyId, Guid leadId, string userId, string currencyCode, CancellationToken cancellationToken = default)
+    public async Task<CrmConversionResult> ConvertLeadAsync(string companyId, Guid leadId, string userId, string currencyCode, CancellationToken cancellationToken = default)
     {
         if (leadId == Guid.Empty) throw new ArgumentException("Lead is required.", nameof(leadId));
-        return _repository.ConvertLeadAsync(RequireCompany(companyId), leadId, RequireUser(userId),
+        var company = RequireCompany(companyId);
+        // Duplicate detection on convert (gap G1, CRM-9007): if the
+        // lead's email/phone already exists as another lead or a
+        // party, conversion into a NEW party is refused — the caller
+        // links the existing party instead (ConvertLeadToExistingPartyAsync).
+        var lead = await _repository.GetLeadAsync(company, leadId, cancellationToken).ConfigureAwait(false);
+        if (lead is not null)
+        {
+            var duplicate = await _repository.FindLeadDuplicateAsync(company, lead, cancellationToken).ConfigureAwait(false);
+            if (duplicate is not null)
+                throw DuplicateError(lead, duplicate);
+        }
+        return await _repository.ConvertLeadAsync(company, leadId, RequireUser(userId),
+            string.IsNullOrWhiteSpace(currencyCode) ? "SAR" : currencyCode.Trim(), cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Converts a lead by LINKING an existing party (gap G2):
+    /// no new party is created; the opportunity is created against
+    /// <paramref name="existingPartyId"/>.</summary>
+    public Task<CrmConversionResult> ConvertLeadToExistingPartyAsync(string companyId, Guid leadId, Guid existingPartyId, string userId, string currencyCode, CancellationToken cancellationToken = default)
+    {
+        if (leadId == Guid.Empty) throw new ArgumentException("Lead is required.", nameof(leadId));
+        if (existingPartyId == Guid.Empty) throw new ArgumentException("Existing party is required.", nameof(existingPartyId));
+        return _repository.ConvertLeadToExistingPartyAsync(RequireCompany(companyId), leadId, existingPartyId, RequireUser(userId),
             string.IsNullOrWhiteSpace(currencyCode) ? "SAR" : currencyCode.Trim(), cancellationToken);
     }
 
@@ -122,8 +165,37 @@ public sealed class CrmService
             throw new InvalidOperationException("Probability must be between 0 and 100.");
         if (opportunity.OppType is not null && !CrmOpportunityTypes.All.Contains(opportunity.OppType))
             throw new InvalidOperationException($"Unknown opportunity type '{opportunity.OppType}'.");
+        // Items (migration 092, CRM-9008): qty > 0, price >= 0,
+        // discount 0-100, tax >= 0, description required. When items
+        // exist the expected amount IS the items total.
+        foreach (var item in opportunity.Items)
+        {
+            if (string.IsNullOrWhiteSpace(item.Description))
+                throw new AppError(ErrorCodes.CrmOpportunityItemInvalid,
+                    "Every opportunity item requires a description.", opportunity.Title);
+            if (item.Qty <= 0m)
+                throw new AppError(ErrorCodes.CrmOpportunityItemInvalid,
+                    $"Opportunity item '{item.Description}' must have a quantity greater than zero.", item.Description);
+            if (item.UnitPrice < 0m)
+                throw new AppError(ErrorCodes.CrmOpportunityItemInvalid,
+                    $"Opportunity item '{item.Description}' cannot have a negative price.", item.Description);
+            if (item.DiscountPct is < 0m or > 100m)
+                throw new AppError(ErrorCodes.CrmOpportunityItemInvalid,
+                    $"Opportunity item '{item.Description}' has a discount outside 0-100%.", item.Description);
+            if (item.TaxRate < 0m)
+                throw new AppError(ErrorCodes.CrmOpportunityItemInvalid,
+                    $"Opportunity item '{item.Description}' cannot have a negative tax rate.", item.Description);
+        }
+        if (opportunity.Items.Count > 0)
+            opportunity.ExpectedAmount = opportunity.Items.Sum(i => i.LineTotal);
         opportunity.Title = opportunity.Title.Trim();
         return _repository.SaveOpportunityAsync(RequireCompany(companyId), opportunity, RequireUser(userId), cancellationToken);
+    }
+
+    public Task<IReadOnlyList<CrmOpportunityItem>> GetOpportunityItemsAsync(string companyId, Guid oppId, CancellationToken cancellationToken = default)
+    {
+        if (oppId == Guid.Empty) throw new ArgumentException("Opportunity is required.", nameof(oppId));
+        return _repository.GetOpportunityItemsAsync(RequireCompany(companyId), oppId, cancellationToken);
     }
 
     public Task DeleteOpportunityAsync(string companyId, Guid oppId, string userId, CancellationToken cancellationToken = default)
@@ -154,7 +226,7 @@ public sealed class CrmService
 
     // ---- Documents ---------------------------------------------------------------
     public Task<CrmQuotationResult> CreateQuotationAsync(string companyId, Guid oppId, string userId,
-        IReadOnlyList<CrmQuotationLine>? lines = null, CancellationToken cancellationToken = default)
+        IReadOnlyList<CrmQuotationLine>? lines = null, DateOnly? validTill = null, CancellationToken cancellationToken = default)
     {
         if (oppId == Guid.Empty) throw new ArgumentException("Opportunity is required.", nameof(oppId));
         if (lines is not null)
@@ -167,9 +239,13 @@ public sealed class CrmService
                     throw new InvalidOperationException("Quotation line quantities must be greater than zero.");
                 if (line.UnitPrice < 0m)
                     throw new InvalidOperationException("Quotation line prices cannot be negative.");
+                if (line.DiscountPct is < 0m or > 100m)
+                    throw new InvalidOperationException("Quotation line discounts must be between 0 and 100.");
+                if (line.TaxRate < 0m)
+                    throw new InvalidOperationException("Quotation line tax rates cannot be negative.");
             }
         }
-        return _repository.CreateQuotationAsync(RequireCompany(companyId), oppId, RequireUser(userId), lines, cancellationToken);
+        return _repository.CreateQuotationAsync(RequireCompany(companyId), oppId, RequireUser(userId), lines, validTill, cancellationToken);
     }
 
     public Task LinkDocumentAsync(string companyId, Guid oppId, string linkType, long docId, string userId, CancellationToken cancellationToken = default)

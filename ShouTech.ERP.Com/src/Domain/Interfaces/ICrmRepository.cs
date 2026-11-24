@@ -32,8 +32,17 @@ public interface ICrmRepository
     // ---- Leads -------------------------------------------------------------
     Task<IReadOnlyList<CrmLead>> GetLeadsAsync(string companyId, string? status = null, CancellationToken cancellationToken = default);
     Task<CrmLead?> GetLeadAsync(string companyId, Guid leadId, CancellationToken cancellationToken = default);
+    /// <summary>Saves a lead. Throws CRM-9007 when the lead's email or
+    /// phone matches another lead or an existing party (duplicate
+    /// detection, gap G1) — checked inside the save transaction.</summary>
     Task SaveLeadAsync(string companyId, CrmLead lead, string userId, CancellationToken cancellationToken = default);
     Task SoftDeleteLeadAsync(string companyId, Guid leadId, string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Finds a duplicate for a lead: the same email OR phone
+    /// (phone/mobile cross-checked) on another lead or on an existing
+    /// party of the company. The lead's own row (lead.Id) is excluded.
+    /// Null when there is no match.</summary>
+    Task<CrmDuplicateMatch?> FindLeadDuplicateAsync(string companyId, CrmLead lead, CancellationToken cancellationToken = default);
 
     /// <summary>Lead conversion (ONE transaction): creates the party in
     /// the unified master (parties, kind C, with its ledger_id assigned
@@ -43,6 +52,13 @@ public interface ICrmRepository
     /// Throws CRM-9001 when the lead is already converted.</summary>
     Task<CrmConversionResult> ConvertLeadAsync(string companyId, Guid leadId, string userId, string currencyCode, CancellationToken cancellationToken = default);
 
+    /// <summary>Lead conversion linked to an EXISTING party (gap G2):
+    /// no new party is inserted; the opportunity is created against
+    /// <paramref name="existingPartyId"/> and the lead is stamped with
+    /// that party. Throws CRM-9004 when the party does not exist for
+    /// the company.</summary>
+    Task<CrmConversionResult> ConvertLeadToExistingPartyAsync(string companyId, Guid leadId, Guid existingPartyId, string userId, string currencyCode, CancellationToken cancellationToken = default);
+
     // ---- Opportunities -------------------------------------------------------
     Task<IReadOnlyList<CrmOpportunity>> GetOpportunitiesAsync(string companyId, CancellationToken cancellationToken = default);
     Task<CrmOpportunity?> GetOpportunityAsync(string companyId, Guid oppId, CancellationToken cancellationToken = default);
@@ -51,8 +67,13 @@ public interface ICrmRepository
     /// its stage (defaulting probability from the stage when the caller
     /// left it at 0 on a fresh record) and writes the creation history
     /// row; updates never move the stage (stage moves go through
-    /// MoveStageAsync so history is complete).</summary>
+    /// MoveStageAsync so history is complete). The opportunity's Items
+    /// (migration 092) are replaced in the SAME transaction, and when
+    /// items exist ExpectedAmount is stored as the items total.</summary>
     Task SaveOpportunityAsync(string companyId, CrmOpportunity opportunity, string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>The opportunity's live items in line order.</summary>
+    Task<IReadOnlyList<CrmOpportunityItem>> GetOpportunityItemsAsync(string companyId, Guid oppId, CancellationToken cancellationToken = default);
     Task SoftDeleteOpportunityAsync(string companyId, Guid oppId, string userId, CancellationToken cancellationToken = default);
 
     /// <summary>Moves an opportunity to a stage in ONE transaction:
@@ -78,9 +99,19 @@ public interface ICrmRepository
     /// crm_opportunity_documents link. Per Step 5 a quotation has NO
     /// effects: this writes no party_ledger, journal or stock rows.
     /// Throws CRM-9004 when the opportunity has no party or the
-    /// company's Guid cannot be resolved.</summary>
+    /// company's Guid cannot be resolved. Lines: explicit
+    /// <paramref name="lines"/> win; otherwise the quotation is built
+    /// from the opportunity's items (migration 092, discount/tax
+    /// carried); only an item-less opportunity falls back to the
+    /// title x expected-amount line. The document number comes from
+    /// the document_number_sequences mechanism (migration 075, the
+    /// InvRepo allocation pattern — never COUNT(*)+1), the exchange
+    /// rate is resolved through FxRates for the opportunity currency
+    /// (0 = unresolved when no rate exists anywhere, never a
+    /// fabricated 1), and <paramref name="validTill"/> is stored on
+    /// the quotation header when given.</summary>
     Task<CrmQuotationResult> CreateQuotationAsync(string companyId, Guid oppId, string userId,
-        IReadOnlyList<CrmQuotationLine>? lines = null, CancellationToken cancellationToken = default);
+        IReadOnlyList<CrmQuotationLine>? lines = null, DateOnly? validTill = null, CancellationToken cancellationToken = default);
 
     /// <summary>Records an opportunity &lt;-&gt; document link for a document
     /// that already exists (e.g. the order/invoice the step-9 chain

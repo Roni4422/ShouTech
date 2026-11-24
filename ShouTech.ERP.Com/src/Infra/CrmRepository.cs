@@ -226,6 +226,16 @@ public sealed class CrmRepository : ICrmRepository
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            // Duplicate detection (gap G1): the same email or phone on
+            // another lead or an existing party is CRM-9007, checked
+            // inside the save transaction so a concurrent save cannot
+            // slip a duplicate past the service-level check.
+            var duplicate = await FindDuplicateAsync(connection, transaction, companyId, lead, cancellationToken).ConfigureAwait(false);
+            if (duplicate is not null)
+                throw new AppError(ErrorCodes.CrmDuplicateLeadOrParty,
+                    $"Lead '{lead.LeadName}' duplicates an existing record: {duplicate.Describe()}. Link the existing record instead of creating a duplicate.",
+                    duplicate.Describe());
+
             var exists = await ExistsAsync(connection, transaction,
                 $"SELECT COUNT(*) FROM crm_leads WHERE company_id = @c AND lead_id = @id AND {NotDeleted}",
                 companyId, lead.Id, cancellationToken).ConfigureAwait(false);
@@ -267,10 +277,105 @@ public sealed class CrmRepository : ICrmRepository
     public Task SoftDeleteLeadAsync(string companyId, Guid leadId, string userId, CancellationToken cancellationToken = default)
         => SoftDeleteAsync("crm_leads", "lead_id", companyId, leadId, userId, cancellationToken);
 
+    public async Task<CrmDuplicateMatch?> FindLeadDuplicateAsync(string companyId, CrmLead lead, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        ArgumentNullException.ThrowIfNull(lead);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        return await FindDuplicateAsync(connection, null, companyId, lead, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Duplicate probe (gap G1): email matches case-insensitively;
+    /// phone and mobile are cross-checked against both stored phone
+    /// columns (a number saved as a lead's mobile may sit in a party's
+    /// phone column and vice versa). Leads are probed first, then the
+    /// unified party master. The lead's own row is excluded.</summary>
+    private async Task<CrmDuplicateMatch?> FindDuplicateAsync(DbConnection connection, DbTransaction? transaction,
+        string companyId, CrmLead lead, CancellationToken cancellationToken)
+    {
+        var email = NullIfBlank(lead.Email)?.ToLowerInvariant();
+        var phones = new[] { NullIfBlank(lead.Phone), NullIfBlank(lead.Mobile) }
+            .Where(p => p is not null).Select(p => p!).Distinct().ToList();
+        if (email is null && phones.Count == 0)
+            return null;
+
+        if (email is not null)
+        {
+            await using var command = CreateCommand(connection, transaction, $"""
+                SELECT lead_id, lead_name FROM crm_leads
+                WHERE company_id = @c AND {NotDeleted} AND lead_id <> @self
+                  AND email IS NOT NULL AND LOWER(TRIM(email)) = @email
+                """);
+            Add(command, "@c", companyId.Trim());
+            Add(command, "@self", FormatGuid(lead.Id));
+            Add(command, "@email", email);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                return new CrmDuplicateMatch("Lead", ReadGuid(reader, 0), ReadString(reader, 1) ?? string.Empty, "Email", lead.Email!.Trim());
+        }
+        foreach (var phone in phones)
+        {
+            await using var command = CreateCommand(connection, transaction, $"""
+                SELECT lead_id, lead_name FROM crm_leads
+                WHERE company_id = @c AND {NotDeleted} AND lead_id <> @self
+                  AND (TRIM(COALESCE(phone, '')) = @phone OR TRIM(COALESCE(mobile, '')) = @phone)
+                """);
+            Add(command, "@c", companyId.Trim());
+            Add(command, "@self", FormatGuid(lead.Id));
+            Add(command, "@phone", phone);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                return new CrmDuplicateMatch("Lead", ReadGuid(reader, 0), ReadString(reader, 1) ?? string.Empty, "Phone", phone);
+        }
+        if (email is not null)
+        {
+            await using var command = CreateCommand(connection, transaction, $"""
+                SELECT id, name_en FROM parties
+                WHERE company_id = @c AND {NotDeleted}
+                  AND email IS NOT NULL AND LOWER(TRIM(email)) = @email
+                """);
+            Add(command, "@c", companyId.Trim());
+            Add(command, "@email", email);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                return new CrmDuplicateMatch("Party", ReadGuid(reader, 0), ReadString(reader, 1) ?? string.Empty, "Email", lead.Email!.Trim());
+        }
+        foreach (var phone in phones)
+        {
+            await using var command = CreateCommand(connection, transaction, $"""
+                SELECT id, name_en FROM parties
+                WHERE company_id = @c AND {NotDeleted}
+                  AND (TRIM(COALESCE(phone, '')) = @phone OR TRIM(COALESCE(mobile, '')) = @phone)
+                """);
+            Add(command, "@c", companyId.Trim());
+            Add(command, "@phone", phone);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                return new CrmDuplicateMatch("Party", ReadGuid(reader, 0), ReadString(reader, 1) ?? string.Empty, "Phone", phone);
+        }
+        return null;
+    }
+
     // ------------------------------------------------------------------
     // Conversion: lead -> party (unified master) + opportunity
     // ------------------------------------------------------------------
-    public async Task<CrmConversionResult> ConvertLeadAsync(string companyId, Guid leadId, string userId, string currencyCode, CancellationToken cancellationToken = default)
+    public Task<CrmConversionResult> ConvertLeadAsync(string companyId, Guid leadId, string userId, string currencyCode, CancellationToken cancellationToken = default)
+        => ConvertLeadCoreAsync(companyId, leadId, null, userId, currencyCode, cancellationToken);
+
+    public Task<CrmConversionResult> ConvertLeadToExistingPartyAsync(string companyId, Guid leadId, Guid existingPartyId, string userId, string currencyCode, CancellationToken cancellationToken = default)
+    {
+        if (existingPartyId == Guid.Empty) throw new ArgumentException("Existing party is required.", nameof(existingPartyId));
+        return ConvertLeadCoreAsync(companyId, leadId, existingPartyId, userId, currencyCode, cancellationToken);
+    }
+
+    /// <summary>Conversion core. With <paramref name="existingPartyId"/>
+    /// null a new party is created in the unified master; with one, NO
+    /// party row is written — the opportunity is created against the
+    /// existing party and the lead is stamped with it (gap G2). The
+    /// duplicate check (CRM-9007) runs only on the create path: on the
+    /// link path the match IS the chosen party.</summary>
+    private async Task<CrmConversionResult> ConvertLeadCoreAsync(string companyId, Guid leadId, Guid? existingPartyId, string userId, string currencyCode, CancellationToken cancellationToken)
     {
         RequireCompany(companyId);
         RequireUser(userId);
@@ -301,33 +406,67 @@ public sealed class CrmRepository : ICrmRepository
                 throw new AppError(ErrorCodes.CrmLeadStateInvalid,
                     $"Lead '{lead.LeadName}' is unqualified and cannot be converted.", lead.LeadName);
 
-            // 1) The party, in the unified master, through the same
-            //    columns + ledger_id rule MasterCardRepository uses.
-            var partyId = Guid.NewGuid();
-            var partyCode = await NextPartyCodeAsync(connection, transaction, companyId, cancellationToken).ConfigureAwait(false);
-            var ledgerId = await NextLedgerIdAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
-            var partyName = !string.IsNullOrWhiteSpace(lead.Organization) ? lead.Organization!.Trim() : lead.LeadName.Trim();
-            await using (var insert = CreateCommand(connection, transaction, """
-                INSERT INTO parties (id, company_id, kind, code, name_en, name_ar, party_group_id, tax_no,
-                    commercial_reg_no, credit_limit, credit_days, price_tier, gl_account_code, phone, mobile,
-                    email, address, is_active, notes, created_by, ledger_id)
-                VALUES (@id, @c, 'C', @code, @nameEn, NULL, NULL, NULL, NULL, 0, 30, NULL, NULL,
-                    @phone, @mobile, @email, @address, @active, @notes, @user, @ledgerId)
-                """))
+            Guid partyId;
+            string partyCode;
+            long ledgerId;
+            string partyName;
+            if (existingPartyId is Guid linkPartyId)
             {
-                Add(insert, "@id", FormatGuid(partyId));
-                Add(insert, "@c", companyId.Trim());
-                Add(insert, "@code", partyCode);
-                Add(insert, "@nameEn", partyName);
-                Add(insert, "@phone", (object?)NullIfBlank(lead.Phone) ?? DBNull.Value);
-                Add(insert, "@mobile", (object?)NullIfBlank(lead.Mobile) ?? DBNull.Value);
-                Add(insert, "@email", (object?)NullIfBlank(lead.Email) ?? DBNull.Value);
-                Add(insert, "@address", (object?)NullIfBlank(lead.Address) ?? DBNull.Value);
-                Add(insert, "@active", BoolValue(true));
-                Add(insert, "@notes", (object?)NullIfBlank(lead.Notes) ?? DBNull.Value);
-                Add(insert, "@user", userId.Trim());
-                Add(insert, "@ledgerId", ledgerId);
-                await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                // Link path (G2): resolve the existing party; write nothing.
+                await using var command = CreateCommand(connection, transaction,
+                    $"SELECT code, ledger_id, name_en FROM parties WHERE company_id = @c AND id = @id AND {NotDeleted}");
+                Add(command, "@c", companyId.Trim());
+                Add(command, "@id", FormatGuid(linkPartyId));
+                await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    throw new AppError(ErrorCodes.CrmQuotationPartyMissing,
+                        $"Party '{linkPartyId}' was not found for this company, so the lead cannot be linked to it.", linkPartyId.ToString());
+                partyId = linkPartyId;
+                partyCode = ReadString(reader, 0) ?? string.Empty;
+                ledgerId = ReadLongOrNull(reader, 1)
+                    ?? throw new AppError(ErrorCodes.CrmQuotationPartyMissing,
+                        $"Party '{partyCode}' has no ledger id, so the lead cannot be linked to it.", partyCode);
+                partyName = ReadString(reader, 2) ?? partyCode;
+            }
+            else
+            {
+                // Duplicate detection (G1) inside the conversion
+                // transaction: converting into a second copy of a lead
+                // or party that already exists is CRM-9007.
+                var duplicate = await FindDuplicateAsync(connection, transaction, companyId, lead, cancellationToken).ConfigureAwait(false);
+                if (duplicate is not null)
+                    throw new AppError(ErrorCodes.CrmDuplicateLeadOrParty,
+                        $"Lead '{lead.LeadName}' duplicates an existing record: {duplicate.Describe()}. Link the existing record instead of creating a duplicate.",
+                        duplicate.Describe());
+
+                // 1) The party, in the unified master, through the same
+                //    columns + ledger_id rule MasterCardRepository uses.
+                partyId = Guid.NewGuid();
+                partyCode = await NextPartyCodeAsync(connection, transaction, companyId, cancellationToken).ConfigureAwait(false);
+                ledgerId = await NextLedgerIdAsync(connection, transaction, cancellationToken).ConfigureAwait(false);
+                partyName = !string.IsNullOrWhiteSpace(lead.Organization) ? lead.Organization!.Trim() : lead.LeadName.Trim();
+                await using (var insert = CreateCommand(connection, transaction, """
+                    INSERT INTO parties (id, company_id, kind, code, name_en, name_ar, party_group_id, tax_no,
+                        commercial_reg_no, credit_limit, credit_days, price_tier, gl_account_code, phone, mobile,
+                        email, address, is_active, notes, created_by, ledger_id)
+                    VALUES (@id, @c, 'C', @code, @nameEn, NULL, NULL, NULL, NULL, 0, 30, NULL, NULL,
+                        @phone, @mobile, @email, @address, @active, @notes, @user, @ledgerId)
+                    """))
+                {
+                    Add(insert, "@id", FormatGuid(partyId));
+                    Add(insert, "@c", companyId.Trim());
+                    Add(insert, "@code", partyCode);
+                    Add(insert, "@nameEn", partyName);
+                    Add(insert, "@phone", (object?)NullIfBlank(lead.Phone) ?? DBNull.Value);
+                    Add(insert, "@mobile", (object?)NullIfBlank(lead.Mobile) ?? DBNull.Value);
+                    Add(insert, "@email", (object?)NullIfBlank(lead.Email) ?? DBNull.Value);
+                    Add(insert, "@address", (object?)NullIfBlank(lead.Address) ?? DBNull.Value);
+                    Add(insert, "@active", BoolValue(true));
+                    Add(insert, "@notes", (object?)NullIfBlank(lead.Notes) ?? DBNull.Value);
+                    Add(insert, "@user", userId.Trim());
+                    Add(insert, "@ledgerId", ledgerId);
+                    await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                }
             }
 
             // 2) The opportunity at the first Open stage.
@@ -405,9 +544,13 @@ public sealed class CrmRepository : ICrmRepository
             $"SELECT {OppColumns} {OppFrom} WHERE o.company_id = @c AND {(IsPg ? "o.is_deleted = false" : "o.is_deleted = 0")} ORDER BY o.created_at DESC, o.title");
         Add(command, "@c", companyId.Trim());
         var result = new List<CrmOpportunity>();
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-            result.Add(ReadOpportunity(reader));
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+        {
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                result.Add(ReadOpportunity(reader));
+        }
+        foreach (var opp in result)
+            opp.Items = (await LoadItemsAsync(connection, null, companyId, opp.Id, cancellationToken).ConfigureAwait(false)).ToList();
         return result;
     }
 
@@ -416,12 +559,26 @@ public sealed class CrmRepository : ICrmRepository
         RequireCompany(companyId);
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await using var command = CreateCommand(connection, null,
-            $"SELECT {OppColumns} {OppFrom} WHERE o.company_id = @c AND o.opp_id = @id AND {(IsPg ? "o.is_deleted = false" : "o.is_deleted = 0")}");
-        Add(command, "@c", companyId.Trim());
-        Add(command, "@id", FormatGuid(oppId));
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        return await reader.ReadAsync(cancellationToken).ConfigureAwait(false) ? ReadOpportunity(reader) : null;
+        CrmOpportunity? result;
+        await using (var command = CreateCommand(connection, null,
+            $"SELECT {OppColumns} {OppFrom} WHERE o.company_id = @c AND o.opp_id = @id AND {(IsPg ? "o.is_deleted = false" : "o.is_deleted = 0")}"))
+        {
+            Add(command, "@c", companyId.Trim());
+            Add(command, "@id", FormatGuid(oppId));
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            result = await reader.ReadAsync(cancellationToken).ConfigureAwait(false) ? ReadOpportunity(reader) : null;
+        }
+        if (result is not null)
+            result.Items = (await LoadItemsAsync(connection, null, companyId, result.Id, cancellationToken).ConfigureAwait(false)).ToList();
+        return result;
+    }
+
+    public async Task<IReadOnlyList<CrmOpportunityItem>> GetOpportunityItemsAsync(string companyId, Guid oppId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        return await LoadItemsAsync(connection, null, companyId, oppId, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task SaveOpportunityAsync(string companyId, CrmOpportunity opportunity, string userId, CancellationToken cancellationToken = default)
@@ -436,6 +593,14 @@ public sealed class CrmRepository : ICrmRepository
             await EnsureStagesAsync(connection, transaction, companyId, userId, cancellationToken).ConfigureAwait(false);
             var stages = await ReadStagesAsync(connection, transaction, companyId, cancellationToken).ConfigureAwait(false);
             var stage = ResolveStage(stages, opportunity, companyId);
+
+            // Items (migration 092) are validated here as the second
+            // line of defence and, when present, DEFINE the expected
+            // amount: the stored amount is the items total so the card,
+            // the pipeline and the quotation can never disagree.
+            ValidateItems(opportunity);
+            if (opportunity.Items.Count > 0)
+                opportunity.ExpectedAmount = opportunity.Items.Sum(i => i.LineTotal);
 
             var exists = await ExistsAsync(connection, transaction,
                 $"SELECT COUNT(*) FROM crm_opportunities WHERE company_id = @c AND opp_id = @id AND {NotDeleted}",
@@ -464,6 +629,7 @@ public sealed class CrmRepository : ICrmRepository
                 BindOpportunityCard(update, companyId, opportunity, userId);
                 await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
+            await SaveItemsAsync(connection, transaction, companyId, opportunity, userId, cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch
@@ -603,7 +769,7 @@ public sealed class CrmRepository : ICrmRepository
     // Documents: quotation creation + links (decision C3)
     // ------------------------------------------------------------------
     public async Task<CrmQuotationResult> CreateQuotationAsync(string companyId, Guid oppId, string userId,
-        IReadOnlyList<CrmQuotationLine>? lines = null, CancellationToken cancellationToken = default)
+        IReadOnlyList<CrmQuotationLine>? lines = null, DateOnly? validTill = null, CancellationToken cancellationToken = default)
     {
         RequireCompany(companyId);
         RequireUser(userId);
@@ -639,27 +805,57 @@ public sealed class CrmRepository : ICrmRepository
                         $"The company Guid for '{companyId}' could not be resolved, so a chain-compatible quotation cannot be created.", companyId);
             }
 
-            var effectiveLines = lines is { Count: > 0 }
-                ? lines
-                : new[] { new CrmQuotationLine(null, null, opp.Title, null, 1m, opp.ExpectedAmount) };
-            decimal subtotal = 0m;
+            // Lines (gap G3): explicit lines win; otherwise the
+            // quotation is built FROM the opportunity's items with
+            // discount/tax carried; only an item-less opportunity
+            // falls back to the title x expected-amount line.
+            IReadOnlyList<CrmQuotationLine> effectiveLines;
+            if (lines is { Count: > 0 })
+            {
+                effectiveLines = lines;
+            }
+            else
+            {
+                var items = await LoadItemsAsync(connection, transaction, companyId, oppId, cancellationToken).ConfigureAwait(false);
+                effectiveLines = items.Count > 0
+                    ? items.Select(i => new CrmQuotationLine(i.MaterialId, i.MaterialCode, i.Description,
+                        i.Unit, i.Qty, i.UnitPrice, i.DiscountPct, i.TaxRate)).ToList()
+                    : new[] { new CrmQuotationLine(null, null, opp.Title, null, 1m, opp.ExpectedAmount) };
+            }
+            decimal subtotal = 0m, taxAmount = 0m, grandTotal = 0m;
             var computed = new List<(CrmQuotationLine Line, decimal Sub, decimal Tax, decimal Total)>();
             foreach (var line in effectiveLines)
             {
-                var sub = decimal.Round(line.Qty * line.UnitPrice, 4, MidpointRounding.AwayFromZero);
-                computed.Add((line, sub, 0m, sub));
+                var sub = decimal.Round(line.Qty * line.UnitPrice * (1m - line.DiscountPct / 100m), 4, MidpointRounding.AwayFromZero);
+                var tax = decimal.Round(sub * line.TaxRate / 100m, 4, MidpointRounding.AwayFromZero);
+                computed.Add((line, sub, tax, sub + tax));
                 subtotal += sub;
+                taxAmount += tax;
+                grandTotal += sub + tax;
             }
 
-            var year = DateTime.Today.Year.ToString(CultureInfo.InvariantCulture);
-            string docNo;
-            await using (var command = CreateCommand(connection, transaction,
-                "SELECT COUNT(*) FROM sales_documents WHERE company_id = @guid AND doc_kind = 'QUO' AND doc_no LIKE @pattern"))
+            // Document number from the migration-075 sequence table
+            // (the InvRepo.AllocateDocNo pattern), seeded from the
+            // highest existing QUO suffix across BOTH company keys —
+            // never COUNT(*)+1, which re-issues numbers after deletes.
+            var docNo = await AllocateQuotationDocNoAsync(connection, transaction, companyId, companyGuid, cancellationToken).ConfigureAwait(false);
+
+            // Exchange rate via the ONE resolver (FxRates) for the
+            // opportunity's currency. A quotation is a draft with no
+            // posting, so when no rate exists anywhere the resolver's
+            // ACC-5015 is recorded as rate 0 ("no document rate" — the
+            // OrderDocumentRepository convention, resolved at posting)
+            // instead of fabricating 1.
+            var currency = string.IsNullOrWhiteSpace(opp.CurrencyCode) ? "SAR" : opp.CurrencyCode.Trim();
+            decimal exchangeRate;
+            try
             {
-                Add(command, "@guid", companyGuid.ToString("D"));
-                Add(command, "@pattern", $"QUO-{year}-%");
-                var count = Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
-                docNo = $"QUO-{year}-{(count + 1).ToString("D4", CultureInfo.InvariantCulture)}";
+                exchangeRate = FxRates.ResolveByCompanyCode(connection, transaction, _provider,
+                    companyId.Trim(), currency, DateOnly.FromDateTime(DateTime.Today), 0m).Rate;
+            }
+            catch (AppError ex) when (ex.Code == ErrorCodes.ExchangeRateMissing)
+            {
+                exchangeRate = 0m;
             }
 
             long docId;
@@ -667,15 +863,15 @@ public sealed class CrmRepository : ICrmRepository
                 ? """
                   INSERT INTO sales_documents (company_id, doc_kind, doc_no, doc_date, party_id, party_name,
                       currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total,
-                      paid_amount, status, notes, created_by, is_deleted, party_code)
-                  VALUES (@guid, 'QUO', @no, @date, @party, @pname, @cur, 1, @sub, 0, 0, @grand, 0, 'Draft', @notes, @user, 0, @pcode)
+                      paid_amount, status, notes, created_by, is_deleted, party_code, valid_till)
+                  VALUES (@guid, 'QUO', @no, @date, @party, @pname, @cur, @rate, @sub, 0, @tax, @grand, 0, 'Draft', @notes, @user, 0, @pcode, @valid)
                   RETURNING doc_id
                   """
                 : """
                   INSERT INTO sales_documents (company_id, doc_kind, doc_no, doc_date, party_id, party_name,
                       currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total,
-                      paid_amount, status, notes, created_by, is_deleted, party_code)
-                  VALUES (@guid, 'QUO', @no, @date, @party, @pname, @cur, 1, @sub, 0, 0, @grand, 0, 'Draft', @notes, @user, 0, @pcode);
+                      paid_amount, status, notes, created_by, is_deleted, party_code, valid_till)
+                  VALUES (@guid, 'QUO', @no, @date, @party, @pname, @cur, @rate, @sub, 0, @tax, @grand, 0, 'Draft', @notes, @user, 0, @pcode, @valid);
                   SELECT last_insert_rowid();
                   """;
             await using (var insert = CreateCommand(connection, transaction, insertSql))
@@ -685,12 +881,15 @@ public sealed class CrmRepository : ICrmRepository
                 Add(insert, "@date", DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
                 Add(insert, "@party", opp.PartyLedgerId.Value);
                 Add(insert, "@pname", (object?)opp.PartyName ?? DBNull.Value);
-                Add(insert, "@cur", string.IsNullOrWhiteSpace(opp.CurrencyCode) ? "SAR" : opp.CurrencyCode.Trim());
+                Add(insert, "@cur", currency);
+                Add(insert, "@rate", exchangeRate);
                 Add(insert, "@sub", subtotal);
-                Add(insert, "@grand", subtotal);
+                Add(insert, "@tax", taxAmount);
+                Add(insert, "@grand", grandTotal);
                 Add(insert, "@notes", $"CRM opportunity: {opp.Title}");
                 Add(insert, "@user", userId.Trim());
                 Add(insert, "@pcode", (object?)await PartyCodeAsync(connection, transaction, companyId, opp.PartyId.Value, cancellationToken).ConfigureAwait(false) ?? DBNull.Value);
+                Add(insert, "@valid", (object?)validTill?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? DBNull.Value);
                 docId = Convert.ToInt64(await insert.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
             }
 
@@ -701,7 +900,7 @@ public sealed class CrmRepository : ICrmRepository
                 await using var lineInsert = CreateCommand(connection, transaction, """
                     INSERT INTO sales_document_lines (doc_id, line_no, material_id, material_code, description, unit,
                         qty, unit_price, discount_pct, tax_rate, line_subtotal, line_tax, line_total)
-                    VALUES (@doc, @no, @mat, @mcode, @desc, @unit, @qty, @price, 0, 0, @sub, @tax, @total)
+                    VALUES (@doc, @no, @mat, @mcode, @desc, @unit, @qty, @price, @disc, @taxRate, @sub, @tax, @total)
                     """);
                 Add(lineInsert, "@doc", docId);
                 Add(lineInsert, "@no", lineNo);
@@ -711,6 +910,8 @@ public sealed class CrmRepository : ICrmRepository
                 Add(lineInsert, "@unit", (object?)NullIfBlank(line.Unit) ?? DBNull.Value);
                 Add(lineInsert, "@qty", line.Qty);
                 Add(lineInsert, "@price", line.UnitPrice);
+                Add(lineInsert, "@disc", line.DiscountPct);
+                Add(lineInsert, "@taxRate", line.TaxRate);
                 Add(lineInsert, "@sub", sub);
                 Add(lineInsert, "@tax", tax);
                 Add(lineInsert, "@total", total);
@@ -1106,6 +1307,142 @@ public sealed class CrmRepository : ICrmRepository
         await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>Item invariants (CRM-9008): every line needs a
+    /// description, qty &gt; 0, price &gt;= 0, discount inside 0-100 and
+    /// a non-negative tax rate.</summary>
+    private static void ValidateItems(CrmOpportunity opportunity)
+    {
+        foreach (var item in opportunity.Items)
+        {
+            if (string.IsNullOrWhiteSpace(item.Description))
+                throw new AppError(ErrorCodes.CrmOpportunityItemInvalid,
+                    "Every opportunity item requires a description.", opportunity.Title);
+            if (item.Qty <= 0m)
+                throw new AppError(ErrorCodes.CrmOpportunityItemInvalid,
+                    $"Opportunity item '{item.Description}' must have a quantity greater than zero.", item.Description);
+            if (item.UnitPrice < 0m)
+                throw new AppError(ErrorCodes.CrmOpportunityItemInvalid,
+                    $"Opportunity item '{item.Description}' cannot have a negative price.", item.Description);
+            if (item.DiscountPct is < 0m or > 100m)
+                throw new AppError(ErrorCodes.CrmOpportunityItemInvalid,
+                    $"Opportunity item '{item.Description}' has a discount outside 0-100%.", item.Description);
+            if (item.TaxRate < 0m)
+                throw new AppError(ErrorCodes.CrmOpportunityItemInvalid,
+                    $"Opportunity item '{item.Description}' cannot have a negative tax rate.", item.Description);
+        }
+    }
+
+    private async Task<IReadOnlyList<CrmOpportunityItem>> LoadItemsAsync(DbConnection connection, DbTransaction? transaction,
+        string companyId, Guid oppId, CancellationToken cancellationToken)
+    {
+        await using var command = CreateCommand(connection, transaction, $"""
+            SELECT item_id, opportunity_id, line_no, material_id, material_code, description, qty, unit,
+                   unit_price, discount_pct, tax_rate
+            FROM crm_opportunity_items
+            WHERE company_id = @c AND opportunity_id = @opp AND {NotDeleted}
+            ORDER BY line_no
+            """);
+        Add(command, "@c", companyId.Trim());
+        Add(command, "@opp", FormatGuid(oppId));
+        var result = new List<CrmOpportunityItem>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            result.Add(new CrmOpportunityItem
+            {
+                Id = ReadGuid(reader, 0),
+                OppId = ReadGuid(reader, 1),
+                LineNo = Convert.ToInt32(reader.GetValue(2), CultureInfo.InvariantCulture),
+                MaterialId = ReadLongOrNull(reader, 3),
+                MaterialCode = ReadString(reader, 4),
+                Description = ReadString(reader, 5) ?? string.Empty,
+                Qty = Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture),
+                Unit = ReadString(reader, 7),
+                UnitPrice = Convert.ToDecimal(reader.GetValue(8), CultureInfo.InvariantCulture),
+                DiscountPct = Convert.ToDecimal(reader.GetValue(9), CultureInfo.InvariantCulture),
+                TaxRate = Convert.ToDecimal(reader.GetValue(10), CultureInfo.InvariantCulture)
+            });
+        }
+        return result;
+    }
+
+    /// <summary>Replaces the opportunity's items inside the save
+    /// transaction: lines are renumbered in list order, existing rows
+    /// are updated in place, new rows inserted, and stored rows the
+    /// caller dropped are soft-deleted. Stored totals are recomputed
+    /// from the entity's line math so the table always agrees with
+    /// the quotation built from it.</summary>
+    private async Task SaveItemsAsync(DbConnection connection, DbTransaction transaction, string companyId,
+        CrmOpportunity opportunity, string userId, CancellationToken cancellationToken)
+    {
+        var existing = await LoadItemsAsync(connection, transaction, companyId, opportunity.Id, cancellationToken).ConfigureAwait(false);
+        var existingIds = existing.Select(i => i.Id).ToHashSet();
+        var keptIds = opportunity.Items.Select(i => i.Id).ToHashSet();
+        foreach (var stale in existing.Where(i => !keptIds.Contains(i.Id)))
+        {
+            await using var delete = CreateCommand(connection, transaction, $"""
+                UPDATE crm_opportunity_items SET is_deleted = {(IsPg ? "true" : "1")}, updated_by = @user, updated_at = {NowExpr}
+                WHERE company_id = @c AND item_id = @id AND {NotDeleted}
+                """);
+            Add(delete, "@user", userId.Trim());
+            Add(delete, "@c", companyId.Trim());
+            Add(delete, "@id", FormatGuid(stale.Id));
+            await delete.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        var lineNo = 0;
+        foreach (var item in opportunity.Items)
+        {
+            lineNo++;
+            item.OppId = opportunity.Id;
+            item.LineNo = lineNo;
+            if (existingIds.Contains(item.Id))
+            {
+                await using var update = CreateCommand(connection, transaction, $"""
+                    UPDATE crm_opportunity_items SET line_no = @no, material_id = @mat, material_code = @mcode,
+                        description = @desc, qty = @qty, unit = @unit, unit_price = @price,
+                        discount_pct = @disc, tax_rate = @tax, line_subtotal = @sub, line_tax = @ltax,
+                        line_total = @total, updated_by = @user, updated_at = {NowExpr}
+                    WHERE company_id = @c AND item_id = @id AND {NotDeleted}
+                    """);
+                BindItem(update, companyId, item, userId);
+                await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await using var insert = CreateCommand(connection, transaction, """
+                    INSERT INTO crm_opportunity_items (item_id, company_id, opportunity_id, line_no, material_id,
+                        material_code, description, qty, unit, unit_price, discount_pct, tax_rate,
+                        line_subtotal, line_tax, line_total, created_by)
+                    VALUES (@id, @c, @opp, @no, @mat, @mcode, @desc, @qty, @unit, @price, @disc, @tax,
+                        @sub, @ltax, @total, @user)
+                    """);
+                BindItem(insert, companyId, item, userId);
+                Add(insert, "@opp", FormatGuid(opportunity.Id));
+                await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private void BindItem(DbCommand command, string companyId, CrmOpportunityItem item, string userId)
+    {
+        Add(command, "@id", FormatGuid(item.Id));
+        Add(command, "@c", companyId.Trim());
+        Add(command, "@no", item.LineNo);
+        Add(command, "@mat", (object?)item.MaterialId ?? DBNull.Value);
+        Add(command, "@mcode", (object?)NullIfBlank(item.MaterialCode) ?? DBNull.Value);
+        Add(command, "@desc", item.Description.Trim());
+        Add(command, "@qty", item.Qty);
+        Add(command, "@unit", (object?)NullIfBlank(item.Unit) ?? DBNull.Value);
+        Add(command, "@price", item.UnitPrice);
+        Add(command, "@disc", item.DiscountPct);
+        Add(command, "@tax", item.TaxRate);
+        Add(command, "@sub", item.LineSubtotal);
+        Add(command, "@ltax", item.LineTax);
+        Add(command, "@total", item.LineTotal);
+        Add(command, "@user", userId.Trim());
+    }
+
     private void BindOpportunityCard(DbCommand command, string companyId, CrmOpportunity o, string userId)
     {
         Add(command, "@title", o.Title.Trim());
@@ -1168,6 +1505,63 @@ public sealed class CrmRepository : ICrmRepository
         Add(insert, "@type", linkType);
         Add(insert, "@user", userId.Trim());
         await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Allocates the next quotation number through the
+    /// migration-075 document_number_sequences table, following
+    /// InvRepo.AllocateDocNo: the sequence is seeded from the highest
+    /// existing numeric suffix (across both company keys the document
+    /// tables carry) and advanced atomically with an upsert inside the
+    /// caller's transaction, keyed by the company CODE exactly like
+    /// InvRepo keys it, so CRM and InvoiceWin quotations share ONE
+    /// sequence. Format: QUO-{year}-{D4}.</summary>
+    private async Task<string> AllocateQuotationDocNoAsync(DbConnection connection, DbTransaction transaction,
+        string companyId, Guid companyGuid, CancellationToken cancellationToken)
+    {
+        var year = DateTime.Today.Year;
+        var documentPrefix = $"QUO-{year}-";
+        var suffixStart = documentPrefix.Length + 1;
+        var numericSuffixPredicate = IsPg
+            ? "SUBSTRING(doc_no FROM @start) ~ '^[0-9]+$'"
+            : "SUBSTR(doc_no, @start) GLOB '[0-9]*' AND SUBSTR(doc_no, @start) NOT GLOB '*[^0-9]*'";
+
+        long maximum = 0;
+        await using (var maxCommand = CreateCommand(connection, transaction, $"""
+            SELECT COALESCE(MAX(CAST({(IsPg ? "SUBSTRING(doc_no FROM @start)" : "SUBSTR(doc_no, @start)")} AS {(IsPg ? "BIGINT" : "INTEGER")})), 0)
+            FROM sales_documents
+            WHERE company_id IN (@guid, @code) AND doc_kind = 'QUO'
+              AND doc_no LIKE @pattern AND {numericSuffixPredicate}
+            """))
+        {
+            Add(maxCommand, "@guid", companyGuid.ToString("D"));
+            Add(maxCommand, "@code", companyId.Trim());
+            Add(maxCommand, "@pattern", $"{documentPrefix}%");
+            Add(maxCommand, "@start", suffixStart);
+            maximum = Convert.ToInt64(await maxCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+        }
+        if (maximum >= 99999999)
+            throw new InvalidOperationException("The document number sequence has reached its supported limit.");
+
+        if (!PartyLedger.TableExists(connection, transaction, _provider, "document_number_sequences"))
+            return $"{documentPrefix}{(maximum + 1).ToString("D4", CultureInfo.InvariantCulture)}";
+
+        var advanceExpression = IsPg
+            ? "GREATEST(document_number_sequences.last_value + 1, EXCLUDED.last_value)"
+            : "MAX(document_number_sequences.last_value + 1, excluded.last_value)";
+        await using var sequenceCommand = CreateCommand(connection, transaction, $"""
+            INSERT INTO document_number_sequences (company_id, doc_kind, doc_year, last_value)
+            VALUES (@company, 'QUO', @year, @next)
+            ON CONFLICT (company_id, doc_kind, doc_year)
+            DO UPDATE SET last_value = {advanceExpression}
+            RETURNING last_value
+            """);
+        Add(sequenceCommand, "@company", companyId.Trim());
+        Add(sequenceCommand, "@year", year);
+        Add(sequenceCommand, "@next", maximum + 1);
+        var allocated = Convert.ToInt64(await sequenceCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+        if (allocated <= 0 || allocated > 99999999)
+            throw new InvalidOperationException("The document number sequence returned an invalid value.");
+        return $"{documentPrefix}{allocated.ToString("D4", CultureInfo.InvariantCulture)}";
     }
 
     private async Task<string?> PartyCodeAsync(DbConnection connection, DbTransaction transaction, string companyId, Guid partyId, CancellationToken cancellationToken)
