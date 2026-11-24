@@ -29,4 +29,17 @@ public interface IReconciliationRepository
     /// match. The realized FX difference posts in the same journal.
     /// </summary>
     Task<Guid> AllocateAsync(string companyId, string partyKind, long paymentLedgerId, string docTable, long docId, decimal amount, string userId, string? note = null, decimal discountAmount = 0m, decimal? docAmount = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reverses ONE advance allocation (migration 095) in one transaction:
+    /// mirrors its clearing journal, releases the document's paid_amount,
+    /// writes a migration-079 audit row, and deletes the allocation —
+    /// restoring the advance's available balance. Advance allocations
+    /// only; returns the clearing entry's reversal journal id.
+    /// </summary>
+    Task<Guid> UnallocateAsync(string companyId, Guid allocationId, string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Reverses the most recent advance allocation between one
+    /// payment/advance entry and one document (the PayRecWin action).</summary>
+    Task<Guid> UnallocateLatestAdvanceAsync(string companyId, long paymentLedgerId, string docTable, long docId, string userId, CancellationToken cancellationToken = default);
 }

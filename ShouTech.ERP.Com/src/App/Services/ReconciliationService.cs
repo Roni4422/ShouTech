@@ -90,6 +90,30 @@ public sealed class ReconciliationService
         return plan;
     }
 
+    public Task<Guid> UnallocateAsync(string companyId, Guid allocationId, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        if (allocationId == Guid.Empty)
+            throw new ArgumentException("An allocation is required.", nameof(allocationId));
+        if (string.IsNullOrWhiteSpace(userId))
+            throw new InvalidOperationException("A current user is required for audited writes.");
+        return _repository.UnallocateAsync(companyId, allocationId, userId, cancellationToken);
+    }
+
+    public Task<Guid> UnallocateLatestAdvanceAsync(string companyId, long paymentLedgerId, string docTable, long docId, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        if (paymentLedgerId <= 0)
+            throw new ArgumentException("A payment entry is required.", nameof(paymentLedgerId));
+        if (docId <= 0)
+            throw new ArgumentException("A document is required.", nameof(docId));
+        if (docTable is not ("SALES" or "PURCHASE"))
+            throw new ArgumentException("Document table must be SALES or PURCHASE.", nameof(docTable));
+        if (string.IsNullOrWhiteSpace(userId))
+            throw new InvalidOperationException("A current user is required for audited writes.");
+        return _repository.UnallocateLatestAdvanceAsync(companyId, paymentLedgerId, docTable, docId, userId, cancellationToken);
+    }
+
     private static string RequireCompany(string companyId)
     {
         if (string.IsNullOrWhiteSpace(companyId))

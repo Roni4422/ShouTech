@@ -239,5 +239,9 @@ public class Phase3ServiceTests
             LastCall = (paymentLedgerId, docTable, docId, amount);
             return Task.FromResult(Guid.NewGuid());
         }
+        public Task<Guid> UnallocateAsync(string companyId, Guid allocationId, string userId, CancellationToken cancellationToken = default)
+            => Task.FromResult(Guid.NewGuid());
+        public Task<Guid> UnallocateLatestAdvanceAsync(string companyId, long paymentLedgerId, string docTable, long docId, string userId, CancellationToken cancellationToken = default)
+            => Task.FromResult(Guid.NewGuid());
     }
 }

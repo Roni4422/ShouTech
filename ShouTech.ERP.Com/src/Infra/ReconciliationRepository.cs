@@ -2,6 +2,7 @@ using System.Data.Common;
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Npgsql;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
 
@@ -168,21 +169,40 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             : string.Empty;
         // G17: customer credit notes (SRT credit rows) are allocation
         // sources alongside receipts; supplier sources stay PAY/INS.
-        var sourceKinds = partyKind == "C" ? "('RCV', 'INS', 'SRT')" : "('PAY', 'INS')";
+        var sourceKinds = partyKind == "C" ? "('RCV', 'INS', 'SRT')" : "('PAY', 'INS', 'ADV')";
+        // Supplier advances (migration 095) appear as their own allocatable
+        // source: doc_kind 'ADV' rows, flagged with their PO. Their
+        // consumed part counts ONLY advance allocations (source_kind
+        // 'ADVANCE'); normal payments count only 'PAYMENT' allocations —
+        // the two sources never net against each other.
+        var hasAdvanceLink = hasJournalLink
+            && PartyLedger.TableExists(connection, null, _provider, "voucher_party_links")
+            && PartyLedger.ColumnExists(connection, null, _provider, "voucher_party_links", "po_doc_id");
+        var advanceJoin = hasAdvanceLink
+            ? """
+              LEFT JOIN voucher_party_links vl
+                ON vl.journal_entry_id = CAST(l.journal_entry_id AS TEXT) AND vl.company_id = l.company_id
+              LEFT JOIN purchase_documents po
+                ON po.doc_id = vl.po_doc_id
+              """
+            : string.Empty;
         await using var command = CreateCommand(connection, null,
             $"""
             SELECT l.ledger_id, l.entry_date, l.doc_kind, l.doc_no, l.party_id, l.note, {amountExpr} AS amount,
                    COALESCE((SELECT SUM(a.amount) FROM payment_allocations a
-                             WHERE a.company_id = l.company_id AND a.payment_ledger_id = l.ledger_id), 0) AS allocated,
+                             WHERE a.company_id = l.company_id AND a.payment_ledger_id = l.ledger_id
+                               AND COALESCE(a.source_kind, 'PAYMENT') = CASE WHEN l.doc_kind = 'ADV' THEN 'ADVANCE' ELSE 'PAYMENT' END), 0) AS allocated,
                    COALESCE(NULLIF(p.name_en, ''), p.name_ar, '') AS party_name,
                    COALESCE(l.currency_code, 'SAR') AS currency_code,
                    CASE WHEN l.doc_kind = 'SRT' THEN COALESCE((SELECT SUM(r.debit) FROM party_ledger r
                              WHERE r.company_id = l.company_id AND r.party_kind = l.party_kind
                                AND r.party_id = l.party_id AND r.doc_kind = 'SRT'
                                AND r.doc_id = l.doc_id AND r.debit > 0), 0) ELSE 0 END AS refunded
+                   {(hasAdvanceLink ? ", vl.po_doc_id, po.doc_no" : ", NULL, NULL")}
             FROM party_ledger l
             LEFT JOIN parties p
               ON p.company_id = l.company_id AND p.kind = l.party_kind AND p.ledger_id = l.party_id
+            {advanceJoin}
             WHERE l.company_id = @company AND l.party_kind = @kind AND {sidePredicate}
               AND l.doc_kind IN {sourceKinds}
               {activeJournalPredicate}
@@ -207,7 +227,10 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                 Amount: ReadDecimal(reader, 6) - ReadDecimal(reader, 10),
                 Allocated: ReadDecimal(reader, 7),
                 PartyName: ReadString(reader, 8),
-                CurrencyCode: ReadString(reader, 9) ?? "SAR");
+                CurrencyCode: ReadString(reader, 9) ?? "SAR",
+                IsAdvance: string.Equals(ReadString(reader, 2), "ADV", StringComparison.OrdinalIgnoreCase),
+                PoDocId: reader.IsDBNull(11) ? null : Convert.ToInt64(reader.GetValue(11), CultureInfo.InvariantCulture),
+                PoDocNo: ReadString(reader, 12));
             if (row.Available > Tolerance)
                 result.Add(row);
         }
@@ -244,6 +267,9 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             decimal paymentAmount;
             string? paymentDocKind;
             string paymentCurrency;
+            DateOnly paymentDate = DateOnly.FromDateTime(DateTime.Today);
+            string? paymentJournalId = null;
+            decimal paymentRate = 0m;
             // A reversed voucher remains in the append-only party ledger, but it is
             // no longer a valid source of funds. Enforce the same journal-status
             // guard used by GetPaymentsAsync here as well, so direct repository
@@ -266,7 +292,6 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             long? paymentDocId = null;
             // W8: the payment's date + stored rate/base (migration 062)
             // price the realized-FX leg of a cross-currency allocation.
-            var paymentDate = DateOnly.FromDateTime(DateTime.Today);
             var paymentStoredRate = 0m;
             decimal? paymentBaseSide = null;
             var hasBaseAmounts = PartyLedger.ColumnExists(
@@ -280,6 +305,7 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                 SELECT l.party_kind, l.party_id, l.debit, l.credit, l.doc_kind,
                        COALESCE(l.currency_code, 'SAR'), l.doc_id, l.entry_date,
                        {paymentRateSelect}{paymentBaseSelect}
+                       {(hasJournalLink ? ", l.journal_entry_id" : ", NULL")}
                 FROM party_ledger l
                 WHERE l.company_id = @company AND l.ledger_id = @id
                   {activeJournalPredicate}
@@ -300,12 +326,18 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                 paymentDocId = reader.IsDBNull(6) ? null : Convert.ToInt64(reader.GetValue(6), CultureInfo.InvariantCulture);
                 paymentDate = ReadDate(reader, 7) ?? paymentDate;
                 paymentStoredRate = ReadDecimal(reader, 8);
+                paymentRate = paymentStoredRate;
                 if (hasBaseAmounts)
                 {
                     var baseSide = partyKind == "C" ? ReadDecimal(reader, 10) : ReadDecimal(reader, 9);
                     paymentBaseSide = baseSide > 0 ? baseSide : null;
                 }
+                paymentJournalId = ReadString(reader, 11);
             }
+            // Supplier advances (migration 095) are allocatable ONLY as
+            // advances: an 'ADV' entry takes the advance branch below
+            // (same-PO enforcement + Dr AP / Cr Advances clearing).
+            var isAdvance = string.Equals(paymentDocKind, "ADV", StringComparison.OrdinalIgnoreCase);
             // Step 4 (L-10): purchase returns and other non-payment
             // entries are not allocatable payments, even if they sit on
             // the payment side. G17: a customer credit note (SRT) is the
@@ -314,7 +346,7 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             // the refunds/settlement mirrors already paid out on the
             // same return document, which sit as SRT debit rows).
             var isCreditNote = paymentDocKind == "SRT" && partyKind == "C";
-            if (paymentDocKind is not ("RCV" or "PAY" or "INS") && !isCreditNote)
+            if (!isAdvance && paymentDocKind is not ("RCV" or "PAY" or "INS") && !isCreditNote)
                 throw new InvalidOperationException("The selected ledger entry is not a payment (only receipt, payment, installment-collection and customer credit-note entries can be allocated).");
             if (isCreditNote)
             {
@@ -335,6 +367,8 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                 if (paymentAmount <= 0)
                     throw new InvalidOperationException("The credit note has no remaining credit (it was fully refunded in cash).");
             }
+            if (isAdvance && partyKind != "S")
+                throw new InvalidOperationException("Supplier advances can only be allocated against supplier documents.");
             if (!string.Equals(paymentKind, partyKind, StringComparison.Ordinal))
                 throw new InvalidOperationException("The payment entry belongs to a different party kind.");
             if (paymentAmount <= 0)
@@ -342,10 +376,11 @@ public sealed class ReconciliationRepository : IReconciliationRepository
 
             decimal paymentAllocated;
             await using (var sum = CreateCommand(connection, transaction,
-                "SELECT COALESCE(SUM(amount), 0) FROM payment_allocations WHERE company_id = @company AND payment_ledger_id = @id"))
+                "SELECT COALESCE(SUM(amount), 0) FROM payment_allocations WHERE company_id = @company AND payment_ledger_id = @id AND COALESCE(source_kind, 'PAYMENT') = @sourceKind"))
             {
                 Add(sum, "@company", companyId.Trim());
                 Add(sum, "@id", paymentLedgerId);
+                Add(sum, "@sourceKind", isAdvance ? "ADVANCE" : "PAYMENT");
                 paymentAllocated = Convert.ToDecimal(await sum.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
             }
             if (amount > paymentAmount - paymentAllocated + Tolerance)
@@ -400,6 +435,54 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                     "The document amount must equal the payment amount when both share a currency.");
             if (settledDoc + discountAmount > openAmount + Tolerance)
                 throw new InvalidOperationException("Allocation plus settlement discount exceeds the document's open amount.");
+
+            // Advance consumption respects the PO (Y1): the advance's PO
+            // is read from its voucher link, and the invoice's PO ancestry
+            // is walked through document_links (PO -> invoice directly,
+            // or PO -> receipt -> invoice). Any other invoice — another
+            // PO's, or a manual invoice with no PO at all — is rejected
+            // with the catalogued PUR-1012 and nothing is written.
+            long? advancePoDocId = null;
+            if (isAdvance)
+            {
+                if (paymentJournalId is not null
+                    && PartyLedger.TableExists(connection, transaction, _provider, "voucher_party_links")
+                    && PartyLedger.ColumnExists(connection, transaction, _provider, "voucher_party_links", "po_doc_id"))
+                {
+                    await using var link = CreateCommand(connection, transaction,
+                        "SELECT po_doc_id FROM voucher_party_links WHERE journal_entry_id = @journal AND company_id = @company AND "
+                        + (_provider == "PostgreSQL" ? "is_advance = TRUE" : "is_advance = 1"));
+                    Add(link, "@journal", paymentJournalId);
+                    Add(link, "@company", companyId.Trim());
+                    var linkValue = await link.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                    if (linkValue is not null and not DBNull)
+                        advancePoDocId = Convert.ToInt64(linkValue, CultureInfo.InvariantCulture);
+                }
+                var invoicePoIds = new HashSet<long>();
+                if (PartyLedger.TableExists(connection, transaction, _provider, "document_links"))
+                {
+                    await using var chain = CreateCommand(connection, transaction, """
+                        WITH RECURSIVE chain (doc_id, doc_kind) AS (
+                            SELECT source_doc_id, source_doc_kind FROM document_links
+                            WHERE company_id = @docCompany AND target_doc_id = @doc AND target_doc_kind = 'PUR'
+                            UNION
+                            SELECT l.source_doc_id, l.source_doc_kind FROM document_links l
+                            JOIN chain c ON l.target_doc_id = c.doc_id AND l.target_doc_kind = c.doc_kind
+                            WHERE l.company_id = @docCompany
+                        )
+                        SELECT doc_id FROM chain WHERE doc_kind = 'PO'
+                        """);
+                    Add(chain, "@docCompany", documentCompanyKey);
+                    Add(chain, "@doc", docId);
+                    await using var chainReader = await chain.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                    while (await chainReader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                        invoicePoIds.Add(Convert.ToInt64(chainReader.GetValue(0), CultureInfo.InvariantCulture));
+                }
+                if (advancePoDocId is null || !invoicePoIds.Contains(advancePoDocId.Value))
+                    throw new AppError(ErrorCodes.AdvancePurchaseOrderMismatch,
+                        $"Supplier advance for purchase order '{advancePoDocId?.ToString(CultureInfo.InvariantCulture) ?? "?"}' cannot be allocated to invoice '{docNo}', which belongs to a different purchase order.",
+                        docNo);
+            }
 
             // An enabled company policy fails closed: a supplier invoice without
             // a current evaluation cannot be paid through reconciliation.
@@ -487,6 +570,31 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             // journal's source link (ALLOC / allocation id) is stable.
             var allocationIdForJournal = Guid.NewGuid();
 
+            // Advance clearing (migration 095), inside THIS allocation
+            // transaction: Dr AP control 2201 (the invoice liability is
+            // settled by the prepayment) / Cr Advances 1215 (the advance
+            // is consumed). The entry id is stored on the allocation so
+            // unallocation can mirror exactly this entry.
+            string? clearingJournalId = null;
+            if (isAdvance)
+            {
+                var clearingCompanyGuid = await ResolveCompanyGuidAsync(
+                    connection, transaction, companyId, cancellationToken).ConfigureAwait(false);
+                var clearing = GlPosting.PostInTransaction(connection, transaction, _provider,
+                    new GlDocumentRequest(
+                        clearingCompanyGuid, paymentDate,
+                        $"Supplier advance applied to invoice {docNo}",
+                        "ADV_ALLOC", allocationIdForJournal.ToString("D"), docNo,
+                        paymentCurrency, paymentRate,
+                        new[]
+                        {
+                            new GlLineRequest(GlAccounts.Payable, amount, 0m),
+                            new GlLineRequest(GlAccounts.SupplierAdvances, 0m, amount)
+                        }),
+                    userId);
+                clearingJournalId = clearing.JournalEntryId.ToString("D");
+            }
+
             // 3) Price the settlement in base currency (W8). The document
             // rate resolves through the ONE FxRates path (document rate,
             // else currency_rates master, else ACC-5015). The payment rate
@@ -573,7 +681,7 @@ public sealed class ReconciliationRepository : IReconciliationRepository
 
             // 4) Insert the allocation and settle it against the document.
             await using (var insert = CreateCommand(connection, transaction,
-                "INSERT INTO payment_allocations (allocation_id, company_id, document_company_id, party_kind, party_id, payment_ledger_id, doc_table, doc_id, doc_no, amount, allocated_by, note, discount_amount, doc_amount, fx_amount) VALUES (@id, @company, @documentCompany, @kind, @party, @payment, @docTable, @doc, @docNo, @amount, @user, @note, @discount, @docAmount, @fx)"))
+                "INSERT INTO payment_allocations (allocation_id, company_id, document_company_id, party_kind, party_id, payment_ledger_id, doc_table, doc_id, doc_no, amount, allocated_by, note, discount_amount, doc_amount, fx_amount, source_kind, advance_po_doc_id, clearing_journal_id) VALUES (@id, @company, @documentCompany, @kind, @party, @payment, @docTable, @doc, @docNo, @amount, @user, @note, @discount, @docAmount, @fx, @sourceKind, @advancePo, @clearing)"))
             {
                 Add(insert, "@id", FormatGuid(allocationIdForJournal));
                 Add(insert, "@company", companyId.Trim());
@@ -590,6 +698,9 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                 Add(insert, "@discount", discountAmount);
                 Add(insert, "@docAmount", crossCurrency ? (object)settledDoc : DBNull.Value);
                 Add(insert, "@fx", fxBase);
+                Add(insert, "@sourceKind", isAdvance ? "ADVANCE" : "PAYMENT");
+                Add(insert, "@advancePo", (object?)advancePoDocId ?? DBNull.Value);
+                Add(insert, "@clearing", (object?)clearingJournalId ?? DBNull.Value);
                 await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
@@ -618,6 +729,200 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Reverses ONE advance allocation (migration 095) in one transaction:
+    /// the allocation's clearing journal (Dr AP / Cr Advances) is mirrored
+    /// by the shared reversal core, the invoice's paid_amount is released,
+    /// a migration-079 audit row preserves the allocation's provenance,
+    /// and the allocation row is deleted — which is exactly what restores
+    /// the advance's available balance. Normal payment allocations are
+    /// NOT unallocated here (they release only with their voucher's
+    /// reversal, the pre-095 discipline).
+    /// Returns the clearing entry's reversal journal id.
+    /// </summary>
+    public async Task<Guid> UnallocateAsync(string companyId, Guid allocationId, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        if (allocationId == Guid.Empty)
+            throw new ArgumentException("An allocation is required.", nameof(allocationId));
+        if (string.IsNullOrWhiteSpace(userId))
+            throw new ArgumentException("A current user is required for audited writes.", nameof(userId));
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var reversalId = await UnallocateCoreAsync(connection, transaction, companyId, allocationId, userId, cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return reversalId;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    /// <summary>Reverses the most recent advance allocation between one
+    /// payment/advance entry and one document (the PayRecWin action).</summary>
+    public async Task<Guid> UnallocateLatestAdvanceAsync(string companyId, long paymentLedgerId, string docTable, long docId, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            Guid allocationId;
+            await using (var find = CreateCommand(connection, transaction,
+                "SELECT allocation_id FROM payment_allocations WHERE company_id = @company AND payment_ledger_id = @payment AND doc_table = @docTable AND doc_id = @doc AND COALESCE(source_kind, 'PAYMENT') = 'ADVANCE' ORDER BY allocated_at DESC, allocation_id DESC LIMIT 1"))
+            {
+                Add(find, "@company", companyId.Trim());
+                Add(find, "@payment", paymentLedgerId);
+                Add(find, "@docTable", docTable);
+                Add(find, "@doc", docId);
+                var value = await find.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                if (value is null or DBNull)
+                    throw new InvalidOperationException("No advance allocation exists between the selected payment and document.");
+                allocationId = Guid.Parse(Convert.ToString(value, CultureInfo.InvariantCulture)!);
+            }
+            var reversalId = await UnallocateCoreAsync(connection, transaction, companyId, allocationId, userId, cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return reversalId;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private async Task<Guid> UnallocateCoreAsync(DbConnection connection, DbTransaction transaction, string companyId, Guid allocationId, string userId, CancellationToken cancellationToken)
+    {
+        string allocCompany, allocDocTable, allocDocNo, sourceKind;
+        long allocPayment, allocDoc;
+        decimal allocAmount;
+        string? allocDocumentCompany, allocAllocatedBy, allocNote, clearingJournalId;
+        await using (var read = CreateCommand(connection, transaction,
+            "SELECT company_id, payment_ledger_id, doc_table, doc_id, doc_no, amount, document_company_id, allocated_by, note, COALESCE(source_kind, 'PAYMENT'), clearing_journal_id FROM payment_allocations WHERE allocation_id = @id"
+            + (_provider == "PostgreSQL" ? " FOR UPDATE" : "")))
+        {
+            Add(read, "@id", FormatGuid(allocationId));
+            await using var reader = await read.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                throw new InvalidOperationException("The allocation was not found.");
+            allocCompany = ReadString(reader, 0) ?? string.Empty;
+            allocPayment = Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture);
+            allocDocTable = ReadString(reader, 2) ?? string.Empty;
+            allocDoc = Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture);
+            allocDocNo = ReadString(reader, 4) ?? string.Empty;
+            allocAmount = ReadDecimal(reader, 5);
+            allocDocumentCompany = ReadString(reader, 6);
+            allocAllocatedBy = ReadString(reader, 7);
+            allocNote = ReadString(reader, 8);
+            sourceKind = ReadString(reader, 9) ?? "PAYMENT";
+            clearingJournalId = ReadString(reader, 10);
+        }
+        if (!string.Equals(allocCompany, companyId.Trim(), StringComparison.Ordinal))
+            throw new InvalidOperationException("The allocation belongs to a different company.");
+        if (!string.Equals(sourceKind, "ADVANCE", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Only advance allocations can be unallocated directly; reverse the payment voucher to release a normal payment allocation.");
+        if (string.IsNullOrWhiteSpace(clearingJournalId) || !Guid.TryParse(clearingJournalId, out var clearingId))
+            throw new InvalidOperationException($"Advance allocation for document '{allocDocNo}' has no clearing journal entry and cannot be reversed safely.");
+        if (!PartyLedger.TableExists(connection, transaction, _provider, "payment_allocation_reversal_audit"))
+            throw new InvalidOperationException("Payment-allocation reversal audit schema is missing. Apply database migrations before unallocating.");
+
+        // Mirror the clearing entry first: a closed period or unbalanced
+        // source fails the whole unallocation before anything is released.
+        var reversalId = GlPosting.ReverseInTransaction(connection, transaction, _provider, clearingId, userId,
+            $"Advance allocation {allocationId:D} reversed");
+
+        var table = DocumentTable(allocDocTable);
+        var documentCompany = allocDocumentCompany ?? allocCompany;
+        decimal currentPaid;
+        await using (var inspect = CreateCommand(connection, transaction,
+            $"SELECT paid_amount FROM {table} WHERE CAST(company_id AS TEXT) IN (@documentCompany, @company) AND doc_id = @doc AND {NotDeleted}"))
+        {
+            Add(inspect, "@documentCompany", documentCompany);
+            Add(inspect, "@company", allocCompany);
+            Add(inspect, "@doc", allocDoc);
+            var value = await inspect.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            if (value is null or DBNull)
+                throw new InvalidOperationException($"Could not find {allocDocTable} document {allocDoc} while unallocating the advance.");
+            currentPaid = Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+        }
+        if (currentPaid + Tolerance < allocAmount)
+            throw new InvalidOperationException($"Cannot release {allocAmount} from {allocDocTable} document {allocDoc}: paid amount is {currentPaid}.");
+
+        var isPg = _provider == "PostgreSQL";
+        await using (var audit = CreateCommand(connection, transaction, """
+            INSERT INTO payment_allocation_reversal_audit
+                (audit_id, company_id, allocation_id, payment_ledger_id, doc_table, doc_id,
+                 document_company_id, amount, allocated_by, note, released_by, reversal_journal_id)
+            VALUES
+                (@audit, @company, @allocation, @payment, @table, @doc,
+                 @documentCompany, @amount, @allocatedBy, @note, @releasedBy, @reversal)
+            """))
+        {
+            var auditId = Guid.NewGuid();
+            Add(audit, "@audit", isPg ? (object)auditId : auditId.ToString("D"));
+            Add(audit, "@company", allocCompany);
+            Add(audit, "@allocation", isPg ? (object)allocationId : allocationId.ToString("D"));
+            Add(audit, "@payment", allocPayment);
+            Add(audit, "@table", allocDocTable);
+            Add(audit, "@doc", allocDoc);
+            Add(audit, "@documentCompany", documentCompany);
+            Add(audit, "@amount", allocAmount);
+            Add(audit, "@allocatedBy", (object?)allocAllocatedBy ?? DBNull.Value);
+            Add(audit, "@note", (object?)allocNote ?? DBNull.Value);
+            Add(audit, "@releasedBy", userId.Trim());
+            Add(audit, "@reversal", isPg ? (object)reversalId : reversalId.ToString("D"));
+            await audit.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        await using (var release = CreateCommand(connection, transaction,
+            $"""
+            UPDATE {table}
+            SET paid_amount = CASE
+                WHEN CAST(paid_amount AS NUMERIC) <= CAST(@amount AS NUMERIC) + 0.005 THEN 0
+                ELSE CAST(paid_amount AS NUMERIC) - CAST(@amount AS NUMERIC)
+            END
+            WHERE CAST(company_id AS TEXT) = @documentCompany AND doc_id = @doc AND {NotDeleted}
+            """))
+        {
+            Add(release, "@amount", allocAmount);
+            Add(release, "@documentCompany", documentCompany);
+            Add(release, "@doc", allocDoc);
+            if (await release.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+                throw new InvalidOperationException($"Could not release the advance allocation from {allocDocTable} document {allocDoc}.");
+        }
+
+        await using (var delete = CreateCommand(connection, transaction,
+            "DELETE FROM payment_allocations WHERE allocation_id = @id AND company_id = @company"))
+        {
+            Add(delete, "@id", FormatGuid(allocationId));
+            Add(delete, "@company", allocCompany);
+            if (await delete.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+                throw new InvalidOperationException("The advance allocation changed while it was being reversed.");
+        }
+        return reversalId;
+    }
+
+    private async Task<Guid> ResolveCompanyGuidAsync(
+        DbConnection connection, DbTransaction? transaction, string companyId,
+        CancellationToken cancellationToken)
+    {
+        if (Guid.TryParse(companyId, out var suppliedGuid))
+            return suppliedGuid;
+        await using var command = CreateCommand(connection, transaction,
+            "SELECT company_id FROM companies WHERE company_code = @code");
+        Add(command, "@code", companyId.Trim());
+        var value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        if (value is null or DBNull || !Guid.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), out var guid))
+            throw new InvalidOperationException($"Company '{companyId.Trim()}' could not be resolved to its journal company key.");
+        return guid;
     }
 
     private async Task<string> ResolveDocumentCompanyKeyAsync(

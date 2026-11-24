@@ -42,7 +42,13 @@ public sealed record UnallocatedPaymentRow(
     decimal Amount,
     decimal Allocated,
     string? PartyName = null,
-    string CurrencyCode = "SAR")
+    string CurrencyCode = "SAR",
+    // Supplier advances (migration 095): an 'ADV' ledger entry is an
+    // advance against one PO; PoDocId/PoDocNo name that PO and the row
+    // may only be allocated to invoices of that PO.
+    bool IsAdvance = false,
+    long? PoDocId = null,
+    string? PoDocNo = null)
 {
     public decimal Available => Amount - Allocated;
 }

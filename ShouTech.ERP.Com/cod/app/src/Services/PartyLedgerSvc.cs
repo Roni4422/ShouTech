@@ -24,13 +24,111 @@ public static class PartyLedgerSvc
 {
     public sealed record VoucherPartyLink(
         string PartyKind, long PartyId, string PartyCode,
-        string DocKind, string DocNo, decimal Amount, string CurrencyCode)
+        string DocKind, string DocNo, decimal Amount, string CurrencyCode,
+        // Supplier advances (migration 095): a PAY link may name the PO
+        // it is an advance for; posting then debits Advances (1215).
+        long? PoDocId = null, bool IsAdvance = false, string? PoDocNo = null)
     {
         /// <summary>G23: the domain request JournalRepository writes
         /// inside the draft-creation transaction. <paramref name="companyCode"/>
         /// is the current company code — the key voucher_party_links carries.</summary>
         public ShouTech.Domain.Entities.VoucherPartyLinkRequest ToRequest(string companyCode)
             => new(companyCode, PartyKind, PartyId, PartyCode, DocKind, DocNo, Amount, CurrencyCode);
+    }
+
+    /// <summary>Resolves a purchase order by number in the current
+    /// company (either company key: chain documents carry the Guid,
+    /// legacy rows the code) for the CshWin advance picker. Returns the
+    /// PO's doc id, supplier ledger id and status, or null.</summary>
+    public static (long DocId, long PartyId, string Status)? ResolvePurchaseOrder(string docNo)
+    {
+        if (string.IsNullOrWhiteSpace(docNo))
+            return null;
+        var cs = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(cs)) return null;
+        var company = AppState.CurrentCompanyCode ?? "";
+        try
+        {
+            using var connection = Open(cs);
+            string companyGuid = company;
+            using (var lookup = connection.CreateCommand())
+            {
+                lookup.CommandText = "SELECT company_id FROM companies WHERE company_code = $c;";
+                Add(lookup, "$c", company);
+                var value = lookup.ExecuteScalar();
+                if (value is not null and not DBNull)
+                    companyGuid = Convert.ToString(value, CultureInfo.InvariantCulture) ?? company;
+            }
+            using var cmd = connection.CreateCommand();
+            var deletedPredicate = DatabaseRuntime.IsPostgreSql() ? "is_deleted = FALSE" : "is_deleted = 0";
+            cmd.CommandText = $"""
+                SELECT doc_id, COALESCE(party_id, 0), status
+                FROM purchase_documents
+                WHERE doc_kind = 'PO' AND doc_no = $no AND {deletedPredicate}
+                  AND CAST(company_id AS TEXT) IN ($code, $guid)
+                LIMIT 1;
+                """;
+            Add(cmd, "$no", docNo.Trim());
+            Add(cmd, "$code", company);
+            Add(cmd, "$guid", companyGuid);
+            using var reader = cmd.ExecuteReader();
+            if (!reader.Read()) return null;
+            return (Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+                    Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture),
+                    Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture) ?? "");
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "PartyLedgerSvc.ResolvePurchaseOrder");
+            return null;
+        }
+    }
+
+    /// <summary>The PO advance summary OrdWin shows (Y1 visibility):
+    /// total advances posted (journal still Posted) for the PO, the part
+    /// consumed by advance allocations, and the remaining balance.
+    /// Display only — allocation re-validates everything itself.</summary>
+    public static (decimal Total, decimal Consumed, decimal Remaining) GetPoAdvanceSummary(long poDocId)
+    {
+        var cs = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(cs)) return (0m, 0m, 0m);
+        var company = AppState.CurrentCompanyCode ?? "";
+        try
+        {
+            using var connection = Open(cs);
+            var advancePredicate = DatabaseRuntime.IsPostgreSql() ? "vl.is_advance = TRUE" : "vl.is_advance = 1";
+            decimal total, consumed;
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = $"""
+                    SELECT COALESCE(SUM(vl.amount), 0)
+                    FROM voucher_party_links vl
+                    JOIN journal_entries j
+                      ON CAST(j.journal_entry_id AS TEXT) = vl.journal_entry_id AND j.status = 1
+                    WHERE vl.company_id = $c AND vl.po_doc_id = $po AND {advancePredicate};
+                    """;
+                Add(cmd, "$c", company);
+                Add(cmd, "$po", poDocId);
+                total = Convert.ToDecimal(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+            }
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = """
+                    SELECT COALESCE(SUM(amount), 0)
+                    FROM payment_allocations
+                    WHERE company_id = $c AND advance_po_doc_id = $po AND COALESCE(source_kind, 'PAYMENT') = 'ADVANCE';
+                    """;
+                Add(cmd, "$c", company);
+                Add(cmd, "$po", poDocId);
+                consumed = Convert.ToDecimal(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+            }
+            return (total, consumed, total - consumed);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "PartyLedgerSvc.GetPoAdvanceSummary");
+            return (0m, 0m, 0m);
+        }
     }
 
     public static (long LedgerId, string Name)? ResolveParty(string code, string kind)
@@ -122,9 +220,9 @@ public static class PartyLedgerSvc
         using var cmd = connection.CreateCommand();
         cmd.CommandText = """
             INSERT INTO voucher_party_links
-                (journal_entry_id, company_id, party_kind, party_id, party_code, doc_kind, doc_no, amount, currency_code, created_by)
+                (journal_entry_id, company_id, party_kind, party_id, party_code, doc_kind, doc_no, amount, currency_code, created_by, po_doc_id, is_advance)
             VALUES
-                ($id, $company, $kind, $party, $code, $docKind, $docNo, $amount, $currency, $user);
+                ($id, $company, $kind, $party, $code, $docKind, $docNo, $amount, $currency, $user, $po, $advance);
             """;
         Add(cmd, "$id", journalEntryId.ToString("D"));
         Add(cmd, "$company", company);
@@ -136,6 +234,8 @@ public static class PartyLedgerSvc
         Add(cmd, "$amount", amount);
         Add(cmd, "$currency", string.IsNullOrWhiteSpace(currencyCode) ? "SAR" : currencyCode.Trim());
         Add(cmd, "$user", userId);
+        Add(cmd, "$po", (object?)link.PoDocId ?? DBNull.Value);
+        Add(cmd, "$advance", DatabaseRuntime.IsPostgreSql() ? (object)link.IsAdvance : (link.IsAdvance ? 1 : 0));
         cmd.ExecuteNonQuery();
     }
 
@@ -148,9 +248,11 @@ public static class PartyLedgerSvc
             using var connection = Open(cs);
             using var cmd = connection.CreateCommand();
             cmd.CommandText = """
-                SELECT party_kind, party_id, party_code, doc_kind, doc_no, amount, currency_code
-                FROM voucher_party_links
-                WHERE journal_entry_id=$id;
+                SELECT vl.party_kind, vl.party_id, vl.party_code, vl.doc_kind, vl.doc_no, vl.amount, vl.currency_code,
+                       vl.po_doc_id, vl.is_advance, po.doc_no
+                FROM voucher_party_links vl
+                LEFT JOIN purchase_documents po ON po.doc_id = vl.po_doc_id
+                WHERE vl.journal_entry_id=$id;
                 """;
             Add(cmd, "$id", journalEntryId.ToString("D"));
             using var reader = cmd.ExecuteReader();
@@ -162,7 +264,10 @@ public static class PartyLedgerSvc
                 Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture) ?? "",
                 Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture) ?? "",
                 Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture),
-                Convert.ToString(reader.GetValue(6), CultureInfo.InvariantCulture) ?? "SAR");
+                Convert.ToString(reader.GetValue(6), CultureInfo.InvariantCulture) ?? "SAR",
+                reader.IsDBNull(7) ? null : Convert.ToInt64(reader.GetValue(7), CultureInfo.InvariantCulture),
+                !reader.IsDBNull(8) && Convert.ToBoolean(reader.GetValue(8), CultureInfo.InvariantCulture),
+                reader.IsDBNull(9) ? null : Convert.ToString(reader.GetValue(9), CultureInfo.InvariantCulture));
         }
         catch (Exception ex)
         {
