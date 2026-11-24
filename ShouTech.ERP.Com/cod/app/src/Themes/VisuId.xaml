@@ -33,28 +33,32 @@
            Layer 3  COMPONENT    the styles further down this file
          ========================================================= -->
 
-    <!-- ===== Layer 1: primitive neutral ramp ===== -->
+    <!-- ===== Layer 1: primitive neutral ramp =====
+         Blue-gray (slate) family: the neutrals carry a muted
+         blue cast so window surfaces read slate, not plain gray
+         (owner directive 2026-11-24). Luminance order unchanged. -->
     <Color x:Key="NeutralWhiteColor">#FFFFFF</Color>
-    <Color x:Key="Neutral50Color">#FAFBFC</Color>
-    <Color x:Key="Neutral100Color">#F5F6F8</Color>
-    <Color x:Key="Neutral150Color">#F1F3F5</Color>
-    <Color x:Key="Neutral200Color">#F0F2F5</Color>
-    <Color x:Key="Neutral250Color">#E2E5E9</Color>
-    <Color x:Key="Neutral300Color">#D5D9DE</Color>
-    <Color x:Key="Neutral400Color">#B8BEC6</Color>
-    <Color x:Key="Neutral500Color">#9AA0A6</Color>
-    <Color x:Key="Neutral600Color">#5F6368</Color>
-    <Color x:Key="Neutral900Color">#202124</Color>
-    <Color x:Key="TextTertiaryColor">#71777D</Color>
+    <Color x:Key="Neutral50Color">#F8FAFB</Color>
+    <Color x:Key="Neutral100Color">#F2F5F7</Color>
+    <Color x:Key="Neutral150Color">#EAF0F3</Color>
+    <Color x:Key="Neutral200Color">#E6EDF1</Color>
+    <Color x:Key="Neutral250Color">#D8E1E8</Color>
+    <Color x:Key="Neutral300Color">#C9D4DE</Color>
+    <Color x:Key="Neutral400Color">#A9BACA</Color>
+    <Color x:Key="Neutral500Color">#8E9EAC</Color>
+    <Color x:Key="Neutral600Color">#5A6874</Color>
+    <Color x:Key="Neutral900Color">#1F272E</Color>
+    <Color x:Key="TextTertiaryColor">#6B7987</Color>
 
-    <!-- ===== Layer 1: primitive accent (default palette; the
-         accent service in Services/VisuId.cs replaces the accent
-         BRUSHES at application level when the user switches
-         accent, so components keep referencing the brushes). ===== -->
-    <Color x:Key="AccentPrimaryColor">#0067C0</Color>
-    <Color x:Key="AccentDarkColor">#005A9E</Color>
-    <Color x:Key="AccentLightColor">#E5F1FB</Color>
-    <Color x:Key="AccentHoverColor">#D6EBF9</Color>
+    <!-- ===== Layer 1: primitive accent (default palette = the
+         slate "Blue Gray" family; the accent service in
+         Services/VisuId.cs replaces the accent BRUSHES at
+         application level when the user switches accent, so
+         components keep referencing the brushes). ===== -->
+    <Color x:Key="AccentPrimaryColor">#51708E</Color>
+    <Color x:Key="AccentDarkColor">#3D576E</Color>
+    <Color x:Key="AccentLightColor">#E8EEF3</Color>
+    <Color x:Key="AccentHoverColor">#D3DEE8</Color>
 
     <!-- ===== Layer 1: primitive status colors + light tints ===== -->
     <Color x:Key="SuccessColor">#198754</Color>
@@ -79,8 +83,8 @@
     <!-- Accent-tinted selection wash. Services/VisuId.cs refreshes
          this brush (and AccentSubtleBrush / FocusRingBrush /
          FieldBorderFocusBrush) whenever the accent changes. -->
-    <SolidColorBrush x:Key="SurfaceSelectedBrush" Color="#260067C0"/>
-    <SolidColorBrush x:Key="AccentSubtleBrush" Color="#260067C0"/>
+    <SolidColorBrush x:Key="SurfaceSelectedBrush" Color="#2651708E"/>
+    <SolidColorBrush x:Key="AccentSubtleBrush" Color="#2651708E"/>
 
     <!-- ===== Layer 2: semantic text tokens ===== -->
     <SolidColorBrush x:Key="TextTertiaryBrush" Color="{StaticResource TextTertiaryColor}"/>
@@ -603,7 +607,7 @@
 
     <SolidColorBrush
         x:Key="TableHeaderOpeningStockBrush"
-        Color="#005A9E"/>
+        Color="#3D576E"/>
 
     <SolidColorBrush
         x:Key="TableHeaderStockCountBrush"
@@ -690,11 +694,11 @@
 
     <SolidColorBrush
         x:Key="PrimaryTransparentBrush"
-        Color="#330067C0"/>
+        Color="#3351708E"/>
 
     <SolidColorBrush
         x:Key="ShellMenuForegroundBrush"
-        Color="#202124"/>
+        Color="#1F272E"/>
 
     <SolidColorBrush
         x:Key="ShellRibbonBackgroundBrush"

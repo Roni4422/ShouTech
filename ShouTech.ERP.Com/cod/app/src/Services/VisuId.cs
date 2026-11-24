@@ -96,7 +96,7 @@ namespace ShouTech.App.Services
         /// <summary>Standard height of a multi-line (notes/address) field (64).</summary>
         public static double MultilineFieldHeight => ResolveMetric("MultilineFieldHeight", 64);
 
-        private string _accentKey = "win11";
+        private string _accentKey = "slate";
 
         // ============================================================
         // ACCENT PALETTES
@@ -105,6 +105,14 @@ namespace ShouTech.App.Services
         private static readonly Dictionary<string, AccentPalette> Palettes =
             new(StringComparer.OrdinalIgnoreCase)
             {
+                ["slate"] =
+                    new(
+                        "#51708E",
+                        "#3D576E",
+                        "#E8EEF3",
+                        "#D3DEE8",
+                        "Blue Gray"),
+
                 ["win11"] =
                     new(
                         "#0067C0",
@@ -794,7 +802,7 @@ namespace ShouTech.App.Services
                     .ToLowerInvariant();
 
             if (!Palettes.ContainsKey(key))
-                key = "win11";
+                key = "slate";
 
             _accentKey = key;
 
@@ -830,13 +838,13 @@ namespace ShouTech.App.Services
                 var key =
                     string.IsNullOrWhiteSpace(
                         pref.AccentColor)
-                            ? "win11"
+                            ? "slate"
                             : pref.AccentColor
                                 .Trim()
                                 .ToLowerInvariant();
 
                 if (!Palettes.ContainsKey(key))
-                    key = "win11";
+                    key = "slate";
 
                 _accentKey = key;
 
@@ -845,9 +853,9 @@ namespace ShouTech.App.Services
             catch (Exception exL797)
             {
                 AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL797, "VisuId.ApplySavedAccent");
-                _accentKey = "win11";
+                _accentKey = "slate";
 
-                ApplyAccentInternal("win11");
+                ApplyAccentInternal("slate");
             }
         }
 
@@ -865,7 +873,7 @@ namespace ShouTech.App.Services
                     out var palette))
             {
                 palette =
-                    Palettes["win11"];
+                    Palettes["slate"];
             }
 
             /*

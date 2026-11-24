@@ -229,8 +229,8 @@ namespace ShouTech.App.Views
                 var hwnd = new WindowInteropHelper(this).Handle;
                 if (hwnd == IntPtr.Zero) return;
 
-                // #607D8B in BGR = 0x8B7D60
-                int captionColor = 0x8B7D60;
+                // Slate accent #51708E in BGR = 0x8E7051
+                int captionColor = 0x8E7051;
                 int result = DwmSetWindowAttribute(
                     hwnd,
                     DWMWA_CAPTION_COLOR,

@@ -206,7 +206,7 @@ public sealed class OptWin : BaseWin
         SelectByTag(_cmbLang, string.IsNullOrWhiteSpace(_pref.Lang) ? "en" : _pref.Lang);
         _txtCurrency.Text = _pref.CurrencyCode;
         SelectByTag(_cmbAccent,
-            string.IsNullOrWhiteSpace(_pref.AccentColor) ? "win11" : _pref.AccentColor.ToLowerInvariant());
+            string.IsNullOrWhiteSpace(_pref.AccentColor) ? "slate" : _pref.AccentColor.ToLowerInvariant());
         _txtFontSize.Text = _pref.FontSize.ToString("0", CultureInfo.InvariantCulture);
         SelectByTag(_cmbDateFormat, _pref.DateFormat);
         _txtDecimals.Text = _pref.DecimalPlaces.ToString(CultureInfo.InvariantCulture);

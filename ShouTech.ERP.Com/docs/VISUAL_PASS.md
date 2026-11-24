@@ -64,6 +64,44 @@ No resource keys were removed or renamed; no window file was touched
 in V1. RTL, shell-context inheritance, the 50% opening cap and the
 bottom-button convention are unaffected (token values only).
 
+## V1 addendum — default accent becomes BLUE-GRAY (slate) (2026-11-24 14:01)
+
+**OWNER DECISION (2026-11-24 14:01): the default accent is
+BLUE-GRAY (رمادي أزرق, slate) — this SUPERSEDES the 13:59 "keep
+gray" decision recorded above, and supersedes the Win11 blue as
+the default too.** The 13:59 decision is closed history: it
+answered a different question (whether to flip the stored default
+to the `win11` palette); the owner then directed slate instead.
+
+What changed:
+
+1. **New `slate` palette** in Services/VisuId.cs, lead entry:
+   Primary #51708E, Dark #3D576E, Light #E8EEF3, Hover #D3DEE8,
+   display name "Blue Gray". It is now the service default
+   (`_accentKey`), the unknown-key fallback in `SetAccent`, the
+   empty/invalid fallback in `ApplySavedAccent`, and the
+   `ApplyAccentInternal` palette fallback. The `win11` and `gray`
+   palettes remain available choices, unchanged.
+2. **UsrPref**: `AccentColor` default is now `"slate"`; the
+   normalizer accepts `"slate"` and `"win11"` as valid stored
+   values (win11 was pickable in OptWin but previously normalized
+   away) and falls back to `"slate"` on empty/invalid. A profile
+   with an explicitly stored choice (including "gray") keeps it —
+   only never-stored profiles read the new default.
+3. **Themes/VisuId.xaml**: first-paint accent tokens carry the
+   slate family; the accent washes (selection/subtle/primary
+   transparent) re-hued to #51708E at the same alphas; the
+   opening-stock table-header tint (re-hued to the accent dark in
+   V1) follows to the slate dark #3D576E. The **neutral ramp
+   itself is re-hued** with a muted blue cast at unchanged
+   luminance steps, so window surfaces read blue-gray, not plain
+   gray; ShellMenuForegroundBrush follows Neutral900.
+4. **Pre-shell windows**: LogWin and StpWiz hardcoded the old
+   #607D8B caption color via DWM; both now use the slate primary
+   #51708E (white caption text unchanged).
+5. **OptWin**: the accent combo's empty-value fallback is "slate";
+   the picker lists the new palette from VisuId.AvailableAccents.
+
 ## V2 — Phenix v10 invoices/vouchers + Sahli Soft reports
 
 ### Research (public sources, 2026-11-24)

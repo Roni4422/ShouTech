@@ -194,8 +194,8 @@ namespace ShouTech.App.Views
                     return;
                 }
 
-                // #607D8B in BGR format.
-                int captionColor = 0x8B7D60;
+                // Slate accent #51708E in BGR format.
+                int captionColor = 0x8E7051;
 
                 var result = DwmSetWindowAttribute(
                     hwnd,

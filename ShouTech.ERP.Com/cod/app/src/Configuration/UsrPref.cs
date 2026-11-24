@@ -59,7 +59,7 @@ public sealed class UsrPref
 
     /// <summary>
     /// </summary>
-    public string AccentColor { get; set; } = "gray";
+    public string AccentColor { get; set; } = "slate";
 
     // ================================================================
     //  Display
@@ -246,12 +246,12 @@ public sealed class UsrPref
         // Accent
         var validAccents = new[]
         {
-            "gray", "blue", "green", "red", "purple",
+            "slate", "win11", "gray", "blue", "green", "red", "purple",
             "teal", "amber", "orange", "pink"
         };
 
         if (string.IsNullOrWhiteSpace(AccentColor))
-            AccentColor = "gray";
+            AccentColor = "slate";
 
         AccentColor = AccentColor.Trim().ToLowerInvariant();
 
@@ -259,7 +259,7 @@ public sealed class UsrPref
         foreach (var a in validAccents)
             if (a == AccentColor) { valid = true; break; }
 
-        if (!valid) AccentColor = "gray";
+        if (!valid) AccentColor = "slate";
 
         // Font size
         if (FontSize < 10) FontSize = 10;
