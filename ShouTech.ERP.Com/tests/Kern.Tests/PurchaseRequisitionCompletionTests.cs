@@ -399,16 +399,18 @@ namespace Kern.Tests
                 var id = await f.CreateRequisitionAsync(qty: 1m, price: 10m);
                 await f.Workflow.SubmitAsync(f.CompanyId, id, Steps("manager-1", "manager-2"), Actor);
                 var w = await f.Workflow.GetAsync(f.CompanyId, id);
+                Assert.NotNull(w);
+                var approvals = w!.Approvals;
 
                 // Skipping ahead: step 2 cannot be decided while step 1 pends.
                 await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                    f.Workflow.DecideAsync(f.CompanyId, id, w!.Approvals[1].ApprovalId, "manager-2", true, null));
+                    f.Workflow.DecideAsync(f.CompanyId, id, approvals[1].ApprovalId, "manager-2", true, null));
                 // Wrong user: step 1 belongs to manager-1, not manager-2.
                 await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                    f.Workflow.DecideAsync(f.CompanyId, id, w.Approvals[0].ApprovalId, "manager-2", true, null));
+                    f.Workflow.DecideAsync(f.CompanyId, id, approvals[0].ApprovalId, "manager-2", true, null));
 
                 // The assigned approver can still decide afterwards.
-                await f.Workflow.DecideAsync(f.CompanyId, id, w.Approvals[0].ApprovalId, "manager-1", true, null);
+                await f.Workflow.DecideAsync(f.CompanyId, id, approvals[0].ApprovalId, "manager-1", true, null);
                 Assert.Equal("Approved", (await f.Workflow.GetAsync(f.CompanyId, id))!.Approvals[0].Status);
             }
             finally { f.Cleanup(); }
