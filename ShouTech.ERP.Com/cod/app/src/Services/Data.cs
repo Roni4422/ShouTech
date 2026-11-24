@@ -1157,7 +1157,12 @@ internal static class SqliteSchemaBootstrapper
             ("LICENSING", "Licensing", "Licensing", 18),
             ("UPDATES", "Updates", "Updates", 19),
             ("AI", "AI", "AI", 20),
-            ("HELP", "Help", "Help", 21)
+            ("HELP", "Help", "Help", 21),
+            ("HR", "Human Resources", "Human Resources", 22),
+            ("QUALITY", "Quality", "Quality", 23),
+            ("ASSETS", "Fixed Assets", "Fixed Assets", 24),
+            ("PROJECTS", "Projects", "Projects", 25),
+            ("DOCUMENTS", "Documents", "Documents", 26)
         };
 
         foreach (var g in groups)
@@ -1184,7 +1189,9 @@ internal static class SqliteSchemaBootstrapper
             ["CRM"] = "CUSTOMERS", ["REP"] = "REPRESENTATIVES", ["MFG"] = "MANUFACTURING",
             ["BANK"] = "BANKING", ["DELIVERY"] = "DELIVERY", ["REPORT"] = "REPORTING", ["DATA"] = "DATA",
             ["BACKUP"] = "BACKUP", ["AUDIT"] = "AUDIT", ["LIC"] = "LICENSING", ["UPDATE"] = "UPDATES",
-            ["AI"] = "AI", ["HELP"] = "HELP"
+            ["AI"] = "AI", ["HELP"] = "HELP",
+            ["HR"] = "HR", ["QUALITY"] = "QUALITY", ["AST"] = "ASSETS", ["PRJ"] = "PROJECTS",
+            ["DOC"] = "DOCUMENTS"
         };
 
         // Seed all PermCat codes
@@ -1201,7 +1208,8 @@ internal static class SqliteSchemaBootstrapper
             var ar = $"{featureName} - {operationName}";
             var en = $"{featureName} - {operationName}";
             var sensitive = protectedCodes.Contains(code)
-                || operation is "DELETE" or "REVERSE" or "POST" or "MANAGE" or "RESTORE" or "REOPEN" or "OVERRIDE";
+                || operation is "DELETE" or "REVERSE" or "POST" or "MANAGE" or "RESTORE" or "REOPEN" or "OVERRIDE"
+                or "FIELDS" or "ACCOUNT";
             order++;
 
             Execute(connection, """
