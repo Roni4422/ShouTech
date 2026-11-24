@@ -243,7 +243,10 @@ public sealed record CommercialDocumentDraft(
     string? WarehouseName = null,
     decimal DiscountAmount = 0m,
     decimal ExtraAmount = 0m,
-    decimal DeliveryCost = 0m);
+    decimal DeliveryCost = 0m,
+    // W7c (migration 101): a sales order may draw down against a sales
+    // contract (sct_contracts.contract_id, stored as TEXT Guid).
+    string? ContractId = null);
 
 /// <summary>Header-only projection used by document search / order tracking lists.</summary>
 public sealed record CommercialDocumentSummary(

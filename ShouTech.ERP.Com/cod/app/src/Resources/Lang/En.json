@@ -1408,7 +1408,8 @@
     "SalesRepTargetsReport": "Sales Rep Targets Report",
     "SearchCustomers": "Search Customers",
     "Title": "Sales Representative",
-    "Commissions": "Sales commissions"
+    "Commissions": "Sales commissions",
+    "Contracts": "Sales contracts"
   },
   "Shell": {
     "ThemeDark": "Dark Mode",
@@ -4171,5 +4172,49 @@
     "DirectInvoice": "Direct Invoice",
     "Revision": "Revision",
     "ApprovalState": "Approval state"
+  },
+  "Contract": {
+    "Title": "Sales Contracts",
+    "PermissionDenied": "You do not have permission to view sales contracts.",
+    "ServiceUnavailable": "The contracts service is unavailable.",
+    "Activate": "Activate",
+    "Suspend": "Suspend",
+    "Renew": "Renew",
+    "Generate": "Generate Scheduled",
+    "ExpireSweep": "Expire Sweep",
+    "Expiring": "Expiring (30d)",
+    "PartyId": "Party ID",
+    "PartyCode": "Party Code",
+    "PaymentTerms": "Payment Terms",
+    "Guarantee": "Guarantee",
+    "GuaranteeAmount": "Guarantee Amount",
+    "Notes": "Notes",
+    "Lines": "Lines (material, qty, price, next date, interval days, scheduled qty)",
+    "StatusCount": "{0} contract(s)",
+    "ExpiringStatus": "{0} contract(s) expiring within 30 days",
+    "Fulfillment": "Contracted {0} · Delivered {1} · Invoiced {2} · Remaining {3} · Revenue {4} · COGS {5} · Margin {6} ({7}%)",
+    "Saved": "Contract {0} saved.",
+    "Select": "Select a contract first.",
+    "StatusChanged": "Contract {0} is now {1}.",
+    "Renewed": "Contract {0} renewed as {1}.",
+    "Generated": "{0} scheduled draft order(s) generated.",
+    "Expired": "{0} contract(s) expired.",
+    "LineInvalid": "Invalid contract line: {0}",
+    "Col": {
+      "No": "Contract No",
+      "Party": "Party",
+      "Title": "Title",
+      "Start": "Start",
+      "End": "End",
+      "Status": "Status",
+      "Currency": "Currency",
+      "Material": "Material",
+      "Contracted": "Contracted",
+      "Price": "Price",
+      "Delivered": "Delivered",
+      "Invoiced": "Invoiced",
+      "Remaining": "Remaining",
+      "NextDelivery": "Next Delivery"
+    }
   }
 }

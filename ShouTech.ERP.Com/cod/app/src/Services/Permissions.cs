@@ -459,6 +459,10 @@ namespace ShouTech.App.Services
             public const string CommissionManage = "SALES.COMMISSION.MANAGE";
             public const string CommissionApprove = "SALES.COMMISSION.APPROVE";
             public const string CommissionPay = "SALES.COMMISSION.PAY";
+
+            // Section 10 contracts (migration 101 seeds).
+            public const string ContractView = "SALES.CONTRACT.VIEW";
+            public const string ContractManage = "SALES.CONTRACT.MANAGE";
         }
 
         // =====================================================================

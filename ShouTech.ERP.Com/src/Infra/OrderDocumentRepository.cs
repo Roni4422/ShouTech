@@ -334,13 +334,14 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 throw new InvalidOperationException($"Only draft documents can be edited; document '{existing.DocNo}' is '{existing.Status}'.");
             if (existing.CompanyId != draft.CompanyId)
                 throw new InvalidOperationException("Document belongs to a different company.");
-            draft = ApplySalesPricing(connection, transaction, side, draft, priceOverride);
+            draft = ApplySalesPricing(connection, transaction, side, draft, priceOverride, docId);
 
             var computed = ComputeTotals(draft.Lines, out var subtotal, out var taxAmount, out _);
             var grandTotal = decimal.Round(subtotal - draft.DiscountAmount + taxAmount + draft.ExtraAmount, 2);
 
-            // delivery_cost exists only on sales_documents (migration 096).
-            var deliveryCostSet = side == CommercialDocSide.Sales ? "delivery_cost = @deliveryCost," : string.Empty;
+            // delivery_cost exists only on sales_documents (migration 096);
+            // contract_id likewise (migration 101).
+            var deliveryCostSet = side == CommercialDocSide.Sales ? "delivery_cost = @deliveryCost, contract_id = @contractId," : string.Empty;
             await using (var update = CreateCommand(connection, transaction, $"""
                 UPDATE {docs}
                 SET doc_date = @date, party_id = @party, party_name = @partyName, party_code = @partyCode,
@@ -355,7 +356,10 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 Add(update, "@discount", draft.DiscountAmount);
                 Add(update, "@extra", draft.ExtraAmount);
                 if (side == CommercialDocSide.Sales)
+                {
                     Add(update, "@deliveryCost", draft.DeliveryCost);
+                    Add(update, "@contractId", (object?)draft.ContractId ?? DBNull.Value);
+                }
                 Add(update, "@date", draft.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
                 Add(update, "@party", (object?)draft.PartyId ?? DBNull.Value);
                 Add(update, "@partyName", (object?)draft.PartyName ?? DBNull.Value);
@@ -403,7 +407,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
     /// </summary>
     private CommercialDocumentDraft ApplySalesPricing(
         DbConnection connection, DbTransaction transaction, CommercialDocSide side,
-        CommercialDocumentDraft draft, PriceOverrideContext? priceOverride)
+        CommercialDocumentDraft draft, PriceOverrideContext? priceOverride,
+        long? excludeDocId = null)
     {
         if (side != CommercialDocSide.Sales || draft.DocKind != CommercialDocKinds.SalesOrder)
             return draft;
@@ -417,6 +422,14 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             draft.Lines.Select((l, i) => new PriceGuardLine(
                 i + 1, l.MaterialId, l.MaterialCode, l.Qty, l.UnitPrice, l.DiscountPct)).ToList(),
             priceOverride is null ? null : priceOverride with { DocKind = draft.DocKind, DocNo = draft.DocNo });
+        // W7c contract draw-down at SAVE (SAL-7023 / SAL-7015): an
+        // order linked to a contract validates against it here and
+        // again at post; unlinked orders pass through untouched.
+        ContractGuard.ValidateOrder(connection, transaction, _provider,
+            draft.CompanyId.ToString("D"), draft.ContractId, excludeDocId,
+            draft.DocDate, draft.PartyId,
+            draft.Lines.Where(l => l.MaterialId is > 0)
+                .Select(l => (l.MaterialId!.Value, l.Qty)).ToList());
         return draft;
     }
 
@@ -548,6 +561,34 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                     SalesPriceGuard.Validate(connection, transaction, _provider, companyId,
                         kind, docNo, docId, priceLines,
                         priceOverride is null ? null : priceOverride with { DocKind = kind, DocNo = docNo, DocId = docId });
+
+                // W7c contract draw-down at POST (SAL-7023 / SAL-7015):
+                // the stored order is re-validated against its contract
+                // because the contract may have been suspended or fully
+                // drawn by other orders since save.
+                if (kind == CommercialDocKinds.SalesOrder && companyId is not null
+                    && PartyLedger.ColumnExists(connection, transaction, _provider, docs, "contract_id"))
+                {
+                    string? contractId = null;
+                    DateOnly contractDocDate = default;
+                    long? orderParty = null;
+                    await using (var head = CreateCommand(connection, transaction,
+                        $"SELECT contract_id, doc_date, party_id FROM {docs} WHERE doc_id = @doc AND is_deleted = 0"))
+                    {
+                        Add(head, "@doc", docId);
+                        await using var headReader = await head.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                        if (await headReader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                        {
+                            contractId = headReader.IsDBNull(0) ? null : Convert.ToString(headReader.GetValue(0), CultureInfo.InvariantCulture);
+                            contractDocDate = DateOnly.Parse(Convert.ToString(headReader.GetValue(1), CultureInfo.InvariantCulture)![..10], CultureInfo.InvariantCulture);
+                            orderParty = headReader.IsDBNull(2) ? null : Convert.ToInt64(headReader.GetValue(2), CultureInfo.InvariantCulture);
+                        }
+                    }
+                    ContractGuard.ValidateOrder(connection, transaction, _provider, companyId,
+                        contractId, docId, contractDocDate, orderParty,
+                        priceLines.Where(l => l.MaterialId is > 0)
+                            .Select(l => (l.MaterialId!.Value, l.Qty)).ToList());
+                }
             }
 
             await using var update = CreateCommand(connection, transaction,
@@ -2620,16 +2661,20 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         // the header money; it is never silently zeroed.
         var grandTotal = decimal.Round(subtotal - draft.DiscountAmount + taxAmount + draft.ExtraAmount, 2);
         long docId;
-        // delivery_cost exists only on sales_documents (migration 096).
-        var deliveryCostColumn = side == CommercialDocSide.Sales ? ", delivery_cost" : string.Empty;
-        var deliveryCostValue = side == CommercialDocSide.Sales ? ", @deliveryCost" : string.Empty;
+        // delivery_cost exists only on sales_documents (migration 096);
+        // contract_id likewise (migration 101, W7c draw-down link).
+        var deliveryCostColumn = side == CommercialDocSide.Sales ? ", delivery_cost, contract_id" : string.Empty;
+        var deliveryCostValue = side == CommercialDocSide.Sales ? ", @deliveryCost, @contractId" : string.Empty;
         await using (var insertHeader = CreateCommand(connection, transaction,
             $"INSERT INTO {docs} (company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id, currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total, status, notes, created_by, party_code, delivery_date, valid_till, cost_center, branch_name, sales_rep_name, warehouse_name, posted_by, posted_at, extra_amount{deliveryCostColumn}) " +
             $"VALUES (@company, @kind, @no, @date, @party, @partyName, @warehouse, @currency, @rate, @subtotal, @discount, @tax, @total, @status, @notes, @actor, @partyCode, @deliveryDate, @validTill, @costCenter, @branchName, @salesRepName, @warehouseName, @postedBy, @postedAt, @extra{deliveryCostValue})" +
             (_provider == "PostgreSQL" ? " RETURNING doc_id" : "; SELECT last_insert_rowid();")))
         {
             if (side == CommercialDocSide.Sales)
+            {
                 Add(insertHeader, "@deliveryCost", draft.DeliveryCost);
+                Add(insertHeader, "@contractId", (object?)draft.ContractId ?? DBNull.Value);
+            }
             Add(insertHeader, "@company", draft.CompanyId.ToString("D"));
             Add(insertHeader, "@kind", draft.DocKind.Trim());
             Add(insertHeader, "@no", draft.DocNo.Trim());

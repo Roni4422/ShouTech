@@ -6,11 +6,11 @@ using ShouTech.Domain.Entities;
 namespace ShouTech.Infrastructure;
 
 /// <summary>
-/// Contract-price hook (W7a step a). The contracts module (W7c) does not
-/// exist yet, so the only implementation today is
-/// <see cref="NullContractPriceSource"/>, which never hits. When W7c
-/// lands it supplies an implementation that reads the agreed contract
-/// lines; the resolver's order does not change.
+/// Contract-price hook (W7a step a). Since W7c the contracts module
+/// supplies <see cref="ContractPriceSource"/> (ContractRepository.cs),
+/// which reads the agreed contract lines;
+/// <see cref="NullContractPriceSource"/> remains for callers that
+/// explicitly opt out. The resolver's order does not change.
 /// </summary>
 public interface IContractPriceSource
 {
@@ -65,7 +65,10 @@ public sealed class SalesPriceResolver
     public SalesPriceResolver(IContractPriceSource? contracts = null)
         => _contracts = contracts ?? NullContractPriceSource.Instance;
 
-    public static readonly SalesPriceResolver Default = new();
+    /// <summary>The shared resolver, wired (W7c) with the real
+    /// contract price source: resolution level (a) now reads
+    /// sct_contract_lines of the party's active contracts.</summary>
+    public static readonly SalesPriceResolver Default = new(ContractPriceSource.Instance);
 
     public PriceResolution Resolve(
         DbConnection connection, DbTransaction transaction, string provider,

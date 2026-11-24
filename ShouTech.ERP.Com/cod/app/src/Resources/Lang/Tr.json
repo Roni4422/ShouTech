@@ -454,7 +454,8 @@
     "HandheldDevices": "El Cihazları",
     "DeviceCards": "Cihaz Kartları",
     "DeviceRoutes": "Cihaz Rotaları",
-    "Commissions": "Satış komisyonları"
+    "Commissions": "Satış komisyonları",
+    "Contracts": "Satış sözleşmeleri"
   },
   "Manufacturing": {
     "Title": "Üretim",
@@ -4162,5 +4163,49 @@
     "DirectInvoice": "Doğrudan Fatura",
     "Revision": "Revizyon",
     "ApprovalState": "Onay durumu"
+  },
+  "Contract": {
+    "Title": "Satış Sözleşmeleri",
+    "PermissionDenied": "Satış sözleşmelerini görüntüleme yetkiniz yok.",
+    "ServiceUnavailable": "Sözleşme hizmeti kullanılamıyor.",
+    "Activate": "Etkinleştir",
+    "Suspend": "Askıya Al",
+    "Renew": "Yenile",
+    "Generate": "Planlananları Oluştur",
+    "ExpireSweep": "Süresi Dolanları Kapat",
+    "Expiring": "30 Gün İçinde Dolanlar",
+    "PartyId": "Taraf No",
+    "PartyCode": "Taraf Kodu",
+    "PaymentTerms": "Ödeme Koşulları",
+    "Guarantee": "Teminat",
+    "GuaranteeAmount": "Teminat Tutarı",
+    "Notes": "Notlar",
+    "Lines": "Satırlar (malzeme, miktar, fiyat, sonraki tarih, gün aralığı, planlanan miktar)",
+    "StatusCount": "{0} sözleşme",
+    "ExpiringStatus": "30 gün içinde {0} sözleşmenin süresi doluyor",
+    "Fulfillment": "Sözleşme {0} · Teslim {1} · Faturalı {2} · Kalan {3} · Gelir {4} · Maliyet {5} · Marj {6} (%{7})",
+    "Saved": "{0} sözleşmesi kaydedildi.",
+    "Select": "Önce bir sözleşme seçin.",
+    "StatusChanged": "{0} sözleşmesi şimdi {1}.",
+    "Renewed": "{0} sözleşmesi {1} olarak yenilendi.",
+    "Generated": "{0} planlı taslak sipariş oluşturuldu.",
+    "Expired": "{0} sözleşmenin süresi doldu.",
+    "LineInvalid": "Geçersiz sözleşme satırı: {0}",
+    "Col": {
+      "No": "Sözleşme No",
+      "Party": "Taraf",
+      "Title": "Başlık",
+      "Start": "Başlangıç",
+      "End": "Bitiş",
+      "Status": "Durum",
+      "Currency": "Para Birimi",
+      "Material": "Malzeme",
+      "Contracted": "Sözleşme",
+      "Price": "Fiyat",
+      "Delivered": "Teslim",
+      "Invoiced": "Faturalı",
+      "Remaining": "Kalan",
+      "NextDelivery": "Sonraki Teslim"
+    }
   }
 }

@@ -154,6 +154,7 @@ public static class RibbonNav
             case "SalesRep.SalesRepTargetsReport": Show(new TargetsRptWin(), owner); return true;
             case "SalesRep.SearchCustomers": Show(new PartySearchWin(), owner); return true;
             case "SalesRep.Commissions": Show(new CommWin(), owner); return true;
+            case "SalesRep.Contracts": Show(new ContractWin(), owner); return true;
             case "SalesRep.SalesRepMovement": Show(new RepMovementWin(), owner); return true;
             case "SalesRep.SalesRepCollections": Show(new RepCollectionsWin(), owner); return true;
             case "SalesRep.HandheldDevices": ShowDef(DefSets.Devices, owner); return true;
