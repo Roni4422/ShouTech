@@ -509,9 +509,115 @@ existing gate applies unchanged):**
   the new queries is likewise owed (SQL written provider-neutral;
   only SQLite was exercised headlessly).
 
+### A3 — Landed cost completion (L1–L5 + Critical-1 redesign) — branch `feat/p2p-a3-landed`
+
+Owner report (Purchase_cycle.txt §4.3 / §11 #1–3) superseded the original
+L2 account-only design: the final model is two-mode. A charge is either
+**Unlinked** (`Payable`: the voucher creates the liability to its payee)
+or **Linked** (the liability already exists on a posted supplier
+document; posting reclasses the cost out of that document and creates
+NO new liability) — never both.
+
+- **L1 Per-charge payee.** Migration 093 adds `payee_party_id`
+  (parties.ledger_id) per charge; the window charge grid has a parties
+  picker (default = receipt supplier). Posting writes one party-ledger
+  credit per effective payee; the GL credit stays on AP control 2201.
+  Reversal mirrors to the same payees.
+- **L2 Linked mode (Critical-1, primary).** A Linked charge stores
+  `linked_document_id` + `linked_account_code`, the latter resolved at
+  draft time from the linked document's **posted journal** (exactly one
+  debit account outside the clearing/control set {1203, 2201, 2203,
+  1205, 1201, 415}; same currency; charge ≤ that debit — otherwise
+  PUR-1005). Posting credits that account (reclass), writes **no**
+  party-ledger entry and **no** AP credit. **Duplicate prevention:** a
+  supplier document can be consumed by at most one posted,
+  non-reversal voucher — enforced at draft creation and re-checked at
+  posting (PUR-1004); the link picker stops offering consumed
+  documents. Reversal copies the link onto the reversal voucher (which
+  never counts as consuming), marks the original Cancelled, and thereby
+  releases the document for a future voucher; the linked document
+  itself is never modified. The interim `AlreadyBooked` mode is no
+  longer creatable (superseded by Linked); its PostCore branch is kept
+  only so interim-093 drafts remain postable.
+- **L3 Exact reversal.** Migration 093 stores `inventory_amount` /
+  `consumed_amount` per allocation at post time; reversal allocations
+  copy the negated split and `StockValuationEngine` replays it (new
+  `storedInventoryAdjustment` parameter) instead of recomputing from
+  post-reversal stock — a reversal after further consumption mirrors
+  the original journal line-for-line while the layer rate still
+  unwinds exactly. `LandedCostConsumptionAllocator` is now wired in as
+  the single production split implementation inside the engine
+  (previously dead code with tests only).
+- **L4 Multi-receipt vouchers.** The window picks from posted receipts
+  (new `ListReceiptsAsync`) with a per-line inclusion grid
+  (`ListReceiptLinesAsync` — stock-valued lines only, so service /
+  non-stock lines can never enter landed cost); the repository takes
+  receipt selections, allocations stay keyed per receipt line, and
+  migration 093 adds the `purchase_landed_cost_receipts` link table
+  (header `receipt_doc_id` remains the primary receipt). Manual
+  allocations are keyed by global line ID across receipts.
+- **L5 PPV account.** New dedicated account **415 Purchase Price
+  Variance**: `GlAccounts.PurchasePriceVariance`, seeded by migration
+  093 into every existing company carrying 402 (both providers, under
+  402's parent) and into all COA `.shc` templates that carry the
+  purchase group (new companies). The invoice-vs-receipt variance lines
+  in `OrderDocumentRepository` (the only change there — two
+  `GlLineRequest`s) now post to 415 instead of Purchases 402.
+- **Window pillars.** UI: receipt picker + line grid + payee /
+  credit-mode / linked-document charge columns, all localized in 4
+  languages (54 PurchaseLandedCost keys at parity). DB: migration 093
+  both providers. Linking: shell context unchanged (company/language
+  via BaseWin), link table + linked-document relationship persisted.
+  Posting: one transaction for post/reverse as before; RBAC unchanged
+  (`PUR.LANDEDCOST.*` — no new actions). Persistence: payee, credit
+  mode, linked document/account, and the post-time split are all stored
+  columns. Downstream: party ledger per payee, GL reclass visible on
+  the linked document's account, PPV separately reportable on 415.
+  Screenfit: minimum 850×560 → **660×372** with real compaction + a
+  body ScrollViewer guard; action bar moved to the bottom (layout
+  rule). `verify_screenfit` for this window: FAIL → **PASS**.
+- **Errors.** New catalogued codes PUR-1004 (document already linked)
+  and PUR-1005 (linked document invalid), plus PUR-1001..1003, in
+  ErrorCodes.cs, all 4 Errors catalogs (112 codes each, parity 0
+  missing), and docs/ERROR_CATALOG.md.
+- **Proof (Kern.Tests, SQLite; compile-verified here, execution owed
+  on Windows).** New/updated facts in OrderChainStep9Tests:
+  per-charge payee credits the payee's ledger, not the supplier's
+  (incl. reversal mirror); linked charge reclasses Dr Expense 404 →
+  inventory/COGS with carrier balance unchanged, no AP line, no party
+  rows; double consumption rejected at draft (PUR-1004) and at post;
+  linked reversal restores the expense account + receipt valuation
+  exactly, leaves the linked document untouched, and frees the link
+  (re-link posts again); reversal after ADDITIONAL consumption
+  replays the stored split (journal mirrors the original exactly);
+  multi-receipt voucher allocates across two receipts with one line
+  excluded (and all-excluded receipt → PUR-1003); weight-basis E2E
+  allocates from material-card `weight_net` snapshots (all five bases
+  also covered by LandedCostAllocatorTests); PPV lands on 415 (four
+  pre-existing variance assertions moved 402 → 415). §12 evidence:
+  "all five supported methods" ✓ tests; "landed costs correctly
+  update inventory valuation" ✓; "duplicate supplier liabilities are
+  prevented" ✓; "no duplicate liabilities or valuation adjustments"
+  ✓; "reversals preserve original transactions and audit history" ✓
+  (mirrored voucher + events, linked document never modified).
+
 ## 5. Gates
 
 (Filled at completion.)
+
+### A3 gates (this workstream)
+
+- Build `--no-incremental`: 0 errors; warnings = only the 4 known
+  CA1859 in PurchaseReceiptReturnWin.cs (not this workstream).
+- Migrator (SQLite): fresh run through 092 → seed company + 402 →
+  093 applies once (PPV 415 seeded) → second run applies 0.
+  PostgreSQL execution owed (no PG server in this environment).
+- `audit_window_context.py` exit 0; `verify_english_source.py` exit 0;
+  Lang parity for touched keys 0 missing (54/54 ×4); Errors parity
+  0 missing (112 ×4). `verify_screenfit.py` still exits 1 overall on
+  11 pre-existing base windows owned by other workstreams (H2);
+  PurchaseLandedCostWin itself passes.
+- Kern.Tests execution owed on Windows (net8.0-windows testhost).
 
 ## 6. Proof
 
