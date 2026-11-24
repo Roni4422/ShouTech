@@ -4217,5 +4217,18 @@
       "Entries": "القيود",
       "JournalRef": "مرجع القيد"
     }
+  },
+  "SalesDoc": {
+    "SubmitApproval": "إرسال للاعتماد",
+    "Approve": "اعتماد",
+    "Reject": "رفض",
+    "RejectReason": "سبب الرفض",
+    "RejectReasonRequired": "سبب الرفض مطلوب.",
+    "Submitted": "تم الإرسال للاعتماد.",
+    "Approved": "تم اعتماد المستند.",
+    "Rejected": "تم رفض المستند.",
+    "DirectInvoice": "فاتورة مباشرة",
+    "Revision": "المراجعة",
+    "ApprovalState": "حالة الاعتماد"
   }
 }

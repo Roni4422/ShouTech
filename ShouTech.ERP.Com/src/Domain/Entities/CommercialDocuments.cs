@@ -20,6 +20,29 @@ public static class CommercialDocKinds
     public const string PurchaseRequisition = "PRQ";
 }
 
+/// <summary>
+/// Approval states stored in sales_documents.approval_state (migration 098,
+/// sales cycle W23). The workflow is Draft document + approval_state moving
+/// NotRequired → Pending → Approved / Rejected, and is enforced at posting
+/// ONLY when the company enables it in sau_sales_settings (default OFF).
+/// </summary>
+public static class SalesApprovalState
+{
+    public const string NotRequired = "NotRequired";
+    public const string Pending = "Pending";
+    public const string Approved = "Approved";
+    public const string Rejected = "Rejected";
+}
+
+/// <summary>Actions recorded in sau_approval_history (migration 098).</summary>
+public static class SalesApprovalAction
+{
+    public const string Submitted = "Submitted";
+    public const string Approved = "Approved";
+    public const string Rejected = "Rejected";
+    public const string Amended = "Amended";
+}
+
 /// <summary>Statuses stored in the commercial document status column (TEXT).</summary>
 public static class CommercialDocumentStatus
 {
@@ -108,11 +131,45 @@ public sealed record CommercialDocumentSnapshot(
     string? CancelReason = null,
     string? CancelledBy = null,
     string? CancelledAt = null,
-    decimal DeliveryCost = 0m)
+    decimal DeliveryCost = 0m,
+    int RevisionNo = 1,
+    string ApprovalState = SalesApprovalState.NotRequired)
 {
     /// <summary>Derived chain status (sales orders); the raw status for every other document.</summary>
     public string DerivedStatus => SalesChainDerivedStatus.Derive(DocKind, Status, PerDelivered, PerBilled);
 }
+
+/// <summary>
+/// One preserved prior version of a sales document (migration 098,
+/// sau_document_revisions): the full header + lines as a single JSON
+/// snapshot, captured in the amendment transaction BEFORE the document
+/// was rewritten. <see cref="RevisionNo"/> is the revision the snapshot
+/// preserves (the document's revision after the amendment is +1).
+/// Revisions are read-only history.
+/// </summary>
+public sealed record DocumentRevisionSnapshot(
+    Guid RevisionId,
+    Guid CompanyId,
+    long DocId,
+    string DocKind,
+    int RevisionNo,
+    string SnapshotJson,
+    string? ChangeReason,
+    string CreatedBy,
+    string CreatedAt);
+
+/// <summary>One approval-workflow event (migration 098, sau_approval_history).</summary>
+public sealed record ApprovalHistoryEntry(
+    Guid HistoryId,
+    Guid CompanyId,
+    long DocId,
+    string DocKind,
+    string Action,
+    string FromState,
+    string ToState,
+    string Actor,
+    string? Reason,
+    string CreatedAt);
 
 /// <summary>Quantity available for return from one posted goods-receipt line.</summary>
 public sealed record PurchaseReceiptReturnableLine(

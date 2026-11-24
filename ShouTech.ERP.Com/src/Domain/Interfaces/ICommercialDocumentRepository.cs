@@ -36,6 +36,43 @@ public interface ICommercialDocumentRepository
     /// </summary>
     Task ReverseChainDocumentAsync(Guid companyId, long docId, string reason, string actor, CancellationToken cancellationToken = default);
 
+    // ------------------------------------------------- lifecycle (W23, mig 098)
+
+    /// <summary>
+    /// Amends a quotation or sales order as a NEW REVISION in one
+    /// transaction: the current version (header + lines) is preserved in
+    /// sau_document_revisions, the document is rewritten from
+    /// <paramref name="amended"/>, revision_no is incremented and the
+    /// approval state resets to NotRequired. Allowed for drafts (incl.
+    /// approved-but-unposted) and for POSTED orders with no posted
+    /// downstream document and no journal entry; a posted order WITH a
+    /// journal or posted downstream raises SAL-7016, as does any other
+    /// status. A stale <paramref name="expectedRevision"/> (someone else
+    /// amended first) raises SAL-7017. Returns the new revision number.
+    /// </summary>
+    Task<int> AmendSalesDocumentAsync(long docId, CommercialDocumentDraft amended, int expectedRevision, string userId, string? reason = null, CancellationToken cancellationToken = default);
+
+    /// <summary>Returns the preserved prior revisions of a document, oldest first.</summary>
+    Task<IReadOnlyList<DocumentRevisionSnapshot>> GetRevisionsAsync(long docId, CancellationToken cancellationToken = default);
+
+    /// <summary>Moves a draft QUO/SO/SAL document to approval Pending (history recorded).</summary>
+    Task SubmitForApprovalAsync(long docId, string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Approves a Pending document (history recorded).</summary>
+    Task ApproveDocumentAsync(long docId, string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Rejects a Pending document; the reason is mandatory and stored.</summary>
+    Task RejectDocumentAsync(long docId, string userId, string reason, CancellationToken cancellationToken = default);
+
+    /// <summary>Returns the approval/amendment history of a document, oldest first.</summary>
+    Task<IReadOnlyList<ApprovalHistoryEntry>> GetApprovalHistoryAsync(long docId, CancellationToken cancellationToken = default);
+
+    /// <summary>True when the company policy (sau_sales_settings) requires approval before posting.</summary>
+    Task<bool> IsApprovalRequiredAsync(Guid companyId, CancellationToken cancellationToken = default);
+
+    /// <summary>Sets the company approval policy flag (sau_sales_settings).</summary>
+    Task SetApprovalRequiredAsync(Guid companyId, bool required, string userId, CancellationToken cancellationToken = default);
+
     /// <summary>Records that the target document was created from the source document.</summary>
     Task AddLinkAsync(Guid companyId, string sourceDocKind, long sourceDocId, string targetDocKind, long targetDocId, string userId, CancellationToken cancellationToken = default);
 

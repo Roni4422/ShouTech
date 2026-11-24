@@ -564,6 +564,248 @@ namespace Kern.Tests
             }
         }
 
+        // ------------------------------------------- lifecycle (W23, mig 098)
+
+        [Fact]
+        public async Task Amendment_PreservesPriorRevisionAndIncrementsRevisionNo()
+        {
+            var (service, repository, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                // A posted quotation with no downstream yet: amendable.
+                var quotationId = await service.CreateQuotationAsync(
+                    Quotation(companyId, "QT-REV-1", 10m, 25m), "rev-test");
+                var before = await repository.FindSalesByIdAsync(quotationId);
+                Assert.Equal(1, before!.RevisionNo);
+
+                var newRevision = await service.AmendAsync(quotationId,
+                    Quotation(companyId, "QT-REV-1", 4m, 30m), expectedRevision: 1,
+                    "rev-test", "Customer asked for fewer units at a better price");
+                Assert.Equal(2, newRevision);
+
+                var amended = await repository.FindSalesByIdAsync(quotationId);
+                Assert.NotNull(amended);
+                Assert.Equal(2, amended!.RevisionNo);
+                Assert.Equal(CommercialDocumentStatus.Draft, amended.Status);
+                Assert.Equal(120m, amended.GrandTotal);
+                Assert.Equal(4m, amended.Lines[0].Qty);
+
+                // The prior version is retrievable read-only, in full.
+                var revisions = await service.GetRevisionsAsync(quotationId);
+                var prior = Assert.Single(revisions);
+                Assert.Equal(1, prior.RevisionNo);
+                Assert.Contains("\"QT-REV-1\"", prior.SnapshotJson);
+                Assert.Contains("25", prior.SnapshotJson);
+                Assert.Equal("Customer asked for fewer units at a better price", prior.ChangeReason);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task Amendment_WithStaleRevision_ThrowsSal7017()
+        {
+            var (service, repository, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                var quotationId = await service.CreateQuotationAsync(
+                    Quotation(companyId, "QT-REV-2", 10m, 25m), "rev-test");
+                await service.AmendAsync(quotationId,
+                    Quotation(companyId, "QT-REV-2", 5m, 25m), expectedRevision: 1, "rev-test");
+
+                var error = await Assert.ThrowsAsync<AppError>(() => service.AmendAsync(quotationId,
+                    Quotation(companyId, "QT-REV-2", 6m, 25m), expectedRevision: 1, "rev-test"));
+                Assert.Equal(ErrorCodes.DocumentRevisionConflict, error.Code);
+                Assert.Equal("SAL-7017", error.Code);
+
+                var current = await repository.FindSalesByIdAsync(quotationId);
+                Assert.Equal(2, current!.RevisionNo);
+                Assert.Equal(5m, current.Lines[0].Qty);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task PostedOrder_WithPostedDownstream_CannotBeAmended()
+        {
+            var (service, repository, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                var quotationId = await service.CreateQuotationAsync(
+                    Quotation(companyId, "QT-REV-3", 10m, 25m), "rev-test");
+                var orderId = await service.CreateFromSourceAsync(
+                    quotationId, "SO-REV-3", new DateOnly(2026, 10, 20), "rev-test");
+                await service.PostAsync(orderId, "rev-test");
+
+                // No posted downstream yet: the posted order amends cleanly
+                // back to a draft revision.
+                var orderDraft = new CommercialDocumentDraft(
+                    companyId, CommercialDocKinds.SalesOrder, "SO-REV-3",
+                    new DateOnly(2026, 10, 20), PartyId: 7, PartyName: "Chain Test Customer",
+                    WarehouseId: 1, CurrencyCode: "SAR", ExchangeRate: 1m, Notes: null,
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Chain test item", "PCS", 8m, 25m) });
+                var newRevision = await service.AmendAsync(orderId, orderDraft, expectedRevision: 1, "rev-test");
+                Assert.Equal(2, newRevision);
+                var amended = await repository.FindSalesByIdAsync(orderId);
+                Assert.Equal(CommercialDocumentStatus.Draft, amended!.Status);
+
+                // Post it again and convert: now a posted downstream exists.
+                await service.PostAsync(orderId, "rev-test");
+                var deliveryId = await service.CreateFromSourceAsync(
+                    orderId, "DLV-REV-3", new DateOnly(2026, 10, 21), "rev-test");
+                await service.PostAsync(deliveryId, "rev-test");
+
+                var error = await Assert.ThrowsAsync<AppError>(() => service.AmendAsync(
+                    orderId, orderDraft, expectedRevision: 2, "rev-test"));
+                Assert.Equal(ErrorCodes.ApprovalStateInvalid, error.Code);
+                Assert.Equal("SAL-7016", error.Code);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task ApprovalWorkflow_BlocksPostingUntilApproved_WhenCompanyRequiresIt()
+        {
+            var (service, repository, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                await service.SetApprovalRequiredAsync(companyId, true, "appr-test");
+                Assert.True(await service.IsApprovalRequiredAsync(companyId));
+
+                // Draft created directly (CreateQuotationAsync would post).
+                var draftId = await repository.CreateSalesDraftAsync(
+                    Quotation(companyId, "QT-APPR-1", 10m, 25m), "appr-test");
+
+                var blocked = await Assert.ThrowsAsync<AppError>(() =>
+                    service.PostAsync(draftId, "appr-test"));
+                Assert.Equal(ErrorCodes.ApprovalStateInvalid, blocked.Code);
+
+                // Approve before submit is an invalid transition.
+                var early = await Assert.ThrowsAsync<AppError>(() =>
+                    service.ApproveAsync(draftId, "boss", _ => true));
+                Assert.Equal(ErrorCodes.ApprovalStateInvalid, early.Code);
+
+                await service.SubmitForApprovalAsync(draftId, "appr-test");
+                var submitted = await repository.FindSalesByIdAsync(draftId);
+                Assert.Equal(SalesApprovalState.Pending, submitted!.ApprovalState);
+
+                // Approval is a separated duty: without the permission the
+                // service refuses before touching state.
+                await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+                    service.ApproveAsync(draftId, "boss", _ => false));
+
+                await service.ApproveAsync(draftId, "boss", _ => true);
+                var approved = await repository.FindSalesByIdAsync(draftId);
+                Assert.Equal(SalesApprovalState.Approved, approved!.ApprovalState);
+
+                await service.PostAsync(draftId, "appr-test");
+                var posted = await repository.FindSalesByIdAsync(draftId);
+                Assert.Equal(CommercialDocumentStatus.Posted, posted!.Status);
+
+                var history = await service.GetApprovalHistoryAsync(draftId);
+                Assert.Equal(new[] { SalesApprovalAction.Submitted, SalesApprovalAction.Approved },
+                    history.Select(h => h.Action).ToArray());
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task ApprovalRejection_RequiresReasonAndBlocksPosting()
+        {
+            var (service, repository, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                await service.SetApprovalRequiredAsync(companyId, true, "appr-test");
+                var draftId = await repository.CreateSalesDraftAsync(
+                    Quotation(companyId, "QT-APPR-2", 10m, 25m), "appr-test");
+                await service.SubmitForApprovalAsync(draftId, "appr-test");
+
+                await Assert.ThrowsAsync<ArgumentException>(() =>
+                    service.RejectAsync(draftId, "boss", "  ", _ => true));
+
+                await service.RejectAsync(draftId, "boss", "Price is above the approved margin.", _ => true);
+                var rejected = await repository.FindSalesByIdAsync(draftId);
+                Assert.Equal(SalesApprovalState.Rejected, rejected!.ApprovalState);
+
+                var blocked = await Assert.ThrowsAsync<AppError>(() =>
+                    service.PostAsync(draftId, "appr-test"));
+                Assert.Equal(ErrorCodes.ApprovalStateInvalid, blocked.Code);
+
+                var history = await service.GetApprovalHistoryAsync(draftId);
+                var rejection = Assert.Single(history, h => h.Action == SalesApprovalAction.Rejected);
+                Assert.Equal("Price is above the approved margin.", rejection.Reason);
+                Assert.Equal("boss", rejection.Actor);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task ApprovalWorkflow_DefaultOff_PostingUnaffected()
+        {
+            var (service, repository, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                Assert.False(await service.IsApprovalRequiredAsync(companyId));
+                var quotationId = await service.CreateQuotationAsync(
+                    Quotation(companyId, "QT-APPR-3", 10m, 25m), "appr-test");
+                var posted = await repository.FindSalesByIdAsync(quotationId);
+                Assert.Equal(CommercialDocumentStatus.Posted, posted!.Status);
+                Assert.Equal(SalesApprovalState.NotRequired, posted.ApprovalState);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task DirectQuotationToInvoice_RequiresPermissionAndLinksChain()
+        {
+            var (service, repository, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                var quotationId = await service.CreateQuotationAsync(
+                    Quotation(companyId, "QT-DIR-1", 10m, 25m), "direct-test");
+
+                // Without SALES.QUOTATION.DIRECTINVOICE the shortcut refuses.
+                await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+                    service.CreateInvoiceFromQuotationAsync(
+                        quotationId, "SAL-DIR-1", new DateOnly(2026, 10, 22), "direct-test", _ => false));
+
+                var invoiceId = await service.CreateInvoiceFromQuotationAsync(
+                    quotationId, "SAL-DIR-1", new DateOnly(2026, 10, 22), "direct-test",
+                    code => code == SalesChainService.QuotationDirectInvoicePermission);
+                var invoice = await repository.FindSalesByIdAsync(invoiceId);
+                Assert.NotNull(invoice);
+                Assert.Equal(CommercialDocKinds.SalesInvoice, invoice!.DocKind);
+                Assert.Equal(CommercialDocumentStatus.Draft, invoice.Status);
+                Assert.Equal(250m, invoice.GrandTotal);
+
+                var links = await repository.GetSalesLinksFromAsync(companyId, quotationId);
+                var link = Assert.Single(links);
+                Assert.Equal(CommercialDocKinds.SalesInvoice, link.TargetDocKind);
+                Assert.Equal(invoiceId, link.TargetDocId);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
         private static string? DbPath;
 
         private static CommercialDocumentDraft Quotation(Guid companyId, string docNo, decimal qty, decimal price) => new(

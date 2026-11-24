@@ -87,18 +87,23 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         string? cancelReason, cancelledBy, cancelledAt;
         DateOnly? deliveryDate, validTill;
         decimal deliveryCost;
+        int revisionNo;
+        string approvalState;
 
         // per_delivered / per_billed exist only on sales_documents
-        // (migration 093), delivery_cost likewise (migration 096); the
+        // (migration 093), delivery_cost likewise (migration 096), and
+        // revision_no / approval_state likewise (migration 098); the
         // purchase family reads constants so one projection serves both.
         var progressColumns = side == CommercialDocSide.Sales ? "per_delivered, per_billed" : "0, 0";
         var deliveryCostColumn = side == CommercialDocSide.Sales ? "delivery_cost" : "0";
+        var revisionColumn = side == CommercialDocSide.Sales ? "revision_no" : "1";
+        var approvalColumn = side == CommercialDocSide.Sales ? "approval_state" : "'NotRequired'";
         await using (var header = CreateCommand(connection, transaction, $"""
             SELECT doc_id, company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id,
                    currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total,
                    paid_amount, status, notes, party_code, branch_name, sales_rep_name, cost_center,
                    warehouse_name, delivery_date, valid_till, extra_amount, {progressColumns},
-                   cancel_reason, cancelled_by, cancelled_at, {deliveryCostColumn}
+                   cancel_reason, cancelled_by, cancelled_at, {deliveryCostColumn}, {revisionColumn}, {approvalColumn}
             FROM {docs}
             WHERE is_deleted = 0
               AND (@docId IS NULL OR doc_id = @docId)
@@ -147,6 +152,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             cancelledBy = reader.IsDBNull(28) ? null : reader.GetString(28);
             cancelledAt = reader.IsDBNull(29) ? null : Convert.ToString(reader.GetValue(29), CultureInfo.InvariantCulture);
             deliveryCost = Convert.ToDecimal(reader.GetValue(30), CultureInfo.InvariantCulture);
+            revisionNo = Convert.ToInt32(reader.GetValue(31), CultureInfo.InvariantCulture);
+            approvalState = reader.IsDBNull(32) ? SalesApprovalState.NotRequired : reader.GetString(32);
         }
 
         var lineList = new List<CommercialLineSnapshot>();
@@ -185,7 +192,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             currencyCode, exchangeRate, subtotal, discountAmount, taxAmount, grandTotal,
             paidAmount, status, notes, lineList.AsReadOnly(),
             partyCode, branchName, salesRepName, costCenter, warehouseName, deliveryDate, validTill,
-            extraAmount, perDelivered, perBilled, cancelReason, cancelledBy, cancelledAt, deliveryCost);
+            extraAmount, perDelivered, perBilled, cancelReason, cancelledBy, cancelledAt, deliveryCost,
+            revisionNo, approvalState);
     }
 
     // ----------------------------------------------------------------- write
@@ -411,6 +419,39 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 throw new InvalidOperationException($"Document kind '{kind}' is not an order kind; use the invoice posting path.");
             if (status != CommercialDocumentStatus.Draft)
                 throw new InvalidOperationException($"Only draft orders can be posted; this document is '{status}'.");
+
+            if (side == CommercialDocSide.Sales)
+            {
+                // Approval gate (W23, migration 098): only when the company
+                // policy requires approval (sau_sales_settings, default OFF)
+                // must a quotation/order be Approved before it posts.
+                string? approvalCompany = null, approvalState = null;
+                await using (var read = CreateCommand(connection, transaction,
+                    $"SELECT company_id, approval_state FROM {docs} WHERE doc_id = @doc AND is_deleted = 0"))
+                {
+                    Add(read, "@doc", docId);
+                    await using var reader = await read.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                    if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    {
+                        approvalCompany = reader.IsDBNull(0) ? null : Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture);
+                        approvalState = reader.IsDBNull(1) ? null : reader.GetString(1);
+                    }
+                }
+                if (approvalCompany is not null && approvalState != SalesApprovalState.Approved)
+                {
+                    var companyCode = await PartyLedger.ResolveCompanyCodeAsync(
+                        connection, transaction, _provider, approvalCompany, cancellationToken).ConfigureAwait(false);
+                    await using var settings = CreateCommand(connection, transaction,
+                        "SELECT require_approval FROM sau_sales_settings WHERE company_code = @code");
+                    Add(settings, "@code", companyCode);
+                    var flag = await settings.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                    var required = flag is bool b ? b : flag is not null and not DBNull && Convert.ToInt32(flag, CultureInfo.InvariantCulture) != 0;
+                    if (required)
+                        throw new AppError(ErrorCodes.ApprovalStateInvalid,
+                            $"Document requires approval before posting; its approval state is '{approvalState ?? SalesApprovalState.NotRequired}'.",
+                            approvalState ?? SalesApprovalState.NotRequired);
+                }
+            }
 
             if (side == CommercialDocSide.Sales && kind == CommercialDocKinds.SalesOrder)
             {

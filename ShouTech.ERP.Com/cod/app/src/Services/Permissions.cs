@@ -439,6 +439,18 @@ namespace ShouTech.App.Services
 
             public const string ReportsView = "SALES.REPORTS.VIEW";
 
+            // W23 document lifecycle (migration 098 seeds): approval is a
+            // separated duty per document kind; the direct QUO -> SAL
+            // shortcut and the generalized sales attachments have their own
+            // sensitive keys.
+            public const string QuotationApprove = "SALES.QUOTATION.APPROVE";
+            public const string OrderApprove = "SALES.ORDER.APPROVE";
+            public const string InvoiceApprove = "SALES.INVOICE.APPROVE";
+            public const string QuotationDirectInvoice = "SALES.QUOTATION.DIRECTINVOICE";
+            public const string AttachView = "SALES.ATTACH.VIEW";
+            public const string AttachUpload = "SALES.ATTACH.UPLOAD";
+            public const string AttachDelete = "SALES.ATTACH.DELETE";
+
             // Phase 09 commissions (migration 097 seeds).
             public const string CommissionView = "SALES.COMMISSION.VIEW";
             public const string CommissionManage = "SALES.COMMISSION.MANAGE";

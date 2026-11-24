@@ -4125,5 +4125,18 @@
       "Entries": "Kayıtlar",
       "JournalRef": "Yevmiye ref"
     }
+  },
+  "SalesDoc": {
+    "SubmitApproval": "Onaya Gönder",
+    "Approve": "Onayla",
+    "Reject": "Reddet",
+    "RejectReason": "Ret nedeni",
+    "RejectReasonRequired": "Ret nedeni gereklidir.",
+    "Submitted": "Onaya gönderildi.",
+    "Approved": "Belge onaylandı.",
+    "Rejected": "Belge reddedildi.",
+    "DirectInvoice": "Doğrudan Fatura",
+    "Revision": "Revizyon",
+    "ApprovalState": "Onay durumu"
   }
 }

@@ -384,6 +384,67 @@ public sealed class OrderService
         return (invoiceId, invoiceDocNo);
     }
 
+    // ------------------------------------------- lifecycle (W23, migration 098)
+
+    /// <summary>Amends a sales quotation/order as a new revision via the
+    /// chain repository (both repositories share sales_documents).</summary>
+    public Task<int> AmendSalesDocumentAsync(long docId, CommercialDocumentDraft amended, int expectedRevision, string userId, string? reason = null, CancellationToken cancellationToken = default)
+        => new SalesChainService(_chain).AmendAsync(docId, amended, expectedRevision, userId, reason, cancellationToken);
+
+    /// <summary>The stored approval state of a sales document
+    /// (SalesApprovalState values; NotRequired when never submitted).</summary>
+    public async Task<string> GetSalesApprovalStateAsync(long docId, CancellationToken cancellationToken = default)
+    {
+        var document = await _chain.FindSalesByIdAsync(docId, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Sales document was not found.");
+        return document.ApprovalState;
+    }
+
+    /// <summary>The document's current revision number (migration 098).</summary>
+    public async Task<int> GetSalesRevisionNoAsync(long docId, CancellationToken cancellationToken = default)
+    {
+        var document = await _chain.FindSalesByIdAsync(docId, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Sales document was not found.");
+        return document.RevisionNo;
+    }
+
+    /// <summary>Submits a sales quotation/order/invoice draft for approval.</summary>
+    public Task SubmitSalesForApprovalAsync(long docId, string userId, CancellationToken cancellationToken = default)
+        => _chain.SubmitForApprovalAsync(docId, userId, cancellationToken);
+
+    /// <summary>Approves a Pending sales document (kind APPROVE permission enforced).</summary>
+    public Task ApproveSalesDocumentAsync(long docId, string userId, Func<string, bool> hasPermission, CancellationToken cancellationToken = default)
+        => new SalesChainService(_chain).ApproveAsync(docId, userId, hasPermission, cancellationToken);
+
+    /// <summary>Rejects a Pending sales document; the reason is mandatory.</summary>
+    public Task RejectSalesDocumentAsync(long docId, string userId, string reason, Func<string, bool> hasPermission, CancellationToken cancellationToken = default)
+        => new SalesChainService(_chain).RejectAsync(docId, userId, reason, hasPermission, cancellationToken);
+
+    /// <summary>Preserved prior revisions of a sales document (read-only).</summary>
+    public Task<IReadOnlyList<DocumentRevisionSnapshot>> GetSalesRevisionsAsync(long docId, CancellationToken cancellationToken = default)
+        => _chain.GetRevisionsAsync(docId, cancellationToken);
+
+    /// <summary>Approval/amendment history of a sales document.</summary>
+    public Task<IReadOnlyList<ApprovalHistoryEntry>> GetSalesApprovalHistoryAsync(long docId, CancellationToken cancellationToken = default)
+        => _chain.GetApprovalHistoryAsync(docId, cancellationToken);
+
+    /// <summary>
+    /// AUTHORIZED SHORTCUT (W23): creates a sales invoice draft directly
+    /// from a posted quotation (SALES.QUOTATION.DIRECTINVOICE required).
+    /// </summary>
+    public async Task<(long InvoiceId, string InvoiceDocNo)> CreateInvoiceFromQuotationAsync(
+        long quotationDocId, DateOnly invoiceDate, string userId, Func<string, bool> hasPermission,
+        IReadOnlyDictionary<int, decimal>? quantityBySourceLine = null, CancellationToken cancellationToken = default)
+    {
+        var quotation = await _chain.FindSalesByIdAsync(quotationDocId, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Quotation was not found.");
+        var invoiceDocNo = await _orders.NextDocNoAsync(
+            CommercialDocSide.Sales, quotation.CompanyId, CommercialDocKinds.SalesInvoice, cancellationToken).ConfigureAwait(false);
+        var invoiceId = await new SalesChainService(_chain).CreateInvoiceFromQuotationAsync(
+            quotationDocId, invoiceDocNo, invoiceDate, userId, hasPermission, quantityBySourceLine, cancellationToken).ConfigureAwait(false);
+        return (invoiceId, invoiceDocNo);
+    }
+
     public Task CloseOrderAsync(CommercialDocSide side, long docId, string userId, CancellationToken cancellationToken = default)
         => _orders.SetStatusAsync(side, docId, CommercialDocumentStatus.Closed, userId, cancellationToken);
 
