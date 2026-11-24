@@ -9,10 +9,15 @@ public sealed record PurchaseMatchPolicy(
     decimal TaxBlockPercent,
     decimal BaseVarianceWarningAmount,
     decimal BaseVarianceBlockAmount,
-    int PolicyVersion)
+    int PolicyVersion,
+    // Q4 (migration 096): receipt over-delivery tolerance %. 0 = the
+    // historical hard block at exactly the ordered quantity.
+    decimal ReceiptOverTolerancePct = 0m)
 {
     public void Validate()
     {
+        if (ReceiptOverTolerancePct < 0m || ReceiptOverTolerancePct > 1000m)
+            throw new ArgumentOutOfRangeException(nameof(ReceiptOverTolerancePct));
         if (PriceWarningPercent < 0 || PriceBlockPercent < PriceWarningPercent)
             throw new ArgumentOutOfRangeException(nameof(PriceBlockPercent));
         if (TaxWarningPercent < 0 || TaxBlockPercent < TaxWarningPercent)

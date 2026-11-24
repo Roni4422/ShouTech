@@ -103,7 +103,14 @@ public sealed record CommercialLineSnapshot(
     // that delivery's line number. Null on standalone and legacy
     // single-source chain lines (line_no keeps the source identity).
     long? SourceDocId = null,
-    int? SourceLineNo = null);
+    int? SourceLineNo = null,
+    // B1 (migration 096): stored UOM factor snapshot, per-line
+    // required-by, rejected qty at receipt, per-line tax code.
+    decimal? UomFactor = null,
+    DateOnly? LineRequiredBy = null,
+    decimal RejectedQty = 0m,
+    string? RejectReason = null,
+    string? TaxCode = null);
 
 /// <summary>An immutable commercial document header with its lines.</summary>
 public sealed record CommercialDocumentSnapshot(
@@ -157,10 +164,33 @@ public sealed record CommercialDocumentSnapshot(
     // for purchase requisitions; null for every other document kind.
     DateOnly? RequiredByDate = null,
     string? RequestType = null,
-    string? Department = null)
+    string? Department = null,
+    // B1 (migration 096): P3 header facts, Q3 delivery note, I1 bill
+    // identity, I5 PRT own credit-note reference, P5 stored received
+    // percentage, P6 amend link. Null/0 for kinds that do not carry
+    // them. The P3 incoterm rides the export block's Incoterm above
+    // and the P5 billed percentage the stored PerBilled above.
+    string? PaymentTerms = null,
+    string? ReferenceNo = null,
+    DateOnly? BillDate = null,
+    string? DeliveryNoteNo = null,
+    string? SupplierCreditNoteRef = null,
+    decimal PerReceived = 0m,
+    long? AmendedFromDocId = null)
 {
     /// <summary>Derived chain status (sales orders); the raw status for every other document.</summary>
     public string DerivedStatus => SalesChainDerivedStatus.Derive(DocKind, Status, PerDelivered, PerBilled);
+
+    /// <summary>P5 derived status (ERPNext vocabulary) for a purchase
+    /// order, computed from the STORED percentages.</summary>
+    public string DerivedOrderStatus => DocKind != CommercialDocKinds.PurchaseOrder
+        ? Status
+        : Status != CommercialDocumentStatus.Posted
+            ? Status
+            : PerReceived >= 100m && PerBilled >= 100m ? "Completed"
+            : PerReceived >= 100m ? "To Bill"
+            : PerBilled >= 100m ? "To Receive"
+            : "To Receive and Bill";
 }
 
 /// <summary>
@@ -257,7 +287,14 @@ public sealed record CommercialLineDraft(
     // source deliveries can both have a line 1. Single-source chain
     // conversions leave both null and keep the line_no identity.
     long? SourceDocId = null,
-    int? SourceRefLineNo = null);
+    int? SourceRefLineNo = null,
+    // B1 (migration 096): Q2 rejected qty + reason (receipt lines);
+    // P4 stored UOM factor + per-line required-by; I2 per-line tax code.
+    decimal RejectedQty = 0m,
+    string? RejectReason = null,
+    decimal? UomFactor = null,
+    DateOnly? LineRequiredBy = null,
+    string? TaxCode = null);
 
 /// <summary>A new commercial document header to persist with its lines.</summary>
 public sealed record CommercialDocumentDraft(
@@ -303,7 +340,15 @@ public sealed record CommercialDocumentDraft(
     // Migration 092: requisition header facts (see CommercialDocumentSnapshot).
     DateOnly? RequiredByDate = null,
     string? RequestType = null,
-    string? Department = null);
+    string? Department = null,
+    // B1 (migration 096): see CommercialDocumentSnapshot.
+    string? PaymentTerms = null,
+    string? Incoterm = null,
+    string? ReferenceNo = null,
+    DateOnly? BillDate = null,
+    string? DeliveryNoteNo = null,
+    string? SupplierCreditNoteRef = null,
+    long? AmendedFromDocId = null);
 
 /// <summary>Header-only projection used by document search / order tracking lists.</summary>
 public sealed record CommercialDocumentSummary(
@@ -316,7 +361,31 @@ public sealed record CommercialDocumentSummary(
     decimal GrandTotal,
     string Status,
     DateOnly? DeliveryDate,
-    DateOnly? ValidTill);
+    DateOnly? ValidTill,
+    // P5: stored percentages + derived status for PO rows in tracking lists.
+    decimal PerReceived = 0m,
+    decimal PerBilled = 0m)
+{
+    public string DerivedOrderStatus => DocKind != CommercialDocKinds.PurchaseOrder
+        ? Status
+        : Status != CommercialDocumentStatus.Posted
+            ? Status
+            : PerReceived >= 100m && PerBilled >= 100m ? "Completed"
+            : PerReceived >= 100m ? "To Bill"
+            : PerBilled >= 100m ? "To Receive"
+            : "To Receive and Bill";
+}
+
+/// <summary>One supplier invited to quote against an RFQ (P1, mig 097).</summary>
+public sealed record RfqInvitation(
+    long InvitationId,
+    long RfqDocId,
+    long PartyId,
+    string? PartyCode,
+    string? PartyName,
+    string Status,
+    DateTime InvitedAt,
+    DateTime? RespondedAt);
 
 /// <summary>Per-material fulfilment/billing progress of a posted order.</summary>
 public sealed record OrderProgressLine(
@@ -342,8 +411,15 @@ public sealed record OrderProgress(
     decimal PerBilled,
     string Status = "")
 {
-    /// <summary>Derived chain status (sales orders); the raw status for every other document.</summary>
-    public string DerivedStatus => SalesChainDerivedStatus.Derive(DocKind, Status, PerFulfilled, PerBilled);
+    /// <summary>Derived status: for a purchase order, the P5 ERPNext
+    /// vocabulary from the (stored) percentages; otherwise the sales
+    /// chain derivation (raw status outside posted sales orders).</summary>
+    public string DerivedStatus => DocKind == CommercialDocKinds.PurchaseOrder
+        ? PerFulfilled >= 100m && PerBilled >= 100m ? "Completed"
+        : PerFulfilled >= 100m ? "To Bill"
+        : PerBilled >= 100m ? "To Receive"
+        : "To Receive and Bill"
+        : SalesChainDerivedStatus.Derive(DocKind, Status, PerFulfilled, PerBilled);
 }
 
 /// <summary>

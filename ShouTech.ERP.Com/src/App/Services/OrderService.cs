@@ -413,7 +413,7 @@ public sealed class OrderService
             await _orders.RecalculateStoredProgressAsync(orderId.Value, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<(long ReceiptId, string ReceiptDocNo)> CreatePurchaseReceiptAsync(Guid companyId, long purchaseOrderId, DateOnly receiptDate, IReadOnlyList<CommercialLineDraft> receivedLines, string userId, CancellationToken cancellationToken = default)
+    public async Task<(long ReceiptId, string ReceiptDocNo)> CreatePurchaseReceiptAsync(Guid companyId, long purchaseOrderId, DateOnly receiptDate, IReadOnlyList<CommercialLineDraft> receivedLines, string userId, string? deliveryNoteNo = null, CancellationToken cancellationToken = default)
     {
         var order = await _orders.FindByIdAsync(CommercialDocSide.Purchase, purchaseOrderId, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException("Purchase order was not found.");
@@ -422,7 +422,7 @@ public sealed class OrderService
         if (order.DocKind != CommercialDocKinds.PurchaseOrder)
             throw new InvalidOperationException("A goods receipt must be created from a purchase order.");
         var receiptDocNo = await _orders.NextDocNoAsync(CommercialDocSide.Purchase, order.CompanyId, CommercialDocKinds.PurchaseReceipt, cancellationToken).ConfigureAwait(false);
-        var receiptId = await _orders.CreatePurchaseReceiptAsync(companyId, purchaseOrderId, receiptDocNo, receiptDate, receivedLines, userId, cancellationToken).ConfigureAwait(false);
+        var receiptId = await _orders.CreatePurchaseReceiptAsync(companyId, purchaseOrderId, receiptDocNo, receiptDate, receivedLines, userId, deliveryNoteNo, cancellationToken).ConfigureAwait(false);
         return (receiptId, receiptDocNo);
     }
 
@@ -454,6 +454,7 @@ public sealed class OrderService
     public async Task<(long InvoiceId, string InvoiceDocNo)> CreatePurchaseInvoiceAsync(
         Guid companyId, long purchaseOrderId, DateOnly invoiceDate,
         IReadOnlyList<CommercialLineDraft> invoiceLines, string userId,
+        string? supplierBillNo = null, DateOnly? billDate = null,
         CancellationToken cancellationToken = default)
     {
         if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
@@ -467,7 +468,8 @@ public sealed class OrderService
         var invoiceDocNo = await _orders.NextDocNoAsync(
             CommercialDocSide.Purchase, companyId, CommercialDocKinds.PurchaseInvoice, cancellationToken).ConfigureAwait(false);
         var invoiceId = await _orders.CreatePurchaseInvoiceAsync(
-            companyId, purchaseOrderId, invoiceDocNo, invoiceDate, invoiceLines, userId, cancellationToken).ConfigureAwait(false);
+            companyId, purchaseOrderId, invoiceDocNo, invoiceDate, invoiceLines, userId,
+            supplierBillNo, billDate, cancellationToken).ConfigureAwait(false);
         return (invoiceId, invoiceDocNo);
     }
 
@@ -530,6 +532,33 @@ public sealed class OrderService
         var invoiceId = await new SalesChainService(_chain).CreateInvoiceFromQuotationAsync(
             quotationDocId, invoiceDocNo, invoiceDate, userId, hasPermission, quantityBySourceLine, cancellationToken).ConfigureAwait(false);
         return (invoiceId, invoiceDocNo);
+
+    // ------------------------------------------------------------ P1 / P6
+
+    public Task<IReadOnlyList<RfqInvitation>> GetRfqInvitationsAsync(Guid companyId, long rfqDocId, CancellationToken cancellationToken = default)
+        => _orders.GetRfqInvitationsAsync(companyId, rfqDocId, cancellationToken);
+
+    public Task InviteSuppliersToRfqAsync(Guid companyId, long rfqDocId,
+        IReadOnlyList<(long PartyId, string? PartyCode, string? PartyName)> suppliers,
+        string userId, CancellationToken cancellationToken = default)
+        => _orders.AddRfqInvitationsAsync(companyId, rfqDocId, suppliers, userId, cancellationToken);
+
+    public Task DeclineRfqInvitationAsync(Guid companyId, long rfqDocId, long partyId, string userId, CancellationToken cancellationToken = default)
+        => _orders.SetRfqInvitationStatusAsync(companyId, rfqDocId, partyId, "Declined", userId, cancellationToken);
+
+    /// <summary>P6: ERPNext-style amend of a cancelled PO (new draft copy, linked).</summary>
+    public async Task<(long PurchaseOrderId, string PurchaseOrderNo)> AmendPurchaseOrderAsync(
+        Guid companyId, long cancelledPoId, DateOnly docDate, string userId,
+        CancellationToken cancellationToken = default)
+    {
+        var original = await _orders.FindByIdAsync(CommercialDocSide.Purchase, cancelledPoId, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Purchase order was not found.");
+        if (original.CompanyId != companyId)
+            throw new InvalidOperationException("The purchase order belongs to a different company.");
+        var docNo = await _orders.NextDocNoAsync(
+            CommercialDocSide.Purchase, companyId, CommercialDocKinds.PurchaseOrder, cancellationToken).ConfigureAwait(false);
+        var newId = await _orders.AmendPurchaseOrderAsync(companyId, cancelledPoId, docNo, docDate, userId, cancellationToken).ConfigureAwait(false);
+        return (newId, docNo);
     }
 
     public Task CloseOrderAsync(CommercialDocSide side, long docId, string userId, CancellationToken cancellationToken = default)
@@ -697,10 +726,16 @@ public sealed class OrderService
             supplierId, supplierName.Trim(), rfq.WarehouseId, currencyCode.Trim().ToUpperInvariant(),
             exchangeRate, $"Supplier quotation: {supplierQuotationNumber.Trim()}\n{terms}".Trim(),
             quotedLines, supplierCode.Trim(), deliveryDate, validTill,
-            WarehouseName: rfq.WarehouseName);
+            WarehouseName: rfq.WarehouseName,
+            PaymentTerms: string.IsNullOrWhiteSpace(terms) ? null : terms.Trim(),
+            ReferenceNo: supplierQuotationNumber.Trim());
         var quotationId = await _orders.CreateLinkedDraftAsync(
             CommercialDocSide.Purchase, draft, CommercialDocKinds.RequestForQuotation, rfqId,
             userId, cancellationToken).ConfigureAwait(false);
+        // P1: an SQ created against the RFQ for this supplier flips
+        // their invitation to Quoted (no-op when none was recorded).
+        await _orders.SetRfqInvitationStatusAsync(
+            rfq.CompanyId, rfqId, supplierId, "Quoted", userId, cancellationToken).ConfigureAwait(false);
         return (quotationId, docNo);
     }
 
@@ -745,9 +780,18 @@ public sealed class OrderService
             .ToArray();
     }
 
-    /// <summary>Creates a draft PO from an accepted, unexpired supplier quotation.</summary>
+    /// <summary>
+    /// Creates a draft PO from an accepted, unexpired supplier quotation.
+    /// P2: with <paramref name="awardedLineNos"/> the award is a SPLIT
+    /// award — the PO contains only the awarded SQ lines (per-line link
+    /// rows are the PO lines' SourceLineNo). Without it, the whole
+    /// quotation is awarded (the historical default). P3 fidelity: the
+    /// SQ's currency/rate, payment terms, incoterm and external
+    /// reference carry onto the PO header.
+    /// </summary>
     public async Task<(long PurchaseOrderId, string PurchaseOrderNo)> CreatePurchaseOrderFromSupplierQuotationAsync(
         long supplierQuotationId, DateOnly orderDate, string userId,
+        IReadOnlyCollection<int>? awardedLineNos = null,
         CancellationToken cancellationToken = default)
     {
         var quote = await _orders.FindByIdAsync(CommercialDocSide.Purchase, supplierQuotationId, cancellationToken).ConfigureAwait(false)
@@ -764,17 +808,41 @@ public sealed class OrderService
                 throw new InvalidOperationException("This supplier quotation already has an active purchase order.");
         }
 
+        var awarded = awardedLineNos is { Count: > 0 }
+            ? quote.Lines.Where(line => awardedLineNos.Contains(line.LineNo)).ToArray()
+            : quote.Lines.ToArray();
+        if (awarded.Length == 0)
+            throw new InvalidOperationException("A split award must name at least one supplier-quotation line.");
+
         var docNo = await _orders.NextDocNoAsync(
             CommercialDocSide.Purchase, quote.CompanyId, CommercialDocKinds.PurchaseOrder, cancellationToken).ConfigureAwait(false);
-        var lines = quote.Lines.Select(line => new CommercialLineDraft(
+        var lines = awarded.Select(line => new CommercialLineDraft(
             line.MaterialId, line.MaterialCode, line.Description, line.Unit, line.Qty,
-            line.UnitPrice, line.DiscountPct, line.TaxRate, line.WarehouseId, line.LineNo)).ToArray();
+            line.UnitPrice, line.DiscountPct, line.TaxRate, line.WarehouseId, line.LineNo,
+            UomFactor: line.UomFactor, LineRequiredBy: line.LineRequiredBy, TaxCode: line.TaxCode)).ToArray();
+        // Award fidelity: the SQ stores its external reference + terms
+        // in Notes ("Supplier quotation: <ref>\n<terms>") until P3's
+        // header columns; recover both onto the PO header explicitly.
+        string? externalRef = quote.ReferenceNo;
+        string? terms = quote.PaymentTerms;
+        if (externalRef is null && quote.Notes is { } sqNotes
+            && sqNotes.StartsWith("Supplier quotation:", StringComparison.Ordinal))
+        {
+            var body = sqNotes["Supplier quotation:".Length..].Trim();
+            var split = body.IndexOf('\n');
+            externalRef = (split >= 0 ? body[..split] : body).Trim();
+            if (split >= 0 && body[(split + 1)..].Trim() is { Length: > 0 } rest)
+                terms ??= rest;
+            if (externalRef.Length == 0) externalRef = null;
+        }
         var draft = new CommercialDocumentDraft(
             quote.CompanyId, CommercialDocKinds.PurchaseOrder, docNo, orderDate,
             quote.PartyId, quote.PartyName, quote.WarehouseId, quote.CurrencyCode,
             quote.ExchangeRate, $"Created from supplier quotation {quote.DocNo}",
             lines, quote.PartyCode, quote.DeliveryDate, null,
-            quote.CostCenter, quote.BranchName, WarehouseName: quote.WarehouseName);
+            quote.CostCenter, quote.BranchName, WarehouseName: quote.WarehouseName,
+            RequiredByDate: quote.RequiredByDate,
+            PaymentTerms: terms, Incoterm: quote.Incoterm, ReferenceNo: externalRef);
         var orderId = await _orders.CreateLinkedDraftAsync(
             CommercialDocSide.Purchase, draft, CommercialDocKinds.SupplierQuotation,
             supplierQuotationId, userId, cancellationToken).ConfigureAwait(false);

@@ -38,8 +38,16 @@ public interface IOrderDocumentRepository
 
     /// <summary>Creates and posts a partial goods receipt against a posted purchase order. Stock, GRNI journal, receipt document, and source link commit atomically.</summary>
     /// <summary>Creates a posted supplier invoice from received quantities, records line-level receipt matching and price variance, and clears GRNI atomically.</summary>
-    Task<long> CreatePurchaseInvoiceAsync(Guid companyId, long purchaseOrderId, string invoiceDocNo, DateOnly invoiceDate, IReadOnlyList<CommercialLineDraft> invoiceLines, string userId, CancellationToken cancellationToken = default);
-    Task<long> CreatePurchaseReceiptAsync(Guid companyId, long purchaseOrderId, string receiptDocNo, DateOnly receiptDate, IReadOnlyList<CommercialLineDraft> receivedLines, string userId, CancellationToken cancellationToken = default);
+    Task<long> CreatePurchaseInvoiceAsync(Guid companyId, long purchaseOrderId, string invoiceDocNo, DateOnly invoiceDate, IReadOnlyList<CommercialLineDraft> invoiceLines, string userId, string? supplierBillNo = null, DateOnly? billDate = null, CancellationToken cancellationToken = default);
+    Task<long> CreatePurchaseReceiptAsync(Guid companyId, long purchaseOrderId, string receiptDocNo, DateOnly receiptDate, IReadOnlyList<CommercialLineDraft> receivedLines, string userId, string? deliveryNoteNo = null, CancellationToken cancellationToken = default);
+
+    /// <summary>P6: creates a new DRAFT purchase order copying a cancelled PO, linked via amended_from_doc_id + document_links.</summary>
+    Task<long> AmendPurchaseOrderAsync(Guid companyId, long cancelledPoId, string newDocNo, DateOnly docDate, string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>P1: RFQ supplier invitations (migration 097).</summary>
+    Task<IReadOnlyList<RfqInvitation>> GetRfqInvitationsAsync(Guid companyId, long rfqDocId, CancellationToken cancellationToken = default);
+    Task AddRfqInvitationsAsync(Guid companyId, long rfqDocId, IReadOnlyList<(long PartyId, string? PartyCode, string? PartyName)> suppliers, string userId, CancellationToken cancellationToken = default);
+    Task SetRfqInvitationStatusAsync(Guid companyId, long rfqDocId, long partyId, string status, string userId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<PurchaseReceiptReturnableLine>> GetPurchaseReceiptReturnableLinesAsync(Guid companyId, long receiptId, CancellationToken cancellationToken = default);
 
