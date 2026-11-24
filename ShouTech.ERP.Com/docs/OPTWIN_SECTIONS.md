@@ -613,3 +613,53 @@ scripts exit 0 · errors + lang parity ×4 · harnesses P2p 39/39,
 W1 36/36, Bin 22/22, Num 27/27, Info 35/35 · plus the landing's
 own consumer proof (formatter / header composer / barcode parser /
 held-cap / loyalty / task-rail harnesses as applicable).
+
+## 7. Defaults audit (owner ruling, 2026-11-24 21:06)
+
+Owner ruling: seeded defaults are **per-setting** and must match
+the states visible in his screenshots (the §-evidence notes record
+✓/☐ per item). Applied to L4–L7 as built, and retro-checked over
+every already-landed section. Correction landing fixes:
+
+| Setting | Screenshot default | Was | Now |
+|---|---|---|---|
+| Price decimal digits (`UsrPref.PriceDecimalPlaces` + `NumFmtSettings.PriceDigits`) | 3 | 2 | 3 |
+| Time format (`UsrPref.TimeFormat` + `NumFmtSettings.TimePattern`) | h:mm tt | HH:mm | h:mm tt |
+| Confirm on exit (`UsrPref.ConfirmOnExit`) | ☐ | on | off |
+| Print previous balance on invoices (`PrintSetSvc` defaults) | ✓ | off | on |
+
+Verified matches, no change: quantity decimals 3 · group
+thousands ✓ · show trailing zeros ✓ · round displayed numbers ✓ ·
+date format dd/MM/yyyy · idle-lock minutes 0 (screenshot:
+screensaver after 0 minutes) · print current balance ☐ · print
+user name on invoices ☐.
+
+Kept / default-unverified (never guessed):
+- **Font family** — the screenshot shows Tahoma, the owner's
+  Phenix *selection*; ours stays the theme default (Segoe UI —
+  the Win11 central design system). Kept deliberately; flagged
+  for owner overrule.
+- **Font size** — screenshot 0 means "program default" in
+  Phenix; ours 13 *is* our program default. Semantically
+  equivalent; kept.
+- **Print header field switches** (phone / mobile / email /
+  website / licence / tax number) — the notes list the fields
+  without ✓/☐ states → default-unverified; current defaults
+  kept (name + address on, the rest off).
+- **Print copies (invoices / vouchers)** — screenshot shows 0;
+  the semantics of 0 are unrecorded and our model requires ≥1
+  copy → kept 1, default-unverified.
+- **Composite barcode template** — no seeded row exists (the
+  parser is inactive until a template is configured); the
+  screenshot values are the owner's machine configuration, not
+  a program default → kept unseeded.
+- Sections with no screenshot counterpart (Appearance toggles,
+  the remaining Behavior/Session fields, Numbering, Layouts) are
+  our own sections; the ruling does not reach them.
+
+Fiscal-period note (owner evidence, 2026-11-24 21:05): the
+advanced-options fiscal-period checkbox is **checked by
+default**, with period start/end fields under it. That mechanism
+and its store belong to the period-close workstream
+(feat/period-close); if the advanced section is ever built here,
+its fields bind to that store — recorded, no parallel store.

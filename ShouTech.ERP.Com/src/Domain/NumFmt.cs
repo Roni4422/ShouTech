@@ -21,17 +21,19 @@ public sealed record NumFmtSettings(
     string TimePattern)
 {
     /// <summary>Built-in defaults — identical to the UsrPref
-    /// defaults, so behaviour before any Options save is the
-    /// historic one (qty 3, price 2, grouped, zeros shown,
-    /// dd/MM/yyyy, HH:mm).</summary>
+    /// defaults, so behaviour before any Options save follows the
+    /// owner's evidenced Options defaults (qty 3, price 3, grouped,
+    /// zeros shown, rounded, dd/MM/yyyy, h:mm tt — the states
+    /// visible in the owner's reference screenshots; defaults
+    /// ruling 2026-11-24).</summary>
     public static NumFmtSettings Defaults { get; } = new(
         QtyDigits: 3,
-        PriceDigits: 2,
+        PriceDigits: 3,
         GroupThousands: true,
         ShowTrailingZeros: true,
         RoundDisplay: true,
         DatePattern: "dd/MM/yyyy",
-        TimePattern: "HH:mm");
+        TimePattern: "h:mm tt");
 }
 
 /// <summary>

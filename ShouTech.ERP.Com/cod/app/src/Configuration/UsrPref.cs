@@ -116,8 +116,10 @@ public sealed class UsrPref
     /// <summary>Fraction digits for quantities (default 3).</summary>
     public int QtyDecimalPlaces { get; set; } = 3;
 
-    /// <summary>Fraction digits for prices and money (default 2).</summary>
-    public int PriceDecimalPlaces { get; set; } = 2;
+    /// <summary>Fraction digits for prices and money (default 3 —
+    /// the owner's evidenced Options value, defaults ruling
+    /// 2026-11-24).</summary>
+    public int PriceDecimalPlaces { get; set; } = 3;
 
     /// <summary>Group thousands with a separator in displayed
     /// numbers (default on).</summary>
@@ -131,8 +133,10 @@ public sealed class UsrPref
     /// on); off truncates toward zero instead.</summary>
     public bool RoundDisplay { get; set; } = true;
 
-    /// <summary>Time-of-day display pattern (default "HH:mm").</summary>
-    public string TimeFormat { get; set; } = "HH:mm";
+    /// <summary>Time-of-day display pattern (default "h:mm tt" —
+    /// the owner's evidenced Options value, defaults ruling
+    /// 2026-11-24).</summary>
+    public string TimeFormat { get; set; } = "h:mm tt";
 
     // ---- Printing (per-user copy counts; the company print
     // settings themselves live in print_settings, migration 125).
@@ -150,7 +154,11 @@ public sealed class UsrPref
     //  Behavior
     // ================================================================
 
-    public bool ConfirmOnExit { get; set; } = true;
+    /// <summary>Ask before exiting the program (default off — the
+    /// owner's evidenced Options state, defaults ruling
+    /// 2026-11-24). Consumed by the shell exit path (RibbonNav).
+    /// </summary>
+    public bool ConfirmOnExit { get; set; }
 
     public bool ConfirmOnDelete { get; set; } = true;
 
@@ -347,7 +355,7 @@ public sealed class UsrPref
         // TimeFormat — must be one of the supported patterns.
         if (string.IsNullOrWhiteSpace(TimeFormat))
         {
-            TimeFormat = "HH:mm";
+            TimeFormat = "h:mm tt";
         }
         else
         {
@@ -355,7 +363,7 @@ public sealed class UsrPref
             valid = false;
             foreach (var f in SupportedTimeFormats)
                 if (f == trimmedTime) { valid = true; break; }
-            TimeFormat = valid ? trimmedTime : "HH:mm";
+            TimeFormat = valid ? trimmedTime : "h:mm tt";
         }
 
         // AutoSave

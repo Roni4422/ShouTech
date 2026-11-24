@@ -38,9 +38,11 @@ public static class PrintSetSvc
     /// re-resolve after an Options save without a restart.</summary>
     public static int HeaderVersion { get; private set; }
     /// <summary>The stored printing switches for one company.
-    /// Defaults reproduce the historic behaviour exactly (company
-    /// name + address in the header, nothing else) so a company
-    /// that never opened Options prints as before.</summary>
+    /// Defaults follow the owner's evidenced Options states
+    /// (defaults ruling 2026-11-24): company name + address in the
+    /// header, and the previous party balance printed on invoices
+    /// (the one evidenced ✓ among the balance/user switches);
+    /// every other switch off.</summary>
     public sealed record PrintSettingsRec(
         bool HeaderName,
         bool HeaderAddress,
@@ -58,7 +60,7 @@ public static class PrintSetSvc
     {
         public static PrintSettingsRec Defaults { get; } = new(
             true, true, false, false, false, false, false, false,
-            null, false, false, false, null);
+            null, true, false, false, null);
     }
 
     /// <summary>The company-profile values the header can carry,

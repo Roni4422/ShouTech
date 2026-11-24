@@ -37,8 +37,10 @@ RunSection("A", check =>
     var d = NumFmtSettings.Defaults;
     Eq("A1 qty digits default to 3, grouped, rounded",
         NumFmt.FormatValue(1234.56789m, d.QtyDigits, d), "1,234.568");
-    Eq("A2 price digits default to 2",
-        NumFmt.FormatValue(1234.56789m, d.PriceDigits, d), "1,234.57");
+    Eq("A2 price digits default to 3 (owner's evidenced Options value)",
+        NumFmt.FormatValue(1234.56789m, d.PriceDigits, d), "1,234.568");
+    Eq("A2b time pattern defaults to h:mm tt (owner's evidenced Options value)",
+        NumFmt.FormatTimeOfDay(new DateTime(2026, 1, 1, 14, 5, 0), d.TimePattern), "2:05 PM");
     Eq("A3 grouping off removes the separator",
         NumFmt.FormatValue(1234.5m, 2, d with { GroupThousands = false }), "1234.50");
     Eq("A4 trailing zeros off trims to the significant fraction",

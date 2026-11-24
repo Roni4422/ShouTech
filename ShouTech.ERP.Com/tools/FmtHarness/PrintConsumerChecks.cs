@@ -26,10 +26,10 @@ internal static class PrintConsumerChecks
 
         NumFmt.Current = NumFmtSettings.Defaults;
         Eq("B1 print qty under defaults", DocDesign.FormatLineValue(line, "Qty"), "2.500");
-        Eq("B2 print unit price under defaults", DocDesign.FormatLineValue(line, "UnitPrice"), "10,126.50");
+        Eq("B2 print unit price under defaults", DocDesign.FormatLineValue(line, "UnitPrice"), "10,126.499");
         Eq("B3 print discount % under defaults (rounded)", DocDesign.FormatLineValue(line, "DiscountPct"), "5.1");
-        Eq("B4 print line subtotal under defaults", DocDesign.FormatLineValue(line, "LineSubtotal"), "24,035.25");
-        Eq("B5 print line total under defaults", DocDesign.FormatLineValue(line, "LineTotal"), "27,640.53");
+        Eq("B4 print line subtotal under defaults", DocDesign.FormatLineValue(line, "LineSubtotal"), "24,035.245");
+        Eq("B5 print line total under defaults", DocDesign.FormatLineValue(line, "LineTotal"), "27,640.532");
 
         NumFmt.Current = new NumFmtSettings(
             QtyDigits: 0, PriceDigits: 3,
