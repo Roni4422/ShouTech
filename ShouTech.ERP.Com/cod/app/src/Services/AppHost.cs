@@ -70,9 +70,13 @@ namespace ShouTech.App.Services
         public static ILocSvc Localization =>
             System.Windows.Application.Current is App app
                 ? app.Localization
-                : _fallbackLocalization;
+                : _fallbackLocalization.Value;
 
-        private static readonly LocSvc _fallbackLocalization = new();
+        // Lazy (docs/STARTUP_PERF_STUDY.md L3): this fallback serves
+        // only non-App hosts (tools/harnesses); in the real app every
+        // call returns App.Localization, so constructing it eagerly
+        // repeated the full catalog load on every launch for nothing.
+        private static readonly Lazy<LocSvc> _fallbackLocalization = new(() => new LocSvc());
 
         public static void Initialize()
         {

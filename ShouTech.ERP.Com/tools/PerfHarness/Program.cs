@@ -53,10 +53,19 @@ Report("integrity-length", Time(() =>
 
 // ------------------------------------------------------------------
 // 3. Localization: construction + language adoption, per language.
-//    A warm-up instance absorbs one-time JIT / static-init cost, as
-//    in the real process where these types are already warm.
+//    The warm-up instance runs a FULL cycle (construct, adopt,
+//    lookup, label resolve) so one-time JIT / System.Text.Json
+//    metadata costs are paid before timing in every code version —
+//    in the real process those costs exist exactly once either way.
 // ------------------------------------------------------------------
-_ = new LocSvc();
+var warm = new LocSvc();
+warm.SetLanguage("en");
+_ = warm.GetString("Application.Title");
+_ = warm.TryResolveKeyFromLabel("Save", out _);
+Report("locsvc-construct-only", Time(() =>
+{
+    _ = new LocSvc();
+}), "constructor alone (index + resources deferred after L3)");
 Report("locsvc-construct+en", Time(() =>
 {
     var svc = new LocSvc();

@@ -203,9 +203,10 @@ SchemaMigrator-built SQLite database. Filled in as landings proceed:
 
 | Segment | Before | After | Note |
 |---------|--------|-------|------|
-| LocSvc construct + SetLanguage("en") | **196.3 ms** | _pending L3_ | per instance; startup constructs two |
-| LocSvc construct + SetLanguage("ar") | **189.2 ms** | _pending L3_ | per instance |
+| LocSvc construct + SetLanguage("en") | **196.3 ms** | first lookup still pays the load once — see L3 note below | per instance; startup constructs two |
+| LocSvc construct + SetLanguage("ar") | **189.2 ms** | first lookup still pays the load once — see L3 note below | per instance |
 | LocSvc label-index build (all 4 catalogs) | inside the ≈190 ms ctor above (fresh-instance `TryResolveKeyFromLabel` segment: 133.3 ms, ctor-dominated) | deferred to first use | L3 |
+| LocSvc construct **only** (L3, new segment) | ≈190 ms (the old ctor above) | **0.3 ms** (both L3 runs) | constructor no longer parses any catalog |
 | `EnsureDatabase` on a migrated DB (re-seed) | **530.3 ms** | unchanged (by ruling) | §1 note + §6.2 |
 | `SchemaMigrator.ApplyAllAsync`, all applied | **48.6 ms** | unchanged (not on path) | §1 |
 | Entry-assembly full read + SHA-256 (8,985,088-byte file) | **98.7 ms** | `FileInfo.Length`: **0.2 ms** | L2 |
@@ -213,6 +214,24 @@ SchemaMigrator-built SQLite database. Filled in as landings proceed:
 
 Baseline run: PerfHarness against base code (commit `627ec0a2` +
 harness), this VM, warm-up instance first for the LocSvc segments.
+
+**L3 measurement note (honest record).** After L3, the constructor
+parses nothing: `locsvc-construct-only` measured **0.3 ms** in both
+runs (vs the ≈190 ms eager constructor). The deferred work still
+exists exactly once, at first use — `construct+en` first lookup
+136.7 / 264.7 ms, `construct+ar` 878.4 / 801.0 ms, first
+`TryResolveKeyFromLabel` 1750.1 / 803.8 ms across two runs. Those
+absolute first-use numbers are **not comparable** to the quiet-VM
+baselines above: the L3 runs were taken while several sibling
+workstreams built concurrently on this shared 1.5-CPU VM, and
+control segments L3 does not touch swung wildly between the same
+two runs (`EnsureDatabase` 5529.3 → 3905.9 ms vs its 530.3 ms
+baseline; migrator-all-applied 326.3 → 26.8 ms vs 48.6 ms). The
+structural claim is what the code proves: startup catalog parses
+drop from ≈11 to 1–2 (the App instance's En base + active overlay,
+once, at first lookup; the AppHost fallback instance is never
+constructed in the real app). The owner's Windows phase lines (§4)
+remain the real before/after.
 
 Gate set per landing (branch standard): solution build
 `--no-incremental` = 0 errors / 0 warnings; SqlMigrator fresh-apply
