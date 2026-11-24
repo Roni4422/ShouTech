@@ -469,7 +469,8 @@
   "Col.LineTotal": "TOTAL LIGNE",
   "TerminalNotDefined": "Ce terminal n'est pas défini ou pas actif. Définissez-le d'abord (Définition du terminal de caisse).",
   "TerminalUserNotPermitted": "Votre utilisateur n'est pas autorisé à ouvrir une session sur ce terminal.",
-  "SessionSales": "Ventes de la session"
+  "SessionSales": "Ventes de la session",
+  "CustomerOutsideTerminalGroup": "Ce client est hors du groupe de clients du terminal."
  },
  "Orders": {
   "RecurringSchedules": "Planifications récurrentes",
@@ -4740,7 +4741,14 @@
   "Active": "Actif",
   "Saved": "Terminal enregistré.",
   "CodeRequired": "Le code et le nom sont requis.",
-  "ConfirmDelete": "Supprimer la définition de ce terminal ?"
+  "ConfirmDelete": "Supprimer la définition de ce terminal ?",
+  "SalesDocKind": "Document de vente",
+  "ClosingAccount": "Compte de clôture",
+  "Currency": "Devise",
+  "CustomerGroup": "Groupe de clients",
+  "SaleDesign": "Modèle de vente",
+  "ReturnDesign": "Modèle de retour",
+  "GiftDesign": "Modèle cadeau"
  },
  "PosSales": {
   "Title": "Ventes de la session",

@@ -107,3 +107,25 @@ from till to GL with session accountability end to end; easier —
 the cashier opens a session with a counted float and sells;
 every definition lives in one terminal record instead of
 scattered settings.
+
+## P4 — PosTermWin vs Phenix «تعريف نقاط البيع» (owner evidence 2026-11-24 17:49; step after numbering)
+
+Field-by-field (Phenix field → ShouTech before → action):
+
+| Phenix | ShouTech before | This step |
+|---|---|---|
+| Point name + Latin name | code + name_en + name_ar | COVERED already |
+| Out-document type (which sales invoice type) | — | **BUILT**: sales_doc_kind (POS/SAL), consumed by PosWin checkout + PosPosting's kind guards |
+| Returns document type | — | **NOT APPLICABLE, with reason**: our POS returns always post as SalesReturn documents linked to the original bill (PosPosting) — the return type is not a free choice in this posting model, so no selector is offered rather than a field that cannot change behavior |
+| Cash account | ✓ | already |
+| Cashbox CLOSING account (separate) | — | **BUILT**: closing_account_code, recorded on every close (pos_cash_closings) |
+| Currency per point | — (session used UsrPref currency) | **BUILT**: currency_code, consumed at session open |
+| Customer GROUP scoping | default customer only | **BUILT (weighed)**: customer_group_code; PosWin rejects a typed customer outside the terminal's group (scoped tills are real retail practice; the terminal's own default customer is exempt). Default customer kept — the two compose: group scopes, default pre-fills |
+| Touch-screen properties | — | DEFERRED to the POS-screen step (its only consumer is the sales-screen surface) — named, not silent |
+| POS-fields customization per point | — | DEFERRED with the same reason |
+| Print designs per point (sale/return/GIFT) | — | **STORED + pickers BUILT** from doc_designs (.stid names); CONSUMER PARTIAL: the POS thermal receipt is a fixed code-built layout today (InvPrn.PrintPosReceipt), so the binding takes effect when the receipt becomes design-driven — recorded honestly, not claimed complete |
+| Tabs قائمة المهام / قسيمة شراء | n/a | UNEXAMINED (owner transcription) — not invented |
+
+**Ours ahead (recorded)**: warehouse binding, bank/card account,
+cash drawer, printer name, price level, permitted users — none
+visible on the Phenix tab. Migration 124 carries the new columns.

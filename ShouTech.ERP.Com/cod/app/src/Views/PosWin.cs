@@ -488,6 +488,25 @@ public sealed class PosWin : BaseWin
         }
     }
 
+    /// <summary>The document kind this terminal's sales post as
+    /// (P4 binding): SAL when the terminal definition binds the
+    /// sales-invoice type, otherwise the POS sale kind.</summary>
+    private InvDocKind TerminalSaleKind()
+    {
+        try
+        {
+            var terminal = PosTermRepo.FindByCode(_terminal);
+            return string.Equals(terminal?.SalesDocKind, "SAL", StringComparison.OrdinalIgnoreCase)
+                ? InvDocKind.SalesInvoice
+                : InvDocKind.PosSale;
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PosWin.TerminalSaleKind");
+            return InvDocKind.PosSale;
+        }
+    }
+
     private void ResolveCustomer()
     {
         var code = _customerCode.Text.Trim();
@@ -513,6 +532,32 @@ public sealed class PosWin : BaseWin
         {
             _partyId = null; _partyCode = code; _partyName = string.Empty;
             _customerName.Text = Local("CustomerNotFoundShort", "Customer not found");
+            return;
+        }
+        // Terminal customer-group scope (P4): when the terminal
+        // definition scopes a customer group, a typed customer
+        // outside it is not accepted at this till (the terminal's
+        // own default customer is exempt).
+        try
+        {
+            var terminal = PosTermRepo.FindByCode(_terminal);
+            if (!string.IsNullOrWhiteSpace(terminal?.CustomerGroupCode)
+                && !string.Equals(code, terminal.DefaultCustomerCode, StringComparison.OrdinalIgnoreCase))
+            {
+                var group = PosTermRepo.PartyGroupCodeOf(code);
+                if (!string.Equals(group, terminal.CustomerGroupCode, StringComparison.OrdinalIgnoreCase))
+                {
+                    _partyId = null; _partyCode = string.Empty; _partyName = string.Empty;
+                    _customerName.Text = Local("CustomerOutsideTerminalGroup", "This customer is outside the terminal's customer group.");
+                    return;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PosWin.ResolveCustomerGroupScope");
+            _partyId = null; _partyCode = string.Empty; _partyName = string.Empty;
+            _customerName.Text = Local("CustomerOutsideTerminalGroup", "This customer is outside the terminal's customer group.");
             return;
         }
         _partyId = found.Value.Id; _partyCode = code; _partyName = found.Value.Name;
@@ -1106,16 +1151,17 @@ public sealed class PosWin : BaseWin
             SetStatus(Local("WarehouseRequired", "Configure a warehouse for this POS terminal before selling."), true);
             return;
         }
+        var saleKind = TerminalSaleKind();
         var doc = new InvDoc
         {
-            Kind = InvDocKind.PosSale,
-            DocNo = InvRepo.NextDocNo(InvDocKind.PosSale),
+            Kind = saleKind,
+            DocNo = InvRepo.NextDocNo(saleKind),
             DocDate = DateTime.Today,
             PartyId = _partyId,
             PartyCode = _partyCode,
             PartyName = _partyName,
             WarehouseId = warehouseId,
-            CurrencyCode = UsrPref.Load().CurrencyCode,
+            CurrencyCode = _session?.CurrencyCode ?? UsrPref.Load().CurrencyCode,
             DefaultTaxRate = TaxSvc.GetDefaultRate(),
             LinesDiscountAmount = BillDiscountValue(),
             Notes = $"POS sale {DateTime.Now:yyyy-MM-dd HH:mm:ss}; user: {CurrentUserDisplay}; company: {CurrentCompanyDisplay} ({AppState.CurrentCompanyCode ?? ""}); session: {sessionNo ?? "session-less"}; terminal: {_terminal}.",

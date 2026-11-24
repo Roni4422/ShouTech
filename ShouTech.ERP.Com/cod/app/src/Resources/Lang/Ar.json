@@ -470,7 +470,8 @@
   "Col.LineTotal": "إجمالي السطر",
   "TerminalNotDefined": "هذه النافذة غير معرّفة أو غير مفعّلة. عرّفها أولاً (تعريف نافذة نقاط البيع).",
   "TerminalUserNotPermitted": "مستخدمك غير مخوّل بفتح جلسة على هذه النافذة.",
-  "SessionSales": "مبيعات النافذة"
+  "SessionSales": "مبيعات النافذة",
+  "CustomerOutsideTerminalGroup": "هذا العميل خارج مجموعة عملاء هذه النقطة."
  },
  "Orders": {
   "RecurringSchedules": "الجداول المتكررة",
@@ -4832,7 +4833,14 @@
   "Active": "مفعّلة",
   "Saved": "تم حفظ النافذة.",
   "CodeRequired": "الرمز والاسم مطلوبان.",
-  "ConfirmDelete": "حذف تعريف هذه النافذة؟"
+  "ConfirmDelete": "حذف تعريف هذه النافذة؟",
+  "SalesDocKind": "مستند المبيعات",
+  "ClosingAccount": "حساب إغلاق الصندوق",
+  "Currency": "العملة",
+  "CustomerGroup": "مجموعة العملاء",
+  "SaleDesign": "تصميم البيع",
+  "ReturnDesign": "تصميم المرتجع",
+  "GiftDesign": "تصميم الهدايا"
  },
  "PosSales": {
   "Title": "مبيعات النافذة",

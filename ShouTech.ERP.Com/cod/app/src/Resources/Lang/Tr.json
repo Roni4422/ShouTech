@@ -469,7 +469,8 @@
   "Col.LineTotal": "SATIR TOPLAMI",
   "TerminalNotDefined": "Bu terminal tanımlı değil veya etkin değil. Önce tanımlayın (POS Terminali Tanımı).",
   "TerminalUserNotPermitted": "Kullanıcınızın bu terminalde oturum açma izni yok.",
-  "SessionSales": "Oturum satışları"
+  "SessionSales": "Oturum satışları",
+  "CustomerOutsideTerminalGroup": "Bu müşteri, terminalin müşteri grubunun dışında."
  },
  "Orders": {
   "RecurringSchedules": "Yinelenen Zamanlamalar",
@@ -4740,7 +4741,14 @@
   "Active": "Etkin",
   "Saved": "Terminal kaydedildi.",
   "CodeRequired": "Kod ve ad zorunludur.",
-  "ConfirmDelete": "Bu terminal tanımı silinsin mi?"
+  "ConfirmDelete": "Bu terminal tanımı silinsin mi?",
+  "SalesDocKind": "Satış belgesi",
+  "ClosingAccount": "Kapanış hesabı",
+  "Currency": "Para birimi",
+  "CustomerGroup": "Müşteri grubu",
+  "SaleDesign": "Satış tasarımı",
+  "ReturnDesign": "İade tasarımı",
+  "GiftDesign": "Hediye tasarımı"
  },
  "PosSales": {
   "Title": "Oturum Satışları",

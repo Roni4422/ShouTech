@@ -61,6 +61,7 @@ public sealed class PosReturnWin : BaseWin
     private decimal _returnTotalValue;
 
     private PosOriginalBill? _original;
+    private InvDocKind _exchangeKind = InvDocKind.PosSale;
 
     public PosReturnWin(Guid? sessionId, string? initialDocNo = null)
     {
@@ -269,8 +270,8 @@ public sealed class PosReturnWin : BaseWin
             var warehouseId = _original.Lines.Select(l => l.WarehouseId).FirstOrDefault(w => w is not null);
             var newSale = new InvDoc
             {
-                Kind = InvDocKind.PosSale,
-                DocNo = InvRepo.NextDocNo(InvDocKind.PosSale),
+                Kind = _exchangeKind,
+                DocNo = InvRepo.NextDocNo(_exchangeKind),
                 DocDate = DateTime.Today,
                 CurrencyCode = _original.CurrencyCode,
                 ExchangeRate = _original.ExchangeRate,
@@ -329,6 +330,17 @@ public sealed class PosReturnWin : BaseWin
         {
             var service = AppHost.Pos ?? throw new InvalidOperationException(T("POS.ServiceUnavailable"));
             _original = await service.GetOriginalBillAsync(CurrentCompanyCode, _docNo.Text.Trim());
+            // The exchange's new sale follows the terminal's bound
+            // sales document kind (P4): SAL terminals exchange into a
+            // sales invoice, others into a POS sale.
+            _exchangeKind = InvDocKind.PosSale;
+            if (_sessionId is { } sessionId)
+            {
+                var session = await service.GetSessionAsync(CurrentCompanyCode, sessionId);
+                var terminal = session is null ? null : PosTermRepo.FindByCode(session.TerminalCode);
+                if (string.Equals(terminal?.SalesDocKind, "SAL", StringComparison.OrdinalIgnoreCase))
+                    _exchangeKind = InvDocKind.SalesInvoice;
+            }
             _rows.Clear();
             foreach (var line in _original.Lines)
                 _rows.Add(new ReturnRow

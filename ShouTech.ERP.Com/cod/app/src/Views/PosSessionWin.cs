@@ -205,10 +205,11 @@ public sealed class PosSessionWin : BaseWin
             // definitions at all, the legacy free-code path stays
             // (the settings default), so existing installs do not
             // break before they define their first terminal.
+            PosTermRepo.PosTermRec? terminal = null;
             var defined = PosTermRepo.LoadAll();
             if (defined.Count > 0)
             {
-                var terminal = defined.Find(t =>
+                terminal = defined.Find(t =>
                     string.Equals(t.Code, _terminal.Text.Trim(), StringComparison.OrdinalIgnoreCase) && t.IsActive);
                 if (terminal is null) { ShowWarn("POS.TerminalNotDefined"); return; }
                 var username = AppState.CurrentUser?.Username ?? CurrentUserDisplay;
@@ -224,7 +225,9 @@ public sealed class PosSessionWin : BaseWin
                 return;
             }
             _open = await service.OpenSessionAsync(CurrentCompanyCode, _terminal.Text.Trim(), CurrentUserDisplay,
-                warehouseId, UsrPref.Load().CurrencyCode, F2Ui.ParseDecimal(_opening.Text), CurrentUserId);
+                warehouseId,
+                string.IsNullOrWhiteSpace(terminal?.CurrencyCode) ? UsrPref.Load().CurrencyCode : terminal.CurrencyCode!.Trim(),
+                F2Ui.ParseDecimal(_opening.Text), CurrentUserId);
             UpdateInfo();
             await RefreshAsync();
         }

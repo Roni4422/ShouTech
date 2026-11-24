@@ -212,19 +212,26 @@ public sealed class PosRepository : IPosRepository
             // Mirror into the legacy day-close register (migration 037)
             // so CloseCashWin's history keeps one row per close.
             var session = await GetSessionInTxAsync(connection, transaction, companyId, sessionId).ConfigureAwait(false);
+            // The terminal's separate cashbox-CLOSING account (P4) is
+            // recorded on the register row: where the counted cash
+            // closes to, per the terminal definition.
+            var closingAccount = await ScalarStringAsync(connection, transaction,
+                "SELECT closing_account_code FROM pos_terminals WHERE company_id = @company AND code = @terminal AND is_deleted = 0",
+                ("@company", companyId.Trim()), ("@terminal", session.TerminalCode)).ConfigureAwait(false);
             await ExecAsync(connection, transaction, """
                 INSERT INTO pos_cash_closings
                     (id, company_id, terminal_code, business_date, opened_by, closed_by,
-                     opening_amount, expected_amount, counted_amount, difference, status, notes, created_by)
+                     opening_amount, expected_amount, counted_amount, difference, status, notes, created_by, closing_account_code)
                 VALUES (@id, @company, @terminal, @date, @opened, @closed,
-                        @opening, @expected, @counted, @diff, 'Closed', @notes, @user)
+                        @opening, @expected, @counted, @diff, 'Closed', @notes, @user, @closingAccount)
                 """,
                 ("@id", (object)FormatGuid(Guid.NewGuid())), ("@company", companyId.Trim()),
                 ("@terminal", session.TerminalCode), ("@date", DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
                 ("@opened", (object?)NullIfBlank(session.OpenedBy) ?? DBNull.Value), ("@closed", userId),
                 ("@opening", session.OpeningCash), ("@expected", z.ExpectedCash),
                 ("@counted", countedCash), ("@diff", variance),
-                ("@notes", (object)$"Session {session.SessionNo}"), ("@user", userId)).ConfigureAwait(false);
+                ("@notes", (object)$"Session {session.SessionNo}"), ("@user", userId),
+                ("@closingAccount", (object?)NullIfBlank(closingAccount) ?? DBNull.Value)).ConfigureAwait(false);
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             z.CountedCash = countedCash;

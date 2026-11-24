@@ -42,6 +42,13 @@ public sealed class PosTermWin : BaseWin
     private readonly TextBox _customer = new();
     private readonly ComboBox _priceLevel = new() { IsEditable = true };
     private readonly TextBox _users = new();
+    private readonly ComboBox _salesKind = new() { IsEditable = true };
+    private readonly ComboBox _closingAccount = new() { IsEditable = true };
+    private readonly TextBox _currency = new();
+    private readonly ComboBox _custGroup = new() { IsEditable = true };
+    private readonly ComboBox _saleDesign = new() { IsEditable = true };
+    private readonly ComboBox _returnDesign = new() { IsEditable = true };
+    private readonly ComboBox _giftDesign = new() { IsEditable = true };
     private readonly CheckBox _active = new() { IsChecked = true };
     private readonly TextBlock _statusBar = new();
     private readonly Button _newButton = new();
@@ -122,6 +129,17 @@ public sealed class PosTermWin : BaseWin
         F2Ui.AddField(_labels, form, 3, 0, "PosTerm.DefaultCustomer", _customer);
         F2Ui.AddField(_labels, form, 3, 1, "PosTerm.PermittedUsers", _users);
         F2Ui.AddField(_labels, form, 3, 2, "PosTerm.Active", _active);
+        // P4 (Phenix-verified bindings): document kinds the point
+        // issues, the separate closing account, per-point currency,
+        // customer-group scoping, per-point print designs.
+        _salesKind.ItemsSource = new[] { "POS", "SAL" };
+        F2Ui.AddField(_labels, form, 4, 0, "PosTerm.SalesDocKind", _salesKind);
+        F2Ui.AddField(_labels, form, 4, 1, "PosTerm.ClosingAccount", _closingAccount);
+        F2Ui.AddField(_labels, form, 4, 2, "PosTerm.Currency", _currency);
+        F2Ui.AddField(_labels, form, 5, 0, "PosTerm.CustomerGroup", _custGroup);
+        F2Ui.AddField(_labels, form, 5, 1, "PosTerm.SaleDesign", _saleDesign);
+        F2Ui.AddField(_labels, form, 5, 2, "PosTerm.ReturnDesign", _returnDesign);
+        F2Ui.AddField(_labels, form, 6, 0, "PosTerm.GiftDesign", _giftDesign);
         content.Children.Add(form);
 
         root.Children.Add(content);
@@ -153,7 +171,13 @@ public sealed class PosTermWin : BaseWin
                 .ToList();
             _cashAccount.ItemsSource = accounts;
             _bankAccount.ItemsSource = accounts;
+            _closingAccount.ItemsSource = accounts;
             _priceLevel.ItemsSource = PosTermRepo.LoadPriceLevels();
+            var designs = PosTermRepo.LoadDesignNames();
+            _saleDesign.ItemsSource = designs;
+            _returnDesign.ItemsSource = designs;
+            _giftDesign.ItemsSource = designs;
+            _custGroup.ItemsSource = PosTermRepo.LoadCustomerGroups();
         }
         catch (Exception ex)
         {
@@ -177,6 +201,13 @@ public sealed class PosTermWin : BaseWin
         _customer.Clear();
         _priceLevel.Text = string.Empty;
         _users.Clear();
+        _salesKind.Text = string.Empty;
+        _closingAccount.Text = string.Empty;
+        _currency.Clear();
+        _custGroup.Text = string.Empty;
+        _saleDesign.Text = string.Empty;
+        _returnDesign.Text = string.Empty;
+        _giftDesign.Text = string.Empty;
         _active.IsChecked = true;
         _code.Focus();
     }
@@ -195,6 +226,13 @@ public sealed class PosTermWin : BaseWin
         _customer.Text = rec.DefaultCustomerCode ?? string.Empty;
         _priceLevel.Text = rec.PriceLevel ?? string.Empty;
         _users.Text = rec.PermittedUsers ?? string.Empty;
+        _salesKind.Text = rec.SalesDocKind ?? string.Empty;
+        _closingAccount.Text = rec.ClosingAccountCode ?? string.Empty;
+        _currency.Text = rec.CurrencyCode ?? string.Empty;
+        _custGroup.Text = rec.CustomerGroupCode ?? string.Empty;
+        _saleDesign.Text = rec.SaleDesignName ?? string.Empty;
+        _returnDesign.Text = rec.ReturnDesignName ?? string.Empty;
+        _giftDesign.Text = rec.GiftDesignName ?? string.Empty;
         _active.IsChecked = rec.IsActive;
     }
 
@@ -216,7 +254,10 @@ public sealed class PosTermWin : BaseWin
                 Blank(_warehouse.Text), Blank(_cashAccount.Text), Blank(_bankAccount.Text),
                 Blank(_drawer.Text), Blank(_printer.Text), Blank(_customer.Text),
                 Blank(_priceLevel.Text), Blank(_users.Text),
-                _active.IsChecked == true);
+                _active.IsChecked == true,
+                Blank(_salesKind.Text), Blank(_closingAccount.Text),
+                Blank(_currency.Text), Blank(_custGroup.Text),
+                Blank(_saleDesign.Text), Blank(_returnDesign.Text), Blank(_giftDesign.Text));
             var id = PosTermRepo.Save(value, CurrentUserDisplay);
             _statusBar.Text = T("PosTerm.Saved");
             RefreshList();

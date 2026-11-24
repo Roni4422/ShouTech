@@ -47,8 +47,8 @@ public static class PosPosting
     {
         ArgumentNullException.ThrowIfNull(doc);
         ArgumentNullException.ThrowIfNull(tenders);
-        if (doc.Kind != InvDocKind.PosSale)
-            throw new InvalidOperationException("CompleteSale only posts POS sales.");
+        if (doc.Kind is not (InvDocKind.PosSale or InvDocKind.SalesInvoice))
+            throw new InvalidOperationException("CompleteSale only posts POS sales (or sales invoices for terminals bound to SAL).");
         PosTenderMath.ValidateSaleTenders(doc.GrandTotal, tenders, doc.PartyId is not null, exchangeCredit);
         doc.PaidAmount = PosTenderMath.CollectedAmount(tenders);
         // The document's single PaymentMethod stays meaningful for the
@@ -111,8 +111,8 @@ public static class PosPosting
         ArgumentNullException.ThrowIfNull(original);
         ArgumentNullException.ThrowIfNull(newSale);
         ArgumentNullException.ThrowIfNull(netTenders);
-        if (newSale.Kind != InvDocKind.PosSale)
-            throw new InvalidOperationException("An exchange's new document must be a POS sale.");
+        if (newSale.Kind is not (InvDocKind.PosSale or InvDocKind.SalesInvoice))
+            throw new InvalidOperationException("An exchange's new document must be a POS sale (or a sales invoice for terminals bound to SAL).");
         if (newSale.Lines.Count == 0)
             throw new AppError(ErrorCodes.PosTenderInvalid, "An exchange needs at least one new sale line; a plain return is not an exchange.");
         // The exchange is with the original bill's customer (or the

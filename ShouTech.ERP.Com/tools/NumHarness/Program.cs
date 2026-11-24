@@ -204,5 +204,28 @@ var jx = journalRepo.NextDocumentNumber(CompanyCode, "JV", DateOnly.FromDateTime
 Check("L2 saved OptWin config drives the next allocation (prefix/padding/start)",
     jx == $"JX-{year}-050", jx);
 
+// ------------------------------------------ P4: POS terminal bindings
+var termId = PosTermRepo.Save(new PosTermRepo.PosTermRec(
+    string.Empty, "T9", "Terminal 9", string.Empty,
+    "WH-01", "131", "133", null, null, null, null, null, true,
+    SalesDocKind: "SAL", ClosingAccountCode: "132", CurrencyCode: "KWD",
+    CustomerGroupCode: "RETAIL", SaleDesignName: "Thermal A", ReturnDesignName: "Thermal R",
+    GiftDesignName: "Gift A"), Actor);
+var termBack = PosTermRepo.FindByCode("T9");
+Check("M1 terminal P4 fields round-trip through PosTermRepo",
+    termBack is not null && termBack.Id == termId
+    && termBack.SalesDocKind == "SAL" && termBack.ClosingAccountCode == "132"
+    && termBack.CurrencyCode == "KWD" && termBack.CustomerGroupCode == "RETAIL"
+    && termBack.SaleDesignName == "Thermal A" && termBack.GiftDesignName == "Gift A",
+    termBack?.SalesDocKind ?? "missing");
+Exec($"INSERT INTO party_groups (id, company_id, kind, code, name_en, is_active, is_deleted) VALUES ('{Guid.NewGuid():D}', '{CompanyCode}', 'C', 'RETAIL', 'Retail', 1, 0);");
+Exec($"INSERT INTO doc_designs (CompanyID, DocKind, DesignName, IsDefault, PayloadJson, IsDeleted) VALUES ('{CompanyCode}', 'SAL', 'Thermal A', 0, '{{}}', 0);");
+Check("M2 design + customer-group loaders read real rows",
+    PosTermRepo.LoadDesignNames().Contains("Thermal A") && PosTermRepo.LoadCustomerGroups().Contains("RETAIL"));
+var sesT9 = await posRepo.OpenSessionAsync(CompanyCode, "T9", "cashier", 1, "KWD", 25m, Actor);
+await posRepo.CloseSessionAsync(CompanyCode, sesT9.Id, 25m, Actor);
+Check("M3 the close register records the terminal's closing account",
+    Scalar("SELECT COUNT(*) FROM pos_cash_closings WHERE company_id='NUMH' AND terminal_code='T9' AND closing_account_code='132'") == 1);
+
 Console.WriteLine($"== NumHarness: {pass} PASS / {fail} FAIL ==");
 return fail == 0 ? 0 : 1;
