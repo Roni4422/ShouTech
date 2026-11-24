@@ -3586,7 +3586,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             Add(insertLine, "@lineRequiredBy", (object?)line.LineRequiredBy?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? DBNull.Value);
             Add(insertLine, "@rejectedQty", line.RejectedQty);
             Add(insertLine, "@rejectReason", (object?)line.RejectReason ?? DBNull.Value);
-            Add(insertLine, "@taxCode", (object?)line.TaxCode ?? DBNull.Value);
+            Add(insertLine, "@taxCode", (object?)line.TaxCode ?? string.Empty);
             await insertLine.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
     }
