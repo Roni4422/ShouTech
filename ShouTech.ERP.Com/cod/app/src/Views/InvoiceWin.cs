@@ -2146,18 +2146,26 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
             return;
         line.LastMaterialText = text;
 
-        var match = TaxSvc.MatchMaterial(text);
+        // Composite scale labels (§3.4): a weighed label resolves by
+        // its extracted material code, and the embedded weight fills
+        // the line quantity — the same pre-pass the POS scan box runs.
+        var (scanCode, scanQty) = TaxSvc.ParseScan(text);
+        var match = TaxSvc.MatchMaterial(scanCode);
         if (match is { Kind: TaxSvc.MaterialMatchKind.Exact or TaxSvc.MaterialMatchKind.UniquePartial })
         {
             if (match.Id != line.MaterialId)
                 FillLineFromMatch(line, match);
+            if (scanQty is decimal weighedQty)
+                line.QtyText = weighedQty.ToString("0.####", CultureInfo.InvariantCulture);
             return;
         }
 
-        var pick = MatDirWin.ShowPicker(this, text);
+        var pick = MatDirWin.ShowPicker(this, scanQty is not null ? scanCode : text);
         if (pick is not null)
         {
             ApplyPick(line, pick);
+            if (scanQty is decimal pickedQty)
+                line.QtyText = pickedQty.ToString("0.####", CultureInfo.InvariantCulture);
         }
         else if (line.MaterialId is not > 0)
         {

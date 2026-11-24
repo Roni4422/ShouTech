@@ -4761,7 +4761,20 @@
   "PrintTestParty": "Client de test",
   "PrintTestItem": "Article de test",
   "PrintLogoTooLarge": "L'image du logo ne doit pas dépasser 2 Mo.",
-  "PrintLogoInvalid": "Veuillez choisir une image PNG ou JPEG."
+  "PrintLogoInvalid": "Veuillez choisir une image PNG ou JPEG.",
+  "BarcodeSection": "Code-barres",
+  "BcdActive": "L'analyse des codes-barres composites est active",
+  "BcdPrefix": "Préfixe de l'étiquette",
+  "BcdTotalLength": "Longueur totale de l'étiquette",
+  "BcdCodeSegment": "Segment du code article",
+  "BcdWeightIntSegment": "Segment entier du poids",
+  "BcdWeightFracSegment": "Segment fractionnaire du poids",
+  "BcdStart": "Début",
+  "BcdLength": "Longueur",
+  "BcdTestLabel": "Tester une étiquette",
+  "BcdTestResult": "Code article : {0} - Poids : {1}",
+  "BcdTestNoMatch": "Cette étiquette ne correspond pas au modèle.",
+  "BcdInvalid": "Le modèle de code-barres est invalide : vérifiez le préfixe, la longueur totale et que les segments y tiennent sans se chevaucher."
  },
  "Print": {
   "Tel": "Tél",

@@ -4853,7 +4853,20 @@
   "PrintTestParty": "زبون اختبار",
   "PrintTestItem": "مادة اختبار",
   "PrintLogoTooLarge": "يجب ألا تتجاوز صورة الشعار 2 ميغابايت.",
-  "PrintLogoInvalid": "يرجى اختيار صورة PNG أو JPEG."
+  "PrintLogoInvalid": "يرجى اختيار صورة PNG أو JPEG.",
+  "BarcodeSection": "الباركود",
+  "BcdActive": "تحليل الباركود المركّب مفعّل",
+  "BcdPrefix": "بادئة الملصق",
+  "BcdTotalLength": "طول الملصق الكلي",
+  "BcdCodeSegment": "مقطع رمز المادة",
+  "BcdWeightIntSegment": "مقطع العدد الصحيح للوزن",
+  "BcdWeightFracSegment": "مقطع كسر الوزن",
+  "BcdStart": "البداية",
+  "BcdLength": "الطول",
+  "BcdTestLabel": "اختبار ملصق",
+  "BcdTestResult": "رمز المادة: {0} - الوزن: {1}",
+  "BcdTestNoMatch": "هذا الملصق لا يطابق القالب.",
+  "BcdInvalid": "قالب الباركود غير صالح: تحقق من البادئة والطول الكلي وأن المقاطع تقع داخله دون تداخل."
  },
  "Print": {
   "Tel": "هاتف",

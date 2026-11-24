@@ -697,6 +697,31 @@ public static class TaxSvc
     /// UniquePartial when exactly one name contains the text. When
     /// several materials match (Ambiguous) or none do (None), the
     /// caller opens the material search (MatDirWin picker) with the
+    /// <summary>
+    /// Composite-barcode pre-pass (OPTWIN_SECTIONS §3.4): when the
+    /// company has an active scale-label template and the scanned
+    /// string matches it, returns the extracted material code and
+    /// the embedded weight as the quantity; otherwise the input
+    /// unchanged with no quantity. Both scan consumers (POS scan
+    /// box, invoice grid entry) run this first, so a weighed label
+    /// resolves identically everywhere.
+    /// </summary>
+    public static (string Code, decimal? Qty) ParseScan(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return (text, null);
+        try
+        {
+            var template = BcdTplSvc.Load();
+            if (template is not null && template.TryParse(text, out var code, out var weight))
+                return (code, weight);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "TaxSvc.ParseScan");
+        }
+        return (text, null);
+    }
+
     /// typed text instead of guessing. Same predicates as
     /// ResolveMaterial; failures are reported, never thrown.
     /// </summary>

@@ -406,8 +406,13 @@ public sealed class PosWin : BaseWin, IInfoContextProvider
 
     private void AddScannedItem()
     {
-        var code = _scan.Text.Trim();
-        if (code.Length == 0) return;
+        var rawCode = _scan.Text.Trim();
+        if (rawCode.Length == 0) return;
+        // Composite scale labels (§3.4): the pre-pass splits an
+        // embedded-weight barcode into material code + weight; the
+        // weight becomes the line quantity instead of 1.
+        var (code, scanQty) = TaxSvc.ParseScan(rawCode);
+        var qtyDelta = scanQty ?? 1m;
         (long? Id, string Name, decimal Price, string Unit, decimal TaxRate)? material;
         try { material = TaxSvc.ResolveMaterial(code); }
         catch (Exception ex)
@@ -431,15 +436,15 @@ public sealed class PosWin : BaseWin, IInfoContextProvider
         // after a unit change incremented the old unit's line.
         var existing = _cart.FirstOrDefault(x => x.MaterialId == material.Value.Id
             && string.Equals(x.Unit, material.Value.Unit, StringComparison.OrdinalIgnoreCase));
-        if (existing is not null) existing.Qty += 1;
+        if (existing is not null) existing.Qty += qtyDelta;
         else
         {
             // W7a: the till consults the ONE price resolver too
             // (walk-in sale: no party, so customer/tier levels fall
             // through to the price list / material card) — the card
             // price from ResolveMaterial is only the fallback.
-            var resolution = TaxSvc.ResolveSalesPrice(null, material.Value.Id, code, 1, material.Value.Unit);
-            existing = new PosLine { MaterialId = material.Value.Id, Code = code, Name = material.Value.Name, Unit = material.Value.Unit, Price = resolution is not null && resolution.Price > 0 ? resolution.Price : material.Value.Price, DiscountPct = resolution?.DiscountPct ?? 0m, TaxRate = material.Value.TaxRate > 0 ? material.Value.TaxRate : TaxSvc.GetDefaultRate(), Qty = 1 };
+            var resolution = TaxSvc.ResolveSalesPrice(null, material.Value.Id, code, qtyDelta, material.Value.Unit);
+            existing = new PosLine { MaterialId = material.Value.Id, Code = code, Name = material.Value.Name, Unit = material.Value.Unit, Price = resolution is not null && resolution.Price > 0 ? resolution.Price : material.Value.Price, DiscountPct = resolution?.DiscountPct ?? 0m, TaxRate = material.Value.TaxRate > 0 ? material.Value.TaxRate : TaxSvc.GetDefaultRate(), Qty = qtyDelta };
             _cart.Add(existing);
         }
         _scan.Clear(); UpdateTotals(); SetStatus($"Added {material.Value.Name} to the sale."); _scan.Focus();

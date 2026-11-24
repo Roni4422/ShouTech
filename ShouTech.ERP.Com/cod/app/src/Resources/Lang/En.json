@@ -4770,7 +4770,20 @@
   "PrintTestParty": "Test customer",
   "PrintTestItem": "Test item",
   "PrintLogoTooLarge": "The logo image must be 2 MB or smaller.",
-  "PrintLogoInvalid": "Please choose a PNG or JPEG image."
+  "PrintLogoInvalid": "Please choose a PNG or JPEG image.",
+  "BarcodeSection": "Barcode",
+  "BcdActive": "Composite barcode parsing is active",
+  "BcdPrefix": "Label prefix",
+  "BcdTotalLength": "Total label length",
+  "BcdCodeSegment": "Material code segment",
+  "BcdWeightIntSegment": "Weight integer segment",
+  "BcdWeightFracSegment": "Weight fraction segment",
+  "BcdStart": "Start",
+  "BcdLength": "Length",
+  "BcdTestLabel": "Test a label",
+  "BcdTestResult": "Material code: {0} - Weight: {1}",
+  "BcdTestNoMatch": "This label does not match the template.",
+  "BcdInvalid": "The barcode template is invalid: check the prefix, the total length, and that the segments fit inside it without overlapping."
  },
  "Print": {
   "Tel": "Tel",

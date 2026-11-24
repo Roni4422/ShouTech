@@ -128,6 +128,25 @@ public sealed class OptWin : BaseWin
     private string? _logoStagedMedia;
     private bool _logoDirty;
 
+    // Barcode section (§3.4): the composite scale-label template
+    // (barcode_templates, migration 126). Three named segment rows
+    // (code / weight integer / weight fraction) + a live test field
+    // that runs the real parser — our layout, not a copy of the
+    // benchmark's free segment grid.
+    private readonly CheckBox _chkBcdActive = new();
+    private readonly TextBox _txtBcdPrefix = new();
+    private readonly TextBox _txtBcdTotal = new();
+    private readonly TextBox _txtBcdCodeStart = new();
+    private readonly TextBox _txtBcdCodeLen = new();
+    private readonly TextBox _txtBcdIntStart = new();
+    private readonly TextBox _txtBcdIntLen = new();
+    private readonly TextBox _txtBcdFracStart = new();
+    private readonly TextBox _txtBcdFracLen = new();
+    private readonly TextBox _txtBcdTest = new();
+    private readonly TextBlock _lblBcdTestResult = new();
+    private int _barcodeSection = -1;
+    private bool _barcodeLoaded;
+
     private UsrPref _pref = UsrPref.Load();
 
     public OptWin()
@@ -337,6 +356,24 @@ public sealed class OptWin : BaseWin
         Grid.SetColumn(_btnTestPage, 1);
         printing.Children.Add(_btnTestPage);
 
+        // ---- Barcode (§3.4) ------------------------------------------
+        var barcode = BeginSection("Options.BarcodeSection", "Options.ScopeCompany");
+        _barcodeSection = _sectionPanels.Count - 1;
+        AddCheck(barcode, _chkBcdActive, "Options.BcdActive");
+        AddField(barcode, "Options.BcdPrefix", _txtBcdPrefix);
+        AddField(barcode, "Options.BcdTotalLength", _txtBcdTotal);
+        AddSegmentRow(barcode, "Options.BcdCodeSegment", _txtBcdCodeStart, _txtBcdCodeLen);
+        AddSegmentRow(barcode, "Options.BcdWeightIntSegment", _txtBcdIntStart, _txtBcdIntLen);
+        AddSegmentRow(barcode, "Options.BcdWeightFracSegment", _txtBcdFracStart, _txtBcdFracLen);
+        AddField(barcode, "Options.BcdTestLabel", _txtBcdTest);
+        AddReadout(barcode, _lblBcdTestResult);
+        foreach (var box in new[]
+                 {
+                     _txtBcdPrefix, _txtBcdTotal, _txtBcdCodeStart, _txtBcdCodeLen,
+                     _txtBcdIntStart, _txtBcdIntLen, _txtBcdFracStart, _txtBcdFracLen, _txtBcdTest
+                 })
+            box.TextChanged += (_, _) => UpdateBcdTest();
+
         // ---- Backup (SVC1) -------------------------------------------
         // Readout is DERIVED from the real backup list (newest
         // file's write time) so it cannot drift from reality; the
@@ -412,6 +449,8 @@ public sealed class OptWin : BaseWin
             LoadNumbering();
         if (index == _printingSection)
             LoadPrinting();
+        if (index == _barcodeSection)
+            LoadBarcode();
     }
 
     private void LoadPrinting()
@@ -553,6 +592,137 @@ public sealed class OptWin : BaseWin
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
             return false;
         }
+    }
+
+    /// <summary>One barcode segment row: the segment's label in the
+    /// label column, then Start/Length number boxes side by side —
+    /// positions are read off the printed label left to right.</summary>
+    private void AddSegmentRow(Grid grid, string key, TextBox startBox, TextBox lengthBox)
+    {
+        var row = grid.RowDefinitions.Count;
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var label = new TextBlock
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 3, 8, 3)
+        };
+        _labels.Add((label, key));
+        Grid.SetRow(label, row);
+        Grid.SetColumn(label, 0);
+        grid.Children.Add(label);
+
+        var startLabel = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
+        _labels.Add((startLabel, "Options.BcdStart"));
+        var lengthLabel = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 6, 0) };
+        _labels.Add((lengthLabel, "Options.BcdLength"));
+        startBox.Width = 56;
+        lengthBox.Width = 56;
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 3) };
+        panel.Children.Add(startLabel);
+        panel.Children.Add(startBox);
+        panel.Children.Add(lengthLabel);
+        panel.Children.Add(lengthBox);
+        Grid.SetRow(panel, row);
+        Grid.SetColumn(panel, 1);
+        grid.Children.Add(panel);
+    }
+
+    private void LoadBarcode()
+    {
+        if (_barcodeLoaded)
+            return;
+        _barcodeLoaded = true;
+        try
+        {
+            var row = BcdTplSvc.LoadRow();
+            _chkBcdActive.IsChecked = row?.Active ?? false;
+            if (row is { } stored)
+            {
+                _txtBcdPrefix.Text = stored.Template.Prefix;
+                _txtBcdTotal.Text = stored.Template.TotalLength.ToString(CultureInfo.InvariantCulture);
+                _txtBcdCodeStart.Text = stored.Template.CodeStart.ToString(CultureInfo.InvariantCulture);
+                _txtBcdCodeLen.Text = stored.Template.CodeLength.ToString(CultureInfo.InvariantCulture);
+                _txtBcdIntStart.Text = stored.Template.WeightIntStart.ToString(CultureInfo.InvariantCulture);
+                _txtBcdIntLen.Text = stored.Template.WeightIntLength.ToString(CultureInfo.InvariantCulture);
+                _txtBcdFracStart.Text = stored.Template.WeightFracStart.ToString(CultureInfo.InvariantCulture);
+                _txtBcdFracLen.Text = stored.Template.WeightFracLength.ToString(CultureInfo.InvariantCulture);
+            }
+            else
+            {
+                // Editor defaults = the standard scale-label layout;
+                // nothing parses until a prefix is set and the
+                // template is activated and saved.
+                _txtBcdTotal.Text = "13";
+                _txtBcdCodeStart.Text = "3";
+                _txtBcdCodeLen.Text = "4";
+                _txtBcdIntStart.Text = "7";
+                _txtBcdIntLen.Text = "2";
+                _txtBcdFracStart.Text = "9";
+                _txtBcdFracLen.Text = "3";
+            }
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OptWin.LoadBarcode");
+        }
+        UpdateBcdTest();
+    }
+
+    private bool TryBuildBarcodeTemplate(out BarcodeTemplate template)
+    {
+        template = null!;
+        if (!int.TryParse(_txtBcdTotal.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var total) ||
+            !int.TryParse(_txtBcdCodeStart.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var cs) ||
+            !int.TryParse(_txtBcdCodeLen.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var cl) ||
+            !int.TryParse(_txtBcdIntStart.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var ws) ||
+            !int.TryParse(_txtBcdIntLen.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var wl) ||
+            !int.TryParse(_txtBcdFracStart.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var fs) ||
+            !int.TryParse(_txtBcdFracLen.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var fl))
+            return false;
+        template = new BarcodeTemplate(_txtBcdPrefix.Text.Trim(), total, cs, cl, ws, wl, fs, fl);
+        return template.IsValid(out _);
+    }
+
+    private bool SaveBarcode()
+    {
+        if (!_barcodeLoaded)
+            return true;
+        try
+        {
+            var actor = AppState.CurrentUser?.Username ?? "anonymous";
+            if (_txtBcdPrefix.Text.Trim().Length == 0)
+                return BcdTplSvc.Save(null, false, actor);
+            if (!TryBuildBarcodeTemplate(out var template))
+            {
+                MessageBox.Show(this, T("Options.BcdInvalid"), Title,
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                ShowSection(_barcodeSection);
+                return false;
+            }
+            return BcdTplSvc.Save(template, _chkBcdActive.IsChecked == true, actor);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OptWin.SaveBarcode");
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+            return false;
+        }
+    }
+
+    /// <summary>The live test runs the REAL parser over the unsaved
+    /// field values, so what the owner sees here is exactly what the
+    /// POS scan box and the invoice grid will do with the label.</summary>
+    private void UpdateBcdTest()
+    {
+        var sample = _txtBcdTest.Text.Trim();
+        if (sample.Length == 0 || !TryBuildBarcodeTemplate(out var template))
+        {
+            _lblBcdTestResult.Text = string.Empty;
+            return;
+        }
+        _lblBcdTestResult.Text = template.TryParse(sample, out var code, out var weight)
+            ? Tf("Options.BcdTestResult", code, weight.ToString("0.###", CultureInfo.InvariantCulture))
+            : T("Options.BcdTestNoMatch");
     }
 
     /// <summary>Prints a sample document through the REAL invoice
@@ -913,6 +1083,8 @@ public sealed class OptWin : BaseWin
         // Print settings + logo persist with the same all-or-nothing
         // discipline.
         if (!SavePrinting())
+            return;
+        if (!SaveBarcode())
             return;
         _pref.PrintInvoiceCopies = Math.Clamp(invoiceCopies, 1, 9);
         _pref.PrintVoucherCopies = Math.Clamp(voucherCopies, 1, 9);

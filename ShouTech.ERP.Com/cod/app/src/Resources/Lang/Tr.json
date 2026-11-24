@@ -4761,7 +4761,20 @@
   "PrintTestParty": "Test müşterisi",
   "PrintTestItem": "Test malzemesi",
   "PrintLogoTooLarge": "Logo resmi 2 MB veya daha küçük olmalıdır.",
-  "PrintLogoInvalid": "Lütfen bir PNG veya JPEG resmi seçin."
+  "PrintLogoInvalid": "Lütfen bir PNG veya JPEG resmi seçin.",
+  "BarcodeSection": "Barkod",
+  "BcdActive": "Birleşik barkod çözümleme etkin",
+  "BcdPrefix": "Etiket öneki",
+  "BcdTotalLength": "Toplam etiket uzunluğu",
+  "BcdCodeSegment": "Malzeme kodu bölümü",
+  "BcdWeightIntSegment": "Ağırlık tam sayı bölümü",
+  "BcdWeightFracSegment": "Ağırlık kesir bölümü",
+  "BcdStart": "Başlangıç",
+  "BcdLength": "Uzunluk",
+  "BcdTestLabel": "Etiketi test et",
+  "BcdTestResult": "Malzeme kodu: {0} - Ağırlık: {1}",
+  "BcdTestNoMatch": "Bu etiket şablonla eşleşmiyor.",
+  "BcdInvalid": "Barkod şablonu geçersiz: öneki, toplam uzunluğu ve bölümlerin çakışmadan içine sığdığını kontrol edin."
  },
  "Print": {
   "Tel": "Tel",
