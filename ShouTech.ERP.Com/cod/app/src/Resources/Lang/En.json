@@ -2237,7 +2237,18 @@
     "ShowName": "Name",
     "ShowPrice": "Price",
     "ShowCode": "Code",
-    "Bold": "Bold"
+    "Bold": "Bold",
+    "Symbology": "Symbology:",
+    "Design": "Design:",
+    "DesignName": "Name:",
+    "SetDefault": "Set as default",
+    "ExportDesign": "Export design",
+    "ImportDesign": "Import design",
+    "DesignImportFailed": "The design file could not be imported.",
+    "DesignExportFailed": "The design could not be exported.",
+    "SelectDesign": "Select a design first.",
+    "NameRequired": "Enter a design name first.",
+    "DefaultSuffix": "(default)"
   },
   "BarcodeGen": {
     "Prefix": "Prefix:",

@@ -2321,7 +2321,18 @@
     "ShowName": "الاسم",
     "ShowPrice": "السعر",
     "ShowCode": "الرمز",
-    "Bold": "غامق"
+    "Bold": "غامق",
+    "Symbology": "الترميز:",
+    "Design": "التصميم:",
+    "DesignName": "الاسم:",
+    "SetDefault": "تعيين كافتراضي",
+    "ExportDesign": "تصدير التصميم",
+    "ImportDesign": "استيراد التصميم",
+    "DesignImportFailed": "تعذر استيراد ملف التصميم.",
+    "DesignExportFailed": "تعذر تصدير التصميم.",
+    "SelectDesign": "اختر تصميمًا أولًا.",
+    "NameRequired": "أدخل اسم التصميم أولًا.",
+    "DefaultSuffix": "(افتراضي)"
   },
   "BarcodeGen": {
     "Prefix": "البادئة:",

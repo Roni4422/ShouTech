@@ -11,6 +11,7 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using ShouTech.App.Common;
+using ShouTech.App.Reporting;
 using ShouTech.App.Services;
 
 using ShouTech.Domain;
@@ -90,7 +91,7 @@ public sealed class BcdGenWin : BaseWin
         toolbar.Children.Add(_btnSave);
 
         StyleButton(_btnPrint, T("Common.Print"));
-        _btnPrint.Click += (_, _) => PrintGenerated();
+        _btnPrint.Click += async (_, _) => await PrintGeneratedAsync();
         toolbar.Children.Add(_btnPrint);
 
         StyleButton(_btnSelectAll, T("Common.SelectAll"));
@@ -401,7 +402,7 @@ public sealed class BcdGenWin : BaseWin
     // Printing
     // ------------------------------------------------------------------
 
-    private void PrintGenerated()
+    private async Task PrintGeneratedAsync()
     {
         var printable = _rows
             .Where(r => r.Include && !string.IsNullOrWhiteSpace(r.Barcode))
@@ -412,6 +413,11 @@ public sealed class BcdGenWin : BaseWin
             MessageBox.Show(this, T("Messages.NoData"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
+
+        // B4: the current company's default label design (Barcode
+        // Designer) styles the sheet; no design keeps the historic
+        // layout. Resolution failures degrade to the historic layout.
+        var labelStyle = (await LabelDesignRepo.ResolveDefaultAsync(CurrentCompanyCode))?.ToStyle();
 
         var dialog = new PrintDialog();
         if (dialog.ShowDialog() != true)
@@ -446,7 +452,7 @@ public sealed class BcdGenWin : BaseWin
                         Width = cellWidth,
                         Height = cellHeight - 4,
                         Stretch = Stretch.Uniform,
-                        Child = BarcodeLabelPrinter.BuildLabel(slice[i].Name, slice[i].Barcode)
+                        Child = BarcodeLabelPrinter.BuildLabel(slice[i].Name, slice[i].Barcode, null, labelStyle)
                     };
                     Grid.SetColumn(cell, i % columns);
                     Grid.SetRow(cell, i / columns);
@@ -458,7 +464,7 @@ public sealed class BcdGenWin : BaseWin
         }
         catch (Exception ex)
         {
-            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "BcdGenWin.PrintGenerated");
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "BcdGenWin.PrintGeneratedAsync");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

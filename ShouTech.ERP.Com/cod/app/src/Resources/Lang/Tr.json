@@ -2233,7 +2233,18 @@
     "ShowName": "Ad",
     "ShowPrice": "Fiyat",
     "ShowCode": "Kod",
-    "Bold": "Kalın"
+    "Bold": "Kalın",
+    "Symbology": "Semboloji:",
+    "Design": "Tasarım:",
+    "DesignName": "Ad:",
+    "SetDefault": "Varsayılan yap",
+    "ExportDesign": "Tasarımı dışa aktar",
+    "ImportDesign": "Tasarımı içe aktar",
+    "DesignImportFailed": "Tasarım dosyası içe aktarılamadı.",
+    "DesignExportFailed": "Tasarım dışa aktarılamadı.",
+    "SelectDesign": "Önce bir tasarım seçin.",
+    "NameRequired": "Önce bir tasarım adı girin.",
+    "DefaultSuffix": "(varsayılan)"
   },
   "BarcodeGen": {
     "Prefix": "Ön ek:",

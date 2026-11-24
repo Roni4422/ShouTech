@@ -242,8 +242,54 @@ namespace ShouTech.App.Common
     /// Builds and prints material barcode labels through the system print
     /// dialog. Fully offline; no external dependencies.
     /// </summary>
+    /// <summary>
+    /// Label styling honored by the sheet printer (B4): the subset of
+    /// a saved label design (LabelDesign) that applies to sheet
+    /// printing. A null style means the historic fixed layout.
+    /// </summary>
+    public sealed class LabelStyle
+    {
+        public string Symbology { get; init; } = "CODE128";
+        public double ModuleWidth { get; init; } = 2;
+        public double BarHeight { get; init; } = 56;
+        public string BarColorName { get; init; } = "Black";
+        public string BackgroundName { get; init; } = "White";
+        public string TextColorName { get; init; } = "Black";
+        public double FontSize { get; init; } = 13;
+        public bool Bold { get; init; } = true;
+        public bool ShowName { get; init; } = true;
+        public bool ShowPrice { get; init; } = true;
+        public bool ShowCode { get; init; } = true;
+    }
+
     public static class BarcodeLabelPrinter
     {
+        /// <summary>The designer's color palette, shared by the
+        /// designer window and the sheet printer.</summary>
+        public static Brush ResolveBrush(string? name, Brush fallback) => name switch
+        {
+            "Black" => Brushes.Black,
+            "Dark Blue" => Brushes.DarkBlue,
+            "Dark Red" => Brushes.DarkRed,
+            "Forest Green" => Brushes.ForestGreen,
+            "Dim Gray" => Brushes.DimGray,
+            "Brown" => Brushes.Brown,
+            "White" => Brushes.White,
+            "Ivory" => Brushes.Ivory,
+            "Light Yellow" => Brushes.LightYellow,
+            "White Smoke" => Brushes.WhiteSmoke,
+            _ => fallback
+        };
+
+        /// <summary>Renders a barcode in the chosen symbology
+        /// (CODE39 → Code39 encoder; anything else → Code 128).</summary>
+        public static FrameworkElement BuildBarcode(
+            string symbology, string code, double moduleWidth, double barHeight,
+            double quietZone, Brush barBrush, Brush? backgroundBrush = null)
+            => string.Equals(symbology, "CODE39", StringComparison.OrdinalIgnoreCase)
+                ? Code39.BuildVisual(code, moduleWidth, barHeight, quietZone, barBrush, backgroundBrush)
+                : Code128.BuildVisual(code, moduleWidth, barHeight, quietZone, barBrush, backgroundBrush);
+
         /// <summary>
         /// Builds a printable label visual containing the material name,
         /// the Code-128 barcode, the human-readable code and an optional
@@ -253,6 +299,81 @@ namespace ShouTech.App.Common
             string materialName,
             string code,
             string? priceText = null)
+            => BuildLabel(materialName, code, priceText, null);
+
+        /// <summary>Styled variant (B4): honors a saved label
+        /// design's symbology, sizes, colors and visible elements.</summary>
+        public static FrameworkElement BuildLabel(
+            string materialName,
+            string code,
+            string? priceText,
+            LabelStyle? style)
+        {
+            if (style == null)
+                return BuildHistoricLabel(materialName, code, priceText);
+
+            var textColor = ResolveBrush(style.TextColorName, Brushes.Black);
+            var layout = new StackPanel
+            {
+                Background = ResolveBrush(style.BackgroundName, Brushes.White),
+                Margin = new Thickness(12)
+            };
+
+            if (style.ShowName && !string.IsNullOrWhiteSpace(materialName))
+            {
+                layout.Children.Add(new TextBlock
+                {
+                    Text = materialName,
+                    FontSize = style.FontSize,
+                    FontWeight = style.Bold ? FontWeights.Bold : FontWeights.Normal,
+                    Foreground = textColor,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    MaxWidth = 320,
+                    Margin = new Thickness(0, 0, 0, 4)
+                });
+            }
+
+            layout.Children.Add(BuildBarcode(
+                style.Symbology, code,
+                Math.Min(style.ModuleWidth, 4), style.BarHeight,
+                quietZone: 8,
+                barBrush: ResolveBrush(style.BarColorName, Brushes.Black),
+                backgroundBrush: Brushes.Transparent));
+
+            if (style.ShowCode)
+            {
+                layout.Children.Add(new TextBlock
+                {
+                    Text = code,
+                    FontSize = Math.Max(9, style.FontSize - 1),
+                    FontFamily = new FontFamily("Consolas"),
+                    Foreground = textColor,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Margin = new Thickness(0, 3, 0, 0)
+                });
+            }
+
+            if (style.ShowPrice && !string.IsNullOrWhiteSpace(priceText))
+            {
+                layout.Children.Add(new TextBlock
+                {
+                    Text = priceText,
+                    FontSize = Math.Max(9, style.FontSize - 1),
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = textColor,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Margin = new Thickness(0, 2, 0, 0)
+                });
+            }
+
+            return layout;
+        }
+
+        private static StackPanel BuildHistoricLabel(
+            string materialName,
+            string code,
+            string? priceText)
         {
             var layout = new StackPanel
             {

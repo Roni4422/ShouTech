@@ -196,6 +196,35 @@ audited in code on this branch — every "exists" below names the file.
   Code 128 (existing encoder) + Code 39 (new encoder in Common) —
   design list (load/save-as/delete/set-print-default), print uses
   the selected design, encrypted export/import (`.stld`).
+  **Outcome (2026-11-24): DONE, gates ALL-GREEN** (build 0/0;
+  migrator fresh through 117 + second run 0; 4 audit scripts exit
+  0; Errors parity pass; P2pHarness 39/39; W1Harness 36/36; Lang
+  parity for touched keys 0 missing). Migration 117 (both dialects)
+  creates `label_designs` (12 columns + company index, verified on
+  a fresh DB). New `Common/Code39.cs`: Code-39 encoder, pattern
+  table cross-verified digit-for-digit against ZXing's published
+  CHARACTER_ENCODINGS; Sanitize uppercases and drops unsupported
+  characters; same BuildVisual contract as Code 128.
+  `Common/Code128.cs` gains `LabelStyle`, the shared
+  `BarcodeLabelPrinter.ResolveBrush` palette, `BuildBarcode`
+  (symbology switch) and a styled `BuildLabel` overload — a null
+  style delegates to the historic implementation, so existing
+  label prints are unchanged unless a design is chosen. New
+  `Reporting/LabelDesign.cs`: versioned design model +
+  `LabelDesignRepo` (transactional default handling, soft delete)
+  + `ResolveDefaultAsync` degrading to null with a central error
+  report. BcdDesWin: symbology combo, design list + name box; Save
+  writes BOTH the local cfg (now including the symbology) and the
+  named DB design (a company's first design auto-defaults); Load
+  prefers the picked DB design, else the local file; Delete /
+  Set-default / `.stld` export / `.stld` import (import lands as a
+  saved design); preview tolerates un-encodable sample text while
+  typing (print surfaces the error). BcdGenWin's label-sheet print
+  passes the company's default design style into BuildLabel. 11
+  new BarcodeDesign keys ×4 languages (28 keys, parity 0 missing).
+  One CA1859 warning fixed at the cause during the gate run.
+  Windows-owed: WPF click-through of BcdDesWin + designed label
+  printing; live PostgreSQL run of migration 117.
 - **B5 — Maintenance completion.** MaintenanceWin gains the two
   Al-Ameen audits that map to real ShouTech engines: **Recalculate
   costs** (StockRecalculationService, exposed through

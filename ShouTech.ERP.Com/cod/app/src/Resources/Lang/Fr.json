@@ -2233,7 +2233,18 @@
     "ShowName": "Nom",
     "ShowPrice": "Prix",
     "ShowCode": "Code",
-    "Bold": "Gras"
+    "Bold": "Gras",
+    "Symbology": "Symbologie :",
+    "Design": "Modèle :",
+    "DesignName": "Nom :",
+    "SetDefault": "Définir par défaut",
+    "ExportDesign": "Exporter le modèle",
+    "ImportDesign": "Importer le modèle",
+    "DesignImportFailed": "Impossible d'importer le fichier de modèle.",
+    "DesignExportFailed": "Impossible d'exporter le modèle.",
+    "SelectDesign": "Sélectionnez d'abord un modèle.",
+    "NameRequired": "Saisissez d'abord un nom de modèle.",
+    "DefaultSuffix": "(par défaut)"
   },
   "BarcodeGen": {
     "Prefix": "Préfixe :",

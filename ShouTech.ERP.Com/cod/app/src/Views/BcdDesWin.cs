@@ -1,11 +1,16 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using Microsoft.Win32;
 using ShouTech.App.Common;
-
+using ShouTech.App.Reporting;
 using ShouTech.App.Services;
 using ShouTech.Domain;
 namespace ShouTech.App.Views;
@@ -36,6 +41,18 @@ public sealed class BcdDesWin : BaseWin
     private readonly Button _btnLoad = new();
     private readonly Button _btnReset = new();
     private readonly Button _btnPrint = new();
+    private readonly Button _btnDeleteDesign = new();
+    private readonly Button _btnDefaultDesign = new();
+    private readonly Button _btnExportDesign = new();
+    private readonly Button _btnImportDesign = new();
+
+    // B4: symbology choice + named designs in the DB (label_designs).
+    private readonly ComboBox _cbSymbology = new() { Width = VisuId.FieldWidthShort };
+    private readonly ComboBox _cbDesigns = new() { Width = VisuId.FieldWidthMedium };
+    private readonly TextBox _txtDesignName = new() { Width = VisuId.FieldWidthMedium };
+    private IReadOnlyList<LabelDesignListItem> _items = Array.Empty<LabelDesignListItem>();
+    private int? _loadedDesignId;
+    private Guid _companyId;
 
     private readonly TextBox _txtName = new() { Width = VisuId.FieldWidthMedium, Text = "Sample Product" };
     private readonly TextBox _txtPrice = new() { Width = VisuId.FieldWidthTiny, Text = "25.00" };
@@ -66,6 +83,29 @@ public sealed class BcdDesWin : BaseWin
         BuildUi();
         LoadDesign();
         UpdatePreview();
+        Loaded += OnLoaded;
+    }
+
+    private static int UserId => int.TryParse(AppState.CurrentUser?.Id, out var id) ? id : 0;
+
+    private string CurrentSymbology =>
+        _cbSymbology.SelectedIndex == 1 ? LabelDesign.SymbologyCode39 : LabelDesign.SymbologyCode128;
+
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var companies = await CoLocalStore.LoadAsync();
+            var rec = companies.FirstOrDefault(c =>
+                string.Equals(c.Code, CurrentCompanyCode, StringComparison.OrdinalIgnoreCase));
+            if (rec != null)
+                _companyId = rec.CompanyId;
+            await RefreshDesignsAsync();
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.DatabaseQueryFailed, ex, "BcdDesWin.OnLoaded");
+        }
     }
 
     protected override void ApplyLocalizedText()
@@ -75,6 +115,10 @@ public sealed class BcdDesWin : BaseWin
         _btnLoad.Content = L("BarcodeDesign.LoadDesign", "Load design");
         _btnReset.Content = T("Common.Refresh");
         _btnPrint.Content = T("Common.Print");
+        _btnDeleteDesign.Content = T("Common.Delete");
+        _btnDefaultDesign.Content = T("BarcodeDesign.SetDefault");
+        _btnExportDesign.Content = T("BarcodeDesign.ExportDesign");
+        _btnImportDesign.Content = T("BarcodeDesign.ImportDesign");
         _chkBold.Content = T("BarcodeDesign.Bold");
         _chkShowName.Content = T("BarcodeDesign.ShowName");
         _chkShowPrice.Content = T("BarcodeDesign.ShowPrice");
@@ -171,11 +215,11 @@ public sealed class BcdDesWin : BaseWin
         var toolbar = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
 
         StyleButton(_btnSave, L("BarcodeDesign.SaveDesign", "Save design"));
-        _btnSave.Click += (_, _) => SaveDesign();
+        _btnSave.Click += async (_, _) => await SaveAllAsync();
         toolbar.Children.Add(_btnSave);
 
         StyleButton(_btnLoad, L("BarcodeDesign.LoadDesign", "Load design"));
-        _btnLoad.Click += (_, _) => { LoadDesign(); UpdatePreview(); };
+        _btnLoad.Click += async (_, _) => await LoadSelectedAsync();
         toolbar.Children.Add(_btnLoad);
 
         StyleButton(_btnReset, T("Common.Refresh"));
@@ -186,12 +230,53 @@ public sealed class BcdDesWin : BaseWin
         _btnPrint.Click += (_, _) => PrintDesignedLabel();
         toolbar.Children.Add(_btnPrint);
 
+        StyleButton(_btnDeleteDesign, T("Common.Delete"));
+        _btnDeleteDesign.Click += async (_, _) => await DeleteDesignAsync();
+        toolbar.Children.Add(_btnDeleteDesign);
+
+        StyleButton(_btnDefaultDesign, T("BarcodeDesign.SetDefault"));
+        _btnDefaultDesign.Click += async (_, _) => await SetDefaultDesignAsync();
+        toolbar.Children.Add(_btnDefaultDesign);
+
+        StyleButton(_btnExportDesign, T("BarcodeDesign.ExportDesign"));
+        _btnExportDesign.Click += (_, _) => ExportDesignFile();
+        toolbar.Children.Add(_btnExportDesign);
+
+        StyleButton(_btnImportDesign, T("BarcodeDesign.ImportDesign"));
+        _btnImportDesign.Click += async (_, _) => await ImportDesignFileAsync();
+        toolbar.Children.Add(_btnImportDesign);
+
         return toolbar;
     }
 
     private StackPanel BuildSettings()
     {
         var panel = new StackPanel();
+
+        // B4: named designs (DB store) — pick one, name the working
+        // design, then Save / Load / Delete / Set-default below.
+        var designRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+        designRow.Children.Add(MakeLabel(L("BarcodeDesign.Design", "Design:")));
+        _cbDesigns.SetResourceReference(StyleProperty, "VisuComboBoxStyle");
+        designRow.Children.Add(_cbDesigns);
+        panel.Children.Add(designRow);
+
+        var designNameRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+        designNameRow.Children.Add(MakeLabel(L("BarcodeDesign.DesignName", "Name:")));
+        _txtDesignName.SetResourceReference(StyleProperty, "VisuTextBoxStyle");
+        designNameRow.Children.Add(_txtDesignName);
+        panel.Children.Add(designNameRow);
+
+        // B4: symbology choice (Code 128 existing encoder, Code 39 new).
+        var symbologyRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+        symbologyRow.Children.Add(MakeLabel(L("BarcodeDesign.Symbology", "Symbology:")));
+        _cbSymbology.SetResourceReference(StyleProperty, "VisuComboBoxStyle");
+        _cbSymbology.Items.Add("Code 128");
+        _cbSymbology.Items.Add("Code 39");
+        _cbSymbology.SelectedIndex = 0;
+        _cbSymbology.SelectionChanged += (_, _) => UpdatePreview();
+        symbologyRow.Children.Add(_cbSymbology);
+        panel.Children.Add(symbologyRow);
 
         _cbFont.SetResourceReference(StyleProperty, "VisuComboBoxStyle");
         _cbFontSize.SetResourceReference(StyleProperty, "VisuComboBoxStyle");
@@ -384,7 +469,7 @@ public sealed class BcdDesWin : BaseWin
         _ = double.TryParse(_txtHeight.Text, out var h);
         _label.Width = w > 40 ? w : 240;
         _label.Height = h > 30 ? h : 150;
-        _label.Background = ResolveBrush(_cbBackground.SelectedItem as string, Brushes.White);
+        _label.Background = BarcodeLabelPrinter.ResolveBrush(_cbBackground.SelectedItem as string, Brushes.White);
         _label.SetResourceReference(Border.BorderBrushProperty, "BorderStrongBrush");
 
         // Font styling.
@@ -392,8 +477,8 @@ public sealed class BcdDesWin : BaseWin
         _ = double.TryParse(_cbFontSize.SelectedItem as string, out var size);
         if (size <= 0) size = 13;
 
-        var textColor = ResolveBrush(_cbTextColor.SelectedItem as string, Brushes.Black);
-        var barColor = ResolveBrush(_cbBarColor.SelectedItem as string, Brushes.Black);
+        var textColor = BarcodeLabelPrinter.ResolveBrush(_cbTextColor.SelectedItem as string, Brushes.Black);
+        var barColor = BarcodeLabelPrinter.ResolveBrush(_cbBarColor.SelectedItem as string, Brushes.Black);
 
         _prevName.Text = _chkShowName.IsChecked == true ? _txtName.Text : string.Empty;
         _prevName.FontFamily = family;
@@ -411,7 +496,7 @@ public sealed class BcdDesWin : BaseWin
         _prevCode.FontSize = Math.Max(9, size - 2);
         _prevCode.Foreground = textColor;
 
-        // Real Code-128 bars with the chosen bar/background colors.
+        // Real bars in the chosen symbology with the chosen colors.
         _prevBars.Children.Clear();
         var code = _txtCode.Text;
         if (string.IsNullOrWhiteSpace(code)) code = "12345678";
@@ -423,13 +508,23 @@ public sealed class BcdDesWin : BaseWin
         _ = double.TryParse(_txtBarHeight.Text, out var barHeight);
         if (barHeight <= 0) barHeight = 44;
 
-        _prevBars.Children.Add(Code128.BuildVisual(
-            code,
-            moduleWidth,
-            barHeight,
-            quietZone: 4,
-            barBrush: barColor,
-            backgroundBrush: Brushes.Transparent));
+        try
+        {
+            _prevBars.Children.Add(BarcodeLabelPrinter.BuildBarcode(
+                CurrentSymbology,
+                code,
+                moduleWidth,
+                barHeight,
+                quietZone: 4,
+                barBrush: barColor,
+                backgroundBrush: Brushes.Transparent));
+        }
+        catch (ArgumentException)
+        {
+            // The sample value cannot be encoded in the chosen
+            // symbology (e.g. Code 39 charset) — the preview simply
+            // shows no bars while typing; printing surfaces the error.
+        }
     }
 
     // ------------------------------------------------------------------
@@ -465,7 +560,7 @@ public sealed class BcdDesWin : BaseWin
 
         var label = new Border
         {
-            Background = ResolveBrush(_cbBackground.SelectedItem as string, Brushes.White),
+            Background = BarcodeLabelPrinter.ResolveBrush(_cbBackground.SelectedItem as string, Brushes.White),
             BorderThickness = new Thickness(1.5),
             CornerRadius = new CornerRadius(5),
             Padding = new Thickness(10),
@@ -487,8 +582,8 @@ public sealed class BcdDesWin : BaseWin
         var family = new FontFamily((_cbFont.SelectedItem as string) ?? "Segoe UI");
         _ = double.TryParse(_cbFontSize.SelectedItem as string, out var size);
         if (size <= 0) size = 13;
-        var textColor = ResolveBrush(_cbTextColor.SelectedItem as string, Brushes.Black);
-        var barColor = ResolveBrush(_cbBarColor.SelectedItem as string, Brushes.Black);
+        var textColor = BarcodeLabelPrinter.ResolveBrush(_cbTextColor.SelectedItem as string, Brushes.Black);
+        var barColor = BarcodeLabelPrinter.ResolveBrush(_cbBarColor.SelectedItem as string, Brushes.Black);
 
         if (_chkShowName.IsChecked == true && !string.IsNullOrWhiteSpace(_txtName.Text))
         {
@@ -523,7 +618,8 @@ public sealed class BcdDesWin : BaseWin
         _ = double.TryParse(_txtBarHeight.Text, out var barHeight);
         if (barHeight <= 0) barHeight = 56;
 
-        content.Children.Add(Code128.BuildVisual(
+        content.Children.Add(BarcodeLabelPrinter.BuildBarcode(
+            CurrentSymbology,
             _txtCode.Text,
             Math.Min(moduleWidth, 4),
             barHeight,
@@ -553,58 +649,32 @@ public sealed class BcdDesWin : BaseWin
     // Design persistence
     // ------------------------------------------------------------------
 
-    private static Brush ResolveBrush(string? name, Brush fallback) => name switch
-    {
-        "Black" => Brushes.Black,
-        "Dark Blue" => Brushes.DarkBlue,
-        "Dark Red" => Brushes.DarkRed,
-        "Forest Green" => Brushes.ForestGreen,
-        "Dim Gray" => Brushes.DimGray,
-        "Brown" => Brushes.Brown,
-        "White" => Brushes.White,
-        "Ivory" => Brushes.Ivory,
-        "Light Yellow" => Brushes.LightYellow,
-        "White Smoke" => Brushes.WhiteSmoke,
-        _ => fallback
-    };
-
+    /// <summary>Writes the local working design file (the fallback
+    /// store). Silent: SaveAllAsync owns the user feedback and the
+    /// error reporting for the combined local + DB save.</summary>
     private void SaveDesign()
     {
-        try
+        Directory.CreateDirectory(DesignFolder);
+        File.WriteAllLines(DesignFile, new[]
         {
-            Directory.CreateDirectory(DesignFolder);
-            File.WriteAllLines(DesignFile, new[]
-            {
-                "width=" + _txtWidth.Text,
-                "height=" + _txtHeight.Text,
-                "moduleWidth=" + _txtModuleWidth.Text,
-                "barHeight=" + _txtBarHeight.Text,
-                "font=" + (_cbFont.SelectedItem ?? string.Empty),
-                "fontSize=" + (_cbFontSize.SelectedItem ?? string.Empty),
-                "bold=" + (_chkBold.IsChecked == true),
-                "textColor=" + (_cbTextColor.SelectedItem ?? string.Empty),
-                "barColor=" + (_cbBarColor.SelectedItem ?? string.Empty),
-                "background=" + (_cbBackground.SelectedItem ?? string.Empty),
-                "showName=" + (_chkShowName.IsChecked == true),
-                "showPrice=" + (_chkShowPrice.IsChecked == true),
-                "showCode=" + (_chkShowCode.IsChecked == true),
-                "sampleName=" + _txtName.Text,
-                "samplePrice=" + _txtPrice.Text,
-                "sampleCode=" + _txtCode.Text
-            });
-
-            MessageBox.Show(
-                this,
-                T("Messages.SaveSuccess"),
-                Title,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-        }
-        catch (Exception ex)
-        {
-            ShouTech.App.Services.AppHost.Logging?.LogError("BarcodeDesign", "Failed to save barcode design configuration.", ex);
-            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
-        }
+            "width=" + _txtWidth.Text,
+            "height=" + _txtHeight.Text,
+            "moduleWidth=" + _txtModuleWidth.Text,
+            "barHeight=" + _txtBarHeight.Text,
+            "symbology=" + CurrentSymbology,
+            "font=" + (_cbFont.SelectedItem ?? string.Empty),
+            "fontSize=" + (_cbFontSize.SelectedItem ?? string.Empty),
+            "bold=" + (_chkBold.IsChecked == true),
+            "textColor=" + (_cbTextColor.SelectedItem ?? string.Empty),
+            "barColor=" + (_cbBarColor.SelectedItem ?? string.Empty),
+            "background=" + (_cbBackground.SelectedItem ?? string.Empty),
+            "showName=" + (_chkShowName.IsChecked == true),
+            "showPrice=" + (_chkShowPrice.IsChecked == true),
+            "showCode=" + (_chkShowCode.IsChecked == true),
+            "sampleName=" + _txtName.Text,
+            "samplePrice=" + _txtPrice.Text,
+            "sampleCode=" + _txtCode.Text
+        });
     }
 
     private void LoadDesign()
@@ -629,6 +699,7 @@ public sealed class BcdDesWin : BaseWin
                     case "height": _txtHeight.Text = value; break;
                     case "moduleWidth": _txtModuleWidth.Text = value; break;
                     case "barHeight": _txtBarHeight.Text = value; break;
+                    case "symbology": _cbSymbology.SelectedIndex = value == LabelDesign.SymbologyCode39 ? 1 : 0; break;
                     case "font": SelectItem(_cbFont, value); break;
                     case "fontSize": SelectItem(_cbFontSize, value); break;
                     case "bold": _chkBold.IsChecked = value == "True"; break;
@@ -658,12 +729,217 @@ public sealed class BcdDesWin : BaseWin
             combo.SelectedIndex = index;
     }
 
+    // ------------------------------------------------------------------
+    // Named designs in the DB (B4, label_designs) + .stld transfer.
+    // The local cfg above remains the working fallback: Save writes
+    // BOTH the local file and the named DB design; Load prefers the
+    // design picked in the list and falls back to the local file.
+    // ------------------------------------------------------------------
+
+    private sealed record DesignEntry(LabelDesignListItem Item, string Display)
+    {
+        public override string ToString() => Display;
+    }
+
+    private LabelDesign DesignFromForm()
+    {
+        var name = _txtDesignName.Text.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+            throw new InvalidOperationException(T("BarcodeDesign.NameRequired"));
+        return new LabelDesign
+        {
+            Name = name,
+            Symbology = CurrentSymbology,
+            Width = ParseOr(_txtWidth.Text, 240),
+            Height = ParseOr(_txtHeight.Text, 150),
+            ModuleWidth = ParseOr(_txtModuleWidth.Text, 2),
+            BarHeight = ParseOr(_txtBarHeight.Text, 44),
+            Font = (_cbFont.SelectedItem as string) ?? "Segoe UI",
+            FontSize = ParseOr(_cbFontSize.SelectedItem as string, 13),
+            Bold = _chkBold.IsChecked == true,
+            TextColor = (_cbTextColor.SelectedItem as string) ?? "Black",
+            BarColor = (_cbBarColor.SelectedItem as string) ?? "Black",
+            Background = (_cbBackground.SelectedItem as string) ?? "White",
+            ShowName = _chkShowName.IsChecked == true,
+            ShowPrice = _chkShowPrice.IsChecked == true,
+            ShowCode = _chkShowCode.IsChecked == true
+        };
+    }
+
+    private static double ParseOr(string? text, double fallback)
+        => double.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var v) && v > 0
+            ? v
+            : fallback;
+
+    private void ApplyDesign(LabelDesign design, int? id)
+    {
+        _loadedDesignId = id;
+        _txtDesignName.Text = design.Name;
+        _cbSymbology.SelectedIndex = design.Symbology == LabelDesign.SymbologyCode39 ? 1 : 0;
+        _txtWidth.Text = design.Width.ToString(CultureInfo.InvariantCulture);
+        _txtHeight.Text = design.Height.ToString(CultureInfo.InvariantCulture);
+        _txtModuleWidth.Text = design.ModuleWidth.ToString(CultureInfo.InvariantCulture);
+        _txtBarHeight.Text = design.BarHeight.ToString(CultureInfo.InvariantCulture);
+        SelectItem(_cbFont, design.Font);
+        SelectItem(_cbFontSize, design.FontSize.ToString(CultureInfo.InvariantCulture));
+        _chkBold.IsChecked = design.Bold;
+        SelectItem(_cbTextColor, design.TextColor);
+        SelectItem(_cbBarColor, design.BarColor);
+        SelectItem(_cbBackground, design.Background);
+        _chkShowName.IsChecked = design.ShowName;
+        _chkShowPrice.IsChecked = design.ShowPrice;
+        _chkShowCode.IsChecked = design.ShowCode;
+        UpdatePreview();
+    }
+
+    private async Task RefreshDesignsAsync()
+    {
+        _items = await LabelDesignRepo.ListAsync(_companyId);
+        var selectedId = (_cbDesigns.SelectedItem as DesignEntry)?.Item.DesignID;
+        _cbDesigns.ItemsSource = _items
+            .Select(i => new DesignEntry(i, i.DesignName + (i.IsDefault ? " " + T("BarcodeDesign.DefaultSuffix") : string.Empty)))
+            .ToList();
+        if (selectedId is int id)
+            _cbDesigns.SelectedItem = (_cbDesigns.ItemsSource as List<DesignEntry>)?
+                .FirstOrDefault(e => e.Item.DesignID == id);
+    }
+
+    private async Task SaveAllAsync()
+    {
+        try
+        {
+            var design = DesignFromForm();
+            SaveDesign(); // local working file (fallback), as before
+            var makeDefault = _items.Count == 0 && _loadedDesignId is null;
+            _loadedDesignId = await LabelDesignRepo.SaveAsync(
+                _companyId, design, makeDefault, _loadedDesignId, UserId);
+            await RefreshDesignsAsync();
+            MessageBox.Show(this, T("Messages.SaveSuccess"), Title,
+                MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "BcdDesWin.SaveAllAsync");
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task LoadSelectedAsync()
+    {
+        try
+        {
+            if (_cbDesigns.SelectedItem is DesignEntry entry)
+            {
+                var payload = await LabelDesignRepo.LoadPayloadAsync(entry.Item.DesignID);
+                var design = payload is null ? null : LabelDesign.FromJson(payload);
+                if (design is null)
+                    throw new InvalidOperationException(T("BarcodeDesign.DesignImportFailed"));
+                ApplyDesign(design, entry.Item.DesignID);
+                return;
+            }
+            _loadedDesignId = null;
+            LoadDesign();
+            UpdatePreview();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task DeleteDesignAsync()
+    {
+        try
+        {
+            if (_cbDesigns.SelectedItem is not DesignEntry entry)
+                throw new InvalidOperationException(T("BarcodeDesign.SelectDesign"));
+            await LabelDesignRepo.DeleteAsync(entry.Item.DesignID, UserId);
+            if (_loadedDesignId == entry.Item.DesignID)
+                _loadedDesignId = null;
+            await RefreshDesignsAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task SetDefaultDesignAsync()
+    {
+        try
+        {
+            if (_cbDesigns.SelectedItem is not DesignEntry entry)
+                throw new InvalidOperationException(T("BarcodeDesign.SelectDesign"));
+            await LabelDesignRepo.SetDefaultAsync(entry.Item.DesignID, _companyId, UserId);
+            await RefreshDesignsAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void ExportDesignFile()
+    {
+        try
+        {
+            var design = DesignFromForm();
+            var dialog = new SaveFileDialog
+            {
+                Filter = DesignFileSvc.FilterFor(DesignFileSvc.Kind.Label),
+                DefaultExt = DesignFileSvc.ExtensionFor(DesignFileSvc.Kind.Label),
+                AddExtension = true,
+                OverwritePrompt = true,
+                FileName = design.Name + DesignFileSvc.ExtensionFor(DesignFileSvc.Kind.Label)
+            };
+            if (dialog.ShowDialog(this) != true)
+                return;
+            if (!DesignFileSvc.Export(dialog.FileName, DesignFileSvc.Kind.Label,
+                    design.Name, design.ToJson()))
+                throw new InvalidOperationException(T("BarcodeDesign.DesignExportFailed"));
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task ImportDesignFileAsync()
+    {
+        try
+        {
+            var dialog = new OpenFileDialog
+            {
+                Filter = DesignFileSvc.FilterFor(DesignFileSvc.Kind.Label)
+            };
+            if (dialog.ShowDialog(this) != true)
+                return;
+            var json = DesignFileSvc.Import(dialog.FileName, DesignFileSvc.Kind.Label, out var designName);
+            var design = json is null ? null : LabelDesign.FromJson(json);
+            if (design is null)
+                throw new InvalidOperationException(T("BarcodeDesign.DesignImportFailed"));
+            if (!string.IsNullOrWhiteSpace(designName))
+                design.Name = designName;
+            _loadedDesignId = await LabelDesignRepo.SaveAsync(
+                _companyId, design, makeDefault: false, existingId: null, UserId);
+            ApplyDesign(design, _loadedDesignId);
+            await RefreshDesignsAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     private void ResetDesign()
     {
         _txtWidth.Text = "240";
         _txtHeight.Text = "150";
         _txtModuleWidth.Text = "2";
         _txtBarHeight.Text = "44";
+        _cbSymbology.SelectedIndex = 0;
+        _loadedDesignId = null;
+        _txtDesignName.Text = string.Empty;
         _cbFont.SelectedIndex = 0;
         _cbFontSize.SelectedItem = "13";
         _chkBold.IsChecked = true;
