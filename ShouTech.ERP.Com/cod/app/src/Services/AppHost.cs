@@ -43,6 +43,7 @@ namespace ShouTech.App.Services
         public static BudgetService? Budgets { get; private set; }
         public static QualityService? Quality { get; private set; }
         public static CrmService? Crm { get; private set; }
+        public static WarrantyService? Warranties { get; private set; }
         public static CommService? Commissions { get; private set; }
         public static HrService? Hr { get; private set; }
         public static PosService? Pos { get; private set; }
@@ -108,6 +109,7 @@ namespace ShouTech.App.Services
             Budgets = CreatePhase3Service((provider, connection) => new BudgetService(new BudgetRepository(provider, connection), Permissions.Has), "Budgets");
             Quality = CreatePhase3Service((provider, connection) => new QualityService(new QualityRepository(provider, connection)), "Quality");
             Crm = CreatePhase3Service((provider, connection) => new CrmService(new CrmRepository(provider, connection)), "CRM");
+            Warranties = CreatePhase3Service((provider, connection) => new WarrantyService(provider, connection), "Warranties");
             Commissions = CreatePhase3Service((provider, connection) => new CommService(new CommRepository(provider, connection), JournalStore), "Commissions");
             Hr = CreatePhase3Service((provider, connection) => new HrService(new HrRepository(provider, connection)), "HR");
             Pos = CreatePhase3Service((provider, connection) => new PosService(new PosRepository(provider, connection)), "POS");
@@ -198,6 +200,7 @@ namespace ShouTech.App.Services
                 Budgets = CreatePhase3Service((provider, connection) => new BudgetService(new BudgetRepository(provider, connection), Permissions.Has), "Budgets");
                 Quality = CreatePhase3Service((provider, connection) => new QualityService(new QualityRepository(provider, connection)), "Quality");
                 Crm = CreatePhase3Service((provider, connection) => new CrmService(new CrmRepository(provider, connection)), "CRM");
+            Warranties = CreatePhase3Service((provider, connection) => new WarrantyService(provider, connection), "Warranties");
             Commissions = CreatePhase3Service((provider, connection) => new CommService(new CommRepository(provider, connection), JournalStore), "Commissions");
             Hr = CreatePhase3Service((provider, connection) => new HrService(new HrRepository(provider, connection)), "HR");
             Pos = CreatePhase3Service((provider, connection) => new PosService(new PosRepository(provider, connection)), "POS");
@@ -404,6 +407,7 @@ namespace ShouTech.App.Services
         public static BudgetService? Budgets => AppHost.Budgets;
         public static QualityService? Quality => AppHost.Quality;
         public static CrmService? Crm => AppHost.Crm;
+        public static WarrantyService? Warranties => AppHost.Warranties;
         public static CommService? Commissions => AppHost.Commissions;
         public static HrService? Hr => AppHost.Hr;
         public static PosService? Pos => AppHost.Pos;

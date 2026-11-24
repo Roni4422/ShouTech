@@ -184,7 +184,7 @@ public sealed class CrmRepository : ICrmRepository
     // ------------------------------------------------------------------
     // Leads
     // ------------------------------------------------------------------
-    private const string LeadColumns = "lead_id, lead_name, organization, email, phone, mobile, address, source, campaign, status, assigned_rep_code, converted_party_id, converted_opportunity_id, notes";
+    private const string LeadColumns = "lead_id, lead_name, organization, email, phone, mobile, address, source, campaign, status, assigned_rep_code, converted_party_id, converted_opportunity_id, notes, campaign_id";
 
     public async Task<IReadOnlyList<CrmLead>> GetLeadsAsync(string companyId, string? status = null, CancellationToken cancellationToken = default)
     {
@@ -243,9 +243,9 @@ public sealed class CrmRepository : ICrmRepository
             {
                 await using var insert = CreateCommand(connection, transaction, """
                     INSERT INTO crm_leads (lead_id, company_id, lead_name, organization, email, phone, mobile, address,
-                        source, campaign, status, assigned_rep_code, notes, created_by)
+                        source, campaign, campaign_id, status, assigned_rep_code, notes, created_by)
                     VALUES (@id, @c, @name, @org, @email, @phone, @mobile, @address,
-                        @source, @campaign, @status, @rep, @notes, @user)
+                        @source, @campaign, @campaignId, @status, @rep, @notes, @user)
                     """);
                 BindLead(insert, companyId, lead, userId);
                 await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -257,7 +257,7 @@ public sealed class CrmRepository : ICrmRepository
                 // lead's links can never be re-pointed by an edit.
                 await using var update = CreateCommand(connection, transaction, $"""
                     UPDATE crm_leads SET lead_name = @name, organization = @org, email = @email, phone = @phone,
-                        mobile = @mobile, address = @address, source = @source, campaign = @campaign,
+                        mobile = @mobile, address = @address, source = @source, campaign = @campaign, campaign_id = @campaignId,
                         status = @status, assigned_rep_code = @rep, notes = @notes,
                         updated_by = @user, updated_at = {NowExpr}
                     WHERE company_id = @c AND lead_id = @id AND {NotDeleted}
@@ -487,6 +487,7 @@ public sealed class CrmRepository : ICrmRepository
                 OppType = CrmOpportunityTypes.NewBusiness,
                 Source = lead.Source,
                 Campaign = lead.Campaign,
+                CampaignId = lead.CampaignId,
                 AssignedRepCode = lead.AssignedRepCode
             };
             await InsertOpportunityAsync(connection, transaction, companyId, opportunity, userId, cancellationToken).ConfigureAwait(false);
@@ -526,7 +527,7 @@ public sealed class CrmRepository : ICrmRepository
     private const string OppColumns = """
         o.opp_id, o.title, o.party_id, p.name_en, p.ledger_id, o.lead_id, o.stage_id, s.name_en, s.stage_type,
         o.probability, o.expected_amount, o.currency_code, o.expected_close_date, o.opp_type, o.source,
-        o.campaign, o.assigned_rep_code, o.lost_reason_id, o.lost_notes
+        o.campaign, o.assigned_rep_code, o.lost_reason_id, o.lost_notes, o.campaign_id
         """;
 
     private string OppFrom => $"""
@@ -622,7 +623,7 @@ public sealed class CrmRepository : ICrmRepository
                 await using var update = CreateCommand(connection, transaction, $"""
                     UPDATE crm_opportunities SET title = @title, party_id = @party, lead_id = @lead,
                         expected_amount = @amount, currency_code = @currency, expected_close_date = @close,
-                        opp_type = @type, source = @source, campaign = @campaign, assigned_rep_code = @rep,
+                        opp_type = @type, source = @source, campaign = @campaign, campaign_id = @campaignId, assigned_rep_code = @rep,
                         updated_by = @user, updated_at = {NowExpr}
                     WHERE company_id = @c AND opp_id = @id AND {NotDeleted}
                     """);
@@ -1143,6 +1144,138 @@ public sealed class CrmRepository : ICrmRepository
         => SoftDeleteAsync("crm_activities", "activity_id", companyId, activityId, userId, cancellationToken);
 
     // ------------------------------------------------------------------
+    // Campaigns (migration 105, sales Level 3)
+    // ------------------------------------------------------------------
+    private const string CampaignColumns = "campaign_id, name, kind, start_date, end_date, budget, target_notes, status";
+
+    public async Task<IReadOnlyList<CrmCampaign>> GetCampaignsAsync(string companyId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = CreateCommand(connection, null,
+            $"SELECT {CampaignColumns} FROM crm_campaigns WHERE company_id = @c AND {NotDeleted} ORDER BY name");
+        Add(command, "@c", companyId.Trim());
+        var result = new List<CrmCampaign>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            result.Add(ReadCampaign(reader));
+        return result;
+    }
+
+    public async Task SaveCampaignAsync(string companyId, CrmCampaign campaign, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        ArgumentNullException.ThrowIfNull(campaign);
+        RequireUser(userId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var exists = await ExistsAsync(connection, transaction,
+                $"SELECT COUNT(*) FROM crm_campaigns WHERE company_id = @c AND campaign_id = @id AND {NotDeleted}",
+                companyId, campaign.Id, cancellationToken).ConfigureAwait(false);
+            if (!exists)
+            {
+                await using var insert = CreateCommand(connection, transaction, """
+                    INSERT INTO crm_campaigns (campaign_id, company_id, name, kind, start_date, end_date, budget, target_notes, status, created_by)
+                    VALUES (@id, @c, @name, @kind, @start, @end, @budget, @notes, @status, @user)
+                    """);
+                BindCampaign(insert, companyId, campaign, userId);
+                await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await using var update = CreateCommand(connection, transaction, $"""
+                    UPDATE crm_campaigns SET name = @name, kind = @kind, start_date = @start, end_date = @end,
+                        budget = @budget, target_notes = @notes, status = @status,
+                        updated_by = @user, updated_at = {NowExpr}
+                    WHERE company_id = @c AND campaign_id = @id AND {NotDeleted}
+                    """);
+                BindCampaign(update, companyId, campaign, userId);
+                await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    public Task SoftDeleteCampaignAsync(string companyId, Guid campaignId, string userId, CancellationToken cancellationToken = default)
+        => SoftDeleteAsync("crm_campaigns", "campaign_id", companyId, campaignId, userId, cancellationToken);
+
+    /// <summary>The outcome roll-up: per campaign, the linked lead and
+    /// opportunity counts (campaign_id links, migration 105) and the
+    /// expected amount of linked opportunities sitting in a Won stage.</summary>
+    public async Task<IReadOnlyList<CrmCampaignOutcome>> GetCampaignOutcomesAsync(string companyId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = CreateCommand(connection, null, $"""
+            SELECT c.campaign_id, c.name, c.kind, c.status, c.budget,
+                (SELECT COUNT(*) FROM crm_leads l
+                  WHERE l.company_id = c.company_id AND l.campaign_id = c.campaign_id AND {(IsPg ? "l.is_deleted = false" : "l.is_deleted = 0")}) AS lead_count,
+                (SELECT COUNT(*) FROM crm_opportunities o
+                  WHERE o.company_id = c.company_id AND o.campaign_id = c.campaign_id AND {(IsPg ? "o.is_deleted = false" : "o.is_deleted = 0")}) AS opp_count,
+                (SELECT COALESCE(SUM(o.expected_amount), 0) FROM crm_opportunities o
+                   INNER JOIN crm_stages s ON s.stage_id = o.stage_id AND s.company_id = o.company_id
+                     AND {(IsPg ? "s.is_deleted = false" : "s.is_deleted = 0")}
+                  WHERE o.company_id = c.company_id AND o.campaign_id = c.campaign_id
+                    AND {(IsPg ? "o.is_deleted = false" : "o.is_deleted = 0")} AND s.stage_type = 'Won') AS won_value
+            FROM crm_campaigns c
+            WHERE c.company_id = @c AND {NotDeleted}
+            ORDER BY c.name
+            """);
+        Add(command, "@c", companyId.Trim());
+        var result = new List<CrmCampaignOutcome>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            result.Add(new CrmCampaignOutcome(
+                ReadGuid(reader, 0),
+                ReadString(reader, 1) ?? string.Empty,
+                ReadString(reader, 2) ?? CrmCampaignKinds.Marketing,
+                ReadString(reader, 3) ?? CrmCampaignStatuses.Planned,
+                Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture),
+                Convert.ToInt32(reader.GetValue(5), CultureInfo.InvariantCulture),
+                Convert.ToInt32(reader.GetValue(6), CultureInfo.InvariantCulture),
+                Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture)));
+        }
+        return result;
+    }
+
+    private void BindCampaign(DbCommand command, string companyId, CrmCampaign campaign, string userId)
+    {
+        Add(command, "@id", FormatGuid(campaign.Id));
+        Add(command, "@c", companyId.Trim());
+        Add(command, "@name", campaign.Name.Trim());
+        Add(command, "@kind", campaign.Kind);
+        Add(command, "@start", (object?)NullIfBlank(campaign.StartDate) ?? DBNull.Value);
+        Add(command, "@end", (object?)NullIfBlank(campaign.EndDate) ?? DBNull.Value);
+        Add(command, "@budget", campaign.Budget);
+        Add(command, "@notes", (object?)NullIfBlank(campaign.TargetNotes) ?? DBNull.Value);
+        Add(command, "@status", campaign.Status);
+        Add(command, "@user", RequireUser(userId));
+    }
+
+    private static CrmCampaign ReadCampaign(DbDataReader reader) => new()
+    {
+        Id = ReadGuid(reader, 0),
+        Name = ReadString(reader, 1) ?? string.Empty,
+        Kind = ReadString(reader, 2) ?? CrmCampaignKinds.Marketing,
+        StartDate = ReadString(reader, 3),
+        EndDate = ReadString(reader, 4),
+        Budget = Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture),
+        TargetNotes = ReadString(reader, 6),
+        Status = ReadString(reader, 7) ?? CrmCampaignStatuses.Planned
+    };
+
+    // ------------------------------------------------------------------
     // Lookups
     // ------------------------------------------------------------------
     public async Task<IReadOnlyList<CrmPartyOption>> GetPartyOptionsAsync(string companyId, CancellationToken cancellationToken = default)
@@ -1282,10 +1415,10 @@ public sealed class CrmRepository : ICrmRepository
     {
         await using var insert = CreateCommand(connection, transaction, """
             INSERT INTO crm_opportunities (opp_id, company_id, title, party_id, lead_id, stage_id, probability,
-                expected_amount, currency_code, expected_close_date, opp_type, source, campaign,
+                expected_amount, currency_code, expected_close_date, opp_type, source, campaign, campaign_id,
                 assigned_rep_code, lost_reason_id, lost_notes, created_by)
             VALUES (@id, @c, @title, @party, @lead, @stage, @prob, @amount, @currency, @close, @type,
-                @source, @campaign, @rep, @reason, @lostNotes, @user)
+                @source, @campaign, @campaignId, @rep, @reason, @lostNotes, @user)
             """);
         Add(insert, "@id", FormatGuid(o.Id));
         Add(insert, "@c", companyId.Trim());
@@ -1300,6 +1433,7 @@ public sealed class CrmRepository : ICrmRepository
         Add(insert, "@type", (object?)NullIfBlank(o.OppType) ?? DBNull.Value);
         Add(insert, "@source", (object?)NullIfBlank(o.Source) ?? DBNull.Value);
         Add(insert, "@campaign", (object?)NullIfBlank(o.Campaign) ?? DBNull.Value);
+        Add(insert, "@campaignId", FormatGuidOrNull(o.CampaignId));
         Add(insert, "@rep", (object?)NullIfBlank(o.AssignedRepCode) ?? DBNull.Value);
         Add(insert, "@reason", FormatGuidOrNull(o.LostReasonId));
         Add(insert, "@lostNotes", (object?)NullIfBlank(o.LostNotes) ?? DBNull.Value);
@@ -1454,6 +1588,7 @@ public sealed class CrmRepository : ICrmRepository
         Add(command, "@type", (object?)NullIfBlank(o.OppType) ?? DBNull.Value);
         Add(command, "@source", (object?)NullIfBlank(o.Source) ?? DBNull.Value);
         Add(command, "@campaign", (object?)NullIfBlank(o.Campaign) ?? DBNull.Value);
+        Add(command, "@campaignId", FormatGuidOrNull(o.CampaignId));
         Add(command, "@rep", (object?)NullIfBlank(o.AssignedRepCode) ?? DBNull.Value);
         Add(command, "@user", userId.Trim());
         Add(command, "@c", companyId.Trim());
@@ -1676,6 +1811,7 @@ public sealed class CrmRepository : ICrmRepository
         Add(command, "@address", (object?)NullIfBlank(lead.Address) ?? DBNull.Value);
         Add(command, "@source", (object?)NullIfBlank(lead.Source) ?? DBNull.Value);
         Add(command, "@campaign", (object?)NullIfBlank(lead.Campaign) ?? DBNull.Value);
+        Add(command, "@campaignId", FormatGuidOrNull(lead.CampaignId));
         Add(command, "@status", lead.Status);
         Add(command, "@rep", (object?)NullIfBlank(lead.AssignedRepCode) ?? DBNull.Value);
         Add(command, "@notes", (object?)NullIfBlank(lead.Notes) ?? DBNull.Value);
@@ -1714,7 +1850,8 @@ public sealed class CrmRepository : ICrmRepository
         AssignedRepCode = ReadString(reader, 10),
         ConvertedPartyId = ReadGuidOrNull(reader, 11),
         ConvertedOpportunityId = ReadGuidOrNull(reader, 12),
-        Notes = ReadString(reader, 13)
+        Notes = ReadString(reader, 13),
+        CampaignId = ReadGuidOrNull(reader, 14)
     };
 
     private static CrmOpportunity ReadOpportunity(DbDataReader reader) => new()
@@ -1737,7 +1874,8 @@ public sealed class CrmRepository : ICrmRepository
         Campaign = ReadString(reader, 15),
         AssignedRepCode = ReadString(reader, 16),
         LostReasonId = ReadGuidOrNull(reader, 17),
-        LostNotes = ReadString(reader, 18)
+        LostNotes = ReadString(reader, 18),
+        CampaignId = ReadGuidOrNull(reader, 19)
     };
 
     private static CrmActivity ReadActivity(DbDataReader reader) => new()

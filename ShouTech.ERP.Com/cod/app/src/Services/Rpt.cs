@@ -2295,6 +2295,34 @@ public static class RptQuery
         return await QueryAsync(sql, ct, ("$company", Company));
     }
 
+    /// <summary>Pipeline forecast (W10, sales Level 3): OPEN
+    /// opportunities grouped by expected close month and owner rep,
+    /// weighted by the STAGE probability (crm_stages.probability,
+    /// migration 057 — the stage's own forecast weight, distinct from
+    /// the per-opportunity override the funnel's Pipeline section
+    /// uses). Opportunities without an expected close date cannot be
+    /// placed in a month and are excluded rather than guessed.</summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> CrmForecastByMonthAsync(
+        CancellationToken ct)
+    {
+        DocSchema.Ensure();
+        var sql = PgBoolFix("""
+            SELECT substr(o.expected_close_date, 1, 7) AS CloseMonth,
+                   COALESCE(NULLIF(o.assigned_rep_code, ''), '') AS Rep,
+                   COUNT(o.opp_id) AS OppCount,
+                   COALESCE(SUM(COALESCE(o.expected_amount, 0)), 0) AS RawTotal,
+                   COALESCE(SUM(COALESCE(o.expected_amount, 0) * COALESCE(s.probability, 0) / 100.0), 0) AS WeightedTotal
+            FROM crm_opportunities o
+            INNER JOIN crm_stages s
+              ON s.company_id = o.company_id AND s.stage_id = o.stage_id AND s.is_deleted = 0 AND s.stage_type = 'Open'
+            WHERE o.company_id = $company AND o.is_deleted = 0
+              AND COALESCE(o.expected_close_date, '') <> ''
+            GROUP BY substr(o.expected_close_date, 1, 7), o.assigned_rep_code
+            ORDER BY CloseMonth, Rep;
+            """);
+        return await QueryAsync(sql, ct, ("$company", Company));
+    }
+
     /// <summary>Closed outcomes per sales rep over [from, to]: opportunities
     /// whose CURRENT stage is Won/Lost and whose last update (stage moves
     /// stamp updated_at in CrmRepository.MoveStageAsync) falls in the

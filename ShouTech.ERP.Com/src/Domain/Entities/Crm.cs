@@ -134,6 +134,10 @@ public sealed class CrmLead
     public string? Address { get; set; }
     public string? Source { get; set; }
     public string? Campaign { get; set; }
+    /// <summary>Structured campaign link (migration 105, crm_campaigns).
+    /// The free-text Campaign above stays the display snapshot; this id
+    /// is what the campaign outcome roll-up aggregates on.</summary>
+    public Guid? CampaignId { get; set; }
     public string Status { get; set; } = CrmLeadStatuses.New;
     /// <summary>CORE sales rep code (sales_reps, migration 031) — reps
     /// stay core; CRM only references them.</summary>
@@ -171,6 +175,9 @@ public sealed class CrmOpportunity
     public string? OppType { get; set; }
     public string? Source { get; set; }
     public string? Campaign { get; set; }
+    /// <summary>Structured campaign link (migration 105, crm_campaigns);
+    /// see CrmLead.CampaignId.</summary>
+    public Guid? CampaignId { get; set; }
     public string? AssignedRepCode { get; set; }
     public Guid? LostReasonId { get; set; }
     public string? LostNotes { get; set; }
@@ -312,6 +319,56 @@ public sealed record CrmPipelineColumn(
     public decimal TotalAmount => Opportunities.Sum(o => o.ExpectedAmount);
     public decimal WeightedAmount => Opportunities.Sum(o => o.WeightedValue);
 }
+
+/// <summary>Campaign kinds (migration 105). Stored as text so the
+/// vocabulary matches the CHECK list in crm_campaigns.</summary>
+public static class CrmCampaignKinds
+{
+    public const string Marketing = "Marketing";
+    public const string Exhibition = "Exhibition";
+    public const string Web = "Web";
+    public const string Seasonal = "Seasonal";
+    public const string Referral = "Referral";
+    public const string Other = "Other";
+
+    public static readonly IReadOnlyList<string> All =
+        new[] { Marketing, Exhibition, Web, Seasonal, Referral, Other };
+}
+
+/// <summary>Campaign lifecycle (migration 105).</summary>
+public static class CrmCampaignStatuses
+{
+    public const string Planned = "Planned";
+    public const string Active = "Active";
+    public const string Completed = "Completed";
+    public const string Cancelled = "Cancelled";
+
+    public static readonly IReadOnlyList<string> All = new[] { Planned, Active, Completed, Cancelled };
+}
+
+/// <summary>One marketing campaign (migration 105, crm_campaigns).
+/// Leads and opportunities link to it through their campaign_id; the
+/// outcome roll-up counts those links and sums the value of the
+/// opportunities that reached a Won stage.</summary>
+public sealed class CrmCampaign
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = string.Empty;
+    public string Kind { get; set; } = CrmCampaignKinds.Marketing;
+    /// <summary>Window start, 'yyyy-MM-dd' text (CRM date convention).</summary>
+    public string? StartDate { get; set; }
+    public string? EndDate { get; set; }
+    public decimal Budget { get; set; }
+    public string? TargetNotes { get; set; }
+    public string Status { get; set; } = CrmCampaignStatuses.Planned;
+}
+
+/// <summary>The outcome roll-up for one campaign (migration 105):
+/// linked lead count, linked opportunity count, and the expected
+/// amount of the linked opportunities whose stage is Won.</summary>
+public sealed record CrmCampaignOutcome(
+    Guid CampaignId, string Name, string Kind, string Status, decimal Budget,
+    int LeadCount, int OpportunityCount, decimal WonValue);
 
 /// <summary>A party as the CRM pickers offer it (unified master row).</summary>
 public sealed record CrmPartyOption(Guid Id, string Code, string Name, long LedgerId);

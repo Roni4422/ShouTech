@@ -343,6 +343,9 @@ namespace ShouTech.App.Services
             public const string ActivityView = "CRM.ACTIVITY.VIEW";
             public const string ActivityEdit = "CRM.ACTIVITY.EDIT";
             public const string StageEdit = "CRM.STAGE.EDIT";
+            // W10 (migration 105): campaigns master + outcome roll-up.
+            public const string CampaignView = "CRM.CAMPAIGN.VIEW";
+            public const string CampaignEdit = "CRM.CAMPAIGN.EDIT";
         }
 
         // =====================================================================
@@ -453,6 +456,12 @@ namespace ShouTech.App.Services
             public const string AttachView = "SALES.ATTACH.VIEW";
             public const string AttachUpload = "SALES.ATTACH.UPLOAD";
             public const string AttachDelete = "SALES.ATTACH.DELETE";
+
+            // W10 (migration 105): warranty registration + claims.
+            // RMA deliberately has NO new key: its decisions reuse
+            // ReturnApprove above, creation ReturnCreate.
+            public const string WarrantyView = "SALES.WARRANTY.VIEW";
+            public const string WarrantyManage = "SALES.WARRANTY.MANAGE";
 
             // Phase 09 commissions (migration 097 seeds).
             public const string CommissionView = "SALES.COMMISSION.VIEW";

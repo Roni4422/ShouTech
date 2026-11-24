@@ -59,7 +59,8 @@ public sealed class CrmOppWin : BaseWin, IWindowMode
     private readonly DatePicker _closeDate = new();
     private readonly ComboBox _oppType = new();
     private readonly ComboBox _source = new();
-    private readonly TextBox _campaign = new();
+    private readonly ComboBox _campaign = new();
+    private IReadOnlyList<CrmCampaign> _campaignOptions = Array.Empty<CrmCampaign>();
     private readonly ComboBox _rep = new();
     private readonly ComboBox _stage = new();
     private readonly TextBox _probability = new();
@@ -202,6 +203,7 @@ public sealed class CrmOppWin : BaseWin, IWindowMode
         _source.ItemsSource = CrmSources.All;
         _source.IsEditable = true;
         _rep.IsEditable = true;
+        _campaign.IsEditable = true;
         _stage.DisplayMemberPath = nameof(CrmStage.NameEn);
         _lostReason.DisplayMemberPath = nameof(CrmLostReason.NameEn);
         _currency.Text = UsrPref.Load().CurrencyCode;
@@ -339,6 +341,8 @@ public sealed class CrmOppWin : BaseWin, IWindowMode
             _party.ItemsSource = null;
             _party.ItemsSource = _parties;
             var reps = await _service.GetRepOptionsAsync(CurrentCompanyCode);
+            _campaignOptions = await _service.GetCampaignsAsync(CurrentCompanyCode);
+            _campaign.ItemsSource = _campaignOptions.Select(c => c.Name).ToList();
             _rep.ItemsSource = reps.Select(r => r.Code).ToList();
 
             var rows = await _service.GetOpportunitiesAsync(CurrentCompanyCode);
@@ -369,7 +373,7 @@ public sealed class CrmOppWin : BaseWin, IWindowMode
         _closeDate.SelectedDate = DateTime.TryParse(opp.ExpectedCloseDate, CultureInfo.InvariantCulture, DateTimeStyles.None, out var close) ? close : null;
         _oppType.SelectedItem = opp.OppType;
         _source.Text = opp.Source ?? string.Empty;
-        _campaign.Text = opp.Campaign ?? string.Empty;
+        _campaign.Text = CampaignDisplay(opp.CampaignId, opp.Campaign);
         _rep.Text = opp.AssignedRepCode ?? string.Empty;
         _stage.SelectedItem = _stages.FirstOrDefault(s => s.Id == opp.StageId);
         _probability.Text = opp.Probability.ToString("0.##", CultureInfo.InvariantCulture);
@@ -470,6 +474,7 @@ public sealed class CrmOppWin : BaseWin, IWindowMode
             opp.OppType = _oppType.SelectedItem as string;
             opp.Source = NullIfBlank(_source.Text);
             opp.Campaign = NullIfBlank(_campaign.Text);
+            opp.CampaignId = ResolveCampaignId(opp.Campaign);
             opp.AssignedRepCode = NullIfBlank(_rep.Text);
             opp.Items = CollectItems();
             if (opp.Items.Count > 0)
@@ -659,6 +664,19 @@ public sealed class CrmOppWin : BaseWin, IWindowMode
             || decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out value)
             ? value
             : 0m;
+
+    // Campaign picker (migration 105): see CrmLeadWin — the combo
+    // offers the campaign master names, stays editable for legacy
+    // free text, and choosing a master name stamps campaign_id.
+    private string CampaignDisplay(Guid? campaignId, string? campaignText)
+        => campaignId is Guid id
+            ? _campaignOptions.FirstOrDefault(c => c.Id == id)?.Name ?? campaignText ?? string.Empty
+            : campaignText ?? string.Empty;
+
+    private Guid? ResolveCampaignId(string? campaignText)
+        => string.IsNullOrWhiteSpace(campaignText)
+            ? null
+            : _campaignOptions.FirstOrDefault(c => string.Equals(c.Name, campaignText.Trim(), StringComparison.OrdinalIgnoreCase))?.Id;
 
     private static string? NullIfBlank(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

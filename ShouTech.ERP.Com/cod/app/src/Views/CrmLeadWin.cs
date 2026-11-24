@@ -42,7 +42,8 @@ public sealed class CrmLeadWin : BaseWin
     private readonly TextBox _mobile = new();
     private readonly TextBox _address = new();
     private readonly ComboBox _source = new();
-    private readonly TextBox _campaign = new();
+    private readonly ComboBox _campaign = new();
+    private IReadOnlyList<CrmCampaign> _campaignOptions = Array.Empty<CrmCampaign>();
     private readonly ComboBox _status = new();
     private readonly ComboBox _rep = new();
     private readonly TextBox _notes = new();
@@ -156,6 +157,7 @@ public sealed class CrmLeadWin : BaseWin
         _status.ItemsSource = CrmLeadStatuses.All;
         _status.SelectedItem = CrmLeadStatuses.New;
         _rep.IsEditable = true;
+        _campaign.IsEditable = true;
         _notes.TextWrapping = TextWrapping.Wrap;
         _notes.MinHeight = 44;
         _convertedParty.IsReadOnly = true;
@@ -197,6 +199,8 @@ public sealed class CrmLeadWin : BaseWin
             _grid.ItemsSource = _leads;
             var reps = await _service.GetRepOptionsAsync(CurrentCompanyCode);
             _rep.ItemsSource = reps.Select(r => r.Code).ToList();
+            _campaignOptions = await _service.GetCampaignsAsync(CurrentCompanyCode);
+            _campaign.ItemsSource = _campaignOptions.Select(c => c.Name).ToList();
             _statusBar.Text = Tf("Crm.LeadsStatus", _leads.Count,
                 _leads.Count(l => l.Status == CrmLeadStatuses.Converted));
         }
@@ -219,7 +223,7 @@ public sealed class CrmLeadWin : BaseWin
         _mobile.Text = lead.Mobile ?? string.Empty;
         _address.Text = lead.Address ?? string.Empty;
         _source.Text = lead.Source ?? string.Empty;
-        _campaign.Text = lead.Campaign ?? string.Empty;
+        _campaign.Text = CampaignDisplay(lead.CampaignId, lead.Campaign);
         _status.SelectedItem = lead.Status;
         _rep.Text = lead.AssignedRepCode ?? string.Empty;
         _notes.Text = lead.Notes ?? string.Empty;
@@ -264,6 +268,7 @@ public sealed class CrmLeadWin : BaseWin
             lead.Address = NullIfBlank(_address.Text);
             lead.Source = NullIfBlank(_source.Text);
             lead.Campaign = NullIfBlank(_campaign.Text);
+            lead.CampaignId = ResolveCampaignId(lead.Campaign);
             lead.Status = _status.SelectedItem as string ?? CrmLeadStatuses.New;
             lead.AssignedRepCode = NullIfBlank(_rep.Text);
             lead.Notes = NullIfBlank(_notes.Text);
@@ -386,4 +391,17 @@ public sealed class CrmLeadWin : BaseWin
 
     private static string? NullIfBlank(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    // Campaign picker (migration 105): the combo offers the campaign
+    // master names and stays editable, so legacy free text keeps
+    // working; choosing a master name also stamps the campaign_id link.
+    private string CampaignDisplay(Guid? campaignId, string? campaignText)
+        => campaignId is Guid id
+            ? _campaignOptions.FirstOrDefault(c => c.Id == id)?.Name ?? campaignText ?? string.Empty
+            : campaignText ?? string.Empty;
+
+    private Guid? ResolveCampaignId(string? campaignText)
+        => string.IsNullOrWhiteSpace(campaignText)
+            ? null
+            : _campaignOptions.FirstOrDefault(c => string.Equals(c.Name, campaignText.Trim(), StringComparison.OrdinalIgnoreCase))?.Id;
 }
