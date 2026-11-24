@@ -107,11 +107,15 @@ Build workstreams (parallel sub-branches, merged back into this branch):
   SalesReturnWin (view/create/post); InvoiceWin exposes **Valid Till** for
   quotations (InvDoc + InvRepo round-trip); voucher party link written inside
   the journal draft transaction.
-- **B4 — Delivery GL & chain reversal** (G12, G13, G14): new account **1204
+- **B4 — Delivery GL & chain reversal** (G12, G13, G14): new account **1215
   Stock Delivered But Not Billed** (COA templates + migration for existing
   companies, both DBs; GlPosting constant with the manufacturing-style fallback
-  to 1203 when a chart lacks it); DLV posting adds Dr 1204 / Cr 1203 at
-  movement cost; DLV-linked invoice COGS becomes Dr 401 / Cr 1204 with
+  to 1203 when a chart lacks it). _Account-code correction at build time: the
+  brief said 1204, but 1204 is already "Prepaid Expenses" in every COA
+  template — 1215 is the first free code in the inventory family (1210 raw,
+  1211 WIP, 1212 FG, 1213 spare parts) and is what was built._ DLV posting
+  adds Dr 1215 / Cr 1203 at movement cost; DLV-linked invoice COGS becomes
+  Dr 401 / Cr 1215 with
   **line-level pro-rata delivery-cost allocation**, enabling partial and
   multiple invoicing of one delivery (final invoice takes the rounding
   remainder); chain document reversal for posted DLV and chain SAL
@@ -163,15 +167,50 @@ CRM-9007, CRM-9008 (ErrorCodes.cs + En/Ar/Fr/Tr catalogs).
 7. **Shipment/carrier/tracking** data on deliveries (DeliveryDeskWin is a
    separate logistics surface; integration is a product decision).
 
-## 6. Completion record
+## 6. Completion record — Part I workstreams (B1–B5, merged)
 
-_To be filled at fan-in: per-workstream results, gate results (build 0/0,
-migrator idempotency, audits), and the headless harness evidence for the full
-chain: lead → opportunity → quotation → order → partial delivery (stock + COGS,
-per_delivered) → partial invoice (AR + revenue + tax, per_billed) → partial
-payment → remaining delivery + invoice → return against the original invoice at
-original cost → all ledgers reconcile. Kern.Tests execution on Windows remains
-owed._
+All five sub-branches merged into `feat/sales-cycle-erpnext` (B1 `da3baef`,
+B2 `073229a`, B4 `c8ef932`, B3 `2774625`, B5 `0908a15` + Lang deep-union fix
+`beac68e`, test API conversion `628db44`, stored-progress posting hook
+`9f7e241`).
+
+**Gates on the merged tree**
+- Full solution build `--no-incremental`: **0 errors, 4 warnings** — the 4 are
+  the base branch's pre-existing CA1859 pair in `PurchaseReceiptReturnWin.cs`
+  (untouched); no new warnings.
+- SqlMigrator on fresh SQLite: applies through **094**; second run applies 0
+  (idempotent). Migrations added: 092 (CRM opportunity items), 093 (stored
+  progress + cancellation audit), 094 (account 1215) — each in both dialects.
+- `tools/audit_window_context.py`: exit 0.
+- `tools/verify_screenfit.py` and `tools/verify_english_source.py`: exit 1 —
+  **identical failures on the base branch** (`52a762a`: TaxReportWin/TaxSetupWin/
+  SupplierQuotationEntryWin minimums; Fr/Tr catalog asymmetries from the
+  stabilization branch). No new failures; Lang catalogs grew by exactly the 69
+  keys this work added, in all four languages, with zero keys lost.
+- Errors catalogs: 119 entries × 4 languages (12 codes added at `ad26b4a`).
+
+**Headless harness (real src-level services, migrated SQLite): 35/35 PASS**
+- CRM: lead saved → duplicate rejected with CRM-9007 → conversion creates
+  party + opportunity → items persist, expected amount = items total 264.50 →
+  quotation from items with header 230 / 34.5 / 264.5, valid_till set, lines
+  carrying discount + tax, opportunity link recorded.
+- Chain: QUO → SO → DLV 4/10 (stock 1000→996, Dr 1215 = 160, stored
+  per_delivered = 40) → SAL 4 (AR Dr 100, revenue Cr 100, COGS Dr 160 /
+  Cr 1215 → 1215 back to 0, per_billed = 40, party ledger Dr 100) → DLV 6 +
+  SAL 6 → progress 100/100 stored and computed, stock 990.
+- Payment: receipt voucher's party link written inside the draft transaction;
+  receipt listed unallocated; allocation settles SAL1 (open 250→150 total);
+  party balance 150 = SAL2 open amount.
+- Reversal: second order's DLV (2 units) posted then reversed with a reason —
+  document Cancelled, stock restored 988→990, stored per_delivered back to 0,
+  `document_reversals` row present.
+- Global: journal Dr = Cr; 1215 nets to 0; inventory GL net Cr 400 = stock
+  value drop (10 × 40); COGS Dr 400; AR GL Dr 150 = party ledger = open
+  invoices.
+- The native `InvRepo` path (B3: return settlement, allocatable credit notes,
+  refunds, RBAC, Valid Till) lives in the WPF assembly and is covered by
+  Kern.Tests facts that compile here; **execution on Windows remains owed**,
+  as do live PostgreSQL verification and WPF click-through.
 
 ---
 
