@@ -703,6 +703,13 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             Add(update, "@draft", CommercialDocumentStatus.Draft);
             if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
                 throw new InvalidOperationException("Sales document was not found or is not in draft status.");
+
+            // Keep the source order's stored per_delivered / per_billed in
+            // step with this posting inside the same transaction, so direct
+            // repository posters (not only OrderService callers) refresh it.
+            await RefreshSourceOrderProgressAsync(
+                connection, transaction, companyId, docKind, docId, cancellationToken).ConfigureAwait(false);
+
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch
