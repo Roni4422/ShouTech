@@ -550,6 +550,93 @@ namespace Kern.Tests
 
         private static string LastConnectionString = string.Empty;
 
+        // ------------------------------------------------------------ W1 (mig 095)
+
+        [Fact]
+        public async Task SalesOrderPost_CreditLimitBlocksAtOrderStage_AndOverrideAudits()
+        {
+            var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var master = new MasterCardRepository("SQLite", connectionString);
+                var party = new Party
+                {
+                    Kind = PartyKinds.Customer, Code = "CUST-CR", NameEn = "Credit Customer",
+                    CreditLimit = 100m, CreditDays = 10
+                };
+                await master.SavePartyAsync("ORDER-GL", party, "order-test");
+                Assert.True(party.LedgerId > 0);
+
+                var docId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.SalesOrder, "SO-CR1", 10m, 25m,
+                        partyId: party.LedgerId, partyCode: "CUST-CR"), "order-test");
+
+                // Order total 250 against a 100 limit: blocked at ORDER
+                // stage with ACC-5006 (previously only invoices checked).
+                var error = await Assert.ThrowsAsync<ShouTech.Domain.AppError>(() =>
+                    service.PostOrderAsync(CommercialDocSide.Sales, docId, "order-test"));
+                Assert.Equal(ShouTech.Domain.ErrorCodes.CreditLimitExceeded, error.Code);
+                var still = await orders.FindByIdAsync(CommercialDocSide.Sales, docId);
+                Assert.Equal(CommercialDocumentStatus.Draft, still!.Status);
+
+                // With an authorized override context the post succeeds
+                // and the breach is audited in credit_overrides.
+                await service.PostOrderAsync(CommercialDocSide.Sales, docId, "boss-user",
+                    new CreditOverrideContext("boss-user", null, null));
+                var posted = await orders.FindByIdAsync(CommercialDocSide.Sales, docId);
+                Assert.Equal(CommercialDocumentStatus.Posted, posted!.Status);
+
+                using var connection = new SqliteConnection(connectionString);
+                connection.Open();
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = "SELECT actor, document_amount, credit_limit FROM credit_overrides WHERE party_id = $p;";
+                cmd.Parameters.AddWithValue("$p", party.LedgerId);
+                using var reader = cmd.ExecuteReader();
+                Assert.True(reader.Read());
+                Assert.Equal("boss-user", reader.GetString(0));
+                Assert.Equal(250m, reader.GetDecimal(1));
+                Assert.Equal(100m, reader.GetDecimal(2));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task ConvertedInvoice_DueDate_FromPartyCreditDays()
+        {
+            var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var master = new MasterCardRepository("SQLite", connectionString);
+                var party = new Party
+                {
+                    Kind = PartyKinds.Customer, Code = "CUST-DD", NameEn = "Due Date Customer",
+                    CreditLimit = 100000m, CreditDays = 10
+                };
+                await master.SavePartyAsync("ORDER-GL", party, "order-test");
+
+                var docId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.SalesOrder, "SO-DD1", 10m, 25m,
+                        partyId: party.LedgerId, partyCode: "CUST-DD"), "order-test");
+                await service.PostOrderAsync(CommercialDocSide.Sales, docId, "order-test");
+                var (invoiceId, _) = await service.ConvertToInvoiceAsync(
+                    CommercialDocSide.Sales, docId, new DateOnly(2026, 11, 2), "order-test");
+
+                using var connection = new SqliteConnection(connectionString);
+                connection.Open();
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = "SELECT due_date FROM sales_documents WHERE doc_id = $id;";
+                cmd.Parameters.AddWithValue("$id", invoiceId);
+                Assert.Equal("2026-11-12", Convert.ToString(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
         private static CommercialDocumentDraft Order(
             Guid companyId, string kind, string docNo, decimal qty, decimal price,
             long partyId = 7, string partyCode = "CUST-1", DateOnly? delivery = null, DateOnly? validTill = null)

@@ -376,7 +376,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         }
     }
 
-    public async Task PostOrderAsync(CommercialDocSide side, long docId, string userId, CancellationToken cancellationToken = default)
+    public async Task PostOrderAsync(CommercialDocSide side, long docId, string userId, CancellationToken cancellationToken = default, CreditOverrideContext? creditOverride = null)
     {
         if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
         var (docs, _) = Tables(side);
@@ -403,6 +403,50 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 throw new InvalidOperationException($"Document kind '{kind}' is not an order kind; use the invoice posting path.");
             if (status != CommercialDocumentStatus.Draft)
                 throw new InvalidOperationException($"Only draft orders can be posted; this document is '{status}'.");
+
+            if (side == CommercialDocSide.Sales && kind == CommercialDocKinds.SalesOrder)
+            {
+                // W1 credit control at ORDER stage (spec §1/§3): a posted
+                // sales order reserves credit, so the guard runs HERE —
+                // against (current party balance + order base total) —
+                // not only later at invoice posting. The override context
+                // is non-null only when the posting user holds
+                // SALES.CREDIT.OVERRIDE (resolved by the caller, where
+                // permissions are visible); otherwise ACC-5006 hard-blocks.
+                long? partyId = null;
+                string? partyCode = null, docNo = null, companyId = null, currencyCode = null;
+                decimal grandTotal = 0m, exchangeRate = 0m;
+                DateOnly docDate = DateOnly.FromDateTime(DateTime.Today);
+                await using (var read = CreateCommand(connection, transaction,
+                    $"SELECT party_id, party_code, doc_no, company_id, grand_total, exchange_rate, currency_code, doc_date FROM {docs} WHERE doc_id = @doc AND is_deleted = 0"))
+                {
+                    Add(read, "@doc", docId);
+                    await using var reader = await read.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                    if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    {
+                        partyId = reader.IsDBNull(0) ? null : reader.GetInt64(0);
+                        partyCode = reader.IsDBNull(1) ? null : reader.GetString(1);
+                        docNo = reader.IsDBNull(2) ? null : reader.GetString(2);
+                        companyId = reader.IsDBNull(3) ? null : reader.GetString(3);
+                        grandTotal = reader.IsDBNull(4) ? 0m : Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture);
+                        exchangeRate = reader.IsDBNull(5) ? 0m : Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture);
+                        currencyCode = reader.IsDBNull(6) ? null : reader.GetString(6);
+                        if (!reader.IsDBNull(7))
+                            docDate = DateOnly.Parse(Convert.ToString(reader.GetValue(7), CultureInfo.InvariantCulture)!, CultureInfo.InvariantCulture);
+                    }
+                }
+                if (partyId is not null && companyId is not null && grandTotal > 0m)
+                {
+                    var fx = FxRates.Resolve(connection, transaction, _provider,
+                        Guid.Parse(companyId), string.IsNullOrWhiteSpace(currencyCode) ? "SAR" : currencyCode, docDate, exchangeRate);
+                    var effectiveOverride = creditOverride is null
+                        ? null
+                        : creditOverride with { DocKind = kind, DocNo = docNo };
+                    await PartyCreditGuard.EnsureWithinLimitAsync(
+                        connection, transaction, _provider, companyId, "C", partyId.Value, partyCode,
+                        FxRates.ToBase(grandTotal, fx.Rate), "@", effectiveOverride, cancellationToken).ConfigureAwait(false);
+                }
+            }
 
             await using var update = CreateCommand(connection, transaction,
                 $"UPDATE {docs} SET status = @posted, posted_by = @actor, posted_at = CURRENT_TIMESTAMP WHERE doc_id = @doc AND status = @draft AND is_deleted = 0");
@@ -2506,6 +2550,23 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             Add(insertHeader, "@postedBy", posted ? userId.Trim() : DBNull.Value);
             Add(insertHeader, "@postedAt", posted ? DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) : DBNull.Value);
             docId = Convert.ToInt64(await insertHeader.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+        }
+        // W1 (migration 095): a SAL invoice's due date is doc_date + the
+        // party's credit_days (covers ConvertToInvoice, which is born
+        // posted through this insert).
+        if (side == CommercialDocSide.Sales && draft.DocKind == CommercialDocKinds.SalesInvoice && draft.PartyId is not null
+            && PartyLedger.ColumnExists(connection, transaction, _provider, docs, "due_date"))
+        {
+            var due = await PartyLedger.ComputeDueDateAsync(connection, transaction, _provider,
+                draft.CompanyId.ToString("D"), draft.PartyId.Value, draft.DocDate, cancellationToken).ConfigureAwait(false);
+            if (due is not null)
+            {
+                await using var dueCmd = CreateCommand(connection, transaction,
+                    $"UPDATE {docs} SET due_date = @due WHERE doc_id = @doc AND due_date IS NULL");
+                Add(dueCmd, "@due", due.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                Add(dueCmd, "@doc", docId);
+                await dueCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
         }
         await InsertLinesAsync(connection, transaction, side, docId, draft.Lines, computed, cancellationToken).ConfigureAwait(false);
         return docId;

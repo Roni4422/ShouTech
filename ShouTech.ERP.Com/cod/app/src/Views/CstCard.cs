@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -46,6 +48,29 @@ public sealed class CstCard : BaseWin
     private readonly TextBox _txtAddress = new();
     private readonly TextBox _txtNotes = new();
     private readonly CheckBox _chkActive = new() { VerticalAlignment = VerticalAlignment.Center, IsChecked = true };
+
+    // W1 (migration 095): header additions + party structure tabs.
+    private readonly TextBox _txtCurrency = new();
+    private readonly ComboBox _cbRisk = new();
+    private readonly CheckBox _chkBlacklisted = new() { VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBox _txtBlacklistReason = new();
+    private readonly TextBlock _lblOpening = new();
+    private string? _loadedBlacklistedAt;
+    private string? _loadedBlacklistedBy;
+
+    private readonly ObservableCollection<PartyContact> _contacts = new();
+    private readonly ObservableCollection<PartyAddress> _addresses = new();
+    private readonly ObservableCollection<PartyBranch> _branches = new();
+    private readonly DataGrid _gridContacts = new();
+    private readonly DataGrid _gridAddresses = new();
+    private readonly DataGrid _gridBranches = new();
+    private readonly Button _btnAddContact = new();
+    private readonly Button _btnDelContact = new();
+    private readonly Button _btnAddAddress = new();
+    private readonly Button _btnDelAddress = new();
+    private readonly Button _btnAddBranch = new();
+    private readonly Button _btnDelBranch = new();
+    private readonly Button _btnOpening = new();
 
     private readonly TextBlock _lblCurBal = new();
     private readonly TextBlock _lblTotDr = new();
@@ -141,14 +166,16 @@ public sealed class CstCard : BaseWin
         StyleButton(_btnSave, "Common.Save");
         StyleButton(_btnDelete, "Common.Delete");
         StyleButton(_btnStmt, "CustCard.Statement");
+        StyleButton(_btnOpening, "CustCard.OpeningBalance");
 
         _btnLoad.Click += async (_, _) => await LoadParty(PartyKind, _txtCode.Text.Trim());
         _btnNew.Click += (_, _) => ResetCard();
         _btnSave.Click += async (_, _) => await SaveAsync();
         _btnDelete.Click += async (_, _) => await DeleteAsync();
         _btnStmt.Click += (_, _) => OpenStatement();
+        _btnOpening.Click += async (_, _) => await PostOpeningBalanceAsync();
 
-        foreach (var b in new[] { _btnLoad, _btnNew, _btnSave, _btnDelete, _btnStmt })
+        foreach (var b in new[] { _btnLoad, _btnNew, _btnSave, _btnDelete, _btnStmt, _btnOpening })
             toolbar.Children.Add(b);
 
         var actionBar = new Border
@@ -211,6 +238,13 @@ public sealed class CstCard : BaseWin
         AddFormField(formFin, 0, 1, "CustCard.CreditDays", _txtCreditDays);
         AddFormField(formFin, 0, 2, "CustCard.PriceTier", _cbPriceTier);
         AddFormField(formFin, 1, 0, "CustCard.AccountLink", _txtGlAcc);
+        AddFormField(formFin, 1, 1, "CustCard.DefaultCurrency", _txtCurrency);
+        AddFormField(formFin, 1, 2, "CustCard.RiskClass", _cbRisk);
+        _chkBlacklisted.Content = T("CustCard.Blacklisted");
+        _chkBlacklisted.Tag = "CustCard.Blacklisted";
+        AddFormElement(formFin, 2, 0, _chkBlacklisted);
+        AddFormField(formFin, 2, 1, "CustCard.BlacklistReason", _txtBlacklistReason, spanPairs: 2);
+        AddFormElement(formFin, 3, 0, _lblOpening);
         tabFin.Content = formFin;
         tabs.Items.Add(tabFin);
 
@@ -225,6 +259,45 @@ public sealed class CstCard : BaseWin
         tabCont.Content = formCont;
         tabs.Items.Add(tabCont);
 
+        // W1: party structure tabs (migration 095). Rows edit in the
+        // grid and persist with the card's Save (bottom action bar);
+        // each tab carries its own Add/Delete buttons at its bottom.
+        tabs.Items.Add(BuildStructureTab("CustCard.TabContacts", _gridContacts, _contacts, _btnAddContact, _btnDelContact, grid =>
+        {
+            grid.Columns.Add(new DataGridTextColumn { Header = T("CustCard.ContactName"), Binding = new System.Windows.Data.Binding(nameof(PartyContact.Name)) { Mode = System.Windows.Data.BindingMode.TwoWay }, Width = 150 });
+            grid.Columns.Add(new DataGridTextColumn { Header = T("CustCard.ContactRole"), Binding = new System.Windows.Data.Binding(nameof(PartyContact.Role)) { Mode = System.Windows.Data.BindingMode.TwoWay }, Width = 110 });
+            grid.Columns.Add(new DataGridTextColumn { Header = T("CustCard.Phone"), Binding = new System.Windows.Data.Binding(nameof(PartyContact.Phone)) { Mode = System.Windows.Data.BindingMode.TwoWay }, Width = 110 });
+            grid.Columns.Add(new DataGridTextColumn { Header = T("CustCard.Mobile"), Binding = new System.Windows.Data.Binding(nameof(PartyContact.Mobile)) { Mode = System.Windows.Data.BindingMode.TwoWay }, Width = 110 });
+            grid.Columns.Add(new DataGridTextColumn { Header = T("CustCard.Email"), Binding = new System.Windows.Data.Binding(nameof(PartyContact.Email)) { Mode = System.Windows.Data.BindingMode.TwoWay }, Width = 170 });
+            grid.Columns.Add(new DataGridCheckBoxColumn { Header = T("CustCard.Primary"), Binding = new System.Windows.Data.Binding(nameof(PartyContact.IsPrimary)) { Mode = System.Windows.Data.BindingMode.TwoWay }, Width = 70 });
+            grid.Columns.Add(new DataGridCheckBoxColumn { Header = T("MasterCards.Active"), Binding = new System.Windows.Data.Binding(nameof(PartyContact.IsActive)) { Mode = System.Windows.Data.BindingMode.TwoWay }, Width = 70 });
+        }));
+        _btnAddContact.Click += (_, _) => _contacts.Add(new PartyContact { PartyId = _loadedId ?? Guid.Empty, IsPrimary = _contacts.Count == 0 });
+        _btnDelContact.Click += (_, _) => { if (_gridContacts.SelectedItem is PartyContact c) _contacts.Remove(c); };
+
+        tabs.Items.Add(BuildStructureTab("CustCard.TabAddresses", _gridAddresses, _addresses, _btnAddAddress, _btnDelAddress, grid =>
+        {
+            grid.Columns.Add(new DataGridTextColumn { Header = T("CustCard.AddressKind"), Binding = new System.Windows.Data.Binding(nameof(PartyAddress.Kind)) { Mode = System.Windows.Data.BindingMode.TwoWay }, Width = 90 });
+            grid.Columns.Add(new DataGridTextColumn { Header = T("CustCard.City"), Binding = new System.Windows.Data.Binding(nameof(PartyAddress.City)) { Mode = System.Windows.Data.BindingMode.TwoWay }, Width = 110 });
+            grid.Columns.Add(new DataGridTextColumn { Header = T("CustCard.Country"), Binding = new System.Windows.Data.Binding(nameof(PartyAddress.Country)) { Mode = System.Windows.Data.BindingMode.TwoWay }, Width = 110 });
+            grid.Columns.Add(new DataGridTextColumn { Header = T("CustCard.PostalCode"), Binding = new System.Windows.Data.Binding(nameof(PartyAddress.PostalCode)) { Mode = System.Windows.Data.BindingMode.TwoWay }, Width = 90 });
+            grid.Columns.Add(new DataGridTextColumn { Header = T("CustCard.Address"), Binding = new System.Windows.Data.Binding(nameof(PartyAddress.Address)) { Mode = System.Windows.Data.BindingMode.TwoWay }, Width = 240 });
+            grid.Columns.Add(new DataGridCheckBoxColumn { Header = T("CustCard.Default"), Binding = new System.Windows.Data.Binding(nameof(PartyAddress.IsDefault)) { Mode = System.Windows.Data.BindingMode.TwoWay }, Width = 70 });
+            grid.Columns.Add(new DataGridCheckBoxColumn { Header = T("MasterCards.Active"), Binding = new System.Windows.Data.Binding(nameof(PartyAddress.IsActive)) { Mode = System.Windows.Data.BindingMode.TwoWay }, Width = 70 });
+        }));
+        _btnAddAddress.Click += (_, _) => _addresses.Add(new PartyAddress { PartyId = _loadedId ?? Guid.Empty, IsDefault = _addresses.Count == 0 });
+        _btnDelAddress.Click += (_, _) => { if (_gridAddresses.SelectedItem is PartyAddress a) _addresses.Remove(a); };
+
+        tabs.Items.Add(BuildStructureTab("CustCard.TabBranches", _gridBranches, _branches, _btnAddBranch, _btnDelBranch, grid =>
+        {
+            grid.Columns.Add(new DataGridTextColumn { Header = T("CustCard.BranchName"), Binding = new System.Windows.Data.Binding(nameof(PartyBranch.Name)) { Mode = System.Windows.Data.BindingMode.TwoWay }, Width = 170 });
+            grid.Columns.Add(new DataGridTextColumn { Header = T("CustCard.Address"), Binding = new System.Windows.Data.Binding(nameof(PartyBranch.Address)) { Mode = System.Windows.Data.BindingMode.TwoWay }, Width = 260 });
+            grid.Columns.Add(new DataGridTextColumn { Header = T("CustCard.Phone"), Binding = new System.Windows.Data.Binding(nameof(PartyBranch.Phone)) { Mode = System.Windows.Data.BindingMode.TwoWay }, Width = 120 });
+            grid.Columns.Add(new DataGridCheckBoxColumn { Header = T("MasterCards.Active"), Binding = new System.Windows.Data.Binding(nameof(PartyBranch.IsActive)) { Mode = System.Windows.Data.BindingMode.TwoWay }, Width = 70 });
+        }));
+        _btnAddBranch.Click += (_, _) => _branches.Add(new PartyBranch { PartyId = _loadedId ?? Guid.Empty });
+        _btnDelBranch.Click += (_, _) => { if (_gridBranches.SelectedItem is PartyBranch b) _branches.Remove(b); };
+
         root.Children.Add(tabs);
         Content = root;
 
@@ -238,6 +311,29 @@ public sealed class CstCard : BaseWin
         };
         _cbPriceTier.ItemsSource = new[] { "Retail", "Wholesale", "Distributor" };
         _cbPriceTier.SelectedIndex = 0;
+        _cbRisk.ItemsSource = new[] { string.Empty, PartyRiskClasses.Low, PartyRiskClasses.Medium, PartyRiskClasses.High };
+        _cbRisk.SelectedIndex = 0;
+    }
+
+    private static TabItem BuildStructureTab(string headerKey, DataGrid grid, System.Collections.IEnumerable items, Button addButton, Button deleteButton, Action<DataGrid> buildColumns)
+    {
+        var tab = new TabItem { Header = new TextBlock { Text = T(headerKey), Tag = headerKey } };
+        var panel = new DockPanel { Margin = new Thickness(16) };
+        var bar = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
+        StyleButton(addButton, "Common.New");
+        StyleButton(deleteButton, "Common.Delete");
+        bar.Children.Add(addButton);
+        bar.Children.Add(deleteButton);
+        DockPanel.SetDock(bar, Dock.Bottom);
+        panel.Children.Add(bar);
+        grid.AutoGenerateColumns = false;
+        grid.CanUserAddRows = false;
+        grid.ItemsSource = items;
+        grid.SetResourceReference(StyleProperty, "VisuDataGridStyle");
+        buildColumns(grid);
+        panel.Children.Add(grid);
+        tab.Content = panel;
+        return tab;
     }
 
     private void SyncTypeCombo()
@@ -287,12 +383,97 @@ public sealed class CstCard : BaseWin
         _txtAddress.Text = party.Address ?? string.Empty;
         _txtNotes.Text = party.Notes ?? string.Empty;
         _chkActive.IsChecked = party.IsActive;
+        _txtCurrency.Text = party.DefaultCurrency ?? string.Empty;
+        _cbRisk.SelectedItem = party.RiskClass ?? string.Empty;
+        _chkBlacklisted.IsChecked = party.IsBlacklisted;
+        _txtBlacklistReason.Text = party.BlacklistReason ?? string.Empty;
+        _loadedBlacklistedAt = party.BlacklistedAt;
+        _loadedBlacklistedBy = party.BlacklistedBy;
+        _lblOpening.Text = party.OpeningBalanceAmount.HasValue
+            ? $"{T("CustCard.OpeningBalance")}: {party.OpeningBalanceAmount.Value.ToString("N2", CultureInfo.CurrentCulture)} ({party.OpeningBalanceDate})"
+            : string.Empty;
+        _ = LoadChildrenAsync(party.Id);
         _cbGroup.SelectedItem = null;
         if (party.PartyGroupId.HasValue)
         {
             foreach (var group in _groups)
                 if (group.Id == party.PartyGroupId.Value)
                     _cbGroup.SelectedItem = group;
+        }
+    }
+
+    private async Task LoadChildrenAsync(Guid partyId)
+    {
+        var service = AppHost.MasterCards;
+        if (service is null)
+            return;
+        try
+        {
+            _contacts.Clear();
+            foreach (var c in await service.GetPartyContactsAsync(CurrentCompanyCode, partyId))
+                _contacts.Add(c);
+            _addresses.Clear();
+            foreach (var a in await service.GetPartyAddressesAsync(CurrentCompanyCode, partyId))
+                _addresses.Add(a);
+            _branches.Clear();
+            foreach (var b in await service.GetPartyBranchesAsync(CurrentCompanyCode, partyId))
+                _branches.Add(b);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ShouTech.Domain.ErrorCodes.NonFatalInternalFailure, ex, "CstCard.LoadChildren");
+        }
+    }
+
+    private async Task SaveChildrenAsync(ShouTech.Application.Services.MasterCardService service, Guid partyId)
+    {
+        // Persist grid rows; rows removed from a grid are soft-deleted by
+        // diffing against the stored set (full persistence, no orphans).
+        var storedContacts = await service.GetPartyContactsAsync(CurrentCompanyCode, partyId);
+        foreach (var stored in storedContacts)
+            if (_contacts.All(c => c.Id != stored.Id))
+                await service.DeletePartyContactAsync(CurrentCompanyCode, stored.Id, CurrentUserId);
+        foreach (var contact in _contacts)
+        {
+            contact.PartyId = partyId;
+            if (string.IsNullOrWhiteSpace(contact.Name))
+                continue;
+            await service.SavePartyContactAsync(CurrentCompanyCode, contact, CurrentUserId);
+        }
+
+        var storedAddresses = await service.GetPartyAddressesAsync(CurrentCompanyCode, partyId);
+        foreach (var stored in storedAddresses)
+            if (_addresses.All(a => a.Id != stored.Id))
+                await service.DeletePartyAddressAsync(CurrentCompanyCode, stored.Id, CurrentUserId);
+        foreach (var address in _addresses)
+        {
+            address.PartyId = partyId;
+            if (!PartyAddressKinds.IsValid(address.Kind))
+                address.Kind = PartyAddressKinds.Delivery;
+            await service.SavePartyAddressAsync(CurrentCompanyCode, address, CurrentUserId);
+        }
+
+        var storedBranches = await service.GetPartyBranchesAsync(CurrentCompanyCode, partyId);
+        foreach (var stored in storedBranches)
+            if (_branches.All(b => b.Id != stored.Id))
+                await service.DeletePartyBranchAsync(CurrentCompanyCode, stored.Id, CurrentUserId);
+        foreach (var branch in _branches)
+        {
+            branch.PartyId = partyId;
+            if (string.IsNullOrWhiteSpace(branch.Name))
+                continue;
+            await service.SavePartyBranchAsync(CurrentCompanyCode, branch, CurrentUserId);
+        }
+
+        await LoadChildrenAsync(partyId);
+        // Primary contact / default address mirror onto the card summary.
+        var refreshed = await service.GetPartyByCodeAsync(CurrentCompanyCode, PartyKind, _txtCode.Text.Trim());
+        if (refreshed is not null)
+        {
+            _txtPhone.Text = refreshed.Phone ?? string.Empty;
+            _txtMobile.Text = refreshed.Mobile ?? string.Empty;
+            _txtEmail.Text = refreshed.Email ?? string.Empty;
+            _txtAddress.Text = refreshed.Address ?? string.Empty;
         }
     }
 
@@ -336,10 +517,31 @@ public sealed class CstCard : BaseWin
                 Email = NullIfBlank(_txtEmail.Text),
                 Address = NullIfBlank(_txtAddress.Text),
                 IsActive = _chkActive.IsChecked == true,
-                Notes = NullIfBlank(_txtNotes.Text)
+                Notes = NullIfBlank(_txtNotes.Text),
+                DefaultCurrency = NullIfBlank(_txtCurrency.Text)?.ToUpperInvariant(),
+                RiskClass = NullIfBlank(_cbRisk.SelectedItem as string),
+                IsBlacklisted = _chkBlacklisted.IsChecked == true,
+                BlacklistReason = NullIfBlank(_txtBlacklistReason.Text),
+                BlacklistedAt = _chkBlacklisted.IsChecked == true
+                    ? _loadedBlacklistedAt ?? DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)
+                    : null,
+                BlacklistedBy = _chkBlacklisted.IsChecked == true
+                    ? _loadedBlacklistedBy ?? CurrentUserId
+                    : null
             };
             await service.SavePartyAsync(CurrentCompanyCode, party, CurrentUserId);
             _loadedId = party.Id;
+            if (_chkBlacklisted.IsChecked == true)
+            {
+                _loadedBlacklistedAt = party.BlacklistedAt;
+                _loadedBlacklistedBy = party.BlacklistedBy;
+            }
+            else
+            {
+                _loadedBlacklistedAt = null;
+                _loadedBlacklistedBy = null;
+            }
+            await SaveChildrenAsync(service, party.Id);
             MessageBox.Show(this, T("CustCard.Saved"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
             await RefreshBalanceAsync();
         }
@@ -373,10 +575,68 @@ public sealed class CstCard : BaseWin
 
     private void OpenStatement()
     {
-        // AccStmtWin filters by GL account code inside the report; it exposes
-        // no pre-filter API, so the statement opens on its own filter bar.
-        var window = new AccStmtWin { Owner = this };
+        // W1: customers open the party-ledger customer statement
+        // (CustStmtWin) pre-filtered to this party; suppliers keep the
+        // supplier statement. (Previously this opened the GL statement.)
+        if (PartyKind == PartyKinds.Supplier)
+        {
+            var supplierWindow = new SupStatementWin { Owner = this, InitialSearch = NullIfBlank(_txtCode.Text) };
+            supplierWindow.Show();
+            return;
+        }
+        var window = new CustStmtWin { Owner = this, InitialSearch = NullIfBlank(_txtCode.Text) };
         window.Show();
+    }
+
+    private async Task PostOpeningBalanceAsync()
+    {
+        try
+        {
+            var service = AppHost.MasterCards
+                ?? throw new InvalidOperationException(T("MasterCards.ServiceUnavailable"));
+            if (!_loadedId.HasValue)
+                throw new InvalidOperationException(T("CustCard.SaveFirst"));
+            var party = await service.GetPartyByCodeAsync(CurrentCompanyCode, PartyKind, _txtCode.Text.Trim());
+            if (party is null)
+                throw new InvalidOperationException(T("MasterCards.NotFound"));
+            if (party.OpeningBalanceAmount.HasValue)
+                throw new InvalidOperationException(T("CustCard.OpeningAlreadyPosted"));
+
+            var amountBox = new TextBox { Text = "0.00", Margin = new Thickness(0, 4, 0, 8) };
+            var datePicker = new DatePicker { SelectedDate = DateTime.Today, Margin = new Thickness(0, 4, 0, 8) };
+            var ok = new Button { Content = T("Common.Save"), MinWidth = VisuId.ButtonMinWidth, IsDefault = true };
+            var panel = new StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(new TextBlock { Text = T("CustCard.OpeningAmount") });
+            panel.Children.Add(amountBox);
+            panel.Children.Add(new TextBlock { Text = T("CustCard.OpeningDate") });
+            panel.Children.Add(datePicker);
+            panel.Children.Add(ok);
+            var dialog = new Window
+            {
+                Title = T("CustCard.OpeningBalance"),
+                Content = panel,
+                Width = 320,
+                Height = 230,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = this
+            };
+            ok.Click += (_, _) => dialog.DialogResult = true;
+            if (dialog.ShowDialog() != true)
+                return;
+            var amount = ParseDecimal(amountBox.Text);
+            var date = DateOnly.FromDateTime(datePicker.SelectedDate ?? DateTime.Today);
+            await service.PostPartyOpeningBalanceAsync(CurrentCompanyCode, PartyKind, party.Code, amount, date, party.DefaultCurrency, CurrentUserId);
+            MessageBox.Show(this, T("CustCard.Saved"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowParty(party);
+            var refreshed = await service.GetPartyByCodeAsync(CurrentCompanyCode, PartyKind, party.Code);
+            if (refreshed is not null)
+                ShowParty(refreshed);
+            await RefreshBalanceAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void ResetCard()
@@ -398,6 +658,16 @@ public sealed class CstCard : BaseWin
         _txtNotes.Text = string.Empty;
         _chkActive.IsChecked = true;
         _cbGroup.SelectedItem = null;
+        _txtCurrency.Text = string.Empty;
+        _cbRisk.SelectedIndex = 0;
+        _chkBlacklisted.IsChecked = false;
+        _txtBlacklistReason.Text = string.Empty;
+        _loadedBlacklistedAt = null;
+        _loadedBlacklistedBy = null;
+        _lblOpening.Text = string.Empty;
+        _contacts.Clear();
+        _addresses.Clear();
+        _branches.Clear();
         UpdateBalances(0, 0);
     }
 

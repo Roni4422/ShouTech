@@ -428,6 +428,11 @@ namespace ShouTech.App.Services
             public const string CashInvoiceCreate = "SALES.CASH.CREATE";
             public const string PriceOverride = "SALES.PRICE.OVERRIDE";
 
+            // W1 (migration 095): posting past a party credit limit when
+            // the posting user holds this key; every use is audited in
+            // credit_overrides by PartyCreditGuard.
+            public const string CreditOverride = "SALES.CREDIT.OVERRIDE";
+
             public const string DiscountOverride = "SALES.DISCOUNT.OVERRIDE";
 
             public const string InvoiceRepost = "SALES.INVOICE.REPOST";

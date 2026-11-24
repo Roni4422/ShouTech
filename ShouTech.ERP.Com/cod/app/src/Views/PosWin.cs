@@ -491,7 +491,18 @@ public sealed class PosWin : BaseWin
             _customerName.Text = Local("WalkIn", "Walk-in");
             return;
         }
-        var found = TaxSvc.ResolveParty(code, customer: true);
+        (long? Id, string Name)? found;
+        try
+        {
+            found = TaxSvc.ResolveParty(code, customer: true);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // W1: blacklisted customer — clear rejection at POS too.
+            _partyId = null; _partyCode = string.Empty; _partyName = string.Empty;
+            _customerName.Text = ex.Message;
+            return;
+        }
         if (found is null)
         {
             _partyId = null; _partyCode = code; _partyName = string.Empty;

@@ -388,7 +388,9 @@ public static class RptQuery
                    COALESCE(NULLIF(c.name_en, ''), c.name_ar, '') AS Name,
                    COALESCE(c.name_en, '') AS NameEn,
                    COALESCE(c.phone, '') AS Phone,
-                   COALESCE(bal.balance, 0) AS Balance
+                   COALESCE(bal.balance, 0) AS Balance,
+                   c.is_active AS IsActive,
+                   COALESCE(c.is_blacklisted, 0) AS IsBlacklisted
             FROM parties c
             LEFT JOIN (
                 SELECT party_id, SUM(COALESCE(base_debit, debit) - COALESCE(base_credit, credit)) AS balance
@@ -396,7 +398,7 @@ public static class RptQuery
                 WHERE company_id = $company AND party_kind = 'C'
                 GROUP BY party_id
             ) bal ON bal.party_id = c.ledger_id
-            WHERE c.company_id = $company AND c.kind = 'C' AND c.is_deleted = 0 AND c.is_active = 1
+            WHERE c.company_id = $company AND c.kind = 'C' AND c.is_deleted = 0
             ORDER BY c.code;
             """;
         return await QueryAsync(sql, ct, ("$company", Company));
@@ -528,6 +530,59 @@ public static class RptQuery
                    OR LOWER(SupplierName) LIKE LOWER($search)
                    OR LOWER(DocumentNo) LIKE LOWER($search))
             ORDER BY SupplierCode, EntryDate, LedgerId;
+            """;
+        var normalizedSearch = string.IsNullOrWhiteSpace(search) ? string.Empty : "%" + search.Trim() + "%";
+        return await QueryAsync(sql, ct,
+            ("$company", Company),
+            ("$from", from.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
+            ("$toEx", to.Date.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
+            ("$search", normalizedSearch));
+    }
+
+    /// <summary>
+    /// Customer ledger statement (W1): the mirror of
+    /// SupplierStatementAsync with customer orientation — the running
+    /// balance is debit − credit (what the customer owes), computed over
+    /// ALL of the party's ledger rows so the opening balance (entries
+    /// before the range) and the running balance stay exact.
+    /// </summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> CustomerStatementAsync(
+        DateTime from, DateTime to, string? search, CancellationToken ct)
+    {
+        DocSchema.Ensure();
+        const string sql = """
+            WITH customer_ledger AS (
+                SELECT p.code AS CustomerCode,
+                       COALESCE(NULLIF(p.name_en, ''), p.name_ar, '') AS CustomerName,
+                       l.ledger_id AS LedgerId,
+                       l.entry_date AS EntryDate,
+                       COALESCE(l.doc_no, '') AS DocumentNo,
+                       COALESCE(l.doc_kind, '') AS DocumentKind,
+                       COALESCE(l.note, '') AS Note,
+                       COALESCE(l.currency_code, '') AS CurrencyCode,
+                       COALESCE(l.base_debit, l.debit) AS DebitBase,
+                       COALESCE(l.base_credit, l.credit) AS CreditBase,
+                       SUM(COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit))
+                           OVER (PARTITION BY l.party_id ORDER BY l.entry_date, l.ledger_id
+                                 ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS RunningBalanceBase,
+                       SUM(CASE WHEN l.entry_date < $from
+                                THEN COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit)
+                                ELSE 0 END)
+                           OVER (PARTITION BY l.party_id) AS OpeningBalanceBase
+                FROM party_ledger l
+                INNER JOIN parties p
+                  ON p.ledger_id = l.party_id AND p.company_id = l.company_id AND p.kind = 'C'
+                WHERE l.company_id = $company AND l.party_kind = 'C'
+            )
+            SELECT CustomerCode, CustomerName, EntryDate, DocumentNo, DocumentKind,
+                   Note, CurrencyCode, DebitBase, CreditBase,
+                   OpeningBalanceBase, RunningBalanceBase
+            FROM customer_ledger
+            WHERE EntryDate >= $from AND EntryDate < $toEx
+              AND ($search = '' OR LOWER(CustomerCode) LIKE LOWER($search)
+                   OR LOWER(CustomerName) LIKE LOWER($search)
+                   OR LOWER(DocumentNo) LIKE LOWER($search))
+            ORDER BY CustomerCode, EntryDate, LedgerId;
             """;
         var normalizedSearch = string.IsNullOrWhiteSpace(search) ? string.Empty : "%" + search.Trim() + "%";
         return await QueryAsync(sql, ct,
@@ -710,9 +765,20 @@ public static class RptQuery
         // Step 7: aging buckets are BASE amounts — a foreign invoice
         // ages at its converted value, not its face value.
         var amount = customers ? "COALESCE(l.base_debit, l.debit) - COALESCE(l.base_credit, l.credit)" : "COALESCE(l.base_credit, l.credit) - COALESCE(l.base_debit, l.debit)";
+        // W1 (migration 095): aging is DUE-DATE based when the ledger
+        // row's source document carries a due_date (doc_date +
+        // credit_days on SAL/PUR invoices); legacy rows without one fall
+        // back to the ledger entry date. The document join is on doc_id
+        // alone — doc_id is a table-wide identity, unique across
+        // companies — because documents key the company by Guid while
+        // party_ledger keys it by code.
+        var docTable = customers ? "sales_documents" : "purchase_documents";
+        // due_date exists only on sales_documents (migration 095);
+        // supplier aging keeps the entry-date basis.
+        var ageBasis = customers ? "COALESCE(d.due_date, l.entry_date)" : "l.entry_date";
         var ageDays = DatabaseRuntime.IsPostgreSql()
-            ? "(CURRENT_DATE - CAST(l.entry_date AS DATE))"
-            : "(julianday('now') - julianday(l.entry_date))";
+            ? $"(CURRENT_DATE - CAST({ageBasis} AS DATE))"
+            : $"(julianday('now') - julianday({ageBasis}))";
         var sql = $"""
             SELECT p.code AS Code,
                    COALESCE(NULLIF(p.name_en, ''), p.name_ar, '') AS Name,
@@ -724,7 +790,9 @@ public static class RptQuery
             FROM parties p
             LEFT JOIN party_ledger l
               ON l.party_id = p.ledger_id AND l.company_id = p.company_id AND l.party_kind = $pk
-            WHERE p.company_id = $company AND p.kind = $pk AND p.is_deleted = 0 AND p.is_active = 1
+            LEFT JOIN {docTable} d
+              ON d.doc_id = l.doc_id
+            WHERE p.company_id = $company AND p.kind = $pk AND p.is_deleted = 0
             GROUP BY p.code, p.name_en, p.name_ar
             HAVING ABS(COALESCE(SUM({amount}), 0)) > 0.0001
             ORDER BY p.code;

@@ -404,6 +404,45 @@ public static class PartyLedger
         delete.ExecuteNonQuery();
     }
 
+    /// <summary>
+    /// Due date for a party document (W1, migration 095): doc_date + the
+    /// party's credit_days from the canonical card (resolved by ledger id
+    /// in the resolved company). Null when the party or its credit_days
+    /// cannot be resolved — due dates are then left unset and aging
+    /// falls back to the entry date.
+    /// </summary>
+    public static DateOnly? ComputeDueDate(DbConnection connection, DbTransaction? transaction, string provider, string companyKey, long partyId, DateOnly docDate)
+    {
+        if (partyId <= 0)
+            return null;
+        var companyCode = ResolveCompanyCode(connection, transaction, provider, companyKey);
+        using var command = Create(connection, transaction,
+            $"SELECT credit_days FROM parties WHERE company_id = @company AND ledger_id = @party AND {NotDeleted(provider)}");
+        Add(command, "@company", companyCode);
+        Add(command, "@party", partyId);
+        var value = command.ExecuteScalar();
+        if (value is null or DBNull)
+            return null;
+        var days = Convert.ToInt32(value, CultureInfo.InvariantCulture);
+        return docDate.AddDays(Math.Max(days, 0));
+    }
+
+    public static async Task<DateOnly?> ComputeDueDateAsync(DbConnection connection, DbTransaction? transaction, string provider, string companyKey, long partyId, DateOnly docDate, CancellationToken cancellationToken = default)
+    {
+        if (partyId <= 0)
+            return null;
+        var companyCode = await ResolveCompanyCodeAsync(connection, transaction, provider, companyKey, cancellationToken).ConfigureAwait(false);
+        await using var command = Create(connection, transaction,
+            $"SELECT credit_days FROM parties WHERE company_id = @company AND ledger_id = @party AND {NotDeleted(provider)}");
+        Add(command, "@company", companyCode);
+        Add(command, "@party", partyId);
+        var value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        if (value is null or DBNull)
+            return null;
+        var days = Convert.ToInt32(value, CultureInfo.InvariantCulture);
+        return docDate.AddDays(Math.Max(days, 0));
+    }
+
     public static bool TableExists(DbConnection connection, DbTransaction? transaction, string provider, string table)
     {
         var sql = IsPostgres(provider)

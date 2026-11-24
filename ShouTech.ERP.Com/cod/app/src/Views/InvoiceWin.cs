@@ -830,7 +830,17 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
 
     private void ResolveParty()
     {
-        var found = TaxSvc.ResolveParty(_txtPartyCode.Text, customer: _doc.IsSalesSide);
+        (long? Id, string Name)? found;
+        try
+        {
+            found = TaxSvc.ResolveParty(_txtPartyCode.Text, customer: _doc.IsSalesSide);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // W1: blacklisted party — clear rejection, party not applied.
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
         if (found is null) return;
         _doc.PartyId = found.Value.Id;
         _txtPartyName.Text = found.Value.Name;

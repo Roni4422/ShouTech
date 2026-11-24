@@ -73,6 +73,16 @@ public sealed class OrderService
         => _orders.PostOrderAsync(side, docId, userId, cancellationToken);
 
     /// <summary>
+    /// Posts an order with an optional authorized credit override (W1):
+    /// the caller (the window, where the session's permissions are
+    /// visible) supplies the override context only when the posting user
+    /// holds SALES.CREDIT.OVERRIDE; the guard then audits the breach in
+    /// credit_overrides instead of hard-blocking with ACC-5006.
+    /// </summary>
+    public Task PostOrderAsync(CommercialDocSide side, long docId, string userId, CreditOverrideContext? creditOverride, CancellationToken cancellationToken = default)
+        => _orders.PostOrderAsync(side, docId, userId, cancellationToken, creditOverride);
+
+    /// <summary>
     /// Creates a draft delivery note from the remaining quantities on a posted
     /// sales order. The chain repository records the source link atomically;
     /// posting is a separate operation so the warehouse can review the draft.

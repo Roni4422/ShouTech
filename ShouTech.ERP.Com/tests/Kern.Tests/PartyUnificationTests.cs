@@ -1,6 +1,8 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using ShouTech.App;
@@ -305,6 +307,81 @@ public sealed class PartyUnificationTests
             Lines = { new InvLine { LineNo = 1, MaterialId = 42, MaterialCode = "MAT-42", Qty = qty, UnitPrice = price, TaxRate = 0m, WarehouseId = 1 } }
         };
 
+    // ------------------------------------------------------------ W1 (mig 095)
+
+    [Fact]
+    public async Task BlacklistedParty_IsRejectedAtResolution()
+    {
+        using var db = await SeededAsync();
+        var repo = new MasterCardRepository("SQLite", db.ConnectionString);
+        var party = new Party
+        {
+            Kind = "C", Code = "BAD-1", NameEn = "Blacklisted Customer",
+            IsBlacklisted = true, BlacklistReason = "Fraud", BlacklistedBy = Actor
+        };
+        await repo.SavePartyAsync(CompanyCode, party, Actor);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => TaxSvc.ResolveParty("BAD-1", customer: true));
+        Assert.Contains("blacklisted", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Fraud", ex.Message);
+        Assert.Throws<InvalidOperationException>(() => PartyLedgerSvc.ResolveParty("BAD-1", "C"));
+
+        // The balance still reports (balances never vanish): the party
+        // shows in CustomerBalances even while blacklisted + inactive.
+        Exec(db, $"INSERT INTO party_ledger (company_id, party_kind, party_id, doc_kind, entry_date, debit, credit) VALUES ('{CompanyCode}', 'C', {party.LedgerId}, 'SAL', '2026-01-01', 250, 0);");
+        Exec(db, $"UPDATE parties SET is_active = 0 WHERE code = 'BAD-1' AND company_id = '{CompanyCode}';");
+        var balances = await RptQuery.CustomerBalancesAsync(CancellationToken.None);
+        var row = balances.Single(r => Convert.ToString(r["Code"], CultureInfo.InvariantCulture) == "BAD-1");
+        Assert.Equal(250m, Convert.ToDecimal(row["Balance"], CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public async Task OpeningBalance_PostsOnce_AndBalanceReflectsIt()
+    {
+        using var db = await SeededAsync();
+        var service = new MasterCardService(new MasterCardRepository("SQLite", db.ConnectionString));
+        await SavePartyAsync(db, "OPN-1", "Opening Customer", creditLimit: 0m);
+
+        var journalId = await service.PostPartyOpeningBalanceAsync(
+            CompanyCode, "C", "OPN-1", 750m, new DateOnly(2026, 1, 1), null, Actor);
+        Assert.False(string.IsNullOrWhiteSpace(journalId));
+
+        var balance = await service.GetPartyBalanceAsync(CompanyCode, "C", "OPN-1");
+        Assert.Equal(750m, balance.Balance);
+
+        var loaded = await service.GetPartyByCodeAsync(CompanyCode, "C", "OPN-1");
+        Assert.Equal(750m, loaded!.OpeningBalanceAmount);
+        Assert.Equal(journalId, loaded.OpeningJournalId);
+
+        // GL: receivable debited 750, retained earnings (32) credited 750.
+        Assert.Equal(750m, ExecScalar(db,
+            "SELECT COALESCE(SUM(l.debit - l.credit), 0) FROM journal_entry_lines l JOIN chart_of_accounts a ON a.account_id = l.account_id WHERE a.account_code = '1201';"));
+        Assert.Equal(-750m, ExecScalar(db,
+            "SELECT COALESCE(SUM(l.debit - l.credit), 0) FROM journal_entry_lines l JOIN chart_of_accounts a ON a.account_id = l.account_id WHERE a.account_code = '32';"));
+
+        // A second opening is blocked.
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.PostPartyOpeningBalanceAsync(CompanyCode, "C", "OPN-1", 10m, new DateOnly(2026, 1, 2), null, Actor));
+    }
+
+    [Fact]
+    public async Task CustomerStatement_RunningBalanceAndOpening()
+    {
+        using var db = await SeededAsync();
+        var party = await SavePartyAsync(db, "STMT-1", "Statement Customer", creditLimit: 0m);
+        // Before the range: +500 opening position. Inside: +300, -100.
+        Exec(db, $"INSERT INTO party_ledger (company_id, party_kind, party_id, doc_kind, doc_no, entry_date, debit, credit, currency_code) VALUES ('{CompanyCode}', 'C', {party.LedgerId}, 'SAL', 'SAL-0', '2025-12-15', 500, 0, 'SAR');");
+        Exec(db, $"INSERT INTO party_ledger (company_id, party_kind, party_id, doc_kind, doc_no, entry_date, debit, credit, currency_code) VALUES ('{CompanyCode}', 'C', {party.LedgerId}, 'SAL', 'SAL-1', '2026-02-01', 300, 0, 'SAR');");
+        Exec(db, $"INSERT INTO party_ledger (company_id, party_kind, party_id, doc_kind, doc_no, entry_date, debit, credit, currency_code) VALUES ('{CompanyCode}', 'C', {party.LedgerId}, 'RCV', 'RCV-1', '2026-02-10', 0, 100, 'SAR');");
+
+        var rows = await RptQuery.CustomerStatementAsync(
+            new DateTime(2026, 1, 1), new DateTime(2026, 12, 31), "STMT-1", CancellationToken.None);
+        Assert.Equal(2, rows.Count);
+        Assert.Equal(500m, Convert.ToDecimal(rows[0]["OpeningBalanceBase"], CultureInfo.InvariantCulture));
+        Assert.Equal(800m, Convert.ToDecimal(rows[0]["RunningBalanceBase"], CultureInfo.InvariantCulture));
+        Assert.Equal(700m, Convert.ToDecimal(rows[1]["RunningBalanceBase"], CultureInfo.InvariantCulture));
+    }
+
     private static async Task<Party> SavePartyAsync(TestDb db, string code, string name, decimal creditLimit)
     {
         var repo = new MasterCardRepository("SQLite", db.ConnectionString);
@@ -356,7 +433,7 @@ public sealed class PartyUnificationTests
         foreach (var (code, name) in new[]
         {
             ("131", "Cash"), ("1201", "Receivable"), ("1203", "Inventory"),
-            ("2201", "Payable"), ("301", "Sales"), ("401", "COGS")
+            ("2201", "Payable"), ("301", "Sales"), ("401", "COGS"), ("32", "Retained Earnings")
         })
         {
             AccRepo.Save(null, new AccRepo.AccRec(

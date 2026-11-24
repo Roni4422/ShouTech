@@ -130,6 +130,91 @@ public sealed class Party
     public string? Address { get; set; }
     public bool IsActive { get; set; } = true;
     public string? Notes { get; set; }
+
+    // W1 (migration 095): per-customer currency + risk classification,
+    // the blacklist/suspension model, and the opening-balance marker.
+    /// <summary>Default document currency for this party (3-letter, nullable).</summary>
+    public string? DefaultCurrency { get; set; }
+    /// <summary>Risk classification: Low / Medium / High (nullable).</summary>
+    public string? RiskClass { get; set; }
+    public bool IsBlacklisted { get; set; }
+    public string? BlacklistReason { get; set; }
+    public string? BlacklistedAt { get; set; }
+    public string? BlacklistedBy { get; set; }
+    /// <summary>Signed opening balance as posted (debit positive for a
+    /// customer receivable; the marker exists iff an opening entry was
+    /// posted — a second opening is blocked while it is set).</summary>
+    public decimal? OpeningBalanceAmount { get; set; }
+    public string? OpeningBalanceDate { get; set; }
+    public string? OpeningJournalId { get; set; }
+}
+
+/// <summary>Risk classes stored in <c>parties.risk_class</c> (migration 095).</summary>
+public static class PartyRiskClasses
+{
+    public const string Low = "Low";
+    public const string Medium = "Medium";
+    public const string High = "High";
+
+    public static readonly IReadOnlyList<string> All = new[] { Low, Medium, High };
+
+    public static bool IsValid(string? value) => value is Low or Medium or High;
+}
+
+/// <summary>Address kinds stored in <c>party_addresses.kind</c> (migration 095).</summary>
+public static class PartyAddressKinds
+{
+    public const string Delivery = "Delivery";
+    public const string Billing = "Billing";
+    public const string Other = "Other";
+
+    public static readonly IReadOnlyList<string> All = new[] { Delivery, Billing, Other };
+
+    public static bool IsValid(string? value) => value is Delivery or Billing or Other;
+}
+
+/// <summary>A named contact of a party (migration 095). The primary
+/// contact mirrors to the party row's phone/mobile/email summary.</summary>
+public sealed class PartyContact
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid PartyId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Role { get; set; }
+    public string? Phone { get; set; }
+    public string? Mobile { get; set; }
+    public string? Email { get; set; }
+    public bool IsPrimary { get; set; }
+    public bool IsActive { get; set; } = true;
+    public string? Notes { get; set; }
+}
+
+/// <summary>One address of a party (migration 095). The default address
+/// mirrors to the party row's address summary.</summary>
+public sealed class PartyAddress
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid PartyId { get; set; }
+    public string Kind { get; set; } = PartyAddressKinds.Delivery;
+    public string? City { get; set; }
+    public string? Country { get; set; }
+    public string? PostalCode { get; set; }
+    public string? Address { get; set; }
+    public bool IsDefault { get; set; }
+    public bool IsActive { get; set; } = true;
+    public string? Notes { get; set; }
+}
+
+/// <summary>A branch of a party (migration 095).</summary>
+public sealed class PartyBranch
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid PartyId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Address { get; set; }
+    public string? Phone { get; set; }
+    public bool IsActive { get; set; } = true;
+    public string? Notes { get; set; }
 }
 
 /// <summary>A customer/supplier group (tree node) supplying defaults to its parties.</summary>

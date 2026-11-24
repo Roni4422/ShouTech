@@ -52,6 +52,12 @@ public static class GlAccounts
     public const string FinishedGoods = "1212";
     public const string ManufacturingVariance = "406";
     public const string AppliedManufacturingOverhead = "409";
+    // W1 (migration 095): party opening balances post against Retained
+    // Earnings — account 32 in every seeded template (CoaWin seed:
+    // 31 Capital / 32 Retained Earnings, both postable). There is no
+    // dedicated opening-balance account in any template; retained
+    // earnings is the standard opening-equity counterpart.
+    public const string OpeningBalanceEquity = "32";
 }
 
 /// <summary>
