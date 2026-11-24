@@ -79,6 +79,7 @@ public abstract class BaseWin : Window
         }
 
         PreviewKeyDown += OnHelpPreviewKeyDown;
+        PreviewKeyDown += OnInfoPreviewKeyDown;
         Loaded += OnBaseLoaded;
         Closed += OnBaseClosed;
     }
@@ -108,6 +109,46 @@ public abstract class BaseWin : Window
         {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "BaseWin.F1Help");
         }
+    }
+
+    /// <summary>
+    /// F9 — the global Information Window (INFO_WINDOW_STUDY): opens
+    /// InfoWin on this window's current selection when the window
+    /// implements IInfoContextProvider; otherwise reopens it on the
+    /// last published selection, and with no selection anywhere it
+    /// opens on its localized empty state. InfoWin and HelpWin are
+    /// excluded (InfoWin is the surface itself; HelpWin is modal
+    /// reading material, not a data window).
+    /// </summary>
+    private void OnInfoPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.F9 || e.IsRepeat || this is InfoWin || this is HelpWin)
+            return;
+
+        e.Handled = true;
+        try
+        {
+            if (this is IInfoContextProvider provider && provider.CurrentInfoRef is { } reference)
+                InfoWin.ShowFor(reference, provider.CurrentInfoContext, this);
+            else
+                InfoWin.ShowLast(this);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "BaseWin.F9Info");
+        }
+    }
+
+    /// <summary>
+    /// Publishes this window's current selection to the information
+    /// hub (a visible InfoWin in Follow mode tracks it live). Windows
+    /// implementing IInfoContextProvider call this whenever their
+    /// selection changes.
+    /// </summary>
+    protected void PublishInfoSelection()
+    {
+        if (this is IInfoContextProvider provider)
+            InfoContextHub.Publish(provider.CurrentInfoRef, provider.CurrentInfoContext);
     }
 
     /// <summary>Localization service owned by the application shell.</summary>

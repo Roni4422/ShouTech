@@ -25,7 +25,7 @@ namespace ShouTech.App.Views;
 /// InvoiceWin and discarded the id. Quotations can be marked Lost and
 /// converted to a sales order here (real writes through OrderService).
 /// </summary>
-public sealed class DocSearchWin : BaseWin, IWindowMode
+public sealed class DocSearchWin : BaseWin, IWindowMode, IInfoContextProvider
 {
     protected override string? ScheduleTintName => "Denim";
     public enum DocSearchMode
@@ -142,6 +142,7 @@ public sealed class DocSearchWin : BaseWin, IWindowMode
         body.Children.Add(filters);
 
         _grid.AutoGenerateColumns = false;
+        _grid.SelectionChanged += (_, _) => PublishInfoSelection();
         _grid.CanUserAddRows = false;
         _grid.IsReadOnly = true;
         _grid.AlternationCount = 2;
@@ -324,6 +325,15 @@ public sealed class DocSearchWin : BaseWin, IWindowMode
             _lblStatus.Text = ex.Message;
         }
     }
+
+    // Global Information Window provider (INFO_WINDOW_STUDY): the
+    // selected search result as a document reference.
+    public InfoRef? CurrentInfoRef
+        => _grid.SelectedItem is DocRow row
+            ? new InfoRef(InfoKind.Document, Id: row.DocId, DocKind: row.DocKind)
+            : null;
+
+    public InfoContext? CurrentInfoContext => null;
 
     private void OpenSelected()
     {

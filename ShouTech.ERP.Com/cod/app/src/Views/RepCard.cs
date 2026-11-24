@@ -16,7 +16,7 @@ namespace ShouTech.App.Views;
 /// phone, commission %, target amount and group (from sales_rep_groups).
 /// Load by code, save (insert/update), delete. Bottom command bar.
 /// </summary>
-public sealed class RepCard : BaseWin
+public sealed class RepCard : BaseWin, IInfoContextProvider
 {
     protected override string? ScheduleTintName => "Grove";
     private readonly TextBox _txtCode = new();
@@ -37,6 +37,15 @@ public sealed class RepCard : BaseWin
 
     private readonly List<SalesRepGroup> _groups = new();
     private Guid? _loadedId;
+
+    // Global Information Window provider (INFO_WINDOW_STUDY): the
+    // card's loaded sales rep, resolved by code.
+    public InfoRef? CurrentInfoRef
+        => _loadedId is not null && !string.IsNullOrWhiteSpace(_txtCode.Text)
+            ? new InfoRef(InfoKind.SalesRep, Code: _txtCode.Text.Trim())
+            : null;
+
+    public InfoContext? CurrentInfoContext => null;
 
     public RepCard()
     {
@@ -177,6 +186,7 @@ public sealed class RepCard : BaseWin
     {
         _loadedId = rep.Id;
         _txtCode.Text = rep.Code;
+        PublishInfoSelection();
         _txtNameEn.Text = rep.NameEn;
         _txtNameAr.Text = rep.NameAr ?? string.Empty;
         _txtPhone.Text = rep.Phone ?? string.Empty;

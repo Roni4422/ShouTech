@@ -13,13 +13,22 @@ using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 /// <summary>Persistent account card. Account numbering and storage are database-driven.</summary>
-public partial class AccCard : BaseWin
+public partial class AccCard : BaseWin, IInfoContextProvider
 {
     protected override string? ScheduleTintName => "Cinder";
     private bool _isNew;
     private bool _isEditing;
     private AccRepo.AccRec? _current;
     private readonly string? _initialParentCode;
+
+    // Global Information Window provider (INFO_WINDOW_STUDY): the
+    // card's loaded account.
+    public InfoRef? CurrentInfoRef
+        => _current is { } record
+            ? new InfoRef(InfoKind.Account, GuidId: record.Id, Code: record.Code)
+            : null;
+
+    public InfoContext? CurrentInfoContext => null;
 
     public event EventHandler? Saved;
 
@@ -288,6 +297,7 @@ public partial class AccCard : BaseWin
         _isEditing = false;
         InitializeLists();
         LoadRecord();
+        PublishInfoSelection();
         UpdateNavigationState();
     }
 

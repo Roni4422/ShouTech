@@ -467,6 +467,24 @@ namespace ShouTech.App.Views
             }
         }
 
+        /// <summary>
+        /// Shell entry to the global Information Window
+        /// (INFO_WINDOW_STUDY): reopens InfoWin on the last selection
+        /// published by any window (F9 inside a window opens it on
+        /// that window's own selection).
+        /// </summary>
+        private void OnInfoClick(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                InfoWin.ShowLast(this);
+            }
+            catch (Exception ex)
+            {
+                AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, ex, "MWin.xaml.OnInfoClick");
+            }
+        }
+
         private async Task RefreshRecycleBinBadgeAsync()
         {
             try

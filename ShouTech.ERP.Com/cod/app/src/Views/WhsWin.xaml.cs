@@ -21,7 +21,7 @@ namespace ShouTech.App.Views
     /// Data contract: <see cref="MatRepo.WarehouseRec"/> and the warehouses table.
     /// All user-visible strings come from language resources via T("WhsWin.*").
     /// </summary>
-    public partial class WhsWin : BaseWin
+    public partial class WhsWin : BaseWin, IInfoContextProvider
     {
         private const string ErrSaveFailed      = "WHS-001";
         private const string ErrDeleteFailed    = "WHS-002";
@@ -32,6 +32,15 @@ namespace ShouTech.App.Views
         private readonly List<MatRepo.WarehouseRec> _items = new();
         private MatRepo.WarehouseRec? _current;
         private int _index = -1;
+
+        // Global Information Window provider (INFO_WINDOW_STUDY):
+        // the warehouse record currently shown by the card.
+        public InfoRef? CurrentInfoRef
+            => _current is { } warehouse
+                ? new InfoRef(InfoKind.Warehouse, Id: warehouse.Id)
+                : null;
+
+        public InfoContext? CurrentInfoContext => null;
 
         private bool _isNew;
         private bool _isLoading;
@@ -468,6 +477,7 @@ namespace ShouTech.App.Views
                 _current = _items[index];
                 _isNew = false;
                 _editing = false;
+                PublishInfoSelection();
 
                 BindRecord(_current);
                 SetEditable(false);

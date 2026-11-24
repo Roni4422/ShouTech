@@ -4810,6 +4810,7 @@
   "NotFound": "Seçilen öğe bulunamadı.",
   "LoadFailed": "Bilgiler yüklenemedi.",
   "Follow": "Seçimi izle",
+  "Pin": "Sabitle",
   "Properties": "Özellikler",
   "PropertiesTip": "Bu tür için gösterilen bilgileri seçin",
   "TotalWords": "Yazıyla toplam",

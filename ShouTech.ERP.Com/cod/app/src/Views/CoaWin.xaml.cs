@@ -25,7 +25,7 @@ namespace ShouTech.App.Views;
 // Implementation note: UI text is provided by language resources.
 // Implementation note: UI text is provided by language resources.
 /// </summary>
-public partial class CoaWin : BaseWin
+public partial class CoaWin : BaseWin, IInfoContextProvider
 {
     protected override string? ScheduleTintName => "Lavender";
 
@@ -306,7 +306,16 @@ public partial class CoaWin : BaseWin
     {
         _selected = e.NewValue as AccountNode;
         UpdateSelectedText();
+        PublishInfoSelection();
     }
+
+    // Global Information Window provider (INFO_WINDOW_STUDY).
+    public InfoRef? CurrentInfoRef
+        => _selected is { } node
+            ? new InfoRef(InfoKind.Account, GuidId: node.Id, Code: node.Code)
+            : null;
+
+    public InfoContext? CurrentInfoContext => null;
 
     private void OpenAccount_Click(object sender, RoutedEventArgs e)
     {

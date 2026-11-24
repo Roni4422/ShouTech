@@ -104,15 +104,22 @@ public interface IInfoContextProvider
 /// </summary>
 public static class InfoContextHub
 {
-    public static event Action<InfoRef, InfoContext?>? SelectionPublished;
+    public static event Action<InfoRef?, InfoContext?>? SelectionPublished;
 
     public static InfoRef? LastRef { get; private set; }
     public static InfoContext? LastContext { get; private set; }
 
-    public static void Publish(InfoRef reference, InfoContext? context)
+    /// <summary>Publishes a selection change. A null reference means
+    /// the provider's selection cleared: subscribers ignore it and
+    /// the retained last selection is left untouched, so the shell
+    /// button still reopens on the last real selection.</summary>
+    public static void Publish(InfoRef? reference, InfoContext? context)
     {
-        LastRef = reference;
-        LastContext = context;
+        if (reference is not null)
+        {
+            LastRef = reference;
+            LastContext = context;
+        }
         SelectionPublished?.Invoke(reference, context);
     }
 }
@@ -465,7 +472,7 @@ public static class InfoSvc
         if (rec.PackQty != 0m) props.Add(new InfoProperty("PackQty", InfoFormat.Qty, rec.PackQty));
         if (rec.WeightNet != 0m) props.Add(new InfoProperty("NetWeight", InfoFormat.Qty, rec.WeightNet));
         if (!string.IsNullOrWhiteSpace(rec.SizeSpec)) props.Add(Text("Size", rec.SizeSpec));
-        props.Add(new InfoProperty("ServiceFlag", InfoFormat.YesNo, null, (rec.IsService || !rec.IsStocked) ? "Yes" : "No"));
+        props.Add(new InfoProperty("ServiceFlag", InfoFormat.YesNo, (rec.IsService || !rec.IsStocked) ? 1m : 0m));
         if (rec.ReorderQty != 0m) props.Add(new InfoProperty("ReorderPoint", InfoFormat.Qty, rec.ReorderQty));
         if (!string.IsNullOrWhiteSpace(rec.Notes)) props.Add(Text("Notes", rec.Notes));
 
@@ -557,8 +564,8 @@ public static class InfoSvc
                 : Str(row[10])));
         if (Date(row[12]) is { } recon) props.Add(new InfoProperty("ReconciliationDate", InfoFormat.Date, null, recon));
         if (!string.IsNullOrWhiteSpace(Str(row[13]))) props.Add(Text("ClosingAccount", Str(row[13])));
-        props.Add(new InfoProperty("Postable", InfoFormat.YesNo, null, Truthy(row[5]) ? "Yes" : "No"));
-        props.Add(new InfoProperty("Active", InfoFormat.YesNo, null, Truthy(row[6]) ? "Yes" : "No"));
+        props.Add(new InfoProperty("Postable", InfoFormat.YesNo, Truthy(row[5]) ? 1m : 0m));
+        props.Add(new InfoProperty("Active", InfoFormat.YesNo, Truthy(row[6]) ? 1m : 0m));
 
         return Sheet(InfoKind.Account, props, Str(row[1]), Str(row[2]));
     }
@@ -600,10 +607,11 @@ public static class InfoSvc
         var groupName = DisplayName(Str(row[12]), Str(row[13]));
         if (!string.IsNullOrWhiteSpace(groupName)) props.Add(Text("Group", groupName));
 
-        // Balance over BASE amounts (the Rpt convention): positive =
-        // the party owes us (customer) / we owe the party (supplier is
-        // credit-positive in the ledger, so its balance flips sign to
-        // read as an amount outstanding in both cases).
+        // Balance over BASE amounts (the Rpt convention), one signed
+        // convention everywhere (debit − credit, exactly like the
+        // account sheet and CoaWin): a customer who owes reads
+        // positive (Debit side); a supplier we owe reads negative
+        // (Credit side). The window renders magnitude + side word.
         var balanceRows = Query(connection,
             """
             SELECT COALESCE(SUM(COALESCE(base_debit, debit) - COALESCE(base_credit, credit)), 0)
@@ -611,8 +619,7 @@ public static class InfoSvc
             WHERE company_id = @company AND party_kind = @kind AND party_id = @party;
             """,
             ("@company", company), ("@kind", kind), ("@party", ledgerId));
-        var rawBalance = Dec(balanceRows[0][0]);
-        var balance = kind == "C" ? rawBalance : -rawBalance;
+        var balance = Dec(balanceRows[0][0]);
         props.Add(new InfoProperty("Balance", InfoFormat.MoneySide, balance));
 
         var creditLimit = Dec(row[4]);
@@ -679,7 +686,7 @@ public static class InfoSvc
         if (!string.IsNullOrWhiteSpace(Str(row[8]))) props.Add(Text("Phone", Str(row[8])));
         if (!string.IsNullOrWhiteSpace(Str(row[9]))) props.Add(Text("Mobile", Str(row[9])));
         if (!string.IsNullOrWhiteSpace(Str(row[10]))) props.Add(Text("Email", Str(row[10])));
-        props.Add(new InfoProperty("Active", InfoFormat.YesNo, null, Truthy(row[11]) ? "Yes" : "No"));
+        props.Add(new InfoProperty("Active", InfoFormat.YesNo, Truthy(row[11]) ? 1m : 0m));
 
         return Sheet(kind == "C" ? InfoKind.Customer : InfoKind.Supplier, props, Str(row[1]), name);
     }
@@ -777,7 +784,7 @@ public static class InfoSvc
             """,
             ("@company", company), ("@code", code));
         props.Add(new InfoProperty("PendingCommission", InfoFormat.Money, Dec(pendingRows[0][0])));
-        props.Add(new InfoProperty("Active", InfoFormat.YesNo, null, Truthy(row[6]) ? "Yes" : "No"));
+        props.Add(new InfoProperty("Active", InfoFormat.YesNo, Truthy(row[6]) ? 1m : 0m));
 
         return Sheet(InfoKind.SalesRep, props, code, name);
     }
@@ -812,8 +819,8 @@ public static class InfoSvc
         {
             Text("Code", Convert.ToString(row[0], CultureInfo.InvariantCulture) ?? string.Empty),
             Text("Name", name),
-            new("DefaultFlag", InfoFormat.YesNo, null, Truthy(row[3]) ? "Yes" : "No"),
-            new("Active", InfoFormat.YesNo, null, Truthy(row[4]) ? "Yes" : "No")
+            new("DefaultFlag", InfoFormat.YesNo, Truthy(row[3]) ? 1m : 0m),
+            new("Active", InfoFormat.YesNo, Truthy(row[4]) ? 1m : 0m)
         };
 
         var aggregates = Query(connection,

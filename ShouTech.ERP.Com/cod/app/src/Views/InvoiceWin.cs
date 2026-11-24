@@ -24,7 +24,7 @@ namespace ShouTech.App.Views;
 /// right payment & document fields, middle party/rep/warehouse, left cost centre & accounts,
 /// footer totals (lines total, invoice value, paid / discount, payment, remaining / extra, net).
 /// </summary>
-public sealed class InvoiceWin : BaseWin, IWindowMode
+public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
 {
     protected override string? ScheduleTintName => "Mint";
 
@@ -967,6 +967,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
     private void ConfigureGrid()
     {
         _grid.AutoGenerateColumns = false;
+        _grid.SelectionChanged += (_, _) => PublishInfoSelection();
         _grid.CanUserAddRows = false;
         _grid.CanUserResizeRows = false;
         _grid.HeadersVisibility = DataGridHeadersVisibility.Column;
@@ -1225,7 +1226,30 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
 
         if (_doc.PaymentMethod == InvPaymentMethod.Credit)
             _txtPartyAccount.Text = found.Value.Name;
+        PublishInfoSelection();
     }
+
+    // ---- Global Information Window provider (INFO_WINDOW_STUDY) ----
+    // The current line's material (with the document's party as
+    // context, so last-price-to-this-customer resolves); with no line
+    // selected, the document's party itself. No projected balance
+    // here: invoice lines are mid-edit in mixed units — the
+    // projection is a POS-surface behavior (PosWin).
+
+    public InfoRef? CurrentInfoRef
+        => _grid.SelectedItem is LineVm line && line.MaterialId is > 0
+            ? new InfoRef(InfoKind.Material, Id: line.MaterialId)
+            : _doc.PartyId is > 0
+                ? new InfoRef(_doc.Kind.IsSales() ? InfoKind.Customer : InfoKind.Supplier, Id: _doc.PartyId)
+                : null;
+
+    public InfoContext? CurrentInfoContext
+        => _doc.PartyId is > 0
+            ? new InfoContext(
+                PartyLedgerId: _doc.PartyId,
+                PartyKind: _doc.Kind.IsSales() ? "C" : "S",
+                WarehouseId: _doc.WarehouseId)
+            : null;
 
     private void RefreshTotalsFromFooterInputs()
     {

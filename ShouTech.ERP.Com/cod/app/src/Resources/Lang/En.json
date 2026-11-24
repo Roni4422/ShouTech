@@ -4819,6 +4819,7 @@
   "NotFound": "The selected item was not found.",
   "LoadFailed": "The information could not be loaded.",
   "Follow": "Follow selection",
+  "Pin": "Pin",
   "Properties": "Properties",
   "PropertiesTip": "Choose the information shown for this kind",
   "TotalWords": "Total in words",

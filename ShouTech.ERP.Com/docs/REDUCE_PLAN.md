@@ -252,7 +252,11 @@ benchmarks to be sellable as enterprise commercial software.
 - **GLOBAL Information Window** (owner evidence 2026-11-24
   17:55, SCOPE CORRECTION 17:59 + EMPHASIS 18:00; START DIRECTED
   2026-11-24 19:01 — phase-gate study committed as
-  docs/INFO_WINDOW_STUDY.md, build in progress): NOT a POS-only
+  docs/INFO_WINDOW_STUDY.md; BUILT + GATED 2026-11-24: InfoSvc +
+  InfoWin (F9 in every BaseWin window, shell button, 11 provider
+  windows, POS projected balance + live amount-in-words, per-type
+  property config via header right-click on WinPref, INF-8401/8402
+  ×4, InfoHarness 35/35; study §8 is the as-built record): NOT a POS-only
   pane — a program-wide, selection-driven Information Window
   openable from ANY window (a standard affordance in every
   window: shell command + consistent per-window entry), reading

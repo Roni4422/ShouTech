@@ -172,7 +172,7 @@ Check("customer: oldest open document 2026-02-01", Prop(customerSheet, "OldestOp
 
 var supplierSheet = InfoSvc.Resolve(new InfoRef(InfoKind.Supplier, Id: supplier.LedgerId),
     new InfoContext(MaterialId: 42));
-Check("supplier: balance reads 3,000 outstanding (sign flipped)", Num(supplierSheet, "Balance") == 3000m,
+Check("supplier: balance -3,000 signed (credit side = owed to them)", Num(supplierSheet, "Balance") == -3000m,
     $"{Num(supplierSheet, "Balance")}");
 Check("supplier: open amount 3,000", Num(supplierSheet, "OpenAmount") == 3000m);
 Check("supplier: last price for the context material 45", Num(supplierSheet, "LastPriceForMaterial") == 45m);

@@ -19,7 +19,7 @@ using ShouTech.Domain;
 namespace ShouTech.App.Views;
 
 /// <summary>Retail cashier workspace. Final invoice posting remains in the existing invoice workflow.</summary>
-public sealed class PosWin : BaseWin
+public sealed class PosWin : BaseWin, IInfoContextProvider
 {
     protected override string? ScheduleTintName => "Peach";
     private static readonly Brush Ink = ShouTech.App.Services.VisuId.ResolveBrushResource("PosInkBrush", "#172B3A");
@@ -34,6 +34,7 @@ public sealed class PosWin : BaseWin
     private readonly TextBlock _tax = new() { FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(16), Foreground = Ink };
     private readonly TextBlock _total = new() { FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(30), FontWeight = FontWeights.Bold, Foreground = ShouTech.App.Services.VisuId.ResolveBrushResource("TextOnDarkBrush", "#FFFFFF") };
     private readonly TextBlock _count = new() { FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(13), Foreground = Muted };
+    private readonly TextBlock _totalWords = new() { FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(12), Foreground = ShouTech.App.Services.VisuId.ResolveBrushResource("PosTotalLabelBrush", "#B9D4DC"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
     private readonly TextBlock _status = new() { FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(13), TextWrapping = TextWrapping.Wrap, Foreground = Muted };
     private readonly System.Collections.Generic.Dictionary<string, Button> _paymentButtons = new(StringComparer.OrdinalIgnoreCase);
     private string _selectedPaymentMethod = "Cash";
@@ -200,7 +201,23 @@ public sealed class PosWin : BaseWin
         Grid.SetColumn(cartTitle, 0); cartHeader.Children.Add(cartTitle);
         var remove = MakeButton("Remove selected", ShouTech.App.Services.VisuId.ResolveBrushResource("PosRemoveBackgroundBrush", "#EEF3F5"), Ink, 142, 38);
         remove.Click += (_, _) => { if (_grid.SelectedItem is PosLine line) { _cart.Remove(line); UpdateTotals(); } _scan.Focus(); };
-        Grid.SetColumn(remove, 1); cartHeader.Children.Add(remove);
+        // The Phenix information-window button: opens the global
+        // Information Window on the selected cart line's material,
+        // with this sale's customer + pending quantities as context
+        // (projected balance). Same surface as F9 everywhere else.
+        var infoButton = MakeButton(ShouTech.App.Localization.Loc.Get("InfoWin.Title", "Information"), ShouTech.App.Services.VisuId.ResolveBrushResource("PosRemoveBackgroundBrush", "#EEF3F5"), Ink, 142, 38);
+        infoButton.Margin = new Thickness(8, 0, 0, 0);
+        infoButton.Click += (_, _) =>
+        {
+            if (CurrentInfoRef is { } reference)
+                InfoWin.ShowFor(reference, CurrentInfoContext, this);
+            else
+                InfoWin.ShowLast(this);
+        };
+        var cartActions = new StackPanel { Orientation = Orientation.Horizontal };
+        cartActions.Children.Add(remove);
+        cartActions.Children.Add(infoButton);
+        Grid.SetColumn(cartActions, 1); cartHeader.Children.Add(cartActions);
         Grid.SetRow(cartHeader, 0); cartLayout.Children.Add(cartHeader);
 
         _grid.ItemsSource = _cart;
@@ -218,6 +235,7 @@ public sealed class PosWin : BaseWin
         _grid.Columns.Add(new DataGridTextColumn { Header = "LINE TOTAL", Binding = new System.Windows.Data.Binding(nameof(PosLine.Total)) { StringFormat = "N2" }, IsReadOnly = true, Width = 100 });
         _grid.CellEditEnding += (_, _) => Dispatcher.BeginInvoke(new Action(() => { ClampDiscountValues(); UpdateTotals(); }));
         _grid.CurrentCellChanged += (_, _) => UpdateTotals();
+        _grid.SelectionChanged += (_, _) => PublishInfoSelection();
         Grid.SetRow(_grid, 1); cartLayout.Children.Add(_grid);
         cartCard.Child = cartLayout; Grid.SetColumn(cartCard, 0); body.Children.Add(cartCard);
 
@@ -253,7 +271,7 @@ public sealed class PosWin : BaseWin
         var customerTitle = new TextBlock { Text = "CUSTOMER", FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(11), FontWeight = FontWeights.Bold, Foreground = Teal, Margin = new Thickness(0, 4, 0, 6) };
         totals.Children.Add(customerTitle);
         _customerCode.ToolTip = "Customer code (blank = walk-in)";
-        _customerCode.LostFocus += (_, _) => ResolveCustomer();
+        _customerCode.LostFocus += (_, _) => { ResolveCustomer(); PublishInfoSelection(); };
         totals.Children.Add(_customerCode);
         totals.Children.Add(_customerName);
         var rule = new Border { Height = 1, Background = PosBorderBrush, Margin = new Thickness(0, 13, 0, 13) }; totals.Children.Add(rule);
@@ -261,6 +279,7 @@ public sealed class PosWin : BaseWin
         var totalLayout = new StackPanel();
         totalLayout.Children.Add(new TextBlock { Text = "TOTAL DUE", FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(11), FontWeight = FontWeights.Bold, Foreground = ShouTech.App.Services.VisuId.ResolveBrushResource("PosTotalLabelBrush", "#B9D4DC") });
         totalLayout.Children.Add(_total);
+        totalLayout.Children.Add(_totalWords);
         totalPanel.Child = totalLayout; totals.Children.Add(totalPanel);
 
         var payTitle = new TextBlock { Text = "PAYMENT METHOD", FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(11), FontWeight = FontWeights.Bold, Foreground = Teal, Margin = new Thickness(0, 15, 0, 8) };
@@ -459,8 +478,86 @@ public sealed class PosWin : BaseWin
         _subtotal.Text = $"{subtotal:N2} {currency}";
         _tax.Text = $"{tax:N2} {currency}";
         _total.Text = $"{total:N2} {currency}";
+        // Live amount-in-words under the total (Phenix POS renders the
+        // tafqeet as the bill is built). NumWords is the program's one
+        // amount-in-words engine — the same wording the printed
+        // documents carry (English legal wording by design).
+        _totalWords.Text = _cart.Count == 0
+            ? string.Empty
+            : $"{ShouTech.App.Localization.Loc.Get("InfoWin.TotalWords", "Total in words")}: {NumWords.ToWords(total, currency)}";
         _count.Text = $"{_cart.Count} line(s)  ·  {_cart.Sum(x => x.Qty):N3} item(s)";
         if (_cart.Count == 0) SetStatus("Scan a barcode or enter an item code or name to begin.");
+        PublishInfoSelection();
+    }
+
+    // ---- Global Information Window provider (INFO_WINDOW_STUDY) ----
+    // The selected cart line's material, in the context of THIS sale:
+    // the attached customer (last-price-to-this-customer), the active
+    // warehouse, and the cart's pending-out quantity for the material
+    // converted to base units through the card's unit equivalents —
+    // the projected balance Phenix shows. When any line's unit cannot
+    // be resolved to an equivalent, the projection is omitted rather
+    // than approximated.
+
+    public InfoRef? CurrentInfoRef
+        => _grid.SelectedItem is PosLine line && line.MaterialId is > 0
+            ? new InfoRef(InfoKind.Material, Id: line.MaterialId)
+            : null;
+
+    public InfoContext? CurrentInfoContext
+    {
+        get
+        {
+            decimal? pendingOut = null;
+            if (_grid.SelectedItem is PosLine selected && selected.MaterialId is > 0)
+            {
+                var total = 0m;
+                var resolved = true;
+                foreach (var line in _cart)
+                {
+                    if (line.MaterialId != selected.MaterialId)
+                        continue;
+                    var factor = UnitFactor(selected.MaterialId.Value, line.Unit);
+                    if (factor is null) { resolved = false; break; }
+                    total += line.Qty * factor.Value;
+                }
+                if (resolved && total != 0m)
+                    pendingOut = total;
+            }
+            return new InfoContext(
+                PartyLedgerId: _partyId,
+                PartyKind: _partyId is > 0 ? "C" : null,
+                WarehouseId: _activeWarehouseId,
+                PendingOutQty: pendingOut);
+        }
+    }
+
+    /// <summary>Base-unit equivalent of one unit of the material
+    /// (the units grid's equivalent relative to the FIRST unit), or null
+    /// when the unit name is not on the card.</summary>
+    private static decimal? UnitFactor(long materialId, string unit)
+    {
+        if (string.IsNullOrWhiteSpace(unit))
+            return 1m;
+        var material = MatRepo.LoadById(materialId, false);
+        if (material is null)
+            return null;
+        (string? Name, decimal Factor)[] units =
+        {
+            (material.Unit1, material.Unit1Factor),
+            (material.Unit2, material.Unit2Factor),
+            (material.Unit3, material.Unit3Factor),
+            (material.Unit4, material.Unit4Factor),
+            (material.Unit5, material.Unit5Factor),
+            (material.DefaultUnit, 1m)
+        };
+        foreach (var (name, factor) in units)
+        {
+            if (!string.IsNullOrWhiteSpace(name)
+                && string.Equals(name.Trim(), unit.Trim(), StringComparison.OrdinalIgnoreCase))
+                return factor <= 0m ? 1m : factor;
+        }
+        return null;
     }
 
     // ---- Build POS 066: session, customer, products, hold/recall, return ----

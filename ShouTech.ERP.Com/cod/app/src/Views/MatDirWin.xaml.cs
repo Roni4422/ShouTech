@@ -92,7 +92,7 @@ public sealed class MatDirNode : System.ComponentModel.INotifyPropertyChanged
 /// <summary>
 /// Material and group directory.
 /// </summary>
-public partial class MatDirWin : BaseWin
+public partial class MatDirWin : BaseWin, IInfoContextProvider
 {
     protected override string? ScheduleTintName => "Sand";
 
@@ -147,6 +147,7 @@ public MatDirWin()
     ApplyDirection();
 
     TvItems.ItemsSource = _roots;
+    TvItems.SelectedItemChanged += (_, _) => PublishInfoSelection();
 
     Reload();
 }
@@ -235,6 +236,16 @@ private void OnLanguageChanged(object? sender, EventArgs e)
 
 private MatDirListItem? SelectedItem
     => (TvItems.SelectedItem as MatDirNode)?.Item;
+
+// Global Information Window provider (INFO_WINDOW_STUDY): a material
+// node publishes its material; a group node publishes nothing (groups
+// have no property sheet — the study's entity set has no group kind).
+public InfoRef? CurrentInfoRef
+    => SelectedItem is { ItemKind: MatDirListItem.Kind.Material } item
+        ? new InfoRef(InfoKind.Material, Id: item.Id)
+        : null;
+
+public InfoContext? CurrentInfoContext => null;
 
 private void Reload()
 {

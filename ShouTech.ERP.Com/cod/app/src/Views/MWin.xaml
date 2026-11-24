@@ -948,6 +948,24 @@
                                Source="pack://application:,,,/Resources/Ico/ArchiveBin.png"/>
                     </Button>
                 </StatusBarItem>
+                <StatusBarItem x:Name="InfoStatusItem"
+                               HorizontalAlignment="Left"
+                               HorizontalContentAlignment="Left">
+                    <Button x:Name="InfoButton"
+                            ToolTip="Information (F9)"
+                            Width="36"
+                            Height="30"
+                            Margin="0,0,8,0"
+                            Click="OnInfoClick">
+                        <TextBlock Text="i"
+                                   FontFamily="Georgia"
+                                   FontStyle="Italic"
+                                   FontWeight="Bold"
+                                   FontSize="17"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                    </Button>
+                </StatusBarItem>
             </StatusBar>
 
             <!-- Archive bin: LTR Canvas so RTL shell does not mirror screen sides -->

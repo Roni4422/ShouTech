@@ -162,7 +162,7 @@ public sealed class MatCategoryOption
 // ====================================================================
 //  MatCard - Material Card window
 // ====================================================================
-public partial class MatCard : BaseWin
+public partial class MatCard : BaseWin, IInfoContextProvider
 {
     protected override string? ScheduleTintName => "Amber";
 
@@ -179,6 +179,13 @@ public partial class MatCard : BaseWin
     private bool _isEditing;
     private long _currentId;
     private MatRepo.MatRec? _loaded;
+
+    // Global Information Window provider (INFO_WINDOW_STUDY): the
+    // card's loaded material.
+    public InfoRef? CurrentInfoRef
+        => _currentId != 0 ? new InfoRef(InfoKind.Material, Id: _currentId) : null;
+
+    public InfoContext? CurrentInfoContext => null;
 
     private static readonly Regex NumericInputRegex =
         new(@"^[0-9]*\.?[0-9]*$", RegexOptions.Compiled);
@@ -1028,6 +1035,7 @@ public partial class MatCard : BaseWin
             _loaded = m;
             _currentId = m.Id;
             _isNew = false;
+            PublishInfoSelection();
 
             BindToUi(m);
             SetEditMode(false);

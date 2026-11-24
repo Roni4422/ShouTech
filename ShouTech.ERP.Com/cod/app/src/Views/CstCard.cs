@@ -23,7 +23,7 @@ namespace ShouTech.App.Views;
 /// party_groups, the balance from party_ledger, and Statement opens the
 /// account-statement report window.
 /// </summary>
-public sealed class CstCard : BaseWin
+public sealed class CstCard : BaseWin, IInfoContextProvider
 {
     protected override string? ScheduleTintName => "Rose";
 
@@ -101,6 +101,17 @@ public sealed class CstCard : BaseWin
             SyncTypeCombo();
         }
     }
+
+    // Global Information Window provider (INFO_WINDOW_STUDY): the
+    // card's loaded party, resolved by its code (the resolver maps
+    // the code to the party's ledger id).
+    public InfoRef? CurrentInfoRef
+        => _loadedId is not null && !string.IsNullOrWhiteSpace(_txtCode.Text)
+            ? new InfoRef(_partyKind == PartyKinds.Supplier ? InfoKind.Supplier : InfoKind.Customer,
+                Code: _txtCode.Text.Trim())
+            : null;
+
+    public InfoContext? CurrentInfoContext => null;
 
     public CstCard() : this(false)
     {
@@ -377,6 +388,7 @@ public sealed class CstCard : BaseWin
         _partyKind = party.Kind;
         SyncTypeCombo();
         _txtCode.Text = party.Code;
+        PublishInfoSelection();
         _txtNameEn.Text = party.NameEn;
         _txtNameAr.Text = party.NameAr ?? string.Empty;
         _txtTaxNo.Text = party.TaxNo ?? string.Empty;

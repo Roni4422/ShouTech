@@ -4810,6 +4810,7 @@
   "NotFound": "L'élément sélectionné est introuvable.",
   "LoadFailed": "Les informations n'ont pas pu être chargées.",
   "Follow": "Suivre la sélection",
+  "Pin": "Épingler",
   "Properties": "Propriétés",
   "PropertiesTip": "Choisissez les informations affichées pour ce type",
   "TotalWords": "Total en lettres",

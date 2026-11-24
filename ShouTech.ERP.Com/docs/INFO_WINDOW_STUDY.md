@@ -222,3 +222,61 @@ account balance and movement count; rep month sales, target and
 achievement; document sheet totals; not-found maps to INF-8401.
 Plus the standing gates (build 0/0, migrator through 124 idempotent,
 4 audits, errors parity, P2p 39/39, W1 36/36, Bin 22/22, Num 27/27).
+
+## 8. As built (2026-11-24, reduce)
+
+Landed in two gated steps: S1 = InfoSvc + catalogs + InfoHarness;
+S2 = InfoWin + BaseWin F9 affordance + shell button + providers +
+POS surface. Gates at both landings: build 0/0, migrator through
+124 idempotent (no new migration — §6), 4 audits exit 0, errors
+parity 171 codes ×4, P2p 39/39, W1 36/36, Bin 22/22, Num 27/27,
+InfoHarness 35/35.
+
+Served property sets (registry order; the header right-click menu
+toggles each per entity type, persisted via WinPref):
+
+- **Material**: Code, Name, Group, Category, TotalBalance,
+  ProjectedBalance (context only), ReservedQty, AvailableQty,
+  WarehouseBalances (child rows), StockValue, AvgCost, LastCost,
+  CardCost, StandardCost, CostMethod, SalePrice, WholesalePrice,
+  HalfWholesalePrice (the card's special price), ExportPrice,
+  DistributorPrice, OnlinePrice, MinSalePrice, MinPurchasePrice,
+  MaxPurchasePrice, AvgSalePrice, AvgPurchasePrice, LastPurchasePrice,
+  LastPurchaseDate, LastPurchaseSupplier, LastSalePrice,
+  LastSalePriceToCustomer (context party), SalesThisMonthQty,
+  SalesThisMonthAmount, Manufacturer, Brand, OriginCountry, Source,
+  Barcode, ExtraBarcodes, Packing (pack qty + units per parcel),
+  Weight, Size, DefaultUnit, ServiceFlag, Notes.
+- **Account**: Code, Name, Type, ParentCode, Balance (signed
+  debit−credit, rendered magnitude + side), DebitTotal, CreditTotal,
+  MovementsCount, LastMovementDate, Currency, Budget, WarningSide,
+  AccountSide, ReconciliationDate, Postable, Active.
+- **Customer / Supplier**: Code, Name, Group, Balance (same signed
+  convention), CreditLimit, CreditUsedPct, CreditDays, OpenAmount,
+  OldestOpenDate, LastTransactionDate, LastTransactionAmount,
+  LastPriceForMaterial (context material), Phone, TaxNumber.
+- **SalesRep**: Code, Name, Group, CommissionPct, MonthSales
+  (commission-engine basis), Target (targets table, card fallback),
+  AchievementPct, MonthCommission, PendingCommission, Phone, Active.
+- **Warehouse**: Code, Name, ParentWarehouse, MaterialsCount,
+  TotalQty, StockValue, DefaultFlag, Active.
+- **Document**: DocNo, Kind, Date, Party, Status, Warehouse,
+  Currency, SubTotal, DiscountTotal, TaxTotal, GrandTotal,
+  PaidAmount, OpenAmount, LinesCount.
+
+Providers wired (publish on selection change; F9 reads live):
+PosWin (cart line material + sale context + projected balance +
+labelled Information button + live amount-in-words under the POS
+total), InvoiceWin (line material / document party), MatDirWin
+(material tree nodes), MatCard, CoaWin, AccCard, CstCard (customer
+and supplier kinds), RepCard, WhsWin, DocSearchWin (document rows).
+Every other BaseWin window answers F9 with the last published
+selection or the localized empty state.
+
+Exceptions and deferrals (unchanged from §5, restated): startup
+chain and modal pickers offer no F9; chemical composition and
+spare-part properties have no schema fields and are NOT served;
+party aging buckets stay with the reports; rep month figures are
+commission-engine based and labelled as such; the amount-in-words
+engine renders 2 fraction digits (KWD/JOD 3-decimal precision is a
+recorded NumWords limitation, not silently changed here).
