@@ -42,13 +42,14 @@ public static class PosPosting
     /// posted document (with its journal number).</summary>
     public static InvDoc CompleteSale(
         InvDoc doc, Guid? sessionId, IReadOnlyList<PosTender> tenders,
-        string userId, Func<InvDoc, IReadOnlyDictionary<int, LineBatchSerialCapture>?> captureBatchSerial)
+        string userId, Func<InvDoc, IReadOnlyDictionary<int, LineBatchSerialCapture>?> captureBatchSerial,
+        decimal exchangeCredit = 0m)
     {
         ArgumentNullException.ThrowIfNull(doc);
         ArgumentNullException.ThrowIfNull(tenders);
         if (doc.Kind != InvDocKind.PosSale)
             throw new InvalidOperationException("CompleteSale only posts POS sales.");
-        PosTenderMath.ValidateSaleTenders(doc.GrandTotal, tenders, doc.PartyId is not null);
+        PosTenderMath.ValidateSaleTenders(doc.GrandTotal, tenders, doc.PartyId is not null, exchangeCredit);
         doc.PaidAmount = PosTenderMath.CollectedAmount(tenders);
         // The document's single PaymentMethod stays meaningful for the
         // legacy readers: Card when any card tender exists, Credit
@@ -61,9 +62,129 @@ public static class PosPosting
         var captures = captureBatchSerial(doc);
         if (captures is null) return doc; // capture cancelled by the cashier
         InvRepo.Post(doc.DocId, doc.Kind, userId, captures,
-            new PosPostingContext(sessionId, tenders));
+            new PosPostingContext(sessionId, tenders, exchangeCredit));
         var posted = InvRepo.Load(doc.DocId, doc.Kind) ?? doc;
         return posted;
+    }
+
+    /// <summary>The two posted documents of one POS exchange (W9).</summary>
+    public sealed record PosExchangeResult(InvDoc ReturnDoc, InvDoc SaleDoc, string ExchangeRef, decimal Net);
+
+    /// <summary>
+    /// A POS exchange (sales cycle W9): return lines off a completed
+    /// bill AND a new sale in one flow, settled on the NET.
+    ///
+    /// Document model (chosen): an exchange is TWO documents — the
+    /// SRT return and the POS sale — each posted through the existing
+    /// verified paths (CreatePosReturn / CompleteSale, each in its
+    /// own posting transaction; the InvRepo architecture posts one
+    /// document per transaction, so a single cross-document
+    /// transaction does not exist to reuse). Both documents are
+    /// stamped with the same exchange_ref (migration 104) so the
+    /// pair is one auditable flow. If the sale leg fails after the
+    /// return posted, the return stands as an ordinary POS return —
+    /// a true, complete document, never a half-exchange.
+    ///
+    /// Netting: net = new sale total − return total.
+    ///   * The return's refund is ONLY the negative-net excess
+    ///     (cashRefund / cardRefund, magnitudes summing to −net when
+    ///     net &lt; 0, both zero otherwise); the consumed part of the
+    ///     return rides as the return's on-account remainder — the
+    ///     existing partial-return shape.
+    ///   * The new sale is tendered with an on-account "exchange
+    ///     credit" tender equal to the consumed return value, plus
+    ///     <paramref name="netTenders"/> settling the positive net.
+    ///     The credit is not party credit (PosTenderMath carries it
+    ///     as exchangeCredit): its GL receivable leg is offset by
+    ///     the return's own credit leg, and for a named party the
+    ///     return's ledger credit and the sale's ledger debit net on
+    ///     the party ledger. Drawer math nets too: the session's
+    ///     cash tenders sum to exactly the net cash movement.
+    /// </summary>
+    public static PosExchangeResult CompleteExchange(
+        PosOriginalBill original, IReadOnlyDictionary<int, decimal> qtyByLineNo,
+        InvDoc newSale, IReadOnlyList<PosTender> netTenders,
+        decimal cashRefund, decimal cardRefund, Guid? sessionId,
+        string reason, string userId,
+        Func<InvDoc, IReadOnlyDictionary<int, LineBatchSerialCapture>?> captureBatchSerial)
+    {
+        ArgumentNullException.ThrowIfNull(original);
+        ArgumentNullException.ThrowIfNull(newSale);
+        ArgumentNullException.ThrowIfNull(netTenders);
+        if (newSale.Kind != InvDocKind.PosSale)
+            throw new InvalidOperationException("An exchange's new document must be a POS sale.");
+        if (newSale.Lines.Count == 0)
+            throw new AppError(ErrorCodes.PosTenderInvalid, "An exchange needs at least one new sale line; a plain return is not an exchange.");
+        // The exchange is with the original bill's customer (or the
+        // same walk-in): the sale inherits the original's party.
+        newSale.PartyId = original.PartyId;
+        newSale.PartyCode = original.PartyCode ?? string.Empty;
+        newSale.PartyName = original.PartyName ?? string.Empty;
+
+        // 1) The return leg. Its total decides the net, so it posts
+        // first with only the excess refunded (validated below once
+        // the real total is known — the refund split the cashier
+        // entered is checked against the posted total, and a split
+        // that exceeds the excess is refused BEFORE the sale leg).
+        var returnDoc = CreatePosReturn(original, qtyByLineNo, cashRefund, cardRefund,
+            sessionId, reason, userId, captureBatchSerial);
+        if (returnDoc.Status != InvDocStatus.Posted) return new PosExchangeResult(returnDoc, newSale, string.Empty, 0m); // capture cancelled; draft stands
+
+        var returnTotal = returnDoc.GrandTotal;
+        var net = PosTenderMath.ExchangeNet(newSale.GrandTotal, returnTotal);
+        var refundGiven = PosTenderMath.Round(cashRefund + cardRefund);
+        var expectedRefund = net < 0 ? -net : 0m;
+        if (refundGiven != expectedRefund)
+        {
+            // The return already posted as an ordinary return with
+            // the cashier's split; refuse the sale leg rather than
+            // pretend the pair netted.
+            throw new AppError(ErrorCodes.PosTenderMismatch,
+                $"The refunded {refundGiven} does not equal the exchange excess {expectedRefund} (return {returnTotal}, new sale {newSale.GrandTotal}); the return {returnDoc.DocNo} stands as a plain return and no exchange sale was posted.");
+        }
+        var consumedCredit = PosTenderMath.Round(returnTotal - refundGiven);
+        if (consumedCredit > PosTenderMath.Round(newSale.GrandTotal))
+            throw new AppError(ErrorCodes.PosTenderMismatch,
+                "The consumed return credit exceeds the new sale total; the exchange cannot net.");
+
+        // 2) The sale leg: exchange-credit tender + the net tenders.
+        var saleTenders = new List<PosTender>();
+        if (consumedCredit > 0)
+            saleTenders.Add(new PosTender { TenderType = PosTenderTypes.OnAccount, Amount = consumedCredit });
+        saleTenders.AddRange(netTenders);
+        var postedSale = CompleteSale(newSale, sessionId, saleTenders, userId, captureBatchSerial, consumedCredit);
+        if (postedSale.Status != InvDocStatus.Posted) return new PosExchangeResult(returnDoc, postedSale, string.Empty, net); // capture cancelled
+
+        // 3) Link the pair.
+        var exchangeRef = "EXC-" + Guid.NewGuid().ToString("N")[..12].ToUpperInvariant();
+        StampExchangeRef(returnDoc.DocId, postedSale.DocId, exchangeRef);
+        return new PosExchangeResult(returnDoc, postedSale, exchangeRef, net);
+    }
+
+    /// <summary>Stamps the shared exchange_ref on both documents of
+    /// an exchange, in one transaction (the RestoreOriginalLineNumbers
+    /// pattern).</summary>
+    private static void StampExchangeRef(long returnDocId, long saleDocId, string exchangeRef)
+    {
+        var cs = DatabaseRuntime.GetConnectionString()
+            ?? throw new InvalidOperationException("No database connection.");
+        using var connection = Open(cs);
+        using var tx = connection.BeginTransaction();
+        foreach (var docId in new[] { returnDocId, saleDocId })
+        {
+            using var upd = connection.CreateCommand();
+            upd.Transaction = tx;
+            // sales_documents rows carry the company CODE on insert,
+            // but legacy rows may carry the company GUID (the InvRepo
+            // dual-key pattern) — match either store of the company.
+            upd.CommandText = "UPDATE sales_documents SET exchange_ref=$ref WHERE doc_id=$id AND company_id IN ($company, (SELECT company_id FROM companies WHERE company_code=$company));";
+            Add(upd, "$ref", exchangeRef);
+            Add(upd, "$id", docId);
+            Add(upd, "$company", Company);
+            if (upd.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException($"Document {docId} could not be stamped with the exchange reference.");
+        }
+        tx.Commit();
     }
 
     /// <summary>The refund tenders for a return, built from the
@@ -220,6 +341,144 @@ public static class PosPosting
     }
 
     private static void Add(DbCommand command, string name, object? value)
+    {
+        var p = command.CreateParameter();
+        p.ParameterName = name;
+        p.Value = value ?? DBNull.Value;
+        command.Parameters.Add(p);
+    }
+}
+
+/// <summary>An approved supervisor override of the cashier discount
+/// limit (migration 104): who approved, the ceiling that was
+/// exceeded, and the measured discount it approved. Written to
+/// pos_discount_overrides by <see cref="PosDiscountGuard"/> once the
+/// sale it approved has posted.</summary>
+public sealed record PosDiscountApproval(
+    string Cashier, string ApprovedBy, decimal LimitPct,
+    PosDiscountMath.Measurement Measurement);
+
+/// <summary>
+/// Supervisor-override verification + audit for the numeric cashier
+/// discount limit (sales cycle W9, migration 104). A supervisor is a
+/// user of the SAME company who (a) authenticates with their own
+/// password (PwdHash.Verify — the Auth.cs primitive, no session is
+/// touched and no login lockout state is mutated) and (b) holds
+/// POS.DISCOUNT.OVERRIDE under the exact Permissions.cs resolution
+/// (administrator, role grant, or per-user allow; a per-user deny
+/// wins). Verification never reveals which half failed.
+/// </summary>
+public static class PosDiscountGuard
+{
+    private static string Company => AppState.CurrentCompanyCode ?? string.Empty;
+
+    /// <summary>True when the named user authenticated AND holds
+    /// POS.DISCOUNT.OVERRIDE in the current company.</summary>
+    public static bool VerifySupervisor(string username, string password)
+    {
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrEmpty(password)) return false;
+        var cs = DatabaseRuntime.GetConnectionString()
+            ?? throw new InvalidOperationException("No database connection.");
+        var pg = DatabaseRuntime.IsPostgreSql();
+        var notDeleted = pg ? "is_deleted = FALSE" : "is_deleted = 0";
+        var active = pg ? "is_active = TRUE" : "is_active = 1";
+        using var connection = OpenConnection(cs);
+        object userId;
+        string hash, salt;
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = $"""
+                SELECT u.user_id, u.password_hash, u.password_salt
+                FROM users u JOIN companies c ON c.company_id = u.company_id
+                WHERE c.company_code = $company AND u.username = $user
+                  AND u.{active} AND u.{notDeleted} AND c.{active} AND c.{notDeleted}
+                """;
+            AddParam(cmd, "$company", Company);
+            AddParam(cmd, "$user", username.Trim());
+            using var reader = cmd.ExecuteReader();
+            if (!reader.Read()) return false;
+            userId = reader.GetValue(0);
+            hash = reader.IsDBNull(1) ? string.Empty : Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? string.Empty;
+            salt = reader.IsDBNull(2) ? string.Empty : Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture) ?? string.Empty;
+        }
+        if (!PwdHash.Verify(password, hash, salt)) return false;
+
+        var effectTrue = pg ? "TRUE" : "1";
+        var effectFalse = pg ? "FALSE" : "0";
+        long Count(string sql)
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = sql;
+            AddParam(cmd, "$uid", userId);
+            AddParam(cmd, "$company", Company);
+            return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+        }
+        var isAdmin = Count($"""
+            SELECT COUNT(*) FROM user_roles ur JOIN roles r ON r.role_id = ur.role_id
+            JOIN companies c ON c.company_id = r.company_id
+            WHERE ur.user_id = $uid AND c.company_code = $company
+              AND r.role_code = 'ROLE_ADMINISTRATOR' AND r.{active} AND r.{notDeleted}
+            """) > 0;
+        var granted = isAdmin || Count($"""
+            SELECT COUNT(*) FROM role_permissions rp
+            JOIN user_roles ur ON ur.role_id = rp.role_id
+            JOIN permissions p ON p.permission_id = rp.permission_id
+            WHERE ur.user_id = $uid AND p.permission_code = 'POS.DISCOUNT.OVERRIDE' AND p.{active}
+            """) > 0 || Count($"""
+            SELECT COUNT(*) FROM user_permissions up
+            JOIN permissions p ON p.permission_id = up.permission_id
+            WHERE up.user_id = $uid AND p.permission_code = 'POS.DISCOUNT.OVERRIDE' AND up.effect = {effectTrue}
+            """) > 0;
+        if (!granted) return false;
+        var denied = Count($"""
+            SELECT COUNT(*) FROM user_permissions up
+            JOIN permissions p ON p.permission_id = up.permission_id
+            WHERE up.user_id = $uid AND p.permission_code = 'POS.DISCOUNT.OVERRIDE' AND up.effect = {effectFalse}
+            """) > 0;
+        return !denied;
+    }
+
+    /// <summary>Writes the override audit row for a posted sale.
+    /// Called AFTER the sale posts, so the row always names a real
+    /// document; a cancelled checkout writes nothing.</summary>
+    public static void RecordOverride(string docKind, string docNo, long docId, PosDiscountApproval approval)
+    {
+        ArgumentNullException.ThrowIfNull(approval);
+        var cs = DatabaseRuntime.GetConnectionString()
+            ?? throw new InvalidOperationException("No database connection.");
+        using var connection = OpenConnection(cs);
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO pos_discount_overrides
+                (id, company_id, doc_kind, doc_no, doc_id, cashier, approved_by,
+                 limit_pct, effective_pct, max_line_pct, discount_amount)
+            VALUES ($id, $company, $kind, $no, $doc, $cashier, $approver,
+                    $limit, $effective, $maxline, $amount);
+            """;
+        AddParam(cmd, "$id", Guid.NewGuid().ToString("D"));
+        AddParam(cmd, "$company", Company);
+        AddParam(cmd, "$kind", docKind);
+        AddParam(cmd, "$no", docNo);
+        AddParam(cmd, "$doc", docId);
+        AddParam(cmd, "$cashier", approval.Cashier);
+        AddParam(cmd, "$approver", approval.ApprovedBy);
+        AddParam(cmd, "$limit", approval.LimitPct);
+        AddParam(cmd, "$effective", approval.Measurement.EffectivePct);
+        AddParam(cmd, "$maxline", approval.Measurement.MaxLinePct);
+        AddParam(cmd, "$amount", approval.Measurement.DiscountAmount);
+        cmd.ExecuteNonQuery();
+    }
+
+    private static DbConnection OpenConnection(string connectionString)
+    {
+        DbConnection connection = DatabaseRuntime.IsPostgreSql()
+            ? new NpgsqlConnection(connectionString)
+            : new SqliteConnection(DatabaseRuntime.NormalizeSqliteConnectionString(connectionString));
+        connection.Open();
+        return connection;
+    }
+
+    private static void AddParam(DbCommand command, string name, object? value)
     {
         var p = command.CreateParameter();
         p.ParameterName = name;

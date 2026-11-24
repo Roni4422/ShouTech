@@ -28,6 +28,7 @@ public sealed class PosCheckoutWin : BaseWin
     private readonly InvDoc _doc;
     private readonly Guid? _sessionId;
     private readonly string? _sessionNo;
+    private readonly PosDiscountApproval? _discountApproval;
     private readonly TextBlock _docNo = new();
     private readonly TextBlock _date = new();
     private readonly TextBlock _customer = new();
@@ -47,11 +48,13 @@ public sealed class PosCheckoutWin : BaseWin
     public InvDoc? PostedDoc { get; private set; }
     public decimal ChangeDue { get; private set; }
 
-    public PosCheckoutWin(InvDoc doc, Guid? sessionId, string? sessionNo, string defaultTender)
+    public PosCheckoutWin(InvDoc doc, Guid? sessionId, string? sessionNo, string defaultTender,
+        PosDiscountApproval? discountApproval = null)
     {
         _doc = doc ?? throw new ArgumentNullException(nameof(doc));
         _sessionId = sessionId;
         _sessionNo = sessionNo;
+        _discountApproval = discountApproval;
         Width = 620;
         Height = 560;
         MinWidth = 540;
@@ -212,6 +215,21 @@ public sealed class PosCheckoutWin : BaseWin
                 return;
             }
             PostedDoc = posted;
+            // W9: a supervisor-approved over-limit discount is
+            // audited against the POSTED document (migration 104,
+            // pos_discount_overrides). A failed audit write is
+            // reported centrally; the sale itself already posted.
+            if (_discountApproval is not null)
+            {
+                try
+                {
+                    PosDiscountGuard.RecordOverride("POS", posted.DocNo, posted.DocId, _discountApproval);
+                }
+                catch (Exception auditEx)
+                {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, auditEx, "PosCheckoutWin.RecordDiscountOverride");
+                }
+            }
             ShowInfo("POS.SalePosted");
             try
             {

@@ -144,6 +144,44 @@ public sealed class PosService
     public Task<PosZReport> GetZReportAsync(string companyId, Guid sessionId, CancellationToken cancellationToken = default)
         => _repository.GetZReportAsync(RequireCompany(companyId), sessionId, cancellationToken);
 
+    // ---- Session paid-outs (migration 104) --------------------------------------
+    /// <summary>Records a drawer paid-out: positive amount, a reason,
+    /// an open session (the repository re-checks state in its
+    /// transaction). The paid-out reduces the session's expected
+    /// cash; it is a reconciliation record, not a GL posting —
+    /// sessions journal nothing at close (066 model).</summary>
+    public Task<PosSessionExpense> RecordSessionExpenseAsync(string companyId, Guid sessionId, decimal amount, string reason, string? referenceNo, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        if (amount <= 0)
+            throw new AppError(ErrorCodes.PosSessionStateInvalid, "A paid-out amount must be positive.");
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new AppError(ErrorCodes.PosSessionStateInvalid, "A paid-out needs a reason.");
+        return _repository.RecordSessionExpenseAsync(companyId, sessionId, amount, reason.Trim(), referenceNo, RequireUser(userId), cancellationToken);
+    }
+
+    public Task<IReadOnlyList<PosSessionExpense>> GetSessionExpensesAsync(string companyId, Guid sessionId, CancellationToken cancellationToken = default)
+        => _repository.GetSessionExpensesAsync(RequireCompany(companyId), sessionId, cancellationToken);
+
+    // ---- Discount limits (migration 104) ------------------------------------------
+    public Task<decimal?> GetDiscountLimitPctAsync(string companyId, string username, CancellationToken cancellationToken = default)
+        => _repository.GetDiscountLimitPctAsync(RequireCompany(companyId), username, cancellationToken);
+
+    public Task SaveDiscountLimitAsync(string companyId, string subjectKind, string subjectKey, decimal maxDiscountPct, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        return _repository.SaveDiscountLimitAsync(companyId, subjectKind, subjectKey, maxDiscountPct, RequireUser(userId), cancellationToken);
+    }
+
+    // ---- Performance (migration 104) --------------------------------------------------
+    public Task<IReadOnlyList<PosPerformanceRow>> GetPerformanceAsync(string companyId, DateTime from, DateTime to, string? terminalCode, string? cashier, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        if (to < from)
+            throw new AppError(ErrorCodes.PosSessionStateInvalid, "The performance period ends before it starts.");
+        return _repository.GetPerformanceAsync(companyId, from, to, terminalCode, cashier, cancellationToken);
+    }
+
     private static string RequireCompany(string companyId)
     {
         if (string.IsNullOrWhiteSpace(companyId))

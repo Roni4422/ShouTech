@@ -1539,7 +1539,7 @@ public static class InvRepo
 
         if (doc.Kind == InvDocKind.PosSale)
         {
-            ShouTech.Domain.Entities.PosTenderMath.ValidateSaleTenders(doc.PostingTotal, pos.Tenders, doc.PartyId is not null);
+            ShouTech.Domain.Entities.PosTenderMath.ValidateSaleTenders(doc.PostingTotal, pos.Tenders, doc.PartyId is not null, pos.ExchangeCredit);
             var collected = ShouTech.Domain.Entities.PosTenderMath.CollectedAmount(pos.Tenders);
             if (ShouTech.Domain.Entities.PosTenderMath.Round(doc.PaidAmount) != ShouTech.Domain.Entities.PosTenderMath.Round(collected))
                 throw new AppError(ErrorCodes.PosTenderMismatch,
@@ -4657,7 +4657,11 @@ internal static class InvDocKindExt
 /// </summary>
 public sealed record PosPostingContext(
     Guid? SessionId,
-    IReadOnlyList<ShouTech.Domain.Entities.PosTender> Tenders);
+    IReadOnlyList<ShouTech.Domain.Entities.PosTender> Tenders,
+    // W9 exchange: the part of the sale's on-account tender that is a
+    // consumed return credit (the exchange return's own credit leg is
+    // its offset), not party credit — see PosTenderMath.
+    decimal ExchangeCredit = 0m);
 
 public static class InvPostingPolicy
 {

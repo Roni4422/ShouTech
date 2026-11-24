@@ -740,7 +740,12 @@ public sealed class PosRepository : IPosRepository
         z.OnAccountTendered = tenders.Where(t => t.DocKind == "POS" && t.TenderType == PosTenderTypes.OnAccount).Sum(t => t.Amount);
         z.CashRefunded = -tenders.Where(t => t.DocKind == "SRT" && t.TenderType == PosTenderTypes.Cash).Sum(t => t.Amount);
         z.CardRefunded = -tenders.Where(t => t.DocKind == "SRT" && t.TenderType == PosTenderTypes.Card).Sum(t => t.Amount);
-        z.ExpectedCash = PosTenderMath.ExpectedCash(session.OpeningCash, tenders);
+        // Paid-outs (migration 104): cash that left the drawer for
+        // till expenses reduces the expectation exactly like a refund.
+        var expenses = await ReadSessionExpensesAsync(connection, transaction, companyId, sessionId).ConfigureAwait(false);
+        z.PaidOutsCount = expenses.Count;
+        z.PaidOutsTotal = expenses.Sum(e => e.Amount);
+        z.ExpectedCash = PosTenderMath.ExpectedCash(session.OpeningCash, tenders, z.PaidOutsTotal);
         z.Variance = session.CountedCash is decimal counted ? counted - z.ExpectedCash : null;
         return z;
     }
@@ -759,6 +764,231 @@ public sealed class PosRepository : IPosRepository
         if (!await reader.ReadAsync().ConfigureAwait(false))
             throw new AppError(ErrorCodes.PosSessionStateInvalid, "The POS session was not found for this company.");
         return ReadSession(reader);
+    }
+
+    // ==================================================================
+    // Session paid-outs (migration 104)
+    // ==================================================================
+
+    public async Task<PosSessionExpense> RecordSessionExpenseAsync(string companyId, Guid sessionId, decimal amount, string reason, string? referenceNo, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        if (amount <= 0) throw new AppError(ErrorCodes.PosSessionStateInvalid, "A paid-out amount must be positive.");
+        if (string.IsNullOrWhiteSpace(reason)) throw new AppError(ErrorCodes.PosSessionStateInvalid, "A paid-out needs a reason.");
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var status = await ScalarStringAsync(connection, transaction,
+                $"SELECT status FROM pos_sessions WHERE company_id = @company AND id = @id AND {NotDeleted}",
+                ("@company", companyId.Trim()), ("@id", FormatGuid(sessionId))).ConfigureAwait(false)
+                ?? throw new AppError(ErrorCodes.PosSessionStateInvalid, "The POS session was not found for this company.");
+            if (!string.Equals(status, PosSessionStatuses.Open, StringComparison.Ordinal))
+                throw new AppError(ErrorCodes.PosSessionStateInvalid, "Paid-outs can only be recorded against an open session.", status);
+            var year = DateTime.Today.Year;
+            var count = await CountAsync(connection, transaction,
+                "SELECT COUNT(*) FROM pos_session_expenses WHERE company_id = @company AND expense_no LIKE @pattern",
+                ("@company", companyId.Trim()), ("@pattern", $"EXP-{year}-%")).ConfigureAwait(false);
+            var expense = new PosSessionExpense
+            {
+                SessionId = sessionId,
+                ExpenseNo = $"EXP-{year}-{(count + 1).ToString("D4", CultureInfo.InvariantCulture)}",
+                Amount = amount,
+                Reason = reason.Trim(),
+                ReferenceNo = NullIfBlank(referenceNo),
+                CreatedBy = userId
+            };
+            await ExecAsync(connection, transaction, """
+                INSERT INTO pos_session_expenses
+                    (id, company_id, session_id, expense_no, amount, reason, reference_no, created_by)
+                VALUES (@id, @company, @session, @no, @amount, @reason, @ref, @user)
+                """,
+                ("@id", (object)FormatGuid(expense.Id)), ("@company", companyId.Trim()),
+                ("@session", FormatGuid(sessionId)), ("@no", expense.ExpenseNo),
+                ("@amount", expense.Amount), ("@reason", expense.Reason),
+                ("@ref", (object?)expense.ReferenceNo ?? DBNull.Value), ("@user", userId)).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return expense;
+        }
+        catch { await RollbackAsync(transaction).ConfigureAwait(false); throw; }
+    }
+
+    public async Task<IReadOnlyList<PosSessionExpense>> GetSessionExpensesAsync(string companyId, Guid sessionId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        return await ReadSessionExpensesAsync(connection, null, companyId, sessionId).ConfigureAwait(false);
+    }
+
+    private async Task<List<PosSessionExpense>> ReadSessionExpensesAsync(DbConnection connection, DbTransaction? transaction, string companyId, Guid sessionId)
+    {
+        await using var command = CreateCommand(connection, transaction, $"""
+            SELECT id, session_id, expense_no, amount, reason, reference_no, created_by, CAST(created_at AS TEXT)
+            FROM pos_session_expenses
+            WHERE company_id = @company AND session_id = @session AND {NotDeleted}
+            ORDER BY created_at, expense_no
+            """);
+        Add(command, "@company", companyId.Trim());
+        Add(command, "@session", FormatGuid(sessionId));
+        var result = new List<PosSessionExpense>();
+        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        while (await reader.ReadAsync().ConfigureAwait(false))
+            result.Add(new PosSessionExpense
+            {
+                Id = ReadGuid(reader, 0), SessionId = ReadGuid(reader, 1),
+                ExpenseNo = ReadString(reader, 2) ?? string.Empty, Amount = ReadDecimal(reader, 3),
+                Reason = ReadString(reader, 4) ?? string.Empty, ReferenceNo = ReadString(reader, 5),
+                CreatedBy = ReadString(reader, 6), CreatedAt = ReadString(reader, 7)
+            });
+        return result;
+    }
+
+    // ==================================================================
+    // Discount limits (migration 104)
+    // ==================================================================
+
+    public async Task<decimal?> GetDiscountLimitPctAsync(string companyId, string username, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        if (string.IsNullOrWhiteSpace(username)) return null;
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var userLimit = await ScalarDecimalOrNullAsync(connection, null,
+            "SELECT max_discount_pct FROM pos_discount_limits WHERE company_id = @company AND subject_kind = 'USER' AND subject_key = @key",
+            ("@company", companyId.Trim()), ("@key", username.Trim())).ConfigureAwait(false);
+        if (userLimit is not null) return userLimit;
+        // The highest ROLE row among the cashier's roles in this
+        // company (users join companies by CODE, the Auth.cs shape).
+        return await ScalarDecimalOrNullAsync(connection, null, """
+            SELECT MAX(l.max_discount_pct)
+            FROM pos_discount_limits l
+            JOIN companies c ON c.company_code = @company
+            JOIN users u ON u.company_id = c.company_id AND u.username = @key
+            JOIN user_roles ur ON ur.user_id = u.user_id
+            JOIN roles r ON r.role_id = ur.role_id AND r.company_id = c.company_id
+            WHERE l.company_id = @company AND l.subject_kind = 'ROLE' AND l.subject_key = r.role_code
+            """,
+            ("@company", companyId.Trim()), ("@key", username.Trim())).ConfigureAwait(false);
+    }
+
+    public async Task SaveDiscountLimitAsync(string companyId, string subjectKind, string subjectKey, decimal maxDiscountPct, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        if (subjectKind is not (PosDiscountLimitSubjects.User or PosDiscountLimitSubjects.Role))
+            throw new AppError(ErrorCodes.PosSessionStateInvalid, $"Unknown discount-limit subject kind '{subjectKind}'.", subjectKind ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(subjectKey))
+            throw new AppError(ErrorCodes.PosSessionStateInvalid, "A discount-limit subject key (username or role code) is required.");
+        if (maxDiscountPct < 0m || maxDiscountPct > 100m)
+            throw new AppError(ErrorCodes.PosSessionStateInvalid, "A discount limit must be between 0 and 100 percent.");
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var exists = await CountAsync(connection, null,
+            "SELECT COUNT(*) FROM pos_discount_limits WHERE company_id = @company AND subject_kind = @kind AND subject_key = @key",
+            ("@company", companyId.Trim()), ("@kind", subjectKind), ("@key", subjectKey.Trim())).ConfigureAwait(false) > 0;
+        if (exists)
+            await ExecAsync(connection, null, $"""
+                UPDATE pos_discount_limits SET max_discount_pct = @pct, updated_by = @user, updated_at = {NowExpr}
+                WHERE company_id = @company AND subject_kind = @kind AND subject_key = @key
+                """,
+                ("@pct", maxDiscountPct), ("@user", userId), ("@company", companyId.Trim()),
+                ("@kind", subjectKind), ("@key", subjectKey.Trim())).ConfigureAwait(false);
+        else
+            await ExecAsync(connection, null, $"""
+                INSERT INTO pos_discount_limits (company_id, subject_kind, subject_key, max_discount_pct, updated_by, updated_at)
+                VALUES (@company, @kind, @key, @pct, @user, {NowExpr})
+                """,
+                ("@company", companyId.Trim()), ("@kind", subjectKind), ("@key", subjectKey.Trim()),
+                ("@pct", maxDiscountPct), ("@user", userId)).ConfigureAwait(false);
+    }
+
+    // ==================================================================
+    // Performance (migration 104)
+    // ==================================================================
+
+    public async Task<IReadOnlyList<PosPerformanceRow>> GetPerformanceAsync(string companyId, DateTime from, DateTime to, string? terminalCode, string? cashier, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var expenseDate = _provider == "PostgreSQL" ? "CAST(e.created_at AS DATE)" : "date(e.created_at)";
+        // One row per (terminal, cashier): documents carry their
+        // session (pos_session_id, 066), so sales/returns/discounts
+        // group through the session that ran them; paid-outs group
+        // through their own session. Sessions with only paid-outs in
+        // the period still appear (the second UNION arm).
+        await using var command = CreateCommand(connection, null, $"""
+            SELECT s.terminal_code, s.cashier,
+                   COALESCE(SUM(CASE WHEN d.doc_kind = 'POS' THEN 1 ELSE 0 END), 0),
+                   COALESCE(SUM(CASE WHEN d.doc_kind = 'POS' THEN d.grand_total ELSE 0 END), 0),
+                   COALESCE(SUM(CASE WHEN d.doc_kind = 'SRT' THEN 1 ELSE 0 END), 0),
+                   COALESCE(SUM(CASE WHEN d.doc_kind = 'SRT' THEN d.grand_total ELSE 0 END), 0),
+                   COALESCE(SUM(CASE WHEN d.doc_kind = 'POS' THEN d.discount_amount ELSE 0 END), 0)
+                   - COALESCE(SUM(CASE WHEN d.doc_kind = 'SRT' THEN d.discount_amount ELSE 0 END), 0),
+                   COALESCE((SELECT SUM(e.amount) FROM pos_session_expenses e
+                             WHERE e.company_id = @company AND e.session_id = s.id AND e.{NotDeleted}
+                               AND {expenseDate} >= @efrom AND {expenseDate} <= @eto), 0)
+            FROM pos_sessions s
+            JOIN sales_documents d ON d.company_id = @company AND d.pos_session_id = s.id
+                 AND d.status = 'Posted' AND d.{NotDeleted} AND d.doc_kind IN ('POS', 'SRT')
+            WHERE s.company_id = @company AND s.{NotDeleted}
+              AND d.doc_date >= @from AND d.doc_date <= @to
+              AND (@terminal = '' OR s.terminal_code = @terminal)
+              AND (@cashier = '' OR s.cashier = @cashier)
+            GROUP BY s.id, s.terminal_code, s.cashier
+            UNION ALL
+            SELECT s.terminal_code, s.cashier, 0, 0, 0, 0, 0,
+                   COALESCE(SUM(e.amount), 0)
+            FROM pos_sessions s
+            JOIN pos_session_expenses e ON e.company_id = @company AND e.session_id = s.id AND e.{NotDeleted}
+            WHERE s.company_id = @company AND s.{NotDeleted}
+              AND {expenseDate} >= @efrom AND {expenseDate} <= @eto
+              AND (@terminal = '' OR s.terminal_code = @terminal)
+              AND (@cashier = '' OR s.cashier = @cashier)
+              AND NOT EXISTS (SELECT 1 FROM sales_documents d2
+                              WHERE d2.company_id = @company AND d2.pos_session_id = s.id
+                                AND d2.status = 'Posted' AND d2.{NotDeleted} AND d2.doc_kind IN ('POS', 'SRT')
+                                AND d2.doc_date >= @from AND d2.doc_date <= @to)
+            GROUP BY s.id, s.terminal_code, s.cashier
+            ORDER BY 1, 2
+            """);
+        Add(command, "@company", companyId.Trim());
+        // doc_date is ISO text in both dialects; the expense date is
+        // text in SQLite (date()) but a real DATE in PostgreSQL
+        // (CAST), so the expense range gets provider-shaped params.
+        Add(command, "@from", from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        Add(command, "@to", to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        Add(command, "@efrom", _provider == "PostgreSQL" ? (object)from.Date : from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        Add(command, "@eto", _provider == "PostgreSQL" ? (object)to.Date : to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        Add(command, "@terminal", (terminalCode ?? string.Empty).Trim());
+        Add(command, "@cashier", (cashier ?? string.Empty).Trim());
+        // A session can legitimately appear once per arm only (the
+        // arms are disjoint), but two sessions of the same cashier on
+        // the same terminal must MERGE into one row.
+        var byKey = new Dictionary<(string, string), PosPerformanceRow>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            var key = (ReadString(reader, 0) ?? string.Empty, ReadString(reader, 1) ?? string.Empty);
+            if (!byKey.TryGetValue(key, out var row))
+                byKey[key] = row = new PosPerformanceRow { TerminalCode = key.Item1, Cashier = key.Item2 };
+            row.SalesCount += Convert.ToInt32(reader.GetValue(2), CultureInfo.InvariantCulture);
+            row.GrossSales += ReadDecimal(reader, 3);
+            row.ReturnsCount += Convert.ToInt32(reader.GetValue(4), CultureInfo.InvariantCulture);
+            row.ReturnsTotal += ReadDecimal(reader, 5);
+            row.DiscountsGiven += ReadDecimal(reader, 6);
+            row.PaidOuts += ReadDecimal(reader, 7);
+        }
+        return byKey.Values.OrderBy(r => r.TerminalCode).ThenBy(r => r.Cashier).ToList();
+    }
+
+    private static async Task<decimal?> ScalarDecimalOrNullAsync(DbConnection connection, DbTransaction? transaction, string sql, params (string Name, object Value)[] parameters)
+    {
+        await using var command = CreateCommand(connection, transaction, sql);
+        foreach (var (name, value) in parameters) Add(command, name, value);
+        var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        return result is null or DBNull ? null : Convert.ToDecimal(result, CultureInfo.InvariantCulture);
     }
 
     // ==================================================================

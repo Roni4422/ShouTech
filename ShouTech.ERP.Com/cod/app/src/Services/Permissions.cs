@@ -543,6 +543,10 @@ namespace ShouTech.App.Services
             public const string HoldManage = "POS.HOLD.MANAGE";
             public const string SessionBypass = "POS.SESSION.BYPASS";
 
+            // Sales cycle W9 (migration 104 seed): recording cash
+            // paid out of the drawer during an open session.
+            public const string ExpenseManage = "POS.EXPENSE.MANAGE";
+
             public const string SyncExecute = "POS.SYNC.EXECUTE";
             public const string ReportsView = "POS.REPORTS.VIEW";
         }
