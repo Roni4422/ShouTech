@@ -705,7 +705,21 @@ all PG verification on this branch, still owes a live PostgreSQL run.
 
 ## 7. Owner flags
 
-- Withholding/TDS: not built (country decision).
+- Withholding/TDS: **exclusion LIFTED by owner decision 2026-11-24** —
+  now a build workstream (W1) on top of the existing tax-engine foundation
+  (migrations 067-091), no parallel tax system. Scope: withholding
+  configuration (rate per tax code / supplier / document type, threshold
+  where the jurisdiction model supports it); deduction at supplier-invoice
+  posting (ERPNext TDS model: withheld category on the invoice, liability
+  to a withholding payable account, supplier paid net); GL integration (AP
+  gross, withholding liability credited, supplier balance net); payment
+  allocation consistent with netted balances; reversal restoring withheld
+  amounts; per-supplier per-period withholding reporting / certificate
+  data from the tax register; permissions + audit. Country specifics are
+  implemented as a configurable generic mechanism (rate + threshold +
+  liability account per jurisdiction/tax code); the country-pack question
+  is flagged, not hard-coded. Sequenced after B1 (shared invoice-posting
+  and allocation files).
 - Partial (per-line) requisition conversion and multiple POs per
   requisition: not built; whole-document conversion kept.
 - Rebase note: base is the owner's stabilization tip @ 52a762a; he is
