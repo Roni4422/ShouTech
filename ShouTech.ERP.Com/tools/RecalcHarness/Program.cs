@@ -27,6 +27,7 @@
 // period containing today.
 using System.Globalization;
 using Microsoft.Data.Sqlite;
+using ShouTech.App.Services;
 using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Infrastructure;
@@ -75,8 +76,9 @@ string Txt(object? value) => value is null or DBNull ? "" : Convert.ToString(val
 decimal GlAccountBalance(string accountCode, Guid company) =>
     Dec(Scalar($"SELECT COALESCE(SUM(l.debit - l.credit), 0) FROM journal_entry_lines l " +
                $"JOIN journal_entries e ON e.journal_entry_id = l.journal_entry_id " +
-               $"WHERE e.company_id = '{company:D}' AND e.status = 'Posted' AND e.is_deleted = 0 " +
-               $"AND l.account_code = '{accountCode}' AND l.is_deleted = 0"));
+               $"JOIN chart_of_accounts a ON a.account_id = l.account_id " +
+               $"WHERE e.company_id = '{company:D}' AND e.status = 1 AND e.is_deleted = 0 " +
+               $"AND a.account_code = '{accountCode}'"));
 
 decimal StockBalance(long materialId) =>
     Dec(Scalar($"SELECT COALESCE(stock_value, 0) FROM material_stock_balances " +
@@ -84,7 +86,7 @@ decimal StockBalance(long materialId) =>
 
 long StkRevalEntryCount() =>
     Lng(Scalar($"SELECT COUNT(*) FROM journal_entries WHERE company_id = '{companyId:D}' " +
-               $"AND source_doc_type = 'STKREVAL' AND status = 'Posted' AND is_deleted = 0"));
+               $"AND source_doc_type = 'STKREVAL' AND status = 1 AND is_deleted = 0"));
 
 // ---------------------------------------------------------------- setup
 var migration = await SchemaMigrator.ApplyAllAsync("SQLite", dbPath);
@@ -218,7 +220,7 @@ Check("ledger holds 2 posted STKREVAL entries", StkRevalEntryCount() == 2);
 Check("every STKREVAL entry is balanced",
     Lng(Scalar($"SELECT COUNT(*) FROM (SELECT l.journal_entry_id FROM journal_entry_lines l " +
                $"JOIN journal_entries e ON e.journal_entry_id = l.journal_entry_id " +
-               $"WHERE e.company_id = '{companyId:D}' AND e.source_doc_type = 'STKREVAL' AND l.is_deleted = 0 " +
+               $"WHERE e.company_id = '{companyId:D}' AND e.source_doc_type = 'STKREVAL' AND e.status = 1 AND e.is_deleted = 0 " +
                $"GROUP BY l.journal_entry_id HAVING SUM(l.debit) <> SUM(l.credit))")) == 0);
 Check("every STKREVAL entry carries the run link (source id = run id + material)",
     applied.PostedEntries.All(p => Txt(Scalar(
