@@ -423,6 +423,18 @@
   "message": "'{0}' kalite şablonu geçersiz.",
   "hint": "Şablon satırlarını kontrol edin: sayısal parametreler bir aralık, değer parametreleri kabul edilen bir değer gerektirir ve bir parametre yalnızca bir kez geçebilir."
  },
+ "INV-6017": {
+  "code": "INV-6017",
+  "name": "RecalculationChangedSincePreview",
+  "message": "Önizleme hesaplandıktan sonra stok verileri değişti; bu nedenle hiçbir kayıt işlenmedi.",
+  "hint": "Önizlemeyi yeniden çalıştırın, yeni rakamları gözden geçirin ve onaylayın."
+ },
+ "INV-6018": {
+  "code": "INV-6018",
+  "name": "RecalculationMovementsAfterRange",
+  "message": "Aralık bitiş tarihinden sonra stok hareketleri var (en son hareket '{0}'); bu nedenle bu aralık tek başına yeniden hesaplanamaz.",
+  "hint": "Bitiş tarihini en son hareketi kapsayacak şekilde uzatın ve önizlemeyi yeniden çalıştırın."
+ },
  "CRM-9001": {
   "code": "CRM-9001",
   "name": "CrmLeadAlreadyConverted",

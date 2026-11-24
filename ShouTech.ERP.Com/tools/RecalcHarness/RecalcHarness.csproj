@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- RecalcHarness: headless proof for Recalculate Costs WITH GL
+       restatement (feat/recalc-costs-gl). Runs the REAL
+       StockRecalculationService preview/apply flow against a real
+       SchemaMigrator-built SQLite database whose seeded purchase-price
+       corrections make every expected delta computable by hand, and
+       prints PASS/FAIL lines. On Linux the WindowsDesktop framework
+       entry is stripped from the generated runtimeconfig before
+       execution (the exercised code paths load no WPF types); on
+       Windows it runs as-is. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>RecalcHarness</AssemblyName>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\cod\app\src\MainApp.csproj" />
+  </ItemGroup>
+
+</Project>

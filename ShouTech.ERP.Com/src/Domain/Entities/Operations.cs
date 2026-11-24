@@ -231,6 +231,46 @@ public sealed class UnbalancedEntryRow
 /// replay engine's result, projected into the App layer).</summary>
 public sealed record RecalculationOutcome(string JobId, int MovementsReplayed, decimal ValueDelta);
 
+/// <summary>One cost change of a recalculation preview/apply, per
+/// warehouse + material: the quantity on hand and the average cost and
+/// stock value before and after the replay. A change is listed when
+/// the replay touched the key and its cost or value moved.</summary>
+public sealed record RecalcCostChange(
+    long WarehouseId, long MaterialId, string MaterialCode, string MaterialName,
+    decimal QtyOnHand, decimal OldAvgCost, decimal NewAvgCost,
+    decimal OldValue, decimal NewValue, decimal ValueDelta);
+
+/// <summary>The general-ledger adjustment one material's cost changes
+/// imply: the signed value delta restated between the material's
+/// inventory account (its acc_inventory, else 1203) and its offset
+/// account (its acc_cogs, else 401) — the same account pairing every
+/// stock-value posting in the system uses. Positive amount = inventory
+/// gained value (Dr inventory / Cr offset).</summary>
+public sealed record RecalcAdjustment(
+    long MaterialId, string MaterialCode, string MaterialName,
+    string InventoryAccountCode, string OffsetAccountCode, decimal Amount);
+
+/// <summary>A Recalculate Costs preview: the exact cost changes and
+/// matching GL adjustments a run over the range WOULD produce.
+/// Nothing is written by a preview; approval re-runs the replay and
+/// posts only when the fresh result matches this preview exactly
+/// (INV-6017 otherwise).</summary>
+public sealed record RecalculationPreview(
+    DateOnly FromDate, DateOnly ToDate, int MovementsReplayed, decimal TotalDelta,
+    IReadOnlyList<RecalcCostChange> Changes, IReadOnlyList<RecalcAdjustment> Adjustments);
+
+/// <summary>One posted GL adjustment entry of an approved
+/// recalculation run, traced to its material.</summary>
+public sealed record RecalcPostedEntry(
+    long MaterialId, string MaterialCode, Guid JournalEntryId, string DocumentNumber);
+
+/// <summary>Outcome of an approved Recalculate Costs run: the
+/// persisted job id and the adjustment entries it posted (possibly
+/// empty when the approved preview carried no value delta).</summary>
+public sealed record RecalculationApplyResult(
+    string JobId, int MovementsReplayed, decimal ValueDelta,
+    IReadOnlyList<RecalcPostedEntry> PostedEntries);
+
 /// <summary>Read-only trial-balance integrity audit result: per-period
 /// posted Dr=Cr verification, orphan journal lines (a line whose entry
 /// no longer exists), and posted entries carrying no lines at all.</summary>

@@ -114,6 +114,13 @@ public static class ErrorCodes
     public const string QualityInspectionStateInvalid = "INV-6014";
     public const string QualityInspectionQtyMismatch = "INV-6015";
     public const string QualityTemplateInvalid = "INV-6016";
+    // Recalculate Costs GL restatement (feat/recalc-costs-gl): the
+    // preview/approve flow takes the next free INV codes. 6017 fires
+    // when the data moved between preview and approval (nothing is
+    // posted); 6018 when stock movements exist after the chosen range
+    // end, which would make a bounded recalculation incoherent.
+    public const string RecalculationChangedSincePreview = "INV-6017";
+    public const string RecalculationMovementsAfterRange = "INV-6018";
 
     // ---- UI 7000-7999 --------------------------------------------------
     public const string WindowOperationFailed = "UI-7001";

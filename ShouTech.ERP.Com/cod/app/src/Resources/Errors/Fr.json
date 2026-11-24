@@ -423,6 +423,18 @@
   "message": "Le modèle qualité '{0}' est invalide.",
   "hint": "Vérifiez les lignes du modèle : les paramètres numériques exigent une plage, les paramètres de valeur une valeur acceptée, et un paramètre ne peut apparaître qu'une fois."
  },
+ "INV-6017": {
+  "code": "INV-6017",
+  "name": "RecalculationChangedSincePreview",
+  "message": "Les données de stock ont changé après le calcul de l'aperçu ; rien n'a été comptabilisé.",
+  "hint": "Relancez l'aperçu, vérifiez les nouveaux chiffres, puis approuvez."
+ },
+ "INV-6018": {
+  "code": "INV-6018",
+  "name": "RecalculationMovementsAfterRange",
+  "message": "Des mouvements de stock existent après la date de fin de la période (dernier mouvement '{0}') ; cette période ne peut donc pas être recalculée seule.",
+  "hint": "Étendez la date de fin jusqu'au dernier mouvement, puis relancez l'aperçu."
+ },
  "CRM-9001": {
   "code": "CRM-9001",
   "name": "CrmLeadAlreadyConverted",

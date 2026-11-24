@@ -423,6 +423,18 @@
   "message": "Quality template '{0}' is invalid.",
   "hint": "Check the template lines: numeric parameters need a band, value parameters need an accepted value, and a parameter may appear only once."
  },
+ "INV-6017": {
+  "code": "INV-6017",
+  "name": "RecalculationChangedSincePreview",
+  "message": "Stock data changed after the preview was calculated, so nothing was posted.",
+  "hint": "Run the preview again, review the fresh figures, then approve."
+ },
+ "INV-6018": {
+  "code": "INV-6018",
+  "name": "RecalculationMovementsAfterRange",
+  "message": "Stock movements exist after the range end date (latest movement '{0}'), so this range cannot be recalculated on its own.",
+  "hint": "Extend the end date to cover the latest movement, then preview again."
+ },
  "CRM-9001": {
   "code": "CRM-9001",
   "name": "CrmLeadAlreadyConverted",
