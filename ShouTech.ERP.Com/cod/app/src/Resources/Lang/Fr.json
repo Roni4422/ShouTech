@@ -465,7 +465,9 @@
     "PerfCol.NetSales": "Ventes nettes",
     "PerfCol.AvgBasket": "Panier moyen",
     "Col.Qty": "QTÉ",
-    "Col.LineTotal": "TOTAL LIGNE"
+    "Col.LineTotal": "TOTAL LIGNE",
+    "TerminalNotDefined": "Ce terminal n'est pas défini ou pas actif. Définissez-le d'abord (Définition du terminal de caisse).",
+    "TerminalUserNotPermitted": "Votre utilisateur n'est pas autorisé à ouvrir une session sur ce terminal."
   },
   "Orders": {
     "RecurringSchedules": "Planifications récurrentes",

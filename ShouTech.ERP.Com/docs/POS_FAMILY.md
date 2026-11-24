@@ -39,11 +39,16 @@ the missing pieces.
   a generic key-value editor cannot express. The other
   DefManagerWin sets stay generic until R4's per-set audit.
 
-## P2 — session opening on defined terminals (next)
+## P2 — session opening on defined terminals (DONE, gates ALL-GREEN)
 
-PosSessionWin's terminal becomes a picker of defined active
-terminals; opening validates the terminal is defined and the
-user is on its permitted list (when one is set).
+PosSessionWin's terminal is now an editable combo fed by the
+defined, active terminals. Opening enforces the definition:
+when the company defines terminals, the code must be a defined
+active terminal and the user must be on its permitted list when
+one is set (POS.TerminalNotDefined / POS.TerminalUserNotPermitted,
+×4 languages). With no definitions at all, the legacy
+settings-default path stays, so existing installs do not break
+before their first terminal is defined.
 
 ## P3 — session sales window (planned)
 

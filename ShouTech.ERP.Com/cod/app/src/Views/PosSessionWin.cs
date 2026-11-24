@@ -26,7 +26,10 @@ public sealed class PosSessionWin : BaseWin
     private readonly List<(TextBlock Label, string Key)> _labels = new();
     private readonly List<(DataGridColumn Column, string Key)> _headers = new();
 
-    private readonly TextBox _terminal = new();
+    // Terminal picker (POS family P2): an editable combo fed by
+    // the DEFINED terminals (PosTermWin / pos_terminals) — a
+    // session opens on a defined terminal, not on free text.
+    private readonly ComboBox _terminal = new() { IsEditable = true };
     private readonly TextBox _opening = new() { Text = "0" };
     private readonly TextBox _counted = new();
     private readonly TextBox _expenseAmount = new() { Text = "0" };
@@ -121,8 +124,11 @@ public sealed class PosSessionWin : BaseWin
             var service = AppHost.Pos;
             if (service is null) { _statusBar.Text = T("POS.ServiceUnavailable"); return; }
             var settings = await service.GetSettingsAsync(CurrentCompanyCode);
+            var defined = PosTermRepo.LoadAll().FindAll(t => t.IsActive);
+            _terminal.ItemsSource = defined.ConvertAll(t => t.Code);
             if (string.IsNullOrWhiteSpace(_terminal.Text))
-                _terminal.Text = settings.DefaultTerminalCode ?? "T1";
+                _terminal.Text = settings.DefaultTerminalCode
+                    ?? (defined.Count > 0 ? defined[0].Code : "T1");
             _open = await service.GetOpenSessionAsync(CurrentCompanyCode, _terminal.Text.Trim());
             var rows = await service.GetSessionsAsync(CurrentCompanyCode);
             _sessions.Clear();
@@ -191,6 +197,24 @@ public sealed class PosSessionWin : BaseWin
         {
             if (!AppHost.Permissions.Has(PermCat.Pos.SessionOpen)) { ShowWarn("POS.PermissionDenied"); return; }
             var service = AppHost.Pos ?? throw new InvalidOperationException(T("POS.ServiceUnavailable"));
+
+            // Defined-terminal enforcement (POS family P2): when
+            // the company defines terminals, a session may open
+            // only on a defined, active one — and only by a user
+            // on its permitted list when a list is set. With no
+            // definitions at all, the legacy free-code path stays
+            // (the settings default), so existing installs do not
+            // break before they define their first terminal.
+            var defined = PosTermRepo.LoadAll();
+            if (defined.Count > 0)
+            {
+                var terminal = defined.Find(t =>
+                    string.Equals(t.Code, _terminal.Text.Trim(), StringComparison.OrdinalIgnoreCase) && t.IsActive);
+                if (terminal is null) { ShowWarn("POS.TerminalNotDefined"); return; }
+                var username = AppState.CurrentUser?.Username ?? CurrentUserDisplay;
+                if (!PosTermRepo.IsUserPermitted(terminal, username)) { ShowWarn("POS.TerminalUserNotPermitted"); return; }
+            }
+
             var settings = await service.GetSettingsAsync(CurrentCompanyCode);
             var warehouseId = await service.GetTerminalWarehouseIdAsync(CurrentCompanyCode, _terminal.Text.Trim())
                 ?? settings.DefaultWarehouseId;

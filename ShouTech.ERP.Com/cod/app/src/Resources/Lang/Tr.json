@@ -465,7 +465,9 @@
     "PerfCol.NetSales": "Net satışlar",
     "PerfCol.AvgBasket": "Ortalama sepet",
     "Col.Qty": "MİKTAR",
-    "Col.LineTotal": "SATIR TOPLAMI"
+    "Col.LineTotal": "SATIR TOPLAMI",
+    "TerminalNotDefined": "Bu terminal tanımlı değil veya etkin değil. Önce tanımlayın (POS Terminali Tanımı).",
+    "TerminalUserNotPermitted": "Kullanıcınızın bu terminalde oturum açma izni yok."
   },
   "Orders": {
     "RecurringSchedules": "Yinelenen Zamanlamalar",

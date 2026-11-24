@@ -1057,7 +1057,9 @@
     "PerfCol.NetSales": "Net sales",
     "PerfCol.AvgBasket": "Average basket",
     "Col.Qty": "QTY",
-    "Col.LineTotal": "LINE TOTAL"
+    "Col.LineTotal": "LINE TOTAL",
+    "TerminalNotDefined": "This terminal is not defined or not active. Define it first (POS Terminal Definition).",
+    "TerminalUserNotPermitted": "Your user is not permitted to open a session on this terminal."
   },
   "Permissions": {
     "Cancel": "Cancel",
