@@ -93,9 +93,13 @@ cannot carry a complete-pillars surface.
   pattern) + App.SetApplicationLanguage live switch (re-mirrors and
   re-localizes all open windows). The (c) class is empty.
 - **R2 — grid/directory program** (owner spec 2026-11-24 15:07 +
-  Phenix reference image 15:10): invoice/voucher/report grid
-  standard, MatDirWin tree, CoaWin tree + account card — these
-  carry the four-system comparisons for their families.
+  reference image 15:10 — Al-Ameen 2004, attribution corrected
+  15:19; structure/content only, visuals modern per 15:20):
+  invoice/voucher/report grid standard, MatDirWin tree, CoaWin
+  tree + account card — these carry the four-system comparisons
+  for their families (docs/GRID_PROGRAM.md). **R2a (invoice
+  family) DONE (2026-11-24), gates ALL-GREEN**; R2b vouchers,
+  R2c reports, R2d MatDirWin tree, R2e CoaWin + AccCard follow.
 - **R3 — router approximations (5)**: give each its dedicated
   report window or formally adopt the mapped report (owner-visible
   choice per report).
