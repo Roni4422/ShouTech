@@ -183,7 +183,7 @@ public sealed class GrniWin : RptBase
         return agedRows;
     }
 
-    private async Task<List<Dictionary<string, object?>>> BuildExceptionRowsAsync(
+    private static async Task<List<Dictionary<string, object?>>> BuildExceptionRowsAsync(
         RptFltValues filters, List<Dictionary<string, object?>> detailRows, DateTime asOf, CancellationToken ct)
     {
         var thresholdText = filters.GetString("AgeThresholdDays")?.Trim();
