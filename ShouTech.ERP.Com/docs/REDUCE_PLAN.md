@@ -157,29 +157,60 @@ for a non-trivial cause is reverted and marked SKIPPED with the reason.
   section or shows the graceful topic-pending note
   (Help.TopicPending ×4). Gates: ALL-GREEN.
 
+## Standing rule (owner, 2026-11-24 15:54)
+
+**Find the best and work with it** — program-wide, not only for
+the help system: every window, workflow, pattern and technical
+choice is based on the best pattern found in research (the four
+benchmarks, global products, documented best practice), adopted
+and adapted — never the familiar or first option by default.
+Comparison notes record what was chosen, what was rejected, and
+why the chosen one is better on the owner's criterion: POWER +
+EASE for the user (2026-11-24 15:30). Commercial bar (15:29):
+ShouTech must compete with and be better than the four
+benchmarks to be sellable as enterprise commercial software.
+
 ## Commercial-phase workstreams (registered, not in this branch's scope)
 
-- **Help system (owner decisions 2026-11-24 15:36 + 15:38):**
-  the manual becomes the F1 help system. (a) Encrypted help
-  package — AES-256-GCM + integrity, same discipline as
-  DesignFileSvc, proprietary extension **.sthx**, opened only by
-  ShouTech; (b) the built-in viewer gains the three navigation
-  modes — Contents tree, **Index** (keyword index like a CHM
-  Index tab), full-text Search — replacing the interim markdown
-  surface in HelpWin; (c) per-window INDEX: every window has an
-  index entry mapping it to its topic(s) with keywords per topic
-  per help language; index coverage (windows indexed / total
-  windows) is reported in the commercial-phase report; a window
-  without an index entry is a defect (the audit's topic-key
-  column is the enforcement mechanism — H1 landed the keys and
-  the routing); (d) the same content exportable as a
+- **Help system (owner decisions 2026-11-24 15:36 + 15:38;
+  design RESEARCHED and RATIFIED by the owner 2026-11-24 15:54
+  — "find the best and work with it"; full sourced report:
+  ~/workspace/research_notes/global-f1-help-display-protection-20261124-1248/report.md):**
+  the manual becomes the F1 help system. (a) Package = SIGNED +
+  ENCRYPTED: a manifest with a vendor signature (the viewer
+  refuses tampered packs — MS Help Viewer precedent) AND
+  AES-256-GCM encryption under the DesignFileSvc discipline,
+  proprietary extension **.sthx**, opened only by ShouTech;
+  never CHM (decompilable by a built-in Windows command);
+  (b) viewer = in-app **WebView2** (topics never extracted to
+  disk, no external browser/hh.exe), tri-pane Contents / Index /
+  Search, RTL-mirrored skin; the search index is a PRE-BUILT
+  Lucene.Net index shipped inside the package (Arabic analyser
+  for the Arabic pack); context mapping by stable topic IDs via
+  a map/alias file (the universal standard — Oracle/Flare/
+  RoboHelp/CHM); WPF has no built-in F1 provider — the canonical
+  pattern is an attached property + ApplicationCommands.Help;
+  F1 fallback chain per press: field topic → window topic →
+  module topic → help home; (c) per-window INDEX: every window
+  has an index entry mapping it to its topic(s) with keywords
+  per topic per help language; index coverage (windows indexed /
+  total windows) is reported in the commercial-phase report; a
+  window without an index entry is a defect (the audit's
+  topic-key column is the enforcement mechanism — H1 landed the
+  keys and the routing); (d) the same content exportable as a
   permission-protected PDF (official printable/archive copy) —
   true digital signing is a RELEASE-PROCESS item unless in-stack
   signing tooling is confirmed in the commercial phase; the
   protected PDF ships, the signature step is not faked;
   (e) content authored per window as windows finalize, Arabic +
-  English first. Source material: the owner's uploaded manuals,
-  incl. the Al-Ameen classic help text for benchmark structure.
+  English first. Honest protection limit (from the research,
+  recorded verbatim in the spec): encryption = casual-copy
+  resistance, signing = tamper-evidence; nothing stops a
+  licensed user copying what they can read — no researched
+  vendor achieves that offline, and we do not claim it.
+  Source material: the owner's uploaded manuals, incl. the
+  Al-Ameen classic help text for benchmark structure.
 - **POS family completion** (owner workstream 2026-11-24 15:31):
-  sequenced in this branch after the grid program — see
-  RIBBON_AUDIT.md batch plan.
+  IN PROGRESS in this branch — docs/POS_FAMILY.md (audit, P1
+  terminal definition DONE; P2 session picker, P3 session sales
+  follow).

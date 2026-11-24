@@ -4678,5 +4678,23 @@
     "PosSection": "Satış noktası",
     "Saved": "Seçenekler kaydedildi.",
     "InvalidNumber": "Lütfen geçerli bir sayı girin: {0}"
+  },
+  "PosTerm": {
+    "Title": "POS Terminali Tanımı",
+    "Code": "Kod",
+    "Name": "Ad",
+    "NameAr": "Arapça ad",
+    "Warehouse": "Depo",
+    "CashAccount": "Kasa hesabı",
+    "BankAccount": "Banka / kart hesabı",
+    "Drawer": "Para çekmecesi",
+    "Printer": "Fiş yazıcısı",
+    "PriceLevel": "Fiyat düzeyi",
+    "DefaultCustomer": "Varsayılan müşteri",
+    "PermittedUsers": "İzinli kullanıcılar",
+    "Active": "Etkin",
+    "Saved": "Terminal kaydedildi.",
+    "CodeRequired": "Kod ve ad zorunludur.",
+    "ConfirmDelete": "Bu terminal tanımı silinsin mi?"
   }
 }

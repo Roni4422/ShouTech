@@ -4678,5 +4678,23 @@
     "PosSection": "Point de vente",
     "Saved": "Options enregistrées.",
     "InvalidNumber": "Veuillez saisir un nombre valide pour : {0}"
+  },
+  "PosTerm": {
+    "Title": "Définition du terminal de caisse",
+    "Code": "Code",
+    "Name": "Nom",
+    "NameAr": "Nom arabe",
+    "Warehouse": "Entrepôt",
+    "CashAccount": "Compte de caisse",
+    "BankAccount": "Compte banque / cartes",
+    "Drawer": "Tiroir-caisse",
+    "Printer": "Imprimante de tickets",
+    "PriceLevel": "Niveau de prix",
+    "DefaultCustomer": "Client par défaut",
+    "PermittedUsers": "Utilisateurs autorisés",
+    "Active": "Actif",
+    "Saved": "Terminal enregistré.",
+    "CodeRequired": "Le code et le nom sont requis.",
+    "ConfirmDelete": "Supprimer la définition de ce terminal ?"
   }
 }

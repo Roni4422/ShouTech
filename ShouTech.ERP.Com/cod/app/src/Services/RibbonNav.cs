@@ -119,7 +119,7 @@ public static class RibbonNav
 
             // ------------------------------------------------ POS
             case "POS.Points": Show(new LoyaltyWin(), owner); return true;
-            case "POS.DefinePOS": ShowDef(DefSets.PosTerminals, owner); return true;
+            case "POS.DefinePOS": Show(new PosTermWin(), owner); return true;
             case "POS.POSCashReport": Show(new PosCashRptWin(), owner); return true;
             case "POS.Sessions": Show(new PosSessionWin(), owner); return true;
             case "POS.ZReport": Show(new PosZReportWin(), owner); return true;

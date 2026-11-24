@@ -4687,5 +4687,23 @@
     "PosSection": "Point of sale",
     "Saved": "Options saved.",
     "InvalidNumber": "Please enter a valid number for: {0}"
+  },
+  "PosTerm": {
+    "Title": "POS Terminal Definition",
+    "Code": "Code",
+    "Name": "Name",
+    "NameAr": "Arabic name",
+    "Warehouse": "Warehouse",
+    "CashAccount": "Cash account",
+    "BankAccount": "Bank / card account",
+    "Drawer": "Cash drawer",
+    "Printer": "Receipt printer",
+    "PriceLevel": "Price level",
+    "DefaultCustomer": "Default customer",
+    "PermittedUsers": "Permitted users",
+    "Active": "Active",
+    "Saved": "Terminal saved.",
+    "CodeRequired": "Code and name are required.",
+    "ConfirmDelete": "Delete this terminal definition?"
   }
 }
