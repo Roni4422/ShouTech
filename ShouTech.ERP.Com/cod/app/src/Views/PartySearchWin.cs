@@ -85,7 +85,8 @@ public sealed class PartySearchWin : BaseWin
         DockPanel.SetDock(statusBorder, Dock.Bottom);
         root.Children.Add(statusBorder);
 
-        var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var bar = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(bar);
         StyleButton(_selectButton, "MasterCards.Select");
         StyleButton(_closeButton, "Common.Close");
         _selectButton.Click += (_, _) => AcceptSelection();

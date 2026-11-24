@@ -157,7 +157,10 @@ internal static class F2Ui
     /// <summary>Explorer-style bottom command bar (flat, top divider), docked bottom.</summary>
     public static Border BottomBar(params Button[] buttons)
     {
-        var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        // End-aligned through FlowAlign so the command bar mirrors with
+        // the window (physical right in LTR, physical left in RTL).
+        var bar = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(bar);
         foreach (var b in buttons)
             bar.Children.Add(b);
         var border = new Border
@@ -215,4 +218,99 @@ internal static class F2Ui
 
     public static string? NullIfBlank(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}
+
+/// <summary>
+/// Direction-aware ("start"/"end") horizontal alignment — the central
+/// mirroring mechanism for layout clusters (owner directive 2026-11-24
+/// 14:55: in Arabic the ENTIRE window mirrors).
+///
+/// WPF's HorizontalAlignment.Left/Right are PHYSICAL: a button cluster
+/// pinned Right stays on the physical right while the rest of the
+/// window mirrors around it. Binding the alignment to the element's
+/// own (inherited) FlowDirection makes the cluster sit at the layout
+/// END in both directions — physical right in LTR, physical left in
+/// RTL — and re-evaluates live when the window's direction flips on a
+/// language switch, because the inherited FlowDirection value changes.
+///
+/// Code:  FlowAlign.End(panel);  /  FlowAlign.Start(control);
+/// XAML:  local:FlowAlign.AlignEnd="True"  /  local:FlowAlign.AlignStart="True"
+/// (replacing the HorizontalAlignment="Right"/"Left" attribute).
+///
+/// Content alignment is deliberately NOT covered here: numeric grid
+/// columns stay right-aligned in both directions (F2Ui.RightAlignStyle)
+/// and styled text controls follow the application alignment resources
+/// (LangDirSv.UpdateApplicationAlignmentResources).
+/// </summary>
+public static class FlowAlign
+{
+    private sealed class EndConverter : IValueConverter
+    {
+        public static readonly EndConverter Instance = new();
+        public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+            => value is FlowDirection.RightToLeft ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+        public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+            => throw new NotSupportedException();
+    }
+
+    private sealed class StartConverter : IValueConverter
+    {
+        public static readonly StartConverter Instance = new();
+        public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+            => value is FlowDirection.RightToLeft ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+        public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+            => throw new NotSupportedException();
+    }
+
+    /// <summary>Pins the element to the layout END (right in LTR, left in RTL), live with direction changes.</summary>
+    public static void End(FrameworkElement element)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        element.SetBinding(FrameworkElement.HorizontalAlignmentProperty,
+            new Binding(nameof(FrameworkElement.FlowDirection)) { Source = element, Converter = EndConverter.Instance });
+    }
+
+    /// <summary>Pins the element to the layout START (left in LTR, right in RTL), live with direction changes.</summary>
+    public static void Start(FrameworkElement element)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        element.SetBinding(FrameworkElement.HorizontalAlignmentProperty,
+            new Binding(nameof(FrameworkElement.FlowDirection)) { Source = element, Converter = StartConverter.Instance });
+    }
+
+    public static readonly DependencyProperty AlignEndProperty =
+        DependencyProperty.RegisterAttached("AlignEnd", typeof(bool), typeof(FlowAlign),
+            new PropertyMetadata(false, OnAlignEndChanged));
+
+    public static bool GetAlignEnd(DependencyObject obj) => (bool)obj.GetValue(AlignEndProperty);
+
+    public static void SetAlignEnd(DependencyObject obj, bool value) => obj.SetValue(AlignEndProperty, value);
+
+    private static void OnAlignEndChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not FrameworkElement element)
+            return;
+        if (e.NewValue is true)
+            End(element);
+        else
+            BindingOperations.ClearBinding(element, FrameworkElement.HorizontalAlignmentProperty);
+    }
+
+    public static readonly DependencyProperty AlignStartProperty =
+        DependencyProperty.RegisterAttached("AlignStart", typeof(bool), typeof(FlowAlign),
+            new PropertyMetadata(false, OnAlignStartChanged));
+
+    public static bool GetAlignStart(DependencyObject obj) => (bool)obj.GetValue(AlignStartProperty);
+
+    public static void SetAlignStart(DependencyObject obj, bool value) => obj.SetValue(AlignStartProperty, value);
+
+    private static void OnAlignStartChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not FrameworkElement element)
+            return;
+        if (e.NewValue is true)
+            Start(element);
+        else
+            BindingOperations.ClearBinding(element, FrameworkElement.HorizontalAlignmentProperty);
+    }
 }

@@ -197,7 +197,8 @@ public sealed class TaxSetupWin : BaseWin
         content.Children.Add(withholdingPanel);
         content.Children.Add(editor);
 
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
+        var actions = new StackPanel { Orientation = Orientation.Horizontal,  Margin = new Thickness(0, 8, 0, 0) };
+        FlowAlign.End(actions);
         ConfigureButton(_new, "Common.New");
         ConfigureButton(_save, "Common.Save");
         ConfigureButton(_refresh, "Common.Refresh");

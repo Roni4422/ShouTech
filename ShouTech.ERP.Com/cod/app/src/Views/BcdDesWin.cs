@@ -156,7 +156,7 @@ public sealed class BcdDesWin : BaseWin
         // un-docked, which DockPanel treats as Dock.Left.
         var actionPanel = BuildToolbar();
         actionPanel.Margin = new Thickness(0);
-        actionPanel.HorizontalAlignment = HorizontalAlignment.Right;
+        FlowAlign.End(actionPanel);
         // Explorer-style bottom command bar: flat, transparent, subtle 1px top divider.
         var actionBar = new Border
         {

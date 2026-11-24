@@ -151,7 +151,8 @@ public sealed class PurchaseLandedCostWin : BaseWin
         root.Children.Add(status);
 
         // Action buttons live at the BOTTOM of the window (layout rule).
-        var toolbar = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
+        var toolbar = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+        FlowAlign.End(toolbar);
         StyleButton(_add, "PurchaseLandedCost.AddCharge");
         StyleButton(_remove, "PurchaseLandedCost.RemoveCharge");
         StyleButton(_create, "PurchaseLandedCost.CreateDraft");

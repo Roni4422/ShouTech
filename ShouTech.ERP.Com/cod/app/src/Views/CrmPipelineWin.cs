@@ -98,7 +98,8 @@ public sealed class CrmPipelineWin : BaseWin
         DockPanel.SetDock(statusBorder, Dock.Bottom);
         root.Children.Add(statusBorder);
 
-        var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var bar = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(bar);
         StyleButton(_regressButton, "Crm.Regress");
         StyleButton(_advanceButton, "Crm.Advance");
         StyleButton(_openButton, "Crm.OpenOpportunity");
@@ -157,7 +158,8 @@ public sealed class CrmPipelineWin : BaseWin
         _stageType.ItemsSource = CrmStageTypes.All;
         _stageActive.IsChecked = true;
         config.Children.Add(stageForm);
-        var stageBar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 0, 10) };
+        var stageBar = new StackPanel { Orientation = Orientation.Horizontal,  Margin = new Thickness(0, 0, 0, 10) };
+        FlowAlign.End(stageBar);
         StyleButton(_saveStageButton, "Crm.SaveStage");
         StyleButton(_deleteStageButton, "Common.Delete");
         _saveStageButton.Click += async (_, _) => await SaveStageAsync();
@@ -184,7 +186,8 @@ public sealed class CrmPipelineWin : BaseWin
         var reasonForm = CreateFormGrid(1);
         AddFormField(_labels, reasonForm, 0, 0, "Crm.LostReason", _reasonName);
         config.Children.Add(reasonForm);
-        var reasonBar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var reasonBar = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(reasonBar);
         StyleButton(_saveReasonButton, "Crm.SaveReason");
         _saveReasonButton.Click += async (_, _) => await SaveReasonAsync();
         reasonBar.Children.Add(_saveReasonButton);

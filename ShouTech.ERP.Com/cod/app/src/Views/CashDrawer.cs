@@ -27,7 +27,8 @@ public sealed class CashDrawerOptionsWin : BaseWin
         root.Children.Add(_hint);
         root.Children.Add(_printers);
         root.Children.Add(_status);
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(buttons);
         _test.Click += (_, _) => { var ok = CashDrawerService.TryOpenDrawer(out var message); _status.Text = message; _status.Foreground = ShouTech.App.Services.VisuId.ResolveBrushResource(ok ? "SuccessBrush" : "ErrorBrush", ok ? "#198754" : "#C0392B"); };
         _save.Click += (_, _) => { CashDrawerService.SavePrinter(_printers.SelectedItem as string); _status.Text = L("POS.CashDrawerSaved", "Cash drawer printer setting saved."); _status.Foreground = ShouTech.App.Services.VisuId.ResolveBrushResource("SuccessBrush", "#198754"); };
         _close.Click += (_, _) => Close();

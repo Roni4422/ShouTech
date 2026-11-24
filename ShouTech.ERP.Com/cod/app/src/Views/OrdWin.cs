@@ -162,7 +162,8 @@ public sealed class OrdWin : BaseWin, IWindowMode
     {
         var root = new DockPanel { Margin = new Thickness(10) };
 
-        var toolbar = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
+        var toolbar = new WrapPanel();
+        FlowAlign.End(toolbar);
         StyleButton(_btnNew, "Common.New");
         StyleButton(_btnLoad, "OrderDoc.Load");
         StyleButton(_btnSave, "Common.Save");
@@ -1089,8 +1090,9 @@ public sealed class OrdWin : BaseWin, IWindowMode
             var actions = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
+                
             };
+            FlowAlign.End(actions);
             var confirm = new Button { Content = T("Buttons.Save"), MinWidth = 100, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
             var cancel = new Button { Content = T("Buttons.Cancel"), MinWidth = 100, IsCancel = true };
             confirm.Click += (_, _) =>
@@ -1332,8 +1334,9 @@ public sealed class OrdWin : BaseWin, IWindowMode
         var actions = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right
+            
         };
+        FlowAlign.End(actions);
         var confirm = new Button { Content = T("Buttons.Save"), MinWidth = 100, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
         var cancel = new Button { Content = T("Buttons.Cancel"), MinWidth = 100, IsCancel = true };
         confirm.Click += (_, _) =>
@@ -1436,7 +1439,8 @@ public sealed class OrdWin : BaseWin, IWindowMode
                 boxes.Add(box);
                 panel.Children.Add(box);
             }
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+            FlowAlign.End(buttons);
             var ok = new Button { Content = T("Common.OK"), MinWidth = 84, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
             var cancel = new Button { Content = T("Common.Cancel"), MinWidth = 84, IsCancel = true };
             ok.Click += (_, _) => dialog.DialogResult = true;
@@ -1537,7 +1541,8 @@ public sealed class OrdWin : BaseWin, IWindowMode
         invitePanel.Children.Add(decline);
         DockPanel.SetDock(invitePanel, Dock.Top);
         content.Children.Add(invitePanel);
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var actions = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(actions);
         var close = new Button { Content = T("Buttons.Cancel"), MinWidth = 100, IsCancel = true };
         actions.Children.Add(close);
         DockPanel.SetDock(actions, Dock.Bottom);

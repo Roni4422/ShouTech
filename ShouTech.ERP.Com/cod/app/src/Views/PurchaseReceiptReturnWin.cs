@@ -91,7 +91,8 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
     private void BuildUi()
     {
         var root = new DockPanel { Margin = new Thickness(12) };
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(buttons);
         F2Ui.StyleButton(_load, "Purchasing.ReceiptReturn.LoadReceipt");
         F2Ui.StyleButton(_post, "Purchasing.ReceiptReturn.PostReturn");
         F2Ui.StyleButton(_receiptAttachments, "PurchaseAttachments.Receipt");

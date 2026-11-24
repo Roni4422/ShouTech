@@ -455,7 +455,7 @@
 
                 <StackPanel Grid.Column="1"
                             Orientation="Horizontal"
-                            HorizontalAlignment="Right">
+                            local:FlowAlign.AlignEnd="True">
                     <Button x:Name="BtnNew"
                             Content="New"
                             loc:LocProps.Key="Buttons.New"

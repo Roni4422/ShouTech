@@ -107,7 +107,8 @@ public sealed class RmaWin : BaseWin
         DockPanel.SetDock(statusBorder, Dock.Bottom);
         root.Children.Add(statusBorder);
 
-        var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var bar = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(bar);
         StyleButton(_createButton, "Rma.Create");
         StyleButton(_approveButton, "Rma.Approve");
         StyleButton(_rejectButton, "Rma.Reject");
@@ -172,7 +173,8 @@ public sealed class RmaWin : BaseWin
         AddFormField(_labels, form, 2, 1, "Rma.Notes", _notes);
         _sourceKind.ItemsSource = new[] { "INV", "DLV", "NONE" };
         _sourceKind.SelectedItem = "INV";
-        var formBar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 4, 0, 4) };
+        var formBar = new StackPanel { Orientation = Orientation.Horizontal,  Margin = new Thickness(0, 4, 0, 4) };
+        FlowAlign.End(formBar);
         StyleButton(_loadSourceButton, "Rma.LoadSource");
         _loadSourceButton.Click += (_, _) => LoadSource();
         formBar.Children.Add(_loadSourceButton);

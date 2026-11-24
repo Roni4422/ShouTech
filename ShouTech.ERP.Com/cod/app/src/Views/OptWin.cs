@@ -126,7 +126,7 @@ public sealed class OptWin : BaseWin
         // ---- Point of sale ------------------------------------------
         var pos = BeginSection(form, "Options.PosSection");
         F2Ui.StyleButton(_posButton, "Options.PosDevices");
-        _posButton.HorizontalAlignment = HorizontalAlignment.Left;
+        FlowAlign.Start(_posButton);
         _posButton.Click += (_, _) =>
         {
             var drawer = new CashDrawerOptionsWin { Owner = this };
@@ -178,7 +178,7 @@ public sealed class OptWin : BaseWin
         grid.Children.Add(label);
 
         control.Margin = new Thickness(0, 3, 0, 3);
-        control.HorizontalAlignment = HorizontalAlignment.Left;
+        FlowAlign.Start(control);
         control.MinWidth = 220;
         Grid.SetRow(control, row);
         Grid.SetColumn(control, 1);

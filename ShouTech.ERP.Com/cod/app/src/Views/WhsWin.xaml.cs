@@ -1300,9 +1300,9 @@ namespace ShouTech.App.Views
                 var buttons = new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
-                    HorizontalAlignment = HorizontalAlignment.Right,
                     Margin = new Thickness(0, 6, 0, 0)
                 };
+                FlowAlign.End(buttons);
                 var post = new Button
                 {
                     Content = T("Inventory.StockCountPost"),
@@ -1775,9 +1775,9 @@ namespace ShouTech.App.Views
                         var buttons = new StackPanel
                         {
                             Orientation = Orientation.Horizontal,
-                            HorizontalAlignment = HorizontalAlignment.Right,
                             Margin = new Thickness(0, 4, 0, 0)
                         };
+                        FlowAlign.End(buttons);
                         _post.MinWidth = ShouTech.App.Services.VisuId.ButtonMinWidth;
                         _post.Margin = new Thickness(0, 0, 4, 0);
                         _post.SetResourceReference(StyleProperty, "VisuAccentButtonStyle");
@@ -2050,8 +2050,9 @@ namespace ShouTech.App.Views
                         var buttons = new StackPanel
                         {
                             Orientation = Orientation.Horizontal,
-                            HorizontalAlignment = HorizontalAlignment.Right
+                            
                         };
+                        FlowAlign.End(buttons);
                         _post.MinWidth = ShouTech.App.Services.VisuId.PrimaryButtonMinWidth;
                         _post.Margin = new Thickness(0, 0, 4, 0);
                         _post.SetResourceReference(StyleProperty, "VisuAccentButtonStyle");

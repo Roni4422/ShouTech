@@ -119,7 +119,8 @@ public sealed class DeliveryDeskWin : BaseWin
 
         // ------------------------------------------------------- Requests tab
         var requestsRoot = new DockPanel { Margin = new Thickness(8) };
-        var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var bar = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(bar);
         StyleButton(_newButton, "Common.New");
         StyleButton(_saveButton, "Common.Save");
         StyleButton(_deleteButton, "Common.Delete");
@@ -199,7 +200,8 @@ public sealed class DeliveryDeskWin : BaseWin
 
         // ---------------------------------------------------- Settlements tab
         var settleRoot = new DockPanel { Margin = new Thickness(8) };
-        var settleBar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var settleBar = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(settleBar);
         StyleButton(_closeCashButton, "Delivery.CloseCash");
         _closeCashButton.Click += async (_, _) => await CloseCashAsync();
         settleBar.Children.Add(_closeCashButton);
@@ -664,7 +666,8 @@ public sealed class DeliveryDeskWin : BaseWin
                 boxes.Add(box);
                 panel.Children.Add(box);
             }
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+            FlowAlign.End(buttons);
             var ok = new Button { Content = T("Common.OK"), MinWidth = 84, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
             var cancel = new Button { Content = T("Common.Cancel"), MinWidth = 84, IsCancel = true };
             ok.Click += (_, _) => dialog.DialogResult = true;
@@ -708,7 +711,8 @@ public sealed class DeliveryDeskWin : BaseWin
                 Margin = new Thickness(0, 0, 0, 10)
             };
             panel.Children.Add(ink);
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+            FlowAlign.End(buttons);
             var clear = new Button { Content = T("Delivery.ClearSignature"), MinWidth = 84, Margin = new Thickness(0, 0, 6, 0) };
             clear.Click += (_, _) => ink.Strokes.Clear();
             var ok = new Button { Content = T("Common.OK"), MinWidth = 84, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };

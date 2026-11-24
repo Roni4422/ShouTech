@@ -113,8 +113,9 @@ public abstract class RptBase : BaseWin
         var toolbar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right
+            
         };
+        FlowAlign.End(toolbar);
         _refresh.MinWidth = ShouTech.App.Services.VisuId.ButtonMinWidth;
         _refresh.Click += async (_, _) => await RefreshAsync();
         _columns.MinWidth = ShouTech.App.Services.VisuId.ButtonMinWidth;

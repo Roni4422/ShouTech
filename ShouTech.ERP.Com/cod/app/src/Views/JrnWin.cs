@@ -86,7 +86,8 @@ public sealed class JrnWin : BaseWin
         var root = new DockPanel { Margin = new Thickness(10) };
 
         // 1. Toolbar
-        var toolbar = new WrapPanel { Margin = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Right };
+        var toolbar = new WrapPanel { Margin = new Thickness(0) };
+        FlowAlign.End(toolbar);
         StyleButton(_btnNew, "Common.New");
         StyleButton(_btnLoad, "Vouchers.Load");
         StyleButton(_btnSave, "Common.Save");

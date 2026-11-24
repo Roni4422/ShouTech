@@ -59,7 +59,8 @@ public sealed class BarWin : BaseWin
         var root = new DockPanel { Margin = new Thickness(12) };
 
         // 1. Toolbar
-        var toolbar = new WrapPanel { Margin = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Right };
+        var toolbar = new WrapPanel { Margin = new Thickness(0) };
+        FlowAlign.End(toolbar);
         StyleButton(_btnPick, T("Invoice.FindMaterial"));
         StyleButton(_btnGen, T("Common.New"));
         StyleButton(_btnSave, T("BarcodeTool.SaveToMaterial"));

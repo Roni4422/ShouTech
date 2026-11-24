@@ -67,7 +67,8 @@ public sealed class MfgListWin : BaseWin
         DockPanel.SetDock(statusBorder, Dock.Bottom);
         root.Children.Add(statusBorder);
 
-        var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var bar = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(bar);
         StyleButton(_openButton, "MfgOrders.Open");
         StyleButton(_newButton, "Common.New");
         StyleButton(_refreshButton, "Common.Refresh");

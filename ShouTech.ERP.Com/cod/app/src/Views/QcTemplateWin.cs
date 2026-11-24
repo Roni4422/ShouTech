@@ -117,7 +117,8 @@ public sealed class QcTemplateWin : BaseWin
         DockPanel.SetDock(statusBorder, Dock.Bottom);
         root.Children.Add(statusBorder);
 
-        var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var bar = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(bar);
         StyleButton(_saveParamButton, "Quality.SaveParameter");
         StyleButton(_deleteParamButton, "Quality.DeleteParameter");
         StyleButton(_saveTemplateButton, "Quality.SaveTemplate");

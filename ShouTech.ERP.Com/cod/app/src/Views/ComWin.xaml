@@ -1,6 +1,7 @@
 ﻿<Window x:Class="ShouTech.App.Views.ComWin"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:ShouTech.App.Views"
         xmlns:loc="clr-namespace:ShouTech.App.Localization"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="Select Company"
@@ -707,7 +708,7 @@
                       HorizontalAlignment="Stretch"
                       Visibility="Collapsed">
                     <StackPanel Orientation="Horizontal"
-                                HorizontalAlignment="Right">
+                                local:FlowAlign.AlignEnd="True">
                         <Button x:Name="btnEditSave"
                                 Content="Save"
                                 Width="100"

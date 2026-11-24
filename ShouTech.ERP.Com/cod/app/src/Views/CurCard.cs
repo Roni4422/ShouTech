@@ -98,7 +98,8 @@ public sealed class CurCard : BaseWin
     {
         var root = new DockPanel { Margin = new Thickness(10) };
 
-        var toolbar = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
+        var toolbar = new WrapPanel();
+        FlowAlign.End(toolbar);
         StyleButton(_btnLoad, "MasterCards.Load");
         StyleButton(_btnNew, "Common.New");
         StyleButton(_btnSave, "Common.Save");

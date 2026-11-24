@@ -72,7 +72,8 @@ public sealed class BcdGenWin : BaseWin
         var root = new DockPanel { Margin = new Thickness(12) };
 
         // Action bar - docked at the BOTTOM above the status line (layout rule).
-        var toolbar = new WrapPanel { Margin = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Right };
+        var toolbar = new WrapPanel { Margin = new Thickness(0) };
+        FlowAlign.End(toolbar);
 
         toolbar.Children.Add(MakeLabel(L("BarcodeGen.Prefix", "Prefix:")));
         _txtPrefix.SetResourceReference(StyleProperty, "VisuTextBoxStyle");

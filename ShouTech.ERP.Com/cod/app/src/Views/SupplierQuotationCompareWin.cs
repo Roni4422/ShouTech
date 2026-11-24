@@ -71,7 +71,8 @@ public sealed class SupplierQuotationCompareWin : BaseWin
     {
         Title = T("Purchasing.SupplierQuotationComparison.Title");
         var root = new DockPanel { Margin = new Thickness(12) };
-        var footer = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var footer = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(footer);
         F2Ui.StyleButton(_refresh, "Common.Refresh");
         F2Ui.StyleButton(_award, "Purchasing.SupplierQuotationComparison.Award");
         F2Ui.StyleButton(_markLost, "DocSearch.SetLost");

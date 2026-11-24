@@ -102,9 +102,9 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
         var commands = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 8, 0, 0)
         };
+        FlowAlign.End(commands);
         StyleButton(_save, "PurchaseMatch.Save");
         StyleButton(_refresh, "Common.Refresh");
         StyleButton(_release, "PurchaseMatch.Release");

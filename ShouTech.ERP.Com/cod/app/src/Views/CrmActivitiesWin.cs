@@ -95,7 +95,8 @@ public sealed class CrmActivitiesWin : BaseWin
         DockPanel.SetDock(statusBorder, Dock.Bottom);
         root.Children.Add(statusBorder);
 
-        var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var bar = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(bar);
         StyleButton(_newButton, "Common.New");
         StyleButton(_saveButton, "Common.Save");
         StyleButton(_completeButton, "Crm.Complete");

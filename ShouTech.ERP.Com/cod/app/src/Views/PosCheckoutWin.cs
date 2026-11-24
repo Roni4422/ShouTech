@@ -131,7 +131,8 @@ public sealed class PosCheckoutWin : BaseWin
         Grid.SetRow(contentScroll, 1);
         root.Children.Add(contentScroll);
 
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 0) };
+        var actions = new StackPanel { Orientation = Orientation.Horizontal,  Margin = new Thickness(0, 6, 0, 0) };
+        FlowAlign.End(actions);
         ConfigureButton(_cancel, "Common.Cancel");
         ConfigureButton(_complete, "POS.CompleteSale");
         _complete.MinWidth = ShouTech.App.Services.VisuId.PrimaryButtonMinWidth;

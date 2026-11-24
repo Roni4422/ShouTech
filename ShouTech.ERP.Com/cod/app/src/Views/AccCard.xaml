@@ -198,7 +198,7 @@
              bar is a WrapPanel: the same eight buttons in the same order
              flow on one row when there is room and wrap to a second row
              at the 660 minimum — every action stays reachable. -->
-        <WrapPanel Grid.Row="3" Margin="0,7,0,0" HorizontalAlignment="Right">
+        <WrapPanel Grid.Row="3" Margin="0,7,0,0" local:FlowAlign.AlignEnd="True">
             <Button Content="New" loc:LocProps.Key="Common.New" Click="New_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>
             <Button Content="Save" loc:LocProps.Key="Common.Save" Click="Save_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0" FontWeight="SemiBold"/>
             <Button Content="Edit" loc:LocProps.Key="Common.Edit" Click="Edit_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="8,0,0,0"/>

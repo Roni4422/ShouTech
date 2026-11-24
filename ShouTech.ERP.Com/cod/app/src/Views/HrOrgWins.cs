@@ -45,7 +45,8 @@ internal static class HrWinUtil
 
     public static Border BottomBar(params Button[] buttons)
     {
-        var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var bar = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(bar);
         foreach (var b in buttons) bar.Children.Add(b);
         var border = new Border
         {

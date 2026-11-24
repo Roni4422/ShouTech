@@ -45,7 +45,8 @@ public sealed class OrderTrackWin : BaseWin
     {
         var root = new DockPanel { Margin = new Thickness(10) };
 
-        var toolbar = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
+        var toolbar = new WrapPanel();
+        FlowAlign.End(toolbar);
         StyleButton(_btnRefresh, "Common.Refresh");
         StyleButton(_btnOpen, "DocSearch.Open");
         StyleButton(_btnClose, "Common.Close");

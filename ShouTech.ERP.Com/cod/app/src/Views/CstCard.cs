@@ -163,7 +163,8 @@ public sealed class CstCard : BaseWin
     {
         var root = new DockPanel { Margin = new Thickness(12) };
 
-        var toolbar = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
+        var toolbar = new WrapPanel();
+        FlowAlign.End(toolbar);
         StyleButton(_btnLoad, "MasterCards.Load");
         StyleButton(_btnNew, "Common.New");
         StyleButton(_btnSave, "Common.Save");
@@ -324,7 +325,8 @@ public sealed class CstCard : BaseWin
     {
         var tab = new TabItem { Header = new TextBlock { Text = T(headerKey), Tag = headerKey } };
         var panel = new DockPanel { Margin = new Thickness(16) };
-        var bar = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
+        var bar = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+        FlowAlign.End(bar);
         StyleButton(addButton, "Common.New");
         StyleButton(deleteButton, "Common.Delete");
         bar.Children.Add(addButton);

@@ -118,7 +118,8 @@ public sealed class PayRecWin : BaseWin
         DockPanel.SetDock(statusBorder, Dock.Bottom);
         root.Children.Add(statusBorder);
 
-        var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var bar = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(bar);
         StyleButton(_allocateButton, "PaymentReconciliation.Allocate");
         StyleButton(_suggestButton, "PaymentReconciliation.Suggest");
         StyleButton(_unallocateButton, "PaymentReconciliation.UnallocateAdvance");

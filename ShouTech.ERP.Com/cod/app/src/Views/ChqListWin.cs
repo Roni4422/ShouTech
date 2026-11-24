@@ -97,7 +97,8 @@ public sealed class ChqListWin : BaseWin
         DockPanel.SetDock(statusBorder, Dock.Bottom);
         root.Children.Add(statusBorder);
 
-        var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var bar = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(bar);
         StyleButton(_depositButton, "Cheques.Deposit");
         StyleButton(_clearButton, "Cheques.Clear");
         StyleButton(_bounceButton, "Cheques.Bounce");
@@ -426,7 +427,8 @@ public sealed class ChqListWin : BaseWin
                 boxes.Add(box);
                 panel.Children.Add(box);
             }
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+            FlowAlign.End(buttons);
             var ok = new Button { Content = T("Common.OK"), MinWidth = 84, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
             var cancel = new Button { Content = T("Common.Cancel"), MinWidth = 84, IsCancel = true };
             ok.Click += (_, _) => dialog.DialogResult = true;

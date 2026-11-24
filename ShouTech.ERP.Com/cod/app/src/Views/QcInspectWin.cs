@@ -108,7 +108,8 @@ public sealed class QcInspectWin : BaseWin
         DockPanel.SetDock(statusBorder, Dock.Bottom);
         root.Children.Add(statusBorder);
 
-        var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var bar = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(bar);
         StyleButton(_saveButton, "Quality.SaveResults");
         StyleButton(_completeButton, "Quality.Complete");
         StyleButton(_newButton, "Quality.NewOutgoing");

@@ -302,7 +302,8 @@ public sealed class RecurWin : BaseWin
 
     private static Border BottomBar(params Button[] buttons)
     {
-        var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var bar = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(bar);
         foreach (var button in buttons) bar.Children.Add(button);
         var border = new Border
         {

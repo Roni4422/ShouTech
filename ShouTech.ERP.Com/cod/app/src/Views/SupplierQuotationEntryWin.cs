@@ -123,7 +123,8 @@ public sealed class SupplierQuotationEntryWin : BaseWin
     {
         Title = T("Purchasing.SupplierQuotationEntry.Title");
         var root = new DockPanel { Margin = new Thickness(12) };
-        var footer = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var footer = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(footer);
         F2Ui.StyleButton(_selectSupplier, "Purchasing.SupplierQuotationEntry.SelectSupplier");
         F2Ui.StyleButton(_savePost, "Purchasing.SupplierQuotationEntry.SaveAndPost");
         F2Ui.StyleButton(_attachments, "PurchaseAttachments.Open");

@@ -90,7 +90,8 @@ public sealed class MfgPlanWin : BaseWin
         DockPanel.SetDock(statusBorder, Dock.Bottom);
         root.Children.Add(statusBorder);
 
-        var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var bar = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(bar);
         StyleButton(_runButton, "MfgPlan.Run");
         StyleButton(_convertPlannedButton, "MfgPlan.ConvertPlanned");
         StyleButton(_convertSuggestionButton, "MfgPlan.ConvertSuggestion");

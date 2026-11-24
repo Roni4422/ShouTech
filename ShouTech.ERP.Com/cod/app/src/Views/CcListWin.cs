@@ -77,7 +77,8 @@ public sealed class CcListWin : BaseWin
         DockPanel.SetDock(statusBorder, Dock.Bottom);
         root.Children.Add(statusBorder);
 
-        var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var bar = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(bar);
         StyleButton(_newButton, "Common.New");
         StyleButton(_newChildButton, "MasterCards.NewChild");
         StyleButton(_editButton, "Common.Edit");

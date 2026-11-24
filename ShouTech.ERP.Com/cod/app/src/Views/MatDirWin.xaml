@@ -153,7 +153,7 @@
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,1,0,0">
 
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+        <StackPanel Orientation="Horizontal" local:FlowAlign.AlignEnd="True">
 
             <Button x:Name="BtnAdd"
                     Style="{StaticResource ToolbarButton}"

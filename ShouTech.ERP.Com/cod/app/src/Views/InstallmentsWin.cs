@@ -98,7 +98,8 @@ public sealed class InstallmentsWin : BaseWin
         DockPanel.SetDock(statusBorder, Dock.Bottom);
         root.Children.Add(statusBorder);
 
-        var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var bar = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(bar);
         StyleButton(_newButton, "Common.New");
         StyleButton(_createButton, "Installments.CreatePlan");
         StyleButton(_deleteButton, "Common.Delete");

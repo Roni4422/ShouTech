@@ -116,7 +116,8 @@ public sealed class ChqWin : BaseWin, IWindowMode
     {
         var root = new DockPanel { Margin = new Thickness(10) };
 
-        var toolbar = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
+        var toolbar = new WrapPanel();
+        FlowAlign.End(toolbar);
         StyleButton(_btnNew, "Common.New");
         StyleButton(_btnSave, "Common.Save");
         StyleButton(_btnAddChq, "Invoice.AddLine");

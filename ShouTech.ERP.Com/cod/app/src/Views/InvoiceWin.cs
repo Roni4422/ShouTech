@@ -426,9 +426,9 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         var toolbar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0)
         };
+        FlowAlign.End(toolbar);
         StyleButton(_btnSave, "Common.Save");
         StyleButton(_btnPost, "Invoice.Post");
         StyleButton(_btnReverse, "Invoice.Reverse");
@@ -548,9 +548,9 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         var cmdRight = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center
         };
+        FlowAlign.End(cmdRight);
         StyleButton(_btnVoucher, "Invoice.Voucher");
         StyleButton(_btnOriginal, "Invoice.Original");
         StyleButton(_btnAttachments, "PurchaseAttachments.Open");
@@ -1705,7 +1705,8 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
                 boxes.Add(box);
                 panel.Children.Add(box);
             }
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+            FlowAlign.End(buttons);
             var ok = new Button { Content = T("Common.OK"), MinWidth = 84, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
             var cancel = new Button { Content = T("Common.Cancel"), MinWidth = 84, IsCancel = true };
             ok.Click += (_, _) => dialog.DialogResult = true;

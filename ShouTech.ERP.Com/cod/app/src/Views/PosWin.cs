@@ -166,8 +166,9 @@ public sealed class PosWin : BaseWin
         add.Margin = new Thickness(8, 0, 0, 0); add.Click += (_, _) => AddScannedItem(); Grid.SetColumn(add, 1); scanPanel.Children.Add(add);
         Grid.SetColumn(scanPanel, 1); headerGrid.Children.Add(scanPanel);
 
-        var shortcut = new StackPanel { Margin = new Thickness(18, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
-        _sessionLabel.HorizontalAlignment = HorizontalAlignment.Right;
+        var shortcut = new StackPanel { Margin = new Thickness(18, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        FlowAlign.End(shortcut);
+        FlowAlign.End(_sessionLabel);
         shortcut.Children.Add(_sessionLabel);
         shortcut.Children.Add(new TextBlock { Text = "READY TO SCAN", FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(11), FontWeight = FontWeights.Bold, Foreground = Teal, HorizontalAlignment = HorizontalAlignment.Right });
         shortcut.Children.Add(new TextBlock { Text = "F2 Scan   ·   F12 Checkout", FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(12), Foreground = Muted, Margin = new Thickness(0, 5, 0, 0) });
@@ -241,7 +242,7 @@ public sealed class PosWin : BaseWin
         _discountLabel.Text = "Bill discount";
         _discountLabel.VerticalAlignment = VerticalAlignment.Center;
         discountRow.Children.Add(_discountLabel);
-        DockPanel.SetDock(_billDiscount, Dock.Right); _billDiscount.HorizontalAlignment = HorizontalAlignment.Right;
+        FlowAlign.End(_billDiscount);
         _billDiscount.LostFocus += (_, _) => { ClampDiscountValues(); UpdateTotals(); };
         discountRow.Children.Add(_billDiscount);
         totals.Children.Add(discountRow);
@@ -373,7 +374,7 @@ public sealed class PosWin : BaseWin
     {
         var row = new DockPanel { Margin = new Thickness(0, 0, 0, 11) };
         row.Children.Add(new TextBlock { Text = label, FontSize = ShouTech.App.Services.VisuId.ResolveFontSize(15), Foreground = Muted, VerticalAlignment = VerticalAlignment.Center });
-        DockPanel.SetDock(value, Dock.Right); value.HorizontalAlignment = HorizontalAlignment.Right; row.Children.Add(value);
+        FlowAlign.End(value); row.Children.Add(value);
         return new StackPanel { Children = { row } };
     }
 
@@ -586,7 +587,8 @@ public sealed class PosWin : BaseWin
         layout.Children.Add(userBox);
         layout.Children.Add(new TextBlock { Text = Local("SupervisorPassword", "Supervisor password"), Foreground = Muted });
         layout.Children.Add(passBox);
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        FlowAlign.End(buttons);
         var ok = MakeButton(Local("Approve", "Approve"), Teal, ShouTech.App.Services.VisuId.ResolveBrushResource("TextOnDarkBrush", "#FFFFFF"), 110, 38);
         var cancel = MakeButton(Local("Cancel", "Cancel"), ShouTech.App.Services.VisuId.ResolveBrushResource("PosRemoveBackgroundBrush", "#EEF3F5"), Ink, 90, 38);
         cancel.Margin = new Thickness(8, 0, 0, 0);
@@ -743,7 +745,8 @@ public sealed class PosWin : BaseWin
             grid.Columns.Add(new DataGridTextColumn { Header = Local("HeldCustomer", "Customer"), Binding = new System.Windows.Data.Binding(nameof(ShouTech.Domain.Entities.PosHeldBill.PartyName)), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
             grid.Columns.Add(new DataGridTextColumn { Header = Local("HeldTotal", "Total"), Binding = new System.Windows.Data.Binding(nameof(ShouTech.Domain.Entities.PosHeldBill.GrandTotal)) { StringFormat = "N2" }, Width = 110 });
             layout.Children.Add(grid);
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+            FlowAlign.End(buttons);
             DockPanel.SetDock(buttons, Dock.Bottom);
             var ok = MakeButton(Local("Recall", "Recall"), Teal, ShouTech.App.Services.VisuId.ResolveBrushResource("TextOnDarkBrush", "#FFFFFF"), 100, 38);
             var cancel = MakeButton(Local("Cancel", "Cancel"), ShouTech.App.Services.VisuId.ResolveBrushResource("PosRemoveBackgroundBrush", "#EEF3F5"), Ink, 90, 38);
@@ -878,7 +881,8 @@ public sealed class PosWin : BaseWin
             grid.Columns.Add(new DataGridTextColumn { Header = Local("UnitPrice", "Unit price"), Binding = new System.Windows.Data.Binding(nameof(MatUnitRow.PriceSale)) { StringFormat = "N2" }, Width = 110 });
             grid.MouseDoubleClick += (_, _) => { if (grid.SelectedItem is MatUnitRow chosen) { ApplyChosenUnit(line, chosen); dlg.DialogResult = true; dlg.Close(); } };
             DockPanel.SetDock(grid, Dock.Top); layout.Children.Add(grid);
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+            FlowAlign.End(buttons);
             var ok = MakeButton(Local("UseUnit", "Use unit"), Teal, ShouTech.App.Services.VisuId.ResolveBrushResource("TextOnDarkBrush", "#FFFFFF"), 100, 36);
             ok.Click += (_, _) => { if (grid.SelectedItem is MatUnitRow chosen) { ApplyChosenUnit(line, chosen); dlg.DialogResult = true; dlg.Close(); } };
             var cancel = MakeButton(Local("Cancel", "Cancel"), ShouTech.App.Services.VisuId.ResolveBrushResource("PosRemoveBackgroundBrush", "#EEF3F5"), Ink, 90, 36); cancel.Margin = new Thickness(8, 0, 0, 0); cancel.Click += (_, _) => dlg.Close();

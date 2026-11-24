@@ -141,7 +141,8 @@ public sealed class SalesDeliveryWin : BaseWin
     {
         var root = new DockPanel { Margin = new Thickness(12) };
 
-        var actions = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
+        var actions = new WrapPanel();
+        FlowAlign.End(actions);
         StyleButton(_btnNew, "Common.New");
         StyleButton(_btnLoad, "OrderDoc.Load");
         StyleButton(_btnCreate, "SalesDelivery.CreateDraft");
@@ -619,7 +620,8 @@ public sealed class SalesDeliveryWin : BaseWin
                 boxes.Add((box, delivery.DeliveryDocId));
                 panel.Children.Add(box);
             }
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+            FlowAlign.End(buttons);
             var ok = new Button { Content = T("Common.OK"), MinWidth = 84, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
             var cancel = new Button { Content = T("Common.Cancel"), MinWidth = 84, IsCancel = true };
             ok.Click += (_, _) => dialog.DialogResult = true;
@@ -911,7 +913,8 @@ public sealed class SalesDeliveryWin : BaseWin
                 boxes.Add(box);
                 panel.Children.Add(box);
             }
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+            FlowAlign.End(buttons);
             var ok = new Button { Content = T("Common.OK"), MinWidth = 84, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
             var cancel = new Button { Content = T("Common.Cancel"), MinWidth = 84, IsCancel = true };
             ok.Click += (_, _) => dialog.DialogResult = true;

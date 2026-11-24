@@ -1028,7 +1028,8 @@ public partial class CoaWin : BaseWin
         Grid.SetColumn(box, 1);
         panel.Children.Add(box);
 
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0) };
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal,  Margin = new Thickness(0, 14, 0, 0) };
+        FlowAlign.End(buttons);
         var ok = new Button { Content = T("Common.OK"), MinWidth = VisuId.ButtonMinWidth, IsDefault = true, Margin = new Thickness(0, 0, 6, 0), ToolTip = T("CoaWin.PasswordOkTip") };
         var cancel = new Button { Content = T("Common.Cancel"), MinWidth = VisuId.ButtonMinWidth, IsCancel = true, ToolTip = T("CoaWin.PasswordCancelTip") };
         ok.Click += (_, _) => { if (!string.IsNullOrWhiteSpace(box.Password)) dialog.DialogResult = true; };

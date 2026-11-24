@@ -77,7 +77,8 @@ public sealed class DocSearchWin : BaseWin, IWindowMode
     {
         var root = new DockPanel { Margin = new Thickness(10) };
 
-        var toolbar = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
+        var toolbar = new WrapPanel();
+        FlowAlign.End(toolbar);
         StyleButton(_btnSearch, "Common.Search");
         StyleButton(_btnOpen, "DocSearch.Open");
         StyleButton(_btnSetLost, "DocSearch.SetLost");
@@ -484,7 +485,8 @@ public sealed class DocSearchWin : BaseWin, IWindowMode
                 boxes.Add(box);
                 panel.Children.Add(box);
             }
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+            FlowAlign.End(buttons);
             var ok = new Button { Content = T("Common.OK"), MinWidth = 84, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
             var cancel = new Button { Content = T("Common.Cancel"), MinWidth = 84, IsCancel = true };
             ok.Click += (_, _) => dialog.DialogResult = true;
