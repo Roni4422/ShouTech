@@ -838,5 +838,17 @@
     "name": "LandedCostLinkedDocumentInvalid",
     "message": "'{0}' gideri {1} tedarikçi belgesine bağlanamaz.",
     "hint": "Aynı para biriminde, günlüğü tam olarak bir maliyet hesabını borçlandıran onaylanmış bir tedarikçi belgesi bağlayın; gider tutarı bu borcu aşamaz."
+  },
+  "PUR-1012": {
+    "code": "PUR-1012",
+    "name": "AdvancePurchaseOrderMismatch",
+    "message": "Tedarikçi avansı '{0}' belgesine uygulanamaz: satın alma siparişi eşleşmiyor.",
+    "hint": "Avans, yalnızca ödendiği satın alma siparişinin faturalarını, aynı şirket içindeki aynı tedarikçi için kapatır. Avansın satın alma siparişini ve faturanın sipariş zincirini kontrol edin."
+  },
+  "PUR-1013": {
+    "code": "PUR-1013",
+    "name": "AdvanceReversalBlockedWhileConsumed",
+    "message": "Tedarikçi avansı '{0}' kısmen tüketilmiş ve geri alınamaz.",
+    "hint": "Önce Ödeme Mutabakatı'nda avans dağıtımlarını geri alın; avansın hiçbiri tüketilmediğinde avans belgesi geri alınabilir."
   }
 }

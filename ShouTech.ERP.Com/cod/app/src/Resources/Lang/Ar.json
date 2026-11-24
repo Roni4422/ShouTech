@@ -2030,7 +2030,9 @@
     "EntryDraftUpdated": "تم تحديث مسودة القيد في قاعدة البيانات.\nالمعرف: {0}",
     "EntryPosted": "تم ترحيل القيد إلى قاعدة البيانات.",
     "SaveFailedMsg": "لم تنجح العملية ولم يتم عرضها كناجحة.\n[{0}] {1}",
-    "SaveFailedTitle": "فشل حفظ القيد"
+    "SaveFailedTitle": "فشل حفظ القيد",
+    "AdvanceForPo": "دفعة مقدمة لأمر شراء",
+    "PurchaseOrderNo": "رقم أمر الشراء"
   },
   "CustCard": {
     "DefaultCurrency": "العملة الافتراضية",
@@ -2273,7 +2275,8 @@
     "TitleRfq": "طلب عرض سعر",
     "ValidTill": "آخر موعد لاستلام العروض",
     "RfqCannotConvert": "لا يمكن تحويل طلب عرض السعر مباشرة إلى فاتورة مورد.",
-    "RfqOpen": "طلب عرض سعر مفتوح"
+    "RfqOpen": "طلب عرض سعر مفتوح",
+    "AdvancesSummary": "الدفعات المقدمة: {0} · المستهلك {1} · المتبقي {2}"
   },
   "BarcodeDesign": {
     "SaveDesign": "حفظ التصميم",
@@ -2697,7 +2700,11 @@
     "SelectPayment": "اختر دفعة أولاً.",
     "SuggestedOk": "تم ملء التخصيصات المقترحة",
     "DiscountPermissionDenied": "ليس لديك صلاحية منح خصم تسوية (SALES.SETTLEMENT.DISCOUNT).",
-    "DocAmountRequired": "يتطلب التخصيص بعملة مختلفة مبلغ المستند (DocAmount) لكل صف مُدخل."
+    "DocAmountRequired": "يتطلب التخصيص بعملة مختلفة مبلغ المستند (DocAmount) لكل صف مُدخل.",
+    "AdvancePo": "أمر شراء الدفعة",
+    "UnallocateAdvance": "عكس تخصيص الدفعة المقدمة",
+    "UnallocatedOk": "تم عكس تخصيص الدفعة المقدمة واستعادة رصيدها.",
+    "SelectAdvancePair": "اختر دفعة مقدمة والمستند المخصص لها أولاً."
   },
   "Projects": {
     "Title": "المشاريع",
@@ -2795,7 +2802,10 @@
     "RateInvalid": "سعر الصرف غير صالح؛ يجب ان يكون اكبر من صفر.",
     "AmountMismatch": "الترحيل محظور: مبلغ الترويسه يختلف عن مجموع السطور بمقدار",
     "AmountInWords": "المبلغ كتابه",
-    "NotFound": "لم يتم العثور على سند بهذا الرقم في الشركه النشطه"
+    "NotFound": "لم يتم العثور على سند بهذا الرقم في الشركه النشطه",
+    "AdvanceSupplierOnly": "يجب أن تكون الدفعة المقدمة سند صرف لمورد مع رمز طرف.",
+    "PurchaseOrderNotFound": "أمر الشراء غير موجود",
+    "AdvancePoInvalid": "أمر الشراء ليس أمراً مرحّلاً لهذا المورد"
   },
   "Cheques": {
     "Deposit": "ايداع",

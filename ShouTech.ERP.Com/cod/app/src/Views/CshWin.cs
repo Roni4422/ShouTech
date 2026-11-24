@@ -58,6 +58,10 @@ public sealed class CshWin : BaseWin, IWindowMode
     private readonly TextBox _txtRefNo = new();
     private readonly TextBox _txtCc = new();
     private readonly TextBox _txtMemo = new();
+    // Supplier advances (migration 095, Payment mode only): flag the
+    // voucher as an advance for one PO; posting debits Advances (1215).
+    private readonly CheckBox _chkAdvance = new() { VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBox _txtPoNo = new();
 
     private readonly Button _btnNew = new();
     private readonly Button _btnLoad = new();
@@ -204,6 +208,11 @@ public sealed class CshWin : BaseWin, IWindowMode
         _cbPartyKind.SelectedIndex = _kind == CshKind.Receipt ? 0 : 1;
         AddFormField(headerForm, 3, 0, "Vouchers.PartyCode", _txtPartyCode);
         AddFormField(headerForm, 3, 1, "Vouchers.PartyKind", _cbPartyKind);
+        if (_kind == CshKind.Payment)
+        {
+            AddFormField(headerForm, 4, 0, "Vouchers.AdvanceForPo", _chkAdvance);
+            AddFormField(headerForm, 4, 1, "Vouchers.PurchaseOrderNo", _txtPoNo);
+        }
         Grid.SetRow(headerForm, 0);
         body.Children.Add(headerForm);
 
@@ -248,6 +257,8 @@ public sealed class CshWin : BaseWin, IWindowMode
         _dtDate.SelectedDate = DateTime.Today;
         _txtParty.Text = string.Empty;
         _txtPartyCode.Text = string.Empty;
+        _chkAdvance.IsChecked = false;
+        _txtPoNo.Text = string.Empty;
         _cbPartyKind.SelectedIndex = _kind == CshKind.Receipt ? 0 : 1;
         _btnReverse.IsEnabled = false;
         _txtAmount.Text = "0.00";
@@ -269,6 +280,8 @@ public sealed class CshWin : BaseWin, IWindowMode
         _txtBox.IsReadOnly = readOnly;
         _txtParty.IsReadOnly = readOnly;
         _txtPartyCode.IsReadOnly = readOnly;
+        _txtPoNo.IsReadOnly = readOnly;
+        _chkAdvance.IsEnabled = !readOnly;
         _cbPartyKind.IsEnabled = !readOnly;
         _txtAmount.IsReadOnly = readOnly;
         _txtCur.IsReadOnly = readOnly;
@@ -353,6 +366,11 @@ public sealed class CshWin : BaseWin, IWindowMode
             var total = 0m;
             foreach (var line in validLines)
             {
+                // An advance voucher's settlement line is the Advances
+                // account by definition; default an empty account to it
+                // (posting re-validates the debit lands on 1215 exactly).
+                if (_chkAdvance.IsChecked == true && string.IsNullOrWhiteSpace(line.AccountCode))
+                    line.AccountCode = GlAccounts.SupplierAdvances;
                 if (string.IsNullOrWhiteSpace(line.AccountCode))
                     throw new InvalidOperationException($"{T("Vouchers.AccountCode")} — {line.LineNo}");
                 var accountId = await store.ResolveAccountIdAsync(companyId, line.AccountCode.Trim());
@@ -376,13 +394,32 @@ public sealed class CshWin : BaseWin, IWindowMode
             // unresolved code blocks the voucher instead of silently
             // posting a GL-only entry with a free-text name (B-03/L-7).
             PartyLedgerSvc.VoucherPartyLink? partyLink = null;
+            if (_chkAdvance.IsChecked == true && string.IsNullOrWhiteSpace(_txtPartyCode.Text))
+                throw new InvalidOperationException(T("CashVoucher.AdvanceSupplierOnly"));
             if (!string.IsNullOrWhiteSpace(_txtPartyCode.Text))
             {
                 var resolved = PartyLedgerSvc.ResolveParty(_txtPartyCode.Text.Trim(), PartyKind)
                     ?? throw new InvalidOperationException($"{T("CashVoucher.PartyNotFound")}: {_txtPartyCode.Text.Trim()}");
+                long? advancePoId = null;
+                string? advancePoNo = null;
+                if (_chkAdvance.IsChecked == true)
+                {
+                    // Advance marking (Y1): the PO must resolve in this
+                    // company, be Posted, and belong to the same supplier
+                    // — posting enforces all of it again in-transaction.
+                    if (_kind != CshKind.Payment || PartyKind != "S")
+                        throw new InvalidOperationException(T("CashVoucher.AdvanceSupplierOnly"));
+                    advancePoNo = _txtPoNo.Text.Trim();
+                    var po = PartyLedgerSvc.ResolvePurchaseOrder(advancePoNo)
+                        ?? throw new InvalidOperationException($"{T("CashVoucher.PurchaseOrderNotFound")}: {advancePoNo}");
+                    if (po.PartyId != resolved.LedgerId || po.Status != "Posted")
+                        throw new InvalidOperationException($"{T("CashVoucher.AdvancePoInvalid")}: {advancePoNo}");
+                    advancePoId = po.DocId;
+                }
                 partyLink = new PartyLedgerSvc.VoucherPartyLink(
                     PartyKind, resolved.LedgerId, _txtPartyCode.Text.Trim(),
-                    _kind == CshKind.Receipt ? "RCV" : "PAY", _txtDocNo.Text.Trim(), total, currency);
+                    _kind == CshKind.Receipt ? "RCV" : "PAY", _txtDocNo.Text.Trim(), total, currency,
+                    PoDocId: advancePoId, IsAdvance: advancePoId is not null, PoDocNo: advancePoNo);
                 if (string.IsNullOrWhiteSpace(_txtParty.Text))
                     _txtParty.Text = resolved.Name;
             }
@@ -517,6 +554,8 @@ public sealed class CshWin : BaseWin, IWindowMode
             {
                 _txtPartyCode.Text = link.PartyCode;
                 _cbPartyKind.SelectedIndex = link.PartyKind == "S" ? 1 : 0;
+                _chkAdvance.IsChecked = link.IsAdvance;
+                _txtPoNo.Text = link.PoDocNo ?? string.Empty;
             }
             _btnReverse.IsEnabled = _isPosted && snapshot.Status == JournalEntryStatus.Posted;
             _dtDate.SelectedDate = snapshot.EntryDate.ToDateTime(TimeOnly.MinValue);

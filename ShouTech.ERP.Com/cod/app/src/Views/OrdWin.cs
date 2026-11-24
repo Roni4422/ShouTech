@@ -534,6 +534,15 @@ public sealed class OrdWin : BaseWin, IWindowMode
                 }
             }
             _lblStatus.Text = $"{T("OrderDoc.Status")}: {DerivedStatusText(progress.DerivedStatus)} | {T("OrderDoc.Fulfilled")}: {progress.PerFulfilled:N1}% | {T("OrderDoc.Billed")}: {progress.PerBilled:N1}%";
+            // Supplier advances (Y1, migration 095): a PO shows its
+            // advance total / consumed / remaining, read from the
+            // voucher links + advance allocations (display only).
+            if (_kind == OrdKind.Purchase && !IsRfq)
+            {
+                var advances = PartyLedgerSvc.GetPoAdvanceSummary(docId);
+                if (advances.Total > 0m)
+                    _lblStatus.Text += $" | {Tf("OrderDoc.AdvancesSummary", advances.Total.ToString("N2", CultureInfo.InvariantCulture), advances.Consumed.ToString("N2", CultureInfo.InvariantCulture), advances.Remaining.ToString("N2", CultureInfo.InvariantCulture))}";
+            }
         }
         catch (Exception ex)
         {

@@ -838,5 +838,17 @@
     "name": "LandedCostLinkedDocumentInvalid",
     "message": "La charge '{0}' ne peut pas être liée au document fournisseur {1}.",
     "hint": "Liez un document fournisseur validé, dans la même devise, dont le journal débite exactement un compte de coût ; le montant de la charge ne peut pas dépasser ce débit."
+  },
+  "PUR-1012": {
+    "code": "PUR-1012",
+    "name": "AdvancePurchaseOrderMismatch",
+    "message": "L'avance fournisseur ne peut pas être appliquée à '{0}' : la commande d'achat ne correspond pas.",
+    "hint": "Une avance ne règle que les factures de la commande d'achat contre laquelle elle a été payée, pour le même fournisseur dans la même société. Vérifiez la commande de l'avance et la chaîne de commandes de la facture."
+  },
+  "PUR-1013": {
+    "code": "PUR-1013",
+    "name": "AdvanceReversalBlockedWhileConsumed",
+    "message": "L'avance fournisseur '{0}' est partiellement consommée et ne peut pas être annulée.",
+    "hint": "Annulez d'abord les affectations de l'avance dans le rapprochement des paiements ; le bon d'avance pourra être annulé une fois qu'il n'en reste rien de consommé."
   }
 }

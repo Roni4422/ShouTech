@@ -2285,7 +2285,9 @@
     "EntryDraftUpdated": "Kayıt taslağı veritabanında güncellendi.\nKimlik: {0}",
     "EntryPosted": "Kayıt veritabanına işlendi.",
     "SaveFailedMsg": "İşlem başarısız oldu ve başarılı olarak gösterilmedi.\n[{0}] {1}",
-    "SaveFailedTitle": "Kayıt Kaydedilemedi"
+    "SaveFailedTitle": "Kayıt Kaydedilemedi",
+    "AdvanceForPo": "Satın alma siparişi avansı",
+    "PurchaseOrderNo": "Satın Alma Sipariş No."
   },
   "CustCard": {
     "DefaultCurrency": "Varsayılan Para Birimi",
@@ -2558,7 +2560,11 @@
     "SelectPayment": "Önce bir ödeme seçin.",
     "SuggestedOk": "Önerilen tahsisler dolduruldu",
     "DiscountPermissionDenied": "Uzlaşma iskontosu verme izniniz yok (SALES.SETTLEMENT.DISCOUNT).",
-    "DocAmountRequired": "Farklı para birimi tahsisi, doldurulan her satır için belge tutarı (DocAmount) gerektirir."
+    "DocAmountRequired": "Farklı para birimi tahsisi, doldurulan her satır için belge tutarı (DocAmount) gerektirir.",
+    "AdvancePo": "Avans Siparişi",
+    "UnallocateAdvance": "Avans dağıtımını geri al",
+    "UnallocatedOk": "Avans dağıtımı geri alındı; avans bakiyesi geri yüklendi.",
+    "SelectAdvancePair": "Önce bir avans ve dağıtıldığı belgeyi seçin."
   },
   "Projects": {
     "Title": "Projeler",
@@ -2656,7 +2662,10 @@
     "RateInvalid": "Doviz kuru gecersiz; sifirdan buyuk olmalidir.",
     "AmountMismatch": "Kayit engellendi: baslik tutari satirlarin toplamindan su kadar farkli:",
     "AmountInWords": "Tutar yaziyla",
-    "NotFound": "Aktif sirkette bu numarayla makbuz bulunamadi"
+    "NotFound": "Aktif sirkette bu numarayla makbuz bulunamadi",
+    "AdvanceSupplierOnly": "Avans, taraf kodu olan bir tedarikçiye ait ödeme belgesi olmalıdır.",
+    "PurchaseOrderNotFound": "Satın alma siparişi bulunamadı",
+    "AdvancePoInvalid": "Satın alma siparişi bu tedarikçinin onaylanmış siparişi değil"
   },
   "Cheques": {
     "Deposit": "Yatir",
@@ -2770,7 +2779,8 @@
     "TitleRfq": "Teklif Talebi",
     "ValidTill": "Yanıt Son Tarihi",
     "RfqCannotConvert": "Teklif talebi doğrudan tedarikçi faturasına dönüştürülemez.",
-    "RfqOpen": "Açık teklif talebi"
+    "RfqOpen": "Açık teklif talebi",
+    "AdvancesSummary": "Avanslar: {0} · tüketilen {1} · kalan {2}"
   },
   "Definitions": {
     "Title": "Tanımlar",

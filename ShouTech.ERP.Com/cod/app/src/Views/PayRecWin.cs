@@ -54,6 +54,7 @@ public sealed class PayRecWin : BaseWin
     private readonly TextBlock _statusBar = new();
     private readonly Button _allocateButton = new();
     private readonly Button _suggestButton = new();
+    private readonly Button _unallocateButton = new();
     private readonly Button _refreshButton = new();
     private readonly Button _closeButton = new();
 
@@ -120,14 +121,17 @@ public sealed class PayRecWin : BaseWin
         var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         StyleButton(_allocateButton, "PaymentReconciliation.Allocate");
         StyleButton(_suggestButton, "PaymentReconciliation.Suggest");
+        StyleButton(_unallocateButton, "PaymentReconciliation.UnallocateAdvance");
         StyleButton(_refreshButton, "Common.Refresh");
         StyleButton(_closeButton, "Common.Close");
         _allocateButton.Click += async (_, _) => await AllocateAsync();
         _suggestButton.Click += (_, _) => SuggestAllocations();
+        _unallocateButton.Click += async (_, _) => await UnallocateAdvanceAsync();
         _refreshButton.Click += async (_, _) => await RefreshAsync();
         _closeButton.Click += (_, _) => Close();
         bar.Children.Add(_allocateButton);
         bar.Children.Add(_suggestButton);
+        bar.Children.Add(_unallocateButton);
         bar.Children.Add(_refreshButton);
         bar.Children.Add(_closeButton);
         var barBorder = new Border
@@ -203,6 +207,9 @@ public sealed class PayRecWin : BaseWin
         // matched to a document responsibly (cash-payments MAJOR).
         _payGrid.Columns.Add(TextCol("PaymentReconciliation.Party", nameof(UnallocatedPaymentRow.PartyName), 140));
         _payGrid.Columns.Add(TextCol("PaymentReconciliation.Currency", nameof(UnallocatedPaymentRow.CurrencyCode), 70, center: true));
+        // Supplier advances (migration 095) carry the PO they belong to;
+        // the column is empty for normal payments.
+        _payGrid.Columns.Add(TextCol("PaymentReconciliation.AdvancePo", nameof(UnallocatedPaymentRow.PoDocNo), 90));
         _payGrid.Columns.Add(TextCol("PaymentReconciliation.Amount", nameof(UnallocatedPaymentRow.Amount), 110, numeric: true));
         _payGrid.Columns.Add(TextCol("PaymentReconciliation.Allocated", nameof(UnallocatedPaymentRow.Allocated), 90, numeric: true));
         _payGrid.Columns.Add(TextCol("PaymentReconciliation.Available", nameof(UnallocatedPaymentRow.Available), 100, numeric: true));
@@ -230,7 +237,7 @@ public sealed class PayRecWin : BaseWin
             label.Text = T(key);
         foreach (var (column, key) in _headers)
             column.Header = T(key);
-        foreach (var b in new[] { _allocateButton, _suggestButton, _refreshButton, _closeButton })
+        foreach (var b in new[] { _allocateButton, _suggestButton, _unallocateButton, _refreshButton, _closeButton })
             if (b.Tag is string key)
                 b.Content = T(key);
         UpdateStatusBar();
@@ -375,9 +382,59 @@ public sealed class PayRecWin : BaseWin
         }
         catch (Exception ex)
         {
-            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PayRecWin.AllocateAsync");
-            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+            ReportFailure("AllocateAsync", ex);
         }
+    }
+
+    /// <summary>Reverses the most recent advance allocation between the
+    /// selected advance and the selected document (migration 095): the
+    /// clearing entry is mirrored, paid_amount is released and the
+    /// advance balance is restored, with a 079 audit row.</summary>
+    private async Task UnallocateAdvanceAsync()
+    {
+        try
+        {
+            if (_service is null)
+                throw new InvalidOperationException(T("PaymentReconciliation.ServiceUnavailable"));
+            if (!AppHost.Permissions.Has(PermCat.Accounting.PaymentReconciliationAllocate))
+                throw new InvalidOperationException(T("PaymentReconciliation.PermissionDenied"));
+            if (_docGrid.SelectedItem is not OpenDocumentRow doc || _payGrid.SelectedItem is not UnallocatedPaymentRow pay || !pay.IsAdvance)
+                throw new InvalidOperationException(T("PaymentReconciliation.SelectAdvancePair"));
+            _unallocateButton.IsEnabled = false;
+            try
+            {
+                await _service.UnallocateLatestAdvanceAsync(CurrentCompanyCode, pay.LedgerId, doc.DocTable, doc.DocId, CurrentUserId);
+            }
+            finally
+            {
+                _unallocateButton.IsEnabled = true;
+            }
+            MessageBox.Show(this, T("PaymentReconciliation.UnallocatedOk"), Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            ReportFailure("UnallocateAdvanceAsync", ex);
+        }
+    }
+
+    private void ReportFailure(string operation, Exception ex)
+    {
+        if (ex is AppError appError)
+        {
+            // Catalogued business blocks (e.g. PUR-1012 advance/PO
+            // mismatch) show their localized catalog message + code.
+            AppHost.Errors.Report(appError.Code, appError, $"PayRecWin.{operation}");
+            var info = AppHost.Errors.Resolve(appError.Code, appError.Args.ToArray());
+            var body = info.Message;
+            if (!string.IsNullOrWhiteSpace(info.Hint))
+                body += $"{Environment.NewLine}{Environment.NewLine}{info.Hint}";
+            body += $"{Environment.NewLine}{Environment.NewLine}(Error {info.Code})";
+            MessageBox.Show(this, body, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+        AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, $"PayRecWin.{operation}");
+        MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
     }
 
     private void UpdateStatusBar()

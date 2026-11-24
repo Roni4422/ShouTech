@@ -1938,7 +1938,9 @@
     "EntryDraftUpdated": "The entry draft was updated in the database.\nId: {0}",
     "EntryPosted": "The entry was posted to the database.",
     "SaveFailedMsg": "The operation did not succeed and was not shown as a success.\n[{0}] {1}",
-    "SaveFailedTitle": "Failed to Save Entry"
+    "SaveFailedTitle": "Failed to Save Entry",
+    "AdvanceForPo": "Advance for PO",
+    "PurchaseOrderNo": "Purchase Order No."
   },
   "CustCard": {
     "DefaultCurrency": "Default Currency",
@@ -2189,7 +2191,8 @@
     "TitleRfq": "Request for Quotation",
     "ValidTill": "Response Deadline",
     "RfqCannotConvert": "A request for quotation cannot be converted directly to a supplier invoice.",
-    "RfqOpen": "Open sourcing request"
+    "RfqOpen": "Open sourcing request",
+    "AdvancesSummary": "Advances: {0} · consumed {1} · remaining {2}"
   },
   "BarcodeDesign": {
     "SaveDesign": "Save design",
@@ -2613,7 +2616,11 @@
     "SelectPayment": "Select a payment first.",
     "SuggestedOk": "Suggested allocations filled",
     "DiscountPermissionDenied": "You do not have permission to grant a settlement discount (SALES.SETTLEMENT.DISCOUNT).",
-    "DocAmountRequired": "A cross-currency allocation needs the document amount (DocAmount) for every filled row."
+    "DocAmountRequired": "A cross-currency allocation needs the document amount (DocAmount) for every filled row.",
+    "AdvancePo": "Advance PO",
+    "UnallocateAdvance": "Reverse advance allocation",
+    "UnallocatedOk": "Advance allocation reversed; the advance balance was restored.",
+    "SelectAdvancePair": "Select an advance and the document it was allocated to first."
   },
   "Projects": {
     "Title": "Projects",
@@ -2711,7 +2718,10 @@
     "RateInvalid": "The exchange rate is invalid; it must be greater than zero.",
     "AmountMismatch": "Posting is blocked: the header amount differs from the sum of lines by",
     "AmountInWords": "Amount in words",
-    "NotFound": "No voucher was found with this number in the active company"
+    "NotFound": "No voucher was found with this number in the active company",
+    "AdvanceSupplierOnly": "An advance must be a payment voucher for a supplier, with a party code.",
+    "PurchaseOrderNotFound": "Purchase order not found",
+    "AdvancePoInvalid": "The purchase order is not a posted order of this supplier"
   },
   "Cheques": {
     "Deposit": "Deposit",

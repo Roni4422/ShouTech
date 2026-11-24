@@ -838,5 +838,17 @@
     "name": "LandedCostLinkedDocumentInvalid",
     "message": "Charge '{0}' cannot link to supplier document {1}.",
     "hint": "Link a posted supplier document in the same currency whose journal debits exactly one cost account; the charge amount may not exceed that debit."
+  },
+  "PUR-1012": {
+    "code": "PUR-1012",
+    "name": "AdvancePurchaseOrderMismatch",
+    "message": "Supplier advance cannot be applied to '{0}': the purchase order does not match.",
+    "hint": "An advance settles only invoices of the purchase order it was paid against, for the same supplier in the same company. Check the advance's purchase order and the invoice's order chain."
+  },
+  "PUR-1013": {
+    "code": "PUR-1013",
+    "name": "AdvanceReversalBlockedWhileConsumed",
+    "message": "Supplier advance '{0}' is partly consumed and cannot be reversed.",
+    "hint": "Reverse the advance allocations in Payment Reconciliation first; the advance voucher can be reversed once none of it is consumed."
   }
 }

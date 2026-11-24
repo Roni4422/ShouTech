@@ -2285,7 +2285,9 @@
     "EntryDraftUpdated": "Le brouillon de l'écriture a été mis à jour dans la base de données.\nID : {0}",
     "EntryPosted": "L'écriture a été comptabilisée dans la base de données.",
     "SaveFailedMsg": "L'opération n'a pas abouti et n'a pas été présentée comme un succès.\n[{0}] {1}",
-    "SaveFailedTitle": "Échec de l'enregistrement de l'écriture"
+    "SaveFailedTitle": "Échec de l'enregistrement de l'écriture",
+    "AdvanceForPo": "Avance sur commande d'achat",
+    "PurchaseOrderNo": "N° de commande d'achat"
   },
   "CustCard": {
     "DefaultCurrency": "Devise par défaut",
@@ -2558,7 +2560,11 @@
     "SelectPayment": "Sélectionnez d'abord un paiement.",
     "SuggestedOk": "Affectations suggérées remplies",
     "DiscountPermissionDenied": "Vous n'avez pas l'autorisation d'accorder un escompte de règlement (SALES.SETTLEMENT.DISCOUNT).",
-    "DocAmountRequired": "Une affectation multi-devises exige le montant du document (DocAmount) pour chaque ligne remplie."
+    "DocAmountRequired": "Une affectation multi-devises exige le montant du document (DocAmount) pour chaque ligne remplie.",
+    "AdvancePo": "Commande de l'avance",
+    "UnallocateAdvance": "Annuler l'affectation de l'avance",
+    "UnallocatedOk": "Affectation de l'avance annulée ; le solde de l'avance a été restauré.",
+    "SelectAdvancePair": "Sélectionnez d'abord une avance et le document auquel elle a été affectée."
   },
   "Projects": {
     "Title": "Projets",
@@ -2656,7 +2662,10 @@
     "RateInvalid": "Le taux de change est invalide ; il doit etre superieur a zero.",
     "AmountMismatch": "Comptabilisation bloquee : le montant d'en-tete differe de la somme des lignes de",
     "AmountInWords": "Montant en lettres",
-    "NotFound": "Aucun bon trouve avec ce numero dans la societe active"
+    "NotFound": "Aucun bon trouve avec ce numero dans la societe active",
+    "AdvanceSupplierOnly": "Une avance doit être un bon de paiement pour un fournisseur, avec un code tiers.",
+    "PurchaseOrderNotFound": "Commande d'achat introuvable",
+    "AdvancePoInvalid": "La commande d'achat n'est pas une commande validée de ce fournisseur"
   },
   "Cheques": {
     "Deposit": "Deposer",
@@ -2770,7 +2779,8 @@
     "TitleRfq": "Demande de devis",
     "ValidTill": "Date limite de réponse",
     "RfqCannotConvert": "Une demande de devis ne peut pas être convertie directement en facture fournisseur.",
-    "RfqOpen": "Demande de devis ouverte"
+    "RfqOpen": "Demande de devis ouverte",
+    "AdvancesSummary": "Avances : {0} · consommé {1} · restant {2}"
   },
   "Definitions": {
     "Title": "Définitions",
