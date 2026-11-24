@@ -385,6 +385,29 @@ proving grant/deny end-to-end through the real service + loader on
 a migrated SQLite database, including Inspector verdicts matching
 loader outcomes.
 
+**As-built verification (2026-11-24, branch
+`feat/permissions-templates`)**: landings L1–L3 `20fbf684` +
+`aecf67a3` (migration 125 both dialects, PermCat completion,
+loader union + deny set, Inspector, PermTplSvc, PrmWin fix, PRM
+error catalog, PermTpl Lang), L4 `2d1a52b1` (PermTplWin, Myrtle
+tint, RibbonNav), L5 `5295560e` (DOC enforcement in InvoiceWin /
+OrdWin / PosWin / PosSalesWin), L6 (PermHarness + this note).
+Gates at the final tip: solution build 0 errors / 0 warnings
+(--no-incremental); SqlMigrator fresh-apply + idempotent through
+125 (489 permissions, 104 DOC, 26 groups, system templates
+148/58/27 grants); the 4 audit scripts exit 0; Errors parity
+177 keys ×4 exact-set; Lang PermTpl section 41 keys ×4 exact-set
+(the base catalogs carry a pre-existing divergence outside this
+section — untouched). Harnesses: PermHarness 37/37 — including
+the proof that the set of stored codes with no `PermCat` constant
+is EXACTLY the 58-code drift documented in §1.1 (26 migration-002
+underscore relics + 17 PermKey short codes + 13 PUR.* + 2
+INV.VALUATION.*), no more, no less — plus the pre-existing suites
+unchanged: P2p 39/39, W1 36/36, Bin 22/22, Num 27/27, Info 35/35.
+PostgreSQL legs are code-mirrored and migrator-verified for
+syntax shape only; a live PG run and the WPF click-through remain
+Windows-owed, as for every workstream on this base.
+
 **Recorded gaps (not built, with reasons)**:
 - **Full ribbon/nav gating** (every nav entry checked before its
   window opens): the shell's established pattern is window
