@@ -90,7 +90,7 @@ public static class TaxSvc
 
         var companyCode = AppState.CurrentCompanyCode;
         if (string.IsNullOrWhiteSpace(companyCode))
-            throw new InvalidOperationException("An active company is required to configure taxation.");
+            throw new AppError(ErrorCodes.PartyBlacklisted,"An active company is required to configure taxation.");
 
         var cs = DatabaseRuntime.GetConnectionString();
         if (string.IsNullOrWhiteSpace(cs))
@@ -537,7 +537,7 @@ public static class TaxSvc
                     (string.IsNullOrWhiteSpace(reason) ? string.Empty : $" Reason: {reason}"));
             }
         }
-        catch (InvalidOperationException)
+        catch (AppError)
         {
             throw;
         }

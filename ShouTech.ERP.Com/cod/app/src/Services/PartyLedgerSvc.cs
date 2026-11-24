@@ -65,12 +65,12 @@ public static class PartyLedgerSvc
             if (reader.Read())
             {
                 var reason = reader.IsDBNull(0) ? null : Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture);
-                throw new InvalidOperationException(
+                throw new AppError(ErrorCodes.PartyBlacklisted,
                     $"Party '{code.Trim()}' is blacklisted and cannot be used on new documents." +
                     (string.IsNullOrWhiteSpace(reason) ? string.Empty : $" Reason: {reason}"));
             }
         }
-        catch (InvalidOperationException)
+        catch (AppError)
         {
             throw;
         }

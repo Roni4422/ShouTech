@@ -92,6 +92,7 @@ public static class ErrorCodes
     // so the guard takes the next free ACC codes instead.
     public const string BudgetExceededAnnual = "ACC-5018";
     public const string BudgetExceededMonthly = "ACC-5019";
+    public const string PartyBlacklisted = "ACC-5020";
 
     // ---- INV 6000-6999 -------------------------------------------------
     public const string InventoryOperationFailed = "INV-6001";

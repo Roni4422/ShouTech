@@ -722,5 +722,9 @@
     "name": "ApprovalStateInvalid",
     "message": "Le document '{0}' ne peut pas changer d'état d'approbation depuis son état actuel.",
     "hint": "Actualisez le document et vérifiez son état d'approbation avant d'agir."
+  },
+  "ACC-5020": {
+    "name": "Party blacklisted",
+    "message": "Le tiers est sur liste noire et ne peut pas être utilisé sur de nouveaux documents."
   }
 }
