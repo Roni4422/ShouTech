@@ -680,10 +680,153 @@ Fr/Tr 19 pre-existing); Errors parity 119 codes ×4, 0 missing.
 PostgreSQL execution of migration 095 and the new queries is
 code-reviewed (provider-neutral SQL, BOOLEAN/TRUE forms) but, like
 all PG verification on this branch, still owes a live PostgreSQL run.
+### B1 — Shared document core: PO/RFQ/SQ, receipt, invoice/match (P1–P7, Q1–Q4, I1–I5) — branch `feat/p2p-b1-core`
+
+Migrations **096** (core columns), **097** (RFQ invitations + P5
+backfill), **098** (PRT match-unwind audit) — both providers each.
+New catalogued error **PUR-1011** (duplicate supplier bill reference)
+in ErrorCodes.cs, all 4 Errors catalogs (parity 0 missing), and
+docs/ERROR_CATALOG.md. No new code files: everything extends
+OrderDocumentRepository / OrderService / OrdWin / InvRepo /
+PurchaseMatchPolicyRepository in place.
+
+- **Q1 QC gate on chain receipts (blocker — closed).** The purchase
+  branch of `PostConversionStockAsync` now runs the migration-056
+  gate exactly as StkPost does, through the shared `QualityGate`
+  service: a QC-required line's movement lands in the quarantine
+  warehouse and creates the Draft inspection (destination = the
+  receipt's target warehouse); the receipt GL/stock value is booked
+  into quarantine at receipt value, and the existing QC release path
+  (`QualityGate.CompleteInTransaction`) moves accepted qty to the
+  target warehouse at the same value; rejected qty stays in
+  quarantine, returnable via RCR. Service / non-stock lines never
+  reach the gate (existing stockable guard).
+- **Q2 Rejected qty at receipt.** Per-line rejected qty + reason in
+  the OrdWin receipt dialog, persisted on the receipt line
+  (`rejected_qty` / `reject_reason`, mig 096; reason required when
+  qty > 0). **Model decision:** rejected-at-the-gate goods are
+  recorded but NOT received — no stock, no GL, no PO progress —
+  because they never enter the books; goods rejected later by QC
+  inspection are the ones that sit in quarantine under Q1.
+- **Q3 Receipt date + delivery note.** The receipt dialog date is
+  editable (default today) and posts on the picked date; the
+  supplier delivery-note number is persisted on the receipt header
+  (`delivery_note_no`, mig 096).
+- **Q4 Over-receipt tolerance.** `receipt_over_tolerance_pct` on
+  `purchase_match_policies` (mig 096), editable in
+  PurchaseMatchPolicyWin; the receipt hard block applies beyond
+  ordered × (1 + tolerance) at material, per-source-line and
+  allocation level. Default 0 = previous behaviour.
+- **P5 Stored percentages + derived status.** `per_received` /
+  `per_billed` stored on the document header (mig 096) and
+  maintained inside the receipt, receipt-return, chain-invoice and
+  PRT posting transactions (PRT via InvRepo's refresh); backfilled
+  for existing POs by mig 097. Derived status (To Receive and Bill /
+  To Bill / To Receive / Completed) computed from the stored values,
+  shown in the OrdWin header progress line and as a column in
+  OrderTrackWin.
+- **P3 PO header completeness.** `payment_terms` + `incoterm`
+  persisted (mig 096); currency + exchange rate editable in OrdWin
+  for PO/RFQ (no longer forced to user-pref/0; empty rate keeps the
+  master-rate fallback). SQ award carries the SQ's currency, rate,
+  payment terms, incoterm and supplier reference onto the PO.
+- **P4 Stored UOM factor + per-line required-by.** `uom_factor`
+  snapshotted from the material card (`UnitEquivalents`) at line
+  entry, persisted per line (mig 096) and carried onto derived
+  receipt/invoice lines; `line_required_by` per line, defaulting to
+  the header date.
+- **P1 RFQ invitations.** `rfq_invitations` (mig 097): OrdWin RFQ
+  mode gains an invitations dialog (invite by supplier code, status
+  grid, decline action); creating an SQ against the RFQ flips that
+  supplier's invitation to Quoted with `responded_at`.
+- **P2 Split award.** The comparison window's lines grid is
+  multi-select: awarding with a proper subset selected creates the
+  PO from those lines only (per-line links preserved); no selection
+  keeps the whole-quotation award.
+- **P6 Dependency-aware cancel + amend.** Cancelling a document
+  cancels its DRAFT downstream documents in the same transaction
+  (posted downstream already blocked). Amend on a cancelled PO
+  creates a new draft PO copying header + lines, linked via
+  `amended_from_doc_id` (mig 096) + a document_links row; OrdWin
+  Amend button (cancelled POs, `PUR.ORDER.CREATE`).
+- **P7 Budget check at PO posting.** Posting a draft PO runs
+  `BudgetGuard.CheckCommitment` on the PO total (base amount) with
+  the same Stop/Warn semantics as requisition submit; blocked events
+  are recorded after rollback, mirroring the journal pattern.
+- **I1 Chain bill identity.** The OrdWin invoice dialog captures the
+  supplier bill number + bill date; persisted to `reference_no` +
+  new `bill_date` (mig 096). Uniqueness per (company, supplier,
+  normalized ref) enforced on the chain path with **PUR-1011**; the
+  manual path's plain `InvalidOperationException` in
+  `InvRepo.EnsureUniqueSupplierInvoiceReference` now throws the same
+  catalogued error (existing test updated to expect it).
+- **I2 Chain tax registration.** Chain purchase invoices write
+  `tax_transactions` INPUT rows through the tax engine, mirroring
+  `InvRepo.WriteTaxTransactions`: per-line tax code (line → PO line
+  → active company rule matching the line rate), recoverability from
+  the rule, non-recoverable tax capitalized into the GRNI clearing
+  amount; GL stays balanced (Dr GRNI + Dr/Cr PPV + Dr Input VAT
+  (recoverable) = Cr AP grand total). Taxed lines without company
+  tax setup fail loudly, as on the manual path.
+- **I3 Match completeness.** (a) On-demand evaluation:
+  `PurchaseMatchPolicyRepository.ReevaluateLatestAsync` builds and
+  persists a first evaluation for a posted purchase invoice that has
+  none (previously it threw), unblocking allocation review from the
+  policy window. On-demand snapshots carry tax variance 0 — legacy
+  chain invoices hold no PO tax expectation to compare against.
+  (b) Per-line variance (qty / rate / amount) is stored in every new
+  evaluation snapshot (`lineVariance`) and viewable in the policy
+  window's history detail.
+- **I4 PRT unwinds match.** PRT posting (InvRepo, same transaction
+  and lock discipline as the allocation validation) decrements the
+  mig-078 receipt↔invoice matched quantities FIFO per invoice line
+  and refreshes the PO's stored per_billed, recording every unwind
+  in `purchase_return_match_unwinds` (mig 098) so returned goods can
+  be re-invoiced. `InvRepo.RewindPurchaseReturnMatches` replays the
+  stored unwinds exactly. **Leftover:** the base has no PRT-reversal
+  UI/entry point (ReversePostedInvoice covers SAL/PUR originals
+  only), so the re-wind is a service operation awaiting that entry
+  point; the unwind itself is live on every PRT post.
+- **I5 PRT own reference.** PurchaseReturnWin no longer copies the
+  original invoice's reference; a new optional "Supplier Credit
+  Note Ref." field is stored on the PRT header
+  (`supplier_credit_note_ref`, mig 096; 4-language key).
+- **Proof (Kern.Tests, SQLite; compile-verified here, execution
+  owed on Windows).** New B1 facts in OrderChainStep9Tests:
+  QC-required receipt diverts to quarantine (sellable stock
+  unchanged, Draft inspection created, delivery note persisted) and
+  the QC release moves accepted qty at the same value leaving the
+  rejected unit in quarantine; over-receipt blocked at default 0,
+  allowed at ordered × 1.10 with a 10% policy, blocked beyond;
+  stored percentages + derived-status transitions across partial
+  receipt/invoice to Completed; cancel cascades a draft child and is
+  blocked by a posted receipt; amend copies lines and links
+  `amended_from`; duplicate chain bill number rejected with
+  PUR-1011 (normalized, cross-PO); chain invoice writes the INPUT
+  tax_transactions row and the recoverable VAT GL split; RFQ
+  invitation flips Invited → Quoted on SQ creation and a split award
+  produces a one-line PO carrying SQ currency + terms; PRT unwinds
+  the 078 match + stored per_billed, stores its own credit-note
+  reference, rewind restores the match exactly, and re-invoicing
+  the returned qty succeeds. InvPostCorrectnessTests' duplicate
+  reference fact now expects AppError PUR-1011.
 
 ## 5. Gates
 
 (Filled at completion.)
+
+### B1 gates (this workstream)
+
+- Build `--no-incremental`: 0 errors, 0 warnings.
+- Migrator (SQLite): fresh run applies through 098; second run
+  applies 0 (096–098 SKIP); new columns/tables verified present
+  exactly once. PostgreSQL execution owed (no PG server here).
+- `audit_window_context.py` exit 0; `verify_screenfit.py` exit 0
+  (ALL PASS); `verify_english_source.py` exit 0.
+- Lang parity for touched keys 0 missing (19 keys ×4); Errors
+  parity 0 missing (PUR-1011 in all 4 catalogs; full code sets
+  identical across languages).
+- Kern.Tests execution owed on Windows (net8.0-windows testhost).
 
 ### A3 gates (this workstream)
 
