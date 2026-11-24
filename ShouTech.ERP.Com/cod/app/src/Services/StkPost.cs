@@ -1028,6 +1028,14 @@ public static class StkPost
         {
             throw;
         }
+        catch (AppError)
+        {
+            // Catalog errors (e.g. ACC-5021, posting into a closed period)
+            // reach the caller unmasked — wrapping them in the generic
+            // transfer failure would hide the catalog code and its
+            // localized message from the user.
+            throw;
+        }
         catch (Exception ex)
         {
             throw new StockTransferException(

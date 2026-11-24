@@ -4734,6 +4734,7 @@
   "FiscalConfirmRoll": "Passer à l'exercice fiscal suivant ? L'activation de fin de période de l'exercice courant est désactivée et un nouvel exercice avec ses périodes est créé.",
   "FiscalRolledOk": "Le programme est passé à l'exercice fiscal suivant.",
   "FiscalPermissionDenied": "Vous n'avez pas l'autorisation de basculer les exercices fiscaux.",
+  "FiscalServiceUnavailable": "Service des opérations indisponible (base de données non configurée).",
   "FontSection": "Police",
   "FontFamily": "Famille de police",
   "FontThemeDefault": "Par défaut du thème",

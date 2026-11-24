@@ -4743,6 +4743,7 @@
   "FiscalConfirmRoll": "Roll forward into the next fiscal year? The current year's period-end activation is switched off and a new fiscal year with its periods is created.",
   "FiscalRolledOk": "The program rolled forward into the next fiscal year.",
   "FiscalPermissionDenied": "You do not have permission to roll fiscal years forward.",
+  "FiscalServiceUnavailable": "Operations service is unavailable (database not configured).",
   "FontSection": "Font",
   "FontFamily": "Font family",
   "FontThemeDefault": "Theme default",

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- PeriodHarness: headless proof for the period-close window
+       (docs/PERIOD_CLOSE_STUDY.md SS6). Runs the REAL Operations layer,
+       close engine, GL resolver and stock engine against a real
+       SchemaMigrator-built SQLite database and prints PASS/FAIL lines.
+       On Linux the WindowsDesktop framework entry is stripped from the
+       generated runtimeconfig before execution (the exercised code
+       paths load no WPF types); on Windows it runs as-is. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>PeriodHarness</AssemblyName>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\cod\app\src\MainApp.csproj" />
+  </ItemGroup>
+
+</Project>

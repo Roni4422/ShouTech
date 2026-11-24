@@ -55,8 +55,8 @@ public sealed class PeriodCloseWin : BaseWin
         _service = AppHost.Operations;
         Width = 980;
         Height = 620;
-        MinWidth = 700;
-        MinHeight = 430;
+        MinWidth = 660;
+        MinHeight = 380;
         BuildUi();
         Loaded += OnLoaded;
     }
@@ -177,10 +177,11 @@ public sealed class PeriodCloseWin : BaseWin
             _yearCombo.Items.Clear();
             foreach (var year in _years)
                 _yearCombo.Items.Add($"{year.FiscalYear} ({year.StartDate} - {year.EndDate})");
+            if (_years.Count > 0)
+                _yearCombo.SelectedIndex = _years.Count - 1;
             _binding = false;
             if (_years.Count > 0)
             {
-                _yearCombo.SelectedIndex = _years.Count - 1;
                 await OnYearChangedAsync();
             }
             else
@@ -279,7 +280,10 @@ public sealed class PeriodCloseWin : BaseWin
                 ShowWarn("PeriodClose.NotOpen");
                 return;
             }
-            if (!AppHost.Permissions.Require(PermCat.System.PeriodClose, "ACCOUNTS", "PERIOD", 0, period.PeriodName))
+            // docSide keeps PermServ.Require's default: sau_document_events
+            // is a SALES/PURCHASE-sided document table (migration 103);
+            // the PERIOD docKind + period name carry the context.
+            if (!AppHost.Permissions.Require(PermCat.System.PeriodClose, docKind: "PERIOD", docNo: period.PeriodName))
             {
                 ShowWarn("PeriodClose.PermissionDenied");
                 return;
@@ -311,7 +315,7 @@ public sealed class PeriodCloseWin : BaseWin
                 ShowWarn("PeriodClose.NotClosed");
                 return;
             }
-            if (!AppHost.Permissions.Require(PermCat.System.PeriodReopen, "ACCOUNTS", "PERIOD", 0, period.PeriodName))
+            if (!AppHost.Permissions.Require(PermCat.System.PeriodReopen, docKind: "PERIOD", docNo: period.PeriodName))
             {
                 ShowWarn("PeriodClose.PermissionDenied");
                 return;

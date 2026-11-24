@@ -4734,6 +4734,7 @@
   "FiscalConfirmRoll": "Sonraki mali yıla geçilsin mi? Geçerli yılın dönem sonu etkinleştirmesi kapatılır ve dönemleriyle birlikte yeni bir mali yıl oluşturulur.",
   "FiscalRolledOk": "Program sonraki mali yıla geçti.",
   "FiscalPermissionDenied": "Mali yılları devretme izniniz yok.",
+  "FiscalServiceUnavailable": "İşlem hizmeti kullanılamıyor (veritabanı yapılandırılmamış).",
   "FontSection": "Yazı tipi",
   "FontFamily": "Yazı tipi ailesi",
   "FontThemeDefault": "Tema varsayılanı",

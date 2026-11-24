@@ -828,7 +828,12 @@ public static class GlPosting
     private static AppError PeriodClosedError(CoveringPeriod period)
     {
         var effectiveStatus = period.YearClosed && period.Status == "OPEN" ? "CLOSED" : period.Status;
+        // AppError convention: canonical English message (identical to the
+        // catalog text) + the format args the catalog resolution applies.
         return new AppError(ErrorCodes.PeriodClosedPosting,
+            string.Format(CultureInfo.InvariantCulture,
+                "Posting is not allowed: fiscal period {0} ({1} to {2}) is {3}.",
+                period.Name, period.StartDate, period.EndDate, effectiveStatus),
             period.Name, period.StartDate, period.EndDate, effectiveStatus);
     }
 

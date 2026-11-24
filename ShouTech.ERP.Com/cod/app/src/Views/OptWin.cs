@@ -486,7 +486,12 @@ public sealed class OptWin : BaseWin
         _lblFiscalNote.Text = T("Options.FiscalNote");
         try
         {
-            var years = await AppHost.Operations.GetFiscalYearsAsync(CurrentCompanyCode);
+            if (AppHost.Operations is not { } operations)
+            {
+                _chkFiscalActivation.IsEnabled = false;
+                return;
+            }
+            var years = await operations.GetFiscalYearsAsync(CurrentCompanyCode);
             _fiscalBinding = true;
             if (years.Count == 0)
             {
@@ -522,14 +527,16 @@ public sealed class OptWin : BaseWin
         // re-arms the checkbox whenever the act did not complete.
         try
         {
-            if (!AppHost.Permissions.Require(PermCat.System.FiscalRollForward, "ACCOUNTS", "FISCAL_YEAR", 0, null))
+            if (!AppHost.Permissions.Require(PermCat.System.FiscalRollForward, docKind: "FISCAL_YEAR"))
             {
                 ShowWarn("Options.FiscalPermissionDenied");
                 return;
             }
             if (MessageBox.Show(this, T("Options.FiscalConfirmRoll"), Title, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
                 return;
-            await AppHost.Operations.DeactivatePeriodEndAndRollForwardAsync(CurrentCompanyCode, CurrentUserId);
+            if (AppHost.Operations is not { } operations)
+                throw new InvalidOperationException(T("Options.FiscalServiceUnavailable"));
+            await operations.DeactivatePeriodEndAndRollForwardAsync(CurrentCompanyCode, CurrentUserId);
             ShowInfo("Options.FiscalRolledOk");
         }
         catch (AppError ex)

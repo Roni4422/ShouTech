@@ -134,9 +134,11 @@ public sealed class AccountingStructureRepository
             var periodParam = PeriodIdValue(fiscalPeriodId);
             var period = await LoadPeriodAsync(connection, transaction, periodParam, cancellationToken).ConfigureAwait(false);
             if (period is null)
-                throw new AppError(ErrorCodes.PeriodNotClosable, fiscalPeriodId.ToString(), "NOT FOUND");
+                throw CatalogError(ErrorCodes.PeriodNotClosable,
+                    "Fiscal period {0} cannot be closed from its current state ({1}).", fiscalPeriodId.ToString(), "NOT FOUND");
             if (period.Value.Status != "OPEN")
-                throw new AppError(ErrorCodes.PeriodNotClosable, period.Value.Name, period.Value.Status);
+                throw CatalogError(ErrorCodes.PeriodNotClosable,
+                    "Fiscal period {0} cannot be closed from its current state ({1}).", period.Value.Name, period.Value.Status);
 
             // Unposted items strand inside a closed period: draft journals
             // assigned to the period, plus draft documents dated inside it
@@ -150,7 +152,8 @@ public sealed class AccountingStructureRepository
             }
             unposted += await CountDraftDocumentsAsync(connection, transaction, period.Value, cancellationToken).ConfigureAwait(false);
             if (unposted > 0)
-                throw new AppError(ErrorCodes.PeriodCloseUnpostedItems, period.Value.Name, unposted);
+                throw CatalogError(ErrorCodes.PeriodCloseUnpostedItems,
+                    "Fiscal period {0} cannot be closed because {1} unposted item(s) are still dated inside it.", period.Value.Name, unposted);
 
             await using (var unbalanced = CreateCommand(connection, transaction,
                 "SELECT COUNT(*) FROM (SELECT e.journal_entry_id FROM journal_entries e JOIN journal_entry_lines l ON l.journal_entry_id=e.journal_entry_id WHERE e.fiscal_period_id=@period AND e.status IN (1,2) GROUP BY e.journal_entry_id HAVING COUNT(l.journal_entry_line_id)<2 OR ABS(COALESCE(SUM(l.debit),0)-COALESCE(SUM(l.credit),0))>0.0001) x"))
@@ -158,7 +161,8 @@ public sealed class AccountingStructureRepository
                 Add(unbalanced, "@period", periodParam);
                 var bad = Convert.ToInt64(await unbalanced.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
                 if (bad > 0)
-                    throw new AppError(ErrorCodes.PeriodCloseUnbalancedJournals, period.Value.Name, bad);
+                    throw CatalogError(ErrorCodes.PeriodCloseUnbalancedJournals,
+                    "Fiscal period {0} cannot be closed because {1} posted journal(s) in it are not balanced.", period.Value.Name, bad);
             }
             // Enforce sequential close: earlier periods must already be closed/locked.
             await using (var order = CreateCommand(connection, transaction,
@@ -167,15 +171,21 @@ public sealed class AccountingStructureRepository
                 Add(order, "@period", periodParam);
                 var earlier = await order.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
                 if (earlier is not null and not DBNull)
-                    throw new AppError(ErrorCodes.PeriodCloseOutOfOrder, period.Value.Name,
+                    throw CatalogError(ErrorCodes.PeriodCloseOutOfOrder,
+                        "Fiscal period {0} cannot be closed while the earlier period {1} is still open.", period.Value.Name,
                         Convert.ToString(earlier, CultureInfo.InvariantCulture) ?? string.Empty);
             }
+            // SQLite close stamp uses the fiscal_period_events timestamp
+            // format (millisecond ISO) so the reopen trigger's
+            // recorded_at >= closed_at comparison is exact; PostgreSQL
+            // compares native timestamptz values.
             await using var update = CreateCommand(connection, transaction,
-                "UPDATE fiscal_periods SET status='CLOSED',closed_by=@actor,closed_at=CURRENT_TIMESTAMP WHERE fiscal_period_id=@period AND status='OPEN'");
+                "UPDATE fiscal_periods SET status='CLOSED',closed_by=@actor,closed_at=" + (_provider == "PostgreSQL" ? "CURRENT_TIMESTAMP" : "strftime('%Y-%m-%dT%H:%M:%fZ','now')") + " WHERE fiscal_period_id=@period AND status='OPEN'");
             Add(update, "@actor", actor.Trim());
             Add(update, "@period", periodParam);
             if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
-                throw new AppError(ErrorCodes.PeriodNotClosable, period.Value.Name, period.Value.Status);
+                throw CatalogError(ErrorCodes.PeriodNotClosable,
+                    "Fiscal period {0} cannot be closed from its current state ({1}).", period.Value.Name, period.Value.Status);
             // The CLOSE event joins the period ledger (migration 127) inside
             // the same transaction; best-effort on pre-127 databases.
             if (await TableExistsAsync(connection, transaction, "fiscal_period_events", cancellationToken).ConfigureAwait(false))
@@ -211,11 +221,14 @@ public sealed class AccountingStructureRepository
             var periodParam = PeriodIdValue(fiscalPeriodId);
             var period = await LoadPeriodAsync(connection, transaction, periodParam, cancellationToken).ConfigureAwait(false);
             if (period is null)
-                throw new AppError(ErrorCodes.PeriodNotClosable, fiscalPeriodId.ToString(), "NOT FOUND");
+                throw CatalogError(ErrorCodes.PeriodNotClosable,
+                    "Fiscal period {0} cannot be closed from its current state ({1}).", fiscalPeriodId.ToString(), "NOT FOUND");
             if (string.IsNullOrWhiteSpace(reason))
-                throw new AppError(ErrorCodes.PeriodReopenReasonRequired, period.Value.Name);
+                throw CatalogError(ErrorCodes.PeriodReopenReasonRequired,
+                    "Reopening fiscal period {0} requires a recorded reason.", period.Value.Name);
             if (period.Value.Status != "CLOSED")
-                throw new AppError(ErrorCodes.PeriodNotClosable, period.Value.Name, period.Value.Status);
+                throw CatalogError(ErrorCodes.PeriodNotClosable,
+                    "Fiscal period {0} cannot be closed from its current state ({1}).", period.Value.Name, period.Value.Status);
             if (!await TableExistsAsync(connection, transaction, "fiscal_period_events", cancellationToken).ConfigureAwait(false))
                 throw new InvalidOperationException("Fiscal period events are unavailable; apply migration 127 before reopening a period.");
 
@@ -241,11 +254,17 @@ public sealed class AccountingStructureRepository
                 "UPDATE fiscal_periods SET status='OPEN',closed_by=NULL,closed_at=NULL WHERE fiscal_period_id=@period AND status='CLOSED'");
             Add(update, "@period", periodParam);
             if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
-                throw new AppError(ErrorCodes.PeriodNotClosable, period.Value.Name, period.Value.Status);
+                throw CatalogError(ErrorCodes.PeriodNotClosable,
+                    "Fiscal period {0} cannot be closed from its current state ({1}).", period.Value.Name, period.Value.Status);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch { await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false); throw; }
     }
+
+    // AppError convention: canonical English message (identical to the
+    // catalog text) + the format args the catalog resolution applies.
+    private static AppError CatalogError(string code, string format, params object[] args)
+        => new AppError(code, string.Format(CultureInfo.InvariantCulture, format, args), args);
 
     private readonly record struct PeriodState(Guid CompanyId, string Name, DateOnly StartDate, DateOnly EndDate, string Status);
 
