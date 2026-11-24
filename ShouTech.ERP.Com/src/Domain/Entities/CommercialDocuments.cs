@@ -290,7 +290,11 @@ public sealed record CommercialDocumentDraft(
     string? CustomsRef = null,
     string? VesselFlight = null,
     decimal? GrossWeight = null,
-    decimal? NetWeight = null);
+    decimal? NetWeight = null,
+    // Y3: explicit payment due date for purchase invoices (migration 094,
+    // renumbered 109). Null means "derive at insert": doc date + the
+    // supplier's credit_days.
+    DateOnly? DueDate = null);
 
 /// <summary>Header-only projection used by document search / order tracking lists.</summary>
 public sealed record CommercialDocumentSummary(

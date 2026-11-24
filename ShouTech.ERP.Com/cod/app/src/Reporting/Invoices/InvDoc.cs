@@ -143,6 +143,15 @@ public sealed class InvDoc
     public InvDocKind Kind { get; set; } = InvDocKind.SalesInvoice;
     public string DocNo { get; set; } = string.Empty;
     public DateTime DocDate { get; set; } = DateTime.Today;
+
+    /// <summary>
+    /// Payment due date (purchase invoices only, migration 094). Null at
+    /// capture time means SaveDraft derives it: document date + the
+    /// supplier's payment terms (parties.credit_days), else the document
+    /// date. Persisted on purchase_documents.due_date and read back by
+    /// Load; the payable aging report buckets open invoices by it.
+    /// </summary>
+    public DateTime? DueDate { get; set; }
     public long? PartyId { get; set; }
     public string PartyCode { get; set; } = string.Empty;
     public string PartyName { get; set; } = string.Empty;

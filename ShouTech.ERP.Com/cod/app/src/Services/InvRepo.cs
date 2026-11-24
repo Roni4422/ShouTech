@@ -383,6 +383,9 @@ public static class InvRepo
             }
         }
 
+        if (!isSales && doc.Kind == InvDocKind.PurchaseInvoice)
+            StampPurchaseDueDate(connection, tx, docId, doc);
+
         foreach (var line in doc.Lines)
         {
             using var cmd = connection.CreateCommand();
@@ -2216,7 +2219,7 @@ public static class InvRepo
                        discount_amount, extra_amount, paid_amount, payment_method, receipt_no, reference_no,
                        branch_name, sales_rep_name, cost_center, party_account_name, goods_account_name,
                        original_doc_id, original_doc_kind, original_doc_no, journal_doc_no,
-                       target_warehouse_id, target_warehouse_name, valid_till
+                       target_warehouse_id, target_warehouse_name, valid_till{(isSales ? "" : ", due_date")}
                        {(hasW6Header ? ", return_reason_code, return_source_kind, no_invoice, inspection_status, approval_status" : string.Empty)}
                        {(hasExportHeader ? ", is_export, incoterm, port_of_loading, port_of_discharge, country_of_origin, customs_ref, vessel_flight, gross_weight, net_weight" : string.Empty)}
                 FROM {headerTable}
@@ -2276,6 +2279,7 @@ public static class InvRepo
                 TargetWarehouseId = (int?)ReadLongNullable(reader, "target_warehouse_id"),
                 TargetWarehouseName = ReadString(reader, "target_warehouse_name"),
                 ValidTill = ParseValidTill(reader),
+                DueDate = isSales ? null : ReadDateNullable(reader, "due_date"),
             };
             if (hasW6Header)
             {
@@ -3701,6 +3705,43 @@ public static class InvRepo
                 "A supplier invoice with this external reference already exists for the selected supplier.");
     }
 
+    /// <summary>
+    /// Y3 (migration 094): stamp purchase_documents.due_date for a purchase
+    /// invoice inside the SaveDraft transaction. An explicit due date on the
+    /// document wins; otherwise the supplier's payment terms
+    /// (parties.credit_days, resolved by the canonical ledger_id the header
+    /// carries) are added to the document date; with no resolvable terms the
+    /// due date is the document date. The effective value is written back to
+    /// the in-memory document so the window shows what was persisted.
+    /// </summary>
+    private static void StampPurchaseDueDate(DbConnection connection, DbTransaction tx, long docId, InvDoc doc)
+    {
+        var dueDate = doc.DueDate?.Date ?? doc.DocDate.Date;
+        if (doc.DueDate is null && doc.PartyId is long supplierLedgerId)
+        {
+            using var lookup = connection.CreateCommand();
+            lookup.Transaction = tx;
+            lookup.CommandText = "SELECT credit_days FROM parties WHERE ledger_id = $party AND kind = 'S' AND is_deleted = "
+                + (DatabaseRuntime.IsPostgreSql() ? "FALSE" : "0");
+            Add(lookup, "$party", supplierLedgerId);
+            var terms = lookup.ExecuteScalar();
+            if (terms is not null and not DBNull)
+            {
+                var creditDays = Convert.ToInt32(terms, CultureInfo.InvariantCulture);
+                if (creditDays > 0)
+                    dueDate = doc.DocDate.Date.AddDays(creditDays);
+            }
+        }
+
+        doc.DueDate = dueDate;
+        using var update = connection.CreateCommand();
+        update.Transaction = tx;
+        update.CommandText = "UPDATE purchase_documents SET due_date = $due WHERE doc_id = $id;";
+        Add(update, "$due", dueDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        Add(update, "$id", docId);
+        update.ExecuteNonQuery();
+    }
+
     private static void BindHeader(DbCommand cmd, InvDoc doc)
     {
         Add(cmd, "$company", Company);
@@ -3858,6 +3899,24 @@ public static class InvRepo
         catch (Exception ex)
         {
             AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, ex, "InvRepo.ReadDecimalNullable");
+            return null;
+        }
+    }
+
+    private static DateTime? ReadDateNullable(DbDataReader reader, string column)
+    {
+        try
+        {
+            var ord = reader.GetOrdinal(column);
+            if (reader.IsDBNull(ord)) return null;
+            var raw = Convert.ToString(reader.GetValue(ord), CultureInfo.InvariantCulture);
+            return DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed)
+                ? parsed.Date
+                : null;
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, ex, "InvRepo.ReadDateNullable");
             return null;
         }
     }

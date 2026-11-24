@@ -2754,8 +2754,46 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 await dueCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
         }
+        if (side == CommercialDocSide.Purchase &&
+            string.Equals(draft.DocKind.Trim(), CommercialDocKinds.PurchaseInvoice, StringComparison.Ordinal))
+            await StampPurchaseInvoiceDueDateAsync(connection, transaction, docId, draft, cancellationToken).ConfigureAwait(false);
         await InsertLinesAsync(connection, transaction, side, docId, draft.Lines, computed, cancellationToken).ConfigureAwait(false);
         return docId;
+    }
+
+    /// <summary>
+    /// Y3 (migration 094): every purchase invoice carries a due date so the
+    /// payable aging report can age by due date instead of entry date. An
+    /// explicit draft due date wins; otherwise the due date is the document
+    /// date plus the supplier's payment terms (parties.credit_days, resolved
+    /// by the canonical ledger_id the document header carries); with no
+    /// resolvable supplier terms it falls back to the document date itself.
+    /// Runs inside the caller's insert transaction.
+    /// </summary>
+    private async Task StampPurchaseInvoiceDueDateAsync(
+        DbConnection connection, DbTransaction transaction, long docId,
+        CommercialDocumentDraft draft, CancellationToken cancellationToken)
+    {
+        var dueDate = draft.DueDate ?? draft.DocDate;
+        if (draft.DueDate is null && draft.PartyId is long supplierLedgerId)
+        {
+            await using var lookup = CreateCommand(connection, transaction,
+                "SELECT credit_days FROM parties WHERE ledger_id = @party AND kind = 'S' AND is_deleted = " + (_provider == "PostgreSQL" ? "FALSE" : "0"));
+            Add(lookup, "@party", supplierLedgerId);
+            var terms = await lookup.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            if (terms is not null and not DBNull)
+            {
+                var creditDays = Convert.ToInt32(terms, CultureInfo.InvariantCulture);
+                if (creditDays > 0)
+                    dueDate = draft.DocDate.AddDays(creditDays);
+            }
+        }
+
+        await using var update = CreateCommand(connection, transaction,
+            "UPDATE purchase_documents SET due_date = @due WHERE doc_id = @doc");
+        Add(update, "@due", dueDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        Add(update, "@doc", docId);
+        await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private async Task InsertLinesAsync(
