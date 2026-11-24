@@ -351,6 +351,74 @@ public class DefinitionServiceTests
         }
     }
 
+    [Fact]
+    public async Task Delivery_LinkPodVehicle_AndReturnedFlow()
+    {
+        var (service, connectionString, cleanup) = await CreateAsync();
+        try
+        {
+            // Driver master with a vehicle (the desk defaults from it).
+            await using (var connection = new SqliteConnection(connectionString))
+            {
+                await connection.OpenAsync();
+                await using var seed = connection.CreateCommand();
+                seed.CommandText = """
+                    INSERT INTO drivers (id, company_id, code, name_en, vehicle_no, is_active, is_deleted, created_by)
+                    VALUES ('drv-9', $company, 'DRV-9', 'Driver Nine', 'VAN-9', 1, 0, 'tester');
+                    """;
+                seed.Parameters.AddWithValue("$company", Company);
+                await seed.ExecuteNonQueryAsync();
+            }
+
+            // Dispatch linked to a delivery note (W4): link + vehicle persist.
+            var id = await service.SaveDeliveryRequestAsync(Company, new DeliveryRequest
+            {
+                RequestDate = new DateOnly(2026, 2, 1),
+                PartyCode = "501",
+                Address = "Main Street 1",
+                DriverCode = "DRV-9",
+                Amount = 250m,
+                SalesDocId = 123,
+                SalesDocKind = "DLV"
+            }, "tester");
+            var request = Assert.Single(await service.ListDeliveryRequestsAsync(Company));
+            Assert.Equal(123, request.SalesDocId);
+            Assert.Equal("DLV", request.SalesDocKind);
+            Assert.Equal("VAN-9", request.VehicleNo); // defaulted from the driver card
+
+            // Proof of delivery requires a receiver name.
+            await service.SetDeliveryStatusAsync(Company, id, DeliveryStatuses.Assigned, "DRV-9", "tester");
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                service.DeliverWithProofAsync(Company, id, "  ", null, "tester"));
+
+            var signature = new byte[] { 1, 2, 3, 4 };
+            await service.DeliverWithProofAsync(Company, id, "Receiver Name", signature, "tester");
+            request = Assert.Single(await service.ListDeliveryRequestsAsync(Company));
+            Assert.Equal(DeliveryStatuses.Delivered, request.Status);
+            Assert.Equal("Receiver Name", request.ReceivedBy);
+            Assert.False(string.IsNullOrWhiteSpace(request.DeliveredAt)); // stamped automatically
+            Assert.Equal(signature, request.SignatureImage);
+
+            // Returned flow: Delivered -> Returned is allowed, Pending -> Returned is not.
+            await service.SetDeliveryStatusAsync(Company, id, DeliveryStatuses.Returned, null, "tester");
+            Assert.Equal(DeliveryStatuses.Returned,
+                Assert.Single(await service.ListDeliveryRequestsAsync(Company)).Status);
+
+            var otherId = await service.SaveDeliveryRequestAsync(Company, new DeliveryRequest
+            {
+                RequestDate = new DateOnly(2026, 2, 2),
+                PartyCode = "501",
+                Amount = 10m
+            }, "tester");
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                service.SetDeliveryStatusAsync(Company, otherId, DeliveryStatuses.Returned, null, "tester"));
+        }
+        finally
+        {
+            cleanup();
+        }
+    }
+
     // ----------------------------------------------------------------- helpers
 
     private static Dictionary<string, object?> Values(params (string Key, object? Value)[] pairs)

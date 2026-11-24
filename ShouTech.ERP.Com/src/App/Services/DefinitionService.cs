@@ -314,7 +314,7 @@ public sealed class DefinitionService
         return await _repository.SaveDeliveryRequestAsync(companyId, request, actor, cancellationToken).ConfigureAwait(false);
     }
 
-    public Task SetDeliveryStatusAsync(string companyId, string requestId, string newStatus, string? driverCode, string actor, CancellationToken cancellationToken = default)
+    public Task SetDeliveryStatusAsync(string companyId, string requestId, string newStatus, string? driverCode, string actor, CancellationToken cancellationToken = default, string? receivedBy = null, byte[]? signatureImage = null)
     {
         RequireCompany(companyId);
         RequireActor(actor);
@@ -322,7 +322,25 @@ public sealed class DefinitionService
             throw new ArgumentException("Delivery request is required.", nameof(requestId));
         if (!DeliveryStatuses.All.Contains(newStatus))
             throw new InvalidOperationException($"Unknown delivery status '{newStatus}'.");
-        return _repository.SetDeliveryStatusAsync(companyId, requestId, newStatus, driverCode, actor, cancellationToken);
+        return _repository.SetDeliveryStatusAsync(companyId, requestId, newStatus, driverCode, actor, cancellationToken, receivedBy, signatureImage);
+    }
+
+    /// <summary>
+    /// Proof-of-delivery completion (sales cycle W4): the Delivered
+    /// transition REQUIRES the receiver's name; the repository stamps
+    /// delivered_at automatically and stores the optional signature.
+    /// </summary>
+    public Task DeliverWithProofAsync(string companyId, string requestId, string receivedBy, byte[]? signatureImage, string actor, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        RequireActor(actor);
+        if (string.IsNullOrWhiteSpace(requestId))
+            throw new ArgumentException("Delivery request is required.", nameof(requestId));
+        if (string.IsNullOrWhiteSpace(receivedBy))
+            throw new InvalidOperationException("The name of the person who received the delivery is required (proof of delivery).");
+        return _repository.SetDeliveryStatusAsync(
+            companyId, requestId, DeliveryStatuses.Delivered, null, actor, cancellationToken,
+            receivedBy.Trim(), signatureImage);
     }
 
     public Task DeleteDeliveryRequestAsync(string companyId, string requestId, string actor, CancellationToken cancellationToken = default)

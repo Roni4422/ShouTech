@@ -46,7 +46,7 @@ public interface IDefinitionRepository
     // ---------------------------------------------------------------- delivery
     Task<IReadOnlyList<DeliveryRequest>> ListDeliveryRequestsAsync(string companyId, CancellationToken cancellationToken = default);
     Task<string> SaveDeliveryRequestAsync(string companyId, DeliveryRequest request, string actor, CancellationToken cancellationToken = default);
-    Task SetDeliveryStatusAsync(string companyId, string requestId, string newStatus, string? driverCode, string actor, CancellationToken cancellationToken = default);
+    Task SetDeliveryStatusAsync(string companyId, string requestId, string newStatus, string? driverCode, string actor, CancellationToken cancellationToken = default, string? receivedBy = null, byte[]? signatureImage = null);
     Task SoftDeleteDeliveryRequestAsync(string companyId, string requestId, string actor, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<DriverSettlement>> ListDriverSettlementsAsync(string companyId, CancellationToken cancellationToken = default);
 

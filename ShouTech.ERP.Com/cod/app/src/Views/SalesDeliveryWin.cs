@@ -20,12 +20,20 @@ namespace ShouTech.App.Views;
 /// <summary>
 /// Creates and posts partial delivery notes from posted sales orders.
 /// The repository revalidates the source-order quantity at posting time.
+///
+/// Picking (sales cycle W4, spec §4) lives in THIS window rather than a
+/// new one: it is the only surface that already loads a posted order
+/// with per-source-line remaining quantities — the exact input a
+/// picking is staged from — and the confirmed picking feeds the same
+/// grid's ToDeliver quantities, so warehouse and delivery work stay in
+/// one place. The picking buttons sit in the same bottom command bar.
 /// </summary>
 public sealed class SalesDeliveryWin : BaseWin
 {
     private readonly TextBox _txtOrderNo = new();
     private readonly TextBox _txtDeliveryNo = new() { IsReadOnly = true };
     private readonly DatePicker _dtDelivery = new() { SelectedDate = DateTime.Today };
+    private readonly TextBox _txtDeliveryCost = new();
     private readonly Button _btnNew = new();
     private readonly Button _btnLoad = new();
     private readonly Button _btnCreate = new();
@@ -33,6 +41,9 @@ public sealed class SalesDeliveryWin : BaseWin
     private readonly Button _btnInvoice = new();
     private readonly Button _btnReverse = new();
     private readonly Button _btnCancelDraft = new();
+    private readonly Button _btnPickCreate = new();
+    private readonly Button _btnPickConfirm = new();
+    private readonly Button _btnPickCancel = new();
     private readonly DataGrid _grid = new();
     private readonly TextBlock _lblStatus = new();
     private readonly ObservableCollection<DeliveryLineVm> _lines = new();
@@ -42,6 +53,8 @@ public sealed class SalesDeliveryWin : BaseWin
     private long? _orderId;
     private long? _deliveryId;
     private string _deliveryStatus = CommercialDocumentStatus.Draft;
+    private long? _pickingId;
+    private string? _pickingStatus;
     private bool _busy;
 
     public SalesDeliveryWin()
@@ -66,6 +79,9 @@ public sealed class SalesDeliveryWin : BaseWin
         _btnInvoice.Content = T("SalesDelivery.CreateInvoice");
         _btnReverse.Content = T("SalesDelivery.Reverse");
         _btnCancelDraft.Content = T("SalesDelivery.CancelDraft");
+        _btnPickCreate.Content = T("SalesDelivery.CreatePicking");
+        _btnPickConfirm.Content = T("SalesDelivery.ConfirmPicking");
+        _btnPickCancel.Content = T("SalesDelivery.CancelPicking");
 
         foreach (var (label, key) in _headerLabels)
             label.Text = T(key);
@@ -78,7 +94,8 @@ public sealed class SalesDeliveryWin : BaseWin
             "SalesDelivery.Ordered",
             "SalesDelivery.Delivered",
             "SalesDelivery.Remaining",
-            "SalesDelivery.ToDeliver"
+            "SalesDelivery.ToDeliver",
+            "SalesDelivery.Picked"
         };
         for (var index = 0; index < _grid.Columns.Count && index < headers.Length; index++)
             _grid.Columns[index].Header = T(headers[index]);
@@ -127,6 +144,9 @@ public sealed class SalesDeliveryWin : BaseWin
         StyleButton(_btnInvoice, "SalesDelivery.CreateInvoice");
         StyleButton(_btnReverse, "SalesDelivery.Reverse");
         StyleButton(_btnCancelDraft, "SalesDelivery.CancelDraft");
+        StyleButton(_btnPickCreate, "SalesDelivery.CreatePicking");
+        StyleButton(_btnPickConfirm, "SalesDelivery.ConfirmPicking");
+        StyleButton(_btnPickCancel, "SalesDelivery.CancelPicking");
         _btnNew.Click += (_, _) => ResetWindow();
         _btnLoad.Click += async (_, _) => await LoadOrderAsync();
         _btnCreate.Click += async (_, _) => await CreateDeliveryAsync();
@@ -134,6 +154,9 @@ public sealed class SalesDeliveryWin : BaseWin
         _btnInvoice.Click += async (_, _) => await CreateInvoiceAsync();
         _btnReverse.Click += async (_, _) => await ReverseDeliveryAsync();
         _btnCancelDraft.Click += async (_, _) => await CancelDraftAsync();
+        _btnPickCreate.Click += async (_, _) => await CreatePickingAsync();
+        _btnPickConfirm.Click += async (_, _) => await ConfirmPickingAsync();
+        _btnPickCancel.Click += async (_, _) => await CancelPickingAsync();
         actions.Children.Add(_btnNew);
         actions.Children.Add(_btnLoad);
         actions.Children.Add(_btnCreate);
@@ -141,6 +164,9 @@ public sealed class SalesDeliveryWin : BaseWin
         actions.Children.Add(_btnInvoice);
         actions.Children.Add(_btnReverse);
         actions.Children.Add(_btnCancelDraft);
+        actions.Children.Add(_btnPickCreate);
+        actions.Children.Add(_btnPickConfirm);
+        actions.Children.Add(_btnPickCancel);
 
         var actionBorder = new Border
         {
@@ -174,9 +200,11 @@ public sealed class SalesDeliveryWin : BaseWin
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         AddHeaderField(header, 0, "SalesDelivery.OrderNo", _txtOrderNo);
         AddHeaderField(header, 1, "SalesDelivery.DeliveryNo", _txtDeliveryNo);
         AddHeaderField(header, 2, "SalesDelivery.Date", _dtDelivery);
+        AddHeaderField(header, 3, "SalesDelivery.DeliveryCost", _txtDeliveryCost);
         Grid.SetRow(header, 0);
         layout.Children.Add(header);
 
@@ -192,6 +220,7 @@ public sealed class SalesDeliveryWin : BaseWin
         _grid.Columns.Add(TextColumn("DeliveredQty", "SalesDelivery.Delivered", 95, true));
         _grid.Columns.Add(TextColumn("RemainingQty", "SalesDelivery.Remaining", 95, true));
         _grid.Columns.Add(TextColumn("QtyToDeliver", "SalesDelivery.ToDeliver", 110, false));
+        _grid.Columns.Add(TextColumn("PickedQty", "SalesDelivery.Picked", 100, false));
         Grid.SetRow(_grid, 1);
         layout.Children.Add(_grid);
 
@@ -235,8 +264,11 @@ public sealed class SalesDeliveryWin : BaseWin
         _orderId = null;
         _deliveryId = null;
         _deliveryStatus = CommercialDocumentStatus.Draft;
+        _pickingId = null;
+        _pickingStatus = null;
         _txtOrderNo.Clear();
         _txtDeliveryNo.Clear();
+        _txtDeliveryCost.Clear();
         _dtDelivery.SelectedDate = DateTime.Today;
         _lines.Clear();
         _lblStatus.Text = T("SalesDelivery.SelectOrder");
@@ -301,12 +333,42 @@ public sealed class SalesDeliveryWin : BaseWin
             }
 
             _lblStatus.Text = $"{T("SalesDelivery.OrderLoaded")}: {order.DocNo}";
+
+            // A confirmed picking for this order feeds delivery
+            // creation: the picked quantities become the default
+            // ToDeliver quantities (the manual path stays editable).
+            _pickingId = null;
+            _pickingStatus = null;
+            var picking = await AppHost.Orders.FindConfirmedPickingAsync(_companyId, order.DocId);
+            if (picking is not null)
+            {
+                ApplyPicking(picking);
+                _lblStatus.Text = $"{T("SalesDelivery.OrderLoaded")}: {order.DocNo} · {T("SalesDelivery.PickingApplied")}";
+            }
             UpdateState();
         }
         catch (Exception ex)
         {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "SalesDeliveryWin.LoadOrder");
             ShowWarningMessage(ex.Message);
+        }
+    }
+
+    /// <summary>Copies a picking's picked quantities into the grid:
+    /// the Picked column always, and ToDeliver when the picking is
+    /// confirmed (capped at what still remains to deliver).</summary>
+    private void ApplyPicking(SalesPickingSnapshot picking)
+    {
+        _pickingId = picking.PickingId;
+        _pickingStatus = picking.Status;
+        var pickedByLine = picking.Lines.ToDictionary(line => line.SourceLineNo, line => line.PickedQty);
+        foreach (var line in _lines)
+        {
+            if (!pickedByLine.TryGetValue(line.SourceLineNo, out var picked))
+                continue;
+            line.PickedQty = picked;
+            if (picking.Status == SalesPickingStatus.Confirmed)
+                line.QtyToDeliver = Math.Min(picked, line.RemainingQty);
         }
     }
 
@@ -357,7 +419,8 @@ public sealed class SalesDeliveryWin : BaseWin
                 DateOnly.FromDateTime(_dtDelivery.SelectedDate ?? DateTime.Today),
                 CurrentUserId,
                 quantities,
-                order.WarehouseId);
+                order.WarehouseId,
+                deliveryCost: ParseMoney(_txtDeliveryCost.Text));
 
             _deliveryId = result.DeliveryId;
             _deliveryStatus = CommercialDocumentStatus.Draft;
@@ -552,6 +615,140 @@ public sealed class SalesDeliveryWin : BaseWin
         }
     }
 
+    /// <summary>Stages a draft picking for the loaded order; its lines
+    /// arrive pre-filled with the remaining-to-deliver quantities.</summary>
+    private async Task CreatePickingAsync()
+    {
+        if (!AppHost.Permissions.Has(PermCat.Sales.OrderConvert))
+        {
+            ShowWarningMessage(T("OrderDoc.PermissionDenied"));
+            return;
+        }
+        if (_busy || _orderId is null || AppHost.Orders is null)
+        {
+            ShowWarningMessage(T("SalesDelivery.SelectOrder"));
+            return;
+        }
+
+        try
+        {
+            _busy = true;
+            UpdateState();
+            var pickingId = await AppHost.Orders.CreatePickingFromOrderAsync(_orderId.Value, CurrentUserId);
+            var picking = await AppHost.Orders.GetPickingAsync(pickingId);
+            if (picking is not null)
+                ApplyPicking(picking);
+            _lblStatus.Text = $"{T("SalesDelivery.PickingCreated")}: #{pickingId}";
+        }
+        catch (AppError ex)
+        {
+            AppHost.Errors.Report(ex.Code, ex, "SalesDeliveryWin.CreatePicking");
+            var info = AppHost.Errors.Resolve(ex.Code, ex.Args.ToArray());
+            ShowWarningMessage($"{info.Message} (Error {info.Code})");
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "SalesDeliveryWin.CreatePicking");
+            ShowWarningMessage(ex.Message);
+        }
+        finally
+        {
+            _busy = false;
+            UpdateState();
+        }
+    }
+
+    /// <summary>Confirms the draft picking with the grid's Picked
+    /// quantities. Over-picking a line beyond the remaining quantity
+    /// is rejected by the repository with SAL-7012.</summary>
+    private async Task ConfirmPickingAsync()
+    {
+        if (!AppHost.Permissions.Has(PermCat.Sales.OrderConvert))
+        {
+            ShowWarningMessage(T("OrderDoc.PermissionDenied"));
+            return;
+        }
+        if (_busy || _pickingId is null || _pickingStatus != SalesPickingStatus.Draft || AppHost.Orders is null)
+            return;
+
+        try
+        {
+            _grid.CommitEdit(DataGridEditingUnit.Cell, true);
+            _grid.CommitEdit(DataGridEditingUnit.Row, true);
+            var picked = _lines.ToDictionary(line => line.SourceLineNo, line => line.PickedQty);
+            _busy = true;
+            UpdateState();
+            await AppHost.Orders.ConfirmPickingAsync(_pickingId.Value, picked, CurrentUserId);
+            _pickingStatus = SalesPickingStatus.Confirmed;
+            foreach (var line in _lines)
+                line.QtyToDeliver = Math.Min(line.PickedQty, line.RemainingQty);
+            _lblStatus.Text = $"{T("SalesDelivery.PickingConfirmed")}: #{_pickingId}";
+        }
+        catch (AppError ex)
+        {
+            AppHost.Errors.Report(ex.Code, ex, "SalesDeliveryWin.ConfirmPicking");
+            var info = AppHost.Errors.Resolve(ex.Code, ex.Args.ToArray());
+            ShowWarningMessage($"{info.Message} (Error {info.Code})");
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "SalesDeliveryWin.ConfirmPicking");
+            ShowWarningMessage(ex.Message);
+        }
+        finally
+        {
+            _busy = false;
+            UpdateState();
+        }
+    }
+
+    private async Task CancelPickingAsync()
+    {
+        if (!AppHost.Permissions.Has(PermCat.Sales.OrderConvert))
+        {
+            ShowWarningMessage(T("OrderDoc.PermissionDenied"));
+            return;
+        }
+        if (_busy || _pickingId is null || _pickingStatus is null ||
+            _pickingStatus == SalesPickingStatus.Cancelled || AppHost.Orders is null)
+            return;
+
+        try
+        {
+            _busy = true;
+            UpdateState();
+            await AppHost.Orders.CancelPickingAsync(_pickingId.Value, CurrentUserId);
+            _pickingStatus = SalesPickingStatus.Cancelled;
+            _lblStatus.Text = $"{T("SalesDelivery.PickingCancelled")}: #{_pickingId}";
+            _pickingId = null;
+            _pickingStatus = null;
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "SalesDeliveryWin.CancelPicking");
+            ShowWarningMessage(ex.Message);
+        }
+        finally
+        {
+            _busy = false;
+            UpdateState();
+        }
+    }
+
+    private static decimal ParseMoney(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return 0m;
+        if (decimal.TryParse(text.Trim(), NumberStyles.Number, CultureInfo.CurrentCulture, out var value) ||
+            decimal.TryParse(text.Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out value))
+        {
+            if (value < 0m)
+                throw new InvalidOperationException(T("SalesDelivery.DeliveryCostNegative"));
+            return value;
+        }
+        throw new InvalidOperationException(T("SalesDelivery.DeliveryCostInvalid"));
+    }
+
     private void ShowWarningMessage(string message)
         => MessageBox.Show(this, message, T("Common.Warning"),
             MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -566,6 +763,9 @@ public sealed class SalesDeliveryWin : BaseWin
         _btnCreate.IsEnabled = !_busy && _orderId is not null && canStartDelivery && _lines.Any(line => line.RemainingQty > 0m);
         _btnPost.IsEnabled = !_busy && _deliveryId is not null && _deliveryStatus == CommercialDocumentStatus.Draft;
         _grid.IsEnabled = !_busy && _orderId is not null && canStartDelivery;
+        _btnPickCreate.IsEnabled = !_busy && _orderId is not null && _pickingId is null;
+        _btnPickConfirm.IsEnabled = !_busy && _pickingId is not null && _pickingStatus == SalesPickingStatus.Draft;
+        _btnPickCancel.IsEnabled = !_busy && _pickingId is not null && _pickingStatus != SalesPickingStatus.Cancelled;
     }
 
     /// <summary>Minimal modal prompt for the reversal reason (ChqListWin pattern).</summary>
@@ -640,6 +840,16 @@ public sealed class SalesDeliveryWin : BaseWin
             {
                 _qtyToDeliver = value;
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(QtyToDeliver)));
+            }
+        }
+        private decimal _pickedQty;
+        public decimal PickedQty
+        {
+            get => _pickedQty;
+            set
+            {
+                _pickedQty = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PickedQty)));
             }
         }
     }

@@ -79,4 +79,23 @@ public interface IOrderDocumentRepository
     Task<long> ConvertToInvoiceAsync(CommercialDocSide side, long orderDocId, string invoiceDocNo, DateOnly invoiceDate, string userId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<CommercialDocumentLink>> GetLinksFromAsync(Guid companyId, long sourceDocId, CancellationToken cancellationToken = default);
+
+    // ------------------------------------------------------------- picking (W4)
+
+    /// <summary>Creates a Draft picking for a Posted sales order, lines
+    /// pre-filled with the remaining-to-deliver quantity per source line.
+    /// Re-validates kind/status inside the transaction.</summary>
+    Task<long> CreatePickingFromOrderAsync(long salesOrderId, string userId, CancellationToken cancellationToken = default);
+
+    Task<SalesPickingSnapshot?> GetPickingAsync(long pickingId, CancellationToken cancellationToken = default);
+
+    /// <summary>The latest Confirmed picking for an order, or null.</summary>
+    Task<SalesPickingSnapshot?> FindConfirmedPickingAsync(Guid companyId, long salesOrderId, CancellationToken cancellationToken = default);
+
+    /// <summary>Confirms a Draft picking with the picked quantity per
+    /// source line. A picked quantity beyond the order's remaining-to-
+    /// deliver quantity fails with SAL-7012 (PickingExceedsRemaining).</summary>
+    Task ConfirmPickingAsync(long pickingId, IReadOnlyDictionary<int, decimal> pickedBySourceLine, string userId, CancellationToken cancellationToken = default);
+
+    Task CancelPickingAsync(long pickingId, string userId, CancellationToken cancellationToken = default);
 }

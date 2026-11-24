@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using ShouTech.Application.Services;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
 using ShouTech.Infrastructure;
@@ -549,6 +551,98 @@ namespace Kern.Tests
         // ------------------------------------------------------------ harness
 
         private static string LastConnectionString = string.Empty;
+
+        // ------------------------------------------------------- picking (W4)
+
+        [Fact]
+        public async Task Picking_CreateConfirm_RoundTrips_AndDeliveryCostPersists()
+        {
+            var (service, orders, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.SalesOrder, "SO-PICK-1", 10m, 25m), "order-test");
+                await service.PostOrderAsync(CommercialDocSide.Sales, orderId, "order-test");
+
+                var pickingId = await service.CreatePickingFromOrderAsync(orderId, "picker-1");
+                var picking = await service.GetPickingAsync(pickingId);
+                Assert.NotNull(picking);
+                Assert.Equal(SalesPickingStatus.Draft, picking!.Status);
+                Assert.Equal(orderId, picking.SalesOrderId);
+                var line = Assert.Single(picking.Lines);
+                Assert.Equal(1, line.SourceLineNo);
+                Assert.Equal(10m, line.OrderedQty);
+                Assert.Equal(10m, line.PickedQty); // pre-filled with remaining-to-deliver
+                Assert.Equal(42, line.MaterialId);
+
+                await service.ConfirmPickingAsync(pickingId,
+                    new Dictionary<int, decimal> { [1] = 7m }, "picker-2");
+                var confirmed = await service.GetPickingAsync(pickingId);
+                Assert.Equal(SalesPickingStatus.Confirmed, confirmed!.Status);
+                Assert.Equal("picker-2", confirmed.ConfirmedBy);
+                Assert.False(string.IsNullOrWhiteSpace(confirmed.ConfirmedAt));
+                Assert.Equal(7m, Assert.Single(confirmed.Lines).PickedQty);
+
+                var found = await service.FindConfirmedPickingAsync(companyId, orderId);
+                Assert.NotNull(found);
+                Assert.Equal(pickingId, found!.PickingId);
+
+                // The confirmed picking's quantities feed delivery creation;
+                // the delivery cost entered for the note is persisted.
+                var picked = new Dictionary<int, decimal>();
+                foreach (var pickingLine in found.Lines)
+                    picked[pickingLine.SourceLineNo] = pickingLine.PickedQty;
+                var (deliveryId, _) = await service.CreateSalesDeliveryAsync(
+                    orderId, new DateOnly(2026, 11, 5), "order-test", picked, null, deliveryCost: 12.5m);
+                var delivery = await orders.FindByIdAsync(CommercialDocSide.Sales, deliveryId);
+                Assert.NotNull(delivery);
+                Assert.Equal(CommercialDocKinds.DeliveryNote, delivery!.DocKind);
+                Assert.Equal(7m, Assert.Single(delivery.Lines).Qty);
+                Assert.Equal(12.5m, delivery.DeliveryCost);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task Picking_OverPick_ThrowsSal7012_AndCancelWorks()
+        {
+            var (service, _, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.SalesOrder, "SO-PICK-2", 4m, 25m), "order-test");
+
+                // Draft orders cannot be picked.
+                var notPosted = await Assert.ThrowsAsync<AppError>(() =>
+                    service.CreatePickingFromOrderAsync(orderId, "picker-1"));
+                Assert.Equal(ErrorCodes.ChainSourceNotPosted, notPosted.Code);
+
+                await service.PostOrderAsync(CommercialDocSide.Sales, orderId, "order-test");
+                var pickingId = await service.CreatePickingFromOrderAsync(orderId, "picker-1");
+
+                var overPick = await Assert.ThrowsAsync<AppError>(() =>
+                    service.ConfirmPickingAsync(pickingId,
+                        new Dictionary<int, decimal> { [1] = 5m }, "picker-1"));
+                Assert.Equal(ErrorCodes.PickingExceedsRemaining, overPick.Code);
+                Assert.Equal("SAL-7012", overPick.Code);
+
+                // The failed confirmation left the picking in Draft.
+                Assert.Equal(SalesPickingStatus.Draft,
+                    (await service.GetPickingAsync(pickingId))!.Status);
+
+                await service.CancelPickingAsync(pickingId, "picker-1");
+                Assert.Equal(SalesPickingStatus.Cancelled,
+                    (await service.GetPickingAsync(pickingId))!.Status);
+                Assert.Null(await service.FindConfirmedPickingAsync(companyId, orderId));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
 
         private static CommercialDocumentDraft Order(
             Guid companyId, string kind, string docNo, decimal qty, decimal price,
