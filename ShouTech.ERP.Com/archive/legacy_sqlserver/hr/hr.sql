@@ -1,3 +1,426 @@
+-- ============================================================
+-- source: archive/legacy_sqlserver/hr/att.sql
+-- ============================================================
+-- ========================================================================
+-- FILE: dba/hr/att.sql
+-- PROJECT: SHOUTECH ERP V10 - Attendance Scheduling Extensions (Ultimate 10/10)
+-- VERSION: 10.3.0
+-- DESCRIPTION: Work shifts & rosters, overtime requests, attendance
+--              corrections (with approval workflow) and official holidays
+--              calendar incl. Hijri-based Gulf holidays.
+--              NOTE: dbo.Attendance (daily punches) lives in dba/hr/hr.sql.
+-- ========================================================================
+-- ✅ Idempotent | TRY/CATCH + TRANSACTION | Soft Delete + RowVersion
+-- ========================================================================
+
+USE [$(DbFileName)];
+GO
+
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+SET XACT_ABORT ON;
+GO
+
+PRINT N'═══════════════════════════════════════════════════════════════════════════';
+PRINT N'SHOUTECH ERP V10 – Attendance Scheduling Extensions (Ultimate 10/10)';
+PRINT N'═══════════════════════════════════════════════════════════════════════════';
+GO
+
+BEGIN TRY
+    BEGIN TRANSACTION;
+
+    -- ==========================================================================
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'WorkShifts')
+    BEGIN
+        CREATE TABLE dbo.WorkShifts (
+            WorkShiftID INT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            ShiftCode NVARCHAR(20) NOT NULL,
+            ShiftNameAR NVARCHAR(150) NOT NULL,
+            ShiftNameEN NVARCHAR(150) NULL,
+            StartTime TIME(0) NOT NULL,
+            EndTime TIME(0) NOT NULL,
+            CrossesMidnight BIT NOT NULL DEFAULT 0,
+            BreakMinutes INT NOT NULL DEFAULT 0,
+            ScheduledHours DECIMAL(4,2) NOT NULL,
+            GraceLateMinutes INT NOT NULL DEFAULT 0,     -- late grace period
+            GraceEarlyLeaveMinutes INT NOT NULL DEFAULT 0,
+            IsFlexible BIT NOT NULL DEFAULT 0,
+            WorkDaysMask NVARCHAR(7) NOT NULL DEFAULT '1111110', -- Sun..Sat (Gulf: Fri/Sat weekend)
+            IsActive BIT NOT NULL DEFAULT 1,
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_WorkShifts PRIMARY KEY CLUSTERED (WorkShiftID),
+            CONSTRAINT UQ_WorkShifts_Code UNIQUE (CompanyID, ShiftCode),
+            CONSTRAINT CK_WorkShifts_Hours CHECK (ScheduledHours > 0 AND ScheduledHours <= 24)
+        );
+    END
+
+    -- ==========================================================================
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'ShiftAssignments')
+    BEGIN
+        CREATE TABLE dbo.ShiftAssignments (
+            ShiftAssignmentID BIGINT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            EmployeeID INT NOT NULL,
+            WorkShiftID INT NOT NULL,
+            ValidFrom DATE NOT NULL,
+            ValidTo DATE NULL,
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_ShiftAssignments PRIMARY KEY CLUSTERED (ShiftAssignmentID),
+            CONSTRAINT CK_ShiftAssignments_Validity CHECK (ValidTo IS NULL OR ValidTo >= ValidFrom)
+        );
+        CREATE NONCLUSTERED INDEX IX_ShiftAssignments_Emp
+            ON dbo.ShiftAssignments (CompanyID, EmployeeID, ValidFrom) WHERE IsDeleted = 0;
+    END
+
+    -- ==========================================================================
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'OvertimeRequests')
+    BEGIN
+        CREATE TABLE dbo.OvertimeRequests (
+            OvertimeRequestID BIGINT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            EmployeeID INT NOT NULL,
+            RequestDate DATE NOT NULL,
+            PlannedHours DECIMAL(4,2) NOT NULL,
+            ActualHours DECIMAL(4,2) NULL,
+            OvertimeType NVARCHAR(15) NOT NULL DEFAULT 'NORMAL', -- NORMAL | WEEKEND | HOLIDAY (rates differ)
+            Reason NVARCHAR(500) NOT NULL,
+            Status NVARCHAR(12) NOT NULL DEFAULT 'PENDING', -- PENDING | APPROVED | REJECTED | POSTED
+            ApprovedBy UNIQUEIDENTIFIER NULL,
+            ApprovedAt DATETIME2(7) NULL,
+            RejectionReason NVARCHAR(300) NULL,
+            PayrollRunID BIGINT NULL,                    -- Set when posted to payroll
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_OvertimeRequests PRIMARY KEY CLUSTERED (OvertimeRequestID),
+            CONSTRAINT CK_OvertimeRequests_Status CHECK (Status IN ('PENDING','APPROVED','REJECTED','POSTED')),
+            CONSTRAINT CK_OvertimeRequests_Hours CHECK (PlannedHours > 0 AND PlannedHours <= 16)
+        );
+        CREATE NONCLUSTERED INDEX IX_OvertimeRequests_Emp
+            ON dbo.OvertimeRequests (CompanyID, EmployeeID, RequestDate) WHERE IsDeleted = 0;
+    END
+
+    -- ==========================================================================
+    --    Never edit dbo.Attendance directly — corrections are audited rows.
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'AttendanceCorrections')
+    BEGIN
+        CREATE TABLE dbo.AttendanceCorrections (
+            CorrectionID BIGINT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            EmployeeID INT NOT NULL,
+            AttendanceDate DATE NOT NULL,
+            CorrectionType NVARCHAR(15) NOT NULL,        -- FORGOT_IN | FORGOT_OUT | WRONG_TIME | ABSENT_TO_LEAVE
+            CorrectedCheckIn TIME(0) NULL,
+            CorrectedCheckOut TIME(0) NULL,
+            Reason NVARCHAR(500) NOT NULL,
+            AttachmentPath NVARCHAR(500) NULL,
+            Status NVARCHAR(12) NOT NULL DEFAULT 'PENDING',
+            ApprovedBy UNIQUEIDENTIFIER NULL,
+            ApprovedAt DATETIME2(7) NULL,
+            RejectionReason NVARCHAR(300) NULL,
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_AttendanceCorrections PRIMARY KEY CLUSTERED (CorrectionID),
+            CONSTRAINT CK_AttendanceCorrections_Type CHECK (CorrectionType IN ('FORGOT_IN','FORGOT_OUT','WRONG_TIME','ABSENT_TO_LEAVE')),
+            CONSTRAINT CK_AttendanceCorrections_Status CHECK (Status IN ('PENDING','APPROVED','REJECTED'))
+        );
+        CREATE NONCLUSTERED INDEX IX_AttendanceCorrections_Emp
+            ON dbo.AttendanceCorrections (CompanyID, EmployeeID, AttendanceDate) WHERE IsDeleted = 0;
+    END
+
+    -- ==========================================================================
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'OfficialHolidays')
+    BEGIN
+        CREATE TABLE dbo.OfficialHolidays (
+            HolidayID INT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            CountryCode NVARCHAR(2) NOT NULL,
+            HolidayNameAR NVARCHAR(200) NOT NULL,
+            HolidayNameEN NVARCHAR(200) NULL,
+            HolidayDate DATE NULL,                       -- Fixed-date holidays
+            HijriDate NVARCHAR(10) NULL,                 -- e.g. '01/01' for 1 Muharram (moon-sighting dependent)
+            IsHijri BIT NOT NULL DEFAULT 0,
+            DaysCount TINYINT NOT NULL DEFAULT 1,
+            Year INT NOT NULL,
+            IsPaid BIT NOT NULL DEFAULT 1,
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_OfficialHolidays PRIMARY KEY CLUSTERED (HolidayID),
+            CONSTRAINT UQ_OfficialHolidays UNIQUE (CompanyID, CountryCode, Year, HolidayNameAR)
+        );
+        CREATE NONCLUSTERED INDEX IX_OfficialHolidays_Date
+            ON dbo.OfficialHolidays (CompanyID, CountryCode, HolidayDate) WHERE IsDeleted = 0;
+    END
+
+    -- ==========================================================================
+    -- COMPLETION
+    -- ==========================================================================
+    COMMIT TRANSACTION;
+    PRINT N'═══════════════════════════════════════════════════════════════════════════';
+    PRINT N'✅ Attendance Scheduling Extensions deployed successfully.';
+    PRINT N'   - Shifts + rosters + overtime workflow + corrections + Hijri holidays.';
+    PRINT N'═══════════════════════════════════════════════════════════════════════════';
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0
+        ROLLBACK TRANSACTION;
+    DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+    DECLARE @ErrorSeverity INT = ERROR_SEVERITY();
+    DECLARE @ErrorState INT = ERROR_STATE();
+    RAISERROR(@ErrorMessage, @ErrorSeverity, @ErrorState);
+END CATCH;
+GO
+
+-- ============================================================
+-- source: archive/legacy_sqlserver/hr/emp.sql
+-- ============================================================
+-- ========================================================================
+-- FILE: dba/hr/emp.sql
+-- PROJECT: SHOUTECH ERP V10 - Employee Extensions (Ultimate 10/10)
+-- VERSION: 10.3.0
+-- DESCRIPTION: Complementary employee records extending hr.sql:
+--              bank accounts (WPS — Wage Protection System), emergency
+--              contacts, dependents (GOSI/insurance), position history
+--              and employee skills matrix.
+--              NOTE: dbo.Employees master table lives in dba/hr/hr.sql.
+-- ========================================================================
+-- ✅ Idempotent | TRY/CATCH + TRANSACTION | Soft Delete + RowVersion
+-- ✅ WPS-ready (KSA Mudad / UAE WPS / Qatar WPS / Jordan / Egypt)
+-- ========================================================================
+
+USE [$(DbFileName)];
+GO
+
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+SET XACT_ABORT ON;
+GO
+
+PRINT N'═══════════════════════════════════════════════════════════════════════════';
+PRINT N'SHOUTECH ERP V10 – Employee Extensions (Ultimate 10/10)';
+PRINT N'═══════════════════════════════════════════════════════════════════════════';
+GO
+
+BEGIN TRY
+    BEGIN TRANSACTION;
+
+    -- ==========================================================================
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'EmployeeBankAccounts')
+    BEGIN
+        CREATE TABLE dbo.EmployeeBankAccounts (
+            EmpBankAccountID INT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            EmployeeID INT NOT NULL,
+            BankNameAR NVARCHAR(150) NOT NULL,
+            BankNameEN NVARCHAR(150) NULL,
+            BankCode NVARCHAR(20) NULL,                  -- SWIFT / local bank code
+            BranchName NVARCHAR(150) NULL,
+            IBAN NVARCHAR(34) NOT NULL,                  -- ISO 13616 (SA24…, AE07…, JO94…)
+            AccountHolderName NVARCHAR(200) NOT NULL,
+            CurrencyCode NVARCHAR(3) NOT NULL,
+            IsPrimary BIT NOT NULL DEFAULT 1,            -- Salary account
+            WpsEnabled BIT NOT NULL DEFAULT 1,           -- Include in WPS file
+            IsActive BIT NOT NULL DEFAULT 1,
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_EmployeeBankAccounts PRIMARY KEY CLUSTERED (EmpBankAccountID),
+            CONSTRAINT UQ_EmpBankAccounts_IBAN UNIQUE (CompanyID, EmployeeID, IBAN)
+        );
+        CREATE NONCLUSTERED INDEX IX_EmpBankAccounts_Emp
+            ON dbo.EmployeeBankAccounts (CompanyID, EmployeeID, IsPrimary) WHERE IsDeleted = 0;
+    END
+
+    -- ==========================================================================
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'EmployeeEmergencyContacts')
+    BEGIN
+        CREATE TABLE dbo.EmployeeEmergencyContacts (
+            ContactID INT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            EmployeeID INT NOT NULL,
+            ContactName NVARCHAR(200) NOT NULL,
+            Relationship NVARCHAR(50) NOT NULL,          -- SPOUSE | PARENT | SIBLING | OTHER
+            Phone NVARCHAR(30) NOT NULL,
+            AlternatePhone NVARCHAR(30) NULL,
+            Address NVARCHAR(300) NULL,
+            Priority TINYINT NOT NULL DEFAULT 1,
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_EmployeeEmergencyContacts PRIMARY KEY CLUSTERED (ContactID)
+        );
+        CREATE NONCLUSTERED INDEX IX_EmpEmergencyContacts_Emp
+            ON dbo.EmployeeEmergencyContacts (CompanyID, EmployeeID, Priority) WHERE IsDeleted = 0;
+    END
+
+    -- ==========================================================================
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'EmployeeDependents')
+    BEGIN
+        CREATE TABLE dbo.EmployeeDependents (
+            DependentID INT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            EmployeeID INT NOT NULL,
+            FullName NVARCHAR(200) NOT NULL,
+            Relationship NVARCHAR(20) NOT NULL,          -- SPOUSE | CHILD | PARENT
+            DateOfBirth DATE NULL,
+            NationalID NVARCHAR(30) NULL,                -- Iqama/National ID of dependent
+            Gender NVARCHAR(6) NULL,
+            IncludedInMedicalInsurance BIT NOT NULL DEFAULT 0,
+            IncludedInSocialInsurance BIT NOT NULL DEFAULT 0, -- GOSI family coverage
+            IsStudent BIT NOT NULL DEFAULT 0,
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_EmployeeDependents PRIMARY KEY CLUSTERED (DependentID),
+            CONSTRAINT CK_EmpDependents_Rel CHECK (Relationship IN ('SPOUSE','CHILD','PARENT'))
+        );
+        CREATE NONCLUSTERED INDEX IX_EmpDependents_Emp
+            ON dbo.EmployeeDependents (CompanyID, EmployeeID) WHERE IsDeleted = 0;
+    END
+
+    -- ==========================================================================
+    --    Immutable audit: each move inserts a new row, never updates old.
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'EmployeePositionHistory')
+    BEGIN
+        CREATE TABLE dbo.EmployeePositionHistory (
+            PositionHistoryID BIGINT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            EmployeeID INT NOT NULL,
+            ChangeType NVARCHAR(20) NOT NULL,            -- HIRE | PROMOTION | TRANSFER | DEMOTION | SALARY_ADJ | TERMINATION
+            EffectiveDate DATE NOT NULL,
+            FromDepartmentID INT NULL,
+            ToDepartmentID INT NULL,
+            FromJobTitleID INT NULL,
+            ToJobTitleID INT NULL,
+            FromBasicSalary DECIMAL(18,4) NULL,
+            ToBasicSalary DECIMAL(18,4) NULL,
+            Reason NVARCHAR(500) NULL,
+            DocumentRef NVARCHAR(100) NULL,              -- Decree/letter reference
+            ApprovedBy UNIQUEIDENTIFIER NULL,
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_EmployeePositionHistory PRIMARY KEY CLUSTERED (PositionHistoryID),
+            CONSTRAINT CK_EmpPosHistory_Type CHECK (ChangeType IN ('HIRE','PROMOTION','TRANSFER','DEMOTION','SALARY_ADJ','TERMINATION'))
+        ) WITH (DATA_COMPRESSION = PAGE);
+        CREATE NONCLUSTERED INDEX IX_EmpPosHistory_Emp
+            ON dbo.EmployeePositionHistory (CompanyID, EmployeeID, EffectiveDate DESC) WHERE IsDeleted = 0;
+    END
+
+    -- ==========================================================================
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'EmployeeSkills')
+    BEGIN
+        CREATE TABLE dbo.EmployeeSkills (
+            EmployeeSkillID INT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            EmployeeID INT NOT NULL,
+            SkillCode NVARCHAR(50) NOT NULL,
+            SkillNameAR NVARCHAR(150) NOT NULL,
+            SkillNameEN NVARCHAR(150) NULL,
+            ProficiencyLevel TINYINT NOT NULL DEFAULT 1, -- 1 Beginner … 5 Expert
+            Certified BIT NOT NULL DEFAULT 0,
+            CertificateRef NVARCHAR(100) NULL,
+            CertificateExpiry DATE NULL,
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_EmployeeSkills PRIMARY KEY CLUSTERED (EmployeeSkillID),
+            CONSTRAINT UQ_EmployeeSkills UNIQUE (CompanyID, EmployeeID, SkillCode),
+            CONSTRAINT CK_EmployeeSkills_Level CHECK (ProficiencyLevel BETWEEN 1 AND 5)
+        );
+        CREATE NONCLUSTERED INDEX IX_EmployeeSkills_Skill
+            ON dbo.EmployeeSkills (CompanyID, SkillCode, ProficiencyLevel DESC) WHERE IsDeleted = 0;
+    END
+
+    -- ==========================================================================
+    -- COMPLETION
+    -- ==========================================================================
+    COMMIT TRANSACTION;
+    PRINT N'═══════════════════════════════════════════════════════════════════════════';
+    PRINT N'✅ Employee Extensions deployed successfully.';
+    PRINT N'   - WPS-ready bank accounts + dependents (GOSI) + position history.';
+    PRINT N'═══════════════════════════════════════════════════════════════════════════';
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0
+        ROLLBACK TRANSACTION;
+    DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+    DECLARE @ErrorSeverity INT = ERROR_SEVERITY();
+    DECLARE @ErrorState INT = ERROR_STATE();
+    RAISERROR(@ErrorMessage, @ErrorSeverity, @ErrorState);
+END CATCH;
+GO
+
+-- ============================================================
+-- source: archive/legacy_sqlserver/hr/hr.sql
+-- ============================================================
 -- ========================================================================
 -- FILE: dba/sch/hr.sql
 -- PROJECT: SHOUTECH ERP V10 - Human Resources Module (Ultimate 10/10)
@@ -770,4 +1193,462 @@ BEGIN CATCH
     DECLARE @ErrorState INT = ERROR_STATE();
     RAISERROR(@ErrorMessage, @ErrorSeverity, @ErrorState);
 END CATCH
+GO
+
+-- ============================================================
+-- source: archive/legacy_sqlserver/hr/leave.sql
+-- ============================================================
+-- ========================================================================
+-- FILE: dba/hr/leave.sql
+-- PROJECT: SHOUTECH ERP V10 - Leave Management Extensions (Ultimate 10/10)
+-- VERSION: 10.3.0
+-- DESCRIPTION: Leave types per jurisdiction (KSA Labor Law Art. 109/113,
+--              UAE, Jordan, Egypt…), annual balances with accruals and
+--              carry-forward rules.
+--              NOTE: dbo.Leaves (requests) lives in dba/hr/hr.sql.
+-- ========================================================================
+-- ✅ Idempotent | TRY/CATCH + TRANSACTION | Soft Delete + RowVersion
+-- ========================================================================
+
+USE [$(DbFileName)];
+GO
+
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+SET XACT_ABORT ON;
+GO
+
+PRINT N'═══════════════════════════════════════════════════════════════════════════';
+PRINT N'SHOUTECH ERP V10 – Leave Management Extensions (Ultimate 10/10)';
+PRINT N'═══════════════════════════════════════════════════════════════════════════';
+GO
+
+BEGIN TRY
+    BEGIN TRANSACTION;
+
+    -- ==========================================================================
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'LeaveTypes')
+    BEGIN
+        CREATE TABLE dbo.LeaveTypes (
+            LeaveTypeID INT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            TypeCode NVARCHAR(20) NOT NULL,              -- ANNUAL | SICK | HAJJ | MATERNITY | PATERNITY | UNPAID | BEREAVEMENT | STUDY
+            TypeNameAR NVARCHAR(150) NOT NULL,
+            TypeNameEN NVARCHAR(150) NOT NULL,
+            CountryCode NVARCHAR(2) NULL,                -- Jurisdiction-specific rules
+            DefaultDaysPerYear DECIMAL(5,1) NOT NULL DEFAULT 0,
+            IsPaid BIT NOT NULL DEFAULT 1,
+            PaidPercentage DECIMAL(5,2) NOT NULL DEFAULT 100, -- Sick: 100% then 75%… (KSA Art.117)
+            RequiresAttachment BIT NOT NULL DEFAULT 0,   -- Medical report etc.
+            MaxConsecutiveDays DECIMAL(5,1) NULL,
+            MinServiceMonths INT NOT NULL DEFAULT 0,     -- Eligibility (e.g. Hajj after 12m)
+            Gender NVARCHAR(6) NULL,                     -- M | F | NULL both
+            CountsWeekends BIT NOT NULL DEFAULT 0,
+            AllowCarryForward BIT NOT NULL DEFAULT 0,
+            MaxCarryForwardDays DECIMAL(5,1) NULL,
+            IsActive BIT NOT NULL DEFAULT 1,
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_LeaveTypes PRIMARY KEY CLUSTERED (LeaveTypeID),
+            CONSTRAINT UQ_LeaveTypes_Code UNIQUE (CompanyID, TypeCode),
+            CONSTRAINT CK_LeaveTypes_PaidPct CHECK (PaidPercentage BETWEEN 0 AND 100)
+        );
+    END
+
+    -- ==========================================================================
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'LeaveBalances')
+    BEGIN
+        CREATE TABLE dbo.LeaveBalances (
+            LeaveBalanceID BIGINT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            EmployeeID INT NOT NULL,
+            LeaveTypeID INT NOT NULL,
+            Year INT NOT NULL,
+            OpeningBalance DECIMAL(5,1) NOT NULL DEFAULT 0,  -- Carried forward
+            AccruedDays DECIMAL(5,1) NOT NULL DEFAULT 0,     -- Earned this year
+            UsedDays DECIMAL(5,1) NOT NULL DEFAULT 0,
+            PendingDays DECIMAL(5,1) NOT NULL DEFAULT 0,     -- In approval workflow
+            AdjustedDays DECIMAL(5,1) NOT NULL DEFAULT 0,    -- Manual HR adjustments (audited)
+            AdjustmentReason NVARCHAR(300) NULL,
+            AvailableDays AS (OpeningBalance + AccruedDays - UsedDays - PendingDays + AdjustedDays) PERSISTED,
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_LeaveBalances PRIMARY KEY CLUSTERED (LeaveBalanceID),
+            CONSTRAINT UQ_LeaveBalances UNIQUE (CompanyID, EmployeeID, LeaveTypeID, Year)
+        );
+        CREATE NONCLUSTERED INDEX IX_LeaveBalances_Emp
+            ON dbo.LeaveBalances (CompanyID, EmployeeID, Year) WHERE IsDeleted = 0;
+    END
+
+    -- ==========================================================================
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'LeaveAccruals')
+    BEGIN
+        CREATE TABLE dbo.LeaveAccruals (
+            AccrualID BIGINT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            EmployeeID INT NOT NULL,
+            LeaveTypeID INT NOT NULL,
+            AccrualDate DATE NOT NULL,
+            PeriodYear INT NOT NULL,
+            PeriodMonth TINYINT NOT NULL,
+            AccruedDays DECIMAL(5,2) NOT NULL,
+            AccrualBasis NVARCHAR(200) NULL,             -- e.g. '21 days / 12 months = 1.75'
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_LeaveAccruals PRIMARY KEY CLUSTERED (AccrualID),
+            CONSTRAINT UQ_LeaveAccruals UNIQUE (CompanyID, EmployeeID, LeaveTypeID, PeriodYear, PeriodMonth),
+            CONSTRAINT CK_LeaveAccruals_Month CHECK (PeriodMonth BETWEEN 1 AND 12)
+        ) WITH (DATA_COMPRESSION = PAGE);
+    END
+
+    -- ==========================================================================
+    -- 4. SEED DATA — Gulf & regional leave types (KSA Labor Law defaults)
+    -- ==========================================================================
+    PRINT N'✅ Seeding jurisdiction leave types...';
+
+    IF NOT EXISTS (SELECT 1 FROM dbo.LeaveTypes WHERE TypeCode = 'ANNUAL')
+    BEGIN
+        INSERT INTO dbo.LeaveTypes
+            (CompanyID, TypeCode, TypeNameAR, TypeNameEN, CountryCode, DefaultDaysPerYear,
+             IsPaid, PaidPercentage, RequiresAttachment, MinServiceMonths, Gender, CreatedBy)
+        SELECT TOP 1 C.CompanyID, X.Code, X.NameAR, X.NameEN, X.CC, X.Days,
+               X.Paid, X.PaidPct, X.NeedsAtt, X.MinSvc, X.Gender, '00000000-0000-0000-0000-000000000001'
+        FROM MST.dbo.Companies C
+        CROSS JOIN (VALUES
+            -- KSA Labor Law: Art.109 (21d → 30d after 5y), 113 (Hajj 10-15d once),
+            --              114 (maternity 10w), 117 (sick: 30d full + 60d 75% + 30d unpaid)
+            ('ANNUAL',    N'Annual Leave',            'Annual Leave',       'SA', 21.0,  1, 100.00, 0, 6,  NULL),
+            ('ANNUAL-5Y', N'Annual Leave (after 5 years)','Annual Leave (5+ years)','SA', 30.0, 1, 100.00, 0, 60, NULL),
+            ('SICK',      N'Sick Leave',            'Sick Leave',         'SA', 120.0, 1, 100.00, 1, 3,  NULL),
+            ('HAJJ',      N'Hajj Leave',             'Hajj Leave',         'SA', 15.0,  1, 100.00, 0, 12, NULL),
+            ('MATERNITY', N'Maternity Leave',          'Maternity Leave',    'SA', 70.0,  1, 100.00, 0, 0,  'F'),
+            ('PATERNITY', N'Paternity Leave',           'Paternity Leave',    'SA', 3.0,   1, 100.00, 0, 0,  'M'),
+            ('BEREAVE',   N'Bereavement Leave',             'Bereavement Leave',  'SA', 5.0,   1, 100.00, 0, 0,  NULL),
+            ('UNPAID',    N'Unpaid Leave',         'Unpaid Leave',       NULL, 0.0,  0, 0.00,   0, 0,  NULL),
+            -- UAE: 30d annual, 60d maternity
+            ('AE-ANNUAL', N'Annual Leave - UAE',  'Annual Leave (UAE)', 'AE', 30.0,  1, 100.00, 0, 6,  NULL),
+            -- Jordan: 14d annual, 70d maternity
+            ('JO-ANNUAL', N'Annual Leave - Jordan',    'Annual Leave (Jordan)','JO', 14.0, 1, 100.00, 0, 6,  NULL),
+            -- Egypt: 21d annual
+            ('EG-ANNUAL', N'Annual Leave - Egypt',       'Annual Leave (Egypt)','EG', 21.0,  1, 100.00, 0, 6,  NULL)
+        ) X (Code, NameAR, NameEN, CC, Days, Paid, PaidPct, NeedsAtt, MinSvc, Gender);
+    END
+
+    -- ==========================================================================
+    -- COMPLETION
+    -- ==========================================================================
+    COMMIT TRANSACTION;
+    PRINT N'═══════════════════════════════════════════════════════════════════════════';
+    PRINT N'✅ Leave Management Extensions deployed successfully.';
+    PRINT N'   - Types per labor law + computed balances + immutable accrual log.';
+    PRINT N'═══════════════════════════════════════════════════════════════════════════';
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0
+        ROLLBACK TRANSACTION;
+    DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+    DECLARE @ErrorSeverity INT = ERROR_SEVERITY();
+    DECLARE @ErrorState INT = ERROR_STATE();
+    RAISERROR(@ErrorMessage, @ErrorSeverity, @ErrorState);
+END CATCH;
+GO
+
+-- ============================================================
+-- source: archive/legacy_sqlserver/hr/payr.sql
+-- ============================================================
+-- ========================================================================
+-- FILE: dba/hr/payr.sql
+-- PROJECT: SHOUTECH ERP V10 - Payroll Engine Extensions (Ultimate 10/10)
+-- VERSION: 10.3.0
+-- DESCRIPTION: Salary components (allowances/deductions), employee salary
+--              structures, monthly payroll runs with WPS output and social
+--              insurance (GOSI KSA, GPSSA UAE, SSC Jordan, Egypt SI).
+--              NOTE: dbo.Payroll (summary) lives in dba/hr/hr.sql.
+-- ========================================================================
+-- ✅ Idempotent | TRY/CATCH + TRANSACTION | Soft Delete + RowVersion
+-- ✅ Posted payroll runs are immutable — reversals create new runs.
+-- ========================================================================
+
+USE [$(DbFileName)];
+GO
+
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+SET XACT_ABORT ON;
+GO
+
+PRINT N'═══════════════════════════════════════════════════════════════════════════';
+PRINT N'SHOUTECH ERP V10 – Payroll Engine Extensions (Ultimate 10/10)';
+PRINT N'═══════════════════════════════════════════════════════════════════════════';
+GO
+
+BEGIN TRY
+    BEGIN TRANSACTION;
+
+    -- ==========================================================================
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'SalaryComponents')
+    BEGIN
+        CREATE TABLE dbo.SalaryComponents (
+            ComponentID INT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            ComponentCode NVARCHAR(20) NOT NULL,         -- BASIC | HOUSING | TRANSPORT | FOOD | PHONE | GOSI_EE | LOAN_DED | ABSENCE_DED
+            ComponentNameAR NVARCHAR(150) NOT NULL,
+            ComponentNameEN NVARCHAR(150) NOT NULL,
+            ComponentKind NVARCHAR(10) NOT NULL,         -- EARNING | DEDUCTION | EMPLOYER_COST
+            CalcMethod NVARCHAR(15) NOT NULL DEFAULT 'FIXED', -- FIXED | PCT_OF_BASIC | PCT_OF_GROSS | FORMULA
+            DefaultValue DECIMAL(18,4) NOT NULL DEFAULT 0,
+            FormulaExpression NVARCHAR(500) NULL,        -- e.g. 'BASIC * 0.25'
+            IsTaxable BIT NOT NULL DEFAULT 0,            -- Relevant for Egypt/Jordan income tax
+            IncludedInGosiBase BIT NOT NULL DEFAULT 0,   -- KSA GOSI wage definition
+            IncludedInOvertimeBase BIT NOT NULL DEFAULT 0,
+            IncludedInEosBase BIT NOT NULL DEFAULT 1,    -- End-of-service calculation
+            GLAccountID INT NULL,                        -- Expense/payable mapping (loose ref)
+            SortOrder INT NOT NULL DEFAULT 0,
+            IsActive BIT NOT NULL DEFAULT 1,
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_SalaryComponents PRIMARY KEY CLUSTERED (ComponentID),
+            CONSTRAINT UQ_SalaryComponents_Code UNIQUE (CompanyID, ComponentCode),
+            CONSTRAINT CK_SalaryComponents_Kind CHECK (ComponentKind IN ('EARNING','DEDUCTION','EMPLOYER_COST')),
+            CONSTRAINT CK_SalaryComponents_Method CHECK (CalcMethod IN ('FIXED','PCT_OF_BASIC','PCT_OF_GROSS','FORMULA'))
+        );
+    END
+
+    -- ==========================================================================
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'EmployeeSalaryStructures')
+    BEGIN
+        CREATE TABLE dbo.EmployeeSalaryStructures (
+            SalaryStructureID BIGINT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            EmployeeID INT NOT NULL,
+            ComponentID INT NOT NULL,
+            Amount DECIMAL(18,4) NOT NULL,
+            ValidFrom DATE NOT NULL,
+            ValidTo DATE NULL,                           -- History-preserving
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_EmpSalaryStructures PRIMARY KEY CLUSTERED (SalaryStructureID),
+            CONSTRAINT CK_EmpSalaryStructures_Amount CHECK (Amount >= 0),
+            CONSTRAINT CK_EmpSalaryStructures_Validity CHECK (ValidTo IS NULL OR ValidTo >= ValidFrom)
+        );
+        CREATE NONCLUSTERED INDEX IX_EmpSalaryStructures_Emp
+            ON dbo.EmployeeSalaryStructures (CompanyID, EmployeeID, ValidFrom) WHERE IsDeleted = 0;
+    END
+
+    -- ==========================================================================
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'PayrollRuns')
+    BEGIN
+        CREATE TABLE dbo.PayrollRuns (
+            PayrollRunID BIGINT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            RunNo NVARCHAR(30) NOT NULL,                 -- PR-2026-01
+            PeriodYear INT NOT NULL,
+            PeriodMonth TINYINT NOT NULL,
+            PeriodFrom DATE NOT NULL,
+            PeriodTo DATE NOT NULL,
+            CurrencyCode NVARCHAR(3) NOT NULL,
+            EmployeeCount INT NOT NULL DEFAULT 0,
+            TotalEarnings DECIMAL(18,4) NOT NULL DEFAULT 0,
+            TotalDeductions DECIMAL(18,4) NOT NULL DEFAULT 0,
+            TotalEmployerCost DECIMAL(18,4) NOT NULL DEFAULT 0,
+            TotalNetPay DECIMAL(18,4) NOT NULL DEFAULT 0,
+            Status NVARCHAR(12) NOT NULL DEFAULT 'DRAFT', -- DRAFT | CALCULATED | APPROVED | POSTED | PAID | REVERSED
+            CalculatedAt DATETIME2(7) NULL,
+            ApprovedBy UNIQUEIDENTIFIER NULL,
+            ApprovedAt DATETIME2(7) NULL,
+            PostedAt DATETIME2(7) NULL,                  -- GL journal created
+            JournalEntryID BIGINT NULL,                  -- Loose ref → JournalEntries
+            PaidAt DATETIME2(7) NULL,
+            WpsFilePath NVARCHAR(500) NULL,              -- Generated WPS SIF file
+            ReversalOfRunID BIGINT NULL,
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_PayrollRuns PRIMARY KEY CLUSTERED (PayrollRunID),
+            CONSTRAINT UQ_PayrollRuns_Period UNIQUE (CompanyID, PeriodYear, PeriodMonth),
+            CONSTRAINT UQ_PayrollRuns_No UNIQUE (CompanyID, RunNo),
+            CONSTRAINT CK_PayrollRuns_Month CHECK (PeriodMonth BETWEEN 1 AND 12),
+            CONSTRAINT CK_PayrollRuns_Status CHECK (Status IN ('DRAFT','CALCULATED','APPROVED','POSTED','PAID','REVERSED'))
+        ) WITH (DATA_COMPRESSION = PAGE);
+        CREATE NONCLUSTERED INDEX IX_PayrollRuns_Status
+            ON dbo.PayrollRuns (CompanyID, Status, PeriodYear DESC, PeriodMonth DESC) WHERE IsDeleted = 0;
+    END
+
+    -- ==========================================================================
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'PayrollRunItems')
+    BEGIN
+        CREATE TABLE dbo.PayrollRunItems (
+            PayrollRunItemID BIGINT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            PayrollRunID BIGINT NOT NULL,
+            EmployeeID INT NOT NULL,
+            ComponentID INT NOT NULL,
+            ComponentKind NVARCHAR(10) NOT NULL,         -- Snapshot
+            Amount DECIMAL(18,4) NOT NULL,
+            WorkingDays DECIMAL(5,2) NOT NULL DEFAULT 0,
+            AbsentDays DECIMAL(5,2) NOT NULL DEFAULT 0,
+            OvertimeHours DECIMAL(6,2) NOT NULL DEFAULT 0,
+            Notes NVARCHAR(300) NULL,
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_PayrollRunItems PRIMARY KEY CLUSTERED (PayrollRunItemID),
+            CONSTRAINT UQ_PayrollRunItems UNIQUE (PayrollRunID, EmployeeID, ComponentID)
+        ) WITH (DATA_COMPRESSION = PAGE);
+        CREATE NONCLUSTERED INDEX IX_PayrollRunItems_Emp
+            ON dbo.PayrollRunItems (CompanyID, EmployeeID, PayrollRunID) WHERE IsDeleted = 0;
+        CREATE COLUMNSTORE INDEX CSIX_PayrollRunItems
+            ON dbo.PayrollRunItems (CompanyID, PayrollRunID, EmployeeID, ComponentID, Amount);
+    END
+
+    -- ==========================================================================
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'SocialInsuranceConfigs')
+    BEGIN
+        CREATE TABLE dbo.SocialInsuranceConfigs (
+            SiConfigID INT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            CountryCode NVARCHAR(2) NOT NULL,
+            SchemeCode NVARCHAR(20) NOT NULL,            -- GOSI-SA | GPSSA-AE | SSC-JO | SI-EG
+            SchemeNameAR NVARCHAR(200) NOT NULL,
+            SchemeNameEN NVARCHAR(200) NOT NULL,
+            EmployeeRate DECIMAL(6,4) NOT NULL,          -- e.g. GOSI Saudi: 9.75% (annuities+saned)
+            EmployerRate DECIMAL(6,4) NOT NULL,          -- e.g. GOSI Saudi: 11.75%
+            MinWageBase DECIMAL(18,4) NULL,
+            MaxWageBase DECIMAL(18,4) NULL,              -- GOSI cap: 45,000 SAR
+            AppliesToNationality NVARCHAR(10) NOT NULL DEFAULT 'LOCAL', -- LOCAL | EXPAT | ALL
+            EmployerRegistrationNo NVARCHAR(50) NULL,
+            ValidFrom DATE NOT NULL,
+            ValidTo DATE NULL,
+            IsActive BIT NOT NULL DEFAULT 1,
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_SocialInsuranceConfigs PRIMARY KEY CLUSTERED (SiConfigID),
+            CONSTRAINT UQ_SocialInsuranceConfigs UNIQUE (CompanyID, SchemeCode, ValidFrom),
+            CONSTRAINT CK_SocialInsuranceConfigs_Rates CHECK (EmployeeRate >= 0 AND EmployerRate >= 0)
+        );
+    END
+
+    -- ==========================================================================
+    -- 6. SEED DATA — salary components + social insurance schemes
+    -- ==========================================================================
+    PRINT N'✅ Seeding salary components & social insurance...';
+
+    IF NOT EXISTS (SELECT 1 FROM dbo.SalaryComponents WHERE ComponentCode = 'BASIC')
+    BEGIN
+        INSERT INTO dbo.SalaryComponents
+            (CompanyID, ComponentCode, ComponentNameAR, ComponentNameEN, ComponentKind,
+             CalcMethod, DefaultValue, IsTaxable, IncludedInGosiBase, IncludedInOvertimeBase,
+             IncludedInEosBase, SortOrder, CreatedBy)
+        SELECT TOP 1 C.CompanyID, X.Code, X.NameAR, X.NameEN, X.Kind, X.Method, X.DefVal,
+               X.Taxable, X.Gosi, X.OtBase, X.EosBase, X.SortOrd, '00000000-0000-0000-0000-000000000001'
+        FROM MST.dbo.Companies C
+        CROSS JOIN (VALUES
+            ('BASIC',    N'Basic Salary',        'Basic Salary',        'EARNING', 'FIXED',        0,  1, 1, 1, 1, 1),
+            ('HOUSING',  N'Housing Allowance',             'Housing Allowance',   'EARNING', 'PCT_OF_BASIC', 25, 1, 1, 0, 1, 2),
+            ('TRANSPORT',N'Transportation Allowance',         'Transport Allowance', 'EARNING', 'FIXED',        0,  1, 1, 0, 1, 3),
+            ('FOOD',     N'Food Allowance',            'Food Allowance',      'EARNING', 'FIXED',        0,  1, 0, 0, 1, 4),
+            ('PHONE',    N'Phone Allowance',            'Phone Allowance',     'EARNING', 'FIXED',        0,  0, 0, 0, 0, 5),
+            ('OT-NORMAL',N'Overtime - Regular',      'Overtime — Normal',   'EARNING', 'FORMULA',      0,  0, 0, 0, 0, 6),
+            ('GOSI-EE',  N'Employee share - Insurance','GOSI Employee Share', 'DEDUCTION','FORMULA',     0,  0, 0, 0, 0, 20),
+            ('LOAN-DED', N'Loan Installment',              'Loan Installment',    'DEDUCTION','FIXED',       0,  0, 0, 0, 0, 21),
+            ('ABS-DED',  N'Absence Deduction',            'Absence Deduction',   'DEDUCTION','FORMULA',     0,  0, 0, 0, 0, 22),
+            ('GOSI-ER',  N'Employer share - Insurance','GOSI Employer Share','EMPLOYER_COST','FORMULA',0,0, 0, 0, 0, 30)
+        ) X (Code, NameAR, NameEN, Kind, Method, DefVal, Taxable, Gosi, OtBase, EosBase, SortOrd);
+    END
+
+    IF NOT EXISTS (SELECT 1 FROM dbo.SocialInsuranceConfigs WHERE SchemeCode = 'GOSI-SA')
+    BEGIN
+        INSERT INTO dbo.SocialInsuranceConfigs
+            (CompanyID, CountryCode, SchemeCode, SchemeNameAR, SchemeNameEN,
+             EmployeeRate, EmployerRate, MinWageBase, MaxWageBase, AppliesToNationality,
+             ValidFrom, CreatedBy)
+        SELECT TOP 1 C.CompanyID, X.CC, X.Code, X.NameAR, X.NameEN,
+               X.EeRate, X.ErRate, X.MinBase, X.MaxBase, X.Nat, X.VFrom,
+               '00000000-0000-0000-0000-000000000001'
+        FROM MST.dbo.Companies C
+        CROSS JOIN (VALUES
+            -- KSA GOSI: Saudi employee 9.75% (annuities 9% + SANED 0.75%),
+            --           employer 11.75% (annuities 9% + hazards 2% + SANED 0.75%)
+            ('SA', 'GOSI-SA',    N'Social Insurance - Saudi Arabia (Saudi national)', 'GOSI — Saudi National', 9.7500, 11.7500, 1500, 45000, 'LOCAL', '2024-01-01'),
+            ('SA', 'GOSI-SA-XP', N'Social Insurance - Saudi Arabia (Expatriate)',  'GOSI — Expatriate',     0.0000,  2.0000, NULL, NULL,  'EXPAT', '2024-01-01'),
+            -- UAE GPSSA: employee 11%, employer 15% (private sector, UAE nationals)
+            ('AE', 'GPSSA-AE',   N'Pensions - UAE (Citizen)',            'GPSSA — UAE National',  11.0000, 15.0000, NULL, 50000, 'LOCAL', '2024-01-01'),
+            -- Jordan SSC: employee 7.5%, employer 14.25%
+            ('JO', 'SSC-JO',     N'Social Security - Jordan',               'SSC — Jordan',           7.5000, 14.2500, NULL, NULL,  'ALL',   '2024-01-01'),
+            -- Egypt SI: employee 11%, employer 18.75% (Law 148/2019)
+            ('EG', 'SI-EG',      N'Social Insurance - Egypt',              'Social Insurance — Egypt',11.0000, 18.7500, 2000, 12600, 'ALL',  '2024-01-01')
+        ) X (CC, Code, NameAR, NameEN, EeRate, ErRate, MinBase, MaxBase, Nat, VFrom);
+    END
+
+    -- ==========================================================================
+    -- COMPLETION
+    -- ==========================================================================
+    COMMIT TRANSACTION;
+    PRINT N'═══════════════════════════════════════════════════════════════════════════';
+    PRINT N'✅ Payroll Engine Extensions deployed successfully.';
+    PRINT N'   - Components + structures + runs + WPS + GOSI/GPSSA/SSC/SI-EG seeds.';
+    PRINT N'═══════════════════════════════════════════════════════════════════════════';
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0
+        ROLLBACK TRANSACTION;
+    DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+    DECLARE @ErrorSeverity INT = ERROR_SEVERITY();
+    DECLARE @ErrorState INT = ERROR_STATE();
+    RAISERROR(@ErrorMessage, @ErrorSeverity, @ErrorState);
+END CATCH;
 GO

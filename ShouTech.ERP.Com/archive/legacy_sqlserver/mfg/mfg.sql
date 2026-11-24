@@ -1,3 +1,136 @@
+-- ============================================================
+-- source: archive/legacy_sqlserver/mfg/bom.sql
+-- ============================================================
+-- ========================================================================
+-- FILE: dba/mfg/bom.sql
+-- PROJECT: SHOUTECH ERP V10 - BOM Governance Extensions (Ultimate 10/10)
+-- VERSION: 10.3.0
+-- DESCRIPTION: Engineering Change Notices (ECN/ECO) with approval workflow
+--              and frozen BOM cost rollups for variance analysis.
+--              NOTE: dbo.ProductionBlueprints + inputs/outputs → dba/mfg/mfg.sql.
+-- ========================================================================
+-- ✅ Idempotent | TRY/CATCH + TRANSACTION | Soft Delete + RowVersion
+-- ========================================================================
+
+USE [$(DbFileName)];
+GO
+
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+SET XACT_ABORT ON;
+GO
+
+PRINT N'═══════════════════════════════════════════════════════════════════════════';
+PRINT N'SHOUTECH ERP V10 – BOM Governance Extensions (Ultimate 10/10)';
+PRINT N'═══════════════════════════════════════════════════════════════════════════';
+GO
+
+BEGIN TRY
+    BEGIN TRANSACTION;
+
+    -- ==========================================================================
+    --    No BOM change without an approved ECN — full traceability (ISO 9001).
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'EngineeringChangeNotices')
+    BEGIN
+        CREATE TABLE dbo.EngineeringChangeNotices (
+            EcnID BIGINT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            EcnNo NVARCHAR(30) NOT NULL,                 -- ECN-2026-0001
+            BlueprintID INT NOT NULL,                    -- Loose ref → ProductionBlueprints
+            ChangeType NVARCHAR(15) NOT NULL,            -- ADD_ITEM | REMOVE_ITEM | QTY_CHANGE | SUBSTITUTE | ROUTE_CHANGE
+            Priority NVARCHAR(10) NOT NULL DEFAULT 'NORMAL', -- LOW | NORMAL | HIGH | EMERGENCY
+            ReasonCode NVARCHAR(20) NOT NULL,            -- COST_REDUCTION | QUALITY | SUPPLIER | CUSTOMER_REQ | REGULATORY
+            DescriptionAR NVARCHAR(1000) NOT NULL,
+            DescriptionEN NVARCHAR(1000) NULL,
+            AffectedItemID INT NULL,
+            OldValue NVARCHAR(200) NULL,
+            NewValue NVARCHAR(200) NULL,
+            EffectiveDate DATE NOT NULL,
+            Status NVARCHAR(12) NOT NULL DEFAULT 'DRAFT', -- DRAFT | SUBMITTED | APPROVED | REJECTED | IMPLEMENTED | CANCELLED
+            RequestedBy INT NOT NULL,                    -- EmployeeID
+            RequestedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            ApprovedBy UNIQUEIDENTIFIER NULL,
+            ApprovedAt DATETIME2(7) NULL,
+            ImplementedAt DATETIME2(7) NULL,
+            RejectionReason NVARCHAR(300) NULL,
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_EngineeringChangeNotices PRIMARY KEY CLUSTERED (EcnID),
+            CONSTRAINT UQ_EngineeringChangeNotices_No UNIQUE (CompanyID, EcnNo),
+            CONSTRAINT CK_ECN_Status CHECK (Status IN ('DRAFT','SUBMITTED','APPROVED','REJECTED','IMPLEMENTED','CANCELLED')),
+            CONSTRAINT CK_ECN_Priority CHECK (Priority IN ('LOW','NORMAL','HIGH','EMERGENCY'))
+        ) WITH (DATA_COMPRESSION = PAGE);
+        CREATE NONCLUSTERED INDEX IX_ECN_Blueprint
+            ON dbo.EngineeringChangeNotices (CompanyID, BlueprintID, Status) WHERE IsDeleted = 0;
+    END
+
+    -- ==========================================================================
+    --    Frozen snapshots → variance analysis against WorkOrder actuals.
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'BomCostRollups')
+    BEGIN
+        CREATE TABLE dbo.BomCostRollups (
+            BomCostRollupID BIGINT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            BlueprintID INT NOT NULL,
+            RollupDate DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            CostingMethod NVARCHAR(15) NOT NULL,         -- STANDARD | AVERAGE | LAST | FIFO
+            MaterialCost DECIMAL(18,4) NOT NULL DEFAULT 0,
+            LaborCost DECIMAL(18,4) NOT NULL DEFAULT 0,
+            OverheadCost DECIMAL(18,4) NOT NULL DEFAULT 0,
+            SubcontractCost DECIMAL(18,4) NOT NULL DEFAULT 0,
+            AdditionalCosts DECIMAL(18,4) NOT NULL DEFAULT 0,
+            TotalCost AS (MaterialCost + LaborCost + OverheadCost + SubcontractCost + AdditionalCosts) PERSISTED,
+            OutputQty DECIMAL(18,4) NOT NULL DEFAULT 1,
+            UnitCost AS (CASE WHEN OutputQty > 0
+                              THEN (MaterialCost + LaborCost + OverheadCost + SubcontractCost + AdditionalCosts) / OutputQty
+                              ELSE 0 END) PERSISTED,
+            CurrencyCode NVARCHAR(3) NOT NULL,
+            Notes NVARCHAR(500) NULL,
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_BomCostRollups PRIMARY KEY CLUSTERED (BomCostRollupID),
+            CONSTRAINT CK_BomCostRollups_Method CHECK (CostingMethod IN ('STANDARD','AVERAGE','LAST','FIFO'))
+        ) WITH (DATA_COMPRESSION = PAGE);
+        CREATE NONCLUSTERED INDEX IX_BomCostRollups_Blueprint
+            ON dbo.BomCostRollups (CompanyID, BlueprintID, RollupDate DESC) WHERE IsDeleted = 0;
+    END
+
+    -- ==========================================================================
+    -- COMPLETION
+    -- ==========================================================================
+    COMMIT TRANSACTION;
+    PRINT N'═══════════════════════════════════════════════════════════════════════════';
+    PRINT N'✅ BOM Governance Extensions deployed successfully.';
+    PRINT N'   - ECN approval workflow (ISO 9001) + frozen cost rollups.';
+    PRINT N'═══════════════════════════════════════════════════════════════════════════';
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0
+        ROLLBACK TRANSACTION;
+    DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+    DECLARE @ErrorSeverity INT = ERROR_SEVERITY();
+    DECLARE @ErrorState INT = ERROR_STATE();
+    RAISERROR(@ErrorMessage, @ErrorSeverity, @ErrorState);
+END CATCH;
+GO
+
+-- ============================================================
+-- source: archive/legacy_sqlserver/mfg/mfg.sql
+-- ============================================================
 -- ========================================================================
 -- FILE: dba/sch/mfg.sql
 -- PROJECT: SHOUTECH ERP V10 - Smart Manufacturing Core (Ultimate 10/10)
@@ -1049,4 +1182,448 @@ BEGIN CATCH
     DECLARE @ErrorState INT = ERROR_STATE();
     RAISERROR(@ErrorMessage, @ErrorSeverity, @ErrorState);
 END CATCH
+GO
+
+-- ============================================================
+-- source: archive/legacy_sqlserver/mfg/qual.sql
+-- ============================================================
+-- ========================================================================
+-- FILE: dba/mfg/qual.sql
+-- PROJECT: SHOUTECH ERP V10 - Quality Management Extensions (Ultimate 10/10)
+-- VERSION: 10.3.0
+-- DESCRIPTION: Inspection plans (AQL sampling, ISO 2859), non-conformance
+--              reports (NCR) and corrective/preventive actions (CAPA).
+--              NOTE: dbo.QualityTests + dbo.QualityTestResults → dba/mfg/mfg.sql.
+-- ========================================================================
+-- ✅ Idempotent | TRY/CATCH + TRANSACTION | Soft Delete + RowVersion
+-- ✅ ISO 9001 traceability: NCR → CAPA linkage is mandatory.
+-- ========================================================================
+
+USE [$(DbFileName)];
+GO
+
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+SET XACT_ABORT ON;
+GO
+
+PRINT N'═══════════════════════════════════════════════════════════════════════════';
+PRINT N'SHOUTECH ERP V10 – Quality Management Extensions (Ultimate 10/10)';
+PRINT N'═══════════════════════════════════════════════════════════════════════════';
+GO
+
+BEGIN TRY
+    BEGIN TRANSACTION;
+
+    -- ==========================================================================
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'QualityPlans')
+    BEGIN
+        CREATE TABLE dbo.QualityPlans (
+            QualityPlanID INT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            PlanCode NVARCHAR(30) NOT NULL,
+            PlanNameAR NVARCHAR(200) NOT NULL,
+            PlanNameEN NVARCHAR(200) NULL,
+            AppliesTo NVARCHAR(15) NOT NULL,             -- ITEM | BLUEPRINT | SUPPLIER | WORK_ORDER
+            AppliesToID INT NOT NULL,
+            InspectionTrigger NVARCHAR(15) NOT NULL,     -- RECEIVING | IN_PROCESS | FINAL | PRE_SHIPMENT
+            SamplingStandard NVARCHAR(15) NOT NULL DEFAULT 'ISO2859', -- ISO2859 | FULL | FIXED_PCT | NONE
+            AqlLevel NVARCHAR(10) NULL,                  -- e.g. 'II', 'S-3'
+            AqlValue DECIMAL(5,2) NULL,                  -- e.g. 1.0, 2.5
+            FixedSamplePct DECIMAL(5,2) NULL,            -- When FIXED_PCT
+            IsActive BIT NOT NULL DEFAULT 1,
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_QualityPlans PRIMARY KEY CLUSTERED (QualityPlanID),
+            CONSTRAINT UQ_QualityPlans_Code UNIQUE (CompanyID, PlanCode),
+            CONSTRAINT CK_QualityPlans_AppliesTo CHECK (AppliesTo IN ('ITEM','BLUEPRINT','SUPPLIER','WORK_ORDER')),
+            CONSTRAINT CK_QualityPlans_Trigger CHECK (InspectionTrigger IN ('RECEIVING','IN_PROCESS','FINAL','PRE_SHIPMENT')),
+            CONSTRAINT CK_QualityPlans_Sampling CHECK (SamplingStandard IN ('ISO2859','FULL','FIXED_PCT','NONE'))
+        );
+        CREATE NONCLUSTERED INDEX IX_QualityPlans_Target
+            ON dbo.QualityPlans (CompanyID, AppliesTo, AppliesToID) WHERE IsDeleted = 0;
+    END
+
+    -- ==========================================================================
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'NonConformanceReports')
+    BEGIN
+        CREATE TABLE dbo.NonConformanceReports (
+            NcrID BIGINT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            NcrNo NVARCHAR(30) NOT NULL,                 -- NCR-2026-0001
+            SourceType NVARCHAR(15) NOT NULL,            -- RECEIVING | PRODUCTION | CUSTOMER_RETURN | AUDIT | SUPPLIER
+            SourceDocumentID BIGINT NULL,                -- GRN / WorkOrder / Sales return
+            ItemID INT NOT NULL,
+            BatchNo NVARCHAR(50) NULL,
+            QtyAffected DECIMAL(18,4) NOT NULL,
+            Severity NVARCHAR(10) NOT NULL DEFAULT 'MAJOR', -- CRITICAL | MAJOR | MINOR
+            DefectDescriptionAR NVARCHAR(1000) NOT NULL,
+            DefectDescriptionEN NVARCHAR(1000) NULL,
+            DetectedBy INT NOT NULL,                     -- EmployeeID
+            DetectedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            Disposition NVARCHAR(15) NULL,               -- USE_AS_IS | REWORK | SCRAP | RETURN_SUPPLIER | SORT
+            DispositionBy UNIQUEIDENTIFIER NULL,
+            DispositionAt DATETIME2(7) NULL,
+            EstimatedCost DECIMAL(18,4) NOT NULL DEFAULT 0,
+            Status NVARCHAR(12) NOT NULL DEFAULT 'OPEN', -- OPEN | DISPOSITIONED | CLOSED
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_NonConformanceReports PRIMARY KEY CLUSTERED (NcrID),
+            CONSTRAINT UQ_NonConformanceReports_No UNIQUE (CompanyID, NcrNo),
+            CONSTRAINT CK_NCR_Source CHECK (SourceType IN ('RECEIVING','PRODUCTION','CUSTOMER_RETURN','AUDIT','SUPPLIER')),
+            CONSTRAINT CK_NCR_Severity CHECK (Severity IN ('CRITICAL','MAJOR','MINOR')),
+            CONSTRAINT CK_NCR_Disposition CHECK (Disposition IS NULL OR Disposition IN ('USE_AS_IS','REWORK','SCRAP','RETURN_SUPPLIER','SORT')),
+            CONSTRAINT CK_NCR_Status CHECK (Status IN ('OPEN','DISPOSITIONED','CLOSED'))
+        ) WITH (DATA_COMPRESSION = PAGE);
+        CREATE NONCLUSTERED INDEX IX_NCR_Item
+            ON dbo.NonConformanceReports (CompanyID, ItemID, DetectedAt DESC) WHERE IsDeleted = 0;
+        CREATE NONCLUSTERED INDEX IX_NCR_Open
+            ON dbo.NonConformanceReports (CompanyID, Status, Severity) WHERE IsDeleted = 0 AND Status <> 'CLOSED';
+    END
+
+    -- ==========================================================================
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CorrectiveActions')
+    BEGIN
+        CREATE TABLE dbo.CorrectiveActions (
+            CapaID BIGINT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            CapaNo NVARCHAR(30) NOT NULL,                -- CAPA-2026-0001
+            ActionType NVARCHAR(10) NOT NULL,            -- CORRECTIVE | PREVENTIVE
+            NcrID BIGINT NULL,                           -- Mandatory when CORRECTIVE (ISO 9001)
+            RootCause NVARCHAR(1000) NULL,               -- 5-Why / fishbone summary
+            ActionPlanAR NVARCHAR(2000) NOT NULL,
+            ActionPlanEN NVARCHAR(2000) NULL,
+            ResponsibleEmployeeID INT NOT NULL,
+            TargetDate DATE NOT NULL,
+            CompletedDate DATE NULL,
+            EffectivenessChecked BIT NOT NULL DEFAULT 0,
+            EffectivenessNotes NVARCHAR(1000) NULL,
+            Status NVARCHAR(12) NOT NULL DEFAULT 'OPEN', -- OPEN | IN_PROGRESS | COMPLETED | VERIFIED | CANCELLED
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_CorrectiveActions PRIMARY KEY CLUSTERED (CapaID),
+            CONSTRAINT UQ_CorrectiveActions_No UNIQUE (CompanyID, CapaNo),
+            CONSTRAINT CK_CAPA_Type CHECK (ActionType IN ('CORRECTIVE','PREVENTIVE')),
+            CONSTRAINT CK_CAPA_Status CHECK (Status IN ('OPEN','IN_PROGRESS','COMPLETED','VERIFIED','CANCELLED')),
+            -- ISO 9001: a CORRECTIVE action must trace back to an NCR
+            CONSTRAINT CK_CAPA_NcrRequired CHECK (ActionType <> 'CORRECTIVE' OR NcrID IS NOT NULL)
+        ) WITH (DATA_COMPRESSION = PAGE);
+        CREATE NONCLUSTERED INDEX IX_CAPA_Open
+            ON dbo.CorrectiveActions (CompanyID, Status, TargetDate) WHERE IsDeleted = 0 AND Status NOT IN ('VERIFIED','CANCELLED');
+    END
+
+    -- ==========================================================================
+    -- COMPLETION
+    -- ==========================================================================
+    COMMIT TRANSACTION;
+    PRINT N'═══════════════════════════════════════════════════════════════════════════';
+    PRINT N'✅ Quality Management Extensions deployed successfully.';
+    PRINT N'   - AQL plans (ISO 2859) + NCR + CAPA with ISO 9001 mandatory linkage.';
+    PRINT N'═══════════════════════════════════════════════════════════════════════════';
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0
+        ROLLBACK TRANSACTION;
+    DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+    DECLARE @ErrorSeverity INT = ERROR_SEVERITY();
+    DECLARE @ErrorState INT = ERROR_STATE();
+    RAISERROR(@ErrorMessage, @ErrorSeverity, @ErrorState);
+END CATCH;
+GO
+
+-- ============================================================
+-- source: archive/legacy_sqlserver/mfg/route.sql
+-- ============================================================
+-- ========================================================================
+-- FILE: dba/mfg/route.sql
+-- PROJECT: SHOUTECH ERP V10 - Routing & Capacity Extensions (Ultimate 10/10)
+-- VERSION: 10.3.0
+-- DESCRIPTION: Operation standard times with validity history and work
+--              center capacity plans (finite scheduling input).
+--              NOTE: dbo.ProductionRoutings + dbo.WorkCenters → dba/mfg/mfg.sql.
+-- ========================================================================
+-- ✅ Idempotent | TRY/CATCH + TRANSACTION | Soft Delete + RowVersion
+-- ========================================================================
+
+USE [$(DbFileName)];
+GO
+
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+SET XACT_ABORT ON;
+GO
+
+PRINT N'═══════════════════════════════════════════════════════════════════════════';
+PRINT N'SHOUTECH ERP V10 – Routing & Capacity Extensions (Ultimate 10/10)';
+PRINT N'═══════════════════════════════════════════════════════════════════════════';
+GO
+
+BEGIN TRY
+    BEGIN TRANSACTION;
+
+    -- ==========================================================================
+    --    History-preserving like tax rates: new standard → new row.
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'OperationStandards')
+    BEGIN
+        CREATE TABLE dbo.OperationStandards (
+            OperationStandardID BIGINT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            RoutingID INT NOT NULL,                      -- Loose ref → ProductionRoutings
+            OperationSeq INT NOT NULL,
+            OperationName NVARCHAR(200) NOT NULL,
+            WorkCenterID INT NULL,
+            StandardSetupMinutes INT NOT NULL DEFAULT 0,
+            StandardRunMinutesPerUnit DECIMAL(18,4) NOT NULL,
+            MachineMinutesPerUnit DECIMAL(18,4) NOT NULL DEFAULT 0,
+            LaborRatePerHour DECIMAL(18,4) NOT NULL DEFAULT 0,
+            OverheadRatePerHour DECIMAL(18,4) NOT NULL DEFAULT 0,
+            ExpectedScrapPct DECIMAL(5,2) NOT NULL DEFAULT 0,
+            CrewSize DECIMAL(4,1) NOT NULL DEFAULT 1,
+            ValidFrom DATE NOT NULL,
+            ValidTo DATE NULL,
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_OperationStandards PRIMARY KEY CLUSTERED (OperationStandardID),
+            CONSTRAINT CK_OpStandards_Run CHECK (StandardRunMinutesPerUnit > 0),
+            CONSTRAINT CK_OpStandards_Validity CHECK (ValidTo IS NULL OR ValidTo >= ValidFrom)
+        );
+        CREATE NONCLUSTERED INDEX IX_OpStandards_Routing
+            ON dbo.OperationStandards (CompanyID, RoutingID, OperationSeq, ValidFrom) WHERE IsDeleted = 0;
+    END
+
+    -- ==========================================================================
+    --    Input for finite scheduling and load-vs-capacity reports.
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CapacityPlans')
+    BEGIN
+        CREATE TABLE dbo.CapacityPlans (
+            CapacityPlanID BIGINT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            WorkCenterID INT NOT NULL,
+            PeriodYear INT NOT NULL,
+            PeriodMonth TINYINT NOT NULL,
+            WorkingDays TINYINT NOT NULL,
+            ShiftsPerDay TINYINT NOT NULL DEFAULT 1,
+            HoursPerShift DECIMAL(4,2) NOT NULL DEFAULT 8,
+            EfficiencyPct DECIMAL(5,2) NOT NULL DEFAULT 85,  -- OEE efficiency assumption
+            UtilizationPct DECIMAL(5,2) NOT NULL DEFAULT 90,
+            PlannedCapacityHours AS (WorkingDays * ShiftsPerDay * HoursPerShift * EfficiencyPct / 100 * UtilizationPct / 100) PERSISTED,
+            LoadedHours DECIMAL(18,2) NOT NULL DEFAULT 0,    -- Sum of scheduled operations
+            Notes NVARCHAR(300) NULL,
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_CapacityPlans PRIMARY KEY CLUSTERED (CapacityPlanID),
+            CONSTRAINT UQ_CapacityPlans UNIQUE (CompanyID, WorkCenterID, PeriodYear, PeriodMonth),
+            CONSTRAINT CK_CapacityPlans_Month CHECK (PeriodMonth BETWEEN 1 AND 12),
+            CONSTRAINT CK_CapacityPlans_Pct CHECK (EfficiencyPct BETWEEN 0 AND 100 AND UtilizationPct BETWEEN 0 AND 100)
+        );
+        CREATE NONCLUSTERED INDEX IX_CapacityPlans_Period
+            ON dbo.CapacityPlans (CompanyID, PeriodYear, PeriodMonth) WHERE IsDeleted = 0;
+    END
+
+    -- ==========================================================================
+    -- COMPLETION
+    -- ==========================================================================
+    COMMIT TRANSACTION;
+    PRINT N'═══════════════════════════════════════════════════════════════════════════';
+    PRINT N'✅ Routing & Capacity Extensions deployed successfully.';
+    PRINT N'   - Validity-based standards + computed capacity plans.';
+    PRINT N'═══════════════════════════════════════════════════════════════════════════';
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0
+        ROLLBACK TRANSACTION;
+    DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+    DECLARE @ErrorSeverity INT = ERROR_SEVERITY();
+    DECLARE @ErrorState INT = ERROR_STATE();
+    RAISERROR(@ErrorMessage, @ErrorSeverity, @ErrorState);
+END CATCH;
+GO
+
+-- ============================================================
+-- source: archive/legacy_sqlserver/mfg/wo.sql
+-- ============================================================
+-- ========================================================================
+-- FILE: dba/mfg/wo.sql
+-- PROJECT: SHOUTECH ERP V10 - Work Order Execution Extensions (Ultimate 10/10)
+-- VERSION: 10.3.0
+-- DESCRIPTION: Shop-floor execution: operation-level tracking (start/stop),
+--              labor time logs and downtime reasons.
+--              NOTE: dbo.WorkOrders + dbo.MaterialFlows → dba/mfg/mfg.sql.
+-- ========================================================================
+-- ✅ Idempotent | TRY/CATCH + TRANSACTION | Soft Delete + RowVersion
+-- ========================================================================
+
+USE [$(DbFileName)];
+GO
+
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+SET XACT_ABORT ON;
+GO
+
+PRINT N'═══════════════════════════════════════════════════════════════════════════';
+PRINT N'SHOUTECH ERP V10 – Work Order Execution Extensions (Ultimate 10/10)';
+PRINT N'═══════════════════════════════════════════════════════════════════════════';
+GO
+
+BEGIN TRY
+    BEGIN TRANSACTION;
+
+    -- ==========================================================================
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'WorkOrderOperations')
+    BEGIN
+        CREATE TABLE dbo.WorkOrderOperations (
+            WoOperationID BIGINT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            WorkOrderID BIGINT NOT NULL,                 -- Loose ref → WorkOrders
+            OperationSeq INT NOT NULL,                   -- 10, 20, 30…
+            OperationName NVARCHAR(200) NOT NULL,
+            WorkCenterID INT NULL,                       -- Loose ref → WorkCenters
+            PlannedSetupMinutes INT NOT NULL DEFAULT 0,
+            PlannedRunMinutes DECIMAL(18,2) NOT NULL DEFAULT 0,
+            ActualSetupMinutes INT NULL,
+            ActualRunMinutes DECIMAL(18,2) NULL,
+            QtyPlanned DECIMAL(18,4) NOT NULL,
+            QtyCompleted DECIMAL(18,4) NOT NULL DEFAULT 0,
+            QtyScrapped DECIMAL(18,4) NOT NULL DEFAULT 0,
+            QtyReworked DECIMAL(18,4) NOT NULL DEFAULT 0,
+            OperatorEmployeeID INT NULL,
+            StartedAt DATETIME2(7) NULL,
+            CompletedAt DATETIME2(7) NULL,
+            Status NVARCHAR(12) NOT NULL DEFAULT 'PENDING', -- PENDING | RUNNING | PAUSED | COMPLETED | SKIPPED
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_WorkOrderOperations PRIMARY KEY CLUSTERED (WoOperationID),
+            CONSTRAINT UQ_WorkOrderOperations UNIQUE (WorkOrderID, OperationSeq),
+            CONSTRAINT CK_WoOperations_Status CHECK (Status IN ('PENDING','RUNNING','PAUSED','COMPLETED','SKIPPED')),
+            CONSTRAINT CK_WoOperations_Qty CHECK (QtyCompleted >= 0 AND QtyScrapped >= 0 AND QtyCompleted + QtyScrapped <= QtyPlanned * 1.2)
+        ) WITH (DATA_COMPRESSION = PAGE);
+        CREATE NONCLUSTERED INDEX IX_WoOperations_WO
+            ON dbo.WorkOrderOperations (CompanyID, WorkOrderID, OperationSeq) WHERE IsDeleted = 0;
+    END
+
+    -- ==========================================================================
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'WorkOrderLaborLogs')
+    BEGIN
+        CREATE TABLE dbo.WorkOrderLaborLogs (
+            LaborLogID BIGINT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            WoOperationID BIGINT NOT NULL,               -- Loose ref → WorkOrderOperations
+            EmployeeID INT NOT NULL,
+            LogDate DATE NOT NULL,
+            StartTime DATETIME2(7) NOT NULL,
+            EndTime DATETIME2(7) NULL,                   -- NULL = still running
+            WorkedMinutes AS (CASE WHEN EndTime IS NOT NULL
+                                   THEN DATEDIFF(MINUTE, StartTime, EndTime) END) PERSISTED,
+            HourlyRate DECIMAL(18,4) NULL,               -- Snapshot at log time
+            IsOvertime BIT NOT NULL DEFAULT 0,
+            Notes NVARCHAR(300) NULL,
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_WorkOrderLaborLogs PRIMARY KEY CLUSTERED (LaborLogID),
+            CONSTRAINT CK_WoLaborLogs_Time CHECK (EndTime IS NULL OR EndTime > StartTime)
+        ) WITH (DATA_COMPRESSION = PAGE);
+        CREATE NONCLUSTERED INDEX IX_WoLaborLogs_Op
+            ON dbo.WorkOrderLaborLogs (CompanyID, WoOperationID, LogDate) WHERE IsDeleted = 0;
+        CREATE NONCLUSTERED INDEX IX_WoLaborLogs_Emp
+            ON dbo.WorkOrderLaborLogs (CompanyID, EmployeeID, LogDate) WHERE IsDeleted = 0;
+    END
+
+    -- ==========================================================================
+    -- ==========================================================================
+    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'WorkOrderDowntimeLogs')
+    BEGIN
+        CREATE TABLE dbo.WorkOrderDowntimeLogs (
+            DowntimeLogID BIGINT IDENTITY(1,1) NOT NULL,
+            CompanyID UNIQUEIDENTIFIER NOT NULL,
+            WoOperationID BIGINT NOT NULL,
+            ReasonCategory NVARCHAR(15) NOT NULL,        -- BREAKDOWN | SETUP_WAIT | MATERIAL_WAIT | QUALITY_HOLD | NO_OPERATOR | POWER | OTHER
+            ReasonDetails NVARCHAR(300) NULL,
+            StartedAt DATETIME2(7) NOT NULL,
+            EndedAt DATETIME2(7) NULL,
+            DowntimeMinutes AS (CASE WHEN EndedAt IS NOT NULL
+                                     THEN DATEDIFF(MINUTE, StartedAt, EndedAt) END) PERSISTED,
+            IsPlanned BIT NOT NULL DEFAULT 0,
+            IsDeleted BIT NOT NULL DEFAULT 0,
+            DeletedAt DATETIME2(7) NULL,
+            DeletedBy UNIQUEIDENTIFIER NULL,
+            CreatedBy UNIQUEIDENTIFIER NOT NULL,
+            CreatedAt DATETIME2(7) NOT NULL DEFAULT SYSUTCDATETIME(),
+            UpdatedBy UNIQUEIDENTIFIER NULL,
+            UpdatedAt DATETIME2(7) NULL,
+            RowVersion ROWVERSION,
+            CONSTRAINT PK_WorkOrderDowntimeLogs PRIMARY KEY CLUSTERED (DowntimeLogID),
+            CONSTRAINT CK_WoDowntime_Category CHECK (ReasonCategory IN ('BREAKDOWN','SETUP_WAIT','MATERIAL_WAIT','QUALITY_HOLD','NO_OPERATOR','POWER','OTHER')),
+            CONSTRAINT CK_WoDowntime_Time CHECK (EndedAt IS NULL OR EndedAt > StartedAt)
+        ) WITH (DATA_COMPRESSION = PAGE);
+        CREATE NONCLUSTERED INDEX IX_WoDowntime_Op
+            ON dbo.WorkOrderDowntimeLogs (CompanyID, WoOperationID, ReasonCategory) WHERE IsDeleted = 0;
+    END
+
+    -- ==========================================================================
+    -- COMPLETION
+    -- ==========================================================================
+    COMMIT TRANSACTION;
+    PRINT N'═══════════════════════════════════════════════════════════════════════════';
+    PRINT N'✅ Work Order Execution Extensions deployed successfully.';
+    PRINT N'   - Operation tracking + labor logs + OEE downtime classification.';
+    PRINT N'═══════════════════════════════════════════════════════════════════════════';
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0
+        ROLLBACK TRANSACTION;
+    DECLARE @ErrorMessage NVARCHAR(4000) = ERROR_MESSAGE();
+    DECLARE @ErrorSeverity INT = ERROR_SEVERITY();
+    DECLARE @ErrorState INT = ERROR_STATE();
+    RAISERROR(@ErrorMessage, @ErrorSeverity, @ErrorState);
+END CATCH;
 GO
