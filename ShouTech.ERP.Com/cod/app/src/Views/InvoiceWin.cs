@@ -78,6 +78,14 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
     /// <summary>Phenix "original" - original invoice when opened from a linked document.</summary>
     private readonly Button _btnOriginal = new();
     private readonly Button _btnAttachments = new();
+    /// <summary>W23 approval workflow (migration 098): submit / approve /
+    /// reject for native sales invoices and quotations. The buttons act on
+    /// the stored approval_state through InvRepo; posting itself enforces
+    /// the company flag (SAL-7016) at the repository layer.</summary>
+    private readonly Button _btnSubmitApproval = new();
+    private readonly Button _btnApproveDoc = new();
+    private readonly Button _btnRejectDoc = new();
+    private string _approvalState = ShouTech.Domain.Entities.SalesApprovalState.NotRequired;
 
     // ---- Footer totals (Phenix-style three columns) ----
     private readonly TextBox _txtLinesTotal = new() { IsReadOnly = true };
@@ -396,6 +404,12 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         StyleButton(_btnAddLine, "Invoice.AddLine");
         StyleButton(_btnRemoveLine, "Invoice.RemoveLine");
         StyleButton(_btnFindMaterial, "Invoice.FindMaterial");
+        StyleButton(_btnSubmitApproval, "SalesDoc.SubmitApproval");
+        StyleButton(_btnApproveDoc, "SalesDoc.Approve");
+        StyleButton(_btnRejectDoc, "SalesDoc.Reject");
+        _btnSubmitApproval.Click += (_, _) => SubmitApproval();
+        _btnApproveDoc.Click += (_, _) => ApproveDocument();
+        _btnRejectDoc.Click += (_, _) => RejectDocument();
         _btnSave.Click += (_, _) => SaveDraft();
         _btnPost.Click += (_, _) => PostDoc();
         _btnPrint.Click += (_, _) => InvPrn.Print(CaptureDoc(), CurrentCompanyDisplay);
@@ -438,7 +452,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             }
         };
         _btnFindMaterial.Click += (_, _) => PickMaterial();
-        foreach (var b in new[] { _btnSave, _btnPost, _btnReverse, _btnPrint, _btnPdf, _btnAddLine, _btnRemoveLine, _btnFindMaterial })
+        foreach (var b in new[] { _btnSave, _btnPost, _btnReverse, _btnPrint, _btnPdf, _btnAddLine, _btnRemoveLine, _btnFindMaterial, _btnSubmitApproval, _btnApproveDoc, _btnRejectDoc })
             toolbar.Children.Add(b);
         // Explorer-style bottom command bar: flat, transparent, subtle 1px top divider.
         var actionBar = new Border
@@ -505,7 +519,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         StyleButton(_btnVoucher, "Invoice.Voucher");
         StyleButton(_btnOriginal, "Invoice.Original");
         StyleButton(_btnAttachments, "PurchaseAttachments.Open");
-        _btnAttachments.Visibility = _doc.Kind is InvDocKind.PurchaseInvoice or InvDocKind.PurchaseReturn ? Visibility.Visible : Visibility.Collapsed;
+        _btnAttachments.Visibility = _doc.Kind is InvDocKind.PurchaseInvoice or InvDocKind.PurchaseReturn or InvDocKind.SalesInvoice ? Visibility.Visible : Visibility.Collapsed;
         _btnAttachments.Click += async (_, _) => await OpenPurchaseAttachmentsAsync();
         _btnVoucher.Content = Tf("Invoice.Voucher", "Voucher");
         _btnOriginal.Content = Tf("Invoice.Original", "Original");
@@ -1066,7 +1080,111 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _btnPost.IsEnabled = !locked;
         _grid.IsReadOnly = locked;
         UpdateVoucherOriginalButtons();
+        RefreshApprovalButtons(doc);
         RefreshTotals();
+    }
+
+    /// <summary>
+    /// W23: approval buttons exist only for native sales invoices and
+    /// quotations; their enablement mirrors the stored approval_state and
+    /// the kind's APPROVE permission. The repository re-validates every
+    /// transition, so a stale enablement can never approve by itself.
+    /// </summary>
+    private void RefreshApprovalButtons(InvDoc doc)
+    {
+        var applies = doc.Kind is InvDocKind.SalesInvoice or InvDocKind.Quotation;
+        var visibility = applies ? Visibility.Visible : Visibility.Collapsed;
+        _btnSubmitApproval.Visibility = visibility;
+        _btnApproveDoc.Visibility = visibility;
+        _btnRejectDoc.Visibility = visibility;
+        if (!applies) return;
+        try
+        {
+            _approvalState = doc.DocId > 0
+                ? InvRepo.GetSalesApprovalState(doc.DocId)
+                : ShouTech.Domain.Entities.SalesApprovalState.NotRequired;
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "InvoiceWin.RefreshApprovalButtons");
+            _approvalState = ShouTech.Domain.Entities.SalesApprovalState.NotRequired;
+        }
+        var draft = doc.Status == InvDocStatus.Draft;
+        _btnSubmitApproval.IsEnabled = draft
+            && _approvalState is ShouTech.Domain.Entities.SalesApprovalState.NotRequired or ShouTech.Domain.Entities.SalesApprovalState.Rejected;
+        var canApprove = AppHost.Permissions.Has(doc.Kind == InvDocKind.Quotation
+            ? PermCat.Sales.QuotationApprove
+            : PermCat.Sales.InvoiceApprove);
+        _btnApproveDoc.IsEnabled = draft
+            && _approvalState == ShouTech.Domain.Entities.SalesApprovalState.Pending && canApprove;
+        _btnRejectDoc.IsEnabled = _btnApproveDoc.IsEnabled;
+    }
+
+    private void SubmitApproval()
+    {
+        if (_doc.DocId <= 0) { ShowWarn("OrderDoc.SaveFirst"); return; }
+        try
+        {
+            InvRepo.SubmitSalesForApproval(_doc.DocId, CurrentUserId);
+            RefreshApprovalButtons(_doc);
+            ShowInfo("SalesDoc.Submitted");
+        }
+        catch (AppError ex) { ShowCodedError(ex, "InvoiceWin.SubmitApproval"); }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "InvoiceWin.SubmitApproval");
+            MessageBox.Show(this, ex.Message, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void ApproveDocument()
+    {
+        if (_doc.DocId <= 0) { ShowWarn("OrderDoc.SaveFirst"); return; }
+        try
+        {
+            InvRepo.ApproveSalesDocument(_doc.DocId, CurrentUserId);
+            RefreshApprovalButtons(_doc);
+            ShowInfo("SalesDoc.Approved");
+        }
+        catch (AppError ex) { ShowCodedError(ex, "InvoiceWin.ApproveDocument"); }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "InvoiceWin.ApproveDocument");
+            MessageBox.Show(this, ex.Message, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void RejectDocument()
+    {
+        if (_doc.DocId <= 0) { ShowWarn("OrderDoc.SaveFirst"); return; }
+        var input = PromptDialog.Show(this, T("SalesDoc.RejectReason"), (T("SalesDoc.RejectReason"), string.Empty));
+        var reason = input is { Length: > 0 } ? input[0] : null;
+        if (string.IsNullOrWhiteSpace(reason)) { ShowWarn("SalesDoc.RejectReasonRequired"); return; }
+        try
+        {
+            InvRepo.RejectSalesDocument(_doc.DocId, CurrentUserId, reason);
+            RefreshApprovalButtons(_doc);
+            ShowInfo("SalesDoc.Rejected");
+        }
+        catch (AppError ex) { ShowCodedError(ex, "InvoiceWin.RejectDocument"); }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "InvoiceWin.RejectDocument");
+            MessageBox.Show(this, ex.Message, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>Coded business blocks get the localized catalog message
+    /// with its code (the PostDoc pattern).</summary>
+    private void ShowCodedError(AppError ex, string context)
+    {
+        AppHost.Errors.Report(ex.Code, ex, context);
+        var info = AppHost.Errors.Resolve(ex.Code, ex.Args.ToArray());
+        var body = info.Message;
+        if (!string.IsNullOrWhiteSpace(info.Hint))
+            body += $"{Environment.NewLine}{Environment.NewLine}{info.Hint}";
+        body += $"{Environment.NewLine}{Environment.NewLine}(Error {info.Code})";
+        MessageBox.Show(this, body, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
     }
 
     /// <summary>
@@ -1083,7 +1201,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
 
     private async Task OpenPurchaseAttachmentsAsync()
     {
-        if (_doc.Kind is not (InvDocKind.PurchaseInvoice or InvDocKind.PurchaseReturn) || LoadedDocumentId is not long documentId)
+        if (_doc.Kind is not (InvDocKind.PurchaseInvoice or InvDocKind.PurchaseReturn or InvDocKind.SalesInvoice) || LoadedDocumentId is not long documentId)
         {
             MessageBox.Show(this, T("OrderDoc.SaveFirst"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
@@ -1096,7 +1214,14 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         try
         {
             var companyId = await AppHost.JournalStore.ResolveCompanyIdAsync(CurrentCompanyCode);
-            new PurchaseAttachmentsWin(companyId, documentId, CurrentUserId) { Owner = this }.ShowDialog();
+            // W23: sales invoices use the generalized SALDOC owner on the
+            // same attachment store/window (migration 098); purchase kinds
+            // keep the legacy purchase-document path.
+            if (_doc.Kind == InvDocKind.SalesInvoice)
+                new PurchaseAttachmentsWin(companyId, ShouTech.Domain.Entities.AttachmentOwnerKind.SalesDocument,
+                    documentId.ToString(CultureInfo.InvariantCulture), CurrentUserId) { Owner = this }.ShowDialog();
+            else
+                new PurchaseAttachmentsWin(companyId, documentId, CurrentUserId) { Owner = this }.ShowDialog();
         }
         catch (Exception ex)
         {
@@ -1274,6 +1399,42 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         }
     }
 
+    /// <summary>Minimal modal prompt (the ChqListWin/OrdWin pattern), used
+    /// for the mandatory rejection reason.</summary>
+    private static class PromptDialog
+    {
+        public static string[]? Show(Window owner, string title, params (string Label, string Value)[] fields)
+        {
+            var dialog = new Window
+            {
+                Title = title,
+                Width = 420,
+                SizeToContent = SizeToContent.Height,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ResizeMode = ResizeMode.NoResize
+            };
+            var panel = new StackPanel { Margin = new Thickness(12) };
+            var boxes = new List<TextBox>();
+            foreach (var (label, value) in fields)
+            {
+                panel.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+                var box = new TextBox { Text = value, Margin = new Thickness(0, 0, 0, 10) };
+                boxes.Add(box);
+                panel.Children.Add(box);
+            }
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var ok = new Button { Content = T("Common.OK"), MinWidth = 84, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
+            var cancel = new Button { Content = T("Common.Cancel"), MinWidth = 84, IsCancel = true };
+            ok.Click += (_, _) => dialog.DialogResult = true;
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+            return dialog.ShowDialog() == true ? boxes.Select(b => b.Text.Trim()).ToArray() : null;
+        }
+    }
+
     private void PostDoc()
     {
         if (!EnsureSalesPermission("post", "PostDoc")) return;
@@ -1281,6 +1442,11 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         // create right is required for that path as well.
         if (_doc.DocId <= 0 && !EnsureSalesPermission("create", "PostDoc")) return;
         if (!AskConfirm("Invoice.ConfirmPost")) return;
+        TryPost(null);
+    }
+
+    private void TryPost(ShouTech.Domain.Entities.CreditOverrideContext? creditOverride)
+    {
         try
         {
             ResolveParty();
@@ -1296,7 +1462,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             // linked delivery's COGS, so do not ask for a second stock capture.
             var captures = deliveryLinked ? null : BatchSerialCaptureSvc.CaptureForPosting(doc, this);
             if (!deliveryLinked && captures is null) return;
-            InvRepo.Post(doc.DocId, doc.Kind, AppState.CurrentUser?.Username ?? Environment.UserName, captures);
+            InvRepo.Post(doc.DocId, doc.Kind, AppState.CurrentUser?.Username ?? Environment.UserName, captures, creditOverride: creditOverride);
             doc.Status = InvDocStatus.Posted;
             GenerateCommissionsFailSoft(doc.DocId, doc.Kind);
             // Reload so JournalDocNo assigned during post is visible to the voucher button.
@@ -1312,6 +1478,20 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             UpdateVoucherOriginalButtons();
             ShowInfo("Invoice.Posted");
             RefreshTotals();
+        }
+        catch (AppError ex) when (creditOverride is null
+            && ex.Code == ErrorCodes.CreditLimitExceeded
+            && _doc.Kind == InvDocKind.SalesInvoice
+            && AppHost.Permissions.Has(PermCat.Sales.CreditOverride))
+        {
+            // W23 carry-over (W1 wired this in OrdWin only): the posting
+            // user holds SALES.CREDIT.OVERRIDE — offer the audited override
+            // instead of a dead-end ACC-5006 block. PartyCreditGuard
+            // records actor + amounts in credit_overrides on the retry.
+            if (MessageBox.Show(this, $"{ex.Message}\n\n{T("OrderDoc.CreditOverrideConfirm")}", Title,
+                    MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                return;
+            TryPost(new ShouTech.Domain.Entities.CreditOverrideContext(CurrentUserId, null, null));
         }
         catch (AppError ex)
         {

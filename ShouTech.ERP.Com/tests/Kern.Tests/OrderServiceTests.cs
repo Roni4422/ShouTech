@@ -180,6 +180,79 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public async Task GeneralizedAttachments_ServeSalesDocumentsAndParties()
+        {
+            var (ordersService, _, companyId, connectionString, cleanup) = await CreateAsync();
+            var storageRoot = Path.Combine(Path.GetTempPath(), $"shoutech-attachments-{Guid.NewGuid():N}");
+            try
+            {
+                var salesOrderId = await ordersService.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.SalesOrder, "SO-ATT-01", 1m, 5m),
+                    "attachment-test");
+                var partyId = Guid.NewGuid();
+                await using (var connection = new SqliteConnection(connectionString))
+                {
+                    await connection.OpenAsync();
+                    await using var seed = connection.CreateCommand();
+                    seed.CommandText = "INSERT INTO parties (id, company_id, kind, code, name_en) VALUES ($id, 'ORDER-GL', 'C', 'CUST-ATT', 'Attachment Party')";
+                    seed.Parameters.AddWithValue("$id", partyId.ToString("D"));
+                    await seed.ExecuteNonQueryAsync();
+                }
+                var audit = new System.Collections.Generic.List<string>();
+                var service = new PurchaseDocumentAttachmentService(
+                    new PurchaseDocumentAttachmentRepository("SQLite", connectionString),
+                    ordersService,
+                    _ => true,
+                    (_, action, _) =>
+                    {
+                        audit.Add(action);
+                        return Task.CompletedTask;
+                    },
+                    storageRoot);
+                var payload = new byte[] { 0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34, 0x0A };
+
+                // Sales document owner (SALDOC).
+                await using (var source = new MemoryStream(payload))
+                {
+                    var uploaded = await service.UploadForOwnerAsync(
+                        companyId, AttachmentOwnerKind.SalesDocument,
+                        salesOrderId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        "signed-order.pdf", "application/pdf", source, "attachment-test");
+                    Assert.Equal(AttachmentOwnerKind.SalesDocument, uploaded.OwnerKind);
+                }
+                Assert.Single(await service.ListForOwnerAsync(
+                    companyId, AttachmentOwnerKind.SalesDocument,
+                    salesOrderId.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                // The legacy purchase listing must NOT see the sales owner's rows.
+                Assert.Empty(await service.ListAsync(companyId, salesOrderId));
+
+                // Party owner (PARTY).
+                await using (var source = new MemoryStream(payload))
+                {
+                    await service.UploadForOwnerAsync(
+                        companyId, AttachmentOwnerKind.Party, partyId.ToString("D"),
+                        "trade-license.pdf", "application/pdf", source, "attachment-test");
+                }
+                Assert.Single(await service.ListForOwnerAsync(
+                    companyId, AttachmentOwnerKind.Party, partyId.ToString("D")));
+
+                // Unknown party / wrong company are refused.
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    service.ListForOwnerAsync(companyId, AttachmentOwnerKind.Party, Guid.NewGuid().ToString("D")));
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    service.ListForOwnerAsync(Guid.NewGuid(), AttachmentOwnerKind.Party, partyId.ToString("D")));
+
+                Assert.Contains("SalesAttachment.Upload", audit);
+                Assert.Contains("PartyAttachment.Upload", audit);
+            }
+            finally
+            {
+                if (Directory.Exists(storageRoot)) Directory.Delete(storageRoot, recursive: true);
+                cleanup();
+            }
+        }
+
+        [Fact]
         public async Task SalesOrder_SaveReloadPost_PersistsSchedulingFields()
         {
             var (service, orders, companyId, _, cleanup) = await CreateAsync();

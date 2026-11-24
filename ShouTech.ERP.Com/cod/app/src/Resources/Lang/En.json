@@ -4134,5 +4134,18 @@
       "Entries": "Entries",
       "JournalRef": "Journal ref"
     }
+  },
+  "SalesDoc": {
+    "SubmitApproval": "Submit for Approval",
+    "Approve": "Approve",
+    "Reject": "Reject",
+    "RejectReason": "Rejection reason",
+    "RejectReasonRequired": "A rejection reason is required.",
+    "Submitted": "Submitted for approval.",
+    "Approved": "Document approved.",
+    "Rejected": "Document rejected.",
+    "DirectInvoice": "Direct Invoice",
+    "Revision": "Revision",
+    "ApprovalState": "Approval state"
   }
 }

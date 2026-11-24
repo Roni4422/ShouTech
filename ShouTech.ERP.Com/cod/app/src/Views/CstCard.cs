@@ -81,6 +81,9 @@ public sealed class CstCard : BaseWin
     private readonly Button _btnSave = new();
     private readonly Button _btnDelete = new();
     private readonly Button _btnStmt = new();
+    /// <summary>W23: party attachments on the generalized attachment store
+    /// (migration 098, PARTY owner) — same window/service as documents.</summary>
+    private readonly Button _btnAttachments = new();
 
     private readonly List<PartyGroup> _groups = new();
     private Guid? _loadedId;
@@ -167,6 +170,7 @@ public sealed class CstCard : BaseWin
         StyleButton(_btnDelete, "Common.Delete");
         StyleButton(_btnStmt, "CustCard.Statement");
         StyleButton(_btnOpening, "CustCard.OpeningBalance");
+        StyleButton(_btnAttachments, "PurchaseAttachments.Open");
 
         _btnLoad.Click += async (_, _) => await LoadParty(PartyKind, _txtCode.Text.Trim());
         _btnNew.Click += (_, _) => ResetCard();
@@ -174,8 +178,9 @@ public sealed class CstCard : BaseWin
         _btnDelete.Click += async (_, _) => await DeleteAsync();
         _btnStmt.Click += (_, _) => OpenStatement();
         _btnOpening.Click += async (_, _) => await PostOpeningBalanceAsync();
+        _btnAttachments.Click += async (_, _) => await OpenAttachmentsAsync();
 
-        foreach (var b in new[] { _btnLoad, _btnNew, _btnSave, _btnDelete, _btnStmt, _btnOpening })
+        foreach (var b in new[] { _btnLoad, _btnNew, _btnSave, _btnDelete, _btnStmt, _btnOpening, _btnAttachments })
             toolbar.Children.Add(b);
 
         var actionBar = new Border
@@ -570,6 +575,34 @@ public sealed class CstCard : BaseWin
         catch (Exception ex)
         {
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>W23: opens this party's attachments (PARTY owner) in the
+    /// shared attachment window; the party must be saved/loaded first so
+    /// the owner reference is a real party id.</summary>
+    private async Task OpenAttachmentsAsync()
+    {
+        if (_loadedId is not Guid partyId)
+        {
+            MessageBox.Show(this, T("OrderDoc.SaveFirst"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        if (AppHost.PurchaseAttachments is null || AppHost.JournalStore is null)
+        {
+            MessageBox.Show(this, T("PurchaseAttachments.MissingService"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        try
+        {
+            var companyId = await AppHost.JournalStore.ResolveCompanyIdAsync(CurrentCompanyCode);
+            new PurchaseAttachmentsWin(companyId, AttachmentOwnerKind.Party,
+                partyId.ToString("D"), CurrentUserId) { Owner = this }.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ShouTech.Domain.ErrorCodes.WindowOperationFailed, ex, "CstCard.OpenAttachments");
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 

@@ -4125,5 +4125,18 @@
       "Entries": "Écritures",
       "JournalRef": "Réf. journal"
     }
+  },
+  "SalesDoc": {
+    "SubmitApproval": "Soumettre pour approbation",
+    "Approve": "Approuver",
+    "Reject": "Rejeter",
+    "RejectReason": "Motif du rejet",
+    "RejectReasonRequired": "Un motif de rejet est requis.",
+    "Submitted": "Soumis pour approbation.",
+    "Approved": "Document approuvé.",
+    "Rejected": "Document rejeté.",
+    "DirectInvoice": "Facture directe",
+    "Revision": "Révision",
+    "ApprovalState": "État d'approbation"
   }
 }

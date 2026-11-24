@@ -63,6 +63,8 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         string? cancelledBy;
         string? cancelledAt;
         decimal deliveryCost;
+        int revisionNo;
+        string approvalState;
 
         await using (var header = connection.CreateCommand())
         {
@@ -71,7 +73,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                        currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total,
                        paid_amount, status, notes, party_code, branch_name, sales_rep_name, cost_center,
                        warehouse_name, delivery_date, valid_till, extra_amount, per_delivered, per_billed,
-                       cancel_reason, cancelled_by, cancelled_at, delivery_cost
+                       cancel_reason, cancelled_by, cancelled_at, delivery_cost, revision_no, approval_state
                 FROM sales_documents
                 WHERE doc_id = @docId AND is_deleted = 0
                 """;
@@ -112,6 +114,8 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             cancelledBy = reader.IsDBNull(28) ? null : reader.GetString(28);
             cancelledAt = reader.IsDBNull(29) ? null : Convert.ToString(reader.GetValue(29), CultureInfo.InvariantCulture);
             deliveryCost = Convert.ToDecimal(reader.GetValue(30), CultureInfo.InvariantCulture);
+            revisionNo = Convert.ToInt32(reader.GetValue(31), CultureInfo.InvariantCulture);
+            approvalState = reader.IsDBNull(32) ? SalesApprovalState.NotRequired : reader.GetString(32);
         }
 
         var lines = new List<CommercialLineSnapshot>();
@@ -151,7 +155,8 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             currencyCode, exchangeRate, subtotal, discountAmount, taxAmount, grandTotal,
             paidAmount, status, notes, lines.AsReadOnly(),
             partyCode, branchName, salesRepName, costCenter, warehouseName, deliveryDate, validTill,
-            extraAmount, perDelivered, perBilled, cancelReason, cancelledBy, cancelledAt, deliveryCost);
+            extraAmount, perDelivered, perBilled, cancelReason, cancelledBy, cancelledAt, deliveryCost,
+            revisionNo, approvalState);
     }
 
     public async Task<long> CreateSalesDraftAsync(CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default)
@@ -476,8 +481,9 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             decimal subtotal = 0m, taxAmount = 0m, exchangeRate = 1m;
             string? costCenter = null;
 
+            string approvalState = SalesApprovalState.NotRequired;
             await using (var header = CreateCommand(connection, transaction, """
-                SELECT company_id, doc_kind, doc_no, doc_date, party_id, warehouse_id, currency_code, grand_total, status, party_code, subtotal, tax_amount, cost_center, exchange_rate
+                SELECT company_id, doc_kind, doc_no, doc_date, party_id, warehouse_id, currency_code, grand_total, status, party_code, subtotal, tax_amount, cost_center, exchange_rate, approval_state
                 FROM sales_documents
                 WHERE doc_id = @doc AND is_deleted = 0
                 """))
@@ -487,6 +493,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                     throw new InvalidOperationException("Sales document was not found.");
                 companyId = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture)!;
+                approvalState = reader.IsDBNull(14) ? SalesApprovalState.NotRequired : reader.GetString(14);
                 docKind = reader.GetString(1);
                 docNo = reader.GetString(2);
                 docDate = Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture)!;
@@ -508,6 +515,16 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
 
             if (status != CommercialDocumentStatus.Draft)
                 throw new InvalidOperationException("Sales document was not found or is not in draft status.");
+
+            // Approval gate (W23, migration 098): only when the company
+            // policy requires approval (sau_sales_settings, default OFF)
+            // must a QUO/SO/SAL document be Approved before it posts.
+            if (docKind is CommercialDocKinds.SalesQuotation or CommercialDocKinds.SalesOrder or CommercialDocKinds.SalesInvoice
+                && approvalState != SalesApprovalState.Approved
+                && await IsApprovalRequiredInTransactionAsync(connection, transaction, companyId, cancellationToken).ConfigureAwait(false))
+                throw new AppError(ErrorCodes.ApprovalStateInvalid,
+                    $"Document '{docNo}' requires approval before posting; its approval state is '{approvalState}'.",
+                    docNo, approvalState);
 
             if (docKind == CommercialDocKinds.DeliveryNote)
             {
@@ -1747,6 +1764,487 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                 creditAccount = GlAccounts.StockDeliveredNotBilled;
         }
         return (totalCogs, creditAccount);
+    }
+
+    // ------------------------------------------------- lifecycle (W23, mig 098)
+
+    /// <summary>Company approval policy inside an open transaction: the
+    /// settings row is keyed by company CODE (067 pattern), resolved from
+    /// the document's Guid key. A missing row means approval is OFF.</summary>
+    private async Task<bool> IsApprovalRequiredInTransactionAsync(
+        DbConnection connection, DbTransaction transaction, string companyKey, CancellationToken cancellationToken)
+    {
+        var companyCode = await PartyLedger.ResolveCompanyCodeAsync(
+            connection, transaction, _provider, companyKey, cancellationToken).ConfigureAwait(false);
+        await using var command = CreateCommand(connection, transaction,
+            "SELECT require_approval FROM sau_sales_settings WHERE company_code = @code");
+        Add(command, "@code", companyCode);
+        var value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        if (value is null or DBNull) return false;
+        return value is bool flag ? flag : Convert.ToInt32(value, CultureInfo.InvariantCulture) != 0;
+    }
+
+    public async Task<bool> IsApprovalRequiredAsync(Guid companyId, CancellationToken cancellationToken = default)
+    {
+        if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var required = await IsApprovalRequiredInTransactionAsync(
+            connection, transaction, companyId.ToString("D"), cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return required;
+    }
+
+    public async Task SetApprovalRequiredAsync(Guid companyId, bool required, string userId, CancellationToken cancellationToken = default)
+    {
+        if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
+        if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var companyCode = await PartyLedger.ResolveCompanyCodeAsync(
+                connection, transaction, _provider, companyId.ToString("D"), cancellationToken).ConfigureAwait(false);
+            var now = _provider == "PostgreSQL" ? "now()" : "datetime('now')";
+            await using var command = CreateCommand(connection, transaction, $"""
+                INSERT INTO sau_sales_settings (company_code, require_approval, updated_by, updated_at)
+                VALUES (@code, @required, @actor, {now})
+                ON CONFLICT (company_code) DO UPDATE
+                SET require_approval = EXCLUDED.require_approval, updated_by = EXCLUDED.updated_by, updated_at = EXCLUDED.updated_at
+                """);
+            Add(command, "@code", companyCode);
+            Add(command, "@required", _provider == "PostgreSQL" ? (object)required : required ? 1 : 0);
+            Add(command, "@actor", userId.Trim());
+            await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            try { await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false); }
+            catch (InvalidOperationException) { /* already completed; keep root error */ }
+            throw;
+        }
+    }
+
+    private async Task InsertApprovalHistoryAsync(
+        DbConnection connection, DbTransaction transaction, string companyId, long docId, string docKind,
+        string action, string fromState, string toState, string actor, string? reason,
+        CancellationToken cancellationToken)
+    {
+        await using var command = CreateCommand(connection, transaction, """
+            INSERT INTO sau_approval_history
+                (history_id, company_id, doc_id, doc_kind, action, from_state, to_state, actor, reason)
+            VALUES (@id, @company, @doc, @kind, @action, @from, @to, @actor, @reason)
+            """);
+        Add(command, "@id", Guid.NewGuid().ToString("D"));
+        Add(command, "@company", companyId);
+        Add(command, "@doc", docId);
+        Add(command, "@kind", docKind);
+        Add(command, "@action", action);
+        Add(command, "@from", fromState);
+        Add(command, "@to", toState);
+        Add(command, "@actor", actor);
+        Add(command, "@reason", (object?)reason ?? DBNull.Value);
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Shared guarded approval transition: loads the document,
+    /// validates kind/status/current state, updates approval_state with a
+    /// state-guarded UPDATE and records the history row — atomically.</summary>
+    private async Task TransitionApprovalAsync(
+        long docId, string userId, IReadOnlySet<string> allowedFrom, string toState,
+        string action, string? reason, CancellationToken cancellationToken)
+    {
+        if (docId <= 0) throw new ArgumentException("Document is required.", nameof(docId));
+        if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            string companyId, docKind, docNo, status, approvalState;
+            await using (var header = CreateCommand(connection, transaction, """
+                SELECT company_id, doc_kind, doc_no, status, approval_state
+                FROM sales_documents WHERE doc_id = @doc AND is_deleted = 0
+                """))
+            {
+                Add(header, "@doc", docId);
+                await using var reader = await header.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    throw new AppError(ErrorCodes.ApprovalStateInvalid,
+                        $"Document '{docId}' was not found and cannot change approval state.",
+                        docId.ToString(CultureInfo.InvariantCulture), string.Empty);
+                companyId = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture)!;
+                docKind = reader.GetString(1);
+                docNo = reader.GetString(2);
+                status = reader.GetString(3);
+                approvalState = reader.IsDBNull(4) ? SalesApprovalState.NotRequired : reader.GetString(4);
+            }
+
+            if (docKind is not (CommercialDocKinds.SalesQuotation or CommercialDocKinds.SalesOrder or CommercialDocKinds.SalesInvoice)
+                || status != CommercialDocumentStatus.Draft
+                || !allowedFrom.Contains(approvalState))
+                throw new AppError(ErrorCodes.ApprovalStateInvalid,
+                    $"Document '{docNo}' in status '{status}' with approval state '{approvalState}' cannot perform '{action}'.",
+                    docNo, approvalState);
+
+            await using (var update = CreateCommand(connection, transaction,
+                "UPDATE sales_documents SET approval_state = @to WHERE doc_id = @doc AND approval_state = @from AND status = @draft AND is_deleted = 0"))
+            {
+                Add(update, "@to", toState);
+                Add(update, "@doc", docId);
+                Add(update, "@from", approvalState);
+                Add(update, "@draft", CommercialDocumentStatus.Draft);
+                if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+                    throw new AppError(ErrorCodes.ApprovalStateInvalid,
+                        $"Document '{docNo}' changed approval state concurrently; '{action}' was not applied.",
+                        docNo, approvalState);
+            }
+
+            await InsertApprovalHistoryAsync(connection, transaction, companyId, docId, docKind,
+                action, approvalState, toState, userId.Trim(), reason, cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            try { await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false); }
+            catch (InvalidOperationException) { /* already completed; keep root error */ }
+            throw;
+        }
+    }
+
+    public Task SubmitForApprovalAsync(long docId, string userId, CancellationToken cancellationToken = default) =>
+        TransitionApprovalAsync(docId, userId,
+            new HashSet<string> { SalesApprovalState.NotRequired, SalesApprovalState.Rejected },
+            SalesApprovalState.Pending, SalesApprovalAction.Submitted, null, cancellationToken);
+
+    public Task ApproveDocumentAsync(long docId, string userId, CancellationToken cancellationToken = default) =>
+        TransitionApprovalAsync(docId, userId,
+            new HashSet<string> { SalesApprovalState.Pending },
+            SalesApprovalState.Approved, SalesApprovalAction.Approved, null, cancellationToken);
+
+    public Task RejectDocumentAsync(long docId, string userId, string reason, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(reason)) throw new ArgumentException("A rejection reason is required.", nameof(reason));
+        reason = reason.Trim();
+        if (reason.Length > 1000) throw new ArgumentException("The rejection reason cannot exceed 1000 characters.", nameof(reason));
+        return TransitionApprovalAsync(docId, userId,
+            new HashSet<string> { SalesApprovalState.Pending },
+            SalesApprovalState.Rejected, SalesApprovalAction.Rejected, reason, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ApprovalHistoryEntry>> GetApprovalHistoryAsync(long docId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var rows = new List<ApprovalHistoryEntry>();
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT history_id, company_id, doc_id, doc_kind, action, from_state, to_state, actor, reason, created_at
+            FROM sau_approval_history WHERE doc_id = @doc ORDER BY created_at, history_id
+            """;
+        Add(command, "@doc", docId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            rows.Add(new ApprovalHistoryEntry(
+                Guid.Parse(Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture)!),
+                Guid.Parse(Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture)!),
+                Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture),
+                reader.GetString(3), reader.GetString(4), reader.GetString(5), reader.GetString(6),
+                reader.GetString(7),
+                reader.IsDBNull(8) ? null : reader.GetString(8),
+                Convert.ToString(reader.GetValue(9), CultureInfo.InvariantCulture)!));
+        }
+        return rows;
+    }
+
+    public async Task<IReadOnlyList<DocumentRevisionSnapshot>> GetRevisionsAsync(long docId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var rows = new List<DocumentRevisionSnapshot>();
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT revision_id, company_id, doc_id, doc_kind, revision_no, snapshot_json, change_reason, created_by, created_at
+            FROM sau_document_revisions WHERE doc_id = @doc ORDER BY revision_no
+            """;
+        Add(command, "@doc", docId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            rows.Add(new DocumentRevisionSnapshot(
+                Guid.Parse(Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture)!),
+                Guid.Parse(Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture)!),
+                Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture),
+                reader.GetString(3),
+                Convert.ToInt32(reader.GetValue(4), CultureInfo.InvariantCulture),
+                reader.GetString(5),
+                reader.IsDBNull(6) ? null : reader.GetString(6),
+                reader.GetString(7),
+                Convert.ToString(reader.GetValue(8), CultureInfo.InvariantCulture)!));
+        }
+        return rows;
+    }
+
+    /// <summary>Generic row-to-dictionary read used for revision snapshots:
+    /// the snapshot must preserve EVERY stored column of the superseded
+    /// version, including columns added by later migrations.</summary>
+    private static async Task<Dictionary<string, object?>> ReadRowAsDictionaryAsync(DbDataReader reader, CancellationToken cancellationToken)
+    {
+        var row = new Dictionary<string, object?>(StringComparer.Ordinal);
+        for (var i = 0; i < reader.FieldCount; i++)
+        {
+            var value = await reader.IsDBNullAsync(i, cancellationToken).ConfigureAwait(false) ? null : reader.GetValue(i);
+            row[reader.GetName(i)] = value switch
+            {
+                null => null,
+                DateTime moment => moment.ToString("o", CultureInfo.InvariantCulture),
+                byte[] bytes => Convert.ToBase64String(bytes),
+                _ => value
+            };
+        }
+        return row;
+    }
+
+    public async Task<int> AmendSalesDocumentAsync(
+        long docId, CommercialDocumentDraft amended, int expectedRevision, string userId,
+        string? reason = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(amended);
+        if (docId <= 0) throw new ArgumentException("Document is required.", nameof(docId));
+        if (expectedRevision <= 0) throw new ArgumentException("The expected revision must be positive.", nameof(expectedRevision));
+        if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
+        if (amended.Lines.Count == 0) throw new InvalidOperationException("A commercial document requires at least one line.");
+        if (reason is not null && reason.Length > 1000) throw new ArgumentException("The amendment reason cannot exceed 1000 characters.", nameof(reason));
+
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            // ---- Load the current version (header + lines) for the snapshot.
+            Dictionary<string, object?> headerRow;
+            string companyId, docKind, docNo, status, approvalState;
+            int currentRevision;
+            await using (var header = CreateCommand(connection, transaction,
+                "SELECT * FROM sales_documents WHERE doc_id = @doc AND is_deleted = 0"))
+            {
+                Add(header, "@doc", docId);
+                await using var reader = await header.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    throw new AppError(ErrorCodes.ApprovalStateInvalid,
+                        $"Document '{docId}' was not found and cannot be amended.",
+                        docId.ToString(CultureInfo.InvariantCulture), string.Empty);
+                headerRow = await ReadRowAsDictionaryAsync(reader, cancellationToken).ConfigureAwait(false);
+            }
+            companyId = Convert.ToString(headerRow["company_id"], CultureInfo.InvariantCulture)!;
+            docKind = Convert.ToString(headerRow["doc_kind"], CultureInfo.InvariantCulture)!;
+            docNo = Convert.ToString(headerRow["doc_no"], CultureInfo.InvariantCulture)!;
+            status = Convert.ToString(headerRow["status"], CultureInfo.InvariantCulture)!;
+            approvalState = headerRow["approval_state"] as string ?? SalesApprovalState.NotRequired;
+            currentRevision = Convert.ToInt32(headerRow["revision_no"], CultureInfo.InvariantCulture);
+
+            var lineRows = new List<Dictionary<string, object?>>();
+            await using (var lines = CreateCommand(connection, transaction,
+                "SELECT * FROM sales_document_lines WHERE doc_id = @doc ORDER BY line_no"))
+            {
+                Add(lines, "@doc", docId);
+                await using var reader = await lines.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    lineRows.Add(await ReadRowAsDictionaryAsync(reader, cancellationToken).ConfigureAwait(false));
+            }
+
+            // ---- Guards.
+            if (docKind is not (CommercialDocKinds.SalesQuotation or CommercialDocKinds.SalesOrder))
+                throw new AppError(ErrorCodes.ApprovalStateInvalid,
+                    $"Only quotations and sales orders can be amended by revision; document '{docNo}' is a '{docKind}'.",
+                    docNo, approvalState);
+            if (!string.Equals(amended.DocKind, docKind, StringComparison.Ordinal)
+                || amended.CompanyId != Guid.Parse(companyId))
+                throw new InvalidOperationException("An amendment must keep the document kind and company of the original.");
+            if (currentRevision != expectedRevision)
+                throw new AppError(ErrorCodes.DocumentRevisionConflict,
+                    $"Document '{docNo}' is at revision {currentRevision}; the amendment was based on revision {expectedRevision}. Reload before amending.",
+                    docNo, currentRevision.ToString(CultureInfo.InvariantCulture));
+            if (status == CommercialDocumentStatus.Posted)
+            {
+                // Item 3: a posted order may be amended only when nothing
+                // posted hangs below it and no journal entry exists (orders
+                // normally post no journal; if one does, the documented
+                // reversal machinery — not an amendment — owns it).
+                long postedDownstream;
+                await using (var downstream = CreateCommand(connection, transaction, """
+                    SELECT COUNT(*) FROM document_links l
+                    JOIN sales_documents t ON t.doc_id = l.target_doc_id
+                    WHERE l.company_id = @company AND l.source_doc_id = @doc
+                      AND t.status = @posted AND t.is_deleted = 0
+                    """))
+                {
+                    Add(downstream, "@company", companyId);
+                    Add(downstream, "@doc", docId);
+                    Add(downstream, "@posted", CommercialDocumentStatus.Posted);
+                    postedDownstream = Convert.ToInt64(await downstream.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+                }
+                if (postedDownstream > 0)
+                    throw new AppError(ErrorCodes.ApprovalStateInvalid,
+                        $"Posted document '{docNo}' has posted downstream documents and cannot be amended.",
+                        docNo, approvalState);
+
+                long journalCount;
+                await using (var journal = CreateCommand(connection, transaction,
+                    "SELECT COUNT(*) FROM journal_entries WHERE company_id = @company AND source_doc_type = @type AND source_doc_id = @source AND reversal_of_entry_id IS NULL AND status IN (0, 1)"))
+                {
+                    Add(journal, "@company", GlPosting.FormatGuid(_provider, Guid.Parse(companyId)));
+                    Add(journal, "@type", docKind);
+                    Add(journal, "@source", docId.ToString(CultureInfo.InvariantCulture));
+                    journalCount = Convert.ToInt64(await journal.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+                }
+                if (journalCount > 0)
+                    throw new AppError(ErrorCodes.ApprovalStateInvalid,
+                        $"Posted document '{docNo}' has a journal entry and cannot be amended; reverse it instead.",
+                        docNo, approvalState);
+            }
+            else if (status != CommercialDocumentStatus.Draft)
+            {
+                throw new AppError(ErrorCodes.ApprovalStateInvalid,
+                    $"Document '{docNo}' in status '{status}' cannot be amended.",
+                    docNo, approvalState);
+            }
+
+            // ---- Preserve the superseded version in full.
+            var snapshotJson = System.Text.Json.JsonSerializer.Serialize(new { header = headerRow, lines = lineRows });
+            await using (var revision = CreateCommand(connection, transaction, """
+                INSERT INTO sau_document_revisions
+                    (revision_id, company_id, doc_id, doc_kind, revision_no, snapshot_json, change_reason, created_by)
+                VALUES (@id, @company, @doc, @kind, @revision, @snapshot, @reason, @actor)
+                """))
+            {
+                Add(revision, "@id", Guid.NewGuid().ToString("D"));
+                Add(revision, "@company", companyId);
+                Add(revision, "@doc", docId);
+                Add(revision, "@kind", docKind);
+                Add(revision, "@revision", currentRevision);
+                Add(revision, "@snapshot", snapshotJson);
+                Add(revision, "@reason", (object?)reason?.Trim() ?? DBNull.Value);
+                Add(revision, "@actor", userId.Trim());
+                await revision.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            // ---- Rewrite header + lines from the amendment (totals follow
+            // the same stored-total rule as draft creation).
+            if (amended.DiscountAmount < 0m) throw new InvalidOperationException("Header discount cannot be negative.");
+            if (amended.ExtraAmount < 0m) throw new InvalidOperationException("Header extra charges cannot be negative.");
+            decimal subtotal = 0m, taxAmount = 0m;
+            var computed = new List<(decimal Subtotal, decimal Tax, decimal Total)>();
+            foreach (var line in amended.Lines)
+            {
+                if (line.Qty <= 0m) throw new InvalidOperationException("Document line quantities must be greater than zero.");
+                var lineSubtotal = decimal.Round(line.Qty * line.UnitPrice * (1m - line.DiscountPct / 100m), 2);
+                var lineTax = decimal.Round(lineSubtotal * line.TaxRate / 100m, 2);
+                computed.Add((lineSubtotal, lineTax, lineSubtotal + lineTax));
+                subtotal += lineSubtotal;
+                taxAmount += lineTax;
+            }
+            var grandTotal = decimal.Round(subtotal - amended.DiscountAmount + taxAmount + amended.ExtraAmount, 2);
+            var newRevision = currentRevision + 1;
+
+            await using (var update = CreateCommand(connection, transaction, """
+                UPDATE sales_documents SET
+                    doc_date = @date, party_id = @party, party_name = @partyName, warehouse_id = @warehouse,
+                    currency_code = @currency, exchange_rate = @rate, subtotal = @subtotal,
+                    discount_amount = @discount, tax_amount = @tax, grand_total = @total,
+                    status = @draft, notes = @notes, party_code = @partyCode,
+                    delivery_date = @deliveryDate, valid_till = @validTill, cost_center = @costCenter,
+                    branch_name = @branchName, sales_rep_name = @salesRepName, warehouse_name = @warehouseName,
+                    extra_amount = @extra, delivery_cost = @deliveryCost,
+                    posted_by = NULL, posted_at = NULL,
+                    revision_no = @newRevision, approval_state = @notRequired
+                WHERE doc_id = @doc AND revision_no = @expected AND is_deleted = 0
+                """))
+            {
+                Add(update, "@date", amended.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                Add(update, "@party", (object?)amended.PartyId ?? DBNull.Value);
+                Add(update, "@partyName", (object?)amended.PartyName ?? DBNull.Value);
+                Add(update, "@warehouse", (object?)amended.WarehouseId ?? DBNull.Value);
+                Add(update, "@currency", string.IsNullOrWhiteSpace(amended.CurrencyCode) ? "SAR" : amended.CurrencyCode.Trim());
+                Add(update, "@rate", amended.ExchangeRate < 0m ? 0m : amended.ExchangeRate);
+                Add(update, "@subtotal", decimal.Round(subtotal, 2));
+                Add(update, "@discount", amended.DiscountAmount);
+                Add(update, "@tax", decimal.Round(taxAmount, 2));
+                Add(update, "@total", grandTotal);
+                Add(update, "@draft", CommercialDocumentStatus.Draft);
+                Add(update, "@notes", (object?)amended.Notes ?? DBNull.Value);
+                Add(update, "@partyCode", (object?)amended.PartyCode ?? DBNull.Value);
+                Add(update, "@deliveryDate", (object?)amended.DeliveryDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? DBNull.Value);
+                Add(update, "@validTill", (object?)amended.ValidTill?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? DBNull.Value);
+                Add(update, "@costCenter", (object?)amended.CostCenter ?? DBNull.Value);
+                Add(update, "@branchName", (object?)amended.BranchName ?? DBNull.Value);
+                Add(update, "@salesRepName", (object?)amended.SalesRepName ?? DBNull.Value);
+                Add(update, "@warehouseName", (object?)amended.WarehouseName ?? DBNull.Value);
+                Add(update, "@extra", amended.ExtraAmount);
+                Add(update, "@deliveryCost", amended.DeliveryCost);
+                Add(update, "@newRevision", newRevision);
+                Add(update, "@notRequired", SalesApprovalState.NotRequired);
+                Add(update, "@doc", docId);
+                Add(update, "@expected", expectedRevision);
+                if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+                    throw new AppError(ErrorCodes.DocumentRevisionConflict,
+                        $"Document '{docNo}' changed while it was being amended; the amendment was not saved.",
+                        docNo, currentRevision.ToString(CultureInfo.InvariantCulture));
+            }
+
+            await using (var deleteLines = CreateCommand(connection, transaction,
+                "DELETE FROM sales_document_lines WHERE doc_id = @doc"))
+            {
+                Add(deleteLines, "@doc", docId);
+                await deleteLines.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            var lineNumber = 0;
+            var usedLineNumbers = new HashSet<int>();
+            for (var index = 0; index < amended.Lines.Count; index++)
+            {
+                var line = amended.Lines[index];
+                var totals = computed[index];
+                lineNumber++;
+                var persistedLineNumber = line.SourceLineNo ?? lineNumber;
+                if (persistedLineNumber <= 0 || !usedLineNumbers.Add(persistedLineNumber))
+                    throw new InvalidOperationException("Document line numbers must be positive and unique within a document.");
+                await using var insertLine = CreateCommand(connection, transaction,
+                    "INSERT INTO sales_document_lines (doc_id, line_no, material_id, material_code, description, unit, qty, unit_price, discount_pct, tax_rate, line_subtotal, line_tax, line_total, warehouse_id) " +
+                    "VALUES (@doc, @line, @material, @materialCode, @description, @unit, @qty, @price, @discount, @taxRate, @subtotal, @tax, @total, @warehouse)");
+                Add(insertLine, "@doc", docId);
+                Add(insertLine, "@line", persistedLineNumber);
+                Add(insertLine, "@material", (object?)line.MaterialId ?? DBNull.Value);
+                Add(insertLine, "@materialCode", (object?)line.MaterialCode ?? DBNull.Value);
+                Add(insertLine, "@description", string.IsNullOrWhiteSpace(line.Description) ? line.MaterialCode ?? "Item" : line.Description.Trim());
+                Add(insertLine, "@unit", (object?)line.Unit ?? DBNull.Value);
+                Add(insertLine, "@qty", line.Qty);
+                Add(insertLine, "@price", line.UnitPrice);
+                Add(insertLine, "@discount", line.DiscountPct);
+                Add(insertLine, "@taxRate", line.TaxRate);
+                Add(insertLine, "@subtotal", totals.Subtotal);
+                Add(insertLine, "@tax", totals.Tax);
+                Add(insertLine, "@total", totals.Total);
+                Add(insertLine, "@warehouse", (object?)line.WarehouseId ?? DBNull.Value);
+                await insertLine.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            await InsertApprovalHistoryAsync(connection, transaction, companyId, docId, docKind,
+                SalesApprovalAction.Amended, approvalState, SalesApprovalState.NotRequired,
+                userId.Trim(), reason, cancellationToken).ConfigureAwait(false);
+
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return newRevision;
+        }
+        catch
+        {
+            try { await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false); }
+            catch (InvalidOperationException) { /* already completed; keep root error */ }
+            throw;
+        }
     }
 
     private static DbCommand CreateCommand(DbConnection connection, DbTransaction transaction, string sql)

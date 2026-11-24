@@ -11,22 +11,39 @@ using ShouTech.Domain.Entities;
 
 namespace ShouTech.App.Views;
 
-/// <summary>Company-scoped attachment browser for purchase documents.</summary>
+/// <summary>
+/// Company-scoped attachment browser. Born for purchase documents (086);
+/// migration 098 generalized the store, so the same window serves sales
+/// documents and parties through the owner discriminator — the second
+/// constructor takes the owner kind/ref, the first keeps the legacy
+/// purchase-document behavior.
+/// </summary>
 public sealed class PurchaseAttachmentsWin : BaseWin
 {
     private readonly Guid _companyId;
     private readonly long _documentId;
+    private readonly string _ownerKind;
+    private readonly string _ownerRef;
     private readonly string _actor;
     private readonly DataGrid _grid=new();
     private readonly ObservableCollection<AttachmentRow> _rows=new();
     private readonly Button _upload=new(),_open=new(),_delete=new(),_refresh=new(),_close=new();
 
     public PurchaseAttachmentsWin(Guid companyId,long documentId,string actor)
+        : this(companyId,ShouTech.Domain.Entities.AttachmentOwnerKind.PurchaseDocument,
+              documentId.ToString(System.Globalization.CultureInfo.InvariantCulture),actor)
     {
-        _companyId=companyId;_documentId=documentId;_actor=actor;
+    }
+
+    public PurchaseAttachmentsWin(Guid companyId,string ownerKind,string ownerRef,string actor)
+    {
+        _companyId=companyId;_ownerKind=ownerKind;_ownerRef=ownerRef;_actor=actor;
+        _documentId=long.TryParse(ownerRef,System.Globalization.NumberStyles.Integer,System.Globalization.CultureInfo.InvariantCulture,out var parsed)?parsed:0;
         Title=T("PurchaseAttachments.Title");Width=850;Height=520;MinWidth=650;MinHeight=380;
         BuildUi();Loaded+=async(_,_)=>await RefreshAsync();
     }
+
+    private bool IsPurchase => _ownerKind==ShouTech.Domain.Entities.AttachmentOwnerKind.PurchaseDocument;
     private void BuildUi()
     {
         var root=new DockPanel{Margin=new Thickness(12)};
@@ -41,7 +58,7 @@ public sealed class PurchaseAttachmentsWin : BaseWin
         _grid.Columns.Add(new DataGridTextColumn{Header=T("PurchaseAttachments.UploadedBy"),Binding=new Binding(nameof(AttachmentRow.UploadedBy)),Width=130});
         _grid.Columns.Add(new DataGridTextColumn{Header=T("PurchaseAttachments.UploadedAt"),Binding=new Binding(nameof(AttachmentRow.UploadedAt)),Width=170});
         root.Children.Add(_grid);Content=root;
-        _upload.IsEnabled=AppHost.Permissions.Has("PUR.ATTACH.UPLOAD");_delete.IsEnabled=AppHost.Permissions.Has("PUR.ATTACH.DELETE");
+        _upload.IsEnabled=AppHost.Permissions.Has(IsPurchase?"PUR.ATTACH.UPLOAD":"SALES.ATTACH.UPLOAD");_delete.IsEnabled=AppHost.Permissions.Has(IsPurchase?"PUR.ATTACH.DELETE":"SALES.ATTACH.DELETE");
         ApplyLocalizedText();
     }
     private static void StyleButton(Button button,string key){button.Tag=key;button.Content=T(key);button.MinWidth=78;button.Margin=new Thickness(4,0,0,0);button.Padding=new Thickness(8,4,8,4);}
@@ -66,7 +83,7 @@ public sealed class PurchaseAttachmentsWin : BaseWin
     private async Task RefreshAsync()
     {
         var service=AppHost.PurchaseAttachments;if(service is null){MessageBox.Show(this,T("PurchaseAttachments.MissingService"),Title);return;}
-        try{_rows.Clear();foreach(var a in await service.ListAsync(_companyId,_documentId)){_rows.Add(new(a.Id,a.OriginalName,$"{a.ByteLength/1024d:N1} KB",a.UploadedBy,a.UploadedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)));}}
+        try{_rows.Clear();var items=IsPurchase?await service.ListAsync(_companyId,_documentId):await service.ListForOwnerAsync(_companyId,_ownerKind,_ownerRef);foreach(var a in items){_rows.Add(new(a.Id,a.OriginalName,$"{a.ByteLength/1024d:N1} KB",a.UploadedBy,a.UploadedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)));}}
         catch(Exception ex){MessageBox.Show(this,ex.Message,Title,MessageBoxButton.OK,MessageBoxImage.Warning);}
     }
     private async Task UploadAsync()
@@ -74,7 +91,7 @@ public sealed class PurchaseAttachmentsWin : BaseWin
         var service=AppHost.PurchaseAttachments;if(service is null)return;
         var dlg=new OpenFileDialog{Title=T("PurchaseAttachments.Upload"),Filter=T("PurchaseAttachments.UploadFilter")+"|*.pdf;*.png;*.jpg;*.jpeg;*.xlsx;*.docx;*.csv|All files|*.*",Multiselect=false};
         if(dlg.ShowDialog(this)!=true)return;
-        try{await using var stream=File.OpenRead(dlg.FileName);await service.UploadAsync(_companyId,_documentId,Path.GetFileName(dlg.FileName),"application/octet-stream",stream,_actor);await RefreshAsync();}
+        try{await using var stream=File.OpenRead(dlg.FileName);if(IsPurchase)await service.UploadAsync(_companyId,_documentId,Path.GetFileName(dlg.FileName),"application/octet-stream",stream,_actor);else await service.UploadForOwnerAsync(_companyId,_ownerKind,_ownerRef,Path.GetFileName(dlg.FileName),"application/octet-stream",stream,_actor);await RefreshAsync();}
         catch(Exception ex){MessageBox.Show(this,ex.Message,Title,MessageBoxButton.OK,MessageBoxImage.Warning);}
     }
     private async Task OpenAsync()

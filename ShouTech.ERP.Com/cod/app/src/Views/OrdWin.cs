@@ -64,6 +64,13 @@ public sealed class OrdWin : BaseWin, IWindowMode
     private readonly Button _btnConvert = new();
     private readonly Button _btnReceipt = new();
     private readonly Button _btnAttachments = new();
+    /// <summary>W23 approval workflow (migration 098) for sales orders:
+    /// submit / approve / reject through OrderService; posting enforces
+    /// the company approval flag in the repository (SAL-7016).</summary>
+    private readonly Button _btnSubmitApproval = new();
+    private readonly Button _btnApproveDoc = new();
+    private readonly Button _btnRejectDoc = new();
+    private string _approvalState = SalesApprovalState.NotRequired;
     private readonly Button _btnRequisitions = new();
     private readonly Button _btnClose = new();
     private readonly Button _btnCancel = new();
@@ -158,7 +165,17 @@ public sealed class OrdWin : BaseWin, IWindowMode
         StyleButton(_btnAttachments, "PurchaseAttachments.Open");
         StyleButton(_btnRequisitions, "PurchaseRequisition.Open");
         _btnRequisitions.Visibility = _kind == OrdKind.Purchase ? Visibility.Visible : Visibility.Collapsed;
-        _btnAttachments.Visibility = _kind == OrdKind.Purchase ? Visibility.Visible : Visibility.Collapsed;
+        // W23: attachments generalized (migration 098) — sales orders use
+        // the SALDOC owner on the same store; the button now serves both.
+        StyleButton(_btnSubmitApproval, "SalesDoc.SubmitApproval");
+        StyleButton(_btnApproveDoc, "SalesDoc.Approve");
+        StyleButton(_btnRejectDoc, "SalesDoc.Reject");
+        _btnSubmitApproval.Visibility = _kind == OrdKind.Sales ? Visibility.Visible : Visibility.Collapsed;
+        _btnApproveDoc.Visibility = _kind == OrdKind.Sales ? Visibility.Visible : Visibility.Collapsed;
+        _btnRejectDoc.Visibility = _kind == OrdKind.Sales ? Visibility.Visible : Visibility.Collapsed;
+        _btnSubmitApproval.Click += async (_, _) => await SubmitApprovalAsync();
+        _btnApproveDoc.Click += async (_, _) => await ApproveDocumentAsync();
+        _btnRejectDoc.Click += async (_, _) => await RejectDocumentAsync();
         _btnReceipt.Visibility = _kind == OrdKind.Purchase ? Visibility.Visible : Visibility.Collapsed;
         _btnConvert.Visibility = IsRfq ? Visibility.Collapsed : Visibility.Visible;
         StyleButton(_btnClose, "OrderDoc.CloseOrder");
@@ -229,7 +246,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             }
         };
 
-        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnConvert, _btnReceipt, _btnAttachments, _btnRequisitions, _btnAddSupplierQuote, _btnCompareQuotes, _btnClose, _btnCancel, _btnAddLine, _btnRemLine, _btnPrint })
+        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnConvert, _btnReceipt, _btnAttachments, _btnSubmitApproval, _btnApproveDoc, _btnRejectDoc, _btnRequisitions, _btnAddSupplierQuote, _btnCompareQuotes, _btnClose, _btnCancel, _btnAddLine, _btnRemLine, _btnPrint })
             toolbar.Children.Add(b);
 
         var actionBar = new Border
@@ -441,6 +458,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             _docId = doc.DocId;
             _partyId = doc.PartyId;
             _status = doc.Status;
+            _approvalState = doc.ApprovalState;
             _cancelReason = doc.CancelReason;
             _txtDocNo.Text = doc.DocNo;
             _dtDate.SelectedDate = doc.DocDate.ToDateTime(TimeOnly.MinValue);
@@ -713,15 +731,93 @@ public sealed class OrdWin : BaseWin, IWindowMode
 
     private void OpenAttachments()
     {
-        if (_kind != OrdKind.Purchase || _docId is null || _companyId == Guid.Empty)
+        if (_docId is null || _companyId == Guid.Empty)
         {
             ShowWarningMessage(T("OrderDoc.SaveFirst"));
+            return;
+        }
+        // W23: purchase orders keep the legacy owner; sales orders open
+        // the generalized SALDOC owner on the same attachment store.
+        if (_kind == OrdKind.Sales)
+        {
+            new PurchaseAttachmentsWin(_companyId, AttachmentOwnerKind.SalesDocument,
+                _docId.Value.ToString(CultureInfo.InvariantCulture), CurrentUserId)
+            {
+                Owner = this
+            }.ShowDialog();
             return;
         }
         new PurchaseAttachmentsWin(_companyId, _docId.Value, CurrentUserId)
         {
             Owner = this
         }.ShowDialog();
+    }
+
+    // ------------------------------------------- approval workflow (W23)
+
+    private async Task SubmitApprovalAsync()
+    {
+        if (AppHost.Orders is null || _docId is null)
+        {
+            ShowWarningMessage(T("OrderDoc.SaveFirst"));
+            return;
+        }
+        try
+        {
+            await AppHost.Orders.SubmitSalesForApprovalAsync(_docId.Value, CurrentUserId);
+            _approvalState = SalesApprovalState.Pending;
+            UpdateEditState();
+        }
+        catch (Exception ex)
+        {
+            ShowWarningMessage(ex.Message);
+        }
+    }
+
+    private async Task ApproveDocumentAsync()
+    {
+        if (AppHost.Orders is null || _docId is null)
+        {
+            ShowWarningMessage(T("OrderDoc.SaveFirst"));
+            return;
+        }
+        try
+        {
+            await AppHost.Orders.ApproveSalesDocumentAsync(_docId.Value, CurrentUserId, AppHost.Permissions.Has);
+            _approvalState = SalesApprovalState.Approved;
+            UpdateEditState();
+        }
+        catch (Exception ex)
+        {
+            ShowWarningMessage(ex.Message);
+        }
+    }
+
+    private async Task RejectDocumentAsync()
+    {
+        if (AppHost.Orders is null || _docId is null)
+        {
+            ShowWarningMessage(T("OrderDoc.SaveFirst"));
+            return;
+        }
+        var input = PromptDialog.Show(this, T("SalesDoc.RejectReason"),
+            (T("SalesDoc.RejectReason"), string.Empty));
+        var reason = input is { Length: > 0 } ? input[0] : null;
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            ShowWarningMessage(T("SalesDoc.RejectReasonRequired"));
+            return;
+        }
+        try
+        {
+            await AppHost.Orders.RejectSalesDocumentAsync(_docId.Value, CurrentUserId, reason, AppHost.Permissions.Has);
+            _approvalState = SalesApprovalState.Rejected;
+            UpdateEditState();
+        }
+        catch (Exception ex)
+        {
+            ShowWarningMessage(ex.Message);
+        }
     }
 
     private async Task ReceiveAsync()
@@ -1200,6 +1296,17 @@ public sealed class OrdWin : BaseWin, IWindowMode
         _btnCancel.IsEnabled = _status is CommercialDocumentStatus.Draft or CommercialDocumentStatus.Posted;
         _btnAddLine.IsEnabled = editable;
         _btnRemLine.IsEnabled = editable;
+        // W23 approval workflow: submit from Draft (NotRequired/Rejected),
+        // approve/reject only while Pending and only with the kind's
+        // APPROVE permission (the service re-checks it).
+        _btnSubmitApproval.IsEnabled = _kind == OrdKind.Sales && _docId is not null
+            && _status == CommercialDocumentStatus.Draft
+            && _approvalState is SalesApprovalState.NotRequired or SalesApprovalState.Rejected;
+        var canApproveOrder = AppHost.Permissions.Has(PermCat.Sales.OrderApprove);
+        _btnApproveDoc.IsEnabled = _kind == OrdKind.Sales && _docId is not null
+            && _status == CommercialDocumentStatus.Draft
+            && _approvalState == SalesApprovalState.Pending && canApproveOrder;
+        _btnRejectDoc.IsEnabled = _btnApproveDoc.IsEnabled;
     }
 
     private void Renumber()

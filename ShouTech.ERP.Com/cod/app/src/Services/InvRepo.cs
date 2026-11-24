@@ -310,9 +310,169 @@ public static class InvRepo
         return docId;
     }
 
+    // ------------------------------------------- approval workflow (W23, mig 098)
+
+    private static string Provider => DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+
+    /// <summary>True when sau_sales_settings requires approval for the
+    /// current company (keyed by company CODE; default OFF).</summary>
+    public static bool IsSalesApprovalRequired()
+    {
+        DocSchema.Ensure();
+        var cs = DatabaseRuntime.GetConnectionString()
+            ?? throw new InvalidOperationException("No database connection.");
+        using var connection = Open(cs);
+        using var tx = connection.BeginTransaction();
+        var required = IsSalesApprovalRequired(connection, tx);
+        tx.Commit();
+        return required;
+    }
+
+    private static bool IsSalesApprovalRequired(DbConnection connection, DbTransaction tx)
+    {
+        if (!PartyLedger.ColumnExists(connection, tx, Provider, "sau_sales_settings", "require_approval"))
+            return false;
+        using var cmd = connection.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "SELECT require_approval FROM sau_sales_settings WHERE company_code=$company";
+        Add(cmd, "$company", Company);
+        var value = cmd.ExecuteScalar();
+        if (value is null or DBNull) return false;
+        return value is bool flag ? flag : Convert.ToInt32(value, CultureInfo.InvariantCulture) != 0;
+    }
+
+    /// <summary>The stored approval state of a native sales document
+    /// (NotRequired when the column predates migration 098).</summary>
+    public static string GetSalesApprovalState(long docId)
+    {
+        DocSchema.Ensure();
+        var cs = DatabaseRuntime.GetConnectionString()
+            ?? throw new InvalidOperationException("No database connection.");
+        using var connection = Open(cs);
+        using var tx = connection.BeginTransaction();
+        var state = ReadSalesApprovalState(connection, tx, docId, out _, out _);
+        tx.Commit();
+        return state;
+    }
+
+    private static string ReadSalesApprovalState(DbConnection connection, DbTransaction tx, long docId, out string docKind, out string status)
+    {
+        docKind = string.Empty;
+        status = string.Empty;
+        if (!PartyLedger.ColumnExists(connection, tx, Provider, "sales_documents", "approval_state"))
+            return ShouTech.Domain.Entities.SalesApprovalState.NotRequired;
+        using var cmd = connection.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = """
+            SELECT approval_state, doc_kind, status FROM sales_documents
+            WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND is_deleted=0
+            """;
+        Add(cmd, "$id", docId);
+        Add(cmd, "$company", Company);
+        Add(cmd, "$guid", ResolveCompanyGuidOrNull(connection, tx)?.ToString("D") ?? Company);
+        using var reader = cmd.ExecuteReader();
+        if (!reader.Read())
+            throw new InvalidOperationException("Document not found.");
+        docKind = reader.GetString(1);
+        status = reader.GetString(2);
+        return reader.IsDBNull(0) ? ShouTech.Domain.Entities.SalesApprovalState.NotRequired : reader.GetString(0);
+    }
+
+    private static void EnsureSalesApprovalGate(DbConnection connection, DbTransaction tx, long docId, string docNo)
+    {
+        var state = ReadSalesApprovalState(connection, tx, docId, out _, out _);
+        if (state != ShouTech.Domain.Entities.SalesApprovalState.Approved && IsSalesApprovalRequired(connection, tx))
+            throw new AppError(ErrorCodes.ApprovalStateInvalid,
+                $"Document '{docNo}' requires approval before posting; its approval state is '{state}'.",
+                docNo, state);
+    }
+
+    /// <summary>Submits a native sales invoice/quotation draft for approval.</summary>
+    public static void SubmitSalesForApproval(long docId, string userId) =>
+        TransitionSalesApproval(docId, userId,
+            new[] { ShouTech.Domain.Entities.SalesApprovalState.NotRequired, ShouTech.Domain.Entities.SalesApprovalState.Rejected },
+            ShouTech.Domain.Entities.SalesApprovalState.Pending, ShouTech.Domain.Entities.SalesApprovalAction.Submitted, null);
+
+    /// <summary>Approves a Pending native sales invoice/quotation.</summary>
+    public static void ApproveSalesDocument(long docId, string userId) =>
+        TransitionSalesApproval(docId, userId,
+            new[] { ShouTech.Domain.Entities.SalesApprovalState.Pending },
+            ShouTech.Domain.Entities.SalesApprovalState.Approved, ShouTech.Domain.Entities.SalesApprovalAction.Approved, null);
+
+    /// <summary>Rejects a Pending native sales invoice/quotation; reason mandatory.</summary>
+    public static void RejectSalesDocument(long docId, string userId, string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason)) throw new ArgumentException("A rejection reason is required.", nameof(reason));
+        TransitionSalesApproval(docId, userId,
+            new[] { ShouTech.Domain.Entities.SalesApprovalState.Pending },
+            ShouTech.Domain.Entities.SalesApprovalState.Rejected, ShouTech.Domain.Entities.SalesApprovalAction.Rejected, reason.Trim());
+    }
+
+    private static void TransitionSalesApproval(long docId, string userId, string[] allowedFrom, string toState, string action, string? reason)
+    {
+        if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
+        DocSchema.Ensure();
+        var cs = DatabaseRuntime.GetConnectionString()
+            ?? throw new InvalidOperationException("No database connection.");
+        using var connection = Open(cs);
+        using var tx = connection.BeginTransaction();
+        var fromState = ReadSalesApprovalState(connection, tx, docId, out var docKind, out var status);
+        string companyKey;
+        string docNo;
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = "SELECT company_id, doc_no FROM sales_documents WHERE doc_id=$id AND is_deleted=0";
+            Add(cmd, "$id", docId);
+            using var reader = cmd.ExecuteReader();
+            if (!reader.Read()) throw new InvalidOperationException("Document not found.");
+            companyKey = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture)!;
+            docNo = reader.GetString(1);
+        }
+        if (docKind is not ("QUO" or "SO" or "SAL")
+            || !string.Equals(status, "Draft", StringComparison.OrdinalIgnoreCase)
+            || Array.IndexOf(allowedFrom, fromState) < 0)
+            throw new AppError(ErrorCodes.ApprovalStateInvalid,
+                $"Document '{docNo}' in status '{status}' with approval state '{fromState}' cannot perform '{action}'.",
+                docNo, fromState);
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = "UPDATE sales_documents SET approval_state=$to WHERE doc_id=$id AND approval_state=$from AND is_deleted=0";
+            Add(cmd, "$to", toState);
+            Add(cmd, "$id", docId);
+            Add(cmd, "$from", fromState);
+            if (cmd.ExecuteNonQuery() != 1)
+                throw new AppError(ErrorCodes.ApprovalStateInvalid,
+                    $"Document '{docNo}' changed approval state concurrently; '{action}' was not applied.",
+                    docNo, fromState);
+        }
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = """
+                INSERT INTO sau_approval_history
+                    (history_id, company_id, doc_id, doc_kind, action, from_state, to_state, actor, reason)
+                VALUES ($id, $company, $doc, $kind, $action, $from, $to, $actor, $reason)
+                """;
+            Add(cmd, "$id", Guid.NewGuid().ToString("D"));
+            Add(cmd, "$company", companyKey);
+            Add(cmd, "$doc", docId);
+            Add(cmd, "$kind", docKind);
+            Add(cmd, "$action", action);
+            Add(cmd, "$from", fromState);
+            Add(cmd, "$to", toState);
+            Add(cmd, "$actor", userId.Trim());
+            Add(cmd, "$reason", (object?)reason ?? DBNull.Value);
+            cmd.ExecuteNonQuery();
+        }
+        tx.Commit();
+    }
+
     public static void Post(long docId, InvDocKind kind, string userId,
         IReadOnlyDictionary<int, LineBatchSerialCapture>? batchSerialByLine = null,
-        PosPostingContext? pos = null)
+        PosPostingContext? pos = null,
+        ShouTech.Domain.Entities.CreditOverrideContext? creditOverride = null)
     {
         DocSchema.Ensure();
         MatRepo.EnsureSchema();
@@ -413,6 +573,13 @@ public static class InvRepo
                 StoredGrandTotal = reader.IsDBNull(reader.GetOrdinal("grand_total")) ? null : Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("grand_total")), CultureInfo.InvariantCulture),
             };
         }
+
+        // Approval gate (W23, migration 098): only when the company policy
+        // requires approval (sau_sales_settings, default OFF) must a native
+        // sales invoice / quotation be Approved before it posts — the same
+        // SAL-7016 contract the chain repository enforces.
+        if (isSales && kind is InvDocKind.SalesInvoice or InvDocKind.Quotation)
+            EnsureSalesApprovalGate(connection, tx, docId, doc.DocNo);
 
         // The legacy InvoiceWin/InvRepo purchase path has no PO/receipt
         // lineage and can settle a bill immediately during posting. When the
@@ -683,12 +850,18 @@ public static class InvRepo
             // exposure — stored total x the effective rate resolved
             // above — never the raw foreign total.
             var exposureIncrease = effects.CreditGuard ? (partyKind == "C" ? debit : credit) : 0m;
+            // W23 carry-over: the credit override context is non-null only
+            // when the posting user confirmed the override in InvoiceWin
+            // AND holds SALES.CREDIT.OVERRIDE — the guard then audits the
+            // breach in credit_overrides instead of hard-blocking ACC-5006
+            // (the OrdWin pattern from W1, now on the native path too).
             PartyCreditGuard.EnsureWithinLimit(
                 connection, tx,
                 DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite",
                 Company, partyKind, partyId,
                 string.IsNullOrWhiteSpace(doc.PartyCode) ? null : doc.PartyCode,
-                FxRates.ToBase(exposureIncrease, fx.Rate), "$");
+                FxRates.ToBase(exposureIncrease, fx.Rate), "$",
+                creditOverride is null ? null : creditOverride with { DocKind = doc.KindCode, DocNo = doc.DocNo });
 
             // Step 7: the ledger row carries its base amounts alongside
             // the transaction amounts (migration 062), at the same
