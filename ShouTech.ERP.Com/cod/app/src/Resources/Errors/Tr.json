@@ -808,5 +808,23 @@
     "name": "RequisitionReasonRequired",
     "message": "Bu talep işlemi için bir neden gereklidir.",
     "hint": "Nedeni karar nedeni alanına yazın."
+  },
+  "PUR-1006": {
+    "code": "PUR-1006",
+    "name": "LandedCostAlreadyBookedNeedsAccount",
+    "message": "'{0}' varış maliyeti gideri Zaten Kaydedildi olarak işaretli ancak gider hesabı yok.",
+    "hint": "Giderin daha önce kaydedildiği gider hesabını girin veya gider kredi modunu Ödenecek olarak geri değiştirin."
+  },
+  "PUR-1007": {
+    "code": "PUR-1007",
+    "name": "LandedCostPayeeNotFound",
+    "message": "'{0}' varış maliyeti gideri, bu şirketin aktif bir tarafı olmayan {1} alacaklısını belirtiyor.",
+    "hint": "Alacaklıyı şirket taraf listesinden seçin veya tutarın makbuz tedarikçisine borçlanılması için alacaklıyı temizleyin."
+  },
+  "PUR-1008": {
+    "code": "PUR-1008",
+    "name": "LandedCostReceiptSelectionInvalid",
+    "message": "Varış maliyeti belgesi uygun makbuz satırı seçmiyor.",
+    "hint": "En az bir onaylanmış mal giriş makbuzu seçin ve en az bir stok değerli makbuz satırı ekleyin."
   }
 }

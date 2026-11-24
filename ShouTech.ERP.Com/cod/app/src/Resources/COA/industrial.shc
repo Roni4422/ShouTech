@@ -1187,6 +1187,24 @@
       }
     },
     {
+      "id": 101,
+      "number": 415,
+      "code": "415",
+      "parentId": 57,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "فروقات أسعار الشراء",
+        "en": "Purchase Price Variance"
+      }
+    },
+    {
       "id": 64,
       "number": 5,
       "code": "5",

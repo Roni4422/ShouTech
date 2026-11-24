@@ -2016,9 +2016,9 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                     var purchaseVariance = invoiceCostAmount - grniDocumentAmount;
                     glLines.Add(new GlLineRequest(GlAccounts.GoodsReceivedNotInvoiced, grniDocumentAmount, 0m, order.CostCenter));
                     if (purchaseVariance > 0m)
-                        glLines.Add(new GlLineRequest(GlAccounts.Purchases, purchaseVariance, 0m, order.CostCenter));
+                        glLines.Add(new GlLineRequest(GlAccounts.PurchasePriceVariance, purchaseVariance, 0m, order.CostCenter));
                     else if (purchaseVariance < 0m)
-                        glLines.Add(new GlLineRequest(GlAccounts.Purchases, 0m, -purchaseVariance, order.CostCenter));
+                        glLines.Add(new GlLineRequest(GlAccounts.PurchasePriceVariance, 0m, -purchaseVariance, order.CostCenter));
                     if (splitTax) glLines.Add(new GlLineRequest(GlAccounts.InputVat, invoiceTax, 0m));
                     glLines.Add(new GlLineRequest(GlAccounts.Payable, 0m, grandTotal));
                 }

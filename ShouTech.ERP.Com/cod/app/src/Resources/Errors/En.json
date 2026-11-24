@@ -808,5 +808,23 @@
     "name": "RequisitionReasonRequired",
     "message": "A reason is required for this requisition action.",
     "hint": "Type the reason in the decision reason field."
+  },
+  "PUR-1006": {
+    "code": "PUR-1006",
+    "name": "LandedCostAlreadyBookedNeedsAccount",
+    "message": "Landed-cost charge '{0}' is marked AlreadyBooked but has no expense account.",
+    "hint": "Enter the expense account the charge was already booked to, or switch the charge credit mode back to Payable."
+  },
+  "PUR-1007": {
+    "code": "PUR-1007",
+    "name": "LandedCostPayeeNotFound",
+    "message": "Landed-cost charge '{0}' names payee party {1}, which is not an active party of this company.",
+    "hint": "Pick the payee from the company party list, or clear the payee to owe the receipt supplier."
+  },
+  "PUR-1008": {
+    "code": "PUR-1008",
+    "name": "LandedCostReceiptSelectionInvalid",
+    "message": "The landed-cost voucher selects no eligible receipt lines.",
+    "hint": "Select at least one posted goods receipt and include at least one stock-valued receipt line."
   }
 }

@@ -174,6 +174,11 @@ public static class ErrorCodes
     public const string RequisitionCloseInvalid = "PUR-1003";
     public const string RequisitionStateInvalid = "PUR-1004";
     public const string RequisitionReasonRequired = "PUR-1005";
+    // Landed-cost completion (migration 093). Renumbered 1006-1008 at
+    // integration: 1001-1005 were already taken by the requisition codes.
+    public const string LandedCostAlreadyBookedNeedsAccount = "PUR-1006";
+    public const string LandedCostPayeeNotFound = "PUR-1007";
+    public const string LandedCostReceiptSelectionInvalid = "PUR-1008";
 
     // ---- POS 1001-1999 (POS full build, migration 066) ------------------
     // The POS module takes its own prefix block, like MFG / HR.

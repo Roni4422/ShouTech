@@ -52,6 +52,11 @@ public static class GlAccounts
     public const string Cogs = "401";
     public const string Purchases = "402";
     public const string PurchaseReturns = "403";
+    // Landed-cost completion (migration 093): invoice-vs-receipt price
+    // variance posts here instead of Purchases (402) so PPV is separately
+    // reportable. Seeded by migration 093 into existing companies and by
+    // the COA templates (cod/app/src/Resources/COA/*.shc) for new ones.
+    public const string PurchasePriceVariance = "415";
     public const string DepreciationExpense = "505";
     // Manufacturing (Build 058): carried by the industrial / job-orders /
     // continuous-inventory templates. The staged manufacturing posting

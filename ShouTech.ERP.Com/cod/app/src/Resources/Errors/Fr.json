@@ -808,5 +808,23 @@
     "name": "RequisitionReasonRequired",
     "message": "Un motif est requis pour cette action sur la demande.",
     "hint": "Saisissez le motif dans le champ de motif de décision."
+  },
+  "PUR-1006": {
+    "code": "PUR-1006",
+    "name": "LandedCostAlreadyBookedNeedsAccount",
+    "message": "La charge de coût landed '{0}' est marquée Déjà comptabilisée mais n'a aucun compte de charges.",
+    "hint": "Saisissez le compte de charges sur lequel la charge a déjà été comptabilisée, ou repassez le mode de crédit de la charge à À payer."
+  },
+  "PUR-1007": {
+    "code": "PUR-1007",
+    "name": "LandedCostPayeeNotFound",
+    "message": "La charge de coût landed '{0}' désigne le bénéficiaire {1}, qui n'est pas un tiers actif de cette société.",
+    "hint": "Choisissez le bénéficiaire dans la liste des tiers de la société, ou effacez-le pour devoir le montant au fournisseur du reçu."
+  },
+  "PUR-1008": {
+    "code": "PUR-1008",
+    "name": "LandedCostReceiptSelectionInvalid",
+    "message": "Le bon de coût landed ne sélectionne aucune ligne de reçu éligible.",
+    "hint": "Sélectionnez au moins un reçu de marchandises validé et incluez au moins une ligne de reçu valorisée en stock."
   }
 }
