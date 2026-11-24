@@ -1766,10 +1766,10 @@
     "ReverseReason": "Kullanıcı fatura penceresinden ters kayıt istedi",
     "TaxSystem": "Vergi sistemi",
     "ColTaxCode": "Vergi kodu",
-    "StatusPosting": "İşleniyor — mutabakat gerekli"
-  ,
+    "StatusPosting": "İşleniyor — mutabakat gerekli",
     "ValidTill": "Geçerlilik tarihi",
-    "PermissionDenied": "Bu fatura işlemini gerçekleştirme izniniz yok."},
+    "PermissionDenied": "Bu fatura işlemini gerçekleştirme izniniz yok."
+  },
   "CompanyWizard": {
     "Title": {
       "NewCompany": "Yeni şirket — ShouTech ERP",
@@ -2400,9 +2400,9 @@
     "SelectBoth": "Önce açık bir belge ve bir ödeme seçin.",
     "ServiceUnavailable": "Ödeme mutabakatı hizmeti kullanılamıyor (veritabanı bağlantısı yok).",
     "PermissionDenied": "Ödeme dağıtma izniniz yok (ACC.PAYREC.ALLOCATE).",
-    "Note": "Not"
-  ,
-    "Kind": "Tür"},
+    "Note": "Not",
+    "Kind": "Tür"
+  },
   "Projects": {
     "Title": "Projeler",
     "Projects": "Projeler",
@@ -3721,8 +3721,7 @@
     "SelectQuantity": "En az bir satır için iade miktarı girin.",
     "ExceedsReturnable": "İade miktarı kalan iade edilebilir miktarı aşamaz.",
     "Confirm": "Bu müşteri iadesi ve alacak dekontu kaydedilsin mi?",
-    "Posted": "Satış iadesi kaydedildi"
-  ,
+    "Posted": "Satış iadesi kaydedildi",
     "RefundMethod": "İade Yöntemi",
     "RefundAmount": "İade Tutarı",
     "RefundCredit": "Yalnızca alacak dekontu",
@@ -3730,7 +3729,8 @@
     "RefundCard": "Kart",
     "RefundChecks": "Çek",
     "RefundInvalid": "Nakit iade için geçerli bir iade tutarı ve iade yöntemi (nakit, kart veya çek) girin.",
-    "PermissionDenied": "Bu satış iadesi işlemini gerçekleştirme izniniz yok."},
+    "PermissionDenied": "Bu satış iadesi işlemini gerçekleştirme izniniz yok."
+  },
   "PurchaseReturn": {
     "Title": "Satın Alma İadesi / Borç Dekontu",
     "LoadInvoice": "Tedarikçi Faturasını Yükle",

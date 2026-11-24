@@ -1766,10 +1766,10 @@
     "ReverseReason": "L'utilisateur a demandé l'extourne depuis la fenêtre de facture",
     "TaxSystem": "Système fiscal",
     "ColTaxCode": "Code de taxe",
-    "StatusPosting": "Comptabilisation en cours — rapprochement requis"
-  ,
+    "StatusPosting": "Comptabilisation en cours — rapprochement requis",
     "ValidTill": "Valable jusqu'au",
-    "PermissionDenied": "Vous n'avez pas l'autorisation d'effectuer cette action sur la facture."},
+    "PermissionDenied": "Vous n'avez pas l'autorisation d'effectuer cette action sur la facture."
+  },
   "CompanyWizard": {
     "Title": {
       "NewCompany": "Nouvelle société — ShouTech ERP",
@@ -2400,9 +2400,9 @@
     "SelectBoth": "Sélectionnez d'abord un document ouvert et un paiement.",
     "ServiceUnavailable": "Le service de rapprochement est indisponible (aucune connexion à la base de données).",
     "PermissionDenied": "Vous n'avez pas l'autorisation d'affecter des paiements (ACC.PAYREC.ALLOCATE).",
-    "Note": "Note"
-  ,
-    "Kind": "Type"},
+    "Note": "Note",
+    "Kind": "Type"
+  },
   "Projects": {
     "Title": "Projets",
     "Projects": "Projets",
@@ -3721,8 +3721,7 @@
     "SelectQuantity": "Saisissez une quantité de retour pour au moins une ligne.",
     "ExceedsReturnable": "La quantité retournée ne peut pas dépasser la quantité encore retournable.",
     "Confirm": "Valider ce retour client et cet avoir ?",
-    "Posted": "Retour client validé"
-  ,
+    "Posted": "Retour client validé",
     "RefundMethod": "Mode de remboursement",
     "RefundAmount": "Montant du remboursement",
     "RefundCredit": "Avoir uniquement",
@@ -3730,7 +3729,8 @@
     "RefundCard": "Carte",
     "RefundChecks": "Chèque",
     "RefundInvalid": "Saisissez un montant de remboursement valide et un mode de remboursement (espèces, carte ou chèque).",
-    "PermissionDenied": "Vous n'avez pas l'autorisation d'effectuer cette action de retour client."},
+    "PermissionDenied": "Vous n'avez pas l'autorisation d'effectuer cette action de retour client."
+  },
   "PurchaseReturn": {
     "Title": "Retour achat / Note de débit",
     "LoadInvoice": "Charger la facture fournisseur",

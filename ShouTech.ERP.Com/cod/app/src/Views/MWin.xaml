@@ -427,6 +427,7 @@
                         <ribbon:RibbonButton loc:LocProps.Key="CRM.Pipeline" Label="CRM pipeline" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="CRM.Opportunities" Label="CRM opportunities" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="CRM.Activities" Label="CRM activities" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Reports.CrmFunnel" Label="CRM funnel" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.CustomersReports" Header="Reports">
                         <ribbon:RibbonButton loc:LocProps.Key="Customers.CustomerBalance" Label="Customer balances" Click="OnRibbonButtonClick"/>
@@ -528,6 +529,7 @@
                         <ribbon:RibbonButton loc:LocProps.Key="Reports.SalesInvoiceList" Label="Sales invoices" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Reports.PurchaseInvoiceList" Label="Purchase invoices" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Reports.GoodsReceivedNotInvoiced" Label="Goods received not invoiced" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Reports.SalesChainExceptions" Label="Sales chain exceptions" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Reports.SupplierStatement" Label="Supplier statement" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.ReportsReports" Header="Other">

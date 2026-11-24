@@ -1757,10 +1757,10 @@
     "ReverseReason": "User requested reversal from invoice window",
     "TaxSystem": "Tax system",
     "ColTaxCode": "Tax code",
-    "StatusPosting": "Posting — reconciliation required"
-  ,
+    "StatusPosting": "Posting — reconciliation required",
     "ValidTill": "Valid Till",
-    "PermissionDenied": "You do not have permission to perform this invoice action."},
+    "PermissionDenied": "You do not have permission to perform this invoice action."
+  },
   "Vouchers": {
     "PartyCode": "Party Code",
     "PartyKind": "Party Kind",
@@ -2454,9 +2454,9 @@
     "SelectBoth": "Select an open document and a payment first.",
     "ServiceUnavailable": "Payment reconciliation service is unavailable (no database connection).",
     "PermissionDenied": "You do not have permission to allocate payments (ACC.PAYREC.ALLOCATE).",
-    "Note": "Note"
-  ,
-    "Kind": "Type"},
+    "Note": "Note",
+    "Kind": "Type"
+  },
   "Projects": {
     "Title": "Projects",
     "Projects": "Projects",
@@ -3730,8 +3730,7 @@
     "SelectQuantity": "Enter a return quantity for at least one line.",
     "ExceedsReturnable": "A return quantity cannot exceed the remaining returnable quantity.",
     "Confirm": "Post this customer return and credit note?",
-    "Posted": "Sales return posted"
-  ,
+    "Posted": "Sales return posted",
     "RefundMethod": "Refund Method",
     "RefundAmount": "Refund Amount",
     "RefundCredit": "Credit note only",
@@ -3739,7 +3738,8 @@
     "RefundCard": "Card",
     "RefundChecks": "Cheque",
     "RefundInvalid": "Enter a valid refund amount and a refund method (cash, card or cheque) for a cash refund.",
-    "PermissionDenied": "You do not have permission to perform this sales return action."},
+    "PermissionDenied": "You do not have permission to perform this sales return action."
+  },
   "PurchaseReturn": {
     "Title": "Purchase Return / Debit Note",
     "LoadInvoice": "Load Supplier Invoice",
