@@ -1,5 +1,52 @@
 // shoutech_erp_v0.1.6/src/ShouTech.Domain/Enums/ModKey.cs
+
 namespace ShouTech.Domain.Enums;
+
+// ---- merged from src/Domain/Enums/AppMode.cs ----
+    public enum AppMode
+    {
+        Standalone,
+        Server,
+        Client
+    }
+
+// ---- merged from src/Domain/Enums/LicenseType.cs ----
+    public enum LicenseType
+    {
+        SingleDevice,
+        NetworkServer,
+        NetworkClient
+    }
+
+// ---- merged from src/Domain/Enums/LicStat.cs ----
+public enum LicStat : byte
+{
+    Valid = 0,
+    GracePeriod = 1,
+    Expired = 2,
+    Revoked = 3,
+    HardwareMismatch = 4,
+    InvalidSignature = 5,
+    DeviceLimitExceeded = 6,
+    NotFound = 7
+}
+
+// ---- merged from src/Domain/Enums/LicEd.cs ----
+/// <summary>
+/// Commercial license state (not feature set).
+/// Feature set is controlled by Module Flags.
+/// </summary>
+public enum LicEd : byte
+{
+    /// <summary>Time-limited full or partial trial.</summary>
+    Demo = 0,
+
+    /// <summary>Read-only. No create / edit / post allowed.</summary>
+    Viewer = 1,
+
+    /// <summary>Paid core license (Accounting + Inventory + basic Sales/Purchase).</summary>
+    Core = 10
+}
 
 /// <summary>
 /// Strongly-typed module keys used for licensing and dynamic UI.
