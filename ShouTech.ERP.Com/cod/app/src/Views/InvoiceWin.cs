@@ -854,6 +854,10 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             tb.Margin = new Thickness(0);
         }
 
+        // The net is the document's hero number (Phenix totals band):
+        // it alone takes the central grand-total treatment.
+        _txtNet.SetResourceReference(FrameworkElement.StyleProperty, "VisuGrandTotalStyle");
+
         var grid = new Grid { Margin = new Thickness(0, 2, 0, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });

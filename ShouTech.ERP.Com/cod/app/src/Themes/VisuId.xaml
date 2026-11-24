@@ -1131,6 +1131,34 @@
     </Style>
 
 
+    <!-- Grand-total field: the one number a document window exists
+         for (invoice net, voucher total). Phenix-style totals bands
+         set it apart from the uniform footer fields — semibold,
+         one size up, accent-tinted surface, accent-dark text. -->
+    <Style
+        x:Key="VisuGrandTotalStyle"
+        TargetType="{x:Type TextBox}"
+        BasedOn="{StaticResource VisuTextBoxStyle}">
+
+        <Setter
+            Property="FontFamily"
+            Value="{DynamicResource ApplicationFontFamilyStrong}"/>
+
+        <Setter
+            Property="FontSize"
+            Value="{DynamicResource FontSize14}"/>
+
+        <Setter
+            Property="Background"
+            Value="{DynamicResource AccentLightBrush}"/>
+
+        <Setter
+            Property="Foreground"
+            Value="{DynamicResource AccentDarkBrush}"/>
+
+    </Style>
+
+
     <!-- =========================================================
          PASSWORD BOX
          ========================================================= -->

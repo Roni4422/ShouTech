@@ -52,7 +52,7 @@ public static class RptRend
     {
         var bg = Brush("BackgroundBrush", Brushes.White);
         var fg = Brush("TextBrush", Brushes.Black);
-        var accent = Brush("AccentBrush", new SolidColorBrush(Color.FromRgb(0x1F, 0x4E, 0x79)));
+        var accent = Brush("AccentBrush", new SolidColorBrush(Color.FromRgb(0x00, 0x67, 0xC0)));
         var zebra = ZebraBrush();
 
         var root = new Grid { Width = PageSize.Width, Height = PageSize.Height, Background = bg };
@@ -121,8 +121,14 @@ public static class RptRend
         // ---- Totals ---------------------------------------------------------
         if (model.Totals != null && model.PageIndex == model.PageCount - 1)
         {
+            // Totals band: the resolved app accent at print alpha, so
+            // the printed identity follows the theme (Sahli-style
+            // totals emphasis) instead of a pinned legacy blue.
+            var totalsFill = accent is SolidColorBrush accentSolid
+                ? new SolidColorBrush(Color.FromArgb(0x22, accentSolid.Color.R, accentSolid.Color.G, accentSolid.Color.B))
+                : accent;
             stack.Children.Add(BuildRow(model.Columns, widths, model.Totals,
-                new SolidColorBrush(Color.FromArgb(0x22, 0x1F, 0x4E, 0x79)), fg, bold: true, model));
+                totalsFill, fg, bold: true, model));
         }
 
         // ---- Footer ---------------------------------------------------------
