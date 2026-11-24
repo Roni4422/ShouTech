@@ -42,7 +42,7 @@ public sealed class PurchaseMatchPolicyRepository : IPurchaseMatchPolicyReposito
         await using var command = CreateCommand(connection, null, """
             SELECT is_enabled, require_receipt_match, price_warning_percent, price_block_percent,
                    tax_warning_percent, tax_block_percent, base_variance_warning_amount,
-                   base_variance_block_amount, policy_version
+                   base_variance_block_amount, policy_version, receipt_over_tolerance_pct
             FROM purchase_match_policies
             WHERE company_code = @company
             """);
@@ -60,7 +60,8 @@ public sealed class PurchaseMatchPolicyRepository : IPurchaseMatchPolicyReposito
             Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture),
             Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture),
             Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture),
-            Convert.ToInt32(reader.GetValue(8), CultureInfo.InvariantCulture));
+            Convert.ToInt32(reader.GetValue(8), CultureInfo.InvariantCulture),
+            ReceiptOverTolerancePct: Convert.ToDecimal(reader.GetValue(9), CultureInfo.InvariantCulture));
         policy.Validate();
         return policy;
     }
@@ -155,11 +156,12 @@ public sealed class PurchaseMatchPolicyRepository : IPurchaseMatchPolicyReposito
                  price_warning_percent, price_block_percent,
                  tax_warning_percent, tax_block_percent,
                  base_variance_warning_amount, base_variance_block_amount,
+                 receipt_over_tolerance_pct,
                  policy_version, created_by, updated_by)
             VALUES
                 (@company, @enabled, @requireReceipt,
                  @priceWarning, @priceBlock, @taxWarning, @taxBlock,
-                 @baseWarning, @baseBlock, 1, @actor, @actor)
+                 @baseWarning, @baseBlock, @receiptTolerance, 1, @actor, @actor)
             ON CONFLICT(company_code) DO UPDATE SET
                 is_enabled = excluded.is_enabled,
                 require_receipt_match = excluded.require_receipt_match,
@@ -169,6 +171,7 @@ public sealed class PurchaseMatchPolicyRepository : IPurchaseMatchPolicyReposito
                 tax_block_percent = excluded.tax_block_percent,
                 base_variance_warning_amount = excluded.base_variance_warning_amount,
                 base_variance_block_amount = excluded.base_variance_block_amount,
+                receipt_over_tolerance_pct = excluded.receipt_over_tolerance_pct,
                 policy_version = purchase_match_policies.policy_version + 1,
                 updated_by = excluded.updated_by,
                 updated_at = CURRENT_TIMESTAMP
@@ -184,6 +187,7 @@ public sealed class PurchaseMatchPolicyRepository : IPurchaseMatchPolicyReposito
         Add(command, "@taxBlock", policy.TaxBlockPercent);
         Add(command, "@baseWarning", policy.BaseVarianceWarningAmount);
         Add(command, "@baseBlock", policy.BaseVarianceBlockAmount);
+        Add(command, "@receiptTolerance", policy.ReceiptOverTolerancePct);
         Add(command, "@actor", actor.Trim());
         Add(command, "@expectedVersion", expectedVersion);
 
@@ -215,7 +219,7 @@ public sealed class PurchaseMatchPolicyRepository : IPurchaseMatchPolicyReposito
         var policySql = """
             SELECT is_enabled, require_receipt_match, price_warning_percent, price_block_percent,
                    tax_warning_percent, tax_block_percent, base_variance_warning_amount,
-                   base_variance_block_amount, policy_version
+                   base_variance_block_amount, policy_version, receipt_over_tolerance_pct
             FROM purchase_match_policies
             WHERE company_code = @company
             """ + (_provider == "PostgreSQL" ? " FOR SHARE" : string.Empty);
@@ -234,7 +238,8 @@ public sealed class PurchaseMatchPolicyRepository : IPurchaseMatchPolicyReposito
                 Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture),
                 Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture),
                 Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture),
-                Convert.ToInt32(reader.GetValue(8), CultureInfo.InvariantCulture));
+                Convert.ToInt32(reader.GetValue(8), CultureInfo.InvariantCulture),
+                ReceiptOverTolerancePct: Convert.ToDecimal(reader.GetValue(9), CultureInfo.InvariantCulture));
         }
         policy.Validate();
         if (!policy.IsEnabled)
@@ -255,10 +260,28 @@ public sealed class PurchaseMatchPolicyRepository : IPurchaseMatchPolicyReposito
             Add(latest, "@invoice", invoiceDocId);
             await using var reader = await latest.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-                throw new InvalidOperationException("The invoice has no prior match evaluation and cannot be re-evaluated from a missing source snapshot.");
-            previousResult = ReadJsonText(reader.GetValue(0));
-            previousPolicyVersion = Convert.ToInt32(reader.GetValue(2), CultureInfo.InvariantCulture);
-            previousEvaluationVersion = Convert.ToInt32(reader.GetValue(3), CultureInfo.InvariantCulture);
+            {
+                // I3a: ON-DEMAND evaluation — a posted purchase invoice
+                // with no prior evaluation (legacy / pre-policy / manual
+                // path) is evaluated from the invoice document and its
+                // mig-078 receipt matches, so it is no longer
+                // permanently un-evaluable (and therefore permanently
+                // un-allocatable when the policy blocks). The variance
+                // snapshot is synthesized in the same shape the chain
+                // posting writes, including per-line variance (I3b).
+                // Tax variance is 0: a legacy invoice carries no PO tax
+                // expectation to measure against.
+                previousResult = await BuildOnDemandSnapshotAsync(
+                    connection, transaction, companyCode.Trim(), invoiceDocId, cancellationToken).ConfigureAwait(false);
+                previousPolicyVersion = -1; // never equal to the current version
+                previousEvaluationVersion = 0;
+            }
+            else
+            {
+                previousResult = ReadJsonText(reader.GetValue(0));
+                previousPolicyVersion = Convert.ToInt32(reader.GetValue(2), CultureInfo.InvariantCulture);
+                previousEvaluationVersion = Convert.ToInt32(reader.GetValue(3), CultureInfo.InvariantCulture);
+            }
         }
 
         if (previousPolicyVersion == policy.PolicyVersion)
@@ -308,6 +331,7 @@ public sealed class PurchaseMatchPolicyRepository : IPurchaseMatchPolicyReposito
             taxBlock = policy.TaxBlockPercent,
             baseWarning = policy.BaseVarianceWarningAmount,
             baseBlock = policy.BaseVarianceBlockAmount,
+            receiptOverTolerancePct = policy.ReceiptOverTolerancePct,
             policyVersion = policy.PolicyVersion
         });
         var snapshotValues = new Dictionary<string, System.Text.Json.JsonElement>();
@@ -347,6 +371,114 @@ public sealed class PurchaseMatchPolicyRepository : IPurchaseMatchPolicyReposito
             evaluationId, invoiceDocId, evaluationVersion, policy.PolicyVersion,
             evaluation.Decision, evaluation.ReasonCodes, policySnapshot, resultSnapshot,
             actor.Trim(), DateTime.UtcNow);
+    }
+
+    /// <summary>
+    /// I3a/I3b: builds the variance snapshot for an on-demand (first)
+    /// evaluation of a posted purchase invoice from the invoice header
+    /// and its mig-078 matches. Throws when the invoice is not a posted
+    /// purchase invoice of the company.
+    /// </summary>
+    private async Task<string> BuildOnDemandSnapshotAsync(
+        DbConnection connection, DbTransaction transaction, string companyCode,
+        long invoiceDocId, CancellationToken cancellationToken)
+    {
+        string companyGuid = companyCode;
+        await using (var company = CreateCommand(connection, transaction,
+            "SELECT CAST(company_id AS TEXT) FROM companies WHERE company_code = @company"))
+        {
+            Add(company, "@company", companyCode);
+            var value = await company.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            if (value is not null and not DBNull)
+                companyGuid = Convert.ToString(value, CultureInfo.InvariantCulture) ?? companyCode;
+        }
+
+        decimal subtotal, exchangeRate;
+        await using (var invoice = CreateCommand(connection, transaction, """
+            SELECT subtotal, exchange_rate FROM purchase_documents
+            WHERE doc_id = @invoice AND (company_id = @guid OR company_id = @code)
+              AND doc_kind = 'PUR' AND status = 'Posted'
+              AND CAST(is_deleted AS TEXT) IN ('0', 'false')
+            """))
+        {
+            Add(invoice, "@invoice", invoiceDocId);
+            Add(invoice, "@guid", companyGuid);
+            Add(invoice, "@code", companyCode);
+            await using var reader = await invoice.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                throw new InvalidOperationException("Only a posted purchase invoice of this company can be evaluated on demand.");
+            subtotal = Convert.ToDecimal(reader.GetValue(0), CultureInfo.InvariantCulture);
+            exchangeRate = Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
+        }
+        if (exchangeRate <= 0m) exchangeRate = 1m;
+
+        var matchDetails = new List<object>();
+        var lineVariance = new List<object>();
+        decimal grniBaseAmount = 0m;
+        await using (var matches = CreateCommand(connection, transaction, """
+            SELECT match_id, purchase_order_id, receipt_doc_id, receipt_line_id,
+                   invoice_line_id, material_id, matched_qty, receipt_unit_cost,
+                   receipt_exchange_rate, invoice_unit_cost, invoice_exchange_rate,
+                   receipt_base_amount, invoice_base_amount, variance_base_amount
+            FROM purchase_receipt_invoice_matches
+            WHERE invoice_doc_id = @invoice
+            ORDER BY receipt_doc_id, receipt_line_id, invoice_line_id, match_id
+            """))
+        {
+            Add(matches, "@invoice", invoiceDocId);
+            await using var reader = await matches.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var receiptBase = Convert.ToDecimal(reader.GetValue(11), CultureInfo.InvariantCulture);
+                var invoiceBase = Convert.ToDecimal(reader.GetValue(12), CultureInfo.InvariantCulture);
+                grniBaseAmount += receiptBase;
+                matchDetails.Add(new
+                {
+                    matchId = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture),
+                    purchaseOrderId = Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture),
+                    receiptDocId = Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture),
+                    receiptLineId = Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture),
+                    invoiceLineId = Convert.ToInt64(reader.GetValue(4), CultureInfo.InvariantCulture),
+                    materialId = Convert.ToInt64(reader.GetValue(5), CultureInfo.InvariantCulture),
+                    matchedQty = Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture),
+                    receiptUnitCost = Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture),
+                    receiptExchangeRate = Convert.ToDecimal(reader.GetValue(8), CultureInfo.InvariantCulture),
+                    invoiceUnitCost = Convert.ToDecimal(reader.GetValue(9), CultureInfo.InvariantCulture),
+                    invoiceExchangeRate = Convert.ToDecimal(reader.GetValue(10), CultureInfo.InvariantCulture),
+                    receiptBaseAmount = receiptBase,
+                    invoiceBaseAmount = invoiceBase,
+                    varianceBaseAmount = Convert.ToDecimal(reader.GetValue(13), CultureInfo.InvariantCulture)
+                });
+                lineVariance.Add(new
+                {
+                    invoiceLineId = Convert.ToInt64(reader.GetValue(4), CultureInfo.InvariantCulture),
+                    materialId = Convert.ToInt64(reader.GetValue(5), CultureInfo.InvariantCulture),
+                    matchedQty = Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture),
+                    receiptRate = Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture),
+                    invoiceRate = Convert.ToDecimal(reader.GetValue(9), CultureInfo.InvariantCulture),
+                    rateVariance = Convert.ToDecimal(reader.GetValue(9), CultureInfo.InvariantCulture)
+                        - Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture),
+                    amountVariance = invoiceBase - receiptBase
+                });
+            }
+        }
+
+        var invoiceBaseAmount = decimal.Round(subtotal * exchangeRate, 6, MidpointRounding.AwayFromZero);
+        var priceVariancePercent = grniBaseAmount == 0m
+            ? (invoiceBaseAmount == 0m ? 0m : decimal.MaxValue)
+            : decimal.Round(Math.Abs(invoiceBaseAmount - grniBaseAmount) / Math.Abs(grniBaseAmount) * 100m, 6, MidpointRounding.AwayFromZero);
+        var absoluteBaseVariance = Math.Abs(invoiceBaseAmount - grniBaseAmount);
+        return System.Text.Json.JsonSerializer.Serialize(new
+        {
+            priceVariancePercent,
+            taxVariancePercent = 0m,
+            absoluteBaseVariance,
+            grniBaseAmount,
+            invoiceBaseAmount,
+            matchDetails,
+            lineVariance,
+            onDemand = true
+        });
     }
 
     public async Task<Guid> RecordOverrideAsync(

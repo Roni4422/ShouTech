@@ -56,6 +56,11 @@ public sealed class OrdWin : BaseWin, IWindowMode
     private readonly TextBox _txtPartyName = new();
     private readonly TextBox _txtWhs = new() { Text = "WH-01" };
     private readonly TextBox _txtNotes = new();
+    // P3 (purchase kinds only): currency + rate, payment terms, incoterm.
+    private readonly TextBox _txtCurrency = new();
+    private readonly TextBox _txtRate = new();
+    private readonly TextBox _txtPaymentTerms = new();
+    private readonly TextBox _txtIncoterm = new();
 
     private readonly Button _btnNew = new();
     private readonly Button _btnLoad = new();
@@ -79,6 +84,8 @@ public sealed class OrdWin : BaseWin, IWindowMode
     private readonly Button _btnPrint = new();
     private readonly Button _btnCompareQuotes = new();
     private readonly Button _btnAddSupplierQuote = new();
+    private readonly Button _btnAmend = new();
+    private readonly Button _btnInvitations = new();
 
     private bool _isReceiving;
     private bool _isConverting;
@@ -180,6 +187,12 @@ public sealed class OrdWin : BaseWin, IWindowMode
         _btnConvert.Visibility = IsRfq ? Visibility.Collapsed : Visibility.Visible;
         StyleButton(_btnClose, "OrderDoc.CloseOrder");
         StyleButton(_btnCancel, "OrderDoc.CancelOrder");
+        StyleButton(_btnAmend, "OrderDoc.Amend");
+        _btnAmend.Visibility = _kind == OrdKind.Purchase ? Visibility.Visible : Visibility.Collapsed;
+        _btnAmend.Click += async (_, _) => await AmendAsync();
+        StyleButton(_btnInvitations, "OrderDoc.Invitations");
+        _btnInvitations.Visibility = IsRfq ? Visibility.Visible : Visibility.Collapsed;
+        _btnInvitations.Click += async (_, _) => await ShowInvitationsAsync();
         StyleButton(_btnAddLine, "Invoice.AddLine");
         StyleButton(_btnRemLine, "Invoice.RemoveLine");
         StyleButton(_btnPrint, "Invoice.Print");
@@ -246,7 +259,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             }
         };
 
-        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnConvert, _btnReceipt, _btnAttachments, _btnSubmitApproval, _btnApproveDoc, _btnRejectDoc, _btnRequisitions, _btnAddSupplierQuote, _btnCompareQuotes, _btnClose, _btnCancel, _btnAddLine, _btnRemLine, _btnPrint })
+        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnConvert, _btnReceipt, _btnAttachments, _btnSubmitApproval, _btnApproveDoc, _btnRejectDoc, _btnRequisitions, _btnAddSupplierQuote, _btnCompareQuotes, _btnInvitations, _btnClose, _btnCancel, _btnAmend, _btnAddLine, _btnRemLine, _btnPrint })
             toolbar.Children.Add(b);
 
         var actionBar = new Border
@@ -295,6 +308,16 @@ public sealed class OrdWin : BaseWin, IWindowMode
         AddFormField(headerForm, 1, 0, _kind == OrdKind.Sales ? "Invoice.CustomerName" : "Invoice.SupplierName", _txtPartyName, spanPairs: 2);
         AddFormField(headerForm, 1, 2, "Invoice.Warehouse", _txtWhs);
         AddFormField(headerForm, 2, 0, "Invoice.Notes", _txtNotes, spanPairs: 4);
+        if (_kind != OrdKind.Sales)
+        {
+            // P3: PO/RFQ header completion — currency + exchange rate
+            // are editable here (previously forced to the user-pref
+            // currency with rate 0), plus payment terms and incoterm.
+            AddFormField(headerForm, 3, 0, "Invoice.Currency", _txtCurrency);
+            AddFormField(headerForm, 3, 1, "OrderDoc.ExchangeRate", _txtRate);
+            AddFormField(headerForm, 3, 2, "OrderDoc.PaymentTerms", _txtPaymentTerms);
+            AddFormField(headerForm, 3, 3, "OrderDoc.Incoterm", _txtIncoterm);
+        }
         var headerPanel = headerForm;
 
         _txtPartyCode.LostFocus += (_, _) => ResolveParty();
@@ -420,6 +443,10 @@ public sealed class OrdWin : BaseWin, IWindowMode
             _txtPartyCode.Text = string.Empty;
             _txtPartyName.Text = string.Empty;
             _txtNotes.Text = string.Empty;
+            _txtCurrency.Text = UsrPref.Load().CurrencyCode;
+            _txtRate.Text = string.Empty;
+            _txtPaymentTerms.Text = string.Empty;
+            _txtIncoterm.Text = string.Empty;
             _lines.Clear();
             _lines.Add(new OrderLineVm { LineNo = 1, Unit = "PCS", Qty = 1, UnitPrice = 0 });
         }
@@ -486,6 +513,10 @@ public sealed class OrdWin : BaseWin, IWindowMode
             _txtPartyName.Text = doc.PartyName ?? string.Empty;
             _txtWhs.Text = doc.WarehouseName ?? string.Empty;
             _txtNotes.Text = doc.Notes ?? string.Empty;
+            _txtCurrency.Text = doc.CurrencyCode;
+            _txtRate.Text = doc.ExchangeRate > 0m ? doc.ExchangeRate.ToString(CultureInfo.InvariantCulture) : string.Empty;
+            _txtPaymentTerms.Text = doc.PaymentTerms ?? string.Empty;
+            _txtIncoterm.Text = doc.Incoterm ?? string.Empty;
             _lines.Clear();
             foreach (var line in doc.Lines)
             {
@@ -533,7 +564,13 @@ public sealed class OrdWin : BaseWin, IWindowMode
                     line.BilledQty = match.BilledQty;
                 }
             }
-            _lblStatus.Text = $"{T("OrderDoc.Status")}: {DerivedStatusText(progress.DerivedStatus)} | {T("OrderDoc.Fulfilled")}: {progress.PerFulfilled:N1}% | {T("OrderDoc.Billed")}: {progress.PerBilled:N1}%";
+            // Sales orders show the localized derived chain status in
+            // the status slot; purchase orders keep the raw status and
+            // ride the P5 derived PO status (from the stored
+            // percentages) as its own segment.
+            var statusText = _kind == OrdKind.Purchase ? StatusText(_status) : DerivedStatusText(progress.DerivedStatus);
+            var derived = _kind == OrdKind.Purchase ? $" | {T("OrderDoc.DerivedStatus")}: {progress.DerivedStatus}" : string.Empty;
+            _lblStatus.Text = $"{T("OrderDoc.Status")}: {statusText} | {T("OrderDoc.Fulfilled")}: {progress.PerFulfilled:N1}% | {T("OrderDoc.Billed")}: {progress.PerBilled:N1}%{derived}";
             // Supplier advances (Y1, migration 095): a PO shows its
             // advance total / consumed / remaining, read from the
             // voucher links + advance allocations (display only).
@@ -624,6 +661,17 @@ public sealed class OrdWin : BaseWin, IWindowMode
         if (lines.Count == 0)
             throw new InvalidOperationException(T("OrderDoc.LinesRequired"));
 
+        // P3: purchase kinds take currency + rate from the header
+        // fields (rate empty = Step 7 convention 0 = master fallback,
+        // never fabricated to 1). Sales keeps the user-pref currency.
+        var currency = _kind == OrdKind.Sales
+            ? UsrPref.Load().CurrencyCode
+            : string.IsNullOrWhiteSpace(_txtCurrency.Text) ? UsrPref.Load().CurrencyCode : _txtCurrency.Text.Trim().ToUpperInvariant();
+        var rate = 0m;
+        if (_kind != OrdKind.Sales && !string.IsNullOrWhiteSpace(_txtRate.Text)
+            && !decimal.TryParse(_txtRate.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out rate))
+            throw new InvalidOperationException(T("OrderDoc.ExchangeRate"));
+        var deliveryOrValid = _dtDeliveryDate.SelectedDate is { } d ? DateOnly.FromDateTime(d) : (DateOnly?)null;
         return new CommercialDocumentDraft(
             _companyId,
             DocKindCode,
@@ -632,21 +680,22 @@ public sealed class OrdWin : BaseWin, IWindowMode
             _partyId,
             string.IsNullOrWhiteSpace(_txtPartyName.Text) ? null : _txtPartyName.Text.Trim(),
             warehouseId,
-            UsrPref.Load().CurrencyCode,
-            // Step 7 convention: 0 = no document rate (the currency_rates
-            // master supplies it at posting; a foreign-currency document
-            // with no rate anywhere fails with ACC-5015). The window has
-            // no rate field, so it must not fabricate 1.
-            0m,
+            currency,
+            rate,
             string.IsNullOrWhiteSpace(_txtNotes.Text) ? null : _txtNotes.Text.Trim(),
             lines,
             string.IsNullOrWhiteSpace(_txtPartyCode.Text) ? null : _txtPartyCode.Text.Trim(),
-            IsRfq ? null : _dtDeliveryDate.SelectedDate is { } delivery ? DateOnly.FromDateTime(delivery) : null,
-            IsRfq && _dtDeliveryDate.SelectedDate is { } validTill ? DateOnly.FromDateTime(validTill) : null,
+            IsRfq ? null : deliveryOrValid,
+            IsRfq ? deliveryOrValid : null,
             null,
             null,
             null,
-            string.IsNullOrWhiteSpace(_txtWhs.Text) ? null : _txtWhs.Text.Trim());
+            string.IsNullOrWhiteSpace(_txtWhs.Text) ? null : _txtWhs.Text.Trim(),
+            // P4: the header delivery/required-by date defaults the
+            // per-line required-by (the repository snapshots factors).
+            RequiredByDate: _kind == OrdKind.Purchase ? deliveryOrValid : null,
+            PaymentTerms: _kind == OrdKind.Sales || string.IsNullOrWhiteSpace(_txtPaymentTerms.Text) ? null : _txtPaymentTerms.Text.Trim(),
+            Incoterm: _kind == OrdKind.Sales || string.IsNullOrWhiteSpace(_txtIncoterm.Text) ? null : _txtIncoterm.Text.Trim());
     }
 
     private async Task PostAsync()
@@ -759,11 +808,12 @@ public sealed class OrdWin : BaseWin, IWindowMode
             string invoiceDocNo;
             if (_kind == OrdKind.Purchase)
             {
-                var supplierInvoiceLines = CaptureSupplierInvoiceLines();
-                if (supplierInvoiceLines is null) return;
+                var captured = CaptureSupplierInvoiceLines();
+                if (captured is null) return;
+                var (supplierInvoiceLines, supplierBillNo, billDate) = captured.Value;
                 var result = await AppHost.Orders.CreatePurchaseInvoiceAsync(
                     _companyId, _docId.Value, DateOnly.FromDateTime(DateTime.Today),
-                    supplierInvoiceLines, CurrentUserId);
+                    supplierInvoiceLines, CurrentUserId, supplierBillNo, billDate);
                 invoiceDocNo = result.InvoiceDocNo;
             }
             else
@@ -990,7 +1040,28 @@ public sealed class OrdWin : BaseWin, IWindowMode
                 },
                 Width = 110
             });
-    
+            // Q2: rejected qty + reason per line (recorded on the
+            // receipt line; never counts as received).
+            grid.Columns.Add(new DataGridTextColumn
+            {
+                Header = T("OrderDoc.RejectedQty"),
+                Binding = new Binding(nameof(ReceiptLineVm.RejectedQty))
+                {
+                    UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+                    StringFormat = "0.###"
+                },
+                Width = 95
+            });
+            grid.Columns.Add(new DataGridTextColumn
+            {
+                Header = T("OrderDoc.RejectReason"),
+                Binding = new Binding(nameof(ReceiptLineVm.RejectReason))
+                {
+                    UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+                },
+                Width = 150
+            });
+
             var dialog = new Window
             {
                 Owner = this,
@@ -1003,6 +1074,18 @@ public sealed class OrdWin : BaseWin, IWindowMode
                 ResizeMode = ResizeMode.CanResize
             };
             var content = new DockPanel { Margin = new Thickness(12) };
+            // Q3: the receipt date is user-settable (default today) and
+            // the supplier delivery-note number is captured here and
+            // persisted on the receipt header.
+            var receiptDatePicker = new DatePicker { SelectedDate = DateTime.Today, MinWidth = 130, Margin = new Thickness(0, 0, 12, 0) };
+            var deliveryNoteBox = new TextBox { MinWidth = 170 };
+            var receiptHeader = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+            receiptHeader.Children.Add(new TextBlock { Text = T("OrderDoc.ReceiptDate"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+            receiptHeader.Children.Add(receiptDatePicker);
+            receiptHeader.Children.Add(new TextBlock { Text = T("OrderDoc.DeliveryNoteNo"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+            receiptHeader.Children.Add(deliveryNoteBox);
+            DockPanel.SetDock(receiptHeader, Dock.Top);
+            content.Children.Add(receiptHeader);
             var actions = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -1028,15 +1111,20 @@ public sealed class OrdWin : BaseWin, IWindowMode
                 .Where(line => line.Quantity > 0m)
                 .Select(line => new CommercialLineDraft(
                     line.MaterialId, line.ItemCode, line.Description, line.Unit,
-                    line.Quantity, line.UnitPrice, line.DiscountPct, 0m, line.WarehouseId, line.SourceLineNo))
+                    line.Quantity, line.UnitPrice, line.DiscountPct, 0m, line.WarehouseId, line.SourceLineNo,
+                    RejectedQty: line.RejectedQty,
+                    RejectReason: string.IsNullOrWhiteSpace(line.RejectReason) ? null : line.RejectReason.Trim()))
                 .ToList();
             if (receiptLines.Count == 0)
             {
                 ShowWarningMessage(T("OrderDoc.NoRemainingReceipt"));
                 return;
             }
-    
-            var captureDate = DateOnly.FromDateTime(DateTime.Today);
+
+            // Q3: the receipt posts on the date the user picked in the
+            // dialog (default today), not a forced today.
+            var captureDate = DateOnly.FromDateTime(receiptDatePicker.SelectedDate ?? DateTime.Today);
+            var deliveryNoteNo = string.IsNullOrWhiteSpace(deliveryNoteBox.Text) ? null : deliveryNoteBox.Text.Trim();
             var captureDoc = new InvDoc
             {
                 Kind = InvDocKind.StockIn,
@@ -1075,7 +1163,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             try
             {
                 var (_, receiptDocNo) = await AppHost.Orders.CreatePurchaseReceiptAsync(
-                    _companyId, _docId.Value, captureDate, receiptLines, CurrentUserId);
+                    _companyId, _docId.Value, captureDate, receiptLines, CurrentUserId, deliveryNoteNo);
                 _lblStatus.Text = $"{T("OrderDoc.ReceiptCreated")}: {receiptDocNo}";
                 await RefreshProgressAsync(_docId.Value);
                 UpdateEditState();
@@ -1093,7 +1181,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
         }
     }
 
-    private List<CommercialLineDraft>? CaptureSupplierInvoiceLines()
+    private (List<CommercialLineDraft> Lines, string? SupplierBillNo, DateOnly? BillDate)? CaptureSupplierInvoiceLines()
     {
         var taxEnabled = TaxSvc.IsEnabled;
         var rows = _lines
@@ -1229,6 +1317,18 @@ public sealed class OrdWin : BaseWin, IWindowMode
             ResizeMode = ResizeMode.CanResize
         };
         var content = new DockPanel { Margin = new Thickness(12) };
+        // I1: the supplier's own bill number + bill date are captured
+        // here and persisted on the chain invoice (uniqueness enforced
+        // with PUR-1011 in the repository).
+        var billNoBox = new TextBox { MinWidth = 160, Margin = new Thickness(0, 0, 12, 0) };
+        var billDatePicker = new DatePicker { SelectedDate = DateTime.Today, MinWidth = 130 };
+        var billHeader = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+        billHeader.Children.Add(new TextBlock { Text = T("OrderDoc.BillNo"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        billHeader.Children.Add(billNoBox);
+        billHeader.Children.Add(new TextBlock { Text = T("OrderDoc.BillDate"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        billHeader.Children.Add(billDatePicker);
+        DockPanel.SetDock(billHeader, Dock.Top);
+        content.Children.Add(billHeader);
         var actions = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -1261,7 +1361,9 @@ public sealed class OrdWin : BaseWin, IWindowMode
             ShowWarningMessage(T("OrderDoc.NoReceivedToInvoice"));
             return null;
         }
-        return result;
+        return (result,
+            string.IsNullOrWhiteSpace(billNoBox.Text) ? null : billNoBox.Text.Trim(),
+            billDatePicker.SelectedDate is { } billDate ? DateOnly.FromDateTime(billDate) : null);
     }
 
     private async Task SetStatusAsync(string newStatus, string permission)
@@ -1346,6 +1448,141 @@ public sealed class OrdWin : BaseWin, IWindowMode
         }
     }
 
+
+    /// <summary>P6: ERPNext-style amend — a cancelled PO is copied to a
+    /// new draft PO linked to the original; this window then loads the
+    /// copy for editing.</summary>
+    private async Task AmendAsync()
+    {
+        if (AppHost.Orders is null || _docId is null || _kind != OrdKind.Purchase
+            || _status != CommercialDocumentStatus.Cancelled)
+            return;
+        if (!AppHost.Permissions.Has(PermCat.Purchasing.OrderCreate))
+        {
+            ShowWarningMessage(T("OrderDoc.PermissionDenied"));
+            return;
+        }
+        try
+        {
+            var (newId, newNo) = await AppHost.Orders.AmendPurchaseOrderAsync(
+                _companyId, _docId.Value, DateOnly.FromDateTime(DateTime.Today), CurrentUserId);
+            _lblStatus.Text = $"{T("OrderDoc.AmendedCreated")}: {newNo}";
+            await LoadOrderAsync(newId);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OrdWin.Amend");
+            ShowWarningMessage(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// P1: RFQ supplier invitations — list the invited suppliers with
+    /// their status (Invited / Quoted / Declined), invite more by
+    /// supplier code, or decline the selected invitation. Creating an
+    /// SQ for an invited supplier flips the row to Quoted (service).
+    /// </summary>
+    private async Task ShowInvitationsAsync()
+    {
+        if (AppHost.Orders is null || _docId is null || !IsRfq) return;
+        var orders = AppHost.Orders;
+        var rows = new ObservableCollection<RfqInvitation>();
+        async Task Reload()
+        {
+            rows.Clear();
+            foreach (var invitation in await orders.GetRfqInvitationsAsync(_companyId, _docId.Value))
+                rows.Add(invitation);
+        }
+        try { await Reload(); }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OrdWin.InvitationsLoad");
+            ShowWarningMessage(ex.Message);
+            return;
+        }
+
+        var grid = new DataGrid
+        {
+            AutoGenerateColumns = false,
+            CanUserAddRows = false,
+            CanUserDeleteRows = false,
+            IsReadOnly = true,
+            ItemsSource = rows,
+            HeadersVisibility = DataGridHeadersVisibility.Column,
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        grid.Columns.Add(new DataGridTextColumn { Header = T("Invoice.SupplierCode"), Binding = new Binding(nameof(RfqInvitation.PartyCode)), Width = 110 });
+        grid.Columns.Add(new DataGridTextColumn { Header = T("Invoice.SupplierName"), Binding = new Binding(nameof(RfqInvitation.PartyName)), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+        grid.Columns.Add(new DataGridTextColumn { Header = T("OrderDoc.InvitationStatus"), Binding = new Binding(nameof(RfqInvitation.Status)), Width = 110 });
+
+        var dialog = new Window
+        {
+            Owner = this,
+            Title = T("OrderDoc.InvitedSuppliers"),
+            Width = 640,
+            Height = 380,
+            MinWidth = 520,
+            MinHeight = 300,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.CanResize
+        };
+        var content = new DockPanel { Margin = new Thickness(12) };
+        var invitePanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+        var supplierCode = new TextBox { MinWidth = 140, Margin = new Thickness(0, 0, 8, 0) };
+        var invite = new Button { Content = T("OrderDoc.InviteSupplier"), MinWidth = 110, Margin = new Thickness(0, 0, 8, 0) };
+        var decline = new Button { Content = T("OrderDoc.DeclineInvitation"), MinWidth = 90 };
+        invitePanel.Children.Add(new TextBlock { Text = T("Invoice.SupplierCode"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        invitePanel.Children.Add(supplierCode);
+        invitePanel.Children.Add(invite);
+        invitePanel.Children.Add(decline);
+        DockPanel.SetDock(invitePanel, Dock.Top);
+        content.Children.Add(invitePanel);
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var close = new Button { Content = T("Buttons.Cancel"), MinWidth = 100, IsCancel = true };
+        actions.Children.Add(close);
+        DockPanel.SetDock(actions, Dock.Bottom);
+        content.Children.Add(actions);
+        content.Children.Add(grid);
+        dialog.Content = content;
+
+        invite.Click += async (_, _) =>
+        {
+            var found = TaxSvc.ResolveParty(supplierCode.Text.Trim(), false);
+            if (found is not { } party || party.Id is not long partyId)
+            {
+                ShowWarningMessage(T("OrderDoc.NotFound"));
+                return;
+            }
+            try
+            {
+                await orders.InviteSuppliersToRfqAsync(_companyId, _docId.Value,
+                    new[] { (partyId, (string?)supplierCode.Text.Trim(), (string?)party.Name) }, CurrentUserId);
+                supplierCode.Clear();
+                await Reload();
+            }
+            catch (Exception ex)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OrdWin.InviteSupplier");
+                ShowWarningMessage(ex.Message);
+            }
+        };
+        decline.Click += async (_, _) =>
+        {
+            if (grid.SelectedItem is not RfqInvitation selected) return;
+            try
+            {
+                await orders.DeclineRfqInvitationAsync(_companyId, _docId.Value, selected.PartyId, CurrentUserId);
+                await Reload();
+            }
+            catch (Exception ex)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OrdWin.DeclineInvitation");
+                ShowWarningMessage(ex.Message);
+            }
+        };
+        dialog.ShowDialog();
+    }
+
     private void UpdateEditState()
     {
         var editable = IsEditable;
@@ -1363,6 +1600,13 @@ public sealed class OrdWin : BaseWin, IWindowMode
         _btnReceipt.IsEnabled = !_isReceiving && !_isConverting && _kind == OrdKind.Purchase && _status == CommercialDocumentStatus.Posted && _docId is not null;
         _btnClose.IsEnabled = _status == CommercialDocumentStatus.Posted;
         _btnCancel.IsEnabled = _status is CommercialDocumentStatus.Draft or CommercialDocumentStatus.Posted;
+        // P6: Amend is offered exactly for a cancelled purchase order.
+        _btnAmend.IsEnabled = _kind == OrdKind.Purchase && _status == CommercialDocumentStatus.Cancelled && _docId is not null;
+        _btnInvitations.IsEnabled = IsRfq && _docId is not null;
+        _txtCurrency.IsEnabled = editable;
+        _txtRate.IsEnabled = editable;
+        _txtPaymentTerms.IsEnabled = editable;
+        _txtIncoterm.IsEnabled = editable;
         _btnAddLine.IsEnabled = editable;
         _btnRemLine.IsEnabled = editable;
         // W23 approval workflow: submit from Draft (NotRequired/Rejected),
@@ -1584,6 +1828,9 @@ public sealed class OrdWin : BaseWin, IWindowMode
         public decimal UnitPrice { get; init; }
         public decimal DiscountPct { get; init; }
         public long? WarehouseId { get; init; }
+        // Q2: rejected at the gate (recorded, never received).
+        public decimal RejectedQty { get; set; }
+        public string RejectReason { get; set; } = "";
     }
 
     private sealed class OrderLineVm : INotifyPropertyChanged

@@ -26,6 +26,7 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
     private readonly TextBox _taxBlock = NumberBox();
     private readonly TextBox _baseWarning = NumberBox();
     private readonly TextBox _baseBlock = NumberBox();
+    private readonly TextBox _receiptTolerance = NumberBox();
     private readonly TextBox _releaseReason = new();
     private readonly DataGrid _history = new();
     private readonly TextBox _matchDetails = new();
@@ -137,7 +138,7 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
         var fields = new Grid { Margin = new Thickness(0, 8, 0, 0) };
         for (var i = 0; i < 3; i++)
             fields.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        for (var i = 0; i < 2; i++)
+        for (var i = 0; i < 3; i++)
             fields.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         AddThresholdField(fields, 0, 0, "PurchaseMatch.PriceWarning", _priceWarning);
@@ -146,6 +147,9 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
         AddThresholdField(fields, 0, 1, "PurchaseMatch.TaxBlock", _taxBlock);
         AddThresholdField(fields, 1, 1, "PurchaseMatch.BaseWarning", _baseWarning);
         AddThresholdField(fields, 2, 1, "PurchaseMatch.BaseBlock", _baseBlock);
+        // Q4: receipt over-delivery tolerance % (mig 096) — receipts
+        // beyond ordered x (1 + tolerance) are hard-blocked.
+        AddThresholdField(fields, 0, 2, "PurchaseMatch.ReceiptTolerance", _receiptTolerance);
         settingsPanel.Children.Add(fields);
         settings.Child = settingsPanel;
         Grid.SetRow(settings, 0);
@@ -353,6 +357,7 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
         _taxBlock.Text = value.TaxBlockPercent.ToString(CultureInfo.InvariantCulture);
         _baseWarning.Text = value.BaseVarianceWarningAmount.ToString(CultureInfo.InvariantCulture);
         _baseBlock.Text = value.BaseVarianceBlockAmount.ToString(CultureInfo.InvariantCulture);
+        _receiptTolerance.Text = value.ReceiptOverTolerancePct.ToString(CultureInfo.InvariantCulture);
     }
 
     private async Task SaveAsync()
@@ -367,7 +372,8 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
                 Parse(_priceWarning), Parse(_priceBlock),
                 Parse(_taxWarning), Parse(_taxBlock),
                 Parse(_baseWarning), Parse(_baseBlock),
-                _policy?.PolicyVersion ?? 1);
+                _policy?.PolicyVersion ?? 1,
+                ReceiptOverTolerancePct: Parse(_receiptTolerance));
             policy.Validate();
             await _service.SavePolicyAsync(
                 CurrentCompanyCode, policy, _policy?.PolicyVersion ?? 0, CurrentUserId);
@@ -417,7 +423,7 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
     {
         _enabled.IsEnabled = enabled;
         _requireReceipt.IsEnabled = enabled;
-        foreach (var box in new[] { _priceWarning, _priceBlock, _taxWarning, _taxBlock, _baseWarning, _baseBlock })
+        foreach (var box in new[] { _priceWarning, _priceBlock, _taxWarning, _taxBlock, _baseWarning, _baseBlock, _receiptTolerance })
             box.IsEnabled = enabled;
     }
 

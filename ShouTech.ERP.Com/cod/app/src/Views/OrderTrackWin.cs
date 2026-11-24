@@ -114,6 +114,7 @@ public sealed class OrderTrackWin : BaseWin
         _grid.Columns.Add(TextCol(nameof(TrackRow.StatusText), 95));
         _grid.Columns.Add(TextCol(nameof(TrackRow.FulfilledText), 105));
         _grid.Columns.Add(TextCol(nameof(TrackRow.BilledText), 105));
+        _grid.Columns.Add(TextCol(nameof(TrackRow.DerivedStatusText), 150));
         _grid.MouseDoubleClick += (_, _) => OpenSelected();
         Grid.SetRow(_grid, 1);
         body.Children.Add(_grid);
@@ -175,7 +176,12 @@ public sealed class OrderTrackWin : BaseWin
                                 ? T("OrderDoc.Completed")
                                 : T("OrderDoc.Open"),
                     FulfilledText = isRfq ? "—" : progress!.PerFulfilled.ToString("N1", CultureInfo.InvariantCulture) + "%",
-                    BilledText = isRfq ? "—" : progress!.PerBilled.ToString("N1", CultureInfo.InvariantCulture) + "%"
+                    BilledText = isRfq ? "—" : progress!.PerBilled.ToString("N1", CultureInfo.InvariantCulture) + "%",
+                    // P5: derived status from the STORED percentages on
+                    // the summary row (no progress call needed for POs).
+                    DerivedStatusText = order.DocKind == CommercialDocKinds.PurchaseOrder
+                        ? order.DerivedOrderStatus
+                        : "—"
                 });
             }
             _lblStatus.Text = $"{T("DocSearch.Results")}: {_rows.Count}";
@@ -221,7 +227,7 @@ public sealed class OrderTrackWin : BaseWin
             ((ComboBoxItem)_cmbKind.Items[1]).Content = T("OrderDoc.TitlePurchase");
             ((ComboBoxItem)_cmbKind.Items[2]).Content = T("OrderDoc.TitleRfq");
         }
-        if (_grid.Columns.Count >= 7)
+        if (_grid.Columns.Count >= 8)
         {
             _grid.Columns[0].Header = T("OrderDoc.OrderNo");
             _grid.Columns[1].Header = T("OrderDoc.Date");
@@ -230,6 +236,7 @@ public sealed class OrderTrackWin : BaseWin
             _grid.Columns[4].Header = T("OrderDoc.Status");
             _grid.Columns[5].Header = T("OrderDoc.Fulfilled");
             _grid.Columns[6].Header = T("OrderDoc.Billed");
+            _grid.Columns[7].Header = T("OrderDoc.DerivedStatus");
         }
         RefreshLocalizedContent(Content as DependencyObject);
     }
@@ -274,5 +281,6 @@ public sealed class OrderTrackWin : BaseWin
         public string StatusText { get; set; } = "";
         public string FulfilledText { get; set; } = "";
         public string BilledText { get; set; } = "";
+        public string DerivedStatusText { get; set; } = "";
     }
 }
