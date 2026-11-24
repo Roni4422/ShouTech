@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -32,7 +32,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class CrmOppWin : BaseWin, IWindowMode
 {
-    protected override string? ScheduleTintName => "Violet";
+    protected override string? ScheduleTintName => "Bramble";
 
     private readonly CrmService? _service;
     private readonly Guid? _focusId;

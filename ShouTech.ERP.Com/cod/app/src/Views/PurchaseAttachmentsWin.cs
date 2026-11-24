@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Globalization;
@@ -20,6 +20,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class PurchaseAttachmentsWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Larkspur";
     private readonly Guid _companyId;
     private readonly long _documentId;
     private readonly string _ownerKind;

@@ -227,7 +227,7 @@ public sealed class PosCashRptWin : RptBase
 /// </summary>
 public sealed class PosPerfRptWin : RptBase
 {
-    protected override string? ScheduleTintName => "Peach";
+    protected override string? ScheduleTintName => "Damson";
 
     protected override RptDef BuildDefinition() => new()
     {
@@ -284,7 +284,7 @@ public sealed class PosPerfRptWin : RptBase
 /// </summary>
 public sealed class PosZReportWin : RptBase
 {
-    protected override string? ScheduleTintName => "Peach";
+    protected override string? ScheduleTintName => "Juniper";
 
     protected override RptDef BuildDefinition() => new()
     {

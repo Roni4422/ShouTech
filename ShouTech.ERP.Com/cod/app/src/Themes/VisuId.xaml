@@ -1,4 +1,4 @@
-<ResourceDictionary
+﻿<ResourceDictionary
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:System="clr-namespace:System;assembly=mscorlib"
@@ -576,6 +576,59 @@
     <!-- Phase B 055 extension: BudgetWin claims Copper (the 43-token
          palette was fully claimed after Step 13). -->
     <SolidColorBrush x:Key="ScheduleTintCopperBrush" Color="#F7E8DC"/>
+    <SolidColorBrush x:Key="ScheduleTintHarborBrush" Color="#F1DDDD"/>
+    <SolidColorBrush x:Key="ScheduleTintMeadowBrush" Color="#DDF1E3"/>
+    <SolidColorBrush x:Key="ScheduleTintDuneBrush" Color="#E8DDF1"/>
+    <SolidColorBrush x:Key="ScheduleTintSiennaBrush" Color="#F1EEDD"/>
+    <SolidColorBrush x:Key="ScheduleTintMistBrush" Color="#DDEEF1"/>
+    <SolidColorBrush x:Key="ScheduleTintBirchBrush" Color="#F1DDE8"/>
+    <SolidColorBrush x:Key="ScheduleTintClaretBrush" Color="#E2F1DD"/>
+    <SolidColorBrush x:Key="ScheduleTintOchreBrush" Color="#DDDDF1"/>
+    <SolidColorBrush x:Key="ScheduleTintBasaltBrush" Color="#F1E3DD"/>
+    <SolidColorBrush x:Key="ScheduleTintRowanBrush" Color="#DDF1E9"/>
+    <SolidColorBrush x:Key="ScheduleTintSorrelBrush" Color="#EFDDF1"/>
+    <SolidColorBrush x:Key="ScheduleTintTundraBrush" Color="#EDF1DD"/>
+    <SolidColorBrush x:Key="ScheduleTintZephyrBrush" Color="#DDE7F1"/>
+    <SolidColorBrush x:Key="ScheduleTintRussetBrush" Color="#F1DDE1"/>
+    <SolidColorBrush x:Key="ScheduleTintDamsonBrush" Color="#DDF1DE"/>
+    <SolidColorBrush x:Key="ScheduleTintCeladonBrush" Color="#E4DDF1"/>
+    <SolidColorBrush x:Key="ScheduleTintFallowBrush" Color="#F1EADD"/>
+    <SolidColorBrush x:Key="ScheduleTintGorseBrush" Color="#DDF1F0"/>
+    <SolidColorBrush x:Key="ScheduleTintHeatherBrush" Color="#F1DDEC"/>
+    <SolidColorBrush x:Key="ScheduleTintJuniperBrush" Color="#E6F1DD"/>
+    <SolidColorBrush x:Key="ScheduleTintKelpBrush" Color="#DDE0F1"/>
+    <SolidColorBrush x:Key="ScheduleTintLindenBrush" Color="#F1DFDD"/>
+    <SolidColorBrush x:Key="ScheduleTintMarlBrush" Color="#DDF1E5"/>
+    <SolidColorBrush x:Key="ScheduleTintOpalBrush" Color="#EBDDF1"/>
+    <SolidColorBrush x:Key="ScheduleTintPumiceBrush" Color="#F1F1DD"/>
+    <SolidColorBrush x:Key="ScheduleTintQuinceBrush" Color="#DDEBF1"/>
+    <SolidColorBrush x:Key="ScheduleTintReedBrush" Color="#F1DDE5"/>
+    <SolidColorBrush x:Key="ScheduleTintAlderBrush" Color="#DFF1DD"/>
+    <SolidColorBrush x:Key="ScheduleTintBrambleBrush" Color="#E0DDF1"/>
+    <SolidColorBrush x:Key="ScheduleTintCinderBrush" Color="#F1E6DD"/>
+    <SolidColorBrush x:Key="ScheduleTintDappleBrush" Color="#DDF1EC"/>
+    <SolidColorBrush x:Key="ScheduleTintElderBrush" Color="#F1DDF0"/>
+    <SolidColorBrush x:Key="ScheduleTintFlintBrush" Color="#EAF1DD"/>
+    <SolidColorBrush x:Key="ScheduleTintGroveBrush" Color="#DDE4F1"/>
+    <SolidColorBrush x:Key="ScheduleTintHazelBrush" Color="#F1DDDE"/>
+    <SolidColorBrush x:Key="ScheduleTintJasperBrush" Color="#DDF1E1"/>
+    <SolidColorBrush x:Key="ScheduleTintKeelBrush" Color="#E7DDF1"/>
+    <SolidColorBrush x:Key="ScheduleTintLarkspurBrush" Color="#F1EDDD"/>
+    <SolidColorBrush x:Key="ScheduleTintMallowBrush" Color="#DDEFF1"/>
+    <SolidColorBrush x:Key="ScheduleTintNectarBrush" Color="#F1DDE9"/>
+    <SolidColorBrush x:Key="ScheduleTintOsierBrush" Color="#E3F1DD"/>
+    <SolidColorBrush x:Key="ScheduleTintPollenBrush" Color="#DDDDF1"/>
+    <SolidColorBrush x:Key="ScheduleTintQuillBrush" Color="#F1E2DD"/>
+    <SolidColorBrush x:Key="ScheduleTintRattanBrush" Color="#DDF1E8"/>
+    <SolidColorBrush x:Key="ScheduleTintSableBrush" Color="#EEDDF1"/>
+    <SolidColorBrush x:Key="ScheduleTintTallowBrush" Color="#EEF1DD"/>
+    <SolidColorBrush x:Key="ScheduleTintUmberBrush" Color="#DDE8F1"/>
+    <SolidColorBrush x:Key="ScheduleTintVervainBrush" Color="#F1DDE2"/>
+    <SolidColorBrush x:Key="ScheduleTintWickerBrush" Color="#DDF1DD"/>
+    <SolidColorBrush x:Key="ScheduleTintYarrowBrush" Color="#E3DDF1"/>
+    <SolidColorBrush x:Key="ScheduleTintSolaceBrush" Color="#F1E9DD"/>
+    <SolidColorBrush x:Key="ScheduleTintThicketBrush" Color="#DDF1EF"/>
+    <SolidColorBrush x:Key="ScheduleTintBrackenBrush" Color="#DDE2F1"/>
 
     <SolidColorBrush
         x:Key="TableHeaderSalesBrush"

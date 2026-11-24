@@ -302,3 +302,109 @@ navigable at a glance; easier — one click sets the exact tree
 depth, the card opens in place from the chart with its balance
 in front of the user, and nothing about the legacy reference
 look was copied.
+
+## Tint audit (owner reinforcement 2026-11-24 16:08) — outcome
+
+Every schedule window resolves a DISTINCT tint from the central
+palette (97 windows / 97 tints after the INV1 sweep; RptBase report
+family shares Silver by design). Full record: docs/INVOICE_FAMILY.md.
+
+| Window | Tint |
+|---|---|
+| AccCard | Cinder |
+| ActivityLogWin | Olive |
+| AddonsWin | Wheat |
+| AssetWin | Stone |
+| BankRecWin | Slate |
+| BatchSerialPickerWin | Bracken |
+| BcdDesWin | Dapple |
+| BcdGenWin | Lagoon |
+| BinWin | Bronze |
+| BnkCard | Elder |
+| BomWin | Fern |
+| BudgetWin | Copper |
+| CcCard | Flint |
+| CcListWin | Orchid |
+| ChqListWin | Indigo |
+| ChqWin | Periwinkle |
+| CloseCashWin | Coral |
+| CoaWin | Lavender |
+| CommWin | Tundra |
+| CompressInvoicesWin | Solace |
+| ContractWin | Quince |
+| CrmActivitiesWin | Meadow |
+| CrmCampaignWin | Opal |
+| CrmLeadWin | Russet |
+| CrmOppWin | Bramble |
+| CrmPipelineWin | Ochre |
+| CshWin | Teal |
+| CstCard | Rose |
+| CurCard | Peridot |
+| CustomReportsWin | Violet |
+| DatWin | Hazel |
+| DefManagerWin | Jade |
+| DeliveryDeskWin | Lime |
+| DocSearchWin | Denim |
+| FinancialAnalysisWin | Plum |
+| GroupManagerWin | Topaz |
+| HrAttendanceWin | Cyan |
+| HrDeptWin | Sage |
+| HrDesigWin | Mist |
+| HrEmployeeWin | Basalt |
+| HrLeaveWin | Sienna |
+| HrPayrollWin | Cobalt |
+| HrStructureWin | Alder |
+| InstallmentsWin | Quartz |
+| InvDesWin | Zephyr |
+| InvoiceWin | Mint |
+| JrnWin | Blue |
+| LicenseWin | Jasper |
+| LoyaltyWin | Garnet |
+| MaintenanceWin | Keel |
+| MatCard | Amber |
+| MatDirWin | Sand |
+| MatGroupWin | Honey |
+| MatMergeWin | Willow |
+| MfgListWin | Birch |
+| MfgPlanWin | Sorrel |
+| MfgWin | Green |
+| OrdWin | Sky |
+| OrderTrackWin | Dune |
+| PartyManagerWin | Blush |
+| PartySearchWin | Mauve |
+| PayRecWin | Lilac |
+| PosCheckoutWin | Yarrow |
+| PosPerfRptWin | Damson |
+| PosReturnWin | Celadon |
+| PosSalesWin | Fallow |
+| PosSessionWin | Gorse |
+| PosSyncWin | Harbor |
+| PosTermWin | Heather |
+| PosWin | Peach |
+| PosZReportWin | Juniper |
+| ProjWin | Aqua |
+| PurchaseAttachmentsWin | Larkspur |
+| PurchaseLandedCostWin | Mallow |
+| PurchaseMatchPolicyWin | Nectar |
+| PurchaseReceiptReturnWin | Osier |
+| PurchaseRequisitionWin | Pollen |
+| PurchaseReturnWin | Quill |
+| QcAlertWin | Claret |
+| QcInspectWin | Rowan |
+| QcTemplateWin | Marl |
+| RecurWin | Kelp |
+| RepCard | Grove |
+| RepostWin | Thicket |
+| RmaWin | Linden |
+| RolloverWin | Cedar |
+| RptBase | Silver |
+| SalesDeliveryWin | Rattan |
+| SalesReturnWin | Sable |
+| SerWin | Onyx |
+| StockCountDialog | Pumice |
+| SupplierQuotationCompareWin | Tallow |
+| SupplierQuotationEntryWin | Umber |
+| SupportWin | Ember |
+| TaxReportWin | Vervain |
+| TaxSetupWin | Wicker |
+| WarrantyWin | Reed |

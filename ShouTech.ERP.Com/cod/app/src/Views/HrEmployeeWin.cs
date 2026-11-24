@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -23,7 +23,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class HrEmployeeWin : BaseWin
 {
-    protected override string? ScheduleTintName => "Jade";
+    protected override string? ScheduleTintName => "Basalt";
 
     private readonly HrService? _service;
     private readonly List<HrEmployee> _employees = new();

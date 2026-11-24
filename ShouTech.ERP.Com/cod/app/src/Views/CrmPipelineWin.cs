@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -29,7 +29,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class CrmPipelineWin : BaseWin
 {
-    protected override string? ScheduleTintName => "Indigo";
+    protected override string? ScheduleTintName => "Ochre";
 
     private readonly CrmService? _service;
     private readonly List<(TextBlock Label, string Key)> _labels = new();

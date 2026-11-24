@@ -1,4 +1,4 @@
-﻿{
+{
   "Pricing": {
     "Resolved": "Price {0} from {1}",
     "OverrideConfirm": "Post anyway with a price override? The override will be recorded."
@@ -1911,7 +1911,11 @@
     "ValidTill": "Valid Till",
     "PermissionDenied": "You do not have permission to perform this invoice action.",
     "DueDate": "Due date",
-    "MaterialNotMatched": "Material not matched: {0}"
+    "MaterialNotMatched": "Material not matched: {0}",
+    "ColNotes": "Line notes",
+    "Collect": "Collect",
+    "QuickSearch": "Quick search (F3)",
+    "PostedByLine": "Posted by {0} at {1}"
   },
   "Vouchers": {
     "PartyCode": "Party Code",

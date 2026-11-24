@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -29,6 +29,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class BatchSerialPickerWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Bracken";
     public sealed class BatchRow
     {
         public string BatchNo { get; set; } = string.Empty;

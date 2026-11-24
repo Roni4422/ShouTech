@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -34,7 +34,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class WarrantyWin : BaseWin
 {
-    protected override string? ScheduleTintName => "Slate";
+    protected override string? ScheduleTintName => "Reed";
 
     private readonly WarrantyService? _service;
     private readonly List<WarrantyRow> _warranties = new();

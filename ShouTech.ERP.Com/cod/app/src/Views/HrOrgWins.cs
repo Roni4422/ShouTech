@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -272,7 +272,7 @@ public sealed class HrDeptWin : BaseWin
 /// </summary>
 public sealed class HrDesigWin : BaseWin
 {
-    protected override string? ScheduleTintName => "Fern";
+    protected override string? ScheduleTintName => "Mist";
 
     private readonly HrService? _service;
     private readonly List<HrDesignation> _rows = new();

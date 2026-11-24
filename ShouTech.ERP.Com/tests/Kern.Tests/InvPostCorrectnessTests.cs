@@ -1284,6 +1284,12 @@ public sealed class InvPostCorrectnessTests
         Assert.False(InvPostingPolicy.For(InvDocKind.Quotation).Stock);
         Assert.False(InvPostingPolicy.For(InvDocKind.StockIn).PartyLedger);
         Assert.True(InvPostingPolicy.For(InvDocKind.StockIn).Stock);
+        // Owner rule 2026-11-24: stock entry/exit post to inventory
+        // ONLY — no journal voucher.
+        Assert.False(InvPostingPolicy.For(InvDocKind.StockIn).Gl);
+        Assert.False(InvPostingPolicy.For(InvDocKind.StockOut).Gl);
+        Assert.True(InvPostingPolicy.For(InvDocKind.StockOut).Stock);
+        Assert.False(InvPostingPolicy.For(InvDocKind.StockOut).PartyLedger);
         Assert.False(InvPostingPolicy.For(InvDocKind.OpeningStock).Gl);
         // Step 9: TRN/CNT are routed to their dedicated engines — no
         // generic effects, and no longer blocked.

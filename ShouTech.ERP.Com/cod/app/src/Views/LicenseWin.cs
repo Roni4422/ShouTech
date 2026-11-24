@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
@@ -19,6 +19,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class LicenseWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Jasper";
     private readonly List<(TextBlock Label, string Key)> _labels = new();
     private readonly ListBox _info = new();
     private readonly TextBlock _renewNote = new();

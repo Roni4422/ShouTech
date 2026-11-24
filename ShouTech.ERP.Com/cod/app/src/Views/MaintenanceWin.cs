@@ -23,6 +23,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class MaintenanceWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Keel";
     private readonly OperationsService? _service;
     private readonly List<(TextBlock Label, string Key)> _labels = new();
     private readonly ListBox _results = new();

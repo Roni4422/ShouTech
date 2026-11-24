@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media;
 using ShouTech.App.Configuration;
 using ShouTech.App.Interaction;
@@ -57,7 +58,11 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
     private DataGridTextColumn _discountColumn = new();
     private DataGridTextColumn _taxRateColumn = new();
     private DataGridTextColumn _warehouseColumn = new();
+    private DataGridTextColumn _notesColumn = new();
     private readonly Button _btnColumns = new();
+    private readonly Button _btnCollect = new();
+    private readonly TextBox _txtQuickSearch = new();
+    private readonly TextBlock _lblAudit = new() { Margin = new Thickness(8, 4, 0, 0), VerticalAlignment = VerticalAlignment.Center };
     private IReadOnlyList<TaxSvc.TaxCodeRec> _taxCodes = Array.Empty<TaxSvc.TaxCodeRec>();
     private bool _suppressTaxSelectionChanged;
     private readonly TextBox _txtReceiptNo = new();
@@ -455,6 +460,8 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         StyleButton(_btnAddLine, "Invoice.AddLine");
         StyleButton(_btnRemoveLine, "Invoice.RemoveLine");
         StyleButton(_btnFindMaterial, "Invoice.FindMaterial");
+        StyleButton(_btnCollect, "Invoice.Collect");
+        _btnCollect.Click += (_, _) => OpenCollect();
         StyleButton(_btnSubmitApproval, "SalesDoc.SubmitApproval");
         StyleButton(_btnApproveDoc, "SalesDoc.Approve");
         StyleButton(_btnRejectDoc, "SalesDoc.Reject");
@@ -503,7 +510,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             }
         };
         _btnFindMaterial.Click += (_, _) => PickMaterial();
-        foreach (var b in new[] { _btnSave, _btnPost, _btnReverse, _btnPrint, _btnPdf, _btnAddLine, _btnRemoveLine, _btnFindMaterial, _btnSubmitApproval, _btnApproveDoc, _btnRejectDoc })
+        foreach (var b in new[] { _btnSave, _btnPost, _btnReverse, _btnPrint, _btnPdf, _btnCollect, _btnAddLine, _btnRemoveLine, _btnFindMaterial, _btnSubmitApproval, _btnApproveDoc, _btnRejectDoc })
             toolbar.Children.Add(b);
         // Explorer-style bottom command bar: flat, transparent, subtle 1px top divider.
         var actionBar = new Border
@@ -539,13 +546,41 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         // the grid's header strip (spec item 4), end-aligned so it
         // mirrors with the window.
         var gridDock = new DockPanel();
-        var chooserStrip = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
-        FlowAlign.End(chooserStrip);
+        // Strip above the grid: quick search (F3) at the START side,
+        // the column-chooser button at the END of the header strip
+        // (owner spec items 3-4 + the Phenix F3 reference); both
+        // sides mirror with the window's FlowDirection.
+        var chooserStrip = new DockPanel { Margin = new Thickness(0, 2, 0, 2), LastChildFill = false };
+        var searchPanel = new StackPanel { Orientation = Orientation.Horizontal };
+        var lblSearch = new TextBlock
+        {
+            Text = Tf("Invoice.QuickSearch", "Quick search (F3)"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 6, 0)
+        };
+        _txtQuickSearch.Width = 220;
+        _txtQuickSearch.KeyDown += QuickSearch_KeyDown;
+        searchPanel.Children.Add(lblSearch);
+        searchPanel.Children.Add(_txtQuickSearch);
+        DockPanel.SetDock(searchPanel, Dock.Left);
+        chooserStrip.Children.Add(searchPanel);
+        var colPanel = new StackPanel { Orientation = Orientation.Horizontal };
         StyleButton(_btnColumns, "Common.Columns");
         _btnColumns.Click += OnColumnsClick;
-        chooserStrip.Children.Add(_btnColumns);
+        colPanel.Children.Add(_btnColumns);
+        DockPanel.SetDock(colPanel, Dock.Right);
+        chooserStrip.Children.Add(colPanel);
         DockPanel.SetDock(chooserStrip, Dock.Top);
         gridDock.Children.Add(chooserStrip);
+        PreviewKeyDown += (s, e) =>
+        {
+            if (e.Key == Key.F3)
+            {
+                _txtQuickSearch.Focus();
+                _txtQuickSearch.SelectAll();
+                e.Handled = true;
+            }
+        };
         gridDock.Children.Add(_grid);
         var gridHost = new Border
         {
@@ -597,6 +632,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         cmdBar.Children.Add(cmdRight);
         _lblStatus.VerticalAlignment = VerticalAlignment.Center;
         cmdBar.Children.Add(_lblStatus);
+        cmdBar.Children.Add(_lblAudit);
         Grid.SetRow(cmdBar, 1);
         bottom.Children.Add(cmdBar);
 
@@ -1004,10 +1040,25 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _marginColumn.Binding = new Binding(nameof(LineVm.MarginText)) { Mode = BindingMode.OneWay };
         _marginColumn.Width = 85;
         _marginColumn.IsReadOnly = true;
-        _marginColumn.Visibility = MarginApplies ? Visibility.Visible : Visibility.Collapsed;
+        _marginColumn.Visibility = Visibility.Collapsed;
         _grid.Columns.Add(_marginColumn);
         _warehouseColumn = TextCol(nameof(LineVm.WarehouseName), 110, Tf("Invoice.ColWarehouse", "Warehouse"));
         _grid.Columns.Add(_warehouseColumn);
+        // Line notes (migration 120): the SIXTH default column
+        // (owner grid refinement 2026-11-24 16:13: material, qty,
+        // unit, price, total, notes). Still chooser-managed: the
+        // user can hide it or move it, persisted per user.
+        _notesColumn = TextCol(nameof(LineVm.Notes), 140, Tf("Invoice.ColNotes", "Line notes"));
+        _notesColumn.DisplayIndex = 5;
+        _grid.Columns.Add(_notesColumn);
+        // Every other optional column starts hidden; the chooser
+        // (visibility + placement) reveals them per user.
+        _codeColumn.Visibility = Visibility.Collapsed;
+        _discountColumn.Visibility = Visibility.Collapsed;
+        _taxCodeColumn.Visibility = Visibility.Collapsed;
+        _taxRateColumn.Visibility = Visibility.Collapsed;
+        _warehouseColumn.Visibility = Visibility.Collapsed;
+        _marginColumn.Visibility = Visibility.Collapsed;
 
         ApplySavedColumnLayout();
 
@@ -1032,6 +1083,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         new("TaxRate", _taxRateColumn, "Invoice.ColTax"),
         new("Margin", _marginColumn, "Invoice.ColMargin"),
         new("Warehouse", _warehouseColumn, "Invoice.ColWarehouse"),
+        new("LineNotes", _notesColumn, "Invoice.ColNotes"),
     };
 
     private string ColumnScope()
@@ -1055,7 +1107,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             if (opt.Key == "Margin" && !MarginApplies)
                 continue;
             opt.Column.Visibility = rec.Visible ? Visibility.Visible : Visibility.Collapsed;
-            opt.Column.DisplayIndex = 5 + rec.Order;
+            opt.Column.DisplayIndex = 6 + rec.Order;
             if (rec.Width is > 30 and < 600)
                 opt.Column.Width = rec.Width;
         }
@@ -1083,7 +1135,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         {
             var opt = optionals.First(o => o.Key == item.Key);
             opt.Column.Visibility = item.Visible ? Visibility.Visible : Visibility.Collapsed;
-            opt.Column.DisplayIndex = 5 + idx;
+            opt.Column.DisplayIndex = 6 + idx;
             recs.Add(new WinPref.ColumnRec
             {
                 Key = item.Key,
@@ -1499,6 +1551,13 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
                 AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL743, "InvoiceWin.ApplyDoc"); _btnReverse.IsEnabled = false; }
         }
         _btnPost.IsEnabled = !locked;
+        // Collect (Phenix reference): receipt allocation against a
+        // POSTED sales invoice, through the existing PayRecWin path.
+        _btnCollect.Visibility = doc.Kind == InvDocKind.SalesInvoice ? Visibility.Visible : Visibility.Collapsed;
+        _btnCollect.IsEnabled = doc.Kind == InvDocKind.SalesInvoice && doc.Status == InvDocStatus.Posted;
+        _lblAudit.Text = doc.Status == InvDocStatus.Posted && !string.IsNullOrWhiteSpace(doc.PostedBy)
+            ? Tf("Invoice.PostedByLine", "Posted by {0} at {1}", doc.PostedBy, doc.PostedAt ?? string.Empty)
+            : string.Empty;
         _grid.IsReadOnly = locked;
         UpdateVoucherOriginalButtons();
         RefreshApprovalButtons(doc);
@@ -1981,6 +2040,44 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
     // typed text. The Find Material button runs the same search.
     // ------------------------------------------------------------------
 
+    private void QuickSearch_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+            return;
+        e.Handled = true;
+        var text = _txtQuickSearch.Text.Trim();
+        if (text.Length == 0)
+            return;
+        // Same entry pipeline as typing in the grid (spec item 3):
+        // a unique/partial match fills the new line at once; no
+        // match opens the material directory search.
+        var line = new LineVm
+        {
+            TaxCode = Convert.ToString(_cmbTaxCode.SelectedValue, CultureInfo.InvariantCulture) ?? string.Empty,
+            TaxRate = ParseDec(_txtTaxRate.Text, TaxSvc.GetDefaultRate()),
+            TaxCalculationMode = _taxCodes.FirstOrDefault(x =>
+                string.Equals(x.Code, Convert.ToString(_cmbTaxCode.SelectedValue, CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase))?.CalculationMode ?? "Exclusive",
+            WarehouseName = _txtWarehouse.Text.Trim()
+        };
+        _lines.Add(line);
+        ResolveMaterialEntry(line, text);
+        if (line.MaterialId is > 0)
+        {
+            _txtQuickSearch.Clear();
+            _grid.SelectedItem = line;
+            RefreshTotals();
+        }
+    }
+
+    private void OpenCollect()
+    {
+        // Receipt + allocation for this invoice live in PayRecWin
+        // (the canonical receipts path); Collect opens it in
+        // context instead of duplicating an allocation surface.
+        var win = new PayRecWin { Owner = this };
+        win.ShowDialog();
+    }
+
     private void ResolveMaterialEntry(LineVm line, string? typedText)
     {
         var text = typedText?.Trim() ?? string.Empty;
@@ -2159,7 +2256,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             _ => "Invoice.SalesTitle"
         }, WindowTitleFor(_doc.Kind));
 
-        foreach (var btn in new[] { _btnSave, _btnPost, _btnReverse, _btnPrint, _btnPdf, _btnAddLine, _btnRemoveLine, _btnFindMaterial, _btnVoucher, _btnOriginal, _btnAttachments, _btnColumns })
+        foreach (var btn in new[] { _btnSave, _btnPost, _btnReverse, _btnPrint, _btnPdf, _btnCollect, _btnAddLine, _btnRemoveLine, _btnFindMaterial, _btnVoucher, _btnOriginal, _btnAttachments, _btnColumns })
         {
             if (btn.Tag is string key)
                 btn.Content = Tf(key, btn.Content?.ToString());
@@ -2205,6 +2302,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         private string _taxRateText = "0";
         private string _taxCode = string.Empty;
         private string _warehouseName = string.Empty;
+        private string _notes = string.Empty;
 
         public long? MaterialId { get; set; }
 
@@ -2224,6 +2322,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         public string TaxCode { get => _taxCode; set { _taxCode = value ?? string.Empty; OnPropertyChanged(); } }
         public string TaxCalculationMode { get; set; } = "Exclusive";
         public string WarehouseName { get => _warehouseName; set { _warehouseName = value; OnPropertyChanged(); } }
+        public string Notes { get => _notes; set { _notes = value; OnPropertyChanged(); } }
 
         public decimal TaxRate
         {
@@ -2289,7 +2388,8 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             TaxCalculationMode = TaxCalculationMode,
             TaxRate = ParseDec(TaxRateText, 0),
             WarehouseId = WarehouseId,
-            WarehouseName = WarehouseName
+            WarehouseName = WarehouseName,
+            Notes = string.IsNullOrWhiteSpace(Notes) ? null : Notes.Trim()
         };
 
         public static LineVm FromLine(InvLine line) => new()
@@ -2305,7 +2405,8 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             TaxCalculationMode = line.TaxCalculationMode,
             TaxRateText = line.TaxRate.ToString("0.##", CultureInfo.InvariantCulture),
             WarehouseId = line.WarehouseId,
-            WarehouseName = line.WarehouseName
+            WarehouseName = line.WarehouseName,
+            Notes = line.Notes ?? string.Empty
         };
 
         private static decimal ParseDec(string? text, decimal fallback)

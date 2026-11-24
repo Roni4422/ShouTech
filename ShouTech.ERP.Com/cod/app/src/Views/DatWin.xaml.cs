@@ -18,6 +18,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public partial class DatWin : BaseWin, IWindowMode
 {
+    protected override string? ScheduleTintName => "Hazel";
     private enum ExchangeMode { Import, Export, StructuredExport }
     private ExchangeMode _mode = ExchangeMode.Import;
 

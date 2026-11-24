@@ -1,4 +1,4 @@
-﻿{
+{
   "Pricing": {
     "Resolved": "Fiyat {0}, kaynak {1}",
     "OverrideConfirm": "Fiyat aşımı ile yine de kaydedilsin mi? Aşım kayıt altına alınacak."
@@ -1920,7 +1920,11 @@
     "ValidTill": "Geçerlilik tarihi",
     "PermissionDenied": "Bu fatura işlemini gerçekleştirme izniniz yok.",
     "DueDate": "Vade tarihi",
-    "MaterialNotMatched": "Malzeme eşleşmedi: {0}"
+    "MaterialNotMatched": "Malzeme eşleşmedi: {0}",
+    "ColNotes": "Satır notu",
+    "Collect": "Tahsil et",
+    "QuickSearch": "Hızlı arama (F3)",
+    "PostedByLine": "{0} tarafından {1} tarihinde kaydedildi"
   },
   "CompanyWizard": {
     "Title": {

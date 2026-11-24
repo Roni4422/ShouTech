@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -27,7 +27,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class QcTemplateWin : BaseWin
 {
-    protected override string? ScheduleTintName => "Peridot";
+    protected override string? ScheduleTintName => "Marl";
 
     private readonly QualityService? _service;
     private readonly List<QualityParameter> _parameters = new();

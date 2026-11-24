@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -25,7 +25,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class HrLeaveWin : BaseWin
 {
-    protected override string? ScheduleTintName => "Denim";
+    protected override string? ScheduleTintName => "Sienna";
 
     private readonly HrService? _service;
     private readonly List<HrLeaveType> _types = new();

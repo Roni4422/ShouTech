@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Globalization;
 using System.Linq;
@@ -17,6 +17,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class TaxSetupWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Wicker";
     private readonly ComboBox _country = new();
     private readonly Button _jurisdictionAction = new();
     private readonly DataGrid _rules = new() { AutoGenerateColumns = true, IsReadOnly = true, CanUserAddRows = false };

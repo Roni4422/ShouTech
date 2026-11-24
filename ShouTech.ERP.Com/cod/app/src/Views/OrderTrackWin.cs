@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Threading.Tasks;
@@ -19,7 +19,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class OrderTrackWin : BaseWin
 {
-    protected override string? ScheduleTintName => "Cyan";
+    protected override string? ScheduleTintName => "Dune";
     private readonly ComboBox _cmbKind = new();
     private readonly Button _btnRefresh = new();
     private readonly Button _btnOpen = new();

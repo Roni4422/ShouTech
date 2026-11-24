@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Windows;
@@ -17,7 +17,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class PosSyncWin : BaseWin
 {
-    protected override string? ScheduleTintName => "Cobalt";
+    protected override string? ScheduleTintName => "Harbor";
     private readonly OperationsService? _service;
     private readonly List<OutboundMessageRow> _rows = new();
     private readonly List<(TextBlock Label, string Key)> _labels = new();

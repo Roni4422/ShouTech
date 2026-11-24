@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Linq;
 using System.Globalization;
 using System.Windows;
@@ -16,6 +16,7 @@ namespace ShouTech.App.Views;
 /// carries a payee and a credit mode (Payable / AlreadyBooked).</summary>
 public sealed class PurchaseLandedCostWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Mallow";
     private Guid _companyId;
     private readonly TextBox _number = new(), _currency = new(),
         _rate = new() { Text = "1" }, _voucherId = new(), _reversalNumber = new(), _reason = new();

@@ -1,4 +1,4 @@
-using ShouTech.Domain;
+﻿using ShouTech.Domain;
 using System.Globalization;
 using System.Text.Json;
 using System.Windows;
@@ -17,6 +17,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class PurchaseMatchPolicyWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Nectar";
     private readonly PurchaseMatchService? _service;
     private readonly CheckBox _enabled = new();
     private readonly CheckBox _requireReceipt = new();

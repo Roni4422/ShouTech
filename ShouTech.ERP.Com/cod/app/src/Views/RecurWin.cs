@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -29,7 +29,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class RecurWin : BaseWin
 {
-    protected override string? ScheduleTintName => "Peach";
+    protected override string? ScheduleTintName => "Kelp";
 
     private readonly RecurService? _service;
     private readonly List<RecurSchedule> _schedules = new();

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -24,7 +24,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class PosReturnWin : BaseWin
 {
-    protected override string? ScheduleTintName => "Peach";
+    protected override string? ScheduleTintName => "Celadon";
     private readonly Guid? _sessionId;
     private readonly List<(TextBlock Label, string Key)> _labels = new();
     private readonly List<(DataGridColumn Column, string Key)> _headers = new();

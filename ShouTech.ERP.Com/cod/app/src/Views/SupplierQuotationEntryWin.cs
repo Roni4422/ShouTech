@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
@@ -19,6 +19,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class SupplierQuotationEntryWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Umber";
     private readonly long _rfqId;
     private readonly TextBox _supplierId = new();
     private readonly TextBox _supplierCode = new();

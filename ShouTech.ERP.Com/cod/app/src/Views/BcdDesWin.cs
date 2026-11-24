@@ -24,6 +24,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class BcdDesWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Dapple";
     private readonly TextBox _txtWidth = new() { Width = VisuId.FieldWidthTiny, Text = "240" };
     private readonly TextBox _txtHeight = new() { Width = VisuId.FieldWidthTiny, Text = "150" };
     private readonly TextBox _txtModuleWidth = new() { Width = VisuId.FieldWidthTiny, Text = "2" };

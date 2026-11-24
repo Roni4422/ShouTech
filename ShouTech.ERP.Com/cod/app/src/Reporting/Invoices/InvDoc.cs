@@ -63,6 +63,11 @@ public sealed class InvLine
     public int? WarehouseId { get; set; }
     public string WarehouseName { get; set; } = string.Empty;
 
+    /// <summary>Free-text note for this line (migration 120); shown
+    /// in InvoiceWin as an optional grid column. Persisted in the
+    /// line table's notes column.</summary>
+    public string? Notes { get; set; }
+
     // ---- Sales-return routing (W6, migration 100) ----------------------
     /// <summary>Condition the returned goods are in: Good (back to
     /// available stock), Quarantine (into the quarantine warehouse) or
@@ -255,6 +260,12 @@ public sealed class InvDoc
     /// Phenix "voucher" opens this voucher after posting.
     /// </summary>
     public string JournalDocNo { get; set; } = string.Empty;
+
+    /// <summary>Audit line data (INV1): who posted the document and
+    /// when, loaded from the header's posted_by/posted_at columns and
+    /// shown in the invoice window's footer.</summary>
+    public string? PostedBy { get; set; }
+    public string? PostedAt { get; set; }
 
     // ---- Phenix-style footer amounts ----
     /// <summary>Lines discount (absolute amount deducted from lines subtotal).</summary>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -30,7 +30,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class InvDesWin : BaseWin
 {
-    protected override string? ScheduleTintName => "Mint";
+    protected override string? ScheduleTintName => "Zephyr";
 
     private readonly List<(TextBlock Label, string Key)> _labels = new();
     private readonly List<(DataGridColumn Column, string Key)> _headers = new();

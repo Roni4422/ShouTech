@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -15,6 +15,7 @@ namespace ShouTech.App.Views;
 /// <summary>Persistent account card. Account numbering and storage are database-driven.</summary>
 public partial class AccCard : BaseWin
 {
+    protected override string? ScheduleTintName => "Cinder";
     private bool _isNew;
     private bool _isEditing;
     private AccRepo.AccRec? _current;

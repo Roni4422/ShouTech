@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Windows;
@@ -21,6 +21,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class RepostWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Thicket";
     private readonly OperationsService? _service;
     private readonly List<(TextBlock Label, string Key)> _labels = new();
     private readonly ComboBox _entity = new();

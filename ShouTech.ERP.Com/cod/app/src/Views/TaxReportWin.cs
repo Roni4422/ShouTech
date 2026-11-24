@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Globalization;
 using System.Linq;
@@ -15,6 +15,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class TaxReportWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Vervain";
     private readonly DatePicker _from = new() { SelectedDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1) };
     private readonly DatePicker _to = new() { SelectedDate = DateTime.Today };
     private readonly DataGrid _grid = new() { AutoGenerateColumns = true, IsReadOnly = true, CanUserAddRows = false };

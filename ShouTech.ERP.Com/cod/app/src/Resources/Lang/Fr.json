@@ -1,4 +1,4 @@
-﻿{
+{
   "Pricing": {
     "Resolved": "Prix {0} depuis {1}",
     "OverrideConfirm": "Comptabiliser quand même avec une dérogation de prix ? La dérogation sera enregistrée."
@@ -1920,7 +1920,11 @@
     "ValidTill": "Valable jusqu'au",
     "PermissionDenied": "Vous n'avez pas l'autorisation d'effectuer cette action sur la facture.",
     "DueDate": "Date d'échéance",
-    "MaterialNotMatched": "Article introuvable : {0}"
+    "MaterialNotMatched": "Article introuvable : {0}",
+    "ColNotes": "Note de ligne",
+    "Collect": "Encaisser",
+    "QuickSearch": "Recherche rapide (F3)",
+    "PostedByLine": "Comptabilisée par {0} le {1}"
   },
   "CompanyWizard": {
     "Title": {

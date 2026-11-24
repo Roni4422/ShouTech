@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -25,7 +25,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class QcAlertWin : BaseWin
 {
-    protected override string? ScheduleTintName => "Garnet";
+    protected override string? ScheduleTintName => "Claret";
 
     private readonly QualityService? _service;
     private readonly List<QualityAlert> _alerts = new();

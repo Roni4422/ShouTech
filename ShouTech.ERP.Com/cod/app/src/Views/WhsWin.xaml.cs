@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -1500,7 +1500,7 @@ namespace ShouTech.App.Views
 
             protected override string PrefKey => "StockCountWin";
 
-            protected override string? ScheduleTintName => "Sage";
+            protected override string? ScheduleTintName => "Pumice";
 
             public StockCountDialog(Window? owner)
             {

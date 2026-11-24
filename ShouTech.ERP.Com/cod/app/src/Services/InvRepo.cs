@@ -234,6 +234,8 @@ public static class InvRepo
         // on the SALES header table; pre-102 databases keep the legacy
         // behaviour untouched.
         var hasExportHeader = isSales && PartyLedger.ColumnExists(connection, tx, w6Provider, headerTable, "is_export");
+        // Line notes (migration 120): ride along when present.
+        var hasLineNotes = PartyLedger.ColumnExists(connection, tx, w6Provider, lineTable, "notes");
         if (doc.Kind == InvDocKind.SalesReturn && hasW6Header)
         {
             var settings = SrtRepo.ReadSettings(connection, tx);
@@ -394,17 +396,19 @@ public static class InvRepo
                 INSERT INTO {lineTable}
                 (doc_id, line_no, material_id, material_code, description, unit, qty, unit_price,
                  discount_pct, tax_code, tax_rate, tax_calculation_mode, line_subtotal, line_tax, line_total, warehouse_id, warehouse_name
-                 {(hasW6Lines ? ", return_condition, return_reason_code" : string.Empty)})
+                 {(hasW6Lines ? ", return_condition, return_reason_code" : string.Empty)}{(hasLineNotes ? ", notes" : string.Empty)})
                 VALUES
                 ($doc, $no, $mid, $mcode, $desc, $unit, $qty, $price,
                  $disc, $tcode, $trate, $taxMode, $sub, $ltax, $ltot, $wh, $whname
-                 {(hasW6Lines ? ", $rcond, $rreason" : string.Empty)});
+                 {(hasW6Lines ? ", $rcond, $rreason" : string.Empty)}{(hasLineNotes ? ", $notes" : string.Empty)});
                 """;
             if (hasW6Lines)
             {
                 Add(cmd, "$rcond", string.IsNullOrWhiteSpace(line.ReturnCondition) ? "Good" : line.ReturnCondition);
                 Add(cmd, "$rreason", line.ReturnReasonCode);
             }
+            if (hasLineNotes)
+                Add(cmd, "$notes", line.Notes);
             Add(cmd, "$doc", docId);
             Add(cmd, "$no", line.LineNo);
             Add(cmd, "$mid", line.MaterialId);
@@ -2302,6 +2306,7 @@ public static class InvRepo
         var loadProvider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
         var hasW6Header = PartyLedger.ColumnExists(connection, null, loadProvider, headerTable, "return_reason_code");
         var hasW6Lines = PartyLedger.ColumnExists(connection, null, loadProvider, lineTable, "return_condition");
+        var hasLineNotes = PartyLedger.ColumnExists(connection, null, loadProvider, lineTable, "notes");
         // W5 (migration 102): export header fields, sales table only.
         var hasExportHeader = isSales && PartyLedger.ColumnExists(connection, null, loadProvider, headerTable, "is_export");
         InvDoc doc;
@@ -2317,6 +2322,7 @@ public static class InvRepo
                        target_warehouse_id, target_warehouse_name, valid_till{(isSales ? "" : ", due_date, supplier_credit_note_ref")}
                        {(hasW6Header ? ", return_reason_code, return_source_kind, no_invoice, inspection_status, approval_status" : string.Empty)}
                        {(hasExportHeader ? ", is_export, incoterm, port_of_loading, port_of_discharge, country_of_origin, customs_ref, vessel_flight, gross_weight, net_weight" : string.Empty)}
+                       , posted_by, posted_at
                 FROM {headerTable}
                 WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND is_deleted=0;
                 """;
@@ -2372,6 +2378,8 @@ public static class InvRepo
                 OriginalDocKind = ParseDocKind(ReadString(reader, "original_doc_kind")),
                 OriginalDocNo = ReadString(reader, "original_doc_no"),
                 JournalDocNo = ReadString(reader, "journal_doc_no"),
+                PostedBy = ReadString(reader, "posted_by"),
+                PostedAt = ReadString(reader, "posted_at"),
                 TargetWarehouseId = (int?)ReadLongNullable(reader, "target_warehouse_id"),
                 TargetWarehouseName = ReadString(reader, "target_warehouse_name"),
                 ValidTill = ParseValidTill(reader),
@@ -2406,7 +2414,7 @@ public static class InvRepo
             cmd.CommandText = $"""
                 SELECT line_no, material_id, material_code, description, unit, qty, unit_price,
                        discount_pct, tax_code, tax_rate, tax_calculation_mode, warehouse_id, warehouse_name
-                       {(hasW6Lines ? ", return_condition, return_reason_code" : string.Empty)}
+                       {(hasW6Lines ? ", return_condition, return_reason_code" : string.Empty)}{(hasLineNotes ? ", notes" : string.Empty)}
                 FROM {lineTable} WHERE doc_id=$id ORDER BY line_no;
                 """;
             Add(cmd, "$id", docId);
@@ -2435,6 +2443,9 @@ public static class InvRepo
                         : "Good",
                     ReturnReasonCode = hasW6Lines && reader.FieldCount > 14 && !reader.IsDBNull(14)
                         ? Convert.ToString(reader.GetValue(14), CultureInfo.InvariantCulture)
+                        : null,
+                    Notes = hasLineNotes && reader.FieldCount > (hasW6Lines ? 15 : 13) && !reader.IsDBNull(hasW6Lines ? 15 : 13)
+                        ? Convert.ToString(reader.GetValue(hasW6Lines ? 15 : 13), CultureInfo.InvariantCulture)
                         : null,
                 });
             }
@@ -3649,14 +3660,10 @@ public static class InvRepo
                 }
                 break;
             }
-            case InvDocKind.StockIn:
-                Add(GlAccounts.Inventory, grand, 0);
-                Add(GlAccounts.Purchases, 0, grand);
-                break;
-            case InvDocKind.StockOut:
-                Add(GlAccounts.Cogs, grand, 0);
-                Add(GlAccounts.Inventory, 0, grand);
-                break;
+            // StockIn / StockOut have NO case here on purpose: the
+            // owner rule (2026-11-24) makes them inventory-only, and
+            // InvPostingPolicy already withholds the GL effect, so this
+            // builder is never called for them.
         }
         return lines;
     }
@@ -5247,9 +5254,14 @@ internal static class InvDocKindExt
 /// - PurchaseInvoice: GL + party ledger (supplier credit) + stock in +
 ///   settlement + credit guard (supplier exposure, as before Step 5).
 /// - PurchaseReturn: mirror of SalesReturn on the supplier side.
-/// - StockIn / StockOut: GL (Step 3 mapping) + stock. NO party ledger —
-///   a stock document is not a receivable/payable, whatever party text
-///   was typed on it (before Step 5 these credited a supplier).
+/// - StockIn / StockOut: stock ONLY — NO journal voucher and NO party
+///   ledger (owner rule, 2026-11-24 16:06: stock entry/exit documents
+///   post to INVENTORY ONLY, with no journal voucher). Quantities and stock values
+///   still update through StkPost exactly as before; only the GL leg is
+///   absent. A stock document is not a receivable/payable either,
+///   whatever party text was typed on it (before Step 5 these credited
+///   a supplier; until the owner rule they also carried a GL mapping —
+///   Dr Inventory/Cr Purchases and Dr COGS/Cr Inventory — now removed).
 /// - OpeningStock: stock in only (valuation event, Step 6 owns its GL).
 /// - Quotation: NO effects at all. Posting a quotation only advances
 ///   its status; it must never create a receivable, a GL sales entry,
@@ -5299,8 +5311,8 @@ public static class InvPostingPolicy
         InvDocKind.SalesReturn => new Effects(true, true, true, false, false, false),
         InvDocKind.PurchaseInvoice => new Effects(true, true, true, true, true, false),
         InvDocKind.PurchaseReturn => new Effects(true, true, true, false, false, false),
-        InvDocKind.StockIn => new Effects(true, false, true, false, false, false),
-        InvDocKind.StockOut => new Effects(true, false, true, false, false, false),
+        InvDocKind.StockIn => new Effects(false, false, true, false, false, false),
+        InvDocKind.StockOut => new Effects(false, false, true, false, false, false),
         InvDocKind.OpeningStock => new Effects(false, false, true, false, false, false),
         InvDocKind.Quotation => None,
         // Step 9: routed to the dedicated engines at the top of

@@ -20,6 +20,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class CcCard : BaseWin
 {
+    protected override string? ScheduleTintName => "Flint";
     private readonly TextBox _txtCode = new();
     private readonly ComboBox _cbParent = new();
     private readonly TextBox _txtNameAr = new();

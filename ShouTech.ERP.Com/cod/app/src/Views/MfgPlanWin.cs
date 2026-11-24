@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -28,7 +28,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class MfgPlanWin : BaseWin
 {
-    protected override string? ScheduleTintName => "Lagoon";
+    protected override string? ScheduleTintName => "Sorrel";
 
     private readonly PlanningService? _service;
     private readonly BomService? _bomService;

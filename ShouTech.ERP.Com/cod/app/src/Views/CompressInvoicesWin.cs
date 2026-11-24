@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
@@ -21,6 +21,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class CompressInvoicesWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Solace";
     private readonly OperationsService? _service;
     private readonly List<(TextBlock Label, string Key)> _labels = new();
     private readonly TextBlock _salesCount = new();

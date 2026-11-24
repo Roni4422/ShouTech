@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -25,7 +25,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class CrmActivitiesWin : BaseWin
 {
-    protected override string? ScheduleTintName => "Coral";
+    protected override string? ScheduleTintName => "Meadow";
 
     private readonly CrmService? _service;
     private readonly List<CrmActivity> _activities = new();

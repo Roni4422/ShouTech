@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -15,6 +15,7 @@ namespace ShouTech.App.Views;
 /// or request-for-quotation draft.</summary>
 public sealed class PurchaseRequisitionWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Pollen";
     private Guid _companyId;
     private long? _documentId;
     private readonly TextBox _number=new(),_department=new(),_notes=new(),_approvers=new(),_reason=new(),_supplierId=new(),_supplierName=new(),_currency=new(){Text="USD"},_rate=new(){Text="1"},_warehouse=new();

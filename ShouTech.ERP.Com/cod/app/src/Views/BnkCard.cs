@@ -18,6 +18,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class BnkCard : BaseWin
 {
+    protected override string? ScheduleTintName => "Elder";
     private readonly TextBox _txtCode = new();
     private readonly TextBox _txtNameEn = new();
     private readonly TextBox _txtNameAr = new();

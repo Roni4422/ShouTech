@@ -1,4 +1,4 @@
-﻿{
+{
   "Pricing": {
     "Resolved": "السعر {0} من {1}",
     "OverrideConfirm": "الترحيل على أي حال بتجاوز سعري؟ سيتم تسجيل التجاوز."
@@ -2003,7 +2003,11 @@
     "ValidTill": "صالح حتى",
     "PermissionDenied": "ليس لديك صلاحية تنفيذ إجراء الفاتورة هذا.",
     "DueDate": "تاريخ الاستحقاق",
-    "MaterialNotMatched": "المادة غير مطابقة: {0}"
+    "MaterialNotMatched": "المادة غير مطابقة: {0}",
+    "ColNotes": "بيان السطر",
+    "Collect": "تحصيل",
+    "QuickSearch": "بحث سريع (F3)",
+    "PostedByLine": "سُجّلت من قبل {0} في {1}"
   },
   "Vouchers": {
     "PartyCode": "رمز الطرف",

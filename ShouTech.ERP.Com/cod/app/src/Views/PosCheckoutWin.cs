@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -25,6 +25,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class PosCheckoutWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Yarrow";
     private readonly InvDoc _doc;
     private readonly Guid? _sessionId;
     private readonly string? _sessionNo;

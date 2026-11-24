@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Windows;
@@ -21,7 +21,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class PosSessionWin : BaseWin
 {
-    protected override string? ScheduleTintName => "Peach";
+    protected override string? ScheduleTintName => "Gorse";
     private readonly List<PosSession> _sessions = new();
     private readonly List<(TextBlock Label, string Key)> _labels = new();
     private readonly List<(DataGridColumn Column, string Key)> _headers = new();

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Globalization;
@@ -29,7 +29,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class PosSalesWin : BaseWin
 {
-    protected override string? ScheduleTintName => "Peach";
+    protected override string? ScheduleTintName => "Fallow";
 
     private sealed record SaleRow(
         long DocId, string DocNo, string Kind, string Time, string PartyName,

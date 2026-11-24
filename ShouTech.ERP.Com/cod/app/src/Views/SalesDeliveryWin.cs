@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -30,6 +30,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class SalesDeliveryWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Rattan";
     private readonly TextBox _txtOrderNo = new();
     private readonly TextBox _txtDeliveryNo = new() { IsReadOnly = true };
     private readonly DatePicker _dtDelivery = new() { SelectedDate = DateTime.Today };

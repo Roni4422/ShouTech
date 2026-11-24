@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -31,7 +31,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class ContractWin : BaseWin
 {
-    protected override string? ScheduleTintName => "Sky";
+    protected override string? ScheduleTintName => "Quince";
 
     private static readonly char[] NewLineSeparators = { '\r', '\n' };
 

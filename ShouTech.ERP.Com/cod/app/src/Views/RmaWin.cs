@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -29,7 +29,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class RmaWin : BaseWin
 {
-    protected override string? ScheduleTintName => "Peach";
+    protected override string? ScheduleTintName => "Linden";
 
     private readonly List<SrtRepo.RmaRequest> _requests = new();
     private readonly ObservableCollection<RmaLineEdit> _editLines = new();

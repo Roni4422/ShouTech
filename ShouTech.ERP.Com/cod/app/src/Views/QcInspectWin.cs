@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -29,7 +29,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class QcInspectWin : BaseWin
 {
-    protected override string? ScheduleTintName => "Jade";
+    protected override string? ScheduleTintName => "Rowan";
 
     private readonly QualityService? _service;
     private readonly List<QualityInspection> _inspections = new();

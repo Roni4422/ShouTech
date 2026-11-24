@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -29,6 +29,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class SalesReturnWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Sable";
     private readonly List<(TextBlock Label, string Key)> _labels = new();
     private readonly List<(DataGridColumn Column, string Key)> _headers = new();
     private readonly ComboBox _sourceMode = new();

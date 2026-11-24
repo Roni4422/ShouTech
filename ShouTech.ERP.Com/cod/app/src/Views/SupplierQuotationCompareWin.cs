@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Windows;
@@ -17,6 +17,7 @@ namespace ShouTech.App.Views;
 /// </summary>
 public sealed class SupplierQuotationCompareWin : BaseWin
 {
+    protected override string? ScheduleTintName => "Tallow";
     private readonly long _rfqId;
     private readonly DataGrid _offersGrid = new();
     private readonly DataGrid _linesGrid = new();
