@@ -583,6 +583,7 @@ public class MasterCardServiceTests
         public Task<Party?> GetPartyByCodeAsync(string companyId, string kind, string code, CancellationToken cancellationToken = default) => Task.FromResult<Party?>(null);
         public Task<IReadOnlyList<Party>> SearchPartiesAsync(string companyId, string? kind, string query, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<Party>>(Array.Empty<Party>());
         public Task SavePartyAsync(string companyId, Party party, string userId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<string> NextPartyCodeAsync(string companyId, string kind, CancellationToken cancellationToken = default) => Task.FromResult(kind == "S" ? "SUP-0001" : "CUS-0001");
         public Task SoftDeletePartyAsync(string companyId, Guid id, string userId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<int> CountPartyLedgerRefsAsync(string companyId, string kind, string code, CancellationToken cancellationToken = default) => Task.FromResult(0);
         public Task<LedgerBalance> GetPartyBalanceAsync(string companyId, string kind, string code, CancellationToken cancellationToken = default) => Task.FromResult(new LedgerBalance());
