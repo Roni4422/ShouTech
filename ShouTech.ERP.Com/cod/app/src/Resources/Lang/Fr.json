@@ -4684,7 +4684,13 @@
     "PosDevices": "Options des appareils de point de vente…",
     "PosSection": "Point de vente",
     "Saved": "Options enregistrées.",
-    "InvalidNumber": "Veuillez saisir un nombre valide pour : {0}"
+    "InvalidNumber": "Veuillez saisir un nombre valide pour : {0}",
+    "LayoutsSection": "Dispositions des fenêtres",
+    "ResetPositions": "Réinitialiser les positions",
+    "ResetLayouts": "Réinitialiser les grilles",
+    "ResetAllLayouts": "Tout réinitialiser",
+    "ResetConfirm": "Réinitialiser les dispositions enregistrées ? Les fenêtres s’ouvriront avec leurs dispositions par défaut. Les autres utilisateurs ne sont pas affectés.",
+    "LayoutsReset": "Les dispositions enregistrées ont été réinitialisées."
   },
   "PosTerm": {
     "Title": "Définition du terminal de caisse",

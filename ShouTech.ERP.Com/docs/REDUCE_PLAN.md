@@ -214,3 +214,97 @@ benchmarks to be sellable as enterprise commercial software.
   IN PROGRESS in this branch — docs/POS_FAMILY.md (audit, P1
   terminal definition DONE; P2 session picker, P3 session sales
   follow).
+
+## Commercial-readiness phase (owner go-ahead 2026-11-24 16:22) — PLAN
+
+Starts when this branch's work is complete (R3–R5 + the final
+reduce report) and the owner gives the merge/phase decision. Goal:
+the program ready for WORK and SALE, with maximum protection
+against tampering, hackers and reverse engineering — honestly
+bounded (see the limit at the end of this section).
+
+1. **Licensing build** — implement
+   ~/workspace/research/dongle-module-licensing-design.md
+   (AppHost.Entitlements + nav guard over the 215 mapped ribbon
+   buttons; provider chain Dongle → LicenseFile → Online →
+   DevMode → read-only). The design's open decisions are the
+   OWNER's, put to him as options when the phase opens — not
+   decided by the builders:
+   - **D1** lapsed-module data policy (proposal: hide UI + block
+     writes, data preserved/readable via Core reports; alternates
+     in the design doc §6).
+   - **D2** unlicensed install behaviour (proposal: app opens
+     read-only, LicenseWin/AddonsWin reachable, LIC-8004 shown —
+     a licensing failure never bricks access to the customer's
+     own data).
+   - **D5** dongle hardware reality (is there real HID hardware /
+     a vendor SDK behind VID 0x5348/PID 0x4552? Until the native
+     stubs are productized, the signed license file bound to the
+     dongle serial is the shippable mechanism).
+   The R5 pass in this branch completes the LicenseWin/AddonsWin
+   UI foundation the build stands on.
+2. **Protection workstream** (research-first per the standing
+   find-the-best rule; every evaluation records chosen vs
+   rejected with reasons, from vendor docs + independent
+   sources):
+   a. **.NET code protection** — evaluate obfuscation /
+      virtualization protectors for the shipping build
+      (commercial protectors vs open-source options): impact on
+      the build pipeline, WPF/XAML pitfalls (resource names,
+      reflection over view-models, the Lang/Errors JSON loaders),
+      startup/runtime performance cost. Deliverable = evaluation
+      + recommendation; the owner picks before anything is
+      applied to the shipping configuration.
+   b. **License enforcement** = workstream 1 above (signed
+      license blobs, fail-closed for granting, fail-open only
+      for read access to existing data, every grant/block in
+      security_audit_log with its LIC code).
+   c. **Authenticode signing** of all binaries + the installer
+      (certificate procurement is an owner/commercial action;
+      the pipeline signs when a certificate is configured and
+      reports plainly when it is not — unsigned builds are
+      never described as signed).
+   d. **Integrity + encryption, one coherent story** — verify
+      end-to-end what this branch already built: design files
+      (.strd/.stid/.stld, AES-256-GCM + integrity, DSG-8101..03),
+      the help package (.sthx, signed + encrypted, commercial
+      workstream above), encrypted backups; add startup
+      integrity self-checks for the shipped binaries where the
+      chosen protector does not already provide them; gaps
+      recorded, not papered over.
+   e. **Database-level protection for an offline-first app** —
+      only what is real on a customer machine: encrypted backup
+      files, the existing RBAC + audit trail, guidance for
+      NTFS permissions on the data folder, PostgreSQL's own
+      auth/TLS when the customer runs a server. NO fake
+      server-side promises: a local SQLite file is the
+      customer's data on the customer's disk.
+3. **Installer / packaging** — one signed installer: fresh
+   install, in-place upgrade that runs migrations safely,
+   uninstall that preserves customer data by default; the
+   .NET runtime story (self-contained vs framework-dependent)
+   decided in the evaluation under 2a.
+4. **F1 help system** — as registered in the workstreams
+   section above (ratified design; .sthx package, WebView2
+   viewer, per-window index with coverage reporting).
+5. **Manuals** — user manual generated from the help content
+   (the protected PDF is the official copy); installation /
+   administration guide (deployment, backup, licensing,
+   protection settings as actually implemented).
+6. **Demo data** — a clearly-labelled demo company with a
+   realistic dataset (chart, materials, parties, documents
+   across a fiscal period) + a one-click reset; demo data
+   never mixes into real companies.
+7. **Release QA gate** — the Windows verification backlog is
+   this phase's exit gate: Kern.Tests execution, WPF
+   click-through of the full window set, live PostgreSQL
+   migration + posting run, and a clean-machine install test.
+
+**HONEST LIMIT (owner, 2026-11-24 16:22 — recorded, never
+overstated):** a desktop application running on the customer's
+own machine cannot be made uncrackable. The professional goal
+is layered cost-raising (protection + licensing + signing),
+tamper-EVIDENCE (integrity checks, signed packages, audit
+logs), and enforceable licensing — not impossibility. Any
+protection claim in documentation or marketing copy must match
+what is actually implemented at the time it is written.

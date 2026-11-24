@@ -4693,7 +4693,13 @@
     "PosDevices": "POS device options…",
     "PosSection": "Point of sale",
     "Saved": "Options saved.",
-    "InvalidNumber": "Please enter a valid number for: {0}"
+    "InvalidNumber": "Please enter a valid number for: {0}",
+    "LayoutsSection": "Window layouts",
+    "ResetPositions": "Reset window positions",
+    "ResetLayouts": "Reset grid layouts",
+    "ResetAllLayouts": "Reset all layouts",
+    "ResetConfirm": "Reset the saved window layouts? Windows will open with their default layouts. Other users are not affected.",
+    "LayoutsReset": "Saved window layouts were reset."
   },
   "PosTerm": {
     "Title": "POS Terminal Definition",

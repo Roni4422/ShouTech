@@ -4684,7 +4684,13 @@
     "PosDevices": "POS cihaz seçenekleri…",
     "PosSection": "Satış noktası",
     "Saved": "Seçenekler kaydedildi.",
-    "InvalidNumber": "Lütfen geçerli bir sayı girin: {0}"
+    "InvalidNumber": "Lütfen geçerli bir sayı girin: {0}",
+    "LayoutsSection": "Pencere düzenleri",
+    "ResetPositions": "Pencere konumlarını sıfırla",
+    "ResetLayouts": "Izgara düzenlerini sıfırla",
+    "ResetAllLayouts": "Tüm düzenleri sıfırla",
+    "ResetConfirm": "Kaydedilmiş pencere düzenleri sıfırlansın mı? Pencereler varsayılan düzenleriyle açılır. Diğer kullanıcılar etkilenmez.",
+    "LayoutsReset": "Kaydedilmiş pencere düzenleri sıfırlandı."
   },
   "PosTerm": {
     "Title": "POS Terminali Tanımı",

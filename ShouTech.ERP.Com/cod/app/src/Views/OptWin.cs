@@ -33,6 +33,9 @@ public sealed class OptWin : BaseWin
     private readonly Button _saveButton = new();
     private readonly Button _posButton = new();
     private readonly Button _closeButton = new();
+    private readonly Button _resetPositionsButton = new();
+    private readonly Button _resetLayoutsButton = new();
+    private readonly Button _resetAllButton = new();
 
     private readonly ComboBox _cmbLang = new();
     private readonly TextBox _txtCurrency = new();
@@ -133,6 +136,24 @@ public sealed class OptWin : BaseWin
             drawer.ShowDialog();
         };
         pos.Children.Add(_posButton);
+
+        // ---- Window layouts (per-user window state) ------------------
+        // Reset clears USER-scoped state only (positions / grid
+        // layouts / everything); company defaults and other users
+        // are untouched. Open windows re-save their state on close.
+        var layouts = BeginSection(form, "Options.LayoutsSection");
+        F2Ui.StyleButton(_resetPositionsButton, "Options.ResetPositions");
+        F2Ui.StyleButton(_resetLayoutsButton, "Options.ResetLayouts");
+        F2Ui.StyleButton(_resetAllButton, "Options.ResetAllLayouts");
+        _resetPositionsButton.Click += (_, _) => ResetLayouts(WinPref.ResetKind.Geometry);
+        _resetLayoutsButton.Click += (_, _) => ResetLayouts(WinPref.ResetKind.Layouts);
+        _resetAllButton.Click += (_, _) => ResetLayouts(WinPref.ResetKind.All);
+        var layoutButtons = new StackPanel { Orientation = Orientation.Horizontal };
+        layoutButtons.Children.Add(_resetPositionsButton);
+        layoutButtons.Children.Add(_resetLayoutsButton);
+        layoutButtons.Children.Add(_resetAllButton);
+        Grid.SetColumn(layoutButtons, 1);
+        layouts.Children.Add(layoutButtons);
 
         var scroll = new ScrollViewer
         {
@@ -302,6 +323,17 @@ public sealed class OptWin : BaseWin
         _statusBar.Text = T("Options.Saved");
     }
 
+    private void ResetLayouts(WinPref.ResetKind kind)
+    {
+        if (MessageBox.Show(this, T("Options.ResetConfirm"), Title,
+                MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+        var company = AppState.CurrentCompanyCode ?? "no-company";
+        var user = AppState.CurrentUser?.Username ?? "anonymous";
+        WinPref.ResetUserState(company, user, kind);
+        _statusBar.Text = T("Options.LayoutsReset");
+    }
+
     private bool TryInt(TextBox box, string labelKey, out int value)
     {
         if (int.TryParse(box.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value) ||
@@ -317,7 +349,7 @@ public sealed class OptWin : BaseWin
     {
         Title = T("Options.Title");
         F2Ui.ApplyTexts(_labels, new List<(DataGridColumn, string)>(),
-            new[] { _saveButton, _posButton, _closeButton }, T);
+            new[] { _saveButton, _posButton, _closeButton, _resetPositionsButton, _resetLayoutsButton, _resetAllButton }, T);
         foreach (var (label, key) in _sectionLabels)
             label.Text = T(key);
         foreach (var (check, key) in _checkKeys)

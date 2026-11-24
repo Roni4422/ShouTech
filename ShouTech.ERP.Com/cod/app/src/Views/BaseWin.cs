@@ -399,9 +399,51 @@ public abstract class BaseWin : Window
         ApplyLocalizedText();
         ApplyPrimaryButtonConvention();
         HookLanguageChanged();
-        WireGeometryPersistence();
-        ClampToWorkArea();
+        // Owner rule (2026-11-24): a saved user geometry WINS — the
+        // 50% work-area cap is the FIRST-OPEN default only, so the
+        // clamp runs solely when no saved geometry was restored.
+        if (!_geometryRestored)
+            ClampToWorkArea();
     }
+
+    /// <summary>True when WinPref restored a saved geometry for
+    /// this window (see OnSourceInitialized).</summary>
+    private bool _geometryRestored;
+
+    /// <summary>
+    /// Geometry restore happens here, not in the constructor or at
+    /// Loaded: the platform guidance is to restore inside
+    /// OnSourceInitialized — restoring earlier misplaces maximized
+    /// windows on multi-monitor setups.
+    /// </summary>
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        WireGeometryPersistence();
+    }
+
+    /// <summary>Hook for derived windows to restore their own
+    /// persisted state (pane widths, selected tab, expanded
+    /// sections) via PrefGet — called right after the geometry
+    /// restore, whether or not a geometry record existed.</summary>
+    protected virtual void OnRestoreWindowState()
+    {
+    }
+
+    /// <summary>Hook for derived windows to persist their own
+    /// state via PrefSet — called on Closing, before the geometry
+    /// save.</summary>
+    protected virtual void OnSaveWindowState()
+    {
+    }
+
+    /// <summary>Reads one of this window's named state values from
+    /// the per-user store (company defaults underneath).</summary>
+    protected string? PrefGet(string key) => WinPref.LoadValue(GeometryScope(), key);
+
+    /// <summary>Saves one of this window's named state values to
+    /// the per-user store.</summary>
+    protected void PrefSet(string key, string value) => WinPref.SaveValue(GeometryScope(), key, value);
 
     // Windows 11 backdrop layering: the shell window keeps the full
     // Mica backdrop (the central WindowBackdropKind token); secondary
@@ -616,14 +658,23 @@ public abstract class BaseWin : Window
             return;
 
         _geometryWired = true;
-        WinPref.RestoreGeometry(this, GeometryScope());
+        _geometryRestored = WinPref.RestoreGeometry(this, GeometryScope());
         Closing += OnGeometryClosing;
+        try
+        {
+            OnRestoreWindowState();
+        }
+        catch (Exception exState)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exState, "BaseWin.OnRestoreWindowState");
+        }
     }
 
     private void OnGeometryClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         try
         {
+            OnSaveWindowState();
             WinPref.SaveGeometry(this, GeometryScope());
         }
         catch (Exception exL152)

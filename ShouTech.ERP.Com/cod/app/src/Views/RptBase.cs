@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Text;
 using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -443,7 +444,58 @@ public abstract class RptBase : BaseWin
         }
 
         _grid.ItemsSource = _data?.Rows;
+        ApplySavedSort();
         UpdateStatus();
+    }
+
+    private bool _sortRestoreReported;
+
+    /// <summary>Restores the user's saved grid sort (WinPref grid
+    /// state). A row shape that cannot be view-sorted falls back to
+    /// the natural order — reported once, never blocking.</summary>
+    private void ApplySavedSort()
+    {
+        var state = WinPref.LoadGridState(ColumnScope());
+        if (state?.SortKey is not { Length: > 0 } key)
+            return;
+        try
+        {
+            var direction = state.Ascending ? ListSortDirection.Ascending : ListSortDirection.Descending;
+            _grid.Items.SortDescriptions.Clear();
+            _grid.Items.SortDescriptions.Add(new SortDescription(key, direction));
+            foreach (var col in _grid.Columns.OfType<DataGridTextColumn>())
+            {
+                if ((col.Binding as Binding)?.Path.Path == $"[{key}]")
+                    col.SortDirection = direction;
+            }
+        }
+        catch (Exception exSort)
+        {
+            if (!_sortRestoreReported)
+            {
+                _sortRestoreReported = true;
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exSort, "RptBase.ApplySavedSort");
+            }
+        }
+    }
+
+    /// <summary>Captures the grid's current sort into the per-user
+    /// store when the window closes (BaseWin state hook).</summary>
+    protected override void OnSaveWindowState()
+    {
+        try
+        {
+            var sd = _grid.Items.SortDescriptions.FirstOrDefault();
+            WinPref.SaveGridState(ColumnScope(), new WinPref.GridStateRec
+            {
+                SortKey = sd.PropertyName,
+                Ascending = sd.Direction != ListSortDirection.Descending
+            });
+        }
+        catch (Exception exSort)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exSort, "RptBase.OnSaveWindowState");
+        }
     }
 
     /// <summary>

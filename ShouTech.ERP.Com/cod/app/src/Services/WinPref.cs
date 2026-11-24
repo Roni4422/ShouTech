@@ -20,10 +20,26 @@ namespace ShouTech.App.Services;
 /// </summary>
 public static class WinPref
 {
+    /// <summary>On-disk schema version. A file written by a NEWER
+    /// version is never trusted: the reader falls back to defaults
+    /// for every window rather than guessing at a future shape.</summary>
+    public const int CurrentVersion = 1;
+
     private sealed class PrefBag
     {
+        public int Version { get; set; } = CurrentVersion;
         public Dictionary<string, GeometryRec> Geometry { get; set; } = new(StringComparer.Ordinal);
         public Dictionary<string, List<ColumnRec>> ReportColumns { get; set; } = new(StringComparer.Ordinal);
+        public Dictionary<string, string> Values { get; set; } = new(StringComparer.Ordinal);
+        public Dictionary<string, GridStateRec> GridStates { get; set; } = new(StringComparer.Ordinal);
+    }
+
+    /// <summary>Saved grid sort state (report grids): the column key
+    /// the user sorted by and its direction.</summary>
+    public sealed class GridStateRec
+    {
+        public string? SortKey { get; set; }
+        public bool Ascending { get; set; } = true;
     }
 
     private sealed class GeometryRec
@@ -52,20 +68,57 @@ public static class WinPref
     // Window geometry
     // ------------------------------------------------------------------
 
-    /// <summary>Restores the last saved geometry for the window, clamped to the work area.</summary>
-    public static void RestoreGeometry(Window window, string scope)
+    /// <summary>
+    /// Restores the last saved geometry for the window. Returns true
+    /// when a saved record was applied (the caller then skips the
+    /// first-open size cap: a saved user geometry WINS over the cap —
+    /// owner rule 2026-11-24). Validation follows the platform
+    /// guidance: the saved rectangle is kept when a usable part of
+    /// it intersects the VIRTUAL screen (negative coordinates are
+    /// legal on multi-monitor setups and are validated by
+    /// intersection, never by sign); when too little of it is
+    /// visible (display removed, resolution changed), it falls back
+    /// to a clamp inside the primary work area. A saved Minimized
+    /// state is never restored — SaveGeometry records only
+    /// Normal/Maximized, so a window minimized at close reopens
+    /// with its RestoreBounds as a normal window.
+    /// </summary>
+    public static bool RestoreGeometry(Window window, string scope)
     {
         try
         {
             var bag = LoadBag(scope, out var elementKey);
             if (!bag.Geometry.TryGetValue(elementKey, out var rec))
-                return;
+            {
+                // Company/admin defaults sit UNDER user overrides.
+                var fallback = LoadDefaultsBag(scope);
+                if (fallback is null || !fallback.Geometry.TryGetValue(elementKey, out rec))
+                    return false;
+            }
 
             var work = SystemParameters.WorkArea;
             var width = Math.Min(Math.Max(rec.Width, window.MinWidth > 0 ? window.MinWidth : 400), work.Width);
             var height = Math.Min(Math.Max(rec.Height, window.MinHeight > 0 ? window.MinHeight : 300), work.Height);
-            var left = Math.Min(Math.Max(rec.Left, work.Left), work.Right - width);
-            var top = Math.Min(Math.Max(rec.Top, work.Top), work.Bottom - height);
+            var saved = new Rect(rec.Left, rec.Top, width, height);
+
+            var virtualScreen = new Rect(
+                SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop,
+                SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
+            var visible = Rect.Intersect(saved, virtualScreen);
+            double left, top;
+            if (!visible.IsEmpty && visible.Width >= 100 && visible.Height >= 40)
+            {
+                // Enough of the window is reachable on a current
+                // display: keep its place, clamped inside the
+                // virtual screen.
+                left = Math.Min(Math.Max(saved.Left, virtualScreen.Left), virtualScreen.Right - width);
+                top = Math.Min(Math.Max(saved.Top, virtualScreen.Top), virtualScreen.Bottom - height);
+            }
+            else
+            {
+                left = Math.Min(Math.Max(rec.Left, work.Left), work.Right - width);
+                top = Math.Min(Math.Max(rec.Top, work.Top), work.Bottom - height);
+            }
 
             window.WindowStartupLocation = WindowStartupLocation.Manual;
             window.Left = left;
@@ -74,11 +127,13 @@ public static class WinPref
             window.Height = height;
             if (rec.Maximized)
                 window.WindowState = WindowState.Maximized;
+            return true;
         }
         catch (Exception exL77)
         {
             AppHost.Errors.Report(ErrorCodes.SettingsLoadFailed, exL77, "WinPref.RestoreGeometry");
             // Preference restore is best effort only.
+            return false;
         }
     }
 
@@ -122,8 +177,11 @@ public static class WinPref
         try
         {
             var bag = LoadBag(scope, out var elementKey);
-            return bag.ReportColumns.TryGetValue(elementKey, out var cols)
-                ? new List<ColumnRec>(cols)
+            if (bag.ReportColumns.TryGetValue(elementKey, out var cols))
+                return new List<ColumnRec>(cols);
+            var fallback = LoadDefaultsBag(scope);
+            return fallback is not null && fallback.ReportColumns.TryGetValue(elementKey, out var defaults)
+                ? new List<ColumnRec>(defaults)
                 : null;
         }
         catch (Exception exL126)
@@ -147,6 +205,124 @@ public static class WinPref
             AppHost.Errors.Report(ErrorCodes.SettingsSaveFailed, exL141, "WinPref.SaveReportColumns");
             // Preference save is best effort only.
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Named values + grid states (panes, tabs, last-used values, sort)
+    // ------------------------------------------------------------------
+
+    /// <summary>Saves one named value under the element scope
+    /// (splitter/pane widths, selected tab, expanded state,
+    /// last-used dialog values — the F&O personalization set).</summary>
+    public static void SaveValue(string scope, string key, string value)
+    {
+        try
+        {
+            var bag = LoadBag(scope, out var elementKey);
+            bag.Values[elementKey + "/" + key] = value;
+            SaveBag(scope, bag);
+        }
+        catch (Exception exVal)
+        {
+            AppHost.Errors.Report(ErrorCodes.SettingsSaveFailed, exVal, "WinPref.SaveValue");
+        }
+    }
+
+    public static string? LoadValue(string scope, string key)
+    {
+        try
+        {
+            var bag = LoadBag(scope, out var elementKey);
+            if (bag.Values.TryGetValue(elementKey + "/" + key, out var value))
+                return value;
+            var fallback = LoadDefaultsBag(scope);
+            return fallback is not null && fallback.Values.TryGetValue(elementKey + "/" + key, out var def)
+                ? def
+                : null;
+        }
+        catch (Exception exVal)
+        {
+            AppHost.Errors.Report(ErrorCodes.SettingsLoadFailed, exVal, "WinPref.LoadValue");
+            return null;
+        }
+    }
+
+    public static void SaveGridState(string scope, GridStateRec state)
+    {
+        try
+        {
+            var bag = LoadBag(scope, out var elementKey);
+            bag.GridStates[elementKey] = state;
+            SaveBag(scope, bag);
+        }
+        catch (Exception exGrid)
+        {
+            AppHost.Errors.Report(ErrorCodes.SettingsSaveFailed, exGrid, "WinPref.SaveGridState");
+        }
+    }
+
+    public static GridStateRec? LoadGridState(string scope)
+    {
+        try
+        {
+            var bag = LoadBag(scope, out var elementKey);
+            if (bag.GridStates.TryGetValue(elementKey, out var state))
+                return state;
+            var fallback = LoadDefaultsBag(scope);
+            return fallback is not null && fallback.GridStates.TryGetValue(elementKey, out var def)
+                ? def
+                : null;
+        }
+        catch (Exception exGrid)
+        {
+            AppHost.Errors.Report(ErrorCodes.SettingsLoadFailed, exGrid, "WinPref.LoadGridState");
+            return null;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Reset (OptWin): clears USER-scoped state only; company/admin
+    // defaults and other users are untouched. Windows already open
+    // re-save their own state when they close, as usual.
+    // ------------------------------------------------------------------
+
+    public enum ResetKind { Geometry, Layouts, All }
+
+    public static void ResetUserState(string company, string user, ResetKind kind)
+    {
+        try
+        {
+            var scope = company + "/" + user + "/_reset";
+            var bag = LoadBag(scope, out _);
+            if (kind is ResetKind.Geometry or ResetKind.All)
+                bag.Geometry.Clear();
+            if (kind is ResetKind.Layouts or ResetKind.All)
+            {
+                bag.ReportColumns.Clear();
+                bag.GridStates.Clear();
+            }
+            if (kind is ResetKind.All)
+                bag.Values.Clear();
+            SaveBag(scope, bag);
+        }
+        catch (Exception exReset)
+        {
+            AppHost.Errors.Report(ErrorCodes.SettingsSaveFailed, exReset, "WinPref.ResetUserState");
+        }
+    }
+
+    /// <summary>The company-defaults bag ("{company}/defaults"):
+    /// administrator-provided starting layouts that sit UNDER the
+    /// user's own overrides. Read-only from the app today.</summary>
+    private static PrefBag? LoadDefaultsBag(string scope)
+    {
+        var parts = scope.Split('/');
+        if (parts.Length < 2)
+            return null;
+        var company = parts[0];
+        var elementKey = parts[^1];
+        var bag = LoadBag(company + "/defaults/" + elementKey, out _);
+        return bag;
     }
 
     // ------------------------------------------------------------------
@@ -174,7 +350,13 @@ public static class WinPref
                 try
                 {
                     var json = File.ReadAllText(path);
-                    return JsonSerializer.Deserialize<PrefBag>(json, JsonOpts) ?? new PrefBag();
+                    var bag = JsonSerializer.Deserialize<PrefBag>(json, JsonOpts) ?? new PrefBag();
+                    // A file from a NEWER schema is never trusted:
+                    // fall back to defaults for every window in it
+                    // instead of guessing at a future shape. A file
+                    // with no version (pre-versioning) is legacy v0
+                    // and is accepted; it is upgraded on next save.
+                    return bag.Version > CurrentVersion ? new PrefBag() : bag;
                 }
                 catch (Exception exL174)
                 {
@@ -193,6 +375,7 @@ public static class WinPref
 
         lock (IoLock)
         {
+            bag.Version = CurrentVersion;
             var path = BagPath(bagKey);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var json = JsonSerializer.Serialize(bag, JsonOpts);
