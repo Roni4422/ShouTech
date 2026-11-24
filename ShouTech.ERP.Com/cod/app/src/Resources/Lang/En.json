@@ -1703,6 +1703,17 @@
     "Failed": "Export failed."
   },
   "Invoice": {
+    "ExportInvoice": "Export invoice",
+    "Incoterm": "Incoterm",
+    "PortOfLoading": "Port of loading",
+    "PortOfDischarge": "Port of discharge",
+    "CountryOfOrigin": "Country of origin",
+    "CustomsRef": "Customs reference",
+    "VesselFlight": "Vessel / flight",
+    "GrossWeight": "Gross weight",
+    "NetWeight": "Net weight",
+    "ColMargin": "Margin",
+    "TotalMargin": "Gross margin",
     "SalesTitle": "Sales Invoice",
     "PurchaseTitle": "Purchase Invoice",
     "PointOfSaleTitle": "Point of Sale Invoice",
@@ -3755,6 +3766,9 @@
     }
   },
   "SalesDelivery": {
+    "ConsolidatedInvoice": "Consolidated invoice",
+    "ConsolidatedCreated": "Consolidated invoice created",
+    "NoUnbilledDeliveries": "No unbilled deliveries",
     "Reverse": "Reverse Delivery",
     "ReverseTitle": "Reverse Delivery Note",
     "Reason": "Reason",

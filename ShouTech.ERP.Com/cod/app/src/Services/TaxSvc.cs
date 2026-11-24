@@ -666,6 +666,37 @@ public static class TaxSvc
         }
     }
 
+    /// <summary>
+    /// W5 live margin: the material's current valuation cost through
+    /// the SAME fallback chain the pricing guard's margin rule uses
+    /// (SalesPriceGuard.GetCurrentCost). Fail-soft by design — margin
+    /// display must never block line entry: any failure is reported
+    /// through the error catalog and surfaced as null ("cost
+    /// unavailable", shown as —), as is a material with no cost
+    /// anywhere (the guard's chain returns 0 there).
+    /// </summary>
+    public static decimal? GetMaterialCost(long? materialId)
+    {
+        if (materialId is not > 0) return null;
+        var cs = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(cs)) return null;
+        var company = AppState.CurrentCompanyCode ?? "";
+        if (string.IsNullOrWhiteSpace(company)) return null;
+        try
+        {
+            using var connection = Open(cs);
+            using var tx = connection.BeginTransaction();
+            var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+            var cost = SalesPriceGuard.GetCurrentCost(connection, tx, provider, company, materialId.Value);
+            return cost > 0m ? cost : null;
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "TaxSvc.GetMaterialCost");
+            return null;
+        }
+    }
+
     private static decimal? TryLoadActiveRate()
     {
         var cs = DatabaseRuntime.GetConnectionString();

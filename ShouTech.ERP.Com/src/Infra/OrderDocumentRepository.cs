@@ -904,6 +904,27 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         IReadOnlyList<CommercialLineSnapshot> sourceLines, CancellationToken cancellationToken)
     {
         var (docs, lines) = Tables(side);
+        // W5 (migration 102, sales side only): consolidated invoice
+        // lines carry explicit source attribution (source_doc_id =
+        // delivery, source_line_no = that delivery's line). Such a line
+        // counts toward THIS order only when its delivery is linked
+        // from this order, and it is keyed by the delivery's line
+        // number (which by chain identity equals the order's). The
+        // purchase tables have no attribution columns; constants keep
+        // the row shape identical.
+        var attributionColumns = side == CommercialDocSide.Sales
+            ? """
+              , l.source_doc_id, l.source_line_no,
+                CASE WHEN l.source_doc_id IS NULL THEN 1
+                     WHEN EXISTS (
+                         SELECT 1 FROM document_links dlv_link
+                         WHERE dlv_link.company_id = dl.company_id
+                           AND dlv_link.source_doc_id = @sourceId
+                           AND dlv_link.target_doc_kind = @deliveryKind
+                           AND dlv_link.target_doc_id = l.source_doc_id) THEN 1
+                     ELSE 0 END
+              """
+            : ", NULL, NULL, 1";
         await using var command = CreateCommand(connection, transaction, $"""
             SELECT l.line_no, l.material_id,
                    SUM(l.qty) - CASE WHEN @targetKind = @receiptKind THEN COALESCE((
@@ -919,6 +940,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                          AND a.original_doc_id = d.doc_id
                          AND a.original_line_id = l.line_id
                    ), 0) ELSE 0 END
+                   {attributionColumns}
             FROM document_links dl
             JOIN {docs} d
               ON d.company_id = dl.company_id
@@ -939,6 +961,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         Add(command, "@posted", CommercialDocumentStatus.Posted);
         Add(command, "@receiptKind", CommercialDocKinds.PurchaseReceipt);
         Add(command, "@returnKind", CommercialDocKinds.PurchaseReceiptReturn);
+        if (side == CommercialDocSide.Sales)
+            Add(command, "@deliveryKind", CommercialDocKinds.DeliveryNote);
 
         var quantities = new Dictionary<int, decimal>();
         var legacyByMaterial = new Dictionary<long, decimal>();
@@ -950,6 +974,15 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 ? (long?)null
                 : Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture);
             var qty = Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture);
+            var lineSourceDocId = reader.IsDBNull(3) ? (long?)null : Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture);
+            var lineSourceLineNo = reader.IsDBNull(4) ? (int?)null : Convert.ToInt32(reader.GetValue(4), CultureInfo.InvariantCulture);
+            var attributedToSource = Convert.ToInt32(reader.GetValue(5), CultureInfo.InvariantCulture) != 0;
+            if (lineSourceDocId is not null)
+            {
+                if (!attributedToSource)
+                    continue;
+                lineNo = lineSourceLineNo ?? lineNo;
+            }
             var sourceLineExists = sourceLines.Any(line => line.LineNo == lineNo && line.MaterialId == materialId);
             if (sourceLineExists)
             {

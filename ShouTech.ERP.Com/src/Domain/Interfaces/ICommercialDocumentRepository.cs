@@ -21,6 +21,18 @@ public interface ICommercialDocumentRepository
     /// <summary>Creates a sales draft and its source-document link atomically in one database transaction.</summary>
     Task<long> CreateSalesDraftWithLinkAsync(CommercialDocumentDraft draft, string sourceDocKind, long sourceDocId, string userId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Creates a sales draft linked from MULTIPLE source documents in
+    /// one database transaction (W5 consolidated invoices): every source
+    /// is re-validated inside the transaction (posted, expected kind,
+    /// same company), one document_links row is written per source, a
+    /// delivery-sourced invoice additionally gains the SO → SAL link of
+    /// each delivery's parent order, and the stored per_delivered /
+    /// per_billed of every affected sales order is refreshed in the
+    /// same transaction.
+    /// </summary>
+    Task<long> CreateSalesDraftWithLinksAsync(CommercialDocumentDraft draft, IReadOnlyList<CommercialDocumentSourceRef> sources, string userId, CancellationToken cancellationToken = default);
+
     /// <summary>Moves a sales document from Draft to Posted; throws when not a draft.</summary>
     /// <summary>Posts a sales draft. The optional W7a price-override
     /// context is supplied only when the posting user holds

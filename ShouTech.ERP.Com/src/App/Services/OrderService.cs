@@ -258,6 +258,71 @@ public sealed class OrderService
         return (invoiceId, invoiceDocNo);
     }
 
+    /// <summary>
+    /// CONSOLIDATED INVOICE (W5): creates ONE draft sales invoice from
+    /// several posted delivery notes (full remaining quantities), with
+    /// the next SAL document number allocated here like every other
+    /// chain conversion. The chain service enforces the same-party /
+    /// same-currency guards and per-line remaining quantities.
+    /// </summary>
+    public async Task<(long InvoiceId, string InvoiceDocNo)> CreateConsolidatedInvoiceAsync(
+        IReadOnlyList<long> deliveryDocIds,
+        DateOnly invoiceDate,
+        string userId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(deliveryDocIds);
+        if (deliveryDocIds.Count == 0)
+            throw new ArgumentException("At least one delivery note is required for a consolidated invoice.", nameof(deliveryDocIds));
+        var firstDelivery = await _chain.FindSalesByIdAsync(deliveryDocIds[0], cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Delivery note was not found.");
+        var invoiceDocNo = await _orders.NextDocNoAsync(
+            CommercialDocSide.Sales, firstDelivery.CompanyId, CommercialDocKinds.SalesInvoice, cancellationToken).ConfigureAwait(false);
+        var selections = deliveryDocIds
+            .Select(id => new ConsolidatedDeliverySelection(id))
+            .ToList();
+        var invoiceId = await new SalesChainService(_chain).CreateConsolidatedInvoiceAsync(
+            selections, invoiceDocNo, invoiceDate, userId, cancellationToken).ConfigureAwait(false);
+        return (invoiceId, invoiceDocNo);
+    }
+
+    /// <summary>
+    /// The posted delivery notes of one sales order with their billing
+    /// state (W5): delivered totals against quantities already billed
+    /// by posted invoices, per delivery. Feeds the consolidated-invoice
+    /// picker in SalesDeliveryWin.
+    /// </summary>
+    public async Task<IReadOnlyList<OrderDeliveryBillingInfo>> GetOrderDeliveriesAsync(
+        long orderId, CancellationToken cancellationToken = default)
+    {
+        if (orderId <= 0) throw new ArgumentOutOfRangeException(nameof(orderId));
+        var order = await _chain.FindSalesByIdAsync(orderId, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Sales order was not found.");
+        if (order.DocKind != CommercialDocKinds.SalesOrder)
+            throw new AppError(ErrorCodes.ChainTransitionNotAllowed,
+                $"Documents cannot be converted from '{order.DocKind}' to '{CommercialDocKinds.DeliveryNote}'.",
+                order.DocKind, CommercialDocKinds.DeliveryNote);
+
+        var links = await _chain.GetSalesLinksFromAsync(order.CompanyId, orderId, cancellationToken).ConfigureAwait(false);
+        var result = new List<OrderDeliveryBillingInfo>();
+        foreach (var link in links.Where(link => link.TargetDocKind == CommercialDocKinds.DeliveryNote))
+        {
+            var delivery = await _chain.FindSalesByIdAsync(link.TargetDocId, cancellationToken).ConfigureAwait(false);
+            if (delivery is null || delivery.Status != CommercialDocumentStatus.Posted)
+                continue;
+            var billedByLine = await _chain.GetFulfilledQuantitiesBySourceLineAsync(
+                delivery.CompanyId, delivery.DocId, CommercialDocKinds.SalesInvoice, cancellationToken).ConfigureAwait(false);
+            result.Add(new OrderDeliveryBillingInfo(
+                delivery.DocId,
+                delivery.DocNo,
+                delivery.DocDate,
+                delivery.Status,
+                delivery.Lines.Sum(line => line.Qty),
+                billedByLine.Values.Sum()));
+        }
+        return result;
+    }
+
     /// <summary>Posts a sales-chain draft, including the DLV-linked invoice accounting path.</summary>
     public async Task PostSalesChainDocumentAsync(long documentId, string userId, CancellationToken cancellationToken = default)
         => await PostSalesChainDocumentAsync(documentId, userId, null, cancellationToken).ConfigureAwait(false);

@@ -1712,6 +1712,17 @@
     "Failed": "Dışa aktarma başarısız."
   },
   "Invoice": {
+    "ExportInvoice": "İhracat faturası",
+    "Incoterm": "Incoterm",
+    "PortOfLoading": "Yükleme limanı",
+    "PortOfDischarge": "Boşaltma limanı",
+    "CountryOfOrigin": "Menşe ülke",
+    "CustomsRef": "Gümrük referansı",
+    "VesselFlight": "Gemi / uçuş",
+    "GrossWeight": "Brüt ağırlık",
+    "NetWeight": "Net ağırlık",
+    "ColMargin": "Marj",
+    "TotalMargin": "Brüt marj",
     "SalesTitle": "Satış faturası",
     "PurchaseTitle": "Alış faturası",
     "PointOfSaleTitle": "Satış noktası faturası",
@@ -3746,6 +3757,9 @@
     }
   },
   "SalesDelivery": {
+    "ConsolidatedInvoice": "Konsolide fatura",
+    "ConsolidatedCreated": "Konsolide fatura oluşturuldu",
+    "NoUnbilledDeliveries": "Faturalandırılmamış teslimat yok",
     "Reverse": "Teslimatı Ters Kaydet",
     "ReverseTitle": "Teslimat Notunu Ters Kaydet",
     "Reason": "Neden",

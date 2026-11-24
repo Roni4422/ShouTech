@@ -214,6 +214,29 @@ public sealed class InvDoc
     /// NotRequired / PendingApproval / Approved / Rejected.</summary>
     public string ApprovalStatus { get; set; } = "NotRequired";
 
+    // ---- Export invoice fields (W5, migration 102) ------------------
+    /// <summary>True when this sales invoice is an EXPORT invoice; the
+    /// shipment/customs fields below are then shown and edited on
+    /// InvoiceWin. Persisted in sales_documents.is_export.</summary>
+    public bool IsExport { get; set; }
+    /// <summary>Incoterm code (EXW / FOB / CIF ...). sales_documents.incoterm.</summary>
+    public string Incoterm { get; set; } = string.Empty;
+    /// <summary>Port of loading. sales_documents.port_of_loading.</summary>
+    public string PortOfLoading { get; set; } = string.Empty;
+    /// <summary>Port of discharge. sales_documents.port_of_discharge.</summary>
+    public string PortOfDischarge { get; set; } = string.Empty;
+    /// <summary>Country of origin. sales_documents.country_of_origin.</summary>
+    public string CountryOfOrigin { get; set; } = string.Empty;
+    /// <summary>Customs declaration reference. sales_documents.customs_ref.</summary>
+    public string CustomsRef { get; set; } = string.Empty;
+    /// <summary>Vessel name / flight number. sales_documents.vessel_flight.</summary>
+    public string VesselFlight { get; set; } = string.Empty;
+    /// <summary>Gross weight (document unit of weight, as entered).
+    /// sales_documents.gross_weight; null = not recorded.</summary>
+    public decimal? GrossWeight { get; set; }
+    /// <summary>Net weight. sales_documents.net_weight; null = not recorded.</summary>
+    public decimal? NetWeight { get; set; }
+
     /// <summary>
     /// Journal voucher number created when the invoice is posted.
     /// Phenix "voucher" opens this voucher after posting.

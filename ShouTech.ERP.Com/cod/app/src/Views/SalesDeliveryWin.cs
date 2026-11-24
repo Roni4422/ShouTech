@@ -39,6 +39,7 @@ public sealed class SalesDeliveryWin : BaseWin
     private readonly Button _btnCreate = new();
     private readonly Button _btnPost = new();
     private readonly Button _btnInvoice = new();
+    private readonly Button _btnConsolidated = new();
     private readonly Button _btnReverse = new();
     private readonly Button _btnCancelDraft = new();
     private readonly Button _btnPickCreate = new();
@@ -77,6 +78,7 @@ public sealed class SalesDeliveryWin : BaseWin
         _btnCreate.Content = T("SalesDelivery.CreateDraft");
         _btnPost.Content = T("OrderDoc.Post");
         _btnInvoice.Content = T("SalesDelivery.CreateInvoice");
+        _btnConsolidated.Content = T("SalesDelivery.ConsolidatedInvoice");
         _btnReverse.Content = T("SalesDelivery.Reverse");
         _btnCancelDraft.Content = T("SalesDelivery.CancelDraft");
         _btnPickCreate.Content = T("SalesDelivery.CreatePicking");
@@ -142,6 +144,7 @@ public sealed class SalesDeliveryWin : BaseWin
         StyleButton(_btnCreate, "SalesDelivery.CreateDraft");
         StyleButton(_btnPost, "OrderDoc.Post");
         StyleButton(_btnInvoice, "SalesDelivery.CreateInvoice");
+        StyleButton(_btnConsolidated, "SalesDelivery.ConsolidatedInvoice");
         StyleButton(_btnReverse, "SalesDelivery.Reverse");
         StyleButton(_btnCancelDraft, "SalesDelivery.CancelDraft");
         StyleButton(_btnPickCreate, "SalesDelivery.CreatePicking");
@@ -152,6 +155,7 @@ public sealed class SalesDeliveryWin : BaseWin
         _btnCreate.Click += async (_, _) => await CreateDeliveryAsync();
         _btnPost.Click += async (_, _) => await PostDeliveryAsync();
         _btnInvoice.Click += async (_, _) => await CreateInvoiceAsync();
+        _btnConsolidated.Click += async (_, _) => await CreateConsolidatedInvoiceAsync();
         _btnReverse.Click += async (_, _) => await ReverseDeliveryAsync();
         _btnCancelDraft.Click += async (_, _) => await CancelDraftAsync();
         _btnPickCreate.Click += async (_, _) => await CreatePickingAsync();
@@ -162,6 +166,7 @@ public sealed class SalesDeliveryWin : BaseWin
         actions.Children.Add(_btnCreate);
         actions.Children.Add(_btnPost);
         actions.Children.Add(_btnInvoice);
+        actions.Children.Add(_btnConsolidated);
         actions.Children.Add(_btnReverse);
         actions.Children.Add(_btnCancelDraft);
         actions.Children.Add(_btnPickCreate);
@@ -520,6 +525,117 @@ public sealed class SalesDeliveryWin : BaseWin
     }
 
     /// <summary>
+    /// CONSOLIDATED INVOICE (W5): lists the loaded order's posted,
+    /// not-fully-billed deliveries with checkboxes and creates ONE
+    /// draft sales invoice from the selected ones (full remaining
+    /// quantities per delivery), then opens it in InvoiceWin. The
+    /// chain service enforces same-party/same-currency and per-line
+    /// remaining quantities; per-delivery 1215 relief stays exact via
+    /// the lines' source attribution.
+    /// </summary>
+    private async Task CreateConsolidatedInvoiceAsync()
+    {
+        if (!AppHost.Permissions.Has(PermCat.Sales.OrderConvert))
+        {
+            ShowWarningMessage(T("OrderDoc.PermissionDenied"));
+            return;
+        }
+        if (_busy || _orderId is null || AppHost.Orders is null)
+        {
+            ShowWarningMessage(T("SalesDelivery.SelectOrder"));
+            return;
+        }
+
+        try
+        {
+            _busy = true;
+            UpdateState();
+            var deliveries = await AppHost.Orders.GetOrderDeliveriesAsync(_orderId.Value);
+            var unbilled = deliveries.Where(d => d.RemainingQty > 0m).ToList();
+            if (unbilled.Count == 0)
+            {
+                ShowWarningMessage(T("SalesDelivery.NoUnbilledDeliveries"));
+                return;
+            }
+
+            var selectedIds = ConsolidatedPickerDialog.Show(this, unbilled);
+            if (selectedIds is null || selectedIds.Count == 0)
+                return;
+
+            var result = await AppHost.Orders.CreateConsolidatedInvoiceAsync(
+                selectedIds,
+                DateOnly.FromDateTime(DateTime.Today),
+                CurrentUserId);
+            _lblStatus.Text = $"{T("SalesDelivery.ConsolidatedCreated")}: {result.InvoiceDocNo}";
+            var invoiceWindow = new InvoiceWin(result.InvoiceId, InvDocKind.SalesInvoice) { Owner = this };
+            invoiceWindow.Show();
+        }
+        catch (AppError ex)
+        {
+            AppHost.Errors.Report(ex.Code, ex, "SalesDeliveryWin.CreateConsolidatedInvoice");
+            var info = AppHost.Errors.Resolve(ex.Code, ex.Args.ToArray());
+            ShowWarningMessage($"{info.Message} (Error {info.Code})");
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "SalesDeliveryWin.CreateConsolidatedInvoice");
+            ShowWarningMessage(ex.Message);
+        }
+        finally
+        {
+            _busy = false;
+            UpdateState();
+        }
+    }
+
+    /// <summary>Checkbox picker for the order's unbilled deliveries
+    /// (the PromptDialog modal pattern, multi-select).</summary>
+    private static class ConsolidatedPickerDialog
+    {
+        public static List<long>? Show(Window owner, IReadOnlyList<OrderDeliveryBillingInfo> deliveries)
+        {
+            var dialog = new Window
+            {
+                Title = T("SalesDelivery.ConsolidatedInvoice"),
+                Width = 460,
+                SizeToContent = SizeToContent.Height,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ResizeMode = ResizeMode.NoResize
+            };
+            var panel = new StackPanel { Margin = new Thickness(12) };
+            var boxes = new List<(CheckBox Box, long DeliveryId)>();
+            foreach (var delivery in deliveries)
+            {
+                var box = new CheckBox
+                {
+                    Content = $"{delivery.DocNo} · {delivery.DocDate:yyyy-MM-dd} · {T("SalesDelivery.Remaining")}: {delivery.RemainingQty.ToString("0.###", CultureInfo.InvariantCulture)}",
+                    IsChecked = true,
+                    Margin = new Thickness(0, 0, 0, 8)
+                };
+                boxes.Add((box, delivery.DeliveryDocId));
+                panel.Children.Add(box);
+            }
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var ok = new Button { Content = T("Common.OK"), MinWidth = 84, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
+            var cancel = new Button { Content = T("Common.Cancel"), MinWidth = 84, IsCancel = true };
+            ok.Click += (_, _) => dialog.DialogResult = true;
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+            panel.Children.Add(buttons);
+            dialog.Content = new ScrollViewer
+            {
+                Content = panel,
+                MaxHeight = 420,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+            };
+            return dialog.ShowDialog() == true
+                ? boxes.Where(b => b.Box.IsChecked == true).Select(b => b.DeliveryId).ToList()
+                : null;
+        }
+    }
+
+    /// <summary>
     /// Reverses the posted delivery note (sales cycle B4, gap G13):
     /// stock returns at the original movement cost, the delivery GL is
     /// compensated, and the document is cancelled with an audited
@@ -757,6 +873,7 @@ public sealed class SalesDeliveryWin : BaseWin
     {
         _btnLoad.IsEnabled = !_busy;
         _btnInvoice.IsEnabled = !_busy && _deliveryId is not null && _deliveryStatus == CommercialDocumentStatus.Posted;
+        _btnConsolidated.IsEnabled = !_busy && _orderId is not null;
         _btnReverse.IsEnabled = !_busy && _deliveryId is not null && _deliveryStatus == CommercialDocumentStatus.Posted;
         _btnCancelDraft.IsEnabled = !_busy && _deliveryId is not null && _deliveryStatus == CommercialDocumentStatus.Draft;
         var canStartDelivery = _deliveryId is null || _deliveryStatus == CommercialDocumentStatus.Posted || _deliveryStatus == CommercialDocumentStatus.Cancelled;

@@ -65,6 +65,10 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         decimal deliveryCost;
         int revisionNo;
         string approvalState;
+        bool isExport = false;
+        string? incoterm = null, portOfLoading = null, portOfDischarge = null;
+        string? countryOfOrigin = null, customsRef = null, vesselFlight = null;
+        decimal? grossWeight = null, netWeight = null;
 
         await using (var header = connection.CreateCommand())
         {
@@ -73,7 +77,9 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                        currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total,
                        paid_amount, status, notes, party_code, branch_name, sales_rep_name, cost_center,
                        warehouse_name, delivery_date, valid_till, extra_amount, per_delivered, per_billed,
-                       cancel_reason, cancelled_by, cancelled_at, delivery_cost, revision_no, approval_state
+                       cancel_reason, cancelled_by, cancelled_at, delivery_cost, revision_no, approval_state,
+                       is_export, incoterm, port_of_loading, port_of_discharge, country_of_origin,
+                       customs_ref, vessel_flight, gross_weight, net_weight
                 FROM sales_documents
                 WHERE doc_id = @docId AND is_deleted = 0
                 """;
@@ -116,6 +122,18 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             deliveryCost = Convert.ToDecimal(reader.GetValue(30), CultureInfo.InvariantCulture);
             revisionNo = Convert.ToInt32(reader.GetValue(31), CultureInfo.InvariantCulture);
             approvalState = reader.IsDBNull(32) ? SalesApprovalState.NotRequired : reader.GetString(32);
+            // W5 (migration 102): export header fields.
+            isExport = !reader.IsDBNull(33) && (reader.GetValue(33) is bool exportFlag
+                ? exportFlag
+                : Convert.ToInt32(reader.GetValue(33), CultureInfo.InvariantCulture) != 0);
+            incoterm = reader.IsDBNull(34) ? null : reader.GetString(34);
+            portOfLoading = reader.IsDBNull(35) ? null : reader.GetString(35);
+            portOfDischarge = reader.IsDBNull(36) ? null : reader.GetString(36);
+            countryOfOrigin = reader.IsDBNull(37) ? null : reader.GetString(37);
+            customsRef = reader.IsDBNull(38) ? null : reader.GetString(38);
+            vesselFlight = reader.IsDBNull(39) ? null : reader.GetString(39);
+            grossWeight = reader.IsDBNull(40) ? null : Convert.ToDecimal(reader.GetValue(40), CultureInfo.InvariantCulture);
+            netWeight = reader.IsDBNull(41) ? null : Convert.ToDecimal(reader.GetValue(41), CultureInfo.InvariantCulture);
         }
 
         var lines = new List<CommercialLineSnapshot>();
@@ -123,7 +141,8 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         {
             lineCommand.CommandText = """
                 SELECT line_id, line_no, material_id, material_code, description, unit, qty, unit_price,
-                       discount_pct, tax_rate, line_subtotal, line_tax, line_total, warehouse_id
+                       discount_pct, tax_rate, line_subtotal, line_tax, line_total, warehouse_id,
+                       source_doc_id, source_line_no
                 FROM sales_document_lines
                 WHERE doc_id = @docId
                 ORDER BY line_no
@@ -146,7 +165,9 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                     Convert.ToDecimal(reader.GetValue(10), CultureInfo.InvariantCulture),
                     Convert.ToDecimal(reader.GetValue(11), CultureInfo.InvariantCulture),
                     Convert.ToDecimal(reader.GetValue(12), CultureInfo.InvariantCulture),
-                    reader.IsDBNull(13) ? null : Convert.ToInt64(reader.GetValue(13), CultureInfo.InvariantCulture)));
+                    reader.IsDBNull(13) ? null : Convert.ToInt64(reader.GetValue(13), CultureInfo.InvariantCulture),
+                    reader.IsDBNull(14) ? null : Convert.ToInt64(reader.GetValue(14), CultureInfo.InvariantCulture),
+                    reader.IsDBNull(15) ? null : Convert.ToInt32(reader.GetValue(15), CultureInfo.InvariantCulture)));
             }
         }
 
@@ -156,7 +177,9 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             paidAmount, status, notes, lines.AsReadOnly(),
             partyCode, branchName, salesRepName, costCenter, warehouseName, deliveryDate, validTill,
             extraAmount, perDelivered, perBilled, cancelReason, cancelledBy, cancelledAt, deliveryCost,
-            revisionNo, approvalState);
+            revisionNo, approvalState,
+            isExport, incoterm, portOfLoading, portOfDischarge, countryOfOrigin,
+            customsRef, vesselFlight, grossWeight, netWeight);
     }
 
     public async Task<long> CreateSalesDraftAsync(CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default)
@@ -194,12 +217,45 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         }
     }
 
-    public async Task<long> CreateSalesDraftWithLinkAsync(
+    public Task<long> CreateSalesDraftWithLinkAsync(
         CommercialDocumentDraft draft,
         string sourceDocKind,
         long sourceDocId,
         string userId,
         CancellationToken cancellationToken = default)
+    {
+        if (sourceDocId <= 0) throw new ArgumentException("Source document is required.", nameof(sourceDocId));
+        if (string.IsNullOrWhiteSpace(sourceDocKind)) throw new ArgumentException("Source document kind is required.", nameof(sourceDocKind));
+        return CreateSalesDraftWithLinksCoreAsync(
+            draft, new[] { new CommercialDocumentSourceRef(sourceDocKind, sourceDocId) },
+            userId, cancellationToken);
+    }
+
+    /// <summary>
+    /// W5 consolidated invoices: the multi-source generalization of
+    /// <see cref="CreateSalesDraftWithLinkAsync"/>. One draft, one
+    /// document_links row per source delivery, one SO → SAL link per
+    /// DISTINCT parent order (duplicate link rows would double-count
+    /// the invoice in every link-based progress sum), and the stored
+    /// progress of every affected order refreshed in the same
+    /// transaction.
+    /// </summary>
+    public Task<long> CreateSalesDraftWithLinksAsync(
+        CommercialDocumentDraft draft,
+        IReadOnlyList<CommercialDocumentSourceRef> sources,
+        string userId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(sources);
+        if (sources.Count == 0) throw new ArgumentException("At least one source document is required.", nameof(sources));
+        return CreateSalesDraftWithLinksCoreAsync(draft, sources, userId, cancellationToken);
+    }
+
+    private async Task<long> CreateSalesDraftWithLinksCoreAsync(
+        CommercialDocumentDraft draft,
+        IReadOnlyList<CommercialDocumentSourceRef> sources,
+        string userId,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(draft);
         if (draft.CompanyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(draft));
@@ -207,21 +263,33 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         if (string.IsNullOrWhiteSpace(draft.DocNo)) throw new ArgumentException("Document number is required.", nameof(draft));
         if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
         if (draft.Lines.Count == 0) throw new InvalidOperationException("A commercial document requires at least one line.");
-        if (sourceDocId <= 0) throw new ArgumentException("Source document is required.", nameof(sourceDocId));
-        if (string.IsNullOrWhiteSpace(sourceDocKind)) throw new ArgumentException("Source document kind is required.", nameof(sourceDocKind));
+        var distinctSources = new List<CommercialDocumentSourceRef>();
+        var seenSources = new HashSet<(string Kind, long Id)>();
+        foreach (var source in sources)
+        {
+            ArgumentNullException.ThrowIfNull(source);
+            if (source.SourceDocId <= 0) throw new ArgumentException("Source document is required.", nameof(sources));
+            if (string.IsNullOrWhiteSpace(source.SourceDocKind)) throw new ArgumentException("Source document kind is required.", nameof(sources));
+            if (seenSources.Add((source.SourceDocKind.Trim(), source.SourceDocId)))
+                distinctSources.Add(new CommercialDocumentSourceRef(source.SourceDocKind.Trim(), source.SourceDocId));
+        }
 
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using (var source = CreateCommand(connection, transaction, """
-                SELECT status, doc_kind, company_id
-                FROM sales_documents
-                WHERE doc_id = @sourceId AND is_deleted = 0
-                """))
+            // Every source is re-validated inside the transaction: it
+            // must still exist, be posted, carry the expected kind and
+            // belong to the draft's company.
+            foreach (var sourceRef in distinctSources)
             {
-                Add(source, "@sourceId", sourceDocId);
+                await using var source = CreateCommand(connection, transaction, """
+                    SELECT status, doc_kind, company_id
+                    FROM sales_documents
+                    WHERE doc_id = @sourceId AND is_deleted = 0
+                    """);
+                Add(source, "@sourceId", sourceRef.SourceDocId);
                 await using var reader = await source.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                     throw new InvalidOperationException("Source sales document was not found.");
@@ -230,86 +298,102 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                 var persistedCompanyId = reader.GetString(2);
                 if (!string.Equals(sourceStatus, CommercialDocumentStatus.Posted, StringComparison.Ordinal))
                     throw new InvalidOperationException("Only posted source documents can be linked to a new sales document.");
-                if (!string.Equals(persistedSourceKind, sourceDocKind.Trim(), StringComparison.Ordinal))
+                if (!string.Equals(persistedSourceKind, sourceRef.SourceDocKind, StringComparison.Ordinal))
                     throw new InvalidOperationException("The source document kind changed before the linked document was saved.");
                 if (!string.Equals(persistedCompanyId, draft.CompanyId.ToString("D"), StringComparison.OrdinalIgnoreCase))
                     throw new InvalidOperationException("Source and target documents must belong to the same company.");
             }
 
             var docId = await CreateSalesDraftInTransactionAsync(connection, transaction, draft, userId, cancellationToken).ConfigureAwait(false);
-            await using var link = CreateCommand(connection, transaction, """
-                INSERT INTO document_links
-                    (company_id, source_doc_kind, source_doc_id, target_doc_kind, target_doc_id, created_by)
-                VALUES (@company, @sourceKind, @sourceId, @targetKind, @targetId, @actor)
-                """);
-            Add(link, "@company", draft.CompanyId.ToString("D"));
-            Add(link, "@sourceKind", sourceDocKind.Trim());
-            Add(link, "@sourceId", sourceDocId);
-            Add(link, "@targetKind", draft.DocKind.Trim());
-            Add(link, "@targetId", docId);
-            Add(link, "@actor", userId.Trim());
-            await link.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
-            // The sales order whose stored chain progress this creation can
-            // affect: the source itself for SO->DLV, or the delivery's
-            // parent order for DLV->SAL (resolved by the block below).
-            long? progressOrderId = string.Equals(sourceDocKind.Trim(), CommercialDocKinds.SalesOrder, StringComparison.Ordinal)
-                ? sourceDocId
-                : null;
+            foreach (var sourceRef in distinctSources)
+            {
+                await using var link = CreateCommand(connection, transaction, """
+                    INSERT INTO document_links
+                        (company_id, source_doc_kind, source_doc_id, target_doc_kind, target_doc_id, created_by)
+                    VALUES (@company, @sourceKind, @sourceId, @targetKind, @targetId, @actor)
+                    """);
+                Add(link, "@company", draft.CompanyId.ToString("D"));
+                Add(link, "@sourceKind", sourceRef.SourceDocKind);
+                Add(link, "@sourceId", sourceRef.SourceDocId);
+                Add(link, "@targetKind", draft.DocKind.Trim());
+                Add(link, "@targetId", docId);
+                Add(link, "@actor", userId.Trim());
+                await link.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            // The sales orders whose stored chain progress this creation
+            // can affect: a source order itself for SO->DLV, or each
+            // delivery's parent order for DLV->SAL (resolved below).
+            var progressOrderIds = new HashSet<long>();
+            foreach (var sourceRef in distinctSources)
+            {
+                if (string.Equals(sourceRef.SourceDocKind, CommercialDocKinds.SalesOrder, StringComparison.Ordinal))
+                    progressOrderIds.Add(sourceRef.SourceDocId);
+            }
 
             // Preserve order-level billed progress when the invoice is
-            // created from a delivery note. The direct DLV->SAL link is
-            // retained for delivery accounting; this additional SO->SAL
-            // link lets the source order report its billed quantities too.
-            if (string.Equals(sourceDocKind.Trim(), CommercialDocKinds.DeliveryNote, StringComparison.Ordinal) &&
-                string.Equals(draft.DocKind.Trim(), CommercialDocKinds.SalesInvoice, StringComparison.Ordinal))
+            // created from delivery notes. The direct DLV->SAL links are
+            // retained for delivery accounting; one additional SO->SAL
+            // link per distinct parent order lets each source order
+            // report its billed quantities too.
+            if (string.Equals(draft.DocKind.Trim(), CommercialDocKinds.SalesInvoice, StringComparison.Ordinal))
             {
-                long? sourceOrderId = null;
-                await using (var parentOrder = CreateCommand(connection, transaction, """
-                    SELECT source_doc_id
-                    FROM document_links
-                    WHERE company_id = @company
-                      AND source_doc_kind = @orderKind
-                      AND target_doc_kind = @deliveryKind
-                      AND target_doc_id = @deliveryId
-                    """))
+                var linkedOrderIds = new HashSet<long>();
+                foreach (var sourceRef in distinctSources)
                 {
-                    Add(parentOrder, "@company", draft.CompanyId.ToString("D"));
-                    Add(parentOrder, "@orderKind", CommercialDocKinds.SalesOrder);
-                    Add(parentOrder, "@deliveryKind", CommercialDocKinds.DeliveryNote);
-                    Add(parentOrder, "@deliveryId", sourceDocId);
-                    var value = await parentOrder.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-                    if (value is not null and not DBNull)
-                        sourceOrderId = Convert.ToInt64(value, CultureInfo.InvariantCulture);
-                }
+                    if (!string.Equals(sourceRef.SourceDocKind, CommercialDocKinds.DeliveryNote, StringComparison.Ordinal))
+                        continue;
+                    long? sourceOrderId = null;
+                    await using (var parentOrder = CreateCommand(connection, transaction, """
+                        SELECT source_doc_id
+                        FROM document_links
+                        WHERE company_id = @company
+                          AND source_doc_kind = @orderKind
+                          AND target_doc_kind = @deliveryKind
+                          AND target_doc_id = @deliveryId
+                        """))
+                    {
+                        Add(parentOrder, "@company", draft.CompanyId.ToString("D"));
+                        Add(parentOrder, "@orderKind", CommercialDocKinds.SalesOrder);
+                        Add(parentOrder, "@deliveryKind", CommercialDocKinds.DeliveryNote);
+                        Add(parentOrder, "@deliveryId", sourceRef.SourceDocId);
+                        var value = await parentOrder.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                        if (value is not null and not DBNull)
+                            sourceOrderId = Convert.ToInt64(value, CultureInfo.InvariantCulture);
+                    }
 
-                if (sourceOrderId is not null)
-                {
-                    await using var orderInvoiceLink = CreateCommand(connection, transaction, """
-                        INSERT INTO document_links
-                            (company_id, source_doc_kind, source_doc_id, target_doc_kind, target_doc_id, created_by)
-                        VALUES (@company, @orderKind, @orderId, @invoiceKind, @invoiceId, @actor)
-                        """);
-                    Add(orderInvoiceLink, "@company", draft.CompanyId.ToString("D"));
-                    Add(orderInvoiceLink, "@orderKind", CommercialDocKinds.SalesOrder);
-                    Add(orderInvoiceLink, "@orderId", sourceOrderId.Value);
-                    Add(orderInvoiceLink, "@invoiceKind", CommercialDocKinds.SalesInvoice);
-                    Add(orderInvoiceLink, "@invoiceId", docId);
-                    Add(orderInvoiceLink, "@actor", userId.Trim());
-                    await orderInvoiceLink.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-                    progressOrderId = sourceOrderId;
+                    if (sourceOrderId is not null && linkedOrderIds.Add(sourceOrderId.Value))
+                    {
+                        await using var orderInvoiceLink = CreateCommand(connection, transaction, """
+                            INSERT INTO document_links
+                                (company_id, source_doc_kind, source_doc_id, target_doc_kind, target_doc_id, created_by)
+                            VALUES (@company, @orderKind, @orderId, @invoiceKind, @invoiceId, @actor)
+                            """);
+                        Add(orderInvoiceLink, "@company", draft.CompanyId.ToString("D"));
+                        Add(orderInvoiceLink, "@orderKind", CommercialDocKinds.SalesOrder);
+                        Add(orderInvoiceLink, "@orderId", sourceOrderId.Value);
+                        Add(orderInvoiceLink, "@invoiceKind", CommercialDocKinds.SalesInvoice);
+                        Add(orderInvoiceLink, "@invoiceId", docId);
+                        Add(orderInvoiceLink, "@actor", userId.Trim());
+                        await orderInvoiceLink.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                        progressOrderIds.Add(sourceOrderId.Value);
+                    }
                 }
             }
 
-            if (progressOrderId is not null)
+            if (progressOrderIds.Count > 0)
             {
                 // Stored per_delivered / per_billed refresh inside this
                 // same transaction (single recompute helper owned by
                 // OrderDocumentRepository), so the chain document and the
                 // progress it produces commit or roll back together.
                 var progressRepository = new OrderDocumentRepository(_provider, _connectionString);
-                await progressRepository.RecalculateStoredProgressInTransactionAsync(
-                    connection, transaction, progressOrderId.Value, cancellationToken).ConfigureAwait(false);
+                foreach (var progressOrderId in progressOrderIds)
+                {
+                    await progressRepository.RecalculateStoredProgressInTransactionAsync(
+                        connection, transaction, progressOrderId, cancellationToken).ConfigureAwait(false);
+                }
             }
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -380,8 +464,8 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
 
         long docId;
         var insertHeader = CreateCommand(connection, transaction,
-            "INSERT INTO sales_documents (company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id, currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total, status, notes, created_by, party_code, delivery_date, valid_till, cost_center, branch_name, sales_rep_name, warehouse_name, extra_amount, delivery_cost) " +
-            "VALUES (@company, @kind, @no, @date, @party, @partyName, @warehouse, @currency, @rate, @subtotal, @discount, @tax, @total, @status, @notes, @actor, @partyCode, @deliveryDate, @validTill, @costCenter, @branchName, @salesRepName, @warehouseName, @extra, @deliveryCost)" +
+            "INSERT INTO sales_documents (company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id, currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total, status, notes, created_by, party_code, delivery_date, valid_till, cost_center, branch_name, sales_rep_name, warehouse_name, extra_amount, delivery_cost, is_export, incoterm, port_of_loading, port_of_discharge, country_of_origin, customs_ref, vessel_flight, gross_weight, net_weight) " +
+            "VALUES (@company, @kind, @no, @date, @party, @partyName, @warehouse, @currency, @rate, @subtotal, @discount, @tax, @total, @status, @notes, @actor, @partyCode, @deliveryDate, @validTill, @costCenter, @branchName, @salesRepName, @warehouseName, @extra, @deliveryCost, @isExport, @incoterm, @portLoading, @portDischarge, @origin, @customsRef, @vesselFlight, @grossWeight, @netWeight)" +
             (_provider == "PostgreSQL" ? " RETURNING doc_id" : "; SELECT last_insert_rowid();"));
         Add(insertHeader, "@company", draft.CompanyId.ToString("D"));
         Add(insertHeader, "@kind", draft.DocKind.Trim());
@@ -413,6 +497,16 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         Add(insertHeader, "@branchName", (object?)draft.BranchName ?? DBNull.Value);
         Add(insertHeader, "@salesRepName", (object?)draft.SalesRepName ?? DBNull.Value);
         Add(insertHeader, "@warehouseName", (object?)draft.WarehouseName ?? DBNull.Value);
+        // W5 (migration 102): export header fields.
+        Add(insertHeader, "@isExport", _provider == "PostgreSQL" ? (object)draft.IsExport : (draft.IsExport ? 1 : 0));
+        Add(insertHeader, "@incoterm", (object?)draft.Incoterm ?? DBNull.Value);
+        Add(insertHeader, "@portLoading", (object?)draft.PortOfLoading ?? DBNull.Value);
+        Add(insertHeader, "@portDischarge", (object?)draft.PortOfDischarge ?? DBNull.Value);
+        Add(insertHeader, "@origin", (object?)draft.CountryOfOrigin ?? DBNull.Value);
+        Add(insertHeader, "@customsRef", (object?)draft.CustomsRef ?? DBNull.Value);
+        Add(insertHeader, "@vesselFlight", (object?)draft.VesselFlight ?? DBNull.Value);
+        Add(insertHeader, "@grossWeight", (object?)draft.GrossWeight ?? DBNull.Value);
+        Add(insertHeader, "@netWeight", (object?)draft.NetWeight ?? DBNull.Value);
         docId = Convert.ToInt64(await insertHeader.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
 
         // W1 (migration 095): a SAL invoice's due date is doc_date + the
@@ -448,8 +542,8 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             if (persistedLineNumber <= 0 || !usedLineNumbers.Add(persistedLineNumber))
                 throw new InvalidOperationException("Document line numbers must be positive and unique within a document.");
             await using var insertLine = CreateCommand(connection, transaction,
-                "INSERT INTO sales_document_lines (doc_id, line_no, material_id, material_code, description, unit, qty, unit_price, discount_pct, tax_rate, line_subtotal, line_tax, line_total, warehouse_id) " +
-                "VALUES (@doc, @line, @material, @materialCode, @description, @unit, @qty, @price, @discount, @taxRate, @subtotal, @tax, @total, @warehouse)");
+                "INSERT INTO sales_document_lines (doc_id, line_no, material_id, material_code, description, unit, qty, unit_price, discount_pct, tax_rate, line_subtotal, line_tax, line_total, warehouse_id, source_doc_id, source_line_no) " +
+                "VALUES (@doc, @line, @material, @materialCode, @description, @unit, @qty, @price, @discount, @taxRate, @subtotal, @tax, @total, @warehouse, @sourceDoc, @sourceLine)");
             Add(insertLine, "@doc", docId);
             Add(insertLine, "@line", persistedLineNumber);
             Add(insertLine, "@material", (object?)line.MaterialId ?? DBNull.Value);
@@ -464,6 +558,15 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             Add(insertLine, "@tax", totals.Tax);
             Add(insertLine, "@total", totals.Total);
             Add(insertLine, "@warehouse", (object?)line.WarehouseId ?? DBNull.Value);
+            // W5 (migration 102): explicit source attribution rides only
+            // when BOTH parts were supplied (consolidated lines); a
+            // half-set pair is a programming error, not data to store.
+            if (line.SourceDocId is not null && line.SourceRefLineNo is null)
+                throw new InvalidOperationException("A line with a source document must also carry the source line number.");
+            if (line.SourceDocId is null && line.SourceRefLineNo is not null)
+                throw new InvalidOperationException("A line with a source line number must also carry the source document.");
+            Add(insertLine, "@sourceDoc", (object?)line.SourceDocId ?? DBNull.Value);
+            Add(insertLine, "@sourceLine", (object?)line.SourceRefLineNo ?? DBNull.Value);
             await insertLine.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
@@ -746,8 +849,12 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                 // across every invoice that bills the delivery, and credited
                 // against Stock Delivered But Not Billed (1215) — or against
                 // Inventory (1203) when the delivery itself fell back to it.
-                var (deliveryCogs, deliveryCogsCreditAccount) = await GetDeliveryCogsForInvoiceAsync(
+                // W5: a consolidated invoice releases EVERY linked delivery
+                // this way; the amounts come back split by credit account
+                // because deliveries can have used different accounts.
+                var deliveryCogsByAccount = await GetDeliveryCogsForInvoiceAsync(
                     connection, transaction, docId, companyId, cancellationToken).ConfigureAwait(false);
+                var deliveryCogs = deliveryCogsByAccount.Values.Sum();
 
                 if (grandTotal > 0m || deliveryCogs > 0m)
                 {
@@ -765,7 +872,8 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                     if (deliveryCogs > 0m)
                     {
                         glLines.Add(new GlLineRequest(GlAccounts.Cogs, deliveryCogs, 0m, costCenter));
-                        glLines.Add(new GlLineRequest(deliveryCogsCreditAccount, 0m, deliveryCogs));
+                        foreach (var (creditAccount, creditAmount) in deliveryCogsByAccount)
+                            glLines.Add(new GlLineRequest(creditAccount, 0m, creditAmount));
                     }
 
                     GlPosting.PostInTransaction(connection, transaction, _provider,
@@ -1135,9 +1243,28 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                 await CollectSourceOrdersAsync(CommercialDocKinds.SalesOrder, deliveryId).ConfigureAwait(false);
         }
 
+        // W5 (migration 102): a consolidated invoice is linked from
+        // EVERY contributing order, so an order's billed sum must count
+        // only the invoice lines attributed to that order's own
+        // deliveries. Lines without attribution keep the legacy rule
+        // (they belong to the single linked order by construction).
+        var hasLineAttribution = PartyLedger.ColumnExists(
+            connection, transaction, _provider, "sales_document_lines", "source_doc_id");
+        var attributionFilter = hasLineAttribution
+            ? """
+              AND (line.source_doc_id IS NULL OR EXISTS (
+                  SELECT 1 FROM document_links dlv_link
+                  WHERE dlv_link.company_id = link.company_id
+                    AND dlv_link.source_doc_kind = @orderKind
+                    AND dlv_link.source_doc_id = @orderId
+                    AND dlv_link.target_doc_kind = @deliveryKind
+                    AND dlv_link.target_doc_id = line.source_doc_id))
+              """
+            : string.Empty;
+
         async Task<decimal> SumLinkedPostedQtyAsync(long orderId, string linkedKind)
         {
-            await using var command = CreateCommand(connection, transaction, """
+            await using var command = CreateCommand(connection, transaction, $"""
                 SELECT COALESCE(SUM(line.qty), 0)
                 FROM document_links link
                 INNER JOIN sales_documents target
@@ -1151,11 +1278,14 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                   AND link.target_doc_kind = @linkedKind
                   AND target.status = @posted
                   AND CAST(target.is_deleted AS TEXT) IN ('0', 'false')
+                  {attributionFilter}
                 """);
             Add(command, "@company", companyId);
             Add(command, "@orderKind", CommercialDocKinds.SalesOrder);
             Add(command, "@orderId", orderId);
             Add(command, "@linkedKind", linkedKind);
+            if (hasLineAttribution)
+                Add(command, "@deliveryKind", CommercialDocKinds.DeliveryNote);
             Add(command, "@posted", CommercialDocumentStatus.Posted);
             return Convert.ToDecimal(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
                 CultureInfo.InvariantCulture);
@@ -1321,7 +1451,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT l.line_no, l.material_id, SUM(l.qty)
+            SELECT l.line_no, l.material_id, SUM(l.qty), l.source_doc_id, l.source_line_no
             FROM document_links dl
             JOIN sales_documents d
               ON d.company_id = dl.company_id
@@ -1334,7 +1464,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
               AND dl.target_doc_kind = @targetKind
               AND d.status = @posted
               AND d.is_deleted = 0
-            GROUP BY l.line_no, l.material_id
+            GROUP BY l.line_no, l.material_id, l.source_doc_id, l.source_line_no
             """;
         Add(command, "@company", companyId.ToString("D"));
         Add(command, "@sourceId", sourceDocId);
@@ -1349,6 +1479,24 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             var lineNo = Convert.ToInt32(reader.GetValue(0), CultureInfo.InvariantCulture);
             var materialId = reader.IsDBNull(1) ? (long?)null : Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture);
             var qty = Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture);
+            var lineSourceDocId = reader.IsDBNull(3) ? (long?)null : Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture);
+            var lineSourceLineNo = reader.IsDBNull(4) ? (int?)null : Convert.ToInt32(reader.GetValue(4), CultureInfo.InvariantCulture);
+            // W5 (migration 102): a target line with explicit source
+            // attribution (a consolidated invoice line) counts ONLY
+            // toward the source document it names, keyed by the source
+            // line number it names — never toward another delivery that
+            // happens to share the line number and material.
+            if (lineSourceDocId is not null)
+            {
+                if (lineSourceDocId.Value != sourceDocId)
+                    continue;
+                var attributedLineNo = lineSourceLineNo ?? lineNo;
+                if (source.Lines.Any(line => line.LineNo == attributedLineNo && line.MaterialId == materialId))
+                    quantities[attributedLineNo] = quantities.GetValueOrDefault(attributedLineNo) + qty;
+                else if (materialId is long attributedMaterialId)
+                    legacyByMaterial[attributedMaterialId] = legacyByMaterial.GetValueOrDefault(attributedMaterialId) + qty;
+                continue;
+            }
             // Chain-created target lines persist line_no = source line
             // number AND the source line's material: an exact identity
             // match. Anything else is a legacy row, pooled by material
@@ -1561,53 +1709,167 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
     /// <summary>
     /// Allocates the delivery cost released by this sales invoice
     /// (sales cycle B4, gap G14: partial / multiple invoicing of one
-    /// delivery). Per material, the delivery's total stock-movement cost
-    /// is spread over the delivered BASE quantity (movement qty_out, so
-    /// unit equivalence is already applied): unit cost = movement cost /
-    /// delivered qty. This invoice releases unit cost × its invoiced base
-    /// qty, rounded to cents; the invoice that completes a material takes
-    /// the exact remaining cost (movement cost − what earlier invoices
-    /// released, each derived with the same formula), so the COGS of all
-    /// invoices against one delivery sums to the delivery's movement
-    /// cost to the cent. Already-invoiced quantities are read from the
-    /// OTHER posted invoices linked to the same delivery; the delivery
-    /// row is locked first so two invoices cannot allocate concurrently.
-    /// Failures (invoicing more than was delivered, or a stocked
-    /// material the delivery never moved) throw SAL-7009.
-    /// Returns the COGS amount and the account to credit: Stock
-    /// Delivered But Not Billed (1215) when the delivery's own GL entry
-    /// debited it, otherwise Inventory (1203) — the delivery fell back
-    /// to 1203 on a chart without 1215, or predates delivery GL.
+    /// delivery), generalized by W5 to CONSOLIDATED invoices linked to
+    /// several deliveries: the per-delivery computation below runs once
+    /// per linked delivery and the released amounts are summed per
+    /// credit account, so each delivery's 1215 position is relieved by
+    /// exactly its own pro-rata cost and the completing invoice takes
+    /// each delivery's exact rounding plug independently.
+    ///
+    /// Per delivery and material, the delivery's total stock-movement
+    /// cost is spread over the delivered BASE quantity (movement
+    /// qty_out, so unit equivalence is already applied): unit cost =
+    /// movement cost / delivered qty. This invoice releases unit cost ×
+    /// its invoiced base qty FOR THAT DELIVERY, rounded to cents; the
+    /// invoice that completes a material on a delivery takes the exact
+    /// remaining cost (movement cost − what earlier invoices released,
+    /// each derived with the same formula), so the COGS of all invoices
+    /// against one delivery sums to the delivery's movement cost to the
+    /// cent. Quantities are attributed per delivery through the line's
+    /// source_doc_id (migration 102); a line WITHOUT attribution counts
+    /// toward a delivery only when its invoice links to that delivery
+    /// alone — the exact shape of every pre-consolidation invoice.
+    /// Already-invoiced quantities are read from the OTHER posted
+    /// invoices linked to the same delivery; the delivery row is locked
+    /// first so two invoices cannot allocate concurrently. Failures
+    /// (invoicing more than was delivered, or a stocked material the
+    /// delivery never moved) throw SAL-7009.
+    /// Returns the released COGS per account to credit: Stock Delivered
+    /// But Not Billed (1215) when the delivery's own GL entry debited
+    /// it, otherwise Inventory (1203) — the delivery fell back to 1203
+    /// on a chart without 1215, or predates delivery GL. Deliveries of
+    /// one consolidated invoice can legitimately credit different
+    /// accounts, hence the per-account split.
     /// </summary>
-    private async Task<(decimal Cogs, string CreditAccount)> GetDeliveryCogsForInvoiceAsync(
+    private async Task<IReadOnlyDictionary<string, decimal>> GetDeliveryCogsForInvoiceAsync(
         DbConnection connection,
         DbTransaction transaction,
         long invoiceDocId,
         string companyId,
         CancellationToken cancellationToken)
     {
-        long? deliveryDocId = null;
-        await using (var link = CreateCommand(connection, transaction, """
+        var deliveryDocIds = new List<long>();
+        await using (var links = CreateCommand(connection, transaction, """
             SELECT source_doc_id
             FROM document_links
             WHERE company_id = @company
               AND source_doc_kind = @deliveryKind
               AND target_doc_kind = @invoiceKind
               AND target_doc_id = @invoiceId
+            ORDER BY source_doc_id
             """))
         {
-            Add(link, "@company", companyId);
-            Add(link, "@deliveryKind", CommercialDocKinds.DeliveryNote);
-            Add(link, "@invoiceKind", CommercialDocKinds.SalesInvoice);
-            Add(link, "@invoiceId", invoiceDocId);
-            var value = await link.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-            if (value is not null and not DBNull)
-                deliveryDocId = Convert.ToInt64(value, CultureInfo.InvariantCulture);
+            Add(links, "@company", companyId);
+            Add(links, "@deliveryKind", CommercialDocKinds.DeliveryNote);
+            Add(links, "@invoiceKind", CommercialDocKinds.SalesInvoice);
+            Add(links, "@invoiceId", invoiceDocId);
+            await using var reader = await links.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                deliveryDocIds.Add(Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture));
         }
 
-        if (deliveryDocId is null)
-            return (0m, GlAccounts.Inventory);
+        var cogsByCreditAccount = new Dictionary<string, decimal>();
+        if (deliveryDocIds.Count == 0)
+            return cogsByCreditAccount;
 
+        // The delivery-note ids an invoice is linked to (its own DLV
+        // link set), used to attribute unattributed lines: they belong
+        // to a delivery only when it is the invoice's ONLY delivery.
+        async Task<IReadOnlyList<long>> GetDeliveryLinkIdsAsync(long docId)
+        {
+            if (docId == invoiceDocId)
+                return deliveryDocIds;
+            var ids = new List<long>();
+            await using var command = CreateCommand(connection, transaction, """
+                SELECT source_doc_id
+                FROM document_links
+                WHERE company_id = @company
+                  AND source_doc_kind = @deliveryKind
+                  AND target_doc_kind = @invoiceKind
+                  AND target_doc_id = @docId
+                ORDER BY source_doc_id
+                """);
+            Add(command, "@company", companyId);
+            Add(command, "@deliveryKind", CommercialDocKinds.DeliveryNote);
+            Add(command, "@invoiceKind", CommercialDocKinds.SalesInvoice);
+            Add(command, "@docId", docId);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                ids.Add(Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture));
+            return ids;
+        }
+
+        // Line quantities of one document converted to base units, per
+        // material, counting only the lines attributed to ONE delivery
+        // (the same equivalence rule delivery posting applies).
+        async Task<Dictionary<long, decimal>> ReadBaseQuantitiesAsync(long docId, long forDeliveryId)
+        {
+            var linkIds = await GetDeliveryLinkIdsAsync(docId).ConfigureAwait(false);
+            var rows = new List<(long MaterialId, string? Unit, decimal Qty, long? SourceDocId)>();
+            await using (var lines = CreateCommand(connection, transaction,
+                "SELECT material_id, unit, qty, source_doc_id FROM sales_document_lines WHERE doc_id = @doc AND material_id IS NOT NULL"))
+            {
+                Add(lines, "@doc", docId);
+                await using var reader = await lines.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    rows.Add((Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+                              reader.IsDBNull(1) ? null : reader.GetString(1),
+                              Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture),
+                              reader.IsDBNull(3) ? null : Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture)));
+                }
+            }
+            var result = new Dictionary<long, decimal>();
+            foreach (var (materialId, unit, qty, sourceDocId) in rows)
+            {
+                if (sourceDocId is not null)
+                {
+                    if (sourceDocId.Value != forDeliveryId)
+                        continue;
+                }
+                else if (linkIds.Count != 1 || linkIds[0] != forDeliveryId)
+                {
+                    // Unattributed line of a multi-delivery invoice: it
+                    // cannot be assigned to this delivery exactly (a
+                    // BXGY bonus companion is the only such line the
+                    // system produces; its cost relief is a known W5
+                    // leftover, never a guessed allocation).
+                    continue;
+                }
+                var equivalent = await ResolveUnitEquivalentAsync(
+                    connection, transaction, materialId, unit, cancellationToken).ConfigureAwait(false);
+                result[materialId] = result.GetValueOrDefault(materialId) + qty * equivalent;
+            }
+            return result;
+        }
+
+        foreach (var deliveryDocId in deliveryDocIds)
+        {
+            var (cogs, creditAccount) = await GetDeliveryCogsForOneDeliveryAsync(
+                connection, transaction, invoiceDocId, deliveryDocId, companyId,
+                ReadBaseQuantitiesAsync, cancellationToken).ConfigureAwait(false);
+            if (cogs > 0m)
+                cogsByCreditAccount[creditAccount] = cogsByCreditAccount.GetValueOrDefault(creditAccount) + cogs;
+        }
+        return cogsByCreditAccount;
+    }
+
+    /// <summary>
+    /// The per-delivery half of the B4 allocation (see
+    /// <see cref="GetDeliveryCogsForInvoiceAsync"/>): locks the delivery
+    /// row, spreads its movement cost over its delivered quantities and
+    /// returns what THIS invoice releases from it, plus the account the
+    /// delivery originally debited (1215 or the 1203 fallback).
+    /// </summary>
+    private async Task<(decimal Cogs, string CreditAccount)> GetDeliveryCogsForOneDeliveryAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        long invoiceDocId,
+        long deliveryDocId,
+        string companyId,
+        Func<long, long, Task<Dictionary<long, decimal>>> readBaseQuantities,
+        CancellationToken cancellationToken)
+    {
         string deliveryNo;
         await using (var deliveryLock = CreateCommand(connection, transaction,
             _provider == "PostgreSQL"
@@ -1627,7 +1889,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                     AND CAST(is_deleted AS TEXT) IN ('0', 'false')
                   """))
         {
-            Add(deliveryLock, "@deliveryId", deliveryDocId.Value);
+            Add(deliveryLock, "@deliveryId", deliveryDocId);
             Add(deliveryLock, "@company", companyId);
             Add(deliveryLock, "@deliveryKind", CommercialDocKinds.DeliveryNote);
             Add(deliveryLock, "@posted", CommercialDocumentStatus.Posted);
@@ -1665,33 +1927,6 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         if (deliveredByMaterial.Count == 0)
             return (0m, GlAccounts.Inventory);
 
-        // Line quantities of one document converted to base units, per
-        // material (the same equivalence rule delivery posting applies).
-        async Task<Dictionary<long, decimal>> ReadBaseQuantitiesAsync(long docId)
-        {
-            var rows = new List<(long MaterialId, string? Unit, decimal Qty)>();
-            await using (var lines = CreateCommand(connection, transaction,
-                "SELECT material_id, unit, qty FROM sales_document_lines WHERE doc_id = @doc AND material_id IS NOT NULL"))
-            {
-                Add(lines, "@doc", docId);
-                await using var reader = await lines.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-                {
-                    rows.Add((Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
-                              reader.IsDBNull(1) ? null : reader.GetString(1),
-                              Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture)));
-                }
-            }
-            var result = new Dictionary<long, decimal>();
-            foreach (var (materialId, unit, qty) in rows)
-            {
-                var equivalent = await ResolveUnitEquivalentAsync(
-                    connection, transaction, materialId, unit, cancellationToken).ConfigureAwait(false);
-                result[materialId] = result.GetValueOrDefault(materialId) + qty * equivalent;
-            }
-            return result;
-        }
-
         // Earlier posted invoices against this delivery, kept per invoice
         // so each one's released cost can be re-derived exactly.
         var previousInvoiceIds = new List<long>();
@@ -1714,7 +1949,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         {
             Add(previous, "@company", companyId);
             Add(previous, "@deliveryKind", CommercialDocKinds.DeliveryNote);
-            Add(previous, "@deliveryId", deliveryDocId.Value);
+            Add(previous, "@deliveryId", deliveryDocId);
             Add(previous, "@invoiceKind", CommercialDocKinds.SalesInvoice);
             Add(previous, "@posted", CommercialDocumentStatus.Posted);
             Add(previous, "@currentId", invoiceDocId);
@@ -1727,7 +1962,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         var previouslyAllocated = new Dictionary<long, decimal>();
         foreach (var previousId in previousInvoiceIds)
         {
-            var quantities = await ReadBaseQuantitiesAsync(previousId).ConfigureAwait(false);
+            var quantities = await readBaseQuantities(previousId, deliveryDocId).ConfigureAwait(false);
             foreach (var (materialId, baseQty) in quantities)
             {
                 if (!deliveredByMaterial.TryGetValue(materialId, out var delivered) || delivered.BaseQty <= 0m)
@@ -1742,7 +1977,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             }
         }
 
-        var thisInvoice = await ReadBaseQuantitiesAsync(invoiceDocId).ConfigureAwait(false);
+        var thisInvoice = await readBaseQuantities(invoiceDocId, deliveryDocId).ConfigureAwait(false);
         const decimal qtyTolerance = 0.0001m;
         var totalCogs = 0m;
         foreach (var (materialId, thisBaseQty) in thisInvoice)
@@ -1802,7 +2037,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                 """);
             Add(entry, "@companyGuid", GlPosting.FormatGuid(_provider, Guid.Parse(companyId)));
             Add(entry, "@deliveryKind", CommercialDocKinds.DeliveryNote);
-            Add(entry, "@deliveryId", deliveryDocId.Value.ToString(CultureInfo.InvariantCulture));
+            Add(entry, "@deliveryId", deliveryDocId.ToString(CultureInfo.InvariantCulture));
             Add(entry, "@deliveredAccount", GlAccounts.StockDeliveredNotBilled);
             if (Convert.ToInt64(await entry.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
                     CultureInfo.InvariantCulture) > 0)
@@ -1810,6 +2045,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         }
         return (totalCogs, creditAccount);
     }
+
 
     // ------------------------------------------------- lifecycle (W23, mig 098)
 

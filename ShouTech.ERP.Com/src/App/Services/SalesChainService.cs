@@ -244,6 +244,199 @@ public sealed class SalesChainService
             draft, source.DocKind, sourceDocId, userId, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// CONSOLIDATED INVOICE (W5, spec section 5): creates ONE sales
+    /// invoice draft drawing lines from MULTIPLE posted delivery notes
+    /// — several deliveries of one order, or deliveries of several
+    /// orders of the same party. Every copied line carries its own
+    /// source delivery + source line number (migration 102 attribution),
+    /// so per-delivery 1215 relief at posting and per-order per_billed
+    /// stay exact even though the invoice is a single document.
+    /// Guards: at least one delivery, no delivery twice; every source
+    /// must be a POSTED delivery note (SAL-7001) of one company, one
+    /// party and one currency at one exchange rate (SAL-7004 — the
+    /// catalog has no dedicated consolidation-mismatch code; flagged
+    /// for the owner); per-line quantities respect the remaining
+    /// unbilled quantity of their own delivery line (SAL-7002); when
+    /// nothing billable remains on any selected delivery the call
+    /// fails with SAL-7003. A delivery that is already fully billed
+    /// contributes no lines and is simply skipped.
+    /// </summary>
+    /// <returns>The database id of the created draft invoice.</returns>
+    public async Task<long> CreateConsolidatedInvoiceAsync(
+        IReadOnlyList<ConsolidatedDeliverySelection> selections,
+        string docNo,
+        DateOnly invoiceDate,
+        string userId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(selections);
+        if (selections.Count == 0)
+            throw new ArgumentException("At least one delivery note is required for a consolidated invoice.", nameof(selections));
+        if (string.IsNullOrWhiteSpace(docNo)) throw new ArgumentException("Document number is required.", nameof(docNo));
+        if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
+        var seenDeliveries = new HashSet<long>();
+        foreach (var selection in selections)
+        {
+            ArgumentNullException.ThrowIfNull(selection);
+            if (selection.DeliveryDocId <= 0)
+                throw new ArgumentException("Delivery document is required.", nameof(selections));
+            if (!seenDeliveries.Add(selection.DeliveryDocId))
+                throw new ArgumentException($"Delivery '{selection.DeliveryDocId}' is selected more than once.", nameof(selections));
+            if (selection.QuantityBySourceLine is not null)
+            {
+                foreach (var (sourceLineNo, quantity) in selection.QuantityBySourceLine)
+                {
+                    if (sourceLineNo <= 0) throw new ArgumentOutOfRangeException(nameof(selections), "Source line numbers must be positive.");
+                    if (quantity < 0m) throw new ArgumentOutOfRangeException(nameof(selections), "Requested quantities cannot be negative.");
+                }
+            }
+        }
+
+        var deliveries = new List<CommercialDocumentSnapshot>(selections.Count);
+        foreach (var selection in selections)
+        {
+            var delivery = await _repository.FindSalesByIdAsync(selection.DeliveryDocId, cancellationToken).ConfigureAwait(false)
+                           ?? throw new InvalidOperationException($"Source sales document '{selection.DeliveryDocId}' was not found.");
+            if (delivery.DocKind != CommercialDocKinds.DeliveryNote)
+                throw new AppError(ErrorCodes.ChainTransitionNotAllowed,
+                    $"Documents cannot be converted from '{delivery.DocKind}' to '{CommercialDocKinds.SalesInvoice}'.",
+                    delivery.DocKind, CommercialDocKinds.SalesInvoice);
+            if (delivery.Status != CommercialDocumentStatus.Posted)
+                throw new AppError(ErrorCodes.ChainSourceNotPosted,
+                    $"The source document '{delivery.DocNo}' must be posted before it can be converted.",
+                    delivery.DocNo);
+            deliveries.Add(delivery);
+        }
+
+        // One invoice = one company, one party, one currency at one
+        // rate. Anything else would corrupt the header money and the
+        // party-ledger debit, so it is refused before any line is read.
+        var first = deliveries[0];
+        foreach (var delivery in deliveries.Skip(1))
+        {
+            // Party identity is the party id; the code is only the
+            // fallback identity for documents that carry no id.
+            var sameParty = delivery.PartyId is not null || first.PartyId is not null
+                ? delivery.PartyId == first.PartyId
+                : string.Equals(delivery.PartyCode, first.PartyCode, StringComparison.Ordinal);
+            if (delivery.CompanyId != first.CompanyId
+                || !sameParty
+                || !string.Equals(delivery.CurrencyCode, first.CurrencyCode, StringComparison.OrdinalIgnoreCase)
+                || delivery.ExchangeRate != first.ExchangeRate)
+                throw new AppError(ErrorCodes.ChainTransitionNotAllowed,
+                    $"Delivery '{delivery.DocNo}' cannot be consolidated with '{first.DocNo}': company, party, currency and exchange rate must match.",
+                    delivery.DocKind, CommercialDocKinds.SalesInvoice);
+        }
+
+        var lines = new List<CommercialLineDraft>();
+        decimal discountAmount = 0m, extraAmount = 0m;
+        for (var index = 0; index < deliveries.Count; index++)
+        {
+            var delivery = deliveries[index];
+            var requestedByLine = selections[index].QuantityBySourceLine;
+            if (requestedByLine is not null)
+            {
+                var deliveryLineNumbers = new HashSet<int>(delivery.Lines.Select(line => line.LineNo));
+                foreach (var sourceLineNo in requestedByLine.Keys)
+                {
+                    if (!deliveryLineNumbers.Contains(sourceLineNo))
+                        throw new AppError(ErrorCodes.ChainQuantityExceedsRemaining,
+                            $"The requested quantity for source line '{sourceLineNo}' exceeds the remaining quantity on the source document.",
+                            sourceLineNo.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                }
+            }
+
+            // Remaining-qty enforcement is the staged conversion's own:
+            // quantities already billed by POSTED invoices linked to
+            // THIS delivery, keyed by source line (attribution-aware).
+            var billedByLine = await _repository.GetFulfilledQuantitiesBySourceLineAsync(
+                delivery.CompanyId, delivery.DocId, CommercialDocKinds.SalesInvoice, cancellationToken).ConfigureAwait(false);
+
+            decimal copiedSubtotal = 0m;
+            foreach (var line in delivery.Lines)
+            {
+                var previouslyBilled = billedByLine.GetValueOrDefault(line.LineNo);
+                if (previouslyBilled > line.Qty)
+                    throw new AppError(ErrorCodes.ChainQuantityExceedsRemaining,
+                        $"The requested quantity for '{line.Description}' exceeds the remaining quantity on the source document.",
+                        line.Description);
+
+                var remaining = line.Qty - previouslyBilled;
+                if (remaining <= 0m)
+                    continue;
+
+                var requested = remaining;
+                if (requestedByLine is not null)
+                {
+                    if (!requestedByLine.TryGetValue(line.LineNo, out requested))
+                        continue;
+                    if (requested > remaining)
+                        throw new AppError(ErrorCodes.ChainQuantityExceedsRemaining,
+                            $"The requested quantity for '{line.Description}' exceeds the remaining quantity on the source document.",
+                            line.Description);
+                }
+                if (requested <= 0m)
+                    continue;
+
+                lines.Add(new CommercialLineDraft(
+                    line.MaterialId,
+                    line.MaterialCode,
+                    line.Description,
+                    line.Unit,
+                    requested,
+                    line.UnitPrice,
+                    line.DiscountPct,
+                    line.TaxRate,
+                    line.WarehouseId,
+                    SourceLineNo: null,
+                    SourceDocId: delivery.DocId,
+                    SourceRefLineNo: line.LineNo));
+                copiedSubtotal += decimal.Round(requested * line.UnitPrice * (1m - line.DiscountPct / 100m), 2);
+            }
+
+            // Header money follows the copied lines, exactly as in the
+            // staged conversion: each delivery's discount / extra
+            // charges carry pro-rata to its copied subtotal.
+            var carryRatio = delivery.Subtotal > 0m ? copiedSubtotal / delivery.Subtotal : 0m;
+            discountAmount += decimal.Round(delivery.DiscountAmount * carryRatio, 2);
+            extraAmount += decimal.Round(delivery.ExtraAmount * carryRatio, 2);
+        }
+
+        if (lines.Count == 0)
+            throw new AppError(ErrorCodes.ChainSourceFullyFulfilled,
+                $"The source document '{first.DocNo}' is already fully fulfilled.",
+                first.DocNo);
+
+        var draft = new CommercialDocumentDraft(
+            first.CompanyId,
+            CommercialDocKinds.SalesInvoice,
+            docNo.Trim(),
+            invoiceDate,
+            first.PartyId,
+            first.PartyName,
+            first.WarehouseId,
+            first.CurrencyCode,
+            first.ExchangeRate,
+            first.Notes,
+            lines,
+            first.PartyCode,
+            first.DeliveryDate,
+            ValidTill: null,
+            first.CostCenter,
+            first.BranchName,
+            first.SalesRepName,
+            first.WarehouseName,
+            discountAmount,
+            extraAmount);
+
+        var sources = deliveries
+            .Select(delivery => new CommercialDocumentSourceRef(CommercialDocKinds.DeliveryNote, delivery.DocId))
+            .ToList();
+        return await _repository.CreateSalesDraftWithLinksAsync(
+            draft, sources, userId, cancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>Creates and posts a sales quotation draft; entry point of the chain.</summary>
     public async Task<long> CreateQuotationAsync(CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default)
     {
