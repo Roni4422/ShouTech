@@ -207,6 +207,7 @@ SchemaMigrator-built SQLite database. Filled in as landings proceed:
 | LocSvc construct + SetLanguage("ar") | **189.2 ms** | first lookup still pays the load once — see L3 note below | per instance |
 | LocSvc label-index build (all 4 catalogs) | inside the ≈190 ms ctor above (fresh-instance `TryResolveKeyFromLabel` segment: 133.3 ms, ctor-dominated) | deferred to first use | L3 |
 | LocSvc construct **only** (L3, new segment) | ≈190 ms (the old ctor above) | **0.3 ms** (both L3 runs) | constructor no longer parses any catalog |
+| MWin nav bodies (L4) | 266 item buttons + ~532 bindings built in the constructor | first tab's 7 buttons in the constructor; **259 buttons + ~518 bindings deferred** to first demand / Loaded-priority pass | counted from MWin.xaml (266 ribbon buttons, 18 tabs). No headless timing exists for a WPF window on this VM — the owner's `MWinConstructed` phase line (§4) is the before/after |
 | `EnsureDatabase` on a migrated DB (re-seed) | **530.3 ms** | unchanged (by ruling) | §1 note + §6.2 |
 | `SchemaMigrator.ApplyAllAsync`, all applied | **48.6 ms** | unchanged (not on path) | §1 |
 | Entry-assembly full read + SHA-256 (8,985,088-byte file) | **98.7 ms** | `FileInfo.Length`: **0.2 ms** | L2 |
