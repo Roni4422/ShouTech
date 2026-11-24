@@ -47,8 +47,12 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
         Title = T("PurchaseMatch.Title");
         Width = 1120;
         Height = 720;
-        MinWidth = 820;
-        MinHeight = 520;
+        // Screen-fit cap (verify_screenfit.py): <= 684x384. The whole
+        // middle band (settings + history) scrolls vertically when
+        // squeezed instead of clipping; the status and command bars stay
+        // docked at the bottom, always visible.
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }
@@ -204,7 +208,17 @@ public sealed class PurchaseMatchPolicyWin : BaseWin
 
         Grid.SetRow(historyPanel, 1);
         content.Children.Add(historyPanel);
-        root.Children.Add(content);
+        // The settings/history band is the flexible middle: wrap it in a
+        // vertical ScrollViewer so small heights degrade to scroll, never
+        // clip (the history grid's fixed columns scroll horizontally
+        // inside the grid itself).
+        var contentScroll = new ScrollViewer
+        {
+            Content = content,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+        root.Children.Add(contentScroll);
         Content = root;
         ApplyLocalizedText();
     }

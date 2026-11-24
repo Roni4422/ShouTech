@@ -74,8 +74,11 @@ public sealed class SalesReturnWin : BaseWin
     {
         Width = 1000;
         Height = 620;
-        MinWidth = 700;
-        MinHeight = 380;
+        // Screen-fit cap (verify_screenfit.py): <= 684x384. The lines
+        // grid is the flexible band and scrolls internally; the form and
+        // summary bands are slim and the bottom bar stays always visible.
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         BuildUi();
         Loaded += OnLoaded;

@@ -33,8 +33,11 @@ public sealed class SupplierQuotationCompareWin : BaseWin
         _rfqId = rfqId;
         Width = 1180;
         Height = 720;
-        MinWidth = 760;
-        MinHeight = 480;
+        // Screen-fit cap (verify_screenfit.py): <= 684x384. Both grids sit
+        // in star rows and scroll internally; the command/status bars stay
+        // docked at the bottom, always visible.
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         BuildUi();
         ApplyLocalizedText();

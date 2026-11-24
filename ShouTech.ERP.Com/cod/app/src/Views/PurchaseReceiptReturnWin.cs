@@ -44,8 +44,13 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
     {
         Width = 1120;
         Height = 660;
-        MinWidth = 760;
-        MinHeight = 460;
+        // Screen-fit cap (verify_screenfit.py): <= 684x384. The lines grid
+        // is the flexible band and scrolls internally in both directions
+        // (fixed columns exceed 684, so they scroll horizontally at the
+        // minimum); the form band is two rows and the command/status bars
+        // stay docked at the bottom, always visible.
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         BuildUi();
         ApplyLocalizedText();
@@ -292,7 +297,7 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
         _status.Text = Tf("Purchasing.ReceiptReturn.Total", total);
     }
 
-    private static IReadOnlyList<CommercialBatchAllocationDraft>? ParseBatchAllocations(string? value)
+    private static List<CommercialBatchAllocationDraft>? ParseBatchAllocations(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
         var result = new List<CommercialBatchAllocationDraft>();
@@ -308,7 +313,7 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
         return result;
     }
 
-    private static IReadOnlyList<CommercialSerialSelectionDraft>? ParseSerials(string? value)
+    private static CommercialSerialSelectionDraft[]? ParseSerials(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
         var serials = value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

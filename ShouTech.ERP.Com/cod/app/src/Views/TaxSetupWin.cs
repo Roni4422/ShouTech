@@ -48,8 +48,13 @@ public sealed class TaxSetupWin : BaseWin
         Title = T("TaxSetup.Title");
         Width = 1120;
         Height = 760;
-        MinWidth = 760;
-        MinHeight = 500;
+        // Screen-fit cap (verify_screenfit.py): <= 684x384. The rules
+        // grid and the editor band share the middle in star rows (0.8*/1.2*,
+        // their full-size proportions); the editor band scrolls vertically
+        // and the grid scrolls internally when squeezed, and the top band
+        // and action bar stay docked, always visible.
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }
@@ -170,8 +175,6 @@ public sealed class TaxSetupWin : BaseWin
         DockPanel.SetDock(accountPanel, Dock.Top);
         content.Children.Add(accountPanel);
         content.Children.Add(editor);
-        DockPanel.SetDock(content, Dock.Bottom);
-        root.Children.Add(content);
 
         var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
         ConfigureButton(_new, "Common.New");
@@ -186,7 +189,23 @@ public sealed class TaxSetupWin : BaseWin
             actions.Children.Add(button);
         DockPanel.SetDock(actions, Dock.Bottom);
         root.Children.Add(actions);
-        root.Children.Add(_rules);
+        // Middle band: rules grid + editor in star rows, so at the
+        // minimum the editor scrolls instead of clipping its last rows
+        // and the rules grid keeps its share, exactly as at full size.
+        var middle = new Grid();
+        middle.RowDefinitions.Add(new RowDefinition { Height = new GridLength(0.8, GridUnitType.Star) });
+        middle.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1.2, GridUnitType.Star) });
+        Grid.SetRow(_rules, 0);
+        middle.Children.Add(_rules);
+        var editorScroll = new ScrollViewer
+        {
+            Content = content,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+        Grid.SetRow(editorScroll, 1);
+        middle.Children.Add(editorScroll);
+        root.Children.Add(middle);
 
         _country.SelectionChanged += (_, _) =>
         {

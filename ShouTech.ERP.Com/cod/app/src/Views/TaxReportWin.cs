@@ -32,8 +32,11 @@ public sealed class TaxReportWin : BaseWin
         Title = T("TaxReport.Title");
         Width = 1100;
         Height = 680;
-        MinWidth = 720;
-        MinHeight = 440;
+        // Screen-fit cap (verify_screenfit.py): <= 684x384. The tabbed
+        // grids fill the remaining space and scroll internally; filters,
+        // totals and the Close bar stay docked, always visible.
+        MinWidth = 660;
+        MinHeight = 360;
         BuildUi();
         Loaded += OnLoaded;
     }

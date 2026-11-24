@@ -47,8 +47,13 @@ public sealed class SupplierQuotationEntryWin : BaseWin
         _rfqId = rfqId;
         Width = 1120;
         Height = 720;
-        MinWidth = 760;
-        MinHeight = 500;
+        // Screen-fit cap (verify_screenfit.py): <= 684x384. The form and
+        // the lines grid share the middle band in star rows (3*/4*, their
+        // full-size proportions); the form band scrolls vertically and the
+        // grid scrolls internally when squeezed, and the command/status
+        // bars stay docked at the bottom, always visible.
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         BuildUi();
         ApplyLocalizedText();
@@ -153,8 +158,6 @@ public sealed class SupplierQuotationEntryWin : BaseWin
         F2Ui.AddField(_fieldLabels, form, 4, 0, "Purchasing.SupplierQuotationEntry.ValidTill", _validTill);
         F2Ui.AddField(_fieldLabels, form, 4, 1, "Purchasing.SupplierQuotationEntry.DeliveryDate", _deliveryDate);
         F2Ui.AddField(_fieldLabels, form, 5, 0, "Purchasing.SupplierQuotationEntry.Terms", _terms, 2);
-        DockPanel.SetDock(form, Dock.Top);
-        root.Children.Add(form);
 
         _linesGrid.AutoGenerateColumns = false;
         _linesGrid.CanUserAddRows = false;
@@ -168,7 +171,23 @@ public sealed class SupplierQuotationEntryWin : BaseWin
         _linesGrid.Columns.Add(new DataGridTextColumn { Header = T("Purchasing.SupplierQuotationEntry.UnitPrice"), Binding = new Binding(nameof(QuotationLineVm.UnitPrice)) { StringFormat = "N4", UpdateSourceTrigger = UpdateSourceTrigger.LostFocus }, Width = 110 });
         _linesGrid.Columns.Add(new DataGridTextColumn { Header = T("Purchasing.SupplierQuotationEntry.DiscountPct"), Binding = new Binding(nameof(QuotationLineVm.DiscountPct)) { StringFormat = "N2", UpdateSourceTrigger = UpdateSourceTrigger.LostFocus }, Width = 95 });
         _linesGrid.Columns.Add(new DataGridTextColumn { Header = T("Purchasing.SupplierQuotationEntry.TaxRate"), Binding = new Binding(nameof(QuotationLineVm.TaxRate)) { StringFormat = "N2", UpdateSourceTrigger = UpdateSourceTrigger.LostFocus }, Width = 85 });
-        root.Children.Add(_linesGrid);
+        // Middle band: form (scrollable) + lines grid in star rows, so at
+        // the minimum the form scrolls instead of clipping its last rows
+        // and the grid keeps the larger share, exactly as at full size.
+        var middle = new Grid();
+        middle.RowDefinitions.Add(new RowDefinition { Height = new GridLength(3, GridUnitType.Star) });
+        middle.RowDefinitions.Add(new RowDefinition { Height = new GridLength(4, GridUnitType.Star) });
+        var formScroll = new ScrollViewer
+        {
+            Content = form,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+        Grid.SetRow(formScroll, 0);
+        middle.Children.Add(formScroll);
+        Grid.SetRow(_linesGrid, 1);
+        middle.Children.Add(_linesGrid);
+        root.Children.Add(middle);
         Content = root;
     }
 

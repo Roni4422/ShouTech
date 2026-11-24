@@ -63,8 +63,11 @@ public sealed class SalesDeliveryWin : BaseWin
         Title = T("SalesDelivery.Title");
         Width = 1040;
         Height = 650;
-        MinWidth = 760;
-        MinHeight = 440;
+        // Screen-fit cap (verify_screenfit.py): <= 684x384. The lines grid
+        // sits in the star row and scrolls internally; the header band is
+        // one row and the action/status bars stay docked at the bottom.
+        MinWidth = 660;
+        MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         BuildUi();
         Loaded += OnLoaded;

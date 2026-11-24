@@ -1211,7 +1211,10 @@ public sealed class OrdWin : BaseWin, IWindowMode
             Title = T("OrderDoc.CreateSupplierInvoice"),
             Width = 980,
             Height = 460,
-            MinWidth = 720,
+            // Screen-fit cap (verify_screenfit.py): <= 684 wide. The grid
+            // fills the dialog and scrolls horizontally at the minimum if
+            // its fixed columns exceed the available width.
+            MinWidth = 684,
             MinHeight = 320,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ResizeMode = ResizeMode.CanResize
