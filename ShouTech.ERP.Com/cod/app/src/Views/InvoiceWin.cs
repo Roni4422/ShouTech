@@ -62,6 +62,32 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
     private readonly TextBox _txtPartyAccount = new();
     private readonly TextBox _txtGoodsAccount = new();
 
+    // ---- Export header (W5, migration 102) ----
+    /// <summary>Export section: shown ONLY for sales invoices (the
+    /// ValidTill / target-warehouse conditional-field pattern); the
+    /// fields themselves appear only while the Export flag is on.
+    /// Round-tripped through InvDoc / InvRepo.</summary>
+    private readonly CheckBox _chkExport = new();
+    private readonly TextBox _txtIncoterm = new();
+    private readonly TextBox _txtPortLoading = new();
+    private readonly TextBox _txtPortDischarge = new();
+    private readonly TextBox _txtCountryOrigin = new();
+    private readonly TextBox _txtCustomsRef = new();
+    private readonly TextBox _txtVesselFlight = new();
+    private readonly TextBox _txtGrossWeight = new();
+    private readonly TextBox _txtNetWeight = new();
+    private Grid? _exportFieldsPanel;
+    private Grid? _exportSection;
+
+    // ---- Live margin (W5) ----
+    /// <summary>Per-line gross margin column + footer total. Cost comes
+    /// from TaxSvc.GetMaterialCost (the pricing guard's valuation
+    /// chain, fail-soft): a line without a resolvable cost shows —.
+    /// No sales margin-visibility permission exists in the catalog, so
+    /// the column shows for every user (owner decision pending).</summary>
+    private readonly DataGridTextColumn _marginColumn = new();
+    private readonly TextBox _txtTotalMargin = new() { IsReadOnly = true };
+
     // ---- Notes / grid / actions ----
     private readonly TextBox _txtNotes = new() { AcceptsReturn = true };
     private readonly DataGrid _grid = new();
@@ -100,6 +126,10 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
 
     private bool _syncingPayment;
     private bool _syncingDocumentDate;
+
+    /// <summary>W5: live margin applies to selling documents priced
+    /// against stock cost — sales invoices and quotations.</summary>
+    private bool MarginApplies => _doc.Kind is InvDocKind.SalesInvoice or InvDocKind.Quotation;
 
     public InvoiceWin() : this(InvDocKind.SalesInvoice) { }
 
@@ -667,8 +697,93 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         var recordBar = CreateRecordNumberBar(_txtDocNo, NavigateDocuments);
         DockPanel.SetDock(recordBar, Dock.Top);
         panel.Children.Add(recordBar);
-        panel.Children.Add(grid);
+        // The export section rides under the header columns inside the
+        // same scrollable header band (sales invoices only).
+        var headerStack = new StackPanel();
+        headerStack.Children.Add(grid);
+        headerStack.Children.Add(BuildExportSection());
+        panel.Children.Add(headerStack);
         return panel;
+    }
+
+    /// <summary>
+    /// W5 export section: an "Export invoice" flag plus the eight
+    /// shipment/customs fields in the header's three-column scheme.
+    /// The whole section exists only for sales invoices; the fields
+    /// show only while the flag is on.
+    /// </summary>
+    private Grid BuildExportSection()
+    {
+        foreach (var tb in new[] { _txtIncoterm, _txtPortLoading, _txtPortDischarge, _txtCountryOrigin, _txtCustomsRef, _txtVesselFlight, _txtGrossWeight, _txtNetWeight })
+        {
+            tb.Width = double.NaN;
+            tb.MinWidth = 60;
+            tb.HorizontalAlignment = HorizontalAlignment.Stretch;
+            tb.VerticalContentAlignment = VerticalAlignment.Center;
+            tb.Margin = new Thickness(0);
+        }
+
+        _chkExport.Content = Tf("Invoice.ExportInvoice", "Export invoice");
+        _chkExport.Margin = new Thickness(0, 2, 0, 6);
+        _chkExport.Checked += (_, _) => UpdateExportVisibility();
+        _chkExport.Unchecked += (_, _) => UpdateExportVisibility();
+
+        var fields = new Grid { Margin = new Thickness(0) };
+        fields.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        fields.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        fields.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        const double gap = 4;
+        var colPorts = new Grid { Margin = new Thickness(gap) };
+        for (var i = 0; i < 3; i++)
+            colPorts.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        AddLabeledCell(colPorts, 0, Tf("Invoice.Incoterm", "Incoterm"), _txtIncoterm);
+        AddLabeledCell(colPorts, 1, Tf("Invoice.PortOfLoading", "Port of loading"), _txtPortLoading);
+        AddLabeledCell(colPorts, 2, Tf("Invoice.PortOfDischarge", "Port of discharge"), _txtPortDischarge);
+
+        var colCustoms = new Grid { Margin = new Thickness(gap) };
+        for (var i = 0; i < 3; i++)
+            colCustoms.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        AddLabeledCell(colCustoms, 0, Tf("Invoice.CountryOfOrigin", "Country of origin"), _txtCountryOrigin);
+        AddLabeledCell(colCustoms, 1, Tf("Invoice.CustomsRef", "Customs reference"), _txtCustomsRef);
+        AddLabeledCell(colCustoms, 2, Tf("Invoice.VesselFlight", "Vessel / flight"), _txtVesselFlight);
+
+        var colWeights = new Grid { Margin = new Thickness(gap) };
+        for (var i = 0; i < 2; i++)
+            colWeights.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        AddLabeledCell(colWeights, 0, Tf("Invoice.GrossWeight", "Gross weight"), _txtGrossWeight);
+        AddLabeledCell(colWeights, 1, Tf("Invoice.NetWeight", "Net weight"), _txtNetWeight);
+
+        Grid.SetColumn(colWeights, 0);
+        Grid.SetColumn(colCustoms, 1);
+        Grid.SetColumn(colPorts, 2);
+        fields.Children.Add(colWeights);
+        fields.Children.Add(colCustoms);
+        fields.Children.Add(colPorts);
+        _exportFieldsPanel = fields;
+
+        var section = new Grid { Margin = new Thickness(0, 2, 0, 0) };
+        section.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        section.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetRow(_chkExport, 0);
+        section.Children.Add(_chkExport);
+        Grid.SetRow(fields, 1);
+        section.Children.Add(fields);
+        _exportSection = section;
+        UpdateExportVisibility();
+        return section;
+    }
+
+    private void UpdateExportVisibility()
+    {
+        if (_exportSection is not null)
+            _exportSection.Visibility = _doc.Kind == InvDocKind.SalesInvoice
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        if (_exportFieldsPanel is not null)
+            _exportFieldsPanel.Visibility = _chkExport.IsChecked == true
+                ? Visibility.Visible
+                : Visibility.Collapsed;
     }
 
     /// <summary>
@@ -719,7 +834,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
     {
         // Heights and padding come from the central styles (ControlHeight
         // 32, applied by AddLabeledCell); totals only opt into stretching.
-        foreach (var tb in new[] { _txtLinesTotal, _txtInvoiceValue, _txtPaid, _txtLinesDiscount, _txtPaymentValue, _txtRemaining, _txtLinesExtra, _txtNet })
+        foreach (var tb in new[] { _txtLinesTotal, _txtInvoiceValue, _txtPaid, _txtLinesDiscount, _txtPaymentValue, _txtRemaining, _txtLinesExtra, _txtNet, _txtTotalMargin })
         {
             tb.Width = double.NaN;
             tb.MinWidth = 70;
@@ -736,8 +851,12 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         var colExtra = new Grid { Margin = new Thickness(2, 0, 2, 0) };
         colExtra.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         colExtra.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        colExtra.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         AddLabeledCell(colExtra, 0, Tf("Invoice.LinesExtra", "Lines extra"), _txtLinesExtra);
         AddLabeledCell(colExtra, 1, Tf("Invoice.Net", "Net"), _txtNet);
+        // W5 live margin total (sales invoices / quotations only).
+        if (MarginApplies)
+            AddLabeledCell(colExtra, 2, Tf("Invoice.TotalMargin", "Gross margin"), _txtTotalMargin);
 
         var colDisc = new Grid { Margin = new Thickness(2, 0, 2, 0) };
         for (var i = 0; i < 3; i++)
@@ -816,6 +935,15 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             Width = 90,
             IsReadOnly = true
         });
+        // W5 live margin: (net unit price − current valuation cost) ×
+        // qty per line, recomputed on every edit; — when no cost can
+        // be resolved. Sales invoices and quotations only.
+        _marginColumn.Header = Tf("Invoice.ColMargin", "Margin");
+        _marginColumn.Binding = new Binding(nameof(LineVm.MarginText)) { Mode = BindingMode.OneWay };
+        _marginColumn.Width = 85;
+        _marginColumn.IsReadOnly = true;
+        _marginColumn.Visibility = MarginApplies ? Visibility.Visible : Visibility.Collapsed;
+        _grid.Columns.Add(_marginColumn);
         _grid.Columns.Add(TextCol(nameof(LineVm.WarehouseName), 110, Tf("Invoice.ColWarehouse", "Warehouse")));
 
         _grid.CellEditEnding += OnCellEditEnding;
@@ -911,6 +1039,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _txtNet.Text = FormatAmt(_doc.NetAmount);
         if (!_txtPaymentValue.IsFocused)
             _txtPaymentValue.Text = FormatAmt(_doc.PaidAmount);
+        RefreshMarginDisplay();
 
         _lblStatus.Text = _doc.Status switch
         {
@@ -923,6 +1052,56 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
 
     private static string FormatAmt(decimal v)
         => v.ToString("N3", CultureInfo.CurrentCulture);
+
+    /// <summary>
+    /// W5 live margin refresh: resolves each line's valuation cost
+    /// ONCE per material (cached on the line view-model) through the
+    /// fail-soft TaxSvc facade, then restates the footer total from
+    /// the lines that have a cost. Lines without a resolvable cost
+    /// keep the — placeholder and contribute nothing; when NO line
+    /// has a cost the total is — too. Never throws into editing.
+    /// </summary>
+    private void RefreshMarginDisplay()
+    {
+        if (!MarginApplies) return;
+        try
+        {
+            var anyCost = false;
+            var total = 0m;
+            foreach (var line in _lines)
+            {
+                var materialId = line.MaterialId ?? CardStore.ResolveMaterial(line.MaterialCode)?.Id;
+                if (materialId is > 0 && line.CostMaterialId != materialId)
+                {
+                    line.MaterialId = materialId;
+                    line.CostMaterialId = materialId;
+                    line.UnitCost = TaxSvc.GetMaterialCost(materialId);
+                    line.NotifyTotals();
+                }
+                if (line.MarginAmount is decimal margin)
+                {
+                    anyCost = true;
+                    total += margin;
+                }
+            }
+            _txtTotalMargin.Text = anyCost ? FormatAmt(total) : "—";
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "InvoiceWin.RefreshMarginDisplay");
+            _txtTotalMargin.Text = "—";
+        }
+    }
+
+    /// <summary>W5: an export weight as entered — blank or unparsable
+    /// means "not recorded" (null), never a fabricated zero.</summary>
+    private static decimal? ParseWeight(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        if (decimal.TryParse(text, NumberStyles.Any, CultureInfo.CurrentCulture, out var v)) return v;
+        if (decimal.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out v)) return v;
+        return null;
+    }
 
     private InvDoc CaptureDoc()
     {
@@ -945,6 +1124,20 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         // that shows the field); clearing the picker clears the date.
         if (_doc.Kind == InvDocKind.Quotation)
             _doc.ValidTill = _dtValidTill.SelectedDate;
+        // W5: export fields are captured only for sales invoices (the
+        // only kind that shows the section).
+        if (_doc.Kind == InvDocKind.SalesInvoice)
+        {
+            _doc.IsExport = _chkExport.IsChecked == true;
+            _doc.Incoterm = _txtIncoterm.Text.Trim();
+            _doc.PortOfLoading = _txtPortLoading.Text.Trim();
+            _doc.PortOfDischarge = _txtPortDischarge.Text.Trim();
+            _doc.CountryOfOrigin = _txtCountryOrigin.Text.Trim();
+            _doc.CustomsRef = _txtCustomsRef.Text.Trim();
+            _doc.VesselFlight = _txtVesselFlight.Text.Trim();
+            _doc.GrossWeight = ParseWeight(_txtGrossWeight.Text);
+            _doc.NetWeight = ParseWeight(_txtNetWeight.Text);
+        }
         _doc.ReceiptNo = _txtReceiptNo.Text.Trim();
         _doc.Reference = _txtReference.Text.Trim();
         _doc.BranchName = _txtBranch.Text.Trim();
@@ -1032,6 +1225,26 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _doc.PaidAmount = doc.PaidAmount;
         _doc.ValidTill = doc.ValidTill;
         _dtValidTill.SelectedDate = doc.ValidTill;
+        // W5: export header round-trip (sales invoices).
+        _doc.IsExport = doc.IsExport;
+        _doc.Incoterm = doc.Incoterm;
+        _doc.PortOfLoading = doc.PortOfLoading;
+        _doc.PortOfDischarge = doc.PortOfDischarge;
+        _doc.CountryOfOrigin = doc.CountryOfOrigin;
+        _doc.CustomsRef = doc.CustomsRef;
+        _doc.VesselFlight = doc.VesselFlight;
+        _doc.GrossWeight = doc.GrossWeight;
+        _doc.NetWeight = doc.NetWeight;
+        _chkExport.IsChecked = doc.IsExport;
+        _txtIncoterm.Text = doc.Incoterm;
+        _txtPortLoading.Text = doc.PortOfLoading;
+        _txtPortDischarge.Text = doc.PortOfDischarge;
+        _txtCountryOrigin.Text = doc.CountryOfOrigin;
+        _txtCustomsRef.Text = doc.CustomsRef;
+        _txtVesselFlight.Text = doc.VesselFlight;
+        _txtGrossWeight.Text = doc.GrossWeight?.ToString("0.###", CultureInfo.InvariantCulture) ?? string.Empty;
+        _txtNetWeight.Text = doc.NetWeight?.ToString("0.###", CultureInfo.InvariantCulture) ?? string.Empty;
+        UpdateExportVisibility();
         _doc.OriginalDocId = doc.OriginalDocId;
         _doc.OriginalDocKind = doc.OriginalDocKind;
         _doc.OriginalDocNo = doc.OriginalDocNo;
@@ -1702,7 +1915,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         if (payIdx >= 0 && payIdx < _cmbPayment.Items.Count)
             _cmbPayment.SelectedIndex = payIdx;
 
-        if (_grid.Columns.Count >= 10)
+        if (_grid.Columns.Count >= 11)
         {
             _grid.Columns[0].Header = Tf("Invoice.ColCode", "Code");
             _grid.Columns[1].Header = Tf("Invoice.ColMaterial", "Material");
@@ -1713,8 +1926,10 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             _grid.Columns[6].Header = Tf("Invoice.ColTaxCode", "Tax system");
             _grid.Columns[7].Header = Tf("Invoice.ColTax", "Tax %");
             _grid.Columns[8].Header = Tf("Invoice.ColLineTotal", "Line total");
-            _grid.Columns[9].Header = Tf("Invoice.ColWarehouse", "Warehouse");
+            _grid.Columns[9].Header = Tf("Invoice.ColMargin", "Margin");
+            _grid.Columns[10].Header = Tf("Invoice.ColWarehouse", "Warehouse");
         }
+        _chkExport.Content = Tf("Invoice.ExportInvoice", "Export invoice");
 
         RefreshTotals();
     }
@@ -1760,10 +1975,38 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             }
         }
 
+        // ---- Live margin (W5) ----
+        /// <summary>Current valuation cost per base unit, resolved
+        /// through TaxSvc.GetMaterialCost; null = unavailable.</summary>
+        public decimal? UnitCost { get; set; }
+        /// <summary>The material the cached <see cref="UnitCost"/>
+        /// belongs to; a different material re-resolves the cost.</summary>
+        public long? CostMaterialId { get; set; }
+
+        /// <summary>(Net unit price − cost) × qty, or null when the
+        /// cost is unavailable. Net = price after the line discount,
+        /// the same basis the pricing guard's margin rule uses.</summary>
+        public decimal? MarginAmount
+        {
+            get
+            {
+                if (UnitCost is not decimal cost) return null;
+                var net = ParseDec(UnitPriceText, 0) * (1m - ParseDec(DiscountPctText, 0) / 100m);
+                return (net - cost) * ParseDec(QtyText, 0);
+            }
+        }
+
+        public string MarginText => MarginAmount is decimal margin
+            ? margin.ToString("N2", CultureInfo.CurrentCulture)
+            : "—";
+
         public event PropertyChangedEventHandler? PropertyChanged;
 
         public void NotifyTotals()
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(LineTotalText)));
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(LineTotalText)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(MarginText)));
+        }
 
         private void OnPropertyChanged([CallerMemberName] string? name = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));

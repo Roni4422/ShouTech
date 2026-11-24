@@ -532,6 +532,56 @@ public static class SalesPriceGuard
         }
     }
 
+    /// <summary>
+    /// The ONE current-cost read behind the guard's margin rule,
+    /// exposed for READ-ONLY consumers (W5 live margin on InvoiceWin):
+    /// the valuation fallback chain (balance average, card avg_cost,
+    /// last purchase, standard, card cost — the StockValuationEngine
+    /// order). Returns 0 when the material is unknown to the company or
+    /// carries no cost anywhere; callers treat 0 as "cost unavailable",
+    /// never as a real zero cost.
+    /// </summary>
+    public static decimal GetCurrentCost(
+        DbConnection connection, DbTransaction transaction, string provider,
+        string companyKey, long materialId)
+    {
+        if (materialId <= 0 || string.IsNullOrWhiteSpace(companyKey))
+            return 0m;
+        var isPg = SalesPriceResolver.IsPg(provider);
+        var notDeleted = isPg ? "is_deleted = FALSE" : "is_deleted = 0";
+        var keys = SalesPriceResolver.CompanyKeys(connection, transaction, provider, companyKey);
+        if (keys.Count == 0)
+            return 0m;
+        var inList = string.Join(", ", keys.Select((_, i) => $"@co{i}"));
+        decimal avgCost = 0m, lastPurchase = 0m, standardCost = 0m, cardCost = 0m;
+        using var card = connection.CreateCommand();
+        card.Transaction = transaction;
+        card.CommandText = $"""
+            SELECT avg_cost, last_purchase_cost, standard_cost, cost
+            FROM materials
+            WHERE company_id IN ({inList}) AND material_id = @mat AND {notDeleted}
+            LIMIT 1
+            """;
+        for (var i = 0; i < keys.Count; i++)
+        {
+            var p = card.CreateParameter();
+            p.ParameterName = $"@co{i}";
+            p.Value = keys[i];
+            card.Parameters.Add(p);
+        }
+        var mp = card.CreateParameter();
+        mp.ParameterName = "@mat";
+        mp.Value = materialId;
+        card.Parameters.Add(mp);
+        using var reader = card.ExecuteReader();
+        if (!reader.Read())
+            return 0m;
+        decimal Col(int i) => reader.IsDBNull(i) ? 0m : Convert.ToDecimal(reader.GetValue(i), CultureInfo.InvariantCulture);
+        avgCost = Col(0); lastPurchase = Col(1); standardCost = Col(2); cardCost = Col(3);
+        return CurrentCost(connection, transaction, provider, keys, materialId,
+            avgCost, lastPurchase, standardCost, cardCost);
+    }
+
     /// <summary>Async wrapper for the async repositories (sync ADO inside
     /// the caller's transaction, the PartyCreditGuard pattern).</summary>
     public static Task ValidateAsync(

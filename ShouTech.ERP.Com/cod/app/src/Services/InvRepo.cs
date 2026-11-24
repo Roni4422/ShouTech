@@ -230,6 +230,10 @@ public static class InvRepo
         var w6Provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
         var hasW6Header = PartyLedger.ColumnExists(connection, tx, w6Provider, headerTable, "return_reason_code");
         var hasW6Lines = PartyLedger.ColumnExists(connection, tx, w6Provider, lineTable, "return_condition");
+        // W5 (migration 102): export invoice header fields exist only
+        // on the SALES header table; pre-102 databases keep the legacy
+        // behaviour untouched.
+        var hasExportHeader = isSales && PartyLedger.ColumnExists(connection, tx, w6Provider, headerTable, "is_export");
         if (doc.Kind == InvDocKind.SalesReturn && hasW6Header)
         {
             var settings = SrtRepo.ReadSettings(connection, tx);
@@ -283,6 +287,12 @@ public static class InvRepo
                 var w6Values = hasW6Header
                     ? ", $rreason, $rsource, $noinv, $insp, $appr"
                     : string.Empty;
+                var exportColumns = hasExportHeader
+                    ? ", is_export, incoterm, port_of_loading, port_of_discharge, country_of_origin, customs_ref, vessel_flight, gross_weight, net_weight"
+                    : string.Empty;
+                var exportValues = hasExportHeader
+                    ? ", $isexp, $incoterm, $pload, $pdisch, $origin, $customs, $vessel, $grossw, $netw"
+                    : string.Empty;
                 cmd.CommandText = $"""
                     INSERT INTO {headerTable}
                     (company_id, doc_kind, doc_no, doc_date, party_id, party_code, party_name, warehouse_id,
@@ -292,7 +302,7 @@ public static class InvRepo
                      party_account_name, goods_account_name,
                      original_doc_id, original_doc_kind, original_doc_no, journal_doc_no,
                      target_warehouse_id, target_warehouse_name, valid_till,
-                     created_by, is_deleted{w6Columns})
+                     created_by, is_deleted{w6Columns}{exportColumns})
                     VALUES
                     ($company, $kind, $no, $date, $party, $pcode, $pname, $wh,
                      $whname, $cur, $fx, $sub, $disc, $extra,
@@ -301,7 +311,7 @@ public static class InvRepo
                      $pacc, $gacc,
                      $origId, $origKind, $origNo, $jrn,
                      $twh, $twhname, $validTill,
-                     $user, 0{w6Values});
+                     $user, 0{w6Values}{exportValues});
                     SELECT last_insert_rowid();
                     """;
                 if (DatabaseRuntime.IsPostgreSql())
@@ -315,7 +325,7 @@ public static class InvRepo
                          party_account_name, goods_account_name,
                          original_doc_id, original_doc_kind, original_doc_no, journal_doc_no,
                          target_warehouse_id, target_warehouse_name, valid_till,
-                         created_by, is_deleted{w6Columns})
+                         created_by, is_deleted{w6Columns}{exportColumns})
                         VALUES
                         ($company, $kind, $no, $date, $party, $pcode, $pname, $wh,
                          $whname, $cur, $fx, $sub, $disc, $extra,
@@ -324,12 +334,13 @@ public static class InvRepo
                          $pacc, $gacc,
                          $origId, $origKind, $origNo, $jrn,
                          $twh, $twhname, $validTill,
-                         $user, 0{w6Values})
+                         $user, 0{w6Values}{exportValues})
                         RETURNING doc_id;
                         """;
                 }
                 BindHeader(cmd, doc);
                 if (hasW6Header) BindW6Header(cmd, doc);
+                if (hasExportHeader) BindExportHeader(cmd, doc);
                 docId = Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
             }
         }
@@ -350,10 +361,12 @@ public static class InvRepo
                       original_doc_id=$origId, original_doc_kind=$origKind, original_doc_no=$origNo, journal_doc_no=$jrn,
                       target_warehouse_id=$twh, target_warehouse_name=$twhname, valid_till=$validTill
                       {(hasW6Header ? ", return_reason_code=$rreason, return_source_kind=$rsource, no_invoice=$noinv, inspection_status=$insp, approval_status=$appr" : string.Empty)}
+                      {(hasExportHeader ? ", is_export=$isexp, incoterm=$incoterm, port_of_loading=$pload, port_of_discharge=$pdisch, country_of_origin=$origin, customs_ref=$customs, vessel_flight=$vessel, gross_weight=$grossw, net_weight=$netw" : string.Empty)}
                     WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND status='Draft' AND is_deleted=0;
                     """;
                 BindHeader(cmd, doc);
                 if (hasW6Header) BindW6Header(cmd, doc);
+                if (hasExportHeader) BindExportHeader(cmd, doc);
                 Add(cmd, "$guid", ResolveCompanyGuidOrNull(connection, tx)?.ToString("D") ?? Company);
                 Add(cmd, "$id", docId);
                 var affected = cmd.ExecuteNonQuery();
@@ -2184,6 +2197,8 @@ public static class InvRepo
         var loadProvider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
         var hasW6Header = PartyLedger.ColumnExists(connection, null, loadProvider, headerTable, "return_reason_code");
         var hasW6Lines = PartyLedger.ColumnExists(connection, null, loadProvider, lineTable, "return_condition");
+        // W5 (migration 102): export header fields, sales table only.
+        var hasExportHeader = isSales && PartyLedger.ColumnExists(connection, null, loadProvider, headerTable, "is_export");
         InvDoc doc;
         using (var cmd = connection.CreateCommand())
         {
@@ -2196,6 +2211,7 @@ public static class InvRepo
                        original_doc_id, original_doc_kind, original_doc_no, journal_doc_no,
                        target_warehouse_id, target_warehouse_name, valid_till
                        {(hasW6Header ? ", return_reason_code, return_source_kind, no_invoice, inspection_status, approval_status" : string.Empty)}
+                       {(hasExportHeader ? ", is_export, incoterm, port_of_loading, port_of_discharge, country_of_origin, customs_ref, vessel_flight, gross_weight, net_weight" : string.Empty)}
                 FROM {headerTable}
                 WHERE doc_id=$id AND (company_id=$company OR company_id=$guid) AND is_deleted=0;
                 """;
@@ -2262,6 +2278,19 @@ public static class InvRepo
                 doc.NoInvoice = noInvoiceValue is bool nb ? nb : Convert.ToInt32(noInvoiceValue, CultureInfo.InvariantCulture) != 0;
                 doc.InspectionStatus = string.IsNullOrWhiteSpace(ReadString(reader, "inspection_status")) ? "NotRequired" : ReadString(reader, "inspection_status");
                 doc.ApprovalStatus = string.IsNullOrWhiteSpace(ReadString(reader, "approval_status")) ? "NotRequired" : ReadString(reader, "approval_status");
+            }
+            if (hasExportHeader)
+            {
+                var isExportValue = reader.GetValue(reader.GetOrdinal("is_export"));
+                doc.IsExport = isExportValue is bool eb ? eb : Convert.ToInt32(isExportValue, CultureInfo.InvariantCulture) != 0;
+                doc.Incoterm = ReadString(reader, "incoterm");
+                doc.PortOfLoading = ReadString(reader, "port_of_loading");
+                doc.PortOfDischarge = ReadString(reader, "port_of_discharge");
+                doc.CountryOfOrigin = ReadString(reader, "country_of_origin");
+                doc.CustomsRef = ReadString(reader, "customs_ref");
+                doc.VesselFlight = ReadString(reader, "vessel_flight");
+                doc.GrossWeight = ReadDecimalNullable(reader, "gross_weight");
+                doc.NetWeight = ReadDecimalNullable(reader, "net_weight");
             }
         }
 
@@ -3718,6 +3747,26 @@ public static class InvRepo
         Add(cmd, "$appr", string.IsNullOrWhiteSpace(doc.ApprovalStatus) ? "NotRequired" : doc.ApprovalStatus);
     }
 
+    /// <summary>W5 (migration 102) export header bindings, kept apart
+    /// from BindHeader because the columns exist only on the sales
+    /// header table once migration 102 has been applied; SaveDraft
+    /// binds them under the same ColumnExists condition that extends
+    /// its SQL. Empty text fields persist as NULL, matching the chain
+    /// repository's export columns.</summary>
+    private static void BindExportHeader(DbCommand cmd, InvDoc doc)
+    {
+        static string? Clean(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        Add(cmd, "$isexp", DatabaseRuntime.IsPostgreSql() ? (object)doc.IsExport : (doc.IsExport ? 1 : 0));
+        Add(cmd, "$incoterm", Clean(doc.Incoterm));
+        Add(cmd, "$pload", Clean(doc.PortOfLoading));
+        Add(cmd, "$pdisch", Clean(doc.PortOfDischarge));
+        Add(cmd, "$origin", Clean(doc.CountryOfOrigin));
+        Add(cmd, "$customs", Clean(doc.CustomsRef));
+        Add(cmd, "$vessel", Clean(doc.VesselFlight));
+        Add(cmd, "$grossw", doc.GrossWeight);
+        Add(cmd, "$netw", doc.NetWeight);
+    }
+
     private static DbConnection Open(string connectionString)
     {
         DbConnection connection = DatabaseRuntime.IsPostgreSql()
@@ -3786,6 +3835,22 @@ public static class InvRepo
         catch (Exception exL760)
         {
             AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, exL760, "InvRepo.ReadLongNullable");
+            return null;
+        }
+    }
+
+    /// <summary>W5: nullable decimal reader (export weights), following
+    /// the ReadLongNullable fail-soft pattern.</summary>
+    private static decimal? ReadDecimalNullable(DbDataReader reader, string column)
+    {
+        try
+        {
+            var ord = reader.GetOrdinal(column);
+            return reader.IsDBNull(ord) ? null : Convert.ToDecimal(reader.GetValue(ord), CultureInfo.InvariantCulture);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, ex, "InvRepo.ReadDecimalNullable");
             return null;
         }
     }

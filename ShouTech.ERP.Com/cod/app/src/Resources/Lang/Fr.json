@@ -1713,6 +1713,17 @@
     "Failed": "Échec de l'exportation."
   },
   "Invoice": {
+    "ExportInvoice": "Facture d'exportation",
+    "Incoterm": "Incoterm",
+    "PortOfLoading": "Port d'embarquement",
+    "PortOfDischarge": "Port de déchargement",
+    "CountryOfOrigin": "Pays d'origine",
+    "CustomsRef": "Référence douanière",
+    "VesselFlight": "Navire / vol",
+    "GrossWeight": "Poids brut",
+    "NetWeight": "Poids net",
+    "ColMargin": "Marge",
+    "TotalMargin": "Marge brute",
     "SalesTitle": "Facture de vente",
     "PurchaseTitle": "Facture d'achat",
     "PointOfSaleTitle": "Facture de point de vente",
@@ -3747,6 +3758,9 @@
     }
   },
   "SalesDelivery": {
+    "ConsolidatedInvoice": "Facture consolidée",
+    "ConsolidatedCreated": "Facture consolidée créée",
+    "NoUnbilledDeliveries": "Aucune livraison non facturée",
     "Reverse": "Extourner la livraison",
     "ReverseTitle": "Extourner le bon de livraison",
     "Reason": "Motif",

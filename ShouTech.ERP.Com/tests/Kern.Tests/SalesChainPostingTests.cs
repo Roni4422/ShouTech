@@ -9,6 +9,7 @@ using Microsoft.Data.Sqlite;
 using ShouTech.Application.Services;
 using ShouTech.Domain;
 using ShouTech.Domain.Entities;
+using ShouTech.Domain.Interfaces;
 using ShouTech.Infrastructure;
 using Xunit;
 
@@ -1018,7 +1019,6 @@ namespace Kern.Tests
             });
     }
 
-
     /// <summary>
     /// Sales contracts (migration 101, W7c) folded into this file
     /// because it owns the migrated chain fixture (ChainTests: GL
@@ -1205,5 +1205,390 @@ namespace Kern.Tests
             finally { cleanup(); }
         }
     }
+
+
+    /// <summary>
+    /// W5 consolidated invoices + export fields (migration 102): ONE
+    /// sales invoice drawing lines from MULTIPLE posted deliveries.
+    /// Fixture (ChainTests): material 42, 1000 units on hand at average
+    /// cost 40, customer party 7; the standard line is priced 25.
+    /// Pins: per-line source attribution on the created invoice; the
+    /// two deliveries' 1215 positions relieved by the single invoice
+    /// exactly to zero; per-order per_billed exact at 100 for BOTH
+    /// orders of a cross-order consolidation (the attribution guards
+    /// against the shared invoice being counted twice); partial
+    /// consolidation then completion; the SAL-7001/7002/7003/7004
+    /// guards; the order-deliveries billing list behind the picker;
+    /// and the export header + line attribution persistence round-trip.
+    /// </summary>
+    public class SalesConsolidatedInvoiceTests
+    {
+        [Fact]
+        public async Task ConsolidatedInvoice_TwoDeliveriesOneOrder_Relieves1215ToZero()
+        {
+            var (service, repository, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                var orderId = await PostedOrderAsync(service, companyId, "C1", 10m);
+                var firstDeliveryId = await PostedDeliveryAsync(service, orderId, "DLV-C1-1", 4m);
+                var secondDeliveryId = await PostedDeliveryAsync(service, orderId, "DLV-C1-2", 6m);
+
+                await using var connection = new SqliteConnection(connectionString);
+                await connection.OpenAsync();
+                // Both deliveries parked their cost in 1215: 10 x 40.
+                Assert.Equal(400m, AccountNetDebit(connection, companyId, "1215"));
+
+                var invoiceId = await service.CreateConsolidatedInvoiceAsync(
+                    new[]
+                    {
+                        new ConsolidatedDeliverySelection(firstDeliveryId),
+                        new ConsolidatedDeliverySelection(secondDeliveryId)
+                    },
+                    "SAL-C1", new DateOnly(2026, 10, 22), "cons-test");
+
+                var invoice = await repository.FindSalesByIdAsync(invoiceId);
+                Assert.NotNull(invoice);
+                Assert.Equal(CommercialDocKinds.SalesInvoice, invoice!.DocKind);
+                Assert.Equal(250m, invoice.GrandTotal);
+                Assert.Equal(2, invoice.Lines.Count);
+                // Each line keeps its OWN source delivery + source line.
+                Assert.Contains(invoice.Lines, line =>
+                    line.SourceDocId == firstDeliveryId && line.SourceLineNo == 1 && line.Qty == 4m);
+                Assert.Contains(invoice.Lines, line =>
+                    line.SourceDocId == secondDeliveryId && line.SourceLineNo == 1 && line.Qty == 6m);
+                // One link per delivery, one link to the shared order.
+                var linksTo = await repository.GetSalesLinksToAsync(companyId, invoiceId);
+                Assert.Equal(2, linksTo.Count(link => link.SourceDocKind == CommercialDocKinds.DeliveryNote));
+                Assert.Single(linksTo, link => link.SourceDocKind == CommercialDocKinds.SalesOrder);
+
+                await service.PostAsync(invoiceId, "cons-test");
+
+                // The single invoice relieved BOTH deliveries' cost.
+                Assert.Equal(400m, GlSum(connection, companyId, "SAL", invoiceId, "401", debit: true));
+                Assert.Equal(400m, GlSum(connection, companyId, "SAL", invoiceId, "1215", debit: false));
+                Assert.Equal(0m, AccountNetDebit(connection, companyId, "1215"));
+                Assert.Equal(250m, Scalar(connection,
+                    "SELECT debit FROM party_ledger WHERE doc_no = 'SAL-C1' AND party_kind = 'C' AND party_id = 7"));
+
+                var order = await repository.FindSalesByIdAsync(orderId);
+                Assert.NotNull(order);
+                Assert.Equal(100m, order!.PerDelivered);
+                Assert.Equal(100m, order.PerBilled);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task ConsolidatedInvoice_AcrossTwoOrders_BillsEachOrderExactlyOnce()
+        {
+            var (service, repository, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                var firstOrderId = await PostedOrderAsync(service, companyId, "C2A", 10m);
+                var firstDeliveryId = await PostedDeliveryAsync(service, firstOrderId, "DLV-C2A", 10m);
+                var secondOrderId = await PostedOrderAsync(service, companyId, "C2B", 10m);
+                var secondDeliveryId = await PostedDeliveryAsync(service, secondOrderId, "DLV-C2B", 10m);
+
+                var invoiceId = await service.CreateConsolidatedInvoiceAsync(
+                    new[]
+                    {
+                        new ConsolidatedDeliverySelection(firstDeliveryId),
+                        new ConsolidatedDeliverySelection(secondDeliveryId)
+                    },
+                    "SAL-C2", new DateOnly(2026, 10, 22), "cons-test");
+                await service.PostAsync(invoiceId, "cons-test");
+
+                await using var connection = new SqliteConnection(connectionString);
+                await connection.OpenAsync();
+                Assert.Equal(0m, AccountNetDebit(connection, companyId, "1215"));
+                Assert.Equal(500m, Scalar(connection,
+                    "SELECT debit FROM party_ledger WHERE doc_no = 'SAL-C2' AND party_kind = 'C' AND party_id = 7"));
+
+                // Stored progress: neither order may count the other
+                // order's lines of the shared invoice.
+                var firstOrder = await repository.FindSalesByIdAsync(firstOrderId);
+                var secondOrder = await repository.FindSalesByIdAsync(secondOrderId);
+                Assert.Equal(100m, firstOrder!.PerBilled);
+                Assert.Equal(100m, secondOrder!.PerBilled);
+
+                // The recompute helper (OrderDocumentRepository) agrees.
+                var orders = new OrderDocumentRepository("SQLite", connectionString);
+                var firstProgress = await orders.GetProgressAsync(CommercialDocSide.Sales, firstOrderId);
+                var secondProgress = await orders.GetProgressAsync(CommercialDocSide.Sales, secondOrderId);
+                Assert.Equal(100m, firstProgress.PerBilled);
+                Assert.Equal(100m, secondProgress.PerBilled);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task ConsolidatedInvoice_PartialThenCompletion_1215EndsAtZero()
+        {
+            var (service, repository, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                var orderId = await PostedOrderAsync(service, companyId, "C3", 10m);
+                var firstDeliveryId = await PostedDeliveryAsync(service, orderId, "DLV-C3-1", 5m);
+                var secondDeliveryId = await PostedDeliveryAsync(service, orderId, "DLV-C3-2", 5m);
+
+                // First consolidation: delivery 1 in full (5 x 40 = 200
+                // of cost) and 2 of delivery 2's 5 units (80 of cost).
+                var firstInvoiceId = await service.CreateConsolidatedInvoiceAsync(
+                    new[]
+                    {
+                        new ConsolidatedDeliverySelection(firstDeliveryId),
+                        new ConsolidatedDeliverySelection(secondDeliveryId,
+                            new Dictionary<int, decimal> { [1] = 2m })
+                    },
+                    "SAL-C3-1", new DateOnly(2026, 10, 22), "cons-test");
+                await service.PostAsync(firstInvoiceId, "cons-test");
+
+                await using var connection = new SqliteConnection(connectionString);
+                await connection.OpenAsync();
+                Assert.Equal(280m, GlSum(connection, companyId, "SAL", firstInvoiceId, "401", debit: true));
+                Assert.Equal(120m, AccountNetDebit(connection, companyId, "1215"));
+
+                // The picker data behind SalesDeliveryWin agrees:
+                // delivery 1 fully billed, delivery 2 has 3 remaining.
+                var orderService = new OrderService(
+                    new OrderDocumentRepository("SQLite", connectionString), repository);
+                var deliveries = await orderService.GetOrderDeliveriesAsync(orderId);
+                Assert.Equal(2, deliveries.Count);
+                Assert.Equal(0m, deliveries.Single(d => d.DeliveryDocId == firstDeliveryId).RemainingQty);
+                Assert.Equal(3m, deliveries.Single(d => d.DeliveryDocId == secondDeliveryId).RemainingQty);
+
+                var secondInvoiceId = await service.CreateConsolidatedInvoiceAsync(
+                    new[] { new ConsolidatedDeliverySelection(secondDeliveryId) },
+                    "SAL-C3-2", new DateOnly(2026, 10, 23), "cons-test");
+                await service.PostAsync(secondInvoiceId, "cons-test");
+
+                Assert.Equal(0m, AccountNetDebit(connection, companyId, "1215"));
+                var order = await repository.FindSalesByIdAsync(orderId);
+                Assert.Equal(100m, order!.PerBilled);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task ConsolidatedInvoice_Guards_RejectInvalidSelections()
+        {
+            var (service, repository, companyId, _, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                var orderId = await PostedOrderAsync(service, companyId, "C4", 10m);
+                var deliveryId = await PostedDeliveryAsync(service, orderId, "DLV-C4", 10m);
+
+                // Quantity beyond the delivery line's remaining (SAL-7002).
+                var exceeds = await Assert.ThrowsAsync<AppError>(() =>
+                    service.CreateConsolidatedInvoiceAsync(
+                        new[]
+                        {
+                            new ConsolidatedDeliverySelection(deliveryId,
+                                new Dictionary<int, decimal> { [1] = 11m })
+                        },
+                        "SAL-C4-X", new DateOnly(2026, 10, 22), "cons-test"));
+                Assert.Equal(ErrorCodes.ChainQuantityExceedsRemaining, exceeds.Code);
+
+                // A non-delivery source cannot be consolidated (SAL-7004).
+                var wrongKind = await Assert.ThrowsAsync<AppError>(() =>
+                    service.CreateConsolidatedInvoiceAsync(
+                        new[] { new ConsolidatedDeliverySelection(orderId) },
+                        "SAL-C4-Y", new DateOnly(2026, 10, 22), "cons-test"));
+                Assert.Equal(ErrorCodes.ChainTransitionNotAllowed, wrongKind.Code);
+
+                // A different party's delivery cannot join (SAL-7004).
+                var otherOrderId = await PostedOrderAsync(service, companyId, "C4B", 10m, partyId: 8);
+                var otherDeliveryId = await PostedDeliveryAsync(service, otherOrderId, "DLV-C4B", 10m);
+                var mismatch = await Assert.ThrowsAsync<AppError>(() =>
+                    service.CreateConsolidatedInvoiceAsync(
+                        new[]
+                        {
+                            new ConsolidatedDeliverySelection(deliveryId),
+                            new ConsolidatedDeliverySelection(otherDeliveryId)
+                        },
+                        "SAL-C4-Z", new DateOnly(2026, 10, 22), "cons-test"));
+                Assert.Equal(ErrorCodes.ChainTransitionNotAllowed, mismatch.Code);
+
+                // Bill the delivery in full, then nothing remains (SAL-7003).
+                var invoiceId = await service.CreateConsolidatedInvoiceAsync(
+                    new[] { new ConsolidatedDeliverySelection(deliveryId) },
+                    "SAL-C4", new DateOnly(2026, 10, 22), "cons-test");
+                await service.PostAsync(invoiceId, "cons-test");
+                var fulfilled = await Assert.ThrowsAsync<AppError>(() =>
+                    service.CreateConsolidatedInvoiceAsync(
+                        new[] { new ConsolidatedDeliverySelection(deliveryId) },
+                        "SAL-C4-W", new DateOnly(2026, 10, 23), "cons-test"));
+                Assert.Equal(ErrorCodes.ChainSourceFullyFulfilled, fulfilled.Code);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task ConsolidatedInvoice_DraftDelivery_ThrowsSal7001()
+        {
+            var (service, _, companyId, _, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                var orderId = await PostedOrderAsync(service, companyId, "C5", 10m);
+                var draftDeliveryId = await service.CreateFromSourceAsync(
+                    orderId, "DLV-C5", new DateOnly(2026, 10, 21), "cons-test");
+
+                var error = await Assert.ThrowsAsync<AppError>(() =>
+                    service.CreateConsolidatedInvoiceAsync(
+                        new[] { new ConsolidatedDeliverySelection(draftDeliveryId) },
+                        "SAL-C5", new DateOnly(2026, 10, 22), "cons-test"));
+                Assert.Equal(ErrorCodes.ChainSourceNotPosted, error.Code);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task SalesDraft_ExportFieldsAndLineAttribution_RoundTrip()
+        {
+            var (_, repository, companyId, _, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                var draft = new CommercialDocumentDraft(
+                    companyId,
+                    CommercialDocKinds.SalesInvoice,
+                    "SAL-EXP-1",
+                    new DateOnly(2026, 10, 22),
+                    PartyId: 7,
+                    PartyName: "Export Customer",
+                    WarehouseId: 1,
+                    CurrencyCode: "USD",
+                    ExchangeRate: 3.75m,
+                    Notes: null,
+                    new[]
+                    {
+                        new CommercialLineDraft(42, "MAT-42", "Export item", "PCS", 2m, 25m,
+                            SourceDocId: 555, SourceRefLineNo: 3)
+                    },
+                    IsExport: true,
+                    Incoterm: "FOB",
+                    PortOfLoading: "Jeddah",
+                    PortOfDischarge: "Rotterdam",
+                    CountryOfOrigin: "SA",
+                    CustomsRef: "CUS-991",
+                    VesselFlight: "MV Aurora",
+                    GrossWeight: 12.5m,
+                    NetWeight: 10.25m);
+                var docId = await repository.CreateSalesDraftAsync(draft, "cons-test");
+
+                var saved = await repository.FindSalesByIdAsync(docId);
+                Assert.NotNull(saved);
+                Assert.True(saved!.IsExport);
+                Assert.Equal("FOB", saved.Incoterm);
+                Assert.Equal("Jeddah", saved.PortOfLoading);
+                Assert.Equal("Rotterdam", saved.PortOfDischarge);
+                Assert.Equal("SA", saved.CountryOfOrigin);
+                Assert.Equal("CUS-991", saved.CustomsRef);
+                Assert.Equal("MV Aurora", saved.VesselFlight);
+                Assert.Equal(12.5m, saved.GrossWeight);
+                Assert.Equal(10.25m, saved.NetWeight);
+                var line = Assert.Single(saved.Lines);
+                Assert.Equal(555, line.SourceDocId);
+                Assert.Equal(3, line.SourceLineNo);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        private static async Task<long> PostedOrderAsync(
+            SalesChainService service, Guid companyId, string suffix, decimal qty, long partyId = 7)
+        {
+            var quotationId = await service.CreateQuotationAsync(
+                Quotation(companyId, $"QT-{suffix}", qty, partyId), "cons-test");
+            var orderId = await service.CreateFromSourceAsync(
+                quotationId, $"SO-{suffix}", new DateOnly(2026, 10, 20), "cons-test");
+            await service.PostAsync(orderId, "cons-test");
+            return orderId;
+        }
+
+        private static async Task<long> PostedDeliveryAsync(
+            SalesChainService service, long orderId, string docNo, decimal qty)
+        {
+            var deliveryId = await service.CreateFromSourceAsync(
+                orderId, docNo, new DateOnly(2026, 10, 21), "cons-test",
+                quantityBySourceLine: new Dictionary<int, decimal> { [1] = qty });
+            await service.PostAsync(deliveryId, "cons-test");
+            return deliveryId;
+        }
+
+        private static CommercialDocumentDraft Quotation(Guid companyId, string docNo, decimal qty, long partyId) => new(
+            companyId,
+            CommercialDocKinds.SalesQuotation,
+            docNo,
+            new DateOnly(2026, 10, 16),
+            PartyId: partyId,
+            PartyName: "Consolidated Test Customer",
+            WarehouseId: 1,
+            CurrencyCode: "SAR",
+            ExchangeRate: 1m,
+            Notes: null,
+            new[]
+            {
+                new CommercialLineDraft(42, "MAT-42", "Consolidated test item", "PCS", qty, 25m)
+            });
+
+        private static decimal Scalar(SqliteConnection connection, string sql)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            return Convert.ToDecimal(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+        }
+
+        private static decimal GlSum(SqliteConnection connection, Guid companyId, string sourceKind, long sourceDocId, string accountCode, bool debit)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                SELECT COALESCE(SUM(l.{(debit ? "debit" : "credit")}), 0)
+                FROM journal_entries e
+                JOIN journal_entry_lines l ON l.journal_entry_id = e.journal_entry_id
+                JOIN chart_of_accounts a ON a.account_id = l.account_id
+                WHERE e.company_id = $company AND e.source_doc_type = $kind
+                  AND e.source_doc_id = $source AND e.reversal_of_entry_id IS NULL
+                  AND a.company_id = $company AND a.account_code = $account
+                """;
+            command.Parameters.AddWithValue("$company", companyId.ToString("D"));
+            command.Parameters.AddWithValue("$kind", sourceKind);
+            command.Parameters.AddWithValue("$source", sourceDocId.ToString(CultureInfo.InvariantCulture));
+            command.Parameters.AddWithValue("$account", accountCode);
+            return Convert.ToDecimal(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+        }
+
+        private static decimal AccountNetDebit(SqliteConnection connection, Guid companyId, string accountCode)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT COALESCE(SUM(l.debit - l.credit), 0)
+                FROM journal_entry_lines l
+                JOIN journal_entries e ON e.journal_entry_id = l.journal_entry_id
+                JOIN chart_of_accounts a ON a.account_id = l.account_id
+                WHERE e.company_id = $company AND a.company_id = $company AND a.account_code = $account
+                """;
+            command.Parameters.AddWithValue("$company", companyId.ToString("D"));
+            command.Parameters.AddWithValue("$account", accountCode);
+            return Convert.ToDecimal(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+        }
+    }
+
 
 }

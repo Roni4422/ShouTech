@@ -96,7 +96,14 @@ public sealed record CommercialLineSnapshot(
     decimal LineSubtotal,
     decimal LineTax,
     decimal LineTotal,
-    long? WarehouseId);
+    long? WarehouseId,
+    // W5 (migration 102): explicit source attribution for lines drawn
+    // from a source document when line_no alone cannot identify it —
+    // consolidated invoice lines carry the delivery they came from and
+    // that delivery's line number. Null on standalone and legacy
+    // single-source chain lines (line_no keeps the source identity).
+    long? SourceDocId = null,
+    int? SourceLineNo = null);
 
 /// <summary>An immutable commercial document header with its lines.</summary>
 public sealed record CommercialDocumentSnapshot(
@@ -133,7 +140,19 @@ public sealed record CommercialDocumentSnapshot(
     string? CancelledAt = null,
     decimal DeliveryCost = 0m,
     int RevisionNo = 1,
-    string ApprovalState = SalesApprovalState.NotRequired)
+    string ApprovalState = SalesApprovalState.NotRequired,
+    // W5 (migration 102): export invoice header fields. IsExport flags
+    // an export sales invoice; the rest are the shipment/customs facts
+    // the invoice carries. Null/false on non-export documents.
+    bool IsExport = false,
+    string? Incoterm = null,
+    string? PortOfLoading = null,
+    string? PortOfDischarge = null,
+    string? CountryOfOrigin = null,
+    string? CustomsRef = null,
+    string? VesselFlight = null,
+    decimal? GrossWeight = null,
+    decimal? NetWeight = null)
 {
     /// <summary>Derived chain status (sales orders); the raw status for every other document.</summary>
     public string DerivedStatus => SalesChainDerivedStatus.Derive(DocKind, Status, PerDelivered, PerBilled);
@@ -187,6 +206,12 @@ public sealed record PurchaseReceiptReturnableLine(
     decimal DiscountPct,
     long? WarehouseId);
 
+/// <summary>Identifies one source document of a chain conversion
+/// (kind + id), without the link row's own identity.</summary>
+public sealed record CommercialDocumentSourceRef(
+    string SourceDocKind,
+    long SourceDocId);
+
 /// <summary>A cross-document chain link (see dba document_links table).</summary>
 public sealed record CommercialDocumentLink(
     long LinkId,
@@ -219,7 +244,15 @@ public sealed record CommercialLineDraft(
     int? SourceLineNo = null,
     IReadOnlyList<CommercialBatchAllocationDraft>? BatchAllocations = null,
     IReadOnlyList<CommercialSerialSelectionDraft>? Serials = null,
-    bool AllowExpiredBatchIssue = false);
+    bool AllowExpiredBatchIssue = false,
+    // W5 (migration 102): explicit source attribution, set together —
+    // the source document this line is drawn from and that document's
+    // line number. Used by consolidated invoice lines, whose persisted
+    // line_no is sequential (SourceLineNo stays null) because two
+    // source deliveries can both have a line 1. Single-source chain
+    // conversions leave both null and keep the line_no identity.
+    long? SourceDocId = null,
+    int? SourceRefLineNo = null);
 
 /// <summary>A new commercial document header to persist with its lines.</summary>
 public sealed record CommercialDocumentDraft(
@@ -246,7 +279,18 @@ public sealed record CommercialDocumentDraft(
     decimal DeliveryCost = 0m,
     // W7c (migration 101): a sales order may draw down against a sales
     // contract (sct_contracts.contract_id, stored as TEXT Guid).
-    string? ContractId = null);
+    string? ContractId = null,
+    // W5 (migration 102): export invoice header fields (see the
+    // snapshot record for the semantics).
+    bool IsExport = false,
+    string? Incoterm = null,
+    string? PortOfLoading = null,
+    string? PortOfDischarge = null,
+    string? CountryOfOrigin = null,
+    string? CustomsRef = null,
+    string? VesselFlight = null,
+    decimal? GrossWeight = null,
+    decimal? NetWeight = null);
 
 /// <summary>Header-only projection used by document search / order tracking lists.</summary>
 public sealed record CommercialDocumentSummary(
@@ -287,6 +331,32 @@ public sealed record OrderProgress(
 {
     /// <summary>Derived chain status (sales orders); the raw status for every other document.</summary>
     public string DerivedStatus => SalesChainDerivedStatus.Derive(DocKind, Status, PerFulfilled, PerBilled);
+}
+
+/// <summary>
+/// One delivery's contribution to a consolidated sales invoice (W5):
+/// the posted delivery note to draw from and, optionally, the quantity
+/// to bill per SOURCE line number (null = the full remaining quantity
+/// of every line). Lines not listed are not billed.
+/// </summary>
+public sealed record ConsolidatedDeliverySelection(
+    long DeliveryDocId,
+    IReadOnlyDictionary<int, decimal>? QuantityBySourceLine = null);
+
+/// <summary>
+/// Billing state of one posted delivery note of a sales order (W5):
+/// what was delivered in total and what posted invoices have already
+/// billed against it. Feeds the consolidated-invoice picker.
+/// </summary>
+public sealed record OrderDeliveryBillingInfo(
+    long DeliveryDocId,
+    string DocNo,
+    DateOnly DocDate,
+    string Status,
+    decimal DeliveredQty,
+    decimal BilledQty)
+{
+    public decimal RemainingQty => Math.Max(0m, DeliveredQty - BilledQty);
 }
 
 /// <summary>Statuses stored in sales_picking.status (sales cycle W4, spec §4).</summary>

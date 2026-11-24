@@ -1796,6 +1796,17 @@
     "Failed": "فشل التصدير"
   },
   "Invoice": {
+    "ExportInvoice": "فاتورة تصدير",
+    "Incoterm": "مصطلح التسليم",
+    "PortOfLoading": "ميناء التحميل",
+    "PortOfDischarge": "ميناء التفريغ",
+    "CountryOfOrigin": "بلد المنشأ",
+    "CustomsRef": "المرجع الجمركي",
+    "VesselFlight": "السفينة / الرحلة",
+    "GrossWeight": "الوزن القائم",
+    "NetWeight": "الوزن الصافي",
+    "ColMargin": "الهامش",
+    "TotalMargin": "إجمالي الهامش",
     "SalesTitle": "فاتورة مبيعات",
     "PurchaseTitle": "فاتورة مشتريات",
     "PointOfSaleTitle": "فاتورة نقطة بيع",
@@ -3839,6 +3850,9 @@
     }
   },
   "SalesDelivery": {
+    "ConsolidatedInvoice": "فاتورة مجمعة",
+    "ConsolidatedCreated": "تم إنشاء الفاتورة المجمعة",
+    "NoUnbilledDeliveries": "لا توجد تسليمات غير مفوترة",
     "Reverse": "عكس الإذن",
     "ReverseTitle": "عكس إذن التسليم",
     "Reason": "السبب",
