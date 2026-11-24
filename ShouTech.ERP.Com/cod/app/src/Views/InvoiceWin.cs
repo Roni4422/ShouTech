@@ -9,6 +9,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
 using ShouTech.App.Configuration;
+using ShouTech.App.Interaction;
 using ShouTech.App.Reporting;
 using ShouTech.App.Reporting.Invoices;
 using ShouTech.App.Services;
@@ -42,6 +43,21 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
     private readonly TextBox _txtTaxRate = new();
     private readonly ComboBox _cmbTaxCode = new();
     private readonly DataGridComboBoxColumn _taxCodeColumn = new();
+
+    // Grid-spec columns (owner spec 2026-11-24 15:07): the five core
+    // columns are fixed in spec order (name, qty, unit, price, total);
+    // the rest are optional and managed by the column chooser with
+    // per-user persistence (WinPref).
+    private DataGridTextColumn _descColumn = new();
+    private DataGridTextColumn _qtyColumn = new();
+    private DataGridTextColumn _unitColumn = new();
+    private DataGridTextColumn _priceColumn = new();
+    private DataGridTextColumn _lineTotalColumn = new();
+    private DataGridTextColumn _codeColumn = new();
+    private DataGridTextColumn _discountColumn = new();
+    private DataGridTextColumn _taxRateColumn = new();
+    private DataGridTextColumn _warehouseColumn = new();
+    private readonly Button _btnColumns = new();
     private IReadOnlyList<TaxSvc.TaxCodeRec> _taxCodes = Array.Empty<TaxSvc.TaxCodeRec>();
     private bool _suppressTaxSelectionChanged;
     private readonly TextBox _txtReceiptNo = new();
@@ -519,9 +535,21 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
 
         // ---- Middle 40%: lines grid ----
         ConfigureGrid();
+        // Column-chooser strip: the Columns button sits at the END of
+        // the grid's header strip (spec item 4), end-aligned so it
+        // mirrors with the window.
+        var gridDock = new DockPanel();
+        var chooserStrip = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
+        FlowAlign.End(chooserStrip);
+        StyleButton(_btnColumns, "Common.Columns");
+        _btnColumns.Click += OnColumnsClick;
+        chooserStrip.Children.Add(_btnColumns);
+        DockPanel.SetDock(chooserStrip, Dock.Top);
+        gridDock.Children.Add(chooserStrip);
+        gridDock.Children.Add(_grid);
         var gridHost = new Border
         {
-            Child = _grid,
+            Child = gridDock,
             BorderThickness = new Thickness(1),
             Margin = new Thickness(0, 0, 0, 2),
             Padding = new Thickness(0),
@@ -922,14 +950,40 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL546, "InvoiceWin.ConfigureGrid");
         }
 
+        // Excel-like grid (owner spec item 1): numbered row headers,
+        // zebra rows via the central styles + this window's tint,
+        // unlimited rows with virtualization.
+        DataGridTableBehavior.SetShowRowNumbers(_grid, true);
+
         _grid.ItemsSource = _lines;
         _grid.Columns.Clear();
-        _grid.Columns.Add(TextCol(nameof(LineVm.MaterialCode), 80, Tf("Invoice.ColCode", "Code")));
-        _grid.Columns.Add(TextCol(nameof(LineVm.Description), 180, Tf("Invoice.ColMaterial", "Material")));
-        _grid.Columns.Add(TextCol(nameof(LineVm.QtyText), 70, Tf("Invoice.ColQty", "Qty")));
-        _grid.Columns.Add(TextCol(nameof(LineVm.Unit), 60, Tf("Invoice.ColUnit", "Unit")));
-        _grid.Columns.Add(TextCol(nameof(LineVm.UnitPriceText), 80, Tf("Invoice.ColUnitPrice", "Unit price")));
-        _grid.Columns.Add(TextCol(nameof(LineVm.DiscountPctText), 60, Tf("Invoice.ColDiscount", "Disc %")));
+
+        // Core columns in the owner's fixed order (spec item 2):
+        // 1) item name, 2) quantity, 3) unit, 4) unit price,
+        // 5) line total. They are always visible, in this order.
+        _descColumn = TextCol(nameof(LineVm.Description), 180, Tf("Invoice.ColMaterial", "Material"));
+        _grid.Columns.Add(_descColumn);
+        _qtyColumn = TextCol(nameof(LineVm.QtyText), 70, Tf("Invoice.ColQty", "Qty"));
+        _grid.Columns.Add(_qtyColumn);
+        _unitColumn = TextCol(nameof(LineVm.Unit), 60, Tf("Invoice.ColUnit", "Unit"));
+        _grid.Columns.Add(_unitColumn);
+        _priceColumn = TextCol(nameof(LineVm.UnitPriceText), 80, Tf("Invoice.ColUnitPrice", "Unit price"));
+        _grid.Columns.Add(_priceColumn);
+        _lineTotalColumn = new DataGridTextColumn
+        {
+            Header = Tf("Invoice.ColLineTotal", "Line total"),
+            Binding = new Binding(nameof(LineVm.LineTotalText)) { Mode = BindingMode.OneWay },
+            Width = 90,
+            IsReadOnly = true
+        };
+        _grid.Columns.Add(_lineTotalColumn);
+
+        // Optional columns (spec item 4) — shown/hidden and ordered
+        // through the column chooser, persisted per user (WinPref).
+        _codeColumn = TextCol(nameof(LineVm.MaterialCode), 80, Tf("Invoice.ColCode", "Code"));
+        _grid.Columns.Add(_codeColumn);
+        _discountColumn = TextCol(nameof(LineVm.DiscountPctText), 60, Tf("Invoice.ColDiscount", "Disc %"));
+        _grid.Columns.Add(_discountColumn);
         _taxCodeColumn.Header = Tf("Invoice.ColTaxCode", "Tax system");
         _taxCodeColumn.SelectedValueBinding = new Binding(nameof(LineVm.TaxCode)) { Mode = BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged };
         _taxCodeColumn.SelectedValuePath = nameof(TaxSvc.TaxCodeRec.Code);
@@ -940,16 +994,9 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         /* Keep the tax-code column identity stable: DisplayIndex changes
            when users reorder columns, so event logic must not depend on it. */
         _grid.Columns.Add(_taxCodeColumn);
-        var taxRateColumn = TextCol(nameof(LineVm.TaxRateText), 60, Tf("Invoice.ColTax", "Tax %"));
-        taxRateColumn.IsReadOnly = !TaxSvc.IsEnabled || _taxCodes.Count == 0;
-        _grid.Columns.Add(taxRateColumn);
-        _grid.Columns.Add(new DataGridTextColumn
-        {
-            Header = Tf("Invoice.ColLineTotal", "Line total"),
-            Binding = new Binding(nameof(LineVm.LineTotalText)) { Mode = BindingMode.OneWay },
-            Width = 90,
-            IsReadOnly = true
-        });
+        _taxRateColumn = TextCol(nameof(LineVm.TaxRateText), 60, Tf("Invoice.ColTax", "Tax %"));
+        _taxRateColumn.IsReadOnly = !TaxSvc.IsEnabled || _taxCodes.Count == 0;
+        _grid.Columns.Add(_taxRateColumn);
         // W5 live margin: (net unit price − current valuation cost) ×
         // qty per line, recomputed on every edit; — when no cost can
         // be resolved. Sales invoices and quotations only.
@@ -959,9 +1006,93 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _marginColumn.IsReadOnly = true;
         _marginColumn.Visibility = MarginApplies ? Visibility.Visible : Visibility.Collapsed;
         _grid.Columns.Add(_marginColumn);
-        _grid.Columns.Add(TextCol(nameof(LineVm.WarehouseName), 110, Tf("Invoice.ColWarehouse", "Warehouse")));
+        _warehouseColumn = TextCol(nameof(LineVm.WarehouseName), 110, Tf("Invoice.ColWarehouse", "Warehouse"));
+        _grid.Columns.Add(_warehouseColumn);
+
+        ApplySavedColumnLayout();
 
         _grid.CellEditEnding += OnCellEditEnding;
+    }
+
+    // ------------------------------------------------------------------
+    // Optional columns: chooser + per-user persistence (spec item 4).
+    // The chooser button sits at the END of the grid's header strip
+    // (built in BuildUi); the five core columns never enter the
+    // chooser — they are fixed by the spec. Every optional column is
+    // backed by a real LineVm field; nothing is invented.
+    // ------------------------------------------------------------------
+
+    private sealed record OptionalColumn(string Key, DataGridColumn Column, string HeaderKey);
+
+    private List<OptionalColumn> OptionalColumns() => new()
+    {
+        new("MaterialCode", _codeColumn, "Invoice.ColCode"),
+        new("DiscountPct", _discountColumn, "Invoice.ColDiscount"),
+        new("TaxCode", _taxCodeColumn, "Invoice.ColTaxCode"),
+        new("TaxRate", _taxRateColumn, "Invoice.ColTax"),
+        new("Margin", _marginColumn, "Invoice.ColMargin"),
+        new("Warehouse", _warehouseColumn, "Invoice.ColWarehouse"),
+    };
+
+    private string ColumnScope()
+    {
+        var user = AppState.CurrentUser?.Username ?? "anonymous";
+        var company = AppState.CurrentCompanyCode ?? "no-company";
+        return $"{company}/{user}/Inv:{_doc.Kind}";
+    }
+
+    private void ApplySavedColumnLayout()
+    {
+        var saved = WinPref.LoadReportColumns(ColumnScope());
+        if (saved is null || saved.Count == 0)
+            return;
+        var optionals = OptionalColumns().ToDictionary(o => o.Key, StringComparer.Ordinal);
+        foreach (var rec in saved.OrderBy(r => r.Order))
+        {
+            if (!optionals.TryGetValue(rec.Key, out var opt))
+                continue;
+            // The margin column only exists on sales/quotation docs.
+            if (opt.Key == "Margin" && !MarginApplies)
+                continue;
+            opt.Column.Visibility = rec.Visible ? Visibility.Visible : Visibility.Collapsed;
+            opt.Column.DisplayIndex = 5 + rec.Order;
+            if (rec.Width is > 30 and < 600)
+                opt.Column.Width = rec.Width;
+        }
+    }
+
+    private void OnColumnsClick(object sender, RoutedEventArgs e)
+    {
+        var optionals = OptionalColumns()
+            .Where(o => o.Key != "Margin" || MarginApplies)
+            .OrderBy(o => o.Column.DisplayIndex)
+            .ToList();
+        var items = optionals.Select(o => new ColChsWin.Item
+        {
+            Key = o.Key,
+            Header = T(o.HeaderKey),
+            Visible = o.Column.Visibility == Visibility.Visible,
+            Locked = false
+        });
+        var dialog = new ColChsWin(items) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        var recs = new List<WinPref.ColumnRec>();
+        foreach (var (item, idx) in dialog.Result.Select((item, idx) => (item, idx)))
+        {
+            var opt = optionals.First(o => o.Key == item.Key);
+            opt.Column.Visibility = item.Visible ? Visibility.Visible : Visibility.Collapsed;
+            opt.Column.DisplayIndex = 5 + idx;
+            recs.Add(new WinPref.ColumnRec
+            {
+                Key = item.Key,
+                Visible = item.Visible,
+                Order = idx,
+                Width = opt.Column.ActualWidth
+            });
+        }
+        WinPref.SaveReportColumns(ColumnScope(), recs);
     }
 
     private void OnCellEditEnding(object? sender, DataGridCellEditEndingEventArgs e)
@@ -971,6 +1102,14 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         {
             if (e.Row.Item is LineVm line)
             {
+                // Material entry (spec item 3): a commit in the NAME
+                // or CODE cell resolves the material first, so the
+                // price resolution below sees the linked material.
+                if (ReferenceEquals(e.Column, _descColumn))
+                    ResolveMaterialEntry(line, line.Description);
+                else if (ReferenceEquals(e.Column, _codeColumn))
+                    ResolveMaterialEntry(line, line.MaterialCode);
+
                 if (ReferenceEquals(e.Column, _taxCodeColumn) && TaxSvc.IsEnabled)
                 {
                     var selectedTax = _taxCodes.FirstOrDefault(x =>
@@ -1831,10 +1970,80 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         }
     }
 
+    // ------------------------------------------------------------------
+    // Material entry (owner grid spec item 3): typing a code, a
+    // barcode, an exact name, or PART of a name in the NAME or CODE
+    // cell resolves the material immediately when the match is
+    // unambiguous (TaxSvc.MatchMaterial) and fills the line (default
+    // unit, tax rate; price via the sales resolver below / the card
+    // price on the purchase side). No match — or several — opens the
+    // material directory as the search window, pre-filtered with the
+    // typed text. The Find Material button runs the same search.
+    // ------------------------------------------------------------------
+
+    private void ResolveMaterialEntry(LineVm line, string? typedText)
+    {
+        var text = typedText?.Trim() ?? string.Empty;
+        if (text.Length == 0)
+            return;
+        if (string.Equals(text, line.LastMaterialText, StringComparison.Ordinal))
+            return;
+        line.LastMaterialText = text;
+
+        var match = TaxSvc.MatchMaterial(text);
+        if (match is { Kind: TaxSvc.MaterialMatchKind.Exact or TaxSvc.MaterialMatchKind.UniquePartial })
+        {
+            if (match.Id != line.MaterialId)
+                FillLineFromMatch(line, match);
+            return;
+        }
+
+        var pick = MatDirWin.ShowPicker(this, text);
+        if (pick is not null)
+        {
+            ApplyPick(line, pick);
+        }
+        else if (line.MaterialId is not > 0)
+        {
+            _lblStatus.Text = Tf("Invoice.MaterialNotMatched", "Material not matched: {0}", text);
+        }
+    }
+
+    private void ApplyPick(LineVm line, MatDirListItem pick)
+    {
+        var match = TaxSvc.MatchMaterial(pick.Code);
+        if (match is { Kind: TaxSvc.MaterialMatchKind.Exact })
+        {
+            FillLineFromMatch(line, match);
+            return;
+        }
+        line.MaterialId = pick.Id;
+        line.MaterialCode = pick.Code;
+        line.Description = pick.DisplayName;
+        line.LastMaterialText = pick.DisplayName;
+    }
+
+    private void FillLineFromMatch(LineVm line, TaxSvc.MaterialMatch match)
+    {
+        line.MaterialId = match.Id;
+        line.MaterialCode = match.Code;
+        line.Description = match.Name;
+        line.LastMaterialText = match.Name;
+        if (!string.IsNullOrWhiteSpace(match.Unit))
+            line.Unit = match.Unit;
+        if (TaxSvc.IsEnabled && match.TaxRate > 0)
+            line.TaxRate = match.TaxRate;
+        // Price: on the sales side the W7a resolver below fills it
+        // from the party's pricing (card price is its last fallback);
+        // on the purchase side the card price is the entry default.
+        if (!_doc.IsSalesSide && ParseDec(line.UnitPriceText, 0) == 0 && match.Price > 0)
+            line.UnitPriceText = match.Price.ToString("0.####", CultureInfo.InvariantCulture);
+    }
+
     private void PickMaterial()
     {
-        // Ensure a line is selected; focus description cell for manual entry.
-        // Dedicated material search dialog can replace this when MatCard lookup is wired.
+        // The Find Material button opens the same directory search
+        // as an unmatched typed entry (previously a focus-only stub).
         if (_grid.SelectedItem is not LineVm line)
         {
             if (_lines.Count == 0)
@@ -1853,9 +2062,13 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         {
             if (string.IsNullOrWhiteSpace(line.WarehouseName))
                 line.WarehouseName = _txtWarehouse.Text.Trim();
-            if (_grid.Columns.Count > 1)
-                _grid.CurrentCell = new DataGridCellInfo(line, _grid.Columns[1]);
-            _grid.BeginEdit();
+            var pick = MatDirWin.ShowPicker(this, line.Description);
+            if (pick is not null)
+            {
+                ApplyPick(line, pick);
+                _grid.CurrentCell = new DataGridCellInfo(line, _qtyColumn);
+                _grid.BeginEdit();
+            }
             _grid.Focus();
         }
         catch (Exception exL922)
@@ -1946,7 +2159,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             _ => "Invoice.SalesTitle"
         }, WindowTitleFor(_doc.Kind));
 
-        foreach (var btn in new[] { _btnSave, _btnPost, _btnReverse, _btnPrint, _btnPdf, _btnAddLine, _btnRemoveLine, _btnFindMaterial, _btnVoucher, _btnOriginal, _btnAttachments })
+        foreach (var btn in new[] { _btnSave, _btnPost, _btnReverse, _btnPrint, _btnPdf, _btnAddLine, _btnRemoveLine, _btnFindMaterial, _btnVoucher, _btnOriginal, _btnAttachments, _btnColumns })
         {
             if (btn.Tag is string key)
                 btn.Content = Tf(key, btn.Content?.ToString());
@@ -1961,20 +2174,20 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         if (payIdx >= 0 && payIdx < _cmbPayment.Items.Count)
             _cmbPayment.SelectedIndex = payIdx;
 
-        if (_grid.Columns.Count >= 11)
-        {
-            _grid.Columns[0].Header = Tf("Invoice.ColCode", "Code");
-            _grid.Columns[1].Header = Tf("Invoice.ColMaterial", "Material");
-            _grid.Columns[2].Header = Tf("Invoice.ColQty", "Qty");
-            _grid.Columns[3].Header = Tf("Invoice.ColUnit", "Unit");
-            _grid.Columns[4].Header = Tf("Invoice.ColUnitPrice", "Unit price");
-            _grid.Columns[5].Header = Tf("Invoice.ColDiscount", "Disc %");
-            _grid.Columns[6].Header = Tf("Invoice.ColTaxCode", "Tax system");
-            _grid.Columns[7].Header = Tf("Invoice.ColTax", "Tax %");
-            _grid.Columns[8].Header = Tf("Invoice.ColLineTotal", "Line total");
-            _grid.Columns[9].Header = Tf("Invoice.ColMargin", "Margin");
-            _grid.Columns[10].Header = Tf("Invoice.ColWarehouse", "Warehouse");
-        }
+        // Headers are rewritten by column IDENTITY, never by index:
+        // the chooser changes DisplayIndex, so index-based header
+        // assignment would mislabel columns after a reorder.
+        _descColumn.Header = Tf("Invoice.ColMaterial", "Material");
+        _qtyColumn.Header = Tf("Invoice.ColQty", "Qty");
+        _unitColumn.Header = Tf("Invoice.ColUnit", "Unit");
+        _priceColumn.Header = Tf("Invoice.ColUnitPrice", "Unit price");
+        _lineTotalColumn.Header = Tf("Invoice.ColLineTotal", "Line total");
+        _codeColumn.Header = Tf("Invoice.ColCode", "Code");
+        _discountColumn.Header = Tf("Invoice.ColDiscount", "Disc %");
+        _taxCodeColumn.Header = Tf("Invoice.ColTaxCode", "Tax system");
+        _taxRateColumn.Header = Tf("Invoice.ColTax", "Tax %");
+        _marginColumn.Header = Tf("Invoice.ColMargin", "Margin");
+        _warehouseColumn.Header = Tf("Invoice.ColWarehouse", "Warehouse");
         _chkExport.Content = Tf("Invoice.ExportInvoice", "Export invoice");
 
         RefreshTotals();
@@ -1994,6 +2207,12 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         private string _warehouseName = string.Empty;
 
         public long? MaterialId { get; set; }
+
+        /// <summary>UI state only (never persisted): the last typed
+        /// material text the entry matcher already processed for this
+        /// line, so tabbing through a cell does not re-run the match
+        /// or re-open the search for the same text.</summary>
+        public string? LastMaterialText { get; set; }
         public int? WarehouseId { get; set; }
         public string MaterialCode { get => _materialCode; set { _materialCode = value; OnPropertyChanged(); } }
         public string Description { get => _description; set { _description = value; OnPropertyChanged(); } }

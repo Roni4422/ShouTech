@@ -1987,7 +1987,8 @@
     "StatusPosting": "قيد الترحيل — يلزم التحقق والمطابقة",
     "ValidTill": "صالح حتى",
     "PermissionDenied": "ليس لديك صلاحية تنفيذ إجراء الفاتورة هذا.",
-    "DueDate": "تاريخ الاستحقاق"
+    "DueDate": "تاريخ الاستحقاق",
+    "MaterialNotMatched": "المادة غير مطابقة: {0}"
   },
   "Vouchers": {
     "PartyCode": "رمز الطرف",

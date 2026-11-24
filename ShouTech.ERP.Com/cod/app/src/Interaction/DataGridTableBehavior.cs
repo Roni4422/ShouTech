@@ -42,6 +42,50 @@ public static class DataGridTableBehavior
     public static bool GetEnableStandardContextMenu(DependencyObject element) =>
         (bool)element.GetValue(EnableStandardContextMenuProperty);
 
+    // ------------------------------------------------------------------
+    // Excel-like row numbers (owner grid spec 2026-11-24 15:07 item 1):
+    // a fixed row-header column whose cells carry the 1-based row
+    // position — chrome, not editable data. LoadingRow stamps the
+    // number per realized row, so virtualized grids with countless
+    // rows stay correct (GetIndex is the item's position in the view,
+    // O(1)). Opt in per grid: SetShowRowNumbers(grid, true).
+    // ------------------------------------------------------------------
+
+    public static readonly DependencyProperty ShowRowNumbersProperty =
+        DependencyProperty.RegisterAttached(
+            "ShowRowNumbers",
+            typeof(bool),
+            typeof(DataGridTableBehavior),
+            new PropertyMetadata(false, OnShowRowNumbersChanged));
+
+    public static void SetShowRowNumbers(DependencyObject element, bool value) =>
+        element.SetValue(ShowRowNumbersProperty, value);
+
+    public static bool GetShowRowNumbers(DependencyObject element) =>
+        (bool)element.GetValue(ShowRowNumbersProperty);
+
+    private static void OnShowRowNumbersChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not DataGrid grid)
+            return;
+
+        if (e.NewValue is true)
+        {
+            grid.HeadersVisibility = DataGridHeadersVisibility.All;
+            if (double.IsNaN(grid.RowHeaderWidth) || grid.RowHeaderWidth <= 0)
+                grid.RowHeaderWidth = 36;
+            grid.LoadingRow -= Grid_LoadingRowNumber;
+            grid.LoadingRow += Grid_LoadingRowNumber;
+        }
+        else
+        {
+            grid.LoadingRow -= Grid_LoadingRowNumber;
+        }
+    }
+
+    private static void Grid_LoadingRowNumber(object? sender, DataGridRowEventArgs e)
+        => e.Row.Header = (e.Row.GetIndex() + 1).ToString(CultureInfo.CurrentCulture);
+
     private static double GetNormalRowHeight(DataGrid grid) =>
         grid.TryFindResource("TableRowHeight") is double rowHeight ? rowHeight : NormalRowHeight;
 

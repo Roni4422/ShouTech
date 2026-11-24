@@ -1904,7 +1904,8 @@
     "StatusPosting": "Comptabilisation en cours — rapprochement requis",
     "ValidTill": "Valable jusqu'au",
     "PermissionDenied": "Vous n'avez pas l'autorisation d'effectuer cette action sur la facture.",
-    "DueDate": "Date d'échéance"
+    "DueDate": "Date d'échéance",
+    "MaterialNotMatched": "Article introuvable : {0}"
   },
   "CompanyWizard": {
     "Title": {

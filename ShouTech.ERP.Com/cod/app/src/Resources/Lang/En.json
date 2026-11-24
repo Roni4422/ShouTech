@@ -1895,7 +1895,8 @@
     "StatusPosting": "Posting — reconciliation required",
     "ValidTill": "Valid Till",
     "PermissionDenied": "You do not have permission to perform this invoice action.",
-    "DueDate": "Due date"
+    "DueDate": "Due date",
+    "MaterialNotMatched": "Material not matched: {0}"
   },
   "Vouchers": {
     "PartyCode": "Party Code",

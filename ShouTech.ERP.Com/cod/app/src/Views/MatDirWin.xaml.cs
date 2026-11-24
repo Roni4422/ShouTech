@@ -68,6 +68,40 @@ private readonly ObservableCollection<MatDirListItem> _view = new();
 
 private bool _modeItem = true;
 
+// ------------------------------------------------------------------
+// Picker mode (owner grid spec 2026-11-24 15:07 item 3): document
+// grids whose typed material text matches nothing — or matches
+// several materials — open THIS directory as the search window,
+// pre-filtered with the typed text; double-click/Enter returns the
+// chosen material. The directory is the search surface (the
+// Al-Ameen pattern); no parallel lookup window exists.
+// ------------------------------------------------------------------
+private bool _pickerMode;
+
+public MatDirListItem? PickedItem { get; private set; }
+
+public static MatDirListItem? ShowPicker(Window owner, string? initialSearch)
+{
+    var win = new MatDirWin { Owner = owner };
+    win.BeginPick(initialSearch);
+    win.ShowDialog();
+    return win.PickedItem;
+}
+
+private void BeginPick(string? initialSearch)
+{
+    _pickerMode = true;
+    _modeItem = true;
+    RbItem.IsChecked = true;
+    BtnAdd.Visibility = Visibility.Collapsed;
+    BtnRemove.Visibility = Visibility.Collapsed;
+    Reload();
+    if (!string.IsNullOrWhiteSpace(initialSearch))
+        TxtSearch.Text = initialSearch;
+    TxtSearch.Focus();
+    TxtSearch.SelectAll();
+}
+
 public MatDirWin()
 {
     InitializeComponent();
@@ -430,6 +464,16 @@ private void OpenSelected()
 {
     if (LvItems.SelectedItem is not MatDirListItem item)
         return;
+
+    // Picker mode (document-grid material search): double-click /
+    // Enter accepts the material instead of opening its card.
+    if (_pickerMode && item.ItemKind == MatDirListItem.Kind.Material)
+    {
+        PickedItem = item;
+        DialogResult = true;
+        Close();
+        return;
+    }
 
     if (item.ItemKind == MatDirListItem.Kind.Material)
     {

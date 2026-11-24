@@ -1904,7 +1904,8 @@
     "StatusPosting": "İşleniyor — mutabakat gerekli",
     "ValidTill": "Geçerlilik tarihi",
     "PermissionDenied": "Bu fatura işlemini gerçekleştirme izniniz yok.",
-    "DueDate": "Vade tarihi"
+    "DueDate": "Vade tarihi",
+    "MaterialNotMatched": "Malzeme eşleşmedi: {0}"
   },
   "CompanyWizard": {
     "Title": {

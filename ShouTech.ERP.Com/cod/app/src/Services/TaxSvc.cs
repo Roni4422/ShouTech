@@ -668,6 +668,147 @@ public static class TaxSvc
         }
     }
 
+    /// <summary>How a typed material text matched the catalog
+    /// (owner grid spec 2026-11-24 15:07 item 3).</summary>
+    public enum MaterialMatchKind
+    {
+        /// <summary>No material matches the typed text.</summary>
+        None,
+        /// <summary>Exactly one exact hit (code, any barcode, or exact name).</summary>
+        Exact,
+        /// <summary>Exactly one name-contains hit.</summary>
+        UniquePartial,
+        /// <summary>Several candidates — the search window must decide.</summary>
+        Ambiguous
+    }
+
+    /// <summary>One material match candidate with the data a document
+    /// line needs (default unit, card price, tax rate, canonical code
+    /// and name).</summary>
+    public sealed record MaterialMatch(
+        long Id, string Code, string Name, string Unit, decimal Price, decimal TaxRate,
+        MaterialMatchKind Kind, int CandidateCount);
+
+    /// <summary>
+    /// The material-entry matcher for document grids: typing a code,
+    /// a barcode (material or any unit barcode), an exact name, or
+    /// PART of a name resolves the material when the match is
+    /// unambiguous — Exact for code/barcode/exact-name hits,
+    /// UniquePartial when exactly one name contains the text. When
+    /// several materials match (Ambiguous) or none do (None), the
+    /// caller opens the material search (MatDirWin picker) with the
+    /// typed text instead of guessing. Same predicates as
+    /// ResolveMaterial; failures are reported, never thrown.
+    /// </summary>
+    public static MaterialMatch? MatchMaterial(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        var cs = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(cs)) return null;
+        var company = AppState.CurrentCompanyCode ?? "";
+        var needle = text.Trim();
+
+        const string columns = """
+            material_id, code,
+            COALESCE(NULLIF(pos_name,''), NULLIF(name_ar,''), NULLIF(name_en,''), code),
+            COALESCE(default_unit, unit1, ''),
+            COALESCE(price_retail, price_list, 0),
+            COALESCE(tax_rate, 0)
+            """;
+        const string exactPredicate = """
+            code=$code OR alt_code=$code OR old_code=$code OR gtin=$code OR sku_external=$code
+            OR unit1_barcode=$code OR unit2_barcode=$code OR unit3_barcode=$code
+            OR unit4_barcode=$code OR unit5_barcode=$code
+            OR name_ar=$code OR name_en=$code OR pos_name=$code OR short_name=$code OR search_name=$code
+            """;
+        const string partialPredicate = """
+            name_ar LIKE $like OR name_en LIKE $like
+            OR pos_name LIKE $like OR short_name LIKE $like OR search_name LIKE $like
+            """;
+
+        try
+        {
+            using var connection = Open(cs);
+            var activeMaterialPredicate = DatabaseRuntime.IsPostgreSql() ? "is_deleted = FALSE" : "COALESCE(is_deleted,0)=0";
+
+            MaterialMatch? ReadMatch(System.Data.Common.DbCommand cmd, MaterialMatchKind kind, int count)
+            {
+                using var reader = cmd.ExecuteReader();
+                if (!reader.Read()) return null;
+                return new MaterialMatch(
+                    Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+                    Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? "",
+                    Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture) ?? "",
+                    Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture) ?? "",
+                    Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture),
+                    IsEnabled ? Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture) : 0m,
+                    kind, count);
+            }
+
+            // 1) Exact hits (code / barcode / exact name).
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = $"""
+                    SELECT {columns} FROM materials
+                    WHERE company_id=$c AND {activeMaterialPredicate} AND ({exactPredicate})
+                    ORDER BY name_ar LIMIT 2
+                    """;
+                Add(cmd, "$c", company);
+                Add(cmd, "$code", needle);
+                var first = ReadMatch(cmd, MaterialMatchKind.Exact, 1);
+                if (first is not null)
+                {
+                    // A second exact row means the text is not a
+                    // unique identifier — let the search decide.
+                    using var countCmd = connection.CreateCommand();
+                    countCmd.CommandText = $"""
+                        SELECT COUNT(*) FROM materials
+                        WHERE company_id=$c AND {activeMaterialPredicate} AND ({exactPredicate})
+                        """;
+                    Add(countCmd, "$c", company);
+                    Add(countCmd, "$code", needle);
+                    var exactCount = Convert.ToInt32(countCmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+                    return exactCount == 1
+                        ? first
+                        : first with { Kind = MaterialMatchKind.Ambiguous, CandidateCount = exactCount };
+                }
+            }
+
+            // 2) Name-contains hits: unique inserts, several search.
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = $"""
+                    SELECT COUNT(*) FROM materials
+                    WHERE company_id=$c AND {activeMaterialPredicate} AND ({partialPredicate})
+                    """;
+                Add(cmd, "$c", company);
+                Add(cmd, "$like", "%" + needle + "%");
+                var count = Convert.ToInt32(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+                if (count == 0)
+                    return new MaterialMatch(0, "", "", "", 0m, 0m, MaterialMatchKind.None, 0);
+                if (count > 1)
+                    return new MaterialMatch(0, "", "", "", 0m, 0m, MaterialMatchKind.Ambiguous, count);
+            }
+
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = $"""
+                    SELECT {columns} FROM materials
+                    WHERE company_id=$c AND {activeMaterialPredicate} AND ({partialPredicate})
+                    ORDER BY name_ar LIMIT 1
+                    """;
+                Add(cmd, "$c", company);
+                Add(cmd, "$like", "%" + needle + "%");
+                return ReadMatch(cmd, MaterialMatchKind.UniquePartial, 1);
+            }
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "TaxSvc.MatchMaterial");
+            return null;
+        }
+    }
+
     /// <summary>
     /// W7a price resolution for window line entry (InvoiceWin / OrdWin /
     /// PosWin): the ONE resolver (contract hook → customer_prices →
