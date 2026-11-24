@@ -84,8 +84,10 @@ public sealed class OptWin : BaseWin
         // ---- General ------------------------------------------------
         var general = BeginSection(form, "Options.General");
         AddField(general, "Options.Language", _cmbLang);
+        // Language names follow the LangVM convention (Latin script),
+        // keeping source files English-only per the catalog rule.
         _cmbLang.Items.Add(new ComboBoxItem { Content = "English", Tag = "en" });
-        _cmbLang.Items.Add(new ComboBoxItem { Content = "العربية", Tag = "ar" });
+        _cmbLang.Items.Add(new ComboBoxItem { Content = "Arabic", Tag = "ar" });
         _cmbLang.Items.Add(new ComboBoxItem { Content = "Français", Tag = "fr" });
         _cmbLang.Items.Add(new ComboBoxItem { Content = "Türkçe", Tag = "tr" });
         AddField(general, "Options.Currency", _txtCurrency);
