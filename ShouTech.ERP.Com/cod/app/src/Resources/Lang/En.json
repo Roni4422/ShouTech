@@ -4711,7 +4711,12 @@
     "ResetLayouts": "Reset grid layouts",
     "ResetAllLayouts": "Reset all layouts",
     "ResetConfirm": "Reset the saved window layouts? Windows will open with their default layouts. Other users are not affected.",
-    "LayoutsReset": "Saved window layouts were reset."
+    "LayoutsReset": "Saved window layouts were reset.",
+    "BackupSection": "Backup",
+    "BackupNever": "No backup has been taken for this company yet.",
+    "BackupLastDays": "Last backup: {0} (about {1} day(s) ago).",
+    "BackupStale": "Warning: the last backup is more than 7 days old.",
+    "OpenBackup": "Open Backup"
   },
   "PosTerm": {
     "Title": "POS Terminal Definition",

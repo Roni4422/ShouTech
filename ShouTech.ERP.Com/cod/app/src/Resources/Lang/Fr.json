@@ -4702,7 +4702,12 @@
     "ResetLayouts": "Réinitialiser les grilles",
     "ResetAllLayouts": "Tout réinitialiser",
     "ResetConfirm": "Réinitialiser les dispositions enregistrées ? Les fenêtres s’ouvriront avec leurs dispositions par défaut. Les autres utilisateurs ne sont pas affectés.",
-    "LayoutsReset": "Les dispositions enregistrées ont été réinitialisées."
+    "LayoutsReset": "Les dispositions enregistrées ont été réinitialisées.",
+    "BackupSection": "Sauvegarde",
+    "BackupNever": "Aucune sauvegarde n'a encore été effectuée pour cette société.",
+    "BackupLastDays": "Dernière sauvegarde : {0} (il y a environ {1} jour(s)).",
+    "BackupStale": "Attention : la dernière sauvegarde date de plus de 7 jours.",
+    "OpenBackup": "Ouvrir la sauvegarde"
   },
   "PosTerm": {
     "Title": "Définition du terminal de caisse",

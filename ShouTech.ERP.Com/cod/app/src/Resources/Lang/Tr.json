@@ -4702,7 +4702,12 @@
     "ResetLayouts": "Izgara düzenlerini sıfırla",
     "ResetAllLayouts": "Tüm düzenleri sıfırla",
     "ResetConfirm": "Kaydedilmiş pencere düzenleri sıfırlansın mı? Pencereler varsayılan düzenleriyle açılır. Diğer kullanıcılar etkilenmez.",
-    "LayoutsReset": "Kaydedilmiş pencere düzenleri sıfırlandı."
+    "LayoutsReset": "Kaydedilmiş pencere düzenleri sıfırlandı.",
+    "BackupSection": "Yedekleme",
+    "BackupNever": "Bu şirket için henüz yedek alınmadı.",
+    "BackupLastDays": "Son yedek: {0} (yaklaşık {1} gün önce).",
+    "BackupStale": "Uyarı: son yedek 7 günden eski.",
+    "OpenBackup": "Yedeği Aç"
   },
   "PosTerm": {
     "Title": "POS Terminali Tanımı",

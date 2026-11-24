@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Windows;
@@ -59,6 +59,17 @@ public sealed class OptWin : BaseWin
     private readonly CheckBox _chkAutoOpenCompany = new();
     private readonly CheckBox _chkSkipSplash = new();
 
+    // Category rail (SVC1): one section body visible at a time,
+    // Phenix Options model (rail + body + bottom buttons).
+    private readonly ListBox _rail = new();
+    private readonly Grid _bodyHost = new();
+    private readonly List<UIElement> _sectionPanels = new();
+    private readonly List<string> _sectionKeys = new();
+    private readonly TextBlock _lblLastBackup = new();
+    private readonly TextBlock _lblBackupWarn = new();
+    private readonly Button _btnBackup = new();
+    private int _backupSection = -1;
+
     private UsrPref _pref = UsrPref.Load();
 
     public OptWin()
@@ -82,10 +93,8 @@ public sealed class OptWin : BaseWin
         _closeButton.Click += (_, _) => Close();
         root.Children.Add(F2Ui.BottomBar(_saveButton, _closeButton));
 
-        var form = new StackPanel();
-
         // ---- General ------------------------------------------------
-        var general = BeginSection(form, "Options.General");
+        var general = BeginSection("Options.General");
         AddField(general, "Options.Language", _cmbLang);
         // Language names follow the LangVM convention (Latin script),
         // keeping source files English-only per the catalog rule.
@@ -101,7 +110,7 @@ public sealed class OptWin : BaseWin
         AddField(general, "Options.ThousandSeparator", _txtThousandSep);
 
         // ---- Appearance ---------------------------------------------
-        var appearance = BeginSection(form, "Options.Appearance");
+        var appearance = BeginSection("Options.Appearance");
         AddField(appearance, "Options.Accent", _cmbAccent);
         foreach (var accent in VisuId.AvailableAccents)
             _cmbAccent.Items.Add(new ComboBoxItem { Content = accent.Display, Tag = accent.Key });
@@ -112,7 +121,7 @@ public sealed class OptWin : BaseWin
         AddCheck(appearance, _chkAnimations, "Options.EnableAnimations");
 
         // ---- Behavior -----------------------------------------------
-        var behavior = BeginSection(form, "Options.Behavior");
+        var behavior = BeginSection("Options.Behavior");
         AddCheck(behavior, _chkConfirmExit, "Options.ConfirmOnExit");
         AddCheck(behavior, _chkConfirmDelete, "Options.ConfirmOnDelete");
         AddCheck(behavior, _chkAutoComplete, "Options.EnableAutoComplete");
@@ -121,13 +130,13 @@ public sealed class OptWin : BaseWin
         AddField(behavior, "Options.AutoSaveInterval", _txtAutoSave);
 
         // ---- Session & startup --------------------------------------
-        var session = BeginSection(form, "Options.Session");
+        var session = BeginSection("Options.Session");
         AddCheck(session, _chkAutoOpenCompany, "Options.AutoOpenLastCompany");
         AddCheck(session, _chkSkipSplash, "Options.SkipSplash");
         AddField(session, "Options.AutoLock", _txtAutoLock);
 
         // ---- Point of sale ------------------------------------------
-        var pos = BeginSection(form, "Options.PosSection");
+        var pos = BeginSection("Options.PosSection");
         F2Ui.StyleButton(_posButton, "Options.PosDevices");
         FlowAlign.Start(_posButton);
         _posButton.Click += (_, _) =>
@@ -141,7 +150,7 @@ public sealed class OptWin : BaseWin
         // Reset clears USER-scoped state only (positions / grid
         // layouts / everything); company defaults and other users
         // are untouched. Open windows re-save their state on close.
-        var layouts = BeginSection(form, "Options.LayoutsSection");
+        var layouts = BeginSection("Options.LayoutsSection");
         F2Ui.StyleButton(_resetPositionsButton, "Options.ResetPositions");
         F2Ui.StyleButton(_resetLayoutsButton, "Options.ResetLayouts");
         F2Ui.StyleButton(_resetAllButton, "Options.ResetAllLayouts");
@@ -155,18 +164,114 @@ public sealed class OptWin : BaseWin
         Grid.SetColumn(layoutButtons, 1);
         layouts.Children.Add(layoutButtons);
 
-        var scroll = new ScrollViewer
+        // ---- Backup (SVC1) -------------------------------------------
+        // Readout is DERIVED from the real backup list (newest
+        // file's write time) so it cannot drift from reality; the
+        // staleness warning adopts the Phenix dashboard pattern
+        // (warn when the last backup is older than 7 days).
+        var backup = BeginSection("Options.BackupSection");
+        _backupSection = _sectionPanels.Count - 1;
+        AddReadout(backup, _lblLastBackup);
+        AddReadout(backup, _lblBackupWarn);
+        _lblBackupWarn.FontWeight = FontWeights.SemiBold;
+        F2Ui.StyleButton(_btnBackup, "Options.OpenBackup");
+        FlowAlign.Start(_btnBackup);
+        _btnBackup.Click += (_, _) =>
         {
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Content = form
+            new BkpWin { Owner = this }.ShowDialog();
+            RefreshBackupInfo();
         };
-        root.Children.Add(scroll);
+        var backupRow = backup.RowDefinitions.Count;
+        backup.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetRow(_btnBackup, backupRow);
+        Grid.SetColumn(_btnBackup, 1);
+        backup.Children.Add(_btnBackup);
+
+        // Rail + body host (rail on the start side; mirrors in RTL).
+        var middle = new Grid();
+        middle.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) });
+        middle.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        _rail.SelectionChanged += (_, _) => ShowSection(_rail.SelectedIndex);
+        Grid.SetColumn(_rail, 0);
+        middle.Children.Add(_rail);
+        Grid.SetColumn(_bodyHost, 1);
+        middle.Children.Add(_bodyHost);
+        root.Children.Add(middle);
+        ShowSection(0);
 
         Content = root;
         ApplyLocalizedText();
     }
 
-    private Grid BeginSection(StackPanel host, string key)
+    private static void AddReadout(Grid grid, TextBlock block)
+    {
+        var row = grid.RowDefinitions.Count;
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        block.Margin = new Thickness(0, 4, 0, 4);
+        block.TextWrapping = TextWrapping.Wrap;
+        Grid.SetRow(block, row);
+        Grid.SetColumn(block, 1);
+        grid.Children.Add(block);
+    }
+
+    private void ShowSection(int index)
+    {
+        if (index < 0 || index >= _sectionPanels.Count)
+            index = 0;
+        for (var i = 0; i < _sectionPanels.Count; i++)
+            _sectionPanels[i].Visibility = i == index ? Visibility.Visible : Visibility.Collapsed;
+        if (_rail.SelectedIndex != index)
+            _rail.SelectedIndex = index;
+        if (index == _backupSection)
+            RefreshBackupInfo();
+    }
+
+    private void RefreshBackupInfo()
+    {
+        try
+        {
+            var company = AppState.CurrentCompanyCode ?? string.Empty;
+            var files = string.IsNullOrWhiteSpace(company)
+                ? new List<BkpFileInfo>()
+                : AppHost.Backup.ListBackups(company);
+            if (files.Count == 0)
+            {
+                _lblLastBackup.Text = T("Options.BackupNever");
+                _lblBackupWarn.Visibility = Visibility.Collapsed;
+                return;
+            }
+            var newest = files[0].LastWriteUtc;
+            foreach (var f in files)
+                if (f.LastWriteUtc > newest)
+                    newest = f.LastWriteUtc;
+            var days = (int)Math.Floor((DateTime.UtcNow - newest).TotalDays);
+            _lblLastBackup.Text = Tf("Options.BackupLastDays",
+                newest.ToLocalTime().ToString("d", CultureInfo.CurrentCulture),
+                days.ToString(CultureInfo.InvariantCulture));
+            _lblBackupWarn.Text = T("Options.BackupStale");
+            _lblBackupWarn.Visibility = days > 7 ? Visibility.Visible : Visibility.Collapsed;
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OptWin.RefreshBackupInfo");
+            _lblLastBackup.Text = T("Options.BackupNever");
+            _lblBackupWarn.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    protected override void OnRestoreWindowState()
+    {
+        if (int.TryParse(PrefGet("Section"), NumberStyles.Integer,
+                CultureInfo.InvariantCulture, out var idx))
+            ShowSection(idx);
+    }
+
+    protected override void OnSaveWindowState()
+    {
+        PrefSet("Section", _rail.SelectedIndex.ToString(CultureInfo.InvariantCulture));
+    }
+
+    private Grid BeginSection(string key)
     {
         var header = new TextBlock
         {
@@ -175,12 +280,24 @@ public sealed class OptWin : BaseWin
             Margin = new Thickness(0, 10, 0, 6)
         };
         _sectionLabels.Add((header, key));
-        host.Children.Add(header);
 
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        host.Children.Add(grid);
+
+        var panel = new StackPanel { Margin = new Thickness(12, 0, 4, 0) };
+        panel.Children.Add(header);
+        panel.Children.Add(grid);
+        var scroll = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = panel,
+            Visibility = Visibility.Collapsed
+        };
+        _sectionPanels.Add(scroll);
+        _bodyHost.Children.Add(scroll);
+        _sectionKeys.Add(key);
+        _rail.Items.Add(new ListBoxItem());
         return grid;
     }
 
@@ -349,7 +466,10 @@ public sealed class OptWin : BaseWin
     {
         Title = T("Options.Title");
         F2Ui.ApplyTexts(_labels, new List<(DataGridColumn, string)>(),
-            new[] { _saveButton, _posButton, _closeButton, _resetPositionsButton, _resetLayoutsButton, _resetAllButton }, T);
+            new[] { _saveButton, _posButton, _closeButton, _resetPositionsButton, _resetLayoutsButton, _resetAllButton, _btnBackup }, T);
+        for (var i = 0; i < _sectionKeys.Count && i < _rail.Items.Count; i++)
+            if (_rail.Items[i] is ListBoxItem item)
+                item.Content = T(_sectionKeys[i]);
         foreach (var (label, key) in _sectionLabels)
             label.Text = T(key);
         foreach (var (check, key) in _checkKeys)
