@@ -874,5 +874,23 @@
     "name": "WithholdingRuleNotFound",
     "message": "Withholding tax code '{0}' has no active withholding rule for this company on the document date.",
     "hint": "Create or activate a withholding tax rule with this code in Tax Configuration, or remove the withholding code from the document."
+  },
+  "DSG-8101": {
+    "code": "DSG-8101",
+    "name": "DesignFileInvalid",
+    "message": "The file '{0}' is not a valid ShouTech design file, or it has been modified or corrupted.",
+    "hint": "Export the design again from its designer window, and make sure the file was not changed after export."
+  },
+  "DSG-8102": {
+    "code": "DSG-8102",
+    "name": "DesignFileKindMismatch",
+    "message": "The design file '{0}' belongs to a different designer and cannot be imported here.",
+    "hint": "Open the designer that matches the file type (.strd report, .stid invoice, .stld label) and import the file there."
+  },
+  "DSG-8103": {
+    "code": "DSG-8103",
+    "name": "DesignPayloadInvalid",
+    "message": "The design file '{0}' was read but its contents are not a usable design.",
+    "hint": "Re-export the design from a current version of the program, then import it again."
   }
 }

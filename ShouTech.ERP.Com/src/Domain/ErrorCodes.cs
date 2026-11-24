@@ -193,6 +193,15 @@ public static class ErrorCodes
     public const string WithholdingExceedsPayable = "PUR-1015";
     public const string WithholdingRuleNotFound = "PUR-1016";
 
+    // ---- DSG 8101-8199 (designer template files, reduce services phase)
+    // Encrypted proprietary design files (.strd/.stid/.stld): the file
+    // is foreign, corrupted or tampered (AES-GCM integrity failure).
+    public const string DesignFileInvalid = "DSG-8101";
+    // The file is a valid ShouTech design file of another designer kind.
+    public const string DesignFileKindMismatch = "DSG-8102";
+    // The file decrypted but its payload is not a usable design.
+    public const string DesignPayloadInvalid = "DSG-8103";
+
     // ---- POS 1001-1999 (POS full build, migration 066) ------------------
     // The POS module takes its own prefix block, like MFG / HR.
     public const string PosNoOpenSession = "POS-1001";

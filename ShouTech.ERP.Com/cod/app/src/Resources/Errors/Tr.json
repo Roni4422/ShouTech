@@ -874,5 +874,23 @@
     "name": "WithholdingRuleNotFound",
     "message": "Stopaj kodu '{0}' için bu şirkette belge tarihinde aktif bir stopaj kuralı yok.",
     "hint": "Vergi Yapılandırması'nda bu kodla bir stopaj kuralı oluşturun veya etkinleştirin ya da belgedeki stopaj kodunu kaldırın."
+  },
+  "DSG-8101": {
+    "code": "DSG-8101",
+    "name": "DesignFileInvalid",
+    "message": "'{0}' dosyası geçerli bir ShouTech tasarım dosyası değil veya değiştirilmiş ya da bozulmuş.",
+    "hint": "Tasarımı kendi tasarımcı penceresinden yeniden dışa aktarın ve dosyanın dışa aktarımdan sonra değişmediğinden emin olun."
+  },
+  "DSG-8102": {
+    "code": "DSG-8102",
+    "name": "DesignFileKindMismatch",
+    "message": "'{0}' tasarım dosyası farklı bir tasarımcıya ait ve buraya aktarılamaz.",
+    "hint": "Dosya türüyle eşleşen tasarımcıyı (.strd rapor, .stid fatura, .stld etiket) açın ve dosyayı oradan içe aktarın."
+  },
+  "DSG-8103": {
+    "code": "DSG-8103",
+    "name": "DesignPayloadInvalid",
+    "message": "'{0}' tasarım dosyası okundu ancak içeriği kullanılabilir bir tasarım değil.",
+    "hint": "Tasarımı programın güncel bir sürümünden yeniden dışa aktarın ve tekrar içe aktarın."
   }
 }

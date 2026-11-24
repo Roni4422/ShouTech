@@ -874,5 +874,23 @@
     "name": "WithholdingRuleNotFound",
     "message": "Le code de retenue '{0}' n'a aucune règle de retenue active pour cette société à la date du document.",
     "hint": "Créez ou activez une règle de retenue portant ce code dans la Configuration fiscale, ou retirez le code de retenue du document."
+  },
+  "DSG-8101": {
+    "code": "DSG-8101",
+    "name": "DesignFileInvalid",
+    "message": "Le fichier '{0}' n'est pas un fichier de modèle ShouTech valide, ou il a été modifié ou endommagé.",
+    "hint": "Exportez à nouveau le modèle depuis sa fenêtre de concepteur et assurez-vous que le fichier n'a pas été modifié après l'exportation."
+  },
+  "DSG-8102": {
+    "code": "DSG-8102",
+    "name": "DesignFileKindMismatch",
+    "message": "Le fichier de modèle '{0}' appartient à un autre concepteur et ne peut pas être importé ici.",
+    "hint": "Ouvrez le concepteur correspondant au type de fichier (.strd rapport, .stid facture, .stld étiquette) et importez-y le fichier."
+  },
+  "DSG-8103": {
+    "code": "DSG-8103",
+    "name": "DesignPayloadInvalid",
+    "message": "Le fichier de modèle '{0}' a été lu, mais son contenu n'est pas un modèle utilisable.",
+    "hint": "Réexportez le modèle depuis une version actuelle du programme, puis importez-le à nouveau."
   }
 }
