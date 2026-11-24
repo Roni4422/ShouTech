@@ -18,6 +18,15 @@ family, and a per-invoice-type matrix × (عرض، إضافة، تعديل، ح�
 طباعة، إظهار الحقول، توليد سند قيد، تحديد الحساب) — view, create,
 update, delete, print, show-fields, generate-journal, set-account.
 
+Cross-program research (same date, treated as unverified
+web-derived reference data per that directory's house rules —
+patterns adopted below were each checked against our own measured
+substrate in §1 before being ruled on):
+`~/workspace/research_notes/phenix-tools-tab-inventory-20261124-1335/notes/other-programs-windows-research-20261124.md`
+§3 (permissions survey of ERPNext/Frappe, Odoo, Dynamics 365 BC/F&O,
+SAP Business One, Al-Ameen, Tally, iDempiere, Tryton) and its
+shortlist. §2.6 records what was folded in and what was ruled out.
+
 All counts below were measured on this branch's base (reduce tip
 6cf627e5): a fresh SQLite database migrated through 124, plus static
 scans of `cod/app/src`.
@@ -268,6 +277,67 @@ Wiring in this workstream:
   ErrorCodes + the four Errors catalogs.
 - All new UI text through a new `PermTpl` Lang section ×4.
 
+### 2.6 Cross-program patterns folded in (research shortlist, ruled per item)
+
+ERPNext/Frappe's core lesson — *separate the mechanisms* — validates
+the shape of §2.2–2.3: a per-document-type role matrix, record
+restrictions, field levels and sharing are four different machines,
+not one grid. Our model keeps them separate too; each mechanism is
+ruled on below on its own merits.
+
+- **Permission Inspector (ERPNext) — BUILT.** The research
+  shortlist's power+ease winner, and cheap on top of §2.2: a
+  `PermServ.ExplainAsync(userId, permissionKey)` that answers WHY —
+  returning the deciding source (administrator role / which role's
+  grant / which assigned template's grant / per-user allow /
+  explicit per-user deny / granted nowhere). It reads the same
+  tables the loader reads, so the explanation cannot disagree with
+  enforcement. PermTplWin carries a compact effective-access check
+  strip (user picker + permission picker + verdict line) — our own
+  placement of the idea, not ERPNext's DocType form. The harness
+  proves the verdicts against the loader's actual outcomes.
+- **Role Profiles (ERPNext) / Master Role (iDempiere) / composable
+  Permission Sets (Dynamics BC) — CONFIRMS §2.2.** Bundled named
+  grant sets are the industry template mechanism; our system
+  templates + Copy are the same idea in our form. One deliberate
+  exclusion: set-includes-set nesting (BC) and implied-group chains
+  (Odoo) are NOT in the resolution rule — §2.2's loader stays a
+  single flat union so the Inspector's verdict is always one
+  named source, never a chain to unravel. The ease those products
+  get from hierarchy-by-dropdown is answered in our form by the
+  one-click system-template starting profiles.
+- **Secrecy degrees (Al-Ameen: low/medium/high per operation) —
+  PARTIAL ANALOGUE, full model is a recorded gap.** Our catalog
+  already carries the binary end of this axis: `is_sensitive`
+  marks the high-secrecy operations, and they are exactly the keys
+  the seeds protect (admin-only defaults, ROLE_USER exclusions).
+  A graded three-degree scale with a per-user clearance level is
+  a different axis with no consumer today; §4 records it.
+- **Field-level permissions (Frappe Permission Levels, Odoo
+  groups-on-fields) — COARSE FORM BUILT, fine form gap.**
+  `DOC.<KIND>.FIELDS` is the field-visibility gate where it
+  matters most commercially (cost/margin on documents). Arbitrary
+  per-field levels on every window are not built (§4).
+- **Record-level restrictions (Frappe User Permissions, Odoo
+  Record Rules) — GAP with reason (§4).** Our tenancy is one
+  company per database (SQLite) / company-keyed rows (PG); the
+  only record scoping in the product is POS terminal
+  customer-group scoping (migration 124). A general domain-rule
+  engine is a platform feature of its own, not a permissions
+  workstream add-on.
+- **Sharing (per-record grants to a named user) — GAP (§4).**
+  No record-sharing substrate exists; documents carry company
+  ownership only.
+- **Four-eyes button rules (Tryton: N *different* users must
+  approve) — DIFFERENTIATOR CANDIDATE, recorded with hook
+  points.** Our approval seams already separate duties through
+  dedicated APPROVE keys (SALES.QUOTATION/ORDER/INVOICE.APPROVE,
+  SALES.RETURN.APPROVE, PUR.REQ.APPROVE) and record
+  `sau_approval_history`; a distinct-user/quorum rule layers onto
+  those seams without touching the permission schema. It is the
+  first follow-up candidate after this workstream (§4), not part
+  of it — approval *workflow* semantics, not grant resolution.
+
 ---
 
 ## 3. Schema (migration 125, both dialects)
@@ -309,9 +379,11 @@ purchase cycle renumbered 092–099 → 107–114 at merge.
 PrmWin visibility fix; §2.2 templates (schema, service, loader
 union, system seeds, audit); §2.3 DOC catalog + InvoiceWin /
 OrdWin / POS enforcement as specified; §2.4 PermTplWin + ribbon
-rewiring; §2.5 errors + Lang; a PermHarness proving grant/deny
-end-to-end through the real service + loader on a migrated SQLite
-database.
+rewiring; §2.5 errors + Lang; §2.6 Permission Inspector
+(`ExplainAsync` + PermTplWin access-check strip); a PermHarness
+proving grant/deny end-to-end through the real service + loader on
+a migrated SQLite database, including Inspector verdicts matching
+loader outcomes.
 
 **Recorded gaps (not built, with reasons)**:
 - **Full ribbon/nav gating** (every nav entry checked before its
@@ -333,6 +405,22 @@ database.
   item, same as every prior workstream).
 - **Kern.Tests on Windows**: cannot execute on this Linux VM
   (standing owed item).
+- **Graded secrecy degrees (Al-Ameen model, §2.6)**: our
+  `is_sensitive` flag covers the binary high-secrecy end; a
+  low/medium/high scale with per-user clearance has no consumer
+  in the product today.
+- **Record-level restrictions and per-record sharing (§2.6)**:
+  no domain-rule engine or sharing substrate exists; POS
+  customer-group scoping (migration 124) is the only record
+  scoping in the product. Platform-sized features, recorded for
+  a future workstream.
+- **Fine-grained field levels beyond documents (§2.6)**: only
+  the DOC.*.FIELDS gate is built; per-field levels on arbitrary
+  windows are not.
+- **Four-eyes / quorum approval rules (Tryton model, §2.6)**:
+  the first follow-up candidate — the APPROVE-key seams and
+  `sau_approval_history` already exist; the distinct-user/quorum
+  rule itself is approval-workflow work, not grant resolution.
 
 ---
 
