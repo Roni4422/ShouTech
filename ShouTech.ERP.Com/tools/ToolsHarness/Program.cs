@@ -129,7 +129,10 @@ catch (Exception ex) when (ex is FileNotFoundException or PlatformNotSupportedEx
 var ops = new OperationsService(new OperationsRepository("SQLite", cs));
 var schema = await ops.GetSchemaVersionAsync();
 Check("health: schema version reports applied migrations",
-    schema.AppliedCount > 0 && schema.HighestMigrationId.StartsWith("124", StringComparison.Ordinal),
+    // The prefix tracks the newest migration on the merged tree
+    // (124 on the tools branch; 126 after the reduce merge added
+    // the OptWin print/barcode migrations).
+    schema.AppliedCount > 0 && schema.HighestMigrationId.StartsWith("126", StringComparison.Ordinal),
     $"{schema.AppliedCount}/{schema.HighestMigrationId}");
 var integrity = await ops.GetIntegritySummaryAsync();
 Check("health: integrity summary returns the SQLite verdict",
