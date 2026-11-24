@@ -1146,7 +1146,21 @@
       "GrniDifference": "GRNI Difference (Base)",
       "AgeBand": "Aging band",
       "GrniGlBalanceCompany": "GRNI GL balance (company-wide, base)",
-      "GrniDifferenceCompany": "GRNI difference (company-wide, base)"
+      "GrniDifferenceCompany": "GRNI difference (company-wide, base)",
+      "Name": "Name",
+      "WeightedAmount": "Weighted Amount",
+      "WinRate": "Win Rate",
+      "Won": "Won",
+      "Lost": "Lost",
+      "DaysIdle": "Days Idle",
+      "LastActivity": "Last Activity",
+      "ValidTill": "Valid Till",
+      "OrderedQty": "Ordered Qty",
+      "DeliveredQty": "Delivered Qty",
+      "UninvoicedValue": "Uninvoiced Value",
+      "DeliveryDate": "Delivery Date",
+      "Overdue": "Overdue",
+      "ExpectedClose": "Expected Close"
     },
     "Filter": {
       "All": "All",
@@ -1161,7 +1175,9 @@
       "Limit": "Limit",
       "P2From": "Period 2 From",
       "P2To": "Period 2 To",
-      "Search": "Search supplier code, name, or phone"
+      "Search": "Search supplier code, name, or phone",
+      "Section": "Section",
+      "StaleDays": "Stale Days"
     },
     "CustomerAging": "Customer aging",
     "SupplierAging": "Supplier aging",
@@ -1225,7 +1241,17 @@
     "BudgetVariance": "Budget Variance",
     "QualitySummary": "Quality Inspection Summary",
     "GoodsReceivedNotInvoiced": "Goods Received Not Invoiced (GRNI)",
-    "SupplierStatement": "Supplier Statement"
+    "SupplierStatement": "Supplier Statement",
+    "CrmFunnel": "CRM Funnel",
+    "SalesChainExceptions": "Sales Chain Exceptions",
+    "SectionPipeline": "Pipeline by Stage",
+    "SectionWinRate": "Win Rate by Sales Rep",
+    "SectionStale": "Stale Opportunities",
+    "SectionLostQuotes": "Lost & Expired Quotations",
+    "SectionOrderedNotDelivered": "Ordered Not Delivered",
+    "SectionDeliveredNotInvoiced": "Delivered Not Invoiced",
+    "StatusLost": "Lost",
+    "StatusExpired": "Expired"
   },
   "RestoreCompany": {
     "Close": "Close",

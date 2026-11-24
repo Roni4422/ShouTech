@@ -611,7 +611,21 @@
       "GrniDifference": "Écart GRNI (devise de base)",
       "AgeBand": "Tranche d’ancienneté",
       "GrniGlBalanceCompany": "Solde GRNI du grand livre (toute la société, devise de base)",
-      "GrniDifferenceCompany": "Écart GRNI (toute la société, devise de base)"
+      "GrniDifferenceCompany": "Écart GRNI (toute la société, devise de base)",
+      "Name": "Nom",
+      "WeightedAmount": "Montant pondéré",
+      "WinRate": "Taux de réussite",
+      "Won": "Gagnées",
+      "Lost": "Perdues",
+      "DaysIdle": "Jours d'inactivité",
+      "LastActivity": "Dernière activité",
+      "ValidTill": "Valide jusqu'au",
+      "OrderedQty": "Qté commandée",
+      "DeliveredQty": "Qté livrée",
+      "UninvoicedValue": "Valeur non facturée",
+      "DeliveryDate": "Date de livraison",
+      "Overdue": "En retard",
+      "ExpectedClose": "Clôture prévue"
     },
     "Filter": {
       "All": "Tous",
@@ -626,7 +640,9 @@
       "Limit": "Limite",
       "P2From": "Période 2 du",
       "P2To": "Période 2 au",
-      "Search": "Rechercher par code, nom ou téléphone du fournisseur"
+      "Search": "Rechercher par code, nom ou téléphone du fournisseur",
+      "Section": "Section",
+      "StaleDays": "Jours d'inactivité"
     },
     "CustomerAging": "Balance âgée clients",
     "SupplierAging": "Balance âgée fournisseurs",
@@ -690,7 +706,17 @@
     "BudgetVariance": "Écart budgétaire",
     "QualitySummary": "Résumé des inspections qualité",
     "GoodsReceivedNotInvoiced": "Marchandises reçues non facturées (GRNI)",
-    "SupplierStatement": "Relevé fournisseur"
+    "SupplierStatement": "Relevé fournisseur",
+    "CrmFunnel": "Entonnoir CRM",
+    "SalesChainExceptions": "Exceptions de la chaîne de vente",
+    "SectionPipeline": "Pipeline par étape",
+    "SectionWinRate": "Taux de réussite par commercial",
+    "SectionStale": "Opportunités inactives",
+    "SectionLostQuotes": "Devis perdus et expirés",
+    "SectionOrderedNotDelivered": "Commandé non livré",
+    "SectionDeliveredNotInvoiced": "Livré non facturé",
+    "StatusLost": "Perdu",
+    "StatusExpired": "Expiré"
   },
   "Tools": {
     "Title": "Outils",

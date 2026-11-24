@@ -611,7 +611,21 @@
       "GrniDifference": "GRNI mutabakat farkı (ana para birimi)",
       "AgeBand": "Yaşlandırma aralığı",
       "GrniGlBalanceCompany": "GRNI defteri kebir bakiyesi (şirket geneli, temel para birimi)",
-      "GrniDifferenceCompany": "GRNI farkı (şirket geneli, temel para birimi)"
+      "GrniDifferenceCompany": "GRNI farkı (şirket geneli, temel para birimi)",
+      "Name": "Ad",
+      "WeightedAmount": "Ağırlıklı Tutar",
+      "WinRate": "Kazanma Oranı",
+      "Won": "Kazanılan",
+      "Lost": "Kaybedilen",
+      "DaysIdle": "Boşta Gün",
+      "LastActivity": "Son Aktivite",
+      "ValidTill": "Geçerlilik Tarihi",
+      "OrderedQty": "Sipariş Miktarı",
+      "DeliveredQty": "Teslim Miktarı",
+      "UninvoicedValue": "Faturalanmamış Değer",
+      "DeliveryDate": "Teslim Tarihi",
+      "Overdue": "Gecikmiş",
+      "ExpectedClose": "Beklenen Kapanış"
     },
     "Filter": {
       "All": "Tümü",
@@ -626,7 +640,9 @@
       "Limit": "Limit",
       "P2From": "Dönem 2 Başlangıç",
       "P2To": "Dönem 2 Bitiş",
-      "Search": "Tedarikçi kodu, adı veya telefonuyla ara"
+      "Search": "Tedarikçi kodu, adı veya telefonuyla ara",
+      "Section": "Bölüm",
+      "StaleDays": "Durgunluk Günleri"
     },
     "CustomerAging": "Müşteri yaşlandırma",
     "SupplierAging": "Tedarikçi yaşlandırma",
@@ -690,7 +706,17 @@
     "BudgetVariance": "Bütçe Sapması",
     "QualitySummary": "Kalite Denetim Özeti",
     "GoodsReceivedNotInvoiced": "Faturalanmamış Alınan Mallar (GRNI)",
-    "SupplierStatement": "Tedarikçi Ekstresi"
+    "SupplierStatement": "Tedarikçi Ekstresi",
+    "CrmFunnel": "CRM Hunisi",
+    "SalesChainExceptions": "Satış Zinciri İstisnaları",
+    "SectionPipeline": "Aşamaya Göre Boru Hattı",
+    "SectionWinRate": "Satış Temsilcisine Göre Kazanma Oranı",
+    "SectionStale": "Durgun Fırsatlar",
+    "SectionLostQuotes": "Kayıp ve Süresi Dolmuş Teklifler",
+    "SectionOrderedNotDelivered": "Sipariş Edildi Teslim Edilmedi",
+    "SectionDeliveredNotInvoiced": "Teslim Edildi Faturalanmadı",
+    "StatusLost": "Kayıp",
+    "StatusExpired": "Süresi Dolmuş"
   },
   "Tools": {
     "Title": "Araçlar",
