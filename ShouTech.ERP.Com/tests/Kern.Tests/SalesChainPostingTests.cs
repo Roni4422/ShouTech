@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Globalization;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using ShouTech.Application.Services;
@@ -769,4 +770,252 @@ namespace Kern.Tests
                 $"Applying SQLite DBA migrations failed (exit {process.ExitCode}).\n{output}\n{errors}");
         }
     }
+    /// <summary>
+    /// Phase 09 commissions (migration 097, CommService / CommRepository)
+    /// folded into this file because it already owns the migrated chain
+    /// fixture (ChainTests: GL company 'CHAIN-GL', material 42, stock).
+    /// Pins: policy resolution specificity + tier slab selection (pure
+    /// resolver); a sales-basis entry generated from a REAL posted chain
+    /// invoice; a proportional NEGATIVE return adjustment; a collection
+    /// period-run entry from a payment allocation; and a settlement that
+    /// sums Approved entries and pays through a BALANCED journal voucher
+    /// (Dr commission expense / Cr cash), flipping entries to Settled.
+    /// Execution requires Windows (net8.0-windows testhost).
+    /// </summary>
+    public class SalesCommissionTests
+    {
+        private const string Actor = "comm-test";
+        private const string CO = "CHAIN-GL";
+
+        private static CommService Service(string connectionString)
+            => new(new CommRepository("SQLite", connectionString), new JournalRepository("SQLite", connectionString));
+
+        private static void Exec(string connectionString, string sql)
+        {
+            using var connection = new SqliteConnection(connectionString);
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            command.ExecuteNonQuery();
+        }
+
+        private static decimal Scalar(string connectionString, string sql)
+        {
+            using var connection = new SqliteConnection(connectionString);
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            return Convert.ToDecimal(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+        }
+
+        private static void SeedRep(string connectionString)
+            => Exec(connectionString,
+                $"INSERT INTO sales_reps (id, company_id, code, name_en) VALUES ('{Guid.NewGuid():D}', '{CO}', 'REP-1', 'Rania Saleh');");
+
+        [Fact]
+        public void PolicyResolution_MostSpecificScopeWins_AndTierSlabOverridesFlatRate()
+        {
+            var fallback = new CommPolicy { Name = "default", Basis = CommBases.Sales, RatePct = 2m };
+            var repOnly = new CommPolicy { Name = "rep", Basis = CommBases.Sales, RatePct = 3m, RepScope = CommRepScopes.SpecificRep, RepCode = "REP-1" };
+            var repParty = new CommPolicy { Name = "rep+party", Basis = CommBases.Sales, RatePct = 4m, RepScope = CommRepScopes.SpecificRep, RepCode = "REP-1", CustomerScope = CommCustomerScopes.SpecificParty, PartyId = 7 };
+            var repGroup = new CommPolicy { Name = "rep+group", Basis = CommBases.Sales, RatePct = 5m, RepScope = CommRepScopes.SpecificRep, RepCode = "REP-1", ProductScope = CommProductScopes.Group, MaterialGroupCode = "GRP-1" };
+            var repMaterial = new CommPolicy { Name = "rep+material", Basis = CommBases.Sales, RatePct = 6m, RepScope = CommRepScopes.SpecificRep, RepCode = "REP-1", ProductScope = CommProductScopes.Material, MaterialId = 42 };
+            var policies = new List<CommPolicy> { fallback, repOnly, repParty, repGroup, repMaterial };
+
+            Assert.Same(repMaterial, CommPolicyResolver.Resolve(policies, CommBases.Sales, "REP-1", 42, "GRP-1", 7, null, "2026-10-22"));
+            Assert.Same(repGroup, CommPolicyResolver.Resolve(policies, CommBases.Sales, "REP-1", 99, "GRP-1", 7, null, "2026-10-22"));
+            Assert.Same(repParty, CommPolicyResolver.Resolve(policies, CommBases.Sales, "REP-1", 99, "OTHER", 7, null, "2026-10-22"));
+            Assert.Same(repOnly, CommPolicyResolver.Resolve(policies, CommBases.Sales, "REP-1", 99, "OTHER", 8, null, "2026-10-22"));
+            Assert.Same(fallback, CommPolicyResolver.Resolve(policies, CommBases.Sales, "REP-9", 99, "OTHER", 8, null, "2026-10-22"));
+            Assert.Null(CommPolicyResolver.Resolve(policies, CommBases.Profit, "REP-1", 42, "GRP-1", 7, null, "2026-10-22"));
+
+            var tiered = new CommPolicy
+            {
+                Name = "tiered", Basis = CommBases.Sales, RatePct = 2m,
+                Tiers = new List<CommPolicyTier>
+                {
+                    new() { FromAmount = 100m, RatePct = 5m },
+                    new() { FromAmount = 1000m, RatePct = 8m }
+                }
+            };
+            Assert.Equal(2m, CommPolicyResolver.ResolveRate(tiered, 50m));
+            Assert.Equal(5m, CommPolicyResolver.ResolveRate(tiered, 999m));
+            Assert.Equal(8m, CommPolicyResolver.ResolveRate(tiered, 1000m));
+        }
+
+        [Fact]
+        public async Task PostedChainInvoice_GeneratesSalesEntry_AndReturnClawsBackProportionally()
+        {
+            var (chain, _, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                SeedRep(connectionString);
+                var service = Service(connectionString);
+                await service.SavePolicyAsync(CO, new CommPolicy
+                {
+                    Name = "Rep flat 10%", Basis = CommBases.Sales, RatePct = 10m,
+                    RepScope = CommRepScopes.SpecificRep, RepCode = "REP-1"
+                }, Actor);
+
+                // QT -> SO -> DLV -> SAL through the real chain; the rep is
+                // stamped on the invoice draft exactly as InvoiceWin would
+                // store the free-text sales_rep_name.
+                var quotationId = await chain.CreateQuotationAsync(ChainDraft(companyId, "QT-COMM"), Actor);
+                var orderId = await chain.CreateFromSourceAsync(quotationId, "SO-COMM", new DateOnly(2026, 10, 20), Actor);
+                await chain.PostAsync(orderId, Actor);
+                var deliveryId = await chain.CreateFromSourceAsync(orderId, "DLV-COMM", new DateOnly(2026, 10, 21), Actor);
+                await chain.PostAsync(deliveryId, Actor);
+                var invoiceId = await chain.CreateFromSourceAsync(deliveryId, "SAL-COMM", new DateOnly(2026, 10, 22), Actor);
+                Exec(connectionString, $"UPDATE sales_documents SET sales_rep_name = 'REP-1' WHERE doc_id = {invoiceId}");
+                await chain.PostAsync(invoiceId, Actor);
+
+                // 10 units x 25 = 250 grand total; 10% = 25.
+                Assert.Equal(1, await service.GenerateForInvoiceAsync(companyId.ToString("D"), invoiceId, Actor));
+                // Idempotent: a second hook fire creates nothing.
+                Assert.Equal(0, await service.GenerateForInvoiceAsync(companyId.ToString("D"), invoiceId, Actor));
+                var entries = await service.GetEntriesAsync(CO, "REP-1");
+                var entry = Assert.Single(entries);
+                Assert.Equal(CommBases.Sales, entry.Basis);
+                Assert.Equal(250m, entry.BasisAmount);
+                Assert.Equal(25m, entry.CommissionAmount);
+                Assert.Equal(CommEntryStatuses.Pending, entry.Status);
+                Assert.Equal("2026-10-22", entry.PeriodDate);
+
+                // A posted return of half the invoice (125 of 250) claws
+                // back exactly half the commission as a negative entry.
+                Exec(connectionString, $"""
+                    INSERT INTO sales_documents
+                        (company_id, doc_kind, doc_no, doc_date, party_id, party_name, currency_code,
+                         subtotal, grand_total, status, sales_rep_name, original_doc_id, original_doc_kind)
+                    VALUES ('{companyId:D}', 'SRT', 'SRT-COMM', '2026-10-25', 7, 'Posting Test Customer', 'SAR',
+                            125, 125, 'Posted', 'REP-1', {invoiceId}, 'SAL');
+                    """);
+                var returnId = (long)Scalar(connectionString, "SELECT doc_id FROM sales_documents WHERE doc_no = 'SRT-COMM'");
+                Assert.Equal(1, await service.GenerateForReturnAsync(companyId.ToString("D"), returnId, Actor));
+                var all = await service.GetEntriesAsync(CO, "REP-1");
+                Assert.Equal(2, all.Count);
+                var adjustment = Assert.Single(all, e => e.SourceDocKind == CommSourceKinds.SalesReturn);
+                Assert.Equal(-125m, adjustment.BasisAmount);
+                Assert.Equal(-12.5m, adjustment.CommissionAmount);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task CollectionRun_Settlement_PaysThroughBalancedJournal()
+        {
+            var (chain, _, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                SeedRep(connectionString);
+                // Commission expense account for the payment voucher.
+                Exec(connectionString, $"""
+                    INSERT INTO chart_of_accounts (account_id, company_id, account_code, account_name, account_type, is_postable, is_active, is_deleted)
+                    VALUES ('{Guid.NewGuid():D}', '{companyId:D}', '511', 'Sales Commission Expense', 'EXPENSE', 1, 1, 0);
+                    """);
+                var service = Service(connectionString);
+                await service.SavePolicyAsync(CO, new CommPolicy
+                {
+                    Name = "Rep flat 10%", Basis = CommBases.Sales, RatePct = 10m,
+                    RepScope = CommRepScopes.SpecificRep, RepCode = "REP-1"
+                }, Actor);
+                await service.SavePolicyAsync(CO, new CommPolicy
+                {
+                    Name = "Collections 5%", Basis = CommBases.Collection, RatePct = 5m,
+                    RepScope = CommRepScopes.SpecificRep, RepCode = "REP-1"
+                }, Actor);
+
+                var quotationId = await chain.CreateQuotationAsync(ChainDraft(companyId, "QT-PAY"), Actor);
+                var orderId = await chain.CreateFromSourceAsync(quotationId, "SO-PAY", new DateOnly(2026, 10, 20), Actor);
+                await chain.PostAsync(orderId, Actor);
+                var deliveryId = await chain.CreateFromSourceAsync(orderId, "DLV-PAY", new DateOnly(2026, 10, 21), Actor);
+                await chain.PostAsync(deliveryId, Actor);
+                var invoiceId = await chain.CreateFromSourceAsync(deliveryId, "SAL-PAY", new DateOnly(2026, 10, 22), Actor);
+                Exec(connectionString, $"UPDATE sales_documents SET sales_rep_name = 'REP-1' WHERE doc_id = {invoiceId}");
+                await chain.PostAsync(invoiceId, Actor);
+                Assert.Equal(1, await service.GenerateForInvoiceAsync(companyId.ToString("D"), invoiceId, Actor));
+
+                // Collection basis: 200 collected against the invoice in
+                // the period run -> 5% = 10, keyed by the allocation id.
+                Exec(connectionString, $"""
+                    INSERT INTO payment_allocations
+                        (allocation_id, company_id, document_company_id, party_kind, party_id, payment_ledger_id,
+                         doc_table, doc_id, doc_no, amount, allocated_by, allocated_at)
+                    VALUES ('{Guid.NewGuid():D}', '{CO}', '{companyId:D}', 'C', 7, 1, 'SALES', {invoiceId}, 'SAL-PAY', 200, '{Actor}', '2026-10-24');
+                    """);
+                Assert.Equal(1, await service.GenerateCollectionForPeriodAsync(CO, "2026-10-01", "2026-10-31", Actor));
+                Assert.Equal(0, await service.GenerateCollectionForPeriodAsync(CO, "2026-10-01", "2026-10-31", Actor));
+
+                var entries = await service.GetEntriesAsync(CO, "REP-1", null, "2026-10-01", "2026-10-31");
+                Assert.Equal(2, entries.Count);
+                Assert.Equal(10m, Assert.Single(entries, e => e.Basis == CommBases.Collection).CommissionAmount);
+
+                // Approve both, settle the period: 25 + 10 = 35.
+                await service.ApproveEntriesAsync(CO, entries.Select(e => e.Id).ToList(), Actor);
+                var settlement = await service.CreateSettlementAsync(CO, "REP-1", "2026-10-01", "2026-10-31", Actor);
+                Assert.Equal(35m, settlement.TotalAmount);
+                Assert.Equal(2, settlement.EntryCount);
+                Assert.Equal(CommSettlementStatuses.Draft, settlement.Status);
+
+                // Paying before approval is SAL-7014.
+                var notApproved = await Assert.ThrowsAsync<AppError>(() => service.PaySettlementAsync(CO, settlement.Id, Actor));
+                Assert.Equal(ErrorCodes.CommissionSettlementInvalid, notApproved.Code);
+
+                await service.ApproveSettlementAsync(CO, settlement.Id, Actor);
+                var journalRef = await service.PaySettlementAsync(CO, settlement.Id, Actor);
+                Assert.StartsWith("SCO-", journalRef);
+
+                var paid = await service.GetSettlementsAsync(CO, "REP-1");
+                var paidSettlement = Assert.Single(paid);
+                Assert.Equal(CommSettlementStatuses.Paid, paidSettlement.Status);
+                Assert.Equal(journalRef, paidSettlement.JournalRef);
+                var settled = await service.GetEntriesAsync(CO, "REP-1", CommEntryStatuses.Settled, "2026-10-01", "2026-10-31");
+                Assert.Equal(2, settled.Count);
+
+                // The voucher is balanced: Dr 511 commission expense 35,
+                // Cr 131 cash 35, nothing else.
+                Assert.Equal(35m, Scalar(connectionString, $"""
+                    SELECT COALESCE(SUM(l.debit), 0) FROM journal_entry_lines l
+                    JOIN journal_entries e ON e.journal_entry_id = l.journal_entry_id
+                    JOIN chart_of_accounts a ON a.account_id = l.account_id
+                    WHERE e.document_number = '{journalRef}' AND a.account_code = '511'
+                    """));
+                Assert.Equal(35m, Scalar(connectionString, $"""
+                    SELECT COALESCE(SUM(l.credit), 0) FROM journal_entry_lines l
+                    JOIN journal_entries e ON e.journal_entry_id = l.journal_entry_id
+                    JOIN chart_of_accounts a ON a.account_id = l.account_id
+                    WHERE e.document_number = '{journalRef}' AND a.account_code = '131'
+                    """));
+                Assert.Equal(0m, Scalar(connectionString, $"""
+                    SELECT COALESCE(SUM(l.debit - l.credit), 0) FROM journal_entry_lines l
+                    JOIN journal_entries e ON e.journal_entry_id = l.journal_entry_id
+                    WHERE e.document_number = '{journalRef}'
+                    """));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        private static CommercialDocumentDraft ChainDraft(Guid companyId, string docNo) => new(
+            companyId,
+            CommercialDocKinds.SalesQuotation,
+            docNo,
+            new DateOnly(2026, 10, 16),
+            PartyId: 7,
+            PartyName: "Posting Test Customer",
+            WarehouseId: 1,
+            CurrencyCode: "SAR",
+            ExchangeRate: 1m,
+            Notes: null,
+            new[]
+            {
+                new CommercialLineDraft(42, "MAT-42", "Posting test item", "PCS", 10m, 25m)
+            });
+    }
+
 }

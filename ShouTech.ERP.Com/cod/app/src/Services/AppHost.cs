@@ -43,6 +43,7 @@ namespace ShouTech.App.Services
         public static BudgetService? Budgets { get; private set; }
         public static QualityService? Quality { get; private set; }
         public static CrmService? Crm { get; private set; }
+        public static CommService? Commissions { get; private set; }
         public static HrService? Hr { get; private set; }
         public static PosService? Pos { get; private set; }
         public static ProjectService? Projects { get; private set; }
@@ -107,6 +108,7 @@ namespace ShouTech.App.Services
             Budgets = CreatePhase3Service((provider, connection) => new BudgetService(new BudgetRepository(provider, connection), Permissions.Has), "Budgets");
             Quality = CreatePhase3Service((provider, connection) => new QualityService(new QualityRepository(provider, connection)), "Quality");
             Crm = CreatePhase3Service((provider, connection) => new CrmService(new CrmRepository(provider, connection)), "CRM");
+            Commissions = CreatePhase3Service((provider, connection) => new CommService(new CommRepository(provider, connection), JournalStore), "Commissions");
             Hr = CreatePhase3Service((provider, connection) => new HrService(new HrRepository(provider, connection)), "HR");
             Pos = CreatePhase3Service((provider, connection) => new PosService(new PosRepository(provider, connection)), "POS");
             Projects = CreatePhase3Service((provider, connection) => new ProjectService(new ProjectRepository(provider, connection)), "Projects");
@@ -117,7 +119,7 @@ namespace ShouTech.App.Services
             Manufacturing = CreatePhase3Service((provider, connection) => new MfgOrderService(new MfgOrderRepository(provider, connection)), "Manufacturing Orders");
             Boms = CreatePhase3Service((provider, connection) => new BomService(new BomRepository(provider, connection)), "Bills of Materials");
             Planning = CreatePhase3Service((provider, connection) => new PlanningService(new PlanningRepository(provider, connection)), "Manufacturing Planning");
-            Orders = CreatePhase3Service((provider, connection) => new OrderService(new OrderDocumentRepository(provider, connection), new CommercialDocumentRepository(provider, connection)), "Orders");
+            Orders = CreatePhase3Service((provider, connection) => CreateOrderService(provider, connection), "Orders");
             PurchaseRequisitions = CreatePhase3Service((provider, connection) => new PurchaseRequisitionWorkflowService(new PurchaseRequisitionWorkflowRepository(provider, connection), Orders!, Permissions.Has), "Purchase Requisitions");
             Definitions = CreatePhase3Service((provider, connection) => new DefinitionService(new DefinitionRepository(provider, connection)), "Definitions");
             Operations = CreatePhase3Service((provider, connection) => new OperationsService(new OperationsRepository(provider, connection)), "Operations");
@@ -196,6 +198,7 @@ namespace ShouTech.App.Services
                 Budgets = CreatePhase3Service((provider, connection) => new BudgetService(new BudgetRepository(provider, connection), Permissions.Has), "Budgets");
                 Quality = CreatePhase3Service((provider, connection) => new QualityService(new QualityRepository(provider, connection)), "Quality");
                 Crm = CreatePhase3Service((provider, connection) => new CrmService(new CrmRepository(provider, connection)), "CRM");
+            Commissions = CreatePhase3Service((provider, connection) => new CommService(new CommRepository(provider, connection), JournalStore), "Commissions");
             Hr = CreatePhase3Service((provider, connection) => new HrService(new HrRepository(provider, connection)), "HR");
             Pos = CreatePhase3Service((provider, connection) => new PosService(new PosRepository(provider, connection)), "POS");
                 Projects = CreatePhase3Service((provider, connection) => new ProjectService(new ProjectRepository(provider, connection)), "Projects");
@@ -204,7 +207,7 @@ namespace ShouTech.App.Services
                 Manufacturing = CreatePhase3Service((provider, connection) => new MfgOrderService(new MfgOrderRepository(provider, connection)), "Manufacturing Orders");
                 Boms = CreatePhase3Service((provider, connection) => new BomService(new BomRepository(provider, connection)), "Bills of Materials");
                 Planning = CreatePhase3Service((provider, connection) => new PlanningService(new PlanningRepository(provider, connection)), "Manufacturing Planning");
-                Orders = CreatePhase3Service((provider, connection) => new OrderService(new OrderDocumentRepository(provider, connection), new CommercialDocumentRepository(provider, connection)), "Orders");
+                Orders = CreatePhase3Service((provider, connection) => CreateOrderService(provider, connection), "Orders");
             PurchaseRequisitions = CreatePhase3Service((provider, connection) => new PurchaseRequisitionWorkflowService(new PurchaseRequisitionWorkflowRepository(provider, connection), Orders!, Permissions.Has), "Purchase Requisitions");
                 PurchaseAttachments = CreatePhase3Service((provider, connection) => new PurchaseDocumentAttachmentService(new PurchaseDocumentAttachmentRepository(provider, connection), Orders!, Permissions.Has, (user, action, details) => Audit.LogUserActionAsync(user, action, details)), "Purchase Attachments");
                 PurchaseMatch = CreatePhase3Service((provider, connection) => new PurchaseMatchService(
@@ -262,6 +265,33 @@ namespace ShouTech.App.Services
                 Logging.LogWarning("AppHost", $"Journal persistence could not be initialized: {ex.Message}");
                 return null;
             }
+        }
+
+        /// <summary>
+        /// OrderService factory with the Phase 09 commission hook wired:
+        /// after a chain sales invoice posts, commission entries are
+        /// generated through CommService. FAIL-SOFT by design — the hook
+        /// catches and reports every failure itself, because a commission
+        /// problem must never break invoice posting.
+        /// </summary>
+        private static OrderService CreateOrderService(string provider, string connection)
+        {
+            var orders = new OrderService(
+                new OrderDocumentRepository(provider, connection),
+                new CommercialDocumentRepository(provider, connection));
+            orders.CommissionHook = async (companyKey, docId, userId, cancellationToken) =>
+            {
+                try
+                {
+                    if (Commissions is not null)
+                        await Commissions.GenerateForInvoiceAsync(companyKey, docId, userId, cancellationToken);
+                }
+                catch (System.Exception ex)
+                {
+                    Errors.Report(ErrorCodes.WindowOperationFailed, ex, "AppHost.CommissionHook");
+                }
+            };
+            return orders;
         }
 
         /// <summary>
@@ -374,6 +404,7 @@ namespace ShouTech.App.Services
         public static BudgetService? Budgets => AppHost.Budgets;
         public static QualityService? Quality => AppHost.Quality;
         public static CrmService? Crm => AppHost.Crm;
+        public static CommService? Commissions => AppHost.Commissions;
         public static HrService? Hr => AppHost.Hr;
         public static PosService? Pos => AppHost.Pos;
         public static ProjectService? Projects => AppHost.Projects;

@@ -1224,6 +1224,35 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         return false;
     }
 
+    /// <summary>
+    /// Phase 09 (W7b) commission generation for the NATIVE posting path:
+    /// InvRepo is application code with no service-level post-posting
+    /// event, so the window — which already calls services after a
+    /// successful post — is the least invasive seam. Sales invoices
+    /// generate Sales/Profit entries; sales returns generate the
+    /// negative adjustments. FAIL-SOFT by design: generation runs after
+    /// the post has committed, catches everything, and reports through
+    /// the error catalog — a commission failure never breaks posting.
+    /// Generation is idempotent, so a repost/retry cannot double-pay.
+    /// </summary>
+    private static async void GenerateCommissionsFailSoft(long docId, InvDocKind kind)
+    {
+        try
+        {
+            var service = AppHost.Commissions;
+            if (service is null) return;
+            var user = AppState.CurrentUser?.Username ?? Environment.UserName;
+            if (kind == InvDocKind.SalesInvoice)
+                await service.GenerateForInvoiceAsync(CurrentCompanyCode, docId, user);
+            else if (kind == InvDocKind.SalesReturn)
+                await service.GenerateForReturnAsync(CurrentCompanyCode, docId, user);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "InvoiceWin.GenerateCommissionsFailSoft");
+        }
+    }
+
     private void SaveDraft()
     {
         if (!EnsureSalesPermission(_doc.DocId > 0 ? "update" : "create", "SaveDraft")) return;
@@ -1269,6 +1298,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
             if (!deliveryLinked && captures is null) return;
             InvRepo.Post(doc.DocId, doc.Kind, AppState.CurrentUser?.Username ?? Environment.UserName, captures);
             doc.Status = InvDocStatus.Posted;
+            GenerateCommissionsFailSoft(doc.DocId, doc.Kind);
             // Reload so JournalDocNo assigned during post is visible to the voucher button.
             var reloaded = InvRepo.Load(doc.DocId, doc.Kind);
             if (reloaded is not null)
