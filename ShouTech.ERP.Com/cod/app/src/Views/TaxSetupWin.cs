@@ -35,6 +35,10 @@ public sealed class TaxSetupWin : BaseWin
     private readonly DatePicker _effectiveFrom = new() { SelectedDate = DateTime.Today };
     private readonly DatePicker _effectiveTo = new();
     private readonly CheckBox _recoverable = new() { IsChecked = true };
+    private readonly CheckBox _withholding = new();
+    private readonly TextBox _withholdingAccount = new();
+    private readonly TextBox _withholdingThreshold = new();
+    private readonly ComboBox _withholdingMode = new();
     private readonly CheckBox _compound = new();
     private readonly CheckBox _default = new();
     private readonly Button _new = new();
@@ -171,9 +175,26 @@ public sealed class TaxSetupWin : BaseWin
         accountPanel.Children.Add(CheckPanel("TaxSetup.Compound", _compound));
         accountPanel.Children.Add(CheckPanel("TaxSetup.Default", _default));
 
+        // Withholding (W1): marking the rule as a withholding category
+        // reveals its payable account + threshold configuration; the
+        // values persist on the same tax rule via TaxSvc.SaveRule.
+        var withholdingPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+        withholdingPanel.Children.Add(CheckPanel("TaxSetup.Withholding", _withholding));
+        withholdingPanel.Children.Add(FieldPanel("TaxSetup.WithholdingAccount", _withholdingAccount));
+        withholdingPanel.Children.Add(FieldPanel("TaxSetup.WithholdingThreshold", _withholdingThreshold));
+        var modePanel = new StackPanel { Margin = new Thickness(6, 0, 6, 0), MinWidth = 130 };
+        modePanel.Children.Add(new TextBlock { Text = T("TaxSetup.WithholdingThresholdMode"), Tag = "TaxSetup.WithholdingThresholdMode" });
+        _withholdingMode.ItemsSource = new[] { "PerDocument", "Cumulative" };
+        _withholdingMode.SelectedIndex = 0;
+        modePanel.Children.Add(_withholdingMode);
+        withholdingPanel.Children.Add(modePanel);
+        _withholdingAccount.Text = "2215";
+
         var content = new DockPanel();
         DockPanel.SetDock(accountPanel, Dock.Top);
         content.Children.Add(accountPanel);
+        DockPanel.SetDock(withholdingPanel, Dock.Top);
+        content.Children.Add(withholdingPanel);
         content.Children.Add(editor);
 
         var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
@@ -365,6 +386,10 @@ public sealed class TaxSetupWin : BaseWin
         _recoverable.IsChecked = rule.IsRecoverable;
         _compound.IsChecked = rule.IsCompound;
         _default.IsChecked = rule.IsDefault;
+        _withholding.IsChecked = rule.IsWithholding;
+        _withholdingAccount.Text = rule.WithholdingAccountCode;
+        _withholdingThreshold.Text = rule.WithholdingThresholdAmount?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+        _withholdingMode.SelectedItem = rule.WithholdingThresholdMode;
         _sourceUrl.Text = rule.SourceUrl;
         _sourceReference.Text = rule.SourceReference;
     }
@@ -385,6 +410,10 @@ public sealed class TaxSetupWin : BaseWin
         _recoverable.IsChecked = true;
         _compound.IsChecked = false;
         _default.IsChecked = false;
+        _withholding.IsChecked = false;
+        _withholdingAccount.Text = "2215";
+        _withholdingThreshold.Clear();
+        _withholdingMode.SelectedItem = "PerDocument";
         _sourceUrl.Clear();
         _sourceReference.Clear();
     }
@@ -398,13 +427,22 @@ public sealed class TaxSetupWin : BaseWin
             if (!decimal.TryParse(_rate.Text, NumberStyles.Number, CultureInfo.InvariantCulture, out var rate))
                 throw new InvalidOperationException(T("TaxSetup.InvalidRate"));
 
+            decimal? withholdingThreshold = null;
+            if (!string.IsNullOrWhiteSpace(_withholdingThreshold.Text))
+            {
+                if (!decimal.TryParse(_withholdingThreshold.Text, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsedThreshold))
+                    throw new InvalidOperationException(T("TaxSetup.InvalidRate"));
+                withholdingThreshold = parsedThreshold;
+            }
             TaxSvc.SaveRule(new TaxSvc.TaxRuleDraft(
                 _code.Text, _name.Text, _type.Text, _treatment.Text, rate,
                 from, _effectiveTo.SelectedDate, _recoverable.IsChecked == true,
                 _compound.IsChecked == true, _default.IsChecked == true,
                 _outputAccount.Text, _inputAccount.Text,
                 _calculation.SelectedItem?.ToString() ?? "Exclusive",
-                _sourceUrl.Text.Trim(), _sourceReference.Text.Trim()));
+                _sourceUrl.Text.Trim(), _sourceReference.Text.Trim(),
+                _withholding.IsChecked == true, _withholdingAccount.Text.Trim(),
+                withholdingThreshold, _withholdingMode.SelectedItem?.ToString() ?? "PerDocument"));
 
             _status.Text = T("TaxSetup.Saved");
             RefreshData();

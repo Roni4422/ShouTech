@@ -187,6 +187,101 @@ public static class TaxReportingSvc
         }
     }
 
+    public sealed record WithholdingRow(
+        long SupplierId,
+        string SupplierName,
+        string TaxCode,
+        decimal Rate,
+        string CurrencyCode,
+        int InvoiceCount,
+        decimal TaxableBase,
+        decimal AmountWithheld,
+        decimal BaseAmountWithheld,
+        string CertificateReference,
+        string InvoiceReferences);
+
+    /// <summary>
+    /// Withholding view (W1): per supplier, per period, straight from
+    /// tax_transactions (tax_type 'WITHHOLDING') — no parallel store.
+    /// Reversal rows (negative, under the return document) net against
+    /// the original withholding. The certificate reference is derived
+    /// deterministically from the register rows it summarises:
+    /// WHT-&lt;yyyyMM of period end&gt;-&lt;supplier&gt;-&lt;tax code&gt;.
+    /// </summary>
+    public static IReadOnlyList<WithholdingRow> LoadWithholding(DateTime fromDate, DateTime toDate)
+    {
+        if (fromDate.Date > toDate.Date)
+            throw new ArgumentException("Tax period start date cannot be after its end date.");
+
+        if (!AppHost.Permissions.Has(PermCat.Accounting.TaxReportView))
+            throw new UnauthorizedAccessException("The current user is not authorized to view tax reports.");
+
+        var company = AppState.CurrentCompanyCode;
+        var cs = DatabaseRuntime.GetConnectionString();
+        var settings = TaxSvc.LoadSettings();
+        if (string.IsNullOrWhiteSpace(company) || string.IsNullOrWhiteSpace(cs) ||
+            settings is null)
+            return Array.Empty<WithholdingRow>();
+
+        var isPg = DatabaseRuntime.IsPostgreSql();
+        DbConnection connection = isPg
+            ? new NpgsqlConnection(cs)
+            : new SqliteConnection(DatabaseRuntime.NormalizeSqliteConnectionString(cs));
+        using (connection)
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            var dateFrom = isPg ? "CAST($fromDate AS date)" : "$fromDate";
+            var dateTo = isPg ? "CAST($toDate AS date)" : "$toDate";
+            var refsExpr = isPg
+                ? "string_agg(DISTINCT t.source_doc_no, ', ')"
+                : "GROUP_CONCAT(DISTINCT t.source_doc_no)";
+            command.CommandText = $"""
+                SELECT COALESCE(d.party_id, 0), COALESCE(d.party_name, ''),
+                       t.tax_code, t.tax_rate, t.currency_code,
+                       COUNT(DISTINCT t.source_doc_kind || ':' || CAST(t.source_doc_id AS TEXT)),
+                       COALESCE(SUM(t.taxable_amount), 0),
+                       COALESCE(SUM(t.tax_amount), 0), COALESCE(SUM(t.base_tax_amount), 0),
+                       {refsExpr}
+                FROM tax_transactions t
+                LEFT JOIN purchase_documents d ON d.doc_id = t.source_doc_id
+                WHERE t.company_code=$company
+                  AND t.country_code=$country
+                  AND t.tax_type='WITHHOLDING'
+                  AND t.document_date >= {dateFrom}
+                  AND t.document_date <= {dateTo}
+                GROUP BY COALESCE(d.party_id, 0), COALESCE(d.party_name, ''),
+                         t.tax_code, t.tax_rate, t.currency_code
+                ORDER BY d.party_name, t.tax_code;
+                """;
+            Add(command, "$company", company);
+            Add(command, "$country", settings.CountryCode);
+            Add(command, "$fromDate", fromDate.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            Add(command, "$toDate", toDate.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+
+            var rows = new List<WithholdingRow>();
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                var supplierId = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture);
+                var taxCode = Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture) ?? string.Empty;
+                rows.Add(new WithholdingRow(
+                    supplierId,
+                    Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? string.Empty,
+                    taxCode,
+                    Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture),
+                    Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture) ?? string.Empty,
+                    Convert.ToInt32(reader.GetValue(5), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(reader.GetValue(8), CultureInfo.InvariantCulture),
+                    $"WHT-{toDate:yyyyMM}-{supplierId.ToString(CultureInfo.InvariantCulture)}-{taxCode}",
+                    Convert.ToString(reader.GetValue(9), CultureInfo.InvariantCulture) ?? string.Empty));
+            }
+            return rows.AsReadOnly();
+        }
+    }
+
     private static DateTime ReadDate(object value)
         => value switch
         {

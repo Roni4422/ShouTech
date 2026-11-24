@@ -3822,12 +3822,20 @@
       "IsActive": "Actif",
       "DataStatus": "État des données",
       "SourceUrl": "URL source",
-      "SourceReference": "Référence légale"
+      "SourceReference": "Référence légale",
+      "IsWithholding": "Retenue",
+      "WithholdingAccountCode": "Compte de retenue",
+      "WithholdingThresholdAmount": "Seuil de retenue",
+      "WithholdingThresholdMode": "Mode de seuil de retenue"
     },
     "EnabledNeedsRules": "La fiscalité est activée pour {0} ({1}), mais le jeu complet de taux et de classifications n'est pas chargé. Ajoutez et vérifiez les règles nationales, régionales, locales ou de barème avant comptabilisation.",
     "RegistrationNumber": "Numéro d'immatriculation fiscale",
     "SourceUrl": "URL de la source officielle",
-    "SourceReference": "Référence légale / notes"
+    "SourceReference": "Référence légale / notes",
+    "Withholding": "Retenue à la source",
+    "WithholdingAccount": "Compte de retenue à payer",
+    "WithholdingThreshold": "Seuil (0 = aucun)",
+    "WithholdingThresholdMode": "Mode de seuil"
   },
   "TaxReport": {
     "Title": "Rapport de période fiscale",
@@ -3871,6 +3879,20 @@
       "TaxableAmount": "Base imposable",
       "TaxAmount": "Montant de taxe",
       "BaseTaxAmount": "Taxe en devise de base"
+    },
+    "WithholdingTab": "Retenue à la source",
+    "WithholdingColumn": {
+      "SupplierId": "ID fournisseur",
+      "SupplierName": "Fournisseur",
+      "TaxCode": "Code de retenue",
+      "Rate": "Taux (%)",
+      "CurrencyCode": "Devise",
+      "InvoiceCount": "Factures",
+      "TaxableBase": "Base de retenue",
+      "AmountWithheld": "Montant retenu",
+      "BaseAmountWithheld": "Montant retenu (base)",
+      "CertificateReference": "Référence du certificat",
+      "InvoiceReferences": "Références des factures"
     }
   },
   "SalesDelivery": {

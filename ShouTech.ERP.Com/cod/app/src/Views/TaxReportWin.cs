@@ -19,9 +19,11 @@ public sealed class TaxReportWin : BaseWin
     private readonly DatePicker _to = new() { SelectedDate = DateTime.Today };
     private readonly DataGrid _grid = new() { AutoGenerateColumns = true, IsReadOnly = true, CanUserAddRows = false };
     private readonly DataGrid _registerGrid = new() { AutoGenerateColumns = true, IsReadOnly = true, CanUserAddRows = false };
+    private readonly DataGrid _withholdingGrid = new() { AutoGenerateColumns = true, IsReadOnly = true, CanUserAddRows = false };
     private readonly TabControl _tabs = new();
     private readonly TabItem _summaryTab = new();
     private readonly TabItem _registerTab = new();
+    private readonly TabItem _withholdingTab = new();
     private readonly TextBlock _status = new();
     private readonly TextBlock _totals = new();
     private readonly Button _refresh = new();
@@ -46,6 +48,7 @@ public sealed class TaxReportWin : BaseWin
         Title = T("TaxReport.Title");
         _summaryTab.Header = T("TaxReport.SummaryTab");
         _registerTab.Header = T("TaxReport.RegisterTab");
+        _withholdingTab.Header = T("TaxReport.WithholdingTab");
         if (Content is DependencyObject root)
             ApplyLocalizedNode(root);
         foreach (var column in _grid.Columns)
@@ -54,6 +57,9 @@ public sealed class TaxReportWin : BaseWin
         foreach (var column in _registerGrid.Columns)
             if (!string.IsNullOrWhiteSpace(column.SortMemberPath))
                 column.Header = T("TaxReport.RegisterColumn." + column.SortMemberPath);
+        foreach (var column in _withholdingGrid.Columns)
+            if (!string.IsNullOrWhiteSpace(column.SortMemberPath))
+                column.Header = T("TaxReport.WithholdingColumn." + column.SortMemberPath);
         if (IsLoaded)
             RefreshReport();
     }
@@ -121,13 +127,18 @@ public sealed class TaxReportWin : BaseWin
             e.Column.Header = T("TaxReport.Column." + e.PropertyName);
         _registerGrid.AutoGeneratingColumn += (_, e) =>
             e.Column.Header = T("TaxReport.RegisterColumn." + e.PropertyName);
+        _withholdingGrid.AutoGeneratingColumn += (_, e) =>
+            e.Column.Header = T("TaxReport.WithholdingColumn." + e.PropertyName);
 
         _summaryTab.Header = T("TaxReport.SummaryTab");
         _summaryTab.Content = _grid;
         _registerTab.Header = T("TaxReport.RegisterTab");
         _registerTab.Content = _registerGrid;
+        _withholdingTab.Header = T("TaxReport.WithholdingTab");
+        _withholdingTab.Content = _withholdingGrid;
         _tabs.Items.Add(_summaryTab);
         _tabs.Items.Add(_registerTab);
+        _tabs.Items.Add(_withholdingTab);
         root.Children.Add(_tabs);
         Content = root;
     }
@@ -141,6 +152,7 @@ public sealed class TaxReportWin : BaseWin
             var rows = TaxReportingSvc.LoadPeriod(from, to);
             _grid.ItemsSource = rows;
             _registerGrid.ItemsSource = TaxReportingSvc.LoadRegister(from, to);
+            _withholdingGrid.ItemsSource = TaxReportingSvc.LoadWithholding(from, to);
             var settings = TaxSvc.LoadSettings();
             _status.Text = Tf("TaxReport.PeriodStatus", settings?.CountryCode ?? string.Empty,
                 from.ToString("d", CultureInfo.CurrentCulture),
@@ -164,6 +176,7 @@ public sealed class TaxReportWin : BaseWin
             _status.Text = ex.Message;
             _grid.ItemsSource = Array.Empty<TaxReportingSvc.TaxPeriodRow>();
             _registerGrid.ItemsSource = Array.Empty<TaxReportingSvc.TaxRegisterRow>();
+            _withholdingGrid.ItemsSource = Array.Empty<TaxReportingSvc.WithholdingRow>();
             _totals.Text = string.Empty;
         }
     }

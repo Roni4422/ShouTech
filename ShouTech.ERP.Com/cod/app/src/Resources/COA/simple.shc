@@ -861,6 +861,24 @@
         "ar": "Closing Accounts",
         "en": "Closing Accounts"
       }
+    },
+    {
+      "id": 46,
+      "number": 2215,
+      "code": "2215",
+      "parentId": null,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "ضريبة الاستقطاع المستحقة",
+        "en": "Withholding Tax Payable"
+      }
     }
   ],
   "closingAccounts": [],

@@ -3822,12 +3822,20 @@
       "IsActive": "Etkin",
       "DataStatus": "Veri durumu",
       "SourceUrl": "Kaynak URL'si",
-      "SourceReference": "Yasal referans"
+      "SourceReference": "Yasal referans",
+      "IsWithholding": "Stopaj",
+      "WithholdingAccountCode": "Stopaj hesabı",
+      "WithholdingThresholdAmount": "Stopaj eşiği",
+      "WithholdingThresholdMode": "Stopaj eşik modu"
     },
     "EnabledNeedsRules": "Vergi {0} ({1}) için etkin, ancak bu yetki alanının tüm oran ve sınıflandırma paketi yüklenmedi. Vergili belgeleri kaydetmeden önce ulusal, eyalet, yerel veya tarife kurallarını ekleyip doğrulayın.",
     "RegistrationNumber": "Vergi kayıt numarası",
     "SourceUrl": "Resmî kaynak URL'si",
-    "SourceReference": "Yasal referans / notlar"
+    "SourceReference": "Yasal referans / notlar",
+    "Withholding": "Stopaj",
+    "WithholdingAccount": "Stopaj borç hesabı",
+    "WithholdingThreshold": "Eşik (0 = yok)",
+    "WithholdingThresholdMode": "Eşik modu"
   },
   "TaxReport": {
     "Title": "Vergi Dönem Raporu",
@@ -3871,6 +3879,20 @@
       "TaxableAmount": "Vergi matrahı",
       "TaxAmount": "Vergi tutarı",
       "BaseTaxAmount": "Temel para biriminde vergi"
+    },
+    "WithholdingTab": "Stopaj",
+    "WithholdingColumn": {
+      "SupplierId": "Tedarikçi No",
+      "SupplierName": "Tedarikçi",
+      "TaxCode": "Stopaj kodu",
+      "Rate": "Oran (%)",
+      "CurrencyCode": "Para birimi",
+      "InvoiceCount": "Faturalar",
+      "TaxableBase": "Stopaj matrahı",
+      "AmountWithheld": "Kesilen tutar",
+      "BaseAmountWithheld": "Kesilen tutar (baz)",
+      "CertificateReference": "Belge referansı",
+      "InvoiceReferences": "Fatura referansları"
     }
   },
   "SalesDelivery": {

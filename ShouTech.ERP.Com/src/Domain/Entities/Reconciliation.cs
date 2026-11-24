@@ -18,9 +18,14 @@ public sealed record OpenDocumentRow(
     decimal Total,
     decimal Paid,
     decimal Allocated,
-    DateOnly? DueDate = null)
+    DateOnly? DueDate = null,
+    // Withholding tax (W1, migration 099): the part of a purchase
+    // invoice's total that was withheld at posting. It is owed to the
+    // tax authority, never to the supplier, so it is NOT allocatable:
+    // paying (Total − Withholding − Paid) settles the invoice fully.
+    decimal Withholding = 0m)
 {
-    public decimal OpenAmount => Total - Paid;
+    public decimal OpenAmount => Total - Withholding - Paid;
 
     /// <summary>FIFO ordering basis for allocation suggestions (W8):
     /// the due date when the document carries one (sales documents,

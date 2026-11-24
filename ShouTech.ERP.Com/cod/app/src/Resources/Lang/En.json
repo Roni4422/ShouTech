@@ -3831,12 +3831,20 @@
       "IsActive": "Active",
       "DataStatus": "Data status",
       "SourceUrl": "Source URL",
-      "SourceReference": "Legal reference"
+      "SourceReference": "Legal reference",
+      "IsWithholding": "Withholding",
+      "WithholdingAccountCode": "WHT account",
+      "WithholdingThresholdAmount": "WHT threshold",
+      "WithholdingThresholdMode": "WHT threshold mode"
     },
     "EnabledNeedsRules": "Tax is enabled for {0} ({1}), but this jurisdiction's full rate and classification package has not been loaded. Add and verify the applicable national, state, local, or schedule rules before posting tax documents.",
     "RegistrationNumber": "Tax registration number",
     "SourceUrl": "Official source URL",
-    "SourceReference": "Legal reference / notes"
+    "SourceReference": "Legal reference / notes",
+    "Withholding": "Withholding tax",
+    "WithholdingAccount": "Withholding payable account",
+    "WithholdingThreshold": "Threshold (0 = none)",
+    "WithholdingThresholdMode": "Threshold mode"
   },
   "TaxReport": {
     "Title": "Tax Period Report",
@@ -3880,6 +3888,20 @@
       "TaxableAmount": "Taxable amount",
       "TaxAmount": "Tax amount",
       "BaseTaxAmount": "Base tax amount"
+    },
+    "WithholdingTab": "Withholding",
+    "WithholdingColumn": {
+      "SupplierId": "Supplier ID",
+      "SupplierName": "Supplier",
+      "TaxCode": "Withholding code",
+      "Rate": "Rate (%)",
+      "CurrencyCode": "Currency",
+      "InvoiceCount": "Invoices",
+      "TaxableBase": "Taxable base",
+      "AmountWithheld": "Amount withheld",
+      "BaseAmountWithheld": "Base amount withheld",
+      "CertificateReference": "Certificate reference",
+      "InvoiceReferences": "Invoice references"
     }
   },
   "SalesDelivery": {

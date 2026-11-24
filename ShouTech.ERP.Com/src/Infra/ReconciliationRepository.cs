@@ -102,6 +102,12 @@ public sealed class ReconciliationRepository : IReconciliationRepository
         var dueExpr = PartyKindToDocTable(partyKind) == "SALES"
             ? "COALESCE(d.due_date, d.doc_date)"
             : "d.doc_date";
+        // Withholding (W1): a purchase invoice's open amount is
+        // grand_total − withholding_amount − paid_amount; the withheld
+        // part is not payable to the supplier and never allocatable.
+        var hasWithholding = PartyKindToDocTable(partyKind) == "PURCHASE"
+            && PartyLedger.ColumnExists(connection, null, _provider, table, "withholding_amount");
+        var withholdingExpr = hasWithholding ? "COALESCE(d.withholding_amount, 0)" : "0";
         await using var command = CreateCommand(connection, null,
             $"""
             SELECT d.doc_id, d.doc_no, d.doc_date, d.party_id, d.party_name, d.currency_code, d.grand_total, d.paid_amount,
@@ -109,11 +115,12 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                              WHERE a.company_id = @company AND a.doc_table = @docTable AND a.doc_id = d.doc_id
                                AND (a.document_company_id = CAST(d.company_id AS TEXT)
                                     OR (a.document_company_id IS NULL AND a.company_id = CAST(d.company_id AS TEXT)))), 0) AS allocated,
-                   {dueExpr} AS due_date
+                   {dueExpr} AS due_date,
+                   {withholdingExpr} AS withholding_amount
             FROM {table} d
             WHERE CAST(d.company_id AS TEXT) IN (@company, @documentCompany)
               AND d.{NotDeleted} AND d.status = 'Posted' AND d.party_id IS NOT NULL
-              AND {kindFilter} AND d.grand_total - d.paid_amount > 0.005
+              AND {kindFilter} AND d.grand_total - {withholdingExpr} - d.paid_amount > 0.005
             ORDER BY {dueExpr}, d.doc_id
             """);
         Add(command, "@company", companyId.Trim());
@@ -134,7 +141,8 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                 Total: ReadDecimal(reader, 6),
                 Paid: ReadDecimal(reader, 7),
                 Allocated: ReadDecimal(reader, 8),
-                DueDate: ReadDate(reader, 9));
+                DueDate: ReadDate(reader, 9),
+                Withholding: ReadDecimal(reader, 10));
             if (row.OpenAmount > Tolerance)
                 result.Add(row);
         }
@@ -391,13 +399,15 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             string actualDocumentCompanyKey;
             long docParty;
             decimal openAmount;
-            decimal docTotal, docPaid;
+            decimal docTotal, docPaid, docWithholding = 0m;
             string docStatus;
             string documentCurrency;
             string docKind = string.Empty;
             var docStoredRate = 0m;
+            var hasDocWithholding = docTable == "PURCHASE"
+                && PartyLedger.ColumnExists(connection, transaction, _provider, table, "withholding_amount");
             await using (var doc = CreateCommand(connection, transaction,
-                $"SELECT CAST(company_id AS TEXT), doc_no, party_id, grand_total, paid_amount, status, COALESCE(currency_code, 'SAR'), doc_kind, COALESCE(exchange_rate, 0) FROM {table} WHERE CAST(company_id AS TEXT) IN (@company, @documentCompany) AND doc_id = @doc AND {invoiceKindFilter} AND {NotDeleted}"
+                $"SELECT CAST(company_id AS TEXT), doc_no, party_id, grand_total, paid_amount, status, COALESCE(currency_code, 'SAR'), doc_kind, COALESCE(exchange_rate, 0){(hasDocWithholding ? ", COALESCE(withholding_amount, 0)" : "")} FROM {table} WHERE CAST(company_id AS TEXT) IN (@company, @documentCompany) AND doc_id = @doc AND {invoiceKindFilter} AND {NotDeleted}"
                 + (_provider == "PostgreSQL" ? " FOR UPDATE" : "")))
             {
                 Add(doc, "@company", companyId.Trim());
@@ -415,12 +425,19 @@ public sealed class ReconciliationRepository : IReconciliationRepository
                 documentCurrency = ReadString(reader, 6) ?? "SAR";
                 docKind = ReadString(reader, 7) ?? string.Empty;
                 docStoredRate = ReadDecimal(reader, 8);
+                if (hasDocWithholding) docWithholding = ReadDecimal(reader, 9);
             }
             if (!string.Equals(docStatus, "Posted", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Only posted documents can be reconciled.");
             // paid_amount already includes every prior allocation (this same
             // transaction maintains it), so it is the document's settled total.
-            openAmount = docTotal - docPaid;
+            // Withholding (W1): the withheld part is not payable to the
+            // supplier — allocation settles against the NET open amount,
+            // so paying the net fully settles the invoice and any amount
+            // beyond the net is rejected by the open-amount check below.
+            // This also bounds advance consumption: an advance allocated
+            // here can never consume the withheld portion.
+            openAmount = docTotal - docWithholding - docPaid;
             if (docParty != paymentParty)
                 throw new InvalidOperationException("The payment and the document belong to different parties.");
             // W8: cross-currency allocation is ALLOWED (the pre-W8 hard

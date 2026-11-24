@@ -29,7 +29,11 @@ public static class TaxSvc
         string CalculationMode, bool IsCompound, bool IsRecoverable,
         string OutputAccountCode, string InputAccountCode,
         DateTime EffectiveFrom, DateTime? EffectiveTo,
-        bool IsDefault, bool IsActive, string DataStatus, string SourceUrl, string SourceReference);
+        bool IsDefault, bool IsActive, string DataStatus, string SourceUrl, string SourceReference,
+        // Withholding (W1, migration 099): a rule may be a withholding
+        // category rule with its own payable account + threshold.
+        bool IsWithholding = false, string WithholdingAccountCode = "",
+        decimal? WithholdingThresholdAmount = null, string WithholdingThresholdMode = "PerDocument");
 
     public sealed record TaxRuleDraft(
         string Code,
@@ -46,7 +50,11 @@ public static class TaxSvc
         string InputAccountCode,
         string CalculationMode = "Exclusive",
         string SourceUrl = "",
-        string SourceReference = "");
+        string SourceReference = "",
+        bool IsWithholding = false,
+        string WithholdingAccountCode = "",
+        decimal? WithholdingThresholdAmount = null,
+        string WithholdingThresholdMode = "PerDocument");
 
     public static bool IsEnabled
     {
@@ -213,6 +221,19 @@ public static class TaxSvc
             throw new ArgumentException("Tax rule end date cannot precede its effective date.", nameof(rule));
         if (outputAccount.Length > 50 || inputAccount.Length > 50)
             throw new ArgumentException("Tax account codes cannot exceed 50 characters.", nameof(rule));
+        // Withholding (W1): a withholding rule must name its payable
+        // (liability) account, carry a rate in (0, 100], and a sane
+        // threshold — catalogued PUR-1014, never a silent default.
+        var withholdingAccount = (rule.WithholdingAccountCode ?? string.Empty).Trim();
+        var thresholdMode = (rule.WithholdingThresholdMode ?? string.Empty).Trim();
+        if (rule.IsWithholding)
+        {
+            if (withholdingAccount.Length is < 1 or > 50 || rule.Rate <= 0m || rule.Rate > 100m
+                || thresholdMode is not ("PerDocument" or "Cumulative")
+                || (rule.WithholdingThresholdAmount is decimal th && th < 0m))
+                throw new AppError(ErrorCodes.WithholdingConfigurationInvalid,
+                    $"Withholding rule '{code}' requires a payable account, a rate between 0 and 100, a PerDocument/Cumulative threshold mode and a non-negative threshold.", code);
+        }
 
         if (!AppHost.Permissions.Has(PermCat.Accounting.TaxManage))
             throw new UnauthorizedAccessException("The current user is not authorized to manage tax rules.");
@@ -274,12 +295,15 @@ public static class TaxSvc
                         (company_code, country_code, tax_code, tax_name, tax_type, tax_treatment,
                          rate, calculation_mode, is_compound, is_recoverable, output_account_code,
                          input_account_code, effective_from, effective_to, is_default, is_active,
-                         created_by, source_url, source_reference, verified_on, data_status)
+                         created_by, source_url, source_reference, verified_on, data_status,
+                         is_withholding, withholding_account_code, withholding_threshold_amount,
+                         withholding_threshold_mode)
                     VALUES
                         ($company, $country, $taxCode, $taxName, $taxType, $treatment,
                          $rate, $calculationMode, $isCompound, $isRecoverable, $outputAccount,
                          $inputAccount, {dateExpression}, {endExpression}, $isDefault, {activeValue},
-                         $createdBy, $sourceUrl, $sourceReference, NULL, 'USER_CONFIGURED')
+                         $createdBy, $sourceUrl, $sourceReference, NULL, 'USER_CONFIGURED',
+                         $isWithholding, $withholdingAccount, $withholdingThreshold, $withholdingMode)
                     ON CONFLICT(company_code, tax_code, effective_from) DO UPDATE SET
                         country_code=excluded.country_code,
                         tax_name=excluded.tax_name,
@@ -297,6 +321,10 @@ public static class TaxSvc
                         created_by=excluded.created_by,
                         source_url=CASE WHEN excluded.source_url='' THEN company_tax_rules.source_url ELSE excluded.source_url END,
                         source_reference=CASE WHEN excluded.source_reference='' THEN company_tax_rules.source_reference ELSE excluded.source_reference END,
+                        is_withholding=excluded.is_withholding,
+                        withholding_account_code=excluded.withholding_account_code,
+                        withholding_threshold_amount=excluded.withholding_threshold_amount,
+                        withholding_threshold_mode=excluded.withholding_threshold_mode,
                         data_status='USER_CONFIGURED';
                     """;
                 Add(save, "$company", companyCode);
@@ -318,6 +346,10 @@ public static class TaxSvc
                 Add(save, "$createdBy", Environment.UserName);
                 Add(save, "$sourceUrl", rule.SourceUrl ?? string.Empty);
                 Add(save, "$sourceReference", rule.SourceReference ?? string.Empty);
+                Add(save, "$isWithholding", rule.IsWithholding);
+                Add(save, "$withholdingAccount", withholdingAccount);
+                Add(save, "$withholdingThreshold", (object?)rule.WithholdingThresholdAmount ?? DBNull.Value);
+                Add(save, "$withholdingMode", string.IsNullOrWhiteSpace(thresholdMode) ? "PerDocument" : thresholdMode);
                 save.ExecuteNonQuery();
             }
 
@@ -392,7 +424,9 @@ public static class TaxSvc
                    COALESCE(output_account_code, ''), COALESCE(input_account_code, ''),
                    effective_from, effective_to, is_default, is_active,
                    COALESCE(data_status, 'USER_CONFIGURED'),
-                   COALESCE(source_url, ''), COALESCE(source_reference, '')
+                   COALESCE(source_url, ''), COALESCE(source_reference, ''),
+                   COALESCE(is_withholding, 0), COALESCE(withholding_account_code, ''),
+                   withholding_threshold_amount, COALESCE(withholding_threshold_mode, 'PerDocument')
             FROM company_tax_rules
             WHERE company_code=$company
               AND country_code=(SELECT country_code FROM company_tax_settings WHERE company_code=$company LIMIT 1)
@@ -423,7 +457,11 @@ public static class TaxSvc
                 ToBoolean(reader.GetValue(13)),
                 Convert.ToString(reader.GetValue(14), CultureInfo.InvariantCulture) ?? "USER_CONFIGURED",
                 Convert.ToString(reader.GetValue(15), CultureInfo.InvariantCulture) ?? string.Empty,
-                Convert.ToString(reader.GetValue(16), CultureInfo.InvariantCulture) ?? string.Empty));
+                Convert.ToString(reader.GetValue(16), CultureInfo.InvariantCulture) ?? string.Empty,
+                ToBoolean(reader.GetValue(17)),
+                Convert.ToString(reader.GetValue(18), CultureInfo.InvariantCulture) ?? string.Empty,
+                reader.IsDBNull(19) ? (decimal?)null : Convert.ToDecimal(reader.GetValue(19), CultureInfo.InvariantCulture),
+                Convert.ToString(reader.GetValue(20), CultureInfo.InvariantCulture) ?? "PerDocument"));
         }
         return list.AsReadOnly();
     }
@@ -455,6 +493,7 @@ public static class TaxSvc
                   AND r.country_code = s.country_code
                   AND s.tax_enabled = {activeValue}
                   AND r.is_active = {activeValue}
+                  AND COALESCE(r.is_withholding, 0) = 0
                   AND COALESCE(r.data_status, 'USER_CONFIGURED') IN ('USER_CONFIGURED', 'VERIFIED', 'APPROVED')
                   AND r.effective_from <= {asOfExpression}
                   AND (r.effective_to IS NULL OR r.effective_to >= {asOfExpression})
@@ -712,6 +751,7 @@ public static class TaxSvc
             WHERE r.company_code = $company
               AND r.is_active = {activeValue}
               AND r.is_default = {activeValue}
+              AND COALESCE(r.is_withholding, 0) = 0
               AND s.tax_enabled = {activeValue}
               AND r.country_code = s.country_code
               AND COALESCE(r.data_status, 'USER_CONFIGURED') IN ('USER_CONFIGURED', 'VERIFIED', 'APPROVED')

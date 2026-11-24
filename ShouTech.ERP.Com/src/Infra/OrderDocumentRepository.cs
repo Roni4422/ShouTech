@@ -2134,6 +2134,26 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
             var invoiceId = await InsertDocumentAsync(connection, transaction, side, invoiceDraft, CommercialDocumentStatus.Posted, userId, cancellationToken).ConfigureAwait(false);
 
+            ComputeTotals(invoiceLines, out var invoiceSubtotal, out var invoiceTax, out var grandTotal);
+
+            // Withholding tax (W1, migration 099): same shared evaluator
+            // as the manual path, on the VAT-excluding base (the lines
+            // subtotal). Determination here is supplier default ->
+            // company default withholding rule (chain invoices carry no
+            // invoice-level selection; the PO's supplier governs).
+            var withholding = WithholdingTax.None;
+            if (side == CommercialDocSide.Purchase)
+            {
+                var companyCodeForWithholding = await PartyLedger.ResolveCompanyCodeAsync(
+                    connection, transaction, _provider, order.CompanyId.ToString("D"), cancellationToken).ConfigureAwait(false);
+                withholding = WithholdingTax.Evaluate(
+                    connection, transaction, _provider, companyCodeForWithholding, order.CompanyId,
+                    order.PartyId, invoiceDate, invoiceSubtotal, explicitCode: null, excludeDocId: invoiceId);
+                if (withholding.Amount > grandTotal)
+                    throw new AppError(ErrorCodes.WithholdingExceedsPayable,
+                        $"Withholding {withholding.Amount} on invoice '{invoiceDocNo.Trim()}' exceeds the amount payable to the supplier.", invoiceDocNo.Trim());
+            }
+
             // Step 7 (J-5): resolve the order's effective rate ONCE
             // through FxRates (document rate, else master, else
             // ACC-5015); guard + ledger consume BASE amounts at it, and
@@ -2212,7 +2232,9 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 invoiceKind, invoiceId, invoiceDocNo.Trim(),
                 invoiceDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 side == CommercialDocSide.Sales ? grandTotal : 0m,
-                side == CommercialDocSide.Purchase ? grandTotal : 0m,
+                // Withholding (W1): the supplier's ledger balance is NET
+                // (gross − withheld), exactly like the manual path.
+                side == CommercialDocSide.Purchase ? grandTotal - withholding.Amount : 0m,
                 order.CurrencyCode,
                 $"Invoice {invoiceDocNo.Trim()} from order {order.DocNo}",
                 exchangeRate: fx.Rate);
@@ -2298,6 +2320,14 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                         glLines.Add(new GlLineRequest(GlAccounts.PurchasePriceVariance, 0m, -purchaseVariance, order.CostCenter));
                     if (splitTax && chainRecoverableTax > 0m) glLines.Add(new GlLineRequest(GlAccounts.InputVat, chainRecoverableTax, 0m));
                     glLines.Add(new GlLineRequest(GlAccounts.Payable, 0m, grandTotal));
+                    // Withholding (W1): AP credited GROSS above; the
+                    // deduction leg moves the withheld part to the
+                    // withholding payable account (net AP balance).
+                    if (withholding is { Amount: > 0m } wht && wht.AccountCode is not null)
+                    {
+                        glLines.Add(new GlLineRequest(GlAccounts.Payable, wht.Amount, 0m));
+                        glLines.Add(new GlLineRequest(wht.AccountCode, 0m, wht.Amount));
+                    }
                 }
                 GlPosting.PostInTransaction(connection, transaction, _provider,
                     new GlDocumentRequest(order.CompanyId, invoiceDate,
@@ -2313,6 +2343,18 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 // order's stored per_billed refreshes in this transaction.
                 await RecalculateStoredProgressInTransactionAsync(
                     connection, transaction, orderDocId, cancellationToken).ConfigureAwait(false);
+            if (side == CommercialDocSide.Purchase && withholding.Evaluated)
+            {
+                // Withholding (W1): persist the outcome on the invoice
+                // header and register it in tax_transactions, in this
+                // same transaction (identical to the manual path).
+                WithholdingTax.PersistOutcome(connection, transaction, _provider, invoiceId, withholding);
+                WithholdingTax.WriteRegisterRow(
+                    connection, transaction, _provider, stockCompanyCode, withholding.CountryCode,
+                    CommercialDocKinds.PurchaseInvoice, invoiceId, invoiceDocNo.Trim(), withholding,
+                    order.CurrencyCode, fx.Rate, invoiceDocNo.Trim(), userId, invoiceDate);
+            }
+
             if (side == CommercialDocSide.Purchase)
             {
                 // P5: maintain the PO's stored per_billed in this txn.

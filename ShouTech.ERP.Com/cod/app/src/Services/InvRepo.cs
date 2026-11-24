@@ -941,7 +941,42 @@ public static class InvRepo
         // returned by the posting engine. Kinds with no GL effect
         // (quotation, opening stock) build no lines and keep an empty
         // journal number.
-        var glLines = effects.Gl ? BuildGlLines(connection, tx, doc, fx.Rate) : new List<ShouTech.Domain.Entities.GlLineRequest>();
+        // Withholding tax (W1, migration 099): evaluated ONCE here, on
+        // the VAT-excluding base (stored grand total − stored tax), so
+        // the GL legs, the party ledger and the tax register all carry
+        // the same figure. A purchase return that reverses a withheld
+        // invoice mirrors the ORIGINAL's stored withholding exactly.
+        var withholding = ShouTech.Infrastructure.WithholdingTax.None;
+        (decimal Amount, string? Account, string? Code, decimal Rate, decimal Base) reversalWithholding = (0m, null, null, 0m, 0m);
+        if (kind == InvDocKind.PurchaseInvoice)
+        {
+            var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+            string? selection = null;
+            if (ShouTech.Infrastructure.PartyLedger.ColumnExists(connection, tx, provider, "purchase_documents", "withholding_tax_code"))
+            {
+                using var sel = connection.CreateCommand();
+                sel.Transaction = tx;
+                sel.CommandText = "SELECT withholding_tax_code FROM purchase_documents WHERE doc_id=$id;";
+                Add(sel, "$id", docId);
+                var selValue = sel.ExecuteScalar();
+                selection = selValue is null or DBNull ? null : Convert.ToString(selValue, CultureInfo.InvariantCulture);
+            }
+            withholding = ShouTech.Infrastructure.WithholdingTax.Evaluate(
+                connection, tx, provider, Company, ResolveCompanyGuid(connection, tx),
+                doc.PartyId, DateOnly.FromDateTime(doc.DocDate),
+                doc.PostingTotal - doc.PostingTaxAmount, selection, excludeDocId: docId);
+            if (withholding.Amount > doc.PostingTotal)
+                throw new AppError(ErrorCodes.WithholdingExceedsPayable,
+                    $"Withholding {withholding.Amount} on invoice '{doc.DocNo}' exceeds the amount payable to the supplier.", doc.DocNo);
+        }
+        else if (kind == InvDocKind.PurchaseReturn && doc.OriginalDocId is long withheldOriginalId)
+        {
+            var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+            reversalWithholding = ShouTech.Infrastructure.WithholdingTax.ReadStored(
+                connection, tx, provider, withheldOriginalId);
+        }
+
+        var glLines = effects.Gl ? BuildGlLines(connection, tx, doc, fx.Rate, withholding, reversalWithholding) : new List<ShouTech.Domain.Entities.GlLineRequest>();
         string journalNo = string.Empty;
         if (glLines.Count > 0)
         {
@@ -966,6 +1001,40 @@ public static class InvRepo
         // Tax register rows are written in the same transaction as the
         // journal and document status. A failure rolls back the entire post.
         WriteTaxTransactions(connection, tx, doc, journalNo, userId, fx.Rate);
+
+        // Withholding (W1): persist the evaluated outcome on the header
+        // and register it in tax_transactions (line_no 0, WITHHOLDING) —
+        // including a below-threshold evaluation with amount 0. A return
+        // reversing a withheld invoice writes the NEGATIVE mirror row
+        // under its own document; the original rows stay immutable.
+        if (withholding.Evaluated)
+        {
+            var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+            ShouTech.Infrastructure.WithholdingTax.PersistOutcome(connection, tx, provider, docId, withholding);
+            ShouTech.Infrastructure.WithholdingTax.WriteRegisterRow(
+                connection, tx, provider, Company, withholding.CountryCode,
+                doc.KindCode, docId, doc.DocNo ?? string.Empty, withholding, doc.CurrencyCode, fx.Rate,
+                journalNo, userId, DateOnly.FromDateTime(doc.DocDate));
+        }
+        else if (reversalWithholding.Amount > 0m && reversalWithholding.Code is not null)
+        {
+            var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+            string mirrorCountry;
+            using (var settings = connection.CreateCommand())
+            {
+                settings.Transaction = tx;
+                settings.CommandText = "SELECT country_code FROM company_tax_settings WHERE company_code=$company LIMIT 1;";
+                Add(settings, "$company", Company);
+                mirrorCountry = Convert.ToString(settings.ExecuteScalar(), CultureInfo.InvariantCulture) ?? string.Empty;
+            }
+            var mirror = new ShouTech.Infrastructure.WithholdingTax.Outcome(
+                true, reversalWithholding.Code, reversalWithholding.Rate, reversalWithholding.Base,
+                reversalWithholding.Base, reversalWithholding.Amount, reversalWithholding.Account, mirrorCountry);
+            ShouTech.Infrastructure.WithholdingTax.WriteRegisterRow(
+                connection, tx, provider, Company, mirrorCountry,
+                doc.KindCode, docId, doc.DocNo ?? string.Empty, mirror, doc.CurrencyCode, fx.Rate,
+                journalNo, userId, DateOnly.FromDateTime(doc.DocDate), sign: -1);
+        }
 
         using (var upd = connection.CreateCommand())
         {
@@ -1070,6 +1139,18 @@ public static class InvRepo
                 FxRates.ToBase(exposureIncrease, fx.Rate), "$",
                 creditOverride is null ? null : creditOverride with { DocKind = doc.KindCode, DocNo = doc.DocNo });
 
+            // Withholding (W1): the supplier's ledger balance is NET —
+            // a purchase invoice credits (gross − withheld) because the
+            // withheld part is owed to the tax authority, not the
+            // supplier; a return reversing a withheld invoice debits the
+            // same net figure, restoring the balance exactly. The
+            // credit guard above still sees the GROSS exposure (the
+            // total liability the invoice creates across AP + WHT).
+            var ledgerDebit = kind == InvDocKind.PurchaseReturn && reversalWithholding.Amount > 0m
+                ? debit - reversalWithholding.Amount : debit;
+            var ledgerCredit = kind == InvDocKind.PurchaseInvoice && withholding.Amount > 0m
+                ? credit - withholding.Amount : credit;
+
             // Step 7: the ledger row carries its base amounts alongside
             // the transaction amounts (migration 062), at the same
             // effective rate the GL used.
@@ -1116,14 +1197,14 @@ public static class InvRepo
             Add(led, "$did", docId);
             Add(led, "$dno", doc.DocNo);
             Add(led, "$date", doc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-            Add(led, "$debit", debit);
-            Add(led, "$credit", credit);
+            Add(led, "$debit", ledgerDebit);
+            Add(led, "$credit", ledgerCredit);
             Add(led, "$cur", doc.CurrencyCode);
             Add(led, "$note", "Auto post");
             if (ledgerHasBase)
             {
-                Add(led, "$baseDebit", FxRates.ToBase(debit, fx.Rate));
-                Add(led, "$baseCredit", FxRates.ToBase(credit, fx.Rate));
+                Add(led, "$baseDebit", FxRates.ToBase(ledgerDebit, fx.Rate));
+                Add(led, "$baseCredit", FxRates.ToBase(ledgerCredit, fx.Rate));
                 Add(led, "$rate", fx.Rate);
             }
             led.ExecuteNonQuery();
@@ -1141,7 +1222,11 @@ public static class InvRepo
             // Returns are not payments and never take this path.
             if (effects.Settlement && doc.PaidAmount > 0m && kind is InvDocKind.SalesInvoice or InvDocKind.PurchaseInvoice or InvDocKind.PosSale)
             {
-                var settled = Math.Min(doc.PaidAmount, doc.PostingTotal);
+                // Withholding (W1): money collected at posting can only
+                // settle the NET payable — the withheld part is never
+                // payable to the supplier.
+                var settled = Math.Min(doc.PaidAmount,
+                    kind == InvDocKind.PurchaseInvoice ? doc.PostingTotal - withholding.Amount : doc.PostingTotal);
                 if (settled > 0m)
                 {
                     var (payDebit, payCredit) = PartyLedger.SettlementSides(partyKind, settled);
@@ -2968,7 +3053,9 @@ public static class InvRepo
         return Convert.ToInt32(command.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture) == 1;
     }
 
-    private static List<ShouTech.Domain.Entities.GlLineRequest> BuildGlLines(DbConnection connection, DbTransaction tx, InvDoc doc, decimal effectiveRate = 1m)
+    private static List<ShouTech.Domain.Entities.GlLineRequest> BuildGlLines(DbConnection connection, DbTransaction tx, InvDoc doc, decimal effectiveRate = 1m,
+        ShouTech.Infrastructure.WithholdingTax.Outcome? withholding = null,
+        (decimal Amount, string? Account, string? Code, decimal Rate, decimal Base) reversalWithholding = default)
     {
         var lines = new List<ShouTech.Domain.Entities.GlLineRequest>();
         if (doc.Kind is InvDocKind.Quotation or InvDocKind.StockTransfer or InvDocKind.OpeningStock or InvDocKind.InventoryCount)
@@ -3473,6 +3560,15 @@ public static class InvRepo
                 var paid = Math.Min(Math.Max(doc.PaidAmount, 0m), grand);
                 Add(settleAccount, 0, paid);
                 Add(GlAccounts.Payable, 0, grand - paid);
+                // Withholding (W1): AP was credited GROSS above; the
+                // deduction leg moves the withheld part out of AP into
+                // the withholding payable account, so the AP balance is
+                // NET while the gross credit stays visible in the entry.
+                if (withholding is { Amount: > 0m } wht && wht.AccountCode is not null)
+                {
+                    Add(GlAccounts.Payable, wht.Amount, 0);
+                    Add(wht.AccountCode, 0, wht.Amount);
+                }
                 break;
             }
             case InvDocKind.PurchaseReturn:
@@ -3496,6 +3592,17 @@ public static class InvRepo
                     Add(purchaseAccount, 0, leg[i], cc);
                 }
                 if (splitTax) foreach (var taxGroup in taxAccountGroups) Add(taxGroup.Account, 0, taxGroup.Amount);
+                // Withholding mirror (W1): a return reversing a withheld
+                // invoice debits the withholding payable back and credits
+                // AP for the withheld part, exactly mirroring the
+                // original deduction leg (the Dr AP grand above already
+                // carries the gross, so AP nets to zero with the
+                // original's net balance).
+                if (reversalWithholding.Amount > 0m && reversalWithholding.Account is not null)
+                {
+                    Add(reversalWithholding.Account, reversalWithholding.Amount, 0);
+                    Add(GlAccounts.Payable, 0, reversalWithholding.Amount);
+                }
                 break;
             }
             case InvDocKind.StockIn:
