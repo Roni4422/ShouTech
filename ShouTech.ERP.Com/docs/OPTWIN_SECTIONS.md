@@ -23,7 +23,11 @@ Evidence: the owner's Phenix screenshots transcribed in
 `~/workspace/research_notes/phenix-tools-tab-inventory-20261124-1335/notes/options-sections-20261124.md`
 (19 rail categories photographed) plus the same file's bonus windows
 (permission templates, payment-method definitions, POS-definition
-«قائمة المهام» tab). Sections the owner has **not** photographed —
+«قائمة المهام» tab). Owner-authorized web/GitHub research folded in
+2026-11-24 19:55: `notes/tools-window-web-research-20261124.md`
+(Phenix functional depth — the automation family, G11) and
+`notes/other-programs-windows-research-20261124.md` (cross-program
+shortlist — the scope-split checks in §1.1 and the §5 corroboration). Sections the owner has **not** photographed —
 الخيارات العامة، الحسابات، إضافي الفواتير، النسخ الاحتياطي — are
 marked **awaiting owner evidence** throughout; nothing is guessed
 into them, and our existing Backup section stays exactly as built
@@ -79,6 +83,25 @@ Restaurant / Tables (not in the photographed rail; recorded absent
 in SVC1 — no restaurant module exists) · Accounts (W) ·
 Invoice extras (W) · General (W).
 
+### 1.1 Cross-program design checks (research shortlist, applied)
+
+- **Tally's F11/F12 split** — capability switches per company vs
+  behaviour/display configuration. Our placement rule follows it:
+  capability switches live with their subsystem (tax in
+  `company_tax_settings` and its surface, POS capability in
+  `pos_settings`), while OptWin holds behaviour/display
+  configuration plus the company behaviour that has no other home.
+  This is why §3.7 builds no "Advanced" miscellany page.
+- **QuickBooks' My Preferences vs Company Preferences** — every
+  category declares its scope. Our two stores already encode the
+  split (UsrPref = personal, company DB = company); the missing
+  piece is *visibility*: from Landing 1 on, each OptWin section
+  header carries its scope ("Personal" / "Company"), so the user
+  always knows whose behaviour they are changing.
+- **SAP Business One's single Administration module** — one home
+  for administration. Already our model (one OptWin surface; the
+  Tools-menu siblings live in the shell, not in competing windows).
+
 ## 2. HEADLINE — program-level gaps the evidence exposes
 
 These are Phenix **controls whose governed subsystem does not exist
@@ -99,6 +122,7 @@ is built, its Options section arrives with it.
 | G8 | Per-user guardrails (§3.8: discount caps, post-print edit lock, 24-hour edit window, hide others' invoices, POS closing level) | A **per-user policy store + multi-window enforcement**. The users table carries no policy columns and no per-user settings window exists to extend. | RBAC (346 codes, roles/user_roles/role_permissions since mig 001) + POS.DISCOUNT.OVERRIDE precedent. Named follow-up landing, §3.8. |
 | G9 | Permission templates (§5) | **Template objects** in RBAC (named bundles applied to roles/users). | Full substrate: permissions catalog + roles; `SYS.PERMISSION_TEMPLATES.MANAGE` code already reserved. Design note §5; build belongs to the commercial phase. |
 | G10 | Export options (audited-only export, lock-after-export, per-type selective export) | **Selective per-type export** in DatWin (today: full-dataset exchange). | DatWin + STEI encrypted datasets (mig-era, built). Backlog with this evidence attached. |
+| G11 | **The automation family**: scheduled automatic backup (set times; local / external-media / shared-cloud destinations) + automated report dispatch (reports emailed automatically daily / weekly / monthly) + the task-scheduling window (جدولة المهام) behind both | A **job scheduler** — jobs, schedules and run history as program data. Phenix treats backup + report dispatch as ONE family on one scheduling substrate (official agent prose, research file §"خيارات التقارير الآلية"). We have neither a scheduler nor job records; report dispatch additionally needs G2's email transport. | Manual backup (BkpWin) + the dashboard/OptWin stale-backup warning (already adopted from this same evidence). Registered in the REDUCE_PLAN commercial backlog. **OptWin consequence, decided now:** when the scheduler lands, ONE "Automation" section governs both families — the controls are not scattered across Backup and a reports page. Build model (research shortlist): Frappe's Scheduled Job Type + Job Log + Error Log — jobs/schedules/history as user-visible, auditable records. |
 
 ## 3. Per-section study
 
@@ -442,7 +466,10 @@ not photographed; **nothing guessed**. Our General and Backup
 sections remain exactly as built in B2. (SVC1 recorded Accounts /
 Invoice-extras as absent-with-reason from *tutorial* evidence;
 the owner's screenshots supersede tutorials, so both revert to W
-until he photographs them.)
+until he photographs them.) The web research's backup material
+describes the Tools-menu backup *command* and its scheduling
+capability (vendor/agent prose), not the Options section's fields —
+it feeds gap **G11**, and does not lift the W on this section.
 
 ## 4. Bonus items
 
@@ -556,7 +583,10 @@ CANCEL ×4, REVERSE ×3, EXECUTE ×3, REPOST ×2, IMPORT ×2, …
 
 **Design ruling for the future build:** templates are *named,
 copyable bundles over the existing PermCat catalog* (never a
-second permission vocabulary); the matrix tabs are projections of
+second permission vocabulary) — the same pattern the cross-program
+research shortlist independently selects (ERPNext's **Role
+Profiles** = named bundles applied over its role matrix; research
+file §"Permissions/Roles"); the matrix tabs are projections of
 the catalog by family + action; PRINT and SET-ACCOUNT action
 families are minted first, since they are the two columns with no
 substrate; field-visibility (show fields) waits for the owner's
