@@ -60,8 +60,8 @@ indexed / total windows) is reported there.
 - ~~`Inventory.MaterialProfits` → ItemProfitWin~~ **R3 DONE — formally ADOPTED**: material profits ARE the item profitability report (same concept, same data); router comment now records the adoption.
 - ~~`Inventory.MaterialGroupMovementReport` → MatMoveWin~~ **R3 DONE — dedicated window BUILT**: GroupMoveWin (RptBase, ReportKey Inv.GroupMoves) over RptQuery.GroupMovesAsync — movement aggregated per material group + Ungrouped bucket; router now routes here.
 - ~~`Inventory.SalesReport` → SalListWin~~ **R3 DONE — formally ADOPTED**: the posted sales document register is the inventory sales report; deeper analytics live in the profitability reports.
-- `Inventory.EditMaterialSpecs` → DefManagerWin: generic definition editor (set: MaterialSpecs) — window is real and persists; per-set field completeness not yet audited
-- `Inventory.MaterialDiscounts` → DefManagerWin: generic definition editor (set: MaterialDiscounts) — window is real and persists; per-set field completeness not yet audited
+- `Inventory.EditMaterialSpecs` → DefManagerWin: generic definition editor (set: MaterialSpecs) — window is real and persists; per-set field completeness not yet audited **R4: field-complete per docs/R4_STUDY.md → (a).**
+- `Inventory.MaterialDiscounts` → DefManagerWin: generic definition editor (set: MaterialDiscounts) — window is real and persists; per-set field completeness not yet audited **R4: field-complete per docs/R4_STUDY.md → (a).**
 - ~~`Accounts.DailyReport` → JrnListWin~~ **R3 DONE — formally ADOPTED**: the daily report is the journal register scoped by its date filters (same ledger, same rows).
 - ~~`Accounts.AgingReceivables` → CustAgingWin~~ **R3 DONE — formally ADOPTED**: receivables aging IS customer aging.
 - `Bonds.DefineVoucherTypes` → DefManagerWin: generic definition editor (set: VoucherTypes) — window is real and persists; per-set field completeness not yet audited
@@ -71,14 +71,14 @@ indexed / total windows) is reported there.
 - `Invoices.DefineInvoices` → DefManagerWin: generic definition editor (set: InvoiceDefinitions) — window is real and persists; per-set field completeness not yet audited
 - `Invoices.CloseCash` → CloseCashWin: legacy window (standing flag: retirement is the owner's call)
 - `POS.DefinePOS` → DefManagerWin: generic definition editor (set: PosTerminals) — window is real and persists; per-set field completeness not yet audited
-- `POS.POSDiscounts` → DefManagerWin: generic definition editor (set: PosDiscounts) — window is real and persists; per-set field completeness not yet audited
+- `POS.POSDiscounts` → DefManagerWin: generic definition editor (set: PosDiscounts) — window is real and persists; per-set field completeness not yet audited **R4: field-complete per docs/R4_STUDY.md → (a).**
 - `POS.SyncPOS` → PosSyncWin: thin window (139 lines) — limited surface, completeness not proven
 - `Orders.DefineOrders` → DefManagerWin: generic definition editor (set: OrderDefinitions) — window is real and persists; per-set field completeness not yet audited
-- `Customers.CustomerPrices` → DefManagerWin: generic definition editor (set: CustomerPrices) — window is real and persists; per-set field completeness not yet audited
-- `Customers.CustomerDiscounts` → DefManagerWin: generic definition editor (set: CustomerDiscounts) — window is real and persists; per-set field completeness not yet audited
+- `Customers.CustomerPrices` → DefManagerWin: generic definition editor (set: CustomerPrices) — window is real and persists; per-set field completeness not yet audited **R4: field-complete per docs/R4_STUDY.md → (a).**
+- `Customers.CustomerDiscounts` → DefManagerWin: generic definition editor (set: CustomerDiscounts) — window is real and persists; per-set field completeness not yet audited **R4: field-complete per docs/R4_STUDY.md → (a).**
 - `Customers.Areas` → DefManagerWin: generic definition editor (set: Areas) — window is real and persists; per-set field completeness not yet audited
-- `Customers.AssignTargets` → DefManagerWin: generic definition editor (set: PartyTargets) — window is real and persists; per-set field completeness not yet audited
-- `SalesRep.AssignSalesRepTargets` → DefManagerWin: generic definition editor (set: RepTargets) — window is real and persists; per-set field completeness not yet audited
+- `Customers.AssignTargets` → DefManagerWin: generic definition editor (set: PartyTargets) — window is real and persists; per-set field completeness not yet audited **R4: field-complete per docs/R4_STUDY.md → (a).**
+- `SalesRep.AssignSalesRepTargets` → DefManagerWin: generic definition editor (set: RepTargets) — window is real and persists; per-set field completeness not yet audited **R4: field-complete per docs/R4_STUDY.md → (a).**
 - `SalesRep.HandheldDevices` → DefManagerWin: generic definition editor (set: Devices) — window is real and persists; per-set field completeness not yet audited
 - `SalesRep.DeviceRoutes` → DefManagerWin: generic definition editor (set: DeviceRoutes) — window is real and persists; per-set field completeness not yet audited
 - `Tools.ActivityLog` → ActivityLogWin: thin window (144 lines) — limited surface, completeness not proven
@@ -86,10 +86,10 @@ indexed / total windows) is reported there.
 - `OtherTools.Permissions` → PrmWin: thin window (83 lines) — limited surface, completeness not proven
 - `OtherTools.PermissionTemplates` → PrmWin: thin window (83 lines) — limited surface, completeness not proven
 - `OtherTools.CustomFields` → DefManagerWin: generic definition editor (set: CustomFields) — window is real and persists; per-set field completeness not yet audited
-- `OtherTools.UnitsOfMeasure` → DefManagerWin: generic definition editor (set: UnitsOfMeasure) — window is real and persists; per-set field completeness not yet audited
-- `OtherTools.PaymentMethods` → DefManagerWin: generic definition editor (set: PaymentMethods) — window is real and persists; per-set field completeness not yet audited
-- `OtherTools.MaterialSpecs` → DefManagerWin: generic definition editor (set: MaterialSpecs) — window is real and persists; per-set field completeness not yet audited
-- `OtherTools.DriverCard` → DefManagerWin: generic definition editor (set: Drivers) — window is real and persists; per-set field completeness not yet audited
+- `OtherTools.UnitsOfMeasure` → DefManagerWin: generic definition editor (set: UnitsOfMeasure) — window is real and persists; per-set field completeness not yet audited **R4: field-complete per docs/R4_STUDY.md → (a).**
+- `OtherTools.PaymentMethods` → DefManagerWin: generic definition editor (set: PaymentMethods) — window is real and persists; per-set field completeness not yet audited **R4: field-complete per docs/R4_STUDY.md → (a).**
+- `OtherTools.MaterialSpecs` → DefManagerWin: generic definition editor (set: MaterialSpecs) — window is real and persists; per-set field completeness not yet audited **R4: field-complete per docs/R4_STUDY.md → (a).**
+- `OtherTools.DriverCard` → DefManagerWin: generic definition editor (set: Drivers) — window is real and persists; per-set field completeness not yet audited **R4: field-complete per docs/R4_STUDY.md → (a).**
 - `OtherTools.DeliveryPrices` → DefManagerWin: generic definition editor (set: DeliveryPrices) — window is real and persists; per-set field completeness not yet audited
 - `View.PaymentMethods` → DefManagerWin: generic definition editor (set: PaymentMethods) — window is real and persists; per-set field completeness not yet audited
 - `Help.RenewLicense` → LicenseWin: thin window (148 lines) — limited surface, completeness not proven
@@ -132,8 +132,12 @@ indexed / total windows) is reported there.
   AgingReceivables — the mapped report is the requested report
   in substance), 1 dedicated window built (GroupMoveWin for
   MaterialGroupMovementReport). (b) count 34 → 29.
-- **R4 — definition sets (24)**: audit each DefSets set's fields
-  against its domain; complete the sets that are thin.
+- **R4 — definition sets (23 entries)**: DONE (2026-11-24) per
+  docs/R4_STUDY.md — registry matches schemas throughout; the
+  money-driving sets are complete and consumed (12 entries →
+  (a)); UnitsOfMeasure gained names (migration 121); 11 entries
+  stay (b) with named missing consumers (document-type engine,
+  delivery/handheld/platform consumers). (b) total 29 → 17.
 - **R5 — thin windows (6)**: PosSyncWin, ActivityLogWin, AddonsWin,
   PrmWin, LicenseWin — complete-pillars pass per window.
 - Comparisons for the remaining (a) windows are recorded
@@ -185,8 +189,8 @@ indexed / total windows) is reported there.
 | 39 | Inventory.EditSerialNumber | SerWin | RibbonNav | a | central ✓ | — | pending |  |
 | 40 | Inventory.BranchMaterials | BranchMatWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
 | 41 | Inventory.SalesReport | SalListWin | RibbonReportRouter (approximated) | a | App handler ✓ | ✓ | pending | R3: formally adopted (see the (b) list outcome) |
-| 42 | Inventory.EditMaterialSpecs | DefManagerWin | RibbonNav | b | central ✓ | ✓ | pending | generic definition editor (set: MaterialSpecs) — window is real and persists; per-set field completeness not yet audited |
-| 43 | Inventory.MaterialDiscounts | DefManagerWin | RibbonNav | b | central ✓ | ✓ | pending | generic definition editor (set: MaterialDiscounts) — window is real and persists; per-set field completeness not yet audited |
+| 42 | Inventory.EditMaterialSpecs | DefManagerWin | RibbonNav | a | central ✓ | ✓ | pending | generic definition editor (set: MaterialSpecs) — window is real and persists; per-set field completeness not yet audited |
+| 43 | Inventory.MaterialDiscounts | DefManagerWin | RibbonNav | a | central ✓ | ✓ | pending | generic definition editor (set: MaterialDiscounts) — window is real and persists; per-set field completeness not yet audited |
 | 44 | Accounts.ChartOfAccounts | CoaWin | MWin button special | a | central ✓ | — | in grid/directory program |  |
 | 45 | AccountCard | AccCard | MWin button special | a | central ✓ | — | in grid/directory program |  |
 | 46 | Accounts.CostCenter | CcListWin | RibbonNav | a | central ✓ | ✓ | pending |  |
@@ -270,7 +274,7 @@ indexed / total windows) is reported there.
 | 124 | POS.DefinePOS | DefManagerWin | RibbonNav | b | central ✓ | ✓ | pending | generic definition editor (set: PosTerminals) — window is real and persists; per-set field completeness not yet audited |
 | 125 | POS.POSCashReport | PosCashRptWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
 | 126 | POS.Performance | PosPerfRptWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
-| 127 | POS.POSDiscounts | DefManagerWin | RibbonNav | b | central ✓ | ✓ | pending | generic definition editor (set: PosDiscounts) — window is real and persists; per-set field completeness not yet audited |
+| 127 | POS.POSDiscounts | DefManagerWin | RibbonNav | a | central ✓ | ✓ | pending | generic definition editor (set: PosDiscounts) — window is real and persists; per-set field completeness not yet audited |
 | 128 | POS.SyncPOS | PosSyncWin | RibbonNav | b | central ✓ | ✓ | pending | thin window (139 lines) — limited surface, completeness not proven |
 | 129 | POS.AdjustPrice | PriceListWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
 | 130 | POS.AdjustQuantity | WhsWin | RibbonNav — stock-count/adjustment mode | a | central ✓ | ✓ | pending |  |
@@ -288,10 +292,10 @@ indexed / total windows) is reported there.
 | 142 | Orders.SearchOrders | DocSearchWin | RibbonNav | a | central ✓ | — | pending |  |
 | 143 | Orders.RecurringSchedules | RecurWin | RibbonNav | a | central ✓ | — | pending |  |
 | 144 | Customers.CustomerCard | CstCard | RptNav | a | central ✓ | — | pending |  |
-| 145 | Customers.CustomerPrices | DefManagerWin | RibbonNav | b | central ✓ | ✓ | pending | generic definition editor (set: CustomerPrices) — window is real and persists; per-set field completeness not yet audited |
-| 146 | Customers.CustomerDiscounts | DefManagerWin | RibbonNav | b | central ✓ | ✓ | pending | generic definition editor (set: CustomerDiscounts) — window is real and persists; per-set field completeness not yet audited |
+| 145 | Customers.CustomerPrices | DefManagerWin | RibbonNav | a | central ✓ | ✓ | pending | generic definition editor (set: CustomerPrices) — window is real and persists; per-set field completeness not yet audited |
+| 146 | Customers.CustomerDiscounts | DefManagerWin | RibbonNav | a | central ✓ | ✓ | pending | generic definition editor (set: CustomerDiscounts) — window is real and persists; per-set field completeness not yet audited |
 | 147 | Customers.Areas | DefManagerWin | RibbonNav | b | central ✓ | ✓ | pending | generic definition editor (set: Areas) — window is real and persists; per-set field completeness not yet audited |
-| 148 | Customers.AssignTargets | DefManagerWin | RibbonNav | b | central ✓ | ✓ | pending | generic definition editor (set: PartyTargets) — window is real and persists; per-set field completeness not yet audited |
+| 148 | Customers.AssignTargets | DefManagerWin | RibbonNav | a | central ✓ | ✓ | pending | generic definition editor (set: PartyTargets) — window is real and persists; per-set field completeness not yet audited |
 | 149 | Customers.TargetsReport | TargetsRptWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
 | 150 | Customers.SearchCustomers | PartySearchWin | RibbonNav | a | central ✓ | — | pending |  |
 | 151 | Customers.CustomerDue | CustomerDueWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
@@ -310,7 +314,7 @@ indexed / total windows) is reported there.
 | 164 | Customers.CustomerReports | CustBalWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
 | 165 | SalesRep.SalesRepCard | RepCard | RptNav | a | central ✓ | — | pending |  |
 | 166 | SalesRep.SalesRepGroups | GroupManagerWin | RibbonNav | a | central ✓ | — | pending |  |
-| 167 | SalesRep.AssignSalesRepTargets | DefManagerWin | RibbonNav | b | central ✓ | ✓ | pending | generic definition editor (set: RepTargets) — window is real and persists; per-set field completeness not yet audited |
+| 167 | SalesRep.AssignSalesRepTargets | DefManagerWin | RibbonNav | a | central ✓ | ✓ | pending | generic definition editor (set: RepTargets) — window is real and persists; per-set field completeness not yet audited |
 | 168 | SalesRep.SalesRepTargetsReport | TargetsRptWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
 | 169 | SalesRep.Commissions | CommWin | RibbonNav | a | central ✓ | — | pending |  |
 | 170 | SalesRep.Contracts | ContractWin | RibbonNav | a | central ✓ | — | pending |  |
@@ -382,10 +386,10 @@ indexed / total windows) is reported there.
 | 236 | OtherTools.PermissionTemplates | PrmWin | RibbonNav | b | App handler ✓ | — | pending | thin window (83 lines) — limited surface, completeness not proven |
 | 237 | OtherTools.CustomFields | DefManagerWin | RibbonNav | b | central ✓ | ✓ | pending | generic definition editor (set: CustomFields) — window is real and persists; per-set field completeness not yet audited |
 | 238 | RestoreCompany.Restore | BkpWin | MWin button special | a | App handler ✓ | — | pending |  |
-| 239 | OtherTools.UnitsOfMeasure | DefManagerWin | RibbonNav | b | central ✓ | ✓ | pending | generic definition editor (set: UnitsOfMeasure) — window is real and persists; per-set field completeness not yet audited |
-| 240 | OtherTools.PaymentMethods | DefManagerWin | RibbonNav | b | central ✓ | ✓ | pending | generic definition editor (set: PaymentMethods) — window is real and persists; per-set field completeness not yet audited |
-| 241 | OtherTools.MaterialSpecs | DefManagerWin | RibbonNav | b | central ✓ | ✓ | pending | generic definition editor (set: MaterialSpecs) — window is real and persists; per-set field completeness not yet audited |
-| 242 | OtherTools.DriverCard | DefManagerWin | RibbonNav | b | central ✓ | ✓ | pending | generic definition editor (set: Drivers) — window is real and persists; per-set field completeness not yet audited |
+| 239 | OtherTools.UnitsOfMeasure | DefManagerWin | RibbonNav | a | central ✓ | ✓ | pending | generic definition editor (set: UnitsOfMeasure) — window is real and persists; per-set field completeness not yet audited |
+| 240 | OtherTools.PaymentMethods | DefManagerWin | RibbonNav | a | central ✓ | ✓ | pending | generic definition editor (set: PaymentMethods) — window is real and persists; per-set field completeness not yet audited |
+| 241 | OtherTools.MaterialSpecs | DefManagerWin | RibbonNav | a | central ✓ | ✓ | pending | generic definition editor (set: MaterialSpecs) — window is real and persists; per-set field completeness not yet audited |
+| 242 | OtherTools.DriverCard | DefManagerWin | RibbonNav | a | central ✓ | ✓ | pending | generic definition editor (set: Drivers) — window is real and persists; per-set field completeness not yet audited |
 | 243 | OtherTools.DeliveryPrices | DefManagerWin | RibbonNav | b | central ✓ | ✓ | pending | generic definition editor (set: DeliveryPrices) — window is real and persists; per-set field completeness not yet audited |
 | 244 | OtherTools.PickupRequests | DeliveryDeskWin | RibbonNav | a | central ✓ | ✓ | pending |  |
 | 245 | OtherTools.SearchDelivery | DeliveryDeskWin | RibbonNav | a | central ✓ | ✓ | pending |  |
@@ -395,7 +399,7 @@ indexed / total windows) is reported there.
 | 249 | View.ManufacturingTree | MfgListWin | RibbonNav | a | central ✓ | ✓ | pending |  |
 | 250 | View.CostCenterTree | CcListWin | RibbonNav | a | central ✓ | ✓ | pending |  |
 | 251 | View.InfoWindow | — | command — about dialog | cmd | central ✓ | n/a | pending | shell command, works by design (not a window) |
-| 252 | View.PaymentMethods | DefManagerWin | RibbonNav | b | central ✓ | ✓ | pending | generic definition editor (set: PaymentMethods) — window is real and persists; per-set field completeness not yet audited |
+| 252 | View.PaymentMethods | DefManagerWin | RibbonNav | a | central ✓ | ✓ | pending | generic definition editor (set: PaymentMethods) — window is real and persists; per-set field completeness not yet audited |
 | 253 | View.CompanyInfo | ComWin | RibbonNav | a | App handler ✓ | — | pending |  |
 | 254 | View.ExportData | DatWin | RibbonNav | a | central ✓ | — | pending |  |
 | 255 | Exit.ScreenSaver | — | command — lock workstation | cmd | central ✓ | n/a | pending | shell command, works by design (not a window) |

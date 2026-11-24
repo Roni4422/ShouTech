@@ -271,8 +271,9 @@ public static class DefSets
             OrderByColumn = "entity_kind"
         },
         // Existing table (migration 001): uom_id INTEGER PK, company_id, uom_code,
-        // is_active, is_deleted — no name columns exist, so the set exposes the
-        // code only. PostgreSQL stores company_id as uuid there (legacy schema);
+        // is_active, is_deleted. Migration 121 added name_en/name_ar (R4):
+        // units carry human names like every benchmark's, not codes alone.
+        // PostgreSQL stores company_id as uuid there (legacy schema);
         // the repository binds the company string as-is, matching SQLite.
         [UnitsOfMeasure] = new DefSet
         {
@@ -280,7 +281,7 @@ public static class DefSets
             Table = "units_of_measure",
             IdColumn = "uom_id",
             IdIsText = false,
-            Columns = new[] { T("uom_code", required: true) },
+            Columns = new[] { T("uom_code", required: true), T("name_en"), T("name_ar") },
             UniqueKeys = new[] { "uom_code" },
             PermissionView = "SYS.SETTINGS.VIEW",
             PermissionManage = "SYS.SETTINGS.UPDATE",
