@@ -726,5 +726,29 @@
   "ACC-5020": {
     "name": "Party blacklisted",
     "message": "The party is blacklisted and cannot be used on new documents."
+  },
+  "SAL-7017": {
+    "name": "Document revision conflict",
+    "message": "The document was changed by a newer revision; reload it before saving."
+  },
+  "SAL-7018": {
+    "name": "Price below minimum",
+    "message": "The selling price is below the material's minimum price and no authorized override was supplied."
+  },
+  "SAL-7019": {
+    "name": "Margin below minimum",
+    "message": "The selling price yields a margin below the material's target margin and no authorized override was supplied."
+  },
+  "SAL-7020": {
+    "name": "Discount exceeds limit",
+    "message": "The discount exceeds the material's maximum discount percentage and no authorized override was supplied."
+  },
+  "SAL-7021": {
+    "name": "Return quantity exceeded",
+    "message": "The returned quantity exceeds the remaining returnable quantity on the source document line."
+  },
+  "SAL-7022": {
+    "name": "Return inspection required",
+    "message": "This return requires an inspection decision before it can be posted."
   }
 }

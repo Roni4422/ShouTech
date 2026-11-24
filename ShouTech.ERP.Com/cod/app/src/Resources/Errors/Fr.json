@@ -726,5 +726,29 @@
   "ACC-5020": {
     "name": "Party blacklisted",
     "message": "Le tiers est sur liste noire et ne peut pas être utilisé sur de nouveaux documents."
+  },
+  "SAL-7017": {
+    "name": "Document revision conflict",
+    "message": "Le document a été modifié par une révision plus récente ; rechargez-le avant d'enregistrer."
+  },
+  "SAL-7018": {
+    "name": "Price below minimum",
+    "message": "Le prix de vente est inférieur au prix minimum de l'article et aucun dépassement autorisé n'a été fourni."
+  },
+  "SAL-7019": {
+    "name": "Margin below minimum",
+    "message": "Le prix de vente donne une marge inférieure à la marge cible de l'article et aucun dépassement autorisé n'a été fourni."
+  },
+  "SAL-7020": {
+    "name": "Discount exceeds limit",
+    "message": "La remise dépasse le pourcentage de remise maximum de l'article et aucun dépassement autorisé n'a été fourni."
+  },
+  "SAL-7021": {
+    "name": "Return quantity exceeded",
+    "message": "La quantité retournée dépasse la quantité retournable restante sur la ligne du document source."
+  },
+  "SAL-7022": {
+    "name": "Return inspection required",
+    "message": "Ce retour nécessite une décision d'inspection avant de pouvoir être comptabilisé."
   }
 }

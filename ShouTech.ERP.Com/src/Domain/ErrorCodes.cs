@@ -199,4 +199,10 @@ public static class ErrorCodes
     public const string CommissionSettlementInvalid = "SAL-7014";
     public const string ContractQuantityExceeded = "SAL-7015";
     public const string ApprovalStateInvalid = "SAL-7016";
+    public const string DocumentRevisionConflict = "SAL-7017";
+    public const string PriceBelowMinimum = "SAL-7018";
+    public const string MarginBelowMinimum = "SAL-7019";
+    public const string DiscountExceedsLimit = "SAL-7020";
+    public const string ReturnQuantityExceeded = "SAL-7021";
+    public const string ReturnInspectionRequired = "SAL-7022";
 }

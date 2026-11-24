@@ -726,5 +726,29 @@
   "ACC-5020": {
     "name": "Party blacklisted",
     "message": "Taraf kara listededir ve yeni belgelerde kullanılamaz."
+  },
+  "SAL-7017": {
+    "name": "Document revision conflict",
+    "message": "Belge daha yeni bir revizyonla değiştirildi; kaydetmeden önce yeniden yükleyin."
+  },
+  "SAL-7018": {
+    "name": "Price below minimum",
+    "message": "Satış fiyatı malzemenin minimum fiyatının altında ve yetkili bir aşım sağlanmadı."
+  },
+  "SAL-7019": {
+    "name": "Margin below minimum",
+    "message": "Satış fiyatı, malzemenin hedef marjının altında bir marj veriyor ve yetkili bir aşım sağlanmadı."
+  },
+  "SAL-7020": {
+    "name": "Discount exceeds limit",
+    "message": "İndirim, malzemenin maksimum indirim yüzdesini aşıyor ve yetkili bir aşım sağlanmadı."
+  },
+  "SAL-7021": {
+    "name": "Return quantity exceeded",
+    "message": "İade edilen miktar, kaynak belge satırındaki kalan iade edilebilir miktarı aşıyor."
+  },
+  "SAL-7022": {
+    "name": "Return inspection required",
+    "message": "Bu iadenin muhasebeleştirilebilmesi için bir inceleme kararı gereklidir."
   }
 }
