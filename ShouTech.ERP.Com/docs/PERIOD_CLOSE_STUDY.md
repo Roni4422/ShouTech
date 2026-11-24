@@ -129,3 +129,52 @@ parity with RolloverWin.
 `tools/PeriodHarness` (InfoHarness pattern) on seeded test companies —
 see its PASS/FAIL list in the completion report. The first live close
 on a real company and the Windows click-through remain the owner's run.
+
+## 7. Owner evidence addendum — the fiscal-period control (Phenix, advanced options)
+
+Owner-supplied (2026-11-24): in Phenix's Tools → Advanced Options there is a
+fiscal-period control — a **checkbox** that activates when the period ends;
+**deactivating** it keeps the program working by continuing into another
+financial period (**it adds another year**). Under the checkbox are **two
+fields: period start and period end**. Follow-up ruling: the checkbox is
+**checked by default** — period-end activation is ON out of the box, and a
+fresh company starts with it on.
+
+Functional scope adopted (IP rule — our own form, no copied layout):
+
+- **One store, no parallel settings.** The period bounds already live in
+  `fiscal_years.start_date/end_date` (the 12 `fiscal_periods` derive from
+  them; journal entries attach to periods by date). The checkbox state joins
+  the same store: migration 127 adds `fiscal_years.period_end_activation`
+  (default ON in both dialects — every existing row and every newly created
+  year starts activated; the year creators insert without naming the
+  column, so the default applies).
+- **Surfaces (named consumers both ways).** (a) OptWin gains a company-scope
+  **Fiscal** section (same `BeginSection` idiom as Backup/Numbering): the
+  activation checkbox + the current (latest) fiscal year's start/end
+  fields, read from `fiscal_years` through the Operations layer.
+  (b) PeriodCloseWin reads the same rows — its periods grid is built from
+  them and it mirrors the activation state + bounds of the selected year.
+- **Deactivation = the audited roll-forward.** Unchecking the box is a
+  deliberate act: it asks for confirmation, requires
+  `ACC.FISCAL.ROLL_FORWARD` (RolloverWin's own permission — reconciled, not
+  duplicated) via `PermServ.Require`, then in ONE transaction flips the
+  latest year's flag OFF, creates the next fiscal year with its 12 OPEN
+  periods using the exact semantics of the existing
+  `CreateNextFiscalYearAsync` (day after the latest end, same length — the
+  path RolloverWin's "Create next year" button already owns), and writes a
+  `security_audit_log` row (`FISCAL_YEAR_ROLL_FORWARD`, actor + years).
+  The new year is created with activation ON (schema default), so the
+  control re-arms for the new period — matching "deactivate → the program
+  continues into another financial period".
+- **While active at period end**, the period is treated as ended per the
+  close semantics of §3: dates beyond the year's end have no open period,
+  so the posting resolver refuses them; PeriodCloseWin surfaces a
+  "period ended" status for an activated latest year whose end has passed.
+- **Bounds are display fields, not free edits.** In our schema the bounds
+  are structural (period rows and journal period assignments derive from
+  them); free-text editing would desync posted history. The sanctioned
+  mutation is the audited roll-forward above, which replaces the displayed
+  bounds with the next year's. This is the deliberate reconciliation of the
+  Phenix pattern with our schema, recorded here rather than shipping a
+  dangerous fake edit.
