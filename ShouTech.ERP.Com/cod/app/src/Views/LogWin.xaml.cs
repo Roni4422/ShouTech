@@ -132,6 +132,23 @@ namespace ShouTech.App.Views
 				// Failure to update company order must not block login.
 			}
 
+			// Licensing build: demo state is derived at login from
+			// signed artifacts only — first the local signed license
+			// (already evaluated by the splash/license step), then
+			// the cached signed verdict, applied BEFORE the shell
+			// opens. The check-in + daily-backup cycle then runs in
+			// the background (post-login, per study §6.3 — never in
+			// the startup critical path, never blocking the shell).
+			try
+			{
+				CheckInSvc.Shared.ApplyCachedVerdict();
+			}
+			catch (Exception exLic)
+			{
+				AppHost.Errors.Report(ErrorCodes.CheckInFailed, exLic, "LogWin.OnLoginSucceeded.Verdict");
+			}
+			_ = Task.Run(() => CheckInSvc.Shared.RunPostLoginCycleAsync());
+
 			WpfApp.Current.ShutdownMode = ShutdownMode.OnMainWindowClose;
 
 			if (AppState.InactiveMainWindow is MWin existingMain && existingMain.IsVisible)

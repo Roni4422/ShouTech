@@ -678,10 +678,7 @@ public sealed class LicenSvc : ILicenSvc
     // ========== SyncServ.cs ==========
 public sealed class SyncServ : ISyncServ, ISyncSvc
     {
-        private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
-
         private readonly ILogServ _logging;
-        private readonly IDevInfoSv _deviceInfo;
         private readonly string _queuePath;
         private readonly string _snapshotDir;
         private List<SyncQueueItem> _queue = new();
@@ -689,7 +686,10 @@ public sealed class SyncServ : ISyncServ, ISyncSvc
         public SyncServ(ILogServ logging, IDevInfoSv deviceInfo)
         {
             _logging = logging;
-            _deviceInfo = deviceInfo;
+            // deviceInfo was consumed only by the retired raw-file
+            // snapshot; the parameter stays for composition
+            // compatibility (AppHost + the second constructor below).
+            _ = deviceInfo;
 
             var root = AppPaths.Sync;
 
@@ -701,34 +701,23 @@ public sealed class SyncServ : ISyncServ, ISyncSvc
         public int PendingCount => _queue.Count;
         public IReadOnlyList<SyncQueueItem> PendingItems => _queue;
 
-        public async Task SnapshotLocalUserDataAsync()
+        // ── Licensing build: SyncServ governance ──────────────────
+        // The dormant sync path snapshotted RAW local files —
+        // cfg/user.dat, userprefs.json, cfg/license.local.json,
+        // cfg/device.json — and POSTed them UNAUTHENTICATED to any
+        // configured server URL (telemetry study §3.3: a critical
+        // pre-existing condition). That path is RETIRED here: the
+        // only outbound identity channel is the signed, allowlist
+        // check-in (Services/CheckIn.cs). These methods now PURGE
+        // the legacy artifacts (snapshots accumulated unboundedly on
+        // customer machines, plus the queue that referenced them)
+        // and perform no network I/O of any kind. The ISyncServ
+        // surface is kept so existing composition and callers
+        // (SplWin, OnlCoord) keep working unchanged.
+        public Task SnapshotLocalUserDataAsync()
         {
-            if (!Directory.Exists(_snapshotDir))
-                Directory.CreateDirectory(_snapshotDir);
-
-            var stamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss", System.Globalization.CultureInfo.InvariantCulture);
-            var snapshotPath = Path.Combine(_snapshotDir, $"users_{stamp}.json");
-
-            var userDataRoot = AppPaths.Root;
-
-            var snapshot = new
-            {
-                capturedAt = DateTime.UtcNow,
-                device = _deviceInfo.Current,
-                files = CollectExistingUserFiles(userDataRoot)
-            };
-
-            await File.WriteAllTextAsync(snapshotPath, JsonSerializer.Serialize(snapshot, JsonDefs.Indented))
-                .ConfigureAwait(false);
-
-            _queue.Add(new SyncQueueItem
-            {
-                Type = SyncOperationType.UserProfile,
-                PayloadPath = snapshotPath
-            });
-
-            SaveQueue();
-            _logging.LogInfo("Sync", $"User snapshot queued: {snapshotPath}");
+            PurgeLegacyArtifacts();
+            return Task.CompletedTask;
         }
 
         public void EnqueueUserSnapshot()
@@ -736,90 +725,52 @@ public sealed class SyncServ : ISyncServ, ISyncSvc
             _ = SnapshotLocalUserDataAsync();
         }
 
-        public async Task<int> ProcessQueueAsync()
+        /// <summary>Drains the legacy queue by DELETING its items
+        /// and their payload files. Returns how many legacy items
+        /// were drained. No HTTP is performed — ever.</summary>
+        public Task<int> ProcessQueueAsync()
         {
-            if (_queue.Count == 0)
-                return 0;
-
-            var baseUrl = ResolveSyncBaseUrl();
-            if (string.IsNullOrWhiteSpace(baseUrl))
-                return 0;
-
-            var endpoint = AppCfgSvc.Current.OnlineServices?.SyncEndpoint ?? "/sync";
-            var url = $"{baseUrl.TrimEnd('/')}/{endpoint.TrimStart('/')}";
-            var processed = 0;
-
-            foreach (var item in _queue.ToList())
-            {
-                try
-                {
-                    if (!File.Exists(item.PayloadPath))
-                    {
-                        _queue.Remove(item);
-                        continue;
-                    }
-
-                    var payload = await File.ReadAllTextAsync(item.PayloadPath).ConfigureAwait(false);
-                    using var content = new StringContent(payload, Encoding.UTF8, "application/json");
-                    using var response = await Http.PostAsync(url, content).ConfigureAwait(false);
-
-                    item.Attempts++;
-                    if (response.IsSuccessStatusCode)
-                    {
-                        _queue.Remove(item);
-                        processed++;
-                        _logging.LogInfo("Sync", $"Uploaded sync item {item.Id}");
-                    }
-                    else
-                    {
-                        _logging.LogWarning("Sync", $"Sync item {item.Id} failed with {(int)response.StatusCode}");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    item.Attempts++;
-                    _logging.LogWarning("Sync", $"Sync item {item.Id} error: {ex.Message}");
-                }
-            }
-
-            SaveQueue();
-            return processed;
+            var drained = _queue.Count;
+            PurgeLegacyArtifacts();
+            return Task.FromResult(drained);
         }
 
-        private static string? ResolveSyncBaseUrl()
+        private void PurgeLegacyArtifacts()
         {
-            var activation = AppCfgSvc.Current.Licensing?.Activation?.ActivationServer;
-            if (!string.IsNullOrWhiteSpace(activation))
-                return activation;
-
-            return AppCfgSvc.Current.Integrations?.RestApi?.Endpoint;
-        }
-
-        private static Dictionary<string, string> CollectExistingUserFiles(string root)
-        {
-            var result = new Dictionary<string, string>();
-            var candidates = new[]
+            var purged = 0;
+            try
             {
-                Path.Combine(root, "cfg", "user.dat"),
-                Path.Combine(root, "userprefs.json"),
-                Path.Combine(root, "cfg", "license.local.json"),
-                Path.Combine(root, "cfg", "device.json")
-            };
+                if (Directory.Exists(_snapshotDir))
+                {
+                    foreach (var file in Directory.EnumerateFiles(_snapshotDir))
+                    {
+                        try { File.Delete(file); purged++; }
+                        catch (Exception ex) { AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "Online.SyncPurge"); }
+                    }
+                }
 
-            foreach (var file in candidates.Where(File.Exists))
-            {
-                try
+                foreach (var item in _queue)
                 {
-                    result[Path.GetFileName(file)] = File.ReadAllText(file);
+                    if (!string.IsNullOrWhiteSpace(item.PayloadPath) && File.Exists(item.PayloadPath))
+                    {
+                        try { File.Delete(item.PayloadPath); purged++; }
+                        catch (Exception ex) { AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "Online.SyncPurge"); }
+                    }
                 }
-                catch (Exception exL807)
+
+                if (_queue.Count > 0)
                 {
-                    AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL807, "Online.CollectExistingUserFiles");
-                    // Skip unreadable files
+                    _queue = new List<SyncQueueItem>();
+                    SaveQueue();
                 }
+
+                if (purged > 0)
+                    _logging.LogInfo("Sync", $"Sync governance: purged {purged} legacy snapshot/queue artifact(s); the unauthenticated raw-file sync path is retired.");
             }
-
-            return result;
+            catch (Exception ex)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "Online.SyncPurge");
+            }
         }
 
         private void LoadQueue()

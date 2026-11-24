@@ -1414,14 +1414,26 @@ internal static class SteiSvc
 
         public void PerformBackup()
         {
-            _ = CreateBackupAsync("001");
+            // Licensing build: the company is the OPEN one — the
+            // historical "001" literal backed up the wrong company
+            // on multi-company installs (telemetry study §3.3).
+            var companyCode = AppState.CurrentCompanyCode;
+            if (string.IsNullOrWhiteSpace(companyCode))
+            {
+                _log.LogWarning("Backup", "PerformBackup skipped: no company is open.");
+                return;
+            }
+            _ = CreateBackupAsync(companyCode);
         }
 
         public BackupResult PerformRotatedBackup()
         {
+            var companyCode = AppState.CurrentCompanyCode;
+            if (string.IsNullOrWhiteSpace(companyCode))
+                return new BackupResult { Success = false, Message = "No company is open." };
             try
             {
-                var task = CreateBackupAsync("001");
+                var task = CreateBackupAsync(companyCode);
                 var path = task.GetAwaiter().GetResult();
                 return new BackupResult { Success = true, LocalPath = path };
             }
@@ -1489,9 +1501,12 @@ internal static class SteiSvc
 
         public async Task<BackupResult> RunOnlineBackupCycleAsync(bool force = false, CancellationToken ct = default)
         {
+            var companyCode = AppState.CurrentCompanyCode;
+            if (string.IsNullOrWhiteSpace(companyCode))
+                return new BackupResult { Success = false, Message = "No company is open." };
             try
             {
-                var path = await CreateBackupAsync("001", ct);
+                var path = await CreateBackupAsync(companyCode, ct);
                 return new BackupResult { Success = true, LocalPath = path, Uploaded = false };
             }
             catch (Exception ex)
@@ -1501,9 +1516,20 @@ internal static class SteiSvc
             }
         }
 
-        public Task<bool> TryUploadRotatedBackupsAsync(CancellationToken ct = default)
+        /// <summary>Licensing build: the stub that always returned
+        /// false now delegates to the governed check-in upload
+        /// (Services/CheckIn.cs BackupUploadSvc) — signed,
+        /// allowlist, idempotent by PackageId, retention-3 decided
+        /// by the server. Inert (false) until a server is configured
+        /// and a company is open.</summary>
+        public async Task<bool> TryUploadRotatedBackupsAsync(CancellationToken ct = default)
         {
-            return Task.FromResult(false);
+            if (!SignedTransport.IsConfigured)
+                return false;
+            var companyCode = AppState.CurrentCompanyCode;
+            if (string.IsNullOrWhiteSpace(companyCode))
+                return false;
+            return await CheckInSvc.Shared.Uploads.UploadNewestExistingAsync(companyCode, ct).ConfigureAwait(false);
         }
 
         // ═══════════════════════════════════════════════════════════

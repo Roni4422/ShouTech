@@ -875,6 +875,13 @@ namespace ShouTech.App.Services
         /// then refreshes. Refuses (LIC-8007) a file that does not
         /// verify — the previous license is left untouched.</summary>
         Task<EntitlementSnapshot> ImportLicenseFileAsync(string sourcePath, CancellationToken ct = default);
+
+        /// <summary>Applies (or clears, with null) the demo overlay
+        /// from a verified signed server verdict — the check-in
+        /// layer's enforcement seam (study §7.4). The overlay only
+        /// ever ADDS demo state; clearing requires a signed
+        /// OK/CLEARED/EXEMPT verdict or a fresh valid license.</summary>
+        void ApplyVerdictOverlay(string? demoReasonCategory);
     }
 
     public sealed class EntitlementService : IEntitlementService

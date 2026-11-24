@@ -30,6 +30,9 @@ public sealed class LicenseWin : BaseWin
     private readonly TextBlock _statusBar = new();
     private readonly Button _validateButton = new();
     private readonly Button _renewButton = new();
+    private readonly Button _checkInButton = new();
+    private readonly Button _uploadButton = new();
+    private readonly Button _verdictButton = new();
     private readonly Button _closeButton = new();
 
     public LicenseWin()
@@ -61,11 +64,17 @@ public sealed class LicenseWin : BaseWin
 
         F2Ui.StyleButton(_validateButton, "License.ValidateOnline");
         F2Ui.StyleButton(_renewButton, "License.Import");
+        F2Ui.StyleButton(_checkInButton, "License.CheckInNow");
+        F2Ui.StyleButton(_uploadButton, "License.UploadNow");
+        F2Ui.StyleButton(_verdictButton, "License.CheckVerdict");
         F2Ui.StyleButton(_closeButton, "Common.Close");
         _validateButton.Click += async (_, _) => await ValidateOnlineAsync();
         _renewButton.Click += async (_, _) => await ImportLicenseAsync();
+        _checkInButton.Click += async (_, _) => { await CheckInSvc.Shared.RunPostLoginCycleAsync(force: true); ShowInfo(); };
+        _uploadButton.Click += async (_, _) => await UploadBackupNowAsync();
+        _verdictButton.Click += async (_, _) => { await CheckInSvc.Shared.FetchVerdictNowAsync(); ShowInfo(); };
         _closeButton.Click += (_, _) => Close();
-        root.Children.Add(F2Ui.BottomBar(_validateButton, _renewButton, _closeButton));
+        root.Children.Add(F2Ui.BottomBar(_validateButton, _renewButton, _checkInButton, _uploadButton, _verdictButton, _closeButton));
 
         var content = new DockPanel();
         _renewNote.TextWrapping = TextWrapping.Wrap;
@@ -82,7 +91,7 @@ public sealed class LicenseWin : BaseWin
     protected override void ApplyLocalizedText()
     {
         Title = T("License.Title");
-        foreach (var b in new[] { _validateButton, _renewButton, _closeButton })
+        foreach (var b in new[] { _validateButton, _renewButton, _checkInButton, _uploadButton, _verdictButton, _closeButton })
             if (b.Tag is string key)
                 b.Content = T(key);
     }
@@ -130,6 +139,23 @@ public sealed class LicenseWin : BaseWin
             _info.Items.Add($"{T("License.Expiry")}: {(snapshot.ExpiresAt?.ToString("yyyy-MM-dd", CultureInfo.CurrentCulture) ?? "-")}");
             _info.Items.Add($"{T("License.GraceEnds")}: {(snapshot.GraceEndsAt?.ToString("yyyy-MM-dd", CultureInfo.CurrentCulture) ?? "-")}");
             _info.Items.Add($"{T("License.MaxUsers")}: {(snapshot.MaxUsers?.ToString(CultureInfo.CurrentCulture) ?? "-")} · {T("License.MaxCompanies")}: {(snapshot.MaxCompanies?.ToString(CultureInfo.CurrentCulture) ?? "-")}");
+
+            // ---- Licensing build: check-in / server state (study §8) ----
+            var checkIn = new CheckInStateStore().Read();
+            var configured = SignedTransport.IsConfigured;
+            _checkInButton.IsEnabled = configured;
+            _uploadButton.IsEnabled = configured;
+            _verdictButton.IsEnabled = configured;
+            _info.Items.Add("—");
+            _info.Items.Add($"{T("License.CheckIn")}: {(configured ? SignedTransport.BaseUrl : T("License.NotConfigured"))}");
+            _info.Items.Add($"{T("License.LastReport")}: {(checkIn.LastReportUtc is { } lr ? lr.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture) : T("License.Never"))}");
+            _info.Items.Add($"{T("License.LastUpload")}: {(checkIn.LastUploadUtc is { } lu ? lu.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture) : T("License.Never"))}");
+            _info.Items.Add($"{T("License.ServerCopies")}: {checkIn.ServerCopies.Count}" +
+                (checkIn.ServerCopies.Count > 0
+                    ? " (" + string.Join(", ", checkIn.ServerCopies.Select(c => c.BackupDateUtc)) + ")"
+                    : string.Empty));
+            _info.Items.Add($"{T("License.Enforcement")}: {(string.IsNullOrWhiteSpace(checkIn.LastVerdict) ? T("License.NoVerdict") : $"{checkIn.LastVerdict}{(string.IsNullOrWhiteSpace(checkIn.LastVerdictReason) ? string.Empty : " · " + checkIn.LastVerdictReason)}")}");
+
             _renewNote.Text = entitlements.IsDemoMode ? T("License.ViewOnly") : string.Empty;
             _statusBar.Text = entitlements.IsDemoMode
                 ? $"{snapshot.Status} · {T("License.DemoActive")}"
@@ -195,6 +221,23 @@ public sealed class LicenseWin : BaseWin
             AppHost.Errors.Report(ErrorCodes.LicenseCheckFailed, ex, "LicenseWin.ImportLicense");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private async Task UploadBackupNowAsync()
+    {
+        try
+        {
+            var companyCode = AppState.CurrentCompanyCode;
+            if (string.IsNullOrWhiteSpace(companyCode))
+                return;
+            var today = DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            await CheckInSvc.Shared.Uploads.UploadTodaysBackupAsync(companyCode, today);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.BackupUploadFailed, ex, "LicenseWin.UploadBackupNow");
+        }
+        ShowInfo();
     }
 
     private async Task ValidateOnlineAsync()
