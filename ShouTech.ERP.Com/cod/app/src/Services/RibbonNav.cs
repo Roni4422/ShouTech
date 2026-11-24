@@ -211,8 +211,10 @@ public static class RibbonNav
             // ------------------------------------------------ Other tools
             case "OtherTools.Rotation": Show(new RolloverWin(), owner); return true;
             case "OtherTools.Permissions":
-            case "OtherTools.PermissionTemplates":
                 Show(new PrmWin(AppState.CurrentUser?.Username ?? string.Empty), owner);
+                return true;
+            case "OtherTools.PermissionTemplates":
+                Show(new PermTplWin(), owner);
                 return true;
             case "OtherTools.CustomFields": ShowDef(DefSets.CustomFields, owner); return true;
             case "OtherTools.RestoreCompany.Restore": Show(new RestoreCoWin(), owner); return true;

@@ -593,6 +593,7 @@
     <SolidColorBrush x:Key="ScheduleTintDamsonBrush" Color="#DDF1DE"/>
     <SolidColorBrush x:Key="ScheduleTintCeladonBrush" Color="#E4DDF1"/>
     <SolidColorBrush x:Key="ScheduleTintFallowBrush" Color="#F1EADD"/>
+    <SolidColorBrush x:Key="ScheduleTintMyrtleBrush" Color="#E7EFEA"/>
     <SolidColorBrush x:Key="ScheduleTintGorseBrush" Color="#DDF1F0"/>
     <SolidColorBrush x:Key="ScheduleTintHeatherBrush" Color="#F1DDEC"/>
     <SolidColorBrush x:Key="ScheduleTintJuniperBrush" Color="#E6F1DD"/>

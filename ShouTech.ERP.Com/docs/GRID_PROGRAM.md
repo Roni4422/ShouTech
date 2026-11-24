@@ -307,7 +307,8 @@ look was copied.
 
 Every schedule window resolves a DISTINCT tint from the central
 palette (97 windows / 97 tints after the INV1 sweep; RptBase report
-family shares Silver by design). Full record: docs/INVOICE_FAMILY.md.
+family shares Silver by design; the palette has since grown to 99
+tints — PermTplWin claims Myrtle, PERM L4 2026-11-24). Full record: docs/INVOICE_FAMILY.md.
 
 | Window | Tint |
 |---|---|
@@ -373,6 +374,7 @@ family shares Silver by design). Full record: docs/INVOICE_FAMILY.md.
 | PartyManagerWin | Blush |
 | PartySearchWin | Mauve |
 | PayRecWin | Lilac |
+| PermTplWin | Myrtle |
 | PosCheckoutWin | Yarrow |
 | PosPerfRptWin | Damson |
 | PosReturnWin | Celadon |
