@@ -11,6 +11,7 @@ using Npgsql;
 using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
+using ShouTech.Infra;
 
 namespace ShouTech.Infrastructure;
 
@@ -828,23 +829,52 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
     {
         if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
         var (docs, _) = Tables(side);
+        var kind = docKind.Trim();
+        var isPg = _provider == "PostgreSQL";
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await using var command = connection.CreateCommand();
-        command.CommandText = $"SELECT doc_no FROM {docs} WHERE company_id = @company AND doc_kind = @kind";
-        Add(command, "@company", companyId.ToString("D"));
-        Add(command, "@kind", docKind.Trim());
-        var max = 1000;
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        // The sequence is keyed by the company CODE so chain SAL/PUR
+        // documents share ONE counter with InvRepo's (NUMBERING_STUDY).
+        var companyCode = await ResolveCompanyCodeAsync(connection, null, companyId, cancellationToken).ConfigureAwait(false)
+            ?? companyId.ToString("D");
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            var text = reader.GetString(0);
-            var dash = text.LastIndexOf('-');
-            var suffix = dash >= 0 ? text[(dash + 1)..] : text;
-            if (int.TryParse(suffix, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value > max)
-                max = value;
+            var config = await SequenceAllocator.ReadConfigAsync(connection, transaction, isPg, companyCode, kind,
+                SequenceAllocator.DefaultConfig(PrefixFor(kind)), cancellationToken).ConfigureAwait(false);
+            var year = DateTime.Today.Year;
+            var segment = config.YearlySegment ? year : 0;
+            var documentPrefix = config.YearlySegment ? $"{config.Prefix}-{year}-" : $"{config.Prefix}-";
+            var suffixStart = documentPrefix.Length + 1;
+            var substr = isPg ? "SUBSTRING(doc_no FROM @start)" : "SUBSTR(doc_no, @start)";
+            var predicate = isPg
+                ? $"{substr} ~ '^[0-9]+$'"
+                : $"{substr} GLOB '[0-9]*' AND {substr} NOT GLOB '*[^0-9]*'";
+            long seed;
+            await using (var maxCommand = CreateCommand(connection, transaction, $"""
+                SELECT COALESCE(MAX(CAST({substr} AS {(isPg ? "BIGINT" : "INTEGER")})), 0)
+                FROM {docs}
+                WHERE company_id IN (@guid, @code) AND doc_kind = @kind
+                  AND doc_no LIKE @pattern AND {predicate}
+                """))
+            {
+                Add(maxCommand, "@guid", companyId.ToString("D"));
+                Add(maxCommand, "@code", companyCode);
+                Add(maxCommand, "@kind", kind);
+                Add(maxCommand, "@pattern", $"{documentPrefix}%");
+                Add(maxCommand, "@start", suffixStart);
+                seed = Convert.ToInt64(await maxCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+            }
+            var allocated = await SequenceAllocator.AllocateAsync(connection, transaction, isPg, companyCode, kind,
+                segment, seed, config.StartValue - 1, cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return SequenceAllocator.Format(config, segment, allocated);
         }
-        return $"{PrefixFor(docKind)}-{max + 1}";
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
     }
 
     public async Task<IReadOnlyList<CommercialDocumentSummary>> ListAsync(CommercialDocSide side, Guid companyId, string? docKind, string? status, string? search, DateOnly? from, DateOnly? to, int limit = 500, CancellationToken cancellationToken = default)

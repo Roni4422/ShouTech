@@ -21,6 +21,7 @@ using ShouTech.App.Views;
 using System.IO;
 
 using ShouTech.Domain;
+using ShouTech.Infra;
 using ShouTech.Infrastructure;
 namespace ShouTech.App.Services
 {
@@ -934,22 +935,48 @@ internal static class MatRepo
 
     public static string NextCode(string? groupPrefix = null)
     {
+        var prefix = groupPrefix ?? string.Empty;
         var cs = DatabaseRuntime.GetConnectionString();
-        if (string.IsNullOrWhiteSpace(cs)) return string.IsNullOrWhiteSpace(groupPrefix) ? "0001" : groupPrefix + "0001";
+        if (string.IsNullOrWhiteSpace(cs)) return prefix + "0001";
         EnsureSchema();
+        var company = AppState.CurrentCompanyCode ?? string.Empty;
         using var connection = Open(cs);
-        using var command = connection.CreateCommand();
-        if (string.IsNullOrWhiteSpace(groupPrefix))
-        { command.CommandText = "SELECT code FROM materials WHERE company_id=$company AND is_deleted=0 ORDER BY code DESC LIMIT 1"; Add(command, "$company", AppState.CurrentCompanyCode ?? string.Empty); }
-        else
-        { command.CommandText = "SELECT code FROM materials WHERE company_id=$company AND code LIKE $p AND is_deleted=0 ORDER BY code DESC LIMIT 1"; Add(command, "$company", AppState.CurrentCompanyCode ?? string.Empty); Add(command, "$p", groupPrefix + "%"); }
-        var last = command.ExecuteScalar()?.ToString();
-        if (string.IsNullOrWhiteSpace(last)) return string.IsNullOrWhiteSpace(groupPrefix) ? "0001" : groupPrefix + "0001";
-        int i = last.Length - 1; while (i >= 0 && char.IsDigit(last[i])) i--;
-        var prefix = last[..(i + 1)]; var numPart = last[(i + 1)..];
-        if (!long.TryParse(numPart, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)) n = 0;
-        n++; var width = Math.Max(numPart.Length, 4);
-        return prefix + n.ToString("D" + width, CultureInfo.InvariantCulture);
+        using var transaction = connection is SqliteConnection sqliteConnection
+            ? sqliteConnection.BeginTransaction(deferred: false)
+            : connection.BeginTransaction();
+        // Seed = the highest trailing number among codes with this
+        // prefix, INCLUDING soft-deleted rows: a binned material's code
+        // stays reserved (NUMBERING_STUDY §3.3). The counter itself
+        // lives in document_number_sequences via SequenceAllocator, so
+        // the value is monotonic even after a permanent purge.
+        long seed = 0;
+        var width = 4;
+        using (var scan = connection.CreateCommand())
+        {
+            scan.Transaction = transaction;
+            scan.CommandText = "SELECT code FROM materials WHERE company_id=$company AND code LIKE $p";
+            Add(scan, "$company", company);
+            Add(scan, "$p", prefix + "%");
+            using var reader = scan.ExecuteReader();
+            while (reader.Read())
+            {
+                var code = reader.GetString(0);
+                if (!code.StartsWith(prefix, StringComparison.Ordinal)) continue;
+                var i = code.Length - 1;
+                while (i >= 0 && char.IsDigit(code[i])) i--;
+                if (i < code.Length - 1
+                    && long.TryParse(code[(i + 1)..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+                    && value > seed)
+                {
+                    seed = value;
+                    width = Math.Max(4, code.Length - (i + 1));
+                }
+            }
+        }
+        var allocated = SequenceAllocator.Allocate(
+            connection, transaction, DatabaseRuntime.IsPostgreSql(), company, $"MAT:{prefix}", 0, seed);
+        transaction.Commit();
+        return prefix + allocated.ToString("D" + width.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
     }
 
     public static MatRec Save(MatRec value, bool isNew)
@@ -1888,14 +1915,18 @@ internal static class MatRepo
 		cmd.CommandText = @"
 			SELECT COALESCE(MAX(warehouse_code), 0)
 			FROM warehouses
-			WHERE company_id = $co
-			  AND is_deleted = 0;";
+			WHERE company_id = $co;";
 
 		Add(cmd, "$co", company);
 
 		var max = Convert.ToInt64(
 			cmd.ExecuteScalar() ?? 0L,
 			CultureInfo.InvariantCulture);
+
+		// Preview only (nothing consumed): the WH counter and binned
+		// warehouses both keep their codes reserved (NUMBERING_STUDY).
+		var stored = SequenceAllocator.Peek(conn, null!, company, "WH", 0);
+		if (stored > max) max = stored;
 
 		return checked(max + 1);
 	}
@@ -2043,19 +2074,18 @@ internal static class MatRepo
 			seq.Transaction = tx;
 
 			seq.CommandText = @"
-				SELECT COALESCE(MAX(warehouse_code), 0) + 1
+				SELECT COALESCE(MAX(warehouse_code), 0)
 				FROM warehouses
 				WHERE company_id = $co;";
 
 			Add(seq, "$co", company);
 
-			nextCode = Convert.ToInt64(
-				seq.ExecuteScalar() ?? 1L,
+			var seed = Convert.ToInt64(
+				seq.ExecuteScalar() ?? 0L,
 				CultureInfo.InvariantCulture);
-		}
 
-		if (nextCode <= 0)
-			nextCode = 1;
+			nextCode = SequenceAllocator.Allocate(conn, tx, DatabaseRuntime.IsPostgreSql(), company, "WH", 0, seed);
+		}
 
 		rec.Code = nextCode;
 

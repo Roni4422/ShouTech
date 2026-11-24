@@ -5,6 +5,7 @@ using Npgsql;
 using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
+using ShouTech.Infra;
 
 namespace ShouTech.Infrastructure;
 
@@ -54,13 +55,25 @@ public sealed class PosRepository : IPosRepository
                     ("@company", companyId.Trim()), ("@terminal", terminalCode.Trim())).ConfigureAwait(false) > 0)
                 throw new AppError(ErrorCodes.PosSessionAlreadyOpen,
                     $"Terminal '{terminalCode.Trim()}' already has an open session; close it before opening another.", terminalCode.Trim());
+            var isPg = _provider == "PostgreSQL";
+            var sesConfig = await SequenceAllocator.ReadConfigAsync(connection, transaction, isPg, companyId.Trim(), "SES",
+                SequenceAllocator.DefaultConfig("SES"), cancellationToken).ConfigureAwait(false);
             var year = DateTime.Today.Year;
-            var count = await CountAsync(connection, transaction,
-                "SELECT COUNT(*) FROM pos_sessions WHERE company_id = @company AND session_no LIKE @pattern",
-                ("@company", companyId.Trim()), ("@pattern", $"SES-{year}-%")).ConfigureAwait(false);
+            var sesSegment = sesConfig.YearlySegment ? year : 0;
+            var sesPrefix = sesConfig.YearlySegment ? $"SES-{year}-" : "SES-";
+            var sesSeed = await CountAsync(connection, transaction,
+                $"""
+                SELECT COALESCE(MAX(CAST({(isPg ? "SUBSTRING(session_no FROM @start)" : "SUBSTR(session_no, @start)")} AS {(isPg ? "BIGINT" : "INTEGER")})), 0)
+                FROM pos_sessions
+                WHERE company_id = @company AND session_no LIKE @pattern
+                  AND {(isPg ? "SUBSTRING(session_no FROM @start) ~ '^[0-9]+$'" : "SUBSTR(session_no, @start) GLOB '[0-9]*' AND SUBSTR(session_no, @start) NOT GLOB '*[^0-9]*'")}
+                """,
+                ("@company", companyId.Trim()), ("@pattern", $"{sesPrefix}%"), ("@start", sesPrefix.Length + 1)).ConfigureAwait(false);
+            var sesAllocated = await SequenceAllocator.AllocateAsync(connection, transaction, isPg, companyId.Trim(), "SES",
+                sesSegment, sesSeed, sesConfig.StartValue - 1, cancellationToken).ConfigureAwait(false);
             var session = new PosSession
             {
-                SessionNo = $"SES-{year}-{(count + 1).ToString("D4", CultureInfo.InvariantCulture)}",
+                SessionNo = SequenceAllocator.Format(sesConfig, sesSegment, sesAllocated),
                 TerminalCode = terminalCode.Trim(),
                 Cashier = cashier?.Trim() ?? string.Empty,
                 WarehouseId = warehouseId,

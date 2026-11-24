@@ -172,6 +172,7 @@
     <!-- Lets Kern.Tests exercise the internal STEI export/import engine
          (SteiSvc/SteiCrypto) end-to-end against real SQLite databases. -->
     <InternalsVisibleTo Include="Kern.Tests" />
+    <InternalsVisibleTo Include="NumHarness" />
   </ItemGroup>
 
   <ItemGroup>

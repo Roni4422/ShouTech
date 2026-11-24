@@ -12,6 +12,8 @@ using ShouTech.App;
 using ShouTech.App.Configuration;
 using ShouTech.App.Reporting.Invoices;
 using ShouTech.App.Services;
+using ShouTech.Domain.Entities;
+using ShouTech.Domain.Interfaces;
 using ShouTech.Infra;
 using ShouTech.Infrastructure;
 
@@ -134,6 +136,40 @@ Check("C2 purged stock-in record is gone",
 var nextStockIn = InvRepo.NextDocNo(InvDocKind.StockIn);
 var nextSuffix = long.Parse(nextStockIn.Split('-')[^1], CultureInfo.InvariantCulture);
 Check("C3 purged number is NEVER reissued", nextSuffix > purgedSuffix, $"{stockIn.DocNo} -> {nextStockIn}");
+
+// ------------------------------------------ N2: routed families
+var chainRepo = new OrderDocumentRepository("SQLite", cs);
+var so1 = await chainRepo.NextDocNoAsync(CommercialDocSide.Sales, companyId, CommercialDocKinds.SalesOrder);
+var so2 = await chainRepo.NextDocNoAsync(CommercialDocSide.Sales, companyId, CommercialDocKinds.SalesOrder);
+Check("E1 chain documents use the unified format, sequentially",
+    so1 == $"SO-{year}-0001" && so2 == $"SO-{year}-0002", $"{so1} / {so2}");
+var chainSal = await chainRepo.NextDocNoAsync(CommercialDocSide.Sales, companyId, CommercialDocKinds.SalesInvoice);
+Check("E2 chain SAL shares InvRepo's counter AND its config (INV-00102 after B)",
+    chainSal == $"INV-{year}-00102", chainSal);
+
+var posRepo = new PosRepository("SQLite", cs);
+var ses1 = await posRepo.OpenSessionAsync(CompanyCode, "T1", "cashier", 1, "SAR", 0m, Actor);
+var ses2 = await posRepo.OpenSessionAsync(CompanyCode, "T2", "cashier", 1, "SAR", 0m, Actor);
+Check("F1 POS sessions allocate sequentially",
+    ses1.SessionNo == $"SES-{year}-0001" && ses2.SessionNo == $"SES-{year}-0002",
+    $"{ses1.SessionNo} / {ses2.SessionNo}");
+Exec($"UPDATE pos_sessions SET is_deleted = 1 WHERE session_no = '{ses1.SessionNo}'");
+Exec($"DELETE FROM pos_sessions WHERE session_no = '{ses1.SessionNo}'");
+var ses3 = await posRepo.OpenSessionAsync(CompanyCode, "T3", "cashier", 1, "SAR", 0m, Actor);
+Check("F2 a purged session's number is never reissued (COUNT-based code failed this)",
+    ses3.SessionNo == $"SES-{year}-0003", ses3.SessionNo);
+
+var mfgRepo = new MfgOrderRepository("SQLite", cs);
+var mfg1 = await mfgRepo.GetNextDocNoAsync(CompanyCode);
+var mfg2 = await mfgRepo.GetNextDocNoAsync(CompanyCode);
+Check("G1 manufacturing order numbers are sequential and consumed atomically",
+    mfg1 == 1 && mfg2 == 2, $"{mfg1} / {mfg2}");
+
+var mat1 = MatRepo.NextCode("MAT-");
+Exec("UPDATE materials SET is_deleted = 1 WHERE material_id = 42");
+var mat2 = MatRepo.NextCode("MAT-");
+Check("H1 material codes seed above history incl. binned rows, counter monotonic",
+    mat1 == "MAT-0043" && mat2 == "MAT-0044", $"{mat1} / {mat2}");
 
 Console.WriteLine($"== NumHarness: {pass} PASS / {fail} FAIL ==");
 return fail == 0 ? 0 : 1;
