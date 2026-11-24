@@ -598,6 +598,48 @@ namespace Kern.Tests
                 Assert.Equal("boss-user", reader.GetString(0));
                 Assert.Equal(250m, reader.GetDecimal(1));
                 Assert.Equal(100m, reader.GetDecimal(2));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task ConvertedInvoice_DueDate_FromPartyCreditDays()
+        {
+            var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var master = new MasterCardRepository("SQLite", connectionString);
+                var party = new Party
+                {
+                    Kind = PartyKinds.Customer, Code = "CUST-DD", NameEn = "Due Date Customer",
+                    CreditLimit = 100000m, CreditDays = 10
+                };
+                await master.SavePartyAsync("ORDER-GL", party, "order-test");
+
+                var docId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.SalesOrder, "SO-DD1", 10m, 25m,
+                        partyId: party.LedgerId, partyCode: "CUST-DD"), "order-test");
+                await service.PostOrderAsync(CommercialDocSide.Sales, docId, "order-test");
+                var (invoiceId, _) = await service.ConvertToInvoiceAsync(
+                    CommercialDocSide.Sales, docId, new DateOnly(2026, 11, 2), "order-test");
+
+                using var connection = new SqliteConnection(connectionString);
+                connection.Open();
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = "SELECT due_date FROM sales_documents WHERE doc_id = $id;";
+                cmd.Parameters.AddWithValue("$id", invoiceId);
+                Assert.Equal("2026-11-12", Convert.ToString(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+
         // ------------------------------------------------------- picking (W4)
 
         [Fact]
@@ -653,32 +695,6 @@ namespace Kern.Tests
         }
 
         [Fact]
-        public async Task ConvertedInvoice_DueDate_FromPartyCreditDays()
-        {
-            var (service, orders, companyId, connectionString, cleanup) = await CreateAsync();
-            try
-            {
-                var master = new MasterCardRepository("SQLite", connectionString);
-                var party = new Party
-                {
-                    Kind = PartyKinds.Customer, Code = "CUST-DD", NameEn = "Due Date Customer",
-                    CreditLimit = 100000m, CreditDays = 10
-                };
-                await master.SavePartyAsync("ORDER-GL", party, "order-test");
-
-                var docId = await service.CreateOrderAsync(
-                    Order(companyId, CommercialDocKinds.SalesOrder, "SO-DD1", 10m, 25m,
-                        partyId: party.LedgerId, partyCode: "CUST-DD"), "order-test");
-                await service.PostOrderAsync(CommercialDocSide.Sales, docId, "order-test");
-                var (invoiceId, _) = await service.ConvertToInvoiceAsync(
-                    CommercialDocSide.Sales, docId, new DateOnly(2026, 11, 2), "order-test");
-
-                using var connection = new SqliteConnection(connectionString);
-                connection.Open();
-                using var cmd = connection.CreateCommand();
-                cmd.CommandText = "SELECT due_date FROM sales_documents WHERE doc_id = $id;";
-                cmd.Parameters.AddWithValue("$id", invoiceId);
-                Assert.Equal("2026-11-12", Convert.ToString(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture));
         public async Task Picking_OverPick_ThrowsSal7012_AndCancelWorks()
         {
             var (service, _, companyId, _, cleanup) = await CreateAsync();
@@ -715,7 +731,6 @@ namespace Kern.Tests
                 cleanup();
             }
         }
-
         private static CommercialDocumentDraft Order(
             Guid companyId, string kind, string docNo, decimal qty, decimal price,
             long partyId = 7, string partyCode = "CUST-1", DateOnly? delivery = null, DateOnly? validTill = null)
