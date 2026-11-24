@@ -826,5 +826,17 @@
     "name": "LandedCostReceiptSelectionInvalid",
     "message": "Varış maliyeti belgesi uygun makbuz satırı seçmiyor.",
     "hint": "En az bir onaylanmış mal giriş makbuzu seçin ve en az bir stok değerli makbuz satırı ekleyin."
+  },
+  "PUR-1009": {
+    "code": "PUR-1009",
+    "name": "LandedCostDocumentAlreadyLinked",
+    "message": "{1} tedarikçi belgesi, onaylanmış '{0}' varış maliyeti belgesi tarafından zaten tüketilmiş.",
+    "hint": "Bir tedarikçi belgesi yalnızca bir onaylanmış varış maliyeti belgesine bağlanabilir. Önce o belgeyi ters çevirin veya başka bir belge bağlayın."
+  },
+  "PUR-1010": {
+    "code": "PUR-1010",
+    "name": "LandedCostLinkedDocumentInvalid",
+    "message": "'{0}' gideri {1} tedarikçi belgesine bağlanamaz.",
+    "hint": "Aynı para biriminde, günlüğü tam olarak bir maliyet hesabını borçlandıran onaylanmış bir tedarikçi belgesi bağlayın; gider tutarı bu borcu aşamaz."
   }
 }

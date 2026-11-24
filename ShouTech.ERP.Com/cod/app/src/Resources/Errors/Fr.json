@@ -826,5 +826,17 @@
     "name": "LandedCostReceiptSelectionInvalid",
     "message": "Le bon de coût landed ne sélectionne aucune ligne de reçu éligible.",
     "hint": "Sélectionnez au moins un reçu de marchandises validé et incluez au moins une ligne de reçu valorisée en stock."
+  },
+  "PUR-1009": {
+    "code": "PUR-1009",
+    "name": "LandedCostDocumentAlreadyLinked",
+    "message": "Le document fournisseur {1} est déjà consommé par le bon de coût landed validé '{0}'.",
+    "hint": "Un document fournisseur ne peut être lié qu'à un seul bon de coût landed validé. Extournez d'abord ce bon, ou liez un autre document."
+  },
+  "PUR-1010": {
+    "code": "PUR-1010",
+    "name": "LandedCostLinkedDocumentInvalid",
+    "message": "La charge '{0}' ne peut pas être liée au document fournisseur {1}.",
+    "hint": "Liez un document fournisseur validé, dans la même devise, dont le journal débite exactement un compte de coût ; le montant de la charge ne peut pas dépasser ce débit."
   }
 }

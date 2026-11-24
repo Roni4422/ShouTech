@@ -25,14 +25,42 @@ public sealed class PurchaseLandedCostService
         return _repository.ListAsync(companyId, search, cancellationToken);
     }
 
-    public Task<Guid> CreateDraftAsync(Guid companyId, long receiptDocumentId, string documentNumber,
+    public Task<IReadOnlyList<PurchaseLandedCostReceiptOption>> ListReceiptsAsync(
+        Guid companyId, CancellationToken cancellationToken = default)
+    {
+        Require("PUR.LANDEDCOST.VIEW");
+        return _repository.ListReceiptsAsync(companyId, cancellationToken);
+    }
+
+    public Task<IReadOnlyList<PurchaseLandedCostReceiptLineOption>> ListReceiptLinesAsync(
+        Guid companyId, long receiptDocumentId, CancellationToken cancellationToken = default)
+    {
+        Require("PUR.LANDEDCOST.VIEW");
+        return _repository.ListReceiptLinesAsync(companyId, receiptDocumentId, cancellationToken);
+    }
+
+    public Task<IReadOnlyList<PurchaseLandedCostPayeeOption>> ListPayeesAsync(
+        Guid companyId, CancellationToken cancellationToken = default)
+    {
+        Require("PUR.LANDEDCOST.VIEW");
+        return _repository.ListPayeesAsync(companyId, cancellationToken);
+    }
+
+    public Task<IReadOnlyList<PurchaseLandedCostLinkableDocumentOption>> ListLinkableDocumentsAsync(
+        Guid companyId, CancellationToken cancellationToken = default)
+    {
+        Require("PUR.LANDEDCOST.VIEW");
+        return _repository.ListLinkableDocumentsAsync(companyId, cancellationToken);
+    }
+
+    public Task<Guid> CreateDraftAsync(Guid companyId, IReadOnlyList<PurchaseLandedCostReceiptSelection> receipts, string documentNumber,
         DateOnly documentDate, string currencyCode, decimal exchangeRate,
         IReadOnlyList<PurchaseLandedCostChargeDraft> charges, string actor,
         CancellationToken cancellationToken = default)
     {
         Require("PUR.LANDEDCOST.EDIT");
         RequireActor(actor);
-        return _repository.CreateDraftAsync(companyId, receiptDocumentId, documentNumber,
+        return _repository.CreateDraftAsync(companyId, receipts, documentNumber,
             documentDate, currencyCode, exchangeRate, charges, actor, cancellationToken);
     }
 

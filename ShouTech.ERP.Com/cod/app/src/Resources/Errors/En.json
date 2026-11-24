@@ -826,5 +826,17 @@
     "name": "LandedCostReceiptSelectionInvalid",
     "message": "The landed-cost voucher selects no eligible receipt lines.",
     "hint": "Select at least one posted goods receipt and include at least one stock-valued receipt line."
+  },
+  "PUR-1009": {
+    "code": "PUR-1009",
+    "name": "LandedCostDocumentAlreadyLinked",
+    "message": "Supplier document {1} is already consumed by posted landed-cost voucher '{0}'.",
+    "hint": "A supplier document can be linked to only one posted landed-cost voucher. Reverse that voucher first, or link a different document."
+  },
+  "PUR-1010": {
+    "code": "PUR-1010",
+    "name": "LandedCostLinkedDocumentInvalid",
+    "message": "Charge '{0}' cannot link to supplier document {1}.",
+    "hint": "Link a posted supplier document in the same currency whose journal debits exactly one cost account; the charge amount may not exceed that debit."
   }
 }

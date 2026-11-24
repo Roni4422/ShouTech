@@ -4,13 +4,22 @@
 -- PostgreSQL counterpart: postgresql/093_purchase_landed_cost_completion.sql.
 
 -- L1/L2: a charge may be owed to a payee party other than the receipt
--- supplier (payee_party_id = parties.ledger_id; NULL = receipt supplier),
--- and may already be booked elsewhere (credit_mode = 'AlreadyBooked':
--- posting credits the charge's own expense account and writes no
--- party-ledger entry). Default 'Payable' preserves the pre-093 behaviour.
+-- supplier (payee_party_id = parties.ledger_id; NULL = receipt supplier).
+-- credit_mode: 'Payable' (default; the voucher creates the liability to
+-- the payee) or 'Linked' (the liability already exists on a posted
+-- supplier document — linked_document_id; posting reclasses the cost out
+-- of the account that document originally debited, stored resolved in
+-- linked_account_code, and creates NO new liability). 'AlreadyBooked'
+-- remains in the CHECK only so drafts written by the interim 093 build
+-- stay postable; the application no longer creates it.
 ALTER TABLE purchase_landed_cost_charges ADD COLUMN payee_party_id INTEGER;
 ALTER TABLE purchase_landed_cost_charges ADD COLUMN credit_mode TEXT NOT NULL DEFAULT 'Payable'
-    CHECK (credit_mode IN ('Payable','AlreadyBooked'));
+    CHECK (credit_mode IN ('Payable','AlreadyBooked','Linked'));
+ALTER TABLE purchase_landed_cost_charges ADD COLUMN linked_document_id INTEGER
+    REFERENCES purchase_documents(doc_id);
+ALTER TABLE purchase_landed_cost_charges ADD COLUMN linked_account_code TEXT;
+CREATE INDEX IF NOT EXISTS ix_purchase_landed_cost_charges_linked
+    ON purchase_landed_cost_charges(linked_document_id);
 
 -- L3: the inventory/consumed split computed at post time is stored on the
 -- allocation itself; reversal vouchers copy it (negated) and posting

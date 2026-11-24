@@ -417,7 +417,7 @@ namespace Kern.Tests
                 Assert.Equal(0m, MovementCost(connectionString, firstInvoiceNo, 42));
                 var firstInvoiceGl = GlByAccount(connectionString, "PUR", firstInvoiceId);
                 Assert.Equal(24m, firstInvoiceGl["2203"].Debit);
-                Assert.Equal(2m, firstInvoiceGl["402"].Debit);
+                Assert.Equal(2m, firstInvoiceGl["415"].Debit);
                 Assert.Equal(26m, firstInvoiceGl["2201"].Credit);
 
                 var partiallyBilled = await service.GetProgressAsync(CommercialDocSide.Purchase, orderId);
@@ -446,7 +446,7 @@ namespace Kern.Tests
 
                 var invoiceGl = GlByAccount(connectionString, "PUR", invoiceId);
                 Assert.Equal(36m, invoiceGl["2203"].Debit);
-                Assert.Equal(3m, invoiceGl["402"].Debit);
+                Assert.Equal(3m, invoiceGl["415"].Debit);
                 Assert.Equal(39m, invoiceGl["2201"].Credit);
                 Assert.Equal(2m, Scalar(connectionString,
                     $"SELECT COUNT(*) FROM purchase_receipt_invoice_matches WHERE invoice_doc_id = {invoiceId};"));
@@ -807,7 +807,7 @@ namespace Kern.Tests
                 Assert.Equal(0m, MovementCost(connectionString, invoiceNo, 43));
                 var invoiceGl = GlByAccount(connectionString, "PUR", invoiceId);
                 Assert.Equal(100m, invoiceGl["2203"].Debit);
-                Assert.Equal(10m, invoiceGl["402"].Credit);
+                Assert.Equal(10m, invoiceGl["415"].Credit);
                 Assert.Equal(90m, invoiceGl["2201"].Credit);
                 Assert.Equal(50m, BalanceQty(connectionString, 43));
             }
@@ -858,7 +858,7 @@ namespace Kern.Tests
                 Assert.Equal(0m, MovementCost(connectionString, invoiceNo, 42));
                 var invoiceGl = GlByAccount(connectionString, "PUR", invoiceId);
                 Assert.Equal(32m, invoiceGl["2203"].Debit);
-                Assert.Equal(1m, invoiceGl["402"].Debit);
+                Assert.Equal(1m, invoiceGl["415"].Debit);
                 Assert.Equal(33m, invoiceGl["2201"].Credit);
 
                 var billedProgress = await service.GetProgressAsync(CommercialDocSide.Purchase, orderId);
@@ -1251,6 +1251,54 @@ namespace Kern.Tests
             return Convert.ToDecimal(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
         }
 
+        private static System.Collections.Generic.Dictionary<string, (decimal Debit, decimal Credit)> JournalAccountsById(
+            string connectionString, Guid journalId)
+        {
+            var rows = new System.Collections.Generic.Dictionary<string, (decimal Debit, decimal Credit)>();
+            using var connection = new SqliteConnection(connectionString);
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT a.account_code, COALESCE(SUM(l.debit),0), COALESCE(SUM(l.credit),0)
+                FROM journal_entries e
+                JOIN journal_entry_lines l ON l.journal_entry_id=e.journal_entry_id
+                JOIN chart_of_accounts a ON a.account_id=l.account_id
+                WHERE e.journal_entry_id=$id AND e.status=1
+                GROUP BY a.account_code;
+                """;
+            command.Parameters.AddWithValue("$id", journalId.ToString("D"));
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+                rows[reader.GetString(0)] = (reader.GetDecimal(1), reader.GetDecimal(2));
+            return rows;
+        }
+
+        private static void SeedShipperParty(string connectionString)
+        {
+            using var connection = new SqliteConnection(connectionString);
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = """
+                INSERT INTO parties (id, company_id, kind, code, name_en, credit_limit, is_active, is_deleted, created_by, ledger_id)
+                VALUES ($id, $company, 'S', 'SHIP-1', 'Shipper One', 0, 1, 0, $actor, 10);
+                """;
+            cmd.Parameters.AddWithValue("$id", Guid.NewGuid().ToString("D"));
+            cmd.Parameters.AddWithValue("$company", CompanyCode);
+            cmd.Parameters.AddWithValue("$actor", Actor);
+            cmd.ExecuteNonQuery();
+        }
+
+        private static async Task SellOneUnitAsync(string connectionString, string docNo, string date)
+        {
+            await using var connection = new SqliteConnection(connectionString);
+            await connection.OpenAsync();
+            await using var transaction = await connection.BeginTransactionAsync();
+            StockValuationEngine.Apply(connection, transaction, "SQLite",
+                new StockMovementRequest(CompanyCode, 1, 42, date, "SAL",
+                    docNo, QtyIn: 0m, QtyOut: 1m));
+            await transaction.CommitAsync();
+        }
+
         [Fact]
         public async Task PurchaseLandedCost_PostAndReverse_RevaluesRemainingStockAndConsumedCost()
         {
@@ -1284,7 +1332,7 @@ namespace Kern.Tests
                 var landedCosts = new PurchaseLandedCostService(
                     new PurchaseLandedCostRepository("SQLite", connectionString), _ => true);
                 var landedCostId = await landedCosts.CreateDraftAsync(
-                    companyId, receiptId, "LC-9101", new DateOnly(2026, 11, 3),
+                    companyId, new[] { new PurchaseLandedCostReceiptSelection(receiptId) }, "LC-9101", new DateOnly(2026, 11, 3),
                     "SAR", 1m,
                     new[]
                     {
@@ -1346,6 +1394,508 @@ namespace Kern.Tests
                 Assert.Equal(20m, reversalGl["2201"].Debit);
                 Assert.True(reversalGl["1203"].Credit > 0m);
                 Assert.True(reversalGl["401"].Credit > 0m);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task PurchaseLandedCost_PerChargePayee_CreditsPayeeLedgerNotSupplier()
+        {
+            var (service, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                SeedShipperParty(connectionString);
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-LC-9201",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 12m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+                var (receiptId, _) = await service.CreatePurchaseReceiptAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 12m) }, Actor);
+
+                var landedCosts = new PurchaseLandedCostService(
+                    new PurchaseLandedCostRepository("SQLite", connectionString), _ => true);
+                var landedCostId = await landedCosts.CreateDraftAsync(
+                    companyId, new[] { new PurchaseLandedCostReceiptSelection(receiptId) }, "LC-9201", new DateOnly(2026, 11, 3),
+                    "SAR", 1m,
+                    new[]
+                    {
+                        new PurchaseLandedCostChargeDraft(
+                            "FREIGHT", "Inbound freight payable to shipper", 20m, LandedCostAllocationBases.ByValue,
+                            PayeePartyId: 10)
+                    },
+                    Actor);
+                var journalId = await landedCosts.PostAsync(companyId, landedCostId, Actor);
+
+                // GL credit stays on AP control; the subledger credit goes
+                // to the charge payee (shipper, party 10), NOT the supplier.
+                var gl = JournalAccountsById(connectionString, journalId);
+                Assert.Equal(20m, gl["2201"].Credit);
+                Assert.Equal(20m, Scalar(connectionString,
+                    "SELECT COALESCE(SUM(credit), 0) FROM party_ledger WHERE doc_kind = 'LND' AND party_id = 10;"));
+                Assert.Equal(0m, Scalar(connectionString,
+                    "SELECT COUNT(*) FROM party_ledger WHERE doc_kind = 'LND' AND party_id = 9;"));
+
+                // Reversal mirrors to the same payee.
+                await landedCosts.ReverseAsync(companyId, landedCostId, "LC-REV-9201",
+                    new DateOnly(2026, 11, 4), "Reverse payee test", Actor);
+                Assert.Equal(20m, Scalar(connectionString,
+                    "SELECT COALESCE(SUM(debit), 0) FROM party_ledger WHERE doc_kind = 'LND-REV' AND party_id = 10;"));
+                Assert.Equal(0m, Scalar(connectionString,
+                    "SELECT COUNT(*) FROM party_ledger WHERE doc_kind = 'LND-REV' AND party_id = 9;"));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        private static async Task<long> PostCarrierFreightInvoiceAsync(
+            string connectionString, Guid companyId, string docNo, decimal amount)
+        {
+            // A posted carrier freight invoice at the data layer the
+            // landed-cost voucher sees: purchase_documents row + its posted
+            // journal (Dr Freight-in 404 / Cr AP 2201) + the carrier's
+            // party-ledger credit. The liability lives HERE; a linked
+            // landed-cost charge must never create it a second time.
+            await using var connection = new SqliteConnection(connectionString);
+            await connection.OpenAsync();
+            await using var transaction = await connection.BeginTransactionAsync();
+            long docId;
+            using (var insert = connection.CreateCommand())
+            {
+                insert.Transaction = (SqliteTransaction)transaction;
+                insert.CommandText = """
+                    INSERT INTO purchase_documents
+                        (company_id, doc_kind, doc_no, doc_date, party_id, party_name,
+                         currency_code, exchange_rate, subtotal, grand_total, status, created_by)
+                    VALUES ($company, 'PUR', $no, '2026-11-02', 10, 'Shipper One',
+                            'SAR', 1, $amount, $amount, 'Posted', $actor);
+                    SELECT last_insert_rowid();
+                    """;
+                insert.Parameters.AddWithValue("$company", companyId.ToString("D"));
+                insert.Parameters.AddWithValue("$no", docNo);
+                insert.Parameters.AddWithValue("$amount", amount);
+                insert.Parameters.AddWithValue("$actor", Actor);
+                docId = Convert.ToInt64(insert.ExecuteScalar());
+            }
+            var gl = GlPosting.PostInTransaction(connection, transaction, "SQLite",
+                new GlDocumentRequest(companyId, new DateOnly(2026, 11, 2),
+                    $"Purchase invoice {docNo}", "PUR",
+                    docId.ToString(System.Globalization.CultureInfo.InvariantCulture), docNo,
+                    "SAR", 1m,
+                    new[]
+                    {
+                        new GlLineRequest("404", amount, 0m),
+                        new GlLineRequest("2201", 0m, amount)
+                    }),
+                Actor);
+            PartyLedger.WriteEntry(connection, transaction, "SQLite", CompanyCode, "S", 10,
+                "PUR", docId, docNo, "2026-11-02", 0m, amount, "SAR",
+                $"Freight invoice {docNo}", gl.JournalEntryId.ToString("D"), 1m, 0m, amount);
+            await transaction.CommitAsync();
+            return docId;
+        }
+
+        private static async Task<(long ReceiptId, string ReceiptNo)> CreateGoodsReceiptAsync(
+            OrderService service, Guid companyId, string suffix)
+        {
+            var orderId = await service.CreateOrderAsync(
+                Order(companyId, CommercialDocKinds.PurchaseOrder, $"PO-LC-{suffix}",
+                    new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 12m),
+                    partyId: 9, partyCode: "SUP-1"), Actor);
+            await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+            return await service.CreatePurchaseReceiptAsync(
+                companyId, orderId, new DateOnly(2026, 11, 2),
+                new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 12m) }, Actor);
+        }
+
+        private static PurchaseLandedCostChargeDraft LinkedFreightCharge(long freightDocumentId, decimal amount)
+            => new("FREIGHT", "Freight already invoiced by carrier", amount,
+                LandedCostAllocationBases.ByValue,
+                CreditMode: LandedCostCreditModes.Linked, LinkedDocumentId: freightDocumentId);
+
+        [Fact]
+        public async Task PurchaseLandedCost_LinkedCharge_ReclassesExpenseWithoutDuplicatingLiability()
+        {
+            var (service, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                SeedShipperParty(connectionString);
+                var (receiptId, _) = await CreateGoodsReceiptAsync(service, companyId, "9211");
+                await SellOneUnitAsync(connectionString, "SAL-LC-9211", "2026-11-03");
+                var freightId = await PostCarrierFreightInvoiceAsync(connectionString, companyId, "PIN-FRT-9211", 500m);
+                Assert.Equal(500m, Scalar(connectionString,
+                    "SELECT COALESCE(SUM(credit) - SUM(debit), 0) FROM party_ledger WHERE party_id = 10;"));
+
+                var landedCosts = new PurchaseLandedCostService(
+                    new PurchaseLandedCostRepository("SQLite", connectionString), _ => true);
+                var landedCostId = await landedCosts.CreateDraftAsync(
+                    companyId, new[] { new PurchaseLandedCostReceiptSelection(receiptId) }, "LC-9211", new DateOnly(2026, 11, 3),
+                    "SAR", 1m, new[] { LinkedFreightCharge(freightId, 500m) }, Actor);
+
+                // The charge stored the document's supplier as payee and the
+                // account resolved from the document's own journal (404).
+                Assert.Equal(10m, Scalar(connectionString,
+                    $"SELECT payee_party_id FROM purchase_landed_cost_charges WHERE landed_cost_id = '{landedCostId:D}';"));
+                Assert.Equal("404", ScalarText(connectionString,
+                    $"SELECT linked_account_code FROM purchase_landed_cost_charges WHERE landed_cost_id = '{landedCostId:D}';"));
+
+                var journalId = await landedCosts.PostAsync(companyId, landedCostId, Actor);
+                var gl = JournalAccountsById(connectionString, journalId);
+                // Reclass: the 500 leaves Freight-in and lands in the
+                // inventory/consumed split. NO new AP credit at all.
+                Assert.False(gl.ContainsKey("2201"));
+                Assert.Equal(500m, gl["404"].Credit);
+                Assert.Equal(333.3333m, gl["1203"].Debit);
+                Assert.Equal(166.6667m, gl["401"].Debit);
+
+                // Carrier balance UNCHANGED; no landed-cost party rows exist.
+                Assert.Equal(500m, Scalar(connectionString,
+                    "SELECT COALESCE(SUM(credit) - SUM(debit), 0) FROM party_ledger WHERE party_id = 10;"));
+                Assert.Equal(0m, Scalar(connectionString,
+                    "SELECT COUNT(*) FROM party_ledger WHERE doc_kind IN ('LND', 'LND-REV');"));
+
+                // The consumed document is no longer offered for linking.
+                var linkable = await landedCosts.ListLinkableDocumentsAsync(companyId);
+                Assert.DoesNotContain(linkable, x => x.DocumentId == freightId);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task PurchaseLandedCost_LinkedDocument_CannotBeConsumedTwice()
+        {
+            var (service, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                SeedShipperParty(connectionString);
+                var (receiptId, _) = await CreateGoodsReceiptAsync(service, companyId, "9212");
+                var freightId = await PostCarrierFreightInvoiceAsync(connectionString, companyId, "PIN-FRT-9212", 500m);
+
+                var landedCosts = new PurchaseLandedCostService(
+                    new PurchaseLandedCostRepository("SQLite", connectionString), _ => true);
+                var firstId = await landedCosts.CreateDraftAsync(
+                    companyId, new[] { new PurchaseLandedCostReceiptSelection(receiptId) }, "LC-9212-A", new DateOnly(2026, 11, 3),
+                    "SAR", 1m, new[] { LinkedFreightCharge(freightId, 500m) }, Actor);
+                // A second draft may be created while the first is unposted…
+                var secondId = await landedCosts.CreateDraftAsync(
+                    companyId, new[] { new PurchaseLandedCostReceiptSelection(receiptId) }, "LC-9212-B", new DateOnly(2026, 11, 3),
+                    "SAR", 1m, new[] { LinkedFreightCharge(freightId, 500m) }, Actor);
+
+                await landedCosts.PostAsync(companyId, firstId, Actor);
+
+                // …but posting it after the first consumed the document is
+                // rejected with the catalogued duplicate-link error…
+                var postError = await Assert.ThrowsAsync<AppError>(() =>
+                    landedCosts.PostAsync(companyId, secondId, Actor));
+                Assert.Equal(ErrorCodes.LandedCostDocumentAlreadyLinked, postError.Code);
+
+                // …and so is creating a fresh draft against the consumed doc.
+                var draftError = await Assert.ThrowsAsync<AppError>(() => landedCosts.CreateDraftAsync(
+                    companyId, new[] { new PurchaseLandedCostReceiptSelection(receiptId) }, "LC-9212-C", new DateOnly(2026, 11, 3),
+                    "SAR", 1m, new[] { LinkedFreightCharge(freightId, 500m) }, Actor));
+                Assert.Equal(ErrorCodes.LandedCostDocumentAlreadyLinked, draftError.Code);
+
+                // Exactly one liability ever existed: the carrier's 500.
+                Assert.Equal(500m, Scalar(connectionString,
+                    "SELECT COALESCE(SUM(credit) - SUM(debit), 0) FROM party_ledger WHERE party_id = 10;"));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task PurchaseLandedCost_LinkedReversal_RestoresExpenseExactlyAndFreesLink()
+        {
+            var (service, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                SeedShipperParty(connectionString);
+                var (receiptId, receiptNo) = await CreateGoodsReceiptAsync(service, companyId, "9213");
+                await SellOneUnitAsync(connectionString, "SAL-LC-9213", "2026-11-03");
+                var freightId = await PostCarrierFreightInvoiceAsync(connectionString, companyId, "PIN-FRT-9213", 500m);
+
+                var landedCosts = new PurchaseLandedCostService(
+                    new PurchaseLandedCostRepository("SQLite", connectionString), _ => true);
+                var landedCostId = await landedCosts.CreateDraftAsync(
+                    companyId, new[] { new PurchaseLandedCostReceiptSelection(receiptId) }, "LC-9213", new DateOnly(2026, 11, 3),
+                    "SAR", 1m, new[] { LinkedFreightCharge(freightId, 500m) }, Actor);
+                await landedCosts.PostAsync(companyId, landedCostId, Actor);
+                Assert.Equal(536m, MovementCost(connectionString, receiptNo, 42));
+
+                var reversalJournalId = await landedCosts.ReverseAsync(
+                    companyId, landedCostId, "LC-REV-9213",
+                    new DateOnly(2026, 11, 4), "Reverse linked landed cost", Actor);
+                var reversalGl = JournalAccountsById(connectionString, reversalJournalId);
+                // The reclass unwinds exactly: Freight-in is debited back,
+                // valuation returns to the receipt's original cost, and the
+                // linked document itself is never touched.
+                Assert.Equal(500m, reversalGl["404"].Debit);
+                Assert.Equal(333.3333m, reversalGl["1203"].Credit);
+                Assert.Equal(166.6667m, reversalGl["401"].Credit);
+                Assert.Equal(36m, MovementCost(connectionString, receiptNo, 42));
+                Assert.Equal(500m, Scalar(connectionString,
+                    "SELECT COALESCE(SUM(credit) - SUM(debit), 0) FROM party_ledger WHERE party_id = 10;"));
+                Assert.Equal(0m, Scalar(connectionString,
+                    "SELECT COUNT(*) FROM party_ledger WHERE doc_kind IN ('LND', 'LND-REV');"));
+
+                // The link is released: the document can be consumed again.
+                var linkable = await landedCosts.ListLinkableDocumentsAsync(companyId);
+                Assert.Contains(linkable, x => x.DocumentId == freightId);
+                var relinkedId = await landedCosts.CreateDraftAsync(
+                    companyId, new[] { new PurchaseLandedCostReceiptSelection(receiptId) }, "LC-9213-B", new DateOnly(2026, 11, 5),
+                    "SAR", 1m, new[] { LinkedFreightCharge(freightId, 500m) }, Actor);
+                var relinkedJournal = await landedCosts.PostAsync(companyId, relinkedId, Actor);
+                Assert.Equal(500m, JournalAccountsById(connectionString, relinkedJournal)["404"].Credit);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task PurchaseLandedCost_WeightBasis_AllocatesFromMaterialCardWeights()
+        {
+            var (service, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                using (var connection = new SqliteConnection(connectionString))
+                {
+                    connection.Open();
+                    using var command = connection.CreateCommand();
+                    command.CommandText = """
+                        UPDATE materials SET weight_net = 5 WHERE material_id = 42;
+                        UPDATE materials SET weight_net = 30 WHERE material_id = 43;
+                        """;
+                    command.ExecuteNonQuery();
+                }
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-LC-9214",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 10m),
+                        new CommercialLineDraft(43, "MAT-43", "Item 43", "PCS", 1m, 30m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+                var (receiptId, receiptNo) = await service.CreatePurchaseReceiptAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 2),
+                    new[]
+                    {
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 10m),
+                        new CommercialLineDraft(43, "MAT-43", "Item 43", "PCS", 1m, 30m)
+                    }, Actor);
+
+                var landedCosts = new PurchaseLandedCostService(
+                    new PurchaseLandedCostRepository("SQLite", connectionString), _ => true);
+                var landedCostId = await landedCosts.CreateDraftAsync(
+                    companyId, new[] { new PurchaseLandedCostReceiptSelection(receiptId) }, "LC-9214", new DateOnly(2026, 11, 3),
+                    "SAR", 1m,
+                    new[]
+                    {
+                        new PurchaseLandedCostChargeDraft(
+                            "FREIGHT", "Freight by weight", 90m, LandedCostAllocationBases.ByWeight)
+                    },
+                    Actor);
+                // Line weights: 42 -> 2 x 5 = 10; 43 -> 1 x 30 = 30 (of 40).
+                Assert.Equal(22.5m, Scalar(connectionString,
+                    $"SELECT allocated_base_amount FROM purchase_landed_cost_allocations WHERE landed_cost_id = '{landedCostId:D}' AND material_id = 42;"));
+                Assert.Equal(67.5m, Scalar(connectionString,
+                    $"SELECT allocated_base_amount FROM purchase_landed_cost_allocations WHERE landed_cost_id = '{landedCostId:D}' AND material_id = 43;"));
+                await landedCosts.PostAsync(companyId, landedCostId, Actor);
+                Assert.Equal(42.5m, MovementCost(connectionString, receiptNo, 42));
+                Assert.Equal(97.5m, MovementCost(connectionString, receiptNo, 43));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+
+        [Fact]
+        public async Task PurchaseLandedCost_ReversalAfterAdditionalConsumption_ReplaysStoredSplitExactly()
+        {
+            var (service, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-LC-9204",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 12m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+                var (receiptId, receiptNo) = await service.CreatePurchaseReceiptAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 12m) }, Actor);
+                await SellOneUnitAsync(connectionString, "SAL-LC-9204-A", "2026-11-03");
+
+                var landedCosts = new PurchaseLandedCostService(
+                    new PurchaseLandedCostRepository("SQLite", connectionString), _ => true);
+                var landedCostId = await landedCosts.CreateDraftAsync(
+                    companyId, new[] { new PurchaseLandedCostReceiptSelection(receiptId) }, "LC-9204", new DateOnly(2026, 11, 3),
+                    "SAR", 1m,
+                    new[]
+                    {
+                        new PurchaseLandedCostChargeDraft(
+                            "FREIGHT", "Inbound freight", 20m, LandedCostAllocationBases.ByValue)
+                    },
+                    Actor);
+                var journalId = await landedCosts.PostAsync(companyId, landedCostId, Actor);
+                var postedGl = JournalAccountsById(connectionString, journalId);
+                Assert.Equal(13.3333m, postedGl["1203"].Debit);
+                Assert.Equal(6.6667m, postedGl["401"].Debit);
+
+                // The split is stored on the allocations at post time (L3).
+                Assert.Equal(13.3333m, Scalar(connectionString,
+                    $"SELECT inventory_amount FROM purchase_landed_cost_allocations WHERE landed_cost_id = '{landedCostId:D}';"));
+                Assert.Equal(6.6667m, Scalar(connectionString,
+                    $"SELECT consumed_amount FROM purchase_landed_cost_allocations WHERE landed_cost_id = '{landedCostId:D}';"));
+
+                // Consume ANOTHER unit after posting. A recomputed split
+                // would now be 6.6667 / 13.3333; the stored split must be
+                // replayed instead, mirroring the original journal exactly.
+                await SellOneUnitAsync(connectionString, "SAL-LC-9204-B", "2026-11-04");
+
+                var reversalJournalId = await landedCosts.ReverseAsync(
+                    companyId, landedCostId, "LC-REV-9204",
+                    new DateOnly(2026, 11, 5), "Reverse after further consumption", Actor);
+                var reversalGl = JournalAccountsById(connectionString, reversalJournalId);
+                Assert.Equal(postedGl["1203"].Debit, reversalGl["1203"].Credit);
+                Assert.Equal(postedGl["401"].Debit, reversalGl["401"].Credit);
+                Assert.Equal(20m, reversalGl["2201"].Debit);
+                Assert.Equal(36m, MovementCost(connectionString, receiptNo, 42));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task PurchaseLandedCost_MultiReceiptVoucher_AllocatesAcrossReceiptsWithLineExclusion()
+        {
+            var (service, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var orderA = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-LC-9205A",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 10m),
+                        new CommercialLineDraft(43, "MAT-43", "Item 43", "PCS", 1m, 30m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderA, Actor);
+                var (receiptA, receiptANo) = await service.CreatePurchaseReceiptAsync(
+                    companyId, orderA, new DateOnly(2026, 11, 2),
+                    new[]
+                    {
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 10m),
+                        new CommercialLineDraft(43, "MAT-43", "Item 43", "PCS", 1m, 30m)
+                    }, Actor);
+
+                var orderB = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-LC-9205B",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 10m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderB, Actor);
+                var (receiptB, receiptBNo) = await service.CreatePurchaseReceiptAsync(
+                    companyId, orderB, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 10m) }, Actor);
+
+                var line42A = (long)Scalar(connectionString,
+                    $"SELECT line_id FROM purchase_document_lines WHERE doc_id = {receiptA} AND material_id = 42;");
+                var line42B = (long)Scalar(connectionString,
+                    $"SELECT line_id FROM purchase_document_lines WHERE doc_id = {receiptB} AND material_id = 42;");
+
+                var landedCosts = new PurchaseLandedCostService(
+                    new PurchaseLandedCostRepository("SQLite", connectionString), _ => true);
+
+                // Excluding every line of a receipt is a catalogued error.
+                var excluded = await Assert.ThrowsAsync<AppError>(() => landedCosts.CreateDraftAsync(
+                    companyId,
+                    new[]
+                    {
+                        new PurchaseLandedCostReceiptSelection(receiptA, new[] { line42A }),
+                        new PurchaseLandedCostReceiptSelection(receiptB, Array.Empty<long>())
+                    },
+                    "LC-9205-X", new DateOnly(2026, 11, 3), "SAR", 1m,
+                    new[]
+                    {
+                        new PurchaseLandedCostChargeDraft(
+                            "FREIGHT", "Inbound freight", 10m, LandedCostAllocationBases.ByValue)
+                    },
+                    Actor));
+                Assert.Equal(ErrorCodes.LandedCostReceiptSelectionInvalid, excluded.Code);
+
+                // Receipt A's material-43 line is excluded; the charge is
+                // distributed by value over A-42 (20) and B-42 (30) only.
+                var landedCostId = await landedCosts.CreateDraftAsync(
+                    companyId,
+                    new[]
+                    {
+                        new PurchaseLandedCostReceiptSelection(receiptA, new[] { line42A }),
+                        new PurchaseLandedCostReceiptSelection(receiptB)
+                    },
+                    "LC-9205", new DateOnly(2026, 11, 3), "SAR", 1m,
+                    new[]
+                    {
+                        new PurchaseLandedCostChargeDraft(
+                            "FREIGHT", "Inbound freight", 10m, LandedCostAllocationBases.ByValue)
+                    },
+                    Actor);
+                Assert.Equal(2m, Scalar(connectionString,
+                    $"SELECT COUNT(*) FROM purchase_landed_cost_receipts WHERE landed_cost_id = '{landedCostId:D}';"));
+                Assert.Equal(2m, Scalar(connectionString,
+                    $"SELECT COUNT(*) FROM purchase_landed_cost_allocations WHERE landed_cost_id = '{landedCostId:D}';"));
+                Assert.Equal(4m, Scalar(connectionString,
+                    $"SELECT allocated_base_amount FROM purchase_landed_cost_allocations WHERE landed_cost_id = '{landedCostId:D}' AND receipt_doc_id = {receiptA};"));
+                Assert.Equal(6m, Scalar(connectionString,
+                    $"SELECT allocated_base_amount FROM purchase_landed_cost_allocations WHERE landed_cost_id = '{landedCostId:D}' AND receipt_doc_id = {receiptB};"));
+
+                var journalId = await landedCosts.PostAsync(companyId, landedCostId, Actor);
+                var gl = JournalAccountsById(connectionString, journalId);
+                Assert.Equal(10m, gl["2201"].Credit);
+                Assert.Equal(24m, MovementCost(connectionString, receiptANo, 42));
+                Assert.Equal(36m, MovementCost(connectionString, receiptBNo, 42));
+                // The excluded line keeps its original receipt cost.
+                Assert.Equal(30m, MovementCost(connectionString, receiptANo, 43));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task PurchaseInvoice_PriceVariance_PostsToDedicatedPpvAccount()
+        {
+            var (service, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var orderId = await service.CreateOrderAsync(
+                    Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-LC-9206",
+                        new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 12m),
+                        partyId: 9, partyCode: "SUP-1"), Actor);
+                await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+                await service.CreatePurchaseReceiptAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 2),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 12m) }, Actor);
+
+                var (invoiceId, _) = await service.CreatePurchaseInvoiceAsync(
+                    companyId, orderId, new DateOnly(2026, 11, 3),
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 13m) }, Actor);
+
+                var gl = GlByAccount(connectionString, "PUR", invoiceId);
+                Assert.Equal(24m, gl["2203"].Debit);
+                Assert.Equal(2m, gl["415"].Debit);
+                Assert.False(gl.ContainsKey("402"));
+                Assert.Equal(26m, gl["2201"].Credit);
             }
             finally
             {
@@ -1707,7 +2257,8 @@ namespace Kern.Tests
                 ("1201", "Trade Accounts Receivable", "ASSET"), ("1203", "Merchandise Inventory", "ASSET"),
                 ("2201", "Trade Accounts Payable", "LIABILITY"), ("2203", "Accrued Liabilities / GRNI", "LIABILITY"), ("301", "Goods Sales Revenue", "REVENUE"),
                 ("401", "Cost of Goods Sold", "EXPENSE"), ("402", "Merchandise Purchases", "EXPENSE"),
-                ("403", "Purchase Returns", "EXPENSE"),
+                ("403", "Purchase Returns", "EXPENSE"), ("404", "Freight-in", "EXPENSE"),
+                ("415", "Purchase Price Variance", "EXPENSE"),
                 ("131", "Cash on Hand", "ASSET")
             })
             {

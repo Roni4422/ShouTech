@@ -4,11 +4,20 @@
 -- SQLite counterpart: sqlite/093_purchase_landed_cost_completion.sql.
 
 -- L1/L2: per-charge payee (parties.ledger_id; NULL = receipt supplier)
--- and credit mode ('Payable' default, or 'AlreadyBooked' = credit the
--- charge's own expense account, no party-ledger entry).
+-- and credit mode: 'Payable' (default; voucher creates the liability) or
+-- 'Linked' (liability already exists on linked_document_id, a posted
+-- supplier document; posting reclasses out of linked_account_code, the
+-- account that document originally debited, and creates NO new
+-- liability). 'AlreadyBooked' remains in the CHECK only so drafts
+-- written by the interim 093 build stay postable.
 ALTER TABLE purchase_landed_cost_charges ADD COLUMN IF NOT EXISTS payee_party_id BIGINT;
 ALTER TABLE purchase_landed_cost_charges ADD COLUMN IF NOT EXISTS credit_mode TEXT NOT NULL DEFAULT 'Payable'
-    CHECK (credit_mode IN ('Payable','AlreadyBooked'));
+    CHECK (credit_mode IN ('Payable','AlreadyBooked','Linked'));
+ALTER TABLE purchase_landed_cost_charges ADD COLUMN IF NOT EXISTS linked_document_id BIGINT
+    REFERENCES purchase_documents(doc_id);
+ALTER TABLE purchase_landed_cost_charges ADD COLUMN IF NOT EXISTS linked_account_code TEXT;
+CREATE INDEX IF NOT EXISTS ix_purchase_landed_cost_charges_linked
+    ON purchase_landed_cost_charges(linked_document_id);
 
 -- L3: inventory/consumed split stored at post time, replayed by reversal.
 ALTER TABLE purchase_landed_cost_allocations ADD COLUMN IF NOT EXISTS inventory_amount NUMERIC;

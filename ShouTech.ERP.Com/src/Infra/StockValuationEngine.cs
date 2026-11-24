@@ -89,7 +89,8 @@ public static class StockValuationEngine
         DbConnection connection, DbTransaction transaction, string provider,
         string companyId, string stockCompanyCode, Guid landedCostId, Guid allocationId,
         long sourceMovementId, long warehouseId, long materialId,
-        decimal allocatedBaseAmount, string actor)
+        decimal allocatedBaseAmount, string actor,
+        decimal? storedInventoryAdjustment = null)
     {
         ArgumentNullException.ThrowIfNull(connection);
         ArgumentNullException.ThrowIfNull(transaction);
@@ -271,9 +272,28 @@ public static class StockValuationEngine
         // The receipt movement is the historical source record. Its full
         // cost is revised, while only the share still represented in stock
         // is added to inventory; the consumed remainder is recognized in COGS.
-        var inventoryAdjustment = remainingQty == 0m ? 0m
-            : ValuationMath.RoundMoney((newUnitCost - oldUnitCost) * remainingQty);
-        var consumedAdjustment = allocatedBaseAmount - inventoryAdjustment;
+        decimal inventoryAdjustment, consumedAdjustment;
+        if (storedInventoryAdjustment is decimal storedInventory)
+        {
+            // L3 exact reversal (migration 093): replay the inventory share
+            // stored on the allocation at post time. The split is NOT
+            // recomputed from the quantity remaining now, so a reversal
+            // after further consumption mirrors the original posting
+            // line-for-line; the layer rate still unwinds exactly above.
+            inventoryAdjustment = ValuationMath.RoundMoney(storedInventory);
+            consumedAdjustment = allocatedBaseAmount - inventoryAdjustment;
+        }
+        else
+        {
+            // The one production split implementation: the consumption
+            // allocator (proportional to quantity still on hand, 4-dp).
+            var split = LandedCostConsumptionAllocator.Split(new[]
+            {
+                new LandedCostConsumptionLine(receiptLineId, originalQty, remainingQty, allocatedBaseAmount)
+            })[0];
+            inventoryAdjustment = split.InventoryBaseAdjustment;
+            consumedAdjustment = split.ConsumedBaseAdjustment;
+        }
         var quantityRemainingImmediatelyAfterReceipt =
             Math.Min(originalQty, Math.Max(0m, receiptBalanceQty));
         var receiptSnapshotAdjustment = ValuationMath.RoundMoney(
@@ -309,7 +329,7 @@ public static class StockValuationEngine
 
         if (inventoryAdjustment != 0m)
         {
-            if (balance is null || balance.Quantity < remainingQty)
+            if (balance is null || (storedInventoryAdjustment is null && balance.Quantity < remainingQty))
                 throw new InvalidOperationException("The stock balance does not contain the remaining quantity of the receipt cost source.");
             var newStockValue = ValuationMath.RoundMoney(balance.Value + inventoryAdjustment);
             if (newStockValue < 0m)
