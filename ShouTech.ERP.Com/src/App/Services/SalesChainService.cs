@@ -254,9 +254,8 @@ public sealed class SalesChainService
     /// stay exact even though the invoice is a single document.
     /// Guards: at least one delivery, no delivery twice; every source
     /// must be a POSTED delivery note (SAL-7001) of one company, one
-    /// party and one currency at one exchange rate (SAL-7004 — the
-    /// catalog has no dedicated consolidation-mismatch code; flagged
-    /// for the owner); per-line quantities respect the remaining
+    /// party and one currency at one exchange rate (SAL-7029
+    /// ConsolidationMismatch, registered at wave-3 fan-in); per-line quantities respect the remaining
     /// unbilled quantity of their own delivery line (SAL-7002); when
     /// nothing billable remains on any selected delivery the call
     /// fails with SAL-7003. A delivery that is already fully billed
@@ -299,8 +298,8 @@ public sealed class SalesChainService
             var delivery = await _repository.FindSalesByIdAsync(selection.DeliveryDocId, cancellationToken).ConfigureAwait(false)
                            ?? throw new InvalidOperationException($"Source sales document '{selection.DeliveryDocId}' was not found.");
             if (delivery.DocKind != CommercialDocKinds.DeliveryNote)
-                throw new AppError(ErrorCodes.ChainTransitionNotAllowed,
-                    $"Documents cannot be converted from '{delivery.DocKind}' to '{CommercialDocKinds.SalesInvoice}'.",
+                throw new AppError(ErrorCodes.ConsolidationMismatch,
+                    $"Document '{delivery.DocNo}' is a '{delivery.DocKind}', not a delivery note; only delivery notes can be consolidated.",
                     delivery.DocKind, CommercialDocKinds.SalesInvoice);
             if (delivery.Status != CommercialDocumentStatus.Posted)
                 throw new AppError(ErrorCodes.ChainSourceNotPosted,
@@ -324,7 +323,7 @@ public sealed class SalesChainService
                 || !sameParty
                 || !string.Equals(delivery.CurrencyCode, first.CurrencyCode, StringComparison.OrdinalIgnoreCase)
                 || delivery.ExchangeRate != first.ExchangeRate)
-                throw new AppError(ErrorCodes.ChainTransitionNotAllowed,
+                throw new AppError(ErrorCodes.ConsolidationMismatch,
                     $"Delivery '{delivery.DocNo}' cannot be consolidated with '{first.DocNo}': company, party, currency and exchange rate must match.",
                     delivery.DocKind, CommercialDocKinds.SalesInvoice);
         }
