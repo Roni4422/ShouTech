@@ -12,7 +12,7 @@ Benchmark chain (ERPNext Selling + CRM):
 Lead → Opportunity → Quotation → Sales Order → Delivery Note → Sales Invoice →
 Payment Entry, with returns/credit notes, partial delivery and partial billing,
 `per_delivered` / `per_billed` tracking, and GL/stock/COGS/tax reconciliation at
-every posting. The parity matrix (`ERP-PROCESS-PARITY-MATRIX.md`) rates this
+every posting. The parity matrix (`COMPETITIVE_GAP_ASSESSMENT_2026-11-21.md`) rates this
 cycle **Foundation found**; its acceptance gate is: *convert lead → quote →
 order → partial delivery → invoice → partial receipt; preserve source links;
 reconcile AR, revenue, tax, COGS and stock; support return/refund/reversal.*

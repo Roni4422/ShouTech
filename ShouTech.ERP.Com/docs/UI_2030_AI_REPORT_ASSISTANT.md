@@ -55,4 +55,4 @@ MainApp (WPF) → ReportCopilotViewModel
 3. **Copilot online adapter (server mode) + audit stamping; narrative summaries.**
 4. **Sell the difference:** one click from "question" to "professional bilingual report" — Al-Ameen v10 and ERPNext both require manual report building.
 
-*References: docs/ERPNEXT_PARITY_ROADMAP.md (Phase 3 polish), issue #7 (selling chain UI).*
+*References: docs/COMPETITIVE_GAP_ASSESSMENT_2026-11-21.md (Phase 3 polish), issue #7 (selling chain UI).*

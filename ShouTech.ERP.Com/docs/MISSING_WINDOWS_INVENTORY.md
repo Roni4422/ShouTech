@@ -10,7 +10,7 @@ modules), `cod/app/src/Services/RptNav.cs` (the live command router),
 `cod/app/src/Services/RibbonReportRouter.cs`, `cod/app/src/Services/Data.cs`
 module definitions, a grep for `ShowOperationUnavailable` /
 `ShowPersistenceUnavailable` across `cod/app/src/Views`, and
-`docs/ERPNEXT_PARITY_ROADMAP.md`.
+`docs/COMPETITIVE_GAP_ASSESSMENT_2026-11-21.md`.
 
 ## 1. How navigation actually works today
 

@@ -170,11 +170,11 @@ Use **Not started**, **In progress**, **Blocked**, **Implemented — unverified*
 - [Developer Handbook](DEVELOPER_HANDBOOK.md) — coding, testing, database, security, localization and review rules.
 - [Module Catalog](MODULE_CATALOG.md) — module boundaries, dependencies and evidence required for completion.
 - [Engineering Reference Library](ENGINEERING_REFERENCE_LIBRARY.md) — external standards and product documentation to consult.
-- [Competitive ERP Roadmap](ERP-COMPETITIVE-ROADMAP.md) — broader process gap assessment.
-- [ERP Process Parity Matrix](ERP-PROCESS-PARITY-MATRIX.md) — process-level benchmark.
-- [ERPNext Parity Roadmap](ERPNEXT_PARITY_ROADMAP.md) — ERPNext concepts and comparison.
-- [Manager.io Benchmark](MANAGER-IO-COMPETITIVE-BENCHMARK.md) — accounting/productivity benchmark.
-- [Phenix 10 Roadmap](PHENIX10-COMPETITIVE-ROADMAP.md) — published capability benchmark.
+- [Competitive ERP Roadmap](COMPETITIVE_GAP_ASSESSMENT_2026-11-21.md) — broader process gap assessment.
+- [ERP Process Parity Matrix](COMPETITIVE_GAP_ASSESSMENT_2026-11-21.md) — process-level benchmark.
+- [ERPNext Parity Roadmap](COMPETITIVE_GAP_ASSESSMENT_2026-11-21.md) — ERPNext concepts and comparison.
+- [Manager.io Benchmark](COMPETITIVE_GAP_ASSESSMENT_2026-11-21.md) — accounting/productivity benchmark.
+- [Phenix 10 Roadmap](COMPETITIVE_GAP_ASSESSMENT_2026-11-21.md) — published capability benchmark.
 - [Architecture Refactoring Plan](REFACTOR.md) — current architecture transition and file disposition.
 - [Database Migrations](DATABASE_MIGRATIONS.md) — migration workflow and safeguards.
 - [Accounting Reversals and Outbox](ACCOUNTING_CHART_PERIODS_YEAR_CLOSE.md) — posting and delivery invariants.

@@ -1,3 +1,5 @@
+<!-- source: docs/COMPETITIVE_GAP_ASSESSMENT_2026-11-21.md -->
+
 # ShouTech ERP — Full Competitive Gap Assessment and Product Roadmap
 
 **Assessment date:** 2026-11-21  
@@ -717,3 +719,882 @@ Implemented on this branch:
 Implementation contract and limits: `docs/PURCHASE_TO_PAY_CYCLE.md` and `docs/PURCHASE_TO_PAY_CYCLE.md`.
 
 The following remain open and must not be represented as completed procurement capability: purchase requisitions and multi-level approval; supplier invoice external-reference uniqueness and document attachments; freight/insurance/customs/duty landed-cost allocation and capitalization; full receipt-time lot/serial/batch/expiry capture and end-to-end traceability; GRNI aging, unmatched receipt/invoice exception workbench and period-end reconciliation reports. RFQ supplier responses, line comparison, explicit award, supplier-quotation-to-draft-PO, partial PO receipts, GRNI, received-quantity invoice matching, payment allocation, invoice-linked debit notes, and pre-invoice receipt returns have implementation paths on this branch; they remain subject to current-head CI and end-to-end acceptance.
+
+---
+
+<!-- source: docs/ERP-COMPETITIVE-ROADMAP.md -->
+
+# ShouTech ERP Competitive Gap Assessment and Delivery Roadmap
+
+> **Current consolidated assessment (2026-11-21):** See [COMPETITIVE_GAP_ASSESSMENT_2026-11-21.md](COMPETITIVE_GAP_ASSESSMENT_2026-11-21.md) for the full current comparison against Manager.io, ERPNext, Odoo, Al-Ameen 10 and Phenix 10, including the current branch evidence snapshot, prioritized gaps and release acceptance gates. This document remains the detailed engineering roadmap and historical workflow/source review.
+
+
+**Target:** Make ShouTech a commercially credible offline-first desktop ERP that can compete with Odoo and ERPNext in the business workflows relevant to its target customers.
+
+**Baseline branch:** `work/full-app-stabilization-2026-11-18`  
+**Baseline commit reviewed:** `dd96625861a78d697d78b102a4a7b6bbdf2112b2`  
+**Assessment date:** 2026-11-19
+
+## 1. Product direction
+
+ShouTech must remain a native/offline-first desktop ERP. Do not copy Odoo's web architecture or ERPNext's Frappe/DocType implementation. Reuse their proven business concepts and process controls, implemented through ShouTech's existing Domain / App / Infra layers, SQLite-first local persistence, PostgreSQL support where already provided, and WPF Ribbon interface.
+
+The benchmark is workflow completeness and accounting/inventory integrity, not the number of screens or tables.
+
+## 2. Reference systems reviewed
+
+- Odoo source repository: https://github.com/odoo/odoo
+- Odoo application catalogue: https://www.odoo.com/page/all-apps
+- Odoo accounting concepts: https://www.odoo.com/documentation/20.0/applications/finance/accounting/overview/main_concepts/in_odoo.html
+- Odoo MRP module overview: https://github.com/odoo/odoo/blob/20.0/addons/mrp/README.md
+- ERPNext source repository: https://github.com/frappe/erpnext
+- ERPNext official documentation: https://docs.frappe.io/erpnext/introduction
+- ERPNext selling workflow: https://docs.frappe.io/erpnext/selling
+- ERPNext accounting effects: https://docs.frappe.io/erpnext/accounting-entries
+- ERPNext module settings: https://docs.frappe.io/erpnext/module-settings
+
+Important benchmark behaviours:
+- Sales is a connected lifecycle: enquiry/lead -> quotation -> order -> delivery -> invoice -> payment, with valid shorter paths for counter sales, services and drop-shipping.
+- Buying is a connected lifecycle: request/requisition -> supplier quotation -> purchase order -> receipt -> supplier invoice -> payment, with partial receipts, returns and landed-cost implications.
+- Stock events have traceable source documents, warehouse/bin locations, valuation effects, reservations, serial/batch tracking and returns.
+- Operational documents create the appropriate GL effects on posting; ordinary sales/purchases/payments should not be replaced by arbitrary manual journals.
+- Manufacturing connects BOM revisions, demand/MRP, work orders/operations, material issue, finished output, scrap/by-products, work-in-progress and actual-vs-standard cost.
+- Accounting includes multi-currency/base-currency valuation, taxes, dimensions/cost centres, budgets, bank reconciliation, receivables/payables ageing, period closing and audit trail.
+- Asset, HR/payroll, project, quality, maintenance and support processes should integrate with accounting and operational cost rather than exist as isolated forms.
+
+## 3. ShouTech code inventory: what exists is not yet proof of completeness
+
+The audited tree contains substantial foundations:
+- Domain entities/interfaces for commercial documents, journals, POS, CRM, manufacturing, BOM, planning, quality, projects, HR, fixed assets, budgets, cheques and reconciliation.
+- Application services including SalesChainService, OrderService, PosService, MfgOrderService, BomService, PlanningService, QualityService, CrmService, ProjectService, HrService, AssetService, JournalService and ReconciliationService.
+- Infrastructure repositories/engines including CommercialDocumentRepository, OrderDocumentRepository, PosRepository, MfgOrderRepository, StockValuationEngine, StockRecalculationService, GlPosting, FxRates, PartyLedger, AssetRepository and other module repositories.
+- WPF inventory snapshot: 159 unique view/source basenames, 23 XAML/code-behind pairs, 63 report basenames. MatCard has been moved to Views/Inventory; the remaining UI has not yet been fully grouped by business module or runtime-verified.
+
+These are evidence of implementation foundations only. A class, table, report or window does not count as a completed feature until its full business path, validations, permissions, persistence, accounting/stock effects, reversal, localization and tests are verified.
+
+## 4. Gap matrix and required acceptance
+
+| Business area | Existing evidence in ShouTech | Benchmark capability to verify/build | Acceptance gate |
+|---|---|---|---|
+| General ledger | JournalService, GlPosting, Accounting, chart/accounting entities | Automated source-document posting, dimensions, accrual/cash basis where applicable, recurring journals, allocations, period lock/close, audit | Every posted source document produces balanced GL; reversals preserve original and net correctly; trial balance and statements reconcile |
+| Sales / AR | SalesChainService, OrderService, CommercialDocumentRepository, PartyLedger, invoice/order/delivery windows | Lead/quotation/order/delivery/invoice/credit note/receipt lifecycle, partial fulfilment, credit limits, price lists, discounts, tax, returns, dunning/ageing | Complete and partial paths pass; stock, AR, revenue, tax, COGS and cash reconcile for each path |
+| Buying / AP | OrderDocumentRepository, OrderService, supplier ledger, purchasing document foundations | Requisition/RFQ/supplier quotation/PO/receipt/bill/payment, partial receipt, supplier return, price variance, landed cost, three-way match | Ordered/received/billed quantities and values reconcile; AP, stock, tax and GRNI clear correctly |
+| Inventory / WMS | StockValuationEngine, StockRecalculationService, BatchSerial, warehouse/material windows and reports | Multi-warehouse locations/bins, reservations, replenishment, put-away/picking, transfers, cycle counts, lot/serial/expiry, valuation methods, landed cost | Quantity and value reconcile by item/warehouse/lot; no duplicate movements; negative-stock policy enforced; replay/recalculation is deterministic |
+| POS | PosService, PosRepository, PosPosting, session/checkout/return windows | Offline shift/cash control, multiple tenders, customer credit, refunds, exchanges, price override permissions, cash-up/Z report, safe sync/idempotency | Reopen/retry/sync does not duplicate sales; refunds mirror settlements and stock; session totals equal cash/bank/GL |
+| Manufacturing | BomService, MfgOrderService, MfgOrderRepository, PlanningService, Mfg windows/reports | Multi-level/revision-controlled BOM, routings/work centres/capacity, MRP, job cards, WIP, scrap/by-products, subcontracting, actual costing and variance | Material issue/output/WIP/GL agree; insufficient stock rolls back; cancellation restores balances; cost variance is explainable |
+| Quality / Maintenance | QualityService, QualityGate, quality and maintenance windows | Incoming/in-process/final inspections, non-conformance, corrective actions, equipment schedules, preventive maintenance and downtime cost | Failed inspection blocks configured next step; corrective action and equipment history are traceable |
+| Fixed assets | AssetService, AssetRepository, FixedAsset entity, AssetWin | Acquisition/capitalisation, depreciation books/methods, disposals, transfers, impairment/revaluation, maintenance, GL integration | Asset register ties to GL; schedules reproduce; disposal and period close are auditable |
+| Cash / Bank / Cheques | Cash services, ChequeService, ReconciliationService, bank reconciliation window | Cash forecasts, bank statement import/matching, reconciliation rules, deposits, cheque lifecycle, bounced/replaced cheques, fees and FX differences | Reconciled statement balance ties to bank GL; unmatched items remain visible; cheque status changes post correct entries |
+| CRM / Projects / Support | CrmService, ProjectService, SupportWin and related entities | Lead-to-opportunity-to-quote, activity history, project/task/time/expense/billing, support SLA and warranty | Sales pipeline converts without re-entry; project profitability reconciles to time, expenses and invoices; SLA aging is testable |
+| HR / Payroll | HrService, HR entities and HR windows/reports | Employee lifecycle, attendance/shifts, leave accrual, payroll components, statutory deductions, loans/advances, payslip and GL posting | Payroll calculation reproducible; period approval/lock; employee privacy/role permissions; payroll journal balances |
+| Tax / Compliance | TaxSvc and tax fields across documents | Tax groups, inclusive/exclusive pricing, withholding, recoverable/non-recoverable tax, tax returns and localization packs | Tax reports reconcile to GL by tax code and period; jurisdiction rules are configurable and tested |
+| Analytics / Reporting | 63 report basenames and report infrastructure | Drill-down from KPI -> report -> source document, saved filters, scheduled exports, comparative periods, margin/stock/aging dashboards | Each report ties to source ledgers; date/company/branch filters are consistent; exports match on-screen totals |
+| Platform / Security | Auth, Permissions, License, Backup, DataExchangeGuard, SchMig, Localization | Role/permission matrix, MFA option where suitable, encryption at rest/backup, tamper-evident audit, recovery, signed updater, license grace/offline activation, diagnostics | Clean-device install/upgrade/rollback; least-privilege tests; backup restore verified; secrets not stored as plaintext |
+| Multi-company / Multi-branch | Company service and company-scoped repository patterns | Per-company data isolation, branches/warehouses, intercompany transactions, consolidated reporting, separate fiscal years/currencies | Cross-company leakage tests; intercompany balances reconcile; user access scoped to allowed companies/branches |
+
+## 5. Live correctness gate — execution log (2026-11-19)
+
+The most recent **completed** CI run inspected at this update is:
+- Run: 44466340520 (PR merge ref; branch head at that time: `7c8c6d63fe673ba74fd7d17b130fc9112863fd4a`).
+- Release build: succeeded with **0 warnings / 0 errors**.
+- Tests: **307 passed, 9 failed, 316 total**.
+- Newer branch commit `da3bf2fd024d35dc4cf5687a6084e6948311f69c` adds missing GL accounts to the sales-chain posting fixture; its CI run 44467664452 was still in progress when this log was written.
+- Follow-up commit `ccc3942ea69d3cc9b893fe921e4c9d8e02273e16` corrects the manufacturing test migration executor so conditional ALTER directives are evaluated in migration order, after preceding CREATE statements. Its CI run 44468374819 was queued at this update.
+- Therefore, neither follow-up is marked verified until its own CI run completes.
+
+### Failure classification from run 44466340520
+
+| Failure group | Evidence | Corrective action / state |
+|---|---|---|
+| Manufacturing fixture — duplicate `card_no` | Five MFG tests failed while applying migration 016; the fixture evaluated all conditional-column directives before executing the earlier CREATE TABLE statements in that same migration. | Fixed in `ccc3942`: execute migration segments in order, evaluate each directive against the schema created by preceding segments. CI pending. |
+| Sales-chain GL account 301 | Posting failed because the fixture did not seed an active, postable sales revenue account. | Fixture now seeds 301, 1203 and 401 alongside receivables in `da3bf2f`. CI pending. |
+| POS partial return settlement | `PosPosting.PartiallyUnsettleOriginal` received SQLite `no such column: debit` when reading party-ledger settlement rows. | Open. Confirm the exact schema actually present in the failing test database before changing SQL or adding a compatibility migration. Preserve append-only settlement mirrors and partial-refund arithmetic. |
+| Invoice reversal settlement | `InvRepo.UnsettleOriginalOnReversal` received the same missing-`debit` error in two reversal tests. | Open. Trace migration ownership/order and the exact live table columns; do not mask this with a zero/default balance. |
+| Sales invoice GL test | Sales return test failed through the reversal settlement path above. | Treat as part of the party-ledger schema defect; keep the stock valuation and mirrored GL assertions unchanged. |
+
+The current known blocker is not merely test setup: the party-ledger schema seen by the failing reversal tests does not expose the `debit` column expected by the runtime query, despite the canonical SQLite commercial-document migration defining `debit` and `credit`. This discrepancy must be diagnosed at the database-creation/migration boundary. Add a schema assertion immediately after migration in the relevant fixtures and trace any pre-existing table/bootstrap path that could cause `CREATE TABLE IF NOT EXISTS` to preserve an incompatible table.
+
+### Required evidence before closing Phase A
+
+1. CI on the latest branch commit: Release build 0 warnings/errors and all tests passing.
+2. SQLite schema assertions for `party_ledger`, warehouses and manufacturing tables after clean migration.
+3. Fresh SQLite migration run and upgrade run from a representative pre-existing database.
+4. PostgreSQL migration smoke run, including the same business schemas.
+5. Reversal/partial-refund regression tests proving party ledger, allocations, paid amount, inventory and GL reconcile; do not delete posted financial history.
+
+## 6. Delivery order
+
+### Phase A — Correctness gate (current)
+- Resolve all CI failures by root cause.
+- Add regression tests for sales/purchase returns, partial settlement reversal, POS refund, manufacturing issue/output/cancel, multi-currency, permissions, and unit conversions.
+- Verify both SQLite and PostgreSQL migration paths and accounting/stock reconciliation.
+- Keep posted financial documents immutable; use reversal/credit-note flows with complete audit trail.
+
+### Phase B — Core commercial workflows
+- Finish Sales and Buying end-to-end document chains.
+- Finish warehouse execution: reservations, picking/packing, batch/serial/expiry, counts, replenishment and costing.
+- Finish POS shift and refund accounting.
+- Connect all posting, payment, stock and tax effects to GL/party ledgers.
+
+### Phase C — Enterprise operations
+- Complete MRP, work centres/routings, capacity planning, WIP and production variance.
+- Complete quality, maintenance, assets, HR/payroll, projects and support workflows.
+- Add intercompany and multi-branch controls where supported by target customer needs.
+
+### Phase D — Usability and reporting
+- Group windows by business module without splitting large files unnecessarily.
+- Complete Ribbon routes, permissions, resource dictionaries, localization, search/filter/validation and consistent layouts.
+- Provide drill-down dashboards and reports that reconcile to source transactions.
+
+### Phase E — Commercial release
+- Installer, updater, uninstall, offline activation/licensing, backup/restore, secure credential handling, audit/logging, migration/rollback and documentation.
+- Run acceptance on a clean Windows machine with realistic multi-company datasets and full period close.
+
+## 7. Non-negotiable engineering rules
+
+- Work only on `work/full-app-stabilization-2026-11-18`; do not merge into `main` without explicit approval.
+- Prefer existing files/services and existing architecture. Do not split large files unless there is a concrete technical need.
+- Keep source code, comments and default resource keys in English; user-visible translations belong in resource files.
+- All schema definitions/migrations belong under `dba`; runtime service files must not own embedded table DDL.
+- Never weaken accounting, stock, security or validation rules just to make tests pass.
+- No feature is complete until UI, route, permissions, localization, database, service, reporting, reversal and automated tests are connected.
+- A module marked implemented must be backed by a passing workflow test, not merely a class or window name.
+
+## 8. Definition of done
+
+ShouTech can be called commercially ready only after:
+1. All automated tests pass on the release commit.
+2. SQLite and PostgreSQL migration/integration suites pass.
+3. Sales, buying, inventory, POS, manufacturing and finance end-to-end acceptance scenarios reconcile.
+4. Security, permissions, audit, backup/restore and clean installation are verified.
+5. No critical data-loss, duplicate-posting, cross-company leakage or untraceable reversal defect remains.
+6. Release package and operator/admin documentation are complete.
+
+
+## 9. Source-level workflow comparison: Odoo 19.0 and ERPNext 15
+
+This review follows executable model/service code, not only product feature lists. The
+purpose is to transfer business invariants into ShouTech's desktop/offline architecture;
+it is not a plan to copy either product's web framework.
+
+### Reference implementation paths
+
+Odoo:
+- `addons/sale/models/sale_order.py` — order confirmation, line-level delivery and invoice progress.
+- `addons/stock/models/stock_move.py` — reservations, move completion and returned-move lineage.
+- `addons/account/models/account_move.py` — posting controls, posted-entry audit state and reversal workflow.
+- `addons/mrp/models/mrp_production.py` — production orders, component consumption and finished output.
+
+ERPNext:
+- `erpnext/selling/doctype/sales_order/sales_order.py` — submit-time validation and per-delivered/per-billed progress.
+- `erpnext/buying/doctype/purchase_order/purchase_order.py` — per-received/per-billed quantities and linked-document status.
+- `erpnext/stock/stock_ledger.py` — immutable stock ledger entries and future-entry reposting after backdated changes.
+- `erpnext/manufacturing/doctype/work_order/work_order.py` — BOM-driven production, material transfer and operation/job-card lifecycle.
+- `erpnext/accounts/doctype/payment_entry/payment_entry.py` and `erpnext/accounts/general_ledger.py` — allocation, outstanding updates and GL posting.
+
+Source links:
+- Odoo sale: https://github.com/odoo/odoo/blob/19.0/addons/sale/models/sale_order.py
+- Odoo stock: https://github.com/odoo/odoo/blob/19.0/addons/stock/models/stock_move.py
+- Odoo accounting: https://github.com/odoo/odoo/blob/19.0/addons/account/models/account_move.py
+- Odoo manufacturing: https://github.com/odoo/odoo/blob/19.0/addons/mrp/models/mrp_production.py
+- ERPNext sales: https://github.com/frappe/erpnext/blob/version-15/erpnext/selling/doctype/sales_order/sales_order.py
+- ERPNext purchasing: https://github.com/frappe/erpnext/blob/version-15/erpnext/buying/doctype/purchase_order/purchase_order.py
+- ERPNext stock ledger: https://github.com/frappe/erpnext/blob/version-15/erpnext/stock/stock_ledger.py
+- ERPNext manufacturing: https://github.com/frappe/erpnext/blob/version-15/erpnext/manufacturing/doctype/work_order/work_order.py
+- ERPNext payments: https://github.com/frappe/erpnext/blob/version-15/erpnext/accounts/doctype/payment_entry/payment_entry.py
+- ERPNext GL: https://github.com/frappe/erpnext/blob/version-15/erpnext/accounts/general_ledger.py
+
+### Business invariants to adopt
+
+1. Every downstream document must retain its source document and source-line identity.
+2. Delivered, received, invoiced and billed quantities are cumulative, line-level values;
+   partial completion must not silently close the remaining quantity.
+3. A posted source order cannot be cancelled while posted downstream delivery, receipt or
+   invoice documents still depend on it. Reverse/cancel the child documents first.
+4. Returns must point to the original movement/document where available and reverse the
+   original cost/tax/settlement effect, not merely create a negative sales line.
+5. Stock is valued from the stock ledger and valuation method; backdated movements must
+   trigger deterministic replay of affected later movements.
+6. Posted financial entries are append-only; correction is by a linked reversal with an
+   auditable actor, reason and timestamp.
+7. Payment allocation, party outstanding, cash/bank movement and GL posting must commit
+   in one transaction or not commit at all.
+
+### ShouTech source assessment
+
+| Area | Verified foundation | Gap to close |
+|---|---|---|
+| Sales | `SalesChainService` supports quotation → order → delivery → invoice, including partial delivery quantities; `OrderDocumentRepository` calculates fulfilment/billing progress. | Surface partial states in the order UI and strengthen linked-document cancellation/closure rules. |
+| Purchasing | `OrderService` supports RFQ/purchase-order workflows and purchase-invoice conversion; progress calculation already recognizes purchase receipts. | No complete purchase-receipt creation/posting service was found. Add PO → partial/full receipt → supplier invoice → payment, including received-not-invoiced (GRNI) accounting and no double stock receipt. |
+| Inventory | `StockValuationEngine` supports weighted average/FIFO/LIFO, stock cost layers and replay; migrations 053/054 add valuation, batch and serial tracking. | Complete warehouse execution: location/bin-level picking and put-away, reservation visibility, replenishment and stock-count variance controls. |
+| Manufacturing | `MfgOrderRepository` supports staged material issue, WIP, finished output, by-products/scrap and close/cancel paths. | Add routings, operation sequence, work centres, capacity/calendar planning, job cards and actual-vs-standard operation time/cost. |
+| Accounting | Shared GL posting, base-currency amounts, FX rates, party ledger, payment allocations, budgets, cost centres and bank reconciliation are present. | Finish reversal/settlement regression coverage and reconcile all posting paths against the same accounting-period, currency and audit rules. |
+| Fixed assets | Asset records and depreciation scheduling/posting are present. | Complete acquisition/capitalisation, transfer, disposal/sale, impairment and revaluation with linked GL entries and audit history. |
+| POS | Sessions, held bills, split tenders, customer-on-account and return flows exist. | Complete cash-up/shift variance, tender reconciliation and return/refund edge-case acceptance tests. |
+
+### Priority order
+
+- **P0 — integrity:** all tests green; SQLite/PostgreSQL migration parity; posting, reversal,
+  settlement, valuation and period-lock invariants.
+- **P1 — purchasing:** implement Purchase Receipt and GRNI end-to-end before adding more
+  purchasing screens; prevent duplicate receipt/invoice stock movements.
+- **P1 — warehouse execution:** bin/location model, reservation and pick/put-away flows,
+  replenishment and controlled cycle counts.
+- **P1 — manufacturing execution:** routings, work centres, operation capacity and job cards.
+- **P2 — fixed assets:** full asset lifecycle and depreciation/disposal/revaluation journals.
+- **P2 — business visibility:** computed partial-delivery/receipt/billing states, source-to-ledger
+  drill-down and exception work queues.
+- **P3 — differentiators:** robust offline-first operation, safe multi-device synchronisation
+  with conflict handling, verified backup/restore drills, keyboard-first workflows and
+  explainable data-health checks.
+
+### Product differentiation rule
+
+ShouTech remains a native desktop ERP with local/offline operation. Odoo and ERPNext are
+used as references for process correctness, auditability and breadth; their server/web
+architecture is not copied. ShouTech should differentiate through reliable offline workflows,
+fast keyboard-oriented entry, compact deployment, local data ownership, predictable recovery,
+and consistent multilingual/RTL-LTR behavior. These differentiators are targets until their
+acceptance tests and release packaging are complete.
+
+---
+
+<!-- source: docs/PHENIX10-COMPETITIVE-ROADMAP.md -->
+
+# Phenix 10 Competitive Benchmark and ShouTech Upgrade Roadmap
+
+**Target branch:** `work/full-app-stabilization-2026-11-18`  
+**Benchmark source:** Official Phenix Systems / Phenix Software product pages and Phenix 10 release article  
+**Assessment date:** 2026-11-20  
+**Purpose:** Convert publicly documented Phenix 10 capabilities into a verifiable ShouTech ERP upgrade program. This is a product benchmark, not a claim that either product has been independently audited.
+
+## 1. Benchmark scope and evidence rules
+
+The primary benchmark is the vendor's published Phenix 10 feature article (dated 2023-12-24), supplemented by current Phenix product pages for accounting, inventory, POS, and manufacturing. Public pages describe marketed capabilities; they do not disclose every implementation detail, limitation, license tier, or current deployment status.
+
+ShouTech must not claim parity merely because a window, class, service, or database table exists. A capability is accepted only when its complete workflow is implemented, persisted, permission-checked, auditable, localized, tested against SQLite and PostgreSQL where supported, and verified through end-to-end tests.
+
+Status vocabulary:
+- **Existing foundation:** related ShouTech components are present in the audited source inventory; end-to-end acceptance remains required.
+- **Partial / verify:** a related workflow exists but coverage, correctness, or usability is not proven.
+- **Gap / not evidenced:** the current audited inventory does not establish the capability.
+- **New differentiator:** an enhancement ShouTech should implement beyond the published Phenix 10 description.
+
+## 2. Phenix 10 published feature inventory
+
+### 2.1 User interface and productivity
+- User-selectable themes and dark mode.
+- Detachable windows outside the main window and a multi-window workflow.
+- Keyboard navigation between open windows (Ctrl+Tab); Shift/Ctrl modifiers for separate or comparison windows.
+- Attachments that can contain arbitrary content.
+- Resizable/zoomable table columns and ascending/descending sorting with sorting disabled when needed.
+- Dashboard widgets from reports, including columns and charts.
+- Main workspace split horizontally or vertically.
+- Quick functions for frequently used cards and operations.
+- Concurrent window/report work through a multithreaded window system.
+
+### 2.2 Accounting and operational controls
+- Minimum and maximum permitted currency values.
+- A common-field lookup workflow linking invoices and vouchers.
+- Invoice import/export with the warehouse management application.
+- Visibility of stock balances across warehouses from material lookup inside invoices.
+- Account credit limits enforced during invoicing.
+- Voucher/invoice reconciliation during head-office/branch synchronization.
+- Branch-specific account mapping for customer assets, unified customer accounts, cash closing, and cash differences.
+- Transaction-level profit percentage in document information.
+
+### 2.3 Integrations and connected operations
+- Microsoft Power BI integration.
+- E-commerce integrations including Salla, Shopify, WooCommerce, and Wix.
+- Local kitchen printing from cloud/restaurant ordering workflows.
+- Cloud ordering experiences including e-menu and drive-through applications.
+- Supporting mobile applications for warehouse inventory, receiving, delivery, and synchronization.
+- Driver/delivery company setup with commission by fixed amount, percentage, or both; GPS tracking is also described.
+
+### 2.4 Reports and analytics
+- All built-in reports can be included in custom reports.
+- Custom field types such as text, dropdowns, and images in selected report types (Pro tier).
+- Purchase planning report.
+- Inventory movement analysis that evaluates turnover and movement over a period rather than relying only on a no-movement flag.
+- Tree/grouped presentation of reports by a selected column.
+- Sharing reports through WhatsApp.
+- Pivot, aggregate, and chart capabilities, with permissions governing access.
+
+### 2.5 Productivity, approvals, and security
+- Administrative approvals and HR approvals.
+- Full 64-bit execution and faster synchronization.
+- Synchronization of item masters between branches.
+- Printing image attachments and using user-card data in print templates.
+- Appointment scheduling, permission controls, and manager notifications.
+- Clipboard copy/paste restrictions for tables and reports.
+- User-specific column visibility and table-feature restrictions.
+- User working days and hours.
+- Granular permissions to edit columns, create custom columns, copy/share data, and use pivot/aggregate/chart features.
+- Import of manufacturing templates.
+
+### 2.6 Product-suite capabilities advertised by Phenix
+The vendor also markets accounting, inventory, restaurants, POS, manufacturing, fixed assets, HR, clinics, pharmacies, sales representatives, cloud, mobile applications, and integrations. Inventory pages specifically describe multi-unit support, product specifications, multiple barcodes, serial numbers, expiry dates, stock counts, reorder/shortage alerts, branch transfers, and landed-cost components. Manufacturing pages describe production tracking, BOM/model definition, material planning, production scheduling, workforce control, cost measurement, and cost variance reporting. POS pages describe barcode sales, unlimited POS points/users/items, cash-session reporting, peak-time analysis, cashier permissions, and stock-count integration.
+
+## 3. ShouTech baseline and competitive position
+
+ShouTech remains an offline-first WPF desktop ERP using SQLite and PostgreSQL. Its architecture must stay appropriate for a desktop product; do not transplant web-only Phenix or Frappe implementation patterns.
+
+The existing ShouTech ERP process-parity inventory records foundations for GL, AR/AP, inventory, POS, sales chains, manufacturing, quality, fixed assets, cash/bank, CRM, HR, tax, reports, security, and multi-company. It also explicitly marks many workflows as partial or still requiring end-to-end verification. See `ERP-PROCESS-PARITY-MATRIX.md` for the detailed ERPNext/Odoo process audit.
+
+Current product strengths to preserve and extend:
+- Desktop/offline-first operation with SQLite and PostgreSQL support.
+- Explicit accounting and stock posting paths, with reversal/return workflows rather than destructive edits to posted history.
+- Company isolation, role/permission foundations, and a central service/repository architecture.
+- Existing sales-chain, POS, manufacturing, quality, fixed-asset, payroll, and reporting foundations.
+- A shared WPF visual identity and central window infrastructure.
+
+Critical quality rule: fix and stabilize existing financial and inventory workflows before adding broad surface area. A feature that can create duplicate GL entries, orphan source links, inconsistent stock, or unreconciled settlements is not a competitive feature.
+
+## 4. Feature-by-feature ShouTech upgrade matrix
+
+| Phenix capability | ShouTech baseline evidence | Target upgrade | Priority |
+|---|---|---|---|
+| Themes and dark mode | Theme resources exist; full user preference flow not proven | Central theme service, per-user persisted preference, complete control/template coverage, contrast/accessibility tests | P2 |
+| Detachable and multi-window UI | WPF main-window/navigation foundations exist | Window host supporting tabbed, detached, modal, and comparison modes without duplicate data contexts | P2 |
+| Ctrl+Tab / keyboard productivity | Existing navigation utilities | Global command routing, predictable focus, shortcut map, keyboard-only acceptance tests | P2 |
+| Attachments | Data exchange and document foundations | Typed attachment service, previews, metadata, checksums, versioning, access control, backup/restore | P2 |
+| Resizable/sortable grids | WPF grids and report infrastructure exist | Persist per-user/per-view column order, widths, visibility, sorting, filters, grouping and reset-to-default | P1 |
+| Report-to-dashboard widgets | Dashboard/report foundations need verification | Safe widget catalog, parameterized queries, per-user dashboards, refresh policy, permission-aware drill-down | P1 |
+| Split workspace and quick actions | Main window/Ribbon foundations | Workspace split and pinned quick actions while preserving the agreed two-bar main-window structure | P2 |
+| Currency min/max | Multi-currency foundation exists | Currency precision/range rules, effective dates, per-company validation, explicit override permission and audit | P1 |
+| Invoice/voucher common-field lookup | Document and voucher foundations exist | Cross-document finder with exact/partial search, source links, status, amount, date and audit context | P1 |
+| Invoice/WMS exchange | Import/export foundation exists | Versioned exchange contract, idempotent imports, preview/validation, conflict report and retry-safe sync | P1 |
+| Cross-warehouse balances in invoice lookup | Stock services/reports exist | Fast availability matrix by warehouse, reserved/available/on-hand quantities and freshness timestamp | P1 |
+| Credit limits | Credit guard foundation exists | Configurable hard/soft limits, overdue exposure, pending orders, user overrides, approvals and audit | P1 |
+| Branch-specific account mapping | Multi-branch/accounting foundations need verification | Effective-dated branch mappings, cash closing/difference accounts, unified customer ledger, mapping validation | P1 |
+| Profit margin in document | Valuation and invoice data foundations exist | Show gross margin and margin percent using actual valuation, landed costs, discounts, tax treatment and permissions | P1 |
+| Power BI | No accepted connector evidence in the current audit | Read-only, least-privilege analytics export/API, stable semantic model and incremental refresh | P3 |
+| Salla / Shopify / WooCommerce / Wix | No accepted production connector evidence | Provider adapters, webhook inbox/outbox, mapping, idempotency, retry/dead-letter handling and reconciliation | P3 |
+| Custom reports and custom fields | Report designer and custom reports exist | Extend all permitted report sources; typed calculated fields, validation, safe query model and versioning | P1 |
+| Purchase planning | Purchasing foundation exists | Demand/supply planning with lead times, reorder policy, open PO/receipt visibility and suggested quantities | P2 |
+| Inventory turnover analysis | Stock ledger/valuation/report foundations exist | Period-based turnover, days on hand, ABC/XYZ, dead/slow/fast movers, seasonality and drill-down | P1 |
+| Tree/grouped report view | Report infrastructure exists | Reusable grouping/tree engine, subtotal correctness, expand/collapse, export fidelity | P1 |
+| WhatsApp report sharing | No accepted integration evidence | User-approved share/export workflow with privacy controls; no silent transmission of financial data | P3 |
+| Pivot/aggregate/chart reports | Reporting infrastructure exists | Reusable pivot engine, saved layouts, aggregation validation, chart drill-through and permission enforcement | P1 |
+| Administrative and HR approvals | Approval foundations exist in parity inventory; coverage needs verification | Configurable approval matrices, amount thresholds, delegation, escalation, separation of duties and immutable history | P1 |
+| 64-bit and concurrency | .NET 8 build exists; packaging/runtime profile needs verification | x64 packaging, asynchronous I/O, UI-thread isolation, bounded concurrency and performance benchmarks | P2 |
+| Branch synchronization | Sync foundations need end-to-end verification | Offline-first outbox/inbox, conflict policies, idempotency keys, voucher/document reconciliation and observability | P1 |
+| Print templates and attachments | Print infrastructure exists; full metadata binding needs verification | Template versioning, user/company metadata, attachment rendering, PDF preview and deterministic output tests | P2 |
+| Delivery commissions/GPS | Delivery-related foundations need verification | Commission rules, route assignments, mobile sync, consent-aware location tracking and retention controls | P3 |
+| Appointments and notifications | Appointment foundations need verification | Calendar resources, permissions, conflict detection, reminder queue and notification audit | P3 |
+| Clipboard and column permissions | RBAC foundation exists | Field/column-level policy enforced in UI and export/service layers, not UI hiding alone | P1 |
+| User working schedules | User/security foundation exists | Effective-dated schedules, time-zone handling, grace periods, emergency override and audit | P2 |
+| Manufacturing template import | Manufacturing and data exchange foundations exist | Versioned BOM/template import, preview, unit validation, substitution mapping and rollback-safe commit | P1 |
+| Batch/serial/expiry and landed costs | Batch/serial and valuation foundations exist | Full traceability, FEFO/FIFO policy, recalls, landed-cost allocation and valuation reconciliation | P1 |
+| POS cashier/session analytics | POS foundations exist | Session lifecycle, cash-up, tender variance, peak periods, cashier permissions and offline replay tests | P1 |
+
+## 5. ShouTech differentiators required to beat the benchmark
+
+The goal is not to match a marketing checklist. ShouTech should exceed it in the following areas:
+
+1. **Accounting integrity by construction**
+   - Every posted source document has exactly one linked accounting posting, with balanced lines and source traceability.
+   - Idempotent posting and retry; no duplicate GL, stock, tax, or settlement effects.
+   - Reversal/return documents preserve originals, use the original account mapping where required, and reconcile party, cash, stock, valuation, and GL effects.
+   - Fiscal-period locks, audit events, and controlled reopening.
+
+2. **Offline-first branch synchronization**
+   - Durable local outbox/inbox, idempotent delivery, explicit conflict resolution, and branch-level reconciliation.
+   - Synchronization must survive restart, network loss, duplicate messages, clock skew, and partial failure.
+   - Never silently overwrite posted financial or inventory history.
+
+3. **Inventory traceability and costing**
+   - Lot/batch, serial, expiry, multi-unit equivalence, warehouse/bin, reservation, and stock availability at document-entry time.
+   - Deterministic valuation and landed-cost allocation with replayable valuation history.
+   - FEFO/FIFO/average policies where appropriate, plus traceable recalls and expiry alerts.
+
+4. **Approval and segregation-of-duties engine**
+   - Rules based on document type, value, margin, credit exposure, warehouse, branch, user, and exception.
+   - Maker/checker controls, delegation, escalation, expiry, and tamper-evident approval history.
+   - Enforce permissions inside services and repositories, not only by hiding controls.
+
+5. **Analytics that reconcile**
+   - Every dashboard KPI drills down to its source documents and ledger movements.
+   - Inventory turnover, gross margin, aged debt, cash forecast, purchase planning, production variance, and branch performance.
+   - Report definitions are versioned, permission-aware, and tested against known accounting fixtures.
+
+6. **Commercial-grade reliability**
+   - Automated backup verification and restore drills, migration rollback strategy, health diagnostics, structured logs, error catalog, and upgrade recovery.
+   - Performance budgets for large ledgers, stock cards, reports, and multi-window sessions.
+   - Installer, update channel, licensing, support diagnostics, and documented deployment profiles.
+
+## 6. Delivery sequence and release gates
+
+### Phase 0 — Stabilization gate (must precede feature expansion)
+- Resolve all current CI failures and warnings that indicate correctness or maintainability risk.
+- Verify invoice reversal GL, party-ledger, stock, valuation, and settlement symmetry.
+- Verify sales-chain atomicity, source-link integrity, partial quantities, and retry behavior.
+- Keep SQLite/PostgreSQL schema behavior equivalent.
+- Exit gate: clean Release build; all tests pass; no unresolved high-severity accounting/stock defects; CI green on the development branch.
+
+### Phase 1 — High-value daily workflow improvements
+- Persist grid layouts and column permissions.
+- Add cross-document finder for invoices, vouchers, orders, receipts, and returns.
+- Add warehouse availability matrix to material lookup in invoices.
+- Strengthen credit exposure and margin visibility.
+- Add period-based inventory turnover analysis.
+- Exit gate: UI/service integration tests, permission tests, performance test on large datasets, and exact reconciliation with source ledgers.
+
+### Phase 2 — Approvals, reports, and dashboards
+- Complete administrative and HR approval matrices.
+- Expand custom report designer, pivot/group/tree views, and dashboard widgets.
+- Add report drill-through, saved user layouts, and export parity.
+- Exit gate: every widget/report enforces company, branch, and user permissions and reconciles to the underlying ledger.
+
+### Phase 3 — Branch and external integrations
+- Build a durable offline synchronization engine with conflict and reconciliation workflows.
+- Add versioned API/provider adapters for Power BI and e-commerce integrations.
+- Add controlled report sharing and delivery integrations only after consent, authorization, and audit are implemented.
+- Exit gate: duplicate webhook/retry/network partition tests, replayability, and reconciliation across branch databases.
+
+### Phase 4 — Inventory, manufacturing, POS, and operational depth
+- Complete batch/serial/expiry, reservations, landed costs, purchase planning, and mobile WMS workflows.
+- Complete manufacturing revisions, scheduling, WIP, partial completion, scrap/by-products, and actual-vs-standard variance.
+- Complete POS session/cash-up, multi-tender, offline retry, returns and cashier analytics.
+- Exit gate: end-to-end stock valuation and GL reconciliation across all workflows.
+
+### Phase 5 — Enterprise readiness and release
+- Complete HR, fixed assets, tax localization, audit, backup/restore, installer, licensing, and support tooling.
+- Run security, performance, migration, restore, and multi-company isolation test suites.
+- Produce operator/admin documentation and a migration guide.
+- Exit gate: release candidate accepted against a published commercial acceptance checklist.
+
+## 7. Non-negotiable engineering rules
+
+- Continue on `work/full-app-stabilization-2026-11-18`; do not merge into `main` without explicit approval.
+- Keep code, comments, SQL identifiers, and resource keys in English. All user-facing text belongs in localization resources.
+- Keep table DDL in `dba` migration scripts. Runtime services must not create or mutate schema.
+- Do not split large source files without a measured maintainability reason.
+- Keep the WPF desktop architecture; integrations must use explicit interfaces/adapters.
+- Every schema change needs SQLite and PostgreSQL migrations plus upgrade tests.
+- Every financial or stock workflow needs positive, negative, retry, concurrency, cancellation/reversal, and reconciliation tests.
+- Do not mark a phase complete until its acceptance gate passes in CI.
+
+## 8. Official benchmark sources
+
+- Phenix 10 feature article (English): https://phenixsoft.com/en/blog/phenix-10-features
+- Phenix 10 feature article (Arabic): https://phenixsoft.com/index.php/ar/blog/phenix-10-features
+- Phenix product overview: https://www.phenixsystems.com/
+- Phenix accounting: https://phenixsystems.com/services/products/accounting
+- Phenix inventory: https://phenixsystems.com/services/products/Inventory
+- Phenix POS: https://www.phenixsystems.com/services/products/pos
+- Phenix manufacturing: https://www.phenixuae.com/en/manufacturing-accounting-software/
+- Phenix inventory mobile application: https://phenixsoft.com/index.php/en/app/inventory
+
+The vendor feature article is dated 2023-12-24. Current product pages may describe a broader product suite than the exact Phenix 10 release. Validate edition, regional availability, and licensing with the vendor before treating every listed capability as included in every Phenix 10 installation.
+
+
+## 9. Related benchmark
+
+Manager.io is assessed separately because its strengths are especially relevant to accounting workflows, inventory valuation, advanced/custom reports, batch operations, recurring transactions, API access, and offline desktop usage. See [MANAGER-IO-COMPETITIVE-BENCHMARK.md](MANAGER-IO-COMPETITIVE-BENCHMARK.md) for the feature inventory, ShouTech gap mapping, implementation order, and source-license caution.
+
+---
+
+<!-- source: docs/ERPNEXT_PARITY_ROADMAP.md -->
+
+# ShouTech ERP — ERPNext Feature-Parity Roadmap (Offline Desktop)
+
+Goal: reach functional parity with [ERPNext](https://github.com/frappe/erpnext) as an **offline-first Windows desktop ERP**, and outperform **Al-Ameen ERP v10** in the SMB market.
+
+**Deployment model (target):** ShouTech ERP is *offline-first, not offline-only*. The desktop client runs fully standalone (SQLite), and — when ready — can additionally connect to a central server (PostgreSQL) for multi-user/multi-branch operation, encrypted cloud backup, and outbox sync. Licensing is enforced by the SecEng native engine: server-side validation for connected deployments, and optional **hardware dongle** activation for offline machines.
+
+> **Reference:** ERPNext is a web ERP (Python/Frappe, ~41k stars, actively updated). Its module list below was taken from the current `develop` branch module folders.
+
+---
+
+## 1. Legal Boundary — Read First
+
+ERPNext is licensed under **GPL-3.0**. ShouTech ERP is proprietary.
+
+- **Allowed:** studying *concepts* (workflows, document states, report definitions) and re-implementing them in our own C#/WPF/SQLite code.
+- **NOT allowed:** copying ERPNext source code, schemas, or UI assets into this repository. That would force the whole product to GPL and destroy the proprietary license.
+- All parity work must be clean-room: write from scratch against our own `src/ShouTech.*` layers and `dba/` schemas.
+
+---
+
+## 2. ERPNext Module Map vs ShouTech Coverage
+
+ERPNext current modules: accounts, assets, buying, crm, edi, maintenance, manufacturing, projects, quality_management, selling, stock, subcontracting, support (helpdesk), telephony, shopping_cart/portal (website).
+
+| ERPNext module | What it does | ShouTech today | Gap |
+|---|---|---|---|
+| **Accounts** | GL, AP/AR, payment reconciliation, taxes, budgets | GL, chart of accounts, journals, vouchers, periods, year close | Payment reconciliation & budgets missing |
+| **Stock** | Multi-warehouse, batches, serial nos, valuation (FIFO/Moving Avg), stock ledger | Inventory core, warehouses, movements, barcodes | Batch/serial tracking, valuation methods, stock ledger audit |
+| **Selling** | Quotations, SO, delivery notes, pricing rules | Orders, customer pricing | Quotation→SO→Delivery→Invoice chain incomplete |
+| **Buying** | RFQ, PO, receipt, purchase invoices | Purchase invoices | RFQ/PO/receipt chain missing |
+| **CRM** | Leads, opportunities, activities | CRM folder, leads, sales reps | Opportunity pipeline & activity logging |
+| **Manufacturing** | BOM, work orders, MRP, job cards | BOM, production orders | MRP planning, job-card tracking |
+| **Projects** | Projects, tasks, timesheets | — | Missing |
+| **Assets** | Asset register, depreciation | — | Missing |
+| **Quality Management** | QI, non-conformance | — | Missing |
+| **Maintenance** | Asset maintenance visits | — | Missing (low priority) |
+| **Support / Helpdesk** | Tickets, SLA | — | Missing (low priority for offline desktop) |
+| **Subcontracting** | Subcontract POs | — | Missing |
+| **EDI / Integrations** | E-invoicing, bank sync, shipping | Outbox webhooks only | Bank statement import, e-invoice (Kuwait NIC/PACS) |
+| **Portal / Website** | Self-service portal, e-commerce | — | **Not applicable** — desktop-first is our positioning, not a gap |
+| **HRMS** (separate repo) | Payroll, leave, attendance | HR folder (basic) | Payroll & leave |
+| **POS** | POS | POS | Exists — parity OK |
+
+---
+
+## 3. Why ShouTech Beats Al-Ameen ERP v10
+
+Positioning advantages to protect and advertise:
+
+1. **Hybrid offline-first** — full standalone operation without internet; when a server is available, the same client connects for multi-user sync, encrypted cloud backup, and outbox webhooks. Al-Ameen v10 has no comparable online↔offline continuity.
+2. **Modern stack** — .NET 8 / WPF / MVVM vs legacy WinForms-era code; dark mode, 4 languages (Ar/En/Fr/Tr) with proper RTL.
+3. **Clean architecture path** — Domain/Application/Infrastructure split (Al-Ameen is monolithic).
+4. **Auditability** — SHA-256-checked migrations, audit trail, RBAC with 209 permission keys, native C++ security engine.
+5. **Per-fiscal-year database isolation** — superior to flat-file yearly archives.
+6. **Licensing model** — per-user activation; server-connected deployments validate licenses server-side, offline machines enforce via **hardware dongle**.
+
+---
+
+## 4. Phased Roadmap
+
+### Phase 1 — Close the accounting/inventory gaps (core ERP credibility)
+- Payment reconciliation (open invoice matching against receipts/payments)
+- Stock valuation methods (FIFO, Moving Average) + permanent stock ledger
+- Batch & serial number tracking
+- Quotation → Sales Order → Delivery Note → Invoice document chain with statuses (Draft/Submitted/Cancelled — ERPNext-style document workflow, re-implemented)
+- RFQ → PO → Purchase Receipt → Purchase Invoice chain
+
+### Phase 2 — Differentiators Al-Ameen lacks
+- Asset register with depreciation schedules posting to GL
+- Projects & timesheets
+- Bank statement import (CSV/MT940) with auto-matching
+- Kuwait e-invoicing (NIC/PACS) clearance integration via outbox worker
+- MRP for manufacturing
+- FastReport .NET report pack (currently "planned")
+
+### Phase 3 — Polish & scale
+- CRM opportunity pipeline with activities
+- Quality management + subcontracting
+- Payroll & leave (HRMS parity)
+- Install/update framework (clickonce/MSIX) — ERPNext's weakness offline is deployment; ours must be one-click
+- **Server mode (when ready):** central PostgreSQL server + sync service for multi-branch/multi-user; the WPF client must switch transparently between local SQLite and server PostgreSQL (both providers already exist in `ShouTech.Infrastructure`)
+- **Dongle licensing (when ready):** SecEng dongle check at startup with grace period; server deployments validate licenses server-side so thin clients need no dongle
+
+### Engineering rules for every phase
+- Feature-complete = schema (`dba/mig`) + service + WPF view + RBAC permission key + tests (`Kern.Tests`) + docs entry.
+- No new "legacy-style" code in `cod/`; all new features go through `src/ShouTech.Domain|Application|Infrastructure`.
+- Journal reversal already creates compensating entries: `JournalRepository.ReverseAsync` posts a linked compensating entry (`reversal_of_entry_id`), marks the original reversed, and writes audit events in one transaction — see [ACCOUNTING_CHART_PERIODS_YEAR_CLOSE.md](ACCOUNTING_CHART_PERIODS_YEAR_CLOSE.md). This prerequisite for Phase 2 accounting features is satisfied.
+
+---
+
+*Created from an ERPNext parity review on 2026-11-10. Updated same day: hybrid server mode + dongle licensing added to the target deployment model.*
+
+---
+
+<!-- source: docs/MANAGER-IO-COMPETITIVE-BENCHMARK.md -->
+
+# Manager.io Competitive Benchmark and ShouTech Upgrade Plan
+
+**Target branch:** `work/full-app-stabilization-2026-11-18`  
+**Assessment date:** 2026-11-20  
+**Benchmark scope:** Public Manager.io feature pages, user guides, release notes, and the public repository README/license notice.  
+**Purpose:** Identify proven workflow and usability ideas that can strengthen ShouTech ERP. This document does not claim that every feature is available in every Manager edition or localization.
+
+## 1. Product positioning
+
+Manager is a capable small-business accounting product with an offline desktop edition and a self-hosted server edition. Its documented scope covers general ledger, cash/bank, AR/AP, sales and purchasing documents, inventory, production orders, payroll, fixed assets, tax, multi-currency, and extensive reporting. The vendor's public guides are particularly useful because they explain operational workflows, not just menu names.
+
+Manager is a useful benchmark for workflow simplicity and broad accounting coverage. ShouTech's intended target is a broader commercial/institutional ERP, so the goal is to take the strongest patterns and implement them with deeper warehouse, manufacturing, POS, branch, audit, and enterprise controls—not to copy its architecture or source.
+
+## 2. Manager capabilities verified in public documentation
+
+### 2.1 Financial accounting and treasury
+- General ledger, journal entries, chart of accounts, cash management, receipts, payments, inter-account transfers, and bank reconciliation.
+- Accounts receivable/payable, customer and supplier statements, aged receivables/payables, remittance advice, late-payment fees, credit notes and debit notes.
+- Accrual and cash-basis accounting, multi-currency, exchange-rate handling, VAT/GST/sales tax, withholding tax, and lock dates.
+- Bank statement imports and bank rules; cash-flow reporting and forecasts.
+- Comparative financial statements, project/division accounting, and capital accounts.
+
+### 2.2 Sales and purchasing lifecycle
+- Sales and purchase quotes, orders, invoices, delivery notes, goods receipts, credit notes, debit notes, and recurring transactions.
+- Document conversion/copy workflows (for example quote → order → invoice, or order → delivery/receipt) and status tracking.
+- Billable time and billable expenses that can flow into invoicing.
+- Customer/supplier portals are listed in the current guide navigation; implementation scope and edition availability should be checked before treating them as baseline requirements.
+
+### 2.3 Inventory and production
+- Inventory items, inventory kits, inventory locations, transfers, write-offs, reorder points, quantity-to-order, quantity-to-deliver, and quantity-to-receive.
+- Item-level valuation policy documented for FIFO and weighted average.
+- Inventory costing worksheets/corrections and cost drill-down to underlying transactions.
+- Production orders, production stages, input material consumption, finished-goods output, and allocation of non-inventory production costs.
+- Inventory quantity/value by location, inventory profit margin, price lists, and costing calculation reports.
+
+### 2.4 Payroll and assets
+- Employees and payslips, configurable payslip items, and recurring payslips.
+- Fixed assets, depreciation entries, intangible assets, amortization entries, and supporting asset reports.
+- Attachments and custom fields for many master and transaction types.
+
+### 2.5 Reporting and data analysis
+- Standard financial statements: Profit & Loss, Balance Sheet, Cash Flow, Statement of Changes in Equity, and Trial Balance.
+- General-ledger transaction and summary reports, aged AR/AP, customer/supplier statements, tax reports, inventory quantity/value/location, inventory margin, fixed asset and depreciation reports, payroll reports, and forecasts.
+- Advanced Queries: user-defined select columns, filters, sorting, grouping, and saved queries against tabular data.
+- Custom Reports: query-based reports using ledger data, calculations, filters, ordering, and grouping.
+- Editable column layouts and copy-to-clipboard workflows.
+
+### 2.6 Productivity, automation, and administration
+- Batch Create, Batch Update, Batch View, and Batch Delete workflows, including spreadsheet copy/paste with a review step before commit.
+- Custom fields on many master records, transaction headers, and transaction lines.
+- Form defaults, recurring transaction templates, email templates, PDF output, attachments and attachment folders.
+- User permissions, business localization, date/number formats, themes, divisions, projects, and accounting lock dates.
+- Access Tokens and API endpoints for integrations and automation.
+- Transaction history/audit features.
+- Desktop mode works offline for one user; the self-hosted server edition supports multiple users through a browser. Public documentation describes backup/restore and moving business data between devices.
+
+## 3. ShouTech capability mapping
+
+The ShouTech repository already has a broad WPF desktop foundation: reporting designer/repository, custom reports window, formula engine, many operational report windows, batch/serial support, sales-chain services, POS, manufacturing, payroll/HR, fixed assets, multi-company, SQLite/PostgreSQL migrations, and API documentation. Presence of code is not acceptance evidence; every workflow below still needs service, persistence, permissions, localization, and end-to-end verification.
+
+| Manager capability | ShouTech evidence in audited tree | Upgrade action for ShouTech | Priority |
+|---|---|---|---|
+| GL, AR/AP, cash/bank, journals | Accounting services, reports, and voucher flows exist; correctness still under stabilization | Complete source-linked posting, reconciliation, reversals, period locks, bank reconciliation, and ledger integrity tests | P0 |
+| Quotes/orders/invoices/returns/delivery/receipts | Sales-chain and commercial-document foundations exist | Complete document conversion graph, partial fulfillment, return/refund settlement, idempotent posting, and audit trail | P0 |
+| Recurring transactions | Not proven by the current file inventory | Add scheduler-backed templates with preview, next-run, pause, catch-up policy, idempotency, and approval | P2 |
+| Multi-currency and tax | Currency/tax foundations exist | Verify rate sourcing, realized/unrealized FX, rounding, tax components, withholding, localization, and tax reconciliation | P1 |
+| Bank reconciliation/import | Bank reporting exists; complete reconciliation workflow not proven | Add statement import adapters, duplicate detection, matching rules, split matching, unmatched queue, and audit | P1 |
+| FIFO / weighted average costing | Stock valuation foundation exists; policy parity not proven | Make valuation policy explicit and versioned per company/item; add replayable cost layers/average calculation and reconciliation worksheet | P0 |
+| Reorder point and demand | Shortage/stock reports exist | Add min/max, lead time, safety stock, supplier MOQ, open supply/demand, and purchase suggestions | P1 |
+| Inventory locations and transfers | Warehouse and transfer foundations exist | Complete bin/location-level stock, reservation, two-sided transfer, in-transit balances, and traceability | P1 |
+| Production orders/stages | Manufacturing foundations and cost/variance reports exist | Complete BOM revisions, routing/stages, WIP, partial output, scrap/by-products, labor/overhead allocation, and variance | P1 |
+| Payroll and fixed assets | HR/payroll and fixed asset foundations exist | Verify lifecycle end-to-end: payroll accrual/payment, depreciation schedules, disposal, revaluation, and GL reconciliation | P1 |
+| Custom fields | Not established as a universal typed metadata framework | Build safe typed custom fields for master/header/line/report with validation, indexing, migration, localization, and permissions | P2 |
+| Advanced Queries | Report designer/formula engine/custom report window exist | Add a safe metadata-driven query builder (select/filter/sort/group/aggregate), saved views, parameterization, and permission-aware field catalog | P1 |
+| Custom reports | Report designer, models, repository, renderer exist | Expand data sources to ledger and operational facts; add reusable calculations, report transformations, versioning, and drill-through | P1 |
+| Batch create/update | Batch/serial capture exists; generic CRUD batch operations not proven | Add spreadsheet template export, staging preview, validation summary, row-level errors, atomic/partial modes, and retry-safe commit | P1 |
+| Batch delete | Soft-delete/recycle-bin foundations exist | Batch soft-delete only; require safeguards for posted records and preserve audit/restore semantics | P2 |
+| Form defaults and copy-to | Invoice and document forms exist | Central per-user/per-company defaults, copy-to conversions preserving custom fields and validating source/target semantics | P2 |
+| Attachments | Not proven as a complete shared service | Add content store, metadata, checksum, preview, versioning, permissions, retention, and backup integration | P2 |
+| API access tokens | API documentation exists | Token issuance/revocation, scopes, expiry, secret hashing, rate limits, audit, idempotency, and integration tests | P1 |
+| Audit history | Deletion audit exists | Extend to field-level before/after events, actor, timestamp, correlation ID, source document, and tamper-evident retention | P1 |
+| Business localization and multi-business | Multi-company/language foundations exist | Verify company isolation, per-company fiscal settings, regional tax packs, RTL, date/number formats, and cross-company authorization | P1 |
+| Offline and multi-user modes | Desktop/offline WPF app with SQLite/PostgreSQL | Keep offline-first; provide optional secured LAN/server sync with durable outbox/inbox and conflict resolution | P1 |
+| Backup/restore | Backup and restore windows exist | Add automated backup schedules, integrity verification, encryption, restore drills, retention policies, and disaster-recovery tests | P1 |
+
+## 4. Features ShouTech should implement better than Manager
+
+1. **True ERP-wide document graph:** every quote, order, delivery, invoice, return, receipt, payment, production order, and stock movement should retain explicit source/target links, partial quantities, status transitions, and audit history.
+2. **Stronger warehouse operations:** multi-warehouse/bin stock, reservations, lot/batch/serial/expiry, FEFO, barcode workflows, replenishment, in-transit transfers, stock count variance approval, and traceable recalls.
+3. **Manufacturing depth:** multi-level BOMs, versioned routings, work centers, capacity planning, labor and overhead, WIP, co-products/by-products, scrap, subcontracting, and actual-vs-standard variance.
+4. **Enterprise approvals:** maker/checker, amount/margin/credit/warehouse/branch thresholds, delegation, escalation, separation of duties, and exception audit.
+5. **Branch-first offline synchronization:** durable event queues, idempotency, conflict workflows, branch reconciliation, and restart/network-partition tests.
+6. **Reconciled analytics:** every KPI drills down to underlying source documents and ledger/stock movements; no dashboard number should be a disconnected cache.
+7. **Commercial deployment:** installer/updater, licensing, diagnostics, verified backups, migration recovery, support bundle, and deployment documentation.
+
+## 5. Implementation order
+
+### Gate 0 — Correctness before expansion
+- Resolve all active CI failures.
+- Correct invoice reversal account mapping and prove mirror postings.
+- Verify sales/purchase source links and partial delivery/receipt allocations.
+- Verify SQLite/PostgreSQL behavior and transaction ownership.
+- Gate: Release build and full test suite pass; accounting/stock reconciliation fixtures are green.
+
+### Phase 1 — Accounting and stock controls
+- Bank reconciliation and statement import.
+- Explicit FIFO/weighted-average policy and cost correction worksheet.
+- Reorder planning, warehouse availability and reservations.
+- Returns/credit/debit notes with settlement and source traceability.
+
+### Phase 2 — Report and productivity platform
+- Advanced query builder and reusable custom report engine.
+- Saved grid layouts, custom fields, form defaults, copy-to, batch import/update preview.
+- Drill-through from all financial and inventory KPIs.
+
+### Phase 3 — Automation and integrations
+- Recurring document templates and posting schedule.
+- Scoped API tokens, audit events, webhook/outbox patterns.
+- Secure attachments, email/PDF workflows, external accounting/e-commerce integrations.
+
+### Phase 4 — Manufacturing and enterprise operations
+- Multi-level BOM/routing/WIP and capacity planning.
+- Approval matrices, branch synchronization, and enterprise access control.
+- Payroll/fixed asset/tax lifecycle completion and commercial deployment readiness.
+
+No phase is complete until its acceptance criteria pass in CI and its persisted data survives restart, backup, and restore tests.
+
+## 6. Source-code and license caution
+
+The public `managerhq/Manager` repository labels Manager as **source-available, not open source**, under the Functional Source License 1.1 / Apache 2.0 Future License. The repository README states that the license restricts competing use, including offering a commercial substitute, until the relevant version transitions to Apache 2.0 two years after release.
+
+ShouTech is intended to be a competing commercial ERP. Therefore:
+- Use Manager's public feature descriptions and user guides as product/workflow research.
+- Do **not** copy, port, translate, adapt, or derive ShouTech implementation code from Manager's repository unless a qualified license review confirms the exact code/version is permitted for this use.
+- Do not copy UI assets, branding, text, or distinctive product presentation.
+- Implement independent designs from the requirements in this benchmark and ShouTech's own architecture.
+- Review third-party notices and dependencies separately if any source is ever considered.
+
+## 7. Official sources
+
+- Manager feature overview: https://www2.manager.io/features/
+- Manager guides index: https://www2.manager.io/guides
+- Reports and custom reports: https://www.manager.io/guides/reports/
+- Advanced Queries: https://www.manager.io/guides/advanced-queries/
+- Custom Fields: https://www2.manager.io/guides/8941
+- Inventory item form and valuation methods: https://www.manager.io/guides/inventory-item-form/
+- Inventory management introduction: https://www2.manager.io/guides/11111
+- Inventory locations: https://www.manager.io/guides/custom-inventory-locations/
+- Inventory unit costs: https://www.manager.io/guides/inventory-unit-costs/
+- Recurring transactions: https://www.manager.io/guides/recurring-transactions/
+- Batch operations: https://www.manager.io/guides/batch-operations/
+- Access tokens/API: https://www.manager.io/guides/access-tokens/
+- Release history: https://www.manager.io/releases/
+- Public source repository and license notice: https://github.com/managerhq/Manager
+
+## 8. Benchmark caveats
+
+Manager's feature pages and guides are vendor-published documentation, not an independent security, accounting, or performance audit. Some capabilities may vary by version, edition, or localization. Verify availability and behavior in a current Manager installation before treating a detail as a universal product guarantee.
+
+---
+
+<!-- source: docs/ERP-PROCESS-PARITY-MATRIX.md -->
+
+# ERP Process Parity Matrix — ShouTech vs ERPNext vs Odoo
+
+**Branch:** `work/full-app-stabilization-2026-11-18`  
+**Assessment date:** 2026-11-19  
+**Purpose:** Turn the competitive roadmap into testable process parity work. This is a source-inventory assessment, not a claim that every ShouTech service is production-complete.
+
+## 1. Benchmark rules
+
+ShouTech remains an offline-first WPF desktop ERP. Adopt proven business controls from ERPNext and Odoo without copying their web/Frappe architecture.
+
+A class, window, table, or menu is implementation evidence only. A process is complete only when its end-to-end path, permissions, persistence, validation, accounting/stock effects, reversal, audit, localization, and tests work together. Drafts must not affect posted ledgers. Posted accounting and stock history must be corrected through controlled cancellation/reversal, credit/debit notes, returns, or supported reposting—not silent row deletion. Dependencies must be checked before cancellation or deletion.
+
+## 2. Process parity matrix
+
+Status meanings: **Foundation found** = relevant source components exist, full process not yet accepted; **Partial / verify** = some path exists but benchmark controls or end-to-end evidence remain; **Gap / not evidenced** = audited inventory does not prove capability.
+
+| Process | ERPNext benchmark | Odoo benchmark | ShouTech evidence in audited branch | Assessment | ShouTech acceptance gate |
+|---|---|---|---|---|---|
+| Lead-to-cash | Lead/opportunity, quotation, sales order, delivery note, sales invoice, payment entry, returns/credit note | CRM opportunity/quotation, sales order, delivery, invoice, payment, credit note/return | CrmService, SalesChainService, OrderService, CommercialDocumentRepository, PartyLedger; CRM/order/invoice/delivery/return windows | Foundation found | Convert lead → quote → order → partial delivery → invoice → partial receipt; preserve source links; reconcile AR, revenue, tax, COGS and stock; support return/refund/reversal |
+| POS / counter sale | POS profile/session, POS invoice, payments, returns | POS session, orders, payments, refunds, stock/accounting integration | PosService, PosRepository, PosPosting; PosWin, PosCheckoutWin, PosSessionWin, PosReturnWin, PosSyncWin | Foundation found | Multi-tender checkout, cash/card/on-account split, idempotent offline retry, shift opening/closing, cash-up/Z report, partial return/refund; no duplicate GL/stock/settlement |
+| Procure-to-pay | Material Request, RFQ, Supplier Quotation, Purchase Order, Purchase Receipt, Purchase Invoice, Payment Entry | Purchase requisition/RFQ, PO, receipt, vendor bill, payment | OrderService, OrderDocumentRepository, supplier ledger, RFQ/quotation comparison and award, receipt/GRNI, three-way match, returns and payment allocation | Partial / verify | Implement purchase requisition with need/budget checks and multi-level approval; enforce supplier invoice external-reference uniqueness and attachments; complete landed-cost capitalization, receipt-time lot/serial/expiry traceability, GRNI aging/exception reporting; pass current-head SQLite/PostgreSQL and concurrency acceptance |
+| Inventory / WMS | Item, warehouse, bins, stock entry, transfer, reconciliation, reservations, batch/serial, valuation and reposting | Products, locations, receipts/deliveries, internal transfers, inventory adjustments, lots/serials, valuation | StockValuationEngine, StockRecalculationService, BatchSerial; material, warehouse, transfer, adjustment, barcode and stock reports | Foundation found | Multi-warehouse/bin movement, reservations, picking/put-away, cycle count, lot/serial/expiry, returns, negative-stock policy, deterministic FIFO/average valuation and ledger reconciliation |
+| GL / period close | Journal Entry, automated GL, dimensions, immutable ledger, cancellation/reversal, reposting, period closing | Journals, automated accounting, analytic accounting, lock dates, audit trail, reversal entries | JournalService, GlPosting, Accounting, chart of accounts, fiscal period services, reports | Foundation found; correctness gate open | Every posted source document creates balanced linked GL; no duplicate posting; reversals preserve originals; closed periods reject posting; trial balance and statements reconcile |
+| AR / AP | Payment Entry, allocations, advances, ageing, dunning, credit limits | Register payment, outstanding reconciliation, follow-up, credit notes | PartyLedger, payment/receipt services, ageing and customer/supplier reports | Partial / verify | Partial allocations, advances, overpayments, refunds, write-offs, multi-currency differences, ageing and settlement reversals reconcile to GL |
+| Returns / corrections | Return Sales/Purchase Invoice, credit/debit notes, cancellation and amendment, immutable ledger | Reverse transfer plus credit note/refund; vendor credit note; reversal | InvRepo reversal path, POS return flow, commercial document entities | Foundation found | Return before/after invoice; partial quantities; return stock at correct valuation; refund and AR/AP effects; preserve original and link reversal documents |
+| Manufacturing | BOM revisions, Work Order, Job Cards/operations, material issue, WIP, finished output, scrap/by-products, subcontracting | BoM, manufacturing order, work orders, components, operations, scrap/by-products, work centers | BomService, MfgOrderService, MfgOrderRepository, PlanningService; Mfg/BOM/planning windows and reports | Foundation found | Multi-level revision-controlled BOM; plan/reserve; issue materials; WIP; partial completion; scrap/by-products; actual-vs-standard variance; subcontracting; cancellation restores stock and GL |
+| Quality | Quality Inspection templates, incoming/in-process/final checks, non-conformance | Quality checks, quality alerts, control points, corrective actions | QualityService, QualityGate, QC windows | Partial / verify | Failed inspection blocks configured receipt/issue/production; non-conformance and corrective action trace to source lot/order |
+| Fixed assets | Asset, purchase/capitalization, depreciation, sale/disposal, maintenance | Asset model, depreciation boards, acquisition, disposal, asset accounting | AssetService, AssetRepository, FixedAsset, AssetWin | Foundation found | Acquisition to GL; depreciation methods/books; additions, transfers, impairment/revaluation, disposal and gain/loss; asset register ties to GL |
+| Cash / bank / cheques | Bank transactions, payment entries, bank reconciliation, cheque management | Bank import/sync, reconciliation, outstanding payments, cash journals | Cash services, ChequeService, ReconciliationService; bank/cash/cheque windows and reports | Foundation found | Statement import, matching rules, partial matches, fees, FX, bounced/replaced cheques; reconciled balance ties to bank GL |
+| CRM / projects / support | Lead/opportunity, activity, project/task/timesheet, issue/SLA | CRM pipeline, activities, projects, timesheets, helpdesk/SLA | CrmService, ProjectService, SupportWin and CRM/project entities/windows | Partial / verify | Convert opportunity without re-entry; activity audit; project budgets/time/expenses/invoice profitability; SLA timers and warranty links |
+| HR / payroll | Employee, attendance, leave, payroll entry, salary structure, statutory components | Employees, contracts, attendance, time off, payroll, payslips | HrService, HR entities, employee/attendance/leave/payroll windows and reports | Partial / verify | Approval chain, accruals, shifts/overtime, loans/advances, deductions, payroll period lock, privacy permissions, reproducible payroll journal |
+| Tax / compliance | Tax templates/accounts, withholding, tax reports, country localization, e-invoicing | Tax grids, fiscal positions, tax reports, localizations, e-invoicing | TaxSvc and tax fields in commercial documents | Partial / verify | Inclusive/exclusive tax, recoverable/non-recoverable input tax, withholding, tax groups, jurisdiction packs; tax reports reconcile to GL |
+| Reporting / analytics | Financial statements, stock ledger, ageing, dashboards, filters and drill-down | Accounting reports, inventory valuation, dashboards, pivot/graph, drill-down | 63 report basenames, Rpt infrastructure and reporting services | Foundation found | Company/branch/date filters, drill-down to source, consistent opening/closing balances, export parity and permission checks |
+| Master data / lifecycle | Item/customer/supplier/account/warehouse masters; disabled/frozen states; deletion controls | Product/partner/account/location archive and relational constraints | MatCard, CatWin, MatDirWin, MatGroupWin, WhsWin, party/account cards; RecycleBinSvc | Partial / verify | Soft-delete/restore eligible masters; block deletion with active references; preserve code uniqueness and historical snapshots |
+| Security / audit / multi-company | Role permissions, user permissions, immutable ledger, audit, backup/restore, company restrictions | ACLs, record rules, chatter/audit, lock dates, backup/restore and multi-company | Auth, Permissions, License, Backup, DataExchangeGuard, SchMig, Localization; Company service | Foundation found | Least privilege at UI and service layers; company/branch isolation; tamper-evident audit; encrypted backups; tested restore/migrations; offline license recovery |
+
+## 3. Delete, archive, cancel, restore — explicit product decision
+
+These systems do not use one universal delete semantic.
+
+### ERPNext
+- Draft submittable documents can be deleted.
+- Submitted documents must normally be cancelled before deletion.
+- Deleted Documents supports restore; restoring a cancelled document can assign a new name.
+- Cancelled documents linked to GL/stock ledgers are normally protected; an explicit Accounts Settings option can permit deleting linked ledger rows, while Immutable Ledger prevents it.
+- The recommended correction for posted transactions is cancellation/amendment, returns/credit notes, or reversal—not deleting ledger rows.
+
+### Odoo
+- Master records commonly support archive/unarchive instead of deletion when no longer used.
+- Restrictive Audit Trail mode prevents deletion of tracked accounting records and limits them to cancellation or archive.
+- Returns after delivery use reverse transfers; after invoicing, returns are paired with credit notes/refunds.
+- Posted accounting changes are controlled through reversal/credit-note and lock-date workflows.
+
+### ShouTech target policy (user-approved)
+1. **Ordinary Delete = soft delete.** Set deletion state/metadata and move the record to Recycle Bin. Keep the row and relationships; hide it from normal lists and operational selection.
+2. **Restore = restore original identity.** Reinstate the same record, identifiers and relationships if no conflicting active record exists. Log actor/time.
+3. **Permanent Delete = explicit hard delete.** Only from Recycle Bin, with separate permission, confirmation and audit. Validate dependencies and use a transaction.
+4. **Posted financial/stock documents = immutable business history.** Ordinary delete is not cancellation. Require cancellation/reversal/credit-debit note/return first. Even after cancellation, permanent deletion is blocked by default if it would erase ledger evidence or statutory history.
+5. **Master cards = archive/soft delete.** If referenced by historical documents, retain the master or a historical snapshot; do not cascade-delete financial or stock history.
+6. **Audit is independent of the deleted row.** Hard-delete audit events must survive the deleted business record; do not rely only on triggers attached to a row about to disappear.
+
+References:
+- ERPNext immutable ledger: https://docs.frappe.io/erpnext/immutable-ledger
+- ERPNext delete submitted document: https://docs.frappe.io/erpnext/delete-submitted-document
+- ERPNext restore deleted documents: https://docs.frappe.io/erpnext/restore-deleted-erpnext
+- ERPNext linked GL deletion controls: https://docs.frappe.io/erpnext/delete-entries-linked-with-gl-entries
+- ERPNext correcting submitted accounting entry: https://docs.frappe.io/erpnext/correct-submitted-accounting-entry
+- Odoo audit trail: https://www.odoo.com/documentation/20.0/applications/finance/accounting/reporting.html
+- Odoo sales process: https://www.odoo.com/documentation/19.0/applications/sales/sales.html
+- Odoo returns/refunds: https://www.odoo.com/documentation/18.0/applications/sales/sales/products_prices/returns.html
+
+## 4. Implementation order and gates
+
+### Phase A — stabilize financial and stock correctness (blocker)
+Finish current Release build/test CI; fix failures by root cause; prove clean-install and upgrade SQLite migrations; run PostgreSQL migration smoke tests; prove invoice posting, allocations, full reversal, partial return, POS refund, stock valuation and journal balance. No workflow expansion until this gate passes.
+
+### Phase B — unified record lifecycle
+Inventory every master/transaction table's key, company scope, foreign keys, posted state and dependency graph. Define canonical lifecycle metadata and audit event schema in DBA migrations for both providers. Implement one shared lifecycle service: SoftDelete, Restore, PermanentDelete, Archive/Deactivate. Replace direct deletes in services/windows; keep transient/temp cleanup separate. Add separate permissions: DeleteToBin, RestoreFromBin, PermanentDelete, Archive, Cancel, Reverse.
+
+Acceptance tests: same-ID restore; duplicate-code conflict; dependency block; cross-company isolation; posted-document protection; audit survives hard delete; transaction rollback on partial failure.
+
+### Phase C — complete sales and purchasing lifecycles
+Complete lead/quote/order/delivery/invoice/payment/return with partials and backorders. Complete requisition/RFQ/quotation/PO/receipt/bill/payment with three-way matching and GRNI. Add dependency-aware cancel/amend and source-document traceability. Test stock vs service, cash vs credit, tax, multi-currency and partial fulfilment.
+
+### Phase D — inventory, POS and manufacturing depth
+Complete bins/locations, reservation, pick/pack, replenishment, cycle counts, batch/serial/expiry and valuation repost. Verify POS offline idempotency, multi-tender settlement, cash-up and refunds. Complete BOM revisions, routing/work centres, MRP, WIP, scrap/by-products, subcontracting and cost variance.
+
+### Phase E — finance, people and compliance
+Complete bank statement import/matching, cheque lifecycle, FX, ageing, dunning, budgets and period close. Complete asset disposals/transfers/impairment, payroll approvals/statutory localization, tax reports and e-invoice packs.
+
+### Phase F — UI, reports and commercial readiness
+Map each Ribbon action to a process and permission; remove orphan windows; add consistent filters, drill-down and export; complete localization/resource audit and offline installer/backup/restore/update tests; run role-based UAT scripts and publish known limitations.
+
+## 5. Definition of parity
+
+A ShouTech process is parity-accepted only when its happy path and key exception paths pass automated tests; persisted state and links survive restart; financial and stock ledgers reconcile; cancellation, return, restore and retry are idempotent and auditable; permissions are enforced in services; SQLite and PostgreSQL behave equivalently for supported workflows; and UI, reports, exports and localization represent the same underlying state.
+
+A process remains **not verified** until evidence is recorded. Do not claim full Odoo/ERPNext parity or sale readiness before the relevant gates pass.
+
+
+## 6. Phenix feature evidence — public marketing material supplied by the user
+
+**Evidence boundary:** This section records capabilities explicitly advertised in the Phenix Systems posts supplied on 2026-11-20. Marketing statements are not independent proof of technical implementation, regulatory certification, service-level guarantees, or detailed feature behavior. Validate each item against product documentation, demonstrations, contracts, and country-specific legal requirements before treating it as a benchmark acceptance criterion.
+
+| Phenix-advertised capability | Evidence in supplied posts | ShouTech target capability | Evidence status / next validation |
+|---|---|---|---|
+| Saudi e-invoicing and ZATCA integration | Posts advertise direct/automatic integration with the Saudi e-invoicing platform and ZATCA compliance | Country-specific Saudi e-invoicing connector; invoice validation, signing/sealing where required, clearance/reporting flows, QR/XML payloads as applicable, retries, response archive, audit trail and sandbox/production configuration | Marketing claim only; verify exact ZATCA phase/scope, supported document types, onboarding and certification status |
+| Jordan tax compliance | Post advertises licensing/approval by the Jordan Income and Sales Tax Department | Jordan localization pack with tax rules, electronic invoicing integration where applicable, reporting and versioned regulatory configuration | Marketing claim only; verify license/approval scope and current technical requirements |
+| Egypt e-invoicing | Post advertises support for electronic invoicing and integration with the Egyptian Tax Authority | Egypt localization pack with authority-specific submission, identifiers, signatures, status tracking, credit/debit notes and reconciliation | Marketing claim only; verify actual supported flows and approval status |
+| Third-party integrations | Post names Salla, Rasd and Wasfaty | Integration Hub with provider adapters, API/webhook credentials, mapping, sync queue, retries, idempotency keys, monitoring and audit | Named integrations only; verify direction, objects, depth and availability of each connector |
+| Van Sales mobile application | Posts advertise field sales app connected to central Phenix | Mobile sales app for route/visit plans, customer lookup, price/credit checks, orders, invoices, collections, returns and offline queue/sync | Advertised; verify offline behavior, supported devices, permissions and supported document types |
+| GPS field-force tracking | Post advertises real-time GPS location during customer visits | Consent- and role-controlled location tracking, visit check-in/out, route history, business-hours policy and retention controls | Advertised; verify update frequency, precision, privacy policy and user controls |
+| Mobile document creation | Post advertises configurable documents and issuing documents at customer location | Centrally governed mobile document templates, numbering, pricing/tax rules, validation and server-side posting | Advertised; verify which document types can be issued and whether drafts/posting are supported |
+| POS application | Posts advertise fast sales, payment processing, invoices and central synchronization | POS terminal/session, cash drawer, multi-tender payments, receipt, discounts, returns/refunds, stock/GL posting, offline idempotent sync and shift close | Advertised; verify offline mode, devices, payment integrations and reconciliation |
+| Restaurant e-menu | Post advertises tablet-based digital menu with item images/prices and live synchronization | Menu/catalog publishing, availability, modifiers, table/order flow, kitchen routing and synchronized pricing | Advertised; verify ordering, table management, kitchen display and payment scope |
+| Administrative workflow | Post advertises approval paths for purchase requests, disbursement requests and financial documents | Configurable workflow engine with sequential/parallel approvers, thresholds, delegation, escalation, rejection/resubmission, segregation of duties and immutable decision log | Advertised; verify workflow designer, conditions, notifications, delegation and audit depth |
+| Payroll / HR | General Phenix descriptions mention payroll and human resources | Complete HR/payroll lifecycle with country localization, approvals, accruals, statutory deductions and linked payroll journals | High-level product claim only; verify scope of HR modules and country coverage |
+| Unified ERP | Posts describe sales, warehouses, HR and online-store integrations in one system | Unified master data and transaction services across desktop, mobile, POS, warehouse, accounting and external channels | Positioning claim; verify actual shared data model, licensing and module dependencies |
+
+### Multi-country tax engine
+
+The tax localization requirement is now specified in [MULTI-COUNTRY-TAX-ENGINE-ROADMAP.md](MULTI-COUNTRY-TAX-ENGINE-ROADMAP.md). This is a cross-cutting ERP capability and must be delivered through effective-dated jurisdiction packs, immutable tax snapshots, tax-to-GL/return reconciliation, and country-specific e-invoicing adapters. Saudi Arabia, Jordan, Egypt, the full GCC, Syria, Iraq, Lebanon, EU member states, the United States and additional jurisdictions are explicit coverage targets. A country is not considered supported until its legal rules, official technical specifications and conformance tests have been reviewed and passed.
+
+### ShouTech architecture implications
+
+1. Build a provider-neutral **Integration Hub**; do not hardwire Salla or any named provider into sales/accounting services. Each connector must be isolated behind a contract and have its own configuration, credential handling, mapping, health state, retry policy and audit.
+2. Build **Tax Localization Packs** by jurisdiction and effective date. Tax rates, document schemas and authority endpoints must not be scattered as constants through invoice windows or posting services. A connector must distinguish validation, submission, acceptance, rejection, cancellation and credit/debit correction.
+3. Treat **Van Sales, POS and EMenu** as clients of the same governed catalog, pricing, inventory, customer, document-numbering and posting services. Mobile/POS synchronization must be idempotent and conflict-aware; the client must never independently create authoritative accounting entries.
+4. Implement **Workflow** as a reusable state machine/policy engine, not a collection of approval buttons. Enforce approval authorization in the service layer, preserve every decision, and prevent self-approval where segregation-of-duties rules prohibit it.
+5. Add explicit privacy/security controls for GPS, customer data, payment data and integration credentials: least privilege, retention rules, encryption, access logging and revocation.
+6. Keep country compliance claims separate. ZATCA, Jordanian and Egyptian requirements are distinct localization and certification tracks; passing one does not imply compliance with another.
+
+### Recommended delivery sequence
+
+- **P1 — Foundation first:** stabilize posting, stock, numbering, company isolation, audit and CI; no external connector may bypass these services.
+- **P2 — Workflow and Integration Hub:** establish contracts, durable queue/outbox, idempotency, retries, observability and approval engine.
+- **P3 — Saudi e-invoicing discovery and implementation:** verify current official ZATCA specifications and required onboarding/certification before implementation; test sandbox and production readiness separately.
+- **P4 — POS and Van Sales:** reuse shared sales, inventory, payment and numbering services; add offline sync and device/session controls.
+- **P5 — Restaurant EMenu and kitchen workflow:** publish controlled menu data and route orders through the same stock and sales services.
+- **P6 — Jordan and Egypt localization:** separate regulatory discovery, implementation and acceptance tests for each country.
+
+**Acceptance rule:** A marketing claim is not a ShouTech feature until the end-to-end flow is implemented, tested against the relevant authority/provider sandbox where available, audited, secured, and verified for failure/retry/reversal scenarios.
