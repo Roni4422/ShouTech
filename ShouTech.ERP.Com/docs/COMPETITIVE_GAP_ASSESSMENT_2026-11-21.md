@@ -682,7 +682,7 @@ The following official product pages and documentation were used as the public b
 - [ERP competitive roadmap](ERP-COMPETITIVE-ROADMAP.md)
 - [Tax engine implementation status](TAX-ENGINE-IMPLEMENTATION-STATUS.md)
 - [Enterprise security controls](SECURITY_ENTERPRISE.md)
-- [Accounting reversals and outbox](ACCOUNTING_REVERSALS_AND_OUTBOX.md)
+- [Accounting reversals and outbox](ACCOUNTING_CHART_PERIODS_YEAR_CLOSE.md)
 - [Ribbon completion inventory](RIBBON_COMPLETION_INVENTORY.md)
 - [Window inventory](WINDOW-INVENTORY.md)
 
@@ -714,6 +714,6 @@ Implemented on this branch:
 - Supplier payment vouchers can be allocated to GUID-scoped purchase invoices while retaining the company-code party-ledger scope.
 - Supplier payment allocations are currency-checked; reversing an allocated payment restores invoice open balances and retains release provenance in migration 079 audit rows.
 
-Implementation contract and limits: `docs/PURCHASE_TO_PAY_WORKFLOW.md` and `docs/PURCHASE_TO_PAY_CYCLE.md`.
+Implementation contract and limits: `docs/PURCHASE_TO_PAY_CYCLE.md` and `docs/PURCHASE_TO_PAY_CYCLE.md`.
 
 The following remain open and must not be represented as completed procurement capability: purchase requisitions and multi-level approval; supplier invoice external-reference uniqueness and document attachments; freight/insurance/customs/duty landed-cost allocation and capitalization; full receipt-time lot/serial/batch/expiry capture and end-to-end traceability; GRNI aging, unmatched receipt/invoice exception workbench and period-end reconciliation reports. RFQ supplier responses, line comparison, explicit award, supplier-quotation-to-draft-PO, partial PO receipts, GRNI, received-quantity invoice matching, payment allocation, invoice-linked debit notes, and pre-invoice receipt returns have implementation paths on this branch; they remain subject to current-head CI and end-to-end acceptance.

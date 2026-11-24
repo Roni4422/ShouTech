@@ -177,7 +177,7 @@ Use **Not started**, **In progress**, **Blocked**, **Implemented — unverified*
 - [Phenix 10 Roadmap](PHENIX10-COMPETITIVE-ROADMAP.md) — published capability benchmark.
 - [Architecture Refactoring Plan](REFACTOR.md) — current architecture transition and file disposition.
 - [Database Migrations](DATABASE_MIGRATIONS.md) — migration workflow and safeguards.
-- [Accounting Reversals and Outbox](ACCOUNTING_REVERSALS_AND_OUTBOX.md) — posting and delivery invariants.
+- [Accounting Reversals and Outbox](ACCOUNTING_CHART_PERIODS_YEAR_CLOSE.md) — posting and delivery invariants.
 - [Multi-country Tax Roadmap](MULTI-COUNTRY-TAX-ENGINE-ROADMAP.md) — jurisdiction package requirements.
 - [Window and Ribbon Inventories](WINDOW-INVENTORY.md), [Ribbon Completion Inventory](RIBBON_COMPLETION_INVENTORY.md) — UI coverage and gaps.
 

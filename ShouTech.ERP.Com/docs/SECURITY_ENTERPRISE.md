@@ -3,7 +3,7 @@
 This document describes the security controls implemented in Phase 4
 (branch `feat/enterprise-security-phase4`), how an operator configures them
 for production, and the honest remaining backlog. It complements
-`docs/sec.md` and `docs/ACCOUNTING_REVERSALS_AND_OUTBOX.md`.
+`docs/usr.md` and `docs/ACCOUNTING_CHART_PERIODS_YEAR_CLOSE.md`.
 
 ## 1. Authentication hardening
 

@@ -1,3 +1,5 @@
+<!-- source: docs/PURCHASE_TO_PAY_CYCLE.md -->
+
 # Purchase-to-Pay Cycle
 
 ## Scope
@@ -170,3 +172,283 @@ ShouTech already enforces received quantities at invoice creation, so the next s
 
 - `PurchaseInvoice_SubsetSourceLine_MatchesExactReceiptLine` verifies that an invoice containing only a later PO line is matched to that exact receipt line, with the persisted invoice-line identity and matched quantity checked against `purchase_receipt_invoice_matches`.
 - This complements the partial receipt-return source-line test and the existing multi-receipt / partial-invoice matching coverage. CI for the current branch head must pass before this increment is considered verified.
+
+---
+
+<!-- source: docs/PURCHASE_TO_PAY_WORKFLOW.md -->
+
+# Purchase-to-Pay Workflow
+
+## Scope
+
+This document records the purchase-to-pay implementation on
+`work/full-app-stabilization-2026-11-18`. It is an implementation contract,
+not a claim that every procurement feature in the ERP is complete.
+
+## Current transaction chain
+
+`Purchase Order → Goods Receipt (RCV) → Supplier Invoice (PUR) → Supplier Payment Voucher (PAY) → Payment Reconciliation`
+
+### 1. Purchase order
+
+- A posted purchase order is the commercial commitment.
+- Posting the order does not receive stock and does not create a supplier payable.
+- The order remains the parent document for receipts and supplier invoices.
+- Fulfilment and billing progress are calculated from linked posted documents.
+
+### 2. Goods receipt
+
+- A receipt can be created only from a posted purchase order in the active company.
+- The receipt UI defaults each line to the outstanding quantity and permits partial quantities.
+- Receipt posting validates material identity, positive quantities, and the remaining ordered quantity.
+- Receipt document, stock movement, GRNI journal, and PO-to-receipt link commit in one database transaction.
+- Stock-tracked materials increase inventory at discounted purchase cost and the receipt-date exchange rate.
+- Non-stock/service materials do not create stock movements; their receipt value is debited to the purchases/expense account.
+- Both paths credit the GRNI control account (2203).
+- Receipt posting does not create a supplier payable or supplier-ledger entry.
+- Repeated submission cannot receive beyond the PO's remaining quantity.
+
+### 3. Supplier invoice and three-way matching
+
+- The supplier invoice UI defaults to received-but-not-yet-invoiced quantities and allocates duplicate material lines in source-line order.
+- Users can enter actual supplier unit prices and discounts. Tax is sourced from company tax rules and the tax-rate column is hidden when tax is disabled.
+- The repository rejects taxable supplier invoices unless the company explicitly enabled its tax system; selecting a country alone does not activate tax.
+- A supplier invoice cannot be posted before a receipt or for quantities beyond posted, unbilled receipts.
+- Each invoice line retains its original purchase-order line number and is allocated FIFO against receipt lines for that same source line. Duplicate material cards on separate PO lines therefore retain their own quantity and cost history. The allocation is persisted in
+  `purchase_receipt_invoice_matches`, including receipt/invoice line IDs, quantities,
+  historical costs, exchange rates, and base-currency variance.
+- Invoice posting does not move stock a second time.
+- GRNI is debited at the receipt's historical base value.
+- Price and exchange-rate variance is posted to the purchases/variance account (402).
+- Recoverable input tax is split to the input-VAT account when that account is configured;
+  otherwise tax remains in purchase cost.
+- The supplier payable is credited for the invoice total.
+- PO-to-invoice and matched receipt-to-invoice links are written in the same transaction.
+
+### 4. Supplier payment and reconciliation
+
+- Supplier payments are posted through the existing cash/bank journal voucher flow.
+- A voucher-party link writes the supplier debit to the party ledger in the same posting transaction. The posting repository verifies the voucher-party link belongs to the journal's company and requires the full voucher amount and linked amount to debit the configured payable control account (2201); a balanced voucher that debits an expense account instead is rejected.
+- Payment Reconciliation allocates the payment to the open supplier invoice and updates
+  `purchase_documents.paid_amount` atomically. Allocation is rejected when the payment and invoice
+  currencies differ; there is no implicit same-number cross-currency settlement.
+- Reversing an allocated supplier payment releases its active allocations and restores each
+  affected invoice's open balance inside the journal-reversal transaction. Each released allocation
+  is preserved with allocator, note, amount, invoice identity, releasing user, and reversal journal
+  in `payment_allocation_reversal_audit`.
+- The payment ledger uses the company code while order-chain documents use the stable company
+  identifier. Migration 077 adds `payment_allocations.document_company_id` so both scopes are
+  retained and allocations remain company-isolated.
+
+## Database ownership
+
+- Runtime code does not create tables.
+- Migration 077: `payment_allocations.document_company_id` for dual company-key reconciliation.
+- Migration 078: `purchase_receipt_invoice_matches` for line-level three-way matching and variance audit.
+- Migration 079: `payment_allocation_reversal_audit` for retained allocation provenance when a linked payment voucher is reversed.
+- GRNI control mapping currently uses account 2203 (accrued liabilities); the match table is the
+  receipt-level subledger supporting reconciliation.
+
+## Required regression coverage
+
+- Partial receipt, second receipt, and partial supplier invoices across receipt lines.
+- No invoice before receipt.
+- Over-receipt rejected without changing stock.
+- Receipt updates last purchase cost and posts inventory/GRNI.
+- Supplier price variance posts separately from GRNI.
+- Service receipts accrue to expense without changing stock.
+- Supplier payment voucher appears in the unallocated supplier-payment list; its full balanced amount and the exact linked amount must both debit the payable control account.
+- A supplier-linked payment voucher that debits an expense account instead of Accounts Payable is rejected before any party-ledger settlement is written.
+- Payment allocation settles a GUID-scoped invoice while retaining the company-code payment key.
+- Cross-currency supplier payment allocation is rejected without changing invoice/payment balances.
+- Reversing an allocated supplier payment releases invoice balances and retains the full allocation-release audit record.
+- Partial purchase debit notes retain original invoice-line identity and cannot cumulatively return more than the posted supplier invoice quantity.
+- Concurrent returns against the same supplier invoice cannot consume the same remaining quantity.
+- SQLite and PostgreSQL migrations are repeatable.
+
+## Sourcing request entry
+
+A supplier-neutral Request for Quotation (RFQ) can now be created from
+**Orders → Request for Quotation**. It uses the shared commercial-document
+engine, supports item lines and a response deadline, can be saved as a draft,
+posted, loaded by document number, and printed. A supplier is not mandatory
+on the RFQ header because one request may be sent to multiple suppliers.
+
+Supplier responses are captured in the dedicated supplier quotation
+entry window. Posted offers can be compared side by side, explicitly awarded,
+and converted into a linked draft purchase order. A supplier quotation can
+also be marked Lost without changing the RFQ or any sales document. These
+workflows still require full end-to-end acceptance coverage before release
+readiness can be claimed.
+
+## Remaining procurement scope
+
+Partial supplier debit notes against posted invoices are implemented in `cod/app/src/Views/PurchaseReturnWin.cs` and `cod/app/src/Services/InvRepo.cs`; migration 080 records cumulative line allocations.
+
+Pre-invoice receipt returns are implemented separately in `cod/app/src/Views/PurchaseReceiptReturnWin.cs` and `src/Infra/OrderDocumentRepository.cs`; migration 081 records cumulative receipt-line return allocations.
+
+Supplier invoice external references are unique per company and supplier (case-insensitive and whitespace-trimmed) for active purchase invoices. The application validates before save, and SQLite/PostgreSQL migration 084 adds matching partial unique indexes as the concurrency guard.
+
+Receipt-return eligibility and invoice posting now count only match rows whose source supplier invoice remains posted and is not deleted. This protects replacement invoices and receipt-return quantities from stale match rows retained for inactive legacy invoices. Regression coverage exercises an inactive invoice with retained matches, a full returnable quantity, and a replacement invoice against the same receipt.
+
+The current chain does not yet claim completion of:
+- purchase requisition creation, budget/need validation, multi-level approval, and conversion of an approved requisition into an RFQ or purchase order;
+- supplier invoice-document attachment management;
+- freight, landed-cost allocation, customs and duty capitalization;
+- complete lot/serial/batch/expiry capture and traceability in the purchase receipt workflow. The pre-invoice receipt-return path is already implemented separately through `PurchaseReceiptReturnWin` and the transactional `CreatePurchaseReceiptReturnAsync` operation; migration 081 persists receipt-line return allocations, and posting reverses stock/GRNI while excluding returned quantities from later invoice matching. This capability is implemented at source level but still requires end-to-end acceptance evidence.
+- The GRNI report supports an as-of date and 0–30 / 31–60 / 61–90 / 90+ day aging buckets over the remaining base-currency receipt value. Invoice matches and receipt returns are restricted to documents posted on or before the selected as-of date, so later activity does not rewrite historical GRNI. The unmatched receipt/invoice exception workbench and a period-end reconciliation report remain outstanding.
+
+The RFQ supplier-response, side-by-side comparison, explicit award, and supplier-quotation-to-draft-PO workflows are implemented in the application service and dedicated UI. Supplier quotations can also be marked Lost; this disposition is separate from awarding an offer. These capabilities still require the full application build and end-to-end acceptance run before release readiness can be claimed.
+
+These remaining procurement areas must not be silently treated as implemented merely because
+the core PO-to-payment path exists.
+
+---
+
+<!-- source: docs/PURCHASING_THREE_WAY_MATCH_DESIGN.md -->
+
+# Purchasing Three-Way Match and Payment Eligibility
+
+## Status
+
+Design baseline for the next purchase-to-pay increment. This document does not claim that tolerance evaluation, approval overrides, or payment blocking are implemented. The existing received-quantity matching remains authoritative and must not be weakened.
+
+## Existing invariants to preserve
+
+1. A supplier invoice is created only from a posted purchase order in the active company.
+2. Invoice quantities are consumed from posted receipt lines, not merely from ordered quantities.
+3. Receipt-line and invoice-line identities, matched quantities, receipt/invoice costs, FX rates, base amounts, and variance are persisted in `purchase_receipt_invoice_matches`.
+4. Invoice, matching rows, GRNI clearing, supplier ledger, and GL posting commit atomically.
+5. Receipt returns reduce net received quantities and cannot be invoiced.
+6. Supplier payment allocation is a separate operation and is currently allowed only for posted invoices with matching supplier, company, currency, and open balance.
+7. Posted documents are corrected by reversal workflows; no destructive edit/delete path is introduced.
+
+## Target behavior
+
+Add a configurable, company-scoped three-way control over purchase order, receipt, and supplier invoice values. The control evaluates quantity, unit price, tax, and base-currency variance. It must produce one persisted decision per posted supplier invoice:
+
+- `Pass`: within all enabled tolerances.
+- `Warning`: outside a warning threshold but not a blocking threshold.
+- `Blocked`: exceeds a blocking threshold; payment allocation is prohibited.
+- `Override`: a blocked invoice has an explicit, authorized, audited release.
+
+The invoice must never be silently marked eligible merely because its quantity matched. Quantity over-receipt/over-invoice validation remains a hard invariant independent of monetary tolerance settings.
+
+## Configuration model
+
+Use a per-company policy record. New companies receive an explicit disabled policy so existing installations preserve current behavior until an authorized user enables the control. Country selection, supplier identity, tax country, and user role must never silently activate or infer a policy.
+
+Initial policy fields:
+
+- `company_id` (unique company key)
+- `is_enabled`
+- `price_warning_percent`, `price_block_percent`
+- `tax_warning_percent`, `tax_block_percent`
+- `base_variance_warning_amount`, `base_variance_block_amount`
+- `require_receipt_match`
+- `created_at`, `created_by`, `updated_at`, `updated_by`
+
+All tolerances must be non-negative. A blocking threshold must be greater than or equal to its warning threshold. Zero means no variance is permitted for that dimension when the policy is enabled; null should not be used to mean zero. Store and compare monetary tolerances in company base currency.
+
+Supplier-specific exceptions are a later extension. They must be explicit, company-scoped, permission-checked, and auditable; they must not override hard quantity controls.
+
+## Persisted evaluation and audit
+
+Persist an immutable evaluation snapshot for each invoice posting, including:
+
+- company and invoice identity;
+- policy version/snapshot used;
+- evaluated dimensions and measured deltas;
+- final decision and machine-readable reason codes;
+- evaluator timestamp and actor;
+- source match-row identities.
+
+A re-evaluation after a policy change must create a new evaluation version, not overwrite the historical decision used when the invoice was posted or paid.
+
+An override must be a separate append-only audit record containing invoice, prior decision, approver, timestamp, mandatory reason, and the resulting release decision. The caller must have a dedicated permission; the invoice creator must not gain override authority merely by creating the invoice.
+
+## Transaction boundaries
+
+### Invoice posting
+
+Inside the existing purchase-order serialization transaction:
+
+1. Lock and validate the posted purchase order.
+2. Match invoice lines against remaining posted receipt lines.
+3. Persist all receipt/invoice match rows.
+4. Evaluate enabled policy using those exact match rows and invoice tax snapshots.
+5. Persist the evaluation snapshot and decision.
+6. Continue existing GRNI, supplier-ledger, and GL posting.
+7. Commit all effects together.
+
+If evaluation or persistence fails, roll back the entire invoice posting. If the policy is disabled, preserve the existing posting behavior and record an explicit `NotConfigured`/not-enforced state rather than inventing a pass result.
+
+### Payment allocation
+
+Inside `ReconciliationRepository.AllocateAsync`, after locking and reading the posted purchase invoice and before inserting `payment_allocations`:
+
+- resolve the latest effective evaluation for that invoice;
+- reject `Blocked` unless a valid authorized override exists;
+- allow `Pass`, `Warning`, and authorized `Override`;
+- keep all existing company, supplier, currency, payment remainder, and invoice open-balance checks;
+- re-check the decision in the same transaction to prevent a time-of-check/time-of-use gap.
+
+Invoices with no evaluation because the company policy is disabled remain compatible with the existing behavior. A policy enabled after invoice posting requires a controlled re-evaluation workflow before new allocations are accepted; do not infer historical compliance.
+
+## UI and permissions
+
+Add a company accounting/purchasing settings page for enabling the policy and setting tolerances. Show a clear preview of each threshold and base-currency unit. Add an invoice match panel showing PO, receipt, and invoice values by source line, measured variance, decision, and reason. Add a separate approval action for authorized users with mandatory reason entry.
+
+The UI must not display an enabled toggle until the settings are persisted. Do not show a success message before the transaction commits. All visible text must use language resources; no hardcoded Arabic strings or comments.
+
+## Required regression coverage
+
+1. Disabled policy preserves current purchase invoice and payment allocation behavior.
+2. Enabled policy with values inside thresholds records Pass and permits allocation.
+3. Warning-only variance records Warning and permits allocation.
+4. Price variance beyond block threshold records Blocked and rejects allocation.
+5. Tax variance beyond block threshold records Blocked and rejects allocation.
+6. Base-currency absolute variance beyond block threshold records Blocked and rejects allocation.
+7. Authorized override with a non-empty reason permits allocation and records immutable audit data.
+8. Unauthorized override is rejected.
+9. Invoice creator cannot self-approve unless a separately granted permission explicitly permits it.
+10. Policy changes do not rewrite historical evaluation snapshots.
+11. Concurrent allocations cannot bypass a Blocked decision.
+12. Concurrent invoice posting and receipt return cannot consume the same receipt quantity.
+13. SQLite and PostgreSQL migrations and behavior remain equivalent.
+14. Company A policy and evaluations cannot affect Company B.
+15. A missing or corrupt enabled-policy record fails closed; it must not silently permit payment.
+
+## Implementation status
+
+The following foundation has been committed to the work branch:
+
+1. SQLite and PostgreSQL migrations 082/083 create opt-in policy storage, immutable evaluation history, append-only override history, dedicated permissions, and a unique release-per-evaluation constraint.
+2. Domain records and provider-neutral repositories read and update policies with optimistic version checks, return the latest evaluation per invoice, and append releases only for the latest Blocked evaluation.
+3. Purchase invoice conversion evaluates price, tax, and base-currency variance inside the same transaction as invoice posting and GRNI/GL effects.
+4. Payment allocation checks the current company policy and latest invoice evaluation inside the allocation transaction. Enabled policies fail closed for missing evaluations, stale policy versions, invalid decisions, and unreleased Blocked results.
+5. Dedicated policy-manage and override permissions are seeded for administrators; the application service checks them on every write and emits audit events.
+6. A Purchasing ribbon route opens the policy and recent-evaluation window. English, Arabic, French, and Turkish resources have been added.
+7. Regression tests cover evaluator outcomes, blocked payment rejection, audited release, self-approval rejection, policy version conflicts, permission enforcement, source-line match snapshot persistence, and append-only re-evaluation after a policy change.
+8. The evaluation review window displays the stored source-line snapshot and exposes a permission-checked re-evaluation action when the policy version is stale.
+9. The legacy manual supplier invoice repository path refuses posting while the company three-way-match policy is enabled, preventing immediate settlement from bypassing PO/receipt controls.
+
+## Remaining implementation and verification
+
+1. Add controlled invoice re-evaluation when policy changes, retaining all prior evaluations and requiring the current policy version before payment.
+2. Add a source-line drill-down to the invoice match window showing PO, receipt, invoice, quantities, unit prices, tax, exchange rates, and base-currency variance.
+3. Verify the invoice entry paths used by the WPF application all create a match evaluation when a company policy is enabled; manual supplier invoices must not bypass the payment gate.
+4. Add integration coverage for warning allocation, policy-version invalidation, missing evaluation, duplicate override, tenant isolation, and concurrent receipt-return/invoice/payment races.
+5. Run the full solution build and all relevant SQLite and PostgreSQL integration tests; fix every failure before release.
+6. Update `PURCHASE_TO_PAY_CYCLE.md` only with verified test evidence and close the remaining purchase reports, supplier statements, and exception workflow gaps.
+
+## Release gate
+
+Do not call the purchasing cycle or this feature complete until:
+- both providers apply all migrations and pass the same integration scenarios;
+- the active policy version is enforced transactionally at invoice posting and payment allocation;
+- a Blocked invoice cannot be paid without an authorized, independently approved, reasoned override;
+- all WPF supplier-invoice paths are covered, including legacy/manual entry paths;
+- the source-line comparison and re-evaluation workflows are available to authorized users;
+- legacy manual supplier invoice posting cannot bypass an enabled policy;
+- purchase reports, returns, GRNI, supplier balances, and payment reconciliation pass end-to-end regression tests.
