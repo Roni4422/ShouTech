@@ -249,6 +249,20 @@ benchmarks to be sellable as enterprise commercial software.
   per-point print designs bound to doc_designs/.stid), weigh
   customer-group scoping and touch/field customization, record
   where ours is ahead (warehouse, price level, permitted users).
+- **POS material information pane + live tafqeet** (owner
+  evidence 2026-11-24 17:55; transcription §7): QUEUED with the
+  POS comparison work — the POS sales screen gains an info pane
+  for the selected/entered material showing PROJECTED total
+  balance (before ← after the current line), per-warehouse
+  balances, sale price, weighted-average purchase cost, last
+  purchase price + date, and last price sold to the current
+  customer; the displayed property set is configurable per
+  user/point from a checkbox list (Phenix offers ~35 properties
+  incl. price levels, min/max sale & purchase, FIFO, barcode,
+  packing, weight, category, groups, sales snapshot) and persists
+  through WinPref. Plus the live amount-in-words total (KWD
+  tafqeet) on the POS screen. The build step records which
+  properties are implemented vs deferred with reasons.
 
 
 ## Commercial-readiness phase (owner go-ahead 2026-11-24 16:22) — PLAN
