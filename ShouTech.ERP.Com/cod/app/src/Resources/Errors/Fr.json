@@ -778,5 +778,35 @@
   "SAL-7029": {
     "name": "Consolidation mismatch",
     "message": "Les livraisons ne peuvent pas être consolidées en une seule facture : le tiers, la devise ou le taux de change diffèrent, ou une source n'est pas une livraison."
+  },
+  "PUR-1001": {
+    "code": "PUR-1001",
+    "name": "RequisitionNotEditable",
+    "message": "Une demande ne peut être modifiée qu'avant soumission ou après rejet.",
+    "hint": "Corrigez-la après un rejet, ou créez une nouvelle demande."
+  },
+  "PUR-1002": {
+    "code": "PUR-1002",
+    "name": "RequisitionCancelBlocked",
+    "message": "Une demande convertie, clôturée ou déjà annulée ne peut pas être annulée.",
+    "hint": "Une fois la conversion terminée, clôturez plutôt la demande."
+  },
+  "PUR-1003": {
+    "code": "PUR-1003",
+    "name": "RequisitionCloseInvalid",
+    "message": "Seule une demande entièrement convertie peut être clôturée.",
+    "hint": "Convertissez d'abord la demande en bon de commande ou en demande de prix."
+  },
+  "PUR-1004": {
+    "code": "PUR-1004",
+    "name": "RequisitionStateInvalid",
+    "message": "L'état de la demande ne permet pas cette opération.",
+    "hint": "Rechargez la demande et vérifiez l'état de son flux."
+  },
+  "PUR-1005": {
+    "code": "PUR-1005",
+    "name": "RequisitionReasonRequired",
+    "message": "Un motif est requis pour cette action sur la demande.",
+    "hint": "Saisissez le motif dans le champ de motif de décision."
   }
 }

@@ -203,6 +203,11 @@ change and not yet converted.
 | POS-1008 | PosHeldBillNotFound | The held bill was not found. | Thrown by PosRepository.RecallHeldBillAsync for an unknown held bill (Build POS 066). |
 | POS-1009 | PosHeldBillStateInvalid | The held bill is not in a state that allows this operation. | Thrown when recalling/cancelling a bill that is not Held, or holding an empty/invalid bill (Build POS 066). |
 | POS-1010 | PosSessionlessNotAllowed | Session-less selling is enabled but this user may not bypass sessions. | Thrown by PosService.RequireSessionForSaleAsync when pos_settings.allow_sessionless is on but the caller lacks POS.SESSION.BYPASS (Build POS 066). |
+| PUR-1001 | RequisitionNotEditable | A requisition can only be edited before submission or after rejection. | Thrown by PurchaseRequisitionWorkflowService.UpdateDraftAsync when a workflow row exists in any state other than Rejected (P2P A1, migration 092). |
+| PUR-1002 | RequisitionCancelBlocked | A requisition that has been converted, closed, or already cancelled cannot be cancelled. | Thrown by PurchaseRequisitionWorkflowRepository.CancelAsync from a terminal state or when any document_links row exists for the requisition (P2P A1, migration 092). |
+| PUR-1003 | RequisitionCloseInvalid | Only a fully converted requisition can be closed. | Thrown by PurchaseRequisitionWorkflowRepository.CloseAsync when the workflow is not in the Converted state (P2P A1, migration 092). |
+| PUR-1004 | RequisitionStateInvalid | The requisition state does not allow this operation. | Thrown by PurchaseRequisitionWorkflowRepository.SubmitAsync when a workflow row exists in a state other than Rejected (P2P A1, migration 092). |
+| PUR-1005 | RequisitionReasonRequired | A reason is required for this requisition action. | Thrown by the requisition service/repository when a cancel is attempted without a reason (P2P A1, migration 092). |
 | SYS-0001 | UnknownError | An unexpected error occurred. | Fallback for any error with no better code; also what an unregistered code resolves to. |
 | SYS-0002 | DispatcherUnhandled | An unexpected error interrupted the current operation. | Unhandled exception on the UI dispatcher (global handler fallback). |
 | SYS-0003 | AppDomainUnhandled | An unexpected error occurred in the application. | Unhandled AppDomain exception (global handler fallback). |

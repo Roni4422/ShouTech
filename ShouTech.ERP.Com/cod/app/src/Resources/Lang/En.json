@@ -4211,7 +4211,20 @@
     "Saved": "Draft saved.",
     "Submitted": "Requisition submitted for approval.",
     "DecisionSaved": "Approval decision saved.",
-    "Converted": "Purchase order draft created."
+    "Converted": "Purchase order draft created.",
+    "ConvertToRfq": "Create request for quotation",
+    "CancelRequisition": "Cancel requisition",
+    "CloseRequisition": "Close requisition",
+    "Round": "Round",
+    "RequestType": "Request type",
+    "RequestType.Purchase": "Purchase",
+    "RequestType.MaterialTransfer": "Material transfer",
+    "RequestType.MaterialIssue": "Material issue",
+    "RequestType.Manufacture": "Manufacture",
+    "ReasonRequired": "Enter a reason first.",
+    "Cancelled": "Requisition cancelled.",
+    "Closed": "Requisition closed.",
+    "ConvertedToRfq": "Request for quotation draft created."
   },
   "Recur": {
     "Title": "Recurring Sales Schedules",

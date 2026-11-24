@@ -99,7 +99,11 @@ public sealed class PurchaseRequisitionWorkflowRepository:IPurchaseRequisitionWo
         if(string.IsNullOrWhiteSpace(actor))throw new ArgumentException("Actor is required.",nameof(actor));
         await using var c=Open();await c.OpenAsync(ct).ConfigureAwait(false);await using var t=await c.BeginTransactionAsync(ct).ConfigureAwait(false);
         try{
-            // R2: Close is only meaningful after full conversion.
+            // R2: Close is only meaningful after full conversion. The
+            // workflow row is locked first on PostgreSQL (the d12eb0ac
+            // serialization discipline every workflow write follows), so
+            // a concurrent conversion/cancel cannot interleave.
+            await using(var current=Cmd(c,t,"SELECT status FROM purchase_requisition_workflow WHERE company_id=@c AND requisition_doc_id=@id"+(Pg?" FOR UPDATE":string.Empty))){Add(current,"@c",Co(company));Add(current,"@id",id);await using var r=await current.ExecuteReaderAsync(ct).ConfigureAwait(false);if(!await r.ReadAsync(ct).ConfigureAwait(false)||Text(r,0)!="Converted")throw new AppError(ErrorCodes.RequisitionCloseInvalid,"Only a fully converted requisition can be closed.");}
             await using var update=Cmd(c,t,"UPDATE purchase_requisition_workflow SET status='Closed',updated_at=CURRENT_TIMESTAMP WHERE company_id=@c AND requisition_doc_id=@id AND status='Converted'");Add(update,"@c",Co(company));Add(update,"@id",id);
             if(await update.ExecuteNonQueryAsync(ct).ConfigureAwait(false)!=1)throw new AppError(ErrorCodes.RequisitionCloseInvalid,"Only a fully converted requisition can be closed.");
             await Event(c,t,company,id,"Closed",actor.Trim(),null,ct);await t.CommitAsync(ct).ConfigureAwait(false);

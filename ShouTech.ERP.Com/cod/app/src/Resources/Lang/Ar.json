@@ -4294,7 +4294,20 @@
     "Saved": "تم حفظ المسودة.",
     "Submitted": "تم إرسال الطلب للاعتماد.",
     "DecisionSaved": "تم حفظ قرار الاعتماد.",
-    "Converted": "تم إنشاء مسودة أمر الشراء."
+    "Converted": "تم إنشاء مسودة أمر الشراء.",
+    "ConvertToRfq": "إنشاء طلب عروض أسعار",
+    "CancelRequisition": "إلغاء الطلب",
+    "CloseRequisition": "إغلاق الطلب",
+    "Round": "الجولة",
+    "RequestType": "نوع الطلب",
+    "RequestType.Purchase": "شراء",
+    "RequestType.MaterialTransfer": "تحويل مواد",
+    "RequestType.MaterialIssue": "صرف مواد",
+    "RequestType.Manufacture": "تصنيع",
+    "ReasonRequired": "أدخل سببًا أولًا.",
+    "Cancelled": "تم إلغاء الطلب.",
+    "Closed": "تم إغلاق الطلب.",
+    "ConvertedToRfq": "تم إنشاء مسودة طلب عروض الأسعار."
   },
   "Recur": {
     "Title": "جداول المبيعات المتكررة",

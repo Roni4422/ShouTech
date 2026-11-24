@@ -293,8 +293,111 @@ Adopted wholesale:
 
 ## 4. Build results
 
-(Filled per workstream as the build lands — pillars checklist per window:
-UI / DB / linking / posting / persistence / downstream.)
+### Workstream A1 — Purchase Requisition completion (R1–R6 + permission/approval amendment)
+
+Branch `feat/p2p-a1-requisition`. Migration **092** (SQLite + PostgreSQL).
+
+Pillars checklist — PurchaseRequisitionWin / requisition workflow:
+- **UI** ✓ — window gains Required-by date picker, Request Type combo
+  (Purchase / MaterialTransfer / MaterialIssue / Manufacture), real
+  Department field; new bottom-bar actions Convert to RFQ, Cancel
+  Requisition, Close Requisition (all action buttons moved to the bottom
+  bar per the standing layout rule); approvals grid gains a Round column
+  so prior rounds stay visible; minimum compacted 900×600 → 660×372 with
+  a ScrollViewer guard (PosCheckoutWin pattern) — `verify_screenfit.py`
+  PASS for this window.
+- **DB (both providers)** ✓ — migration 092: `required_by_date`,
+  `request_type`, `department` on the document store; workflow status
+  CHECK widened with Cancelled/Closed; `round_no` on workflow +
+  approvals (uniqueness moves to round+step); `rfq_doc_id`; PRQ→RFQ
+  single-link unique index; permissions PUR.REQ.CANCEL (524) /
+  PUR.REQ.CLOSE (525). SqlMigrator double-run on scratch SQLite:
+  applies once, second run 0.
+- **Linking** ✓ — (PRQ, RFQ) added to the permitted conversion pairs in
+  `OrderDocumentRepository.CreateLinkedDraftAsync`; the link persists in
+  `document_links` exactly once (unique index + reservation discipline
+  shared with PRQ→PO); shell context (company/language/theme) inherited
+  via BaseWin as before.
+- **Posting** ✓ (non-posting by design, budget-guarded) — requisitions
+  still post no journal; R1 adds the budget control at submit (below).
+- **Persistence** ✓ — required-by / type / department / warehouse all
+  round-trip create → update → load (harness + Kern.Tests proof);
+  department no longer smuggled into Notes, and migration 092 moves
+  trivially parseable legacy `Department: …`-prefixed Notes values into
+  the column (verified against the migrated schema).
+- **Downstream** ✓ — conversion targets are real RFQ/PO drafts on the
+  shared engine; workflow events are append-only across rounds,
+  cancels, closes, conversions and budget overrides.
+
+R1 budget-check design choice (documented per the workstream brief):
+a requisition carries no account or cost-center coding, so the check
+charges its estimated total (grand total × exchange rate) to the
+**Account budget dimension of the canonical Purchases account
+(GlAccounts.Purchases, "402")** — the account an approved requisition's
+spend lands on at invoice posting — via the new
+`BudgetGuard.CheckCommitment`, which reuses the posting guard's active
+budgets, annual + accumulated-monthly horizons, posted-GL actuals (net
+of reversals), and Stop/Warn semantics. Stop throws the same catalogued
+ACC-5018/5019, rolls the submission back, and records Blocked
+budget-control events after the rollback (the JournalRepository
+boundary pattern); Warn lets the submit through and writes a
+`BudgetOverride` workflow event plus the guard's Warned budget-control
+events. CostCenter/Project budgets cannot be charged by a requisition
+(no attribution exists on it) and are skipped, exactly as the posting
+guard skips unattributable lines. The check runs at submit (including
+resubmission); approval completion re-checks nothing new — approvers
+decide on a submission that already passed the gate.
+
+Permission enforcement (owner report §11 item 6): every service
+operation re-checks its PUR.REQ.* permission in
+`PurchaseRequisitionWorkflowService` (VIEW/EDIT/APPROVE/CONVERT/CANCEL/
+CLOSE); denial now throws the catalogued `AppError` AUTH-2005 instead
+of an uncatalogued exception. New error codes PUR-1001..1005
+(edit-lock, cancel-blocked, close-invalid, state-invalid,
+reason-required) are registered in ErrorCodes and in all four Errors
+catalogs (parity: 112 codes × 4 languages, 0 missing); Lang keys for
+the new window controls exist in all four Lang catalogs (56
+PurchaseRequisition keys × 4, 0 missing).
+
+PostgreSQL concurrency discipline for the new writes (the d12eb0ac
+pattern — lock the workflow row `FOR UPDATE` inside the transaction
+before any read-modify-write; SQLite relies on its single-writer
+transaction):
+- Submit/resubmit: workflow row read `FOR UPDATE` (PG) before the
+  state check and round increment; the budget check runs inside the
+  same transaction after the lock, so two concurrent submits of one
+  requisition serialize on the row.
+- Decide: unchanged from d12eb0ac (`FOR UPDATE OF w`).
+- Cancel: workflow row read `FOR UPDATE` (PG); the conversion-link
+  check and the guarded status update run under that lock.
+- Close: workflow row read `FOR UPDATE` (PG) before the guarded
+  `status='Converted'` update.
+- MarkConvertedToRfq / Begin / Abort conversion: `FOR UPDATE` (PG),
+  same as the existing PO conversion methods; Abort's link check now
+  covers RFQ links too.
+- Budget events: Warned rows are written inside the submit transaction;
+  Blocked rows are append-only inserts in a short follow-up transaction
+  after the rollback — no read-modify-write, so no lock is needed.
+
+Proof: Kern.Tests `PurchaseRequisitionCompletionTests`
+(13 facts, compile-verified; execution owed on Windows) + a headless
+harness executing the same scenarios against a real migrated SQLite
+database on Linux — 39/39 checks PASS, including migration
+idempotency, budget Stop/Warn, round-2 resubmission, single RFQ link,
+cancel/close, header round-trips, AUTH-2005 denials, the 3-approver
+chain, mid-chain rejection, self-approval and step-skip rejection.
+Speaks to owner-report §12 lines: "Internal requisitions work from
+creation through approval" and "Approval permissions and sequential
+approvals work correctly".
+
+Left out, deliberately: partial (per-line) requisition conversion and
+multiple POs per requisition (whole-document conversion kept, as
+flagged in §7); request types other than Purchase persist and display
+but do not yet convert to stock entries / work orders (their downstream
+documents are other workstreams' scope); PostgreSQL execution of
+migration 092 and the new writes is code-reviewed against the SQLite
+run and the d12eb0ac discipline but, like all PG verification on this
+branch, still owes a live PostgreSQL run on Windows.
 
 ### Workstream A2 — GRNI exceptions + payable aging (Y2, Y3) — branch `feat/p2p-a2-grni`
 

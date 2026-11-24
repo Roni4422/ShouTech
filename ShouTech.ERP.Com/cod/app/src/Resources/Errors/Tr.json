@@ -778,5 +778,35 @@
   "SAL-7029": {
     "name": "Consolidation mismatch",
     "message": "Teslimatlar tek bir faturada birleştirilemez: taraf, para birimi veya döviz kuru farklı ya da bir kaynak teslimat değil."
+  },
+  "PUR-1001": {
+    "code": "PUR-1001",
+    "name": "RequisitionNotEditable",
+    "message": "Bir talep yalnızca gönderimden önce veya reddedildikten sonra düzenlenebilir.",
+    "hint": "Reddedildikten sonra düzeltin veya yeni bir talep oluşturun."
+  },
+  "PUR-1002": {
+    "code": "PUR-1002",
+    "name": "RequisitionCancelBlocked",
+    "message": "Dönüştürülmüş, kapatılmış veya zaten iptal edilmiş bir talep iptal edilemez.",
+    "hint": "Dönüştürme tamamlandıktan sonra talebi kapatın."
+  },
+  "PUR-1003": {
+    "code": "PUR-1003",
+    "name": "RequisitionCloseInvalid",
+    "message": "Yalnızca tamamen dönüştürülmüş bir talep kapatılabilir.",
+    "hint": "Talebi önce bir satın alma siparişine veya teklif talebine dönüştürün."
+  },
+  "PUR-1004": {
+    "code": "PUR-1004",
+    "name": "RequisitionStateInvalid",
+    "message": "Talep durumu bu işleme izin vermiyor.",
+    "hint": "Talebi yeniden yükleyin ve iş akışı durumunu kontrol edin."
+  },
+  "PUR-1005": {
+    "code": "PUR-1005",
+    "name": "RequisitionReasonRequired",
+    "message": "Bu talep işlemi için bir neden gereklidir.",
+    "hint": "Nedeni karar nedeni alanına yazın."
   }
 }

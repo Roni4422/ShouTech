@@ -778,5 +778,35 @@
   "SAL-7029": {
     "name": "Consolidation mismatch",
     "message": "The deliveries cannot be consolidated into one invoice: party, currency or exchange rate differ, or a source is not a delivery."
+  },
+  "PUR-1001": {
+    "code": "PUR-1001",
+    "name": "RequisitionNotEditable",
+    "message": "A requisition can only be edited before submission or after rejection.",
+    "hint": "Correct it after a rejection, or create a new requisition instead."
+  },
+  "PUR-1002": {
+    "code": "PUR-1002",
+    "name": "RequisitionCancelBlocked",
+    "message": "A requisition that has been converted, closed, or already cancelled cannot be cancelled.",
+    "hint": "Once conversion is complete, close the requisition instead."
+  },
+  "PUR-1003": {
+    "code": "PUR-1003",
+    "name": "RequisitionCloseInvalid",
+    "message": "Only a fully converted requisition can be closed.",
+    "hint": "Convert the requisition to a purchase order or a request for quotation first."
+  },
+  "PUR-1004": {
+    "code": "PUR-1004",
+    "name": "RequisitionStateInvalid",
+    "message": "The requisition state does not allow this operation.",
+    "hint": "Reload the requisition and check its workflow status."
+  },
+  "PUR-1005": {
+    "code": "PUR-1005",
+    "name": "RequisitionReasonRequired",
+    "message": "A reason is required for this requisition action.",
+    "hint": "Type the reason in the decision reason field."
   }
 }

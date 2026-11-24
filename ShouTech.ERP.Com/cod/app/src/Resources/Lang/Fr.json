@@ -4202,7 +4202,20 @@
     "Saved": "Brouillon enregistré.",
     "Submitted": "Demande soumise à approbation.",
     "DecisionSaved": "Décision enregistrée.",
-    "Converted": "Brouillon de bon de commande créé."
+    "Converted": "Brouillon de bon de commande créé.",
+    "ConvertToRfq": "Créer une demande de prix",
+    "CancelRequisition": "Annuler la demande",
+    "CloseRequisition": "Clôturer la demande",
+    "Round": "Tour",
+    "RequestType": "Type de demande",
+    "RequestType.Purchase": "Achat",
+    "RequestType.MaterialTransfer": "Transfert de matière",
+    "RequestType.MaterialIssue": "Sortie de matière",
+    "RequestType.Manufacture": "Fabrication",
+    "ReasonRequired": "Saisissez d'abord un motif.",
+    "Cancelled": "Demande annulée.",
+    "Closed": "Demande clôturée.",
+    "ConvertedToRfq": "Brouillon de demande de prix créé."
   },
   "Recur": {
     "Title": "Planifications de ventes récurrentes",

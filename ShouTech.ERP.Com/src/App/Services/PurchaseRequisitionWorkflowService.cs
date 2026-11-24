@@ -26,7 +26,7 @@ public sealed class PurchaseRequisitionWorkflowService
 
     public Task<PurchaseRequisitionWorkflow?> GetAsync(Guid companyId,long id,CancellationToken ct=default)
     {
-        if(!_hasPermission("PUR.REQ.VIEW")&&!_hasPermission("PUR.REQ.APPROVE")&&!_hasPermission("PUR.REQ.CONVERT"))throw new UnauthorizedAccessException("Purchase requisition view permission is required.");
+        if(!_hasPermission("PUR.REQ.VIEW")&&!_hasPermission("PUR.REQ.APPROVE")&&!_hasPermission("PUR.REQ.CONVERT"))throw new AppError(ErrorCodes.PermissionDenied,"Purchase requisition view permission is required.");
         return _repository.GetAsync(RequireCompany(companyId),id,ct);
     }
 
@@ -194,7 +194,12 @@ public sealed class PurchaseRequisitionWorkflowService
             throw;
         }
     }
-    private void RequirePermission(string code){if(!_hasPermission(code))throw new UnauthorizedAccessException($"Missing permission: {code}.");}
+    /// <summary>Service-layer enforcement (owner report section 11 item
+    /// 6): every public operation re-checks its PUR.REQ.* permission here,
+    /// not only in the window, and a denial is a catalogued error
+    /// (AUTH-2005) so it resolves through the error catalog like every
+    /// other deliberate failure.</summary>
+    private void RequirePermission(string code){if(!_hasPermission(code))throw new AppError(ErrorCodes.PermissionDenied,$"Missing permission: {code}.");}
     private static Guid RequireCompany(Guid id)=>id==Guid.Empty?throw new ArgumentException("Company is required.",nameof(id)):id;
     private static string RequireActor(string value)=>string.IsNullOrWhiteSpace(value)?throw new ArgumentException("Actor is required.",nameof(value)):value.Trim();
 }

@@ -4202,7 +4202,20 @@
     "Saved": "Taslak kaydedildi.",
     "Submitted": "Talep onaya gönderildi.",
     "DecisionSaved": "Onay kararı kaydedildi.",
-    "Converted": "Satın alma siparişi taslağı oluşturuldu."
+    "Converted": "Satın alma siparişi taslağı oluşturuldu.",
+    "ConvertToRfq": "Teklif talebi oluştur",
+    "CancelRequisition": "Talebi iptal et",
+    "CloseRequisition": "Talebi kapat",
+    "Round": "Tur",
+    "RequestType": "Talep türü",
+    "RequestType.Purchase": "Satın alma",
+    "RequestType.MaterialTransfer": "Malzeme transferi",
+    "RequestType.MaterialIssue": "Malzeme çıkışı",
+    "RequestType.Manufacture": "Üretim",
+    "ReasonRequired": "Önce bir neden girin.",
+    "Cancelled": "Talep iptal edildi.",
+    "Closed": "Talep kapatıldı.",
+    "ConvertedToRfq": "Teklif talebi taslağı oluşturuldu."
   },
   "Recur": {
     "Title": "Yinelenen Satış Zamanlamaları",
