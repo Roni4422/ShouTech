@@ -468,7 +468,8 @@
     "Col.Qty": "الكمية",
     "Col.LineTotal": "إجمالي السطر",
     "TerminalNotDefined": "هذه النافذة غير معرّفة أو غير مفعّلة. عرّفها أولاً (تعريف نافذة نقاط البيع).",
-    "TerminalUserNotPermitted": "مستخدمك غير مخوّل بفتح جلسة على هذه النافذة."
+    "TerminalUserNotPermitted": "مستخدمك غير مخوّل بفتح جلسة على هذه النافذة.",
+    "SessionSales": "مبيعات النافذة"
   },
   "Orders": {
     "RecurringSchedules": "الجداول المتكررة",
@@ -4790,5 +4791,23 @@
     "Saved": "تم حفظ النافذة.",
     "CodeRequired": "الرمز والاسم مطلوبان.",
     "ConfirmDelete": "حذف تعريف هذه النافذة؟"
+  },
+  "PosSales": {
+    "Title": "مبيعات النافذة",
+    "Session": "الجلسة",
+    "DocNo": "رقم الفاتورة",
+    "Kind": "النوع",
+    "Time": "الوقت",
+    "Customer": "الزبون",
+    "Total": "الإجمالي",
+    "OnAccount": "على الحساب",
+    "Status": "الحالة",
+    "Reprint": "إعادة طباعة",
+    "Return": "إرجاع / استبدال",
+    "SalesTotal": "المبيعات",
+    "ReturnsTotal": "المرتجعات",
+    "NetTotal": "الصافي",
+    "NoSession": "لا توجد جلسات بعد.",
+    "SelectSale": "اختر فاتورة أولاً."
   }
 }

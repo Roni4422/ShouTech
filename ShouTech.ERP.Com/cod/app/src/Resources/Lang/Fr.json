@@ -467,7 +467,8 @@
     "Col.Qty": "QTÉ",
     "Col.LineTotal": "TOTAL LIGNE",
     "TerminalNotDefined": "Ce terminal n'est pas défini ou pas actif. Définissez-le d'abord (Définition du terminal de caisse).",
-    "TerminalUserNotPermitted": "Votre utilisateur n'est pas autorisé à ouvrir une session sur ce terminal."
+    "TerminalUserNotPermitted": "Votre utilisateur n'est pas autorisé à ouvrir une session sur ce terminal.",
+    "SessionSales": "Ventes de la session"
   },
   "Orders": {
     "RecurringSchedules": "Planifications récurrentes",
@@ -4698,5 +4699,23 @@
     "Saved": "Terminal enregistré.",
     "CodeRequired": "Le code et le nom sont requis.",
     "ConfirmDelete": "Supprimer la définition de ce terminal ?"
+  },
+  "PosSales": {
+    "Title": "Ventes de la session",
+    "Session": "Session",
+    "DocNo": "N° de ticket",
+    "Kind": "Type",
+    "Time": "Heure",
+    "Customer": "Client",
+    "Total": "Total",
+    "OnAccount": "À crédit",
+    "Status": "Statut",
+    "Reprint": "Réimprimer",
+    "Return": "Retour / Échange",
+    "SalesTotal": "Ventes",
+    "ReturnsTotal": "Retours",
+    "NetTotal": "Net",
+    "NoSession": "Aucune session de caisse.",
+    "SelectSale": "Sélectionnez d'abord une vente."
   }
 }

@@ -50,12 +50,18 @@ one is set (POS.TerminalNotDefined / POS.TerminalUserNotPermitted,
 settings-default path stays, so existing installs do not break
 before their first terminal is defined.
 
-## P3 — session sales window (planned)
+## P3 — session sales window (DONE, gates ALL-GREEN)
 
-PosSalesWin: pick a session → its sales (sales_documents by
-pos_session_id) with tender summary → Reprint + Return/Exchange
-(PosReturnWin). New ribbon key POS.SessionSales (265 → 266
-entries; RIBBON_AUDIT addendum).
+**PosSalesWin** (new ribbon key POS.SessionSales, 265 → 266
+entries): pick a session (defaults to the open one) → its
+documents with the per-bill tender split (cash/card/on-account)
+and session totals (sales / returns / net). Reprint runs the
+real receipt path (InvRepo.Load + InvPrn.PrintPosReceipt with
+the stored tenders); Return/Exchange opens PosReturnWin on the
+chosen bill (new optional initialDocNo parameter — the bill
+loads directly instead of being re-typed). Rows carry the
+numbered row-header treatment; returns (SRT) are listed beside
+sales, distinguished by kind.
 
 ## Named gaps (recorded, not papered over)
 
@@ -80,7 +86,7 @@ entries; RIBBON_AUDIT addendum).
 | Terminal definition | POS Profile (warehouse, accounts, payment methods, user) | POS config (shop, pricelist, journal, users) | POS station options + restaurant-system options (help text) | POS station definition (vendor material) | PosTermWin: warehouse, cash+bank accounts, drawer, printer, default customer, price level, permitted users |
 | Session | POS opening entry with float | session open with starting cash | shift open | session open | PosSessionWin float open, one open session per terminal (unique index) |
 | Sales bound to session | invoice linked to opening entry | order linked to session | POS invoices per station | per session | PosWin gated on the open session; docs carry pos_session_id |
-| Session sales list | POS invoice list per profile | orders per session | station sales review | session sales | P3 (missing today — recorded) |
+| Session sales list | POS invoice list per profile | orders per session | station sales review | session sales | PosSalesWin with reprint + return/exchange (P3) |
 | Close | closing entry with variance | close + cash count | Z / day close | Z report | close with counted/expected/variance + PosZReportWin |
 
 Al-Ameen evidence: the classic help text (owner upload 15:33)

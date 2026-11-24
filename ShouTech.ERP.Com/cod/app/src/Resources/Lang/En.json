@@ -1059,7 +1059,8 @@
     "Col.Qty": "QTY",
     "Col.LineTotal": "LINE TOTAL",
     "TerminalNotDefined": "This terminal is not defined or not active. Define it first (POS Terminal Definition).",
-    "TerminalUserNotPermitted": "Your user is not permitted to open a session on this terminal."
+    "TerminalUserNotPermitted": "Your user is not permitted to open a session on this terminal.",
+    "SessionSales": "Session sales"
   },
   "Permissions": {
     "Cancel": "Cancel",
@@ -4707,5 +4708,23 @@
     "Saved": "Terminal saved.",
     "CodeRequired": "Code and name are required.",
     "ConfirmDelete": "Delete this terminal definition?"
+  },
+  "PosSales": {
+    "Title": "Session Sales",
+    "Session": "Session",
+    "DocNo": "Bill no.",
+    "Kind": "Kind",
+    "Time": "Time",
+    "Customer": "Customer",
+    "Total": "Total",
+    "OnAccount": "On account",
+    "Status": "Status",
+    "Reprint": "Reprint",
+    "Return": "Return / Exchange",
+    "SalesTotal": "Sales",
+    "ReturnsTotal": "Returns",
+    "NetTotal": "Net",
+    "NoSession": "No POS sessions yet.",
+    "SelectSale": "Select a sale first."
   }
 }

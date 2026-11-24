@@ -1,4 +1,11 @@
-# Ribbon completion audit — all 265 RibModMap-driven entries
+# Ribbon completion audit — all RibModMap-driven entries (265 at audit; 266 after P3)
+
+Addendum (POS family, 2026-11-24): **POS.SessionSales** added
+(266th entry) → PosSalesWin, class (a) on arrival (dedicated,
+persisted read model, real print/return paths — docs/
+POS_FAMILY.md P3). **POS.DefinePOS** moved from the (b)
+DefManagerWin class to (a): it now opens the dedicated
+PosTermWin (P1). The (b) count drops 36 → 34 by these two.
 
 Owner directives 2026-11-24 14:38 + 14:43: audit EVERY entry,
 classify (a) complete / (b) partial / (c) dead, commit this audit

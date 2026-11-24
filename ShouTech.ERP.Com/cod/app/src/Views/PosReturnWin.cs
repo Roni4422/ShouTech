@@ -62,7 +62,7 @@ public sealed class PosReturnWin : BaseWin
 
     private PosOriginalBill? _original;
 
-    public PosReturnWin(Guid? sessionId)
+    public PosReturnWin(Guid? sessionId, string? initialDocNo = null)
     {
         _sessionId = sessionId;
         Width = 980;
@@ -70,12 +70,20 @@ public sealed class PosReturnWin : BaseWin
         MinWidth = 660;
         MinHeight = 360;
         BuildUi();
-        Loaded += (_, _) =>
+        Loaded += async (_, _) =>
         {
             if (!AppHost.Permissions.Has(PermCat.Pos.InvoiceRefund))
             {
                 ShowWarn("POS.PermissionDenied");
                 Close();
+                return;
+            }
+            // Opened from the session-sales window (POS family P3)
+            // with a bill chosen: prefill and load it directly.
+            if (!string.IsNullOrWhiteSpace(initialDocNo))
+            {
+                _docNo.Text = initialDocNo;
+                await LoadBillAsync();
             }
         };
     }
