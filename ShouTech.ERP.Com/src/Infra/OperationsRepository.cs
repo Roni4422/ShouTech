@@ -852,6 +852,28 @@ public sealed class OperationsRepository : IOperationsRepository
     }
 
     /// <summary>
+    /// Applied-migration facts from the schema_migrations bookkeeping
+    /// table (maintained by both the app bootstrapper and SqlMigrator).
+    /// Identical SQL in both dialects; a database whose migrations were
+    /// never recorded reports zero rather than failing the health panel.
+    /// </summary>
+    public async Task<SchemaVersionInfo> GetSchemaVersionAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var info = new SchemaVersionInfo();
+        if (!await TableExistsAsync(connection, "schema_migrations").ConfigureAwait(false))
+            return info;
+        info.AppliedCount = (int)await ScalarLongAsync(connection,
+            "SELECT COUNT(*) FROM schema_migrations", cancellationToken).ConfigureAwait(false);
+        await using var cmd = CreateCommand(connection, null,
+            "SELECT COALESCE(MAX(migration_id), '') FROM schema_migrations");
+        var highest = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        info.HighestMigrationId = Convert.ToString(highest, CultureInfo.InvariantCulture) ?? string.Empty;
+        return info;
+    }
+
+    /// <summary>
     /// Trial-balance integrity audit (B5, read-only): posted entries
     /// (status = 1) must balance per fiscal period and individually;
     /// journal lines must never be orphaned; a posted entry must carry

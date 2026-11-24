@@ -964,5 +964,23 @@
   "name": "InfoLoadFailed",
   "message": "Bilgiler yüklenemedi.",
   "hint": "Veritabanı bağlantısını kontrol edip tekrar deneyin."
+ },
+ "TLS-8501": {
+  "code": "TLS-8501",
+  "name": "ToolsSettingsNotPersisted",
+  "message": "Araç ayarları kaydedilemedi.",
+  "hint": "Yapılandırma dosyası yüklü değil, bu nedenle değişiklikler saklanamaz. Yapılandırma dosyasını (cfg/appset.json) geri yükleyip yeniden deneyin."
+ },
+ "TLS-8502": {
+  "code": "TLS-8502",
+  "name": "ToolsHealthCheckFailed",
+  "message": "Bir sağlık denetimi tamamlanamadı.",
+  "hint": "Veritabanı bağlantısını denetleyip yeniden deneyin."
+ },
+ "TLS-8503": {
+  "code": "TLS-8503",
+  "name": "ToolsBackupActionFailed",
+  "message": "Yedekleme işlemi başarısız oldu.",
+  "hint": "Yedek klasörünü ve kullanılabilir disk alanını denetleyip yeniden deneyin."
  }
 }

@@ -90,6 +90,9 @@ public interface IOperationsRepository
     /// unbalanced posted entries, orphan journal lines, posted entries without lines.</summary>
     Task<TrialBalanceIntegrityResult> GetTrialBalanceIntegrityAsync(string companyId, CancellationToken cancellationToken = default);
 
+    /// <summary>Applied-migration facts from schema_migrations (count + highest id); both dialects.</summary>
+    Task<SchemaVersionInfo> GetSchemaVersionAsync(CancellationToken cancellationToken = default);
+
     // ------------------------------------------------------------ Fiscal roll-over
     Task<IReadOnlyList<FiscalYearRow>> GetFiscalYearsAsync(string companyId, CancellationToken cancellationToken = default);
     Task CreateNextFiscalYearAsync(string companyId, string userId, CancellationToken cancellationToken = default);

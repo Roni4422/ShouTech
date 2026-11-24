@@ -308,6 +308,9 @@ look was copied.
 Every schedule window resolves a DISTINCT tint from the central
 palette (97 windows / 97 tints after the INV1 sweep; RptBase report
 family shares Silver by design). Full record: docs/INVOICE_FAMILY.md.
+The unified Tools window (TOOLS_WINDOW_STUDY, feat/tools-window) takes
+Hickory — the one palette tint no window had claimed (98 windows /
+98 tints).
 
 | Window | Tint |
 |---|---|
@@ -407,4 +410,5 @@ family shares Silver by design). Full record: docs/INVOICE_FAMILY.md.
 | SupportWin | Ember |
 | TaxReportWin | Vervain |
 | TaxSetupWin | Wicker |
+| ToolsWin | Hickory |
 | WarrantyWin | Reed |

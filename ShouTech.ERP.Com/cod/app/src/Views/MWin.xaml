@@ -620,6 +620,7 @@
 
                 <ribbon:RibbonTab x:Name="TabTools" Header="Tools" Visibility="Collapsed">
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.ToolsTools" Header="Tools">
+                        <ribbon:RibbonButton loc:LocProps.Key="Tools.Home" Label="Tools Center" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Tools.Calculator" Label="Calculator" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Tools.Keyboard" Label="Keyboard" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Tools.Options" Label="Options" Click="OnRibbonButtonClick"/>

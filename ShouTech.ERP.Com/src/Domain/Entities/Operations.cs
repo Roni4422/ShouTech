@@ -245,6 +245,17 @@ public sealed class TrialBalanceIntegrityResult
         UnbalancedEntries.Count == 0 && Periods.All(p => p.IsBalanced);
 }
 
+/// <summary>
+/// Applied-schema facts from the schema_migrations bookkeeping table
+/// both migrators maintain (Tools window health panel): how many
+/// migrations are applied and the highest applied migration id.
+/// </summary>
+public sealed class SchemaVersionInfo
+{
+    public int AppliedCount { get; set; }
+    public string HighestMigrationId { get; set; } = string.Empty;
+}
+
 /// <summary>Stored vs recomputed totals of one commercial document (repost).</summary>
 public sealed class DocumentTotalsRow
 {

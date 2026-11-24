@@ -190,6 +190,7 @@ public static class RibbonNav
             case "Reports.CustomizeReports": Show(new CustomReportsWin(), owner); return true;
 
             // ------------------------------------------------ Tools
+            case "Tools.Home": Show(new ToolsWin(), owner); return true;
             case "Tools.Calculator": Show(new CalculatorWin(), owner); return true;
             case "Tools.Keyboard": LaunchOnScreenKeyboard(owner); return true;
             // Ribbon completion R1: the four language entries had NO

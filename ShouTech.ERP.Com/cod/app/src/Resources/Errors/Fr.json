@@ -964,5 +964,23 @@
   "name": "InfoLoadFailed",
   "message": "Les informations n'ont pas pu être chargées.",
   "hint": "Vérifiez la connexion à la base de données et réessayez."
+ },
+ "TLS-8501": {
+  "code": "TLS-8501",
+  "name": "ToolsSettingsNotPersisted",
+  "message": "Les paramètres des outils n'ont pas pu être enregistrés.",
+  "hint": "Aucun fichier de configuration n'est chargé : les modifications ne peuvent pas être conservées. Restaurez le fichier de configuration (cfg/appset.json) puis réessayez."
+ },
+ "TLS-8502": {
+  "code": "TLS-8502",
+  "name": "ToolsHealthCheckFailed",
+  "message": "Un contrôle d'intégrité n'a pas pu aboutir.",
+  "hint": "Vérifiez la connexion à la base de données puis réessayez."
+ },
+ "TLS-8503": {
+  "code": "TLS-8503",
+  "name": "ToolsBackupActionFailed",
+  "message": "L'action de sauvegarde a échoué.",
+  "hint": "Vérifiez le dossier de sauvegarde et l'espace disque disponible, puis réessayez."
  }
 }

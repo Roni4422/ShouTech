@@ -964,5 +964,23 @@
   "name": "InfoLoadFailed",
   "message": "The information could not be loaded.",
   "hint": "Check the database connection and try again."
+ },
+ "TLS-8501": {
+  "code": "TLS-8501",
+  "name": "ToolsSettingsNotPersisted",
+  "message": "The tools settings could not be saved.",
+  "hint": "No configuration file is loaded, so changes cannot be stored. Restore the configuration file (cfg/appset.json) and try again."
+ },
+ "TLS-8502": {
+  "code": "TLS-8502",
+  "name": "ToolsHealthCheckFailed",
+  "message": "A health check could not be completed.",
+  "hint": "Check the database connection and try again."
+ },
+ "TLS-8503": {
+  "code": "TLS-8503",
+  "name": "ToolsBackupActionFailed",
+  "message": "The backup action failed.",
+  "hint": "Check the backup folder and available disk space, then try again."
  }
 }
