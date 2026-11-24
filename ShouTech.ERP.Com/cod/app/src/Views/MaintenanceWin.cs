@@ -251,9 +251,13 @@ public sealed class MaintenanceWin : BaseWin
                 foreach (var period in audit.Periods)
                 {
                     var name = string.IsNullOrWhiteSpace(period.Period) ? T("Maintenance.NoPeriod") : period.Period;
-                    _results.Items.Add(Tf("Maintenance.TbPeriodLine",
+                    var line = Tf("Maintenance.TbPeriodLine",
                         name, period.Entries, F2Ui.Fmt(period.Debit), F2Ui.Fmt(period.Credit),
-                        period.IsBalanced ? T("Maintenance.TbBalanced") : T("Maintenance.TbUnbalanced")));
+                        period.IsBalanced ? T("Maintenance.TbBalanced") : T("Maintenance.TbUnbalanced"));
+                    // Reports mark closed periods where periods are shown.
+                    if (period.Status is "CLOSED" or "LOCKED")
+                        line += " " + T("Maintenance.TbPeriodClosed");
+                    _results.Items.Add(line);
                 }
                 foreach (var entry in audit.UnbalancedEntries)
                 {

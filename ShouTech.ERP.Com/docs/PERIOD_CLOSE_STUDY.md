@@ -113,8 +113,9 @@ Posting-path trace (every path lands on a traced choke point):
 
 ## 5. Window
 
-`PeriodCloseWin` (BaseWin; grid tint **Flint** — unclaimed in the
-census), opened from Other Tools beside Rollover
+`PeriodCloseWin` (BaseWin; grid tint **Tuff** — a new brush added to
+the central palette, since all 98 existing tints were already claimed
+in the census), opened from Other Tools beside Rollover
 (`OtherTools.PeriodClose`). Fiscal-year selector for the current
 company, periods grid (number, name, dates, status, closed by/at),
 unposted-items grid for the selected period, Close and Reopen (with

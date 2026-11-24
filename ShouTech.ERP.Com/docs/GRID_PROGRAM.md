@@ -373,6 +373,7 @@ family shares Silver by design). Full record: docs/INVOICE_FAMILY.md.
 | PartyManagerWin | Blush |
 | PartySearchWin | Mauve |
 | PayRecWin | Lilac |
+| PeriodCloseWin | Tuff |
 | PosCheckoutWin | Yarrow |
 | PosPerfRptWin | Damson |
 | PosReturnWin | Celadon |

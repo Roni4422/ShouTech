@@ -645,6 +645,7 @@
                 <ribbon:RibbonTab x:Name="TabOtherTools" Header="Other Tools" Visibility="Collapsed">
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.OtherToolsAdministration" Header="Administration">
                         <ribbon:RibbonButton loc:LocProps.Key="OtherTools.Rotation" Label="Rollover" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="OtherTools.PeriodClose" Label="Period close" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="OtherTools.Permissions" Label="Permissions" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="OtherTools.PermissionTemplates" Label="Permission templates" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="OtherTools.CustomFields" Label="Custom fields" Click="OnRibbonButtonClick"/>

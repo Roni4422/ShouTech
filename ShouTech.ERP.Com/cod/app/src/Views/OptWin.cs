@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -146,6 +147,20 @@ public sealed class OptWin : BaseWin
     private readonly TextBlock _lblBcdTestResult = new();
     private int _barcodeSection = -1;
     private bool _barcodeLoaded;
+
+    // Fiscal section (docs/PERIOD_CLOSE_STUDY.md SS7): the fiscal-period
+    // activation control. The store is fiscal_years itself — the checkbox
+    // mirrors the latest year's period_end_activation (default ON,
+    // migration 127) and the two fields show its bounds. Unchecking is
+    // not a saved preference: it is the deliberate audited roll-forward
+    // (OperationsService.DeactivatePeriodEndAndRollForwardAsync), gated
+    // on ACC.FISCAL.ROLL_FORWARD like RolloverWin.
+    private readonly CheckBox _chkFiscalActivation = new();
+    private readonly TextBox _txtFiscalStart = new();
+    private readonly TextBox _txtFiscalEnd = new();
+    private readonly TextBlock _lblFiscalNote = new();
+    private int _fiscalSection = -1;
+    private bool _fiscalBinding;
 
     private UsrPref _pref = UsrPref.Load();
 
@@ -408,6 +423,17 @@ public sealed class OptWin : BaseWin
         Grid.SetColumn(_numGrid, 1);
         numbering.Children.Add(_numGrid);
 
+        // ---- Fiscal period (activation control, study SS7) ----------
+        var fiscal = BeginSection("Options.FiscalSection", "Options.ScopeCompany");
+        _fiscalSection = _sectionPanels.Count - 1;
+        AddReadout(fiscal, _lblFiscalNote);
+        AddCheck(fiscal, _chkFiscalActivation, "Options.FiscalActivation");
+        _txtFiscalStart.IsReadOnly = true;
+        _txtFiscalEnd.IsReadOnly = true;
+        AddField(fiscal, "Options.FiscalStart", _txtFiscalStart);
+        AddField(fiscal, "Options.FiscalEnd", _txtFiscalEnd);
+        _chkFiscalActivation.Unchecked += async (_, _) => await OnFiscalDeactivatedAsync();
+
         // Rail + body host (rail on the start side; mirrors in RTL).
         var middle = new Grid();
         middle.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) });
@@ -451,6 +477,76 @@ public sealed class OptWin : BaseWin
             LoadPrinting();
         if (index == _barcodeSection)
             LoadBarcode();
+        if (index == _fiscalSection)
+            LoadFiscal();
+    }
+
+    private async void LoadFiscal()
+    {
+        _lblFiscalNote.Text = T("Options.FiscalNote");
+        try
+        {
+            var years = await AppHost.Operations.GetFiscalYearsAsync(CurrentCompanyCode);
+            _fiscalBinding = true;
+            if (years.Count == 0)
+            {
+                _chkFiscalActivation.IsChecked = true;
+                _chkFiscalActivation.IsEnabled = false;
+                _txtFiscalStart.Text = string.Empty;
+                _txtFiscalEnd.Text = string.Empty;
+            }
+            else
+            {
+                var last = years[years.Count - 1];
+                _chkFiscalActivation.IsChecked = last.PeriodEndActivation;
+                _chkFiscalActivation.IsEnabled = AppHost.Permissions.Has(PermCat.System.FiscalRollForward);
+                _txtFiscalStart.Text = last.StartDate;
+                _txtFiscalEnd.Text = last.EndDate;
+            }
+            _fiscalBinding = false;
+        }
+        catch (Exception ex)
+        {
+            _fiscalBinding = false;
+            MessageBox.Show(this, ex.Message, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async Task OnFiscalDeactivatedAsync()
+    {
+        if (_fiscalBinding)
+            return;
+        // Deactivation is the deliberate roll-forward act (study SS7):
+        // permission-gated (audited denial via PermServ.Require) and
+        // confirmed; LoadFiscal in finally re-reads the store, which
+        // re-arms the checkbox whenever the act did not complete.
+        try
+        {
+            if (!AppHost.Permissions.Require(PermCat.System.FiscalRollForward, "ACCOUNTS", "FISCAL_YEAR", 0, null))
+            {
+                ShowWarn("Options.FiscalPermissionDenied");
+                return;
+            }
+            if (MessageBox.Show(this, T("Options.FiscalConfirmRoll"), Title, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                return;
+            await AppHost.Operations.DeactivatePeriodEndAndRollForwardAsync(CurrentCompanyCode, CurrentUserId);
+            ShowInfo("Options.FiscalRolledOk");
+        }
+        catch (AppError ex)
+        {
+            AppHost.Errors.Report(ex.Code, ex, "OptWin.FiscalDeactivate");
+            var info = AppHost.Errors.Resolve(ex.Code, ex.Args.ToArray());
+            MessageBox.Show(this, info.Message, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OptWin.FiscalDeactivate");
+            MessageBox.Show(this, ex.Message, T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            LoadFiscal();
+        }
     }
 
     private void LoadPrinting()

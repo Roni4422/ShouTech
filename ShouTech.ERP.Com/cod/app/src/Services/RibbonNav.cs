@@ -210,6 +210,7 @@ public static class RibbonNav
 
             // ------------------------------------------------ Other tools
             case "OtherTools.Rotation": Show(new RolloverWin(), owner); return true;
+            case "OtherTools.PeriodClose": Show(new PeriodCloseWin(), owner); return true;
             case "OtherTools.Permissions":
             case "OtherTools.PermissionTemplates":
                 Show(new PrmWin(AppState.CurrentUser?.Username ?? string.Empty), owner);
