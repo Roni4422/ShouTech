@@ -209,4 +209,7 @@ public static class ErrorCodes
     public const string RecurringScheduleInvalid = "SAL-7024";
     public const string RmaStateInvalid = "SAL-7025";
     public const string WarrantyClaimInvalid = "SAL-7026";
+    public const string SettlementDiscountInvalid = "SAL-7027";
+    public const string CrossCurrencyAllocationInvalid = "SAL-7028";
+    public const string ConsolidationMismatch = "SAL-7029";
 }

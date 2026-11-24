@@ -766,5 +766,17 @@
   "SAL-7026": {
     "name": "Warranty claim invalid",
     "message": "The warranty claim is invalid: the warranty is expired, void, or does not cover this claim."
+  },
+  "SAL-7027": {
+    "name": "Settlement discount invalid",
+    "message": "The settlement discount is invalid: it exceeds the document's open amount or was not authorized."
+  },
+  "SAL-7028": {
+    "name": "Cross-currency allocation invalid",
+    "message": "The cross-currency allocation is invalid: the document amount, payment amount or exchange rates are inconsistent."
+  },
+  "SAL-7029": {
+    "name": "Consolidation mismatch",
+    "message": "The deliveries cannot be consolidated into one invoice: party, currency or exchange rate differ, or a source is not a delivery."
   }
 }

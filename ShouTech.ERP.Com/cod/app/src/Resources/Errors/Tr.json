@@ -766,5 +766,17 @@
   "SAL-7026": {
     "name": "Warranty claim invalid",
     "message": "Garanti talebi geçersiz: garanti süresi dolmuş, geçersiz veya bu talebi kapsamıyor."
+  },
+  "SAL-7027": {
+    "name": "Settlement discount invalid",
+    "message": "Ödeme indirimi geçersiz: belgenin açık tutarını aşıyor veya yetkilendirilmemiş."
+  },
+  "SAL-7028": {
+    "name": "Cross-currency allocation invalid",
+    "message": "Çapraz para birimi tahsisi geçersiz: belge tutarı, ödeme tutarı veya döviz kurları tutarsız."
+  },
+  "SAL-7029": {
+    "name": "Consolidation mismatch",
+    "message": "Teslimatlar tek bir faturada birleştirilemez: taraf, para birimi veya döviz kuru farklı ya da bir kaynak teslimat değil."
   }
 }

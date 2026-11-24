@@ -766,5 +766,17 @@
   "SAL-7026": {
     "name": "Warranty claim invalid",
     "message": "La demande de garantie est invalide : la garantie est expirée, annulée ou ne couvre pas cette demande."
+  },
+  "SAL-7027": {
+    "name": "Settlement discount invalid",
+    "message": "L'escompte de règlement est invalide : il dépasse le montant ouvert du document ou n'a pas été autorisé."
+  },
+  "SAL-7028": {
+    "name": "Cross-currency allocation invalid",
+    "message": "L'affectation multidevise est invalide : le montant du document, le montant du paiement ou les taux de change sont incohérents."
+  },
+  "SAL-7029": {
+    "name": "Consolidation mismatch",
+    "message": "Les livraisons ne peuvent pas être consolidées en une seule facture : le tiers, la devise ou le taux de change diffèrent, ou une source n'est pas une livraison."
   }
 }
