@@ -845,6 +845,7 @@ public static class InvRepo
         if (kind == InvDocKind.SalesInvoice)
             ValidateSalesPrices(connection, tx, doc, docId);
 
+        (decimal ReceiptBase, decimal InvoiceBase) unwoundChain = (0m, 0m);
         if (kind == InvDocKind.SalesReturn)
         {
             // W6 source branching: a no-invoice (walk-in) return and a
@@ -871,8 +872,10 @@ public static class InvRepo
             // I4: posting the debit note unwinds the mig-078 matches
             // and the PO's stored per_billed for the returned lines, in
             // this same transaction and under the same original-invoice
-            // lock the allocation step holds.
-            UnwindPurchaseReturnMatches(connection, tx, guidKey, doc, userId);
+            // lock the allocation step holds. The unwound base totals
+            // feed BuildGlLines, which mirrors the original chain
+            // invoice's GRNI clearing for the unwound portion.
+            unwoundChain = UnwindPurchaseReturnMatches(connection, tx, guidKey, doc, userId);
         }
 
         // Batch/serial capture (Phase B 054): merge the picker's
@@ -976,7 +979,7 @@ public static class InvRepo
                 connection, tx, provider, withheldOriginalId);
         }
 
-        var glLines = effects.Gl ? BuildGlLines(connection, tx, doc, fx.Rate, withholding, reversalWithholding) : new List<ShouTech.Domain.Entities.GlLineRequest>();
+        var glLines = effects.Gl ? BuildGlLines(connection, tx, doc, fx.Rate, withholding, reversalWithholding, unwoundChain) : new List<ShouTech.Domain.Entities.GlLineRequest>();
         string journalNo = string.Empty;
         if (glLines.Count > 0)
         {
@@ -3055,7 +3058,8 @@ public static class InvRepo
 
     private static List<ShouTech.Domain.Entities.GlLineRequest> BuildGlLines(DbConnection connection, DbTransaction tx, InvDoc doc, decimal effectiveRate = 1m,
         ShouTech.Infrastructure.WithholdingTax.Outcome? withholding = null,
-        (decimal Amount, string? Account, string? Code, decimal Rate, decimal Base) reversalWithholding = default)
+        (decimal Amount, string? Account, string? Code, decimal Rate, decimal Base) reversalWithholding = default,
+        (decimal ReceiptBase, decimal InvoiceBase) unwoundChain = default)
     {
         var lines = new List<ShouTech.Domain.Entities.GlLineRequest>();
         if (doc.Kind is InvDocKind.Quotation or InvDocKind.StockTransfer or InvDocKind.OpeningStock or InvDocKind.InventoryCount)
@@ -3591,6 +3595,46 @@ public static class InvRepo
                         : CodeOr(infos[i].AccPurchaseReturn, GlAccounts.PurchaseReturns);
                     Add(purchaseAccount, 0, leg[i], cc);
                 }
+                // I4 GRNI mirror: when this return unwound mig-078
+                // matches, the original chain invoice had cleared the
+                // GRNI accrual at receipt value with the difference in
+                // PPV. Mirror that clearing for the unwound portion —
+                // reclass it out of the purchase credits above into
+                // Cr GRNI (receipt base) and Cr/Dr PPV (invoice base −
+                // receipt base) — so the accrual revives by exactly the
+                // unwound receipt base: the period-end GRNI
+                // reconciliation (match-ledger received-not-invoiced vs
+                // GL 2203) stays exact across the return, and a later
+                // re-invoice clears the accrual instead of
+                // double-clearing it. Match base amounts are
+                // base-currency; the /rate bridge matches AddCogs.
+                if (unwoundChain.ReceiptBase != 0m || unwoundChain.InvoiceBase != 0m)
+                {
+                    var invoiceTxn = effectiveRate == 1m ? unwoundChain.InvoiceBase
+                        : decimal.Round(unwoundChain.InvoiceBase / effectiveRate, 8, MidpointRounding.AwayFromZero);
+                    var receiptTxn = effectiveRate == 1m ? unwoundChain.ReceiptBase
+                        : decimal.Round(unwoundChain.ReceiptBase / effectiveRate, 8, MidpointRounding.AwayFromZero);
+                    var legTotal = leg.Sum();
+                    if (legTotal != 0m && invoiceTxn != 0m)
+                    {
+                        decimal allocatedBack = 0m;
+                        for (var i = 0; i < doc.Lines.Count; i++)
+                        {
+                            var purchaseAccount = mirrorsOriginalPurchase
+                                ? CodeOr(infos[i].AccPurchase, GlAccounts.Purchases)
+                                : CodeOr(infos[i].AccPurchaseReturn, GlAccounts.PurchaseReturns);
+                            var share = i == doc.Lines.Count - 1
+                                ? invoiceTxn - allocatedBack
+                                : decimal.Round(invoiceTxn * leg[i] / legTotal, 4, MidpointRounding.AwayFromZero);
+                            allocatedBack += share;
+                            Add(purchaseAccount, share, 0, cc);
+                        }
+                    }
+                    Add(GlAccounts.GoodsReceivedNotInvoiced, 0, receiptTxn, cc);
+                    var varianceTxn = invoiceTxn - receiptTxn;
+                    if (varianceTxn > 0m) Add(GlAccounts.PurchasePriceVariance, 0, varianceTxn, cc);
+                    else if (varianceTxn < 0m) Add(GlAccounts.PurchasePriceVariance, -varianceTxn, 0, cc);
+                }
                 if (splitTax) foreach (var taxGroup in taxAccountGroups) Add(taxGroup.Account, 0, taxGroup.Amount);
                 // Withholding mirror (W1): a return reversing a withheld
                 // invoice debits the withholding payable back and credits
@@ -3780,17 +3824,20 @@ public static class InvRepo
     /// lock discipline, so concurrent returns cannot unwind the same
     /// matched quantity twice. Fully-consumed match rows are deleted
     /// (matched_qty has a &gt; 0 CHECK); the re-wind re-creates them
-    /// from the receipt/invoice documents.
+    /// from the receipt/invoice documents. Returns the base amounts
+    /// that left the matches (receipt base / invoice base) so
+    /// BuildGlLines can mirror the original invoice's GRNI clearing
+    /// for exactly the unwound portion.
     /// </summary>
-    private static void UnwindPurchaseReturnMatches(
+    private static (decimal ReceiptBase, decimal InvoiceBase) UnwindPurchaseReturnMatches(
         DbConnection connection, DbTransaction transaction, string guidKey, InvDoc returnDoc, string userId)
     {
         if (returnDoc.OriginalDocId is not long originalDocId || originalDocId <= 0)
-            return;
+            return (0m, 0m);
         var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
         if (!PartyLedger.TableExists(connection, transaction, provider, "purchase_receipt_invoice_matches") ||
             !PartyLedger.TableExists(connection, transaction, provider, "purchase_return_match_unwinds"))
-            return;
+            return (0m, 0m);
 
         var allocations = new List<(long OriginalLineId, decimal ReturnedQty)>();
         using (var cmd = connection.CreateCommand())
@@ -3811,15 +3858,17 @@ public static class InvRepo
         }
 
         var affectedOrders = new HashSet<long>();
+        decimal unwoundReceiptBase = 0m, unwoundInvoiceBase = 0m;
         foreach (var (originalLineId, returnedQty) in allocations)
         {
             var remaining = returnedQty;
-            var matches = new List<(string MatchId, string CompanyId, long PoId, long ReceiptDocId, long ReceiptLineId, decimal MatchedQty)>();
+            var matches = new List<(string MatchId, string CompanyId, long PoId, long ReceiptDocId, long ReceiptLineId, decimal MatchedQty, decimal ReceiptBaseAmount, decimal InvoiceBaseAmount)>();
             using (var cmd = connection.CreateCommand())
             {
                 cmd.Transaction = transaction;
                 cmd.CommandText = """
-                    SELECT match_id, company_id, purchase_order_id, receipt_doc_id, receipt_line_id, matched_qty
+                    SELECT match_id, company_id, purchase_order_id, receipt_doc_id, receipt_line_id, matched_qty,
+                           receipt_base_amount, invoice_base_amount
                     FROM purchase_receipt_invoice_matches
                     WHERE invoice_doc_id = $inv AND invoice_line_id = $line
                     ORDER BY receipt_doc_id, receipt_line_id;
@@ -3834,7 +3883,9 @@ public static class InvRepo
                         Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture),
                         Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture),
                         Convert.ToInt64(reader.GetValue(4), CultureInfo.InvariantCulture),
-                        Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture)));
+                        Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture),
+                        Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture),
+                        Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture)));
             }
 
             foreach (var match in matches)
@@ -3844,6 +3895,21 @@ public static class InvRepo
                 if (take <= 0m) continue;
                 remaining -= take;
                 affectedOrders.Add(match.PoId);
+
+                // The base amounts leaving the match with this take —
+                // the complement of the scaling the UPDATE below applies,
+                // so unwound + remaining == the original stored amounts.
+                if (take >= match.MatchedQty)
+                {
+                    unwoundReceiptBase += match.ReceiptBaseAmount;
+                    unwoundInvoiceBase += match.InvoiceBaseAmount;
+                }
+                else
+                {
+                    var keepFactor = (match.MatchedQty - take) / match.MatchedQty;
+                    unwoundReceiptBase += match.ReceiptBaseAmount - match.ReceiptBaseAmount * keepFactor;
+                    unwoundInvoiceBase += match.InvoiceBaseAmount - match.InvoiceBaseAmount * keepFactor;
+                }
 
                 using (var upd = connection.CreateCommand())
                 {
@@ -3892,7 +3958,8 @@ public static class InvRepo
         }
 
         foreach (var poId in affectedOrders)
-            RefreshPoStoredPerBilled(connection, transaction, guidKey, poId);
+            RefreshPoStoredPerBilled(connection, transaction, guidKey, poId, inFlightReturnDocId: returnDoc.DocId);
+        return (unwoundReceiptBase, unwoundInvoiceBase);
     }
 
     /// <summary>
@@ -4053,7 +4120,7 @@ public static class InvRepo
         }
 
         foreach (var poId in affectedOrders)
-            RefreshPoStoredPerBilled(connection, tx, guidKey, poId);
+            RefreshPoStoredPerBilled(connection, tx, guidKey, poId, excludeReturnDocId: returnDocId);
         tx.Commit();
     }
 
@@ -4062,8 +4129,16 @@ public static class InvRepo
     /// the caller's transaction, from posted chain invoices net of
     /// posted purchase-return allocations — the same semantics as
     /// OrderDocumentRepository's stored-progress maintenance.
+    /// <paramref name="inFlightReturnDocId"/> names the return whose
+    /// posting is running this refresh: its header is still 'Draft'
+    /// (the status flip happens later in Post), so without it the
+    /// refresh would miss the very return that triggered it and store
+    /// the pre-return value. <paramref name="excludeReturnDocId"/>
+    /// names the return being rewound: its allocations must stop
+    /// netting even before its reversal flips the header status.
     /// </summary>
-    private static void RefreshPoStoredPerBilled(DbConnection connection, DbTransaction transaction, string guidKey, long purchaseOrderId)
+    private static void RefreshPoStoredPerBilled(DbConnection connection, DbTransaction transaction, string guidKey, long purchaseOrderId,
+        long inFlightReturnDocId = 0, long excludeReturnDocId = 0)
     {
         var lines = new List<(int LineNo, decimal Qty)>();
         using (var cmd = connection.CreateCommand())
@@ -4106,7 +4181,9 @@ public static class InvRepo
                     SELECT COALESCE(SUM(a.returned_qty), 0)
                     FROM purchase_return_line_allocations a
                     JOIN purchase_documents prt
-                      ON prt.doc_id = a.return_doc_id AND prt.doc_kind = 'PRT' AND prt.status = 'Posted'
+                      ON prt.doc_id = a.return_doc_id AND prt.doc_kind = 'PRT'
+                     AND (prt.status = 'Posted' OR prt.doc_id = $inFlight)
+                     AND prt.doc_id <> $exclude
                      AND CAST(prt.is_deleted AS TEXT) IN ('0', 'false')
                     JOIN purchase_document_lines il ON il.line_id = a.original_line_id
                     JOIN document_links dl
@@ -4116,6 +4193,8 @@ public static class InvRepo
                     """;
                 Add(cmd, "$lineNo", lineNo);
                 Add(cmd, "$po", purchaseOrderId);
+                Add(cmd, "$inFlight", inFlightReturnDocId);
+                Add(cmd, "$exclude", excludeReturnDocId);
                 billed -= Convert.ToDecimal(cmd.ExecuteScalar() ?? 0m, CultureInfo.InvariantCulture);
             }
             totalBilled += Math.Min(qty, Math.Max(0m, billed));
