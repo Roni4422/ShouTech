@@ -408,7 +408,10 @@ namespace ShouTech.App.ViewModels
 
                     if (result == MessageBoxResult.Yes)
                     {
-                        ExecuteExit();
+                        // Already confirmed by the prompt above —
+                        // shut the app down directly, never re-prompt
+                        // through the pref-governed exit path.
+                        System.Windows.Application.Current.Shutdown();
 
                         try
                         {
@@ -717,7 +720,9 @@ namespace ShouTech.App.ViewModels
 
         private static void ExecuteExit()
         {
-            System.Windows.Application.Current.Shutdown();
+            // Routes through the one pref-governed exit path
+            // (Options -> Confirm on exit; OPTWIN_SECTIONS §3.8).
+            RibbonNav.RequestExit(null);
         }
 
         public void Dispose()

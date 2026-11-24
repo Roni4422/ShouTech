@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using ShouTech.App.Interaction;
 using ShouTech.App.Services;
+using ShouTech.Domain;
 
 namespace ShouTech.App.Views;
 
@@ -216,7 +217,10 @@ internal static class F2Ui
         throw new InvalidOperationException(AppHost.Localization.GetString("Common.InvalidNumberFormat", "Invalid number format."));
     }
 
-    public static string Fmt(decimal value) => value.ToString("N2", CultureInfo.CurrentCulture);
+    /// <summary>Money display for the F2 windows — governed by the
+    /// program-wide Options number settings (NumFmt.Current,
+    /// OPTWIN_SECTIONS §3.2), not a local hardcoded pattern.</summary>
+    public static string Fmt(decimal value) => NumFmt.FormatMoney(value);
 
     public static string? NullIfBlank(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

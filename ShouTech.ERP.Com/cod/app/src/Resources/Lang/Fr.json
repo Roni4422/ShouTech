@@ -4723,7 +4723,21 @@
   "BackupLastDays": "Dernière sauvegarde : {0} (il y a environ {1} jour(s)).",
   "BackupStale": "Attention : la dernière sauvegarde date de plus de 7 jours.",
   "OpenBackup": "Ouvrir la sauvegarde",
-  "NumberingSection": "Numérotation"
+  "NumberingSection": "Numérotation",
+  "FontSection": "Police",
+  "FontFamily": "Famille de police",
+  "FontThemeDefault": "Par défaut du thème",
+  "FontPreviewText": "ShouTech ERP — Facture de vente 0123456789",
+  "NumbersSection": "Nombres, date et heure",
+  "QtyDecimals": "Décimales des quantités",
+  "PriceDecimals": "Décimales des prix",
+  "GroupThousands": "Séparateur de milliers",
+  "ShowTrailingZeros": "Afficher les zéros après la virgule",
+  "RoundDisplay": "Arrondir les nombres affichés",
+  "TimeFormat": "Format de l'heure",
+  "NumSample": "Quantité : {0}  ·  Prix : {1}  ·  Date : {2}  ·  Heure : {3}",
+  "ScopePersonal": "Personnel",
+  "ScopeCompany": "Société"
  },
  "PosTerm": {
   "Title": "Définition du terminal de caisse",

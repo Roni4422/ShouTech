@@ -43,6 +43,11 @@ public sealed class UsrPref
         "dd/MM/yyyy", "yyyy-MM-dd", "MM/dd/yyyy", "d/M/yyyy", "dd.MM.yyyy"
     };
 
+    private static readonly string[] SupportedTimeFormats =
+    {
+        "HH:mm", "h:mm tt", "hh:mm tt", "H:mm"
+    };
+
     private const int MaxDecimalDigits = 4;
 
     // ================================================================
@@ -66,6 +71,11 @@ public sealed class UsrPref
     // ================================================================
 
     public double FontSize { get; set; } = 13;
+
+    /// <summary>Program font family (Options -> Font). Empty = the
+    /// theme default (ApplicationFontFamily resource). Consumed by
+    /// VisuId.ApplyShellVisualProperties for every window.</summary>
+    public string FontFamily { get; set; } = string.Empty;
 
     public bool CompactMode { get; set; }
 
@@ -95,6 +105,34 @@ public sealed class UsrPref
     public int DecimalDigits { get; set; } = 2;
 
     public string ThousandSeparator { get; set; } = ",";
+
+    // ---- Numbers, date & time (Options section, OPTWIN_SECTIONS
+    // §3.2). Canonical display-precision settings; DecimalPlaces /
+    // DecimalDigits above are legacy aliases kept in sync with
+    // PriceDecimalPlaces by Normalize() for stored-JSON and reader
+    // compatibility. Consumed program-wide through NumFmt.Current
+    // (installed at startup and on every Options save).
+
+    /// <summary>Fraction digits for quantities (default 3).</summary>
+    public int QtyDecimalPlaces { get; set; } = 3;
+
+    /// <summary>Fraction digits for prices and money (default 2).</summary>
+    public int PriceDecimalPlaces { get; set; } = 2;
+
+    /// <summary>Group thousands with a separator in displayed
+    /// numbers (default on).</summary>
+    public bool GroupThousands { get; set; } = true;
+
+    /// <summary>Keep trailing zeros up to the digit count (default
+    /// on); off trims them in displayed numbers.</summary>
+    public bool ShowTrailingZeros { get; set; } = true;
+
+    /// <summary>Round displayed numbers to the digit count (default
+    /// on); off truncates toward zero instead.</summary>
+    public bool RoundDisplay { get; set; } = true;
+
+    /// <summary>Time-of-day display pattern (default "HH:mm").</summary>
+    public string TimeFormat { get; set; } = "HH:mm";
 
     // ================================================================
     //  Behavior
@@ -265,6 +303,12 @@ public sealed class UsrPref
         if (FontSize < 10) FontSize = 10;
         if (FontSize > 20) FontSize = 20;
 
+        // Font family — free text (an installed family name); empty
+        // means the theme default. Capped so a corrupt store cannot
+        // carry an unbounded string into every window.
+        FontFamily = (FontFamily ?? string.Empty).Trim();
+        if (FontFamily.Length > 120) FontFamily = FontFamily[..120];
+
         // Decimal places
         if (DecimalPlaces < 0) DecimalPlaces = 0;
         if (DecimalPlaces > 6) DecimalPlaces = 6;
@@ -272,6 +316,29 @@ public sealed class UsrPref
         // Decimal digits (display precision)
         if (DecimalDigits < 0) DecimalDigits = 0;
         if (DecimalDigits > MaxDecimalDigits) DecimalDigits = MaxDecimalDigits;
+
+        // Numbers section — canonical precision settings.
+        if (QtyDecimalPlaces < 0) QtyDecimalPlaces = 0;
+        if (QtyDecimalPlaces > MaxDecimalDigits) QtyDecimalPlaces = MaxDecimalDigits;
+        if (PriceDecimalPlaces < 0) PriceDecimalPlaces = 0;
+        if (PriceDecimalPlaces > MaxDecimalDigits) PriceDecimalPlaces = MaxDecimalDigits;
+        // Legacy aliases follow the canonical price precision.
+        DecimalPlaces = PriceDecimalPlaces;
+        DecimalDigits = PriceDecimalPlaces;
+
+        // TimeFormat — must be one of the supported patterns.
+        if (string.IsNullOrWhiteSpace(TimeFormat))
+        {
+            TimeFormat = "HH:mm";
+        }
+        else
+        {
+            var trimmedTime = TimeFormat.Trim();
+            valid = false;
+            foreach (var f in SupportedTimeFormats)
+                if (f == trimmedTime) { valid = true; break; }
+            TimeFormat = valid ? trimmedTime : "HH:mm";
+        }
 
         // AutoSave
         if (AutoSaveIntervalMinutes < 0) AutoSaveIntervalMinutes = 0;
@@ -398,6 +465,19 @@ public sealed class UsrPref
             ? WindowState.Normal
             : win.WindowState;
     }
+
+    /// <summary>Builds the program-wide display-format settings
+    /// (Domain NumFmt) from these preferences. Called at startup
+    /// and on every Options save so the whole program's figures
+    /// follow the Options window.</summary>
+    public NumFmtSettings ToNumFmtSettings() => new(
+        QtyDecimalPlaces,
+        PriceDecimalPlaces,
+        GroupThousands,
+        ShowTrailingZeros,
+        RoundDisplay,
+        DateFormat,
+        TimeFormat);
 
 	public string? RememberedUsername { get; set; }
 	

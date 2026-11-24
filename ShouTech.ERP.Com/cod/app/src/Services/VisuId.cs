@@ -410,10 +410,32 @@ namespace ShouTech.App.Services
         private static void ApplyShellVisualProperties(Window window)
         {
             /*
-             * Central typography.
+             * Central typography — governed by Options -> Font
+             * (OPTWIN_SECTIONS §3.1): the stored per-user family and
+             * size apply to EVERY window through this single point;
+             * the theme resources remain the fallback when no family
+             * is chosen. A preference-load failure degrades to the
+             * historic resource behaviour, never to a broken window.
              */
 
-            if (window.FontFamily == null)
+            string? prefFamily = null;
+            var prefSize = 0d;
+            try
+            {
+                var pref = UsrPref.Load();
+                prefFamily = pref.FontFamily;
+                prefSize = pref.FontSize;
+            }
+            catch (Exception ex)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "VisuId.ApplyShellVisualProperties.Prefs");
+            }
+
+            if (!string.IsNullOrWhiteSpace(prefFamily))
+            {
+                window.FontFamily = new FontFamily(prefFamily);
+            }
+            else if (window.FontFamily == null)
             {
                 window.FontFamily =
                     FindResource(
@@ -422,7 +444,11 @@ namespace ShouTech.App.Services
                         new FontFamily("Segoe UI"));
             }
 
-            if (window.FontSize <= 0)
+            if (prefSize > 0)
+            {
+                window.FontSize = prefSize;
+            }
+            else if (window.FontSize <= 0)
             {
                 window.FontSize =
                     FindResource(

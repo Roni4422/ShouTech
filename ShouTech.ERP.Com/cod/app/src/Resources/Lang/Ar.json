@@ -4815,7 +4815,21 @@
   "BackupLastDays": "آخر نسخة احتياطية: {0} (قبل نحو {1} يوم).",
   "BackupStale": "تنبيه: مرّ أكثر من 7 أيام على آخر نسخة احتياطية.",
   "OpenBackup": "فتح النسخ الاحتياطي",
-  "NumberingSection": "الترقيم"
+  "NumberingSection": "الترقيم",
+  "FontSection": "الخط",
+  "FontFamily": "نوع الخط",
+  "FontThemeDefault": "الافتراضي للسمة",
+  "FontPreviewText": "شوتك — فاتورة مبيعات 0123456789",
+  "NumbersSection": "الأرقام والتاريخ والوقت",
+  "QtyDecimals": "خانات الكمية العشرية",
+  "PriceDecimals": "خانات السعر العشرية",
+  "GroupThousands": "فاصل الآلاف",
+  "ShowTrailingZeros": "إظهار الأصفار بعد الفاصلة",
+  "RoundDisplay": "تقريب الأرقام المعروضة",
+  "TimeFormat": "تنسيق الوقت",
+  "NumSample": "الكمية: {0}  ·  السعر: {1}  ·  التاريخ: {2}  ·  الوقت: {3}",
+  "ScopePersonal": "شخصي",
+  "ScopeCompany": "الشركة"
  },
  "PosTerm": {
   "Title": "تعريف نافذة نقاط البيع",

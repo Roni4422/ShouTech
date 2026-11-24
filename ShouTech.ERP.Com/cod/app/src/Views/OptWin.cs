@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using ShouTech.App.Configuration;
 using ShouTech.App.Services;
 using ShouTech.Domain;
@@ -30,7 +31,7 @@ namespace ShouTech.App.Views;
 public sealed class OptWin : BaseWin
 {
     private readonly List<(TextBlock Label, string Key)> _labels = new();
-    private readonly List<(TextBlock Label, string Key)> _sectionLabels = new();
+    private readonly List<(TextBlock Label, string Key, string ScopeKey)> _sectionLabels = new();
     private readonly TextBlock _statusBar = new();
     private readonly Button _saveButton = new();
     private readonly Button _posButton = new();
@@ -44,10 +45,27 @@ public sealed class OptWin : BaseWin
     private readonly ComboBox _cmbAccent = new();
     private readonly TextBox _txtFontSize = new();
     private readonly ComboBox _cmbDateFormat = new();
-    private readonly TextBox _txtDecimals = new();
-    private readonly TextBox _txtThousandSep = new();
     private readonly TextBox _txtAutoSave = new();
     private readonly TextBox _txtAutoLock = new();
+
+    // Font section (OPTWIN_SECTIONS §3.1): family picker + size +
+    // live preview rendered in the chosen typography.
+    private readonly ComboBox _cmbFontFamily = new();
+    private readonly ComboBoxItem _fontDefaultItem = new();
+    private readonly TextBlock _fontPreviewHead = new();
+    private readonly TextBlock _fontPreviewBody = new();
+    private readonly TextBlock _fontPreviewSmall = new();
+
+    // Numbers, date & time section (§3.2): the digit split and
+    // display rules behind NumFmt, with a live sample rendered by
+    // the real formatter core from the edited (unsaved) values.
+    private readonly TextBox _txtQtyDecimals = new();
+    private readonly TextBox _txtPriceDecimals = new();
+    private readonly CheckBox _chkGroupThousands = new();
+    private readonly CheckBox _chkShowZeros = new();
+    private readonly CheckBox _chkRoundDisplay = new();
+    private readonly ComboBox _cmbTimeFormat = new();
+    private readonly TextBlock _lblNumSample = new();
 
     private readonly CheckBox _chkCompact = new();
     private readonly CheckBox _chkToolBar = new();
@@ -103,7 +121,7 @@ public sealed class OptWin : BaseWin
         root.Children.Add(F2Ui.BottomBar(_saveButton, _closeButton));
 
         // ---- General ------------------------------------------------
-        var general = BeginSection("Options.General");
+        var general = BeginSection("Options.General", "Options.ScopePersonal");
         AddField(general, "Options.Language", _cmbLang);
         // Language names follow the LangVM convention (Latin script),
         // keeping source files English-only per the catalog rule.
@@ -112,25 +130,84 @@ public sealed class OptWin : BaseWin
         _cmbLang.Items.Add(new ComboBoxItem { Content = "Français", Tag = "fr" });
         _cmbLang.Items.Add(new ComboBoxItem { Content = "Türkçe", Tag = "tr" });
         AddField(general, "Options.Currency", _txtCurrency);
-        AddField(general, "Options.DateFormat", _cmbDateFormat);
-        foreach (var fmt in new[] { "dd/MM/yyyy", "yyyy-MM-dd", "MM/dd/yyyy", "dd.MM.yyyy" })
-            _cmbDateFormat.Items.Add(new ComboBoxItem { Content = fmt, Tag = fmt });
-        AddField(general, "Options.DecimalPlaces", _txtDecimals);
-        AddField(general, "Options.ThousandSeparator", _txtThousandSep);
 
         // ---- Appearance ---------------------------------------------
-        var appearance = BeginSection("Options.Appearance");
+        var appearance = BeginSection("Options.Appearance", "Options.ScopePersonal");
         AddField(appearance, "Options.Accent", _cmbAccent);
         foreach (var accent in VisuId.AvailableAccents)
             _cmbAccent.Items.Add(new ComboBoxItem { Content = accent.Display, Tag = accent.Key });
-        AddField(appearance, "Options.FontSize", _txtFontSize);
         AddCheck(appearance, _chkCompact, "Options.CompactMode");
         AddCheck(appearance, _chkToolBar, "Options.ShowToolBar");
         AddCheck(appearance, _chkStatusBar, "Options.ShowStatusBar");
         AddCheck(appearance, _chkAnimations, "Options.EnableAnimations");
 
+        // ---- Font (§3.1) ---------------------------------------------
+        // The family/size pair is consumed by the ONE central point
+        // (VisuId.ApplyShellVisualProperties) for every window; the
+        // preview card renders the sample lines in the edited
+        // typography before anything is saved.
+        var font = BeginSection("Options.FontSection", "Options.ScopePersonal");
+        _fontDefaultItem.Tag = string.Empty;
+        _cmbFontFamily.Items.Add(_fontDefaultItem);
+        foreach (var family in Fonts.SystemFontFamilies
+                     .Select(f => f.Source)
+                     .Distinct(StringComparer.OrdinalIgnoreCase)
+                     .OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase))
+            _cmbFontFamily.Items.Add(new ComboBoxItem { Content = family, Tag = family });
+        AddField(font, "Options.FontFamily", _cmbFontFamily);
+        AddField(font, "Options.FontSize", _txtFontSize);
+        var fontPreview = new Border
+        {
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(10, 8, 10, 8),
+            Margin = new Thickness(0, 6, 0, 2)
+        };
+        fontPreview.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
+        fontPreview.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush");
+        var fontPreviewStack = new StackPanel();
+        _fontPreviewHead.FontWeight = FontWeights.SemiBold;
+        _fontPreviewBody.Margin = new Thickness(0, 4, 0, 0);
+        _fontPreviewSmall.Margin = new Thickness(0, 2, 0, 0);
+        _fontPreviewSmall.Opacity = 0.75;
+        fontPreviewStack.Children.Add(_fontPreviewHead);
+        fontPreviewStack.Children.Add(_fontPreviewBody);
+        fontPreviewStack.Children.Add(_fontPreviewSmall);
+        fontPreview.Child = fontPreviewStack;
+        var fontPreviewRow = font.RowDefinitions.Count;
+        font.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetRow(fontPreview, fontPreviewRow);
+        Grid.SetColumn(fontPreview, 1);
+        font.Children.Add(fontPreview);
+        _cmbFontFamily.SelectionChanged += (_, _) => RefreshFontPreview();
+        _txtFontSize.TextChanged += (_, _) => RefreshFontPreview();
+
+        // ---- Numbers, date & time (§3.2) ------------------------------
+        var numbers = BeginSection("Options.NumbersSection", "Options.ScopePersonal");
+        AddField(numbers, "Options.QtyDecimals", _txtQtyDecimals);
+        AddField(numbers, "Options.PriceDecimals", _txtPriceDecimals);
+        AddCheck(numbers, _chkGroupThousands, "Options.GroupThousands");
+        AddCheck(numbers, _chkShowZeros, "Options.ShowTrailingZeros");
+        AddCheck(numbers, _chkRoundDisplay, "Options.RoundDisplay");
+        AddField(numbers, "Options.DateFormat", _cmbDateFormat);
+        foreach (var fmt in new[] { "dd/MM/yyyy", "yyyy-MM-dd", "MM/dd/yyyy", "dd.MM.yyyy" })
+            _cmbDateFormat.Items.Add(new ComboBoxItem { Content = fmt, Tag = fmt });
+        AddField(numbers, "Options.TimeFormat", _cmbTimeFormat);
+        foreach (var fmt in new[] { "HH:mm", "h:mm tt", "hh:mm tt", "H:mm" })
+            _cmbTimeFormat.Items.Add(new ComboBoxItem { Content = fmt, Tag = fmt });
+        AddReadout(numbers, _lblNumSample);
+        _txtQtyDecimals.TextChanged += (_, _) => RefreshNumSample();
+        _txtPriceDecimals.TextChanged += (_, _) => RefreshNumSample();
+        _chkGroupThousands.Checked += (_, _) => RefreshNumSample();
+        _chkGroupThousands.Unchecked += (_, _) => RefreshNumSample();
+        _chkShowZeros.Checked += (_, _) => RefreshNumSample();
+        _chkShowZeros.Unchecked += (_, _) => RefreshNumSample();
+        _chkRoundDisplay.Checked += (_, _) => RefreshNumSample();
+        _chkRoundDisplay.Unchecked += (_, _) => RefreshNumSample();
+        _cmbDateFormat.SelectionChanged += (_, _) => RefreshNumSample();
+        _cmbTimeFormat.SelectionChanged += (_, _) => RefreshNumSample();
+
         // ---- Behavior -----------------------------------------------
-        var behavior = BeginSection("Options.Behavior");
+        var behavior = BeginSection("Options.Behavior", "Options.ScopePersonal");
         AddCheck(behavior, _chkConfirmExit, "Options.ConfirmOnExit");
         AddCheck(behavior, _chkConfirmDelete, "Options.ConfirmOnDelete");
         AddCheck(behavior, _chkAutoComplete, "Options.EnableAutoComplete");
@@ -139,13 +216,13 @@ public sealed class OptWin : BaseWin
         AddField(behavior, "Options.AutoSaveInterval", _txtAutoSave);
 
         // ---- Session & startup --------------------------------------
-        var session = BeginSection("Options.Session");
+        var session = BeginSection("Options.Session", "Options.ScopePersonal");
         AddCheck(session, _chkAutoOpenCompany, "Options.AutoOpenLastCompany");
         AddCheck(session, _chkSkipSplash, "Options.SkipSplash");
         AddField(session, "Options.AutoLock", _txtAutoLock);
 
         // ---- Point of sale ------------------------------------------
-        var pos = BeginSection("Options.PosSection");
+        var pos = BeginSection("Options.PosSection", "Options.ScopeCompany");
         F2Ui.StyleButton(_posButton, "Options.PosDevices");
         FlowAlign.Start(_posButton);
         _posButton.Click += (_, _) =>
@@ -159,7 +236,7 @@ public sealed class OptWin : BaseWin
         // Reset clears USER-scoped state only (positions / grid
         // layouts / everything); company defaults and other users
         // are untouched. Open windows re-save their state on close.
-        var layouts = BeginSection("Options.LayoutsSection");
+        var layouts = BeginSection("Options.LayoutsSection", "Options.ScopePersonal");
         F2Ui.StyleButton(_resetPositionsButton, "Options.ResetPositions");
         F2Ui.StyleButton(_resetLayoutsButton, "Options.ResetLayouts");
         F2Ui.StyleButton(_resetAllButton, "Options.ResetAllLayouts");
@@ -178,7 +255,7 @@ public sealed class OptWin : BaseWin
         // file's write time) so it cannot drift from reality; the
         // staleness warning adopts the Phenix dashboard pattern
         // (warn when the last backup is older than 7 days).
-        var backup = BeginSection("Options.BackupSection");
+        var backup = BeginSection("Options.BackupSection", "Options.ScopeCompany");
         _backupSection = _sectionPanels.Count - 1;
         AddReadout(backup, _lblLastBackup);
         AddReadout(backup, _lblBackupWarn);
@@ -197,7 +274,7 @@ public sealed class OptWin : BaseWin
         backup.Children.Add(_btnBackup);
 
         // ---- Numbering (per-series configuration) -------------------
-        var numbering = BeginSection("Options.NumberingSection");
+        var numbering = BeginSection("Options.NumberingSection", "Options.ScopeCompany");
         _numberingSection = _sectionPanels.Count - 1;
         AddReadout(numbering, _numHint);
         BuildNumberingGrid();
@@ -374,7 +451,7 @@ public sealed class OptWin : BaseWin
         PrefSet("Section", _rail.SelectedIndex.ToString(CultureInfo.InvariantCulture));
     }
 
-    private Grid BeginSection(string key)
+    private Grid BeginSection(string key, string scopeKey)
     {
         var header = new TextBlock
         {
@@ -382,7 +459,7 @@ public sealed class OptWin : BaseWin
             FontSize = 14,
             Margin = new Thickness(0, 10, 0, 6)
         };
-        _sectionLabels.Add((header, key));
+        _sectionLabels.Add((header, key, scopeKey));
 
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
@@ -448,10 +525,15 @@ public sealed class OptWin : BaseWin
         _txtCurrency.Text = _pref.CurrencyCode;
         SelectByTag(_cmbAccent,
             string.IsNullOrWhiteSpace(_pref.AccentColor) ? "slate" : _pref.AccentColor.ToLowerInvariant());
+        SelectByTag(_cmbFontFamily, _pref.FontFamily ?? string.Empty);
         _txtFontSize.Text = _pref.FontSize.ToString("0", CultureInfo.InvariantCulture);
+        _txtQtyDecimals.Text = _pref.QtyDecimalPlaces.ToString(CultureInfo.InvariantCulture);
+        _txtPriceDecimals.Text = _pref.PriceDecimalPlaces.ToString(CultureInfo.InvariantCulture);
+        _chkGroupThousands.IsChecked = _pref.GroupThousands;
+        _chkShowZeros.IsChecked = _pref.ShowTrailingZeros;
+        _chkRoundDisplay.IsChecked = _pref.RoundDisplay;
         SelectByTag(_cmbDateFormat, _pref.DateFormat);
-        _txtDecimals.Text = _pref.DecimalPlaces.ToString(CultureInfo.InvariantCulture);
-        _txtThousandSep.Text = _pref.ThousandSeparator;
+        SelectByTag(_cmbTimeFormat, _pref.TimeFormat);
         _txtAutoSave.Text = _pref.AutoSaveIntervalMinutes.ToString(CultureInfo.InvariantCulture);
         _txtAutoLock.Text = _pref.AutoLockMinutes.ToString(CultureInfo.InvariantCulture);
 
@@ -466,7 +548,64 @@ public sealed class OptWin : BaseWin
         _chkToolTips.IsChecked = _pref.ShowToolTips;
         _chkAutoOpenCompany.IsChecked = _pref.AutoOpenLastCompany;
         _chkSkipSplash.IsChecked = _pref.SkipSplash;
+        RefreshFontPreview();
+        RefreshNumSample();
     }
+
+    /// <summary>Renders the Font preview card in the edited (unsaved)
+    /// family/size — the same values VisuId will apply to every
+    /// window on save.</summary>
+    private void RefreshFontPreview()
+    {
+        var familyName = SelectedTag(_cmbFontFamily);
+        FontFamily family;
+        if (!string.IsNullOrWhiteSpace(familyName))
+        {
+            family = new FontFamily(familyName);
+        }
+        else
+        {
+            family = TryFindResource("ApplicationFontFamily") as FontFamily
+                ?? new FontFamily("Segoe UI");
+        }
+        var size = double.TryParse(_txtFontSize.Text, NumberStyles.Float,
+            CultureInfo.InvariantCulture, out var parsed)
+            ? Math.Clamp(parsed, 10, 20)
+            : _pref.FontSize;
+        foreach (var block in new[] { _fontPreviewHead, _fontPreviewBody, _fontPreviewSmall })
+            block.FontFamily = family;
+        _fontPreviewHead.FontSize = size + 5;
+        _fontPreviewBody.FontSize = size;
+        _fontPreviewSmall.FontSize = Math.Max(size - 2, 8);
+    }
+
+    /// <summary>Renders the Numbers live sample through the REAL
+    /// formatter core with the edited (unsaved) settings, so what
+    /// the user sees is exactly what the program will print.</summary>
+    private void RefreshNumSample()
+    {
+        var qtyDigits = TryParseDigits(_txtQtyDecimals.Text, _pref.QtyDecimalPlaces);
+        var priceDigits = TryParseDigits(_txtPriceDecimals.Text, _pref.PriceDecimalPlaces);
+        var settings = new NumFmtSettings(
+            qtyDigits,
+            priceDigits,
+            _chkGroupThousands.IsChecked == true,
+            _chkShowZeros.IsChecked == true,
+            _chkRoundDisplay.IsChecked == true,
+            SelectedTag(_cmbDateFormat),
+            SelectedTag(_cmbTimeFormat));
+        var sampleMoment = new DateTime(2026, 2, 3, 14, 5, 0);
+        _lblNumSample.Text = Tf("Options.NumSample",
+            NumFmt.FormatValue(12345.6789m, qtyDigits, settings),
+            NumFmt.FormatValue(9876.543m, priceDigits, settings),
+            NumFmt.FormatDate(sampleMoment, settings.DatePattern),
+            NumFmt.FormatTimeOfDay(sampleMoment, settings.TimePattern));
+    }
+
+    private static int TryParseDigits(string text, int fallback) =>
+        int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v)
+            ? Math.Clamp(v, 0, 4)
+            : fallback;
 
     private static void SelectByTag(ComboBox combo, string tag)
     {
@@ -489,7 +628,8 @@ public sealed class OptWin : BaseWin
     private void Save()
     {
         if (!TryInt(_txtFontSize, "Options.FontSize", out var fontSize) ||
-            !TryInt(_txtDecimals, "Options.DecimalPlaces", out var decimals) ||
+            !TryInt(_txtQtyDecimals, "Options.QtyDecimals", out var qtyDecimals) ||
+            !TryInt(_txtPriceDecimals, "Options.PriceDecimals", out var priceDecimals) ||
             !TryInt(_txtAutoSave, "Options.AutoSaveInterval", out var autoSave) ||
             !TryInt(_txtAutoLock, "Options.AutoLock", out var autoLock))
             return;
@@ -508,12 +648,15 @@ public sealed class OptWin : BaseWin
         _pref.CurrencyCode = string.IsNullOrWhiteSpace(_txtCurrency.Text)
             ? _pref.CurrencyCode : _txtCurrency.Text.Trim().ToUpperInvariant();
         _pref.AccentColor = SelectedTag(_cmbAccent);
+        _pref.FontFamily = SelectedTag(_cmbFontFamily);
         _pref.FontSize = Math.Clamp(fontSize, 10, 20);
+        _pref.QtyDecimalPlaces = Math.Clamp(qtyDecimals, 0, 4);
+        _pref.PriceDecimalPlaces = Math.Clamp(priceDecimals, 0, 4);
+        _pref.GroupThousands = _chkGroupThousands.IsChecked == true;
+        _pref.ShowTrailingZeros = _chkShowZeros.IsChecked == true;
+        _pref.RoundDisplay = _chkRoundDisplay.IsChecked == true;
         _pref.DateFormat = SelectedTag(_cmbDateFormat);
-        _pref.DecimalPlaces = Math.Clamp(decimals, 0, 4);
-        _pref.DecimalDigits = _pref.DecimalPlaces;
-        _pref.ThousandSeparator = string.IsNullOrEmpty(_txtThousandSep.Text)
-            ? "," : _txtThousandSep.Text[..1];
+        _pref.TimeFormat = SelectedTag(_cmbTimeFormat);
         _pref.AutoSaveIntervalMinutes = Math.Max(0, autoSave);
         _pref.AutoLockMinutes = Math.Max(0, autoLock);
 
@@ -540,11 +683,34 @@ public sealed class OptWin : BaseWin
             return;
         }
 
-        // Live-apply the two settings with established shell appliers.
+        // Live-apply the settings with established shell appliers.
         if (!string.Equals(oldAccent, _pref.AccentColor, StringComparison.OrdinalIgnoreCase))
             AppHost.Visual.SetAccent(_pref.AccentColor);
         if (!string.Equals(oldLang, _pref.Lang, StringComparison.OrdinalIgnoreCase))
             AppHost.Localization.SetLanguage(_pref.Lang);
+
+        // Number formats take effect program-wide at once: every
+        // consumer reads NumFmt.Current (§3.2).
+        NumFmt.Current = _pref.ToNumFmtSettings();
+
+        // Font applies to open windows immediately, and to every
+        // future window through VisuId (§3.1).
+        try
+        {
+            if (System.Windows.Application.Current is not null)
+            {
+                foreach (Window window in System.Windows.Application.Current.Windows)
+                {
+                    if (!string.IsNullOrWhiteSpace(_pref.FontFamily))
+                        window.FontFamily = new FontFamily(_pref.FontFamily);
+                    window.FontSize = _pref.FontSize;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "OptWin.Save.ApplyFont");
+        }
 
         _statusBar.Text = T("Options.Saved");
     }
@@ -579,8 +745,13 @@ public sealed class OptWin : BaseWin
         for (var i = 0; i < _sectionKeys.Count && i < _rail.Items.Count; i++)
             if (_rail.Items[i] is ListBoxItem item)
                 item.Content = T(_sectionKeys[i]);
-        foreach (var (label, key) in _sectionLabels)
-            label.Text = T(key);
+        foreach (var (label, key, scopeKey) in _sectionLabels)
+            label.Text = $"{T(key)}  ·  {T(scopeKey)}";
+        _fontDefaultItem.Content = T("Options.FontThemeDefault");
+        _fontPreviewHead.Text = T("Options.FontPreviewText");
+        _fontPreviewBody.Text = T("Options.FontPreviewText");
+        _fontPreviewSmall.Text = T("Options.FontPreviewText");
+        RefreshNumSample();
         foreach (var (check, key) in _checkKeys)
             check.Content = T(key);
     }

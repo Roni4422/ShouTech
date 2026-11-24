@@ -4732,7 +4732,21 @@
   "BackupLastDays": "Last backup: {0} (about {1} day(s) ago).",
   "BackupStale": "Warning: the last backup is more than 7 days old.",
   "OpenBackup": "Open Backup",
-  "NumberingSection": "Numbering"
+  "NumberingSection": "Numbering",
+  "FontSection": "Font",
+  "FontFamily": "Font family",
+  "FontThemeDefault": "Theme default",
+  "FontPreviewText": "ShouTech ERP — Sales invoice 0123456789",
+  "NumbersSection": "Numbers, date & time",
+  "QtyDecimals": "Quantity decimal digits",
+  "PriceDecimals": "Price decimal digits",
+  "GroupThousands": "Thousand separator",
+  "ShowTrailingZeros": "Show trailing zeros after the decimal point",
+  "RoundDisplay": "Round displayed numbers",
+  "TimeFormat": "Time format",
+  "NumSample": "Quantity: {0}  ·  Price: {1}  ·  Date: {2}  ·  Time: {3}",
+  "ScopePersonal": "Personal",
+  "ScopeCompany": "Company"
  },
  "PosTerm": {
   "Title": "POS Terminal Definition",

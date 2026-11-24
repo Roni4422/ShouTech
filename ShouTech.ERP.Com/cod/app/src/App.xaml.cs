@@ -412,6 +412,12 @@ namespace ShouTech.App
             // Localization.SetLanguage (raises LanguageChanged) + ApplyToAllWindows.
             SetApplicationLanguage(pref.Lang);
 
+            // Install the Options-governed display formats program-wide
+            // (OPTWIN_SECTIONS §3.2): every quantity/price/date the
+            // program prints or shows follows NumFmt.Current from here
+            // on; Options saves refresh it live (OptWin.Save).
+            NumFmt.Current = pref.ToNumFmtSettings();
+
             // ---------- Dependency Injection ----------
             var services = new ServiceCollection();
             ConfigureServices(services);

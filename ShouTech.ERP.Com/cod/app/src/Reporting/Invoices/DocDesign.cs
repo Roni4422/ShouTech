@@ -173,8 +173,12 @@ public sealed class DocDesign
     public static bool IsNumericField(string fieldKey)
         => LineFields.FirstOrDefault(f => string.Equals(f.Key, fieldKey, StringComparison.OrdinalIgnoreCase))?.IsNumeric ?? false;
 
-    /// <summary>Formats one line value for a design column
-    /// (invariant culture, matching the historic InvPrn output).</summary>
+    /// <summary>Formats one line value for a design column. Digit
+    /// counts and display rules come from the program-wide Options
+    /// settings (NumFmt.Current, OPTWIN_SECTIONS §3.2) — quantities
+    /// use the quantity digits, prices/money the price digits,
+    /// percents one digit; culture stays invariant (Western digits
+    /// are mandatory program-wide).</summary>
     public static string FormatLineValue(InvLine line, string fieldKey)
     {
         var inv = CultureInfo.InvariantCulture;
@@ -184,13 +188,13 @@ public sealed class DocDesign
             "MaterialCode" => line.MaterialCode,
             "Description" => line.Description,
             "Unit" => line.Unit,
-            "Qty" => line.Qty.ToString("N3", inv),
-            "UnitPrice" => line.UnitPrice.ToString("N2", inv),
-            "DiscountPct" => line.DiscountPct.ToString("N1", inv),
-            "TaxRate" => line.TaxRate.ToString("N1", inv),
-                "LineSubtotal" => line.LineSubtotal.ToString("N2", inv),
-            "LineTax" => line.LineTax.ToString("N2", inv),
-            "LineTotal" => line.LineTotal.ToString("N2", inv),
+            "Qty" => NumFmt.FormatQty(line.Qty),
+            "UnitPrice" => NumFmt.FormatPrice(line.UnitPrice),
+            "DiscountPct" => NumFmt.FormatPercent(line.DiscountPct),
+            "TaxRate" => NumFmt.FormatPercent(line.TaxRate),
+                "LineSubtotal" => NumFmt.FormatMoney(line.LineSubtotal),
+            "LineTax" => NumFmt.FormatMoney(line.LineTax),
+            "LineTotal" => NumFmt.FormatMoney(line.LineTotal),
             "WarehouseName" => line.WarehouseName,
             _ => string.Empty
         };

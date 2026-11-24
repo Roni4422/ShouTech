@@ -4723,7 +4723,21 @@
   "BackupLastDays": "Son yedek: {0} (yaklaşık {1} gün önce).",
   "BackupStale": "Uyarı: son yedek 7 günden eski.",
   "OpenBackup": "Yedeği Aç",
-  "NumberingSection": "Numaralandırma"
+  "NumberingSection": "Numaralandırma",
+  "FontSection": "Yazı tipi",
+  "FontFamily": "Yazı tipi ailesi",
+  "FontThemeDefault": "Tema varsayılanı",
+  "FontPreviewText": "ShouTech ERP — Satış faturası 0123456789",
+  "NumbersSection": "Sayılar, tarih ve saat",
+  "QtyDecimals": "Miktar ondalık basamakları",
+  "PriceDecimals": "Fiyat ondalık basamakları",
+  "GroupThousands": "Binlik ayırıcı",
+  "ShowTrailingZeros": "Ondalık sonrası sıfırları göster",
+  "RoundDisplay": "Görüntülenen sayıları yuvarla",
+  "TimeFormat": "Saat biçimi",
+  "NumSample": "Miktar: {0}  ·  Fiyat: {1}  ·  Tarih: {2}  ·  Saat: {3}",
+  "ScopePersonal": "Kişisel",
+  "ScopeCompany": "Şirket"
  },
  "PosTerm": {
   "Title": "POS Terminali Tanımı",

@@ -10,6 +10,7 @@ using Microsoft.Win32;
 using ShouTech.App.Common;
 using ShouTech.App.Reporting;
 using ShouTech.App.Reporting.Invoices;
+using ShouTech.Domain;
 
 namespace ShouTech.App.Services;
 
@@ -120,7 +121,7 @@ public static class InvPrn
         });
         stack.Children.Add(new TextBlock
         {
-            Text = doc.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            Text = NumFmt.FormatDate(doc.DocDate),
             FontSize = 12,
             Opacity = 0.8,
             Margin = new Thickness(0, 0, 0, 12)
@@ -209,8 +210,8 @@ public static class InvPrn
 
         // ── Totals band ──
         var totalsText = design.ShowTaxBlock
-            ? $"Subtotal: {doc.Subtotal:N2}    Tax: {doc.TaxAmount:N2}    Total: {doc.GrandTotal:N2} {doc.CurrencyCode}"
-            : $"Total: {doc.GrandTotal:N2} {doc.CurrencyCode}";
+            ? $"Subtotal: {NumFmt.FormatMoney(doc.Subtotal)}    Tax: {NumFmt.FormatMoney(doc.TaxAmount)}    Total: {NumFmt.FormatMoney(doc.GrandTotal)} {doc.CurrencyCode}"
+            : $"Total: {NumFmt.FormatMoney(doc.GrandTotal)} {doc.CurrencyCode}";
         stack.Children.Add(new TextBlock
         {
             Text = totalsText,
@@ -339,13 +340,13 @@ public static class InvPrn
                 Margin = new Thickness(0, 1, 0, 1)
             });
         void Rule() => stack.Children.Add(new Border { Height = 1, Background = Brushes.Gray, Margin = new Thickness(0, 5, 0, 5) });
-        string Money(decimal value) => value.ToString("N2", CultureInfo.InvariantCulture) + " " + doc.CurrencyCode;
+        string Money(decimal value) => NumFmt.FormatMoney(value) + " " + doc.CurrencyCode;
 
         Line(companyName, 15, bold: true, center: true);
         Line(doc.Kind == InvDocKind.SalesReturn ? L("ReceiptReturnTitle", "POS RETURN") : L("ReceiptTitle", "POS RECEIPT"), 11, bold: true, center: true);
         Rule();
         Line($"{L("ReceiptNo", "Receipt")}: {doc.DocNo}");
-        Line($"{L("ReceiptDate", "Date")}: {doc.DocDate:yyyy-MM-dd} {DateTime.Now:HH:mm}");
+        Line($"{L("ReceiptDate", "Date")}: {NumFmt.FormatDate(doc.DocDate)} {NumFmt.FormatTimeOfDay(DateTime.Now)}");
         if (!string.IsNullOrWhiteSpace(sessionNo)) Line($"{L("SessionNo", "Session")}: {sessionNo}");
         if (!string.IsNullOrWhiteSpace(cashier)) Line($"{L("Cashier", "Cashier")}: {cashier}");
         if (!string.IsNullOrWhiteSpace(doc.PartyName)) Line($"{L("ReceiptCustomer", "Customer")}: {doc.PartyCode} {doc.PartyName}");
@@ -353,8 +354,8 @@ public static class InvPrn
         foreach (var line in doc.Lines)
         {
             Line($"{line.Description}", 11, bold: true);
-            var discount = line.DiscountPct > 0 ? $"  -{line.DiscountPct:N1}%" : string.Empty;
-            Line($"{line.Qty:N3} {line.Unit} x {line.UnitPrice:N2}{discount}    {line.LineTotal:N2}");
+            var discount = line.DiscountPct > 0 ? $"  -{NumFmt.FormatPercent(line.DiscountPct)}%" : string.Empty;
+            Line($"{NumFmt.FormatQty(line.Qty)} {line.Unit} x {NumFmt.FormatPrice(line.UnitPrice)}{discount}    {NumFmt.FormatMoney(line.LineTotal)}");
         }
         Rule();
         Line($"{L("Subtotal", "Subtotal")}: {Money(doc.Subtotal)}");

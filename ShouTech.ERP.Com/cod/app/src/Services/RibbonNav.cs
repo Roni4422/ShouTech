@@ -322,8 +322,32 @@ public static class RibbonNav
         MessageBox.Show(owner, text, "ShouTech ERP", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
-    private static void ConfirmExit(Window? owner)
+    private static void ConfirmExit(Window? owner) => RequestExit(owner);
+
+    /// <summary>
+    /// The one application-exit path (OPTWIN_SECTIONS §3.8): the
+    /// Options "Confirm on exit" preference governs whether the
+    /// confirmation prompt appears at all. Previously the prompt
+    /// was unconditional here and absent in the shell view-model —
+    /// the stored preference was read by nothing. Every exit entry
+    /// point (ribbon Exit, shell Exit command, shell menu) routes
+    /// through this method.
+    /// </summary>
+    public static void RequestExit(Window? owner)
     {
+        var confirmOnExit = true;
+        try { confirmOnExit = UsrPref.Load().ConfirmOnExit; }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "RibbonNav.RequestExit.Prefs");
+        }
+
+        if (!confirmOnExit)
+        {
+            System.Windows.Application.Current.Shutdown();
+            return;
+        }
+
         var confirm = MessageBox.Show(
             owner,
             AppHost.Localization.GetString("Messages.ConfirmExit", "Exit ShouTech ERP?"),

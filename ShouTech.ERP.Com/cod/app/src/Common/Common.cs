@@ -28,8 +28,11 @@ internal static class AppFormat
         public static string FormatTime(System.DateTime value) =>
             value.ToString("HH:mm:ss", Invariant);
 
+        /// <summary>Date display follows the Options-governed
+        /// pattern (NumFmt.Current, OPTWIN_SECTIONS §3.2); the
+        /// built-in default equals the historic dd/MM/yyyy.</summary>
         public static string FormatDate(System.DateTime value) =>
-            value.ToString("dd/MM/yyyy", Invariant);
+            ShouTech.Domain.NumFmt.FormatDate(value);
 
         public static string FormatDateTime(System.DateTime value) =>
             value.ToString("G", Invariant);
