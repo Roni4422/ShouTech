@@ -223,6 +223,12 @@ public static class ErrorCodes
     public const string BinPurgeStillReferenced = "BIN-8207";
     // Bin state conflict: already binned / not binned (exactly-once guard).
     public const string BinStateConflict = "BIN-8208";
+    // Number sequence reached its supported limit.
+    public const string NumberingLimitReached = "NUM-8301";
+    // Stored series configuration is invalid (prefix/padding/start).
+    public const string NumberingInvalidConfig = "NUM-8302";
+    // Allocation returned an invalid value / failed.
+    public const string NumberingAllocationFailed = "NUM-8303";
 
     // ---- POS 1001-1999 (POS full build, migration 066) ------------------
     // The POS module takes its own prefix block, like MFG / HR.

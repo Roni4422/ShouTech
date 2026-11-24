@@ -9,6 +9,7 @@ using ShouTech.App.Views;
 
 using ShouTech.Domain;
 using ShouTech.Domain.Entities;
+using ShouTech.Infra;
 using ShouTech.Infrastructure;
 namespace ShouTech.App.Services;
 
@@ -37,6 +38,10 @@ public static class InvRepo
             var number = AllocateDocNo(connection, transaction, kind);
             transaction.Commit();
             return number;
+        }
+        catch (AppError)
+        {
+            throw; // cataloged numbering errors (NUM-83xx) surface as-is
         }
         catch (Exception ex)
         {
@@ -68,8 +73,18 @@ public static class InvRepo
             InvDocKind.Quotation => "QUO",
             _ => "DOC"
         };
+        var isPg = DatabaseRuntime.IsPostgreSql();
+        // Series key = the kind code; the printed prefix/padding/yearly
+        // segmentation come from number_series_config when configured
+        // (NUMBERING_STUDY §3.4), else the built-in defaults.
+        var config = SequenceAllocator.ReadConfig(
+            connection, transaction, isPg, Company, prefix,
+            SequenceAllocator.DefaultConfig(prefix));
         var year = DateTime.Today.Year;
-        var documentPrefix = $"{prefix}-{year}-";
+        var segmentYear = config.YearlySegment ? year : 0;
+        var documentPrefix = config.YearlySegment
+            ? $"{config.Prefix}-{year}-"
+            : $"{config.Prefix}-";
         var suffixStart = documentPrefix.Length + 1;
         var numericSuffixPredicate = DatabaseRuntime.IsPostgreSql()
             ? "SUBSTR(doc_no, $suffixStart) ~ '^[0-9]+$'"
@@ -93,37 +108,10 @@ public static class InvRepo
             var maximum = Convert.ToInt64(
                 maxCommand.ExecuteScalar() ?? 0,
                 CultureInfo.InvariantCulture);
-            if (maximum >= 99999999)
-                throw new InvalidOperationException(
-                    "The document number sequence has reached its supported limit.");
-
-            var next = maximum + 1;
-            var advanceExpression = DatabaseRuntime.IsPostgreSql()
-                ? "GREATEST(document_number_sequences.last_value + 1, EXCLUDED.last_value)"
-                : "MAX(document_number_sequences.last_value + 1, excluded.last_value)";
-
-            using var sequenceCommand = connection.CreateCommand();
-            sequenceCommand.Transaction = transaction;
-            sequenceCommand.CommandText = $"""
-                INSERT INTO document_number_sequences
-                    (company_id, doc_kind, doc_year, last_value)
-                VALUES ($company, $kind, $year, $next)
-                ON CONFLICT (company_id, doc_kind, doc_year)
-                DO UPDATE SET last_value = {advanceExpression}
-                RETURNING last_value;
-                """;
-            Add(sequenceCommand, "$company", Company);
-            Add(sequenceCommand, "$kind", prefix);
-            Add(sequenceCommand, "$year", year);
-            Add(sequenceCommand, "$next", next);
-            var allocated = Convert.ToInt64(
-                sequenceCommand.ExecuteScalar() ?? 0,
-                CultureInfo.InvariantCulture);
-            if (allocated <= 0 || allocated > 99999999)
-                throw new InvalidOperationException(
-                    "The document number sequence returned an invalid value.");
-
-            return $"{documentPrefix}{allocated.ToString("D4", CultureInfo.InvariantCulture)}";
+            var allocated = SequenceAllocator.Allocate(
+                connection, transaction, isPg, Company, prefix, segmentYear,
+                maximum, config.StartValue - 1);
+            return SequenceAllocator.Format(config, segmentYear, allocated);
         }
     }
 
