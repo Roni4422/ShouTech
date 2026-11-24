@@ -1242,7 +1242,13 @@
       "OpenReceiptBase": "Open receipts (base, cumulative)",
       "ExceptionAmount": "Exception amount (base)",
       "DaysOverdue": "Days overdue",
-      "OpenAmount": "Open amount"
+      "OpenAmount": "Open amount",
+      "GroupCode": "Group code",
+      "GroupName": "Group",
+      "MaterialCount": "Materials",
+      "ValueIn": "Value in",
+      "ValueOut": "Value out",
+      "NetValue": "Net value"
     },
     "Filter": {
       "All": "All",
@@ -1351,7 +1357,9 @@
     "ExceptionInvoicedNoReceipt": "Invoiced without receipt",
     "ExceptionGlTieOut": "GL 2203 tie-out difference",
     "AgingByEntryDate": "Entry date — supplier summary",
-    "AgingByDueDate": "Due date — per invoice"
+    "AgingByDueDate": "Due date — per invoice",
+    "GroupMoves": "Material group movement",
+    "Ungrouped": "Ungrouped"
   },
   "RestoreCompany": {
     "Close": "Close",

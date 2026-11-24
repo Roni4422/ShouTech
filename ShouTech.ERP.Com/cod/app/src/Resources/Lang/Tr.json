@@ -708,7 +708,13 @@
       "OpenReceiptBase": "Açık teslimatlar (temel, kümülatif)",
       "ExceptionAmount": "İstisna tutarı (temel)",
       "DaysOverdue": "Gecikme günü",
-      "OpenAmount": "Açık tutar"
+      "OpenAmount": "Açık tutar",
+      "GroupCode": "Grup kodu",
+      "GroupName": "Grup",
+      "MaterialCount": "Malzemeler",
+      "ValueIn": "Giriş değeri",
+      "ValueOut": "Çıkış değeri",
+      "NetValue": "Net değer"
     },
     "Filter": {
       "All": "Tümü",
@@ -817,7 +823,9 @@
     "ExceptionInvoicedNoReceipt": "Teslimatsız faturalandı",
     "ExceptionGlTieOut": "GL 2203 mutabakat farkı",
     "AgingByEntryDate": "Kayıt tarihi — tedarikçi özeti",
-    "AgingByDueDate": "Vade tarihi — fatura başına"
+    "AgingByDueDate": "Vade tarihi — fatura başına",
+    "GroupMoves": "Malzeme grubu hareketi",
+    "Ungrouped": "Grupsuz"
   },
   "Tools": {
     "Title": "Araçlar",

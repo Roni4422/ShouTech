@@ -709,7 +709,13 @@
       "OpenReceiptBase": "المستلم المفتوح (أساسي، تراكمي)",
       "ExceptionAmount": "مبلغ الاستثناء (أساسي)",
       "DaysOverdue": "أيام التأخير",
-      "OpenAmount": "المبلغ المفتوح"
+      "OpenAmount": "المبلغ المفتوح",
+      "GroupCode": "رمز المجموعة",
+      "GroupName": "المجموعة",
+      "MaterialCount": "المواد",
+      "ValueIn": "قيمة الوارد",
+      "ValueOut": "قيمة الصادر",
+      "NetValue": "الصافي"
     },
     "Filter": {
       "All": "الكل",
@@ -818,7 +824,9 @@
     "ExceptionInvoicedNoReceipt": "مفوتر بدون استلام",
     "ExceptionGlTieOut": "فرق تسوية GL 2203",
     "AgingByEntryDate": "تاريخ القيد — ملخص المورد",
-    "AgingByDueDate": "تاريخ الاستحقاق — لكل فاتورة"
+    "AgingByDueDate": "تاريخ الاستحقاق — لكل فاتورة",
+    "GroupMoves": "حركة المواد حسب المجموعات",
+    "Ungrouped": "بدون مجموعة"
   },
   "Tools": {
     "Title": "أدوات",

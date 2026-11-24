@@ -549,6 +549,99 @@ public sealed class MatMoveWin : RptBase
     }
 }
 
+/// <summary>
+/// Material GROUP movement report (R3 — the dedicated window behind
+/// Inventory.MaterialGroupMovementReport, replacing the router's
+/// approximation to the per-material movement report): period stock
+/// movement aggregated per material group, with an Ungrouped bucket
+/// for materials in no group. A material in several groups
+/// contributes to each (membership semantics, see
+/// RptQuery.GroupMovesAsync).
+/// </summary>
+public sealed class GroupMoveWin : RptBase
+{
+    protected override RptDef BuildDefinition() => new()
+    {
+        ReportKey = "Inv.GroupMoves",
+        TitleTextKey = "Reports.GroupMoves",
+        Columns = new RptCol[]
+        {
+            new() { Key = "GroupCode", HeaderTextKey = "Reports.Col.GroupCode", Type = RptColType.Text, Width = 110 },
+            new() { Key = "GroupName", HeaderTextKey = "Reports.Col.GroupName", Type = RptColType.Text, Width = 220 },
+            new() { Key = "MaterialCount", HeaderTextKey = "Reports.Col.MaterialCount", Type = RptColType.WholeNumber, Width = 100 },
+            new() { Key = "QtyIn", HeaderTextKey = "Reports.Col.QtyIn", Type = RptColType.FractionalNumber, Width = 100, Format = "N3" },
+            new() { Key = "QtyOut", HeaderTextKey = "Reports.Col.QtyOut", Type = RptColType.FractionalNumber, Width = 100, Format = "N3" },
+            new() { Key = "NetQty", HeaderTextKey = "Reports.Col.NetQty", Type = RptColType.FractionalNumber, Width = 100, Format = "N3" },
+            new() { Key = "ValueIn", HeaderTextKey = "Reports.Col.ValueIn", Type = RptColType.Money, Width = 110, Format = "N2" },
+            new() { Key = "ValueOut", HeaderTextKey = "Reports.Col.ValueOut", Type = RptColType.Money, Width = 110, Format = "N2" },
+            new() { Key = "NetValue", HeaderTextKey = "Reports.Col.NetValue", Type = RptColType.Money, Width = 110, Format = "N2" },
+        },
+        Filters = new RptFlt[]
+        {
+            new() { Key = "Warehouse", LabelTextKey = "Reports.Filter.Warehouse", Kind = RptFltKind.Warehouse },
+            new() { Key = "From", LabelTextKey = "Reports.Filter.DateFrom", Kind = RptFltKind.DateFrom, DefaultValue = new DateTime(DateTime.Today.Year, 1, 1) },
+            new() { Key = "To", LabelTextKey = "Reports.Filter.DateTo", Kind = RptFltKind.DateTo, DefaultValue = DateTime.Today },
+        }
+    };
+
+    protected override IReadOnlyList<KeyValuePair<string, string>> LoadWarehouseChoices()
+        => RptQuery.WarehouseChoices();
+
+    protected override async Task<RptData> LoadDataAsync(RptFltValues filters, CancellationToken ct)
+    {
+        var warehouse = filters.GetString("Warehouse");
+        var from = filters.GetDateOr("From", new DateTime(DateTime.Today.Year, 1, 1));
+        var to = filters.GetDateOr("To", DateTime.Today);
+        var raw = await RptQuery.GroupMovesAsync(warehouse, from, to, ct);
+        var isArabic = string.Equals(App.CurrentLanguageCode, "ar", StringComparison.OrdinalIgnoreCase);
+        var rows = raw.Select(r =>
+        {
+            var qtyIn = ToDec(r.GetValueOrDefault("QtyIn"));
+            var qtyOut = ToDec(r.GetValueOrDefault("QtyOut"));
+            var valueIn = ToDec(r.GetValueOrDefault("ValueIn"));
+            var valueOut = ToDec(r.GetValueOrDefault("ValueOut"));
+            var code = r.GetValueOrDefault("GroupCode")?.ToString() ?? string.Empty;
+            return (IReadOnlyDictionary<string, object?>)new Dictionary<string, object?>
+            {
+                ["GroupCode"] = code,
+                ["GroupName"] = code.Length == 0
+                    ? T("Reports.Ungrouped")
+                    : isArabic
+                        ? r.GetValueOrDefault("GroupName")
+                        : string.IsNullOrWhiteSpace(r.GetValueOrDefault("GroupNameEn")?.ToString())
+                            ? r.GetValueOrDefault("GroupName")
+                            : r.GetValueOrDefault("GroupNameEn"),
+                ["MaterialCount"] = ToDec(r.GetValueOrDefault("MaterialCount")),
+                ["QtyIn"] = qtyIn,
+                ["QtyOut"] = qtyOut,
+                ["NetQty"] = qtyIn - qtyOut,
+                ["ValueIn"] = valueIn,
+                ["ValueOut"] = valueOut,
+                ["NetValue"] = valueIn - valueOut,
+            };
+        }).ToList();
+
+        return new RptData
+        {
+            Columns = BuildDefinition().Columns,
+            Rows = rows,
+            Totals = new Dictionary<string, object?>
+            {
+                ["GroupName"] = T("Reports.Totals"),
+                ["QtyIn"] = rows.Sum(x => ToDec(x["QtyIn"])),
+                ["QtyOut"] = rows.Sum(x => ToDec(x["QtyOut"])),
+                ["NetQty"] = rows.Sum(x => ToDec(x["NetQty"])),
+                ["ValueIn"] = rows.Sum(x => ToDec(x["ValueIn"])),
+                ["ValueOut"] = rows.Sum(x => ToDec(x["ValueOut"])),
+                ["NetValue"] = rows.Sum(x => ToDec(x["NetValue"])),
+            }
+        };
+    }
+
+    private static decimal ToDec(object? v)
+        => v is null ? 0m : Convert.ToDecimal(v, CultureInfo.InvariantCulture);
+}
+
 // ---- merged from cod/app/src/Views/Reports/MatStatsWin.cs ----
 /// <summary>Per-material statistics: qty sold/purchased, revenue, cost at average cost, and margin.</summary>
 public sealed class MatStatsWin : RptBase

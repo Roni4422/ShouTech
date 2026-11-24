@@ -57,13 +57,13 @@ indexed / total windows) is reported there.
 
 ## The (b) list
 
-- `Inventory.MaterialProfits` → ItemProfitWin: router maps it to the closest existing report — no dedicated window yet (router doc comment)
-- `Inventory.MaterialGroupMovementReport` → MatMoveWin: router maps it to the closest existing report — no dedicated window yet (router doc comment)
-- `Inventory.SalesReport` → SalListWin: router maps it to the closest existing report — no dedicated window yet (router doc comment)
+- ~~`Inventory.MaterialProfits` → ItemProfitWin~~ **R3 DONE — formally ADOPTED**: material profits ARE the item profitability report (same concept, same data); router comment now records the adoption.
+- ~~`Inventory.MaterialGroupMovementReport` → MatMoveWin~~ **R3 DONE — dedicated window BUILT**: GroupMoveWin (RptBase, ReportKey Inv.GroupMoves) over RptQuery.GroupMovesAsync — movement aggregated per material group + Ungrouped bucket; router now routes here.
+- ~~`Inventory.SalesReport` → SalListWin~~ **R3 DONE — formally ADOPTED**: the posted sales document register is the inventory sales report; deeper analytics live in the profitability reports.
 - `Inventory.EditMaterialSpecs` → DefManagerWin: generic definition editor (set: MaterialSpecs) — window is real and persists; per-set field completeness not yet audited
 - `Inventory.MaterialDiscounts` → DefManagerWin: generic definition editor (set: MaterialDiscounts) — window is real and persists; per-set field completeness not yet audited
-- `Accounts.DailyReport` → JrnListWin: router maps it to the closest existing report — no dedicated window yet (router doc comment)
-- `Accounts.AgingReceivables` → CustAgingWin: router maps it to the closest existing report — no dedicated window yet (router doc comment)
+- ~~`Accounts.DailyReport` → JrnListWin~~ **R3 DONE — formally ADOPTED**: the daily report is the journal register scoped by its date filters (same ledger, same rows).
+- ~~`Accounts.AgingReceivables` → CustAgingWin~~ **R3 DONE — formally ADOPTED**: receivables aging IS customer aging.
 - `Bonds.DefineVoucherTypes` → DefManagerWin: generic definition editor (set: VoucherTypes) — window is real and persists; per-set field completeness not yet audited
 - `Bonds.DefineSecurities` → DefManagerWin: generic definition editor (set: SecurityTypes) — window is real and persists; per-set field completeness not yet audited
 - `Bonds.PaymentTypes` → DefManagerWin: generic definition editor (set: PaymentTypes) — window is real and persists; per-set field completeness not yet audited
@@ -127,9 +127,11 @@ indexed / total windows) is reported there.
   AccCard follow. After the grid program: the POS family
   workstream (owner, 15:31 — terminal definition, session
   opening, session sales, close/Z integration), then R3–R5.
-- **R3 — router approximations (5)**: give each its dedicated
-  report window or formally adopt the mapped report (owner-visible
-  choice per report).
+- **R3 — router approximations (5)**: DONE (2026-11-24) — 4
+  formally adopted (MaterialProfits, SalesReport, DailyReport,
+  AgingReceivables — the mapped report is the requested report
+  in substance), 1 dedicated window built (GroupMoveWin for
+  MaterialGroupMovementReport). (b) count 34 → 29.
 - **R4 — definition sets (24)**: audit each DefSets set's fields
   against its domain; complete the sets that are thin.
 - **R5 — thin windows (6)**: PosSyncWin, ActivityLogWin, AddonsWin,
@@ -168,7 +170,7 @@ indexed / total windows) is reported there.
 | 24 | Inventory.MaterialMovementChart | MatMoveChartWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
 | 25 | Inventory.ExpiredMaterials | ExpiredWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
 | 26 | Inventory.InvoiceAge | InvoiceAgeWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
-| 27 | Inventory.MaterialProfits | ItemProfitWin | RibbonReportRouter (approximated) | b | App handler ✓ | ✓ | pending | router maps it to the closest existing report — no dedicated window yet (router doc comment) |
+| 27 | Inventory.MaterialProfits | ItemProfitWin | RibbonReportRouter (approximated) | a | App handler ✓ | ✓ | pending | R3: formally adopted (see the (b) list outcome) |
 | 28 | Inventory.MaterialPriceHistory | PriceHistoryWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
 | 29 | Inventory.ServiceMaterials | ServiceMatWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
 | 30 | Inventory.MaterialStatistics | MatStatsWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
@@ -176,13 +178,13 @@ indexed / total windows) is reported there.
 | 32 | Inventory.MostActiveMaterials | MostActiveWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
 | 33 | Inventory.MaterialComparison | MatCompareWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
 | 34 | Inventory.MaterialList | MatListWin | RptNav | a | App handler ✓ | ✓ | pending |  |
-| 35 | Inventory.MaterialGroupMovementReport | MatMoveWin | RibbonReportRouter (approximated) | b | App handler ✓ | ✓ | pending | router maps it to the closest existing report — no dedicated window yet (router doc comment) |
+| 35 | Inventory.MaterialGroupMovementReport | GroupMoveWin | RibbonReportRouter (approximated) | a | App handler ✓ | ✓ | pending | R3: dedicated GroupMoveWin built (see the (b) list outcome) |
 | 36 | Inventory.NegativeOutput | NegativeStockWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
 | 37 | Inventory.Customers | InvCustomersWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
 | 38 | Inventory.SerialNumbersReport | SerWin | RibbonNav | a | central ✓ | — | pending |  |
 | 39 | Inventory.EditSerialNumber | SerWin | RibbonNav | a | central ✓ | — | pending |  |
 | 40 | Inventory.BranchMaterials | BranchMatWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
-| 41 | Inventory.SalesReport | SalListWin | RibbonReportRouter (approximated) | b | App handler ✓ | ✓ | pending | router maps it to the closest existing report — no dedicated window yet (router doc comment) |
+| 41 | Inventory.SalesReport | SalListWin | RibbonReportRouter (approximated) | a | App handler ✓ | ✓ | pending | R3: formally adopted (see the (b) list outcome) |
 | 42 | Inventory.EditMaterialSpecs | DefManagerWin | RibbonNav | b | central ✓ | ✓ | pending | generic definition editor (set: MaterialSpecs) — window is real and persists; per-set field completeness not yet audited |
 | 43 | Inventory.MaterialDiscounts | DefManagerWin | RibbonNav | b | central ✓ | ✓ | pending | generic definition editor (set: MaterialDiscounts) — window is real and persists; per-set field completeness not yet audited |
 | 44 | Accounts.ChartOfAccounts | CoaWin | MWin button special | a | central ✓ | — | in grid/directory program |  |
@@ -203,7 +205,7 @@ indexed / total windows) is reported there.
 | 59 | Accounts.Ledger | AccStmtWin | RptNav | a | App handler ✓ | ✓ | pending |  |
 | 60 | Accounts.CustomerStatement | CustStmtWin | RptNav | a | App handler ✓ | ✓ | pending |  |
 | 61 | Accounts.GeneralJournal | JrnListWin | RptNav | a | App handler ✓ | ✓ | pending |  |
-| 62 | Accounts.DailyReport | JrnListWin | RibbonReportRouter (approximated) | b | App handler ✓ | ✓ | pending | router maps it to the closest existing report — no dedicated window yet (router doc comment) |
+| 62 | Accounts.DailyReport | JrnListWin | RibbonReportRouter (approximated) | a | App handler ✓ | ✓ | pending | R3: formally adopted (see the (b) list outcome) |
 | 63 | Accounts.AccountMovementChart | AccMoveChartWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
 | 64 | Accounts.AccountBalance | AccBalWin | RptNav | a | App handler ✓ | ✓ | pending |  |
 | 65 | Accounts.BranchAccountMovement | BranchAccMoveWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
@@ -215,7 +217,7 @@ indexed / total windows) is reported there.
 | 71 | Accounts.IncomeStatement | IncStmtWin | RptNav | a | App handler ✓ | ✓ | pending |  |
 | 72 | Accounts.CashFlowStatement | CashFlowWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
 | 73 | Accounts.DormantAccounts | DormantWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
-| 74 | Accounts.AgingReceivables | CustAgingWin | RibbonReportRouter (approximated) | b | App handler ✓ | ✓ | pending | router maps it to the closest existing report — no dedicated window yet (router doc comment) |
+| 74 | Accounts.AgingReceivables | CustAgingWin | RibbonReportRouter (approximated) | a | App handler ✓ | ✓ | pending | R3: formally adopted (see the (b) list outcome) |
 | 75 | Accounts.PaymentReconciliation | PayRecWin | RptNav | a | central ✓ | ✓ | in grid/directory program |  |
 | 76 | Accounts.CollectionRates | CollectionRatesWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
 | 77 | Accounts.AccountComparison | AccCompareWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |

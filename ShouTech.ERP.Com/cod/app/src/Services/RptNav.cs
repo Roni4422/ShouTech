@@ -228,6 +228,7 @@ public static class RptNav
     public static void OpenJournalList(Window? owner = null) => Show(new JrnListWin(), owner);
     public static void OpenStockBalances(Window? owner = null) => Show(new StkBalWin(), owner);
     public static void OpenMaterialMoves(Window? owner = null) => Show(new MatMoveWin(), owner);
+    public static void OpenGroupMoves(Window? owner = null) => Show(new GroupMoveWin(), owner);
     public static void OpenCustomerBalances(Window? owner = null) => Show(new CustBalWin(), owner);
     public static void OpenSupplierBalances(Window? owner = null) => Show(new SupBalWin(), owner);
     public static void OpenSalesInvoiceList(Window? owner = null) => Show(new SalListWin(), owner);

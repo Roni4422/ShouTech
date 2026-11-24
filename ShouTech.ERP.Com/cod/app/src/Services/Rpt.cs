@@ -376,6 +376,55 @@ public static class RptQuery
             ("$doc", documentNo ?? string.Empty));
     }
 
+    /// <summary>
+    /// Material GROUP movement (R3): stock movements aggregated per
+    /// material group over the period. A material belonging to
+    /// several groups contributes its movement to EACH of them
+    /// (membership is many-to-many — see MatGroupRepo); materials
+    /// with no group land in the empty-code bucket the window
+    /// labels "Ungrouped". Values split by direction from the
+    /// stored cost_amount (absolute), falling back to qty × unit
+    /// cost exactly like the movement ledger query.
+    /// </summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> GroupMovesAsync(
+        string? warehouseId,
+        DateTime from,
+        DateTime to,
+        CancellationToken ct)
+    {
+        DocSchema.Ensure();
+        MatRepo.EnsureSchema();
+        var sql = """
+            SELECT COALESCE(g.group_code, '') AS "GroupCode",
+                   COALESCE(g.group_name, '') AS "GroupName",
+                   COALESCE(g.group_name_en, '') AS "GroupNameEn",
+                   COUNT(DISTINCT sm.material_id) AS "MaterialCount",
+                   COALESCE(SUM(COALESCE(sm.qty_in, 0)), 0) AS "QtyIn",
+                   COALESCE(SUM(COALESCE(sm.qty_out, 0)), 0) AS "QtyOut",
+                   COALESCE(SUM(CASE WHEN COALESCE(sm.qty_in, 0) > 0
+                        THEN ABS(COALESCE(sm.cost_amount, COALESCE(sm.qty_in, 0) * COALESCE(sm.unit_cost, 0))) ELSE 0 END), 0) AS "ValueIn",
+                   COALESCE(SUM(CASE WHEN COALESCE(sm.qty_out, 0) > 0
+                        THEN ABS(COALESCE(sm.cost_amount, COALESCE(sm.qty_out, 0) * COALESCE(sm.unit_cost, 0))) ELSE 0 END), 0) AS "ValueOut"
+            FROM material_stock_movements sm
+            LEFT JOIN material_group_items gi
+              ON gi.company_id = sm.company_id AND gi.material_id = sm.material_id
+            LEFT JOIN material_groups g
+              ON g.company_id = sm.company_id AND g.group_id = gi.group_id AND COALESCE(g.is_deleted, 0) = 0
+            WHERE sm.company_id = $company AND sm.is_deleted = 0
+              AND sm.movement_date >= $from AND sm.movement_date < $to
+              AND ($wh = '' OR CAST(sm.warehouse_id AS TEXT) = $wh)
+            GROUP BY g.group_code, g.group_name, g.group_name_en
+            ORDER BY g.group_code;
+            """;
+        if (DatabaseRuntime.IsPostgreSql())
+            sql = sql.Replace("sm.is_deleted = 0", "sm.is_deleted = FALSE", StringComparison.Ordinal);
+        return await QueryAsync(sql, ct,
+            ("$company", Company),
+            ("$from", DateStart(from)),
+            ("$to", DateEndExclusive(to)),
+            ("$wh", warehouseId ?? string.Empty));
+    }
+
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> CustomerBalancesAsync(
         CancellationToken ct)
     {

@@ -708,7 +708,13 @@
       "OpenReceiptBase": "Réceptions ouvertes (base, cumul)",
       "ExceptionAmount": "Montant d'exception (base)",
       "DaysOverdue": "Jours de retard",
-      "OpenAmount": "Montant ouvert"
+      "OpenAmount": "Montant ouvert",
+      "GroupCode": "Code du groupe",
+      "GroupName": "Groupe",
+      "MaterialCount": "Articles",
+      "ValueIn": "Valeur entrée",
+      "ValueOut": "Valeur sortie",
+      "NetValue": "Valeur nette"
     },
     "Filter": {
       "All": "Tous",
@@ -817,7 +823,9 @@
     "ExceptionInvoicedNoReceipt": "Facturé sans réception",
     "ExceptionGlTieOut": "Écart de rapprochement GL 2203",
     "AgingByEntryDate": "Date d'écriture — résumé fournisseur",
-    "AgingByDueDate": "Date d'échéance — par facture"
+    "AgingByDueDate": "Date d'échéance — par facture",
+    "GroupMoves": "Mouvements par groupe d’articles",
+    "Ungrouped": "Sans groupe"
   },
   "Tools": {
     "Title": "Outils",
