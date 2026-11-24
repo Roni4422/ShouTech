@@ -290,12 +290,32 @@ public sealed class CshWin : BaseWin, IWindowMode
             _lines[i].LineNo = i + 1;
     }
 
+    /// <summary>The next sequential RCV/PAY number from the central
+    /// allocator (NUMBERING_STUDY). A failure is reported through the
+    /// error catalog and leaves the field empty rather than falling
+    /// back to a fabricated timestamp number.</summary>
+    private string AllocateVoucherNumber()
+    {
+        try
+        {
+            if (AppHost.JournalStore is not { } store)
+                throw new InvalidOperationException("The journal store is not initialized.");
+            return store.NextDocumentNumber(
+                CurrentCompanyCode, _kind == CshKind.Receipt ? "RCV" : "PAY",
+                DateOnly.FromDateTime(DateTime.Today));
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.NumberingAllocationFailed, ex, "CshWin.AllocateVoucherNumber");
+            return string.Empty;
+        }
+    }
+
     private void ResetVoucher()
     {
         _currentJournalId = null;
         _isPosted = false;
-        var prefix = _kind == CshKind.Receipt ? "RCV-" : "PAY-";
-        _txtDocNo.Text = prefix + DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+        _txtDocNo.Text = AllocateVoucherNumber();
         _txtDocNo.IsReadOnly = false;
         _dtDate.SelectedDate = DateTime.Today;
         _txtParty.Text = string.Empty;

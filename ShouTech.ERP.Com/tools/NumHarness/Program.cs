@@ -171,5 +171,13 @@ var mat2 = MatRepo.NextCode("MAT-");
 Check("H1 material codes seed above history incl. binned rows, counter monotonic",
     mat1 == "MAT-0043" && mat2 == "MAT-0044", $"{mat1} / {mat2}");
 
+var journalRepo = new JournalRepository("SQLite", cs);
+var jv1 = journalRepo.NextDocumentNumber(CompanyCode, "JV", DateOnly.FromDateTime(DateTime.Today));
+var jv2 = journalRepo.NextDocumentNumber(CompanyCode, "JV", DateOnly.FromDateTime(DateTime.Today));
+var rcv1 = journalRepo.NextDocumentNumber(CompanyCode, "RCV", DateOnly.FromDateTime(DateTime.Today));
+Check("I1 journal/voucher numbers are sequential per series (no timestamps)",
+    jv1 == $"JV-{year}-0001" && jv2 == $"JV-{year}-0002" && rcv1 == $"RCV-{year}-0001",
+    $"{jv1} / {jv2} / {rcv1}");
+
 Console.WriteLine($"== NumHarness: {pass} PASS / {fail} FAIL ==");
 return fail == 0 ? 0 : 1;

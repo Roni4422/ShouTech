@@ -270,9 +270,29 @@ public sealed class JrnWin : BaseWin
             _lines[i].LineNo = i + 1;
     }
 
+    /// <summary>The next sequential JV number from the central
+    /// allocator (NUMBERING_STUDY). A failure is reported through the
+    /// error catalog and leaves the field empty rather than falling
+    /// back to a fabricated timestamp number.</summary>
+    private static string AllocateVoucherNumber()
+    {
+        try
+        {
+            if (AppHost.JournalStore is not { } store)
+                throw new InvalidOperationException("The journal store is not initialized.");
+            var companyCode = AppState.CurrentCompanyCode ?? string.Empty;
+            return store.NextDocumentNumber(companyCode, "JV", DateOnly.FromDateTime(DateTime.Today));
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.NumberingAllocationFailed, ex, "JrnWin.AllocateVoucherNumber");
+            return string.Empty;
+        }
+    }
+
     private void ResetVoucher()
     {
-        _txtDocNo.Text = "JV-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+        _txtDocNo.Text = AllocateVoucherNumber();
         _currentJournalId = null;
         _btnDelete.IsEnabled = false;
         _loadedDraft = false;
