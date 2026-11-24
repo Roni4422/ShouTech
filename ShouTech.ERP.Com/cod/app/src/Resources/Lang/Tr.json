@@ -3084,7 +3084,10 @@
     "Retry": "Yeniden dene",
     "Requeued": "Mesaj yeniden deneme için kuyruğa alındı.",
     "SelectFailed": "Yeniden denenecek BAŞARISIZ bir mesaj seçin.",
-    "Failed": "Başarısız"
+    "Failed": "Başarısız",
+    "All": "Tümü",
+    "Queued": "Kuyrukta",
+    "Sent": "Gönderildi"
   },
   "BatchSerial": {
     "Title": "Parti / Seri Girişi",
@@ -3129,7 +3132,8 @@
     "User": "Kullanıcı",
     "Event": "Olay",
     "Details": "Ayrıntılar",
-    "Entry": "Yevmiye kaydı"
+    "Entry": "Yevmiye kaydı",
+    "Filter": "Filtre"
   },
   "Maintenance": {
     "Title": "Bakım",

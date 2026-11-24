@@ -3098,7 +3098,10 @@
     "Retry": "Retry",
     "Requeued": "The message was reset to QUEUED for retry.",
     "SelectFailed": "Select a FAILED message to retry.",
-    "Failed": "Failed"
+    "Failed": "Failed",
+    "All": "All",
+    "Queued": "Queued",
+    "Sent": "Sent"
   },
   "BatchSerial": {
     "Title": "Batch / Serial Capture",
@@ -3143,7 +3146,8 @@
     "User": "User",
     "Event": "Event",
     "Details": "Details",
-    "Entry": "Journal entry"
+    "Entry": "Journal entry",
+    "Filter": "Filter"
   },
   "Maintenance": {
     "Title": "Maintenance",

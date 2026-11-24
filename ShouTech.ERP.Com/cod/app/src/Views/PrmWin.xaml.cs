@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows;
 using ShouTech.App.Services;
 using ShouTech.App.Localization;
@@ -7,14 +7,26 @@ using ShouTech.Domain;
 
 namespace ShouTech.App.Views;
 
-public partial class PrmWin : Window, IWindowMode
+public partial class PrmWin : BaseWin, IWindowMode
 {
+    protected override string? ScheduleTintName => "Hickory";
+
     private readonly PrmWinVM _vm;
 
     /// <summary>Step 11 router identity (IWindowMode): the user whose
     /// permissions this window edits — an editor open for one user must
     /// never be reactivated for a request to edit another.</summary>
     public string ModeKey => _vm.UserId;
+
+    /// <summary>BaseWin localization hook (the window migrated from
+    /// Window to BaseWin in R5): the title comes from the catalog
+    /// and the XAML's LocProps texts re-resolve through UiLoczr —
+    /// on open and on every live language switch.</summary>
+    protected override void ApplyLocalizedText()
+    {
+        Title = Loc.Get("Permissions.Title", "User permissions");
+        UiLoczr.ApplyToWindow(this);
+    }
 
     public PrmWin(string userId)
     {
@@ -23,7 +35,6 @@ public partial class PrmWin : Window, IWindowMode
         // The permission gate runs on Loaded below, with the same
         // deny-close pattern as the other guarded windows.
         InitializeComponent();
-        VisuId.ApplyWindow(this);
         _vm = new PrmWinVM(userId);
         DataContext = _vm;
         Loaded += OnLoaded;
@@ -43,8 +54,6 @@ public partial class PrmWin : Window, IWindowMode
 
         try
         {
-            UiLoczr.ApplyToWindow(this);
-            LangDirSv.ApplyToWindow(this, App.CurrentLanguageCode);
             await _vm.LoadAsync();
         }
         catch (Exception ex)

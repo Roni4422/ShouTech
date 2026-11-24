@@ -629,6 +629,7 @@
     <SolidColorBrush x:Key="ScheduleTintSolaceBrush" Color="#F1E9DD"/>
     <SolidColorBrush x:Key="ScheduleTintThicketBrush" Color="#DDF1EF"/>
     <SolidColorBrush x:Key="ScheduleTintBrackenBrush" Color="#DDE2F1"/>
+    <SolidColorBrush x:Key="ScheduleTintHickoryBrush" Color="#EFE7DA"/>
 
     <SolidColorBrush
         x:Key="TableHeaderSalesBrush"

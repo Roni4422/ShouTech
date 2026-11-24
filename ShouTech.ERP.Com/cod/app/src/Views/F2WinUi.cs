@@ -39,7 +39,9 @@ internal static class F2Ui
         grid.CanUserResizeColumns = true;
         grid.SelectionMode = DataGridSelectionMode.Single;
         grid.SelectionUnit = DataGridSelectionUnit.FullRow;
-        grid.RowHeaderWidth = 0;
+        // Owner grid spec: numbered row headers on every schedule
+        // (start side; mirrors with FlowDirection) — centrally on.
+        DataGridTableBehavior.SetShowRowNumbers(grid, true);
         grid.GridLinesVisibility = DataGridGridLinesVisibility.Horizontal;
         grid.AlternationCount = 2;
         DataGridTableBehavior.SetEnableStandardContextMenu(grid, true);

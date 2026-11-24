@@ -72,7 +72,7 @@ indexed / total windows) is reported there.
 - `Invoices.CloseCash` → CloseCashWin: legacy window (standing flag: retirement is the owner's call)
 - `POS.DefinePOS` → DefManagerWin: generic definition editor (set: PosTerminals) — window is real and persists; per-set field completeness not yet audited
 - `POS.POSDiscounts` → DefManagerWin: generic definition editor (set: PosDiscounts) — window is real and persists; per-set field completeness not yet audited **R4: field-complete per docs/R4_STUDY.md → (a).**
-- `POS.SyncPOS` → PosSyncWin: thin window (139 lines) — limited surface, completeness not proven
+- ~~`POS.SyncPOS` → PosSyncWin~~ **R5 DONE → (a)**: status filter (All/Queued/Sent/Failed), numbered rows (central F2Ui), cataloged error reporting on refresh + retry; outbox viewer + FAILED→QUEUED retry verified real.
 - `Orders.DefineOrders` → DefManagerWin: generic definition editor (set: OrderDefinitions) — window is real and persists; per-set field completeness not yet audited
 - `Customers.CustomerPrices` → DefManagerWin: generic definition editor (set: CustomerPrices) — window is real and persists; per-set field completeness not yet audited **R4: field-complete per docs/R4_STUDY.md → (a).**
 - `Customers.CustomerDiscounts` → DefManagerWin: generic definition editor (set: CustomerDiscounts) — window is real and persists; per-set field completeness not yet audited **R4: field-complete per docs/R4_STUDY.md → (a).**
@@ -81,10 +81,10 @@ indexed / total windows) is reported there.
 - `SalesRep.AssignSalesRepTargets` → DefManagerWin: generic definition editor (set: RepTargets) — window is real and persists; per-set field completeness not yet audited **R4: field-complete per docs/R4_STUDY.md → (a).**
 - `SalesRep.HandheldDevices` → DefManagerWin: generic definition editor (set: Devices) — window is real and persists; per-set field completeness not yet audited
 - `SalesRep.DeviceRoutes` → DefManagerWin: generic definition editor (set: DeviceRoutes) — window is real and persists; per-set field completeness not yet audited
-- `Tools.ActivityLog` → ActivityLogWin: thin window (144 lines) — limited surface, completeness not proven
+- ~~`Tools.ActivityLog` → ActivityLogWin~~ **R5 DONE → (a)**: text filter over both audit sources (user/event/details), numbered rows, cataloged error reporting, selected tab persisted per user (WinPref via the BaseWin state hooks).
 - `Tools.Addons` → AddonsWin: thin window (120 lines) — limited surface, completeness not proven
-- `OtherTools.Permissions` → PrmWin: thin window (83 lines) — limited surface, completeness not proven
-- `OtherTools.PermissionTemplates` → PrmWin: thin window (83 lines) — limited surface, completeness not proven
+- ~~`OtherTools.Permissions` → PrmWin~~ **R5 DONE → (a)**: migrated from Window to BaseWin (shell context, whole-window RTL mirroring, geometry/state persistence, F1 topic), localized via the existing Permissions Lang section, own schedule tint (Hickory). The editor itself was already real (per-user permission exceptions via PermAdminSvc).
+- ~~`OtherTools.PermissionTemplates` → PrmWin~~ **R5 DONE → (a)**: same window, same completion as Permissions above.
 - `OtherTools.CustomFields` → DefManagerWin: generic definition editor (set: CustomFields) — window is real and persists; per-set field completeness not yet audited
 - `OtherTools.UnitsOfMeasure` → DefManagerWin: generic definition editor (set: UnitsOfMeasure) — window is real and persists; per-set field completeness not yet audited **R4: field-complete per docs/R4_STUDY.md → (a).**
 - `OtherTools.PaymentMethods` → DefManagerWin: generic definition editor (set: PaymentMethods) — window is real and persists; per-set field completeness not yet audited **R4: field-complete per docs/R4_STUDY.md → (a).**
@@ -138,8 +138,15 @@ indexed / total windows) is reported there.
   (a)); UnitsOfMeasure gained names (migration 121); 11 entries
   stay (b) with named missing consumers (document-type engine,
   delivery/handheld/platform consumers). (b) total 29 → 17.
-- **R5 — thin windows (6)**: PosSyncWin, ActivityLogWin, AddonsWin,
-  PrmWin, LicenseWin — complete-pillars pass per window.
+- **R5 — thin windows (6)**: DONE (2026-11-24) per
+  docs/R5_STUDY.md — PosSyncWin, ActivityLogWin, PrmWin (×2
+  entries) completed → (a). AddonsWin and LicenseWin stay (b)
+  BY DESIGN: they are the commercial licensing phase's
+  foundation (honest read-only catalogue / real license info +
+  online validation; no runtime toggle or renewal API exists —
+  building one now would pre-decide D1/D2/D5). (b) total
+  17 → 14 (11 definition entries awaiting module consumers +
+  AddonsWin + LicenseWin + CloseCashWin).
 - Comparisons for the remaining (a) windows are recorded
   progressively as their families are touched; a window's
   comparison column flips to "done" only with its table written.
@@ -275,7 +282,7 @@ indexed / total windows) is reported there.
 | 125 | POS.POSCashReport | PosCashRptWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
 | 126 | POS.Performance | PosPerfRptWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
 | 127 | POS.POSDiscounts | DefManagerWin | RibbonNav | a | central ✓ | ✓ | pending | generic definition editor (set: PosDiscounts) — window is real and persists; per-set field completeness not yet audited |
-| 128 | POS.SyncPOS | PosSyncWin | RibbonNav | b | central ✓ | ✓ | pending | thin window (139 lines) — limited surface, completeness not proven |
+| 128 | POS.SyncPOS | PosSyncWin | RibbonNav | a | central ✓ | ✓ | pending | R5: status filter, numbered rows, cataloged error reporting |
 | 129 | POS.AdjustPrice | PriceListWin | RibbonNav | a | App handler ✓ | ✓ | pending |  |
 | 130 | POS.AdjustQuantity | WhsWin | RibbonNav — stock-count/adjustment mode | a | central ✓ | ✓ | pending |  |
 | 131 | POS.DeleteMaterial | MatDirWin | RibbonNav | a | central ✓ | — | in grid/directory program |  |
@@ -378,12 +385,12 @@ indexed / total windows) is reported there.
 | 228 | Tools.French | — | UNRESOLVED | c | central ✓ | n/a | pending | no handler anywhere — falls into the generic module workspace; the named action (language switch) never happens |
 | 229 | Tools.Turkish | — | UNRESOLVED | c | central ✓ | n/a | pending | no handler anywhere — falls into the generic module workspace; the named action (language switch) never happens |
 | 230 | Tools.ChangePassword | ChangePasswordWin | RibbonNav | a | central ✓ | ✓ | pending |  |
-| 231 | Tools.ActivityLog | ActivityLogWin | RibbonNav | b | central ✓ | ✓ | pending | thin window (144 lines) — limited surface, completeness not proven |
+| 231 | Tools.ActivityLog | ActivityLogWin | RibbonNav | a | central ✓ | ✓ | pending | R5: text filter, numbered rows, cataloged errors, tab persisted |
 | 232 | Tools.Addons | AddonsWin | RibbonNav | b | central ✓ | ✓ | pending | thin window (120 lines) — limited surface, completeness not proven |
 | 233 | Tools.AI | FinancialAnalysisWin | RibbonNav | a | central ✓ | ✓ | pending |  |
 | 234 | OtherTools.Rotation | RolloverWin | RibbonNav | a | central ✓ | ✓ | pending |  |
-| 235 | OtherTools.Permissions | PrmWin | RibbonNav | b | App handler ✓ | — | pending | thin window (83 lines) — limited surface, completeness not proven |
-| 236 | OtherTools.PermissionTemplates | PrmWin | RibbonNav | b | App handler ✓ | — | pending | thin window (83 lines) — limited surface, completeness not proven |
+| 235 | OtherTools.Permissions | PrmWin | RibbonNav | a | central ✓ | ✓ | pending | R5: BaseWin migration (context/RTL/persistence/F1), Hickory tint |
+| 236 | OtherTools.PermissionTemplates | PrmWin | RibbonNav | a | central ✓ | ✓ | pending | R5: BaseWin migration (context/RTL/persistence/F1), Hickory tint |
 | 237 | OtherTools.CustomFields | DefManagerWin | RibbonNav | b | central ✓ | ✓ | pending | generic definition editor (set: CustomFields) — window is real and persists; per-set field completeness not yet audited |
 | 238 | RestoreCompany.Restore | BkpWin | MWin button special | a | App handler ✓ | — | pending |  |
 | 239 | OtherTools.UnitsOfMeasure | DefManagerWin | RibbonNav | a | central ✓ | ✓ | pending | generic definition editor (set: UnitsOfMeasure) — window is real and persists; per-set field completeness not yet audited |

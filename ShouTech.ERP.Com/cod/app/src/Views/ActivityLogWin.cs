@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using ShouTech.App.Services;
 using ShouTech.Application.Services;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 
 namespace ShouTech.App.Views;
@@ -26,6 +29,7 @@ public sealed class ActivityLogWin : BaseWin
 
     private readonly DatePicker _from = new();
     private readonly DatePicker _to = new();
+    private readonly TextBox _filterText = new();
     private readonly TabControl _tabs = new();
     private readonly TabItem _securityTab = new();
     private readonly TabItem _journalTab = new();
@@ -75,6 +79,9 @@ public sealed class ActivityLogWin : BaseWin
         filter.Margin = new Thickness(0, 0, 0, 8);
         F2Ui.AddField(_labels, filter, 0, 0, "ActivityLog.From", _from);
         F2Ui.AddField(_labels, filter, 0, 1, "ActivityLog.To", _to);
+        _filterText.Width = 220;
+        _filterText.TextChanged += (_, _) => ApplyFilter();
+        F2Ui.AddField(_labels, filter, 1, 0, "ActivityLog.Filter", _filterText);
         DockPanel.SetDock(filter, Dock.Top);
         content.Children.Add(filter);
 
@@ -127,17 +134,43 @@ public sealed class ActivityLogWin : BaseWin
             _security.AddRange(security);
             _journal.Clear();
             _journal.AddRange(journal);
-            _securityGrid.ItemsSource = null;
-            _securityGrid.ItemsSource = _security;
-            _journalGrid.ItemsSource = null;
-            _journalGrid.ItemsSource = _journal;
+            ApplyFilter();
             UpdateStatus();
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "ActivityLogWin.RefreshAsync");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
+
+    /// <summary>Client-side user/event/details filter over the
+    /// loaded rows (R5 — the audit-review filter shape the
+    /// benchmarks converge on).</summary>
+    private void ApplyFilter()
+    {
+        var text = _filterText.Text.Trim();
+        bool Hit(string? value) => text.Length == 0 || (value?.Contains(text, StringComparison.OrdinalIgnoreCase) ?? false);
+        _securityGrid.ItemsSource = null;
+        _securityGrid.ItemsSource = text.Length == 0
+            ? _security
+            : _security.Where(r => Hit(r.Username) || Hit(r.EventType) || Hit(r.Details)).ToList();
+        _journalGrid.ItemsSource = null;
+        _journalGrid.ItemsSource = text.Length == 0
+            ? _journal
+            : _journal.Where(r => Hit(r.Actor) || Hit(r.EventType) || Hit(r.EntryId) || Hit(r.Details)).ToList();
+    }
+
+    // The selected tab is part of the user's window state
+    // (WINSTATE hooks): reopening lands on the tab last used.
+    protected override void OnRestoreWindowState()
+    {
+        if (int.TryParse(PrefGet("Tab"), out var tab) && tab >= 0 && tab < _tabs.Items.Count)
+            _tabs.SelectedIndex = tab;
+    }
+
+    protected override void OnSaveWindowState()
+        => PrefSet("Tab", _tabs.SelectedIndex.ToString(CultureInfo.InvariantCulture));
 
     private void UpdateStatus()
         => _statusBar.Text = $"{T("ActivityLog.SecurityTab")}: {_security.Count} · {T("ActivityLog.JournalTab")}: {_journal.Count}";

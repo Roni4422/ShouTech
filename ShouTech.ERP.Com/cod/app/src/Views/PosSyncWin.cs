@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using ShouTech.App.Services;
 using ShouTech.Application.Services;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 
 namespace ShouTech.App.Views;
@@ -25,6 +27,7 @@ public sealed class PosSyncWin : BaseWin
 
     private readonly DataGrid _grid = new();
     private readonly TextBlock _statusBar = new();
+    private readonly ComboBox _statusFilter = new();
     private readonly Button _retryButton = new();
     private readonly Button _refreshButton = new();
     private readonly Button _closeButton = new();
@@ -64,6 +67,23 @@ public sealed class PosSyncWin : BaseWin
         _closeButton.Click += (_, _) => Close();
         root.Children.Add(F2Ui.BottomBar(_retryButton, _refreshButton, _closeButton));
 
+        // Status filter strip (R5): All / Queued / Sent / Failed
+        // over the loaded outbox rows.
+        var filterStrip = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+        var filterLabel = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
+        _labels.Add((filterLabel, "PosSync.Status"));
+        filterStrip.Children.Add(filterLabel);
+        _statusFilter.Width = 160;
+        _statusFilter.Items.Add(new ComboBoxItem { Tag = "", Content = T("PosSync.All") });
+        _statusFilter.Items.Add(new ComboBoxItem { Tag = "QUEUED", Content = T("PosSync.Queued") });
+        _statusFilter.Items.Add(new ComboBoxItem { Tag = "SENT", Content = T("PosSync.Sent") });
+        _statusFilter.Items.Add(new ComboBoxItem { Tag = "FAILED", Content = T("PosSync.Failed") });
+        _statusFilter.SelectedIndex = 0;
+        _statusFilter.SelectionChanged += (_, _) => ApplyFilter();
+        filterStrip.Children.Add(_statusFilter);
+        DockPanel.SetDock(filterStrip, Dock.Top);
+        root.Children.Add(filterStrip);
+
         F2Ui.ConfigureGrid(_grid);
         _grid.Columns.Add(F2Ui.TextCol(_headers, "PosSync.Channel", nameof(OutboundMessageRow.Channel), 90, center: true));
         _grid.Columns.Add(F2Ui.TextCol(_headers, "PosSync.Recipient", nameof(OutboundMessageRow.Recipient), 190));
@@ -83,6 +103,16 @@ public sealed class PosSyncWin : BaseWin
     {
         Title = T("PosSync.Title");
         F2Ui.ApplyTexts(_labels, _headers, new[] { _retryButton, _refreshButton, _closeButton }, T);
+        foreach (ComboBoxItem item in _statusFilter.Items)
+        {
+            item.Content = (item.Tag as string) switch
+            {
+                "QUEUED" => T("PosSync.Queued"),
+                "SENT" => T("PosSync.Sent"),
+                "FAILED" => T("PosSync.Failed"),
+                _ => T("PosSync.All")
+            };
+        }
         UpdateStatus();
     }
 
@@ -98,14 +128,23 @@ public sealed class PosSyncWin : BaseWin
             var rows = await _service.GetOutboundMessagesAsync(CurrentCompanyCode);
             _rows.Clear();
             _rows.AddRange(rows);
-            _grid.ItemsSource = null;
-            _grid.ItemsSource = _rows;
+            ApplyFilter();
             UpdateStatus();
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PosSyncWin.RefreshAsync");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private void ApplyFilter()
+    {
+        var status = (_statusFilter.SelectedItem as ComboBoxItem)?.Tag as string ?? string.Empty;
+        _grid.ItemsSource = null;
+        _grid.ItemsSource = status.Length == 0
+            ? _rows
+            : _rows.Where(r => string.Equals(r.Status, status, StringComparison.OrdinalIgnoreCase)).ToList();
     }
 
     private void UpdateStatus()
@@ -133,6 +172,7 @@ public sealed class PosSyncWin : BaseWin
         }
         catch (Exception ex)
         {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PosSyncWin.RetryAsync");
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
