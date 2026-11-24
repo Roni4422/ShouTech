@@ -51,6 +51,34 @@ public static class StkPost
         }
     }
 
+    // Period-close guard (docs/PERIOD_CLOSE_STUDY.md SS3): stock-only
+    // postings never resolve a GL period, so they consult the same fiscal
+    // calendar here. Refuses with ACC-5021 naming the period when the
+    // movement date falls inside a CLOSED/LOCKED period (or a closed
+    // fiscal year); silent when no period covers the date, so companies
+    // that never defined fiscal years keep posting stock as before.
+    private static void EnsurePeriodOpenForStock(DbConnection connection, DbTransaction tx, DateTime date)
+    {
+        var companyCode = AppState.CurrentCompanyCode?.Trim();
+        if (string.IsNullOrWhiteSpace(companyCode))
+            return; // callers validate the current company separately
+        using var cmd = connection.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "SELECT company_id FROM companies WHERE company_code = @code";
+        var codeParam = cmd.CreateParameter();
+        codeParam.ParameterName = "@code";
+        codeParam.Value = companyCode;
+        cmd.Parameters.Add(codeParam);
+        var value = cmd.ExecuteScalar();
+        if (value is null || value is DBNull)
+            return;
+        var companyId = value is Guid parsed
+            ? parsed
+            : Guid.Parse(Convert.ToString(value, CultureInfo.InvariantCulture)!);
+        GlPosting.EnsureOpenPeriodForDate(
+            connection, tx, ProviderName, companyId, DateOnly.FromDateTime(date));
+    }
+
     public static void ApplyDocument(DbConnection connection, DbTransaction tx, InvDoc doc)
     {
         ArgumentNullException.ThrowIfNull(doc);
@@ -67,6 +95,8 @@ public static class StkPost
         // and counts through PostCount (delta-based); this generic
         // document path must never move stock for them.
         if (doc.Kind is InvDocKind.StockTransfer or InvDocKind.InventoryCount) return;
+
+        EnsurePeriodOpenForStock(connection, tx, doc.DocDate);
 
         var company = AppState.CurrentCompanyCode ?? string.Empty;
         var isOut = doc.Kind is InvDocKind.SalesInvoice or InvDocKind.PosSale or InvDocKind.PurchaseReturn or InvDocKind.StockOut;
@@ -500,6 +530,7 @@ public static class StkPost
             && TryReadCompletedOperation(connection, tx, company, operationKey, "InventoryCount",
                 out _, out var completedMovementCount))
             return completedMovementCount;
+        EnsurePeriodOpenForStock(connection, tx, countDate);
         EnsureWarehouseIsActive(connection, tx, company, warehouseId);
 
         var documentNo = $"CNT-{countDate:yyyyMMdd}-{Guid.NewGuid():N}";
@@ -938,6 +969,7 @@ public static class StkPost
                 && TryReadCompletedOperation(connection, tx, company, operationKey, "StockTransfer",
                     out var completedDocumentNo, out _))
                 return completedDocumentNo;
+            EnsurePeriodOpenForStock(connection, tx, transferDate);
             EnsureWarehouseIsActive(connection, tx, company, sourceWarehouseId);
             EnsureWarehouseIsActive(connection, tx, company, targetWarehouseId);
 

@@ -763,8 +763,73 @@ public static class GlPosting
         Add(period, "@date", entryDateValue);
         var value = period.ExecuteScalar();
         if (value is null || value is DBNull)
+        {
+            // Distinguish "no period is defined for this date" (the historic
+            // refusal, kept) from "the period covering this date is closed"
+            // — the latter is a catalog error that NAMES the period
+            // (ACC-5021, docs/PERIOD_CLOSE_STUDY.md SS3).
+            var covering = FindCoveringPeriod(connection, transaction, prov, companyId, entryDateValue);
+            if (covering is not null)
+                throw PeriodClosedError(covering.Value);
             throw new InvalidOperationException("No open fiscal period matches the document date and company.");
+        }
         return Convert.ToString(value, CultureInfo.InvariantCulture)!;
+    }
+
+    /// <summary>
+    /// The period-close guard for posting paths that do NOT resolve a GL
+    /// period (the stock engine's stock-only documents — study SS3): refuses
+    /// with ACC-5021 when the date falls inside a CLOSED/LOCKED period (or a
+    /// closed fiscal year). Where NO period covers the date the guard stays
+    /// silent — companies that never defined fiscal years keep posting
+    /// stock exactly as before; the GL resolver above keeps its stricter
+    /// refusal for journal-bearing postings.
+    /// </summary>
+    public static void EnsureOpenPeriodForDate(
+        DbConnection connection, DbTransaction? transaction, string prov, Guid companyId, DateOnly entryDate)
+    {
+        object entryDateValue = prov == "PostgreSQL"
+            ? entryDate
+            : entryDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var covering = FindCoveringPeriod(connection, transaction, prov, companyId, entryDateValue);
+        if (covering is null)
+            return;
+        if (covering.Value.Status != "OPEN" || covering.Value.YearClosed)
+            throw PeriodClosedError(covering.Value);
+    }
+
+    private readonly record struct CoveringPeriod(string Name, string StartDate, string EndDate, string Status, bool YearClosed);
+
+    private static CoveringPeriod? FindCoveringPeriod(
+        DbConnection connection, DbTransaction? transaction, string prov, Guid companyId, object entryDateValue)
+    {
+        using var command = CreateCommand(connection, transaction,
+            "SELECT fp.period_name, fp.start_date, fp.end_date, fp.status, fy.is_closed FROM fiscal_periods fp JOIN fiscal_years fy ON fy.fiscal_year_id=fp.fiscal_year_id WHERE fp.company_id=@company AND @date BETWEEN fp.start_date AND fp.end_date ORDER BY fp.start_date");
+        Add(command, "@company", FormatGuid(prov, companyId));
+        Add(command, "@date", entryDateValue);
+        using var reader = command.ExecuteReader();
+        if (!reader.Read())
+            return null;
+        return new CoveringPeriod(
+            Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty,
+            FormatDateValue(reader.GetValue(1)),
+            FormatDateValue(reader.GetValue(2)),
+            Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture) ?? string.Empty,
+            Convert.ToBoolean(reader.GetValue(4), CultureInfo.InvariantCulture));
+    }
+
+    private static string FormatDateValue(object value) => value switch
+    {
+        DateTime dt => dt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        DateOnly d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty
+    };
+
+    private static AppError PeriodClosedError(CoveringPeriod period)
+    {
+        var effectiveStatus = period.YearClosed && period.Status == "OPEN" ? "CLOSED" : period.Status;
+        return new AppError(ErrorCodes.PeriodClosedPosting,
+            period.Name, period.StartDate, period.EndDate, effectiveStatus);
     }
 
     private static void AddAudit(DbConnection connection, DbTransaction transaction, string prov,
