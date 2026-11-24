@@ -952,5 +952,17 @@
  "NUM-8303": {
   "name": "NumberingAllocationFailed",
   "message": "A new number could not be allocated. Check the database connection and retry."
+ },
+ "INF-8401": {
+  "code": "INF-8401",
+  "name": "InfoEntityNotFound",
+  "message": "The selected item was not found.",
+  "hint": "It may have been deleted or belongs to another company. Refresh and select again."
+ },
+ "INF-8402": {
+  "code": "INF-8402",
+  "name": "InfoLoadFailed",
+  "message": "The information could not be loaded.",
+  "hint": "Check the database connection and try again."
  }
 }

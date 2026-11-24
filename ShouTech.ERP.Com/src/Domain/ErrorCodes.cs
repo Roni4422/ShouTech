@@ -230,6 +230,13 @@ public static class ErrorCodes
     // Allocation returned an invalid value / failed.
     public const string NumberingAllocationFailed = "NUM-8303";
 
+    // ---- INF 8401-8499 (global Information Window, INFO_WINDOW_STUDY) ----
+    // The entity selected for the Information Window no longer exists
+    // (deleted, or in another company).
+    public const string InfoEntityNotFound = "INF-8401";
+    // The information sheet could not be loaded from the data stores.
+    public const string InfoLoadFailed = "INF-8402";
+
     // ---- POS 1001-1999 (POS full build, migration 066) ------------------
     // The POS module takes its own prefix block, like MFG / HR.
     public const string PosNoOpenSession = "POS-1001";

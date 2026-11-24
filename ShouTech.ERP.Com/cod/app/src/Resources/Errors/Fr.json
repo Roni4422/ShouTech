@@ -952,5 +952,17 @@
  "NUM-8303": {
   "name": "NumberingAllocationFailed",
   "message": "Impossible d'allouer un nouveau numéro. Vérifiez la connexion à la base de données et réessayez."
+ },
+ "INF-8401": {
+  "code": "INF-8401",
+  "name": "InfoEntityNotFound",
+  "message": "L'élément sélectionné est introuvable.",
+  "hint": "Il a peut-être été supprimé ou appartient à une autre société. Actualisez puis sélectionnez à nouveau."
+ },
+ "INF-8402": {
+  "code": "INF-8402",
+  "name": "InfoLoadFailed",
+  "message": "Les informations n'ont pas pu être chargées.",
+  "hint": "Vérifiez la connexion à la base de données et réessayez."
  }
 }

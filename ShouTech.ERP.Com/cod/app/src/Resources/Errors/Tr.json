@@ -952,5 +952,17 @@
  "NUM-8303": {
   "name": "NumberingAllocationFailed",
   "message": "Yeni bir numara ayrılamadı. Veritabanı bağlantısını kontrol edip tekrar deneyin."
+ },
+ "INF-8401": {
+  "code": "INF-8401",
+  "name": "InfoEntityNotFound",
+  "message": "Seçilen öğe bulunamadı.",
+  "hint": "Silinmiş veya başka bir şirkete ait olabilir. Yenileyip tekrar seçin."
+ },
+ "INF-8402": {
+  "code": "INF-8402",
+  "name": "InfoLoadFailed",
+  "message": "Bilgiler yüklenemedi.",
+  "hint": "Veritabanı bağlantısını kontrol edip tekrar deneyin."
  }
 }
