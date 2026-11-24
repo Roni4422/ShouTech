@@ -134,6 +134,18 @@ public sealed class UsrPref
     /// <summary>Time-of-day display pattern (default "HH:mm").</summary>
     public string TimeFormat { get; set; } = "HH:mm";
 
+    // ---- Printing (per-user copy counts; the company print
+    // settings themselves live in print_settings, migration 125).
+    // Consumed by PrintSetSvc.ApplyDialogSettings through the
+    // invoice print path (invoices) and the JrnWin/CshWin print
+    // paths (vouchers).
+
+    /// <summary>Copies printed per invoice print (default 1).</summary>
+    public int PrintInvoiceCopies { get; set; } = 1;
+
+    /// <summary>Copies printed per voucher print (default 1).</summary>
+    public int PrintVoucherCopies { get; set; } = 1;
+
     // ================================================================
     //  Behavior
     // ================================================================
@@ -325,6 +337,12 @@ public sealed class UsrPref
         // Legacy aliases follow the canonical price precision.
         DecimalPlaces = PriceDecimalPlaces;
         DecimalDigits = PriceDecimalPlaces;
+
+        // Print copies — at least one, at most nine.
+        if (PrintInvoiceCopies < 1) PrintInvoiceCopies = 1;
+        if (PrintInvoiceCopies > 9) PrintInvoiceCopies = 9;
+        if (PrintVoucherCopies < 1) PrintVoucherCopies = 1;
+        if (PrintVoucherCopies > 9) PrintVoucherCopies = 9;
 
         // TimeFormat — must be one of the supported patterns.
         if (string.IsNullOrWhiteSpace(TimeFormat))

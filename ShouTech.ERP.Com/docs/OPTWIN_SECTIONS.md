@@ -214,7 +214,7 @@ one control point for the whole program's paper identity.
 | Field | Status | Consumer |
 |---|---|---|
 | Company logo pick / clear | **M** | `companies.logo_data` (BLOB/BYTEA) → header composer → InvPrn + RptRend headers. Edited here (current company), per the evidence. |
-| Header field checkboxes: name, address, phone, mobile, website, email, commercial register, licence | **M** — one bool column per field in `print_settings` | Header composer includes exactly the checked profile fields. (Our profile has all of these: Phone, Mobile, Website, Email, commercial_registration, License.) |
+| Header field checkboxes: name, address, phone, mobile, website, email, commercial register, licence | **M** — one bool column per field in `print_settings` | Header composer includes exactly the checked profile fields. **Correction (as built, Landing 2):** ShouTech stores ONE value for licence and commercial register — the `companies.commercial_registration` column carries the profile's License field (`Company.cs` StoredCoRec mapping) — so Phenix's two checkboxes collapse into ONE header switch in our section; a second switch would be a fake field bound to the same value. |
 | Header fields: phone 2, fax, PO box, industrial register (separate) | **A** | The company profile has no such fields — nothing to print. Recorded; if the profile grows them, the checkboxes arrive with the fields. |
 | Free-text print header | **M** — `print_settings.header_text` | Composer emits it under the header block on invoices + reports. |
 | Print previous customer balance ✓ | **M** — `print_settings.print_previous_balance` | InvPrn party band: previous balance = party ledger balance **before** this document (same reader the Information Window uses), printed only for party documents. |
@@ -384,7 +384,7 @@ users). **Confirm on exit** → **U** (grep-verified: `UsrPref.
 ConfirmOnExit` is read by nothing outside OptWin) → wired in
 Landing 1 to the shell exit path (MWin close / application exit
 asks when the pref is on). **Idle auto-lock** →
-`UsrPref.AutoLockMinutes` is likewise **U** (only OptWin touches
+`UsrPref.AutoLockMinutes` is likewise **U** (only OptWin touches it). **Outcome (Landing 1):** no lock surface exists anywhere in the program (no LockWin/session-lock), so the field stays visibly a named deferral — wiring it means building a shell lock screen, which is a shell feature, not an options field; it is NOT presented as live behaviour.
 it); Landing 1 wires it if the shell already has a lock surface,
 otherwise it is recorded here as a named deferral — a lock screen
 is a shell feature, not an options field. The remaining **guardrails**

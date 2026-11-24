@@ -62,6 +62,8 @@ RunSection("A", check =>
 });
 
 RunSection("B", check => PrintConsumerChecks.Run(check));
+RunSection("D", check => PrintSettingsChecks.RunComposer(check));
+RunSection("E", check => PrintSettingsChecks.RunDb(check));
 
 Console.WriteLine($"== FmtHarness: {pass} PASS / {fail} FAIL ==");
 return fail == 0 ? 0 : 1;

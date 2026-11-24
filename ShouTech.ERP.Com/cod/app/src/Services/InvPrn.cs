@@ -8,6 +8,7 @@ using System.Windows.Documents;
 using System.Windows.Media;
 using Microsoft.Win32;
 using ShouTech.App.Common;
+using ShouTech.App.Configuration;
 using ShouTech.App.Reporting;
 using ShouTech.App.Reporting.Invoices;
 using ShouTech.Domain;
@@ -23,11 +24,60 @@ public static class InvPrn
     public static void Print(InvDoc doc, string companyName, DocDesign? design = null, string? companyAddress = null)
     {
         ArgumentNullException.ThrowIfNull(doc);
-        var visual = BuildPage(doc, companyName, design, companyAddress);
+        var visual = BuildPage(doc, companyName, design, companyAddress,
+            PrintSetSvc.ResolveHeader(), ResolveExtras(doc));
         var paginator = new InvDocumentPaginator(visual);
         var dlg = new PrintDialog();
+        int copies = 1;
+        try { copies = UsrPref.Load().PrintInvoiceCopies; }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "InvPrn.Print.Copies");
+        }
+        PrintSetSvc.ApplyDialogSettings(dlg, copies);
         if (dlg.ShowDialog() == true)
             dlg.PrintDocument(paginator, doc.DocNo);
+    }
+
+    /// <summary>Resolves the Options-governed extras for one
+    /// document (print settings §3.3): previous/current party
+    /// balance from party_ledger (excluding this document's own
+    /// rows for "previous") and the posting-user line. Any failure
+    /// degrades to no extras — printing never breaks over them.</summary>
+    private static PrintSetSvc.PrintExtras? ResolveExtras(InvDoc doc)
+    {
+        try
+        {
+            var settings = PrintSetSvc.Load();
+            decimal? previous = null, current = null;
+            var partyKind = doc.Kind switch
+            {
+                InvDocKind.SalesInvoice or InvDocKind.SalesReturn or InvDocKind.PosSale => "C",
+                InvDocKind.PurchaseInvoice or InvDocKind.PurchaseReturn => "S",
+                _ => null
+            };
+            if ((settings.PrintPreviousBalance || settings.PrintCurrentBalance) &&
+                partyKind is not null && doc.PartyId is long partyId)
+            {
+                var (curr, prev) = PrintSetSvc.PartyBalances(
+                    partyKind, partyId, doc.KindCode, doc.DocId);
+                if (settings.PrintPreviousBalance) previous = prev;
+                if (settings.PrintCurrentBalance) current = curr;
+            }
+            var postedBy = settings.PrintUserOnInvoice
+                ? (!string.IsNullOrWhiteSpace(doc.PostedBy)
+                    ? doc.PostedBy
+                    : AppState.CurrentUser?.Username)
+                : null;
+            if (previous is null && current is null && string.IsNullOrWhiteSpace(postedBy))
+                return null;
+            return new PrintSetSvc.PrintExtras(previous, current, postedBy);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "InvPrn.ResolveExtras");
+            return null;
+        }
     }
 
     public static void ExportPdf(InvDoc doc, string companyName, DocDesign? design = null, string? companyAddress = null)
@@ -40,7 +90,8 @@ public static class InvPrn
         };
         if (dlg.ShowDialog() != true) return;
 
-        var visual = BuildPage(doc, companyName, design, companyAddress);
+        var visual = BuildPage(doc, companyName, design, companyAddress,
+            PrintSetSvc.ResolveHeader(), ResolveExtras(doc));
         visual.Measure(new Size(794, 1123)); // A4 at 96 DPI
         visual.Arrange(new Rect(0, 0, 794, 1123));
         visual.UpdateLayout();
@@ -78,7 +129,8 @@ public static class InvPrn
     /// A null design uses DocDesign.BuiltInDefault — the historic
     /// layout as a design.
     /// </summary>
-    private static Border BuildPage(InvDoc doc, string companyName, DocDesign? design, string? companyAddress)
+    private static Border BuildPage(InvDoc doc, string companyName, DocDesign? design, string? companyAddress,
+        PrintSetSvc.PrintHeader? header = null, PrintSetSvc.PrintExtras? extras = null)
     {
         design ??= DocDesign.BuiltInDefault();
         var accent = ParseBrush(design.HeaderBackColor, Color.FromRgb(0x51, 0x70, 0x8E));
@@ -95,22 +147,70 @@ public static class InvPrn
         root.Child = stack;
 
         // ── Header band ──
-        stack.Children.Add(new TextBlock
+        // When the Options-governed header resolves (print settings,
+        // §3.3), it replaces the historic name+address pair: optional
+        // logo, then the composed lines (first line = company name).
+        // A null header keeps the historic layout byte-for-byte.
+        if (header is not null)
         {
-            Text = companyName,
-            FontSize = 18,
-            FontWeight = FontWeights.Bold,
-            Foreground = accent
-        });
-        if (design.ShowCompanyAddress && !string.IsNullOrWhiteSpace(companyAddress))
+            if (header.LogoData is { Length: > 0 } logoBytes)
+            {
+                try
+                {
+                    var bitmap = new System.Windows.Media.Imaging.BitmapImage();
+                    using (var stream = new System.IO.MemoryStream(logoBytes))
+                    {
+                        bitmap.BeginInit();
+                        bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                        bitmap.StreamSource = stream;
+                        bitmap.EndInit();
+                    }
+                    bitmap.Freeze();
+                    stack.Children.Add(new System.Windows.Controls.Image
+                    {
+                        Source = bitmap,
+                        Height = 56,
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        Margin = new Thickness(0, 0, 0, 6)
+                    });
+                }
+                catch (Exception ex)
+                {
+                    AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "InvPrn.BuildPage.Logo");
+                }
+            }
+            for (var i = 0; i < header.Lines.Count; i++)
+            {
+                stack.Children.Add(new TextBlock
+                {
+                    Text = header.Lines[i],
+                    FontSize = i == 0 ? 18 : 10.5,
+                    FontWeight = i == 0 ? FontWeights.Bold : FontWeights.Normal,
+                    Foreground = i == 0 ? accent : Brushes.Black,
+                    Opacity = i == 0 ? 1 : 0.8,
+                    TextWrapping = TextWrapping.Wrap
+                });
+            }
+        }
+        else
         {
             stack.Children.Add(new TextBlock
             {
-                Text = companyAddress,
-                FontSize = 10.5,
-                Opacity = 0.8,
-                TextWrapping = TextWrapping.Wrap
+                Text = companyName,
+                FontSize = 18,
+                FontWeight = FontWeights.Bold,
+                Foreground = accent
             });
+            if (design.ShowCompanyAddress && !string.IsNullOrWhiteSpace(companyAddress))
+            {
+                stack.Children.Add(new TextBlock
+                {
+                    Text = companyAddress,
+                    FontSize = 10.5,
+                    Opacity = 0.8,
+                    TextWrapping = TextWrapping.Wrap
+                });
+            }
         }
         stack.Children.Add(new TextBlock
         {
@@ -136,6 +236,30 @@ public static class InvPrn
                 FontSize = 13,
                 Margin = new Thickness(0, 0, 0, 8)
             });
+            // Options-governed balance lines (§3.3): previous =
+            // party_ledger balance before this document, current =
+            // including it; resolved by ResolveExtras, formatted by
+            // the program-wide NumFmt.
+            if (extras?.PreviousBalance is { } previousBalance)
+            {
+                stack.Children.Add(new TextBlock
+                {
+                    Text = $"Previous balance: {NumFmt.FormatMoney(previousBalance)} {doc.CurrencyCode}",
+                    FontSize = 11,
+                    Opacity = 0.85,
+                    Margin = new Thickness(0, 0, 0, 2)
+                });
+            }
+            if (extras?.CurrentBalance is { } currentBalance)
+            {
+                stack.Children.Add(new TextBlock
+                {
+                    Text = $"Current balance: {NumFmt.FormatMoney(currentBalance)} {doc.CurrencyCode}",
+                    FontSize = 11,
+                    Opacity = 0.85,
+                    Margin = new Thickness(0, 0, 0, 8)
+                });
+            }
         }
 
         // ── Document meta band ──
@@ -283,6 +407,18 @@ public static class InvPrn
                 sigGrid.Children.Add(cell);
             }
             stack.Children.Add(sigGrid);
+        }
+
+        // ── Posting-user line (Options-governed, §3.3) ──
+        if (!string.IsNullOrWhiteSpace(extras?.PostedBy))
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = $"Posted by: {extras.PostedBy}",
+                FontSize = 10,
+                Opacity = 0.7,
+                Margin = new Thickness(0, 18, 0, 0)
+            });
         }
 
         return root;

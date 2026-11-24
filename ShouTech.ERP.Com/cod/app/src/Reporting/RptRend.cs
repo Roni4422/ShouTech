@@ -46,6 +46,16 @@ public static class RptRend
         /// <summary>Company address block lines, rendered under the
         /// company name when the style asks for them.</summary>
         public string? CompanyAddress { get; init; }
+
+        /// <summary>Options-governed print header (print settings,
+        /// OPTWIN_SECTIONS §3.3): when present, these composed lines
+        /// (plus the optional logo) replace the company name/address
+        /// pair in the report header — one paper identity for the
+        /// whole program. Null = the historic header.</summary>
+        public IReadOnlyList<string>? HeaderLines { get; init; }
+
+        /// <summary>Company logo bytes for the governed header.</summary>
+        public byte[]? LogoData { get; init; }
     }
 
     private const double Margin = 36;
@@ -122,23 +132,73 @@ public static class RptRend
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var titleStack = new StackPanel();
-        titleStack.Children.Add(new TextBlock
+        if (model.HeaderLines is { Count: > 0 } headerLines)
         {
-            Text = model.CompanyName,
-            FontSize = 13,
-            Foreground = fg
-        });
-        if (style is { ShowCompanyAddress: true } &&
-            !string.IsNullOrWhiteSpace(model.CompanyAddress))
+            // Options-governed header (§3.3): logo + composed lines
+            // replace the name/address pair.
+            if (model.LogoData is { Length: > 0 } logoBytes)
+            {
+                try
+                {
+                    var bitmap = new BitmapImage();
+                    using (var stream = new MemoryStream(logoBytes))
+                    {
+                        bitmap.BeginInit();
+                        bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                        bitmap.StreamSource = stream;
+                        bitmap.EndInit();
+                    }
+                    bitmap.Freeze();
+                    titleStack.Children.Add(new Image
+                    {
+                        Source = bitmap,
+                        Height = 44,
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        Margin = new Thickness(0, 0, 0, 4)
+                    });
+                }
+                catch (Exception)
+                {
+                    // A corrupt logo never breaks a report; the text
+                    // header below still renders. (RptRend is a pure
+                    // renderer with no error-reporting channel; the
+                    // resolution path in PrintSetSvc reports its own
+                    // failures before bytes reach this model.)
+                }
+            }
+            for (var i = 0; i < headerLines.Count; i++)
+            {
+                titleStack.Children.Add(new TextBlock
+                {
+                    Text = headerLines[i],
+                    FontSize = i == 0 ? 13 : 10,
+                    FontWeight = i == 0 ? FontWeights.SemiBold : FontWeights.Normal,
+                    Foreground = fg,
+                    Opacity = i == 0 ? 1 : 0.75,
+                    TextWrapping = TextWrapping.Wrap
+                });
+            }
+        }
+        else
         {
             titleStack.Children.Add(new TextBlock
             {
-                Text = model.CompanyAddress,
-                FontSize = 10,
-                Foreground = fg,
-                Opacity = 0.75,
-                TextWrapping = TextWrapping.Wrap
+                Text = model.CompanyName,
+                FontSize = 13,
+                Foreground = fg
             });
+            if (style is { ShowCompanyAddress: true } &&
+                !string.IsNullOrWhiteSpace(model.CompanyAddress))
+            {
+                titleStack.Children.Add(new TextBlock
+                {
+                    Text = model.CompanyAddress,
+                    FontSize = 10,
+                    Foreground = fg,
+                    Opacity = 0.75,
+                    TextWrapping = TextWrapping.Wrap
+                });
+            }
         }
         titleStack.Children.Add(new TextBlock
         {

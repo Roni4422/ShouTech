@@ -194,6 +194,7 @@ public static class XptServ
     public static void Print(Window owner, ExportModel model)
     {
         var dialog = new PrintDialog();
+        PrintSetSvc.ApplyDefaultPrinter(dialog);
         if (dialog.ShowDialog() != true)
             return;
 
@@ -213,6 +214,27 @@ public static class XptServ
     private static int PageCount(ExportModel model)
         => Math.Max(1, (int)Math.Ceiling(model.Rows.Count / (double)RptRend.RowsPerPageFor(model.Style)));
 
+    // The Options-governed print header (print settings §3.3),
+    // resolved once per company and reused across the pages of a
+    // print/PDF run; a company switch re-resolves. Resolution
+    // failures degrade to the historic header inside PrintSetSvc.
+    private static PrintSetSvc.PrintHeader? _governedHeader;
+    private static string? _governedHeaderCompany;
+    private static int _governedHeaderVersion = -1;
+
+    private static PrintSetSvc.PrintHeader? ResolveGovernedHeader()
+    {
+        var company = AppState.CurrentCompanyCode ?? string.Empty;
+        if (_governedHeaderVersion != PrintSetSvc.HeaderVersion ||
+            !string.Equals(_governedHeaderCompany, company, StringComparison.OrdinalIgnoreCase))
+        {
+            _governedHeader = PrintSetSvc.ResolveHeader();
+            _governedHeaderCompany = company;
+            _governedHeaderVersion = PrintSetSvc.HeaderVersion;
+        }
+        return _governedHeader;
+    }
+
     private static RptRend.PageModel BuildPageModel(ExportModel model, int pageIndex, int pageCount)
     {
         var perPage = RptRend.RowsPerPageFor(model.Style);
@@ -221,6 +243,7 @@ public static class XptServ
             .Take(perPage)
             .ToList();
 
+        var header = ResolveGovernedHeader();
         return new RptRend.PageModel
         {
             CompanyName = model.CompanyName,
@@ -236,7 +259,9 @@ public static class XptServ
             Translate = model.Translate,
             Totals = model.Totals,
             Style = model.Style,
-            CompanyAddress = model.CompanyAddress
+            CompanyAddress = model.CompanyAddress,
+            HeaderLines = header?.Lines,
+            LogoData = header?.LogoData
         };
     }
 

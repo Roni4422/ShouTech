@@ -937,6 +937,9 @@ public sealed class JrnWin : BaseWin
         var page = BuildPrintPage();
         var paginator = new SinglePagePaginator(page);
         var dlg = new PrintDialog();
+        // Options-governed print behaviour (§3.3): default printer +
+        // the per-user voucher copy count.
+        PrintSetSvc.ApplyDialogSettings(dlg, UsrPref.Load().PrintVoucherCopies);
         if (dlg.ShowDialog() == true)
             dlg.PrintDocument(paginator, string.IsNullOrWhiteSpace(_txtDocNo.Text) ? T("Vouchers.JournalTitle") : _txtDocNo.Text.Trim());
     }

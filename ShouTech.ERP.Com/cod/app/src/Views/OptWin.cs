@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using ShouTech.App.Configuration;
+using ShouTech.App.Reporting.Invoices;
 using ShouTech.App.Services;
 using ShouTech.Domain;
 
@@ -96,6 +97,36 @@ public sealed class OptWin : BaseWin
     private readonly TextBlock _numHint = new();
     private readonly ObservableCollection<NumRowVm> _numRows = new();
     private int _numberingSection = -1;
+
+    // Printing section (§3.3): company print settings (print_settings,
+    // migration 125) + the company logo + per-user copy counts. The
+    // logo is staged in memory and written on Save, like every other
+    // field in this window.
+    private readonly CheckBox _chkHdrName = new();
+    private readonly CheckBox _chkHdrAddress = new();
+    private readonly CheckBox _chkHdrPhone = new();
+    private readonly CheckBox _chkHdrMobile = new();
+    private readonly CheckBox _chkHdrEmail = new();
+    private readonly CheckBox _chkHdrWebsite = new();
+    private readonly CheckBox _chkHdrLicense = new();
+    private readonly CheckBox _chkHdrTax = new();
+    private readonly TextBox _txtHeaderText = new();
+    private readonly CheckBox _chkPrevBalance = new();
+    private readonly CheckBox _chkCurrBalance = new();
+    private readonly CheckBox _chkUserOnInvoice = new();
+    private readonly ComboBox _cmbPrinter = new();
+    private readonly ComboBoxItem _printerDefaultItem = new();
+    private readonly TextBox _txtInvoiceCopies = new();
+    private readonly TextBox _txtVoucherCopies = new();
+    private readonly Image _imgLogo = new();
+    private readonly Button _btnLogoPick = new();
+    private readonly Button _btnLogoClear = new();
+    private readonly Button _btnTestPage = new();
+    private int _printingSection = -1;
+    private bool _printingLoaded;
+    private byte[]? _logoStaged;
+    private string? _logoStagedMedia;
+    private bool _logoDirty;
 
     private UsrPref _pref = UsrPref.Load();
 
@@ -250,6 +281,62 @@ public sealed class OptWin : BaseWin
         Grid.SetColumn(layoutButtons, 1);
         layouts.Children.Add(layoutButtons);
 
+        // ---- Printing (§3.3) ------------------------------------------
+        // Grouped cards in spirit: paper identity (logo + header
+        // fields + header text), then invoice behaviour (balances,
+        // user line), then the workstation's printer + copy counts.
+        var printing = BeginSection("Options.PrintingSection", "Options.ScopeCompany");
+        _printingSection = _sectionPanels.Count - 1;
+        var logoRow = printing.RowDefinitions.Count;
+        printing.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var logoPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 3) };
+        _imgLogo.Height = 54;
+        _imgLogo.MaxWidth = 180;
+        _imgLogo.Margin = new Thickness(0, 0, 10, 0);
+        logoPanel.Children.Add(_imgLogo);
+        F2Ui.StyleButton(_btnLogoPick, "Options.PrintLogoPick");
+        F2Ui.StyleButton(_btnLogoClear, "Options.PrintLogoClear");
+        _btnLogoPick.Click += (_, _) => PickLogo();
+        _btnLogoClear.Click += (_, _) =>
+        {
+            _logoStaged = null;
+            _logoStagedMedia = null;
+            _logoDirty = true;
+            _imgLogo.Source = null;
+        };
+        logoPanel.Children.Add(_btnLogoPick);
+        logoPanel.Children.Add(_btnLogoClear);
+        Grid.SetRow(logoPanel, logoRow);
+        Grid.SetColumn(logoPanel, 1);
+        printing.Children.Add(logoPanel);
+        AddCheck(printing, _chkHdrName, "Options.PrintHeaderName");
+        AddCheck(printing, _chkHdrAddress, "Options.PrintHeaderAddress");
+        AddCheck(printing, _chkHdrPhone, "Options.PrintHeaderPhone");
+        AddCheck(printing, _chkHdrMobile, "Options.PrintHeaderMobile");
+        AddCheck(printing, _chkHdrEmail, "Options.PrintHeaderEmail");
+        AddCheck(printing, _chkHdrWebsite, "Options.PrintHeaderWebsite");
+        AddCheck(printing, _chkHdrLicense, "Options.PrintHeaderLicense");
+        AddCheck(printing, _chkHdrTax, "Options.PrintHeaderTaxNumber");
+        AddField(printing, "Options.PrintHeaderText", _txtHeaderText);
+        AddCheck(printing, _chkPrevBalance, "Options.PrintPreviousBalance");
+        AddCheck(printing, _chkCurrBalance, "Options.PrintCurrentBalance");
+        AddCheck(printing, _chkUserOnInvoice, "Options.PrintUserOnInvoice");
+        _printerDefaultItem.Tag = string.Empty;
+        _cmbPrinter.Items.Add(_printerDefaultItem);
+        foreach (var printer in CashDrawerService.GetInstalledPrinters())
+            _cmbPrinter.Items.Add(new ComboBoxItem { Content = printer, Tag = printer });
+        AddField(printing, "Options.PrintDefaultPrinter", _cmbPrinter);
+        AddField(printing, "Options.PrintInvoiceCopies", _txtInvoiceCopies);
+        AddField(printing, "Options.PrintVoucherCopies", _txtVoucherCopies);
+        F2Ui.StyleButton(_btnTestPage, "Options.PrintTestPage");
+        FlowAlign.Start(_btnTestPage);
+        _btnTestPage.Click += (_, _) => PrintTestPage();
+        var testRow = printing.RowDefinitions.Count;
+        printing.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetRow(_btnTestPage, testRow);
+        Grid.SetColumn(_btnTestPage, 1);
+        printing.Children.Add(_btnTestPage);
+
         // ---- Backup (SVC1) -------------------------------------------
         // Readout is DERIVED from the real backup list (newest
         // file's write time) so it cannot drift from reality; the
@@ -323,6 +410,184 @@ public sealed class OptWin : BaseWin
             RefreshBackupInfo();
         if (index == _numberingSection)
             LoadNumbering();
+        if (index == _printingSection)
+            LoadPrinting();
+    }
+
+    private void LoadPrinting()
+    {
+        if (_printingLoaded)
+            return;
+        _printingLoaded = true;
+        try
+        {
+            var settings = PrintSetSvc.Load();
+            _chkHdrName.IsChecked = settings.HeaderName;
+            _chkHdrAddress.IsChecked = settings.HeaderAddress;
+            _chkHdrPhone.IsChecked = settings.HeaderPhone;
+            _chkHdrMobile.IsChecked = settings.HeaderMobile;
+            _chkHdrEmail.IsChecked = settings.HeaderEmail;
+            _chkHdrWebsite.IsChecked = settings.HeaderWebsite;
+            _chkHdrLicense.IsChecked = settings.HeaderLicense;
+            _chkHdrTax.IsChecked = settings.HeaderTaxNumber;
+            _txtHeaderText.Text = settings.HeaderText ?? string.Empty;
+            _chkPrevBalance.IsChecked = settings.PrintPreviousBalance;
+            _chkCurrBalance.IsChecked = settings.PrintCurrentBalance;
+            _chkUserOnInvoice.IsChecked = settings.PrintUserOnInvoice;
+            SelectByTag(_cmbPrinter, settings.DefaultPrinter ?? string.Empty);
+            _logoStaged = PrintSetSvc.LoadLogo()?.Data;
+            _logoDirty = false;
+            ShowLogoPreview();
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OptWin.LoadPrinting");
+        }
+        _txtInvoiceCopies.Text = _pref.PrintInvoiceCopies.ToString(CultureInfo.InvariantCulture);
+        _txtVoucherCopies.Text = _pref.PrintVoucherCopies.ToString(CultureInfo.InvariantCulture);
+    }
+
+    private void ShowLogoPreview()
+    {
+        if (_logoStaged is not { Length: > 0 } bytes)
+        {
+            _imgLogo.Source = null;
+            return;
+        }
+        try
+        {
+            var bitmap = new System.Windows.Media.Imaging.BitmapImage();
+            using (var stream = new System.IO.MemoryStream(bytes))
+            {
+                bitmap.BeginInit();
+                bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                bitmap.StreamSource = stream;
+                bitmap.EndInit();
+            }
+            bitmap.Freeze();
+            _imgLogo.Source = bitmap;
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "OptWin.ShowLogoPreview");
+            _imgLogo.Source = null;
+        }
+    }
+
+    private void PickLogo()
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = "Images (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg",
+            CheckFileExists = true
+        };
+        if (dlg.ShowDialog(this) != true)
+            return;
+        try
+        {
+            var bytes = System.IO.File.ReadAllBytes(dlg.FileName);
+            if (bytes.Length > 2 * 1024 * 1024)
+            {
+                MessageBox.Show(this, T("Options.PrintLogoTooLarge"), Title,
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            var ext = System.IO.Path.GetExtension(dlg.FileName).ToLowerInvariant();
+            _logoStagedMedia = ext switch
+            {
+                ".png" => "image/png",
+                ".jpg" or ".jpeg" => "image/jpeg",
+                _ => null
+            };
+            if (_logoStagedMedia is null)
+            {
+                MessageBox.Show(this, T("Options.PrintLogoInvalid"), Title,
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            _logoStaged = bytes;
+            _logoDirty = true;
+            ShowLogoPreview();
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OptWin.PickLogo");
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private bool SavePrinting()
+    {
+        if (!_printingLoaded)
+            return true;
+        try
+        {
+            var actor = AppState.CurrentUser?.Username ?? "anonymous";
+            PrintSetSvc.Save(new PrintSetSvc.PrintSettingsRec(
+                _chkHdrName.IsChecked == true,
+                _chkHdrAddress.IsChecked == true,
+                _chkHdrPhone.IsChecked == true,
+                _chkHdrMobile.IsChecked == true,
+                _chkHdrEmail.IsChecked == true,
+                _chkHdrWebsite.IsChecked == true,
+                _chkHdrLicense.IsChecked == true,
+                _chkHdrTax.IsChecked == true,
+                _txtHeaderText.Text,
+                _chkPrevBalance.IsChecked == true,
+                _chkCurrBalance.IsChecked == true,
+                _chkUserOnInvoice.IsChecked == true,
+                SelectedTag(_cmbPrinter)), actor);
+            if (_logoDirty)
+            {
+                if (_logoStaged is { Length: > 0 })
+                    PrintSetSvc.SaveLogo(_logoStaged, _logoStagedMedia);
+                else
+                    PrintSetSvc.ClearLogo();
+                _logoDirty = false;
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OptWin.SavePrinting");
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+            return false;
+        }
+    }
+
+    /// <summary>Prints a sample document through the REAL invoice
+    /// pipeline, so the governed header/logo/balances are seen
+    /// exactly as customers will see them.</summary>
+    private void PrintTestPage()
+    {
+        try
+        {
+            var doc = new InvDoc
+            {
+                Kind = InvDocKind.SalesInvoice,
+                DocNo = "TEST-0001",
+                DocDate = DateTime.Today,
+                CurrencyCode = _pref.CurrencyCode,
+                PartyCode = "TEST",
+                PartyName = T("Options.PrintTestParty"),
+                PostedBy = AppState.CurrentUser?.Username
+            };
+            doc.Lines.Add(new InvLine
+            {
+                LineNo = 1,
+                MaterialCode = "TEST",
+                Description = T("Options.PrintTestItem"),
+                Unit = "pcs",
+                Qty = 2m,
+                UnitPrice = 25.5m
+            });
+            InvPrn.Print(doc, CurrentCompanyDisplay);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "OptWin.PrintTestPage");
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     /// <summary>One editable row of the Numbering grid.</summary>
@@ -633,12 +898,24 @@ public sealed class OptWin : BaseWin
             !TryInt(_txtAutoSave, "Options.AutoSaveInterval", out var autoSave) ||
             !TryInt(_txtAutoLock, "Options.AutoLock", out var autoLock))
             return;
+        var invoiceCopies = _pref.PrintInvoiceCopies;
+        var voucherCopies = _pref.PrintVoucherCopies;
+        if (_printingLoaded &&
+            (!TryInt(_txtInvoiceCopies, "Options.PrintInvoiceCopies", out invoiceCopies) ||
+             !TryInt(_txtVoucherCopies, "Options.PrintVoucherCopies", out voucherCopies)))
+            return;
 
         // Numbering configuration validates and persists first: an
         // invalid series row aborts the whole save (NUM-8302).
         _numGrid.CommitEdit();
         if (!SaveNumbering())
             return;
+        // Print settings + logo persist with the same all-or-nothing
+        // discipline.
+        if (!SavePrinting())
+            return;
+        _pref.PrintInvoiceCopies = Math.Clamp(invoiceCopies, 1, 9);
+        _pref.PrintVoucherCopies = Math.Clamp(voucherCopies, 1, 9);
 
         var oldLang = _pref.Lang;
         var oldAccent = _pref.AccentColor;
@@ -741,7 +1018,8 @@ public sealed class OptWin : BaseWin
     {
         Title = T("Options.Title");
         F2Ui.ApplyTexts(_labels, new List<(DataGridColumn, string)>(),
-            new[] { _saveButton, _posButton, _closeButton, _resetPositionsButton, _resetLayoutsButton, _resetAllButton, _btnBackup }, T);
+            new[] { _saveButton, _posButton, _closeButton, _resetPositionsButton, _resetLayoutsButton, _resetAllButton, _btnBackup, _btnLogoPick, _btnLogoClear, _btnTestPage }, T);
+        _printerDefaultItem.Content = T("Options.PrintSystemDefault");
         for (var i = 0; i < _sectionKeys.Count && i < _rail.Items.Count; i++)
             if (_rail.Items[i] is ListBoxItem item)
                 item.Content = T(_sectionKeys[i]);
