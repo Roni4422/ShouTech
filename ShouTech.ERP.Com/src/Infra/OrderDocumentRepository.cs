@@ -109,7 +109,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                    paid_amount, status, notes, party_code, branch_name, sales_rep_name, cost_center,
                    warehouse_name, delivery_date, valid_till, extra_amount, {progressColumns},
                    cancel_reason, cancelled_by, cancelled_at, {deliveryCostColumn}, {revisionColumn}, {approvalColumn},
-                   required_by_date, request_type, department
+                   required_by_date, request_type, department,
                    payment_terms, incoterm, reference_no, bill_date, delivery_note_no,
                    supplier_credit_note_ref, per_received, per_billed, amended_from_doc_id
             FROM {docs}
