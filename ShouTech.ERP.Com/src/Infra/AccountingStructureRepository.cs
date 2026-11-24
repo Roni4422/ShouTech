@@ -2,6 +2,7 @@ using System.Data.Common;
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Npgsql;
+using ShouTech.Domain;
 
 namespace ShouTech.Infrastructure;
 
@@ -131,25 +132,168 @@ public sealed class AccountingStructureRepository
         try
         {
             var periodParam = PeriodIdValue(fiscalPeriodId);
-            await EnsureNoDraftsAsync(connection, transaction, "e.fiscal_period_id=@period", periodParam, cancellationToken).ConfigureAwait(false);
-            await EnsurePostedJournalsBalancedAsync(connection, transaction, "e.fiscal_period_id=@period", periodParam, cancellationToken).ConfigureAwait(false);
+            var period = await LoadPeriodAsync(connection, transaction, periodParam, cancellationToken).ConfigureAwait(false);
+            if (period is null)
+                throw new AppError(ErrorCodes.PeriodNotClosable, fiscalPeriodId.ToString(), "NOT FOUND");
+            if (period.Value.Status != "OPEN")
+                throw new AppError(ErrorCodes.PeriodNotClosable, period.Value.Name, period.Value.Status);
+
+            // Unposted items strand inside a closed period: draft journals
+            // assigned to the period, plus draft documents dated inside it
+            // (docs/PERIOD_CLOSE_STUDY.md SS3). Both block the close.
+            long unposted = 0;
+            await using (var drafts = CreateCommand(connection, transaction,
+                "SELECT COUNT(*) FROM journal_entries WHERE fiscal_period_id=@period AND status=0"))
+            {
+                Add(drafts, "@period", periodParam);
+                unposted += Convert.ToInt64(await drafts.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+            }
+            unposted += await CountDraftDocumentsAsync(connection, transaction, period.Value, cancellationToken).ConfigureAwait(false);
+            if (unposted > 0)
+                throw new AppError(ErrorCodes.PeriodCloseUnpostedItems, period.Value.Name, unposted);
+
+            await using (var unbalanced = CreateCommand(connection, transaction,
+                "SELECT COUNT(*) FROM (SELECT e.journal_entry_id FROM journal_entries e JOIN journal_entry_lines l ON l.journal_entry_id=e.journal_entry_id WHERE e.fiscal_period_id=@period AND e.status IN (1,2) GROUP BY e.journal_entry_id HAVING COUNT(l.journal_entry_line_id)<2 OR ABS(COALESCE(SUM(l.debit),0)-COALESCE(SUM(l.credit),0))>0.0001) x"))
+            {
+                Add(unbalanced, "@period", periodParam);
+                var bad = Convert.ToInt64(await unbalanced.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+                if (bad > 0)
+                    throw new AppError(ErrorCodes.PeriodCloseUnbalancedJournals, period.Value.Name, bad);
+            }
             // Enforce sequential close: earlier periods must already be closed/locked.
             await using (var order = CreateCommand(connection, transaction,
-                "SELECT COUNT(*) FROM fiscal_periods target JOIN fiscal_periods earlier ON earlier.company_id=target.company_id AND earlier.start_date<target.start_date WHERE target.fiscal_period_id=@period AND earlier.status='OPEN'"))
+                "SELECT earlier.period_name FROM fiscal_periods target JOIN fiscal_periods earlier ON earlier.company_id=target.company_id AND earlier.start_date<target.start_date WHERE target.fiscal_period_id=@period AND earlier.status='OPEN' ORDER BY earlier.start_date LIMIT 1"))
             {
                 Add(order, "@period", periodParam);
-                if (Convert.ToInt64(await order.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture) != 0)
-                    throw new InvalidOperationException("Close fiscal periods in chronological order; an earlier period is still open.");
+                var earlier = await order.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                if (earlier is not null and not DBNull)
+                    throw new AppError(ErrorCodes.PeriodCloseOutOfOrder, period.Value.Name,
+                        Convert.ToString(earlier, CultureInfo.InvariantCulture) ?? string.Empty);
             }
             await using var update = CreateCommand(connection, transaction,
                 "UPDATE fiscal_periods SET status='CLOSED',closed_by=@actor,closed_at=CURRENT_TIMESTAMP WHERE fiscal_period_id=@period AND status='OPEN'");
             Add(update, "@actor", actor.Trim());
             Add(update, "@period", periodParam);
             if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
-                throw new InvalidOperationException("Fiscal period was not found or is already closed/locked.");
+                throw new AppError(ErrorCodes.PeriodNotClosable, period.Value.Name, period.Value.Status);
+            // The CLOSE event joins the period ledger (migration 127) inside
+            // the same transaction; best-effort on pre-127 databases.
+            if (await TableExistsAsync(connection, transaction, "fiscal_period_events", cancellationToken).ConfigureAwait(false))
+            {
+                await using var evt = CreateCommand(connection, transaction,
+                    "INSERT INTO fiscal_period_events (fiscal_period_id, company_id, event_type, actor, reason) VALUES (@period, @company, 'CLOSE', @actor, NULL)");
+                Add(evt, "@period", periodParam);
+                Add(evt, "@company", CompanyValue(period.Value.CompanyId));
+                Add(evt, "@actor", actor.Trim());
+                await evt.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch { await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false); throw; }
+    }
+
+    /// <summary>
+    /// The recorded exception to a close (study SS3): reopens a CLOSED
+    /// period only with a reason, writing the REOPEN row into
+    /// fiscal_period_events (which is what re-arms the database reopen
+    /// trigger) and a PERIOD_REOPEN row into security_audit_log, in the
+    /// same transaction as the status flip. LOCKED periods stay terminal.
+    /// </summary>
+    public async Task ReopenPeriodAsync(Guid fiscalPeriodId, string actor, string reason, CancellationToken cancellationToken = default)
+    {
+        if (fiscalPeriodId == Guid.Empty) throw new ArgumentException("Fiscal period is required.", nameof(fiscalPeriodId));
+        if (string.IsNullOrWhiteSpace(actor)) throw new ArgumentException("Actor is required.", nameof(actor));
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var periodParam = PeriodIdValue(fiscalPeriodId);
+            var period = await LoadPeriodAsync(connection, transaction, periodParam, cancellationToken).ConfigureAwait(false);
+            if (period is null)
+                throw new AppError(ErrorCodes.PeriodNotClosable, fiscalPeriodId.ToString(), "NOT FOUND");
+            if (string.IsNullOrWhiteSpace(reason))
+                throw new AppError(ErrorCodes.PeriodReopenReasonRequired, period.Value.Name);
+            if (period.Value.Status != "CLOSED")
+                throw new AppError(ErrorCodes.PeriodNotClosable, period.Value.Name, period.Value.Status);
+            if (!await TableExistsAsync(connection, transaction, "fiscal_period_events", cancellationToken).ConfigureAwait(false))
+                throw new InvalidOperationException("Fiscal period events are unavailable; apply migration 127 before reopening a period.");
+
+            await using (var evt = CreateCommand(connection, transaction,
+                "INSERT INTO fiscal_period_events (fiscal_period_id, company_id, event_type, actor, reason) VALUES (@period, @company, 'REOPEN', @actor, @reason)"))
+            {
+                Add(evt, "@period", periodParam);
+                Add(evt, "@company", CompanyValue(period.Value.CompanyId));
+                Add(evt, "@actor", actor.Trim());
+                Add(evt, "@reason", reason.Trim());
+                await evt.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            if (await TableExistsAsync(connection, transaction, "security_audit_log", cancellationToken).ConfigureAwait(false))
+            {
+                await using var audit = CreateCommand(connection, transaction,
+                    "INSERT INTO security_audit_log (company_id, user_id, username, event_type, details) VALUES (@company, @actor, @actor, 'PERIOD_REOPEN', @details)");
+                Add(audit, "@company", Convert.ToString(CompanyValue(period.Value.CompanyId), CultureInfo.InvariantCulture)!);
+                Add(audit, "@actor", actor.Trim());
+                Add(audit, "@details", $"Reopened fiscal period {period.Value.Name}: {reason.Trim()}");
+                await audit.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            await using var update = CreateCommand(connection, transaction,
+                "UPDATE fiscal_periods SET status='OPEN',closed_by=NULL,closed_at=NULL WHERE fiscal_period_id=@period AND status='CLOSED'");
+            Add(update, "@period", periodParam);
+            if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+                throw new AppError(ErrorCodes.PeriodNotClosable, period.Value.Name, period.Value.Status);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch { await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false); throw; }
+    }
+
+    private readonly record struct PeriodState(Guid CompanyId, string Name, DateOnly StartDate, DateOnly EndDate, string Status);
+
+    private async Task<PeriodState?> LoadPeriodAsync(DbConnection c, DbTransaction t, object periodParam, CancellationToken ct)
+    {
+        await using var cmd = CreateCommand(c, t,
+            "SELECT company_id, period_name, start_date, end_date, status FROM fiscal_periods WHERE fiscal_period_id=@period");
+        Add(cmd, "@period", periodParam);
+        await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        if (!await reader.ReadAsync(ct).ConfigureAwait(false))
+            return null;
+        var companyRaw = reader.GetValue(0);
+        var companyId = companyRaw is Guid g ? g : Guid.Parse(Convert.ToString(companyRaw, CultureInfo.InvariantCulture)!);
+        return new PeriodState(
+            companyId,
+            Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? string.Empty,
+            DateOnly.FromDateTime(Convert.ToDateTime(reader.GetValue(2), CultureInfo.InvariantCulture)),
+            DateOnly.FromDateTime(Convert.ToDateTime(reader.GetValue(3), CultureInfo.InvariantCulture)),
+            Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture) ?? string.Empty);
+    }
+
+    private async Task<long> CountDraftDocumentsAsync(DbConnection c, DbTransaction t, PeriodState period, CancellationToken ct)
+    {
+        long count = 0;
+        foreach (var table in new[] { "sales_documents", "purchase_documents" })
+        {
+            if (!await TableExistsAsync(c, t, table, ct).ConfigureAwait(false))
+                continue;
+            await using var cmd = CreateCommand(c, t,
+                $"SELECT COUNT(*) FROM {table} WHERE company_id=@company AND status='Draft' AND is_deleted=" + (_provider == "PostgreSQL" ? "false" : "0") + " AND doc_date BETWEEN @start AND @end");
+            Add(cmd, "@company", CompanyValue(period.CompanyId));
+            // doc_date is stored as ISO text in both dialects
+            // (CommercialDocumentRepository writes docDateText).
+            Add(cmd, "@start", period.StartDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            Add(cmd, "@end", period.EndDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            count += Convert.ToInt64(await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false), CultureInfo.InvariantCulture);
+        }
+        return count;
+    }
+
+    private async Task<bool> TableExistsAsync(DbConnection c, DbTransaction t, string table, CancellationToken ct)
+    {
+        var sql = _provider == "PostgreSQL"
+            ? "SELECT COUNT(*) FROM information_schema.tables WHERE table_name=@name"
+            : "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=@name";
+        await using var cmd = CreateCommand(c, t, sql);
+        Add(cmd, "@name", table);
+        return Convert.ToInt64(await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false), CultureInfo.InvariantCulture) > 0;
     }
 
     public async Task CloseFiscalYearAsync(long fiscalYearId, string actor, CancellationToken cancellationToken = default)

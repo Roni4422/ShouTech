@@ -197,6 +197,41 @@ public sealed class FiscalYearRow
     public bool IsClosed { get; set; }
     public string? ClosedBy { get; set; }
     public string? ClosedAt { get; set; }
+    /// <summary>Period-end activation control (migration 127, study SS7):
+    /// ON by default for every year; deactivating it is the audited
+    /// roll-forward into the next financial year.</summary>
+    public bool PeriodEndActivation { get; set; } = true;
+}
+
+/// <summary>One fiscal_periods row for the period-close window
+/// (docs/PERIOD_CLOSE_STUDY.md).</summary>
+public sealed class FiscalPeriodRow
+{
+    public Guid Id { get; set; }
+    public long FiscalYearId { get; set; }
+    public int PeriodNumber { get; set; }
+    public string PeriodName { get; set; } = string.Empty;
+    public string StartDate { get; set; } = string.Empty;
+    public string EndDate { get; set; } = string.Empty;
+    /// <summary>OPEN / CLOSED / LOCKED.</summary>
+    public string Status { get; set; } = string.Empty;
+    public string? ClosedBy { get; set; }
+    public string? ClosedAt { get; set; }
+}
+
+/// <summary>One unposted item dated inside a fiscal period — a draft
+/// journal assigned to the period, or a draft document dated in its
+/// range. Shown by the period-close window before closing and counted
+/// by the close engine's ACC-5022 refusal.</summary>
+public sealed class PeriodUnpostedItemRow
+{
+    /// <summary>JOURNAL or DOCUMENT.</summary>
+    public string Kind { get; set; } = string.Empty;
+    public string DocKind { get; set; } = string.Empty;
+    public string DocNo { get; set; } = string.Empty;
+    public string DocDate { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
 }
 
 /// <summary>Soft-deleted draft counts per document table (compression preview).</summary>
@@ -211,6 +246,9 @@ public sealed class TrialBalancePeriodRow
 {
     /// <summary>Period name, or the no-period bucket label.</summary>
     public string Period { get; set; } = string.Empty;
+    /// <summary>Fiscal period status (OPEN / CLOSED / LOCKED), or empty
+    /// for the no-period bucket — reports mark closed periods.</summary>
+    public string Status { get; set; } = string.Empty;
     public int Entries { get; set; }
     public decimal Debit { get; set; }
     public decimal Credit { get; set; }

@@ -94,6 +94,11 @@ public interface IOperationsRepository
     Task<IReadOnlyList<FiscalYearRow>> GetFiscalYearsAsync(string companyId, CancellationToken cancellationToken = default);
     Task CreateNextFiscalYearAsync(string companyId, string userId, CancellationToken cancellationToken = default);
     Task CloseFiscalYearAsync(string companyId, long fiscalYearId, string userId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<FiscalPeriodRow>> GetFiscalPeriodsAsync(string companyId, long fiscalYearId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<PeriodUnpostedItemRow>> GetPeriodUnpostedItemsAsync(string companyId, Guid fiscalPeriodId, CancellationToken cancellationToken = default);
+    Task ClosePeriodAsync(string companyId, Guid fiscalPeriodId, string userId, CancellationToken cancellationToken = default);
+    Task ReopenPeriodAsync(string companyId, Guid fiscalPeriodId, string userId, string reason, CancellationToken cancellationToken = default);
+    Task DeactivatePeriodEndAndRollForwardAsync(string companyId, string userId, CancellationToken cancellationToken = default);
 
     // ------------------------------------------------------------ Compression
     Task<CompressCounts> GetCompressCountsAsync(string companyId, CancellationToken cancellationToken = default);

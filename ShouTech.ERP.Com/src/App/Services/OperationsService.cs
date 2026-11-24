@@ -319,6 +319,27 @@ public sealed class OperationsService
         return _repository.CloseFiscalYearAsync(RequireCompany(companyId), fiscalYearId, RequireUser(userId), ct);
     }
 
+    // ------------------------------------------------------------ Period close
+
+    public Task<IReadOnlyList<FiscalPeriodRow>> GetFiscalPeriodsAsync(string companyId, long fiscalYearId, CancellationToken ct = default)
+    {
+        if (fiscalYearId <= 0)
+            throw new ArgumentException("Fiscal year is required.", nameof(fiscalYearId));
+        return _repository.GetFiscalPeriodsAsync(RequireCompany(companyId), fiscalYearId, ct);
+    }
+
+    public Task<IReadOnlyList<PeriodUnpostedItemRow>> GetPeriodUnpostedItemsAsync(string companyId, Guid fiscalPeriodId, CancellationToken ct = default)
+        => _repository.GetPeriodUnpostedItemsAsync(RequireCompany(companyId), fiscalPeriodId, ct);
+
+    public Task ClosePeriodAsync(string companyId, Guid fiscalPeriodId, string userId, CancellationToken ct = default)
+        => _repository.ClosePeriodAsync(RequireCompany(companyId), fiscalPeriodId, RequireUser(userId), ct);
+
+    public Task ReopenPeriodAsync(string companyId, Guid fiscalPeriodId, string userId, string reason, CancellationToken ct = default)
+        => _repository.ReopenPeriodAsync(RequireCompany(companyId), fiscalPeriodId, RequireUser(userId), reason, ct);
+
+    public Task DeactivatePeriodEndAndRollForwardAsync(string companyId, string userId, CancellationToken ct = default)
+        => _repository.DeactivatePeriodEndAndRollForwardAsync(RequireCompany(companyId), RequireUser(userId), ct);
+
     // ------------------------------------------------------------ Compression / repost
 
     public Task<CompressCounts> GetCompressCountsAsync(string companyId, CancellationToken ct = default)

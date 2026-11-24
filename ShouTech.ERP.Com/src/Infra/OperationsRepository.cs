@@ -869,6 +869,7 @@ public sealed class OperationsRepository : IOperationsRepository
         var hasPeriodCol = await ColumnExistsAsync(connection, "journal_entries", "fiscal_period_id").ConfigureAwait(false);
         var hasPeriods = await TableExistsAsync(connection, "fiscal_periods").ConfigureAwait(false);
         var periodExpr = hasPeriodCol && hasPeriods ? "COALESCE(fp.period_name, '')" : "''";
+        var periodStatusExpr = hasPeriodCol && hasPeriods ? "COALESCE(fp.status, '')" : "''";
         var periodJoin = hasPeriodCol && hasPeriods
             ? "LEFT JOIN fiscal_periods fp ON fp.fiscal_period_id = e.fiscal_period_id"
             : string.Empty;
@@ -880,12 +881,12 @@ public sealed class OperationsRepository : IOperationsRepository
         var periods = new List<TrialBalancePeriodRow>();
         await using (var cmd = CreateCommand(connection, null, $"""
             SELECT {periodExpr} AS period, COUNT(DISTINCT e.journal_entry_id) AS entries,
-                   COALESCE(SUM(l.debit), 0) AS dr, COALESCE(SUM(l.credit), 0) AS cr
+                   COALESCE(SUM(l.debit), 0) AS dr, COALESCE(SUM(l.credit), 0) AS cr, {periodStatusExpr} AS pstatus
             FROM journal_entries e
             {periodJoin}
             LEFT JOIN journal_entry_lines l ON l.journal_entry_id = e.journal_entry_id
             WHERE {companyCond} AND e.status = 1
-            GROUP BY period
+            GROUP BY period, pstatus
             ORDER BY period
             """))
         {
@@ -899,7 +900,8 @@ public sealed class OperationsRepository : IOperationsRepository
                     Period = ReadString(reader, 0) ?? string.Empty,
                     Entries = Convert.ToInt32(reader.GetValue(1), CultureInfo.InvariantCulture),
                     Debit = Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture),
-                    Credit = Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture)
+                    Credit = Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture),
+                    Status = ReadString(reader, 4) ?? string.Empty
                 });
             }
         }
@@ -973,8 +975,10 @@ public sealed class OperationsRepository : IOperationsRepository
         var resolved = await ResolveCompanyIdAsync(connection, companyId, cancellationToken).ConfigureAwait(false);
         var hasClosedCols = await ColumnExistsAsync(connection, "fiscal_years", "closed_by").ConfigureAwait(false);
         var closedCols = hasClosedCols ? ", closed_by, CAST(closed_at AS TEXT)" : ", NULL, NULL";
+        var hasActivation = await ColumnExistsAsync(connection, "fiscal_years", "period_end_activation").ConfigureAwait(false);
+        var activationCol = hasActivation ? ", period_end_activation" : (IsPg ? ", true" : ", 1");
         await using var cmd = CreateCommand(connection, null, $"""
-            SELECT fiscal_year_id, fiscal_year, CAST(start_date AS TEXT), CAST(end_date AS TEXT), is_current, is_closed {closedCols}
+            SELECT fiscal_year_id, fiscal_year, CAST(start_date AS TEXT), CAST(end_date AS TEXT), is_current, is_closed {closedCols} {activationCol}
             FROM fiscal_years
             WHERE company_id = @company OR CAST(company_id AS TEXT) = @resolved
             ORDER BY fiscal_year
@@ -994,7 +998,8 @@ public sealed class OperationsRepository : IOperationsRepository
                 IsCurrent = ReadBool(reader, 4),
                 IsClosed = ReadBool(reader, 5),
                 ClosedBy = ReadString(reader, 6),
-                ClosedAt = ReadString(reader, 7)
+                ClosedAt = ReadString(reader, 7),
+                PeriodEndActivation = ReadBool(reader, 8)
             });
         }
         return result;
@@ -1024,18 +1029,71 @@ public sealed class OperationsRepository : IOperationsRepository
             Add(cmd, "@id", last.Id);
             dbName = Convert.ToString(await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture) ?? string.Empty;
         }
-        await using var insert = CreateCommand(connection, null, """
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var newYearId = await InsertFiscalYearAsync(connection, transaction, resolved, newStart, newEnd, dbName, cancellationToken).ConfigureAwait(false);
+            // The rolled year must be postable: create its 12 OPEN periods
+            // (previously the year was created bare and the GL period
+            // resolver could never match a date inside it).
+            await InsertYearPeriodsAsync(connection, transaction, resolved, newYearId, newStart, newEnd, cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private async Task<long> InsertFiscalYearAsync(DbConnection connection, DbTransaction transaction, string resolvedCompany, DateOnly newStart, DateOnly newEnd, string dbName, CancellationToken ct)
+    {
+        await using var insert = CreateCommand(connection, transaction, """
             INSERT INTO fiscal_years (company_id, fiscal_year, database_name, start_date, end_date, is_current, is_closed)
             VALUES (@company, @year, @db, @start, @end, @current, @closed)
-            """);
-        Add(insert, "@company", resolved);
+            """ + (IsPg ? " RETURNING fiscal_year_id" : string.Empty));
+        Add(insert, "@company", resolvedCompany);
         Add(insert, "@year", newStart.Year);
         Add(insert, "@db", dbName);
         Add(insert, "@start", newStart.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         Add(insert, "@end", newEnd.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         Add(insert, "@current", Bool(false));
         Add(insert, "@closed", Bool(false));
-        await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        if (IsPg)
+            return Convert.ToInt64(await insert.ExecuteScalarAsync(ct).ConfigureAwait(false), CultureInfo.InvariantCulture);
+        await insert.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        await using var idCmd = CreateCommand(connection, transaction, "SELECT last_insert_rowid()");
+        return Convert.ToInt64(await idCmd.ExecuteScalarAsync(ct).ConfigureAwait(false), CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>Creates the 12 OPEN monthly periods of a fiscal year,
+    /// segmented from the year's start (the accounting engine's calendar
+    /// segmentation generalized to years that start mid-year); the last
+    /// period is clamped to the year's end.</summary>
+    private async Task InsertYearPeriodsAsync(DbConnection connection, DbTransaction transaction, string resolvedCompany, long fiscalYearId, DateOnly yearStart, DateOnly yearEnd, CancellationToken ct)
+    {
+        object companyValue = IsPg && Guid.TryParse(resolvedCompany, out var companyGuid) ? companyGuid : resolvedCompany;
+        for (var i = 1; i <= 12; i++)
+        {
+            var pStart = yearStart.AddMonths(i - 1);
+            if (pStart > yearEnd)
+                break;
+            var pEnd = pStart.AddMonths(1).AddDays(-1);
+            if (pEnd > yearEnd)
+                pEnd = yearEnd;
+            await using var cmd = CreateCommand(connection, transaction, """
+                INSERT INTO fiscal_periods (fiscal_period_id, company_id, fiscal_year_id, period_number, period_name, start_date, end_date, status)
+                VALUES (@id, @company, @yearId, @number, @name, @start, @end, 'OPEN')
+                """);
+            Add(cmd, "@id", IsPg ? (object)Guid.NewGuid() : Guid.NewGuid().ToString("D"));
+            Add(cmd, "@company", companyValue);
+            Add(cmd, "@yearId", fiscalYearId);
+            Add(cmd, "@number", i);
+            Add(cmd, "@name", pStart.ToString("yyyy-MM", CultureInfo.InvariantCulture));
+            Add(cmd, "@start", pStart.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            Add(cmd, "@end", pEnd.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
     }
 
     public async Task CloseFiscalYearAsync(string companyId, long fiscalYearId, string userId, CancellationToken cancellationToken = default)
@@ -1063,6 +1121,227 @@ public sealed class OperationsRepository : IOperationsRepository
     }
 
     // ------------------------------------------------------------ Compression
+
+    // ---- Period close (docs/PERIOD_CLOSE_STUDY.md) ----------------------
+    // Reads are served here; the close/reopen writes delegate to the one
+    // existing engine (AccountingStructureRepository) after validating the
+    // period belongs to the caller's company — no parallel mechanism.
+
+    public async Task<IReadOnlyList<FiscalPeriodRow>> GetFiscalPeriodsAsync(string companyId, long fiscalYearId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var resolved = await ResolveCompanyIdAsync(connection, companyId, cancellationToken).ConfigureAwait(false);
+        await using var cmd = CreateCommand(connection, null, """
+            SELECT CAST(fp.fiscal_period_id AS TEXT), fp.fiscal_year_id, fp.period_number, fp.period_name,
+                   CAST(fp.start_date AS TEXT), CAST(fp.end_date AS TEXT), fp.status, fp.closed_by, CAST(fp.closed_at AS TEXT)
+            FROM fiscal_periods fp
+            WHERE fp.fiscal_year_id = @year
+              AND (CAST(fp.company_id AS TEXT) = @resolved OR CAST(fp.company_id AS TEXT) = @company)
+            ORDER BY fp.period_number
+            """);
+        Add(cmd, "@year", fiscalYearId);
+        Add(cmd, "@resolved", resolved);
+        Add(cmd, "@company", companyId.Trim());
+        var result = new List<FiscalPeriodRow>();
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            result.Add(new FiscalPeriodRow
+            {
+                Id = Guid.Parse(ReadString(reader, 0) ?? string.Empty),
+                FiscalYearId = Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture),
+                PeriodNumber = Convert.ToInt32(reader.GetValue(2), CultureInfo.InvariantCulture),
+                PeriodName = ReadString(reader, 3) ?? string.Empty,
+                StartDate = ReadString(reader, 4) ?? string.Empty,
+                EndDate = ReadString(reader, 5) ?? string.Empty,
+                Status = ReadString(reader, 6) ?? string.Empty,
+                ClosedBy = ReadString(reader, 7),
+                ClosedAt = ReadString(reader, 8)
+            });
+        }
+        return result;
+    }
+
+    public async Task<IReadOnlyList<PeriodUnpostedItemRow>> GetPeriodUnpostedItemsAsync(string companyId, Guid fiscalPeriodId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var period = await LoadPeriodHeaderAsync(connection, companyId, fiscalPeriodId, cancellationToken).ConfigureAwait(false);
+        var items = new List<PeriodUnpostedItemRow>();
+        await using (var cmd = CreateCommand(connection, null, $"""
+            SELECT e.document_number, CAST(e.entry_date AS TEXT), e.description,
+                   (SELECT COALESCE(SUM(l.debit), 0) FROM journal_entry_lines l WHERE l.journal_entry_id = e.journal_entry_id)
+            FROM journal_entries e
+            WHERE CAST(e.fiscal_period_id AS TEXT) = @period AND e.status = 0 AND {NotDeleted}
+            ORDER BY e.entry_date
+            """))
+        {
+            Add(cmd, "@period", fiscalPeriodId.ToString("D"));
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                items.Add(new PeriodUnpostedItemRow
+                {
+                    Kind = "JOURNAL",
+                    DocKind = "JV",
+                    DocNo = ReadString(reader, 0) ?? string.Empty,
+                    DocDate = ReadString(reader, 1) ?? string.Empty,
+                    Description = ReadString(reader, 2) ?? string.Empty,
+                    Amount = Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture)
+                });
+            }
+        }
+        foreach (var table in new[] { "sales_documents", "purchase_documents" })
+        {
+            if (!await TableExistsAsync(connection, table).ConfigureAwait(false))
+                continue;
+            await using var cmd = CreateCommand(connection, null, $"""
+                SELECT doc_kind, doc_no, CAST(doc_date AS TEXT), party_name, grand_total
+                FROM {table}
+                WHERE company_id = @company AND status = 'Draft' AND {NotDeleted}
+                  AND doc_date BETWEEN @start AND @end
+                ORDER BY doc_date
+                """);
+            Add(cmd, "@company", period.CompanyText);
+            Add(cmd, "@start", period.StartDate.Length >= 10 ? period.StartDate[..10] : period.StartDate);
+            Add(cmd, "@end", period.EndDate.Length >= 10 ? period.EndDate[..10] : period.EndDate);
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                items.Add(new PeriodUnpostedItemRow
+                {
+                    Kind = "DOCUMENT",
+                    DocKind = ReadString(reader, 0) ?? string.Empty,
+                    DocNo = ReadString(reader, 1) ?? string.Empty,
+                    DocDate = ReadString(reader, 2) ?? string.Empty,
+                    Description = ReadString(reader, 3) ?? string.Empty,
+                    Amount = Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture)
+                });
+            }
+        }
+        return items;
+    }
+
+    public async Task ClosePeriodAsync(string companyId, Guid fiscalPeriodId, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        _ = await LoadPeriodHeaderAsync(connection, companyId, fiscalPeriodId, cancellationToken).ConfigureAwait(false);
+        var engine = new AccountingStructureRepository(_provider, _connectionString);
+        await engine.ClosePeriodAsync(fiscalPeriodId, userId, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task ReopenPeriodAsync(string companyId, Guid fiscalPeriodId, string userId, string reason, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        _ = await LoadPeriodHeaderAsync(connection, companyId, fiscalPeriodId, cancellationToken).ConfigureAwait(false);
+        var engine = new AccountingStructureRepository(_provider, _connectionString);
+        await engine.ReopenPeriodAsync(fiscalPeriodId, userId, reason, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The fiscal-period activation control (study SS7): deactivating the
+    /// latest year's activation is the deliberate, audited roll-forward —
+    /// in ONE transaction the latest year's flag flips OFF, the next
+    /// fiscal year is created with its 12 OPEN periods (the same bounds
+    /// math as CreateNextFiscalYearAsync; the new year starts activated
+    /// by the migration-127 schema default), and a
+    /// FISCAL_YEAR_ROLL_FORWARD row lands in security_audit_log.
+    /// </summary>
+    public async Task DeactivatePeriodEndAndRollForwardAsync(string companyId, string userId, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        var years = await GetFiscalYearsAsync(companyId, cancellationToken).ConfigureAwait(false);
+        if (years.Count == 0)
+            throw new InvalidOperationException("No fiscal year exists yet for this company; create the first year from company setup.");
+        var last = years[^1];
+        if (!last.PeriodEndActivation)
+            throw new InvalidOperationException("Period-end activation is already off for the latest fiscal year.");
+        if (!DateOnly.TryParse(last.EndDate.Length >= 10 ? last.EndDate[..10] : last.EndDate, CultureInfo.InvariantCulture, out var lastEnd) ||
+            !DateOnly.TryParse(last.StartDate.Length >= 10 ? last.StartDate[..10] : last.StartDate, CultureInfo.InvariantCulture, out var lastStart))
+            throw new InvalidOperationException("The latest fiscal year has invalid dates and cannot be rolled forward.");
+        var newStart = lastEnd.AddDays(1);
+        var length = lastEnd.DayNumber - lastStart.DayNumber;
+        var newEnd = newStart.AddDays(length);
+
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var resolved = await ResolveCompanyIdAsync(connection, companyId, cancellationToken).ConfigureAwait(false);
+        if (!await ColumnExistsAsync(connection, "fiscal_years", "period_end_activation").ConfigureAwait(false))
+            throw new InvalidOperationException("Period-end activation is unavailable; apply migration 127 first.");
+        string dbName;
+        await using (var cmd = CreateCommand(connection, null,
+            "SELECT database_name FROM fiscal_years WHERE fiscal_year_id = @id"))
+        {
+            Add(cmd, "@id", last.Id);
+            dbName = Convert.ToString(await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture) ?? string.Empty;
+        }
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using (var off = CreateCommand(connection, transaction,
+                "UPDATE fiscal_years SET period_end_activation = @off WHERE fiscal_year_id = @id"))
+            {
+                Add(off, "@off", Bool(false));
+                Add(off, "@id", last.Id);
+                if (await off.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+                    throw new InvalidOperationException("The latest fiscal year could not be deactivated.");
+            }
+            var newYearId = await InsertFiscalYearAsync(connection, transaction, resolved, newStart, newEnd, dbName, cancellationToken).ConfigureAwait(false);
+            await InsertYearPeriodsAsync(connection, transaction, resolved, newYearId, newStart, newEnd, cancellationToken).ConfigureAwait(false);
+            if (await TableExistsAsync(connection, "security_audit_log").ConfigureAwait(false))
+            {
+                await using var audit = CreateCommand(connection, transaction, """
+                    INSERT INTO security_audit_log (company_id, user_id, username, event_type, details)
+                    VALUES (@company, @user, @user, 'FISCAL_YEAR_ROLL_FORWARD', @details)
+                    """);
+                Add(audit, "@company", resolved);
+                Add(audit, "@user", userId);
+                Add(audit, "@details", $"Period-end activation deactivated for fiscal year {last.FiscalYear}; rolled forward into {newStart.Year} ({newStart:yyyy-MM-dd} to {newEnd:yyyy-MM-dd}).");
+                await audit.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private readonly record struct PeriodHeader(string CompanyText, string PeriodName, string StartDate, string EndDate, string Status);
+
+    /// <summary>Loads a period header and proves it belongs to the
+    /// caller's company (dual-key: stored Guid text or the company code).</summary>
+    private async Task<PeriodHeader> LoadPeriodHeaderAsync(DbConnection connection, string companyId, Guid fiscalPeriodId, CancellationToken ct)
+    {
+        var resolved = await ResolveCompanyIdAsync(connection, companyId, ct).ConfigureAwait(false);
+        await using var cmd = CreateCommand(connection, null, """
+            SELECT CAST(company_id AS TEXT), period_name, CAST(start_date AS TEXT), CAST(end_date AS TEXT), status
+            FROM fiscal_periods
+            WHERE CAST(fiscal_period_id AS TEXT) = @period
+            """);
+        Add(cmd, "@period", fiscalPeriodId.ToString("D"));
+        await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        if (!await reader.ReadAsync(ct).ConfigureAwait(false))
+            throw new InvalidOperationException("Fiscal period was not found.");
+        var companyText = ReadString(reader, 0) ?? string.Empty;
+        if (!string.Equals(companyText, resolved, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(companyText, companyId.Trim(), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Fiscal period does not belong to the current company.");
+        return new PeriodHeader(
+            companyText,
+            ReadString(reader, 1) ?? string.Empty,
+            ReadString(reader, 2) ?? string.Empty,
+            ReadString(reader, 3) ?? string.Empty,
+            ReadString(reader, 4) ?? string.Empty);
+    }
 
     public async Task<CompressCounts> GetCompressCountsAsync(string companyId, CancellationToken cancellationToken = default)
     {
