@@ -296,6 +296,116 @@ Adopted wholesale:
 (Filled per workstream as the build lands — pillars checklist per window:
 UI / DB / linking / posting / persistence / downstream.)
 
+### Workstream A2 — GRNI exceptions + payable aging (Y2, Y3) — branch `feat/p2p-a2-grni`
+
+**Y2 — GRNI exception view (`GrniWin`, ReportKey `Purchasing.GRNI`, same
+window + same report permission as before; no new nav entry, so the
+existing gate applies unchanged):**
+- UI ✅ — a View filter (Detail / Exceptions) in the existing RptBase
+  window: central styling, bottom action bar, ENTER-horizontal grid,
+  RTL inherited. Exceptions mode lists (a) open receipt lines at/past a
+  user-set age threshold in days (default 90) with remaining qty, base
+  value, age and aging buckets; (b) invoiced-without-receipt invoices
+  (invoice no/date/supplier/base amount, age); (c) per-period GL 2203
+  tie-out rows (period, cumulative open-receipt base, cumulative GL
+  balance, cumulative difference) for every period whose cumulative
+  difference is not zero.
+- DB ✅ — read-only; queries in `RptQuery` (`InvoicedWithoutReceiptAsync`,
+  `GrniTieOutByPeriodAsync`): company-scoped (dual code/Guid key join,
+  as in `PurchaseInvoiceListAsync`), parameterized, provider-neutral
+  SQL (period = yyyy-MM prefix of the ISO date text on both providers).
+- Defect 1 fixed ✅ — the detail query's From filter no longer defaults
+  to −1 year: empty From = all open receipts; a set From bounds the
+  detail AND the reconciliation identically (new
+  `GoodsReceivedNotInvoicedReconciliationAsync(DateTime?, DateTime)`
+  overload; the old signature delegates unbounded).
+- Defect 2 fixed ✅ — `GlBalanceBase`/`DifferenceBase` are populated on
+  every detail row from the reconciliation query (previously totals-only,
+  grid columns always empty).
+- Period-end workbench ✅ (owner report §5 / §11 item 4 / §12) — detail,
+  exceptions and reconciliation are one workbench on ONE boundary: the
+  filter is labelled "Period-end (as of)" (`Reports.Filter.PeriodEndAsOf`,
+  ×4 languages) and receipts, invoice matches, receipt returns and
+  GL 2203 entries are all cut at that same date in every query the
+  window runs — an as-of period-end run reproduces that period-end
+  exactly, with no period+1 activity on either side.
+- Defect 3 found + fixed while proving the period-end scenario ✅ — the
+  reconciliation CTE's pro-rata factor `(remaining / qty)` ran BEFORE
+  the multiplication; on SQLite, integer-stored quantities make that an
+  integer division (3/5 → 0), zeroing every partially-matched line on
+  the receipt side of the tie-out (PostgreSQL NUMERIC unaffected). An
+  explicit `* 1.0` factor now guards the detail query, the
+  reconciliation and the by-period tie-out so all three always agree.
+- Posting — N/A (report). Downstream ✅ — export/print via RptBase cover
+  both modes; the exception columns are in the column chooser.
+
+**Y3 — Payable aging by due date (`SupAgingWin`, ReportKey
+`AP.SupplierAging`, same gate as before):**
+- UI ✅ — an "Aging basis" filter: Entry date (supplier summary, the
+  historical view) or Due date (one row per open purchase invoice:
+  invoice, supplier, invoice date, due date, days overdue, document
+  open amount, and the base open amount placed in the same 4 buckets +
+  Balance). Both modes take an explicit As-of date; entry-date mode now
+  ages `party_ledger` entries against it (entries after as-of excluded)
+  via `PartyAgingAsync(bool, DateTime, ct)` — the old signature
+  delegates with today, so CustAgingWin is unchanged.
+- DB ✅ — migration **094** (SQLite + PostgreSQL):
+  `purchase_documents.due_date` + index. Invoices predating it have NULL
+  and age by doc-date fallback (`COALESCE(due_date, doc_date)`).
+- Persistence ✅ — due date is stamped at invoice creation on BOTH
+  paths, inside the insert transaction: chain
+  (`OrderDocumentRepository.InsertDocumentAsync` → PUR only; explicit
+  `CommercialDocumentDraft.DueDate` wins, else doc date + supplier
+  `parties.credit_days`, else doc date) and manual
+  (`InvRepo.SaveDraft` → same rule; `InvRepo.Load` reads it back).
+  Editable for PUR in InvoiceWin (Due date field, purchase-invoice
+  header only; empty = derive from supplier terms at save).
+- Posting — N/A (no GL effect; due date is a terms attribute).
+  Downstream ✅ — `RptQuery.PayableDueDateAgingAsync` computes
+  DaysOverdue + bucket in SQL (provider-aware day difference, base
+  amounts), proven headlessly (below).
+- Lang ✅ — 21 new keys (`Reports.*` mode/column/filter/exception keys +
+  `Invoice.DueDate`) in all 4 catalogs, 0 missing for touched keys;
+  catalog parity deltas vs En unchanged from the base branch.
+
+**Proof (headless, this Linux host):**
+- Full build `--no-incremental`: 0 errors; warnings = only the 4 known
+  base CA1859 in `PurchaseReceiptReturnWin.cs` (left per instructions).
+- SqlMigrator double-run on a fresh SQLite DB: 094 applies on run 1,
+  SKIP on run 2; `due_date` column + index present.
+- The exact SQL of the new/changed queries was extracted from `Rpt.cs`
+  and executed against a migrated DB seeded like the Kern.Tests
+  fixtures: aged receipt remaining 10 / 200 with the fully-invoiced
+  receipt at 0; invoiced-without-receipt returns the manual invoices
+  and excludes the chain invoice with 078 matches; due-date aging
+  places invoices at 43 days → 31-60, −31 → 0-30, 165 (doc-date
+  fallback) → 90+, and excludes the fully paid invoice; reconciliation
+  unbounded OpenReceiptBase = 200 vs From-bounded (2026-01-01) = 0.
+- Period-end scenario executed headlessly the same way (chain-shaped
+  documents + GL 2203 entries across Nov/Dec 2026): as of 2026-11-30
+  the detail shows only the November receipt (remaining 3 / 36) and
+  OpenReceiptBase = GlBalanceBase = 36, Difference = 0; as of
+  2026-12-31 both sides move to 96, difference still 0 — this is the
+  §12 evidence for "GRNI exceptions and period-end reconciliation work
+  correctly" (functional) and "GRNI balances reconcile with received
+  and invoiced goods" (accounting), at query level.
+- `tools/audit_window_context.py` exit 0; `tools/verify_english_source.py`
+  exit 0.
+- Kern.Tests facts added (`tests/Kern.Tests/GrniPayableAgingTests.cs`,
+  6 facts): the three query behaviours above + due-date capture on the
+  manual path (derived 2026-01-01 + 45d = 2026-02-15, explicit date
+  persisted verbatim, Load round-trip) and on the chain path
+  (PO → receipt → invoice stamps invoice date + 45d) + the period-end
+  scenario through the REAL chain (real GL 2203 postings): as of
+  period-1 end GRNI total = GL 2203 balance = 36 with period-2
+  excluded from both sides, and the receipt's age crossing the
+  90-day exception threshold only at the later as-of date
+  (27 days at period-1 end → 104 days on 2027-02-15, still 36 open).
+  Tests compile here; execution is owed on Windows (net8.0-windows
+  testhost), as with the rest of the suite. PostgreSQL execution of
+  the new queries is likewise owed (SQL written provider-neutral;
+  only SQLite was exercised headlessly).
+
 ## 5. Gates
 
 (Filled at completion.)

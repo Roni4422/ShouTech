@@ -23,6 +23,13 @@ namespace ShouTech.App.Views.Reports;
 ///    no purchase_receipt_invoice_matches row (invoiced without receipt,
 ///    the manual InvoiceWin path), and (c) periods whose cumulative
 ///    GL 2203 tie-out difference is not zero.
+///
+/// PERIOD-END CONTRACT (owner report §5/§11.4): detail, exceptions and
+/// reconciliation are ONE workbench on ONE boundary — the Period-end
+/// (as of) filter date. Receipts, invoice matches, receipt returns and
+/// GL 2203 entries are all cut at that same date in every query this
+/// window runs, so an as-of period-end run reproduces that period-end
+/// exactly, with no period+1 activity leaking into either side.
 /// </summary>
 public sealed class GrniWin : RptBase
 {
@@ -71,7 +78,7 @@ public sealed class GrniWin : RptBase
                 DefaultValue = "Detail"
             },
             new() { Key = "From", LabelTextKey = "Reports.Filter.DateFrom", Kind = RptFltKind.DateFrom },
-            new() { Key = "AsOf", LabelTextKey = "Reports.Filter.AsOf", Kind = RptFltKind.DateTo, DefaultValue = DateTime.Today },
+            new() { Key = "AsOf", LabelTextKey = "Reports.Filter.PeriodEndAsOf", Kind = RptFltKind.DateTo, DefaultValue = DateTime.Today },
             new() { Key = "AgeThresholdDays", LabelTextKey = "Reports.Filter.AgeThresholdDays", Kind = RptFltKind.Text, DefaultValue = "90" },
             new() { Key = "Search", LabelTextKey = "Reports.Filter.Search", Kind = RptFltKind.Text },
         }

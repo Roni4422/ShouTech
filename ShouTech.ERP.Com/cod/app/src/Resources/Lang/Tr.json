@@ -716,7 +716,8 @@
       "StaleDays": "Durgunluk Günleri",
       "ViewMode": "Görünüm",
       "AgeThresholdDays": "Min. yaş (gün)",
-      "AgingBasis": "Yaşlandırma esası"
+      "AgingBasis": "Yaşlandırma esası",
+      "PeriodEndAsOf": "Dönem sonu (itibariyle)"
     },
     "CustomerAging": "Müşteri yaşlandırma",
     "SupplierAging": "Tedarikçi yaşlandırma",

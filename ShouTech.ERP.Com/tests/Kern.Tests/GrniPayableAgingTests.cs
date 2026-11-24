@@ -33,7 +33,12 @@ namespace Kern.Tests;
 ///  * due_date capture: InvRepo.SaveDraft stamps doc date + supplier
 ///    credit_days when no explicit due date is given, persists an
 ///    explicit one verbatim, and Load reads it back; the order-chain
-///    invoice conversion stamps the same default (migration 094).
+///    invoice conversion stamps the same default (migration 094);
+///  * period-end reconciliation (owner report §5/§11.4/§12): chain
+///    receipts + invoices across two periods tie GRNI to the real
+///    GL 2203 balance as of period-1 end, exclude period-2 activity
+///    from both sides, and the aged exception crosses the threshold
+///    only at the later as-of date.
 /// Execution requires Windows (net8.0-windows testhost), like the rest
 /// of Kern.Tests; compilation is verified headlessly.
 /// </summary>
@@ -190,6 +195,98 @@ public sealed class GrniPayableAgingTests
             $"SELECT due_date FROM purchase_documents WHERE doc_id = {invoiceId};"));
     }
 
+    // ------------------------------------- period-end reconciliation (§5)
+
+    /// <summary>
+    /// Owner report §5 / §11 item 4 / §12: receipts and invoices posted
+    /// across TWO periods through the real chain (so GL 2203 carries real
+    /// journal entries). As of period-1 end (2026-11-30): the GRNI total
+    /// equals the GL 2203 balance as of that date, period-2 activity is
+    /// excluded from BOTH sides, and the aged exception for the still-open
+    /// receipt appears only once the age threshold is crossed.
+    /// </summary>
+    [Fact]
+    public async Task GrniPeriodEnd_AsOfPeriod1End_TiesToGl2203_ExcludesPeriod2_AgedExceptionOnlyAfterThreshold()
+    {
+        // Clean database (no report fixtures): the tie-out aggregates the
+        // whole company, so every open receipt here must have its GL side.
+        using var db = await SeededAsync(withReportFixtures: false);
+        SeedChainPrerequisites(db.ConnectionString, db.CompanyId);
+        var orders = new OrderDocumentRepository("SQLite", db.ConnectionString);
+        var chain = new CommercialDocumentRepository("SQLite", db.ConnectionString);
+        var service = new OrderService(orders, chain);
+
+        var orderId = await service.CreateOrderAsync(
+            new CommercialDocumentDraft(
+                db.CompanyId, CommercialDocKinds.PurchaseOrder, "PO-A2-PE",
+                new DateOnly(2026, 11, 2), 9, "StepA2 Supplier", 1, "SAR", 1m, null,
+                new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 10m, 12m) },
+                "SUP-1", new DateOnly(2026, 11, 20), null),
+            Actor);
+        await service.PostOrderAsync(CommercialDocSide.Purchase, orderId, Actor);
+
+        // Period 1 (Nov 2026): receive 5 x 12 = 60 (Cr GRNI 60), then bill
+        // 2 x 12 (Dr GRNI 24) -> open receipt base 36, GL 2203 balance 36.
+        var (receiptAId, receiptANo) = await service.CreatePurchaseReceiptAsync(
+            db.CompanyId, orderId, new DateOnly(2026, 11, 3),
+            new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 5m, 12m) }, Actor);
+        Assert.True(receiptAId > 0);
+        var (invoiceAId, _) = await service.CreatePurchaseInvoiceAsync(
+            db.CompanyId, orderId, new DateOnly(2026, 11, 4),
+            new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 2m, 12m) }, Actor);
+        Assert.True(invoiceAId > 0);
+
+        // Period 2 (Dec 2026): receive the remaining 5 x 12 = 60.
+        var (receiptBId, receiptBNo) = await service.CreatePurchaseReceiptAsync(
+            db.CompanyId, orderId, new DateOnly(2026, 12, 2),
+            new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 5m, 12m) }, Actor);
+        Assert.True(receiptBId > 0);
+
+        var period1End = new DateTime(2026, 11, 30);
+
+        // Detail as of period-1 end: ONLY receipt A, remaining 3 / 36.
+        // Receipt B (period 2) must not leak into the detail side.
+        var detail = await RptQuery.GoodsReceivedNotInvoicedAsync(DateTime.MinValue, period1End, CancellationToken.None);
+        var detailA = Assert.Single(detail,
+            r => string.Equals(r.GetValueOrDefault("ReceiptNo")?.ToString(), receiptANo, StringComparison.Ordinal));
+        Assert.Equal(3m, Dec(detailA.GetValueOrDefault("RemainingQty")));
+        Assert.Equal(36m, Dec(detailA.GetValueOrDefault("RemainingBaseAmount")));
+        Assert.DoesNotContain(detail,
+            r => string.Equals(r.GetValueOrDefault("ReceiptNo")?.ToString(), receiptBNo, StringComparison.Ordinal));
+
+        // Reconciliation as of the SAME boundary: GRNI total == GL 2203
+        // balance as of that date == 36, difference zero — period-2's
+        // receipt (and its GL credit) excluded from both sides.
+        var reconciliation = await RptQuery.GoodsReceivedNotInvoicedReconciliationAsync(null, period1End, CancellationToken.None);
+        var tie = Assert.Single(reconciliation);
+        Assert.Equal(36m, Dec(tie.GetValueOrDefault("OpenReceiptBase")));
+        Assert.Equal(36m, Dec(tie.GetValueOrDefault("GlBalanceBase")));
+        Assert.Equal(0m, Dec(tie.GetValueOrDefault("DifferenceBase")));
+
+        // Sanity: as of period-2 the picture moves to 96 on both sides,
+        // proving the period-1 result was the boundary, not missing data.
+        var reconciliationP2 = await RptQuery.GoodsReceivedNotInvoicedReconciliationAsync(null, new DateTime(2026, 12, 31), CancellationToken.None);
+        var tieP2 = Assert.Single(reconciliationP2);
+        Assert.Equal(96m, Dec(tieP2.GetValueOrDefault("OpenReceiptBase")));
+        Assert.Equal(96m, Dec(tieP2.GetValueOrDefault("GlBalanceBase")));
+        Assert.Equal(0m, Dec(tieP2.GetValueOrDefault("DifferenceBase")));
+
+        // Aged exception: receipt A is 27 days old at period-1 end (below
+        // the 90-day threshold — no exception yet) and 104 days old on
+        // 2027-02-15 with the same 36 still open (exception applies).
+        var ageAtP1End = (period1End - new DateTime(2026, 11, 3)).Days;
+        Assert.Equal(27, ageAtP1End);
+        Assert.True(ageAtP1End < 90);
+        var later = new DateTime(2027, 2, 15);
+        var detailLater = await RptQuery.GoodsReceivedNotInvoicedAsync(DateTime.MinValue, later, CancellationToken.None);
+        var agedRow = Assert.Single(detailLater,
+            r => string.Equals(r.GetValueOrDefault("ReceiptNo")?.ToString(), receiptANo, StringComparison.Ordinal));
+        Assert.Equal(36m, Dec(agedRow.GetValueOrDefault("RemainingBaseAmount")));
+        var receiptDate = DateTime.Parse(Convert.ToString(agedRow.GetValueOrDefault("ReceiptDate"), CultureInfo.InvariantCulture)!, CultureInfo.InvariantCulture);
+        Assert.Equal(104, (later - receiptDate.Date).Days);
+        Assert.True((later - receiptDate.Date).Days >= 90);
+    }
+
     // ------------------------------------------------------------ harness
 
     private sealed class TestDb : IDisposable
@@ -206,7 +303,7 @@ public sealed class GrniPayableAgingTests
         }
     }
 
-    private static async Task<TestDb> SeededAsync()
+    private static async Task<TestDb> SeededAsync(bool withReportFixtures = true)
     {
         var root = Path.Combine(Path.GetTempPath(), "a2-tests-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -230,6 +327,9 @@ public sealed class GrniPayableAgingTests
 
         Exec($"INSERT INTO companies (company_id, company_code, company_name_ar, company_name_en, currency_code) VALUES ('{guid}', '{CompanyCode}', 'A2 Test Co', 'A2 Test Co', 'SAR');");
         Exec($"INSERT INTO parties (id, company_id, kind, code, name_en, name_ar, credit_days, is_active, is_deleted, ledger_id) VALUES ('{Guid.NewGuid():D}', '{CompanyCode}', 'S', 'SUP-1', 'StepA2 Supplier', 'StepA2 Supplier', 45, 1, 0, 9);");
+
+        if (!withReportFixtures)
+            return new TestDb { Root = root, DbPath = dbPath, CompanyId = companyId };
 
         // Chain documents (Guid company key): PO -> two receipts; one
         // receipt fully invoiced through a 078 match, one left open.

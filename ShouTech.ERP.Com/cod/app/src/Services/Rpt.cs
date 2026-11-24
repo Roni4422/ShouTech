@@ -612,7 +612,7 @@ public static class RptQuery
                    CASE WHEN l.qty > 0 AND
                        l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0) > 0
                        THEN l.line_subtotal * r.exchange_rate *
-                           (l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0)) / l.qty
+                           (l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0)) * 1.0 / l.qty
                        ELSE 0 END AS RemainingBaseAmount
             FROM purchase_documents r
             INNER JOIN companies co ON CAST(co.company_id AS TEXT) = r.company_id
@@ -682,6 +682,12 @@ public static class RptQuery
     /// receipt lines and the GL 2203 balance, so the difference the report
     /// shows can always be explained by the rows above it. A null from-date
     /// is unbounded, matching the detail query's new default.
+    /// The remaining-qty pro-rata factor carries an explicit * 1.0: in
+    /// SQLite, quantities stored as integers would otherwise make
+    /// (remaining / qty) an INTEGER division and zero out every
+    /// partially-matched line (PostgreSQL NUMERIC division is exact and
+    /// unaffected). The same factor guards the detail query and the
+    /// by-period tie-out, so all three always agree.
     /// </summary>
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> GoodsReceivedNotInvoicedReconciliationAsync(
         DateTime? from, DateTime asOf, CancellationToken ct)
@@ -693,7 +699,7 @@ public static class RptQuery
             WITH open_receipt_lines AS (
                 SELECT l.line_subtotal * r.exchange_rate *
                     CASE WHEN l.qty > 0 AND l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0) > 0
-                         THEN (l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0)) / l.qty
+                         THEN (l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0)) * 1.0 / l.qty
                          ELSE 0 END AS OpenBaseAmount
                 FROM purchase_documents r
                 INNER JOIN companies co ON CAST(co.company_id AS TEXT) = r.company_id
@@ -792,7 +798,7 @@ public static class RptQuery
                 SELECT substr(CAST(r.doc_date AS TEXT), 1, 7) AS Period,
                        l.line_subtotal * r.exchange_rate *
                        CASE WHEN l.qty > 0 AND l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0) > 0
-                            THEN (l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0)) / l.qty
+                            THEN (l.qty - COALESCE(m.MatchedQty, 0) - COALESCE(rt.ReturnedQty, 0)) * 1.0 / l.qty
                             ELSE 0 END AS OpenBaseAmount
                 FROM purchase_documents r
                 INNER JOIN companies co ON CAST(co.company_id AS TEXT) = r.company_id

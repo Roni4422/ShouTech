@@ -717,7 +717,8 @@
       "StaleDays": "أيام الركود",
       "ViewMode": "العرض",
       "AgeThresholdDays": "الحد الأدنى للعمر (أيام)",
-      "AgingBasis": "أساس الأعمار"
+      "AgingBasis": "أساس الأعمار",
+      "PeriodEndAsOf": "نهاية الفترة (حتى تاريخ)"
     },
     "CustomerAging": "أعمار ديون العملاء",
     "SupplierAging": "أعمار ديون الموردين",

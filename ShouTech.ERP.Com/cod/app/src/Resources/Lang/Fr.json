@@ -716,7 +716,8 @@
       "StaleDays": "Jours d'inactivité",
       "ViewMode": "Affichage",
       "AgeThresholdDays": "Âge min. (jours)",
-      "AgingBasis": "Base d'ancienneté"
+      "AgingBasis": "Base d'ancienneté",
+      "PeriodEndAsOf": "Fin de période (au)"
     },
     "CustomerAging": "Balance âgée clients",
     "SupplierAging": "Balance âgée fournisseurs",

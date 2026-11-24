@@ -1249,7 +1249,8 @@
       "StaleDays": "Stale Days",
       "ViewMode": "View",
       "AgeThresholdDays": "Min. age (days)",
-      "AgingBasis": "Aging basis"
+      "AgingBasis": "Aging basis",
+      "PeriodEndAsOf": "Period-end (as of)"
     },
     "CustomerAging": "Customer aging",
     "SupplierAging": "Supplier aging",
