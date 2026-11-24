@@ -146,6 +146,21 @@ public sealed class DefinitionRepository : IDefinitionRepository
 
             await CheckUniqueAsync(set, connection, transaction, companyId, effectiveId, values, cancellationToken).ConfigureAwait(false);
 
+            // W7a price-change history: a customer_prices save records
+            // old -> new in spr_price_history inside this transaction.
+            decimal? oldCustomerPrice = null;
+            var isCustomerPrices = string.Equals(set.Table, "customer_prices", StringComparison.OrdinalIgnoreCase);
+            if (isCustomerPrices && isUpdate)
+            {
+                await using var oldCmd = CreateCommand(connection, transaction,
+                    "SELECT price FROM customer_prices WHERE id = @id");
+                BindId(oldCmd, "@id", set, effectiveId!);
+                var oldValue = await oldCmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                oldCustomerPrice = oldValue is null or DBNull
+                    ? null
+                    : Convert.ToDecimal(oldValue, CultureInfo.InvariantCulture);
+            }
+
             string resultId;
             if (!isUpdate)
             {
@@ -155,6 +170,16 @@ public sealed class DefinitionRepository : IDefinitionRepository
             {
                 await UpdateRowAsync(set, connection, transaction, companyId, effectiveId!, values, actor, cancellationToken).ConfigureAwait(false);
                 resultId = effectiveId!;
+            }
+
+            if (isCustomerPrices
+                && values.TryGetValue("price", out var newPriceRaw) && newPriceRaw is not null
+                && values.TryGetValue("party_code", out var partyRaw)
+                && values.TryGetValue("material_code", out var materialRaw))
+            {
+                SalesPriceHistory.Record(connection, transaction, _provider, companyId,
+                    "CustomerPrice", $"{partyRaw}/{materialRaw}", "price",
+                    oldCustomerPrice, Convert.ToDecimal(newPriceRaw, CultureInfo.InvariantCulture), actor);
             }
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return resultId;

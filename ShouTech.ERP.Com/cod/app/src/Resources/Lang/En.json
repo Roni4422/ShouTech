@@ -1,4 +1,8 @@
 {
+  "Pricing": {
+    "Resolved": "Price {0} from {1}",
+    "OverrideConfirm": "Post anyway with a price override? The override will be recorded."
+  },
   "AccountCard": "Account Card",
   "Accounts": {
     "AIAnalysis": "AI",

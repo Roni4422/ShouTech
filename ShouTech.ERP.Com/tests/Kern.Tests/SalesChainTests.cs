@@ -8,6 +8,8 @@ using Microsoft.Data.Sqlite;
 using ShouTech.Application.Services;
 using ShouTech.Domain;
 using ShouTech.Domain.Entities;
+using ShouTech.Domain.Interfaces;
+using ShouTech.Infrastructure;
 using Xunit;
 
 namespace Kern.Tests
@@ -565,6 +567,242 @@ namespace Kern.Tests
         }
 
         private static string? DbPath;
+
+        // ---------------------------------------------------------------
+        // W7a pricing & promotions: resolver levels, discount rules,
+        // BXGY, and the SAL-7018/7019/7020 guard with audited overrides.
+        // ---------------------------------------------------------------
+
+        private static void SeedPricing(string connectionString, string extraSql)
+        {
+            using var connection = new SqliteConnection(connectionString);
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                UPDATE materials SET price_retail = 100, price_wholesale = 80, price_list = 90
+                WHERE material_id = 42;
+                INSERT INTO parties (id, company_id, kind, code, name_en, price_tier, is_deleted)
+                VALUES ('party-w7a', 'SC-TEST', 'C', 'CUST-1', 'Pricing Customer', 'Wholesale', 0);
+                """ + extraSql;
+            command.ExecuteNonQuery();
+        }
+
+        private static PriceResolution ResolveWith(string connectionString, Guid companyId, string partyCode, decimal qty)
+        {
+            using var connection = new SqliteConnection(connectionString);
+            connection.Open();
+            using var tx = connection.BeginTransaction();
+            // The Guid company key mirrors the chain repositories; the
+            // resolver's dual-key list also covers the 'SC-TEST' code
+            // that pricing masters (customer_prices, discount_rules)
+            // are keyed by.
+            return SalesPriceResolver.Default.Resolve(
+                connection, tx, "SQLite", companyId.ToString("D"), partyCode, 42, "MAT-42", qty, "PCS", "SAR", "2026-10-20");
+        }
+
+        [Fact]
+        public async Task Pricing_CustomerPriceWinsOverTierAndCard()
+        {
+            var (_, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                SeedPricing(connectionString, """
+                    INSERT INTO customer_prices (id, company_id, party_code, material_code, price, is_active, is_deleted)
+                    VALUES ('cp-1', 'SC-TEST', 'CUST-1', 'MAT-42', 55, 1, 0);
+                    """);
+                var resolution = ResolveWith(connectionString, companyId, "CUST-1", 1m);
+                Assert.Equal(55m, resolution.Price);
+                Assert.Equal(PriceSources.CustomerPrice, resolution.Source);
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task Pricing_PriceListTierBeatsTierColumn_AndExpiredRowsAreIgnored()
+        {
+            var (_, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                SeedPricing(connectionString, """
+                    INSERT INTO material_price_list (company_id, material_id, price_level, price, currency, unit_name, valid_from, valid_to)
+                    VALUES ('SC-TEST', 42, 'Wholesale', 1, '', NULL, '2020-01-01', '2020-12-31');
+                    INSERT INTO material_price_list (company_id, material_id, price_level, price, currency, unit_name, valid_from, valid_to)
+                    VALUES ('SC-TEST', 42, 'Wholesale', 70, '', NULL, '2026-01-01', NULL);
+                    """);
+                var resolution = ResolveWith(connectionString, companyId, "CUST-1", 1m);
+                Assert.Equal(70m, resolution.Price);
+                Assert.Equal(PriceSources.PriceListTier, resolution.Source);
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task Pricing_TierColumnThenMaterialCardFallback()
+        {
+            var (_, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                SeedPricing(connectionString, "");
+                var tier = ResolveWith(connectionString, companyId, "CUST-1", 1m);
+                Assert.Equal(80m, tier.Price);
+                Assert.Equal(PriceSources.TierColumn, tier.Source);
+
+                var card = ResolveWith(connectionString, companyId, "", 1m);
+                Assert.Equal(90m, card.Price);
+                Assert.Equal(PriceSources.MaterialCard, card.Source);
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task Pricing_DiscountRulesTakeHighestQualifying_AndBxgyEarnsFreeQty()
+        {
+            var (_, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                SeedPricing(connectionString, """
+                    UPDATE materials SET bonus_buy_qty = 5, bonus_qty = 1 WHERE material_id = 42;
+                    INSERT INTO discount_rules (id, company_id, scope, target_code, discount_pct, min_qty, is_active, is_deleted)
+                    VALUES ('dr-1', 'SC-TEST', 'CUSTOMER', 'CUST-1', 5, 10, 1, 0);
+                    INSERT INTO discount_rules (id, company_id, scope, target_code, discount_pct, min_qty, is_active, is_deleted)
+                    VALUES ('dr-2', 'SC-TEST', 'MATERIAL', 'MAT-42', 3, 0, 1, 0);
+                    """);
+                var resolution = ResolveWith(connectionString, companyId, "CUST-1", 12m);
+                Assert.Equal(5m, resolution.DiscountPct);
+                Assert.Equal(2m, resolution.BonusFreeQty);
+
+                var belowBreak = ResolveWith(connectionString, companyId, "CUST-1", 4m);
+                Assert.Equal(3m, belowBreak.DiscountPct);
+                Assert.Equal(0m, belowBreak.BonusFreeQty);
+            }
+            finally { cleanup(); }
+        }
+
+        private static void GuardWith(string connectionString, Guid companyId, IReadOnlyList<PriceGuardLine> lines, PriceOverrideContext? overrides)
+        {
+            using var connection = new SqliteConnection(connectionString);
+            connection.Open();
+            using var tx = connection.BeginTransaction();
+            SalesPriceGuard.Validate(connection, tx, "SQLite", companyId.ToString("D"), "SAL", "SAL-1", 1, lines, overrides);
+            tx.Commit();
+        }
+
+        [Fact]
+        public async Task PricingGuard_BlocksBelowMinimum_AndOverrideIsAudited()
+        {
+            var (_, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                SeedPricing(connectionString, "UPDATE materials SET price_min = 50 WHERE material_id = 42;");
+                var lines = new[] { new PriceGuardLine(1, 42, "MAT-42", 1m, 40m, 0m) };
+                var error = Assert.Throws<AppError>(() => GuardWith(connectionString, companyId, lines, null));
+                Assert.Equal(ErrorCodes.PriceBelowMinimum, error.Code);
+
+                GuardWith(connectionString, companyId, lines,
+                    new PriceOverrideContext("pricing-admin", PriceOverride: true, DiscountOverride: false));
+                using var verify = new SqliteConnection(connectionString);
+                verify.Open();
+                using var command = verify.CreateCommand();
+                command.CommandText = "SELECT COUNT(*) FROM spr_price_overrides WHERE rule_code = 'SAL-7018' AND actor = 'pricing-admin'";
+                Assert.Equal(1L, Convert.ToInt64(command.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture));
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task PricingGuard_MarginAndDiscountRules()
+        {
+            var (_, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                // Balance average cost is 40 (fixture); price 45 nets a
+                // margin of ~11% — below the 20% target.
+                SeedPricing(connectionString, "UPDATE materials SET margin_target_pct = 20, discount_max_pct = 10 WHERE material_id = 42;");
+                var marginError = Assert.Throws<AppError>(() => GuardWith(connectionString, companyId,
+                    new[] { new PriceGuardLine(1, 42, "MAT-42", 1m, 45m, 0m) }, null));
+                Assert.Equal(ErrorCodes.MarginBelowMinimum, marginError.Code);
+
+                var discountError = Assert.Throws<AppError>(() => GuardWith(connectionString, companyId,
+                    new[] { new PriceGuardLine(1, 42, "MAT-42", 1m, 100m, 15m) }, null));
+                Assert.Equal(ErrorCodes.DiscountExceedsLimit, discountError.Code);
+
+                // A discount-only override does not authorize a price breach.
+                var stillBlocked = Assert.Throws<AppError>(() => GuardWith(connectionString, companyId,
+                    new[] { new PriceGuardLine(1, 42, "MAT-42", 1m, 45m, 0m) },
+                    new PriceOverrideContext("discounter", PriceOverride: false, DiscountOverride: true)));
+                Assert.Equal(ErrorCodes.MarginBelowMinimum, stillBlocked.Code);
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task PricingGuard_UnsetLimitsNeverBlock()
+        {
+            var (_, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                SeedPricing(connectionString, "");
+                GuardWith(connectionString, companyId,
+                    new[] { new PriceGuardLine(1, 42, "MAT-42", 1m, 1m, 90m) }, null);
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task Pricing_BxgyFreeLineIsAddedAtOrderSave_AndMovesStockAtDelivery()
+        {
+            var (service, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                SeedPricing(connectionString, "UPDATE materials SET bonus_buy_qty = 2, bonus_qty = 1 WHERE material_id = 42;");
+                var orders = new OrderDocumentRepository("SQLite", connectionString);
+                var draft = new CommercialDocumentDraft(
+                    companyId, CommercialDocKinds.SalesOrder, "SO-W7A-B", new DateOnly(2026, 10, 20),
+                    null, null, 1, "SAR", 1m, null,
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Chain test item", "PCS", 4m, 10m, 0m, 0m, 1) },
+                    PartyCode: "CUST-1");
+                var orderId = await orders.CreateDraftAsync(CommercialDocSide.Sales, draft, "pricing-test");
+                var saved = await orders.FindByIdAsync(CommercialDocSide.Sales, orderId);
+                Assert.NotNull(saved);
+                Assert.Equal(2, saved!.Lines.Count);
+                var free = Assert.Single(saved.Lines, l => l.UnitPrice == 0m);
+                Assert.Equal(2m, free.Qty);
+
+                await orders.PostOrderAsync(CommercialDocSide.Sales, orderId, "pricing-test");
+                var deliveryId = await service.CreateFromSourceAsync(
+                    orderId, "DLV-W7A", new DateOnly(2026, 10, 21), "pricing-test");
+                await service.PostAsync(deliveryId, "pricing-test");
+
+                using var verify = new SqliteConnection(connectionString);
+                verify.Open();
+                using var command = verify.CreateCommand();
+                command.CommandText = "SELECT available_qty FROM material_stock_balances WHERE company_id = 'SC-TEST' AND material_id = 42";
+                // Paid 4 + free 2 leave the warehouse; the free part earns
+                // zero revenue but consumes stock and COGS like any line.
+                Assert.Equal(994m, Convert.ToDecimal(command.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture));
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task PricingGuard_BlocksSalesOrderSaveBelowMinimum()
+        {
+            var (_, _, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                SeedPricing(connectionString, "UPDATE materials SET price_min = 50 WHERE material_id = 42;");
+                var orders = new OrderDocumentRepository("SQLite", connectionString);
+                var draft = new CommercialDocumentDraft(
+                    companyId, CommercialDocKinds.SalesOrder, "SO-W7A", new DateOnly(2026, 10, 20),
+                    null, null, 1, "SAR", 1m, null,
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Chain test item", "PCS", 1m, 40m, 0m, 0m, 1) },
+                    PartyCode: "CUST-1");
+                var error = await Assert.ThrowsAsync<AppError>(() =>
+                    orders.CreateDraftAsync(CommercialDocSide.Sales, draft, "pricing-test"));
+                Assert.Equal(ErrorCodes.PriceBelowMinimum, error.Code);
+            }
+            finally { cleanup(); }
+        }
 
         private static CommercialDocumentDraft Quotation(Guid companyId, string docNo, decimal qty, decimal price) => new(
             companyId,

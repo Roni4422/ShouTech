@@ -1,4 +1,8 @@
 {
+  "Pricing": {
+    "Resolved": "Prix {0} depuis {1}",
+    "OverrideConfirm": "Comptabiliser quand même avec une dérogation de prix ? La dérogation sera enregistrée."
+  },
   "Application": {
     "Title": "ShouTech ERP",
     "Subtitle": "Plateforme de Gestion d'Entreprise Intégrée",

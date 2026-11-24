@@ -334,6 +334,23 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         string userId,
         CancellationToken cancellationToken)
     {
+        // W7a pricing: a SALES INVOICE draft earns its BXGY free lines
+        // at save (zero-price companions), and the price/margin/discount
+        // guard hard-blocks below-limit lines at save (SAL-7018/7019/
+        // 7020) — overrides are a posting-time act, audited there.
+        if (draft.DocKind == CommercialDocKinds.SalesInvoice)
+        {
+            var expanded = SalesPriceResolver.Default.ExpandBonusLines(
+                connection, transaction, _provider, draft.CompanyId.ToString("D"),
+                draft.PartyCode, draft.Lines);
+            if (expanded.Count != draft.Lines.Count)
+                draft = draft with { Lines = expanded };
+            SalesPriceGuard.Validate(connection, transaction, _provider,
+                draft.CompanyId.ToString("D"), draft.DocKind, draft.DocNo, null,
+                draft.Lines.Select((l, i) => new PriceGuardLine(
+                    i + 1, l.MaterialId, l.MaterialCode, l.Qty, l.UnitPrice, l.DiscountPct)).ToList(),
+                null);
+        }
         if (draft.DiscountAmount < 0m) throw new InvalidOperationException("Header discount cannot be negative.");
         if (draft.ExtraAmount < 0m) throw new InvalidOperationException("Header extra charges cannot be negative.");
         if (draft.DeliveryCost < 0m) throw new InvalidOperationException("Delivery cost cannot be negative.");
@@ -458,7 +475,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
     /// - SAL (sales invoice): a party_ledger debit for the customer grand total.
     /// - QUO / SO: no side effects.
     /// </summary>
-    public async Task PostSalesAsync(long docId, string userId, CancellationToken cancellationToken = default)
+    public async Task PostSalesAsync(long docId, string userId, CancellationToken cancellationToken = default, PriceOverrideContext? priceOverride = null)
     {
         if (docId <= 0) throw new ArgumentException("Document is required.", nameof(docId));
         if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
@@ -508,6 +525,35 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
 
             if (status != CommercialDocumentStatus.Draft)
                 throw new InvalidOperationException("Sales document was not found or is not in draft status.");
+
+            // W7a pricing guard at POST (SAL-7018/7019/7020): re-checked
+            // here because limits may have tightened since the draft was
+            // saved. An authorized override context (the posting user
+            // holds SALES.PRICE.OVERRIDE / SALES.DISCOUNT.OVERRIDE) is
+            // audited per line in spr_price_overrides instead of blocking.
+            if (docKind == CommercialDocKinds.SalesInvoice)
+            {
+                var guardLines = new List<PriceGuardLine>();
+                await using (var lineCmd = CreateCommand(connection, transaction,
+                    "SELECT line_no, material_id, material_code, qty, unit_price, discount_pct FROM sales_document_lines WHERE doc_id = @doc ORDER BY line_no"))
+                {
+                    Add(lineCmd, "@doc", docId);
+                    await using var lineReader = await lineCmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                    while (await lineReader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    {
+                        guardLines.Add(new PriceGuardLine(
+                            Convert.ToInt32(lineReader.GetValue(0), CultureInfo.InvariantCulture),
+                            lineReader.IsDBNull(1) ? null : Convert.ToInt64(lineReader.GetValue(1), CultureInfo.InvariantCulture),
+                            lineReader.IsDBNull(2) ? null : lineReader.GetString(2),
+                            Convert.ToDecimal(lineReader.GetValue(3), CultureInfo.InvariantCulture),
+                            Convert.ToDecimal(lineReader.GetValue(4), CultureInfo.InvariantCulture),
+                            Convert.ToDecimal(lineReader.GetValue(5), CultureInfo.InvariantCulture)));
+                    }
+                }
+                SalesPriceGuard.Validate(connection, transaction, _provider, companyId,
+                    docKind, docNo, docId, guardLines,
+                    priceOverride is null ? null : priceOverride with { DocKind = docKind, DocNo = docNo, DocId = docId });
+            }
 
             if (docKind == CommercialDocKinds.DeliveryNote)
             {

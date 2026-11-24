@@ -25,16 +25,16 @@ public interface IOrderDocumentRepository
 
     Task<CommercialDocumentSnapshot?> FindByNumberAsync(CommercialDocSide side, Guid companyId, string docKind, string docNo, CancellationToken cancellationToken = default);
 
-    Task<long> CreateDraftAsync(CommercialDocSide side, CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default);
+    Task<long> CreateDraftAsync(CommercialDocSide side, CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default, PriceOverrideContext? priceOverride = null);
 
     /// <summary>Creates a draft and its source-document link atomically.</summary>
     Task<long> CreateLinkedDraftAsync(CommercialDocSide side, CommercialDocumentDraft draft, string sourceDocKind, long sourceDocId, string userId, CancellationToken cancellationToken = default);
 
     /// <summary>Replaces header fields and lines of a Draft document; throws when not a draft.</summary>
-    Task UpdateDraftAsync(CommercialDocSide side, long docId, CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default);
+    Task UpdateDraftAsync(CommercialDocSide side, long docId, CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default, PriceOverrideContext? priceOverride = null);
 
     /// <summary>Posts an order/quotation (status flip only — orders have no GL/stock side effects).</summary>
-    Task PostOrderAsync(CommercialDocSide side, long docId, string userId, CancellationToken cancellationToken = default, CreditOverrideContext? creditOverride = null);
+    Task PostOrderAsync(CommercialDocSide side, long docId, string userId, CancellationToken cancellationToken = default, CreditOverrideContext? creditOverride = null, PriceOverrideContext? priceOverride = null);
 
     /// <summary>Creates and posts a partial goods receipt against a posted purchase order. Stock, GRNI journal, receipt document, and source link commit atomically.</summary>
     /// <summary>Creates a posted supplier invoice from received quantities, records line-level receipt matching and price variance, and clears GRNI atomically.</summary>
