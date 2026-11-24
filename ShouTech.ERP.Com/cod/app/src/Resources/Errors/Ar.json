@@ -750,5 +750,21 @@
   "SAL-7022": {
     "name": "Return inspection required",
     "message": "يتطلب هذا الإرجاع قرار فحص قبل أن يتم ترحيله."
+  },
+  "SAL-7023": {
+    "name": "Contract inactive or expired",
+    "message": "عقد البيع غير نشط في تاريخ هذا المستند؛ العقود المنتهية أو المعلقة أو غير السارية بعد لا يمكن السحب عليها."
+  },
+  "SAL-7024": {
+    "name": "Recurring schedule invalid",
+    "message": "جدول التكرار غير صالح: يلزم مستند قالب وفاصل زمني موجب وتاريخ تشغيل قادم."
+  },
+  "SAL-7025": {
+    "name": "RMA state invalid",
+    "message": "طلب إرجاع RMA ليس في حالة تسمح بهذه العملية."
+  },
+  "SAL-7026": {
+    "name": "Warranty claim invalid",
+    "message": "مطالبة الضمان غير صالحة: الضمان منتهٍ أو لاغٍ أو لا يغطي هذه المطالبة."
   }
 }

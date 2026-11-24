@@ -750,5 +750,21 @@
   "SAL-7022": {
     "name": "Return inspection required",
     "message": "Ce retour nécessite une décision d'inspection avant de pouvoir être comptabilisé."
+  },
+  "SAL-7023": {
+    "name": "Contract inactive or expired",
+    "message": "Le contrat de vente n'est pas actif à la date de ce document ; les contrats expirés, suspendus ou pas encore en vigueur ne peuvent pas être utilisés."
+  },
+  "SAL-7024": {
+    "name": "Recurring schedule invalid",
+    "message": "La planification récurrente est invalide : un document modèle, un intervalle positif et une prochaine date d'exécution sont requis."
+  },
+  "SAL-7025": {
+    "name": "RMA state invalid",
+    "message": "La demande RMA n'est pas dans un état permettant cette opération."
+  },
+  "SAL-7026": {
+    "name": "Warranty claim invalid",
+    "message": "La demande de garantie est invalide : la garantie est expirée, annulée ou ne couvre pas cette demande."
   }
 }

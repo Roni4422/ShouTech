@@ -205,4 +205,8 @@ public static class ErrorCodes
     public const string DiscountExceedsLimit = "SAL-7020";
     public const string ReturnQuantityExceeded = "SAL-7021";
     public const string ReturnInspectionRequired = "SAL-7022";
+    public const string ContractInactive = "SAL-7023";
+    public const string RecurringScheduleInvalid = "SAL-7024";
+    public const string RmaStateInvalid = "SAL-7025";
+    public const string WarrantyClaimInvalid = "SAL-7026";
 }

@@ -750,5 +750,21 @@
   "SAL-7022": {
     "name": "Return inspection required",
     "message": "This return requires an inspection decision before it can be posted."
+  },
+  "SAL-7023": {
+    "name": "Contract inactive or expired",
+    "message": "The sales contract is not active for this document date; expired, suspended or not-yet-effective contracts cannot be drawn down."
+  },
+  "SAL-7024": {
+    "name": "Recurring schedule invalid",
+    "message": "The recurring schedule is invalid: a template document, a positive interval and a next-run date are required."
+  },
+  "SAL-7025": {
+    "name": "RMA state invalid",
+    "message": "The RMA request is not in a state that allows this operation."
+  },
+  "SAL-7026": {
+    "name": "Warranty claim invalid",
+    "message": "The warranty claim is invalid: the warranty is expired, void, or does not cover this claim."
   }
 }

@@ -750,5 +750,21 @@
   "SAL-7022": {
     "name": "Return inspection required",
     "message": "Bu iadenin muhasebeleştirilebilmesi için bir inceleme kararı gereklidir."
+  },
+  "SAL-7023": {
+    "name": "Contract inactive or expired",
+    "message": "Satış sözleşmesi bu belge tarihinde aktif değil; süresi dolmuş, askıya alınmış veya henüz yürürlüğe girmemiş sözleşmelerden çekim yapılamaz."
+  },
+  "SAL-7024": {
+    "name": "Recurring schedule invalid",
+    "message": "Yinelenen zamanlama geçersiz: bir şablon belge, pozitif bir aralık ve bir sonraki çalışma tarihi gereklidir."
+  },
+  "SAL-7025": {
+    "name": "RMA state invalid",
+    "message": "RMA talebi bu işleme izin veren bir durumda değil."
+  },
+  "SAL-7026": {
+    "name": "Warranty claim invalid",
+    "message": "Garanti talebi geçersiz: garanti süresi dolmuş, geçersiz veya bu talebi kapsamıyor."
   }
 }
