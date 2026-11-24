@@ -47,8 +47,11 @@ and `docs/TELEMETRY_BACKUP_STUDY.md` (feat/telemetry-backup).
   design's exceptions; Help/Exit/Menu = PLATFORM, never gated). A
   gated module the license lacks opens **view-only** with a
   once-per-module-per-session LIC-8002 surfacing; the window still
-  opens. `MainShVM.HandleRibbonAction` carries the same check as
-  defense in depth. MWin surfaces the snapshot in the status bar
+  opens. The check sits at the two funnel points every ribbon path
+  passes through (MWin's click dispatch and RibbonNav's head);
+  `MainShVM.HandleRibbonAction` is only ever called downstream of
+  that funnel, so it deliberately carries no third copy. MWin
+  surfaces the snapshot in the status bar
   (edition · source · grace countdown · DEMO state) with a
   persistent demo banner; quick-access buttons route through the
   same click path and are covered.
@@ -86,8 +89,9 @@ and `docs/TELEMETRY_BACKUP_STUDY.md` (feat/telemetry-backup).
   local files (including `license.local.json`) for unauthenticated
   POST is retired — snapshot creation now purges legacy artifacts
   and creates nothing; queue processing performs no HTTP and drains
-  legacy items. Proven dead by LicHarness (no snapshot files
-  created; zero requests reach the mock's /sync endpoint).
+  legacy items. Proven dead by LicHarness (legacy artifacts are
+  purged, no snapshot files are created, and the mock records zero
+  requests of any kind while the retired methods run).
 - **Vendor tooling** (`tools/LicenseIssuer`): offline
   genkey / issue / verify. The release keypair was generated
   2026-11-24; the public half is embedded in
@@ -167,21 +171,77 @@ study (§3.3) required it gone before any server ships.
   (no migrations added by this build).
 - 4 audits (window context, screenfit, english source, schema):
   exit 0.
-- Errors parity 185 ×4 exact-set; Lang parity ×4.
+- Errors parity 185 ×4 exact-set; Lang parity ×4 (License section
+  43 keys ×4 exact-set).
 - Harnesses: P2p 39/39, W1 36/36, Bin 22/22, Num 27/27,
-  Info 35/35, LicHarness (see its section in this doc).
+  Info 35/35, **LicHarness 36/36**.
 - Kern.Tests additions (provider matrix, chain order, gate matrix,
-  matcher recorded sets) compile; execution is Windows-owed like
-  the rest of Kern.Tests.
+  matcher recorded sets, verdict store, DevMode default) compile;
+  execution is Windows-owed like the rest of Kern.Tests.
+
+## LicHarness (tools/LicHarness) — what it proves
+
+Nine legs against the real seams: (1) issue → verify →
+fingerprint match; (2) foreign device → BindingMismatch → demo,
+writes refused with LIC-8006; (3) one-component drift still
+matches; (4) module lapse → LIC-8002 for that module, core still
+writes; (5) signed verdicts — MISMATCH-CONFIRMED demos a valid
+license, replay/tamper/foreign verdicts rejected, CLEARED
+reactivates; (6) the real check-in cycle against the §6.1 double —
+allowlist-only report shape (exact key sets asserted, forbidden
+material absent), the request signature verifies against the
+installation public key the report itself carries, the verdict in
+the report response is applied, the daily marker is recorded;
+(7) backup upload — hashed parts, resume skips server-held parts,
+retention-3 enforced by the double; (8) SyncServ retired path
+purges and makes zero requests; (9) DevMode defaults off, grants
+nothing while disabled, and the shipped config carries it off.
+
+The double sits at the `HttpMessageHandler` seam (the standard
+.NET test position for HttpClient clients): this sandbox denies
+outbound TCP from agent-spawned processes, so a socket listener
+cannot be reached from the harness process here. The client still
+builds and signs real requests; the double sees the exact bytes
+and headers and returns the exact §6.1 responses. On the owner's
+Windows machine the same legs run unchanged.
+
+### Defects the harness caught in this build (fixed at the cause)
+
+1. `VerdictStore` logged discards through `AppHost.Logging`,
+   which is null under headless composition — a replayed verdict
+   crashed with NullReferenceException instead of being discarded.
+   The store now takes an optional `ILogServ` and falls back
+   null-safely; `CheckInSvc.Shared` passes the host log.
+2. `InstallationKeyStore.Protect/Unprotect` referenced
+   `ProtectedData` inside the same method that branch-guarded it,
+   so the method could not be JITted at all on a host without the
+   Windows-only assembly — the "plain storage on non-Windows"
+   path could never run. The DPAPI calls now live in their own
+   Windows-only methods the wrappers branch to.
+3. Finding (no code change): `AppCfgSvc.ApplyDevelopmentDefaults`
+   forcibly empties `Licensing.Activation.ActivationServer` when
+   `Application.EnvironmentType` is "Development" (the class
+   default). A Development install therefore can never check in —
+   coherent with the DevMode philosophy (dev machines do not phone
+   home), but silent; the harness config runs as Production, the
+   customer shape. Worth the owner's awareness when testing the
+   server later: a test install must set EnvironmentType to
+   Production or the client stays inert with no error.
 
 ## Conflict-watch files for the central merge
 
 `src/Domain/ErrorCodes.cs`, `cod/app/src/Resources/Errors/{En,Ar,Fr,Tr}.json`,
 `cod/app/src/Resources/Lang/{En,Ar,Fr,Tr}.json`,
-`cod/app/src/Services/{AppHost,Online,Backup,Accounting,Inventory,Shell,Auth,SplWin-related Views/SplWin.xaml.cs}.cs`,
-`cod/app/src/Views/{MWin.xaml,MWin.xaml.cs,LicenseWin.cs,AddonsWin.cs}`,
-`cod/app/src/Services/RibbonNav.cs`, `cod/app/src/ViewModels/MainShVM.cs`,
+`cod/app/src/Services/{AppHost,Online,Backup,Accounting,Inventory,Shell,Auth,Entitlements,Fingerprint,CheckIn,InvRepo,StkPost,RibbonNav,Security,ErrorCatalog}.cs`,
+`cod/app/src/Views/{MWin.xaml,MWin.xaml.cs,LicenseWin.cs,AddonsWin.cs,SplWin.xaml.cs,LogWin.xaml.cs}`,
+`cod/app/src/ViewModels/MainShVM.cs` (untouched by this build; listed for awareness),
+`cod/app/src/Navigation/ModuleMap.cs` (new),
 `cod/app/src/Configuration/AppConfig.cs`, `cfg/appset.json`,
+`cod/app/src/MainApp.csproj` (System.Management reference),
+`src/App/Services/JournalService.cs`,
 `docs/ERROR_CATALOG.md`, `docs/legal/EULA_TEMPLATE.md`,
-`cod/app/src/MainApp.csproj` (System.Management reference).
+`docs/LICENSING_BUILD.md`,
+`tools/{LicenseIssuer,LicHarness,verify_devmode_fence.py}`,
+`tests/Kern.Tests/LicensingTests.cs`.
+Deleted: `cod/app/src/Services/License.cs`.
 No migration numbers were taken; nothing to renumber.

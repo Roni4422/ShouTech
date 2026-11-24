@@ -92,7 +92,7 @@ namespace ShouTech.App.Services
                     CryptographicOperations.ZeroMemory(pkcs8);
                 }
 
-                AppHost.Logging.LogInfo("CheckIn", "Installation API keypair generated (first registration).");
+                AppHost.Logging?.LogInfo("CheckIn", "Installation API keypair generated (first registration).");
                 return _rsa = created;
             }
         }
@@ -107,26 +107,32 @@ namespace ShouTech.App.Services
         public byte[] Sign(byte[] data)
             => Key.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
 
+        // The DPAPI calls live in their own methods on purpose:
+        // a method that merely REFERENCES ProtectedData cannot be
+        // JITted on a host where the (Windows-only) assembly is
+        // absent, even if the branch never executes. The branching
+        // wrappers below reference no ProtectedData types, so the
+        // plain-storage path genuinely runs on non-Windows hosts.
         private static byte[] Protect(byte[] plain)
-        {
-            if (OperatingSystem.IsWindows())
-                return ProtectedData.Protect(plain, null, DataProtectionScope.CurrentUser);
-            return plain; // non-Windows dev/test hosts only
-        }
+            => OperatingSystem.IsWindows() ? ProtectWindows(plain) : plain; // non-Windows dev/test hosts only
+
+        private static byte[] ProtectWindows(byte[] plain)
+            => ProtectedData.Protect(plain, null, DataProtectionScope.CurrentUser);
 
         private static byte[]? Unprotect(byte[] stored)
         {
             try
             {
-                return OperatingSystem.IsWindows()
-                    ? ProtectedData.Unprotect(stored, null, DataProtectionScope.CurrentUser)
-                    : stored;
+                return OperatingSystem.IsWindows() ? UnprotectWindows(stored) : stored;
             }
             catch (Exception ex) when (ex is CryptographicException or PlatformNotSupportedException)
             {
                 return null;
             }
         }
+
+        private static byte[] UnprotectWindows(byte[] stored)
+            => ProtectedData.Unprotect(stored, null, DataProtectionScope.CurrentUser);
     }
 
     // ========== CheckInReportBuilder.cs ==========
@@ -381,9 +387,20 @@ namespace ShouTech.App.Services
         }
 
         private readonly string _path;
+        private readonly ILogServ? _log;
 
-        public VerdictStore(string? path = null)
-            => _path = path ?? Path.Combine(AppPaths.Cfg, "verdict-cache.json");
+        public VerdictStore(string? path = null, ILogServ? log = null)
+        {
+            _path = path ?? Path.Combine(AppPaths.Cfg, "verdict-cache.json");
+            _log = log;
+        }
+
+        /// <summary>Warning sink: the injected log when composed
+        /// with one, else the host's — and silent when neither
+        /// exists (headless composition must never turn a discarded
+        /// verdict into a crash).</summary>
+        private void Warn(string message)
+            => (_log ?? AppHost.Logging)?.LogWarning("CheckIn", message);
 
         /// <summary>Verifies and records a verdict envelope received
         /// from the server. Returns the payload when it was applied
@@ -394,24 +411,21 @@ namespace ShouTech.App.Services
             var payload = Verify(envelope);
             if (payload is null)
             {
-                AppHost.Logging.LogWarning("CheckIn",
-                    $"[{ErrorCodes.VerdictSignatureInvalid}] Verdict discarded: signature verification failed.");
+                Warn($"[{ErrorCodes.VerdictSignatureInvalid}] Verdict discarded: signature verification failed.");
                 return null;
             }
 
             if (!string.Equals(payload.InstallationId, expectedDeviceId, StringComparison.Ordinal)
                 || !string.Equals(payload.LicenseId, expectedLicenseIdentity, StringComparison.Ordinal))
             {
-                AppHost.Logging.LogWarning("CheckIn",
-                    $"[{ErrorCodes.VerdictReplayIgnored}] Verdict discarded: addressed to a different installation/license.");
+                Warn($"[{ErrorCodes.VerdictReplayIgnored}] Verdict discarded: addressed to a different installation/license.");
                 return null;
             }
 
             var cache = Read();
             if (payload.Seq <= cache.HighestAppliedSeq)
             {
-                AppHost.Logging.LogWarning("CheckIn",
-                    $"[{ErrorCodes.VerdictReplayIgnored}] Verdict seq {payload.Seq} ignored (highest applied {cache.HighestAppliedSeq}).");
+                Warn($"[{ErrorCodes.VerdictReplayIgnored}] Verdict seq {payload.Seq} ignored (highest applied {cache.HighestAppliedSeq}).");
                 return null;
             }
 
@@ -646,7 +660,7 @@ namespace ShouTech.App.Services
     public sealed class CheckInSvc
     {
         private static readonly Lazy<CheckInSvc> SharedInstance = new(() => new CheckInSvc(
-            AppHost.Logging, AppHost.DeviceInfo, new InstallationKeyStore(), new VerdictStore(), new CheckInStateStore()));
+            AppHost.Logging, AppHost.DeviceInfo, new InstallationKeyStore(), new VerdictStore(log: AppHost.Logging), new CheckInStateStore()));
 
         public static CheckInSvc Shared => SharedInstance.Value;
 

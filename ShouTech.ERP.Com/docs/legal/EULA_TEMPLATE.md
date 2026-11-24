@@ -72,11 +72,67 @@ time. The Licensor may require installation of updates that
 affect licensing or security mechanisms.
 
 ### 7. Data and privacy
-The Software operates on the Licensee's machines and data;
-the Licensor does not receive the Licensee's business data
-except data the Licensee affirmatively sends for support or
-activation, handled as described in the product
-documentation.
+The Software operates on the Licensee's machines, and the
+Licensee's data remains the Licensee's property. The
+compliance reporting, backup upload and license enforcement
+described in Section 7A are conditions of this license and
+form part of the product documentation for this Section.
+
+### 7A. Compliance reporting, backup upload and license enforcement
+
+> **[PENDING LAWYER REVIEW — adopted from the telemetry design
+> study (docs/TELEMETRY_BACKUP_STUDY.md §9) on 2026-11-24. The
+> enforcement mechanism described here must not ship before
+> this clause, or its lawyer-approved successor, ships with
+> the license. The encryption-key bracket in (c) is resolved
+> per owner decision (C): the per-installation key is held by
+> the Licensee; the Licensor stores ciphertext it cannot
+> read.]**
+
+(a) *Reporting.* As a condition of this license, the Software, when
+the Licensee's machine is connected to the internet, transmits to
+the Licensor's server, on launch or once daily: (i) information
+about the Software installation (version, instance and device
+identifiers, license key or dongle serial, license status, term and
+licensed limits); (ii) information about the licensed company and
+its users as recorded in the Software (company identifiers, legal
+names, tax and commercial registration numbers, contact details;
+user names, user identifiers, roles and active status); and (iii) a
+device fingerprint consisting of one-way hashes of hardware and
+operating-system components. Raw hardware serial numbers and user
+passwords or password hashes are never transmitted.
+
+(b) *Purpose.* Transmitted information is used solely to compare
+the installation against the Licensor's licensing records, to
+verify license compliance, and to provide the backup custody in
+clause (c).
+
+(c) *Backup upload.* Once daily, when connected, the Software
+uploads one encrypted backup copy of the licensed company's data
+(produced by the Software's own backup facility) to the Licensor's
+server. The Licensor retains at most three (3) such copies per
+company and deletes older copies. Backup copies are stored
+encrypted; the encryption key is held by the Licensee and the
+Licensor does not access the content of backup copies except as
+required to provide restore assistance at the Licensee's request.
+
+(d) *Enforcement.* If the comparison under clause (b) confirms that
+an installation does not correspond to the Licensor's licensing
+records, or the license is revoked for breach, the Licensor may
+cause that copy of the Software to convert, immediately upon the
+check that confirms the mismatch and without prior notice, to a
+view-only demonstration state in which data can be viewed, printed
+and exported but not created, altered, posted or deleted.
+Conversion does not delete, alter or withhold the Licensee's data,
+which remains the Licensee's property and remains fully exportable
+in that state. A converted copy is restored to full function upon
+the Licensor's clearance or re-registration of the installation.
+
+(e) *Offline use.* The Software does not require an internet
+connection to operate. Reporting and upload occur only when a
+connection is available, and the absence of a connection does not
+by itself affect the Licensee's use of the Software within the
+license term.
 
 ### 8. Limited warranty
 The Licensor warrants that the Software will substantially
@@ -131,3 +187,18 @@ ERP. باستخدام البرنامج أو تثبيته أو تفعيله يو�
 والإنهاء عند الإخلال بالبنود الجوهرية مع بقاء حق العميل في
 بياناته. [النص الحاكم عند التعارض والاختصاص القضائي: يُستكمل
 بعد مراجعة المحامي.]
+
+كما تشترط الاتفاقية أن يرسل البرنامج عند توفر الاتصال بالإنترنت،
+عند التشغيل أو مرة يومياً، معلومات عامة عن البرنامج والجهاز
+(النسخة ومعرّفات التثبيت والترخيص وبصمة جهاز مكوّنة من تجزئات
+أحادية الاتجاه لمكوّنات العتاد، دون الأرقام التسلسلية الخام ودون
+أي كلمات مرور أو تجزئاتها) ومعلومات الشركة المرخّصة ومستخدميها،
+وذلك لمقارنتها بسجلات الترخيص لدى المرخِّص والتحقق من الالتزام؛
+وأن يرفع نسخة احتياطية مشفّرة واحدة يومياً من بيانات الشركة
+يحتفظ المرخِّص بثلاث نسخ منها كحد أقصى. وإذا أكّدت المقارنة عدم
+تطابق التثبيت مع سجلات الترخيص جاز للمرخِّص تحويل تلك النسخة
+فوراً ودون إشعار مسبق إلى وضع العرض التجريبي (اطّلاع وطباعة
+وتصدير فقط، دون إنشاء أو تعديل أو ترحيل)، دون أن يمسّ ذلك بيانات
+المرخَّص له التي تبقى ملكاً له وقابلة للتصدير كاملة، وتعود النسخة
+إلى كامل وظائفها عند تسوية الوضع أو إعادة التسجيل. ولا يتطلب
+البرنامج اتصالاً بالإنترنت للعمل.
