@@ -124,3 +124,8 @@ for a non-trivial cause is reverted and marked SKIPPED with the reason.
   (build 0/0; migrator fresh through 115 + second run 0; 4 audit
   scripts exit 0; Errors parity 736 ×4; P2pHarness 39/39;
   W1Harness 36/36; Lang parity for touched keys 0 missing).
+- **Services B3 — DONE** (Invoice Designer; migration 116): see
+  SERVICES_GAP_INVENTORY.md B3 outcome. Gates: ALL-GREEN (build
+  0/0; migrator fresh through 116 + second run 0; 4 audit scripts
+  exit 0; Errors parity 736 ×4; P2pHarness 39/39; W1Harness 36/36;
+  Lang parity for touched keys 0 missing).

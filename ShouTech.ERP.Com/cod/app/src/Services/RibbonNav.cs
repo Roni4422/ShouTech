@@ -114,6 +114,7 @@ public static class RibbonNav
             case "Invoices.PackingList": Show(new PackingListWin(), owner); return true;
             case "Invoices.CompressInvoices": Show(new CompressInvoicesWin(), owner); return true;
             case "Invoices.RepostInvoices": Show(new RepostWin(), owner); return true;
+            case "Invoices.InvoiceDesigner": Show(new InvDesWin(), owner); return true;
 
             // ------------------------------------------------ POS
             case "POS.Points": Show(new LoyaltyWin(), owner); return true;

@@ -434,6 +434,7 @@
                         <ribbon:RibbonButton loc:LocProps.Key="Invoices.SearchQuotations" Label="Search quotations" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Invoices.InvoiceProfits" Label="Invoice profits" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Invoices.PackingList" Label="Packing list" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Invoices.InvoiceDesigner" Label="Invoice designer" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.InvoicesOtherTools" Header="Other Tools">
                         <ribbon:RibbonButton loc:LocProps.Key="Invoices.CompressInvoices" Label="Compress invoices" Click="OnRibbonButtonClick"/>

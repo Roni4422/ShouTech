@@ -154,6 +154,41 @@ audited in code on this branch — every "exists" below names the file.
   InvPrn) + save/copy/delete + encrypted export/import (`.stid`).
   Ribbon: new button under the Invoices tab (key
   Invoices.InvoiceDesigner) routed in RibbonNav.
+  - **B3 OUTCOME (built, gated):** all landed. Migration 116 (both
+    dialects) creates `doc_designs`. `DocDesign` (Reporting/
+    Invoices/DocDesign.cs) is the banded model: band toggles
+    (company address, party, doc meta, tax block, amount-in-words,
+    notes, signatures, Code-128 barcode of the document number),
+    header color, and the lines-band columns (field/caption/width/
+    visibility over the 12-field InvLine catalog); JSON payload is
+    the store shape AND the .stid payload (versioned, validated —
+    unknown line fields rejected). DocDesignRepo mirrors
+    ReportRepo's provider handling; ResolveForPrintAsync degrades
+    to the built-in layout on any failure (reported centrally), so
+    printing never breaks on a design load. InvPrn.BuildPage is
+    design-driven: a null design uses DocDesign.BuiltInDefault —
+    the historic layout as a design (same bands/columns; header
+    accent follows the app slate instead of the pinned #1F4E79,
+    zebra derived from the accent). InvoiceWin's Print/PDF buttons
+    now resolve the company's default design for the document kind
+    first — designs drive the actual print path. InvDesWin: kind
+    picker, per-company design list (load/save/copy/delete/set-
+    default; first design of a kind becomes default), band form,
+    columns editor (combo field picker, caption/width/visibility,
+    up/down reorder), live preview through InvPrn.BuildPreviewPage
+    (the production builder rendering a clearly-sample document),
+    .stid export/import via DesignFileSvc. Ribbon button
+    Invoices.InvoiceDesigner added to MWin.xaml (Invoices tab,
+    General group) + RibbonNav route; the shell nav count grows
+    264 → 265. Gated on REPORT.DESIGNER.VIEW / .MANAGE (the
+    designer permission family, as CustomReportsWin). 45
+    InvDesigner.* keys + Invoices.InvoiceDesigner × 4 languages,
+    parity verified 0 missing. Gates: ALL-GREEN (build 0/0;
+    migrator fresh through 116 + idempotent; 4 audit scripts exit
+    0; Errors parity 736 ×4; P2pHarness 39/39; W1Harness 36/36).
+    Windows-owed: WPF click-through of InvDesWin + designed
+    invoice printing; live PostgreSQL run of migration 116. QR
+    remains not available (no encoder) — not faked.
 - **B4 — Barcode Designer completion.** BcdDesWin keeps its working
   surface; added: **named designs in the DB per company** (migration
   117 `label_designs`, JSON payload; the existing local-file design

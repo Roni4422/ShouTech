@@ -447,8 +447,8 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _btnRejectDoc.Click += (_, _) => RejectDocument();
         _btnSave.Click += (_, _) => SaveDraft();
         _btnPost.Click += (_, _) => PostDoc();
-        _btnPrint.Click += (_, _) => InvPrn.Print(CaptureDoc(), CurrentCompanyDisplay);
-        _btnPdf.Click += (_, _) => InvPrn.ExportPdf(CaptureDoc(), CurrentCompanyDisplay);
+        _btnPrint.Click += async (_, _) => await PrintWithDesignAsync(pdf: false);
+        _btnPdf.Click += async (_, _) => await PrintWithDesignAsync(pdf: true);
         _cmbTaxCode.SelectionChanged += (_, _) =>
         {
             if (_suppressTaxSelectionChanged) return;
@@ -1116,6 +1116,28 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         if (decimal.TryParse(text, NumberStyles.Any, CultureInfo.CurrentCulture, out var v)) return v;
         if (decimal.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out v)) return v;
         return null;
+    }
+
+    /// <summary>Print / PDF through the company's default print
+    /// design for this document kind (Invoice Designer, B3); no
+    /// design = the built-in layout. Resolution failures degrade to
+    /// the built-in layout inside DocDesignRepo (reported there).</summary>
+    private async Task PrintWithDesignAsync(bool pdf)
+    {
+        try
+        {
+            var doc = CaptureDoc();
+            var (design, address) = await DocDesignRepo.ResolveForPrintAsync(doc.Kind, CurrentCompanyCode);
+            if (pdf)
+                InvPrn.ExportPdf(doc, CurrentCompanyDisplay, design, address);
+            else
+                InvPrn.Print(doc, CurrentCompanyDisplay, design, address);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "InvoiceWin.PrintWithDesignAsync");
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private InvDoc CaptureDoc()

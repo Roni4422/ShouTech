@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using Microsoft.Win32;
+using ShouTech.App.Common;
 using ShouTech.App.Reporting;
 using ShouTech.App.Reporting.Invoices;
 
@@ -18,17 +19,17 @@ namespace ShouTech.App.Services;
 /// </summary>
 public static class InvPrn
 {
-    public static void Print(InvDoc doc, string companyName)
+    public static void Print(InvDoc doc, string companyName, DocDesign? design = null, string? companyAddress = null)
     {
         ArgumentNullException.ThrowIfNull(doc);
-        var visual = BuildPage(doc, companyName);
+        var visual = BuildPage(doc, companyName, design, companyAddress);
         var paginator = new InvDocumentPaginator(visual);
         var dlg = new PrintDialog();
         if (dlg.ShowDialog() == true)
             dlg.PrintDocument(paginator, doc.DocNo);
     }
 
-    public static void ExportPdf(InvDoc doc, string companyName)
+    public static void ExportPdf(InvDoc doc, string companyName, DocDesign? design = null, string? companyAddress = null)
     {
         ArgumentNullException.ThrowIfNull(doc);
         var dlg = new SaveFileDialog
@@ -38,7 +39,7 @@ public static class InvPrn
         };
         if (dlg.ShowDialog() != true) return;
 
-        var visual = BuildPage(doc, companyName);
+        var visual = BuildPage(doc, companyName, design, companyAddress);
         visual.Measure(new Size(794, 1123)); // A4 at 96 DPI
         visual.Arrange(new Rect(0, 0, 794, 1123));
         visual.UpdateLayout();
@@ -46,8 +47,42 @@ public static class InvPrn
         PdfWrt.Write(dlg.FileName, new[] { jpeg }, 595.27, 841.89);
     }
 
-    private static Border BuildPage(InvDoc doc, string companyName)
+    /// <summary>Designer preview entry point (InvDesWin): renders a
+    /// document through the exact production page builder.</summary>
+    public static FrameworkElement BuildPreviewPage(
+        InvDoc doc, string companyName, DocDesign design, string? companyAddress = null)
+        => BuildPage(doc, companyName, design, companyAddress);
+
+    private static SolidColorBrush ParseBrush(string? hex, Color fallback)
     {
+        if (!string.IsNullOrWhiteSpace(hex))
+        {
+            try
+            {
+                return new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex.Trim()));
+            }
+            catch (FormatException)
+            {
+                // fall through to the fallback color
+            }
+        }
+        return new SolidColorBrush(fallback);
+    }
+
+    /// <summary>
+    /// Banded page builder (B3): header band (company + optional
+    /// address), title/meta, party band, lines band (the design's
+    /// columns), totals band (+ tax), then the footer elements the
+    /// design enables (amount in words, notes, barcode, signatures).
+    /// A null design uses DocDesign.BuiltInDefault — the historic
+    /// layout as a design.
+    /// </summary>
+    private static Border BuildPage(InvDoc doc, string companyName, DocDesign? design, string? companyAddress)
+    {
+        design ??= DocDesign.BuiltInDefault();
+        var accent = ParseBrush(design.HeaderBackColor, Color.FromRgb(0x51, 0x70, 0x8E));
+        var zebra = new SolidColorBrush(Color.FromArgb(0x16, accent.Color.R, accent.Color.G, accent.Color.B));
+
         var root = new Border
         {
             Background = Brushes.White,
@@ -58,13 +93,24 @@ public static class InvPrn
         var stack = new StackPanel();
         root.Child = stack;
 
+        // ── Header band ──
         stack.Children.Add(new TextBlock
         {
             Text = companyName,
             FontSize = 18,
             FontWeight = FontWeights.Bold,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x1F, 0x4E, 0x79))
+            Foreground = accent
         });
+        if (design.ShowCompanyAddress && !string.IsNullOrWhiteSpace(companyAddress))
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = companyAddress,
+                FontSize = 10.5,
+                Opacity = 0.8,
+                TextWrapping = TextWrapping.Wrap
+            });
+        }
         stack.Children.Add(new TextBlock
         {
             Text = $"{doc.KindCode}  {doc.DocNo}",
@@ -80,31 +126,62 @@ public static class InvPrn
             Margin = new Thickness(0, 0, 0, 12)
         });
 
-        stack.Children.Add(new TextBlock
+        // ── Party band ──
+        if (design.ShowPartyBlock && !string.IsNullOrWhiteSpace(doc.PartyName + doc.PartyCode))
         {
-            Text = $"{doc.PartyCode}  {doc.PartyName}",
-            FontSize = 13,
-            Margin = new Thickness(0, 0, 0, 8)
-        });
+            stack.Children.Add(new TextBlock
+            {
+                Text = $"{doc.PartyCode}  {doc.PartyName}",
+                FontSize = 13,
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+        }
 
+        // ── Document meta band ──
+        if (design.ShowDocMeta)
+        {
+            var meta = new List<string>();
+            if (!string.IsNullOrWhiteSpace(doc.WarehouseName)) meta.Add($"Warehouse: {doc.WarehouseName}");
+            if (!string.IsNullOrWhiteSpace(doc.TargetWarehouseName)) meta.Add($"To: {doc.TargetWarehouseName}");
+            if (!string.IsNullOrWhiteSpace(doc.Reference)) meta.Add($"Ref: {doc.Reference}");
+            if (!string.IsNullOrWhiteSpace(doc.BranchName)) meta.Add($"Branch: {doc.BranchName}");
+            if (!string.IsNullOrWhiteSpace(doc.SalesRepName)) meta.Add($"Sales rep: {doc.SalesRepName}");
+            meta.Add($"Currency: {doc.CurrencyCode}");
+            stack.Children.Add(new TextBlock
+            {
+                Text = string.Join("    ", meta),
+                FontSize = 11,
+                Opacity = 0.8,
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+        }
+
+        // ── Lines band ──
+        var columns = design.Columns.Where(c => c.Visible).ToList();
+        if (columns.Count == 0)
+            columns = DocDesign.DefaultColumns();
         var grid = new Grid();
-        for (var c = 0; c < 6; c++)
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        foreach (var col in columns)
+            grid.ColumnDefinitions.Add(new ColumnDefinition
+            {
+                Width = new GridLength(Math.Max(0.1, col.Width), GridUnitType.Star)
+            });
 
-        string[] headers = { "#", "Code", "Description", "Qty", "Price", "Total" };
-        for (var c = 0; c < headers.Length; c++)
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        for (var c = 0; c < columns.Count; c++)
         {
             var h = new TextBlock
             {
-                Text = headers[c],
+                Text = columns[c].Caption,
                 FontWeight = FontWeights.Bold,
                 Padding = new Thickness(4),
-                Background = new SolidColorBrush(Color.FromRgb(0x1F, 0x4E, 0x79)),
-                Foreground = Brushes.White
+                Background = accent,
+                Foreground = Brushes.White,
+                TextAlignment = DocDesign.IsNumericField(columns[c].FieldKey)
+                    ? TextAlignment.Right : TextAlignment.Left
             };
             Grid.SetColumn(h, c);
             Grid.SetRow(h, 0);
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             grid.Children.Add(h);
         }
 
@@ -112,24 +189,15 @@ public static class InvPrn
         foreach (var line in doc.Lines)
         {
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var vals = new[]
-            {
-                line.LineNo.ToString(CultureInfo.InvariantCulture),
-                line.MaterialCode,
-                line.Description,
-                line.Qty.ToString("N3", CultureInfo.InvariantCulture),
-                line.UnitPrice.ToString("N2", CultureInfo.InvariantCulture),
-                line.LineTotal.ToString("N2", CultureInfo.InvariantCulture),
-            };
-            for (var c = 0; c < vals.Length; c++)
+            for (var c = 0; c < columns.Count; c++)
             {
                 var cell = new TextBlock
                 {
-                    Text = vals[c],
+                    Text = DocDesign.FormatLineValue(line, columns[c].FieldKey),
                     Padding = new Thickness(4),
-                    Background = rowIndex % 2 == 0
-                        ? new SolidColorBrush(Color.FromRgb(0xF2, 0xF6, 0xFB))
-                        : Brushes.Transparent
+                    Background = rowIndex % 2 == 0 ? zebra : Brushes.Transparent,
+                    TextAlignment = DocDesign.IsNumericField(columns[c].FieldKey)
+                        ? TextAlignment.Right : TextAlignment.Left
                 };
                 Grid.SetRow(cell, rowIndex);
                 Grid.SetColumn(cell, c);
@@ -139,16 +207,32 @@ public static class InvPrn
         }
         stack.Children.Add(grid);
 
+        // ── Totals band ──
+        var totalsText = design.ShowTaxBlock
+            ? $"Subtotal: {doc.Subtotal:N2}    Tax: {doc.TaxAmount:N2}    Total: {doc.GrandTotal:N2} {doc.CurrencyCode}"
+            : $"Total: {doc.GrandTotal:N2} {doc.CurrencyCode}";
         stack.Children.Add(new TextBlock
         {
-            Text = $"Subtotal: {doc.Subtotal:N2}    Tax: {doc.TaxAmount:N2}    Total: {doc.GrandTotal:N2} {doc.CurrencyCode}",
+            Text = totalsText,
             FontSize = 13,
             FontWeight = FontWeights.Bold,
             Margin = new Thickness(0, 16, 0, 0),
             HorizontalAlignment = HorizontalAlignment.Right
         });
 
-        if (!string.IsNullOrWhiteSpace(doc.Notes))
+        if (design.ShowAmountInWords)
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = NumWords.ToWords(doc.GrandTotal, doc.CurrencyCode),
+                FontSize = 11,
+                FontStyle = FontStyles.Italic,
+                Margin = new Thickness(0, 8, 0, 0),
+                TextWrapping = TextWrapping.Wrap
+            });
+        }
+
+        if (design.ShowNotes && !string.IsNullOrWhiteSpace(doc.Notes))
         {
             stack.Children.Add(new TextBlock
             {
@@ -158,6 +242,46 @@ public static class InvPrn
                 Margin = new Thickness(0, 12, 0, 0),
                 TextWrapping = TextWrapping.Wrap
             });
+        }
+
+        // ── Barcode element: the document number as Code-128 (the
+        // repo's encoder; QR has no encoder in the repo and is not
+        // faked — see SERVICES_GAP_INVENTORY). ──
+        if (design.ShowBarcode && !string.IsNullOrWhiteSpace(doc.DocNo))
+        {
+            var barcodeStack = new StackPanel { Margin = new Thickness(0, 16, 0, 0) };
+            barcodeStack.Children.Add(Code128.BuildVisual(doc.DocNo, moduleWidth: 1.6, barHeight: 40));
+            barcodeStack.Children.Add(new TextBlock
+            {
+                Text = doc.DocNo,
+                FontSize = 10,
+                Margin = new Thickness(12, 2, 0, 0)
+            });
+            stack.Children.Add(barcodeStack);
+        }
+
+        // ── Signature blocks ──
+        if (design.ShowSignatures)
+        {
+            var sigGrid = new Grid { Margin = new Thickness(0, 36, 0, 0) };
+            for (var c = 0; c < 3; c++)
+                sigGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            string[] labels = { "Prepared by", "Approved by", "Received by" };
+            for (var c = 0; c < labels.Length; c++)
+            {
+                var cell = new StackPanel { Margin = new Thickness(0, 0, 24, 0) };
+                cell.Children.Add(new Border { Height = 1, Background = Brushes.Gray });
+                cell.Children.Add(new TextBlock
+                {
+                    Text = labels[c],
+                    FontSize = 10.5,
+                    Opacity = 0.8,
+                    Margin = new Thickness(0, 4, 0, 0)
+                });
+                Grid.SetColumn(cell, c);
+                sigGrid.Children.Add(cell);
+            }
+            stack.Children.Add(sigGrid);
         }
 
         return root;
