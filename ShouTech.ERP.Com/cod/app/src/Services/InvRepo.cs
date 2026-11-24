@@ -298,7 +298,7 @@ public static class InvRepo
                     (company_id, doc_kind, doc_no, doc_date, party_id, party_code, party_name, warehouse_id,
                      warehouse_name, currency_code, exchange_rate, subtotal, discount_amount, extra_amount,
                      tax_amount, grand_total, paid_amount, status, tax_code, tax_rate, notes,
-                     payment_method, receipt_no, reference_no, branch_name, sales_rep_name, cost_center,
+                     payment_method, receipt_no, reference_no, supplier_credit_note_ref, branch_name, sales_rep_name, cost_center,
                      party_account_name, goods_account_name,
                      original_doc_id, original_doc_kind, original_doc_no, journal_doc_no,
                      target_warehouse_id, target_warehouse_name, valid_till,
@@ -307,7 +307,7 @@ public static class InvRepo
                     ($company, $kind, $no, $date, $party, $pcode, $pname, $wh,
                      $whname, $cur, $fx, $sub, $disc, $extra,
                      $tax, $grand, $paid, 'Draft', $tcode, $trate, $notes,
-                     $pay, $receipt, $ref, $branch, $rep, $cc,
+                     $pay, $receipt, $ref, $cnref, $branch, $rep, $cc,
                      $pacc, $gacc,
                      $origId, $origKind, $origNo, $jrn,
                      $twh, $twhname, $validTill,
@@ -330,7 +330,7 @@ public static class InvRepo
                         ($company, $kind, $no, $date, $party, $pcode, $pname, $wh,
                          $whname, $cur, $fx, $sub, $disc, $extra,
                          $tax, $grand, $paid, 'Draft', $tcode, $trate, $notes,
-                         $pay, $receipt, $ref, $branch, $rep, $cc,
+                         $pay, $receipt, $ref, $cnref, $branch, $rep, $cc,
                          $pacc, $gacc,
                          $origId, $origKind, $origNo, $jrn,
                          $twh, $twhname, $validTill,
@@ -356,7 +356,7 @@ public static class InvRepo
                       currency_code=$cur, exchange_rate=$fx, subtotal=$sub,
                       discount_amount=$disc, extra_amount=$extra, tax_amount=$tax,
                       grand_total=$grand, paid_amount=$paid, tax_code=$tcode, tax_rate=$trate, notes=$notes,
-                      payment_method=$pay, receipt_no=$receipt, reference_no=$ref, branch_name=$branch,
+                      payment_method=$pay, receipt_no=$receipt, reference_no=$ref, supplier_credit_note_ref=$cnref, branch_name=$branch,
                       sales_rep_name=$rep, cost_center=$cc, party_account_name=$pacc, goods_account_name=$gacc,
                       original_doc_id=$origId, original_doc_kind=$origKind, original_doc_no=$origNo, journal_doc_no=$jrn,
                       target_warehouse_id=$twh, target_warehouse_name=$twhname, valid_till=$validTill
@@ -866,7 +866,14 @@ public static class InvRepo
                 EnforceSalesReturnGates(connection, tx, doc);
         }
         if (kind == InvDocKind.PurchaseReturn)
+        {
             ValidateAndAllocatePurchaseReturnAgainstOriginal(connection, tx, guidKey, doc, userId);
+            // I4: posting the debit note unwinds the mig-078 matches
+            // and the PO's stored per_billed for the returned lines, in
+            // this same transaction and under the same original-invoice
+            // lock the allocation step holds.
+            UnwindPurchaseReturnMatches(connection, tx, guidKey, doc, userId);
+        }
 
         // Batch/serial capture (Phase B 054): merge the picker's
         // per-line selections (keyed by line number) into the loaded
@@ -2219,7 +2226,7 @@ public static class InvRepo
                        discount_amount, extra_amount, paid_amount, payment_method, receipt_no, reference_no,
                        branch_name, sales_rep_name, cost_center, party_account_name, goods_account_name,
                        original_doc_id, original_doc_kind, original_doc_no, journal_doc_no,
-                       target_warehouse_id, target_warehouse_name, valid_till{(isSales ? "" : ", due_date")}
+                       target_warehouse_id, target_warehouse_name, valid_till{(isSales ? "" : ", due_date, supplier_credit_note_ref")}
                        {(hasW6Header ? ", return_reason_code, return_source_kind, no_invoice, inspection_status, approval_status" : string.Empty)}
                        {(hasExportHeader ? ", is_export, incoterm, port_of_loading, port_of_discharge, country_of_origin, customs_ref, vessel_flight, gross_weight, net_weight" : string.Empty)}
                 FROM {headerTable}
@@ -2267,6 +2274,7 @@ public static class InvRepo
                 PaymentMethod = ParsePaymentMethod(ReadString(reader, "payment_method")),
                 ReceiptNo = ReadString(reader, "receipt_no"),
                 Reference = ReadString(reader, "reference_no"),
+                SupplierCreditNoteRef = isSales ? string.Empty : ReadString(reader, "supplier_credit_note_ref"),
                 BranchName = ReadString(reader, "branch_name"),
                 SalesRepName = ReadString(reader, "sales_rep_name"),
                 CostCenter = ReadString(reader, "cost_center"),
@@ -3654,6 +3662,368 @@ public static class InvRepo
                 "The invoice tax lines do not reconcile with the stored document tax total. Recalculate the invoice before posting.");
     }
 
+    /// <summary>
+    /// I4 (migration 098): decrements the mig-078 receipt↔invoice
+    /// matched quantities for every line this purchase return allocates
+    /// against its original invoice, recording the exact decrement per
+    /// match row in purchase_return_match_unwinds so a later reversal
+    /// re-winds precisely. Runs inside the posting transaction, after
+    /// ValidateAndAllocatePurchaseReturnAgainstOriginal has written the
+    /// mig-080 allocations under the original invoice's lock — the same
+    /// lock discipline, so concurrent returns cannot unwind the same
+    /// matched quantity twice. Fully-consumed match rows are deleted
+    /// (matched_qty has a &gt; 0 CHECK); the re-wind re-creates them
+    /// from the receipt/invoice documents.
+    /// </summary>
+    private static void UnwindPurchaseReturnMatches(
+        DbConnection connection, DbTransaction transaction, string guidKey, InvDoc returnDoc, string userId)
+    {
+        if (returnDoc.OriginalDocId is not long originalDocId || originalDocId <= 0)
+            return;
+        var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+        if (!PartyLedger.TableExists(connection, transaction, provider, "purchase_receipt_invoice_matches") ||
+            !PartyLedger.TableExists(connection, transaction, provider, "purchase_return_match_unwinds"))
+            return;
+
+        var allocations = new List<(long OriginalLineId, decimal ReturnedQty)>();
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.Transaction = transaction;
+            cmd.CommandText = """
+                SELECT original_line_id, returned_qty
+                FROM purchase_return_line_allocations
+                WHERE return_doc_id = $ret AND company_id = $company
+                ORDER BY original_line_id;
+                """;
+            Add(cmd, "$ret", returnDoc.DocId);
+            Add(cmd, "$company", Company);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                allocations.Add((Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture)));
+        }
+
+        var affectedOrders = new HashSet<long>();
+        foreach (var (originalLineId, returnedQty) in allocations)
+        {
+            var remaining = returnedQty;
+            var matches = new List<(string MatchId, string CompanyId, long PoId, long ReceiptDocId, long ReceiptLineId, decimal MatchedQty)>();
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.Transaction = transaction;
+                cmd.CommandText = """
+                    SELECT match_id, company_id, purchase_order_id, receipt_doc_id, receipt_line_id, matched_qty
+                    FROM purchase_receipt_invoice_matches
+                    WHERE invoice_doc_id = $inv AND invoice_line_id = $line
+                    ORDER BY receipt_doc_id, receipt_line_id;
+                    """;
+                Add(cmd, "$inv", originalDocId);
+                Add(cmd, "$line", originalLineId);
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                    matches.Add((
+                        Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty,
+                        Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? string.Empty,
+                        Convert.ToInt64(reader.GetValue(2), CultureInfo.InvariantCulture),
+                        Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture),
+                        Convert.ToInt64(reader.GetValue(4), CultureInfo.InvariantCulture),
+                        Convert.ToDecimal(reader.GetValue(5), CultureInfo.InvariantCulture)));
+            }
+
+            foreach (var match in matches)
+            {
+                if (remaining <= 0m) break;
+                var take = Math.Min(remaining, match.MatchedQty);
+                if (take <= 0m) continue;
+                remaining -= take;
+                affectedOrders.Add(match.PoId);
+
+                using (var upd = connection.CreateCommand())
+                {
+                    upd.Transaction = transaction;
+                    if (take >= match.MatchedQty)
+                    {
+                        upd.CommandText = "DELETE FROM purchase_receipt_invoice_matches WHERE match_id = $match;";
+                    }
+                    else
+                    {
+                        var factor = (match.MatchedQty - take) / match.MatchedQty;
+                        upd.CommandText = """
+                            UPDATE purchase_receipt_invoice_matches
+                            SET matched_qty = matched_qty - $take,
+                                receipt_base_amount = receipt_base_amount * $factor,
+                                invoice_base_amount = invoice_base_amount * $factor,
+                                variance_base_amount = (invoice_base_amount * $factor) - (receipt_base_amount * $factor)
+                            WHERE match_id = $match;
+                            """;
+                        Add(upd, "$factor", factor);
+                    }
+                    Add(upd, "$take", take);
+                    Add(upd, "$match", match.MatchId);
+                    upd.ExecuteNonQuery();
+                }
+
+                using var ins = connection.CreateCommand();
+                ins.Transaction = transaction;
+                ins.CommandText = """
+                    INSERT INTO purchase_return_match_unwinds
+                        (company_id, return_doc_id, invoice_doc_id, match_id, receipt_doc_id,
+                         receipt_line_id, invoice_line_id, unwound_qty, created_by)
+                    VALUES ($company, $ret, $inv, $match, $receiptDoc, $receiptLine, $invLine, $qty, $actor);
+                    """;
+                Add(ins, "$company", match.CompanyId);
+                Add(ins, "$ret", returnDoc.DocId);
+                Add(ins, "$inv", originalDocId);
+                Add(ins, "$match", match.MatchId);
+                Add(ins, "$receiptDoc", match.ReceiptDocId);
+                Add(ins, "$receiptLine", match.ReceiptLineId);
+                Add(ins, "$invLine", originalLineId);
+                Add(ins, "$qty", take);
+                Add(ins, "$actor", userId);
+                ins.ExecuteNonQuery();
+            }
+        }
+
+        foreach (var poId in affectedOrders)
+            RefreshPoStoredPerBilled(connection, transaction, guidKey, poId);
+    }
+
+    /// <summary>
+    /// I4 re-wind: replays the stored unwind rows of a purchase return
+    /// exactly (the L3 stored-split rule) — matched quantities and base
+    /// amounts are restored, fully-unwound match rows are re-created
+    /// from the receipt/invoice documents, the unwind rows are consumed,
+    /// and the PO's stored per_billed is refreshed. Called when a posted
+    /// PRT is reversed; the PRT document itself is never edited here.
+    /// </summary>
+    public static void RewindPurchaseReturnMatches(long returnDocId, string userId)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(returnDocId);
+        DocSchema.Ensure();
+        var cs = DatabaseRuntime.GetConnectionString()
+            ?? throw new InvalidOperationException("No database connection.");
+        using var connection = Open(cs);
+        using var tx = connection.BeginTransaction();
+        var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+        if (!PartyLedger.TableExists(connection, tx, provider, "purchase_return_match_unwinds"))
+        {
+            tx.Commit();
+            return;
+        }
+        var guidKey = ResolveCompanyGuidOrNull(connection, tx)?.ToString("D") ?? Company;
+
+        var unwinds = new List<(long Id, long InvoiceDocId, string MatchId, long ReceiptDocId, long ReceiptLineId, long InvoiceLineId, decimal Qty)>();
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = """
+                SELECT unwind_id, invoice_doc_id, match_id, receipt_doc_id, receipt_line_id, invoice_line_id, unwound_qty
+                FROM purchase_return_match_unwinds WHERE return_doc_id = $ret ORDER BY unwind_id;
+                """;
+            Add(cmd, "$ret", returnDocId);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                unwinds.Add((
+                    Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+                    Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture),
+                    Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture) ?? string.Empty,
+                    Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture),
+                    Convert.ToInt64(reader.GetValue(4), CultureInfo.InvariantCulture),
+                    Convert.ToInt64(reader.GetValue(5), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture)));
+        }
+
+        var affectedOrders = new HashSet<long>();
+        foreach (var unwind in unwinds)
+        {
+            decimal existingQty = 0m;
+            long poId = 0;
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.Transaction = tx;
+                cmd.CommandText = "SELECT matched_qty, purchase_order_id FROM purchase_receipt_invoice_matches WHERE match_id = $match;";
+                Add(cmd, "$match", unwind.MatchId);
+                using var reader = cmd.ExecuteReader();
+                if (reader.Read())
+                {
+                    existingQty = Convert.ToDecimal(reader.GetValue(0), CultureInfo.InvariantCulture);
+                    poId = Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture);
+                }
+            }
+
+            if (existingQty > 0m)
+            {
+                var factor = (existingQty + unwind.Qty) / existingQty;
+                using var upd = connection.CreateCommand();
+                upd.Transaction = tx;
+                upd.CommandText = """
+                    UPDATE purchase_receipt_invoice_matches
+                    SET matched_qty = matched_qty + $qty,
+                        receipt_base_amount = receipt_base_amount * $factor,
+                        invoice_base_amount = invoice_base_amount * $factor,
+                        variance_base_amount = (invoice_base_amount * $factor) - (receipt_base_amount * $factor)
+                    WHERE match_id = $match;
+                    """;
+                Add(upd, "$qty", unwind.Qty);
+                Add(upd, "$factor", factor);
+                Add(upd, "$match", unwind.MatchId);
+                upd.ExecuteNonQuery();
+            }
+            else
+            {
+                // Re-create the fully-unwound row from the documents:
+                // receipt line cost/rate and invoice line cost/rate are
+                // the same snapshots MatchPurchaseInvoiceToReceipts
+                // originally stored.
+                long materialId = 0;
+                decimal receiptCost = 0m, receiptRate = 1m, invoiceCost = 0m, invoiceRate = 1m;
+                using (var cmd = connection.CreateCommand())
+                {
+                    cmd.Transaction = tx;
+                    cmd.CommandText = """
+                        SELECT rl.material_id, rl.unit_price * (1 - rl.discount_pct / 100), rd.exchange_rate,
+                               il.unit_price * (1 - il.discount_pct / 100), idoc.exchange_rate, dl.source_doc_id
+                        FROM purchase_document_lines rl
+                        JOIN purchase_documents rd ON rd.doc_id = rl.doc_id
+                        JOIN purchase_document_lines il ON il.line_id = $invLine
+                        JOIN purchase_documents idoc ON idoc.doc_id = il.doc_id
+                        LEFT JOIN document_links dl
+                          ON dl.target_doc_kind = 'PUR' AND dl.target_doc_id = idoc.doc_id AND dl.source_doc_kind = 'PO'
+                        WHERE rl.line_id = $receiptLine;
+                        """;
+                    Add(cmd, "$invLine", unwind.InvoiceLineId);
+                    Add(cmd, "$receiptLine", unwind.ReceiptLineId);
+                    using var reader = cmd.ExecuteReader();
+                    if (!reader.Read())
+                        throw new InvalidOperationException("The original receipt/invoice lines for a match re-wind were not found.");
+                    materialId = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture);
+                    receiptCost = Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
+                    receiptRate = Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture);
+                    invoiceCost = Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture);
+                    invoiceRate = Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture);
+                    poId = reader.IsDBNull(5) ? 0 : Convert.ToInt64(reader.GetValue(5), CultureInfo.InvariantCulture);
+                }
+                var receiptBase = decimal.Round(unwind.Qty * receiptCost * receiptRate, 6, MidpointRounding.AwayFromZero);
+                var invoiceBase = decimal.Round(unwind.Qty * invoiceCost * invoiceRate, 6, MidpointRounding.AwayFromZero);
+                using var ins = connection.CreateCommand();
+                ins.Transaction = tx;
+                ins.CommandText = """
+                    INSERT INTO purchase_receipt_invoice_matches
+                        (match_id, company_id, purchase_order_id, receipt_doc_id, receipt_line_id,
+                         invoice_doc_id, invoice_line_id, material_id, matched_qty, receipt_unit_cost,
+                         receipt_exchange_rate, invoice_unit_cost, invoice_exchange_rate,
+                         receipt_base_amount, invoice_base_amount, variance_base_amount, created_by)
+                    VALUES ($match, $company, $po, $receiptDoc, $receiptLine, $inv, $invLine, $material, $qty,
+                            $receiptCost, $receiptRate, $invoiceCost, $invoiceRate,
+                            $receiptBase, $invoiceBase, $variance, $actor);
+                    """;
+                Add(ins, "$match", unwind.MatchId);
+                Add(ins, "$company", guidKey);
+                Add(ins, "$po", poId);
+                Add(ins, "$receiptDoc", unwind.ReceiptDocId);
+                Add(ins, "$receiptLine", unwind.ReceiptLineId);
+                Add(ins, "$inv", unwind.InvoiceDocId);
+                Add(ins, "$invLine", unwind.InvoiceLineId);
+                Add(ins, "$material", materialId);
+                Add(ins, "$qty", unwind.Qty);
+                Add(ins, "$receiptCost", receiptCost);
+                Add(ins, "$receiptRate", receiptRate <= 0m ? 1m : receiptRate);
+                Add(ins, "$invoiceCost", invoiceCost);
+                Add(ins, "$invoiceRate", invoiceRate <= 0m ? 1m : invoiceRate);
+                Add(ins, "$receiptBase", receiptBase);
+                Add(ins, "$invoiceBase", invoiceBase);
+                Add(ins, "$variance", invoiceBase - receiptBase);
+                Add(ins, "$actor", userId);
+                ins.ExecuteNonQuery();
+            }
+            if (poId > 0) affectedOrders.Add(poId);
+
+            using var del = connection.CreateCommand();
+            del.Transaction = tx;
+            del.CommandText = "DELETE FROM purchase_return_match_unwinds WHERE unwind_id = $id;";
+            Add(del, "$id", unwind.Id);
+            del.ExecuteNonQuery();
+        }
+
+        foreach (var poId in affectedOrders)
+            RefreshPoStoredPerBilled(connection, tx, guidKey, poId);
+        tx.Commit();
+    }
+
+    /// <summary>
+    /// I4/P5: recomputes one purchase order's STORED per_billed inside
+    /// the caller's transaction, from posted chain invoices net of
+    /// posted purchase-return allocations — the same semantics as
+    /// OrderDocumentRepository's stored-progress maintenance.
+    /// </summary>
+    private static void RefreshPoStoredPerBilled(DbConnection connection, DbTransaction transaction, string guidKey, long purchaseOrderId)
+    {
+        var lines = new List<(int LineNo, decimal Qty)>();
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.Transaction = transaction;
+            cmd.CommandText = "SELECT line_no, qty FROM purchase_document_lines WHERE doc_id = $po ORDER BY line_no;";
+            Add(cmd, "$po", purchaseOrderId);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                lines.Add((Convert.ToInt32(reader.GetValue(0), CultureInfo.InvariantCulture),
+                    Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture)));
+        }
+        if (lines.Count == 0) return;
+
+        decimal totalOrdered = 0m, totalBilled = 0m;
+        foreach (var (lineNo, qty) in lines)
+        {
+            totalOrdered += qty;
+            decimal billed = 0m;
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.Transaction = transaction;
+                cmd.CommandText = """
+                    SELECT COALESCE(SUM(il.qty), 0)
+                    FROM document_links dl
+                    JOIN purchase_documents inv
+                      ON inv.doc_id = dl.target_doc_id AND inv.doc_kind = 'PUR' AND inv.status = 'Posted'
+                     AND CAST(inv.is_deleted AS TEXT) IN ('0', 'false')
+                    JOIN purchase_document_lines il ON il.doc_id = inv.doc_id AND il.line_no = $lineNo
+                    WHERE dl.source_doc_kind = 'PO' AND dl.source_doc_id = $po AND dl.target_doc_kind = 'PUR';
+                    """;
+                Add(cmd, "$lineNo", lineNo);
+                Add(cmd, "$po", purchaseOrderId);
+                billed = Convert.ToDecimal(cmd.ExecuteScalar() ?? 0m, CultureInfo.InvariantCulture);
+            }
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.Transaction = transaction;
+                cmd.CommandText = """
+                    SELECT COALESCE(SUM(a.returned_qty), 0)
+                    FROM purchase_return_line_allocations a
+                    JOIN purchase_documents prt
+                      ON prt.doc_id = a.return_doc_id AND prt.doc_kind = 'PRT' AND prt.status = 'Posted'
+                     AND CAST(prt.is_deleted AS TEXT) IN ('0', 'false')
+                    JOIN purchase_document_lines il ON il.line_id = a.original_line_id
+                    JOIN document_links dl
+                      ON dl.target_doc_kind = 'PUR' AND dl.target_doc_id = a.original_doc_id
+                     AND dl.source_doc_kind = 'PO' AND dl.source_doc_id = $po
+                    WHERE il.line_no = $lineNo;
+                    """;
+                Add(cmd, "$lineNo", lineNo);
+                Add(cmd, "$po", purchaseOrderId);
+                billed -= Convert.ToDecimal(cmd.ExecuteScalar() ?? 0m, CultureInfo.InvariantCulture);
+            }
+            totalBilled += Math.Min(qty, Math.Max(0m, billed));
+        }
+        var perBilled = totalOrdered <= 0m ? 0m : decimal.Round(100m * totalBilled / totalOrdered, 2);
+        using var upd = connection.CreateCommand();
+        upd.Transaction = transaction;
+        upd.CommandText = "UPDATE purchase_documents SET per_billed = $per WHERE doc_id = $po AND (company_id = $company OR company_id = $guid);";
+        Add(upd, "$per", perBilled);
+        Add(upd, "$po", purchaseOrderId);
+        Add(upd, "$company", Company);
+        Add(upd, "$guid", guidKey);
+        upd.ExecuteNonQuery();
+    }
+
     private static void EnsureUniqueSupplierInvoiceReference(DbConnection connection, DbTransaction transaction, InvDoc doc)
     {
         if (doc.Kind != InvDocKind.PurchaseInvoice ||
@@ -3684,7 +4054,7 @@ public static class InvRepo
         using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = """
-            SELECT doc_id
+            SELECT doc_no
             FROM purchase_documents
             WHERE (company_id = $company OR company_id = $guid)
               AND doc_kind = 'PUR'
@@ -3700,9 +4070,14 @@ public static class InvRepo
         Add(command, "$reference", normalizedReference);
         Add(command, "$current", doc.DocId > 0 ? doc.DocId : null);
 
-        if (command.ExecuteScalar() is not null and not DBNull)
-            throw new InvalidOperationException(
-                "A supplier invoice with this external reference already exists for the selected supplier.");
+        var existingDocNo = command.ExecuteScalar();
+        if (existingDocNo is not null and not DBNull)
+            // I1: the SAME catalogued error the chain path raises
+            // (PUR-1011) — one code for one rule on both paths.
+            throw new AppError(ErrorCodes.SupplierBillReferenceDuplicate,
+                $"Supplier bill '{doc.Reference.Trim()}' already exists for this supplier.",
+                doc.Reference.Trim(),
+                Convert.ToString(existingDocNo, CultureInfo.InvariantCulture) ?? string.Empty);
     }
 
     /// <summary>
@@ -3767,6 +4142,7 @@ public static class InvRepo
         Add(cmd, "$pay", doc.PaymentMethod.ToString());
         Add(cmd, "$receipt", doc.ReceiptNo);
         Add(cmd, "$ref", doc.Reference);
+        Add(cmd, "$cnref", string.IsNullOrWhiteSpace(doc.SupplierCreditNoteRef) ? null : doc.SupplierCreditNoteRef.Trim());
         Add(cmd, "$branch", doc.BranchName);
         Add(cmd, "$rep", doc.SalesRepName);
         Add(cmd, "$cc", doc.CostCenter);

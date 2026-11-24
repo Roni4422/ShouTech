@@ -1015,31 +1015,10 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             connection, transaction, CommercialDocSide.Purchase, order.CompanyId,
             purchaseOrderId, CommercialDocKinds.PurchaseInvoice, order.Lines, cancellationToken).ConfigureAwait(false));
 
-        // I4: quantities unwound by posted purchase returns no longer
-        // count as billed. The unwind rows key the RECEIPT line; receipt
-        // lines carry the PO source line number as their line_no.
-        if (PartyLedger.TableExists(connection, transaction, _provider, "purchase_return_match_unwinds"))
-        {
-            await using var unwinds = CreateCommand(connection, transaction, """
-                SELECT rl.line_no, COALESCE(SUM(u.unwound_qty), 0)
-                FROM purchase_return_match_unwinds u
-                JOIN purchase_documents prt
-                  ON prt.doc_id = u.return_doc_id AND prt.doc_kind = 'PRT'
-                 AND prt.status = 'Posted' AND CAST(prt.is_deleted AS TEXT) IN ('0', 'false')
-                JOIN purchase_document_lines rl ON rl.line_id = u.receipt_line_id
-                JOIN purchase_receipt_invoice_matches m ON m.match_id = u.match_id
-                WHERE m.purchase_order_id = @po
-                GROUP BY rl.line_no
-                """);
-            Add(unwinds, "@po", purchaseOrderId);
-            await using var reader = await unwinds.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-            {
-                var lineNo = Convert.ToInt32(reader.GetValue(0), CultureInfo.InvariantCulture);
-                var qty = Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
-                billedByLine[lineNo] = Math.Max(0m, billedByLine.GetValueOrDefault(lineNo) - qty);
-            }
-        }
+        // I4 note: billed quantities already net posted PRT returns —
+        // LinkedQuantitiesBySourceLineAsync subtracts the mig-080
+        // purchase-return allocations for PUR targets, and the 078
+        // match unwind in InvRepo keeps the match table consistent.
 
         decimal totalOrdered = 0m, totalReceived = 0m, totalBilled = 0m;
         foreach (var line in order.Lines)
@@ -1154,6 +1133,23 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                        WHERE a.company_id = dl.company_id
                          AND a.original_doc_id = d.doc_id
                          AND a.original_line_id = l.line_id
+                   ), 0)
+                   WHEN @targetKind = @invoiceKind THEN COALESCE((
+                       -- I4: a posted purchase return (PRT debit note)
+                       -- un-bills the returned quantity, so the goods
+                       -- can be re-invoiced. Allocations key the original
+                       -- invoice line; the PRT document itself is the
+                       -- company/status guard (its company key is the
+                       -- invoice family's CODE, not this Guid).
+                       SELECT SUM(a.returned_qty)
+                       FROM purchase_return_line_allocations a
+                       JOIN {docs} rd
+                         ON rd.doc_id = a.return_doc_id
+                        AND rd.doc_kind = @prtKind
+                        AND rd.status = @posted
+                        AND CAST(rd.is_deleted AS TEXT) IN ('0', 'false')
+                       WHERE a.original_doc_id = d.doc_id
+                         AND a.original_line_id = l.line_id
                    ), 0) ELSE 0 END
                    {attributionColumns}
             FROM document_links dl
@@ -1178,6 +1174,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         Add(command, "@returnKind", CommercialDocKinds.PurchaseReceiptReturn);
         if (side == CommercialDocSide.Sales)
             Add(command, "@deliveryKind", CommercialDocKinds.DeliveryNote);
+        Add(command, "@invoiceKind", CommercialDocKinds.PurchaseInvoice);
+        Add(command, "@prtKind", CommercialDocKinds.PurchaseReturn);
 
         var quantities = new Dictionary<int, decimal>();
         var legacyByMaterial = new Dictionary<long, decimal>();

@@ -24,6 +24,7 @@ public sealed class PurchaseReturnWin : BaseWin
     private readonly List<(DataGridColumn Column, string Key)> _headers = new();
     private readonly TextBox _invoiceNo = new();
     private readonly TextBox _reason = new();
+    private readonly TextBox _creditNoteRef = new();
     private readonly TextBlock _invoiceInfo = new();
     private readonly TextBlock _returnTotal = new();
     private readonly TextBlock _statusBar = new();
@@ -66,6 +67,7 @@ public sealed class PurchaseReturnWin : BaseWin
         form.Margin = new Thickness(0, 0, 0, 6);
         F2Ui.AddField(_labels, form, 0, 0, "PurchaseReturn.OriginalInvoice", _invoiceNo);
         F2Ui.AddField(_labels, form, 0, 1, "PurchaseReturn.Reason", _reason);
+        F2Ui.AddField(_labels, form, 1, 0, "PurchaseReturn.CreditNoteRef", _creditNoteRef);
         DockPanel.SetDock(form, Dock.Top);
         content.Children.Add(form);
 
@@ -226,7 +228,10 @@ public sealed class PurchaseReturnWin : BaseWin
                 TaxCode = _original.TaxCode,
                 DefaultTaxRate = _original.DefaultTaxRate,
                 ReceiptNo = _original.ReceiptNo,
-                Reference = _original.Reference,
+                // I5: the debit note carries its OWN supplier credit-note
+                // reference (typed here), never the original invoice's.
+                Reference = string.Empty,
+                SupplierCreditNoteRef = _creditNoteRef.Text.Trim(),
                 BranchName = _original.BranchName,
                 SalesRepName = _original.SalesRepName,
                 CostCenter = _original.CostCenter,

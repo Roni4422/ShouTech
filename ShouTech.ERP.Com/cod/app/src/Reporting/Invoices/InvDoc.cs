@@ -177,6 +177,10 @@ public sealed class InvDoc
     public InvPaymentMethod PaymentMethod { get; set; } = InvPaymentMethod.Cash;
     public string ReceiptNo { get; set; } = string.Empty;
     public string Reference { get; set; } = string.Empty;
+    /// <summary>I5 (migration 096): a purchase return's OWN supplier
+    /// credit-note reference, stored on the PRT header in its own column
+    /// — never copied from the original invoice's Reference.</summary>
+    public string SupplierCreditNoteRef { get; set; } = string.Empty;
     public string BranchName { get; set; } = string.Empty;
     public string SalesRepName { get; set; } = string.Empty;
     public string CostCenter { get; set; } = string.Empty;

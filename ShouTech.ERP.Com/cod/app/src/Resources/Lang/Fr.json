@@ -3963,6 +3963,7 @@
     "PostReturn": "Valider le retour",
     "OriginalInvoice": "N° facture fournisseur d'origine",
     "Reason": "Motif du retour",
+    "CreditNoteRef": "Réf. de l'avoir fournisseur (optionnel)",
     "Code": "Code article",
     "Description": "Description",
     "Unit": "Unité",

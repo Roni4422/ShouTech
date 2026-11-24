@@ -3972,6 +3972,7 @@
     "PostReturn": "Post Return",
     "OriginalInvoice": "Original Supplier Invoice No.",
     "Reason": "Return Reason",
+    "CreditNoteRef": "Supplier Credit Note Ref. (optional)",
     "Code": "Item Code",
     "Description": "Description",
     "Unit": "Unit",

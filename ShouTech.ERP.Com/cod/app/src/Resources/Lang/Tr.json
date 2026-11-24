@@ -3963,6 +3963,7 @@
     "PostReturn": "İadeyi Kaydet",
     "OriginalInvoice": "Orijinal Tedarikçi Fatura No.",
     "Reason": "İade Nedeni",
+    "CreditNoteRef": "Tedarikçi alacak dekontu ref. (isteğe bağlı)",
     "Code": "Ürün Kodu",
     "Description": "Açıklama",
     "Unit": "Birim",
