@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Windows;
+using ShouTech.App.Configuration;
 using ShouTech.App.Views;
 using ShouTech.App.Views.Reports;
 using ShouTech.Domain;
@@ -190,6 +191,16 @@ public static class RibbonNav
             // ------------------------------------------------ Tools
             case "Tools.Calculator": Show(new CalculatorWin(), owner); return true;
             case "Tools.Keyboard": LaunchOnScreenKeyboard(owner); return true;
+            // Ribbon completion R1: the four language entries had NO
+            // handler anywhere (audit docs/RIBBON_AUDIT.md class (c)) —
+            // the click fell into the generic module workspace and the
+            // language never switched. They now run the real switch:
+            // persist the choice in UsrPref (the OptWin pattern) and
+            // apply it live to every open window.
+            case "Tools.Arabic": SwitchLanguage("ar"); return true;
+            case "Tools.English": SwitchLanguage("en"); return true;
+            case "Tools.French": SwitchLanguage("fr"); return true;
+            case "Tools.Turkish": SwitchLanguage("tr"); return true;
             case "Tools.MaintenanceWizard": Show(new MaintenanceWin(), owner); return true;
             case "Tools.ChangePassword": Show(new ChangePasswordWin(), owner); return true;
             case "Tools.ActivityLog": Show(new ActivityLogWin(), owner); return true;
@@ -255,6 +266,26 @@ public static class RibbonNav
     /// (sweep S-2), and its empty catch silently swallowed activation
     /// failures (sweep S-7) — WindowActivator reports them centrally.</summary>
     private static void Show(Window win, Window? owner) => WindowActivator.Show(win, owner);
+
+    /// <summary>
+    /// Ribbon language entries (R1): persists the choice in UsrPref
+    /// and applies it live — App.SetApplicationLanguage re-mirrors
+    /// and re-localizes every open window and sets the culture.
+    /// </summary>
+    private static void SwitchLanguage(string code)
+    {
+        try
+        {
+            var pref = UsrPref.Load();
+            pref.Lang = code;
+            pref.Save();
+            App.SetApplicationLanguage(code);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, ex, "RibbonNav.SwitchLanguage");
+        }
+    }
 
     private static void LaunchOnScreenKeyboard(Window? owner)
     {

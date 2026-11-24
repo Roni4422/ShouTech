@@ -88,6 +88,10 @@ cannot carry a complete-pillars surface.
 
 - **R1 — the (c) four**: wire Tools.{Arabic,English,French,
   Turkish} to App.SetApplicationLanguage in RibbonNav.
+  **DONE (2026-11-24), gates ALL-GREEN**: the four cases now call
+  RibbonNav.SwitchLanguage — UsrPref persistence (the OptWin
+  pattern) + App.SetApplicationLanguage live switch (re-mirrors and
+  re-localizes all open windows). The (c) class is empty.
 - **R2 — grid/directory program** (owner spec 2026-11-24 15:07 +
   Phenix reference image 15:10): invoice/voucher/report grid
   standard, MatDirWin tree, CoaWin tree + account card — these
