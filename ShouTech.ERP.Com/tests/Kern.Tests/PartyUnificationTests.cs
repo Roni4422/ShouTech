@@ -239,6 +239,195 @@ public sealed class PartyUnificationTests
         Assert.Empty(await recon.GetPaymentsAsync(CompanyCode, "S"));
     }
 
+    // ------------------------------------------------------------ supplier advances (Y1, migration 095)
+
+    private async Task<Party> SaveSupplierAsync(TestDb db, string code, string name)
+    {
+        var repo = new MasterCardRepository("SQLite", db.ConnectionString);
+        var party = new Party { Kind = "S", Code = code, NameEn = name, CreditLimit = 0m };
+        await repo.SavePartyAsync(CompanyCode, party, Actor);
+        Assert.True(party.LedgerId > 0);
+        return party;
+    }
+
+    private static long InsertPurchaseDoc(TestDb db, string kind, string docNo, long partyId, string partyName, decimal total)
+        => (long)ExecScalar(db,
+            $"INSERT INTO purchase_documents (company_id, doc_kind, doc_no, doc_date, party_id, party_name, currency_code, grand_total, paid_amount, status) VALUES ('{CompanyCode}', '{kind}', '{docNo}', '2026-03-01', {partyId}, '{partyName}', 'SAR', {total.ToString(CultureInfo.InvariantCulture)}, 0, 'Posted'); SELECT last_insert_rowid();");
+
+    private void LinkPoToInvoice(TestDb db, long poId, long invoiceId)
+        => Exec(db,
+            $"INSERT INTO document_links (company_id, source_doc_kind, source_doc_id, target_doc_kind, target_doc_id, created_by) VALUES ('{db.CompanyId:D}', 'PO', {poId}, 'PUR', {invoiceId}, '{Actor}');");
+
+    private static async Task<Guid> AdvanceVoucherAsync(TestDb db, JournalService journal, JournalRepository journalRepo, Party supplier, long poId, string docNo, decimal amount, string debitAccount = "1215")
+    {
+        var cashId = await journalRepo.ResolveAccountIdAsync(db.CompanyId, "131");
+        var debitId = await journalRepo.ResolveAccountIdAsync(db.CompanyId, debitAccount);
+        var id = await journal.CreateDraftAsync(db.CompanyId, new DateOnly(2026, 3, 5),
+            $"Supplier advance {docNo}", Actor,
+            new[]
+            {
+                new JournalLineRequest(debitId, amount, 0m),
+                new JournalLineRequest(cashId, 0m, amount)
+            },
+            documentNumber: docNo);
+        Exec(db,
+            $"INSERT INTO voucher_party_links (journal_entry_id, company_id, party_kind, party_id, party_code, doc_kind, doc_no, amount, currency_code, created_by, po_doc_id, is_advance) VALUES ('{id:D}', '{CompanyCode}', 'S', {supplier.LedgerId}, '{supplier.Code}', 'PAY', '{docNo}', {amount.ToString(CultureInfo.InvariantCulture)}, 'SAR', '{Actor}', {poId}, 1);");
+        await journal.PostAsync(id, Actor);
+        return id;
+    }
+
+    private static decimal GlAccountNetDebit(TestDb db, string accountCode)
+        => ExecScalar(db,
+            $"SELECT COALESCE(SUM(l.debit - l.credit), 0) FROM journal_entry_lines l JOIN chart_of_accounts a ON a.account_id = l.account_id JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id WHERE a.account_code = '{accountCode}' AND j.status IN (1, 2);");
+
+    [Fact]
+    public async Task Advance_PostsDebitAdvances_NotPayable_AndNetsSupplierBalance()
+    {
+        using var db = await SeededAsync();
+        var supplier = await SaveSupplierAsync(db, "SUP-A", "Advance Supplier");
+        var poId = InsertPurchaseDoc(db, "PO", "PO-A1", supplier.LedgerId, "Advance Supplier", 1000m);
+
+        var journalRepo = new JournalRepository("SQLite", db.ConnectionString);
+        var journal = new JournalService(journalRepo);
+        await AdvanceVoucherAsync(db, journal, journalRepo, supplier, poId, "PAY-ADV-1", 400m);
+
+        // GL: the advance debits 1215 and never touches AP 2201.
+        Assert.Equal(400m, GlAccountNetDebit(db, "1215"));
+        Assert.Equal(0m, GlAccountNetDebit(db, "2201"));
+        // Party ledger: one ADV settlement entry (debit) for the supplier.
+        Assert.Equal(1m, ExecScalar(db,
+            $"SELECT COUNT(*) FROM party_ledger WHERE company_id = '{CompanyCode}' AND party_kind = 'S' AND party_id = {supplier.LedgerId} AND doc_kind = 'ADV' AND debit = 400 AND journal_entry_id IS NOT NULL;"));
+
+        // The supplier statement nets the advance against the payable:
+        // invoice credit 1000 + advance debit 400 -> net credit 600 owed.
+        var invoiceId = InsertPurchaseDoc(db, "PUR", "PUR-A1", supplier.LedgerId, "Advance Supplier", 1000m);
+        Exec(db, $"INSERT INTO party_ledger (company_id, party_kind, party_id, doc_kind, doc_id, doc_no, entry_date, debit, credit, currency_code) VALUES ('{CompanyCode}', 'S', {supplier.LedgerId}, 'PUR', {invoiceId}, 'PUR-A1', '2026-03-02', 0, 1000, 'SAR');");
+        var balance = await new MasterCardRepository("SQLite", db.ConnectionString)
+            .GetPartyBalanceAsync(CompanyCode, "S", "SUP-A");
+        Assert.Equal(400m, balance.Debit);
+        Assert.Equal(1000m, balance.Credit);
+        Assert.Equal(-600m, balance.Balance);
+    }
+
+    [Fact]
+    public async Task Advance_VoucherDebitingPayable_IsRejected()
+    {
+        using var db = await SeededAsync();
+        var supplier = await SaveSupplierAsync(db, "SUP-A", "Advance Supplier");
+        var poId = InsertPurchaseDoc(db, "PO", "PO-A1", supplier.LedgerId, "Advance Supplier", 1000m);
+
+        var journalRepo = new JournalRepository("SQLite", db.ConnectionString);
+        var journal = new JournalService(journalRepo);
+        // An advance-flagged voucher that debits AP 2201 (the old shape)
+        // must fail the in-transaction control enforcement for 1215.
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            AdvanceVoucherAsync(db, journal, journalRepo, supplier, poId, "PAY-ADV-BAD", 400m, debitAccount: "2201"));
+        Assert.Equal(0m, ExecScalar(db,
+            $"SELECT COUNT(*) FROM party_ledger WHERE company_id = '{CompanyCode}' AND doc_kind = 'ADV';"));
+    }
+
+    [Fact]
+    public async Task Advance_CannotBeAllocatedToAnotherPurchaseOrdersInvoice()
+    {
+        using var db = await SeededAsync();
+        var supplier = await SaveSupplierAsync(db, "SUP-A", "Advance Supplier");
+        var poA = InsertPurchaseDoc(db, "PO", "PO-A1", supplier.LedgerId, "Advance Supplier", 1000m);
+        var poB = InsertPurchaseDoc(db, "PO", "PO-B1", supplier.LedgerId, "Advance Supplier", 1000m);
+        var invoiceB = InsertPurchaseDoc(db, "PUR", "PUR-B1", supplier.LedgerId, "Advance Supplier", 1000m);
+        LinkPoToInvoice(db, poB, invoiceB);
+
+        var journalRepo = new JournalRepository("SQLite", db.ConnectionString);
+        var journal = new JournalService(journalRepo);
+        await AdvanceVoucherAsync(db, journal, journalRepo, supplier, poA, "PAY-ADV-1", 400m);
+
+        var recon = new ReconciliationRepository("SQLite", db.ConnectionString);
+        var advance = Assert.Single(await recon.GetPaymentsAsync(CompanyCode, "S"));
+        Assert.True(advance.IsAdvance);
+        Assert.Equal("PO-A1", advance.PoDocNo);
+        Assert.Equal(400m, advance.Available);
+
+        var error = await Assert.ThrowsAsync<AppError>(() =>
+            recon.AllocateAsync(CompanyCode, "S", advance.LedgerId, "PURCHASE", invoiceB, 100m, Actor));
+        Assert.Equal(ErrorCodes.AdvancePurchaseOrderMismatch, error.Code);
+        Assert.Equal(0m, ExecScalar(db, $"SELECT paid_amount FROM purchase_documents WHERE doc_id = {invoiceB};"));
+        Assert.Equal(0m, ExecScalar(db, $"SELECT COUNT(*) FROM payment_allocations WHERE company_id = '{CompanyCode}';"));
+        Assert.Equal(400m, GlAccountNetDebit(db, "1215"));
+    }
+
+    [Fact]
+    public async Task Advance_AllocatedToOwnPoInvoice_ClearsAdvanceAndSettles()
+    {
+        using var db = await SeededAsync();
+        var supplier = await SaveSupplierAsync(db, "SUP-A", "Advance Supplier");
+        var poId = InsertPurchaseDoc(db, "PO", "PO-A1", supplier.LedgerId, "Advance Supplier", 1000m);
+        var invoiceId = InsertPurchaseDoc(db, "PUR", "PUR-A1", supplier.LedgerId, "Advance Supplier", 1000m);
+        LinkPoToInvoice(db, poId, invoiceId);
+
+        var journalRepo = new JournalRepository("SQLite", db.ConnectionString);
+        var journal = new JournalService(journalRepo);
+        await AdvanceVoucherAsync(db, journal, journalRepo, supplier, poId, "PAY-ADV-1", 400m);
+
+        var recon = new ReconciliationRepository("SQLite", db.ConnectionString);
+        var advance = Assert.Single(await recon.GetPaymentsAsync(CompanyCode, "S"));
+        var allocationId = await recon.AllocateAsync(CompanyCode, "S", advance.LedgerId, "PURCHASE", invoiceId, 250m, Actor, "Advance applied");
+
+        Assert.Equal(250m, ExecScalar(db, $"SELECT paid_amount FROM purchase_documents WHERE doc_id = {invoiceId};"));
+        Assert.Equal(1m, ExecScalar(db,
+            $"SELECT COUNT(*) FROM payment_allocations WHERE company_id = '{CompanyCode}' AND allocation_id = '{allocationId:D}' AND source_kind = 'ADVANCE' AND advance_po_doc_id = {poId} AND clearing_journal_id IS NOT NULL AND amount = 250;"));
+        // Clearing: Dr AP 2201 / Cr Advances 1215 in the allocation txn.
+        Assert.Equal(250m, GlAccountNetDebit(db, "2201"));
+        Assert.Equal(150m, GlAccountNetDebit(db, "1215"));
+        // The advance remains offered with exactly its unconsumed part.
+        var after = Assert.Single(await recon.GetPaymentsAsync(CompanyCode, "S"));
+        Assert.Equal(150m, after.Available);
+    }
+
+    [Fact]
+    public async Task AdvanceAllocation_ReversalRestoresAdvance_AndVoucherReversalIsBlockedWhileConsumed()
+    {
+        using var db = await SeededAsync();
+        var supplier = await SaveSupplierAsync(db, "SUP-A", "Advance Supplier");
+        var poId = InsertPurchaseDoc(db, "PO", "PO-A1", supplier.LedgerId, "Advance Supplier", 1000m);
+        var invoiceId = InsertPurchaseDoc(db, "PUR", "PUR-A1", supplier.LedgerId, "Advance Supplier", 1000m);
+        LinkPoToInvoice(db, poId, invoiceId);
+
+        var journalRepo = new JournalRepository("SQLite", db.ConnectionString);
+        var journal = new JournalService(journalRepo);
+        var voucherId = await AdvanceVoucherAsync(db, journal, journalRepo, supplier, poId, "PAY-ADV-1", 400m);
+
+        var recon = new ReconciliationRepository("SQLite", db.ConnectionString);
+        var advance = Assert.Single(await recon.GetPaymentsAsync(CompanyCode, "S"));
+        var allocationId = await recon.AllocateAsync(CompanyCode, "S", advance.LedgerId, "PURCHASE", invoiceId, 250m, Actor);
+        Assert.Equal(250m, ExecScalar(db, $"SELECT paid_amount FROM purchase_documents WHERE doc_id = {invoiceId};"));
+
+        // While any of the advance is consumed, reversing the advance
+        // voucher itself is blocked with the catalogued PUR-1013.
+        var blocked = await Assert.ThrowsAsync<AppError>(() => journal.ReverseAsync(voucherId, Actor));
+        Assert.Equal(ErrorCodes.AdvanceReversalBlockedWhileConsumed, blocked.Code);
+        Assert.Equal(1m, ExecScalar(db, $"SELECT status FROM journal_entries WHERE journal_entry_id = '{voucherId:D}';"));
+        Assert.Equal(250m, ExecScalar(db, $"SELECT paid_amount FROM purchase_documents WHERE doc_id = {invoiceId};"));
+
+        // Reversing the allocation un-clears the advance exactly.
+        await recon.UnallocateAsync(CompanyCode, allocationId, Actor);
+        Assert.Equal(0m, ExecScalar(db, $"SELECT paid_amount FROM purchase_documents WHERE doc_id = {invoiceId};"));
+        Assert.Equal(0m, ExecScalar(db, $"SELECT COUNT(*) FROM payment_allocations WHERE company_id = '{CompanyCode}';"));
+        Assert.Equal(1m, ExecScalar(db,
+            $"SELECT COUNT(*) FROM payment_allocation_reversal_audit WHERE company_id = '{CompanyCode}' AND allocation_id = '{allocationId:D}' AND amount = 250 AND released_by = '{Actor}';"));
+        Assert.Equal(400m, GlAccountNetDebit(db, "1215"));
+        Assert.Equal(0m, GlAccountNetDebit(db, "2201"));
+        var restored = Assert.Single(await recon.GetPaymentsAsync(CompanyCode, "S"));
+        Assert.Equal(400m, restored.Available);
+
+        // After unallocation the voucher reversal is allowed and mirrors
+        // the advance settlement: the supplier prepayment disappears.
+        await journal.ReverseAsync(voucherId, Actor);
+        Assert.Empty(await recon.GetPaymentsAsync(CompanyCode, "S"));
+        Assert.Equal(0m, GlAccountNetDebit(db, "1215"));
+        var balance = await new MasterCardRepository("SQLite", db.ConnectionString)
+            .GetPartyBalanceAsync(CompanyCode, "S", "SUP-A");
+        Assert.Equal(0m, balance.Balance);
+    }
+
     // ------------------------------------------------------------ invoice / POS paid at posting
 
     [Fact]
@@ -619,6 +808,7 @@ public sealed class PartyUnificationTests
         foreach (var (code, name) in new[]
         {
             ("131", "Cash"), ("1201", "Receivable"), ("1203", "Inventory"),
+            ("1215", "Advances to Suppliers"),
             ("2201", "Payable"), ("301", "Sales"), ("401", "COGS"), ("32", "Retained Earnings")
         })
         {
