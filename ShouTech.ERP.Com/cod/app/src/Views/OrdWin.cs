@@ -85,6 +85,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
     private long? _docId;
     private long? _partyId;
     private string _status = CommercialDocumentStatus.Draft;
+    private string? _cancelReason;
     private Guid _companyId;
     private bool _loading;
 
@@ -429,6 +430,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
             _docId = doc.DocId;
             _partyId = doc.PartyId;
             _status = doc.Status;
+            _cancelReason = doc.CancelReason;
             _txtDocNo.Text = doc.DocNo;
             _dtDate.SelectedDate = doc.DocDate.ToDateTime(TimeOnly.MinValue);
             _dtDeliveryDate.SelectedDate = (IsRfq ? doc.ValidTill : doc.DeliveryDate)?.ToDateTime(TimeOnly.MinValue);
@@ -471,16 +473,19 @@ public sealed class OrdWin : BaseWin, IWindowMode
             var progress = await AppHost.Orders.GetProgressAsync(Side, docId);
             foreach (var line in _lines)
             {
-                var match = progress.Lines.FirstOrDefault(p =>
-                    (p.MaterialId is not null && p.MaterialId == line.MaterialId) ||
-                    (p.MaterialId is null && p.MaterialCode == line.ItemCode));
+                // Progress is keyed by source line; the material match is
+                // only a fallback for rows loaded before line identity.
+                var match = progress.Lines.FirstOrDefault(p => p.LineNo == line.LineNo)
+                    ?? progress.Lines.FirstOrDefault(p =>
+                        (p.MaterialId is not null && p.MaterialId == line.MaterialId) ||
+                        (p.MaterialId is null && p.MaterialCode == line.ItemCode));
                 if (match is not null)
                 {
                     line.FulfilledQty = match.FulfilledQty;
                     line.BilledQty = match.BilledQty;
                 }
             }
-            _lblStatus.Text = $"{T("OrderDoc.Status")}: {StatusText(_status)} | {T("OrderDoc.Fulfilled")}: {progress.PerFulfilled:N1}% | {T("OrderDoc.Billed")}: {progress.PerBilled:N1}%";
+            _lblStatus.Text = $"{T("OrderDoc.Status")}: {DerivedStatusText(progress.DerivedStatus)} | {T("OrderDoc.Fulfilled")}: {progress.PerFulfilled:N1}% | {T("OrderDoc.Billed")}: {progress.PerBilled:N1}%";
         }
         catch (Exception ex)
         {
@@ -1077,9 +1082,24 @@ public sealed class OrdWin : BaseWin, IWindowMode
         try
         {
             if (newStatus == CommercialDocumentStatus.Closed)
+            {
                 await AppHost.Orders.CloseOrderAsync(Side, _docId.Value, CurrentUserId);
+            }
             else
-                await AppHost.Orders.CancelOrderAsync(Side, _docId.Value, CurrentUserId);
+            {
+                // Documented cancellation (sales-cycle spec sections
+                // 3/14): no cancellation without a recorded reason.
+                var input = PromptDialog.Show(this, T("OrderDoc.CancelReason"),
+                    (T("OrderDoc.CancelReason"), string.Empty));
+                var reason = input is { Length: > 0 } ? input[0] : null;
+                if (string.IsNullOrWhiteSpace(reason))
+                {
+                    ShowWarningMessage(T("OrderDoc.CancelReasonRequired"));
+                    return;
+                }
+                await AppHost.Orders.CancelOrderAsync(Side, _docId.Value, CurrentUserId, reason: reason);
+                _cancelReason = reason;
+            }
             _status = newStatus;
             UpdateEditState();
             RefreshTotals();
@@ -1087,6 +1107,42 @@ public sealed class OrdWin : BaseWin, IWindowMode
         catch (Exception ex)
         {
             ShowWarningMessage(ex.Message);
+        }
+    }
+
+    /// <summary>Minimal modal prompt for the cancellation reason, following
+    /// the ChqListWin PromptDialog pattern.</summary>
+    private static class PromptDialog
+    {
+        public static string[]? Show(Window owner, string title, params (string Label, string Value)[] fields)
+        {
+            var dialog = new Window
+            {
+                Title = title,
+                Width = 420,
+                SizeToContent = SizeToContent.Height,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ResizeMode = ResizeMode.NoResize
+            };
+            var panel = new StackPanel { Margin = new Thickness(12) };
+            var boxes = new System.Collections.Generic.List<TextBox>();
+            foreach (var (label, value) in fields)
+            {
+                panel.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+                var box = new TextBox { Text = value, Margin = new Thickness(0, 0, 0, 10) };
+                boxes.Add(box);
+                panel.Children.Add(box);
+            }
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var ok = new Button { Content = T("Common.OK"), MinWidth = 84, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
+            var cancel = new Button { Content = T("Common.Cancel"), MinWidth = 84, IsCancel = true };
+            ok.Click += (_, _) => dialog.DialogResult = true;
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+            return dialog.ShowDialog() == true ? boxes.Select(b => b.Text.Trim()).ToArray() : null;
         }
     }
 
@@ -1124,14 +1180,29 @@ public sealed class OrdWin : BaseWin, IWindowMode
         _lblTotal.Text = $"{T("Invoice.Total")}: {total + tax:N2} {UsrPref.Load().CurrencyCode}";
         _lblTotal.FontWeight = FontWeights.Bold;
         if (_status != CommercialDocumentStatus.Posted)
-            _lblStatus.Text = $"{T("OrderDoc.Status")}: {StatusText(_status)}";
+            _lblStatus.Text = _status == CommercialDocumentStatus.Cancelled && !string.IsNullOrWhiteSpace(_cancelReason)
+                ? $"{T("OrderDoc.Status")}: {StatusText(_status)} | {T("OrderDoc.CancelReason")}: {_cancelReason}"
+                : $"{T("OrderDoc.Status")}: {StatusText(_status)}";
     }
+
+    /// <summary>Localized text for the derived chain status computed by
+    /// OrderProgress (raw statuses fall through to StatusText).</summary>
+    private static string DerivedStatusText(string derivedStatus) => derivedStatus switch
+    {
+        SalesChainDerivedStatus.ToDeliverAndBill => T("OrderDoc.ToDeliverAndBill"),
+        SalesChainDerivedStatus.ToDeliver => T("OrderDoc.ToDeliver"),
+        SalesChainDerivedStatus.ToBill => T("OrderDoc.ToBill"),
+        SalesChainDerivedStatus.Completed => T("OrderDoc.Completed"),
+        _ => StatusText(derivedStatus)
+    };
 
     private static string StatusText(string status) => status switch
     {
         CommercialDocumentStatus.Posted => T("Invoice.StatusPosted"),
         CommercialDocumentStatus.Closed => T("OrderDoc.StatusClosed"),
         CommercialDocumentStatus.Cancelled => T("Invoice.StatusCancelled"),
+        CommercialDocumentStatus.Expired => T("OrderDoc.StatusExpired"),
+        CommercialDocumentStatus.Lost => T("OrderDoc.StatusLost"),
         _ => T("Invoice.StatusDraft")
     };
 

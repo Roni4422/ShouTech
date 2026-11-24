@@ -346,7 +346,7 @@ public sealed class InvPostCorrectnessTests
 
         var (deliveryId, deliveryNo) = await service.CreateSalesDeliveryAsync(
             orderId, new DateOnly(2026, 11, 11), Actor,
-            new Dictionary<long, decimal> { [42] = 2m }, 1);
+            new Dictionary<int, decimal> { [1] = 2m }, 1);
         await service.PostSalesDeliveryAsync(deliveryId, Actor);
         var stockAfterDelivery = StockQty(db);
         Assert.Equal(998m, stockAfterDelivery);

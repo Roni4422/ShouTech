@@ -46,16 +46,30 @@ public interface IOrderDocumentRepository
     /// <summary>Creates a posted pre-invoice goods return against an original receipt, consuming only quantities not yet invoiced or returned.</summary>
     Task<long> CreatePurchaseReceiptReturnAsync(Guid companyId, long receiptId, string returnDocNo, DateOnly returnDate, IReadOnlyList<CommercialLineDraft> returnedLines, string userId, string? reason = null, CancellationToken cancellationToken = default);
 
-    /// <summary>Moves a document to Closed / Cancelled / Lost with transition guards.</summary>
-    Task SetStatusAsync(CommercialDocSide side, long docId, string newStatus, string userId, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Moves a document to Closed / Cancelled / Lost / Expired with transition
+    /// guards. A move to Cancelled persists <paramref name="cancelReason"/>
+    /// together with the actor and timestamp (cancelled_by / cancelled_at).
+    /// </summary>
+    Task SetStatusAsync(CommercialDocSide side, long docId, string newStatus, string userId, CancellationToken cancellationToken = default, string? cancelReason = null);
 
     /// <summary>Next document number for the kind, formatted PREFIX-NNNN (e.g. SO-1001).</summary>
     Task<string> NextDocNoAsync(CommercialDocSide side, Guid companyId, string docKind, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<CommercialDocumentSummary>> ListAsync(CommercialDocSide side, Guid companyId, string? docKind, string? status, string? search, DateOnly? from, DateOnly? to, int limit = 500, CancellationToken cancellationToken = default);
 
-    /// <summary>Per-material ordered/fulfilled/billed quantities plus qty-weighted percentages.</summary>
+    /// <summary>Per-source-line ordered/fulfilled/billed quantities plus qty-weighted percentages.</summary>
     Task<OrderProgress> GetProgressAsync(CommercialDocSide side, long docId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Recomputes the stored per_delivered / per_billed columns of a sales
+    /// document from the same math as <see cref="GetProgressAsync"/> and
+    /// persists them in its own transaction. Called wherever chain documents
+    /// are created, posted, or converted so the stored progress never drifts
+    /// from the computed progress.
+    /// </summary>
+    Task RecalculateStoredProgressAsync(long salesDocId, CancellationToken cancellationToken = default);
+
 
     /// <summary>
     /// Converts a posted order into a posted invoice containing only the

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
@@ -54,6 +55,12 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         string? warehouseName;
         DateOnly? deliveryDate;
         DateOnly? validTill;
+        decimal extraAmount;
+        decimal perDelivered;
+        decimal perBilled;
+        string? cancelReason;
+        string? cancelledBy;
+        string? cancelledAt;
 
         await using (var header = connection.CreateCommand())
         {
@@ -61,7 +68,8 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                 SELECT doc_id, company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id,
                        currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total,
                        paid_amount, status, notes, party_code, branch_name, sales_rep_name, cost_center,
-                       warehouse_name, delivery_date, valid_till
+                       warehouse_name, delivery_date, valid_till, extra_amount, per_delivered, per_billed,
+                       cancel_reason, cancelled_by, cancelled_at
                 FROM sales_documents
                 WHERE doc_id = @docId AND is_deleted = 0
                 """;
@@ -95,6 +103,12 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             warehouseName = reader.IsDBNull(21) ? null : reader.GetString(21);
             deliveryDate = reader.IsDBNull(22) ? null : DateOnly.Parse(Convert.ToString(reader.GetValue(22), CultureInfo.InvariantCulture)!, CultureInfo.InvariantCulture);
             validTill = reader.IsDBNull(23) ? null : DateOnly.Parse(Convert.ToString(reader.GetValue(23), CultureInfo.InvariantCulture)!, CultureInfo.InvariantCulture);
+            extraAmount = Convert.ToDecimal(reader.GetValue(24), CultureInfo.InvariantCulture);
+            perDelivered = Convert.ToDecimal(reader.GetValue(25), CultureInfo.InvariantCulture);
+            perBilled = Convert.ToDecimal(reader.GetValue(26), CultureInfo.InvariantCulture);
+            cancelReason = reader.IsDBNull(27) ? null : reader.GetString(27);
+            cancelledBy = reader.IsDBNull(28) ? null : reader.GetString(28);
+            cancelledAt = reader.IsDBNull(29) ? null : Convert.ToString(reader.GetValue(29), CultureInfo.InvariantCulture);
         }
 
         var lines = new List<CommercialLineSnapshot>();
@@ -133,7 +147,8 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             foundId, companyId, docKind, docNo, docDate, partyId, partyName, warehouseId,
             currencyCode, exchangeRate, subtotal, discountAmount, taxAmount, grandTotal,
             paidAmount, status, notes, lines.AsReadOnly(),
-            partyCode, branchName, salesRepName, costCenter, warehouseName, deliveryDate, validTill);
+            partyCode, branchName, salesRepName, costCenter, warehouseName, deliveryDate, validTill,
+            extraAmount, perDelivered, perBilled, cancelReason, cancelledBy, cancelledAt);
     }
 
     public async Task<long> CreateSalesDraftAsync(CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default)
@@ -227,6 +242,13 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             Add(link, "@actor", userId.Trim());
             await link.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
+            // The sales order whose stored chain progress this creation can
+            // affect: the source itself for SO->DLV, or the delivery's
+            // parent order for DLV->SAL (resolved by the block below).
+            long? progressOrderId = string.Equals(sourceDocKind.Trim(), CommercialDocKinds.SalesOrder, StringComparison.Ordinal)
+                ? sourceDocId
+                : null;
+
             // Preserve order-level billed progress when the invoice is
             // created from a delivery note. The direct DLV->SAL link is
             // retained for delivery accounting; this additional SO->SAL
@@ -267,7 +289,19 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                     Add(orderInvoiceLink, "@invoiceId", docId);
                     Add(orderInvoiceLink, "@actor", userId.Trim());
                     await orderInvoiceLink.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                    progressOrderId = sourceOrderId;
                 }
+            }
+
+            if (progressOrderId is not null)
+            {
+                // Stored per_delivered / per_billed refresh inside this
+                // same transaction (single recompute helper owned by
+                // OrderDocumentRepository), so the chain document and the
+                // progress it produces commit or roll back together.
+                var progressRepository = new OrderDocumentRepository(_provider, _connectionString);
+                await progressRepository.RecalculateStoredProgressInTransactionAsync(
+                    connection, transaction, progressOrderId.Value, cancellationToken).ConfigureAwait(false);
             }
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -297,8 +331,10 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         string userId,
         CancellationToken cancellationToken)
     {
+        if (draft.DiscountAmount < 0m) throw new InvalidOperationException("Header discount cannot be negative.");
+        if (draft.ExtraAmount < 0m) throw new InvalidOperationException("Header extra charges cannot be negative.");
         var docDateText = draft.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-        decimal subtotal = 0m, taxAmount = 0m, grandTotal = 0m;
+        decimal subtotal = 0m, taxAmount = 0m;
         var computed = new List<(decimal Subtotal, decimal Tax, decimal Total)>();
         foreach (var line in draft.Lines)
         {
@@ -309,13 +345,17 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             computed.Add((lineSubtotal, lineTax, lineTotal));
             subtotal += lineSubtotal;
             taxAmount += lineTax;
-            grandTotal += lineTotal;
         }
+        // Stored-total rule (native invoice family): grand = subtotal -
+        // header discount + tax + header extra charges. The draft carries
+        // the header money (chain conversions carry it from the source,
+        // pro-rata to the copied lines); it is never silently zeroed.
+        var grandTotal = decimal.Round(subtotal - draft.DiscountAmount + taxAmount + draft.ExtraAmount, 2);
 
         long docId;
         var insertHeader = CreateCommand(connection, transaction,
-            "INSERT INTO sales_documents (company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id, currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total, status, notes, created_by, party_code, delivery_date, valid_till, cost_center, branch_name, sales_rep_name, warehouse_name) " +
-            "VALUES (@company, @kind, @no, @date, @party, @partyName, @warehouse, @currency, @rate, @subtotal, @discount, @tax, @total, @status, @notes, @actor, @partyCode, @deliveryDate, @validTill, @costCenter, @branchName, @salesRepName, @warehouseName)" +
+            "INSERT INTO sales_documents (company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id, currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total, status, notes, created_by, party_code, delivery_date, valid_till, cost_center, branch_name, sales_rep_name, warehouse_name, extra_amount) " +
+            "VALUES (@company, @kind, @no, @date, @party, @partyName, @warehouse, @currency, @rate, @subtotal, @discount, @tax, @total, @status, @notes, @actor, @partyCode, @deliveryDate, @validTill, @costCenter, @branchName, @salesRepName, @warehouseName, @extra)" +
             (_provider == "PostgreSQL" ? " RETURNING doc_id" : "; SELECT last_insert_rowid();"));
         Add(insertHeader, "@company", draft.CompanyId.ToString("D"));
         Add(insertHeader, "@kind", draft.DocKind.Trim());
@@ -332,9 +372,10 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         // entered and made the master table unreachable.
         Add(insertHeader, "@rate", draft.ExchangeRate < 0m ? 0m : draft.ExchangeRate);
         Add(insertHeader, "@subtotal", decimal.Round(subtotal, 2));
-        Add(insertHeader, "@discount", 0m);
+        Add(insertHeader, "@discount", draft.DiscountAmount);
+        Add(insertHeader, "@extra", draft.ExtraAmount);
         Add(insertHeader, "@tax", decimal.Round(taxAmount, 2));
-        Add(insertHeader, "@total", decimal.Round(grandTotal, 2));
+        Add(insertHeader, "@total", grandTotal);
         Add(insertHeader, "@status", CommercialDocumentStatus.Draft);
         Add(insertHeader, "@notes", (object?)draft.Notes ?? DBNull.Value);
         Add(insertHeader, "@actor", userId.Trim());
@@ -348,15 +389,25 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         docId = Convert.ToInt64(await insertHeader.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
 
         var lineNumber = 0;
+        var usedLineNumbers = new HashSet<int>();
         for (var index = 0; index < draft.Lines.Count; index++)
         {
             var line = draft.Lines[index];
             var totals = computed[index];
+            lineNumber++;
+            // Chain identity (purchase-family convention): a copied line
+            // persists line_no = its SOURCE line number, so fulfilment and
+            // progress aggregate per source line even when one material
+            // appears on several source lines. Standalone lines keep
+            // sequential numbering.
+            var persistedLineNumber = line.SourceLineNo ?? lineNumber;
+            if (persistedLineNumber <= 0 || !usedLineNumbers.Add(persistedLineNumber))
+                throw new InvalidOperationException("Document line numbers must be positive and unique within a document.");
             await using var insertLine = CreateCommand(connection, transaction,
                 "INSERT INTO sales_document_lines (doc_id, line_no, material_id, material_code, description, unit, qty, unit_price, discount_pct, tax_rate, line_subtotal, line_tax, line_total, warehouse_id) " +
                 "VALUES (@doc, @line, @material, @materialCode, @description, @unit, @qty, @price, @discount, @taxRate, @subtotal, @tax, @total, @warehouse)");
             Add(insertLine, "@doc", docId);
-            Add(insertLine, "@line", ++lineNumber);
+            Add(insertLine, "@line", persistedLineNumber);
             Add(insertLine, "@material", (object?)line.MaterialId ?? DBNull.Value);
             Add(insertLine, "@materialCode", (object?)line.MaterialCode ?? DBNull.Value);
             Add(insertLine, "@description", string.IsNullOrWhiteSpace(line.Description) ? line.MaterialCode ?? "Item" : line.Description.Trim());
@@ -669,6 +720,36 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         return links.AsReadOnly();
     }
 
+    public async Task<IReadOnlyList<CommercialDocumentLink>> GetSalesLinksToAsync(Guid companyId, long targetDocId, CancellationToken cancellationToken = default)
+    {
+        if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT link_id, company_id, source_doc_kind, source_doc_id, target_doc_kind, target_doc_id
+            FROM document_links
+            WHERE company_id = @company AND target_doc_id = @targetId
+            ORDER BY link_id
+            """;
+        Add(command, "@company", companyId.ToString("D"));
+        Add(command, "@targetId", targetDocId);
+
+        var links = new List<CommercialDocumentLink>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            links.Add(new CommercialDocumentLink(
+                Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+                Guid.Parse(Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture)!),
+                reader.GetString(2),
+                Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture),
+                reader.GetString(4),
+                Convert.ToInt64(reader.GetValue(5), CultureInfo.InvariantCulture)));
+        }
+        return links.AsReadOnly();
+    }
+
     public async Task<IReadOnlyDictionary<long, decimal>> GetFulfilledQuantitiesAsync(Guid companyId, long sourceDocId, string targetDocKind, CancellationToken cancellationToken = default)
     {
         if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
@@ -707,6 +788,78 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
             var materialId = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture);
             quantities[materialId] = Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
         }
+        return quantities;
+    }
+
+    public async Task<IReadOnlyDictionary<int, decimal>> GetFulfilledQuantitiesBySourceLineAsync(Guid companyId, long sourceDocId, string targetDocKind, CancellationToken cancellationToken = default)
+    {
+        if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
+        if (string.IsNullOrWhiteSpace(targetDocKind)) throw new ArgumentException("Target document kind is required.", nameof(targetDocKind));
+
+        var source = await FindSalesByIdAsync(sourceDocId, cancellationToken).ConfigureAwait(false)
+                     ?? throw new InvalidOperationException($"Source sales document '{sourceDocId}' was not found.");
+        if (source.CompanyId != companyId)
+            throw new InvalidOperationException("Source document belongs to a different company.");
+
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT l.line_no, l.material_id, SUM(l.qty)
+            FROM document_links dl
+            JOIN sales_documents d
+              ON d.company_id = dl.company_id
+             AND d.doc_id = dl.target_doc_id
+             AND d.doc_kind = dl.target_doc_kind
+            JOIN sales_document_lines l
+              ON l.doc_id = d.doc_id
+            WHERE dl.company_id = @company
+              AND dl.source_doc_id = @sourceId
+              AND dl.target_doc_kind = @targetKind
+              AND d.status = @posted
+              AND d.is_deleted = 0
+            GROUP BY l.line_no, l.material_id
+            """;
+        Add(command, "@company", companyId.ToString("D"));
+        Add(command, "@sourceId", sourceDocId);
+        Add(command, "@targetKind", targetDocKind.Trim());
+        Add(command, "@posted", CommercialDocumentStatus.Posted);
+
+        var quantities = new Dictionary<int, decimal>();
+        var legacyByMaterial = new Dictionary<long, decimal>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            var lineNo = Convert.ToInt32(reader.GetValue(0), CultureInfo.InvariantCulture);
+            var materialId = reader.IsDBNull(1) ? (long?)null : Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture);
+            var qty = Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture);
+            // Chain-created target lines persist line_no = source line
+            // number AND the source line's material: an exact identity
+            // match. Anything else is a legacy row, pooled by material
+            // below (mirrors the purchase branch's fallback).
+            var sourceLineExists = source.Lines.Any(line => line.LineNo == lineNo && line.MaterialId == materialId);
+            if (sourceLineExists)
+                quantities[lineNo] = quantities.GetValueOrDefault(lineNo) + qty;
+            else if (materialId is long legacyMaterialId)
+                legacyByMaterial[legacyMaterialId] = legacyByMaterial.GetValueOrDefault(legacyMaterialId) + qty;
+        }
+
+        foreach (var (materialId, legacyQty) in legacyByMaterial)
+        {
+            var remaining = legacyQty;
+            foreach (var sourceLine in source.Lines
+                .Where(line => line.MaterialId == materialId)
+                .OrderBy(line => line.LineNo))
+            {
+                var available = Math.Max(0m, sourceLine.Qty - quantities.GetValueOrDefault(sourceLine.LineNo));
+                var take = Math.Min(available, remaining);
+                if (take <= 0m) continue;
+                quantities[sourceLine.LineNo] = quantities.GetValueOrDefault(sourceLine.LineNo) + take;
+                remaining -= take;
+                if (remaining <= 0m) break;
+            }
+        }
+
         return quantities;
     }
 

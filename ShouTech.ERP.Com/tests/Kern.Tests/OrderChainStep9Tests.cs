@@ -498,7 +498,7 @@ namespace Kern.Tests
                     orderId,
                     new DateOnly(2026, 11, 10),
                     Actor,
-                    new Dictionary<long, decimal> { [42] = 2m });
+                    new Dictionary<int, decimal> { [1] = 2m });
 
                 Assert.StartsWith("DLV-", deliveryNo);
                 var draft = await orders.FindByIdAsync(CommercialDocSide.Sales, deliveryId);
@@ -536,7 +536,7 @@ namespace Kern.Tests
 
                 var (deliveryId, deliveryNo) = await service.CreateSalesDeliveryAsync(
                     orderId, new DateOnly(2026, 11, 10), Actor,
-                    new Dictionary<long, decimal> { [42] = 2m });
+                    new Dictionary<int, decimal> { [1] = 2m });
                 await service.PostSalesDeliveryAsync(deliveryId, Actor);
 
                 await Assert.ThrowsAsync<InvalidOperationException>(() =>

@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
 
@@ -79,7 +81,7 @@ public sealed class OrderService
         long salesOrderId,
         DateOnly deliveryDate,
         string userId,
-        IReadOnlyDictionary<long, decimal>? quantityByMaterialId = null,
+        IReadOnlyDictionary<int, decimal>? quantityBySourceLine = null,
         long? warehouseId = null,
         CancellationToken cancellationToken = default)
     {
@@ -87,16 +89,20 @@ public sealed class OrderService
         var order = await _chain.FindSalesByIdAsync(salesOrderId, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException("Sales order was not found.");
         if (order.DocKind != CommercialDocKinds.SalesOrder)
-            throw new InvalidOperationException("A delivery note must be created from a sales order.");
+            throw new AppError(ErrorCodes.ChainTransitionNotAllowed,
+                $"Documents cannot be converted from '{order.DocKind}' to '{CommercialDocKinds.DeliveryNote}'.",
+                order.DocKind, CommercialDocKinds.DeliveryNote);
         if (order.Status != CommercialDocumentStatus.Posted)
-            throw new InvalidOperationException("Only a posted sales order can be delivered.");
+            throw new AppError(ErrorCodes.ChainSourceNotPosted,
+                $"The source document '{order.DocNo}' must be posted before it can be converted.",
+                order.DocNo);
 
         var deliveryDocNo = await _orders.NextDocNoAsync(
             CommercialDocSide.Sales, order.CompanyId, CommercialDocKinds.DeliveryNote, cancellationToken).ConfigureAwait(false);
         var chain = new SalesChainService(_chain);
         var deliveryId = await chain.CreateFromSourceAsync(
             salesOrderId, deliveryDocNo, deliveryDate, userId,
-            quantityByMaterialId, warehouseId, cancellationToken).ConfigureAwait(false);
+            quantityBySourceLine, warehouseId, cancellationToken).ConfigureAwait(false);
         return (deliveryId, deliveryDocNo);
     }
 
@@ -108,15 +114,20 @@ public sealed class OrderService
         long deliveryDocId,
         DateOnly invoiceDate,
         string userId,
+        IReadOnlyDictionary<int, decimal>? quantityBySourceLine = null,
         CancellationToken cancellationToken = default)
     {
         if (deliveryDocId <= 0) throw new ArgumentOutOfRangeException(nameof(deliveryDocId));
         var delivery = await _chain.FindSalesByIdAsync(deliveryDocId, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException("Delivery note was not found.");
         if (delivery.DocKind != CommercialDocKinds.DeliveryNote)
-            throw new InvalidOperationException("A sales invoice must be created from a delivery note.");
+            throw new AppError(ErrorCodes.ChainTransitionNotAllowed,
+                $"Documents cannot be converted from '{delivery.DocKind}' to '{CommercialDocKinds.SalesInvoice}'.",
+                delivery.DocKind, CommercialDocKinds.SalesInvoice);
         if (delivery.Status != CommercialDocumentStatus.Posted)
-            throw new InvalidOperationException("Only a posted delivery note can be invoiced.");
+            throw new AppError(ErrorCodes.ChainSourceNotPosted,
+                $"The source document '{delivery.DocNo}' must be posted before it can be converted.",
+                delivery.DocNo);
 
         var existingLinks = await _chain.GetSalesLinksFromAsync(
             delivery.CompanyId, deliveryDocId, cancellationToken).ConfigureAwait(false);
@@ -135,17 +146,72 @@ public sealed class OrderService
             CommercialDocSide.Sales, delivery.CompanyId, CommercialDocKinds.SalesInvoice, cancellationToken).ConfigureAwait(false);
         var chain = new SalesChainService(_chain);
         var invoiceId = await chain.CreateFromSourceAsync(
-            deliveryDocId, invoiceDocNo, invoiceDate, userId, null, null, cancellationToken).ConfigureAwait(false);
+            deliveryDocId, invoiceDocNo, invoiceDate, userId, quantityBySourceLine, null, cancellationToken).ConfigureAwait(false);
         return (invoiceId, invoiceDocNo);
     }
 
     /// <summary>Posts a sales-chain draft, including the DLV-linked invoice accounting path.</summary>
-    public Task PostSalesChainDocumentAsync(long documentId, string userId, CancellationToken cancellationToken = default)
-        => _chain.PostSalesAsync(documentId, userId, cancellationToken);
+    public async Task PostSalesChainDocumentAsync(long documentId, string userId, CancellationToken cancellationToken = default)
+    {
+        await _chain.PostSalesAsync(documentId, userId, cancellationToken).ConfigureAwait(false);
+        await RefreshStoredChainProgressAsync(documentId, cancellationToken).ConfigureAwait(false);
+    }
 
     /// <summary>Posts a delivery note through the stock-valuation chain in one transaction.</summary>
-    public Task PostSalesDeliveryAsync(long deliveryDocId, string userId, CancellationToken cancellationToken = default)
-        => _chain.PostSalesAsync(deliveryDocId, userId, cancellationToken);
+    public async Task PostSalesDeliveryAsync(long deliveryDocId, string userId, CancellationToken cancellationToken = default)
+    {
+        await _chain.PostSalesAsync(deliveryDocId, userId, cancellationToken).ConfigureAwait(false);
+        await RefreshStoredChainProgressAsync(deliveryDocId, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Refreshes the stored per_delivered / per_billed of the sales order
+    /// behind a freshly posted chain document. The posting itself commits
+    /// in CommercialDocumentRepository (a different workstream owns that
+    /// region); this refresh runs immediately after it through the single
+    /// recompute helper, following the document_links chain back to the
+    /// order (SAL → its SO link, or SAL → DLV → SO; DLV → SO).
+    /// </summary>
+    private async Task RefreshStoredChainProgressAsync(long postedDocId, CancellationToken cancellationToken)
+    {
+        var posted = await _chain.FindSalesByIdAsync(postedDocId, cancellationToken).ConfigureAwait(false);
+        if (posted is null)
+            return;
+        long? orderId = posted.DocKind == CommercialDocKinds.SalesOrder ? posted.DocId : null;
+        if (orderId is null)
+        {
+            var linksTo = await _chain.GetSalesLinksToAsync(posted.CompanyId, postedDocId, cancellationToken).ConfigureAwait(false);
+            foreach (var link in linksTo)
+            {
+                if (link.SourceDocKind == CommercialDocKinds.SalesOrder)
+                {
+                    orderId = link.SourceDocId;
+                    break;
+                }
+            }
+            if (orderId is null)
+            {
+                foreach (var link in linksTo)
+                {
+                    if (link.SourceDocKind != CommercialDocKinds.DeliveryNote)
+                        continue;
+                    var deliveryLinks = await _chain.GetSalesLinksToAsync(posted.CompanyId, link.SourceDocId, cancellationToken).ConfigureAwait(false);
+                    foreach (var deliveryLink in deliveryLinks)
+                    {
+                        if (deliveryLink.SourceDocKind == CommercialDocKinds.SalesOrder)
+                        {
+                            orderId = deliveryLink.SourceDocId;
+                            break;
+                        }
+                    }
+                    if (orderId is not null)
+                        break;
+                }
+            }
+        }
+        if (orderId is not null)
+            await _orders.RecalculateStoredProgressAsync(orderId.Value, cancellationToken).ConfigureAwait(false);
+    }
 
     public async Task<(long ReceiptId, string ReceiptDocNo)> CreatePurchaseReceiptAsync(Guid companyId, long purchaseOrderId, DateOnly receiptDate, IReadOnlyList<CommercialLineDraft> receivedLines, string userId, CancellationToken cancellationToken = default)
     {
@@ -208,18 +274,59 @@ public sealed class OrderService
     public Task CloseOrderAsync(CommercialDocSide side, long docId, string userId, CancellationToken cancellationToken = default)
         => _orders.SetStatusAsync(side, docId, CommercialDocumentStatus.Closed, userId, cancellationToken);
 
-    public Task CancelOrderAsync(CommercialDocSide side, long docId, string userId, CancellationToken cancellationToken = default)
-        => _orders.SetStatusAsync(side, docId, CommercialDocumentStatus.Cancelled, userId, cancellationToken);
+    /// <summary>
+    /// Cancels an order/quotation with a documented reason (sales-cycle
+    /// specification sections 3/14): the reason is mandatory and is
+    /// persisted with the cancelling actor and timestamp.
+    /// </summary>
+    public async Task CancelOrderAsync(CommercialDocSide side, long docId, string userId, CancellationToken cancellationToken = default, string? reason = null)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ArgumentException("A cancellation reason is required.", nameof(reason));
+        await _orders.SetStatusAsync(
+            side, docId, CommercialDocumentStatus.Cancelled, userId, cancellationToken, reason.Trim()).ConfigureAwait(false);
+    }
 
     public async Task MarkQuotationLostAsync(long docId, string userId, CancellationToken cancellationToken = default)
     {
         var quotation = await _orders.FindByIdAsync(CommercialDocSide.Sales, docId, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException("Sales quotation was not found.");
-        if (quotation.DocKind != CommercialDocKinds.SalesQuotation ||
-            quotation.Status != CommercialDocumentStatus.Posted)
-            throw new InvalidOperationException("Only a posted sales quotation can be marked as lost.");
+        if (quotation.DocKind != CommercialDocKinds.SalesQuotation)
+            throw new AppError(ErrorCodes.ChainTransitionNotAllowed,
+                $"Documents cannot be converted from '{quotation.DocKind}' to '{CommercialDocumentStatus.Lost}'.",
+                quotation.DocKind, CommercialDocumentStatus.Lost);
+        if (quotation.Status != CommercialDocumentStatus.Posted)
+            throw new AppError(ErrorCodes.ChainSourceNotPosted,
+                $"The source document '{quotation.DocNo}' must be posted before it can be converted.",
+                quotation.DocNo);
         await _orders.SetStatusAsync(
             CommercialDocSide.Sales, docId, CommercialDocumentStatus.Lost, userId, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Expires every Posted sales quotation of the company whose validity
+    /// ended before <paramref name="asOf"/> (valid_till &lt; asOf). Each
+    /// expiry goes through the repository's guarded Posted → Expired
+    /// transition for quotations, so a quotation with posted downstream
+    /// documents is left untouched. Returns how many quotations expired.
+    /// </summary>
+    public async Task<int> ExpirePostedQuotationsAsync(Guid companyId, DateOnly asOf, CancellationToken cancellationToken = default)
+    {
+        if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
+        var posted = await _orders.ListAsync(
+            CommercialDocSide.Sales, companyId, CommercialDocKinds.SalesQuotation,
+            CommercialDocumentStatus.Posted, null, null, null, int.MaxValue, cancellationToken).ConfigureAwait(false);
+        var expired = 0;
+        foreach (var quotation in posted)
+        {
+            if (quotation.ValidTill is not { } validTill || validTill >= asOf)
+                continue;
+            await _orders.SetStatusAsync(
+                CommercialDocSide.Sales, quotation.DocId, CommercialDocumentStatus.Expired,
+                "system", cancellationToken).ConfigureAwait(false);
+            expired++;
+        }
+        return expired;
     }
 
     public async Task MarkSupplierQuotationLostAsync(long docId, string userId, CancellationToken cancellationToken = default)
@@ -265,9 +372,13 @@ public sealed class OrderService
         var quotation = await _chain.FindSalesByIdAsync(quotationDocId, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException("Quotation was not found.");
         if (quotation.DocKind != CommercialDocKinds.SalesQuotation)
-            throw new InvalidOperationException($"Document '{quotation.DocNo}' is not a quotation.");
+            throw new AppError(ErrorCodes.ChainTransitionNotAllowed,
+                $"Documents cannot be converted from '{quotation.DocKind}' to '{CommercialDocKinds.SalesOrder}'.",
+                quotation.DocKind, CommercialDocKinds.SalesOrder);
         if (quotation.ValidTill is { } validTill && validTill < DateOnly.FromDateTime(DateTime.Today))
-            throw new InvalidOperationException($"Quotation '{quotation.DocNo}' expired on {validTill:yyyy-MM-dd}; extend its validity before converting.");
+            throw new AppError(ErrorCodes.QuotationExpired,
+                $"Quotation '{quotation.DocNo}' expired on {validTill.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)} and can no longer be converted.",
+                quotation.DocNo, validTill.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         var chain = new SalesChainService(_chain);
         var docNo = await _orders.NextDocNoAsync(CommercialDocSide.Sales, quotation.CompanyId, CommercialDocKinds.SalesOrder, cancellationToken).ConfigureAwait(false);
         return await chain.CreateFromSourceAsync(quotationDocId, docNo, orderDate, userId, null, null, cancellationToken).ConfigureAwait(false);

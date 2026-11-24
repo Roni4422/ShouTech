@@ -146,10 +146,10 @@ namespace Kern.Tests
                 // source order against the first committed delivery.
                 var firstDeliveryId = await service.CreateFromSourceAsync(
                     orderId, "DLV-OVER-1", new DateOnly(2026, 10, 21), "posting-test",
-                    quantityByMaterialId: new System.Collections.Generic.Dictionary<long, decimal> { [42] = 7m });
+                    quantityBySourceLine: new System.Collections.Generic.Dictionary<int, decimal> { [1] = 7m });
                 var secondDeliveryId = await service.CreateFromSourceAsync(
                     orderId, "DLV-OVER-2", new DateOnly(2026, 10, 22), "posting-test",
-                    quantityByMaterialId: new System.Collections.Generic.Dictionary<long, decimal> { [42] = 7m });
+                    quantityBySourceLine: new System.Collections.Generic.Dictionary<int, decimal> { [1] = 7m });
 
                 await service.PostAsync(firstDeliveryId, "posting-test");
                 var error = await Assert.ThrowsAsync<InvalidOperationException>(

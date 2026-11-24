@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using ShouTech.Application.Services;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using Xunit;
 
@@ -64,7 +65,7 @@ namespace Kern.Tests
 
                 var firstDelivery = await service.CreateFromSourceAsync(
                     orderId, "DLV-3001", new DateOnly(2026, 10, 21), "chain-test",
-                    quantityByMaterialId: new Dictionary<long, decimal> { [42] = 4m });
+                    quantityBySourceLine: new Dictionary<int, decimal> { [1] = 4m });
                 await service.PostAsync(firstDelivery, "chain-test");
 
                 var fulfilled = await repository.GetFulfilledQuantitiesAsync(companyId, orderId, CommercialDocKinds.DeliveryNote);
@@ -77,8 +78,9 @@ namespace Kern.Tests
                 Assert.Equal(6m, delivery!.Lines[0].Qty);
 
                 await service.PostAsync(secondDelivery, "chain-test");
-                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                var fulfilledError = await Assert.ThrowsAsync<AppError>(() =>
                     service.CreateFromSourceAsync(orderId, "DLV-3003", new DateOnly(2026, 10, 23), "chain-test"));
+                Assert.Equal(ErrorCodes.ChainSourceFullyFulfilled, fulfilledError.Code);
             }
             finally
             {
@@ -105,8 +107,9 @@ namespace Kern.Tests
                 // Draft sources cannot continue the chain.
                 var draftId = await repository.CreateSalesDraftAsync(
                     Quotation(companyId, "QT-1004", 5m, 10m), "chain-test");
-                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                var notPostedError = await Assert.ThrowsAsync<AppError>(() =>
                     service.CreateFromSourceAsync(draftId, "SO-9999", new DateOnly(2026, 10, 20), "chain-test"));
+                Assert.Equal(ErrorCodes.ChainSourceNotPosted, notPostedError.Code);
             }
             finally
             {
@@ -128,7 +131,7 @@ namespace Kern.Tests
 
                 var deliveryId = await service.CreateFromSourceAsync(
                     orderId, "DLV-3010", new DateOnly(2026, 10, 21), "chain-test",
-                    quantityByMaterialId: new Dictionary<long, decimal> { [42] = 3m });
+                    quantityBySourceLine: new Dictionary<int, decimal> { [1] = 3m });
                 await service.PostAsync(deliveryId, "chain-test");
 
                 var orders = new ShouTech.Infrastructure.OrderDocumentRepository("SQLite", connectionString);
@@ -186,7 +189,7 @@ namespace Kern.Tests
         }
 
         [Fact]
-        public async Task DeliveryFromOrder_AllocatesRepeatedMaterialQuantitiesAcrossSourceLines()
+        public async Task DeliveryFromOrder_DuplicateMaterialLinesDeliverIndependentlyBySourceLine()
         {
             var (service, repository, companyId, _, cleanup) = await CreateAsync();
             try
@@ -212,21 +215,33 @@ namespace Kern.Tests
                     quotationId, "SO-DUP-MAT", new DateOnly(2026, 10, 20), "chain-test");
                 await service.PostAsync(orderId, "chain-test");
 
+                // Deliver ONLY the second line (same material as the first):
+                // per-source-line quantities must not touch line 1, and the
+                // delivery line keeps the source line number as its identity.
                 var firstDeliveryId = await service.CreateFromSourceAsync(
                     orderId, "DLV-DUP-MAT-1", new DateOnly(2026, 10, 21), "chain-test",
-                    quantityByMaterialId: new Dictionary<long, decimal> { [42] = 5m });
+                    quantityBySourceLine: new Dictionary<int, decimal> { [2] = 5m });
                 var firstDelivery = await repository.FindSalesByIdAsync(firstDeliveryId);
                 Assert.NotNull(firstDelivery);
-                Assert.Equal(new[] { 4m, 1m }, firstDelivery!.Lines.Select(line => line.Qty));
+                var deliveredLine = Assert.Single(firstDelivery!.Lines);
+                Assert.Equal(2, deliveredLine.LineNo);
+                Assert.Equal(5m, deliveredLine.Qty);
+                Assert.Equal("Second line", deliveredLine.Description);
 
                 await service.PostAsync(firstDeliveryId, "chain-test");
+                var fulfilledByLine = await repository.GetFulfilledQuantitiesBySourceLineAsync(
+                    companyId, orderId, CommercialDocKinds.DeliveryNote);
+                Assert.Equal(5m, fulfilledByLine[2]);
+                Assert.False(fulfilledByLine.ContainsKey(1));
+
+                // The remaining conversion carries line 1 in full and the
+                // one unit left on line 2, each under its own line number.
                 var secondDeliveryId = await service.CreateFromSourceAsync(
                     orderId, "DLV-DUP-MAT-2", new DateOnly(2026, 10, 22), "chain-test");
                 var secondDelivery = await repository.FindSalesByIdAsync(secondDeliveryId);
                 Assert.NotNull(secondDelivery);
-                var remainingLine = Assert.Single(secondDelivery!.Lines);
-                Assert.Equal(5m, remainingLine.Qty);
-                Assert.Equal("Second line", remainingLine.Description);
+                Assert.Equal(new[] { 1, 2 }, secondDelivery!.Lines.Select(line => line.LineNo).ToArray());
+                Assert.Equal(new[] { 4m, 1m }, secondDelivery.Lines.Select(line => line.Qty).ToArray());
             }
             finally
             {
@@ -246,9 +261,302 @@ namespace Kern.Tests
                     quotationId, "SO-2005", new DateOnly(2026, 10, 20), "chain-test");
                 await service.PostAsync(orderId, "chain-test");
 
-                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                var exceedsError = await Assert.ThrowsAsync<AppError>(() =>
                     service.CreateFromSourceAsync(orderId, "DLV-3005", new DateOnly(2026, 10, 21), "chain-test",
-                        quantityByMaterialId: new Dictionary<long, decimal> { [42] = 11m }));
+                        quantityBySourceLine: new Dictionary<int, decimal> { [1] = 11m }));
+                Assert.Equal(ErrorCodes.ChainQuantityExceedsRemaining, exceedsError.Code);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task Conversion_CarriesFullHeaderAndSourceLineNumbers()
+        {
+            var (service, repository, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                var quotationId = await service.CreateQuotationAsync(new CommercialDocumentDraft(
+                    companyId,
+                    CommercialDocKinds.SalesQuotation,
+                    "QT-HDR-1",
+                    new DateOnly(2026, 10, 16),
+                    7,
+                    "Chain Test Customer",
+                    1,
+                    "SAR",
+                    1m,
+                    "Header notes carry over",
+                    new[]
+                    {
+                        new CommercialLineDraft(42, "MAT-42", "First line", "PCS", 4m, 25m),
+                        new CommercialLineDraft(42, "MAT-42", "Second line", "PCS", 6m, 25m)
+                    },
+                    PartyCode: "CUS-7",
+                    DeliveryDate: new DateOnly(2026, 11, 1),
+                    ValidTill: new DateOnly(2026, 12, 31),
+                    CostCenter: "CC-1",
+                    BranchName: "Main Branch",
+                    SalesRepName: "Rep One",
+                    WarehouseName: "Main"), "chain-test");
+
+                var orderId = await service.CreateFromSourceAsync(
+                    quotationId, "SO-HDR-1", new DateOnly(2026, 10, 20), "chain-test");
+                var order = await repository.FindSalesByIdAsync(orderId);
+                Assert.NotNull(order);
+                Assert.Equal("CUS-7", order!.PartyCode);
+                Assert.Equal(new DateOnly(2026, 11, 1), order.DeliveryDate);
+                Assert.Equal(new DateOnly(2026, 12, 31), order.ValidTill);
+                Assert.Equal("CC-1", order.CostCenter);
+                Assert.Equal("Main Branch", order.BranchName);
+                Assert.Equal("Rep One", order.SalesRepName);
+                Assert.Equal("Main", order.WarehouseName);
+                Assert.Equal("Header notes carry over", order.Notes);
+                Assert.Equal(new[] { 1, 2 }, order.Lines.Select(line => line.LineNo).ToArray());
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task ChainDraft_CarriesHeaderDiscountAndExtraProRata()
+        {
+            var (service, repository, companyId, _, cleanup) = await CreateAsync();
+            try
+            {
+                var quotationId = await service.CreateQuotationAsync(new CommercialDocumentDraft(
+                    companyId,
+                    CommercialDocKinds.SalesQuotation,
+                    "QT-MONEY-1",
+                    new DateOnly(2026, 10, 16),
+                    7,
+                    "Chain Test Customer",
+                    1,
+                    "SAR",
+                    1m,
+                    null,
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Chain test item", "PCS", 10m, 25m) },
+                    DiscountAmount: 20m,
+                    ExtraAmount: 10m), "chain-test");
+
+                var quotation = await repository.FindSalesByIdAsync(quotationId);
+                Assert.NotNull(quotation);
+                Assert.Equal(240m, quotation!.GrandTotal);
+
+                var orderId = await service.CreateFromSourceAsync(
+                    quotationId, "SO-MONEY-1", new DateOnly(2026, 10, 20), "chain-test");
+                await service.PostAsync(orderId, "chain-test");
+                var order = await repository.FindSalesByIdAsync(orderId);
+                Assert.NotNull(order);
+                Assert.Equal(20m, order!.DiscountAmount);
+                Assert.Equal(10m, order.ExtraAmount);
+                Assert.Equal(240m, order.GrandTotal);
+
+                // Half the quantity converts: header money follows pro-rata
+                // and the stored grand total stays coherent
+                // (125 subtotal - 10 discount + 0 tax + 5 extra = 120).
+                var deliveryId = await service.CreateFromSourceAsync(
+                    orderId, "DLV-MONEY-1", new DateOnly(2026, 10, 21), "chain-test",
+                    quantityBySourceLine: new Dictionary<int, decimal> { [1] = 5m });
+                var delivery = await repository.FindSalesByIdAsync(deliveryId);
+                Assert.NotNull(delivery);
+                Assert.Equal(10m, delivery!.DiscountAmount);
+                Assert.Equal(5m, delivery.ExtraAmount);
+                Assert.Equal(120m, delivery.GrandTotal);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task StoredProgress_AndDerivedStatus_FollowPartialDeliveryAndInvoice()
+        {
+            var (service, repository, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var orders = new ShouTech.Infrastructure.OrderDocumentRepository("SQLite", connectionString);
+                var orderService = new OrderService(orders, repository);
+
+                var quotationId = await service.CreateQuotationAsync(
+                    Quotation(companyId, "QT-PROG-1", 10m, 25m), "chain-test");
+                var orderId = await service.CreateFromSourceAsync(
+                    quotationId, "SO-PROG-1", new DateOnly(2026, 10, 20), "chain-test");
+                await service.PostAsync(orderId, "chain-test");
+
+                var (deliveryId, _) = await orderService.CreateSalesDeliveryAsync(
+                    orderId, new DateOnly(2026, 10, 21), "chain-test",
+                    new Dictionary<int, decimal> { [1] = 5m });
+                await orderService.PostSalesDeliveryAsync(deliveryId, "chain-test");
+
+                var afterDelivery = await repository.FindSalesByIdAsync(orderId);
+                Assert.NotNull(afterDelivery);
+                Assert.Equal(50m, afterDelivery!.PerDelivered);
+                Assert.Equal(0m, afterDelivery.PerBilled);
+                Assert.Equal(SalesChainDerivedStatus.ToDeliverAndBill, afterDelivery.DerivedStatus);
+
+                var (invoiceId, _) = await orderService.CreateSalesInvoiceFromDeliveryAsync(
+                    deliveryId, new DateOnly(2026, 10, 22), "chain-test");
+                await orderService.PostSalesChainDocumentAsync(invoiceId, "chain-test");
+
+                var afterInvoice = await repository.FindSalesByIdAsync(orderId);
+                Assert.NotNull(afterInvoice);
+                Assert.Equal(50m, afterInvoice!.PerDelivered);
+                Assert.Equal(50m, afterInvoice.PerBilled);
+                Assert.Equal(SalesChainDerivedStatus.ToDeliverAndBill, afterInvoice.DerivedStatus);
+
+                var progress = await orders.GetProgressAsync(
+                    global::ShouTech.Domain.Interfaces.CommercialDocSide.Sales, orderId);
+                Assert.Equal(afterInvoice.PerDelivered, progress.PerFulfilled);
+                Assert.Equal(afterInvoice.PerBilled, progress.PerBilled);
+                Assert.Equal(SalesChainDerivedStatus.ToDeliverAndBill, progress.DerivedStatus);
+
+                var (secondDeliveryId, _) = await orderService.CreateSalesDeliveryAsync(
+                    orderId, new DateOnly(2026, 10, 23), "chain-test");
+                await orderService.PostSalesDeliveryAsync(secondDeliveryId, "chain-test");
+
+                // Fully delivered, half billed: the derived status flips
+                // to To Bill, driven by the stored columns.
+                var afterSecondDelivery = await repository.FindSalesByIdAsync(orderId);
+                Assert.NotNull(afterSecondDelivery);
+                Assert.Equal(100m, afterSecondDelivery!.PerDelivered);
+                Assert.Equal(50m, afterSecondDelivery.PerBilled);
+                Assert.Equal(SalesChainDerivedStatus.ToBill, afterSecondDelivery.DerivedStatus);
+
+                var (secondInvoiceId, _) = await orderService.CreateSalesInvoiceFromDeliveryAsync(
+                    secondDeliveryId, new DateOnly(2026, 10, 24), "chain-test");
+                await orderService.PostSalesChainDocumentAsync(secondInvoiceId, "chain-test");
+
+                var completed = await repository.FindSalesByIdAsync(orderId);
+                Assert.NotNull(completed);
+                Assert.Equal(100m, completed!.PerDelivered);
+                Assert.Equal(100m, completed.PerBilled);
+                Assert.Equal(SalesChainDerivedStatus.Completed, completed.DerivedStatus);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task QuotationExpiry_SweepsPostedQuotationsPastValidTill()
+        {
+            var (service, repository, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var orders = new ShouTech.Infrastructure.OrderDocumentRepository("SQLite", connectionString);
+                var orderService = new OrderService(orders, repository);
+                var today = DateOnly.FromDateTime(DateTime.Today);
+
+                var expiredId = await repository.CreateSalesDraftAsync(new CommercialDocumentDraft(
+                    companyId, CommercialDocKinds.SalesQuotation, "QT-EXP-1",
+                    today.AddDays(-10), 7, "Chain Test Customer", 1, "SAR", 1m, null,
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Chain test item", "PCS", 2m, 10m) },
+                    ValidTill: today.AddDays(-1)), "chain-test");
+                await repository.PostSalesAsync(expiredId, "chain-test");
+
+                var liveId = await repository.CreateSalesDraftAsync(new CommercialDocumentDraft(
+                    companyId, CommercialDocKinds.SalesQuotation, "QT-EXP-2",
+                    today.AddDays(-10), 7, "Chain Test Customer", 1, "SAR", 1m, null,
+                    new[] { new CommercialLineDraft(42, "MAT-42", "Chain test item", "PCS", 2m, 10m) },
+                    ValidTill: today.AddDays(5)), "chain-test");
+                await repository.PostSalesAsync(liveId, "chain-test");
+
+                var expiredCount = await orderService.ExpirePostedQuotationsAsync(companyId, today);
+                Assert.Equal(1, expiredCount);
+
+                var expiredDoc = await repository.FindSalesByIdAsync(expiredId);
+                Assert.Equal(CommercialDocumentStatus.Expired, expiredDoc!.Status);
+                var liveDoc = await repository.FindSalesByIdAsync(liveId);
+                Assert.Equal(CommercialDocumentStatus.Posted, liveDoc!.Status);
+
+                // Converting the expired quotation is blocked with SAL-7008.
+                var expiredError = await Assert.ThrowsAsync<AppError>(() =>
+                    orderService.ConvertQuotationToOrderAsync(expiredId, today, "chain-test"));
+                Assert.Equal(ErrorCodes.QuotationExpired, expiredError.Code);
+
+                // Expiry is a quotation-only transition.
+                var orderId = await service.CreateFromSourceAsync(
+                    liveId, "SO-EXP-1", today, "chain-test");
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    orders.SetStatusAsync(global::ShouTech.Domain.Interfaces.CommercialDocSide.Sales,
+                        orderId, CommercialDocumentStatus.Expired, "chain-test"));
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task DirectConversion_StoresBilledProgressAndToDeliverStatus()
+        {
+            var (service, repository, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var orders = new ShouTech.Infrastructure.OrderDocumentRepository("SQLite", connectionString);
+                var orderService = new OrderService(orders, repository);
+
+                var quotationId = await service.CreateQuotationAsync(
+                    Quotation(companyId, "QT-PROG-2", 4m, 25m), "chain-test");
+                var orderId = await service.CreateFromSourceAsync(
+                    quotationId, "SO-PROG-2", new DateOnly(2026, 10, 20), "chain-test");
+                await service.PostAsync(orderId, "chain-test");
+
+                await orderService.ConvertToInvoiceAsync(
+                    global::ShouTech.Domain.Interfaces.CommercialDocSide.Sales,
+                    orderId, new DateOnly(2026, 10, 25), "chain-test");
+
+                var order = await repository.FindSalesByIdAsync(orderId);
+                Assert.NotNull(order);
+                Assert.Equal(0m, order!.PerDelivered);
+                Assert.Equal(100m, order.PerBilled);
+                Assert.Equal(SalesChainDerivedStatus.ToDeliver, order.DerivedStatus);
+            }
+            finally
+            {
+                cleanup();
+            }
+        }
+
+        [Fact]
+        public async Task Cancellation_RequiresAndPersistsDocumentedReason()
+        {
+            var (service, repository, companyId, connectionString, cleanup) = await CreateAsync();
+            try
+            {
+                var orders = new ShouTech.Infrastructure.OrderDocumentRepository("SQLite", connectionString);
+                var orderService = new OrderService(orders, repository);
+
+                var quotationId = await service.CreateQuotationAsync(
+                    Quotation(companyId, "QT-CXL-1", 2m, 10m), "chain-test");
+                var orderId = await service.CreateFromSourceAsync(
+                    quotationId, "SO-CXL-1", new DateOnly(2026, 10, 20), "chain-test");
+
+                // No reason, no cancellation (spec sections 3/14).
+                await Assert.ThrowsAsync<ArgumentException>(() =>
+                    orderService.CancelOrderAsync(
+                        global::ShouTech.Domain.Interfaces.CommercialDocSide.Sales, orderId, "chain-test"));
+                await Assert.ThrowsAsync<ArgumentException>(() =>
+                    orderService.CancelOrderAsync(
+                        global::ShouTech.Domain.Interfaces.CommercialDocSide.Sales, orderId, "chain-test", reason: "  "));
+
+                await orderService.CancelOrderAsync(
+                    global::ShouTech.Domain.Interfaces.CommercialDocSide.Sales, orderId, "chain-test",
+                    reason: "Customer withdrew the request");
+
+                var cancelled = await repository.FindSalesByIdAsync(orderId);
+                Assert.NotNull(cancelled);
+                Assert.Equal(CommercialDocumentStatus.Cancelled, cancelled!.Status);
+                Assert.Equal("Customer withdrew the request", cancelled.CancelReason);
+                Assert.Equal("chain-test", cancelled.CancelledBy);
+                Assert.False(string.IsNullOrWhiteSpace(cancelled.CancelledAt));
             }
             finally
             {

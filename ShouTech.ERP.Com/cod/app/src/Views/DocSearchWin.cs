@@ -121,7 +121,7 @@ public sealed class DocSearchWin : BaseWin, IWindowMode
         // equal quarters aligned to one grid (Phenix rule).
         var filters = CreateFormGrid(4);
         filters.Margin = new Thickness(0, 0, 0, 8);
-        _cmbStatus.ItemsSource = new[] { "", CommercialDocumentStatus.Draft, CommercialDocumentStatus.Posted, CommercialDocumentStatus.Closed, CommercialDocumentStatus.Cancelled, CommercialDocumentStatus.Lost };
+        _cmbStatus.ItemsSource = new[] { "", CommercialDocumentStatus.Draft, CommercialDocumentStatus.Posted, CommercialDocumentStatus.Closed, CommercialDocumentStatus.Cancelled, CommercialDocumentStatus.Lost, CommercialDocumentStatus.Expired };
         _cmbStatus.SelectedIndex = 0;
         AddFormField(filters, 0, 0, "DocSearch.Status", _cmbStatus);
         AddFormField(filters, 0, 1, "DocSearch.Search", _txtSearch);
@@ -206,6 +206,22 @@ public sealed class DocSearchWin : BaseWin, IWindowMode
         }
         try
         {
+            if (_mode == DocSearchMode.Quotations)
+            {
+                // Listing quotations first sweeps Posted quotations whose
+                // validity has passed into Expired, so the schedule never
+                // shows a dead quotation as still Posted. A sweep failure
+                // is reported centrally and does not block the listing.
+                try
+                {
+                    await AppHost.Orders.ExpirePostedQuotationsAsync(
+                        _companyId, DateOnly.FromDateTime(DateTime.Today));
+                }
+                catch (Exception sweepEx)
+                {
+                    AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, sweepEx, "DocSearchWin.ExpireQuotations");
+                }
+            }
             var status = _cmbStatus.SelectedItem as string;
             var from = _dtFrom.SelectedDate is { } f ? DateOnly.FromDateTime(f) : (DateOnly?)null;
             var to = _dtTo.SelectedDate is { } t ? DateOnly.FromDateTime(t) : (DateOnly?)null;
@@ -338,6 +354,11 @@ public sealed class DocSearchWin : BaseWin, IWindowMode
     private async Task SetLostAsync()
     {
         if (_grid.SelectedItem is not DocRow row || AppHost.Orders is null) return;
+        if (!AppHost.Permissions.Has(PermCat.Sales.QuotationConvert))
+        {
+            MessageBox.Show(this, T("OrderDoc.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
         var confirm = MessageBox.Show(this, T("DocSearch.ConfirmLost"), Title, MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (confirm != MessageBoxResult.Yes) return;
         try

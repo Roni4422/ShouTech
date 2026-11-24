@@ -82,13 +82,20 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         long? partyId, warehouseId;
         string? partyName, notes, partyCode, branchName, salesRepName, costCenter, warehouseName;
         decimal exchangeRate, subtotal, discountAmount, taxAmount, grandTotal, paidAmount;
+        decimal extraAmount, perDelivered, perBilled;
+        string? cancelReason, cancelledBy, cancelledAt;
         DateOnly? deliveryDate, validTill;
 
+        // per_delivered / per_billed exist only on sales_documents
+        // (migration 093); the purchase family reads constants so one
+        // projection serves both tables.
+        var progressColumns = side == CommercialDocSide.Sales ? "per_delivered, per_billed" : "0, 0";
         await using (var header = CreateCommand(connection, transaction, $"""
             SELECT doc_id, company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id,
                    currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total,
                    paid_amount, status, notes, party_code, branch_name, sales_rep_name, cost_center,
-                   warehouse_name, delivery_date, valid_till
+                   warehouse_name, delivery_date, valid_till, extra_amount, {progressColumns},
+                   cancel_reason, cancelled_by, cancelled_at
             FROM {docs}
             WHERE is_deleted = 0
               AND (@docId IS NULL OR doc_id = @docId)
@@ -130,6 +137,12 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             warehouseName = reader.IsDBNull(21) ? null : reader.GetString(21);
             deliveryDate = reader.IsDBNull(22) ? null : DateOnly.Parse(Convert.ToString(reader.GetValue(22), CultureInfo.InvariantCulture)!, CultureInfo.InvariantCulture);
             validTill = reader.IsDBNull(23) ? null : DateOnly.Parse(Convert.ToString(reader.GetValue(23), CultureInfo.InvariantCulture)!, CultureInfo.InvariantCulture);
+            extraAmount = Convert.ToDecimal(reader.GetValue(24), CultureInfo.InvariantCulture);
+            perDelivered = Convert.ToDecimal(reader.GetValue(25), CultureInfo.InvariantCulture);
+            perBilled = Convert.ToDecimal(reader.GetValue(26), CultureInfo.InvariantCulture);
+            cancelReason = reader.IsDBNull(27) ? null : reader.GetString(27);
+            cancelledBy = reader.IsDBNull(28) ? null : reader.GetString(28);
+            cancelledAt = reader.IsDBNull(29) ? null : Convert.ToString(reader.GetValue(29), CultureInfo.InvariantCulture);
         }
 
         var lineList = new List<CommercialLineSnapshot>();
@@ -167,7 +180,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             foundId, foundCompany, foundKind, foundNo, docDate, partyId, partyName, warehouseId,
             currencyCode, exchangeRate, subtotal, discountAmount, taxAmount, grandTotal,
             paidAmount, status, notes, lineList.AsReadOnly(),
-            partyCode, branchName, salesRepName, costCenter, warehouseName, deliveryDate, validTill);
+            partyCode, branchName, salesRepName, costCenter, warehouseName, deliveryDate, validTill,
+            extraAmount, perDelivered, perBilled, cancelReason, cancelledBy, cancelledAt);
     }
 
     // ----------------------------------------------------------------- write
@@ -308,18 +322,22 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             if (existing.CompanyId != draft.CompanyId)
                 throw new InvalidOperationException("Document belongs to a different company.");
 
-            var computed = ComputeTotals(draft.Lines, out var subtotal, out var taxAmount, out var grandTotal);
+            var computed = ComputeTotals(draft.Lines, out var subtotal, out var taxAmount, out _);
+            var grandTotal = decimal.Round(subtotal - draft.DiscountAmount + taxAmount + draft.ExtraAmount, 2);
 
             await using (var update = CreateCommand(connection, transaction, $"""
                 UPDATE {docs}
                 SET doc_date = @date, party_id = @party, party_name = @partyName, party_code = @partyCode,
                     warehouse_id = @warehouse, warehouse_name = @warehouseName, currency_code = @currency,
-                    exchange_rate = @rate, subtotal = @subtotal, tax_amount = @tax, grand_total = @total,
+                    exchange_rate = @rate, subtotal = @subtotal, discount_amount = @discount,
+                    extra_amount = @extra, tax_amount = @tax, grand_total = @total,
                     notes = @notes, delivery_date = @deliveryDate, valid_till = @validTill,
                     cost_center = @costCenter, branch_name = @branchName, sales_rep_name = @salesRepName
                 WHERE doc_id = @doc AND status = @draft AND is_deleted = 0
                 """))
             {
+                Add(update, "@discount", draft.DiscountAmount);
+                Add(update, "@extra", draft.ExtraAmount);
                 Add(update, "@date", draft.DocDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
                 Add(update, "@party", (object?)draft.PartyId ?? DBNull.Value);
                 Add(update, "@partyName", (object?)draft.PartyName ?? DBNull.Value);
@@ -394,6 +412,12 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             Add(update, "@draft", CommercialDocumentStatus.Draft);
             if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
                 throw new InvalidOperationException("Document was not found or is not in draft status.");
+            if (side == CommercialDocSide.Sales)
+            {
+                // A freshly posted sales order starts its stored chain
+                // progress from the same computation every reader uses.
+                await RecalculateStoredProgressInTransactionAsync(connection, transaction, docId, cancellationToken).ConfigureAwait(false);
+            }
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch
@@ -403,7 +427,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         }
     }
 
-    public async Task SetStatusAsync(CommercialDocSide side, long docId, string newStatus, string userId, CancellationToken cancellationToken = default)
+    public async Task SetStatusAsync(CommercialDocSide side, long docId, string newStatus, string userId, CancellationToken cancellationToken = default, string? cancelReason = null)
     {
         if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
         var allowed = newStatus switch
@@ -411,6 +435,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             CommercialDocumentStatus.Closed => new[] { CommercialDocumentStatus.Posted },
             CommercialDocumentStatus.Cancelled => new[] { CommercialDocumentStatus.Draft, CommercialDocumentStatus.Posted },
             CommercialDocumentStatus.Lost => new[] { CommercialDocumentStatus.Draft, CommercialDocumentStatus.Posted },
+            CommercialDocumentStatus.Expired => new[] { CommercialDocumentStatus.Posted },
             _ => throw new ArgumentException($"Status '{newStatus}' cannot be set directly.", nameof(newStatus))
         };
         var (docs, _) = Tables(side);
@@ -433,8 +458,11 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             if (newStatus == CommercialDocumentStatus.Lost &&
                 kind is not (CommercialDocKinds.SalesQuotation or CommercialDocKinds.SupplierQuotation))
                 throw new InvalidOperationException("Only sales or supplier quotations can be marked as lost.");
+            if (newStatus == CommercialDocumentStatus.Expired &&
+                kind is not CommercialDocKinds.SalesQuotation)
+                throw new InvalidOperationException("Only sales quotations can expire.");
             if (status == CommercialDocumentStatus.Posted
-                && newStatus is CommercialDocumentStatus.Cancelled or CommercialDocumentStatus.Lost)
+                && newStatus is CommercialDocumentStatus.Cancelled or CommercialDocumentStatus.Lost or CommercialDocumentStatus.Expired)
             {
                 var isCommitment = kind is CommercialDocKinds.SalesOrder
                     or CommercialDocKinds.PurchaseOrder
@@ -473,15 +501,23 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                     CultureInfo.InvariantCulture);
                 if (linkedCount > 0)
                     throw new InvalidOperationException(
-                        "A posted commitment cannot be cancelled or marked lost while posted downstream documents are linked. Reverse or cancel the downstream documents first.");
+                        "A posted commitment cannot be cancelled, marked lost, or expired while posted downstream documents are linked. Reverse or cancel the downstream documents first.");
             }
 
             if (Array.IndexOf(allowed, status) < 0)
                 throw new InvalidOperationException($"A document in status '{status}' cannot move to '{newStatus}'.");
 
+            // Documented cancellation (sales-cycle spec sections 3/14):
+            // the transition to Cancelled stamps the reason, the actor,
+            // and the timestamp in the same guarded update.
+            var cancelColumns = newStatus == CommercialDocumentStatus.Cancelled
+                ? ", cancel_reason = @cancelReason, cancelled_by = @actor, cancelled_at = CURRENT_TIMESTAMP"
+                : string.Empty;
             await using var update = CreateCommand(connection, transaction,
-                $"UPDATE {docs} SET status = @new WHERE doc_id = @doc AND status = @old AND is_deleted = 0");
+                $"UPDATE {docs} SET status = @new{cancelColumns} WHERE doc_id = @doc AND status = @old AND is_deleted = 0");
             Add(update, "@new", newStatus);
+            Add(update, "@cancelReason", (object?)cancelReason?.Trim() ?? DBNull.Value);
+            Add(update, "@actor", userId.Trim());
             Add(update, "@doc", docId);
             Add(update, "@old", status);
             if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
@@ -579,59 +615,86 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
     {
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        var order = await ReadSnapshotAsync(connection, null, side, docId, null, null, null, cancellationToken).ConfigureAwait(false)
+        return await ComputeProgressAsync(connection, null, side, docId, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The single progress computation behind both <see cref="GetProgressAsync"/>
+    /// and the stored per_delivered / per_billed columns: fulfilment and billing
+    /// are aggregated BY SOURCE LINE for both sides (chain-created target lines
+    /// persist line_no = source line number), with the material-keyed legacy
+    /// fallback inside LinkedQuantitiesBySourceLineAsync for target lines that
+    /// predate line identity.
+    /// </summary>
+    private async Task<OrderProgress> ComputeProgressAsync(
+        DbConnection connection, DbTransaction? transaction, CommercialDocSide side,
+        long docId, CancellationToken cancellationToken)
+    {
+        var order = await ReadSnapshotAsync(connection, transaction, side, docId, null, null, null, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException("Order was not found.");
 
         var fulfillKind = side == CommercialDocSide.Sales ? CommercialDocKinds.DeliveryNote : CommercialDocKinds.PurchaseReceipt;
         var billedKind = side == CommercialDocSide.Sales ? CommercialDocKinds.SalesInvoice : CommercialDocKinds.PurchaseInvoice;
-        var lineFulfilledQuantities = new Dictionary<int, decimal>();
-        var lineBilledQuantities = new Dictionary<int, decimal>();
-        if (side == CommercialDocSide.Purchase)
-        {
-            var fulfilledByLine = await LinkedQuantitiesBySourceLineAsync(
-                connection, null, side, order.CompanyId, docId, fulfillKind, order.Lines, cancellationToken).ConfigureAwait(false);
-            var billedByLine = await LinkedQuantitiesBySourceLineAsync(
-                connection, null, side, order.CompanyId, docId, billedKind, order.Lines, cancellationToken).ConfigureAwait(false);
-            foreach (var line in order.Lines)
-            {
-                lineFulfilledQuantities[line.LineNo] = Math.Min(line.Qty, fulfilledByLine.GetValueOrDefault(line.LineNo));
-                lineBilledQuantities[line.LineNo] = Math.Min(line.Qty, billedByLine.GetValueOrDefault(line.LineNo));
-            }
-        }
-        else
-        {
-            var fulfilled = await LinkedQuantitiesAsync(connection, null, side, order.CompanyId, docId, fulfillKind, cancellationToken).ConfigureAwait(false);
-            var billed = await LinkedQuantitiesAsync(connection, null, side, order.CompanyId, docId, billedKind, cancellationToken).ConfigureAwait(false);
-            var remainingFulfilled = fulfilled.ToDictionary(pair => pair.Key, pair => pair.Value);
-            var remainingBilled = billed.ToDictionary(pair => pair.Key, pair => pair.Value);
-            foreach (var line in order.Lines)
-            {
-                var key = line.MaterialId ?? -line.LineNo;
-                var fulfilledAvailable = remainingFulfilled.GetValueOrDefault(key);
-                var billedAvailable = remainingBilled.GetValueOrDefault(key);
-                var lineFulfilled = Math.Min(line.Qty, fulfilledAvailable);
-                var lineBilled = Math.Min(line.Qty, billedAvailable);
-                remainingFulfilled[key] = Math.Max(0m, fulfilledAvailable - lineFulfilled);
-                remainingBilled[key] = Math.Max(0m, billedAvailable - lineBilled);
-                lineFulfilledQuantities[line.LineNo] = lineFulfilled;
-                lineBilledQuantities[line.LineNo] = lineBilled;
-            }
-        }
+        var fulfilledByLine = await LinkedQuantitiesBySourceLineAsync(
+            connection, transaction, side, order.CompanyId, docId, fulfillKind, order.Lines, cancellationToken).ConfigureAwait(false);
+        var billedByLine = await LinkedQuantitiesBySourceLineAsync(
+            connection, transaction, side, order.CompanyId, docId, billedKind, order.Lines, cancellationToken).ConfigureAwait(false);
 
         var lines = new List<OrderProgressLine>();
         decimal totalOrdered = 0m, totalFulfilled = 0m, totalBilled = 0m;
         foreach (var line in order.Lines)
         {
-            var lineFulfilled = lineFulfilledQuantities.GetValueOrDefault(line.LineNo);
-            var lineBilled = lineBilledQuantities.GetValueOrDefault(line.LineNo);
-            lines.Add(new OrderProgressLine(line.MaterialId, line.MaterialCode, line.Description, line.Qty, lineFulfilled, lineBilled));
+            var lineFulfilled = Math.Min(line.Qty, fulfilledByLine.GetValueOrDefault(line.LineNo));
+            var lineBilled = Math.Min(line.Qty, billedByLine.GetValueOrDefault(line.LineNo));
+            lines.Add(new OrderProgressLine(line.MaterialId, line.MaterialCode, line.Description, line.Qty, lineFulfilled, lineBilled, line.LineNo));
             totalOrdered += line.Qty;
             totalFulfilled += lineFulfilled;
             totalBilled += lineBilled;
         }
         var perFulfilled = totalOrdered <= 0m ? 0m : decimal.Round(100m * totalFulfilled / totalOrdered, 2);
         var perBilled = totalOrdered <= 0m ? 0m : decimal.Round(100m * totalBilled / totalOrdered, 2);
-        return new OrderProgress(order.DocId, order.DocKind, order.DocNo, lines.AsReadOnly(), perFulfilled, perBilled);
+        return new OrderProgress(order.DocId, order.DocKind, order.DocNo, lines.AsReadOnly(), perFulfilled, perBilled, order.Status);
+    }
+
+    public async Task RecalculateStoredProgressAsync(long salesDocId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await RecalculateStoredProgressInTransactionAsync(connection, transaction, salesDocId, cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Recomputes and persists per_delivered / per_billed for one sales
+    /// document inside the caller's transaction, so a chain creation,
+    /// posting, or conversion and the progress it produces commit or roll
+    /// back together. Internal: CommercialDocumentRepository (same assembly,
+    /// same database) calls it from its chain-creation transaction.
+    /// </summary>
+    internal async Task RecalculateStoredProgressInTransactionAsync(
+        DbConnection connection, DbTransaction transaction, long salesDocId, CancellationToken cancellationToken)
+    {
+        var progress = await ComputeProgressAsync(
+            connection, transaction, CommercialDocSide.Sales, salesDocId, cancellationToken).ConfigureAwait(false);
+        await using var update = CreateCommand(connection, transaction, """
+            UPDATE sales_documents
+            SET per_delivered = @perDelivered, per_billed = @perBilled
+            WHERE doc_id = @doc AND is_deleted = 0
+            """);
+        Add(update, "@perDelivered", progress.PerFulfilled);
+        Add(update, "@perBilled", progress.PerBilled);
+        Add(update, "@doc", salesDocId);
+        if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+            throw new InvalidOperationException("Sales document was not found while storing chain progress.");
     }
 
     private async Task<IReadOnlyDictionary<long, decimal>> LinkedQuantitiesAsync(
@@ -1464,22 +1527,10 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                     throw new InvalidOperationException(
                         $"Sales order '{order.DocNo}' already has posted delivery notes. Create the invoice from the delivery note so stock is not issued twice.");
 
-                var billed = await LinkedQuantitiesAsync(
-                    connection, transaction, side, order.CompanyId, orderDocId, invoiceKind, cancellationToken).ConfigureAwait(false);
-                var remainingByMaterial = new Dictionary<long, decimal>();
-                foreach (var group in order.Lines.GroupBy(line => line.MaterialId ?? -line.LineNo))
-                    remainingByMaterial[group.Key] = Math.Max(0m, group.Sum(line => line.Qty) - billed.GetValueOrDefault(group.Key));
-
-                foreach (var group in order.Lines.GroupBy(line => line.MaterialId ?? -line.LineNo))
-                {
-                    var available = remainingByMaterial.GetValueOrDefault(group.Key);
-                    foreach (var sourceLine in group.OrderBy(line => line.LineNo))
-                    {
-                        var lineAvailable = Math.Min(sourceLine.Qty, available);
-                        remainingBySourceLine[sourceLine.LineNo] = Math.Max(0m, lineAvailable);
-                        available -= lineAvailable;
-                    }
-                }
+                var billedByLine = await LinkedQuantitiesBySourceLineAsync(
+                    connection, transaction, side, order.CompanyId, orderDocId, invoiceKind, order.Lines, cancellationToken).ConfigureAwait(false);
+                foreach (var line in order.Lines)
+                    remainingBySourceLine[line.LineNo] = Math.Max(0m, line.Qty - billedByLine.GetValueOrDefault(line.LineNo));
             }
 
             var invoiceLines = new List<CommercialLineDraft>();
@@ -1569,17 +1620,28 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 && !await IsCompanyTaxEnabledAsync(connection, transaction, order.CompanyId, cancellationToken).ConfigureAwait(false))
                 throw new InvalidOperationException("Tax is disabled for this company. Enable the company's tax system before posting a taxable supplier invoice.");
 
+            ComputeTotals(invoiceLines, out var invoiceSubtotal, out var invoiceTax, out _);
+            // Header money follows the invoiced lines: the order's header
+            // discount / extra charges are carried pro-rata to the invoiced
+            // line subtotal, and the stored grand total is recomputed from
+            // them inside InsertDocumentAsync (subtotal - discount + tax +
+            // extra), so the ledger/GL legs below — which use the
+            // recomputed total — stay coherent with the stored document.
+            var carryRatio = order.Subtotal > 0m ? invoiceSubtotal / order.Subtotal : 0m;
+            var carriedDiscount = decimal.Round(order.DiscountAmount * carryRatio, 2);
+            var carriedExtra = decimal.Round(order.ExtraAmount * carryRatio, 2);
+            var grandTotal = decimal.Round(invoiceSubtotal - carriedDiscount + invoiceTax + carriedExtra, 2);
+
             var invoiceDraft = new CommercialDocumentDraft(
                 order.CompanyId, invoiceKind, invoiceDocNo.Trim(), invoiceDate,
                 order.PartyId, order.PartyName, order.WarehouseId,
                 order.CurrencyCode, order.ExchangeRate,
                 $"From {orderKind} {order.DocNo}",
                 invoiceLines,
-                order.PartyCode, null, null, order.CostCenter, order.BranchName, order.SalesRepName, order.WarehouseName);
+                order.PartyCode, null, null, order.CostCenter, order.BranchName, order.SalesRepName, order.WarehouseName,
+                carriedDiscount, carriedExtra);
 
             var invoiceId = await InsertDocumentAsync(connection, transaction, side, invoiceDraft, CommercialDocumentStatus.Posted, userId, cancellationToken).ConfigureAwait(false);
-
-            ComputeTotals(invoiceLines, out var invoiceSubtotal, out var invoiceTax, out var grandTotal);
 
             // Step 7 (J-5): resolve the order's effective rate ONCE
             // through FxRates (document rate, else master, else
@@ -1736,6 +1798,14 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                         invoiceKind, invoiceId.ToString(CultureInfo.InvariantCulture), invoiceDocNo.Trim(),
                         order.CurrencyCode, fx.Rate, glLines),
                     userId);
+            }
+
+            if (side == CommercialDocSide.Sales)
+            {
+                // The converted invoice is posted and linked above, so the
+                // order's stored per_billed refreshes in this transaction.
+                await RecalculateStoredProgressInTransactionAsync(
+                    connection, transaction, orderDocId, cancellationToken).ConfigureAwait(false);
             }
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -2190,6 +2260,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         if (string.IsNullOrWhiteSpace(draft.DocNo)) throw new ArgumentException("Document number is required.", nameof(draft));
         if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
         if (draft.Lines.Count == 0) throw new InvalidOperationException("A commercial document requires at least one line.");
+        if (draft.DiscountAmount < 0m) throw new InvalidOperationException("Header discount cannot be negative.");
+        if (draft.ExtraAmount < 0m) throw new InvalidOperationException("Header extra charges cannot be negative.");
     }
 
     private async Task PersistPurchaseMatchEvaluationAsync(
@@ -2395,11 +2467,15 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         CommercialDocumentDraft draft, string status, string userId, CancellationToken cancellationToken)
     {
         var (docs, _) = Tables(side);
-        var computed = ComputeTotals(draft.Lines, out var subtotal, out var taxAmount, out var grandTotal);
+        var computed = ComputeTotals(draft.Lines, out var subtotal, out var taxAmount, out _);
+        // Stored-total rule (native invoice family): grand = subtotal -
+        // header discount + tax + header extra charges. The draft carries
+        // the header money; it is never silently zeroed.
+        var grandTotal = decimal.Round(subtotal - draft.DiscountAmount + taxAmount + draft.ExtraAmount, 2);
         long docId;
         await using (var insertHeader = CreateCommand(connection, transaction,
-            $"INSERT INTO {docs} (company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id, currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total, status, notes, created_by, party_code, delivery_date, valid_till, cost_center, branch_name, sales_rep_name, warehouse_name, posted_by, posted_at) " +
-            "VALUES (@company, @kind, @no, @date, @party, @partyName, @warehouse, @currency, @rate, @subtotal, @discount, @tax, @total, @status, @notes, @actor, @partyCode, @deliveryDate, @validTill, @costCenter, @branchName, @salesRepName, @warehouseName, @postedBy, @postedAt)" +
+            $"INSERT INTO {docs} (company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id, currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total, status, notes, created_by, party_code, delivery_date, valid_till, cost_center, branch_name, sales_rep_name, warehouse_name, posted_by, posted_at, extra_amount) " +
+            "VALUES (@company, @kind, @no, @date, @party, @partyName, @warehouse, @currency, @rate, @subtotal, @discount, @tax, @total, @status, @notes, @actor, @partyCode, @deliveryDate, @validTill, @costCenter, @branchName, @salesRepName, @warehouseName, @postedBy, @postedAt, @extra)" +
             (_provider == "PostgreSQL" ? " RETURNING doc_id" : "; SELECT last_insert_rowid();")))
         {
             Add(insertHeader, "@company", draft.CompanyId.ToString("D"));
@@ -2412,7 +2488,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             Add(insertHeader, "@currency", string.IsNullOrWhiteSpace(draft.CurrencyCode) ? "SAR" : draft.CurrencyCode.Trim());
             Add(insertHeader, "@rate", draft.ExchangeRate < 0m ? 0m : draft.ExchangeRate); // Step 7: as above
             Add(insertHeader, "@subtotal", subtotal);
-            Add(insertHeader, "@discount", 0m);
+            Add(insertHeader, "@discount", draft.DiscountAmount);
+            Add(insertHeader, "@extra", draft.ExtraAmount);
             Add(insertHeader, "@tax", taxAmount);
             Add(insertHeader, "@total", grandTotal);
             Add(insertHeader, "@status", status);
