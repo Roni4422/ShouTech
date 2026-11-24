@@ -138,7 +138,13 @@ namespace ShouTech.App.Services
                         .RecalculateAsync(company, null, null, from, reason, user, ct);
                     return new ShouTech.Domain.Entities.RecalculationOutcome(
                         result.JobId, result.MovementsReplayed, result.ValueDelta);
-                }), "Operations");
+                },
+                (company, from, to, ct) => new StockRecalculationService(provider, connection)
+                    .PreviewAsync(company, null, null, from, to, ct),
+                (company, from, to, reason, user, entryDate, preview, ct) => new StockRecalculationService(provider, connection)
+                    .ApplyAsync(company, null, null, from, to, reason, user, entryDate, preview, ct),
+                (company, ct) => new StockRecalculationService(provider, connection)
+                    .GetOpenPeriodRangeAsync(company, ct)), "Operations");
             AccountingStructure = CreateAccountingStructureRepository();
             DatabaseHealth = CreateDatabaseHealth();
 

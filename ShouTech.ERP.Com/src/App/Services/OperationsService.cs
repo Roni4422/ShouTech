@@ -24,12 +24,29 @@ public sealed class OperationsService
     /// </summary>
     private readonly Func<string, DateOnly, string?, string, CancellationToken, Task<RecalculationOutcome>>? _recalculateCosts;
 
+    /// <summary>
+    /// The GL-restatement flow of the same engine (feat/recalc-costs-gl),
+    /// injected the same way: preview (writes nothing), apply (posts the
+    /// approved preview's adjustments), and the default range (the
+    /// current open fiscal period). All optional so existing hosts and
+    /// unit tests keep constructing the service as before.
+    /// </summary>
+    private readonly Func<string, DateOnly, DateOnly, CancellationToken, Task<RecalculationPreview>>? _previewRecalculation;
+    private readonly Func<string, DateOnly, DateOnly, string?, string, DateOnly, RecalculationPreview, CancellationToken, Task<RecalculationApplyResult>>? _applyRecalculation;
+    private readonly Func<string, CancellationToken, Task<(DateOnly From, DateOnly To)>>? _recalculationDefaultRange;
+
     public OperationsService(
         IOperationsRepository repository,
-        Func<string, DateOnly, string?, string, CancellationToken, Task<RecalculationOutcome>>? recalculateCosts = null)
+        Func<string, DateOnly, string?, string, CancellationToken, Task<RecalculationOutcome>>? recalculateCosts = null,
+        Func<string, DateOnly, DateOnly, CancellationToken, Task<RecalculationPreview>>? previewRecalculation = null,
+        Func<string, DateOnly, DateOnly, string?, string, DateOnly, RecalculationPreview, CancellationToken, Task<RecalculationApplyResult>>? applyRecalculation = null,
+        Func<string, CancellationToken, Task<(DateOnly From, DateOnly To)>>? recalculationDefaultRange = null)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _recalculateCosts = recalculateCosts;
+        _previewRecalculation = previewRecalculation;
+        _applyRecalculation = applyRecalculation;
+        _recalculationDefaultRange = recalculationDefaultRange;
     }
 
     internal IOperationsRepository Repository => _repository;
@@ -304,6 +321,60 @@ public sealed class OperationsService
         if (_recalculateCosts is null)
             throw new InvalidOperationException("Recalculate Costs is not configured for this host.");
         return await _recalculateCosts(company, fromDate, reason, userId.Trim(), ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Recalculate Costs preview (feat/recalc-costs-gl): every cost
+    /// change a run over the range WOULD produce and the GL adjustment
+    /// each change implies. Writes nothing — no stock, no GL, no run
+    /// record. The engine refuses ranges ending before a later
+    /// in-scope movement (INV-6018) and ranges touching a closed
+    /// period (INV-6004).
+    /// </summary>
+    public async Task<RecalculationPreview> PreviewRecalculationAsync(
+        string companyId, DateOnly fromDate, DateOnly toDate, CancellationToken ct = default)
+    {
+        var company = RequireCompany(companyId);
+        if (toDate < fromDate)
+            throw new ArgumentException("The range end date cannot precede its start date.", nameof(toDate));
+        if (_previewRecalculation is null)
+            throw new InvalidOperationException("Recalculate Costs preview is not configured for this host.");
+        return await _previewRecalculation(company, fromDate, toDate, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Posts the approved preview's GL adjustments as real journal
+    /// entries through the central posting engine and persists the run
+    /// record. The engine re-runs the replay first and posts only when
+    /// the fresh result still matches the approved preview exactly
+    /// (INV-6017 otherwise) — no posting without preview + approval,
+    /// and no adjustment without a matching shown cost change.
+    /// </summary>
+    public async Task<RecalculationApplyResult> ApplyRecalculationAsync(
+        string companyId, DateOnly fromDate, DateOnly toDate, string? reason, string userId,
+        DateOnly entryDate, RecalculationPreview approvedPreview, CancellationToken ct = default)
+    {
+        var company = RequireCompany(companyId);
+        if (string.IsNullOrWhiteSpace(userId))
+            throw new ArgumentException("A user is required.", nameof(userId));
+        ArgumentNullException.ThrowIfNull(approvedPreview);
+        if (toDate < fromDate)
+            throw new ArgumentException("The range end date cannot precede its start date.", nameof(toDate));
+        if (_applyRecalculation is null)
+            throw new InvalidOperationException("Recalculate Costs posting is not configured for this host.");
+        return await _applyRecalculation(company, fromDate, toDate, reason, userId.Trim(), entryDate, approvedPreview, ct)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>The window's default recalculation range: the open
+    /// fiscal period containing today.</summary>
+    public async Task<(DateOnly From, DateOnly To)> GetRecalculationDefaultRangeAsync(
+        string companyId, CancellationToken ct = default)
+    {
+        var company = RequireCompany(companyId);
+        if (_recalculationDefaultRange is null)
+            throw new InvalidOperationException("Recalculate Costs is not configured for this host.");
+        return await _recalculationDefaultRange(company, ct).ConfigureAwait(false);
     }
 
     public Task<IReadOnlyList<FiscalYearRow>> GetFiscalYearsAsync(string companyId, CancellationToken ct = default)
