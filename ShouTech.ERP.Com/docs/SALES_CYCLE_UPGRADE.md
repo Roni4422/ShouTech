@@ -350,10 +350,11 @@ Phases 01/02/03/04/05/06/07/12/13).
 6. **Drop shipping / consignment models** (L4) — stock-ownership and
    purchase-chain policies; drop-ship also overlaps the parallel
    purchase-cycle branch.
-7. **Discount-account and FX gain/loss account numbers** will follow the
-   existing COA template structure (discount netted today; the spec's §12
-   account list requires both accounts) — implemented in W7a/W8 using the
-   template's next consistent codes and recorded in the completion record.
+7. **Discount-account and FX gain/loss account numbers** — resolved in
+   W8: every COA template already carries 305 Sales Discounts, 405
+   Purchase Discounts, 509 FX Losses and 306 Other Income (used for FX
+   gains; no template has a dedicated FX-gain account). Nothing was
+   seeded into any chart.
 
 ## §18 completion checklist — scoring
 
@@ -362,3 +363,163 @@ from the spec's §18 (13 functional / 10 technical / 10 accounting-inventory /
 8 final-testing) itemized as PROVEN with evidence or an explicit GAP with the
 reason, followed by the four-system comparison (Al-Ameen 10 / Phenix v10 /
 ERPNext / Odoo) the spec requires._
+
+---
+
+# Part III — §18 Scoring, Four-System Comparison, Final Completion Record
+
+Scored 2026-11-24 on branch `feat/sales-cycle-erpnext` (base
+`52a762adc98a3a2cd003c95eb13475b4c01c432e`, the tip of
+`work/full-app-stabilization-2026-11-18`). The spec file's §18 actually
+enumerates 13 functional / 12 technical / 10 accounting-inventory / 9
+final-testing items; every item is scored below as written in the file.
+Evidence key: **[H]** headless harness on the real services (SQLite),
+**[T]** Kern.Tests facts (compile-verified here; execution owed on
+Windows), **[B]** build/migrator/audit gate, **[C]** code inspection.
+
+## §18.1 Functional completeness (13)
+
+| # | Item | Verdict | Evidence |
+|---|------|---------|----------|
+| 1 | Customer management functions | **PROVEN** (minor note) | W1 (mig 095): contacts/addresses/branches with primary mirroring, per-customer currency, risk class, blacklist enforced at both party resolvers (ACC-5020), opening balances via GlPosting + party_ledger OPN row, customer statement window, order-stage credit check + audited SALES.CREDIT.OVERRIDE, due dates from credit_days [T][C]. Note: territory/area is stored on parties/policies but no document carries an area, so territory matching is dormant (W7b leftover). |
+| 2 | Quotation functions | **PROVEN** | B1 (items grid, valid-till picker, dedupe CRM-9007, conversion with discount/tax carried), B2 (Expired status + sweep), W23 (revisions with preserved snapshots, approval workflow, authorized direct QUO→invoice). [T][H] |
+| 3 | Sales order functions | **GAP (one sub-function)** | Built: line-keyed partial fulfilment, stored per_delivered/per_billed + derived statuses, credit check at order stage, amendments via revision (W23), cancellation with reason, recurring orders (W11), contract draw-down (W7c), picking generation (W4). **Missing: stock reservation** — `reserved_qty` exists in the schema and SAL-7011 is registered, but no order flow writes reservations; posting an order does not reserve stock. This is the one §3 sub-function not delivered. |
+| 4 | Approval workflows | **PROVEN** | W23: QUO/SO/invoice approval (Draft → Pending → Approved/Rejected-with-reason, history, separated-duty permissions) behind a company flag default OFF; W6: return approval (SALES.RETURN.APPROVE). [T] Note: two per-area flags exist (`sau_sales_settings`, `srt_return_settings`) — consolidation candidate, both default OFF. |
+| 5 | Delivery and warehouse functions | **PROVEN** (minor note) | W4 (mig 096): picking with over-pick guard SAL-7012, dispatch with driver/vehicle, proof of delivery (receiver + timestamp + signature bytes), returned-delivery flow via chain reversal, delivery performance reporting. Note: packing remains a printout, not a scanned verification step (appendix L2 "Packing Verification" not built). |
+| 6 | Invoice types (all 10) | **PROVEN** | Cash, credit, order-based, delivery-based, direct, partial (B-chain), consolidated (W5), recurring (W11), export (W5 header fields), service (service-material path). [H][T] |
+| 7 | Return and credit note functions | **PROVEN** | B3 (origin-invoice settlement in-transaction, allocatable credit notes, capped cash refunds), W6 (reasons master, Good/Quarantine/Damaged routing, inspection SAL-7022, approval, no-invoice returns, delivery-sourced returns relieving 1215, cumulative caps SAL-7021), W10 RMA front-end. [T] |
+| 8 | Customer receipt functions | **PROVEN** | Advances + on-account (pre-existing, verified), allocation incl. credit notes (B3), W8: settlement discounts (permission-gated, posted in-allocation), cross-currency allocation with realized FX gain/loss, due-date FIFO suggestion + multi-invoice distribution; bounced-cheque reversal and refunds verified present, not rebuilt. [H 15/15] |
+| 9 | Pricing and promotional functions | **PROVEN** (minor note) | W7a: single resolution engine (contract → customer_prices → tier price list → tier columns → card) with provenance, discount_rules quantity breaks, BXGY (mig 099 `bonus_buy_qty`), price_min/margin/discount_max enforcement at save + post with audited overrides, price-change history. Note: no dedicated promotion-performance *report*; the data (rules + history + overrides) exists. MatCard has no `bonus_buy_qty` field yet (DB/import only). |
+| 10 | Commission functions | **PROVEN** (minor note) | W7b (mig 097): Sales/Collection/Profit bases, specificity + tier resolution, return-adjusted clawbacks, approval → settlement → balanced journal payment, fail-soft generation hooks on chain + native invoice paths. Notes: territory matching dormant (no document area source); POS invoices not hooked (no rep convention on POS docs). |
+| 11 | Contract functions | **PROVEN** (minor note) | W7c (mig 101): contracts + lines + events, contract prices as pricing level (a), draw-down guards SAL-7015/SAL-7023 at save + post, scheduled generation (draft orders), renewals, expiration sweep/query, fulfillment + profitability. Notes: QUO→SO conversions don't propagate contract_id; native invoices are contract-priced but don't roll into fulfillment quantities. |
+| 12 | POS fully integrated | **PROVEN** (owner-decision gap noted) | 066 sessions/split tenders/suspended sales/returns + W7a resolver pricing + W9: paid-outs in session/Z math, exchanges (two linked documents, exact tender netting), numeric cashier discount limits with password-verified supervisor override + audit, per-terminal/cashier performance. **Not built by design: true offline sync and weighing-scale integration — both flagged owner decisions (architecture / hardware protocol).** |
+| 13 | Sales reports (all) | **GAP (partial)** | Delivered: sales analysis + AR aging + customer statement (W1), CRM funnel + forecast (B5/W10), sales exception report incl. delivery performance + AR↔GL and inventory↔GL reconciliation sections (B5/W4/W8), commission entries view (W7b), POS performance (W9), contract fulfillment (W7c). **Not delivered as a set: the spec's full 17-category report catalog with the complete filter matrix (dates/customer/product/group/rep/warehouse/cost-center/project/currency/status) on every report.** Core reporting is real; the exhaustive catalog is not complete. |
+
+## §18.2 Technical completeness (12)
+
+| # | Item | Verdict | Evidence |
+|---|------|---------|----------|
+| 1 | Windows connected to the main window | **PROVEN** | Ribbon routes added for CustStmtWin, CommWin, ContractWin, RecurWin, CrmCampaignWin, WarrantyWin, RmaWin, PosPerfRptWin; `tools/audit_window_context.py` exits 0. [B] |
+| 2 | Windows connected to their services | **PROVEN** | AppHost composition extended for Commissions, Contracts, Recurring, Warranties (+ rebind path). [C][B] |
+| 3 | Services connected to real database operations | **PROVEN** | Every workstream posts through the real repositories/engines; harnesses run on migrated databases only. [H] |
+| 4 | All required SQL files created | **PROVEN** | Migrations 092–106, each in both `dba/mig/sqlite/` and `dba/mig/postgresql/`. [B] |
+| 5 | SQLite and PostgreSQL migrations completed | **PARTIAL** | SQLite: applied + idempotent double-run verified through 106. PostgreSQL: dialect-twin files written to the established conventions but **never executed** — no PostgreSQL server exists in this environment. Live PG run owed on the owner's infrastructure. |
+| 6 | No fake or temporary save operations | **PROVEN** | The five historical FAKE-SAVE windows were rebuilt in earlier phases; all wave work persists in the posting transaction (incl. W1 opening balances, W6 inspection/approval state, W9 paid-outs). [C][H] |
+| 7 | No missing document relationships | **PROVEN** | document_links at every hop, per-line source attribution (mig 102), contract/recurring/exchange/RMA/warranty links, unified `sau_document_events`. [H][T] |
+| 8 | Document numbering unique and concurrency-safe | **PARTIAL** | Mechanism: sequence/numbering-service based (B1 removed the COUNT(*)+1 quotation numbering; recurring and contract numbering follow the same pattern). **No concurrent-numbering stress test was executed** — scored as a proof gap under §18.4 #7 as well. |
+| 9 | Complete authorization and audit implementation | **PROVEN** | RBAC seeds in every migration (097–106), approval history, price/credit/settlement override audits, denied-access events (W8 `PermServ.Require`), error catalog SAL-7001…7029 + ACC-5020 in 4 languages. [C][B] |
+| 10 | English-only source code and comments | **PROVEN (no regression)** | `verify_english_source.py` output is byte-identical in failure set to the base branch (pre-existing purchase-side catalog asymmetries); no new violations introduced by any wave (verified by missing-key diff at every fan-in). [B] |
+| 11 | UI language supplied through resource files | **PROVEN** | Every new key added to all four Lang catalogs with identical structure; fan-in parity checks show zero new missing keys in Ar/Fr/Tr. Errors catalogs at 139 entries × 4. [B] |
+| 12 | Consistent visual identity across all windows | **PROVEN** (visual check owed) | All new windows use the central Win11 tokens, per-window schedule tints, bottom action bars, ENTER-horizontal grids, ≤50% opening via BaseWin. WPF click-through/visual confirmation remains part of the owed Windows run. [C] |
+
+## §18.3 Accounting and inventory completeness (10)
+
+| # | Item | Verdict | Evidence |
+|---|------|---------|----------|
+| 1 | Correct customer balances | **PROVEN** | Party ledger is transaction-derived; wave-4 harness: balance 250 = sum of open invoices; AR GL = party ledger in Part I harness (35/35). [H] |
+| 2 | Correct revenue recognition | **PROVEN** | Stored-total posting (InvRepo/chain), §12 posting table conformance verified in Part II audit; returns reverse revenue proportionally at original values. [H][T] |
+| 3 | Correct tax calculations when enabled | **PROVEN** | Tax engine untouched by the waves except guarded seams; chain + native postings carry tax through stored totals; returns reverse tax pro-rata. [T][C] |
+| 4 | Correct inventory deductions | **PROVEN** | Unit-equivalent deductions (250 g = 0.25 kg), service/non-stock exemption everywhere incl. returns and POS; harness stock 1000 → 990. [H] |
+| 5 | Correct Cost of Goods Sold | **PROVEN** | One StockValuationEngine; delivery COGS parked in 1215 and relieved per-delivery with rounding plug; consolidated relief exact (1215 → 0). [H] |
+| 6 | Correct sales return accounting | **PROVEN** | Original-cost returns; damaged lines take no cost-side entry (original COGS stands as the write-off — GL balanced, inventory GL == valuation); quarantine routing via the 056 mechanism. [T] |
+| 7 | Correct customer receipt allocation | **PROVEN** | Allocation settles open amounts in-transaction (B3); settlement discounts and FX post inside the allocation journal; W8 smoke harness 15/15. [H] |
+| 8 | Correct foreign currency treatment | **PROVEN** | FX via the existing resolver/rates; cross-currency allocation posts realized gain (Cr 306) / loss (Dr 509); worked examples in W8 record (+55 loss / −25 gain). [H][T] |
+| 9 | Correct General Ledger reconciliation | **PROVEN** | Journals balanced in every harness (Dr = Cr); W8 AR↔GL and inventory↔GL reconciliation reports (inventory GL set includes 1215 with documented reasoning). [H] |
+| 10 | Complete reversal and audit history | **PROVEN** | Chain reversal with reason (B4), document_reversals, approval history, unified document events incl. AccessDenied, cancellation reasons mandatory. [T][C] |
+
+## §18.4 Final testing (9)
+
+| # | Item | Verdict | Evidence |
+|---|------|---------|----------|
+| 1 | Successful Windows build | **GAP** | The solution builds 0 errors / 4 baseline warnings on this Linux VM with Windows targeting; a build on the owner's Windows machine is still owed (standing caveat for the whole project). |
+| 2 | Successful SQLite tests | **PARTIAL** | Runtime harnesses on migrated SQLite all pass: Part I chain 35/35, W4 14/14, W5 23/23, W8 15/15, W11 runtime proof, wave-4 consolidated 15/15. Kern.Tests (100+ new facts across the waves) are compile-verified only — the testhost targets net8.0-windows and cannot execute here. |
+| 3 | Successful PostgreSQL tests | **GAP** | No PostgreSQL server available in this environment; PG migrations are dialect twins, unexecuted. |
+| 4 | Successful complete sales workflow tests | **PROVEN** (harness level) | Lead → opportunity → quotation → order → partial delivery → partial invoice → allocation → completion → return, plus consolidated/contract/commission/recurring scenarios, all on the real services. [H] |
+| 5 | Successful accounting reconciliation | **PROVEN** | See §18.3 #9; reconciliation reports ship in SalExceptWin. |
+| 6 | Successful inventory reconciliation | **PROVEN** | See §18.3 #4/#5 + inventory↔GL report (W8). |
+| 7 | Successful concurrent document numbering tests | **GAP** | Not executed (see §18.2 #8). |
+| 8 | No unresolved critical errors | **PROVEN** | Build clean at the baseline warning count; every fan-in gate green; all known leftovers are minor and itemized in the completion record below — none is a posting/money defect. |
+| 9 | Final comparison against Al-Ameen 10, Phenix v10, ERPNext and Odoo | **PROVEN** | Table in the next section. Evidence-depth note: Al-Ameen/Phenix columns rest on vendor documentation/marketing and the owner's parity matrix, not on hands-on runs of those products — the same evidence standard as the purchase-cycle audit. |
+
+## Four-system comparison (sales cycle, post-upgrade state)
+
+| Capability | ShouTech (this branch) | ERPNext | Odoo | Al-Ameen V10 | Phenix v10 |
+|---|---|---|---|---|---|
+| Lead → Opp → Quotation → Order → Delivery → Invoice → Payment chain | Full, line-keyed, source links preserved | Full (benchmark) | Full (CRM + Sale) | Full | Full |
+| Partial delivery / partial invoicing with remaining-qty enforcement | Yes — stored per_delivered/per_billed + derived statuses | Yes | Yes | Yes | Yes |
+| Delivery accounting before invoicing | Dr 1215 / Cr inventory at delivery; relieved per delivery at invoicing | Yes (DN posts stock ledger; SI posts COGS) | Yes (with accounting modules) | Yes | Yes |
+| Stock reservation on orders | **No — gap (§18.1 #3)** | Yes | Yes (forecasted qty) | Yes | Yes |
+| Pricing engine (lists, tiers, customer prices, contracts) | Yes — one resolver, provenance shown | Yes (Pricing Rules) | Yes (pricelists) | Yes | Yes |
+| Min price / margin / discount enforcement with authorized override | Yes — blocked at save + post, overrides audited | Partial (margin alerts; blocking via customization) | Partial | Yes | Yes |
+| Promotions (BXGY, volume) | BXGY + quantity-break rules; no promo-analysis report | Yes | Yes (coupons/programs) | Yes | Yes |
+| Commissions (sales/collection/profit, tiers, settlement) | Yes — incl. return clawbacks, journal-paid settlements | Partial (sales partner/team; settlement manual) | Partial (module dependent) | Yes | Yes |
+| Contracts with draw-down + scheduled deliveries | Yes | Yes (blanket orders partial) | Partial | Yes | Yes |
+| Recurring orders/invoices | Yes — template engine, idempotent generation | Yes (subscriptions) | Yes (subscriptions) | Partial | Yes |
+| Returns: reasons, condition routing, inspection, RMA, warranty | Yes — incl. quarantine/damaged routing, RMA, warranty claims | Partial (RMA via quality/returns; warranty separate) | Partial (RMA module dependent) | Yes | Yes |
+| Receipts: advances, settlement discount, cross-currency FX | Yes — realized FX posted in-allocation | Yes | Yes | Yes | Yes |
+| POS: sessions, paid-outs, exchanges, discount limits | Yes; **offline mode = owner decision** | Yes (POS with offline) | Yes | Yes | Yes |
+| CRM campaigns + forecast | Yes (basic roll-ups, stage-weighted forecast) | Yes | Yes | Partial | Partial |
+| E-invoicing / e-commerce / intercompany / drop-ship / consignment / loyalty | **Not built — owner decisions flagged** | Partial–Yes (varies) | Yes (modules) | Partial | Partial |
+| Audit: unified document events + denied-access logging | Yes | Yes (versioning/activity) | Yes (chatter) | Yes | Yes |
+| Languages / RTL | 4 languages, full RTL via central direction service | Many; RTL partial | Many; RTL partial | Arabic-first | Arabic-first |
+
+## Final completion record (waves 1–3, on top of Part I §6)
+
+- **Wave 1** — W1 customers (mig 095), W4 picking & delivery (mig 096),
+  W7b commissions (mig 097). Fan-in: ACC-5020 registered; blacklist throws
+  cataloged.
+- **Wave 2** — W23 document lifecycle (mig 098), W7a pricing & promotions
+  (mig 099), W6 returns completion (mig 100). Fan-in: approval gate and
+  pricing guard composed sequentially in `PostSalesAsync`.
+- **Wave 3** — W7c contracts (mig 101), W5 invoice completion (mig 102),
+  W8 receipts/audit/reconciliation (mig 103), W9 POS remainder (mig 104),
+  W10 campaigns/warranty/RMA/forecast (mig 105), W11 recurring engine
+  (mig 106). Fan-in: SAL-7027/7028/7029 registered; W5 consolidation guards
+  converted from the SAL-7004 stand-in to SAL-7029; W11 test fake extended
+  for W5's new repository member.
+- **Gates on the final tree**: full build 0 errors / 4 warnings (the base
+  branch's pre-existing CA1859 set in PurchaseReceiptReturnWin.cs — no new
+  warnings); SqlMigrator idempotent through migration 106 (SQLite);
+  `audit_window_context.py` exit 0; `verify_screenfit.py` and
+  `verify_english_source.py` fail only on the identical pre-existing
+  base-branch items (TaxReportWin/TaxSetupWin/SupplierQuotationEntryWin
+  minimums; purchase-side Fr/Tr catalog asymmetries) — zero regressions;
+  Lang parity: zero new missing keys at every fan-in; Errors catalogs
+  139 entries × 4 languages.
+- **Runtime proof on the final merged tree** (wave-4 consolidated harness,
+  real services on migrated SQLite, 15/15): below-minimum order blocked at
+  save with SAL-7018; delivery debits 1215 by 160 and the partial invoice
+  relieves it to 0; the AppHost-wired commission hook generates 10 then 25
+  cumulative; stored per_billed tracks 40 → 100; stock 1000 → 990; party
+  ledger 250 = open invoices; journal balanced (Dr = Cr = 1050); a
+  consolidated invoice over two deliveries (1215 at 400) relieves 1215 to
+  exactly 0 with per_billed 100 and total 250.
+- **New files kept** (owner file rule — everything else extended existing
+  files): CustStmtWin.cs (customer statement; SupStatementWin is
+  supplier-shaped), Comm.cs/CommRepository.cs/CommService.cs/CommWin.cs
+  (commissions module), SalesPricing.cs + Pricing.cs (pricing engine),
+  SrtRepo.cs (returns workflow home), Contract.cs/ContractRepository.cs/
+  ContractService.cs/ContractWin.cs (contracts), DocEvents.cs (one events
+  writer across layers), PosPerfRptWin.cs (report-window-per-file repo
+  convention), Warranty.cs/WarrantyWin.cs, CrmCampaignWin.cs, RmaWin.cs,
+  Recur.cs/RecurRepository.cs/RecurService.cs/RecurWin.cs, and migrations
+  092–106 × 2 dialects (numbered migration files are the repo convention).
+- **Deliberate leftovers** (each with its reason, none silent): stock
+  reservation (§18.1 #3); the 17-category report catalog in full
+  (§18.1 #13); MatCard `bonus_buy_qty` field; amendment/direct-conversion
+  window buttons (service-complete); settings-window toggles for the two
+  approval flags + POS discount limits (no POS settings editor exists);
+  POS commission hook; contract propagation through QUO→SO conversion;
+  delivery-cost GL auto-posting (recording-only — policy decision);
+  signature rendering on delivery printouts; events timeline not fed by
+  approval transitions (they live in `sau_approval_history`).
+- **Owner decisions still open** (flagged, not invented): e-invoice
+  country/format (e.g. ZATCA), email/SMTP for sending quotations,
+  weighing-scale protocol, offline-POS architecture, intercompany model,
+  e-commerce platform, drop-ship/consignment policies, delivery-cost GL
+  posting policy, margin-visibility permission for InvoiceWin's live
+  margin, sales-territory data source (documents carry no area today).
+- **Verification still owed on Windows** (standing): Kern.Tests execution,
+  WPF click-through of all new windows, live PostgreSQL migration +
+  posting run, Windows build. Nothing in this branch is merged or pushed;
+  it awaits the owner's decision like every prior phase.
