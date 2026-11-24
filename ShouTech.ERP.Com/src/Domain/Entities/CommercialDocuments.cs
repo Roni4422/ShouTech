@@ -28,6 +28,34 @@ public static class CommercialDocumentStatus
     public const string Closed = "Closed";
     public const string Cancelled = "Cancelled";
     public const string Lost = "Lost";
+    public const string Expired = "Expired";
+}
+
+/// <summary>
+/// Derived fulfilment status of a posted sales order (ERPNext pattern):
+/// computed from the stored/computed per_delivered and per_billed
+/// percentages, never persisted as a status value of its own. Any document
+/// that is not a posted sales order keeps its raw stored status.
+/// </summary>
+public static class SalesChainDerivedStatus
+{
+    public const string ToDeliverAndBill = "To Deliver and Bill";
+    public const string ToDeliver = "To Deliver";
+    public const string ToBill = "To Bill";
+    public const string Completed = "Completed";
+
+    public static string Derive(string docKind, string status, decimal perDelivered, decimal perBilled)
+    {
+        if (docKind != CommercialDocKinds.SalesOrder ||
+            status != CommercialDocumentStatus.Posted)
+            return status;
+        var delivered = perDelivered >= 100m;
+        var billed = perBilled >= 100m;
+        if (delivered && billed) return Completed;
+        if (delivered) return ToBill;
+        if (billed) return ToDeliver;
+        return ToDeliverAndBill;
+    }
 }
 
 /// <summary>An immutable line of a commercial document as stored in the database.</summary>
@@ -73,7 +101,17 @@ public sealed record CommercialDocumentSnapshot(
     string? CostCenter = null,
     string? WarehouseName = null,
     DateOnly? DeliveryDate = null,
-    DateOnly? ValidTill = null);
+    DateOnly? ValidTill = null,
+    decimal ExtraAmount = 0m,
+    decimal PerDelivered = 0m,
+    decimal PerBilled = 0m,
+    string? CancelReason = null,
+    string? CancelledBy = null,
+    string? CancelledAt = null)
+{
+    /// <summary>Derived chain status (sales orders); the raw status for every other document.</summary>
+    public string DerivedStatus => SalesChainDerivedStatus.Derive(DocKind, Status, PerDelivered, PerBilled);
+}
 
 /// <summary>Quantity available for return from one posted goods-receipt line.</summary>
 public sealed record PurchaseReceiptReturnableLine(
@@ -144,7 +182,9 @@ public sealed record CommercialDocumentDraft(
     string? CostCenter = null,
     string? BranchName = null,
     string? SalesRepName = null,
-    string? WarehouseName = null);
+    string? WarehouseName = null,
+    decimal DiscountAmount = 0m,
+    decimal ExtraAmount = 0m);
 
 /// <summary>Header-only projection used by document search / order tracking lists.</summary>
 public sealed record CommercialDocumentSummary(
@@ -166,7 +206,8 @@ public sealed record OrderProgressLine(
     string Description,
     decimal OrderedQty,
     decimal FulfilledQty,
-    decimal BilledQty)
+    decimal BilledQty,
+    int LineNo = 0)
 {
     public decimal RemainingToFulfill => Math.Max(0m, OrderedQty - FulfilledQty);
     public decimal RemainingToBill => Math.Max(0m, OrderedQty - BilledQty);
@@ -179,7 +220,12 @@ public sealed record OrderProgress(
     string DocNo,
     IReadOnlyList<OrderProgressLine> Lines,
     decimal PerFulfilled,
-    decimal PerBilled);
+    decimal PerBilled,
+    string Status = "")
+{
+    /// <summary>Derived chain status (sales orders); the raw status for every other document.</summary>
+    public string DerivedStatus => SalesChainDerivedStatus.Derive(DocKind, Status, PerFulfilled, PerBilled);
+}
 
 /// <summary>One quoted item, normalized to the company's base currency for comparison.</summary>
 public sealed record SupplierQuotationLineOffer(

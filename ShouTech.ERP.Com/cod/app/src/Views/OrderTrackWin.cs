@@ -169,9 +169,11 @@ public sealed class OrderTrackWin : BaseWin
                     PartyText = string.IsNullOrWhiteSpace(order.PartyCode) ? order.PartyName ?? "" : $"{order.PartyCode} - {order.PartyName}",
                     TotalText = order.GrandTotal.ToString("N2", CultureInfo.InvariantCulture),
                     StatusText = isRfq ? T("OrderDoc.RfqOpen")
-                        : progress!.PerFulfilled >= 100m && progress.PerBilled >= 100m
-                            ? T("OrderDoc.Completed")
-                            : T("OrderDoc.Open"),
+                        : side == CommercialDocSide.Sales
+                            ? DerivedStatusText(progress!.DerivedStatus)
+                            : progress!.PerFulfilled >= 100m && progress.PerBilled >= 100m
+                                ? T("OrderDoc.Completed")
+                                : T("OrderDoc.Open"),
                     FulfilledText = isRfq ? "—" : progress!.PerFulfilled.ToString("N1", CultureInfo.InvariantCulture) + "%",
                     BilledText = isRfq ? "—" : progress!.PerBilled.ToString("N1", CultureInfo.InvariantCulture) + "%"
                 });
@@ -197,6 +199,18 @@ public sealed class OrderTrackWin : BaseWin
         ord.Show();
         _ = ord.LoadOrderAsync(row.DocId);
     }
+
+    /// <summary>Localized text for the derived chain status computed by
+    /// OrderProgress.DerivedStatus (the single derivation shared with
+    /// OrdWin); anything else reads as an open order.</summary>
+    private static string DerivedStatusText(string derivedStatus) => derivedStatus switch
+    {
+        SalesChainDerivedStatus.ToDeliverAndBill => T("OrderDoc.ToDeliverAndBill"),
+        SalesChainDerivedStatus.ToDeliver => T("OrderDoc.ToDeliver"),
+        SalesChainDerivedStatus.ToBill => T("OrderDoc.ToBill"),
+        SalesChainDerivedStatus.Completed => T("OrderDoc.Completed"),
+        _ => T("OrderDoc.Open")
+    };
 
     protected override void ApplyLocalizedText()
     {

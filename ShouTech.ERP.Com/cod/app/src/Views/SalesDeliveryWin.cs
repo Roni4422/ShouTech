@@ -272,11 +272,13 @@ public sealed class SalesDeliveryWin : BaseWin
             for (var index = 0; index < order.Lines.Count; index++)
             {
                 var source = order.Lines[index];
-                var state = index < progress.Lines.Count ? progress.Lines[index] : null;
+                var state = progress.Lines.FirstOrDefault(p => p.LineNo == source.LineNo)
+                            ?? (index < progress.Lines.Count ? progress.Lines[index] : null);
                 var delivered = state?.FulfilledQty ?? 0m;
                 var remaining = Math.Max(0m, source.Qty - delivered);
                 _lines.Add(new DeliveryLineVm
                 {
+                    SourceLineNo = source.LineNo,
                     MaterialId = source.MaterialId,
                     ItemCode = source.MaterialCode ?? string.Empty,
                     Description = source.Description,
@@ -328,9 +330,11 @@ public sealed class SalesDeliveryWin : BaseWin
                     throw new InvalidOperationException(T("SalesDelivery.ExceedsRemaining"));
             }
 
+            // Per-source-line quantities: duplicate-material order lines
+            // deliver independently, so the grid rows key by source line
+            // number, never collapsed by material.
             var quantities = selected
-                .GroupBy(line => line.MaterialId!.Value)
-                .ToDictionary(group => group.Key, group => group.Sum(line => line.QtyToDeliver));
+                .ToDictionary(line => line.SourceLineNo, line => line.QtyToDeliver);
 
             _busy = true;
             UpdateState();
@@ -460,6 +464,7 @@ public sealed class SalesDeliveryWin : BaseWin
     {
         private decimal _qtyToDeliver;
         public event PropertyChangedEventHandler? PropertyChanged;
+        public int SourceLineNo { get; init; }
         public long? MaterialId { get; init; }
         public string ItemCode { get; init; } = string.Empty;
         public string Description { get; init; } = string.Empty;

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 using ShouTech.Domain.Interfaces;
 
@@ -10,8 +11,12 @@ namespace ShouTech.Application.Services;
 
 /// <summary>
 /// Selling-chain workflow: Quotation (QUO) → Sales Order (SO) → Delivery Note (DLV) → Sales Invoice (SAL).
-/// Each step copies a posted source document into a new draft, supports partial quantities,
-/// and records the chain link in document_links.
+/// Each step copies a posted source document into a new draft, supports partial quantities
+/// keyed by SOURCE LINE (so duplicate-material lines convert independently), carries the
+/// full source header, and records the chain link in document_links. Copied lines keep
+/// the source line number in <see cref="CommercialLineDraft.SourceLineNo"/>, which the
+/// repositories persist as the new document's line_no — the line identity every
+/// progress and fulfilment computation matches on.
 /// </summary>
 public sealed class SalesChainService
 {
@@ -31,9 +36,10 @@ public sealed class SalesChainService
 
     /// <summary>
     /// Creates a new draft document of the next chain stage from a posted source document.
-    /// When <paramref name="quantityByMaterialId"/> is null the full remaining quantity of each
-    /// line is copied; otherwise only the requested quantities are copied and the sum of
-    /// previously fulfilled quantities is respected.
+    /// When <paramref name="quantityBySourceLine"/> is null the full remaining quantity of
+    /// each source line is copied; otherwise only the requested quantity of each keyed
+    /// source line is copied (lines absent from the dictionary are not copied) and the
+    /// previously fulfilled quantity of that same source line is respected.
     /// </summary>
     /// <returns>The database id of the created draft.</returns>
     public async Task<long> CreateFromSourceAsync(
@@ -41,7 +47,7 @@ public sealed class SalesChainService
         string docNo,
         DateOnly targetDate,
         string userId,
-        IReadOnlyDictionary<long, decimal>? quantityByMaterialId = null,
+        IReadOnlyDictionary<int, decimal>? quantityBySourceLine = null,
         long? warehouseId = null,
         CancellationToken cancellationToken = default)
     {
@@ -53,47 +59,58 @@ public sealed class SalesChainService
                      ?? throw new InvalidOperationException($"Source sales document '{sourceDocId}' was not found.");
 
         if (source.Status != CommercialDocumentStatus.Posted)
-            throw new InvalidOperationException($"Only posted documents can continue the chain; document '{source.DocNo}' is '{source.Status}'.");
+            throw new AppError(ErrorCodes.ChainSourceNotPosted,
+                $"The source document '{source.DocNo}' must be posted before it can be converted.",
+                source.DocNo);
 
         if (!AllowedTransitions.TryGetValue(source.DocKind, out var targetKind))
-            throw new InvalidOperationException($"Document kind '{source.DocKind}' cannot continue the selling chain.");
+            throw new AppError(ErrorCodes.ChainTransitionNotAllowed,
+                $"Documents cannot be converted from '{source.DocKind}' to a later chain stage.",
+                source.DocKind, string.Empty);
 
-        var fulfilled = await _repository.GetFulfilledQuantitiesAsync(source.CompanyId, sourceDocId, targetKind, cancellationToken).ConfigureAwait(false);
-        var fulfilledRemaining = new Dictionary<long, decimal>(fulfilled);
-        Dictionary<long, decimal>? requestedRemaining = null;
-        if (quantityByMaterialId is not null)
+        Dictionary<int, decimal>? requestedByLine = null;
+        if (quantityBySourceLine is not null)
         {
-            requestedRemaining = new Dictionary<long, decimal>();
-            foreach (var (materialId, quantity) in quantityByMaterialId)
+            requestedByLine = new Dictionary<int, decimal>();
+            var sourceLineNumbers = new HashSet<int>(source.Lines.Select(line => line.LineNo));
+            foreach (var (sourceLineNo, quantity) in quantityBySourceLine)
             {
-                if (materialId <= 0) throw new ArgumentOutOfRangeException(nameof(quantityByMaterialId), "Material identifiers must be positive.");
-                if (quantity < 0m) throw new ArgumentOutOfRangeException(nameof(quantityByMaterialId), "Requested quantities cannot be negative.");
-                requestedRemaining.Add(materialId, quantity);
+                if (sourceLineNo <= 0) throw new ArgumentOutOfRangeException(nameof(quantityBySourceLine), "Source line numbers must be positive.");
+                if (quantity < 0m) throw new ArgumentOutOfRangeException(nameof(quantityBySourceLine), "Requested quantities cannot be negative.");
+                if (!sourceLineNumbers.Contains(sourceLineNo))
+                    throw new AppError(ErrorCodes.ChainQuantityExceedsRemaining,
+                        $"The requested quantity for source line '{sourceLineNo}' exceeds the remaining quantity on the source document.",
+                        sourceLineNo.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                requestedByLine.Add(sourceLineNo, quantity);
             }
         }
 
+        var fulfilledByLine = await _repository.GetFulfilledQuantitiesBySourceLineAsync(
+            source.CompanyId, sourceDocId, targetKind, cancellationToken).ConfigureAwait(false);
+
         var lines = new List<CommercialLineDraft>();
+        decimal copiedSubtotal = 0m;
         foreach (var line in source.Lines)
         {
-            var remaining = line.Qty;
-            if (line.MaterialId is { } materialId &&
-                fulfilledRemaining.TryGetValue(materialId, out var previouslyFulfilled) &&
-                previouslyFulfilled > 0m)
-            {
-                var allocated = Math.Min(remaining, previouslyFulfilled);
-                remaining -= allocated;
-                fulfilledRemaining[materialId] = previouslyFulfilled - allocated;
-            }
+            var previouslyFulfilled = fulfilledByLine.GetValueOrDefault(line.LineNo);
+            if (previouslyFulfilled > line.Qty)
+                throw new AppError(ErrorCodes.ChainQuantityExceedsRemaining,
+                    $"The requested quantity for '{line.Description}' exceeds the remaining quantity on the source document.",
+                    line.Description);
 
+            var remaining = line.Qty - previouslyFulfilled;
             if (remaining <= 0m)
                 continue;
 
             var requested = remaining;
-            if (requestedRemaining is not null && line.MaterialId is { } requestedMaterialId &&
-                requestedRemaining.TryGetValue(requestedMaterialId, out var requestedForMaterial))
+            if (requestedByLine is not null)
             {
-                requested = Math.Min(remaining, requestedForMaterial);
-                requestedRemaining[requestedMaterialId] = requestedForMaterial - requested;
+                if (!requestedByLine.TryGetValue(line.LineNo, out requested))
+                    continue;
+                if (requested > remaining)
+                    throw new AppError(ErrorCodes.ChainQuantityExceedsRemaining,
+                        $"The requested quantity for '{line.Description}' exceeds the remaining quantity on the source document.",
+                        line.Description);
             }
 
             if (requested <= 0m)
@@ -108,17 +125,23 @@ public sealed class SalesChainService
                 line.UnitPrice,
                 line.DiscountPct,
                 line.TaxRate,
-                warehouseId ?? line.WarehouseId));
+                warehouseId ?? line.WarehouseId,
+                line.LineNo));
+            copiedSubtotal += decimal.Round(requested * line.UnitPrice * (1m - line.DiscountPct / 100m), 2);
         }
 
-        if (fulfilledRemaining.Any(pair => pair.Value > 0m))
-            throw new InvalidOperationException("Previously fulfilled quantities exceed the source document quantities; correct the linked documents before continuing.");
-
-        if (requestedRemaining is not null && requestedRemaining.Any(pair => pair.Value > 0m))
-            throw new InvalidOperationException("Requested quantities exceed the remaining quantities on the source document.");
-
         if (lines.Count == 0)
-            throw new InvalidOperationException($"Source document '{source.DocNo}' is already fully fulfilled.");
+            throw new AppError(ErrorCodes.ChainSourceFullyFulfilled,
+                $"The source document '{source.DocNo}' is already fully fulfilled.",
+                source.DocNo);
+
+        // Header money follows the copied lines: the source header discount
+        // and extra charges are carried pro-rata to the copied line subtotal
+        // (a full conversion carries them in full), and the repository
+        // recomputes the target's stored grand total from them.
+        var carryRatio = source.Subtotal > 0m ? copiedSubtotal / source.Subtotal : 0m;
+        var discountAmount = decimal.Round(source.DiscountAmount * carryRatio, 2);
+        var extraAmount = decimal.Round(source.ExtraAmount * carryRatio, 2);
 
         var draft = new CommercialDocumentDraft(
             source.CompanyId,
@@ -130,8 +153,17 @@ public sealed class SalesChainService
             warehouseId ?? source.WarehouseId,
             source.CurrencyCode,
             source.ExchangeRate,
-            $"From {source.DocKind} {source.DocNo}",
-            lines);
+            source.Notes,
+            lines,
+            source.PartyCode,
+            source.DeliveryDate,
+            source.ValidTill,
+            source.CostCenter,
+            source.BranchName,
+            source.SalesRepName,
+            source.WarehouseName,
+            discountAmount,
+            extraAmount);
 
         return await _repository.CreateSalesDraftWithLinkAsync(
             draft, source.DocKind, sourceDocId, userId, cancellationToken).ConfigureAwait(false);
@@ -141,7 +173,9 @@ public sealed class SalesChainService
     public async Task<long> CreateQuotationAsync(CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default)
     {
         if (draft.DocKind != CommercialDocKinds.SalesQuotation)
-            throw new InvalidOperationException("This method only creates sales quotations.");
+            throw new AppError(ErrorCodes.ChainTransitionNotAllowed,
+                $"Documents cannot be converted from '{draft.DocKind}' to '{CommercialDocKinds.SalesQuotation}'.",
+                draft.DocKind, CommercialDocKinds.SalesQuotation);
         var docId = await _repository.CreateSalesDraftAsync(draft, userId, cancellationToken).ConfigureAwait(false);
         await _repository.PostSalesAsync(docId, userId, cancellationToken).ConfigureAwait(false);
         return docId;

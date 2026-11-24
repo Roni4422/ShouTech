@@ -386,8 +386,9 @@ namespace Kern.Tests
                         validTill: DateOnly.FromDateTime(DateTime.Today).AddDays(-1)), "order-test");
                 await repo.PostSalesAsync(quotationId, "order-test");
 
-                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                var expiredError = await Assert.ThrowsAsync<ShouTech.Domain.AppError>(() =>
                     service.ConvertQuotationToOrderAsync(quotationId, DateOnly.FromDateTime(DateTime.Today), "order-test"));
+                Assert.Equal(ShouTech.Domain.ErrorCodes.QuotationExpired, expiredError.Code);
             }
             finally
             {
