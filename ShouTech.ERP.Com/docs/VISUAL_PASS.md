@@ -26,11 +26,13 @@ were identity values left from the pre-Win11 slate theme:
    everywhere in that file. The XAML accent tokens in
    Themes/VisuId.xaml carry the same values so first paint matches.
    A user-saved accent choice is untouched (a saved "gray" still
-   applies). **Flagged follow-up (outside this pass's file list):**
-   `Configuration/UsrPref.cs` still defaults `AccentColor` to
-   `"gray"`, so a profile that never stored a choice reads "gray"
-   back; flipping that one default to `"win11"` is a one-line change
-   awaiting the owner's word.
+   applies). **OWNER DECISION (2026-11-24 13:59): the
+   `Configuration/UsrPref.cs` default `AccentColor` STAYS `"gray"` —
+   do NOT flip it to `"win11"`.** A profile with no stored choice
+   keeps reading "gray"; the `win11` palette remains the applied /
+   fallback styling inside Services/VisuId.cs and the XAML tokens
+   exactly as this pass left it. This question is CLOSED: no later
+   step on this branch (or a future one) should "fix" the default.
 2. **Title bar** — was slate (#607D8B) with white text, the pre-Win11
    identity. Now the bar takes the client surface color
    (ChromeBackgroundBrush = Neutral100, the window BackgroundBrush)
