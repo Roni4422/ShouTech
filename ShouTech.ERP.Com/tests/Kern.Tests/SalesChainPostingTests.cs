@@ -1018,4 +1018,192 @@ namespace Kern.Tests
             });
     }
 
+
+    /// <summary>
+    /// Sales contracts (migration 101, W7c) folded into this file
+    /// because it owns the migrated chain fixture (ChainTests: GL
+    /// company 'CHAIN-GL', material 42, party 7). Pins: the contract
+    /// price source as pricing resolution level (a); order draw-down
+    /// validation SAL-7023 (inactive) and SAL-7015 (cumulative quantity
+    /// exceeded) at save; scheduled generation idempotent per period;
+    /// fulfillment quantities + revenue/COGS rolled up from the posted
+    /// chain documents; renewal creating a successor.
+    /// </summary>
+    public class SalesContractTests
+    {
+        private const string CompanyCode = "CHAIN-GL";
+
+        private static SalesContract NewContract(decimal qty = 10m, decimal price = 19m, bool withSchedule = false) => new()
+        {
+            PartyId = 7,
+            PartyCode = "CUST-7",
+            PartyName = "Posting Test Customer",
+            Title = "Annual supply",
+            StartDate = "2026-01-01",
+            EndDate = "2026-12-31",
+            CurrencyCode = "SAR",
+            Lines = new List<SalesContractLine>
+            {
+                new()
+                {
+                    MaterialId = 42,
+                    MaterialCode = "MAT-42",
+                    ContractedQty = qty,
+                    UnitPrice = price,
+                    NextDeliveryDate = withSchedule ? "2026-10-20" : null,
+                    IntervalDays = withSchedule ? 7 : null,
+                    ScheduledQty = withSchedule ? 4m : 0m
+                }
+            }
+        };
+
+        private static CommercialDocumentDraft OrderDraft(Guid companyId, string docNo, Guid contractId, decimal qty) => new(
+            companyId,
+            CommercialDocKinds.SalesOrder,
+            docNo,
+            new DateOnly(2026, 10, 20),
+            PartyId: 7,
+            PartyName: "Posting Test Customer",
+            WarehouseId: 1,
+            CurrencyCode: "SAR",
+            ExchangeRate: 1m,
+            Notes: null,
+            new[] { new CommercialLineDraft(42, "MAT-42", "Posting test item", "PCS", qty, 25m) },
+            PartyCode: "CUST-7",
+            ContractId: contractId.ToString("D"));
+
+        [Fact]
+        public async Task ContractPriceSource_PricesActiveContractLine_AsResolutionLevelA()
+        {
+            var (_, _, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                var service = new ContractService(new ContractRepository("SQLite", connectionString));
+                var contract = NewContract();
+                await service.SaveContractAsync(CompanyCode, contract, "contract-test");
+                await service.SetStatusAsync(CompanyCode, contract.Id, ContractStatuses.Active, "contract-test");
+
+                await using var connection = new SqliteConnection(connectionString);
+                await connection.OpenAsync();
+                await using var transaction = connection.BeginTransaction();
+                var resolution = SalesPriceResolver.Default.Resolve(
+                    connection, transaction, "SQLite", companyId.ToString("D"),
+                    "CUST-7", 42, "MAT-42", 1m, "PCS", "SAR", "2026-10-20");
+                Assert.Equal(19m, resolution.Price);
+                Assert.Equal(PriceSources.Contract, resolution.Source);
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task OrderAgainstInactiveContract_ThrowsSAL7023_AndExceeding_ThrowsSAL7015()
+        {
+            var (_, _, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                var contracts = new ContractService(new ContractRepository("SQLite", connectionString));
+                var contract = NewContract(qty: 10m);
+                await contracts.SaveContractAsync(CompanyCode, contract, "contract-test");
+                var orders = new OrderService(
+                    new OrderDocumentRepository("SQLite", connectionString),
+                    new CommercialDocumentRepository("SQLite", connectionString));
+
+                var inactive = await Assert.ThrowsAsync<AppError>(() =>
+                    orders.CreateOrderAsync(OrderDraft(companyId, "SO-C1", contract.Id, 5m), "contract-test"));
+                Assert.Equal(ErrorCodes.ContractInactive, inactive.Code);
+
+                await contracts.SetStatusAsync(CompanyCode, contract.Id, ContractStatuses.Active, "contract-test");
+                await orders.CreateOrderAsync(OrderDraft(companyId, "SO-C2", contract.Id, 10m), "contract-test");
+
+                var exceeded = await Assert.ThrowsAsync<AppError>(() =>
+                    orders.CreateOrderAsync(OrderDraft(companyId, "SO-C3", contract.Id, 1m), "contract-test"));
+                Assert.Equal(ErrorCodes.ContractQuantityExceeded, exceeded.Code);
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task ScheduledGeneration_CreatesOneDraftOrderPerPeriod_Idempotently()
+        {
+            var (_, _, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                var repository = new ContractRepository("SQLite", connectionString);
+                var service = new ContractService(repository);
+                var contract = NewContract(qty: 10m, withSchedule: true);
+                await service.SaveContractAsync(CompanyCode, contract, "contract-test");
+                await service.SetStatusAsync(CompanyCode, contract.Id, ContractStatuses.Active, "contract-test");
+
+                var created = await repository.GenerateDueDeliveriesAsync(companyId.ToString("D"), "2026-10-21", "contract-test");
+                Assert.Equal(1, created);
+                // Cadence advanced to 2026-10-27: a re-run for the same
+                // as-of date generates nothing new.
+                var again = await repository.GenerateDueDeliveriesAsync(companyId.ToString("D"), "2026-10-21", "contract-test");
+                Assert.Equal(0, again);
+
+                await using var connection = new SqliteConnection(connectionString);
+                await connection.OpenAsync();
+                await using var command = connection.CreateCommand();
+                command.CommandText = "SELECT COUNT(*) FROM sales_documents WHERE contract_id = $c AND doc_kind = 'SO' AND status = 'Draft'";
+                command.Parameters.AddWithValue("$c", contract.Id.ToString("D"));
+                Assert.Equal(1L, (long)(await command.ExecuteScalarAsync())!);
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task Fulfillment_RollsUpDeliveredInvoicedRevenueAndCogs_FromChain()
+        {
+            var (service, repository, companyId, connectionString, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                var contracts = new ContractService(new ContractRepository("SQLite", connectionString));
+                var contract = NewContract(qty: 10m);
+                await contracts.SaveContractAsync(CompanyCode, contract, "contract-test");
+                await contracts.SetStatusAsync(CompanyCode, contract.Id, ContractStatuses.Active, "contract-test");
+
+                var orderId = await repository.CreateSalesDraftAsync(
+                    OrderDraft(companyId, "SO-C9", contract.Id, 10m), "contract-test");
+                await service.PostAsync(orderId, "contract-test");
+                var deliveryId = await service.CreateFromSourceAsync(orderId, "DLV-C9", new DateOnly(2026, 10, 21), "contract-test");
+                await service.PostAsync(deliveryId, "contract-test");
+                var invoiceId = await service.CreateFromSourceAsync(deliveryId, "SAL-C9", new DateOnly(2026, 10, 22), "contract-test");
+                await service.PostAsync(invoiceId, "contract-test");
+
+                var fulfillment = await contracts.GetFulfillmentAsync(CompanyCode, contract.Id);
+                Assert.NotNull(fulfillment);
+                Assert.Equal(10m, fulfillment!.DeliveredQty);
+                Assert.Equal(10m, fulfillment.InvoicedQty);
+                Assert.Equal(0m, fulfillment.RemainingQty);
+                Assert.Equal(250m, fulfillment.Revenue);
+                Assert.Equal(400m, fulfillment.Cogs);
+                Assert.Equal(-150m, fulfillment.Margin);
+            }
+            finally { cleanup(); }
+        }
+
+        [Fact]
+        public async Task Renewal_CreatesSuccessorDraft_AndMarksSourceRenewed()
+        {
+            var (_, _, _, connectionString, cleanup) = await ChainTests.CreateAsync();
+            try
+            {
+                var service = new ContractService(new ContractRepository("SQLite", connectionString));
+                var contract = NewContract();
+                await service.SaveContractAsync(CompanyCode, contract, "contract-test");
+                await service.SetStatusAsync(CompanyCode, contract.Id, ContractStatuses.Active, "contract-test");
+
+                var successor = await service.RenewAsync(CompanyCode, contract.Id, "contract-test");
+                Assert.Equal(ContractStatuses.Draft, successor.Status);
+                Assert.Equal(contract.Id, successor.RenewalOfId);
+                Assert.Equal("2027-01-01", successor.StartDate);
+                Assert.Single(successor.Lines);
+
+                var source = await service.GetContractAsync(CompanyCode, contract.Id);
+                Assert.Equal(ContractStatuses.Renewed, source!.Status);
+            }
+            finally { cleanup(); }
+        }
+    }
+
 }

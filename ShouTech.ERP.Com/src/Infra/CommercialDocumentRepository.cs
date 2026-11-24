@@ -356,6 +356,14 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
                     i + 1, l.MaterialId, l.MaterialCode, l.Qty, l.UnitPrice, l.DiscountPct)).ToList(),
                 null);
         }
+        // W7c contract draw-down at SAVE for chain sales orders
+        // (SAL-7023 / SAL-7015), mirroring OrderDocumentRepository.
+        if (draft.DocKind == CommercialDocKinds.SalesOrder)
+            ContractGuard.ValidateOrder(connection, transaction, _provider,
+                draft.CompanyId.ToString("D"), draft.ContractId, null,
+                draft.DocDate, draft.PartyId,
+                draft.Lines.Where(l => l.MaterialId is > 0)
+                    .Select(l => (l.MaterialId!.Value, l.Qty)).ToList());
         if (draft.DiscountAmount < 0m) throw new InvalidOperationException("Header discount cannot be negative.");
         if (draft.ExtraAmount < 0m) throw new InvalidOperationException("Header extra charges cannot be negative.");
         if (draft.DeliveryCost < 0m) throw new InvalidOperationException("Delivery cost cannot be negative.");
@@ -380,8 +388,8 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
 
         long docId;
         var insertHeader = CreateCommand(connection, transaction,
-            "INSERT INTO sales_documents (company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id, currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total, status, notes, created_by, party_code, delivery_date, valid_till, cost_center, branch_name, sales_rep_name, warehouse_name, extra_amount, delivery_cost) " +
-            "VALUES (@company, @kind, @no, @date, @party, @partyName, @warehouse, @currency, @rate, @subtotal, @discount, @tax, @total, @status, @notes, @actor, @partyCode, @deliveryDate, @validTill, @costCenter, @branchName, @salesRepName, @warehouseName, @extra, @deliveryCost)" +
+            "INSERT INTO sales_documents (company_id, doc_kind, doc_no, doc_date, party_id, party_name, warehouse_id, currency_code, exchange_rate, subtotal, discount_amount, tax_amount, grand_total, status, notes, created_by, party_code, delivery_date, valid_till, cost_center, branch_name, sales_rep_name, warehouse_name, extra_amount, delivery_cost, contract_id) " +
+            "VALUES (@company, @kind, @no, @date, @party, @partyName, @warehouse, @currency, @rate, @subtotal, @discount, @tax, @total, @status, @notes, @actor, @partyCode, @deliveryDate, @validTill, @costCenter, @branchName, @salesRepName, @warehouseName, @extra, @deliveryCost, @contractId)" +
             (_provider == "PostgreSQL" ? " RETURNING doc_id" : "; SELECT last_insert_rowid();"));
         Add(insertHeader, "@company", draft.CompanyId.ToString("D"));
         Add(insertHeader, "@kind", draft.DocKind.Trim());
@@ -401,6 +409,7 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         Add(insertHeader, "@discount", draft.DiscountAmount);
         Add(insertHeader, "@extra", draft.ExtraAmount);
         Add(insertHeader, "@deliveryCost", draft.DeliveryCost);
+        Add(insertHeader, "@contractId", (object?)draft.ContractId ?? DBNull.Value);
         Add(insertHeader, "@tax", decimal.Round(taxAmount, 2));
         Add(insertHeader, "@total", grandTotal);
         Add(insertHeader, "@status", CommercialDocumentStatus.Draft);

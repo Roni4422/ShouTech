@@ -454,7 +454,8 @@
     "HandheldDevices": "Appareils Portatifs",
     "DeviceCards": "Fiches Appareils",
     "DeviceRoutes": "Itinéraires Appareils",
-    "Commissions": "Commissions de vente"
+    "Commissions": "Commissions de vente",
+    "Contracts": "Contrats de vente"
   },
   "Manufacturing": {
     "Title": "Fabrication",
@@ -4162,5 +4163,49 @@
     "DirectInvoice": "Facture directe",
     "Revision": "Révision",
     "ApprovalState": "État d'approbation"
+  },
+  "Contract": {
+    "Title": "Contrats de vente",
+    "PermissionDenied": "Vous n'avez pas l'autorisation d'afficher les contrats de vente.",
+    "ServiceUnavailable": "Le service des contrats est indisponible.",
+    "Activate": "Activer",
+    "Suspend": "Suspendre",
+    "Renew": "Renouveler",
+    "Generate": "Générer les planifiés",
+    "ExpireSweep": "Expirer les échus",
+    "Expiring": "Expire sous 30 j",
+    "PartyId": "ID du tiers",
+    "PartyCode": "Code du tiers",
+    "PaymentTerms": "Conditions de paiement",
+    "Guarantee": "Garantie",
+    "GuaranteeAmount": "Montant de la garantie",
+    "Notes": "Notes",
+    "Lines": "Lignes (article, qté, prix, prochaine date, intervalle en jours, qté planifiée)",
+    "StatusCount": "{0} contrat(s)",
+    "ExpiringStatus": "{0} contrat(s) expirant sous 30 jours",
+    "Fulfillment": "Contracté {0} · Livré {1} · Facturé {2} · Restant {3} · Revenu {4} · Coût {5} · Marge {6} ({7} %)",
+    "Saved": "Contrat {0} enregistré.",
+    "Select": "Sélectionnez d'abord un contrat.",
+    "StatusChanged": "Le contrat {0} est maintenant {1}.",
+    "Renewed": "Contrat {0} renouvelé sous le n° {1}.",
+    "Generated": "{0} commande(s) planifiée(s) en brouillon générée(s).",
+    "Expired": "{0} contrat(s) expiré(s).",
+    "LineInvalid": "Ligne de contrat invalide : {0}",
+    "Col": {
+      "No": "N° de contrat",
+      "Party": "Tiers",
+      "Title": "Titre",
+      "Start": "Début",
+      "End": "Fin",
+      "Status": "Statut",
+      "Currency": "Devise",
+      "Material": "Article",
+      "Contracted": "Contracté",
+      "Price": "Prix",
+      "Delivered": "Livré",
+      "Invoiced": "Facturé",
+      "Remaining": "Restant",
+      "NextDelivery": "Prochaine livraison"
+    }
   }
 }
