@@ -162,8 +162,12 @@ public sealed class InvDesWin : BaseWin
         _exportButton.Click += (_, _) => ExportDesign();
         _importButton.Click += async (_, _) => await ImportDesignAsync();
         _closeButton.Click += (_, _) => Close();
+        // Bottom-buttons rule (owner, restated 2026-11-24): every
+        // command — including the columns editor's Up/Down/Add/
+        // Remove — lives in this one bottom bar, exclusively.
         root.Children.Add(F2Ui.BottomBar(_newButton, _saveButton, _copyButton, _deleteButton,
-            _defaultButton, _previewButton, _exportButton, _importButton, _closeButton));
+            _defaultButton, _previewButton, _exportButton, _importButton,
+            _upButton, _downButton, _addColumnButton, _removeColumnButton, _closeButton));
 
         var content = new Grid();
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(340) });
@@ -195,13 +199,9 @@ public sealed class InvDesWin : BaseWin
         Grid.SetRowSpan(left, 2);
         content.Children.Add(left);
 
-        // Right top: lines-band columns editor.
+        // Right top: lines-band columns editor (its buttons are in
+        // the window's bottom bar — see BuildUi's bar above).
         var columnsPanel = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
-        var columnButtons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 0, 0, 6)
-        };
         F2Ui.StyleButton(_upButton, "InvDesigner.MoveUp");
         F2Ui.StyleButton(_downButton, "InvDesigner.MoveDown");
         F2Ui.StyleButton(_addColumnButton, "InvDesigner.AddColumn");
@@ -220,12 +220,6 @@ public sealed class InvDesWin : BaseWin
             if (_columnsGrid.SelectedItem is DocDesignColumn col)
                 _columns.Remove(col);
         };
-        columnButtons.Children.Add(_upButton);
-        columnButtons.Children.Add(_downButton);
-        columnButtons.Children.Add(_addColumnButton);
-        columnButtons.Children.Add(_removeColumnButton);
-        DockPanel.SetDock(columnButtons, Dock.Top);
-        columnsPanel.Children.Add(columnButtons);
 
         F2Ui.ConfigureGrid(_columnsGrid);
         _columnsGrid.AutoGenerateColumns = false;

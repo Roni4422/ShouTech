@@ -22,27 +22,14 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <!-- Header -->
+            <!-- Header (title only — all command buttons live in the
+                 bottom bar, per the owner's bottom-buttons rule). -->
             <Grid Grid.Row="0" Margin="0,0,0,10">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
                 <StackPanel>
                     <TextBlock x:Name="txtTitle" Text="Backup"
                                FontSize="{DynamicResource FontSize20}" FontWeight="SemiBold"/>
                     <TextBlock x:Name="txtCompany" Margin="0,4,0,0"
                                Opacity="0.78" FontSize="{DynamicResource FontSize12}"/>
-                </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <Button x:Name="btnOpenFolder" Content="Open folder"
-                            MinWidth="{StaticResource ButtonMinWidth}" Margin="0,0,8,0"
-                            Click="OpenFolder_Click"
-                            Style="{DynamicResource SecondaryButtonStyle}"/>
-                    <Button x:Name="btnRefresh" Content="Refresh"
-                            MinWidth="{StaticResource ButtonMinWidth}"
-                            Click="Refresh_Click"
-                            Style="{DynamicResource SecondaryButtonStyle}"/>
                 </StackPanel>
             </Grid>
 
@@ -64,7 +51,6 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock x:Name="txtNotesLabel" Text="Backup note:"
                                    VerticalAlignment="Center" Margin="0,0,10,0"/>
@@ -75,12 +61,6 @@
                                  VerticalContentAlignment="Center"
                                  MaxLength="80"
                                  ToolTip="Example: before delete the app"/>
-                        <Button x:Name="btnCreate" Grid.Column="2"
-                                Content="Create backup now"
-                                MinWidth="{StaticResource PrimaryButtonMinWidth}"
-                                Margin="12,0,0,0"
-                                Click="Create_Click"
-                                Style="{DynamicResource PrimaryButtonStyle}"/>
                     </Grid>
                     <TextBlock x:Name="txtProvider" Grid.Row="2" Margin="0,8,0,0" Opacity="0.65" FontSize="{DynamicResource FontSize11}"/>
                 </Grid>
@@ -104,10 +84,16 @@
                 </ListView.View>
             </ListView>
 
-            <!-- Footer -->
+            <!-- Footer: the window's one command bar (bottom-buttons rule). -->
             <Grid Grid.Row="3" Margin="0,12,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="8"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="8"/>
                     <ColumnDefinition Width="Auto"/>
@@ -117,10 +103,23 @@
                     <ProgressBar x:Name="progress" Width="160" Height="7"
                                  Margin="12,0,0,0" Visibility="Collapsed" IsIndeterminate="True"/>
                 </StackPanel>
-                <Button x:Name="btnRestore" Grid.Column="1" Content="Restore selected"
+                <Button x:Name="btnCreate" Grid.Column="1"
+                        Content="Create backup now"
+                        MinWidth="{StaticResource PrimaryButtonMinWidth}"
+                        Click="Create_Click"
+                        Style="{DynamicResource PrimaryButtonStyle}"/>
+                <Button x:Name="btnOpenFolder" Grid.Column="3" Content="Open folder"
+                        MinWidth="{StaticResource ButtonMinWidth}"
+                        Click="OpenFolder_Click"
+                        Style="{DynamicResource SecondaryButtonStyle}"/>
+                <Button x:Name="btnRefresh" Grid.Column="5" Content="Refresh"
+                        MinWidth="{StaticResource ButtonMinWidth}"
+                        Click="Refresh_Click"
+                        Style="{DynamicResource SecondaryButtonStyle}"/>
+                <Button x:Name="btnRestore" Grid.Column="7" Content="Restore selected"
                         MinWidth="{StaticResource PrimaryButtonMinWidth}" Click="Restore_Click"
                         Style="{DynamicResource PrimaryButtonStyle}"/>
-                <Button x:Name="btnClose" Grid.Column="3" Content="Close"
+                <Button x:Name="btnClose" Grid.Column="9" Content="Close"
                         MinWidth="{StaticResource ButtonMinWidth}" IsCancel="True"
                         Click="Close_Click"
                         Style="{DynamicResource SecondaryButtonStyle}"/>

@@ -47,11 +47,13 @@ public sealed class PurchaseAttachmentsWin : BaseWin
     private void BuildUi()
     {
         var root=new DockPanel{Margin=new Thickness(12)};
-        var bar=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,0,0,8)};
+        // Bottom-buttons rule (owner, restated 2026-11-24): the
+        // command bar lives at the BOTTOM of the window, exclusively.
+        var bar=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,8,0,0)};
         StyleButton(_upload,"PurchaseAttachments.Upload");StyleButton(_open,"PurchaseAttachments.OpenFile");StyleButton(_delete,"PurchaseAttachments.Delete");StyleButton(_refresh,"PurchaseAttachments.Refresh");StyleButton(_close,"PurchaseAttachments.Close");
         _upload.Click+=async(_,_)=>await UploadAsync();_open.Click+=async(_,_)=>await OpenAsync();_delete.Click+=async(_,_)=>await DeleteAsync();_refresh.Click+=async(_,_)=>await RefreshAsync();_close.Click+=(_,_)=>Close();
         foreach(var b in new[]{_upload,_open,_delete,_refresh,_close})bar.Children.Add(b);
-        DockPanel.SetDock(bar,Dock.Top);root.Children.Add(bar);
+        DockPanel.SetDock(bar,Dock.Bottom);root.Children.Add(bar);
         _grid.AutoGenerateColumns=false;_grid.IsReadOnly=true;_grid.CanUserAddRows=false;_grid.SelectionMode=DataGridSelectionMode.Single;_grid.SelectionUnit=DataGridSelectionUnit.FullRow;_grid.ItemsSource=_rows;
         _grid.Columns.Add(new DataGridTextColumn{Header=T("PurchaseAttachments.FileName"),Binding=new Binding(nameof(AttachmentRow.Name)),Width=new DataGridLength(2,DataGridLengthUnitType.Star)});
         _grid.Columns.Add(new DataGridTextColumn{Header=T("PurchaseAttachments.Size"),Binding=new Binding(nameof(AttachmentRow.Size)),Width=100});

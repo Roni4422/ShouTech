@@ -264,3 +264,59 @@ chrome. RibModMap / RibbonNav are untouched.
 **Windows-owed:** the pane/command bar rendering, the pre-login
 freeze flow through the pane, and RTL mirroring must be confirmed in
 a Windows run; headless gates cannot see them.
+
+## V5 — Bottom-buttons audit (owner rule restated 2026-11-24 14:29)
+
+The owner restated the standing rule as an absolute: ALL window
+action/command buttons live in the window's bottom command bar,
+exclusively (حصراً) — no in-window top toolbars carrying action
+buttons. Full audit of the window set on this branch (every
+Views/*.cs and *.xaml window, code-built and XAML, plus RptBase and
+the Reports subfolder):
+
+**Moved into the bottom bar (placement only; handlers untouched):**
+- **PurchaseAttachmentsWin** — its whole command bar (Upload /
+  Open / Delete / Refresh / Close) was docked TOP; now docked
+  Bottom.
+- **BkpWin** — Open folder + Refresh sat in the header row and
+  Create backup now inside the create panel; all three moved into
+  the Row-3 footer bar (order: Create / Open folder / Refresh /
+  Restore selected / Close; the note field stays in its panel).
+- **InvDesWin** (built in B3) — the columns editor's Up / Down /
+  Add / Remove buttons sat in a panel-top strip; folded into the
+  window's bottom bar.
+
+**Reviewed and compliant (no move needed):** the overwhelming
+majority already follow the rule — F2Ui.BottomBar / bottom-docked
+bars / last-row bars (verified per window, including InvoiceWin's
+row-3 actionBar, RptBase's row-5 actionBar under the status line,
+DatWin's explicitly-commented bottom bar, CatWin/WhsWin/AccCard
+bottom borders, OptWin, CustomReportsWin, MaintenanceWin, the POS
+dialogs, StpWiz/Lang/LogWin/SerWin dialogs).
+
+**Reviewed and kept, with reasons (not window command bars):**
+- Record navigators at the top (InvoiceWin recordBar, WhsWin /
+  AccCard / MatCard first-prev-next-last arrows): data-navigation
+  controls for the record being edited, not commands.
+- Filter/search bars whose Search/Refresh sits beside its own
+  inputs (InstallmentsWin, PartySearchWin, TaxReportWin,
+  MatDirWin, HrAttendanceWin, BankRecWin, ChqListWin, CommWin):
+  filter controls; the windows' commands are in their bottom bars.
+- Section-scoped buttons inside master-detail windows (CRM / HR /
+  QC section headers, CrmOppWin link bar, RmaWin load-source,
+  MfgPlanWin feasibility check, OrdWin invite/decline, ColChsWin
+  reorder arrows, MatGroupWin select/clear-visible, CatWin image
+  pick/clear, DatWin browse "…" and mode cards): each acts on its
+  own section, grid or field; the window command set is in the
+  bottom bar.
+- CoaWin's menu is a right-click context menu on the tree, not a
+  toolbar; its commands are also in the bottom bar.
+- MWin shell chrome (menu bar, ribbon, command bar, quick access
+  bar, nav pane): shell, out of scope per the directive.
+
+**Owner exception (Man, 2026-11-24 14:29): ComWin** — the
+company-opening window is EXEMPT from this audit; its button
+placement is left exactly as it is.
+
+**Flagged, not restructured:** PosWin (and PosCheckoutWin) keep
+the POS touch layout, per the directive.
