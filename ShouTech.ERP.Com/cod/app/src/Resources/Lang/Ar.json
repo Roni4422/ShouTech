@@ -688,7 +688,16 @@
       "DeliveryCost": "تكلفة التوصيل",
       "DeliveryDate": "تاريخ التسليم",
       "Overdue": "متأخر",
-      "ExpectedClose": "الإغلاق المتوقع"
+      "ExpectedClose": "الإغلاق المتوقع",
+      "ExceptionKind": "استثناء",
+      "InvoiceNo": "رقم الفاتورة",
+      "InvoiceDate": "تاريخ الفاتورة",
+      "DueDate": "تاريخ الاستحقاق",
+      "Period": "الفترة",
+      "OpenReceiptBase": "المستلم المفتوح (أساسي، تراكمي)",
+      "ExceptionAmount": "مبلغ الاستثناء (أساسي)",
+      "DaysOverdue": "أيام التأخير",
+      "OpenAmount": "المبلغ المفتوح"
     },
     "Filter": {
       "All": "الكل",
@@ -705,7 +714,10 @@
       "P2To": "الفترة 2 إلى",
       "Search": "ابحث برمز المورد أو اسمه أو هاتفه",
       "Section": "القسم",
-      "StaleDays": "أيام الركود"
+      "StaleDays": "أيام الركود",
+      "ViewMode": "العرض",
+      "AgeThresholdDays": "الحد الأدنى للعمر (أيام)",
+      "AgingBasis": "أساس الأعمار"
     },
     "CustomerAging": "أعمار ديون العملاء",
     "SupplierAging": "أعمار ديون الموردين",
@@ -786,7 +798,14 @@
     "Unassigned": "غير مُسند",
     "StatusLost": "مفقود",
     "StatusExpired": "منتهي",
-    "SectionForecast": "التوقعات"
+    "SectionForecast": "التوقعات",
+    "GrniModeDetail": "التفاصيل — إيصالات مفتوحة",
+    "GrniModeExceptions": "الاستثناءات",
+    "ExceptionAgedReceipt": "مستلم غير مفوتر (مُعمَّر)",
+    "ExceptionInvoicedNoReceipt": "مفوتر بدون استلام",
+    "ExceptionGlTieOut": "فرق تسوية GL 2203",
+    "AgingByEntryDate": "تاريخ القيد — ملخص المورد",
+    "AgingByDueDate": "تاريخ الاستحقاق — لكل فاتورة"
   },
   "Tools": {
     "Title": "أدوات",
@@ -1957,7 +1976,8 @@
     "ColTaxCode": "رمز الضريبة",
     "StatusPosting": "قيد الترحيل — يلزم التحقق والمطابقة",
     "ValidTill": "صالح حتى",
-    "PermissionDenied": "ليس لديك صلاحية تنفيذ إجراء الفاتورة هذا."
+    "PermissionDenied": "ليس لديك صلاحية تنفيذ إجراء الفاتورة هذا.",
+    "DueDate": "تاريخ الاستحقاق"
   },
   "Vouchers": {
     "PartyCode": "رمز الطرف",

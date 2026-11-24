@@ -33,6 +33,11 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
     private readonly ComboBox _cmbPayment = new();
     private readonly TextBox _txtDocNo = new() { IsReadOnly = true };
     private readonly DatePicker _dtDate = new() { SelectedDate = DateTime.Today };
+    /// <summary>Y3: payment due date — purchase invoices only (migration
+    /// 094). Left empty, SaveDraft derives it from the supplier's payment
+    /// terms; the picked value is persisted on purchase_documents.due_date
+    /// and drives the due-date payable aging.</summary>
+    private readonly DatePicker _dtDueDate = new();
     private readonly TextBox _txtCurrency = new();
     private readonly TextBox _txtTaxRate = new();
     private readonly ComboBox _cmbTaxCode = new();
@@ -626,6 +631,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         Size(_cmbPayment);
         Size(_dtDate);
         Size(_dtValidTill);
+        Size(_dtDueDate);
         Size(_txtCurrency);
         Size(_txtTaxRate);
         Size(_cmbTaxCode);
@@ -650,8 +656,11 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
 
         // Payment / document column — a Quotation carries a ninth row:
         // its Valid Till date (G4; other kinds never show the field).
+        // Purchase invoices likewise carry a ninth row: the payment due
+        // date (Y3, migration 094, renumbered 109).
+        var isPurchaseInvoice = _doc.Kind == InvDocKind.PurchaseInvoice;
         var payment = new Grid { Margin = new Thickness(gap) };
-        var paymentRows = _doc.Kind == InvDocKind.Quotation ? 9 : 8;
+        var paymentRows = _doc.Kind == InvDocKind.Quotation || isPurchaseInvoice ? 9 : 8;
         for (var i = 0; i < paymentRows; i++)
             payment.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         AddLabeledCell(payment, 0, Tf("Invoice.PaymentMethod", "Payment method"), _cmbPayment);
@@ -664,6 +673,8 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         AddLabeledCell(payment, 7, Tf("Invoice.TaxSystem", "Tax system"), _cmbTaxCode);
         if (_doc.Kind == InvDocKind.Quotation)
             AddLabeledCell(payment, 8, Tf("Invoice.ValidTill", "Valid till"), _dtValidTill);
+        if (isPurchaseInvoice)
+            AddLabeledCell(payment, 8, Tf("Invoice.DueDate", "Due date"), _dtDueDate);
 
         // Party / warehouse column
         var party = new Grid { Margin = new Thickness(gap) };
@@ -1107,6 +1118,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
     {
         _doc.DocNo = _txtDocNo.Text.Trim();
         _doc.DocDate = _dtDate.SelectedDate ?? DateTime.Today;
+        _doc.DueDate = _doc.Kind == InvDocKind.PurchaseInvoice ? _dtDueDate.SelectedDate?.Date : null;
         _doc.PartyCode = _txtPartyCode.Text.Trim();
         _doc.PartyName = _txtPartyName.Text.Trim();
         _doc.CurrencyCode = string.IsNullOrWhiteSpace(_txtCurrency.Text)
@@ -1198,6 +1210,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _doc.TargetWarehouseName = doc.TargetWarehouseName;
         _doc.DocNo = doc.DocNo;
         _doc.DocDate = doc.DocDate;
+        _doc.DueDate = doc.DueDate;
         _doc.PartyId = doc.PartyId;
         _doc.PartyCode = doc.PartyCode;
         _doc.PartyName = doc.PartyName;
@@ -1254,6 +1267,12 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
         _syncingDocumentDate = true;
         try { _dtDate.SelectedDate = doc.DocDate; }
         finally { _syncingDocumentDate = false; }
+        try { _dtDueDate.SelectedDate = doc.DueDate; }
+        catch (ArgumentOutOfRangeException ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "InvoiceWin.LoadDocument.DueDate");
+            _dtDueDate.SelectedDate = null;
+        }
         _txtPartyCode.Text = doc.PartyCode;
         _txtPartyName.Text = doc.PartyName;
         _txtCurrency.Text = doc.CurrencyCode;

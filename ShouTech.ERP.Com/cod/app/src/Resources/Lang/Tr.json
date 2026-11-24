@@ -687,7 +687,16 @@
       "DeliveryCost": "Teslimat Maliyeti",
       "DeliveryDate": "Teslim Tarihi",
       "Overdue": "Gecikmiş",
-      "ExpectedClose": "Beklenen Kapanış"
+      "ExpectedClose": "Beklenen Kapanış",
+      "ExceptionKind": "İstisna",
+      "InvoiceNo": "Fatura No.",
+      "InvoiceDate": "Fatura tarihi",
+      "DueDate": "Vade tarihi",
+      "Period": "Dönem",
+      "OpenReceiptBase": "Açık teslimatlar (temel, kümülatif)",
+      "ExceptionAmount": "İstisna tutarı (temel)",
+      "DaysOverdue": "Gecikme günü",
+      "OpenAmount": "Açık tutar"
     },
     "Filter": {
       "All": "Tümü",
@@ -704,7 +713,10 @@
       "P2To": "Dönem 2 Bitiş",
       "Search": "Tedarikçi kodu, adı veya telefonuyla ara",
       "Section": "Bölüm",
-      "StaleDays": "Durgunluk Günleri"
+      "StaleDays": "Durgunluk Günleri",
+      "ViewMode": "Görünüm",
+      "AgeThresholdDays": "Min. yaş (gün)",
+      "AgingBasis": "Yaşlandırma esası"
     },
     "CustomerAging": "Müşteri yaşlandırma",
     "SupplierAging": "Tedarikçi yaşlandırma",
@@ -785,7 +797,14 @@
     "Unassigned": "Atanmamış",
     "StatusLost": "Kayıp",
     "StatusExpired": "Süresi Dolmuş",
-    "SectionForecast": "Tahmin"
+    "SectionForecast": "Tahmin",
+    "GrniModeDetail": "Detay — açık teslimatlar",
+    "GrniModeExceptions": "İstisnalar",
+    "ExceptionAgedReceipt": "Alındı, faturalanmadı (yaşlı)",
+    "ExceptionInvoicedNoReceipt": "Teslimatsız faturalandı",
+    "ExceptionGlTieOut": "GL 2203 mutabakat farkı",
+    "AgingByEntryDate": "Kayıt tarihi — tedarikçi özeti",
+    "AgingByDueDate": "Vade tarihi — fatura başına"
   },
   "Tools": {
     "Title": "Araçlar",
@@ -1874,7 +1893,8 @@
     "ColTaxCode": "Vergi kodu",
     "StatusPosting": "İşleniyor — mutabakat gerekli",
     "ValidTill": "Geçerlilik tarihi",
-    "PermissionDenied": "Bu fatura işlemini gerçekleştirme izniniz yok."
+    "PermissionDenied": "Bu fatura işlemini gerçekleştirme izniniz yok.",
+    "DueDate": "Vade tarihi"
   },
   "CompanyWizard": {
     "Title": {

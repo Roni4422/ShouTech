@@ -687,7 +687,16 @@
       "DeliveryCost": "Coût de livraison",
       "DeliveryDate": "Date de livraison",
       "Overdue": "En retard",
-      "ExpectedClose": "Clôture prévue"
+      "ExpectedClose": "Clôture prévue",
+      "ExceptionKind": "Exception",
+      "InvoiceNo": "N° de facture",
+      "InvoiceDate": "Date de facture",
+      "DueDate": "Date d'échéance",
+      "Period": "Période",
+      "OpenReceiptBase": "Réceptions ouvertes (base, cumul)",
+      "ExceptionAmount": "Montant d'exception (base)",
+      "DaysOverdue": "Jours de retard",
+      "OpenAmount": "Montant ouvert"
     },
     "Filter": {
       "All": "Tous",
@@ -704,7 +713,10 @@
       "P2To": "Période 2 au",
       "Search": "Rechercher par code, nom ou téléphone du fournisseur",
       "Section": "Section",
-      "StaleDays": "Jours d'inactivité"
+      "StaleDays": "Jours d'inactivité",
+      "ViewMode": "Affichage",
+      "AgeThresholdDays": "Âge min. (jours)",
+      "AgingBasis": "Base d'ancienneté"
     },
     "CustomerAging": "Balance âgée clients",
     "SupplierAging": "Balance âgée fournisseurs",
@@ -785,7 +797,14 @@
     "Unassigned": "Non affecté",
     "StatusLost": "Perdu",
     "StatusExpired": "Expiré",
-    "SectionForecast": "Prévisions"
+    "SectionForecast": "Prévisions",
+    "GrniModeDetail": "Détail — réceptions ouvertes",
+    "GrniModeExceptions": "Exceptions",
+    "ExceptionAgedReceipt": "Reçu, non facturé (ancien)",
+    "ExceptionInvoicedNoReceipt": "Facturé sans réception",
+    "ExceptionGlTieOut": "Écart de rapprochement GL 2203",
+    "AgingByEntryDate": "Date d'écriture — résumé fournisseur",
+    "AgingByDueDate": "Date d'échéance — par facture"
   },
   "Tools": {
     "Title": "Outils",
@@ -1874,7 +1893,8 @@
     "ColTaxCode": "Code de taxe",
     "StatusPosting": "Comptabilisation en cours — rapprochement requis",
     "ValidTill": "Valable jusqu'au",
-    "PermissionDenied": "Vous n'avez pas l'autorisation d'effectuer cette action sur la facture."
+    "PermissionDenied": "Vous n'avez pas l'autorisation d'effectuer cette action sur la facture.",
+    "DueDate": "Date d'échéance"
   },
   "CompanyWizard": {
     "Title": {

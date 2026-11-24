@@ -1220,7 +1220,16 @@
       "DeliveryCost": "Delivery Cost",
       "DeliveryDate": "Delivery Date",
       "Overdue": "Overdue",
-      "ExpectedClose": "Expected Close"
+      "ExpectedClose": "Expected Close",
+      "ExceptionKind": "Exception",
+      "InvoiceNo": "Invoice No.",
+      "InvoiceDate": "Invoice Date",
+      "DueDate": "Due Date",
+      "Period": "Period",
+      "OpenReceiptBase": "Open receipts (base, cumulative)",
+      "ExceptionAmount": "Exception amount (base)",
+      "DaysOverdue": "Days overdue",
+      "OpenAmount": "Open amount"
     },
     "Filter": {
       "All": "All",
@@ -1237,7 +1246,10 @@
       "P2To": "Period 2 To",
       "Search": "Search supplier code, name, or phone",
       "Section": "Section",
-      "StaleDays": "Stale Days"
+      "StaleDays": "Stale Days",
+      "ViewMode": "View",
+      "AgeThresholdDays": "Min. age (days)",
+      "AgingBasis": "Aging basis"
     },
     "CustomerAging": "Customer aging",
     "SupplierAging": "Supplier aging",
@@ -1318,7 +1330,14 @@
     "Unassigned": "Unassigned",
     "StatusLost": "Lost",
     "StatusExpired": "Expired",
-    "SectionForecast": "Forecast"
+    "SectionForecast": "Forecast",
+    "GrniModeDetail": "Detail — open receipts",
+    "GrniModeExceptions": "Exceptions",
+    "ExceptionAgedReceipt": "Received, not invoiced (aged)",
+    "ExceptionInvoicedNoReceipt": "Invoiced without receipt",
+    "ExceptionGlTieOut": "GL 2203 tie-out difference",
+    "AgingByEntryDate": "Entry date — supplier summary",
+    "AgingByDueDate": "Due date — per invoice"
   },
   "RestoreCompany": {
     "Close": "Close",
@@ -1865,7 +1884,8 @@
     "ColTaxCode": "Tax code",
     "StatusPosting": "Posting — reconciliation required",
     "ValidTill": "Valid Till",
-    "PermissionDenied": "You do not have permission to perform this invoice action."
+    "PermissionDenied": "You do not have permission to perform this invoice action.",
+    "DueDate": "Due date"
   },
   "Vouchers": {
     "PartyCode": "Party Code",
