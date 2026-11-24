@@ -8,6 +8,7 @@ using ShouTech.App.Reporting.Invoices;
 using ShouTech.App.Views;
 
 using ShouTech.Domain;
+using ShouTech.Domain.Entities;
 using ShouTech.Infrastructure;
 namespace ShouTech.App.Services;
 
@@ -126,6 +127,79 @@ public static class InvRepo
         }
     }
 
+    /// <summary>
+    /// W7a: the acting user's price-override context, derived from the
+    /// session permissions exactly like OrdWin's credit override — the
+    /// context exists only when the user holds SALES.PRICE.OVERRIDE
+    /// and/or SALES.DISCOUNT.OVERRIDE, and the guard audits its use.
+    /// </summary>
+    private static PriceOverrideContext? CurrentPriceOverride()
+    {
+        var actor = AppState.CurrentUser?.Username ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(actor))
+            return null;
+        var price = AppHost.Permissions.Has(PermCat.Sales.PriceOverride);
+        var discount = AppHost.Permissions.Has(PermCat.Sales.DiscountOverride);
+        return price || discount ? new PriceOverrideContext(actor, price, discount) : null;
+    }
+
+    /// <summary>
+    /// W7a BXGY at native save: earned free quantities are appended as
+    /// zero-price companion lines (stock + COGS move at zero revenue
+    /// through StkPost, which values issues from the balance, never
+    /// from the selling price). Regenerated companions are replaced,
+    /// never doubled (the resolver's expansion rule).
+    /// </summary>
+    private static void ExpandBonusLines(DbConnection connection, DbTransaction tx, InvDoc doc)
+    {
+        var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+        var drafts = doc.Lines.Select(l => new CommercialLineDraft(
+            l.MaterialId, l.MaterialCode, l.Description, l.Unit, l.Qty, l.UnitPrice,
+            l.DiscountPct, l.TaxRate, l.WarehouseId, l.LineNo)).ToList();
+        var expanded = SalesPriceResolver.Default.ExpandBonusLines(
+            connection, tx, provider, Company, doc.PartyCode, drafts);
+        // ExpandBonusLines keeps the surviving originals first (in
+        // order) and appends the free lines; rebuild the doc lines from
+        // the surviving originals plus the appended companions.
+        var surviving = new List<InvLine>();
+        var paidMaterials = new HashSet<long>(doc.Lines
+            .Where(l => l.MaterialId is > 0 && l.UnitPrice > 0m)
+            .Select(l => l.MaterialId!.Value));
+        foreach (var line in doc.Lines)
+        {
+            if (line.UnitPrice == 0m && line.MaterialId is > 0 && paidMaterials.Contains(line.MaterialId.Value))
+                continue; // regenerated below
+            surviving.Add(line);
+        }
+        foreach (var free in expanded.Skip(surviving.Count))
+        {
+            surviving.Add(new InvLine
+            {
+                MaterialId = free.MaterialId,
+                MaterialCode = free.MaterialCode ?? string.Empty,
+                Description = free.Description,
+                Unit = free.Unit ?? string.Empty,
+                Qty = free.Qty,
+                UnitPrice = 0m,
+                DiscountPct = 0m,
+                TaxRate = free.TaxRate,
+                WarehouseId = free.WarehouseId is null ? null : (int?)free.WarehouseId,
+            });
+        }
+        doc.Lines = surviving;
+        doc.RenumberLines();
+    }
+
+    /// <summary>W7a guard for the native sales-invoice path (save + post).</summary>
+    private static void ValidateSalesPrices(DbConnection connection, DbTransaction tx, InvDoc doc, long? docId)
+    {
+        var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+        SalesPriceGuard.Validate(connection, tx, provider, Company, doc.KindCode, doc.DocNo, docId,
+            doc.Lines.Select(l => new PriceGuardLine(
+                l.LineNo, l.MaterialId, l.MaterialCode, l.Qty, l.UnitPrice, l.DiscountPct)).ToList(),
+            CurrentPriceOverride());
+    }
+
     public static long SaveDraft(InvDoc doc)
     {
         ArgumentNullException.ThrowIfNull(doc);
@@ -148,6 +222,15 @@ public static class InvRepo
         var lineTable = isSales ? "sales_document_lines" : "purchase_document_lines";
 
         EnsureUniqueSupplierInvoiceReference(connection, tx, doc);
+
+        // W7a (sales invoices only): BXGY free lines are earned at
+        // save, and the price/margin/discount guard validates the
+        // lines before anything is written (SAL-7018/7019/7020).
+        if (isSales && doc.Kind == InvDocKind.SalesInvoice)
+        {
+            ExpandBonusLines(connection, tx, doc);
+            ValidateSalesPrices(connection, tx, doc, doc.DocId > 0 ? doc.DocId : null);
+        }
 
         long docId = doc.DocId;
         if (docId <= 0)
@@ -667,6 +750,12 @@ public static class InvRepo
                 });
             }
         }
+
+        // W7a pricing guard at POST for native sales invoices
+        // (SAL-7018/7019/7020), inside the posting transaction before
+        // any stock/GL/ledger write.
+        if (kind == InvDocKind.SalesInvoice)
+            ValidateSalesPrices(connection, tx, doc, docId);
 
         if (kind == InvDocKind.SalesReturn)
             ValidateSalesReturnAgainstOriginal(connection, tx, guidKey, doc);

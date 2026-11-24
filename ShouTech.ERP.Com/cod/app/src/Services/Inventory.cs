@@ -21,6 +21,7 @@ using ShouTech.App.Views;
 using System.IO;
 
 using ShouTech.Domain;
+using ShouTech.Infrastructure;
 namespace ShouTech.App.Services
 {
 
@@ -977,6 +978,35 @@ internal static class MatRepo
         else
         {
             if (CodeExistsOn(connection, transaction, value.Code, value.Id)) throw new InvalidOperationException("Material code already exists: " + value.Code);
+            // W7a price-change history: capture the stored prices
+            // BEFORE the update so changed values can be recorded
+            // old -> new in spr_price_history (same transaction).
+            var oldPrices = new Dictionary<string, decimal>();
+            var oldPriceLines = new Dictionary<string, decimal>();
+            {
+                using var oldCmd = connection.CreateCommand();
+                oldCmd.Transaction = transaction;
+                oldCmd.CommandText = "SELECT price_retail, price_wholesale, price_special, price_min, price_list, price_export, price_distributor, price_online FROM materials WHERE company_id=$company AND material_id=$id";
+                Add(oldCmd, "$company", AppState.CurrentCompanyCode ?? string.Empty);
+                Add(oldCmd, "$id", value.Id);
+                using var oldReader = oldCmd.ExecuteReader();
+                if (oldReader.Read())
+                {
+                    string[] cols = { "price_retail", "price_wholesale", "price_special", "price_min", "price_list", "price_export", "price_distributor", "price_online" };
+                    for (var i = 0; i < cols.Length; i++)
+                        oldPrices[cols[i]] = oldReader.IsDBNull(i) ? 0m : Convert.ToDecimal(oldReader.GetValue(i), CultureInfo.InvariantCulture);
+                }
+            }
+            {
+                using var oldCmd = connection.CreateCommand();
+                oldCmd.Transaction = transaction;
+                oldCmd.CommandText = "SELECT price_level, price FROM material_price_list WHERE company_id=$company AND material_id=$id";
+                Add(oldCmd, "$company", AppState.CurrentCompanyCode ?? string.Empty);
+                Add(oldCmd, "$id", value.Id);
+                using var oldReader = oldCmd.ExecuteReader();
+                while (oldReader.Read())
+                    oldPriceLines[oldReader.GetValue(0)?.ToString() ?? ""] = oldReader.IsDBNull(1) ? 0m : Convert.ToDecimal(oldReader.GetValue(1), CultureInfo.InvariantCulture);
+            }
             using var command = connection.CreateCommand();
             command.Transaction = transaction;
             command.CommandText = "UPDATE materials SET name_ar=$name_ar, name_en=$name_en, name_print_ar=$name_print_ar, name_print_en=$name_print_en, short_name=$short_name, search_name=$search_name, alt_code=$alt_code, old_code=$old_code, supplier_code=$supplier_code, customer_code=$customer_code, manufacturer_code=$manufacturer_code, hs_code=$hs_code, gtin=$gtin, sku_external=$sku_external, pos_name=$pos_name, group_code=$group_code, category=$category, sub_category=$sub_category, brand=$brand, model=$model, color=$color, size_spec=$size_spec, grade=$grade, class1=$class1, class2=$class2, class3=$class3, class4=$class4, class5=$class5, product_line=$product_line, abc_class=$abc_class, season=$season, item_type=$item_type, status=$status, lifecycle_status=$lifecycle_status, make_or_buy=$make_or_buy, stock_stage=$stock_stage, is_stocked=$is_stocked, is_purchased=$is_purchased, is_sold=$is_sold, is_produced=$is_produced, is_service=$is_service, weight_net=$weight_net, weight_gross=$weight_gross, weight_unit=$weight_unit, volume=$volume, volume_unit=$volume_unit, length=$length, width=$width, height=$height, dim_unit=$dim_unit, area=$area, area_unit=$area_unit, pack_qty=$pack_qty, units_per_parcel=$units_per_parcel, origin_country=$origin_country, manufacturer=$manufacturer, brand_owner=$brand_owner, source=$source, warranty_months=$warranty_months, catalogue_ref=$catalogue_ref, web_url=$web_url, tags=$tags, unit1=$unit1, unit1_factor=$unit1_factor, unit1_barcode=$unit1_barcode, unit2=$unit2, unit2_factor=$unit2_factor, unit2_barcode=$unit2_barcode, unit3=$unit3, unit3_factor=$unit3_factor, unit3_barcode=$unit3_barcode, unit4=$unit4, unit4_factor=$unit4_factor, unit4_barcode=$unit4_barcode, unit5=$unit5, unit5_factor=$unit5_factor, unit5_barcode=$unit5_barcode, default_unit=$default_unit, purchase_unit=$purchase_unit, sales_unit=$sales_unit, cost_method=$cost_method, cost=$cost, standard_cost=$standard_cost, last_purchase_cost=$last_purchase_cost, avg_cost=$avg_cost, cost_currency=$cost_currency, overhead_pct=$overhead_pct, landed_cost=$landed_cost, last_purchase_date=$last_purchase_date, price_retail=$price_retail, price_wholesale=$price_wholesale, price_special=$price_special, price_min=$price_min, price_list=$price_list, price_export=$price_export, price_distributor=$price_distributor, price_online=$price_online, price_currency=$price_currency, margin_target_pct=$margin_target_pct, discount_max_pct=$discount_max_pct, allow_invoice_disc=$allow_invoice_disc, price_includes_tax=$price_includes_tax, qty_on_hand=$qty_on_hand, min_qty=$min_qty, max_qty=$max_qty, reorder_qty=$reorder_qty, safety_stock=$safety_stock, default_warehouse=$default_warehouse, shelf_bin=$shelf_bin, lead_time_days=$lead_time_days, lot_size=$lot_size, order_multiple=$order_multiple, economic_order_qty=$economic_order_qty, replenishment_method=$replenishment_method, has_expiry=$has_expiry, shelf_life_days=$shelf_life_days, alert_before_expiry_days=$alert_before_expiry_days, has_serial=$has_serial, has_batch=$has_batch, has_lot=$has_lot, track_location=$track_location, quality_check_required=$quality_check_required, is_taxable=$is_taxable, tax_rate=$tax_rate, tax_code=$tax_code, tax_account=$tax_account, tax_type=$tax_type, is_zero_rated=$is_zero_rated, acc_inventory=$acc_inventory, acc_sales=$acc_sales, acc_sales_return=$acc_sales_return, acc_cogs=$acc_cogs, acc_purchase=$acc_purchase, acc_purchase_return=$acc_purchase_return, acc_expense=$acc_expense, acc_wip=$acc_wip, allow_sale=$allow_sale, allow_purchase=$allow_purchase, allow_return=$allow_return, allow_negative=$allow_negative, commission_pct=$commission_pct, bonus_qty=$bonus_qty, bonus_item_code=$bonus_item_code, min_sale_qty=$min_sale_qty, max_sale_qty=$max_sale_qty, sales_blocked=$sales_blocked, image_path=$image_path, image_path2=$image_path2, attachment_path=$attachment_path, description=$description, notes=$notes, internal_notes=$internal_notes, spec_sheet=$spec_sheet, label_text=$label_text, units_json=$units_json, prices_json=$prices_json, attributes_json=$attributes_json, is_deleted=$is_deleted, updated_by=$updated_by, updated_at=CURRENT_TIMESTAMP WHERE company_id=$company AND material_id=$id AND is_deleted=0";
@@ -989,6 +1019,39 @@ internal static class MatRepo
             using (var del = connection.CreateCommand()) { del.Transaction = transaction; del.CommandText = "DELETE FROM material_price_list WHERE company_id=$company AND material_id=$id"; Add(del, "$company", AppState.CurrentCompanyCode ?? string.Empty); Add(del, "$id", value.Id); del.ExecuteNonQuery(); }
             using (var del = connection.CreateCommand()) { del.Transaction = transaction; del.CommandText = "DELETE FROM material_suppliers WHERE company_id=$company AND material_id=$id"; Add(del, "$company", AppState.CurrentCompanyCode ?? string.Empty); Add(del, "$id", value.Id); del.ExecuteNonQuery(); }
             SaveChildren(connection, transaction, value);
+            // W7a: record the price changes captured above.
+            {
+                var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+                var company = AppState.CurrentCompanyCode ?? string.Empty;
+                var actor = string.IsNullOrWhiteSpace(value.UpdatedBy)
+                    ? (AppState.CurrentUser?.Username ?? "system")
+                    : value.UpdatedBy!;
+                var newPrices = new Dictionary<string, decimal>
+                {
+                    ["price_retail"] = value.PriceRetail,
+                    ["price_wholesale"] = value.PriceWholesale,
+                    ["price_special"] = value.PriceSpecial,
+                    ["price_min"] = value.PriceMin,
+                    ["price_list"] = value.PriceList,
+                    ["price_export"] = value.PriceExport,
+                    ["price_distributor"] = value.PriceDistributor,
+                    ["price_online"] = value.PriceOnline
+                };
+                foreach (var (field, newValue) in newPrices)
+                {
+                    if (oldPrices.TryGetValue(field, out var oldValue))
+                        SalesPriceHistory.Record(connection, transaction, provider, company,
+                            "Material", value.Code, field, oldValue, newValue, actor);
+                }
+                foreach (var line in value.PriceLines)
+                {
+                    oldPriceLines.TryGetValue(line.PriceLevel, out var oldLinePrice);
+                    SalesPriceHistory.Record(connection, transaction, provider, company,
+                        "PriceList", $"{value.Code}:{line.PriceLevel}", "price",
+                        oldPriceLines.ContainsKey(line.PriceLevel) ? oldLinePrice : null,
+                        line.Price, actor);
+                }
+            }
             transaction.Commit();
             return value;
         }

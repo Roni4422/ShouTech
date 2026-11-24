@@ -1,4 +1,8 @@
 {
+  "Pricing": {
+    "Resolved": "Fiyat {0}, kaynak {1}",
+    "OverrideConfirm": "Fiyat aşımı ile yine de kaydedilsin mi? Aşım kayıt altına alınacak."
+  },
   "Application": {
     "Title": "ShouTech ERP",
     "Subtitle": "Entegre Kurumsal Yönetim Platformu",

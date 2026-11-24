@@ -22,7 +22,11 @@ public interface ICommercialDocumentRepository
     Task<long> CreateSalesDraftWithLinkAsync(CommercialDocumentDraft draft, string sourceDocKind, long sourceDocId, string userId, CancellationToken cancellationToken = default);
 
     /// <summary>Moves a sales document from Draft to Posted; throws when not a draft.</summary>
-    Task PostSalesAsync(long docId, string userId, CancellationToken cancellationToken = default);
+    /// <summary>Posts a sales draft. The optional W7a price-override
+    /// context is supplied only when the posting user holds
+    /// SALES.PRICE.OVERRIDE / SALES.DISCOUNT.OVERRIDE; breaches are then
+    /// audited in spr_price_overrides instead of blocking (SAL-7018/7019/7020).</summary>
+    Task PostSalesAsync(long docId, string userId, CancellationToken cancellationToken = default, PriceOverrideContext? priceOverride = null);
 
     /// <summary>
     /// Reverses a posted chain document (DLV or SAL) in one transaction:

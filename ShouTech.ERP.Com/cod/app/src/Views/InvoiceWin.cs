@@ -836,6 +836,30 @@ public sealed class InvoiceWin : BaseWin, IWindowMode
                     line.TaxCalculationMode = selectedTax?.CalculationMode ?? "Exclusive";
                 }
 
+                // W7a: a sales line whose material was just entered with
+                // no price yet is filled from the ONE price resolver
+                // (contract hook -> customer price -> price list by
+                // party tier -> tier column -> material card); the
+                // provenance shows in the status line, and the automatic
+                // discount % from discount_rules is applied when higher.
+                if (_doc.IsSalesSide && !string.IsNullOrWhiteSpace(line.MaterialCode)
+                    && ParseDec(line.UnitPriceText, 0) == 0)
+                {
+                    line.MaterialId = CardStore.ResolveMaterial(line.MaterialCode)?.Id ?? line.MaterialId;
+                    var resolution = TaxSvc.ResolveSalesPrice(
+                        _txtPartyCode.Text.Trim(), line.MaterialId, line.MaterialCode,
+                        ParseDec(line.QtyText, 1), line.Unit, _doc.CurrencyCode);
+                    if (resolution is not null && resolution.Price > 0)
+                    {
+                        line.UnitPriceText = resolution.Price.ToString("0.####", CultureInfo.InvariantCulture);
+                        if (resolution.DiscountPct > ParseDec(line.DiscountPctText, 0))
+                            line.DiscountPctText = resolution.DiscountPct.ToString("0.##", CultureInfo.InvariantCulture);
+                        _lblStatus.Text = Tf("Pricing.Resolved", "Price {0} from {1}")
+                            .Replace("{0}", resolution.Price.ToString("0.####", CultureInfo.InvariantCulture))
+                            .Replace("{1}", resolution.Source);
+                    }
+                }
+
                 line.NotifyTotals();
                 RefreshTotals();
             }

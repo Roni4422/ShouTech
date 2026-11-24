@@ -53,15 +53,26 @@ public sealed class OrderService
             or CommercialDocKinds.SalesQuotation or CommercialDocKinds.RequestForQuotation or CommercialDocKinds.SupplierQuotation;
 
     public async Task<long> CreateOrderAsync(CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default)
+        => await CreateOrderAsync(draft, userId, null, cancellationToken).ConfigureAwait(false);
+
+    /// <summary>Creates an order draft with an optional authorized W7a
+    /// price override (supplied only when the user holds
+    /// SALES.PRICE.OVERRIDE / SALES.DISCOUNT.OVERRIDE; audited by the
+    /// guard in spr_price_overrides instead of blocking SAL-7018/7019/7020).</summary>
+    public async Task<long> CreateOrderAsync(CommercialDocumentDraft draft, string userId, PriceOverrideContext? priceOverride, CancellationToken cancellationToken = default)
     {
         ValidateOrderDraft(draft);
-        return await _orders.CreateDraftAsync(SideFor(draft.DocKind), draft, userId, cancellationToken).ConfigureAwait(false);
+        return await _orders.CreateDraftAsync(SideFor(draft.DocKind), draft, userId, cancellationToken, priceOverride).ConfigureAwait(false);
     }
 
     public async Task UpdateOrderAsync(long docId, CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default)
+        => await UpdateOrderAsync(docId, draft, userId, null, cancellationToken).ConfigureAwait(false);
+
+    /// <summary>Updates an order draft with an optional authorized W7a price override (see CreateOrderAsync).</summary>
+    public async Task UpdateOrderAsync(long docId, CommercialDocumentDraft draft, string userId, PriceOverrideContext? priceOverride, CancellationToken cancellationToken = default)
     {
         ValidateOrderDraft(draft);
-        await _orders.UpdateDraftAsync(SideFor(draft.DocKind), docId, draft, userId, cancellationToken).ConfigureAwait(false);
+        await _orders.UpdateDraftAsync(SideFor(draft.DocKind), docId, draft, userId, cancellationToken, priceOverride).ConfigureAwait(false);
     }
 
     public Task<CommercialDocumentSnapshot?> FindByIdAsync(CommercialDocSide side, long docId, CancellationToken cancellationToken = default)
@@ -93,6 +104,12 @@ public sealed class OrderService
     /// </summary>
     public Task PostOrderAsync(CommercialDocSide side, long docId, string userId, CreditOverrideContext? creditOverride, CancellationToken cancellationToken = default)
         => _orders.PostOrderAsync(side, docId, userId, cancellationToken, creditOverride);
+
+    /// <summary>Posts an order with authorized credit AND W7a price
+    /// overrides (each supplied only when the posting user holds the
+    /// matching permission; both guards audit their breaches).</summary>
+    public Task PostOrderAsync(CommercialDocSide side, long docId, string userId, CreditOverrideContext? creditOverride, PriceOverrideContext? priceOverride, CancellationToken cancellationToken = default)
+        => _orders.PostOrderAsync(side, docId, userId, cancellationToken, creditOverride, priceOverride);
 
     /// <summary>
     /// Creates a draft delivery note from the remaining quantities on a posted
@@ -243,8 +260,13 @@ public sealed class OrderService
 
     /// <summary>Posts a sales-chain draft, including the DLV-linked invoice accounting path.</summary>
     public async Task PostSalesChainDocumentAsync(long documentId, string userId, CancellationToken cancellationToken = default)
+        => await PostSalesChainDocumentAsync(documentId, userId, null, cancellationToken).ConfigureAwait(false);
+
+    /// <summary>Posts a sales-chain draft with an optional authorized
+    /// W7a price override (SAL-7018/7019/7020 audited instead of blocked).</summary>
+    public async Task PostSalesChainDocumentAsync(long documentId, string userId, PriceOverrideContext? priceOverride, CancellationToken cancellationToken = default)
     {
-        await _chain.PostSalesAsync(documentId, userId, cancellationToken).ConfigureAwait(false);
+        await _chain.PostSalesAsync(documentId, userId, cancellationToken, priceOverride).ConfigureAwait(false);
         await RefreshStoredChainProgressAsync(documentId, cancellationToken).ConfigureAwait(false);
         if (CommissionHook is not null)
         {

@@ -7,6 +7,8 @@ using Npgsql;
 using ShouTech.App.Views;
 
 using ShouTech.Domain;
+using ShouTech.Domain.Entities;
+using ShouTech.Infrastructure;
 namespace ShouTech.App.Services;
 
 /// <summary>
@@ -623,6 +625,43 @@ public static class TaxSvc
         catch (Exception exL168)
         {
             AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL168, "TaxSvc.static");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// W7a price resolution for window line entry (InvoiceWin / OrdWin /
+    /// PosWin): the ONE resolver (contract hook → customer_prices →
+    /// price list by party tier → tier column → material card) plus the
+    /// automatic discount % and BXGY free quantity. Returns null when
+    /// the material cannot be identified or no database is connected;
+    /// failures are reported through the error catalog, never thrown
+    /// into line entry.
+    /// </summary>
+    public static PriceResolution? ResolveSalesPrice(
+        string? partyCode, long? materialId, string? materialCode,
+        decimal qty, string? unit = null, string? currency = null)
+    {
+        if (materialId is not > 0 && string.IsNullOrWhiteSpace(materialCode))
+            return null;
+        var cs = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(cs))
+            return null;
+        var company = AppState.CurrentCompanyCode ?? "";
+        if (string.IsNullOrWhiteSpace(company))
+            return null;
+        try
+        {
+            using var connection = Open(cs);
+            using var tx = connection.BeginTransaction();
+            var provider = DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite";
+            return SalesPriceResolver.Default.Resolve(
+                connection, tx, provider, company, partyCode,
+                materialId ?? 0, materialCode, qty <= 0 ? 1m : qty, unit, currency);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "TaxSvc.ResolveSalesPrice");
             return null;
         }
     }

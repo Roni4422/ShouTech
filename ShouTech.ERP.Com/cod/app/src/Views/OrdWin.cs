@@ -372,7 +372,7 @@ public sealed class OrdWin : BaseWin, IWindowMode
         }
     }
 
-    private static void ResolveMaterial(OrderLineVm line)
+    private void ResolveMaterial(OrderLineVm line)
     {
         var found = TaxSvc.ResolveMaterial(line.ItemCode.Trim());
         if (found is { } material)
@@ -382,6 +382,25 @@ public sealed class OrdWin : BaseWin, IWindowMode
             if (line.UnitPrice <= 0m) line.UnitPrice = material.Price;
             if (string.IsNullOrWhiteSpace(line.Unit) || line.Unit == "PCS") line.Unit = string.IsNullOrWhiteSpace(material.Unit) ? line.Unit : material.Unit;
             if (line.TaxRate <= 0m) line.TaxRate = material.TaxRate;
+
+            // W7a: sales lines consult the ONE price resolver (contract
+            // hook -> customer price -> price list by party tier -> tier
+            // column -> material card); the provenance is shown in the
+            // status line so the user can see where the price came from.
+            if (_kind == OrdKind.Sales)
+            {
+                var resolution = TaxSvc.ResolveSalesPrice(
+                    _txtPartyCode.Text.Trim(), material.Id, line.ItemCode.Trim(),
+                    line.Qty <= 0m ? 1m : line.Qty, line.Unit);
+                if (resolution is not null)
+                {
+                    if (resolution.Price > 0m) line.UnitPrice = resolution.Price;
+                    if (resolution.DiscountPct > line.DiscountPct) line.DiscountPct = resolution.DiscountPct;
+                    _lblStatus.Text = T("Pricing.Resolved")
+                        .Replace("{0}", resolution.Price.ToString("0.####", CultureInfo.InvariantCulture))
+                        .Replace("{1}", resolution.Source);
+                }
+            }
         }
     }
 
@@ -543,13 +562,23 @@ public sealed class OrdWin : BaseWin, IWindowMode
         try
         {
             var draft = BuildDraft();
+            // W7a: an authorized price/discount override holder saves
+            // below-limit lines with an audit row instead of a block
+            // (the context is null for everyone else — hard block).
+            var priceOverride = _kind == OrdKind.Sales
+                && (AppHost.Permissions.Has(PermCat.Sales.PriceOverride)
+                    || AppHost.Permissions.Has(PermCat.Sales.DiscountOverride))
+                ? new ShouTech.Domain.Entities.PriceOverrideContext(CurrentUserId,
+                    AppHost.Permissions.Has(PermCat.Sales.PriceOverride),
+                    AppHost.Permissions.Has(PermCat.Sales.DiscountOverride))
+                : null;
             if (_docId is null)
             {
-                _docId = await AppHost.Orders.CreateOrderAsync(draft, CurrentUserId);
+                _docId = await AppHost.Orders.CreateOrderAsync(draft, CurrentUserId, priceOverride);
             }
             else
             {
-                await AppHost.Orders.UpdateOrderAsync(_docId.Value, draft, CurrentUserId);
+                await AppHost.Orders.UpdateOrderAsync(_docId.Value, draft, CurrentUserId, priceOverride);
             }
             _lblStatus.Text = $"{T("OrderDoc.Status")}: {StatusText(_status)} | {T("OrderDoc.Saved")}";
         }
@@ -631,6 +660,34 @@ public sealed class OrdWin : BaseWin, IWindowMode
             UpdateEditState();
             RefreshTotals();
             if (!IsRfq) await RefreshProgressAsync(_docId.Value);
+        }
+        catch (ShouTech.Domain.AppError ex) when ((ex.Code is ShouTech.Domain.ErrorCodes.PriceBelowMinimum
+                or ShouTech.Domain.ErrorCodes.MarginBelowMinimum
+                or ShouTech.Domain.ErrorCodes.DiscountExceedsLimit)
+            && _kind == OrdKind.Sales
+            && AppHost.Permissions.Has(PermCat.Sales.PriceOverride))
+        {
+            // W7a: the posting user holds SALES.PRICE.OVERRIDE — offer
+            // the audited override; the guard records actor + values in
+            // spr_price_overrides on the retry.
+            if (MessageBox.Show(this, $"{ex.Message}\n\n{T("Pricing.OverrideConfirm")}", Title,
+                    MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                return;
+            try
+            {
+                await AppHost.Orders.PostOrderAsync(Side, _docId.Value, CurrentUserId, null,
+                    new ShouTech.Domain.Entities.PriceOverrideContext(CurrentUserId,
+                        AppHost.Permissions.Has(PermCat.Sales.PriceOverride),
+                        AppHost.Permissions.Has(PermCat.Sales.DiscountOverride)));
+                _status = CommercialDocumentStatus.Posted;
+                UpdateEditState();
+                RefreshTotals();
+                if (!IsRfq) await RefreshProgressAsync(_docId.Value);
+            }
+            catch (Exception retryEx)
+            {
+                ShowWarningMessage(retryEx.Message);
+            }
         }
         catch (ShouTech.Domain.AppError ex) when (ex.Code == ShouTech.Domain.ErrorCodes.CreditLimitExceeded
             && _kind == OrdKind.Sales

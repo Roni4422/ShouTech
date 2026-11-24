@@ -198,7 +198,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
     // ----------------------------------------------------------------- write
 
-    public async Task<long> CreateDraftAsync(CommercialDocSide side, CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default)
+    public async Task<long> CreateDraftAsync(CommercialDocSide side, CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default, PriceOverrideContext? priceOverride = null)
     {
         ValidateDraft(draft, userId);
         await using var connection = CreateConnection();
@@ -206,6 +206,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            draft = ApplySalesPricing(connection, transaction, side, draft, priceOverride);
             var docId = await InsertDocumentAsync(connection, transaction, side, draft, CommercialDocumentStatus.Draft, userId, cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return docId;
@@ -318,7 +319,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         }
     }
 
-    public async Task UpdateDraftAsync(CommercialDocSide side, long docId, CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default)
+    public async Task UpdateDraftAsync(CommercialDocSide side, long docId, CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default, PriceOverrideContext? priceOverride = null)
     {
         ValidateDraft(draft, userId);
         var (docs, lines) = Tables(side);
@@ -333,6 +334,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 throw new InvalidOperationException($"Only draft documents can be edited; document '{existing.DocNo}' is '{existing.Status}'.");
             if (existing.CompanyId != draft.CompanyId)
                 throw new InvalidOperationException("Document belongs to a different company.");
+            draft = ApplySalesPricing(connection, transaction, side, draft, priceOverride);
 
             var computed = ComputeTotals(draft.Lines, out var subtotal, out var taxAmount, out _);
             var grandTotal = decimal.Round(subtotal - draft.DiscountAmount + taxAmount + draft.ExtraAmount, 2);
@@ -392,7 +394,33 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         }
     }
 
-    public async Task PostOrderAsync(CommercialDocSide side, long docId, string userId, CancellationToken cancellationToken = default, CreditOverrideContext? creditOverride = null)
+    /// <summary>
+    /// W7a pricing at SAVE for sales orders: BXGY free lines are earned
+    /// at save (zero-price companions) and the price/margin/discount
+    /// guard validates the lines (SAL-7018/7019/7020), auditing breaches
+    /// the caller authorized via SALES.PRICE.OVERRIDE /
+    /// SALES.DISCOUNT.OVERRIDE. Other sides/kinds pass through.
+    /// </summary>
+    private CommercialDocumentDraft ApplySalesPricing(
+        DbConnection connection, DbTransaction transaction, CommercialDocSide side,
+        CommercialDocumentDraft draft, PriceOverrideContext? priceOverride)
+    {
+        if (side != CommercialDocSide.Sales || draft.DocKind != CommercialDocKinds.SalesOrder)
+            return draft;
+        var expanded = SalesPriceResolver.Default.ExpandBonusLines(
+            connection, transaction, _provider, draft.CompanyId.ToString("D"),
+            draft.PartyCode, draft.Lines);
+        if (expanded.Count != draft.Lines.Count)
+            draft = draft with { Lines = expanded };
+        SalesPriceGuard.Validate(connection, transaction, _provider,
+            draft.CompanyId.ToString("D"), draft.DocKind, draft.DocNo, null,
+            draft.Lines.Select((l, i) => new PriceGuardLine(
+                i + 1, l.MaterialId, l.MaterialCode, l.Qty, l.UnitPrice, l.DiscountPct)).ToList(),
+            priceOverride is null ? null : priceOverride with { DocKind = draft.DocKind, DocNo = draft.DocNo });
+        return draft;
+    }
+
+    public async Task PostOrderAsync(CommercialDocSide side, long docId, string userId, CancellationToken cancellationToken = default, CreditOverrideContext? creditOverride = null, PriceOverrideContext? priceOverride = null)
     {
         if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
         var (docs, _) = Tables(side);
@@ -495,6 +523,31 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                         connection, transaction, _provider, companyId, "C", partyId.Value, partyCode,
                         FxRates.ToBase(grandTotal, fx.Rate), "@", effectiveOverride, cancellationToken).ConfigureAwait(false);
                 }
+                // W7a pricing guard at POST (SAL-7018/7019/7020): the
+                // order's stored lines are re-validated because limits
+                // may have tightened since save; an authorized price
+                // override is audited in spr_price_overrides.
+                var priceLines = new List<PriceGuardLine>();
+                await using (var lineCmd = CreateCommand(connection, transaction,
+                    "SELECT line_no, material_id, material_code, qty, unit_price, discount_pct FROM sales_document_lines WHERE doc_id = @doc ORDER BY line_no"))
+                {
+                    Add(lineCmd, "@doc", docId);
+                    await using var lineReader = await lineCmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                    while (await lineReader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    {
+                        priceLines.Add(new PriceGuardLine(
+                            Convert.ToInt32(lineReader.GetValue(0), CultureInfo.InvariantCulture),
+                            lineReader.IsDBNull(1) ? null : Convert.ToInt64(lineReader.GetValue(1), CultureInfo.InvariantCulture),
+                            lineReader.IsDBNull(2) ? null : lineReader.GetString(2),
+                            Convert.ToDecimal(lineReader.GetValue(3), CultureInfo.InvariantCulture),
+                            Convert.ToDecimal(lineReader.GetValue(4), CultureInfo.InvariantCulture),
+                            Convert.ToDecimal(lineReader.GetValue(5), CultureInfo.InvariantCulture)));
+                    }
+                }
+                if (companyId is not null)
+                    SalesPriceGuard.Validate(connection, transaction, _provider, companyId,
+                        kind, docNo, docId, priceLines,
+                        priceOverride is null ? null : priceOverride with { DocKind = kind, DocNo = docNo, DocId = docId });
             }
 
             await using var update = CreateCommand(connection, transaction,
