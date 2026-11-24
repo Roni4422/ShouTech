@@ -249,20 +249,32 @@ benchmarks to be sellable as enterprise commercial software.
   per-point print designs bound to doc_designs/.stid), weigh
   customer-group scoping and touch/field customization, record
   where ours is ahead (warehouse, price level, permitted users).
-- **POS material information pane + live tafqeet** (owner
-  evidence 2026-11-24 17:55; transcription §7): QUEUED with the
-  POS comparison work — the POS sales screen gains an info pane
-  for the selected/entered material showing PROJECTED total
-  balance (before ← after the current line), per-warehouse
-  balances, sale price, weighted-average purchase cost, last
-  purchase price + date, and last price sold to the current
-  customer; the displayed property set is configurable per
-  user/point from a checkbox list (Phenix offers ~35 properties
-  incl. price levels, min/max sale & purchase, FIFO, barcode,
-  packing, weight, category, groups, sales snapshot) and persists
-  through WinPref. Plus the live amount-in-words total (KWD
-  tafqeet) on the POS screen. The build step records which
-  properties are implemented vs deferred with reasons.
+- **GLOBAL Information Window** (owner evidence 2026-11-24
+  17:55, SCOPE CORRECTION 17:59 + EMPHASIS 18:00): NOT a POS-only
+  pane — a program-wide, selection-driven Information Window
+  openable from ANY window (a standard affordance in every
+  window: shell command + consistent per-window entry), reading
+  the HOST window's current selection as context (selected grid
+  row / current card / field entity) and updating as the
+  selection changes. Entity-aware data sets: material →
+  projected balance (before ← after the current line),
+  per-warehouse balances, sale price, weighted-average purchase
+  cost, last purchase price + date, last price sold to the
+  current customer; account → balances + recent movement summary;
+  customer/supplier → balance, credit limit/usage, last
+  transactions, last prices; sales rep → sales and target
+  figures; other entity types per the study. The displayed
+  property set is configurable PER ENTITY TYPE (the right-click
+  properties pattern from the POS evidence; ~35 material
+  properties incl. price levels, min/max, FIFO, barcode, packing,
+  weight, category, groups, sales snapshot) and persists per user
+  via WinPref. The POS material pane is its FIRST surface. It
+  gets its OWN phase-gate study (per-entity data sets vs the
+  benchmarks) queued after the numbering and POS-definition
+  steps; a window that cannot offer it is recorded as an
+  exception with a reason in that study, not silently skipped.
+  Plus, from the same evidence: the live amount-in-words total
+  (KWD tafqeet) on the POS screen.
 
 
 ## Commercial-readiness phase (owner go-ahead 2026-11-24 16:22) — PLAN
