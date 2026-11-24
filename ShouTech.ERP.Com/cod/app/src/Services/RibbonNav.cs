@@ -116,6 +116,7 @@ public static class RibbonNav
             case "POS.POSCashReport": Show(new PosCashRptWin(), owner); return true;
             case "POS.Sessions": Show(new PosSessionWin(), owner); return true;
             case "POS.ZReport": Show(new PosZReportWin(), owner); return true;
+            case "POS.Performance": Show(new PosPerfRptWin(), owner); return true;
             case "POS.POSDiscounts": ShowDef(DefSets.PosDiscounts, owner); return true;
             case "POS.SyncPOS": Show(new PosSyncWin(), owner); return true;
             case "POS.AdjustPrice": RptNav.OpenPriceList(owner); return true;

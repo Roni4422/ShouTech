@@ -64,6 +64,7 @@ public sealed class PosZReportWin : RptBase
                 Row("POS.ZOnAccount", null, z.OnAccountTendered);
                 Row("POS.ZCashRefunded", null, -z.CashRefunded);
                 Row("POS.ZCardRefunded", null, -z.CardRefunded);
+                Row("POS.ZPaidOuts", z.PaidOutsCount, -z.PaidOutsTotal);
                 Row("POS.ZTax", null, z.TaxTotal);
                 Row("POS.ZDiscount", null, z.DiscountTotal);
                 Row("POS.ZOpening", null, z.OpeningCash);

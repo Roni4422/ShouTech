@@ -192,6 +192,50 @@ public sealed class PosOriginalBill
     });
 }
 
+/// <summary>One cash paid-out recorded against an open session
+/// (migration 104): money that left the drawer for a till expense —
+/// it is NOT a tender and posts no GL of its own (sessions reconcile
+/// cash, they do not journal at close); it subtracts from the
+/// session's expected cash in the Z report and at close.</summary>
+public sealed class PosSessionExpense
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid SessionId { get; set; }
+    public string ExpenseNo { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public string Reason { get; set; } = string.Empty;
+    public string? ReferenceNo { get; set; }
+    public string? CreatedBy { get; set; }
+    public string? CreatedAt { get; set; }
+}
+
+/// <summary>Subject kinds a numeric POS discount limit binds to
+/// (migration 104, pos_discount_limits).</summary>
+public static class PosDiscountLimitSubjects
+{
+    public const string User = "USER";
+    public const string Role = "ROLE";
+}
+
+/// <summary>One per-terminal / per-cashier performance row over a
+/// period (sales cycle W9): posted POS sales and POS returns of the
+/// sessions the cashier ran on the terminal, the discounts given on
+/// those sales, the paid-outs taken from those sessions' drawers,
+/// and the average basket (gross sales / sales count).</summary>
+public sealed class PosPerformanceRow
+{
+    public string TerminalCode { get; set; } = string.Empty;
+    public string Cashier { get; set; } = string.Empty;
+    public int SalesCount { get; set; }
+    public decimal GrossSales { get; set; }
+    public int ReturnsCount { get; set; }
+    public decimal ReturnsTotal { get; set; }
+    public decimal DiscountsGiven { get; set; }
+    public decimal PaidOuts { get; set; }
+    public decimal NetSales => GrossSales - ReturnsTotal;
+    public decimal AverageBasket => SalesCount == 0 ? 0m : decimal.Round(GrossSales / SalesCount, 2, MidpointRounding.AwayFromZero);
+}
+
 /// <summary>Z-report data for one session (real session rows only):
 /// sales/returns counts and totals, tenders by type, tax, and the
 /// drawer expectation against the counted close.</summary>
@@ -214,7 +258,12 @@ public sealed class PosZReport
     public decimal OnAccountTendered { get; set; }
     public decimal CashRefunded { get; set; }
     public decimal CardRefunded { get; set; }
-    /// <summary>opening + cash sales − cash refunds.</summary>
+    /// <summary>Cash paid out of the drawer during the session
+    /// (migration 104) — counts and total; the total is subtracted
+    /// from the drawer expectation.</summary>
+    public int PaidOutsCount { get; set; }
+    public decimal PaidOutsTotal { get; set; }
+    /// <summary>opening + cash sales − cash refunds − paid-outs.</summary>
     public decimal ExpectedCash { get; set; }
     public decimal? CountedCash { get; set; }
     public decimal? Variance { get; set; }
@@ -235,10 +284,17 @@ public static class PosTenderMath
     public static decimal Round(decimal value) => decimal.Round(value, 2, MidpointRounding.AwayFromZero);
 
     /// <summary>Validates a sale's tenders against its bill total and
-    /// returns the cash change due. Throws AppError POS-1004/POS-1005.</summary>
-    public static decimal ValidateSaleTenders(decimal billTotal, IReadOnlyList<PosTender> tenders, bool hasParty)
+    /// returns the cash change due. Throws AppError POS-1004/POS-1005.
+    /// <paramref name="exchangeCredit"/> (W9 exchanges) is the part of
+    /// an on-account tender that is NOT party credit at all: it is a
+    /// return credit consumed by this sale, whose offsetting credit
+    /// leg the exchange's return document posts — so it is allowed
+    /// for a walk-in up to that amount; any on-account beyond it
+    /// still requires a named party.</summary>
+    public static decimal ValidateSaleTenders(decimal billTotal, IReadOnlyList<PosTender> tenders, bool hasParty, decimal exchangeCredit = 0m)
     {
         if (billTotal < 0) throw new AppError(ErrorCodes.PosTenderInvalid, "A bill total cannot be negative.");
+        if (exchangeCredit < 0) throw new AppError(ErrorCodes.PosTenderInvalid, "An exchange credit cannot be negative.");
         ArgumentNullException.ThrowIfNull(tenders);
         var applied = 0m;
         var change = 0m;
@@ -249,7 +305,7 @@ public static class PosTenderMath
             if (t.Amount < 0)
                 throw new AppError(ErrorCodes.PosTenderInvalid, "A sale tender amount cannot be negative.");
             applied += t.Amount;
-            if (t.TenderType == PosTenderTypes.OnAccount && t.Amount > 0 && !hasParty)
+            if (t.TenderType == PosTenderTypes.OnAccount && t.Amount > Round(exchangeCredit) && !hasParty)
                 throw new AppError(ErrorCodes.PosTenderInvalid,
                     "An on-account tender requires a named customer; a walk-in sale cannot be put on account.");
             if (t.TenderType == PosTenderTypes.Cash)
@@ -295,6 +351,20 @@ public static class PosTenderMath
     public static decimal ExpectedCash(decimal openingCash, IEnumerable<PosTender> sessionTenders)
         => openingCash + sessionTenders.Where(t => t.TenderType == PosTenderTypes.Cash).Sum(t => t.Amount);
 
+    /// <summary>Expected drawer cash with paid-outs (migration 104):
+    /// every recorded session expense left the drawer, so it reduces
+    /// the expectation exactly like a cash refund does.</summary>
+    public static decimal ExpectedCash(decimal openingCash, IEnumerable<PosTender> sessionTenders, decimal paidOutsTotal)
+        => ExpectedCash(openingCash, sessionTenders) - paidOutsTotal;
+
+    /// <summary>The net a POS exchange settles: positive when the new
+    /// sale is worth more than the return (the customer pays the
+    /// difference), negative when the return is worth more (the
+    /// customer is refunded the difference), zero when they match
+    /// (no money moves; the return credit covers the sale exactly).</summary>
+    public static decimal ExchangeNet(decimal newSaleTotal, decimal returnTotal)
+        => Round(newSaleTotal) - Round(returnTotal);
+
     /// <summary>Validates return quantities against the original bill:
     /// every returned line must exist on the original and the quantity
     /// (in the original line's unit, the only unit a return is taken
@@ -324,5 +394,69 @@ public static class PosTenderMath
     {
         if (originalLinesSubtotal == 0m) return 0m;
         return decimal.Round(headerAmount * returnedLinesSubtotal / originalLinesSubtotal, 4, MidpointRounding.AwayFromZero);
+    }
+}
+
+/// <summary>
+/// Pure cashier-discount authority math (migration 104) — no I/O, so
+/// the till, the checkout and the Kern.Tests facts can never disagree.
+///
+/// A bill's discount is measured two ways, and the cashier's numeric
+/// limit binds BOTH: the EFFECTIVE discount (total discount amount —
+/// line discounts plus the bill discount — over the gross lines
+/// subtotal) and the MAX LINE discount % on any single line. The
+/// authority ceiling is 0 when the cashier does not hold
+/// POS.DISCOUNT.OVERRIDE at all (the pre-104 rule: no discounts at the
+/// till without the override right); a holder's ceiling is their
+/// configured numeric limit, or 100 (no numeric cap) when no limit
+/// row exists for them. Anything above the ceiling needs a supervisor
+/// override, audited in pos_discount_overrides.
+/// </summary>
+public static class PosDiscountMath
+{
+    /// <summary>The measured discount of one bill.</summary>
+    public sealed record Measurement(decimal GrossSubtotal, decimal DiscountAmount, decimal EffectivePct, decimal MaxLinePct)
+    {
+        /// <summary>The figure the limit binds: the larger of the
+        /// effective bill % and the largest single-line %.</summary>
+        public decimal BindingPct => Math.Max(EffectivePct, MaxLinePct);
+        public bool HasDiscount => DiscountAmount > 0m || MaxLinePct > 0m;
+    }
+
+    /// <summary>Measures a bill from its lines (qty, unit price, line
+    /// discount %) and its absolute bill-discount amount.</summary>
+    public static Measurement Measure(IEnumerable<(decimal Qty, decimal UnitPrice, decimal DiscountPct)> lines, decimal billDiscountAmount)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        var gross = 0m;
+        var lineDiscount = 0m;
+        var maxLine = 0m;
+        foreach (var (qty, price, pct) in lines)
+        {
+            var lineGross = qty * price;
+            gross += lineGross;
+            lineDiscount += decimal.Round(lineGross * pct / 100m, 4, MidpointRounding.AwayFromZero);
+            if (pct > maxLine) maxLine = pct;
+        }
+        var discount = lineDiscount + Math.Max(0m, billDiscountAmount);
+        var effective = gross <= 0m ? 0m : decimal.Round(discount / gross * 100m, 4, MidpointRounding.AwayFromZero);
+        return new Measurement(
+            decimal.Round(gross, 4, MidpointRounding.AwayFromZero),
+            decimal.Round(discount, 4, MidpointRounding.AwayFromZero),
+            effective, maxLine);
+    }
+
+    /// <summary>The cashier's authority ceiling (%): 0 without the
+    /// POS.DISCOUNT.OVERRIDE right; the configured numeric limit for a
+    /// holder; 100 (uncapped) for a holder with no limit row.</summary>
+    public static decimal Ceiling(bool hasOverridePermission, decimal? numericLimitPct)
+        => !hasOverridePermission ? 0m : numericLimitPct ?? 100m;
+
+    /// <summary>True when the measured discount exceeds the ceiling
+    /// and therefore needs a supervisor override.</summary>
+    public static bool RequiresOverride(Measurement measurement, decimal ceilingPct)
+    {
+        ArgumentNullException.ThrowIfNull(measurement);
+        return measurement.HasDiscount && measurement.BindingPct > ceilingPct;
     }
 }

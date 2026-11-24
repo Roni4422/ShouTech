@@ -54,4 +54,28 @@ public interface IPosRepository
     /// per-line already-returned quantities from earlier POS returns.</summary>
     Task<PosOriginalBill?> GetOriginalBillAsync(string companyId, string docNo, CancellationToken cancellationToken = default);
     Task<PosZReport> GetZReportAsync(string companyId, Guid sessionId, CancellationToken cancellationToken = default);
+
+    // ---- Session paid-outs (migration 104) --------------------------------------------
+    /// <summary>Records a cash paid-out against an OPEN session. The
+    /// amount must be positive and the reason non-blank (POS-1003
+    /// otherwise); the paid-out subtracts from the session's expected
+    /// cash in the Z report and at close.</summary>
+    Task<PosSessionExpense> RecordSessionExpenseAsync(string companyId, Guid sessionId, decimal amount, string reason, string? referenceNo, string userId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<PosSessionExpense>> GetSessionExpensesAsync(string companyId, Guid sessionId, CancellationToken cancellationToken = default);
+
+    // ---- Discount limits (migration 104) ------------------------------------------------
+    /// <summary>The cashier's numeric discount ceiling (%): the USER
+    /// row for the username wins, else the highest ROLE row among the
+    /// user's roles in this company, else null (no numeric cap).</summary>
+    Task<decimal?> GetDiscountLimitPctAsync(string companyId, string username, CancellationToken cancellationToken = default);
+    /// <summary>Creates or replaces one limit row (subject USER =
+    /// username, ROLE = role_code). The percentage must be 0–100.</summary>
+    Task SaveDiscountLimitAsync(string companyId, string subjectKind, string subjectKey, decimal maxDiscountPct, string userId, CancellationToken cancellationToken = default);
+
+    // ---- Performance (migration 104) ------------------------------------------------------
+    /// <summary>Per-terminal / per-cashier performance over a period:
+    /// one row per (terminal, cashier) pair that ran a session whose
+    /// documents or paid-outs fall in the range; blank terminal /
+    /// cashier filters match all.</summary>
+    Task<IReadOnlyList<PosPerformanceRow>> GetPerformanceAsync(string companyId, DateTime from, DateTime to, string? terminalCode, string? cashier, CancellationToken cancellationToken = default);
 }

@@ -379,6 +379,7 @@
                         <ribbon:RibbonButton loc:LocProps.Key="POS.Points" Label="Points" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="POS.DefinePOS" Label="Define POS" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="POS.POSCashReport" Label="POS cash report" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="POS.Performance" Label="POS performance" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="POS.POSDiscounts" Label="POS discounts" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="POS.SyncPOS" Label="POS sync" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>

@@ -215,7 +215,7 @@ public sealed class PosWin : BaseWin
         _grid.Columns.Add(new DataGridTextColumn { Header = "DISC %", Binding = new System.Windows.Data.Binding(nameof(PosLine.DiscountPct)) { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged, StringFormat = "N2" }, Width = 70 });
         _grid.Columns.Add(new DataGridTextColumn { Header = "TAX", Binding = new System.Windows.Data.Binding(nameof(PosLine.TaxAmount)) { StringFormat = "N2" }, IsReadOnly = true, Width = 80 });
         _grid.Columns.Add(new DataGridTextColumn { Header = "LINE TOTAL", Binding = new System.Windows.Data.Binding(nameof(PosLine.Total)) { StringFormat = "N2" }, IsReadOnly = true, Width = 100 });
-        _grid.CellEditEnding += (_, _) => Dispatcher.BeginInvoke(new Action(() => { EnforceDiscountPermission(); UpdateTotals(); }));
+        _grid.CellEditEnding += (_, _) => Dispatcher.BeginInvoke(new Action(() => { ClampDiscountValues(); UpdateTotals(); }));
         _grid.CurrentCellChanged += (_, _) => UpdateTotals();
         Grid.SetRow(_grid, 1); cartLayout.Children.Add(_grid);
         cartCard.Child = cartLayout; Grid.SetColumn(cartCard, 0); body.Children.Add(cartCard);
@@ -242,7 +242,7 @@ public sealed class PosWin : BaseWin
         _discountLabel.VerticalAlignment = VerticalAlignment.Center;
         discountRow.Children.Add(_discountLabel);
         DockPanel.SetDock(_billDiscount, Dock.Right); _billDiscount.HorizontalAlignment = HorizontalAlignment.Right;
-        _billDiscount.LostFocus += (_, _) => { EnforceDiscountPermission(); UpdateTotals(); };
+        _billDiscount.LostFocus += (_, _) => { ClampDiscountValues(); UpdateTotals(); };
         discountRow.Children.Add(_billDiscount);
         totals.Children.Add(discountRow);
         // Customer (Build POS 066): walk-in by default; a code resolves
@@ -518,17 +518,105 @@ public sealed class PosWin : BaseWin
         _customerName.Text = found.Value.Name;
     }
 
-    private void EnforceDiscountPermission()
+    /// <summary>Edit-time hygiene only (W9): out-of-range discount
+    /// percentages are clamped while typing. AUTHORITY is no longer
+    /// decided here — the numeric cashier limit + supervisor override
+    /// gate runs at checkout (PosDiscountMath / PosDiscountGuard,
+    /// migration 104), so a cashier may enter a discount and have a
+    /// supervisor approve it, instead of the value being silently
+    /// zeroed (the pre-W9 behaviour).</summary>
+    private void ClampDiscountValues()
     {
-        var hasDiscount = _cart.Any(x => x.DiscountPct != 0) || BillDiscountValue() > 0;
-        if (!hasDiscount) return;
         foreach (var line in _cart)
             if (line.DiscountPct < 0 || line.DiscountPct > 100) line.DiscountPct = 0;
-        if (AppHost.Permissions.Has(PermCat.Pos.DiscountOverride)) return;
-        foreach (var line in _cart) line.DiscountPct = 0;
-        _billDiscount.Text = "0";
         _grid.Items.Refresh();
-        SetStatus(Local("StatusDiscountDenied", "Discounts need the POS discount override permission."), true);
+    }
+
+    /// <summary>The W9 discount-authority gate, run at checkout:
+    /// measures the cart's discount (PosDiscountMath), resolves the
+    /// cashier's ceiling (0 without POS.DISCOUNT.OVERRIDE, else the
+    /// configured numeric limit, else uncapped), and — when the
+    /// discount exceeds the ceiling — asks a supervisor to approve.
+    /// Returns the approval to audit after posting, or null when no
+    /// approval is needed. Blocked = true when the cashier must not
+    /// proceed (over the ceiling, no supervisor approval).</summary>
+    private async System.Threading.Tasks.Task<(PosDiscountApproval? Approval, bool Blocked)> DiscountGateAsync()
+    {
+        var measurement = ShouTech.Domain.Entities.PosDiscountMath.Measure(
+            _cart.Select(x => (x.Qty, x.Price, x.DiscountPct)), BillDiscountValue());
+        if (!measurement.HasDiscount) return (null, false);
+        decimal? limit = null;
+        var service = AppHost.Pos;
+        if (service is not null)
+            limit = await service.GetDiscountLimitPctAsync(CurrentCompanyCode, CurrentUserId);
+        var ceiling = ShouTech.Domain.Entities.PosDiscountMath.Ceiling(
+            AppHost.Permissions.Has(PermCat.Pos.DiscountOverride), limit);
+        if (!ShouTech.Domain.Entities.PosDiscountMath.RequiresOverride(measurement, ceiling)) return (null, false);
+        var supervisor = AskSupervisorOverride(measurement, ceiling);
+        if (supervisor is null)
+        {
+            SetStatus(Local("StatusDiscountLimitBlocked", "The discount exceeds your limit and no supervisor approved it."), true);
+            return (null, true);
+        }
+        return (new PosDiscountApproval(CurrentUserId, supervisor, ceiling, measurement), false);
+    }
+
+    /// <summary>The supervisor approval prompt: the supervisor's own
+    /// username + password, verified by PosDiscountGuard (their
+    /// credentials are checked, never stored; the till session does
+    /// not change hands). Returns the supervisor's username.</summary>
+    private string? AskSupervisorOverride(ShouTech.Domain.Entities.PosDiscountMath.Measurement measurement, decimal ceiling)
+    {
+        var dlg = new Window
+        {
+            Title = Local("SupervisorTitle", "Supervisor approval"), Width = 460, Height = 300,
+            MinWidth = 420, MinHeight = 280, Owner = this,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner, FlowDirection = FlowDirection,
+            Background = ShouTech.App.Services.VisuId.ResolveBrushResource("SurfaceBrush", "#FFFFFF")
+        };
+        var layout = new StackPanel { Margin = new Thickness(16) };
+        layout.Children.Add(new TextBlock
+        {
+            Text = $"{Local("SupervisorExplain", "This discount exceeds the cashier limit.")}\n{Local("Discount", "Discount")}: {measurement.BindingPct:N2}% · {Local("Limit", "Limit")}: {ceiling:N2}%",
+            TextWrapping = TextWrapping.Wrap, Foreground = Ink, Margin = new Thickness(0, 0, 0, 12)
+        });
+        var userBox = new TextBox { Height = 34, Margin = new Thickness(0, 0, 0, 8) };
+        var passBox = new PasswordBox { Height = 34, Margin = new Thickness(0, 0, 0, 12) };
+        layout.Children.Add(new TextBlock { Text = Local("SupervisorUser", "Supervisor user"), Foreground = Muted });
+        layout.Children.Add(userBox);
+        layout.Children.Add(new TextBlock { Text = Local("SupervisorPassword", "Supervisor password"), Foreground = Muted });
+        layout.Children.Add(passBox);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var ok = MakeButton(Local("Approve", "Approve"), Teal, ShouTech.App.Services.VisuId.ResolveBrushResource("TextOnDarkBrush", "#FFFFFF"), 110, 38);
+        var cancel = MakeButton(Local("Cancel", "Cancel"), ShouTech.App.Services.VisuId.ResolveBrushResource("PosRemoveBackgroundBrush", "#EEF3F5"), Ink, 90, 38);
+        cancel.Margin = new Thickness(8, 0, 0, 0);
+        string? approvedBy = null;
+        cancel.Click += (_, _) => dlg.Close();
+        ok.Click += (_, _) =>
+        {
+            try
+            {
+                if (PosDiscountGuard.VerifySupervisor(userBox.Text.Trim(), passBox.Password))
+                {
+                    approvedBy = userBox.Text.Trim();
+                    dlg.DialogResult = true;
+                    dlg.Close();
+                }
+                else
+                    SetStatus(Local("StatusSupervisorDenied", "Supervisor approval failed: the user is not authorized or the password is wrong."), true);
+            }
+            catch (Exception ex)
+            {
+                AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PosWin.AskSupervisorOverride");
+                SetStatus(ex.Message, true);
+            }
+        };
+        buttons.Children.Add(ok);
+        buttons.Children.Add(cancel);
+        layout.Children.Add(buttons);
+        dlg.Content = layout;
+        dlg.ShowDialog();
+        return approvedBy;
     }
 
     private async System.Threading.Tasks.Task ToggleProductsAsync()
@@ -962,10 +1050,28 @@ public sealed class PosWin : BaseWin
             SetStatus($"Check quantity, price, or tax for '{invalid.Name}'. Quantity must be greater than zero.", true);
             _grid.SelectedItem = invalid; _grid.ScrollIntoView(invalid); _grid.Focus(); return;
         }
-        EnforceDiscountPermission();
+        ClampDiscountValues();
         ResolveCustomer();
         if (_customerCode.Text.Trim().Length > 0 && _partyId is null)
         { SetStatus(Local("CustomerNotFoundShort", "Customer not found"), true); return; }
+
+        // Discount-authority gate (W9, migration 104): the numeric
+        // cashier limit binds here; above it a supervisor must have
+        // approved, and the approval is audited by PosCheckoutWin
+        // once the sale it approved has posted.
+        PosDiscountApproval? discountApproval = null;
+        try
+        {
+            var gate = await DiscountGateAsync();
+            if (gate.Blocked) { _scan.Focus(); return; }
+            discountApproval = gate.Approval;
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PosWin.Checkout.DiscountGate");
+            SetStatus(ex.Message, true);
+            return;
+        }
 
         // Session gate (Build POS 066): the sale belongs to the open
         // session; without one, only an explicitly enabled session-less
@@ -1016,7 +1122,7 @@ public sealed class PosWin : BaseWin
                 TaxRate = x.TaxRate, WarehouseId = warehouseId
             }).ToList()
         };
-        var checkout = new PosCheckoutWin(doc, sessionId, sessionNo, _selectedPaymentMethod)
+        var checkout = new PosCheckoutWin(doc, sessionId, sessionNo, _selectedPaymentMethod, discountApproval)
         {
             Owner = Owner ?? this,
             WindowStartupLocation = WindowStartupLocation.CenterOwner

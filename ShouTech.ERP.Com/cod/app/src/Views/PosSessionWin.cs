@@ -29,12 +29,16 @@ public sealed class PosSessionWin : BaseWin
     private readonly TextBox _terminal = new();
     private readonly TextBox _opening = new() { Text = "0" };
     private readonly TextBox _counted = new();
+    private readonly TextBox _expenseAmount = new() { Text = "0" };
+    private readonly TextBox _expenseReason = new();
+    private readonly TextBox _expenseRef = new();
     private readonly TextBlock _openInfo = new();
     private readonly TextBlock _zInfo = new();
     private readonly DataGrid _grid = new();
     private readonly TextBlock _statusBar = new();
     private readonly Button _openButton = new();
     private readonly Button _closeSessionButton = new();
+    private readonly Button _paidOutButton = new();
     private readonly Button _refreshButton = new();
     private readonly Button _closeButton = new();
 
@@ -57,13 +61,15 @@ public sealed class PosSessionWin : BaseWin
 
         F2Ui.StyleButton(_openButton, "POS.SessionOpen");
         F2Ui.StyleButton(_closeSessionButton, "POS.SessionClose");
+        F2Ui.StyleButton(_paidOutButton, "POS.PaidOut");
         F2Ui.StyleButton(_refreshButton, "Common.Refresh");
         F2Ui.StyleButton(_closeButton, "Common.Close");
         _openButton.Click += async (_, _) => await OpenAsync();
         _closeSessionButton.Click += async (_, _) => await CloseSessionAsync();
+        _paidOutButton.Click += async (_, _) => await PaidOutAsync();
         _refreshButton.Click += async (_, _) => await RefreshAsync();
         _closeButton.Click += (_, _) => Close();
-        root.Children.Add(F2Ui.BottomBar(_openButton, _closeSessionButton, _refreshButton, _closeButton));
+        root.Children.Add(F2Ui.BottomBar(_openButton, _closeSessionButton, _paidOutButton, _refreshButton, _closeButton));
 
         var content = new DockPanel();
         var form = F2Ui.CreateFormGrid(3);
@@ -71,6 +77,9 @@ public sealed class PosSessionWin : BaseWin
         F2Ui.AddField(_labels, form, 0, 0, "POS.Terminal", _terminal);
         F2Ui.AddField(_labels, form, 0, 1, "POS.OpeningCash", _opening);
         F2Ui.AddField(_labels, form, 0, 2, "POS.CountedCash", _counted);
+        F2Ui.AddField(_labels, form, 1, 0, "POS.ExpenseAmount", _expenseAmount);
+        F2Ui.AddField(_labels, form, 1, 1, "POS.ExpenseReason", _expenseReason);
+        F2Ui.AddField(_labels, form, 1, 2, "POS.ExpenseRef", _expenseRef);
         DockPanel.SetDock(form, Dock.Top);
         content.Children.Add(form);
 
@@ -101,7 +110,7 @@ public sealed class PosSessionWin : BaseWin
     protected override void ApplyLocalizedText()
     {
         Title = T("POS.SessionTitle");
-        F2Ui.ApplyTexts(_labels, _headers, new[] { _openButton, _closeSessionButton, _refreshButton, _closeButton }, T);
+        F2Ui.ApplyTexts(_labels, _headers, new[] { _openButton, _closeSessionButton, _paidOutButton, _refreshButton, _closeButton }, T);
         UpdateInfo();
     }
 
@@ -123,7 +132,7 @@ public sealed class PosSessionWin : BaseWin
             if (_open is not null)
             {
                 var z = await service.GetZReportAsync(CurrentCompanyCode, _open.Id);
-                _zInfo.Text = $"{T("POS.ZSummary")}: {z.SalesCount} · {F2Ui.Fmt(z.SalesTotal)} | {T("POS.ExpectedCash")}: {F2Ui.Fmt(z.ExpectedCash)}";
+                _zInfo.Text = $"{T("POS.ZSummary")}: {z.SalesCount} · {F2Ui.Fmt(z.SalesTotal)} | {T("POS.ZPaidOuts")}: {F2Ui.Fmt(z.PaidOutsTotal)} | {T("POS.ExpectedCash")}: {F2Ui.Fmt(z.ExpectedCash)}";
             }
             else _zInfo.Text = string.Empty;
             UpdateInfo();
@@ -143,6 +152,37 @@ public sealed class PosSessionWin : BaseWin
             : $"{T("POS.OpenSession")}: {_open.SessionNo} · {_open.TerminalCode} · {_open.Cashier} · {T("POS.OpeningCash")}: {F2Ui.Fmt(_open.OpeningCash)}";
         _openButton.IsEnabled = _open is null;
         _closeSessionButton.IsEnabled = _open is not null;
+        _paidOutButton.IsEnabled = _open is not null;
+    }
+
+    /// <summary>Records a drawer paid-out against the open session
+    /// (W9): POS.EXPENSE.MANAGE, a positive amount and a reason are
+    /// required; the paid-out immediately reduces the session's
+    /// expected cash (see the refreshed Z line).</summary>
+    private async Task PaidOutAsync()
+    {
+        try
+        {
+            if (!AppHost.Permissions.Has(PermCat.Pos.ExpenseManage)) { ShowWarn("POS.PermissionDenied"); return; }
+            var service = AppHost.Pos ?? throw new InvalidOperationException(T("POS.ServiceUnavailable"));
+            if (_open is null) { ShowWarn("POS.NoOpenSession"); return; }
+            var amount = F2Ui.ParseDecimal(_expenseAmount.Text);
+            if (amount <= 0) { ShowWarn("POS.ExpenseNeedsAmount"); return; }
+            if (string.IsNullOrWhiteSpace(_expenseReason.Text)) { ShowWarn("POS.ExpenseNeedsReason"); return; }
+            if (!AskConfirm("POS.ConfirmPaidOut")) return;
+            var expense = await service.RecordSessionExpenseAsync(CurrentCompanyCode, _open.Id, amount,
+                _expenseReason.Text.Trim(), _expenseRef.Text.Trim(), CurrentUserId);
+            _expenseAmount.Text = "0";
+            _expenseReason.Clear();
+            _expenseRef.Clear();
+            _statusBar.Text = $"{T("POS.PaidOut")}: {expense.ExpenseNo} · {F2Ui.Fmt(expense.Amount)}";
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "PosSessionWin.PaidOutAsync");
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private async Task OpenAsync()

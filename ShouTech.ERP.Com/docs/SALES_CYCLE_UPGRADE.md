@@ -304,6 +304,30 @@ Phases 01/02/03/04/05/06/07/12/13).
   expected-cash math + Z report; exchanges (return + resale netted);
   numeric cashier discount limits; per-terminal/per-cashier performance
   grouping.
+  - **W9 BUILT (migration 104, both dialects):** `pos_session_expenses`
+    (paid-outs: amount/reason/reference against an OPEN session, gated
+    POS.EXPENSE.MANAGE; sessions journal nothing at close, so a paid-out
+    is a reconciliation record that SUBTRACTS from expected cash in the
+    Z report and at close — no parallel GL); exchanges as TWO linked
+    documents (the existing SRT return + POS sale paths, each in its own
+    posting transaction, stamped with a shared `sales_documents.
+    exchange_ref`): the return refunds only the negative-net excess, the
+    consumed return value tenders the new sale as an exchange credit
+    (PosTenderMath exchangeCredit — not party credit; the pair's GL
+    receivable legs and drawer tenders net exactly); numeric cashier
+    discount limits in `pos_discount_limits` (USER row beats ROLE rows,
+    resolved in PosRepository) enforced at PosWin checkout by
+    PosDiscountMath (effective % and max-line % both bind; ceiling 0
+    without POS.DISCOUNT.OVERRIDE) with a supervisor override —
+    PosDiscountGuard verifies the supervisor's own password (PwdHash)
+    + POS.DISCOUNT.OVERRIDE under the Permissions.cs resolution and the
+    approval is audited in `pos_discount_overrides` (spr_price_overrides
+    does not fit: per-line pricing-guard rows with no distinct approver);
+    per-terminal/per-cashier performance (PosRepository.GetPerformanceAsync
+    → RptQuery.PosPerformanceAsync → PosPerfRptWin, ribbon POS.Performance):
+    sales count/gross, returns, discounts given, paid-outs, average basket
+    with date/terminal/cashier filters. NOT built (owner decisions, above):
+    offline sync architecture (#4) and scale integration (#3).
 - **W10 — L3 extensions:** CRM campaigns master; warranty registration from
   sold serials + claims; RMA requests converting to authorized returns;
   pipeline-based sales forecast view.

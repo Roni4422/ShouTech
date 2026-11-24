@@ -1852,6 +1852,35 @@ public static class RptQuery
         return await QueryAsync(sql, ct, ("$company", Company), ("$from", FmtDate(from)), ("$to", FmtDate(to)));
     }
 
+    /// <summary>Per-terminal / per-cashier POS performance (sales
+    /// cycle W9, migration 104): sales count and gross, returns,
+    /// discounts given, paid-outs and average basket for the sessions
+    /// in the period. The aggregation itself lives in PosRepository
+    /// (the session world is keyed by session id, not by document
+    /// columns); this is its RptQuery-shaped projection.</summary>
+    public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> PosPerformanceAsync(
+        DateTime from, DateTime to, string? terminalCode, string? cashier, CancellationToken ct)
+    {
+        DocSchema.Ensure();
+        var connection = DatabaseRuntime.GetConnectionString()
+            ?? throw new AppError(ErrorCodes.DatabaseNotInitialized, "No database connection is configured for the POS performance report.");
+        var repo = new ShouTech.Infrastructure.PosRepository(DatabaseRuntime.GetProvider(), connection);
+        var rows = await repo.GetPerformanceAsync(Company, from, to, terminalCode, cashier, ct);
+        return rows.Select(r => (IReadOnlyDictionary<string, object?>)new Dictionary<string, object?>
+        {
+            ["Terminal"] = r.TerminalCode,
+            ["Cashier"] = r.Cashier,
+            ["SalesCount"] = r.SalesCount,
+            ["GrossSales"] = r.GrossSales,
+            ["ReturnsCount"] = r.ReturnsCount,
+            ["ReturnsTotal"] = r.ReturnsTotal,
+            ["Discounts"] = r.DiscountsGiven,
+            ["PaidOuts"] = r.PaidOuts,
+            ["NetSales"] = r.NetSales,
+            ["AvgBasket"] = r.AverageBasket
+        }).ToList();
+    }
+
     // ---------------- Customers ----------------
 
     public static async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> CustomerDueAsync(
