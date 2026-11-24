@@ -407,6 +407,7 @@
                         <ribbon:RibbonButton loc:LocProps.Key="Orders.TrackOrders" Label="Order tracking" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Orders.OrderPayments" Label="Order payments" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Orders.SearchOrders" Label="Search orders" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="Orders.RecurringSchedules" Label="Recurring schedules" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
                 </ribbon:RibbonTab>
 

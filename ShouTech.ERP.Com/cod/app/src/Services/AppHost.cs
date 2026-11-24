@@ -46,6 +46,7 @@ namespace ShouTech.App.Services
         public static WarrantyService? Warranties { get; private set; }
         public static CommService? Commissions { get; private set; }
         public static ContractService? Contracts { get; private set; }
+        public static RecurService? Recurring { get; private set; }
         public static HrService? Hr { get; private set; }
         public static PosService? Pos { get; private set; }
         public static ProjectService? Projects { get; private set; }
@@ -113,6 +114,7 @@ namespace ShouTech.App.Services
             Warranties = CreatePhase3Service((provider, connection) => new WarrantyService(provider, connection), "Warranties");
             Commissions = CreatePhase3Service((provider, connection) => new CommService(new CommRepository(provider, connection), JournalStore), "Commissions");
             Contracts = CreatePhase3Service((provider, connection) => new ContractService(new ContractRepository(provider, connection)), "Contracts");
+            Recurring = CreatePhase3Service((provider, connection) => new RecurService(new RecurRepository(provider, connection), new CommercialDocumentRepository(provider, connection), new OrderDocumentRepository(provider, connection)), "Recurring Sales");
             Hr = CreatePhase3Service((provider, connection) => new HrService(new HrRepository(provider, connection)), "HR");
             Pos = CreatePhase3Service((provider, connection) => new PosService(new PosRepository(provider, connection)), "POS");
             Projects = CreatePhase3Service((provider, connection) => new ProjectService(new ProjectRepository(provider, connection)), "Projects");
@@ -205,6 +207,7 @@ namespace ShouTech.App.Services
             Warranties = CreatePhase3Service((provider, connection) => new WarrantyService(provider, connection), "Warranties");
             Commissions = CreatePhase3Service((provider, connection) => new CommService(new CommRepository(provider, connection), JournalStore), "Commissions");
             Contracts = CreatePhase3Service((provider, connection) => new ContractService(new ContractRepository(provider, connection)), "Contracts");
+            Recurring = CreatePhase3Service((provider, connection) => new RecurService(new RecurRepository(provider, connection), new CommercialDocumentRepository(provider, connection), new OrderDocumentRepository(provider, connection)), "Recurring Sales");
             Hr = CreatePhase3Service((provider, connection) => new HrService(new HrRepository(provider, connection)), "HR");
             Pos = CreatePhase3Service((provider, connection) => new PosService(new PosRepository(provider, connection)), "POS");
                 Projects = CreatePhase3Service((provider, connection) => new ProjectService(new ProjectRepository(provider, connection)), "Projects");

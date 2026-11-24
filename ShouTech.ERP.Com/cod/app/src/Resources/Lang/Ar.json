@@ -460,6 +460,7 @@
     "Col.LineTotal": "إجمالي السطر"
   },
   "Orders": {
+    "RecurringSchedules": "الجداول المتكررة",
     "Title": "الطلبيات",
     "PurchaseOrder": "طلبية شراء",
     "SalesOrder": "طلبية بيع",
@@ -4273,6 +4274,39 @@
     "Submitted": "تم إرسال الطلب للاعتماد.",
     "DecisionSaved": "تم حفظ قرار الاعتماد.",
     "Converted": "تم إنشاء مسودة أمر الشراء."
+  },
+  "Recur": {
+    "Title": "جداول المبيعات المتكررة",
+    "PermissionDenied": "ليس لديك صلاحية استخدام جداول المبيعات المتكررة.",
+    "ServiceUnavailable": "خدمة المبيعات المتكررة غير متاحة.",
+    "SchedulesStatus": "{0} جدول",
+    "CreatedStatus": "تم إنشاء الجدول من القالب {0}؛ التشغيل التالي {1}.",
+    "GeneratedStatus": "تم إنشاء {0} مستند، ترحيل {1}، إخفاقات {2}.",
+    "TemplateRequired": "أدخل رقم مستند القالب.",
+    "TemplateNotFound": "لم يتم العثور على مستند القالب '{0}'.",
+    "SelectSchedule": "اختر جدولاً أولاً.",
+    "Create": "إنشاء جدول",
+    "Pause": "إيقاف مؤقت",
+    "Resume": "استئناف",
+    "CancelSchedule": "إلغاء الجدول",
+    "RunNow": "تشغيل الآن",
+    "GenerateDue": "إنشاء المستحق",
+    "TemplateKind": "نوع القالب",
+    "TemplateDocNo": "رقم مستند القالب",
+    "StartDate": "تاريخ البدء",
+    "EndDate": "تاريخ الانتهاء",
+    "MaxOccurrences": "الحد الأقصى للتكرار",
+    "Col": {
+      "Template": "القالب",
+      "Kind": "النوع",
+      "Interval": "الفاصل",
+      "Every": "كل",
+      "NextRun": "التشغيل التالي",
+      "Occurrences": "التكرارات",
+      "AutoPost": "ترحيل تلقائي",
+      "Status": "الحالة",
+      "LastRun": "آخر تشغيل"
+    }
   },
   "Comm": {
     "Title": "عمولات المبيعات",

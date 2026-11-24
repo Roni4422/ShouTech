@@ -490,6 +490,9 @@ namespace ShouTech.App.Services
             // Section 10 contracts (migration 101 seeds).
             public const string ContractView = "SALES.CONTRACT.VIEW";
             public const string ContractManage = "SALES.CONTRACT.MANAGE";
+            // W11 recurring schedules (migration 106 seeds).
+            public const string RecurringView = "SALES.RECURRING.VIEW";
+            public const string RecurringManage = "SALES.RECURRING.MANAGE";
         }
 
         // =====================================================================

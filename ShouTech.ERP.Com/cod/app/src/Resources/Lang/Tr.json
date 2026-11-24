@@ -459,6 +459,7 @@
     "Col.LineTotal": "SATIR TOPLAMI"
   },
   "Orders": {
+    "RecurringSchedules": "Yinelenen Zamanlamalar",
     "Title": "Siparişler",
     "PurchaseOrder": "Satın Alma Siparişi",
     "SalesOrder": "Satış Siparişi",
@@ -4181,6 +4182,39 @@
     "Submitted": "Talep onaya gönderildi.",
     "DecisionSaved": "Onay kararı kaydedildi.",
     "Converted": "Satın alma siparişi taslağı oluşturuldu."
+  },
+  "Recur": {
+    "Title": "Yinelenen Satış Zamanlamaları",
+    "PermissionDenied": "Yinelenen satış zamanlamalarını kullanma izniniz yok.",
+    "ServiceUnavailable": "Yinelenen satış hizmeti kullanılamıyor.",
+    "SchedulesStatus": "{0} zamanlama",
+    "CreatedStatus": "Zamanlama {0} şablonundan oluşturuldu; sonraki çalıştırma {1}.",
+    "GeneratedStatus": "{0} belge oluşturuldu, {1} kaydedildi, {2} hata.",
+    "TemplateRequired": "Şablon belge numarasını girin.",
+    "TemplateNotFound": "Şablon belgesi '{0}' bulunamadı.",
+    "SelectSchedule": "Önce bir zamanlama seçin.",
+    "Create": "Zamanlama Oluştur",
+    "Pause": "Duraklat",
+    "Resume": "Sürdür",
+    "CancelSchedule": "Zamanlamayı İptal Et",
+    "RunNow": "Şimdi Çalıştır",
+    "GenerateDue": "Vadesi Gelenleri Oluştur",
+    "TemplateKind": "Şablon Türü",
+    "TemplateDocNo": "Şablon Belge No.",
+    "StartDate": "Başlangıç Tarihi",
+    "EndDate": "Bitiş Tarihi",
+    "MaxOccurrences": "Maks. Tekrar",
+    "Col": {
+      "Template": "Şablon",
+      "Kind": "Tür",
+      "Interval": "Aralık",
+      "Every": "Her",
+      "NextRun": "Sonraki Çalıştırma",
+      "Occurrences": "Tekrarlar",
+      "AutoPost": "Otomatik Kayıt",
+      "Status": "Durum",
+      "LastRun": "Son Çalıştırma"
+    }
   },
   "Comm": {
     "Title": "Satış Komisyonları",
