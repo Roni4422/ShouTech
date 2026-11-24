@@ -4532,5 +4532,36 @@
       "Qty": "Miktar",
       "Price": "Fiyat"
     }
+  },
+  "Options": {
+    "Title": "Seçenekler",
+    "General": "Genel",
+    "Appearance": "Görünüm",
+    "Behavior": "Davranış",
+    "Session": "Oturum ve başlangıç",
+    "Language": "Dil",
+    "Currency": "Para birimi",
+    "Accent": "Vurgu rengi",
+    "FontSize": "Yazı tipi boyutu",
+    "DateFormat": "Tarih biçimi",
+    "DecimalPlaces": "Ondalık basamaklar",
+    "ThousandSeparator": "Binlik ayırıcı",
+    "CompactMode": "Kompakt mod",
+    "ShowToolBar": "Araç çubuğunu göster",
+    "ShowStatusBar": "Durum çubuğunu göster",
+    "EnableAnimations": "Animasyonları etkinleştir",
+    "ConfirmOnExit": "Çıkışta onayla",
+    "ConfirmOnDelete": "Silmede onayla",
+    "EnableAutoComplete": "Otomatik tamamlamayı etkinleştir",
+    "AutoFocusFirstField": "İlk alana otomatik odaklan",
+    "ShowToolTips": "İpuçlarını göster",
+    "AutoOpenLastCompany": "Başlangıçta son şirketi yeniden aç",
+    "SkipSplash": "Açılış ekranını atla",
+    "AutoSaveInterval": "Otomatik kaydetme aralığı (dakika)",
+    "AutoLock": "Otomatik kilit (dakika, 0 = kapalı)",
+    "PosDevices": "POS cihaz seçenekleri…",
+    "PosSection": "Satış noktası",
+    "Saved": "Seçenekler kaydedildi.",
+    "InvalidNumber": "Lütfen geçerli bir sayı girin: {0}"
   }
 }

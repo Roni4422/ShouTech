@@ -4624,5 +4624,36 @@
       "Qty": "الكمية",
       "Price": "السعر"
     }
+  },
+  "Options": {
+    "Title": "خيارات",
+    "General": "عام",
+    "Appearance": "المظهر",
+    "Behavior": "السلوك",
+    "Session": "الجلسة وبدء التشغيل",
+    "Language": "اللغة",
+    "Currency": "العملة",
+    "Accent": "لون التمييز",
+    "FontSize": "حجم الخط",
+    "DateFormat": "تنسيق التاريخ",
+    "DecimalPlaces": "المنازل العشرية",
+    "ThousandSeparator": "فاصل الآلاف",
+    "CompactMode": "الوضع المضغوط",
+    "ShowToolBar": "إظهار شريط الأدوات",
+    "ShowStatusBar": "إظهار شريط الحالة",
+    "EnableAnimations": "تفعيل الحركات",
+    "ConfirmOnExit": "التأكيد عند الخروج",
+    "ConfirmOnDelete": "التأكيد عند الحذف",
+    "EnableAutoComplete": "تفعيل الإكمال التلقائي",
+    "AutoFocusFirstField": "التركيز التلقائي على أول حقل",
+    "ShowToolTips": "إظهار التلميحات",
+    "AutoOpenLastCompany": "إعادة فتح آخر شركة عند بدء التشغيل",
+    "SkipSplash": "تخطي شاشة البداية",
+    "AutoSaveInterval": "فاصل الحفظ التلقائي (دقائق)",
+    "AutoLock": "القفل التلقائي بعد (دقائق، 0 = إيقاف)",
+    "PosDevices": "خيارات أجهزة نقاط البيع…",
+    "PosSection": "نقاط البيع",
+    "Saved": "تم حفظ الخيارات.",
+    "InvalidNumber": "يرجى إدخال رقم صالح في: {0}"
   }
 }

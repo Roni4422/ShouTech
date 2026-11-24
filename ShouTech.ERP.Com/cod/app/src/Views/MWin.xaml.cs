@@ -778,10 +778,12 @@ namespace ShouTech.App.Views
             if (sender is not RibbonButton button)
                 return;
 
-            // POS device settings live under Tools > Options.
+            // Tools > Options opens the general Options window
+            // (services phase B1); the POS device settings keep their
+            // own window, reachable from OptWin's POS section.
             if (string.Equals(LocProps.GetKey(button), "Tools.Options", StringComparison.Ordinal))
             {
-                var options = new CashDrawerOptionsWin { Owner = this };
+                var options = new OptWin { Owner = this };
                 options.ShowDialog();
                 return;
             }

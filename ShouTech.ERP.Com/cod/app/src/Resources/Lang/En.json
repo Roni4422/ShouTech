@@ -4541,5 +4541,36 @@
       "Qty": "Qty",
       "Price": "Price"
     }
+  },
+  "Options": {
+    "Title": "Options",
+    "General": "General",
+    "Appearance": "Appearance",
+    "Behavior": "Behavior",
+    "Session": "Session & startup",
+    "Language": "Language",
+    "Currency": "Currency",
+    "Accent": "Accent color",
+    "FontSize": "Font size",
+    "DateFormat": "Date format",
+    "DecimalPlaces": "Decimal places",
+    "ThousandSeparator": "Thousand separator",
+    "CompactMode": "Compact mode",
+    "ShowToolBar": "Show tool bar",
+    "ShowStatusBar": "Show status bar",
+    "EnableAnimations": "Enable animations",
+    "ConfirmOnExit": "Confirm on exit",
+    "ConfirmOnDelete": "Confirm on delete",
+    "EnableAutoComplete": "Enable auto-complete",
+    "AutoFocusFirstField": "Auto-focus first field",
+    "ShowToolTips": "Show tool tips",
+    "AutoOpenLastCompany": "Reopen last company at startup",
+    "SkipSplash": "Skip splash screen",
+    "AutoSaveInterval": "Auto-save interval (minutes)",
+    "AutoLock": "Auto-lock after (minutes, 0 = off)",
+    "PosDevices": "POS device options…",
+    "PosSection": "Point of sale",
+    "Saved": "Options saved.",
+    "InvalidNumber": "Please enter a valid number for: {0}"
   }
 }

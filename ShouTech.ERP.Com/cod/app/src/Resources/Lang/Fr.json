@@ -4532,5 +4532,36 @@
       "Qty": "Qté",
       "Price": "Prix"
     }
+  },
+  "Options": {
+    "Title": "Options",
+    "General": "Général",
+    "Appearance": "Apparence",
+    "Behavior": "Comportement",
+    "Session": "Session et démarrage",
+    "Language": "Langue",
+    "Currency": "Devise",
+    "Accent": "Couleur d'accentuation",
+    "FontSize": "Taille de police",
+    "DateFormat": "Format de date",
+    "DecimalPlaces": "Décimales",
+    "ThousandSeparator": "Séparateur de milliers",
+    "CompactMode": "Mode compact",
+    "ShowToolBar": "Afficher la barre d'outils",
+    "ShowStatusBar": "Afficher la barre d'état",
+    "EnableAnimations": "Activer les animations",
+    "ConfirmOnExit": "Confirmer à la sortie",
+    "ConfirmOnDelete": "Confirmer la suppression",
+    "EnableAutoComplete": "Activer la saisie semi-automatique",
+    "AutoFocusFirstField": "Focus automatique sur le premier champ",
+    "ShowToolTips": "Afficher les info-bulles",
+    "AutoOpenLastCompany": "Rouvrir la dernière société au démarrage",
+    "SkipSplash": "Ignorer l'écran de démarrage",
+    "AutoSaveInterval": "Intervalle d'enregistrement automatique (minutes)",
+    "AutoLock": "Verrouillage automatique après (minutes, 0 = désactivé)",
+    "PosDevices": "Options des appareils de point de vente…",
+    "PosSection": "Point de vente",
+    "Saved": "Options enregistrées.",
+    "InvalidNumber": "Veuillez saisir un nombre valide pour : {0}"
   }
 }
