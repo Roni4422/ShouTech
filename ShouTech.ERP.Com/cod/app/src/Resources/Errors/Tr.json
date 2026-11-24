@@ -856,5 +856,23 @@
     "name": "SupplierBillReferenceDuplicate",
     "message": "'{0}' tedarikçi faturası bu tedarikçi için {1} faturasında zaten var.",
     "hint": "Bir tedarikçi fatura numarası tedarikçi başına yalnızca bir kez kullanılabilir. Mevcut faturayı kontrol edin veya fatura numarasını / tarihini tedarikçinin belgesinden düzeltin."
+  },
+  "PUR-1014": {
+    "code": "PUR-1014",
+    "name": "WithholdingConfigurationInvalid",
+    "message": "Stopaj kuralı '{0}' için geçerli bir stopaj borç hesabı yok.",
+    "hint": "Stopaj vergi kuralında (Vergi Yapılandırması) kaydedilebilir bir yükümlülük hesabı tanımlayın veya belgedeki stopaj kodunu kaldırın."
+  },
+  "PUR-1015": {
+    "code": "PUR-1015",
+    "name": "WithholdingExceedsPayable",
+    "message": "'{0}' faturasındaki {1} tutarındaki stopaj, tedarikçiye ödenecek tutarı aşıyor.",
+    "hint": "Stopaj, tedarikçiye ödenecek tutardan kesilir ve onu asla aşamaz. Stopaj oranını ve matrahını kontrol edin."
+  },
+  "PUR-1016": {
+    "code": "PUR-1016",
+    "name": "WithholdingRuleNotFound",
+    "message": "Stopaj kodu '{0}' için bu şirkette belge tarihinde aktif bir stopaj kuralı yok.",
+    "hint": "Vergi Yapılandırması'nda bu kodla bir stopaj kuralı oluşturun veya etkinleştirin ya da belgedeki stopaj kodunu kaldırın."
   }
 }

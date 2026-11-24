@@ -188,6 +188,10 @@ public static class ErrorCodes
     // Supplier advances (migration 095).
     public const string AdvancePurchaseOrderMismatch = "PUR-1012";
     public const string AdvanceReversalBlockedWhileConsumed = "PUR-1013";
+    // Withholding tax / TDS (migration 099, W1).
+    public const string WithholdingConfigurationInvalid = "PUR-1014";
+    public const string WithholdingExceedsPayable = "PUR-1015";
+    public const string WithholdingRuleNotFound = "PUR-1016";
 
     // ---- POS 1001-1999 (POS full build, migration 066) ------------------
     // The POS module takes its own prefix block, like MFG / HR.

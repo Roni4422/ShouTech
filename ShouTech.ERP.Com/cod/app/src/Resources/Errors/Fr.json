@@ -856,5 +856,23 @@
     "name": "SupplierBillReferenceDuplicate",
     "message": "La facture fournisseur '{0}' existe déjà pour ce fournisseur sur la facture {1}.",
     "hint": "Un numéro de facture fournisseur ne peut être utilisé qu'une seule fois par fournisseur. Vérifiez la facture existante ou corrigez le numéro / la date à partir du document du fournisseur."
+  },
+  "PUR-1014": {
+    "code": "PUR-1014",
+    "name": "WithholdingConfigurationInvalid",
+    "message": "La règle de retenue '{0}' n'a pas de compte de retenue à payer valide.",
+    "hint": "Configurez un compte de passif imputable sur la règle de retenue à la source (Configuration fiscale), ou retirez le code de retenue du document."
+  },
+  "PUR-1015": {
+    "code": "PUR-1015",
+    "name": "WithholdingExceedsPayable",
+    "message": "La retenue {1} sur la facture '{0}' dépasse le montant payable au fournisseur.",
+    "hint": "La retenue est déduite du montant dû au fournisseur et ne peut jamais le dépasser. Vérifiez le taux et la base de la retenue."
+  },
+  "PUR-1016": {
+    "code": "PUR-1016",
+    "name": "WithholdingRuleNotFound",
+    "message": "Le code de retenue '{0}' n'a aucune règle de retenue active pour cette société à la date du document.",
+    "hint": "Créez ou activez une règle de retenue portant ce code dans la Configuration fiscale, ou retirez le code de retenue du document."
   }
 }

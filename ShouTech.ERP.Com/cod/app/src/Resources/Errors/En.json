@@ -856,5 +856,23 @@
     "name": "SupplierBillReferenceDuplicate",
     "message": "Supplier bill '{0}' already exists for this supplier on invoice {1}.",
     "hint": "A supplier bill number may be used only once per supplier. Check the existing invoice, or correct the bill number / bill date from the supplier's document."
+  },
+  "PUR-1014": {
+    "code": "PUR-1014",
+    "name": "WithholdingConfigurationInvalid",
+    "message": "Withholding rule '{0}' has no valid withholding payable account.",
+    "hint": "Configure a postable liability account on the withholding tax rule (Tax Configuration), or clear the withholding code from the document."
+  },
+  "PUR-1015": {
+    "code": "PUR-1015",
+    "name": "WithholdingExceedsPayable",
+    "message": "Withholding {1} on invoice '{0}' exceeds the amount payable to the supplier.",
+    "hint": "Withholding is deducted from the supplier's payable and can never exceed it. Check the withholding rate and base."
+  },
+  "PUR-1016": {
+    "code": "PUR-1016",
+    "name": "WithholdingRuleNotFound",
+    "message": "Withholding tax code '{0}' has no active withholding rule for this company on the document date.",
+    "hint": "Create or activate a withholding tax rule with this code in Tax Configuration, or remove the withholding code from the document."
   }
 }

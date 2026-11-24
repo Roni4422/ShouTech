@@ -63,6 +63,12 @@ public static class GlAccounts
     // clears it (Dr 2201 / Cr 1215). Seeded by migration 095 into
     // existing companies and by the COA templates for new ones.
     public const string SupplierAdvances = "1215";
+    // Withholding tax (migration 099): the DEFAULT withholding payable
+    // (liability) account a withholding tax rule may point at; the rule's
+    // configured withholding_account_code is authoritative when set.
+    // Seeded by migration 099 into existing companies and by the COA
+    // templates for new ones.
+    public const string WithholdingPayable = "2215";
     public const string DepreciationExpense = "505";
     // Manufacturing (Build 058): carried by the industrial / job-orders /
     // continuous-inventory templates. The staged manufacturing posting
