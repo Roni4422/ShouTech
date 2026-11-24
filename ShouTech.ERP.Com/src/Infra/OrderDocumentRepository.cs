@@ -1365,8 +1365,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                     explicitRequest.BatchAllocations,
                     explicitRequest.Serials,
                     explicitRequest.AllowExpiredBatchIssue,
-                    explicitRequest.RejectedQty, explicitRequest.RejectReason,
-                    line.UomFactor, line.LineRequiredBy ?? order.RequiredByDate, line.TaxCode));
+                    RejectedQty: explicitRequest.RejectedQty, RejectReason: explicitRequest.RejectReason,
+                    UomFactor: line.UomFactor, LineRequiredBy: line.LineRequiredBy ?? order.RequiredByDate, TaxCode: line.TaxCode));
             }
 
             foreach (var line in order.Lines)
@@ -2134,8 +2134,6 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
             var invoiceId = await InsertDocumentAsync(connection, transaction, side, invoiceDraft, CommercialDocumentStatus.Posted, userId, cancellationToken).ConfigureAwait(false);
 
-            ComputeTotals(invoiceLines, out var invoiceSubtotal, out var invoiceTax, out var grandTotal);
-
             // Withholding tax (W1, migration 114): same shared evaluator
             // as the manual path, on the VAT-excluding base (the lines
             // subtotal). Determination here is supplier default ->
@@ -2343,6 +2341,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 // order's stored per_billed refreshes in this transaction.
                 await RecalculateStoredProgressInTransactionAsync(
                     connection, transaction, orderDocId, cancellationToken).ConfigureAwait(false);
+            }
             if (side == CommercialDocSide.Purchase && withholding.Evaluated)
             {
                 // Withholding (W1): persist the outcome on the invoice

@@ -532,6 +532,7 @@ public sealed class OrderService
         var invoiceId = await new SalesChainService(_chain).CreateInvoiceFromQuotationAsync(
             quotationDocId, invoiceDocNo, invoiceDate, userId, hasPermission, quantityBySourceLine, cancellationToken).ConfigureAwait(false);
         return (invoiceId, invoiceDocNo);
+    }
 
     // ------------------------------------------------------------ P1 / P6
 

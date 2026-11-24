@@ -341,9 +341,9 @@ public sealed record CommercialDocumentDraft(
     DateOnly? RequiredByDate = null,
     string? RequestType = null,
     string? Department = null,
-    // B1 (migration 111): see CommercialDocumentSnapshot.
+    // B1 (migration 111): see CommercialDocumentSnapshot. (Incoterm is
+    // the single shared parameter in the W5 export block above.)
     string? PaymentTerms = null,
-    string? Incoterm = null,
     string? ReferenceNo = null,
     DateOnly? BillDate = null,
     string? DeliveryNoteNo = null,
