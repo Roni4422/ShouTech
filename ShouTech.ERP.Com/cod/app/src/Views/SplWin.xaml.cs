@@ -46,6 +46,8 @@ namespace ShouTech.App.Views
                 await SafeDelay(200);
             }
 
+            StartupTiming.Mark("SplashPipelineDone");
+
             try
             {
                 SetStatus("Checking companies...");
@@ -57,6 +59,8 @@ namespace ShouTech.App.Views
                 SetStatus($"Company check warning: {ex.Message}");
                 _hasCompaniesAtStartup = false;
             }
+
+            StartupTiming.Mark("CompaniesChecked");
 
             var remaining = MaxSplashSeconds - sw.Elapsed.TotalSeconds;
             if (remaining > 0.05)
