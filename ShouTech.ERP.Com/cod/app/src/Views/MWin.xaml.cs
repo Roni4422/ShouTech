@@ -69,6 +69,13 @@ namespace ShouTech.App.Views
                 RefreshLocalizedText();
                 BuildNavShell();
 
+                // Licensing build: surface the entitlement snapshot
+                // (status-bar license item + demo banner) and keep it
+                // live across refreshes and verdict overlays.
+                ApplyEntitlements();
+                if (AppHost.Entitlements is not null)
+                    AppHost.Entitlements.EntitlementsChanged += OnEntitlementsChanged;
+
                 // Apply language direction safely.
                 try
                 {
@@ -485,6 +492,77 @@ namespace ShouTech.App.Views
             }
         }
 
+        private void OnLicenseStatusClick(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // PLATFORM key — the license surface is never gated.
+                RibbonNav.TryHandle("Help.RenewLicense", this);
+            }
+            catch (Exception ex)
+            {
+                AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, ex, "MWin.xaml.OnLicenseStatusClick");
+            }
+        }
+
+        private void OnEntitlementsChanged(object? sender, EventArgs e)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(ApplyEntitlements));
+                return;
+            }
+            ApplyEntitlements();
+        }
+
+        /// <summary>Licensing build: renders the entitlement
+        /// snapshot into the shell — the status-bar license item
+        /// (edition · source, grace countdown, DEV marker) and the
+        /// persistent view-only banner while demo mode is active.
+        /// Shell status text follows the shell's fixed-English
+        /// status-bar convention (StatBarEn).</summary>
+        private void ApplyEntitlements()
+        {
+            try
+            {
+                var entitlements = AppHost.Entitlements;
+                if (entitlements is null)
+                {
+                    LicenseStatusText.Text = "—";
+                    DemoBanner.Visibility = Visibility.Collapsed;
+                    return;
+                }
+
+                var snapshot = entitlements.Current;
+                var text = snapshot.Source == EntitlementSource.DevMode
+                    ? "DEV MODE"
+                    : snapshot.IsUsable
+                        ? $"{(string.IsNullOrWhiteSpace(snapshot.Edition) ? "Licensed" : snapshot.Edition)} · {snapshot.Source}"
+                        : "Demo · view-only";
+                if (snapshot.Status == EntitlementStatus.GracePeriod && snapshot.GraceEndsAt is { } graceEnd)
+                {
+                    var days = Math.Max(0, (int)Math.Ceiling((graceEnd - DateTime.UtcNow).TotalDays));
+                    text += $" · grace {days}d";
+                }
+                LicenseStatusText.Text = text;
+
+                if (entitlements.IsDemoMode)
+                {
+                    DemoBannerText.Text =
+                        $"View-only mode ({entitlements.DemoReasonCategory ?? "license"}): existing data stays fully available to view, search, print and export; creating, editing, posting and deleting are disabled. Open the License window to activate this installation.";
+                    DemoBanner.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    DemoBanner.Visibility = Visibility.Collapsed;
+                }
+            }
+            catch (Exception ex)
+            {
+                AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, ex, "MWin.xaml.ApplyEntitlements");
+            }
+        }
+
         private async Task RefreshRecycleBinBadgeAsync()
         {
             try
@@ -795,6 +873,20 @@ namespace ShouTech.App.Views
 
             if (sender is not RibbonButton button)
                 return;
+
+            // Licensing build (design §4.4): the click funnel is the
+            // one place every ribbon and quick-access action passes
+            // through. A module the license lacks still opens —
+            // view-only — with a once-per-module LIC-8002 notice.
+            if (NavGate.ModuleRequiringNotice(LocProps.GetKey(button)) is { } gatedModule)
+            {
+                MessageBox.Show(
+                    this,
+                    NavGate.NoticeText(gatedModule),
+                    Title,
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
 
             // Tools > Options opens the general Options window
             // (services phase B1); the POS device settings keep their

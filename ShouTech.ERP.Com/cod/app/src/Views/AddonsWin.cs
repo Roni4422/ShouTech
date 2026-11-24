@@ -5,16 +5,21 @@ using System.Windows;
 using System.Windows.Controls;
 using ShouTech.App.Configuration;
 using ShouTech.App.Services;
+using ShouTech.Domain.Enums;
 
 namespace ShouTech.App.Views;
 
 /// <summary>
 /// Program add-ons window: the module catalogue from the application
 /// configuration (Modules.AllModules + Modules.Enabled) with each module's
-/// version and enabled state, under the current license status. Inspection
-/// found NO API to enable/disable modules at runtime (neither ILicenSvc
-/// nor the configuration service exposes a module toggle), so the list is
-/// read-only and the window says so — no fake switches.
+/// version, under the current license status. Licensing build: the
+/// Enabled state is no longer the config flag alone — a feature that
+/// maps to a gated license module (POS, Manufacturing, Human
+/// Resources, CRM, AI) is enabled only when the live entitlement
+/// snapshot (AppHost.Entitlements) grants it, and core features
+/// require a usable license. There is still NO API to enable/disable
+/// modules at runtime, so the list is read-only and the window says
+/// so — no fake switches.
 /// </summary>
 public sealed class AddonsWin : BaseWin
 {
@@ -96,25 +101,51 @@ public sealed class AddonsWin : BaseWin
         F2Ui.ApplyTexts(_labels, _headers, new[] { _refreshButton, _closeButton }, T);
     }
 
+    /// <summary>Config feature id → gated license module, for the
+    /// features the license vocabulary gates. Features absent here
+    /// belong to the core bundle (usable license required, no module
+    /// grant).</summary>
+    private static readonly Dictionary<string, string> FeatureLicenseModules =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["POS"] = ModKey.Pos,
+            ["Manufacturing"] = ModKey.Mfg,
+            ["HumanResources"] = ModKey.Hr,
+            ["CRM"] = ModKey.Crm,
+            ["AI"] = ModKey.Ai
+        };
+
     private void RefreshList()
     {
         _rows.Clear();
         var modules = AppCfgSvc.Current?.Modules;
         var enabled = new HashSet<string>(modules?.Enabled ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+        var entitlements = AppHost.Entitlements;
+        var snapshot = entitlements?.Current;
         foreach (var module in modules?.AllModules ?? new List<ModuleInfo>())
         {
+            var configEnabled = module.Enabled || enabled.Contains(module.Id);
+            bool licensed;
+            if (entitlements is null || snapshot is null)
+                licensed = false;
+            else if (FeatureLicenseModules.TryGetValue(module.Id, out var licenseModule))
+                licensed = entitlements.IsEntitled(licenseModule);
+            else
+                licensed = snapshot.IsUsable;
             _rows.Add(new AddonRow
             {
                 Id = module.Id,
                 Name = string.IsNullOrWhiteSpace(module.NameEn) ? module.Name : module.NameEn,
                 Version = module.Version,
-                Enabled = module.Enabled || enabled.Contains(module.Id),
+                Enabled = configEnabled && licensed,
                 Required = module.Required
             });
         }
         _grid.ItemsSource = null;
         _grid.ItemsSource = _rows;
-        var licenseStatus = AppHost.License?.Current?.Status.ToString() ?? "-";
-        _statusBar.Text = $"{_rows.Count} · {T("Addons.LicenseStatus")}: {licenseStatus} · {T("Addons.LicensedFeatures")}: {(AppCfgSvc.Current?.Licensing?.Features?.Count ?? 0)}";
+        var licenseStatus = snapshot is null
+            ? (AppHost.License?.Current?.Status.ToString() ?? "-")
+            : $"{snapshot.Status} · {(string.IsNullOrWhiteSpace(snapshot.Edition) ? "-" : snapshot.Edition)} · {snapshot.Source}";
+        _statusBar.Text = $"{_rows.Count} · {T("Addons.LicenseStatus")}: {licenseStatus} · {T("Addons.LicensedFeatures")}: {(snapshot?.Modules.Count ?? 0)}";
     }
 }

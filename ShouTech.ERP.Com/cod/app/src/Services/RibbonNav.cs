@@ -23,6 +23,19 @@ public static class RibbonNav
         if (string.IsNullOrWhiteSpace(actionKey))
             return false;
 
+        // Licensing build (design §4.4): a module the license lacks
+        // still opens — view-only — and the user is told once per
+        // module per session (LIC-8002, localized from the catalog).
+        if (NavGate.ModuleRequiringNotice(actionKey) is { } gatedModule)
+        {
+            MessageBox.Show(
+                owner ?? System.Windows.Application.Current?.MainWindow,
+                NavGate.NoticeText(gatedModule),
+                "ShouTech ERP",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+
         switch (actionKey.Trim())
         {
             // ------------------------------------------------ Inventory reports

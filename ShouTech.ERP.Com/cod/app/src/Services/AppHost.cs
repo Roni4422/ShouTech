@@ -284,7 +284,10 @@ namespace ShouTech.App.Services
             try
             {
                 JournalStore = new JournalRepository(provider, connection);
-                return new JournalService(JournalStore);
+                // Licensing build: the journal service's write guard
+                // is the one entitlement gate (demo/view-only refusal
+                // at the service layer, LIC-8008 family).
+                return new JournalService(JournalStore, () => Entitlements?.EnsureCanWrite());
             }
             catch (System.Exception ex)
             {

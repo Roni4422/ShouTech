@@ -190,6 +190,10 @@ public static class InvRepo
 
     public static long SaveDraft(InvDoc doc)
     {
+        // Licensing build: creating/editing a document is a
+        // state-changing operation — refused in view-only/demo mode
+        // by the one entitlement gate (LIC-8008 family).
+        AppHost.Entitlements?.EnsureCanWrite();
         ArgumentNullException.ThrowIfNull(doc);
         if (doc.Status != InvDocStatus.Draft)
             throw new InvalidOperationException("Only Draft documents can be overwritten. Posted or in-progress documents require reconciliation or a return document.");
@@ -617,6 +621,10 @@ public static class InvRepo
         PosPostingContext? pos = null,
         ShouTech.Domain.Entities.CreditOverrideContext? creditOverride = null)
     {
+        // Licensing build: posting (GL + stock + POS sales) is
+        // refused in view-only/demo mode by the one entitlement gate
+        // (LIC-8008 family) — the service layer, not the window.
+        AppHost.Entitlements?.EnsureCanWrite();
         DocSchema.Ensure();
         MatRepo.EnsureSchema();
 

@@ -1,21 +1,25 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using ShouTech.App.Services;
+using ShouTech.Domain;
 
 namespace ShouTech.App.Views;
 
 /// <summary>
-/// License window over AppHost.License (ILicenSvc). The API surface found
-/// by inspection: Current (LicenseInfo: key, hardware id, expiry, activation
-/// and last-check timestamps, status, offline mode), IsValid,
-/// ValidateOffline() and TryOnlineValidationAsync(). The service exposes
-/// NO renewal flow and NO license-key entry, so the Renew button is shown
-/// disabled with an honest explanation rather than a fake flow; online
-/// validation is real and wired.
+/// License window: the installation's real license surface.
+/// Top section: the legacy online-activation service (AppHost.License,
+/// ILicenSvc — key, hardware id, expiry, online validation).
+/// Licensing build: the entitlement section below it is the live
+/// gate's snapshot (AppHost.Entitlements — status, edition, source,
+/// modules, dongle binding, device fingerprint, expiry/grace, demo
+/// state) and the Import button installs a vendor-signed license
+/// file: the file is verified BEFORE it may replace the current one,
+/// and a file that does not verify is refused with LIC-8007.
 /// </summary>
 public sealed class LicenseWin : BaseWin
 {
@@ -46,7 +50,7 @@ public sealed class LicenseWin : BaseWin
             Close();
             return;
         }
-        _renewButton.IsEnabled = false;
+        _renewButton.IsEnabled = true;
         ShowInfo();
     }
 
@@ -56,9 +60,10 @@ public sealed class LicenseWin : BaseWin
         root.Children.Add(F2Ui.StatusBar(_statusBar));
 
         F2Ui.StyleButton(_validateButton, "License.ValidateOnline");
-        F2Ui.StyleButton(_renewButton, "License.Renew");
+        F2Ui.StyleButton(_renewButton, "License.Import");
         F2Ui.StyleButton(_closeButton, "Common.Close");
         _validateButton.Click += async (_, _) => await ValidateOnlineAsync();
+        _renewButton.Click += async (_, _) => await ImportLicenseAsync();
         _closeButton.Click += (_, _) => Close();
         root.Children.Add(F2Ui.BottomBar(_validateButton, _renewButton, _closeButton));
 
@@ -77,7 +82,6 @@ public sealed class LicenseWin : BaseWin
     protected override void ApplyLocalizedText()
     {
         Title = T("License.Title");
-        _renewNote.Text = T("License.RenewNotSupported");
         foreach (var b in new[] { _validateButton, _renewButton, _closeButton })
             if (b.Tag is string key)
                 b.Content = T(key);
@@ -108,7 +112,89 @@ public sealed class LicenseWin : BaseWin
             _info.Items.Add($"{T("License.Device")}: {device.MachineName} ({device.DeviceId})");
             _info.Items.Add($"{T("License.AppVersion")}: {device.AppVersion}");
         }
+
+        // ---- Licensing build: the live entitlement snapshot ----
+        var entitlements = AppHost.Entitlements;
+        if (entitlements is not null)
+        {
+            var snapshot = entitlements.Current;
+            _info.Items.Add("—");
+            _info.Items.Add($"{T("License.Entitlements")}: {snapshot.Status}");
+            _info.Items.Add($"{T("License.Edition")}: {(string.IsNullOrWhiteSpace(snapshot.Edition) ? "-" : snapshot.Edition)}");
+            _info.Items.Add($"{T("License.Source")}: {snapshot.Source}");
+            _info.Items.Add($"{T("License.Customer")}: {snapshot.CustomerName ?? "-"}");
+            _info.Items.Add($"{T("License.LicenseId")}: {snapshot.LicenseId ?? "-"}");
+            _info.Items.Add($"{T("License.Modules")}: {(snapshot.Modules.Count == 0 ? "-" : string.Join(", ", snapshot.Modules.OrderBy(m => m, StringComparer.Ordinal)))}");
+            _info.Items.Add($"{T("License.Dongle")}: {snapshot.DongleSerial ?? "-"}");
+            _info.Items.Add($"{T("License.Fingerprint")}: {CollectFingerprintShortId()}");
+            _info.Items.Add($"{T("License.Expiry")}: {(snapshot.ExpiresAt?.ToString("yyyy-MM-dd", CultureInfo.CurrentCulture) ?? "-")}");
+            _info.Items.Add($"{T("License.GraceEnds")}: {(snapshot.GraceEndsAt?.ToString("yyyy-MM-dd", CultureInfo.CurrentCulture) ?? "-")}");
+            _info.Items.Add($"{T("License.MaxUsers")}: {(snapshot.MaxUsers?.ToString(CultureInfo.CurrentCulture) ?? "-")} · {T("License.MaxCompanies")}: {(snapshot.MaxCompanies?.ToString(CultureInfo.CurrentCulture) ?? "-")}");
+            _renewNote.Text = entitlements.IsDemoMode ? T("License.ViewOnly") : string.Empty;
+            _statusBar.Text = entitlements.IsDemoMode
+                ? $"{snapshot.Status} · {T("License.DemoActive")}"
+                : snapshot.Status.ToString();
+            return;
+        }
+
         _statusBar.Text = info.Status.ToString();
+    }
+
+    private static string CollectFingerprintShortId()
+    {
+        try
+        {
+            return new FingerprintSvc().Collect().ShortId;
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.LicenseCheckFailed, ex, "LicenseWin.Fingerprint");
+            return "-";
+        }
+    }
+
+    private async Task ImportLicenseAsync()
+    {
+        try
+        {
+            if (!AppHost.Permissions.Has(PermCat.Licensing.Renew))
+                throw new InvalidOperationException(T("License.PermissionDenied"));
+            if (AppHost.Entitlements is null)
+                throw new InvalidOperationException(T("License.ServiceUnavailable"));
+
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Filter = "ShouTech license (*.dat)|*.dat|All files (*.*)|*.*",
+                CheckFileExists = true
+            };
+            if (dialog.ShowDialog(this) != true)
+                return;
+
+            _renewButton.IsEnabled = false;
+            try
+            {
+                await AppHost.Entitlements.ImportLicenseFileAsync(dialog.FileName);
+            }
+            finally
+            {
+                _renewButton.IsEnabled = true;
+            }
+
+            ShowInfo();
+            _statusBar.Text = T("License.ImportDone");
+        }
+        catch (AppError appError)
+        {
+            // Cataloged refusal (e.g. LIC-8007 signature invalid):
+            // show the catalog's localized message for the code.
+            var info = AppHost.Errors.Resolve(appError.Code);
+            MessageBox.Show(this, info.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.LicenseCheckFailed, ex, "LicenseWin.ImportLicense");
+            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private async Task ValidateOnlineAsync()

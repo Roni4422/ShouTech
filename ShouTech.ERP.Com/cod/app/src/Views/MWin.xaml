@@ -966,7 +966,43 @@
                                    VerticalAlignment="Center"/>
                     </Button>
                 </StatusBarItem>
+                <StatusBarItem x:Name="LicenseStatusItem"
+                               HorizontalAlignment="Left"
+                               HorizontalContentAlignment="Left">
+                    <Button x:Name="LicenseStatusButton"
+                            ToolTip="License"
+                            Height="30"
+                            Margin="0,0,8,0"
+                            Padding="8,0"
+                            Click="OnLicenseStatusClick">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="License: " Opacity="0.78" Margin="0,0,3,0"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock x:Name="LicenseStatusText" Text="—"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </StatusBarItem>
             </StatusBar>
+
+            <!-- Licensing build: persistent view-only (demo) banner.
+                 Visible only while the entitlement gate reports demo
+                 mode; overlays the top of the workspace, never the
+                 ribbon or the status bar. -->
+            <Border x:Name="DemoBanner"
+                    Grid.Row="4" Grid.ColumnSpan="2"
+                    VerticalAlignment="Top"
+                    Panel.ZIndex="40"
+                    Visibility="Collapsed"
+                    Background="{DynamicResource WarningBackgroundBrush}"
+                    BorderBrush="{DynamicResource WarningBrush}"
+                    BorderThickness="0,0,0,1"
+                    Padding="12,6">
+                <TextBlock x:Name="DemoBannerText"
+                           TextWrapping="Wrap"
+                           FontWeight="SemiBold"/>
+            </Border>
 
             <!-- Archive bin: LTR Canvas so RTL shell does not mirror screen sides -->
             <Canvas x:Name="RecycleBinLayer"

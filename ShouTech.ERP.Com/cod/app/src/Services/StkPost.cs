@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Globalization;
@@ -57,6 +57,12 @@ public static class StkPost
         if (doc.Lines.Count == 0) return;
 
         if (doc.Kind == InvDocKind.Quotation) return;
+
+        // Licensing build: the stock-effects choke point refuses in
+        // view-only/demo mode (LIC-8008 family). Placed after the
+        // no-effect early returns so a quotation/empty document —
+        // which moves nothing — is not blocked.
+        AppHost.Entitlements?.EnsureCanWrite();
 
         // Step 5 kind guard (defense in depth — InvRepo.Post blocks these
         // kinds before this point): a stock transfer applied as a generic

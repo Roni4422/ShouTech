@@ -813,7 +813,7 @@ namespace ShouTech.App.Services
             if (requested)
             {
                 _log.LogWarning("Entitlements",
-                    $"[{ErrorCodes.LicenseGracePeriod}] DevMode license grant ACTIVE (Debug build, config-fenced). This grant is impossible in Release builds.");
+                    "DevMode license grant ACTIVE (Debug build, config-fenced). This grant is impossible in Release builds.");
                 return Task.FromResult<EntitlementSnapshot?>(new EntitlementSnapshot
                 {
                     Status = EntitlementStatus.Valid,
@@ -1135,6 +1135,71 @@ namespace ShouTech.App.Services
                 ordered.AddRange(new[] { byName["Dongle"], byName["LicenseFile"], byName["Online"], byName["DevMode"] });
 
             return new EntitlementService(ordered, fileProvider, log);
+        }
+    }
+
+    // ========== NavGate.cs ==========
+    /// <summary>
+    /// The navigation guard's shared decision (licensing design
+    /// §4.4): for a ribbon/router action key, decide whether the user
+    /// must be told that the target module is not in the license.
+    /// The window still opens — view-only — so the guard NEVER
+    /// blocks navigation; it surfaces LIC-8002 once per module per
+    /// session and writes the audit/log record. Callers (MWin's click
+    /// funnel, RibbonNav) present the notice.
+    /// </summary>
+    public static class NavGate
+    {
+        private static readonly HashSet<string> Surfaced = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly object SurfacedLock = new();
+
+        /// <summary>Returns the license module to announce for this
+        /// key, or null when no announcement is due (core/platform
+        /// key, module entitled, or already announced this session).</summary>
+        public static string? ModuleRequiringNotice(string? actionKey)
+        {
+            var module = ModuleMap.ResolveModuleForKey(actionKey);
+            if (!ModuleMap.IsGatedModule(module))
+                return null;
+
+            var entitlements = AppHost.Entitlements;
+            if (entitlements is null || entitlements.IsEntitled(module))
+                return null;
+
+            lock (SurfacedLock)
+            {
+                if (!Surfaced.Add(module))
+                    return null;
+            }
+
+            AppHost.Logging.LogWarning("Entitlements",
+                $"[{ErrorCodes.ModuleNotLicensed}] Navigation to module '{module}' (key '{actionKey}') — not in the current license; the window opens view-only.");
+            try
+            {
+                SecurityAuditLog.Write(
+                    AppState.CurrentCompanyCode,
+                    AppState.CurrentUser?.Id,
+                    AppState.CurrentUser?.Username ?? "system",
+                    SecurityAuditLog.LicenseBlocked,
+                    $"nav;module={module};key={actionKey};code={ErrorCodes.ModuleNotLicensed}");
+            }
+            catch (Exception ex)
+            {
+                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "NavGate.Audit");
+            }
+
+            return module;
+        }
+
+        /// <summary>The localized notice text for an announced
+        /// module, resolved from the error catalog (LIC-8002) so it
+        /// follows the shell language like every other coded message.</summary>
+        public static string NoticeText(string moduleKey)
+        {
+            var info = AppHost.Errors.Resolve(ErrorCodes.ModuleNotLicensed, moduleKey);
+            return string.IsNullOrWhiteSpace(info.Hint)
+                ? info.Message
+                : $"{info.Message}\n\n{info.Hint}";
         }
     }
 }

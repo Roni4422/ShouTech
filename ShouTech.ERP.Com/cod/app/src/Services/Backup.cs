@@ -1,4 +1,4 @@
-﻿// ========================================================================
+// ========================================================================
 // FILE: Services/Backup.cs
 // PROJECT: SHOUTECH ERP — Backup service + STEI encrypted packages
 // Merged: BkpFileInfo, IBkpSvc, SteiModels, SteiCrypto, SteiSvc, BkpServ
@@ -1368,7 +1368,7 @@ internal static class SteiSvc
             // Restore replaces the entire database — a state-
             // changing operation, refused in view-only/demo mode by
             // the one entitlement gate (LIC-8008/LIC-8003 family).
-            AppHost.Entitlements.EnsureCanWrite();
+            AppHost.Entitlements?.EnsureCanWrite();
 
             if (_perm != null && !_perm.Has(PermCat.Backup.Restore))
                 throw new UnauthorizedAccessException("You do not have permission to restore backups (BACKUP.RESTORE).");

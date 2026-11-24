@@ -8,10 +8,26 @@ public sealed record JournalLineRequest(Guid AccountId, decimal Debit, decimal C
 public sealed class JournalService
 {
     private readonly IJournalRepository _repository;
+    private readonly Action? _writeGuard;
 
     public JournalService(IJournalRepository repository)
+        : this(repository, null)
+    {
+    }
+
+    /// <summary>
+    /// The write guard is the host's entitlement gate (licensing
+    /// build): the application layer cannot reference the app host,
+    /// so the host injects its EnsureCanWrite as a delegate. When
+    /// present it runs before every state-changing operation and
+    /// refuses with the host's cataloged AppError (LIC-8008 family)
+    /// while the installation is in view-only/demo mode. Null (unit
+    /// tests, headless hosts) means no licensing gate.
+    /// </summary>
+    public JournalService(IJournalRepository repository, Action? writeGuard)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _writeGuard = writeGuard;
     }
 
     public Task<JournalEntrySnapshot?> FindByDocumentNumberAsync(
@@ -37,6 +53,7 @@ public sealed class JournalService
         string? documentNumber = null,
         VoucherPartyLinkRequest? partyLink = null)
     {
+        _writeGuard?.Invoke();
         ArgumentNullException.ThrowIfNull(lines);
 
         var entry = new JournalEntry(entryDate, description, referenceNumber, currencyCode, exchangeRate, documentNumber);
@@ -70,6 +87,7 @@ public sealed class JournalService
         string currencyCode = "SAR",
         decimal exchangeRate = 1m)
     {
+        _writeGuard?.Invoke();
         if (journalEntryId == Guid.Empty) throw new ArgumentException("Journal entry is required.", nameof(journalEntryId));
         ArgumentNullException.ThrowIfNull(lines);
 
@@ -87,9 +105,15 @@ public sealed class JournalService
     /// <summary>Posts a draft entry, returning any budget warnings the
     /// posting produced in Warn mode (Phase B 055) so the posting
     /// window can show them after the entry posts.</summary>
-    public Task<IReadOnlyList<BudgetWarning>> PostAsync(Guid journalEntryId, string userId, CancellationToken cancellationToken = default) =>
-        _repository.PostAsync(journalEntryId, userId, cancellationToken);
+    public Task<IReadOnlyList<BudgetWarning>> PostAsync(Guid journalEntryId, string userId, CancellationToken cancellationToken = default)
+    {
+        _writeGuard?.Invoke();
+        return _repository.PostAsync(journalEntryId, userId, cancellationToken);
+    }
 
-    public Task<Guid> ReverseAsync(Guid journalEntryId, string userId, string? details = null, CancellationToken cancellationToken = default) =>
-        _repository.ReverseAsync(journalEntryId, userId, details, cancellationToken);
+    public Task<Guid> ReverseAsync(Guid journalEntryId, string userId, string? details = null, CancellationToken cancellationToken = default)
+    {
+        _writeGuard?.Invoke();
+        return _repository.ReverseAsync(journalEntryId, userId, details, cancellationToken);
+    }
 }
