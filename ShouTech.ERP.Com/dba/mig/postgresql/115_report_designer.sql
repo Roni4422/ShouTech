@@ -114,41 +114,22 @@ CREATE INDEX IF NOT EXISTS ix_custom_report_groupings_def
 CREATE INDEX IF NOT EXISTS ix_custom_report_filters_def
     ON CustomReportFilters(ReportDefID, IsDeleted);
 
--- @if-column-missing CustomReportDefinitions.TitleFontFamily
-ALTER TABLE CustomReportDefinitions ADD COLUMN TitleFontFamily TEXT;
--- @if-column-missing CustomReportDefinitions.TitleFontSize
-ALTER TABLE CustomReportDefinitions ADD COLUMN TitleFontSize DOUBLE PRECISION NOT NULL DEFAULT 20;
--- @if-column-missing CustomReportDefinitions.TitleBold
-ALTER TABLE CustomReportDefinitions ADD COLUMN TitleBold INTEGER NOT NULL DEFAULT 1;
--- @if-column-missing CustomReportDefinitions.HeaderFontFamily
-ALTER TABLE CustomReportDefinitions ADD COLUMN HeaderFontFamily TEXT;
--- @if-column-missing CustomReportDefinitions.HeaderFontSize
-ALTER TABLE CustomReportDefinitions ADD COLUMN HeaderFontSize DOUBLE PRECISION NOT NULL DEFAULT 10.5;
--- @if-column-missing CustomReportDefinitions.HeaderBold
-ALTER TABLE CustomReportDefinitions ADD COLUMN HeaderBold INTEGER NOT NULL DEFAULT 1;
--- @if-column-missing CustomReportDefinitions.HeaderBackColor
-ALTER TABLE CustomReportDefinitions ADD COLUMN HeaderBackColor TEXT;
--- @if-column-missing CustomReportDefinitions.HeaderTextColor
-ALTER TABLE CustomReportDefinitions ADD COLUMN HeaderTextColor TEXT;
--- @if-column-missing CustomReportDefinitions.BodyFontFamily
-ALTER TABLE CustomReportDefinitions ADD COLUMN BodyFontFamily TEXT;
--- @if-column-missing CustomReportDefinitions.BodyFontSize
-ALTER TABLE CustomReportDefinitions ADD COLUMN BodyFontSize DOUBLE PRECISION NOT NULL DEFAULT 10;
--- @if-column-missing CustomReportDefinitions.TotalsFontFamily
-ALTER TABLE CustomReportDefinitions ADD COLUMN TotalsFontFamily TEXT;
--- @if-column-missing CustomReportDefinitions.TotalsFontSize
-ALTER TABLE CustomReportDefinitions ADD COLUMN TotalsFontSize DOUBLE PRECISION NOT NULL DEFAULT 10;
--- @if-column-missing CustomReportDefinitions.TotalsBold
-ALTER TABLE CustomReportDefinitions ADD COLUMN TotalsBold INTEGER NOT NULL DEFAULT 1;
--- @if-column-missing CustomReportDefinitions.BandingColor
-ALTER TABLE CustomReportDefinitions ADD COLUMN BandingColor TEXT;
--- @if-column-missing CustomReportDefinitions.ShowGridLines
-ALTER TABLE CustomReportDefinitions ADD COLUMN ShowGridLines INTEGER NOT NULL DEFAULT 1;
--- @if-column-missing CustomReportDefinitions.PageSize
-ALTER TABLE CustomReportDefinitions ADD COLUMN PageSize TEXT NOT NULL DEFAULT 'A4';
--- @if-column-missing CustomReportDefinitions.MarginMm
-ALTER TABLE CustomReportDefinitions ADD COLUMN MarginMm DOUBLE PRECISION NOT NULL DEFAULT 12;
--- @if-column-missing CustomReportDefinitions.ShowCompanyAddress
-ALTER TABLE CustomReportDefinitions ADD COLUMN ShowCompanyAddress INTEGER NOT NULL DEFAULT 0;
--- @if-column-missing CustomReportColumns.TotalsFormula
-ALTER TABLE CustomReportColumns ADD COLUMN TotalsFormula TEXT;
+ALTER TABLE CustomReportDefinitions ADD COLUMN IF NOT EXISTS TitleFontFamily TEXT;
+ALTER TABLE CustomReportDefinitions ADD COLUMN IF NOT EXISTS TitleFontSize DOUBLE PRECISION NOT NULL DEFAULT 20;
+ALTER TABLE CustomReportDefinitions ADD COLUMN IF NOT EXISTS TitleBold INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE CustomReportDefinitions ADD COLUMN IF NOT EXISTS HeaderFontFamily TEXT;
+ALTER TABLE CustomReportDefinitions ADD COLUMN IF NOT EXISTS HeaderFontSize DOUBLE PRECISION NOT NULL DEFAULT 10.5;
+ALTER TABLE CustomReportDefinitions ADD COLUMN IF NOT EXISTS HeaderBold INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE CustomReportDefinitions ADD COLUMN IF NOT EXISTS HeaderBackColor TEXT;
+ALTER TABLE CustomReportDefinitions ADD COLUMN IF NOT EXISTS HeaderTextColor TEXT;
+ALTER TABLE CustomReportDefinitions ADD COLUMN IF NOT EXISTS BodyFontFamily TEXT;
+ALTER TABLE CustomReportDefinitions ADD COLUMN IF NOT EXISTS BodyFontSize DOUBLE PRECISION NOT NULL DEFAULT 10;
+ALTER TABLE CustomReportDefinitions ADD COLUMN IF NOT EXISTS TotalsFontFamily TEXT;
+ALTER TABLE CustomReportDefinitions ADD COLUMN IF NOT EXISTS TotalsFontSize DOUBLE PRECISION NOT NULL DEFAULT 10;
+ALTER TABLE CustomReportDefinitions ADD COLUMN IF NOT EXISTS TotalsBold INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE CustomReportDefinitions ADD COLUMN IF NOT EXISTS BandingColor TEXT;
+ALTER TABLE CustomReportDefinitions ADD COLUMN IF NOT EXISTS ShowGridLines INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE CustomReportDefinitions ADD COLUMN IF NOT EXISTS PageSize TEXT NOT NULL DEFAULT 'A4';
+ALTER TABLE CustomReportDefinitions ADD COLUMN IF NOT EXISTS MarginMm DOUBLE PRECISION NOT NULL DEFAULT 12;
+ALTER TABLE CustomReportDefinitions ADD COLUMN IF NOT EXISTS ShowCompanyAddress INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE CustomReportColumns ADD COLUMN IF NOT EXISTS TotalsFormula TEXT;
