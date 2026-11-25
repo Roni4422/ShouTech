@@ -62,7 +62,7 @@ CREATE INDEX IF NOT EXISTS ix_pos_discount_overrides_doc
 -- ---- Exchange link ----------------------------------------------------------------
 ALTER TABLE sales_documents ADD COLUMN IF NOT EXISTS exchange_ref TEXT;
 CREATE INDEX IF NOT EXISTS ix_sales_documents_exchange_ref
-    ON sales_documents(company_id, exchange_ref) WHERE is_deleted = FALSE;
+    ON sales_documents(company_id, exchange_ref) WHERE is_deleted = 0;
 
 -- ---- Permission: POS.EXPENSE.MANAGE -------------------------------------------------
 INSERT INTO permissions(permission_code,permission_name,group_code,feature_code,operation_code,name_ar,name_en,description,display_order,is_sensitive) VALUES ('POS.EXPENSE.MANAGE','POS Expense - Manage','POS','EXPENSE','MANAGE','مصروفات نقاط البيع - إدارة','POS Expense - Manage','Record cash paid out of the drawer during an open POS session (sales cycle W9, migration 104)',401,true) ON CONFLICT(permission_code) DO UPDATE SET group_code=EXCLUDED.group_code,feature_code=EXCLUDED.feature_code,operation_code=EXCLUDED.operation_code,name_ar=EXCLUDED.name_ar,name_en=EXCLUDED.name_en,display_order=EXCLUDED.display_order,is_sensitive=EXCLUDED.is_sensitive;
