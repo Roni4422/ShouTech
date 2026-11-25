@@ -273,9 +273,11 @@ public sealed class ConnServ : IConnSvc
                     ? ConnectivityState.ServerReachable
                     : ConnectivityState.Online;
             }
-            catch (HttpRequestException exL274)
+            catch (HttpRequestException)
             {
-                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL274, "Online.ProbeAsync");
+                // A refused optional API/activation endpoint (for example a
+                // local service that is not running) is an offline state, not
+                // an application failure. Keep it out of the SYS error log.
                 return ConnectivityState.Online;
             }
             catch (TaskCanceledException exL278)
