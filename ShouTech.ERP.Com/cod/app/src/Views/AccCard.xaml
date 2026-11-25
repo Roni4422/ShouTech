@@ -150,17 +150,17 @@
                         <ColumnDefinition Width="{StaticResource FormLabelColumnWidth}"/><ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Name" loc:LocProps.Key="AccCard.Name" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Style="{StaticResource VisuTextBlockLabelStyle}" Grid.Row="0" Grid.Column="0" Text="Name" loc:LocProps.Key="AccCard.Name" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <TextBox x:Name="TxtNameAr" Grid.Row="0" Grid.Column="1" Margin="{StaticResource MarginFormField}"/>
-                    <TextBlock Grid.Row="0" Grid.Column="2" Text="English Name" loc:LocProps.Key="AccCard.EnglishName" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Style="{StaticResource VisuTextBlockLabelStyle}" Grid.Row="0" Grid.Column="2" Text="English Name" loc:LocProps.Key="AccCard.EnglishName" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <TextBox x:Name="TxtNameEn" Grid.Row="0" Grid.Column="3" Margin="{StaticResource MarginFormField}" FlowDirection="LeftToRight"/>
 
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Parent account" loc:LocProps.Key="AccCard.ParentAccount" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Style="{StaticResource VisuTextBlockLabelStyle}" Grid.Row="1" Grid.Column="0" Text="Parent account" loc:LocProps.Key="AccCard.ParentAccount" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <ComboBox x:Name="CmbParent" Grid.Row="1" Grid.Column="1" Margin="{StaticResource MarginFormField}" SelectionChanged="CmbParent_SelectionChanged"/>
-                    <TextBlock Grid.Row="1" Grid.Column="2" Text="Posting mode" loc:LocProps.Key="AccCard.PostingMode" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Style="{StaticResource VisuTextBlockLabelStyle}" Grid.Row="1" Grid.Column="2" Text="Posting mode" loc:LocProps.Key="AccCard.PostingMode" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <ComboBox x:Name="CmbPostingMode" Grid.Row="1" Grid.Column="3" Margin="{StaticResource MarginFormField}"/>
 
-                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Cost center" loc:LocProps.Key="AccCard.CostCenterMode" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Style="{StaticResource VisuTextBlockLabelStyle}" Grid.Row="2" Grid.Column="0" Text="Cost center" loc:LocProps.Key="AccCard.CostCenterMode" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <ComboBox x:Name="CmbCostCenter" Grid.Row="2" Grid.Column="1" Margin="{StaticResource MarginFormField}"/>
                     <CheckBox x:Name="ChkReconcile" Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="2" Content="Allow reconciliation" loc:LocProps.Key="AccCard.Reconcile" VerticalAlignment="Center" Margin="0,0,0,5"/>
 
@@ -171,7 +171,7 @@
                     <CheckBox x:Name="ChkBudget" Grid.Row="4" Grid.Column="2" Grid.ColumnSpan="2" Content="Budget controlled" loc:LocProps.Key="AccCard.Budget" VerticalAlignment="Center" Margin="0,0,0,5"/>
 
                     <CheckBox x:Name="ChkDefault" Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" Content="Default account" loc:LocProps.Key="AccCard.DefaultAccount" VerticalAlignment="Center" Margin="0,0,12,5"/>
-                    <TextBlock Grid.Row="5" Grid.Column="2" Text="Tax rate (%)" loc:LocProps.Key="AccCard.TaxRate" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Style="{StaticResource VisuTextBlockLabelStyle}" Grid.Row="5" Grid.Column="2" Text="Tax rate (%)" loc:LocProps.Key="AccCard.TaxRate" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <TextBox x:Name="TxtTaxRate" Grid.Row="5" Grid.Column="3" Margin="{StaticResource MarginFormField}" Text="0"/>
 
                     <!-- Account-card completion (migration 118, R2e): the
@@ -179,25 +179,25 @@
                          schema lacked — closing account, warning side,
                          account side, estimated budget, currency + parity,
                          reconciliation date. -->
-                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Closing account" loc:LocProps.Key="AccCard.ClosingAccount" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Style="{StaticResource VisuTextBlockLabelStyle}" Grid.Row="6" Grid.Column="0" Text="Closing account" loc:LocProps.Key="AccCard.ClosingAccount" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <ComboBox x:Name="CmbClosing" Grid.Row="6" Grid.Column="1" Margin="{StaticResource MarginFormField}"/>
-                    <TextBlock Grid.Row="6" Grid.Column="2" Text="Warning" loc:LocProps.Key="AccCard.WarningSide" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Style="{StaticResource VisuTextBlockLabelStyle}" Grid.Row="6" Grid.Column="2" Text="Warning" loc:LocProps.Key="AccCard.WarningSide" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <ComboBox x:Name="CmbWarningSide" Grid.Row="6" Grid.Column="3" Margin="{StaticResource MarginFormField}"/>
 
-                    <TextBlock Grid.Row="7" Grid.Column="0" Text="Account side" loc:LocProps.Key="AccCard.AccountSide" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Style="{StaticResource VisuTextBlockLabelStyle}" Grid.Row="7" Grid.Column="0" Text="Account side" loc:LocProps.Key="AccCard.AccountSide" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <ComboBox x:Name="CmbAccountSide" Grid.Row="7" Grid.Column="1" Margin="{StaticResource MarginFormField}"/>
-                    <TextBlock Grid.Row="7" Grid.Column="2" Text="Estimated budget" loc:LocProps.Key="AccCard.EstimatedBudget" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Style="{StaticResource VisuTextBlockLabelStyle}" Grid.Row="7" Grid.Column="2" Text="Estimated budget" loc:LocProps.Key="AccCard.EstimatedBudget" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <TextBox x:Name="TxtEstBudget" Grid.Row="7" Grid.Column="3" Margin="{StaticResource MarginFormField}" Text="0"/>
 
-                    <TextBlock Grid.Row="8" Grid.Column="0" Text="Currency" loc:LocProps.Key="AccCard.Currency" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Style="{StaticResource VisuTextBlockLabelStyle}" Grid.Row="8" Grid.Column="0" Text="Currency" loc:LocProps.Key="AccCard.Currency" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <ComboBox x:Name="CmbCurrency" Grid.Row="8" Grid.Column="1" Margin="{StaticResource MarginFormField}" IsEditable="True"/>
-                    <TextBlock Grid.Row="8" Grid.Column="2" Text="Exchange parity" loc:LocProps.Key="AccCard.ExchangeParity" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Style="{StaticResource VisuTextBlockLabelStyle}" Grid.Row="8" Grid.Column="2" Text="Exchange parity" loc:LocProps.Key="AccCard.ExchangeParity" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <TextBox x:Name="TxtParity" Grid.Row="8" Grid.Column="3" Margin="{StaticResource MarginFormField}" Text="1.00000"/>
 
-                    <TextBlock Grid.Row="9" Grid.Column="0" Text="Reconciliation date" loc:LocProps.Key="AccCard.ReconciliationDate" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Style="{StaticResource VisuTextBlockLabelStyle}" Grid.Row="9" Grid.Column="0" Text="Reconciliation date" loc:LocProps.Key="AccCard.ReconciliationDate" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <DatePicker x:Name="DtReconcile" Grid.Row="9" Grid.Column="1" Margin="{StaticResource MarginFormField}"/>
 
-                    <TextBlock Grid.Row="10" Grid.Column="0" Text="Description" loc:LocProps.Key="AccCard.Description" FontWeight="SemiBold" VerticalAlignment="Top" Margin="0,4,0,5"/>
+                    <TextBlock Style="{StaticResource VisuTextBlockLabelStyle}" Grid.Row="10" Grid.Column="0" Text="Description" loc:LocProps.Key="AccCard.Description" FontWeight="SemiBold" VerticalAlignment="Top" Margin="0,4,0,5"/>
                     <TextBox x:Name="TxtDescription" Grid.Row="10" Grid.Column="1" Grid.ColumnSpan="3" Height="{StaticResource MultilineFieldHeight}" Margin="{StaticResource MarginFormField}" AcceptsReturn="True" TextWrapping="Wrap"/>
 
                     <Grid Grid.Row="11" Grid.Column="0" Grid.ColumnSpan="4" Margin="0,3,0,0">
