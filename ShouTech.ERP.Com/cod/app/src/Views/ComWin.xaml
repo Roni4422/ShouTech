@@ -70,7 +70,7 @@
             <Setter Property="TextWrapping" Value="NoWrap"/>
         </Style>
 
-        <Style x:Key="CompanyEditInputStyle" TargetType="TextBox">
+        <Style x:Key="CompanyEditInputStyle" TargetType="TextBox" BasedOn="{StaticResource AppTextBoxStyle}">
             <Setter Property="Height" Value="28"/>
             <Setter Property="Padding" Value="6,2"/>
             <Setter Property="Margin" Value="0,0,0,6"/>
