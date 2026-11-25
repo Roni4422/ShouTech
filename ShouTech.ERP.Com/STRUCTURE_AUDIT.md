@@ -1,61 +1,73 @@
 # Repository Structure and Bootstrap Audit
 
 Branch: `reduce-2-upgrade`
-Audited source baseline: `f9db6ee9e474c043ba980bfd9e5858b027792d73`
-Scope: first-pass structural inventory, exact-blob duplication, migration safety, and startup entry points.
+Audited code baseline: `8584bee7e604da7758fff2f2a1aad0099d64d565`
 
-## Inventory
+## Repository inventory
 
-- Recursive Git tree is complete (not truncated): 840 tracked files.
+- Recursive Git tree: 840 tracked files; tree response was complete and not truncated.
 - Exact duplicate blob groups: 8.
-- No files were deleted or merged in this pass. Identical migration contents are not sufficient evidence for safe deletion because migration filenames/order/checksums are part of the database history.
+- No exact-duplicate source-code groups were found.
+- No files were deleted or merged in this phase. This is deliberate: all exact duplicates are migration assets whose identities/order must be preserved.
 
-## Exact duplicate blobs
+## Exact duplicate blobs and disposition
 
-| Paths | Assessment |
+| Paths | Disposition |
 |---|---|
-| `dba/mig/postgresql/003_modules.sql` and `004_modules.sql` | Exact same blob, but both are migration IDs. Preserve both; deleting/renaming either can invalidate deployed migration ledgers or alter replay order. |
-| `dba/mig/postgresql/009_accounting_indexes.sql` and `dba/mig/sqlite/007_accounting_indexes.sql` | Cross-provider exact bytes; retain as provider-specific migration assets. |
-| `dba/mig/postgresql/013_deletion_audit.sql` and `dba/mig/sqlite/011_deletion_audit.sql` | Cross-provider exact bytes; retain. |
-| `dba/mig/postgresql/015_journal_document_number_unique.sql` and `dba/mig/sqlite/013_journal_document_number_unique.sql` | Cross-provider exact bytes; retain. |
-| `dba/mig/postgresql/084_supplier_invoice_reference_unique.sql` and `dba/mig/sqlite/084_supplier_invoice_reference_unique.sql` | Cross-provider exact bytes; retain. |
-| `dba/mig/postgresql/120_invoice_line_notes.sql` and `dba/mig/sqlite/120_invoice_line_notes.sql` | Cross-provider exact bytes; retain. |
-| `dba/mig/postgresql/121_uom_names.sql` and `dba/mig/sqlite/121_uom_names.sql` | Cross-provider exact bytes; retain. |
-| `dba/mig/postgresql/126_barcode_template.sql` and `dba/mig/sqlite/126_barcode_template.sql` | Cross-provider exact bytes; retain. |
+| `dba/mig/postgresql/003_modules.sql` and `004_modules.sql` | Same bytes but distinct migration IDs. Keep both to preserve migration history and checksums. |
+| `dba/mig/postgresql/009_accounting_indexes.sql` and `dba/mig/sqlite/007_accounting_indexes.sql` | Provider-specific migration copies. Keep. |
+| `dba/mig/postgresql/013_deletion_audit.sql` and `dba/mig/sqlite/011_deletion_audit.sql` | Provider-specific migration copies. Keep. |
+| `dba/mig/postgresql/015_journal_document_number_unique.sql` and `dba/mig/sqlite/013_journal_document_number_unique.sql` | Provider-specific migration copies. Keep. |
+| `dba/mig/postgresql/084_supplier_invoice_reference_unique.sql` and `dba/mig/sqlite/084_supplier_invoice_reference_unique.sql` | Provider-specific migration copies. Keep. |
+| `dba/mig/postgresql/120_invoice_line_notes.sql` and `dba/mig/sqlite/120_invoice_line_notes.sql` | Provider-specific migration copies. Keep. |
+| `dba/mig/postgresql/121_uom_names.sql` and `dba/mig/sqlite/121_uom_names.sql` | Provider-specific migration copies. Keep. |
+| `dba/mig/postgresql/126_barcode_template.sql` and `dba/mig/sqlite/126_barcode_template.sql` | Provider-specific migration copies. Keep. |
 
-## Startup and host entry points
+## Executable and startup paths
 
-- Desktop WPF entry point: `cod/app/src/App.xaml` is explicitly included as the `ApplicationDefinition` in `cod/app/src/MainApp.csproj`; `App.xaml.cs` contains application lifecycle/bootstrap code.
-- Desktop composition root: `cod/app/src/Services/AppHost.cs` owns application-wide service construction and initialization. It is a composition root/service locator, not a second executable entry point.
-- Separate Windows background service: `svc/Program.cs` builds and runs a Generic Host with the Windows Service integration. This is a distinct deployable process and must not be merged into the desktop WPF startup.
-- Developer/test harnesses each have their own `Program.cs`; these are isolated executable tools and are not desktop launch paths.
-- `src/App/App.csproj` is a class library (no executable output type); it is not an application entry point.
-- The desktop project currently compiles source files by wildcard and explicitly includes XAML. Any file merge/removal requires reference, reflection, XAML, resource, and project-item checks.
+- Desktop WPF executable: `cod/app/src/App.xaml`, explicitly included as `ApplicationDefinition` by `cod/app/src/MainApp.csproj`; `App.xaml.cs` owns WPF lifecycle.
+- Desktop composition root: `cod/app/src/Services/AppHost.cs`; this is not a second executable entry point.
+- Windows background service: `svc/Program.cs`; a distinct deployable process, intentionally separate from desktop WPF.
+- Developer/test harnesses: separate executable projects with their own `Program.cs`; these are not desktop launch paths.
+- `src/App/App.csproj` is a class library, not an executable.
+- The desktop project uses explicit XAML items and wildcard C# compile inclusion. Source removal/merging requires checking symbol references, XAML, resources, reflection, and project inclusion.
 
-## Migration finding fixed in this pass
+## Startup consolidation
 
-The failed PostgreSQL smoke run reached migration `104_pos_remainder.sql` and failed creating `ix_sales_documents_exchange_ref`: `sales_documents.is_deleted` is declared as `INT NOT NULL DEFAULT 0` in migration `012_commercial_documents.sql`, but migration 104 compared it with PostgreSQL boolean `FALSE`. The predicate has been corrected to `is_deleted = 0` on this branch. This is a pre-release repair of a migration that fails on a clean PostgreSQL database before its history row can be committed; verify against deployed database histories before distributing the migration.
+The WPF `SchemaBootstrapper` now delegates to `SchemaMigrator.ApplyAllAsync`, the in-process migration engine also used by company creation. The previous embedded-resource SQL bootstrapper was removed: its expected resource names (`ShouTech.App.dba.lite.sql` and `ShouTech.App.dba.pg.sql`) had no tracked SQL source or explicit embedded-resource inclusion in `MainApp.csproj`. The old code silently returned when those resources were absent.
 
-## Next safe structural steps
+The replacement:
+- uses the provider selected by `DatabaseRuntime`;
+- applies the ordered provider-specific scripts from `dba/mig`;
+- preserves a per-connection process cache and reset methods;
+- marks a database initialized only after successful migration;
+- returns without error when no connection string is configured, which is valid before a company database is selected;
+- propagates migration failures rather than treating an absent bootstrap resource as success.
 
-1. Trace all calls to `AppHost.Initialize`, `SchemaBootstrapper.EnsureSchema`, and `SchemaMigrator.ApplyAllAsync` before changing startup.
-2. Compare embedded schema bootstrap resources with `dba/mig`; remove no bootstrap path until database creation, upgrade, baseline, and recovery flows are proven equivalent.
-3. Add a migration consistency test that validates provider-specific predicates against declared column types, and keep SQLite/PostgreSQL smoke tests as release gates.
-4. Only merge source files with cohesive ownership after checking all symbol references, XAML/resource names, reflection/dynamic loading, and project wildcard inclusion.
+The desktop project copies both provider migration directories to `dba/mig` beside the executable, which supports `SchemaMigrator.FindRepositoryRoot` in build/publish output. The administrative `SqlMigrator` remains a separate CLI runner over the same migration files and history/checksum contract; consolidating the two runners is a separate refactor and was not mixed into this startup change.
 
-## Additional startup-flow finding
+## PostgreSQL migration repairs
 
-The desktop launch path is more complex than a single call into the composition root:
+The clean PostgreSQL smoke workflow exposed three consecutive failures, all repaired in their owning migration files:
 
-1. WPF invokes `App.OnStartup` from `App.xaml`.
-2. Startup loads user preferences and language, builds a local `ServiceCollection`, and builds `_serviceProvider`.
-3. It calls `SchemaBootstrapper.EnsureSchema()` **before** `AppHost.Initialize()`.
-4. It initializes recycle-bin audit infrastructure, then calls `AppHost.Initialize()`.
-5. Login and main-window transitions call `SchemaBootstrapper.EnsureSchema()` again; the helper caches database keys within the process.
-6. `AppHost.Initialize()` is also exposed through a compatibility facade in `App.xaml.cs`, so call-site/reference analysis is required before changing its visibility or name.
+1. `104_pos_remainder.sql`: `sales_documents.is_deleted` is `INT`, so the partial-index predicate now uses `is_deleted = 0`, not Boolean `FALSE`.
+2. `112_rfq_invitations_backfill.sql`: integer deletion flags on purchase document rows now compare to `0`, not Boolean `FALSE`.
+3. `115_report_designer.sql`: removed SQLite-only conditional-column directives from the PostgreSQL script and used native `ADD COLUMN IF NOT EXISTS` for idempotent additions.
 
-This is a confirmed dual bootstrap concern: desktop startup schema provisioning is implemented by an embedded-resource `SchemaBootstrapper`, while `SchemaMigrator` separately applies ordered `dba/mig` scripts. The next structural phase must compare the embedded `ShouTech.App.dba.lite.sql` / `ShouTech.App.dba.pg.sql` resources and their execution call sites against the migration/baseline flows. Do not simply replace one with the other until fresh install, existing database, upgrade, company switching, and recovery behavior are covered by tests.
+The earlier `095_party_structure.sql` repair also aligned three `party_id` foreign-key columns to PostgreSQL `UUID`, matching `parties.id`.
 
-## Embedded schema resource verification
+## Verification evidence
 
-A recursive tree check found no tracked SQL source outside `dba` except explicitly archived legacy snapshots. In addition, `MainApp.csproj` sets `EnableDefaultEmbeddedResourceItems=false` and contains no explicit `EmbeddedResource` item for `ShouTech.App.dba.lite.sql` or `ShouTech.App.dba.pg.sql`; it copies the provider migration files as `None` items instead. Therefore the resource names requested by `SchemaBootstrapper.LoadSql` have no corresponding tracked source/build inclusion in the current tree. Because `EnsureSchema` logs and returns when the resource is missing, this bootstrap path can silently do no schema work. Confirm this from an actual Windows build's manifest/resource list before retiring or replacing it; the source-level evidence is sufficient to prioritize it as a defect candidate, not to assert runtime behavior without a build artifact.
+- Database migration smoke workflow on commit `f6e494ef9cf653beb902717758499b7af75d2b18`: SQLite clean install and same-database rerun passed; PostgreSQL clean install, same-database rerun, and migration-history check passed.
+- Windows CI for the startup consolidation was repeatedly superseded by later documentation/comment-only commits. The final Windows CI run must be recorded against the final code commit before this phase is closed.
+- No database migration file changed after the successful smoke workflow.
+
+## Research basis
+
+- Microsoft .NET Generic Host documentation describes the host's responsibilities for application startup, dependency injection, configuration, logging, and lifetime: https://learn.microsoft.com/dotnet/core/extensions/generic-host
+- Microsoft DI guidance recommends small, well-factored services and avoiding unnecessary stateful static infrastructure: https://learn.microsoft.com/dotnet/core/extensions/dependency-injection-guidelines
+- PostgreSQL documentation defines partial-index predicates as part of the index definition; the predicate must be valid for the actual underlying column types: https://www.postgresql.org/docs/current/sql-createindex.html
+
+## Structural cleanup decision
+
+The eight exact duplicate groups were inspected. Seven are intentional SQLite/PostgreSQL migration copies; the remaining pair are separately numbered PostgreSQL migrations. Removing or renaming any of these can break deployed migration ledgers, checksum verification, or replay order. No arbitrary source-file merges or deletions are justified by file count alone. The next source consolidation should target cohesive service responsibilities and preserve stable public APIs.
