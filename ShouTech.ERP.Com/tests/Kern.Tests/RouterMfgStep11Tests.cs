@@ -253,11 +253,11 @@ public class RouterMfgStep11Tests
     {
         var db = await NewDbAsync();
         Exec(db, """
-            INSERT INTO materials (material_id, company_id, code, name_ar, name_en, unit1, unit1_factor, unit2, unit2_factor, units_json)
-            VALUES (101, 'S11', 'RM-1', 'Raw 1', 'Raw 1', 'KG', 1, 'g250', 0.25, '[{"UnitName":"KG","Factor":1},{"UnitName":"g250","Factor":0.25}]'),
-                   (102, 'S11', 'RM-2', 'Raw 2', 'Raw 2', 'KG', 1, NULL, 1, '[]'),
-                   (103, 'S11', 'FG-1', 'Finished', 'Finished', 'PCS', 1, NULL, 1, '[]'),
-                   (104, 'S11', 'SVC-1', 'Added cost', 'Added cost', 'PCS', 1, NULL, 1, '[]');
+            INSERT INTO materials (material_id, company_id, code, name, unit1, unit1_factor, unit2, unit2_factor, units_json)
+            VALUES (101, 'S11', 'RM-1', 'Raw 1', 'KG', 1, 'g250', 0.25, '[{"UnitName":"KG","Factor":1},{"UnitName":"g250","Factor":0.25}]'),
+                   (102, 'S11', 'RM-2', 'Raw 2', 'KG', 1, NULL, 1, '[]'),
+                   (103, 'S11', 'FG-1', 'Finished', 'PCS', 1, NULL, 1, '[]'),
+                   (104, 'S11', 'SVC-1', 'Added cost', 'PCS', 1, NULL, 1, '[]');
             """);
         Exec(db, "INSERT INTO material_stock_balances (company_id, warehouse_id, material_id, available_qty, average_cost, last_cost, stock_value, is_deleted) VALUES ('S11', 1, 101, 0.5, 8, 8, 4, 0), ('S11', 1, 102, 10, 4, 4, 40, 0);");
         Exec(db, """
@@ -283,9 +283,9 @@ public class RouterMfgStep11Tests
         Exec(db, "INSERT INTO chart_of_accounts (account_id, company_id, account_code, account_name, account_type, is_postable, is_active, is_deleted) VALUES ($id, $c, '1203', 'Merchandise Inventory', 'ASSET', 1, 1, 0);",
             ("$id", Guid.NewGuid().ToString("D")), ("$c", db.CompanyId.ToString("D")));
         Exec(db, """
-            INSERT INTO materials (material_id, company_id, code, name_ar, name_en, is_stocked, is_service, item_type, cost_method, allow_negative, is_deleted, unit1, unit1_factor, unit2, unit2_factor, units_json)
-            VALUES (1, 'S11', 'RM-1', 'Raw', 'Raw', 1, 0, 'Stock', 'WeightedAvg', 1, 0, 'KG', 1, 'g250', 0.25, '[{"UnitName":"KG","Factor":1},{"UnitName":"g250","Factor":0.25}]'),
-                   (2, 'S11', 'FG-1', 'Finished', 'Finished', 1, 0, 'Stock', 'WeightedAvg', 1, 0, 'PCS', 1, 'DOZEN', 12, '[{"UnitName":"PCS","Factor":1},{"UnitName":"DOZEN","Factor":12}]');
+            INSERT INTO materials (material_id, company_id, code, name, is_stocked, is_service, item_type, cost_method, allow_negative, is_deleted, unit1, unit1_factor, unit2, unit2_factor, units_json)
+            VALUES (1, 'S11', 'RM-1', 'Raw', 1, 0, 'Stock', 'WeightedAvg', 1, 0, 'KG', 1, 'g250', 0.25, '[{"UnitName":"KG","Factor":1},{"UnitName":"g250","Factor":0.25}]'),
+                   (2, 'S11', 'FG-1', 'Finished', 1, 0, 'Stock', 'WeightedAvg', 1, 0, 'PCS', 1, 'DOZEN', 12, '[{"UnitName":"PCS","Factor":1},{"UnitName":"DOZEN","Factor":12}]');
             """);
         using (var con = new SqliteConnection(db.ConnectionString))
         {
