@@ -266,9 +266,7 @@ public abstract class RptBase : BaseWin
                     if (material == null)
                         return;
 
-                    var name = string.Equals(App.CurrentLanguageCode, "ar", StringComparison.OrdinalIgnoreCase)
-                        ? material.Name
-                        : string.IsNullOrWhiteSpace(material.NameEn) ? material.Name : material.NameEn;
+                    var name = material.Name;
                     materialFilter.Text = $"{material.Code} - {name}";
                     materialFilter.Tag = material.Code;
                 };
