@@ -39,17 +39,23 @@ namespace Kern.Tests
 
             Assert.Equal("RT-001", m!.Code);
             Assert.Equal("Round trip material", m.Name);
-            Assert.Equal("Round trip EN", m.NameEn);
             using (var verify = new SqliteConnection($"Data Source={ctx.DatabasePath};"))
             {
                 verify.Open();
                 using var command = verify.CreateCommand();
-                command.CommandText = "SELECT name, name_ar FROM materials WHERE material_id = $id";
+                command.CommandText = "SELECT name FROM materials WHERE material_id = $id";
                 command.Parameters.AddWithValue("$id", saved.Id);
                 using var reader = command.ExecuteReader();
                 Assert.True(reader.Read());
                 Assert.Equal("Round trip material", reader.GetString(0));
-                Assert.Equal(string.Empty, reader.GetString(1));
+                using var schema = verify.CreateCommand();
+                schema.CommandText = "PRAGMA table_info(materials)";
+                using var schemaReader = schema.ExecuteReader();
+                var names = new List<string>();
+                while (schemaReader.Read()) names.Add(schemaReader.GetString(1));
+                Assert.Contains("name", names);
+                Assert.DoesNotContain("name_ar", names);
+                Assert.DoesNotContain("name_en", names);
             }
             Assert.Equal("GRP-1", m.GroupCode);
             Assert.Equal("Inactive", m.Status);
@@ -143,18 +149,10 @@ namespace Kern.Tests
         }
 
         [Fact]
-        public void NextCode_LegacyDatabaseWithoutSequenceTable_UsesPersistedMaximum()
+        public void NextCode_UsesDocumentSequenceSchema()
         {
             using var ctx = CreateContext();
             MatRepo.Save(FullyPopulated("MAT-0007"), isNew: true);
-
-            using (var connection = new SqliteConnection($"Data Source={ctx.DatabasePath};"))
-            {
-                connection.Open();
-                using var command = connection.CreateCommand();
-                command.CommandText = "DROP TABLE document_number_sequences";
-                command.ExecuteNonQuery();
-            }
 
             Assert.Equal("MAT-0008", MatRepo.NextCode("MAT-"));
         }
@@ -199,7 +197,6 @@ namespace Kern.Tests
         {
             Code = code,
             Name = "Round trip material",
-            NameEn = "Round trip EN",
             GroupCode = "GRP-1",
             Status = "Inactive",
             ItemType = "Kit",
