@@ -43,7 +43,7 @@
             <Setter Property="FlowDirection" Value="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType=Window}, FallbackValue=LeftToRight}"/>
         </Style>
 
-        <Style x:Key="WizardLabelStyle" TargetType="TextBlock">
+        <Style x:Key="WizardLabelStyle" TargetType="TextBlock" BasedOn="{StaticResource VisuTextBlockLabelStyle}">
             <Setter Property="FontSize" Value="{DynamicResource FontSize12}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Margin" Value="{StaticResource MarginFormLabel}"/>
