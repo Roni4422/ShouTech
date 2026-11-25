@@ -233,9 +233,9 @@ public class ValuationEngineTests
         using var cmd = db.Connection.CreateCommand();
         cmd.Transaction = db.Tx;
         cmd.CommandText = $"""
-            INSERT INTO materials (material_id, company_id, code, name_ar, name_en,
+            INSERT INTO materials (material_id, company_id, code, name,
                 is_stocked, is_service, cost_method, standard_cost, allow_negative, is_deleted)
-            VALUES ({id}, '{CompanyCode}', 'MAT-{id}', 'Item', 'Item',
+            VALUES ({id}, '{CompanyCode}', 'MAT-{id}', 'Item',
                 1, 0, '{costMethod}', {standardCost.ToString(CultureInfo.InvariantCulture)},
                 {(allowNegative ? 1 : 0)}, 0);
             """;
