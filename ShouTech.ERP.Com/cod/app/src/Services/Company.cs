@@ -1279,22 +1279,25 @@ public sealed class CoCreateSvc : ICoCreateSvc
                 };
             }
 
-            if (request.EnableTaxSystem)
+            // Tax localization follows the company's selected country. The UI is
+            // not trusted as the activation authority: enforce the same rule here
+            // so every company-creation entry point activates the matching pack.
+            var selectedPack = TaxCountryPackCatalog.FindByNameOrCode(request.TaxCountryCode);
+            selectedPack ??= TaxCountryPackCatalog.FindByNameOrCode(request.Country);
+            if (!string.IsNullOrWhiteSpace(request.Country) && selectedPack is null)
             {
-                var selectedPack = TaxCountryPackCatalog.FindByNameOrCode(request.Country);
-                if (selectedPack is null ||
-                    !string.Equals(selectedPack.CountryCode, request.TaxCountryCode, StringComparison.OrdinalIgnoreCase))
+                return new CoCreateResult
                 {
-                    return new CoCreateResult
-                    {
-                        Success = false,
-                        Message = "Tax activation requires a supported country or jurisdiction selected in the company profile.",
-                        CompanyCode = string.Empty,
-                        SavedToDatabase = false,
-                        SavedLocally = false
-                    };
-                }
+                    Success = false,
+                    Message = "The selected country has no supported tax localization pack. The company was not created.",
+                    CompanyCode = string.Empty,
+                    SavedToDatabase = false,
+                    SavedLocally = false
+                };
             }
+
+            request.EnableTaxSystem = selectedPack is not null;
+            request.TaxCountryCode = selectedPack?.CountryCode ?? string.Empty;
 
             var companyId = Guid.NewGuid();
             var code = await ResolveCompanyCodeAsync();
