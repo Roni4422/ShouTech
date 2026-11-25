@@ -75,8 +75,8 @@ public class DataExchangeStep10Tests
         PointAppAt(db.Path);
         SeedCompanyAndMaterial(db);
         var xlsx = WriteWorkbook(db.Root,
-            ["material_id", "company_id", "code", "name", "name_en"],
-            [[1L, CompanyCode, "MAT-1", "Widget", "Renamed"]]);
+            ["material_id", "company_id", "code", "name"],
+            [[1L, CompanyCode, "MAT-1", "Renamed"]]);
         var option = new DataExportOption("Products", "Product cards and directory", "materials");
         try
         {
@@ -87,7 +87,7 @@ public class DataExchangeStep10Tests
             var ex = await Assert.ThrowsAsync<AppError>(() =>
                 DataExportSvc.ImportExcelAsync(xlsx, option, CompanyCode));
             Assert.Equal(ErrorCodes.ImportPermissionDenied, ex.Code);
-            Assert.Equal("Widget", db.Scalar("SELECT name_en FROM materials WHERE material_id = 1"));
+            Assert.Equal("Widget", db.Scalar("SELECT name FROM materials WHERE material_id = 1"));
             Assert.True(db.ScalarLong("SELECT COUNT(*) FROM security_audit_log WHERE event_type = 'DATA_IMPORT_DENIED'") >= 1);
         }
         finally { AppHost.Permissions.Clear(); }
@@ -100,8 +100,8 @@ public class DataExchangeStep10Tests
         PointAppAt(db.Path);
         SeedCompanyAndMaterial(db);
         var xlsx = WriteWorkbook(db.Root,
-            ["material_id", "company_id", "code", "name", "name_en"],
-            [[1L, CompanyCode, "MAT-1", "Widget", "Renamed"]]);
+            ["material_id", "company_id", "code", "name"],
+            [[1L, CompanyCode, "MAT-1", "Renamed"]]);
         var option = new DataExportOption("Products", "Product cards and directory", "materials");
         try
         {
@@ -111,7 +111,7 @@ public class DataExchangeStep10Tests
 
             var result = await DataExportSvc.ImportExcelAsync(xlsx, option, CompanyCode);
             Assert.Equal(1, result.UpsertedRows);
-            Assert.Equal("Renamed", db.Scalar("SELECT name_en FROM materials WHERE material_id = 1"));
+            Assert.Equal("Renamed", db.Scalar("SELECT name FROM materials WHERE material_id = 1"));
             var details = db.Scalar("SELECT details FROM security_audit_log WHERE event_type = 'DATA_IMPORT' ORDER BY security_audit_id DESC LIMIT 1");
             Assert.Contains("dataset=Products", details);
             Assert.Contains("upserted=1", details);
@@ -120,14 +120,14 @@ public class DataExchangeStep10Tests
     }
 
     [Fact]
-    public async Task ExcelImport_LanguageNeutralMaterialName_AllowsBlankEnglishName()
+    public async Task ExcelImport_UsesOneMaterialNameField()
     {
         using var db = await MigratedDbAsync();
         PointAppAt(db.Path);
         SeedCompanyAndMaterial(db);
         var xlsx = WriteWorkbook(db.Root,
-            ["material_id", "company_id", "code", "name", "name_en"],
-            [[1L, CompanyCode, "MAT-1", "Material in user language", ""]]);
+            ["material_id", "company_id", "code", "name"],
+            [[1L, CompanyCode, "MAT-1", "Material in user language"]]);
         var option = new DataExportOption("Products", "Product cards and directory", "materials");
         try
         {
@@ -138,8 +138,7 @@ public class DataExchangeStep10Tests
             var result = await DataExportSvc.ImportExcelAsync(xlsx, option, CompanyCode);
             Assert.Equal(1, result.UpsertedRows);
             Assert.Equal("Material in user language", db.Scalar("SELECT name FROM materials WHERE material_id = 1"));
-            Assert.Equal("", db.Scalar("SELECT name_ar FROM materials WHERE material_id = 1"));
-            Assert.Equal("", db.Scalar("SELECT name_en FROM materials WHERE material_id = 1"));
+
         }
         finally { AppHost.Permissions.Clear(); }
     }
@@ -180,8 +179,8 @@ public class DataExchangeStep10Tests
         PointAppAt(db.Path);
         SeedCompanyAndMaterial(db);
         var xlsx = WriteWorkbook(db.Root,
-            ["material_id", "company_id", "code", "name", "name_en", "qty_on_hand", "avg_cost"],
-            [[1L, CompanyCode, "MAT-1", "Widget", "Renamed", 9999L, 999L]]);
+            ["material_id", "company_id", "code", "name", "qty_on_hand", "avg_cost"],
+            [[1L, CompanyCode, "MAT-1", "Renamed", 9999L, 999L]]);
         var option = new DataExportOption("Products", "Product cards and directory", "materials");
         try
         {
@@ -192,7 +191,7 @@ public class DataExchangeStep10Tests
             var result = await DataExportSvc.ImportExcelAsync(xlsx, option, CompanyCode);
             Assert.Contains("qty_on_hand", result.RejectedBalanceColumns);
             Assert.Contains("avg_cost", result.RejectedBalanceColumns);
-            Assert.Equal("Renamed", db.Scalar("SELECT name_en FROM materials WHERE material_id = 1"));
+            Assert.Equal("Renamed", db.Scalar("SELECT name FROM materials WHERE material_id = 1"));
             Assert.Equal("50", db.Scalar("SELECT CAST(qty_on_hand AS TEXT) FROM materials WHERE material_id = 1"));
             Assert.Equal("10", db.Scalar("SELECT CAST(avg_cost AS TEXT) FROM materials WHERE material_id = 1"));
         }
@@ -344,7 +343,7 @@ public class DataExchangeStep10Tests
     private static void SeedCompanyAndMaterial(TestDb db)
     {
         db.Exec($"INSERT INTO companies (company_id, company_code, company_name_ar, company_name_en, currency_code, language_code, is_active, is_deleted, created_at) VALUES ('{CompanyGuid}', '{CompanyCode}', 'Step10 Co', 'Step10 Co', 'SAR', 'en', 1, 0, '2026-01-01T00:00:00')");
-        db.Exec($"INSERT INTO materials (material_id, company_id, code, name, name_ar, name_en, qty_on_hand, avg_cost, is_deleted) VALUES (1, '{CompanyCode}', 'MAT-1', 'Widget', '', 'Widget', 50, 10, 0)");
+        db.Exec($"INSERT INTO materials (material_id, company_id, code, name, qty_on_hand, avg_cost, is_deleted) VALUES (1, '{CompanyCode}', 'MAT-1', 'Widget', 50, 10, 0)");
     }
 
     private static string WriteWorkbook(string root, string[] headers, object?[][] rows)
