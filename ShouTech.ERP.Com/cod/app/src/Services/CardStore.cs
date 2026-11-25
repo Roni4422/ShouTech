@@ -328,7 +328,7 @@ public static class CardStore
             using var connection = Open(cs);
             using var cmd = connection.CreateCommand();
             cmd.CommandText = """
-                SELECT material_id, name_ar FROM materials
+                SELECT material_id, name FROM materials
                 WHERE company_id=$c AND code=$code AND is_deleted=0
                 LIMIT 1;
                 """;
