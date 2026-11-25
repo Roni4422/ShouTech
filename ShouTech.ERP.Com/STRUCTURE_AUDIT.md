@@ -1,7 +1,7 @@
 # Repository Structure and Bootstrap Audit
 
 Branch: `reduce-2-upgrade`
-Audited HEAD: `e155ad05db01bd0c8432939ed17698348d7720e7`
+Audited source baseline: `f9db6ee9e474c043ba980bfd9e5858b027792d73`
 Scope: first-pass structural inventory, exact-blob duplication, migration safety, and startup entry points.
 
 ## Inventory
