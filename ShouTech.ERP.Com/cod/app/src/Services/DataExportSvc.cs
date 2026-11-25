@@ -264,7 +264,7 @@ public static class DataExportSvc
 
     private static readonly string[] MaterialCardExportFields =
     [
-        "material_id", "code", "name", "name_en", "group_code", "item_type", "category",
+        "material_id", "code", "name", "group_code", "item_type", "category",
         "brand", "model", "color", "size_spec", "manufacturer", "origin_country", "source",
         "alt_code", "gtin", "supplier_code", "abc_class", "status", "is_stocked", "is_purchased",
         "is_sold", "is_produced", "is_service", "notes", "unit1", "unit1_factor", "unit1_barcode",
@@ -826,27 +826,17 @@ public static class DataExportSvc
                             $"Column '{mapping.Value.field}' contains value '{cell}' but expects {mapping.Value.type}: {ex.Message}", ex);
                     }
                     values[mapping.Value.field] =
-                        mapping.Value.field.Equals("name_en", StringComparison.OrdinalIgnoreCase) ||
-                        mapping.Value.field.Equals("name", StringComparison.OrdinalIgnoreCase) ||
-                        mapping.Value.field.Equals("name_ar", StringComparison.OrdinalIgnoreCase)
+                        mapping.Value.field.Equals("name", StringComparison.OrdinalIgnoreCase)
                             ? parsed ?? string.Empty
                             : parsed;
                 }
 
-                // The language-neutral "name" column is the only canonical
-                // material name. name_ar is retained solely as an empty legacy
-                // compatibility column and must never be required from users.
+                // Material cards use one user-entered name in materials.name.
                 if (option.TableName.Equals("materials", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!values.TryGetValue("name", out var canonicalName) ||
                         string.IsNullOrWhiteSpace(Convert.ToString(canonicalName, CultureInfo.InvariantCulture)))
-                        throw new InvalidDataException("Product rows require a non-empty canonical 'name' column.");
-
-                    values["name"] = canonicalName;
-                    if (columns.Contains("name_ar", StringComparer.OrdinalIgnoreCase))
-                        values["name_ar"] = string.Empty;
-                    if (values.TryGetValue("name_en", out var englishName))
-                        values["name_en"] = englishName ?? string.Empty;
+                        throw new InvalidDataException("Product rows require a non-empty 'name' column.");
                 }
 
                 if (companyColumn != null)
