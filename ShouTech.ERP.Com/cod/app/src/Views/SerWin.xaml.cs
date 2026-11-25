@@ -323,7 +323,6 @@ public partial class SerWin : BaseWin
                 " ",
                 material.Code,
                 material.Name,
-                material.NameEn,
                 material.ShortName,
                 material.SearchName,
                 material.AltCode,
@@ -333,7 +332,6 @@ public partial class SerWin : BaseWin
             {
                 ["Code"] = material.Code,
                 ["Name"] = material.Name,
-                ["NameEn"] = material.NameEn,
                 ["Group"] = material.GroupCode,
                 ["Status"] = material.Status
             }
@@ -352,12 +350,6 @@ public partial class SerWin : BaseWin
                 Key = "Name",
                 Header = Loc.Get("Reports.Col.MaterialName", "Material Name"),
                 Fill = true
-            },
-            new SerWinColumn
-            {
-                Key = "NameEn",
-                Header = Loc.Get("MatCard.LatinName", "Latin Name"),
-                Width = 180
             },
             new SerWinColumn
             {
