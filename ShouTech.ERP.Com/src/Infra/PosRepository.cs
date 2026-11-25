@@ -309,7 +309,7 @@ public sealed class PosRepository : IPosRepository
         var activeStockBalance = _provider == "PostgreSQL" ? "sb.is_deleted = FALSE" : "COALESCE(sb.is_deleted, 0) = 0";
         var sql = $"""
             SELECT material_id, code,
-                   COALESCE(NULLIF(pos_name,''), NULLIF(name_en,''), NULLIF(name_ar,''), code),
+                   COALESCE(NULLIF(pos_name,''), NULLIF(name,''), NULLIF(name_en,''), code),
                    COALESCE(price_retail, price_list, 0),
                    COALESCE(default_unit, unit1, ''),
                    COALESCE(tax_rate, 0), image_path,
@@ -327,7 +327,7 @@ public sealed class PosRepository : IPosRepository
             """ + (text.Length == 0 ? "" : """
               AND (code LIKE @like OR alt_code LIKE @like OR gtin LIKE @like
                    OR unit1_barcode LIKE @like OR unit2_barcode LIKE @like OR unit3_barcode LIKE @like
-                   OR name_en LIKE @like OR name_ar LIKE @like OR pos_name LIKE @like
+                   OR name_en LIKE @like OR name LIKE @like OR pos_name LIKE @like
                    OR short_name LIKE @like OR search_name LIKE @like)
             """) + $"""
             ORDER BY {(text.Length == 0 ? "code" : """
