@@ -1,0 +1,44 @@
+# Repository Structure and Bootstrap Audit
+
+Branch: `reduce-2-upgrade`
+Audited HEAD: `e155ad05db01bd0c8432939ed17698348d7720e7`
+Scope: first-pass structural inventory, exact-blob duplication, migration safety, and startup entry points.
+
+## Inventory
+
+- Recursive Git tree is complete (not truncated): 840 tracked files.
+- Exact duplicate blob groups: 8.
+- No files were deleted or merged in this pass. Identical migration contents are not sufficient evidence for safe deletion because migration filenames/order/checksums are part of the database history.
+
+## Exact duplicate blobs
+
+| Paths | Assessment |
+|---|---|
+| `dba/mig/postgresql/003_modules.sql` and `004_modules.sql` | Exact same blob, but both are migration IDs. Preserve both; deleting/renaming either can invalidate deployed migration ledgers or alter replay order. |
+| `dba/mig/postgresql/009_accounting_indexes.sql` and `dba/mig/sqlite/007_accounting_indexes.sql` | Cross-provider exact bytes; retain as provider-specific migration assets. |
+| `dba/mig/postgresql/013_deletion_audit.sql` and `dba/mig/sqlite/011_deletion_audit.sql` | Cross-provider exact bytes; retain. |
+| `dba/mig/postgresql/015_journal_document_number_unique.sql` and `dba/mig/sqlite/013_journal_document_number_unique.sql` | Cross-provider exact bytes; retain. |
+| `dba/mig/postgresql/084_supplier_invoice_reference_unique.sql` and `dba/mig/sqlite/084_supplier_invoice_reference_unique.sql` | Cross-provider exact bytes; retain. |
+| `dba/mig/postgresql/120_invoice_line_notes.sql` and `dba/mig/sqlite/120_invoice_line_notes.sql` | Cross-provider exact bytes; retain. |
+| `dba/mig/postgresql/121_uom_names.sql` and `dba/mig/sqlite/121_uom_names.sql` | Cross-provider exact bytes; retain. |
+| `dba/mig/postgresql/126_barcode_template.sql` and `dba/mig/sqlite/126_barcode_template.sql` | Cross-provider exact bytes; retain. |
+
+## Startup and host entry points
+
+- Desktop WPF entry point: `cod/app/src/App.xaml` is explicitly included as the `ApplicationDefinition` in `cod/app/src/MainApp.csproj`; `App.xaml.cs` contains application lifecycle/bootstrap code.
+- Desktop composition root: `cod/app/src/Services/AppHost.cs` owns application-wide service construction and initialization. It is a composition root/service locator, not a second executable entry point.
+- Separate Windows background service: `svc/Program.cs` builds and runs a Generic Host with the Windows Service integration. This is a distinct deployable process and must not be merged into the desktop WPF startup.
+- Developer/test harnesses each have their own `Program.cs`; these are isolated executable tools and are not desktop launch paths.
+- `src/App/App.csproj` is a class library (no executable output type); it is not an application entry point.
+- The desktop project currently compiles source files by wildcard and explicitly includes XAML. Any file merge/removal requires reference, reflection, XAML, resource, and project-item checks.
+
+## Migration finding fixed in this pass
+
+The failed PostgreSQL smoke run reached migration `104_pos_remainder.sql` and failed creating `ix_sales_documents_exchange_ref`: `sales_documents.is_deleted` is declared as `INT NOT NULL DEFAULT 0` in migration `012_commercial_documents.sql`, but migration 104 compared it with PostgreSQL boolean `FALSE`. The predicate has been corrected to `is_deleted = 0` on this branch. This is a pre-release repair of a migration that fails on a clean PostgreSQL database before its history row can be committed; verify against deployed database histories before distributing the migration.
+
+## Next safe structural steps
+
+1. Trace all calls to `AppHost.Initialize`, `SchemaBootstrapper.EnsureSchema`, and `SchemaMigrator.ApplyAllAsync` before changing startup.
+2. Compare embedded schema bootstrap resources with `dba/mig`; remove no bootstrap path until database creation, upgrade, baseline, and recovery flows are proven equivalent.
+3. Add a migration consistency test that validates provider-specific predicates against declared column types, and keep SQLite/PostgreSQL smoke tests as release gates.
+4. Only merge source files with cohesive ownership after checking all symbol references, XAML/resource names, reflection/dynamic loading, and project wildcard inclusion.
