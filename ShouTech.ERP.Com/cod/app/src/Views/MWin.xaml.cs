@@ -333,7 +333,7 @@ namespace ShouTech.App.Views
         }
 
         /// <summary>
-        /// Anchors the archive-bin icon to the quick-access bar.
+        /// Anchors the archive-bin icon above the status bar.
         /// Arabic → left; other languages → right.
         /// The LTR Canvas keeps physical sides stable in RTL layouts.
         /// </summary>
@@ -348,7 +348,7 @@ namespace ShouTech.App.Views
             RecycleBinCornerButton.FlowDirection = isArabic
                 ? FlowDirection.RightToLeft
                 : FlowDirection.LeftToRight;
-            Canvas.SetTop(RecycleBinCornerButton, 0);
+            Canvas.SetBottom(RecycleBinCornerButton, 8);
 
             var layerWidth = RecycleBinLayer.ActualWidth;
             if (layerWidth <= 0)
