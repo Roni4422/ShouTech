@@ -398,9 +398,6 @@ public sealed class PriceListWin : RptBase
         var search = (filters.GetString("Material") ?? string.Empty).Trim();
         var group = filters.GetString("Group") ?? string.Empty;
 
-        var isArabic = string.Equals(
-            App.CurrentLanguageCode, "ar", StringComparison.OrdinalIgnoreCase);
-
         IEnumerable<MatRepo.MatRec> materials = await Task.Run(() => MatRepo.LoadAll(), ct);
 
         if (search.Length > 0)
@@ -408,7 +405,7 @@ public sealed class PriceListWin : RptBase
             materials = materials.Where(m =>
                 m.Code.Contains(search, StringComparison.OrdinalIgnoreCase)
              || m.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
-             || (m.NameEn ?? string.Empty).Contains(search, StringComparison.OrdinalIgnoreCase));
+);
         }
 
         if (group.Length > 0)
@@ -419,7 +416,7 @@ public sealed class PriceListWin : RptBase
             .Select(m => (IReadOnlyDictionary<string, object?>)new Dictionary<string, object?>
             {
                 ["Code"] = m.Code,
-                ["Name"] = isArabic || string.IsNullOrWhiteSpace(m.NameEn) ? m.Name : m.NameEn,
+                ["Name"] = m.Name,
                 ["Unit"] = m.DefaultUnit ?? m.Unit1 ?? string.Empty,
                 ["Retail"] = m.PriceRetail,
                 ["Wholesale"] = m.PriceWholesale,
