@@ -405,9 +405,9 @@ public class QualityGateTests
             })
             {
                 Exec($"""
-                    INSERT INTO materials (company_id, code, name_ar, name_en, cost_method,
+                    INSERT INTO materials (company_id, code, name, cost_method,
                                            quality_check_required, has_batch, has_serial, qc_outgoing_required)
-                    VALUES ('{CO}', '{code}', '{code}', '{code}', 'WeightedAvg', {qc}, {batch}, {serial}, {outgoing});
+                    VALUES ('{CO}', '{code}', '{code}', 'WeightedAvg', {qc}, {batch}, {serial}, {outgoing});
                     """);
                 materials[code] = Scalar($"SELECT material_id FROM materials WHERE company_id = '{CO}' AND code = '{code}'");
             }
