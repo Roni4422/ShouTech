@@ -34,10 +34,11 @@ public class Phase4SecurityTests
 
             var backup = new BkpServ(null!, null!, null!, null);
             Assert.False(backup.IsBackupDue());
+            Assert.False(backup.RunOnlineBackupCycleAsync().GetAwaiter().GetResult().Success);
 
             var result = backup.PerformRotatedBackup();
             Assert.False(result.Success);
-            Assert.Contains("No active company", result.Message, StringComparison.Ordinal);
+            Assert.Contains("No active company", result.Message ?? string.Empty, StringComparison.Ordinal);
         }
         finally
         {
