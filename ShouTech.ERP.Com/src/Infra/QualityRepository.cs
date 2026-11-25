@@ -305,7 +305,7 @@ public sealed class QualityRepository : IQualityRepository
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var command = CreateCommand(connection, null, $"""
-            SELECT material_id, code, name_en, COALESCE(quality_check_required, 0),
+            SELECT material_id, code, name, COALESCE(quality_check_required, 0),
                    COALESCE(qc_outgoing_required, 0), qc_template_in_id, qc_template_out_id
             FROM materials WHERE company_id = @c AND {NotDeleted} ORDER BY code
             """);
@@ -360,7 +360,7 @@ public sealed class QualityRepository : IQualityRepository
     // ------------------------------------------------------------------
     private const string InspectionSelect = """
         SELECT i.inspection_id, i.inspection_type, i.template_id, i.ref_doc_kind, i.ref_doc_id,
-               i.ref_doc_no, i.material_id, m.code, m.name_en, i.batch_id, b.batch_no,
+               i.ref_doc_no, i.material_id, m.code, m.name, i.batch_id, b.batch_no,
                i.warehouse_id, i.quarantine_warehouse_id, i.party_id,
                i.total_qty, i.sample_qty, i.accepted_qty, i.rejected_qty,
                i.status, i.disposition, i.inspector, i.inspected_at, i.due_date, i.notes
@@ -774,12 +774,12 @@ public sealed class QualityRepository : IQualityRepository
               GROUP BY i.party_id, p.name_en ORDER BY 1
               """
             : $"""
-              SELECT COALESCE(m.code, CAST(i.material_id AS TEXT)), COALESCE(m.name_en, ''),
+              SELECT COALESCE(m.code, CAST(i.material_id AS TEXT)), COALESCE(m.name, ''),
                      COUNT(*), COALESCE(SUM(i.total_qty), 0), COALESCE(SUM(i.accepted_qty), 0), COALESCE(SUM(i.rejected_qty), 0)
               FROM quality_inspections i
               LEFT JOIN materials m ON m.material_id = i.material_id AND m.company_id = i.company_id
               WHERE i.company_id = @c AND i.{NotDeleted} AND i.status <> 'Draft'
-              GROUP BY i.material_id, m.code, m.name_en ORDER BY 1
+              GROUP BY i.material_id, m.code, m.name ORDER BY 1
               """;
         await using var command = CreateCommand(connection, null, sql);
         Add(command, "@c", companyId.Trim());
