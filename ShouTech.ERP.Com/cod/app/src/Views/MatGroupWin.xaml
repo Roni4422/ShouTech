@@ -76,8 +76,6 @@
                         Binding="{Binding Code}" IsReadOnly="True"/>
                     <DataGridTextColumn Width="2*"
                         Binding="{Binding DisplayName}" IsReadOnly="True"/>
-                    <DataGridTextColumn Width="2*"
-                        Binding="{Binding NameEn}" IsReadOnly="True"/>
                     <DataGridTextColumn Width="110"
                         Binding="{Binding Status}" IsReadOnly="True"/>
                 </DataGrid.Columns>
