@@ -869,7 +869,7 @@ namespace Kern.Tests
             }
             Exec("INSERT INTO warehouses (warehouse_id, company_id, warehouse_code, warehouse_name_ar, warehouse_name_en, is_active, is_deleted) VALUES (1, $code, 'WH-01', 'Main', 'Main', 1, 0);",
                 ("$code", companyCode));
-            Exec("INSERT INTO materials (material_id, company_id, code, name_ar, name_en, is_stocked, is_service, cost_method, allow_negative, is_deleted) VALUES (42, $code, 'MAT-42', 'Order test item', 'Order test item', 1, 0, 'WeightedAvg', 0, 0);",
+            Exec("INSERT INTO materials (material_id, company_id, code, name, is_stocked, is_service, cost_method, allow_negative, is_deleted) VALUES (42, $code, 'MAT-42', 'Order test item', 1, 0, 'WeightedAvg', 0, 0);",
                 ("$code", companyCode));
             Exec("INSERT INTO material_stock_balances (company_id, warehouse_id, material_id, available_qty, reserved_qty, average_cost, last_cost, stock_value, is_deleted) VALUES ($code, 1, 42, 1000, 0, 10, 10, 10000, 0);",
                 ("$code", companyCode));
