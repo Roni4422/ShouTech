@@ -201,6 +201,10 @@ public sealed class UsrPref
 
     public string LastTab { get; set; } = "File";
 
+    public double RecycleBinLeft { get; set; } = -1;
+
+    public double RecycleBinTop { get; set; } = -1;
+
     // ================================================================
     //  Recent Items
     // ================================================================
