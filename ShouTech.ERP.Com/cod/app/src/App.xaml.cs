@@ -9,20 +9,14 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
-using System.IO;
-using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Interop;
 using System.Windows.Threading;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
-using Npgsql;
 using ShouTech.App.Common;
 using ShouTech.App.Configuration;
 using ShouTech.App.Localization;
@@ -97,7 +91,7 @@ namespace ShouTech.App
     //  Compare these lines in log.log before/after any startup change.
     //  Timing is diagnostics only: a failure inside it must never
     //  affect startup, and the logging layer itself may not exist yet
-    //  — the same guarded pattern SchemaBootstrapper.SafeLog* uses.
+    //  — the same guarded pattern used by the startup bootstrap.
     // ========================================================================
     internal static class StartupTiming
     {
