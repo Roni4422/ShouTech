@@ -432,10 +432,53 @@ public abstract class BaseWin : Window
         ShellContext.ApplyToWindow(this);
     }
 
+    /// <summary>
+    /// Applies the shared RTL-aware form-label style to XAML and code-built
+    /// label/field pairs that have not declared a more specific style.
+    /// A label is recognized only when it shares a Grid row with an input
+    /// control in a later column; headings and report text are left untouched.
+    /// </summary>
+    private void ApplyFormLabelStyles()
+    {
+        var pending = new Stack<DependencyObject>();
+        pending.Push(this);
+
+        while (pending.Count > 0)
+        {
+            var current = pending.Pop();
+            if (current is Grid grid)
+            {
+                foreach (UIElement child in grid.Children)
+                {
+                    if (child is not TextBlock label ||
+                        label.Style is not null ||
+                        Grid.GetColumnSpan(label) != 1)
+                        continue;
+
+                    var row = Grid.GetRow(label);
+                    var column = Grid.GetColumn(label);
+                    var hasAdjacentInput = grid.Children.Cast<UIElement>().Any(candidate =>
+                        !ReferenceEquals(candidate, label) &&
+                        Grid.GetRow(candidate) == row &&
+                        Grid.GetColumn(candidate) > column &&
+                        (candidate is TextBox or ComboBox or DatePicker or PasswordBox or CheckBox or RadioButton));
+
+                    if (hasAdjacentInput)
+                        label.SetResourceReference(StyleProperty, "VisuTextBlockLabelStyle");
+                }
+            }
+
+            var childCount = VisualTreeHelper.GetChildrenCount(current);
+            for (var i = childCount - 1; i >= 0; i--)
+                pending.Push(VisualTreeHelper.GetChild(current, i));
+        }
+    }
+
     private void OnBaseLoaded(object sender, RoutedEventArgs e)
     {
         ApplyBackdropKind();
         ApplyFlowDirection();
+        ApplyFormLabelStyles();
         ApplyScheduleTint();
         ApplyLocalizedText();
         ApplyPrimaryButtonConvention();
@@ -682,6 +725,7 @@ public abstract class BaseWin : Window
         _langHandler = (_, _) => Dispatcher.BeginInvoke(new Action(() =>
         {
             ApplyFlowDirection();
+            ApplyFormLabelStyles();
             ApplyLocalizedText();
             OnLanguageChanged();
         }));
