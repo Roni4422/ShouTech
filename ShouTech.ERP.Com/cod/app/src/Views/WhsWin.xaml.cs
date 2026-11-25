@@ -1339,9 +1339,7 @@ namespace ShouTech.App.Views
                     if (material == null)
                         return;
                     selectedMaterialId = material.Id;
-                    var name = string.Equals(App.CurrentLanguageCode, "ar", StringComparison.OrdinalIgnoreCase)
-                        ? material.Name
-                        : string.IsNullOrWhiteSpace(material.NameEn) ? material.Name : material.NameEn;
+                    var name = material.Name;
                     materialFilter.Text = $"{material.Code} - {name}";
                     selectedMaterialId = material.Id;
                     RefreshRowsView();
@@ -1851,10 +1849,7 @@ namespace ShouTech.App.Views
                     }
 
                     private static string DisplayMaterialName(MatRepo.MatRec material)
-                        => string.Equals(App.CurrentLanguageCode, "ar", StringComparison.OrdinalIgnoreCase) ||
-                           string.IsNullOrWhiteSpace(material.NameEn)
-                            ? material.Name
-                            : material.NameEn;
+                        => material.Name;
 
                     private void MoveHistory_Click(object sender, RoutedEventArgs e)
                     {
@@ -1930,7 +1925,6 @@ namespace ShouTech.App.Views
                         var matches = materials.Where(material =>
                                 material.Code.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                                 material.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                                material.NameEn.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                                 material.ShortName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                                 material.SearchName.Contains(query, StringComparison.OrdinalIgnoreCase))
                             .ToList();
