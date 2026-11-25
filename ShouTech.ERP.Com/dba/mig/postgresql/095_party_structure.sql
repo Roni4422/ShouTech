@@ -11,7 +11,7 @@
 CREATE TABLE IF NOT EXISTS party_contacts (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
-    party_id TEXT NOT NULL REFERENCES parties(id),
+    party_id UUID NOT NULL REFERENCES parties(id),
     name TEXT NOT NULL,
     role TEXT,
     phone TEXT,
@@ -33,7 +33,7 @@ CREATE INDEX IF NOT EXISTS ix_party_contacts_party
 CREATE TABLE IF NOT EXISTS party_addresses (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
-    party_id TEXT NOT NULL REFERENCES parties(id),
+    party_id UUID NOT NULL REFERENCES parties(id),
     kind TEXT NOT NULL DEFAULT 'Delivery' CHECK (kind IN ('Delivery','Billing','Other')),
     city TEXT,
     country TEXT,
@@ -55,7 +55,7 @@ CREATE INDEX IF NOT EXISTS ix_party_addresses_party
 CREATE TABLE IF NOT EXISTS party_branches (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
-    party_id TEXT NOT NULL REFERENCES parties(id),
+    party_id UUID NOT NULL REFERENCES parties(id),
     name TEXT NOT NULL,
     address TEXT,
     phone TEXT,
