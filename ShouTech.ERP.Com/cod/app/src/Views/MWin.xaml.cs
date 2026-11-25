@@ -368,7 +368,7 @@ namespace ShouTech.App.Views
             _recycleBinStartLeft = Canvas.GetLeft(RecycleBinCornerButton);
             _recycleBinStartTop = Canvas.GetTop(RecycleBinCornerButton);
             _isDraggingRecycleBin = false;
-            RecycleBinCornerButton.CaptureMouse();
+            // ButtonBase owns mouse capture so a normal click still raises Click.
         }
 
         private void RecycleBin_MouseMove(object sender, MouseEventArgs e)
@@ -398,7 +398,6 @@ namespace ShouTech.App.Views
             if (RecycleBinCornerButton is null || !RecycleBinCornerButton.IsMouseCaptured)
                 return;
 
-            RecycleBinCornerButton.ReleaseMouseCapture();
             if (!_isDraggingRecycleBin)
                 return;
 
@@ -408,6 +407,8 @@ namespace ShouTech.App.Views
             preferences.RecycleBinTop = Canvas.GetTop(RecycleBinCornerButton);
             preferences.Save();
             _isDraggingRecycleBin = false;
+
+            // Keep capture intact until ButtonBase processes MouseLeftButtonUp.
         }
 
         // Quick Access Bar: each navigation button carries the same action key
