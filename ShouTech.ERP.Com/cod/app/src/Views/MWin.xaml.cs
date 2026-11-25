@@ -316,6 +316,18 @@ namespace ShouTech.App.Views
 
         private void RecycleBinLayer_SizeChanged(object sender, SizeChangedEventArgs e)
         {
+            if (RecycleBinLayer == null || RecycleBinCornerButton == null)
+                return;
+
+            // The archive bin belongs to the content viewport. When the
+            // viewport becomes too short, the status/dock area takes over
+            // the available space and the bin is hidden until it returns.
+            const double requiredHeight = 146;
+            RecycleBinCornerButton.Visibility =
+                RecycleBinLayer.ActualHeight >= requiredHeight
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+
             PositionRecycleBinCorner(IsArabicUi());
         }
 
