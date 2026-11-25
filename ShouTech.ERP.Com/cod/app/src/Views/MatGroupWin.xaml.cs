@@ -144,23 +144,15 @@ public partial class MatGroupWin : BaseWin
             var materials = MatRepo.LoadAll();
             _rows.Clear();
 
-            var arabic = (App.CurrentLanguageCode ?? "en")
-                .StartsWith("ar", StringComparison.OrdinalIgnoreCase);
-
             foreach (var material in materials.OrderBy(item => item.Code, StringComparer.Ordinal))
             {
-                var displayName = arabic
-                    ? material.Name
-                    : material.NameEn;
-                if (string.IsNullOrWhiteSpace(displayName))
-                    displayName = material.Name;
+                var displayName = material.Name;
 
                 var row = new GroupMaterialRow
                 {
                     Id = material.Id,
                     Code = material.Code,
                     DisplayName = displayName,
-                    NameEn = material.NameEn,
                     Status = material.Status,
                     IsAssigned = assigned.Contains(material.Id)
                 };
@@ -354,7 +346,6 @@ public partial class MatGroupWin : BaseWin
         public long Id { get; init; }
         public string Code { get; init; } = string.Empty;
         public string DisplayName { get; init; } = string.Empty;
-        public string NameEn { get; init; } = string.Empty;
         public string Status { get; init; } = string.Empty;
 
         public bool IsAssigned
