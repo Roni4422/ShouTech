@@ -995,8 +995,8 @@ internal static class MatRepo
         if (string.IsNullOrWhiteSpace(cs)) throw new InvalidOperationException("No connection to the current company database.");
         EnsureSchema();
         using var connection = Open(cs);
-        using var transaction = connection.BeginTransaction();
         var hasCanonicalName = HasColumn(connection, "materials", "name");
+        using var transaction = connection.BeginTransaction();
         if (isNew)
         {
             if (CodeExistsOn(connection, transaction, value.Code, null)) throw new InvalidOperationException("Material code already exists: " + value.Code);
