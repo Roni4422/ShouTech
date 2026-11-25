@@ -779,7 +779,7 @@ internal static class SteiSvc
         }
     }
 
-    private static SteiManifest BuildManifest(string provider)
+    internal static SteiManifest BuildManifest(string provider)
     {
         var now = DateTimeOffset.Now;
         var user = AppState.CurrentUser;
@@ -790,7 +790,7 @@ internal static class SteiSvc
             ExportedByUserId = user?.Id ?? "",
             ExportedByUserName = !string.IsNullOrWhiteSpace(user?.FullName) ? user!.FullName : user?.Username ?? Environment.UserName,
             SourceCompanyId = user?.CompanyId ?? "",
-            SourceCompanyCode = AppState.CurrentUser?.CompanyId ?? "",
+            SourceCompanyCode = AppState.CurrentCompanyCode ?? "",
             SourceCompanyName = AppState.CurrentCompanyDisplayName,
             SourceDatabaseName = GetDatabaseName(provider),
             SourceDatabaseProvider = provider,
