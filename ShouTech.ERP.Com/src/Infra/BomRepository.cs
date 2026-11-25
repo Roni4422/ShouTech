@@ -327,7 +327,7 @@ public sealed class BomRepository : IBomRepository
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var command = CreateCommand(connection, null,
-            $"SELECT m.material_id, m.code, COALESCE(NULLIF(m.name, ''), NULLIF(m.name_en, ''), m.code), m.unit1, m.avg_cost, m.standard_cost, m.last_purchase_cost FROM materials m WHERE m.company_id = @company AND m.{NotDeleted} ORDER BY m.code");
+            $"SELECT m.material_id, m.code, COALESCE(NULLIF(m.name, ''), m.code), m.unit1, m.avg_cost, m.standard_cost, m.last_purchase_cost FROM materials m WHERE m.company_id = @company AND m.{NotDeleted} ORDER BY m.code");
         Add(command, "@company", companyId.Trim());
         var result = new List<MfgMaterialOption>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
