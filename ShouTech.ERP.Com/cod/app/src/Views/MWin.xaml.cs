@@ -308,16 +308,38 @@ namespace ShouTech.App.Views
 
         private void RecycleBinLayer_SizeChanged(object sender, SizeChangedEventArgs e)
         {
-            if (RecycleBinLayer == null || RecycleBinCornerButton == null)
+            UpdateRecycleBinVisibility();
+        }
+
+        private void UpdateRecycleBinVisibility()
+        {
+            if (RecycleBinLayer is null || RecycleBinCornerButton is null)
                 return;
 
-            // Keep the user-positioned bin inside a viewport large enough
-            // to display its full surface. Never relocate it automatically.
-            const double requiredWidth = 120;
-            const double requiredHeight = 146;
+            // Keep the user-positioned bin inside the content viewport.
+            // Hide it rather than moving it when the saved position no longer
+            // fits; it reappears when the viewport can contain that position.
+            const double minimumWidth = 120;
+            const double minimumHeight = 146;
+            var width = RecycleBinLayer.ActualWidth;
+            var height = RecycleBinLayer.ActualHeight;
+            var buttonWidth = RecycleBinCornerButton.ActualWidth > 0
+                ? RecycleBinCornerButton.ActualWidth
+                : RecycleBinCornerButton.Width;
+            var buttonHeight = RecycleBinCornerButton.ActualHeight > 0
+                ? RecycleBinCornerButton.ActualHeight
+                : RecycleBinCornerButton.Height;
+            var left = Canvas.GetLeft(RecycleBinCornerButton);
+            var top = Canvas.GetTop(RecycleBinCornerButton);
+            var hasPosition = !double.IsNaN(left) && !double.IsNaN(top);
+            var positionFits = !hasPosition ||
+                (left >= 0 && top >= 0 &&
+                 left + buttonWidth <= width &&
+                 top + buttonHeight <= height);
             var hasRoom =
-                RecycleBinLayer.ActualWidth >= requiredWidth &&
-                RecycleBinLayer.ActualHeight >= requiredHeight;
+                width >= Math.Max(minimumWidth, buttonWidth) &&
+                height >= Math.Max(minimumHeight, buttonHeight) &&
+                positionFits;
 
             RecycleBinCornerButton.Visibility =
                 hasRoom ? Visibility.Visible : Visibility.Collapsed;
@@ -358,6 +380,7 @@ namespace ShouTech.App.Views
             Canvas.SetLeft(RecycleBinCornerButton, left);
             Canvas.SetTop(RecycleBinCornerButton, top);
             RecycleBinCornerButton.FlowDirection = FlowDirection.LeftToRight;
+            UpdateRecycleBinVisibility();
         }
 
         private void RecycleBin_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
