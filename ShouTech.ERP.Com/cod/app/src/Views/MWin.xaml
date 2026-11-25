@@ -984,6 +984,9 @@
                         Height="130"
                         Canvas.Left="24"
                         Canvas.Bottom="8"
+                        PreviewMouseLeftButtonDown="RecycleBin_MouseLeftButtonDown"
+                        PreviewMouseMove="RecycleBin_MouseMove"
+                        PreviewMouseLeftButtonUp="RecycleBin_MouseLeftButtonUp"
                         Click="OnRecycleBinClick">
                     <Grid Width="120" Height="130">
                         <Image Width="130"
