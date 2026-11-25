@@ -179,7 +179,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="../../../dba/mig/sqlite/*.sql" Link="dba/mig/sqlite/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Condition="Exists('../../../dba/mig/sqlite')" />
-    <None Include="../../../dba/mig/postgresql/*.sql" Link="dba/mig/postgresql/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Condition="Exists('../../../dba/mig/postgresql')" />
+    <None Include="../../../dba/mig/sqlite/*.sql" Link="dba/mig/sqlite/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="Exists('../../../dba/mig/sqlite')" />
+    <None Include="../../../dba/mig/postgresql/*.sql" Link="dba/mig/postgresql/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="Exists('../../../dba/mig/postgresql')" />
   </ItemGroup>
 </Project>
