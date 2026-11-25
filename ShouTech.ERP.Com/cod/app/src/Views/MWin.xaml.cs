@@ -517,24 +517,6 @@ namespace ShouTech.App.Views
             }
         }
 
-        /// <summary>
-        /// Shell entry to the global Information Window
-        /// (INFO_WINDOW_STUDY): reopens InfoWin on the last selection
-        /// published by any window (F9 inside a window opens it on
-        /// that window's own selection).
-        /// </summary>
-        private void OnInfoClick(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                InfoWin.ShowLast(this);
-            }
-            catch (Exception ex)
-            {
-                AppHost.Errors.Report(ErrorCodes.ShellOperationFailed, ex, "MWin.xaml.OnInfoClick");
-            }
-        }
-
         private async Task RefreshRecycleBinBadgeAsync()
         {
             try
@@ -845,6 +827,17 @@ namespace ShouTech.App.Views
 
             if (sender is not RibbonButton button)
                 return;
+
+            // View > Information > Info window
+            // opens the shared information window from the main menu surface.
+            if (string.Equals(
+                    LocProps.GetKey(button),
+                    "View.InfoWindow",
+                    StringComparison.Ordinal))
+            {
+                InfoWin.ShowLast(this);
+                return;
+            }
 
             // Tools > Options opens the general Options window
             // (services phase B1); the POS device settings keep their
