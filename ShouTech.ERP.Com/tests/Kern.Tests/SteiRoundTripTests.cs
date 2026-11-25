@@ -29,6 +29,36 @@ namespace Kern.Tests;
 public class SteiRoundTripTests
 {
     [Fact]
+    public void BuildManifest_SeparatesCompanyIdFromCompanyCode()
+    {
+        var previousUser = AppState.CurrentUser;
+        var previousCode = AppState.CurrentCompanyCode;
+        var previousName = AppState.CurrentCompanyName;
+        var previousNameEn = AppState.CurrentCompanyNameEn;
+        try
+        {
+            AppState.CurrentUser = new UserInfo
+            {
+                Id = "user-1",
+                Username = "admin",
+                FullName = "Administrator",
+                CompanyId = "company-id-1"
+            };
+            AppState.SetCompany("company-code-1", "Company Local", "Company English");
+
+            var manifest = SteiSvc.BuildManifest("SQLite");
+
+            Assert.Equal("company-id-1", manifest.SourceCompanyId);
+            Assert.Equal("company-code-1", manifest.SourceCompanyCode);
+        }
+        finally
+        {
+            AppState.CurrentUser = previousUser;
+            AppState.SetCompany(previousCode, previousName, previousNameEn);
+        }
+    }
+
+    [Fact]
     public void Crypto_RoundTrip_PreservesPayload_AndRejectsWrongPassword()
     {
         var payload = Encoding.UTF8.GetBytes("فاتورة INV-001 — 109.25 — 2026-01-15");
