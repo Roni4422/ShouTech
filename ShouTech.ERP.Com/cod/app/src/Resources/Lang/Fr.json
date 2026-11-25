@@ -1682,6 +1682,7 @@
   "CostStandard": "Coût standard",
   "UnitPiece": "Pièce",
   "ErrCodeRequired": "Le code matière est obligatoire",
+  "ErrNumberGeneration": "Impossible de générer un nouveau numéro d'article. Vérifiez la base de données de l'entreprise et la numérotation, puis réessayez.",
   "ErrNameRequired": "Le nom matière est obligatoire",
   "ErrUnitRequired": "L'unité de base est obligatoire",
   "ErrMinMax": "Le minimum ne peut pas dépasser le maximum",
