@@ -71,3 +71,26 @@ The earlier `095_party_structure.sql` repair also aligned three `party_id` forei
 ## Structural cleanup decision
 
 The eight exact duplicate groups were inspected. Seven are intentional SQLite/PostgreSQL migration copies; the remaining pair are separately numbered PostgreSQL migrations. Removing or renaming any of these can break deployed migration ledgers, checksum verification, or replay order. No arbitrary source-file merges or deletions are justified by file count alone. The next source consolidation should target cohesive service responsibilities and preserve stable public APIs.
+
+## Final Windows build and regression evidence
+
+Windows CI run: https://github.com/Roni4422/ShouTech/actions/runs/45563844039
+Code commit tested: `8ed1c27fb9e4d38e748625aac34823f4a77216ac`
+
+- NuGet restore: passed.
+- Windows Release build of the application and test project: passed.
+- Full `Kern.Tests` run reached the 30-minute job limit and was cancelled by the runner. The log recorded 23 failing tests before cancellation; therefore this run is not a passing full-suite result.
+- The failing test groups reported by the run were:
+  - document numbering expectation and consolidated-invoice numbering;
+  - generalized purchase attachments;
+  - party unification (supplier-payment validation, opening-balance FX, blacklist validation);
+  - sales contract fulfillment and sales-chain fiscal-period / warehouse setup;
+  - credit-limit coded-error expectation;
+  - delivery-cost decimal residual;
+  - purchase-chain fixture schema and posting cases;
+  - CRM qualification conversion;
+  - user-preference normalization;
+  - sales approval-history ordering and sales-chain posting cases.
+- These failures are recorded as separate business-domain regression work items; they were not hidden or reclassified as successful by the structural/startup changes.
+
+The SQLite and PostgreSQL migration smoke workflow remains successful on commit `f6e494ef9cf653beb902717758499b7af75d2b18`, with clean install, same-database rerun, and migration-history checks for both providers. No migration files changed after that successful run.
