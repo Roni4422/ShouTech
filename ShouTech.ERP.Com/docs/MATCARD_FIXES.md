@@ -300,7 +300,7 @@ INSERT/UPDATE column lists (every column bound, every parameter used).
 | CmbGroup (المجموعة) | GroupCode | materials.group_code | ✓ | ✓ | round-trips (defect 2) |
 | CmbItemType (النوع) | ItemType | materials.item_type | ✓ | ✓ | round-trips; options below |
 | CmbStatus ⇄ ChkInactive | Status | materials.status | ✓ | ✓ | synced pair, one store |
-| TxtName / TxtNameEn | Name / NameEn | name_ar / name_en | ✓ | ✓ | round-trips |
+| TxtName | Name | name | ✓ | ✓ | round-trips in the user's entered language |
 | CmbCategory (الصنف) | Category | materials.category | ✓ | ✓ | round-trips (defect 2) |
 | TxtBrand / TxtModel / TxtSizeSpec | Brand / Model / SizeSpec | brand / model / size_spec | ✓ | ✓ | round-trips |
 | CmbColor | Color | materials.color | ✓ | ✓ | round-trips (F3 for out-of-list) |
