@@ -81,7 +81,7 @@ public static class RecycleBinSvc
             ["cheque_no", "party_name", "id"],
             ["id"]),
         new("products", "Products",
-            ["product_name_ar", "product_name_en", "product_name", "name", "code", "barcode"],
+            ["product_name", "name", "code", "barcode"],
             ["product_id", "id"]),
         new("materials", "Products",
             ["name", "code", "barcode"],
