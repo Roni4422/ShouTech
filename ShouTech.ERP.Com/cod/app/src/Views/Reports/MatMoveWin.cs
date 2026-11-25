@@ -340,7 +340,6 @@ public sealed class MatListWin : RptBase
             materials = materials.Where(m =>
                 m.Code.Contains(search, StringComparison.OrdinalIgnoreCase)
              || m.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
-             || (m.NameEn ?? string.Empty).Contains(search, StringComparison.OrdinalIgnoreCase)
              || (m.SearchName ?? string.Empty).Contains(search, StringComparison.OrdinalIgnoreCase));
         }
 
@@ -352,7 +351,7 @@ public sealed class MatListWin : RptBase
             .Select(m => (IReadOnlyDictionary<string, object?>)new Dictionary<string, object?>
             {
                 ["Code"] = m.Code,
-                ["Name"] = isArabic || string.IsNullOrWhiteSpace(m.NameEn) ? m.Name : m.NameEn,
+                ["Name"] = m.Name,
                 ["Group"] = string.IsNullOrEmpty(m.GroupCode)
                     ? string.Empty
                     : groupNames.GetValueOrDefault(m.GroupCode, m.GroupCode),
