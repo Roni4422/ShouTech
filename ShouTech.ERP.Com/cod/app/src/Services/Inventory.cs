@@ -1140,7 +1140,8 @@ internal static class MatRepo
                 throw new ArgumentException("Invalid schema table name.", nameof(table));
             command.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = $column";
         }
-        Add(command, "$table", table);
+        if (DatabaseRuntime.IsPostgreSql())
+            Add(command, "$table", table);
         Add(command, "$column", column);
         return Convert.ToInt32(command.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture) > 0;
     }
