@@ -491,11 +491,7 @@ public sealed class MatMoveWin : RptBase
                     ? r.GetValueOrDefault("WarehouseName")?.ToString()
                     : r.GetValueOrDefault("WarehouseNameEn")?.ToString()),
             ["MaterialCode"] = r.GetValueOrDefault("MaterialCode"),
-            ["MaterialName"] = isArabic
-                ? r.GetValueOrDefault("MaterialName")
-                : string.IsNullOrWhiteSpace(r.GetValueOrDefault("MaterialNameEn")?.ToString())
-                    ? r.GetValueOrDefault("MaterialName")
-                    : r.GetValueOrDefault("MaterialNameEn"),
+            ["MaterialName"] = r.GetValueOrDefault("MaterialName"),
             ["QtyIn"] = ToDec(r.GetValueOrDefault("QtyIn")),
             ["QtyOut"] = ToDec(r.GetValueOrDefault("QtyOut")),
             ["UnitCost"] = ToDec(r.GetValueOrDefault("UnitCost")),
