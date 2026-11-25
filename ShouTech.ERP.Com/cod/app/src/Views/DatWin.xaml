@@ -113,7 +113,7 @@
                         </Grid>
                         <Grid Margin="0,8,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <TextBlock x:Name="ImportDatasetLabel" Grid.Column="0" Text="Dataset type" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="ImportDatasetLabel" Grid.Column="0" Text="Dataset type" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <ComboBox x:Name="ImportDatasetBox" Grid.Column="1" Style="{DynamicResource VisuComboBoxStyle}" Height="30" DisplayMemberPath="DisplayName" SelectionChanged="ImportDatasetBox_SelectionChanged"/>
                         </Grid>
                         <TextBlock x:Name="ImportHintText" Margin="0,6,0,0" TextWrapping="Wrap" Opacity="0.78" Text="Editable Excel data can be imported only with its original encrypted type marker and unchanged column headers."/>
@@ -128,7 +128,7 @@
                         </StackPanel>
                         <Grid x:Name="ImportPasswordGrid" Margin="0,8,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <TextBlock x:Name="ImportPasswordLabel" Grid.Column="0" Text="Package password" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="ImportPasswordLabel" Grid.Column="0" Text="Package password" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <PasswordBox x:Name="ImportPasswordBox" Grid.Column="1" Style="{DynamicResource VisuPasswordBoxStyle}" Height="28" Padding="7,4"/>
                         </Grid>
                     </StackPanel>
@@ -147,9 +147,9 @@
                         <Grid Margin="0,8,0,0">
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <TextBlock x:Name="ExportPasswordLabel" Grid.Row="0" Grid.Column="0" Text="Package password" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="ExportPasswordLabel" Grid.Row="0" Grid.Column="0" Text="Package password" VerticalAlignment="Center" Margin="0,0,8,6"/>
                             <PasswordBox x:Name="ExportPasswordBox" Grid.Row="0" Grid.Column="1" Style="{DynamicResource VisuPasswordBoxStyle}" Height="28" Padding="7,4" Margin="0,0,0,6"/>
-                            <TextBlock x:Name="ExportPasswordConfirmLabel" Grid.Row="1" Grid.Column="0" Text="Confirm password" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="ExportPasswordConfirmLabel" Grid.Row="1" Grid.Column="0" Text="Confirm password" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <PasswordBox x:Name="ExportPasswordConfirmBox" Grid.Row="1" Grid.Column="1" Style="{DynamicResource VisuPasswordBoxStyle}" Height="28" Padding="7,4"/>
                         </Grid>
                     </StackPanel>
@@ -184,9 +184,9 @@
                         <Grid x:Name="DatasetPasswordGrid" Grid.Row="3" Margin="0,8,0,0" Visibility="Collapsed">
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <TextBlock x:Name="DatasetPasswordLabel" Grid.Row="0" Grid.Column="0" Text="Package password" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="DatasetPasswordLabel" Grid.Row="0" Grid.Column="0" Text="Package password" VerticalAlignment="Center" Margin="0,0,8,6"/>
                             <PasswordBox x:Name="DatasetPasswordBox" Grid.Row="0" Grid.Column="1" Style="{DynamicResource VisuPasswordBoxStyle}" Height="28" Padding="7,4" Margin="0,0,0,6"/>
-                            <TextBlock x:Name="DatasetPasswordConfirmLabel" Grid.Row="1" Grid.Column="0" Text="Confirm password" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="DatasetPasswordConfirmLabel" Grid.Row="1" Grid.Column="0" Text="Confirm password" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <PasswordBox x:Name="DatasetPasswordConfirmBox" Grid.Row="1" Grid.Column="1" Style="{DynamicResource VisuPasswordBoxStyle}" Height="28" Padding="7,4"/>
                         </Grid>
                     </Grid>
@@ -200,7 +200,7 @@
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="170"/>
             </Grid.ColumnDefinitions>
-            <TextBlock x:Name="ExportFormatLabel" Grid.Column="0" Text="Format" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="ExportFormatLabel" Grid.Column="0" Text="Format" VerticalAlignment="Center" Margin="0,0,8,0"/>
             <ComboBox x:Name="ExportFormatBox"
                       Grid.Column="1"
                       Style="{DynamicResource VisuComboBoxStyle}"
