@@ -40,6 +40,17 @@ namespace Kern.Tests
             Assert.Equal("RT-001", m!.Code);
             Assert.Equal("Round trip material", m.Name);
             Assert.Equal("Round trip EN", m.NameEn);
+            using (var verify = new SqliteConnection($"Data Source={ctx.DatabasePath};"))
+            {
+                verify.Open();
+                using var command = verify.CreateCommand();
+                command.CommandText = "SELECT name, name_ar FROM materials WHERE material_id = $id";
+                command.Parameters.AddWithValue("$id", saved.Id);
+                using var reader = command.ExecuteReader();
+                Assert.True(reader.Read());
+                Assert.Equal("Round trip material", reader.GetString(0));
+                Assert.Equal(string.Empty, reader.GetString(1));
+            }
             Assert.Equal("GRP-1", m.GroupCode);
             Assert.Equal("Inactive", m.Status);
             Assert.Equal("Kit", m.ItemType);
@@ -129,6 +140,23 @@ namespace Kern.Tests
             Assert.Equal(77m, m.PriceLines[0].Price);
             Assert.Single(m.Suppliers);
             Assert.Equal("SUP-1", m.Suppliers[0].SupplierCode);
+        }
+
+        [Fact]
+        public void NextCode_LegacyDatabaseWithoutSequenceTable_UsesPersistedMaximum()
+        {
+            using var ctx = CreateContext();
+            MatRepo.Save(FullyPopulated("MAT-0007"), isNew: true);
+
+            using (var connection = new SqliteConnection($"Data Source={ctx.DatabasePath};"))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = "DROP TABLE document_number_sequences";
+                command.ExecuteNonQuery();
+            }
+
+            Assert.Equal("MAT-0008", MatRepo.NextCode("MAT-"));
         }
 
         [Fact]
@@ -273,6 +301,8 @@ namespace Kern.Tests
             private readonly FieldInfo _settingsField;
             private readonly object? _oldSettings;
             private readonly string? _oldCompany;
+
+            public string DatabasePath => _databasePath;
 
             public RoundTripContext(string databasePath, FieldInfo settingsField, object? oldSettings, string? oldCompany)
             {
