@@ -239,8 +239,8 @@ public static class RptQuery
         var sql = """
             SELECT COALESCE(w.warehouse_code, CAST(s.warehouse_id AS TEXT)) AS Warehouse,
                    COALESCE(m.code, CAST(s.material_id AS TEXT)) AS MaterialCode,
-                   COALESCE(m.name_ar, '') AS MaterialName,
-                   COALESCE(m.name_en, '') AS MaterialNameEn,
+                   COALESCE(m.name, '') AS MaterialName,
+                   COALESCE(m.name, '') AS MaterialNameEn,
                    COALESCE(m.default_unit, '') AS Unit,
                    COALESCE(s.available_qty, 0) AS Qty,
                    COALESCE(s.reserved_qty, 0) AS Reserved,
@@ -256,8 +256,8 @@ public static class RptQuery
               ON m.company_id = s.company_id AND m.material_id = s.material_id
             WHERE s.company_id = $company AND s.is_deleted = 0
               AND ($mat = '' OR LOWER(COALESCE(m.code, '')) LIKE '%' || LOWER($mat) || '%'
-                   OR LOWER(COALESCE(m.name_ar, '')) LIKE '%' || LOWER($mat) || '%'
-                   OR LOWER(COALESCE(m.name_en, '')) LIKE '%' || LOWER($mat) || '%')
+                   OR LOWER(COALESCE(m.name, '')) LIKE '%' || LOWER($mat) || '%'
+                   OR LOWER(COALESCE(m.name, '')) LIKE '%' || LOWER($mat) || '%')
               AND ($group = '' OR COALESCE(m.group_code, '') = $group)
               AND (
                     $state = ''
@@ -314,8 +314,8 @@ public static class RptQuery
                        COALESCE(w.warehouse_name_en, '') AS WarehouseNameEn,
                        sm.material_id AS MaterialId,
                        COALESCE(m.code, '') AS MaterialCode,
-                       COALESCE(m.name_ar, '') AS MaterialName,
-                       COALESCE(m.name_en, '') AS MaterialNameEn,
+                       COALESCE(m.name, '') AS MaterialName,
+                       COALESCE(m.name, '') AS MaterialNameEn,
                        COALESCE(sm.qty_in, 0) AS QtyIn,
                        COALESCE(sm.qty_out, 0) AS QtyOut,
                        COALESCE(sm.unit_cost, 0) AS UnitCost,
@@ -1252,7 +1252,7 @@ public static class RptQuery
                    COALESCE(w.warehouse_name_ar, '') AS WarehouseName,
                    COALESCE(w.warehouse_name_en, '') AS WarehouseNameEn,
                    COALESCE(m.code, CAST(sm.material_id AS TEXT)) AS MaterialCode,
-                   COALESCE(m.name_ar, '') AS MaterialName,
+                   COALESCE(m.name, '') AS MaterialName,
                    COALESCE(sm.qty_in, 0) AS QtyIn,
                    COALESCE(sm.qty_out, 0) AS QtyOut,
                    COALESCE(sm.unit_cost, 0) AS UnitCost,
@@ -1267,8 +1267,8 @@ public static class RptQuery
               AND sm.movement_type IN ('ADJ', 'COUNT_CLOSE')
               AND sm.movement_date >= $from AND sm.movement_date < $to
               AND ($mat = '' OR LOWER(COALESCE(m.code, '')) LIKE '%' || LOWER($mat) || '%'
-                   OR LOWER(COALESCE(m.name_ar, '')) LIKE '%' || LOWER($mat) || '%'
-                   OR LOWER(COALESCE(m.name_en, '')) LIKE '%' || LOWER($mat) || '%')
+                   OR LOWER(COALESCE(m.name, '')) LIKE '%' || LOWER($mat) || '%'
+                   OR LOWER(COALESCE(m.name, '')) LIKE '%' || LOWER($mat) || '%')
               AND ($doc = '' OR COALESCE(sm.document_no, '') LIKE '%' || $doc || '%')
             """;
         if (DatabaseRuntime.IsPostgreSql())
@@ -1366,7 +1366,7 @@ public static class RptQuery
         var sql = PgBoolFix("""
             SELECT COALESCE(w.warehouse_code, CAST(sm.warehouse_id AS TEXT)) AS Warehouse,
                    COALESCE(m.code, '') AS MaterialCode,
-                   COALESCE(m.name_ar, '') AS MaterialName,
+                   COALESCE(m.name, '') AS MaterialName,
                    COALESCE(m.default_unit, '') AS Unit,
                    COALESCE(SUM(sm.qty_in), 0) AS QtyIn,
                    COALESCE(SUM(sm.qty_out), 0) AS QtyOut,
@@ -1378,7 +1378,7 @@ public static class RptQuery
             LEFT JOIN materials m ON m.company_id = sm.company_id AND m.material_id = sm.material_id
             LEFT JOIN warehouses w ON w.company_id = sm.company_id AND w.warehouse_id = sm.warehouse_id
             WHERE sm.company_id = $company AND sm.is_deleted = 0 AND sm.movement_date < $asof
-            GROUP BY sm.warehouse_id, w.warehouse_code, m.code, m.name_ar, m.default_unit
+            GROUP BY sm.warehouse_id, w.warehouse_code, m.code, m.name, m.default_unit
             ORDER BY Warehouse, MaterialCode;
             """);
         // Step 6: Value is the sum of the engine's signed cost_amount
@@ -1396,7 +1396,7 @@ public static class RptQuery
         DocSchema.Ensure(); MatRepo.EnsureSchema();
         var sql = PgBoolFix("""
             SELECT COALESCE(m.code, '') AS MaterialCode,
-                   COALESCE(m.name_ar, '') AS MaterialName,
+                   COALESCE(m.name, '') AS MaterialName,
                    substr(sm.movement_date, 1, 7) AS Month,
                    COALESCE(SUM(sm.qty_in), 0) AS QtyIn,
                    COALESCE(SUM(sm.qty_out), 0) AS QtyOut,
@@ -1406,7 +1406,7 @@ public static class RptQuery
             LEFT JOIN materials m ON m.company_id = sm.company_id AND m.material_id = sm.material_id
             WHERE sm.company_id = $company AND sm.is_deleted = 0
               AND sm.movement_date >= $from AND sm.movement_date <= $to
-            GROUP BY m.code, m.name_ar, substr(sm.movement_date, 1, 7)
+            GROUP BY m.code, m.name, substr(sm.movement_date, 1, 7)
             ORDER BY MaterialCode, Month;
             """);
         return await QueryAsync(sql, ct, ("$company", Company),
@@ -1425,7 +1425,7 @@ public static class RptQuery
         DocSchema.Ensure(); MatRepo.EnsureSchema();
         var sql = PgBoolFix("""
             SELECT m.code AS MaterialCode,
-                   m.name_ar AS MaterialName,
+                   m.name AS MaterialName,
                    COALESCE(m.default_unit, '') AS Unit,
                    b.batch_no AS BatchNo,
                    COALESCE(w.warehouse_code, CAST(bb.warehouse_id AS TEXT)) AS Warehouse,
@@ -1472,7 +1472,7 @@ public static class RptQuery
         DocSchema.Ensure(); MatRepo.EnsureSchema();
         var sql = PgBoolFix("""
             SELECT m.code AS MaterialCode,
-                   m.name_ar AS MaterialName,
+                   m.name AS MaterialName,
                    COALESCE(m.default_unit, '') AS Unit,
                    b.batch_no AS BatchNo,
                    COALESCE(b.supplier_batch_no, '') AS SupplierBatchNo,
@@ -1597,7 +1597,7 @@ public static class RptQuery
         DocSchema.Ensure(); MatRepo.EnsureSchema();
         var sql = PgBoolFix("""
             SELECT m.code AS MaterialCode,
-                   m.name_ar AS MaterialName,
+                   m.name AS MaterialName,
                    COALESCE(m.default_unit, '') AS Unit,
                    COALESCE((SELECT COUNT(*) FROM material_stock_movements x
                      WHERE x.company_id = m.company_id AND x.material_id = m.material_id AND x.is_deleted = 0), 0) AS MoveCount,
@@ -1627,7 +1627,7 @@ public static class RptQuery
         // avg_cost — a figure no posting path maintained.
         var sql = PgBoolFix("""
             SELECT m.code AS MaterialCode,
-                   m.name_ar AS MaterialName,
+                   m.name AS MaterialName,
                    COALESCE(s.QtySold, 0) AS QtySold,
                    COALESCE(s.Revenue, 0) AS Revenue,
                    COALESCE(p.QtyPurchased, 0) AS QtyPurchased,
@@ -1679,7 +1679,7 @@ public static class RptQuery
         var sql = PgBoolFix("""
             SELECT COALESCE(w.warehouse_code, CAST(b.warehouse_id AS TEXT)) AS Warehouse,
                    COALESCE(m.code, '') AS MaterialCode,
-                   COALESCE(m.name_ar, '') AS MaterialName,
+                   COALESCE(m.name, '') AS MaterialName,
                    COALESCE(b.available_qty, 0) AS OnHand,
                    COALESCE(b.average_cost, 0) AS AvgCost,
                    CASE WHEN COALESCE(b.stock_value, 0) <> 0 THEN b.stock_value
@@ -1707,7 +1707,7 @@ public static class RptQuery
         DocSchema.Ensure(); MatRepo.EnsureSchema();
         var sql = PgBoolFix("""
             SELECT COALESCE(m.code, '') AS MaterialCode,
-                   COALESCE(m.name_ar, '') AS MaterialName,
+                   COALESCE(m.name, '') AS MaterialName,
                    COUNT(*) AS MoveCount,
                    COALESCE(SUM(sm.qty_in), 0) AS QtyIn,
                    COALESCE(SUM(sm.qty_out), 0) AS QtyOut,
@@ -1717,7 +1717,7 @@ public static class RptQuery
             LEFT JOIN materials m ON m.company_id = sm.company_id AND m.material_id = sm.material_id
             WHERE sm.company_id = $company AND sm.is_deleted = 0
               AND sm.movement_date >= $from AND sm.movement_date <= $to
-            GROUP BY m.code, m.name_ar
+            GROUP BY m.code, m.name
             ORDER BY TotalQty DESC
             LIMIT $limit;
             """);
@@ -1731,7 +1731,7 @@ public static class RptQuery
         DocSchema.Ensure(); MatRepo.EnsureSchema();
         var sql = PgBoolFix("""
             SELECT COALESCE(m.code, '') AS MaterialCode,
-                   COALESCE(m.name_ar, '') AS MaterialName,
+                   COALESCE(m.name, '') AS MaterialName,
                    COALESCE(SUM(CASE WHEN sm.movement_date >= $f1 AND sm.movement_date <= $t1 THEN sm.qty_in - sm.qty_out ELSE 0 END), 0) AS Qty1,
                    COALESCE(SUM(CASE WHEN sm.movement_date >= $f1 AND sm.movement_date <= $t1 THEN COALESCE(sm.cost_amount, (sm.qty_in - sm.qty_out) * sm.unit_cost) ELSE 0 END), 0) AS Value1,
                    COALESCE(SUM(CASE WHEN sm.movement_date >= $f2 AND sm.movement_date <= $t2 THEN sm.qty_in - sm.qty_out ELSE 0 END), 0) AS Qty2,
@@ -1744,7 +1744,7 @@ public static class RptQuery
             LEFT JOIN materials m ON m.company_id = sm.company_id AND m.material_id = sm.material_id
             WHERE sm.company_id = $company AND sm.is_deleted = 0
               AND ((sm.movement_date >= $f1 AND sm.movement_date <= $t1) OR (sm.movement_date >= $f2 AND sm.movement_date <= $t2))
-            GROUP BY m.code, m.name_ar
+            GROUP BY m.code, m.name
             ORDER BY MaterialCode;
             """);
         return await QueryAsync(sql, ct, ("$company", Company),
@@ -1762,7 +1762,7 @@ public static class RptQuery
         var sql = PgBoolFix("""
             SELECT COALESCE(w.warehouse_code, CAST(b.warehouse_id AS TEXT)) AS Warehouse,
                    COALESCE(m.code, '') AS MaterialCode,
-                   COALESCE(m.name_ar, '') AS MaterialName,
+                   COALESCE(m.name, '') AS MaterialName,
                    COALESCE(b.available_qty, 0) AS Balance,
                    COALESCE(b.average_cost, 0) AS AvgCost,
                    CASE WHEN COALESCE(b.stock_value, 0) <> 0 THEN b.stock_value
@@ -1805,7 +1805,7 @@ public static class RptQuery
         var sql = PgBoolFix("""
             SELECT CAST(COALESCE(w.warehouse_code, b.warehouse_id) AS TEXT) || ' - ' || COALESCE(w.warehouse_name_en, w.warehouse_name_ar, '') AS Branch,
                    COALESCE(m.code, '') AS MaterialCode,
-                   COALESCE(m.name_ar, '') AS MaterialName,
+                   COALESCE(m.name, '') AS MaterialName,
                    COALESCE(b.available_qty, 0) AS Qty,
                    COALESCE(b.average_cost, 0) AS AvgCost,
                    CASE WHEN COALESCE(b.stock_value, 0) <> 0 THEN b.stock_value
