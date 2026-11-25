@@ -46,6 +46,52 @@ public sealed class SchemaMigratorTests
                 Directory.Delete(databaseDirectory, recursive: true);
         }
     }
+
+    [Fact]
+    public async Task DesktopMigrator_RefusesToReplayMigrationsOnExistingSchemaWithoutHistory()
+    {
+        var databaseDirectory = Path.Combine(
+            Path.GetTempPath(),
+            $"shoutech-schema-migrator-legacy-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(databaseDirectory);
+        var databasePath = Path.Combine(databaseDirectory, "legacy.db");
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = databasePath,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            ForeignKeys = true,
+            Pooling = false
+        }.ToString();
+
+        try
+        {
+            await using (var connection = new SqliteConnection(connectionString))
+            {
+                await connection.OpenAsync();
+                await using var command = connection.CreateCommand();
+                command.CommandText = "CREATE TABLE legacy_company_data (id INTEGER PRIMARY KEY, value TEXT NOT NULL);";
+                await command.ExecuteNonQueryAsync();
+            }
+
+            var result = await SchemaMigrator.ApplyAllAsync("sqlite", connectionString);
+
+            Assert.False(result.Success);
+            Assert.Contains("no migration history", result.Message, StringComparison.OrdinalIgnoreCase);
+
+            await using var verify = new SqliteConnection(connectionString);
+            await verify.OpenAsync();
+            await using var check = verify.CreateCommand();
+            check.CommandText = "SELECT COUNT(*) FROM schema_migrations;";
+            Assert.Equal(0L, (long)(await check.ExecuteScalarAsync() ?? -1L));
+            check.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='legacy_company_data';";
+            Assert.Equal(1L, (long)(await check.ExecuteScalarAsync() ?? -1L));
+        }
+        finally
+        {
+            if (Directory.Exists(databaseDirectory))
+                Directory.Delete(databaseDirectory, recursive: true);
+        }
+    }
 }
 
 // ---- merged from tests/Kern.Tests/ErpPlanTests.cs ----
