@@ -316,10 +316,10 @@ namespace Kern.Tests
                           (1, 'TEST-EQUIV', 1, 'Main warehouse', 1, 0),
                           (2, 'TEST-EQUIV', 2, 'Secondary warehouse', 1, 0);
                         INSERT INTO materials
-                          (company_id, code, name_ar, name_en, is_stocked, is_service, allow_negative,
+                          (company_id, code, name, is_stocked, is_service, allow_negative,
                            unit1, unit1_factor, unit2, unit2_factor, units_json)
                         VALUES
-                          ('TEST-EQUIV', 'MAT-EQ', 'Equivalent test', 'Equivalent test', 1, 0, 0,
+                          ('TEST-EQUIV', 'MAT-EQ', 'Equivalent test', 1, 0, 0,
                            'kg', 1, 'g250', 0.25, $json);
                         INSERT INTO material_stock_balances
                           (company_id, warehouse_id, material_id, available_qty, reserved_qty,
