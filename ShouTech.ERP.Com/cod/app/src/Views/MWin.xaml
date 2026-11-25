@@ -970,10 +970,8 @@
 
             <!-- Archive bin: LTR Canvas so RTL shell does not mirror screen sides -->
             <Canvas x:Name="RecycleBinLayer"
-                    Grid.Row="4" Grid.ColumnSpan="2"
-                    Grid.RowSpan="3"
+                    Grid.Row="3" Grid.ColumnSpan="2"
                     FlowDirection="LeftToRight"
-                    
                     IsHitTestVisible="True"
                     Panel.ZIndex="50"
                     SizeChanged="RecycleBinLayer_SizeChanged">
@@ -983,7 +981,7 @@
                         Width="120"
                         Height="130"
                         Canvas.Left="24"
-                        Canvas.Bottom="24"
+                        Canvas.Top="0"
                         Click="OnRecycleBinClick">
                     <Grid Width="120" Height="130">
                         <Image Width="130"
