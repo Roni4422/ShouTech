@@ -2566,6 +2566,7 @@
    "Saudi": "Saudi Arabia — VAT",
    "Jordan": "Jordan — Sales tax"
   },
+  "TaxAutoActivationStatus": "The selected country's tax system is activated automatically",
   "EnableTaxSystem": "Enable the selected country's tax system for this company",
   "TaxCountryRequired": "Choose a supported country name or ISO code before enabling its tax system.",
   "TaxEnableTitle": "Enable tax system?",
