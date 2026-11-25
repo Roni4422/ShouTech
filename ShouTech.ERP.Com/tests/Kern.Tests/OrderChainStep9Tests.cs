@@ -1210,8 +1210,8 @@ namespace Kern.Tests
             try
             {
                 ExecSql(connectionString, """
-                    INSERT INTO materials (material_id, company_id, code, name_ar, name_en, unit1, is_active, is_stocked, quality_check_required, is_deleted)
-                    VALUES (44, 'ORDER-GL', 'MAT-44', 'Item 44', 'Item 44', 'PCS', 1, 1, 1, 0);
+                    INSERT INTO materials (material_id, company_id, code, name_ar, name_en, unit1, is_stocked, quality_check_required, is_deleted)
+                    VALUES (44, 'ORDER-GL', 'MAT-44', 'Item 44', 'Item 44', 'PCS', 1, 1, 0);
                     INSERT INTO material_stock_balances (company_id, warehouse_id, material_id, available_qty, reserved_qty, average_cost, last_cost, is_deleted)
                     VALUES ('ORDER-GL', 1, 44, 0, 0, 10, 10, 0);
                     """);
@@ -1347,7 +1347,7 @@ namespace Kern.Tests
                         new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 3m, 12m),
                         partyId: 9, partyCode: "SUP-1"),
                     CommercialDocKinds.PurchaseRequisition, prqId, Actor);
-                await service.CancelOrderAsync(CommercialDocSide.Purchase, prqId, Actor);
+                await service.CancelOrderAsync(CommercialDocSide.Purchase, prqId, Actor, reason: "Requisition withdrawn");
                 Assert.Equal(CommercialDocumentStatus.Cancelled,
                     (await orders.FindByIdAsync(CommercialDocSide.Purchase, childPoId))!.Status);
 
@@ -1360,7 +1360,7 @@ namespace Kern.Tests
                 await service.CreatePurchaseReceiptAsync(companyId, orderId, new DateOnly(2026, 11, 2),
                     new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 1m, 12m) }, Actor);
                 await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                    service.CancelOrderAsync(CommercialDocSide.Purchase, orderId, Actor));
+                    service.CancelOrderAsync(CommercialDocSide.Purchase, orderId, Actor, reason: "Cancellation requested"));
 
                 // Amend: cancel a clean PO, amend it -> new linked draft copy.
                 var order2Id = await service.CreateOrderAsync(
@@ -1368,7 +1368,7 @@ namespace Kern.Tests
                         new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 7m, 12m),
                         partyId: 9, partyCode: "SUP-1"), Actor);
                 await service.PostOrderAsync(CommercialDocSide.Purchase, order2Id, Actor);
-                await service.CancelOrderAsync(CommercialDocSide.Purchase, order2Id, Actor);
+                await service.CancelOrderAsync(CommercialDocSide.Purchase, order2Id, Actor, reason: "Order amendment");
                 var (amendedId, _) = await service.AmendPurchaseOrderAsync(companyId, order2Id, new DateOnly(2026, 11, 5), Actor);
                 var amended = await orders.FindByIdAsync(CommercialDocSide.Purchase, amendedId);
                 Assert.Equal(CommercialDocumentStatus.Draft, amended!.Status);
@@ -1448,7 +1448,7 @@ namespace Kern.Tests
                     new[] { new CommercialLineDraft(42, "MAT-42", "Item 42", "PCS", 5m, 12m, TaxRate: 15m) }, Actor);
 
                 Assert.Equal(1m, Scalar(connectionString,
-                    $"SELECT COUNT(*) FROM tax_transactions WHERE source_doc_id = {invoiceId} AND direction = 'INPUT';"));
+                    $"SELECT COUNT(*) FROM tax_transactions WHERE source_doc_id = {invoiceId} AND tax_direction = 'INPUT';"));
                 Assert.Equal(9m, Scalar(connectionString,
                     $"SELECT COALESCE(SUM(tax_amount), 0) FROM tax_transactions WHERE source_doc_id = {invoiceId};"));
                 var gl = GlByAccount(connectionString, "PUR", invoiceId);
