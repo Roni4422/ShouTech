@@ -1426,7 +1426,7 @@ namespace Kern.Tests
             {
                 ExecSql(connectionString, """
                     INSERT INTO chart_of_accounts (account_id, company_id, account_code, account_name, account_type, is_postable, is_active, is_deleted)
-                    VALUES ('1205-ORDER-GL', (SELECT company_id FROM companies WHERE company_code = 'ORDER-GL'), '1205', 'Input VAT', 'ASSET', 1, 1, 0);
+                    VALUES ('12050000-0000-4000-8000-000000000001', (SELECT company_id FROM companies WHERE company_code = 'ORDER-GL'), '1205', 'Input VAT', 'ASSET', 1, 1, 0);
                     INSERT INTO company_tax_settings (company_code, country_code, tax_enabled, tax_scheme)
                     VALUES ('ORDER-GL', 'SA', 1, 'VAT');
                     INSERT INTO company_tax_rules
