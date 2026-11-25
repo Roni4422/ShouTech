@@ -1210,8 +1210,8 @@ namespace Kern.Tests
             try
             {
                 ExecSql(connectionString, """
-                    INSERT INTO materials (material_id, company_id, code, name_ar, name_en, unit1, is_stocked, quality_check_required, is_deleted)
-                    VALUES (44, 'ORDER-GL', 'MAT-44', 'Item 44', 'Item 44', 'PCS', 1, 1, 0);
+                    INSERT INTO materials (material_id, company_id, code, name, unit1, is_stocked, quality_check_required, is_deleted)
+                    VALUES (44, 'ORDER-GL', 'MAT-44', 'Item 44', 'PCS', 1, 1, 0);
                     INSERT INTO material_stock_balances (company_id, warehouse_id, material_id, available_qty, reserved_qty, average_cost, last_cost, is_deleted)
                     VALUES ('ORDER-GL', 1, 44, 0, 0, 10, 10, 0);
                     """);
@@ -2638,9 +2638,9 @@ namespace Kern.Tests
             }
             Exec("INSERT INTO warehouses (warehouse_id, company_id, warehouse_code, warehouse_name_ar, warehouse_name_en, is_active, is_deleted) VALUES (1, $code, 'WH-01', 'Main', 'Main', 1, 0);",
                 ("$code", companyCode));
-            Exec("INSERT INTO materials (material_id, company_id, code, name_ar, name_en, is_stocked, is_service, cost_method, allow_negative, is_deleted) VALUES (42, $code, 'MAT-42', 'Item 42', 'Item 42', 1, 0, 'WeightedAvg', 0, 0);",
+            Exec("INSERT INTO materials (material_id, company_id, code, name, is_stocked, is_service, cost_method, allow_negative, is_deleted) VALUES (42, $code, 'MAT-42', 'Item 42', 1, 0, 'WeightedAvg', 0, 0);",
                 ("$code", companyCode));
-            Exec("INSERT INTO materials (material_id, company_id, code, name_ar, name_en, is_stocked, is_service, cost_method, allow_negative, is_deleted) VALUES (43, $code, 'MAT-43', 'Item 43', 'Item 43', 1, 0, 'WeightedAvg', 0, 0);",
+            Exec("INSERT INTO materials (material_id, company_id, code, name, is_stocked, is_service, cost_method, allow_negative, is_deleted) VALUES (43, $code, 'MAT-43', 'Item 43', 1, 0, 'WeightedAvg', 0, 0);",
                 ("$code", companyCode));
             Exec("INSERT INTO material_stock_balances (company_id, warehouse_id, material_id, available_qty, reserved_qty, average_cost, last_cost, stock_value, is_deleted) VALUES ($code, 1, 42, 100, 0, 10, 10, 1000, 0);",
                 ("$code", companyCode));
