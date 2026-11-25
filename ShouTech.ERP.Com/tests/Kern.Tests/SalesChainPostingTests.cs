@@ -681,8 +681,8 @@ namespace Kern.Tests
                 VALUES (1, $companyId, 1, 'Main', 'Main', 1, 0);
 
                 INSERT INTO materials
-                    (material_id, company_id, code, name_ar, name_en, is_stocked, is_deleted, allow_negative, unit1, unit1_factor)
-                VALUES (42, $companyId, 'MAT-42', 'Posting test item', 'Posting test item', 1, 0, 0, 'PCS', 1);
+                    (material_id, company_id, code, name, is_stocked, is_deleted, allow_negative, unit1, unit1_factor)
+                VALUES (42, $companyId, 'MAT-42', 'Posting test item', 1, 0, 0, 'PCS', 1);
 
                 INSERT INTO material_stock_balances
                     (company_id, warehouse_id, material_id, available_qty, average_cost, last_cost)
