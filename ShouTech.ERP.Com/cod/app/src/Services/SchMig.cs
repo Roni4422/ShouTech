@@ -142,6 +142,17 @@ public static class SchemaMigrator
             await EnsureHistoryTableAsync(connection, normalized, cancellationToken).ConfigureAwait(false);
 
             var applied = await ReadAppliedAsync(connection, cancellationToken).ConfigureAwait(false);
+            if (applied.Count == 0 &&
+                await HasExistingApplicationSchemaAsync(connection, normalized, cancellationToken).ConfigureAwait(false))
+            {
+                return new MigrationResult
+                {
+                    Success = false,
+                    Provider = normalized,
+                    Message = "An existing application schema has no migration history. Refusing to reapply migrations automatically. Verify the schema and establish a baseline with the administrative SqlMigrator before starting the application."
+                };
+            }
+
             var appliedCount = 0;
             var skippedCount = 0;
 
@@ -256,6 +267,24 @@ public static class SchemaMigrator
         await using var command = connection.CreateCommand();
         command.CommandText = historySql;
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<bool> HasExistingApplicationSchemaAsync(
+        DbConnection connection,
+        string provider,
+        CancellationToken cancellationToken)
+    {
+        var sql = provider switch
+        {
+            "sqlite" => "SELECT 1 FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name <> 'schema_migrations' LIMIT 1",
+            "postgresql" => "SELECT 1 FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog', 'information_schema') AND table_name <> 'schema_migrations' LIMIT 1",
+            _ => throw new InvalidOperationException("Unsupported database provider.")
+        };
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        var value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return value is not null && value != DBNull.Value;
     }
 
     private static async Task<Dictionary<string, string>> ReadAppliedAsync(
