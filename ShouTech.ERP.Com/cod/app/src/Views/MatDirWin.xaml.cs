@@ -38,11 +38,12 @@ public string DisplayName
 {
     get
     {
-        var lang = App.CurrentLanguageCode ?? "en";
+        if (ItemKind == Kind.Material)
+            return Name;
 
+        var lang = App.CurrentLanguageCode ?? "en";
         if (lang.StartsWith("ar", StringComparison.OrdinalIgnoreCase))
             return string.IsNullOrWhiteSpace(Name) ? NameEn : Name;
-
         return string.IsNullOrWhiteSpace(NameEn) ? Name : NameEn;
     }
 }
@@ -271,7 +272,6 @@ private void Reload()
                 Id = m.Id,
                 Code = m.Code,
                 Name = m.Name,
-                NameEn = m.NameEn,
                 Status = m.Status
             });
         }
