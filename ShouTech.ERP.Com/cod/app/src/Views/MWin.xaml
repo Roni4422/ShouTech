@@ -972,8 +972,8 @@
             <!-- Archive bin: LTR Canvas so RTL shell does not mirror screen sides -->
             <Canvas x:Name="RecycleBinLayer"
                     Grid.Row="4" Grid.ColumnSpan="2"
-                    Grid.RowSpan="2"
                     FlowDirection="LeftToRight"
+                    ClipToBounds="True"
                     IsHitTestVisible="True"
                     Panel.ZIndex="50"
                     SizeChanged="RecycleBinLayer_SizeChanged">
