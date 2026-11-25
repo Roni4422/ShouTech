@@ -212,12 +212,7 @@ public sealed class BarWin : BaseWin
             _pickedCode = material.Code;
             _txtItemCode.Text = material.Code;
 
-            var name = string.Equals(
-                App.CurrentLanguageCode,
-                "ar",
-                StringComparison.OrdinalIgnoreCase)
-                ? material.Name
-                : string.IsNullOrWhiteSpace(material.NameEn) ? material.Name : material.NameEn;
+            var name = material.Name;
             _txtItemName.Text = name;
 
             // Load the material's persisted barcode and retail price so the
