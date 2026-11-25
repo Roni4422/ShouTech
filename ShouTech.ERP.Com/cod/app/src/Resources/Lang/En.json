@@ -624,6 +624,7 @@
   "DefaultWarehouse": "Default warehouse",
   "DescHeader": "Desc Header",
   "ErrCodeRequired": "Material code is required",
+  "ErrNumberGeneration": "A new material number could not be generated. Check the company database and numbering configuration, then try again.",
   "ErrMinMax": "Minimum cannot exceed maximum",
   "ErrNameRequired": "Material name is required",
   "ErrUnitRequired": "Base unit is required",
