@@ -56,6 +56,9 @@ namespace Kern.Tests
                 Assert.Contains("name", names);
                 Assert.DoesNotContain("name_ar", names);
                 Assert.DoesNotContain("name_en", names);
+                using var translationTable = verify.CreateCommand();
+                translationTable.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='material_translations'";
+                Assert.Equal(0L, Convert.ToInt64(translationTable.ExecuteScalar(), CultureInfo.InvariantCulture));
             }
             Assert.Equal("GRP-1", m.GroupCode);
             Assert.Equal("Inactive", m.Status);
