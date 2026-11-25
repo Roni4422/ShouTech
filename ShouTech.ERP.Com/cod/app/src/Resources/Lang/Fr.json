@@ -2197,6 +2197,7 @@
    "Saudi": "Arabie saoudite — TVA",
    "Jordan": "Jordanie — Taxe sur les ventes"
   },
+  "TaxAutoActivationStatus": "Le système fiscal du pays sélectionné est activé automatiquement",
   "EnableTaxSystem": "Activer le système fiscal du pays sélectionné pour cette entreprise",
   "TaxCountryRequired": "Choisissez un pays pris en charge ou son code ISO avant d'activer son système fiscal.",
   "TaxEnableTitle": "Activer le système fiscal ?",
