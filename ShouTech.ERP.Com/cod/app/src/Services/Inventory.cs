@@ -233,7 +233,7 @@ public sealed class SqlInvRepo : IInvRepo
         await using var db = OpenConnection();
         await db.OpenAsync(ct);
         const string sql = """
-            SELECT p.product_id Id, p.product_code Code, p.product_name Name, '' Name2,
+            SELECT p.product_id Id, p.product_code Code, p.product_name_ar Name, p.product_name_en Name2,
                    p.category_id CategoryId, u.uom_code Unit, p.cost_price Cost, p.default_sale_price Price, p.is_active IsActive
             FROM products p INNER JOIN units_of_measure u ON u.uom_id=p.primary_uom_id
             WHERE p.company_id=@companyId AND p.is_deleted=false
@@ -249,7 +249,7 @@ public sealed class SqlInvRepo : IInvRepo
         await using var db = OpenConnection();
         await db.OpenAsync(ct);
         const string sql = """
-            SELECT p.product_id Id, p.product_code Code, p.product_name Name, '' Name2,
+            SELECT p.product_id Id, p.product_code Code, p.product_name_ar Name, p.product_name_en Name2,
                    p.category_id CategoryId, u.uom_code Unit, p.cost_price Cost, p.default_sale_price Price, p.is_active IsActive
             FROM products p INNER JOIN units_of_measure u ON u.uom_id=p.primary_uom_id
             WHERE p.product_id=@id AND p.company_id=@companyId AND p.is_deleted=false LIMIT 1
@@ -264,9 +264,9 @@ public sealed class SqlInvRepo : IInvRepo
         await db.OpenAsync(ct);
         const string sql = """
             INSERT INTO products
-                (company_id, product_code, product_name, category_id, primary_uom_id,
+                (company_id, product_code, product_name_ar, product_name_en, category_id, primary_uom_id,
                  default_sale_price, default_purchase_price, cost_price, created_by)
-            SELECT @companyId, @code, @name, @categoryId, u.uom_id,
+            SELECT @companyId, @code, @name, @name2, @categoryId, u.uom_id,
                    @price, @cost, @cost, @userId
             FROM units_of_measure u
             WHERE u.company_id = @companyId AND u.uom_code = @unit AND u.is_deleted = false AND u.is_active = true
@@ -283,7 +283,7 @@ public sealed class SqlInvRepo : IInvRepo
         await using var db = OpenConnection();
         await db.OpenAsync(ct);
         const string sql = """
-            UPDATE products p SET product_name=@name, category_id=@categoryId,
+            UPDATE products p SET product_name_ar=@name, product_name_en=@name2, category_id=@categoryId,
                 primary_uom_id=u.uom_id, cost_price=@cost, default_sale_price=@price,
                 default_purchase_price=@cost, updated_by=@userId, updated_at=now()
             FROM units_of_measure u
@@ -384,7 +384,7 @@ public sealed class SqliteInvRepo : IInvRepo
         await using var db = OpenConnection();
         await db.OpenAsync(ct);
         const string sql = """
-            SELECT p.product_id Id, p.product_code Code, p.product_name Name, '' Name2,
+            SELECT p.product_id Id, p.product_code Code, p.product_name_ar Name, p.product_name_en Name2,
                    p.category_id CategoryId, u.uom_code Unit, p.cost_price Cost, p.default_sale_price Price, p.is_active IsActive
             FROM products p INNER JOIN units_of_measure u ON u.uom_id=p.primary_uom_id
             WHERE p.company_id=@companyId AND p.is_deleted=0
@@ -400,7 +400,7 @@ public sealed class SqliteInvRepo : IInvRepo
         await using var db = OpenConnection();
         await db.OpenAsync(ct);
         const string sql = """
-            SELECT p.product_id Id, p.product_code Code, p.product_name Name, '' Name2,
+            SELECT p.product_id Id, p.product_code Code, p.product_name_ar Name, p.product_name_en Name2,
                    p.category_id CategoryId, u.uom_code Unit, p.cost_price Cost, p.default_sale_price Price, p.is_active IsActive
             FROM products p INNER JOIN units_of_measure u ON u.uom_id=p.primary_uom_id
             WHERE p.product_id=@id AND p.company_id=@companyId AND p.is_deleted=0 LIMIT 1
@@ -424,7 +424,7 @@ public sealed class SqliteInvRepo : IInvRepo
 
         await db.ExecuteAsync(new CommandDefinition("""
             INSERT INTO products
-                (company_id, product_code, product_name, category_id, primary_uom_id,
+                (company_id, product_code, product_name_ar, product_name_en, category_id, primary_uom_id,
                  default_sale_price, default_purchase_price, cost_price, created_by)
             VALUES (@companyId, @code, @name, @categoryId, @primaryUomId,
                     @price, @cost, @cost, @userId)
@@ -971,17 +971,8 @@ internal static class MatRepo
             }
         }
         long allocated;
-        if (TableExists(connection, transaction, DatabaseRuntime.IsPostgreSql(), "document_number_sequences"))
-        {
-            allocated = SequenceAllocator.Allocate(
-                connection, transaction, DatabaseRuntime.IsPostgreSql(), company, $"MAT:{prefix}", 0, seed);
-        }
-        else
-        {
-            // Legacy company databases may predate migration 075. Derive the
-            // next preview from all persisted codes (including deleted rows).
-            allocated = checked(seed + 1);
-        }
+        allocated = SequenceAllocator.Allocate(
+            connection, transaction, DatabaseRuntime.IsPostgreSql(), company, $"MAT:{prefix}", 0, seed);
         transaction.Commit();
         return prefix + allocated.ToString("D" + width.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
     }
