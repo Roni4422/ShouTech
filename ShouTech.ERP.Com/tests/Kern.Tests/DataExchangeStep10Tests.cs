@@ -144,6 +144,33 @@ public class DataExchangeStep10Tests
         finally { AppHost.Permissions.Clear(); }
     }
 
+    [Fact]
+    public void ExcelImport_DeclaredDecimalStorageType_RemainsFractional()
+    {
+        var map = typeof(DataExportSvc).GetMethod("MapStorageType", BindingFlags.Static | BindingFlags.NonPublic)!;
+        Assert.Equal("FractionalNumber", map.Invoke(null, ["REAL"]));
+        Assert.Equal("FractionalNumber", map.Invoke(null, ["NUMERIC(18,6)"]));
+        Assert.Equal("FractionalNumber", map.Invoke(null, ["DECIMAL(18,6)"]));
+        Assert.Equal("WholeNumber", map.Invoke(null, ["INTEGER"]));
+    }
+
+    [Fact]
+    public void ExcelImport_DecimalParser_AcceptsSixPlacesAndRejectsExcessPrecision()
+    {
+        var parse = typeof(DataExportSvc).GetMethod("ParseExcelValue", BindingFlags.Static | BindingFlags.NonPublic)!;
+        Assert.Equal(1.6m, parse.Invoke(null, ["1.6", "FractionalNumber"]));
+        Assert.Equal(1.123456m, parse.Invoke(null, ["1.123456", "FractionalNumber"]));
+
+        var error = Assert.Throws<TargetInvocationException>(() =>
+            parse.Invoke(null, ["1.1234567", "FractionalNumber"]));
+        Assert.IsType<InvalidDataException>(error.InnerException);
+        Assert.Contains("more than 6 decimal places", error.InnerException!.Message);
+
+        var wholeError = Assert.Throws<TargetInvocationException>(() =>
+            parse.Invoke(null, ["1.6", "WholeNumber"]));
+        Assert.Contains("not a valid whole number", wholeError.InnerException!.Message);
+    }
+
     // ------------------------------------------------------------ balances
 
     [Fact]
