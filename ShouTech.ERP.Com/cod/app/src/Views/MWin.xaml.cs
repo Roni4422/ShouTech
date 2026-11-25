@@ -408,7 +408,6 @@ namespace ShouTech.App.Views
             preferences.RecycleBinTop = Canvas.GetTop(RecycleBinCornerButton);
             preferences.Save();
             _isDraggingRecycleBin = false;
-            e.Handled = true;
         }
 
         // Quick Access Bar: each navigation button carries the same action key
