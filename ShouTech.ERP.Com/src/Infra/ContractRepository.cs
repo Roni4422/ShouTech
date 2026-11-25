@@ -560,7 +560,7 @@ public sealed class ContractRepository : IContractRepository
              AND t.doc_kind = chain.doc_kind
              AND t.doc_kind = @kind AND t.status = 'Posted' AND t.is_deleted = 0
             JOIN sales_document_lines l
-              ON l.doc_id = t.doc_id AND l.company_id = t.company_id
+              ON l.doc_id = t.doc_id
             WHERE l.material_id IS NOT NULL
             GROUP BY l.material_id
             """);
@@ -617,7 +617,7 @@ public sealed class ContractRepository : IContractRepository
              AND t.doc_kind = chain.doc_kind
              AND t.doc_kind = 'SAL' AND t.status = 'Posted' AND t.is_deleted = 0
             JOIN sales_document_lines l
-              ON l.doc_id = t.doc_id AND l.company_id = t.company_id
+              ON l.doc_id = t.doc_id
             GROUP BY t.doc_no
             """))
         {
