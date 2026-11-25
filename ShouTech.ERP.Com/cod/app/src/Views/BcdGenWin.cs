@@ -234,11 +234,7 @@ public sealed class BcdGenWin : BaseWin
 
     private static string DisplayName(Services.MatRepo.MatRec material)
     {
-        var isArabic = string.Equals(
-            App.CurrentLanguageCode, "ar", StringComparison.OrdinalIgnoreCase);
-        return isArabic || string.IsNullOrWhiteSpace(material.NameEn)
-            ? material.Name
-            : material.NameEn;
+        return material.Name;
     }
 
     private void ApplyFilter()
