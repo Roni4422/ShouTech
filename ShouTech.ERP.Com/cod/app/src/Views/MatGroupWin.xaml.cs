@@ -197,7 +197,7 @@ public partial class MatGroupWin : BaseWin
 
         return row.Code.Contains(query, StringComparison.OrdinalIgnoreCase)
             || row.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase)
-            || row.NameEn.Contains(query, StringComparison.OrdinalIgnoreCase);
+;
     }
 
     private void CmbGroup_SelectionChanged(object sender, SelectionChangedEventArgs e)
