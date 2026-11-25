@@ -268,7 +268,7 @@ This window has no editable form fields; its only DB write is delete. Save path 
 | Window | Field/Grid column (UI) | Bound property/control | DB table.column | Save path (method, file) | Load path (method, file) | Status |
 |---|---|---|---|---|---|---|
 | MatDirWin | List: Code (Material mode) | `MatDirListItem.Code` ← `MatRec.Code` (`{Binding Code}`) | `materials.code` | n/a in this window (read-only list; edited in MatCard) | `Reload()` ← `MatRepo.LoadAll()`, Inventory.cs | VERIFIED (load-only by design) |
-| MatDirWin | List: Name (Material mode) | `MatDirListItem.DisplayName` ← `MatRec.Name/NameEn` by language | `materials.name_ar / name_en` | n/a in this window | as above | VERIFIED (load-only) |
+| MatDirWin | List: Name (Material mode) | `MatDirListItem.DisplayName` ← `MatRec.Name` | `materials.name` | n/a in this window | as above | VERIFIED (load-only) |
 | MatDirWin | List: Status (Material mode) | `MatDirListItem.StatusLabel` ← `MatRec.Status` | `materials.status` | n/a in this window | as above | VERIFIED (load-only) |
 | MatDirWin | List: Code (Group mode) | `MatDirListItem.Code` ← reflection `Code` property | `material_groups.group_code` | n/a in this window (groups deleted only via Groups window — `Remove_Click` shows hint + opens it) | `LoadGroups()` → reflection `MatGroupRepo.LoadAll()`, MatDirWin.xaml.cs | VERIFIED (load-only) |
 | MatDirWin | List: Name (Group mode) | `MatDirListItem.DisplayName` ← reflection `Name/NameEn` | `material_groups.group_name / group_name_en` | n/a in this window | as above | VERIFIED (load-only) |
