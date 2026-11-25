@@ -713,6 +713,7 @@
                  same ribbon map and route through OnRibbonButtonClick
                  with the original RibbonButton as sender. -->
             <Border x:Name="CommandBar" Grid.Row="2" Grid.ColumnSpan="2"
+                    Visibility="Collapsed"
                     Background="{DynamicResource ShellRibbonBackgroundBrush}"
                     BorderBrush="{DynamicResource ShellContentBorderBrush}"
                     BorderThickness="0,0,0,1"
