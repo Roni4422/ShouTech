@@ -1682,6 +1682,7 @@
   "CostStandard": "Standart maliyet",
   "UnitPiece": "Adet",
   "ErrCodeRequired": "Malzeme kodu gerekli",
+  "ErrNumberGeneration": "Yeni malzeme numarası oluşturulamadı. Şirket veritabanını ve numaralandırma ayarlarını kontrol edip yeniden deneyin.",
   "ErrNameRequired": "Malzeme adı gerekli",
   "ErrUnitRequired": "Temel birim gerekli",
   "ErrMinMax": "Minimum maksimumdan büyük olamaz",
