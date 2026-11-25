@@ -284,8 +284,6 @@ namespace ShouTech.App.Views
             var language = AppHost.Localization.GetCurrentLanguage();
             var direction =
                 LanguageDirectionService.GetFlowDirection(language);
-            var isArabic = IsArabicUi();
-
             FlowDirection = direction;
 
             if (MainMenu != null)
