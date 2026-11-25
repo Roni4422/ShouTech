@@ -1416,17 +1416,34 @@ internal static class SteiSvc
             }
         }
 
+        internal static string? ResolveActiveCompanyCode()
+        {
+            var companyCode = ShouTech.App.AppState.CurrentCompanyCode?.Trim();
+            return string.IsNullOrWhiteSpace(companyCode) ? null : companyCode;
+        }
+
         public void PerformBackup()
         {
-            _ = CreateBackupAsync("001");
+            var companyCode = ResolveActiveCompanyCode();
+            if (companyCode is null)
+                return;
+
+            _ = CreateBackupAsync(companyCode);
         }
 
         public BackupResult PerformRotatedBackup()
         {
+            var companyCode = ResolveActiveCompanyCode();
+            if (companyCode is null)
+                return new BackupResult
+                {
+                    Success = false,
+                    Message = "No active company is selected; backup was not created."
+                };
+
             try
             {
-                var task = CreateBackupAsync("001");
-                var path = task.GetAwaiter().GetResult();
+                var path = CreateBackupAsync(companyCode).GetAwaiter().GetResult();
                 return new BackupResult { Success = true, LocalPath = path };
             }
             catch (Exception ex)
@@ -1438,13 +1455,17 @@ internal static class SteiSvc
 
         public bool IsBackupDue()
         {
+            var companyCode = ResolveActiveCompanyCode();
+            if (companyCode is null)
+                return false;
+
             try
             {
                 var settings = AppCfgSvc.Current.Database.Backup;
                 if (!settings.Enabled || !settings.AutoBackup)
                     return false;
 
-                var root = AppPaths.CompanyBackup("001");
+                var root = AppPaths.CompanyBackup(companyCode);
                 if (!Directory.Exists(root))
                     return true;
 
@@ -1495,7 +1516,15 @@ internal static class SteiSvc
         {
             try
             {
-                var path = await CreateBackupAsync("001", ct);
+                var companyCode = ResolveActiveCompanyCode();
+                if (companyCode is null)
+                    return new BackupResult
+                    {
+                        Success = false,
+                        Message = "No active company is selected; backup was not created."
+                    };
+
+                var path = await CreateBackupAsync(companyCode, ct);
                 return new BackupResult { Success = true, LocalPath = path, Uploaded = false };
             }
             catch (Exception ex)
