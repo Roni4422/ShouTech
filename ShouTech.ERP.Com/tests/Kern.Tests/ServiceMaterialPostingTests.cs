@@ -137,10 +137,10 @@ namespace Kern.Tests
                 using var cmd = connection.CreateCommand();
                 cmd.CommandText = """
                     INSERT INTO materials
-                      (material_id, company_id, code, name_ar, name_en, is_stocked, is_service,
+                      (material_id, company_id, code, name, is_stocked, is_service,
                        allow_negative, item_type, unit1, unit1_factor)
                     VALUES
-                      ($id, 'TEST-SERVICE', $code, 'Service test', 'Service test', $stocked, $service,
+                      ($id, 'TEST-SERVICE', $code, 'Service test', $stocked, $service,
                        0, $type, 'pcs', 1);
                     INSERT INTO material_stock_balances
                       (company_id, warehouse_id, material_id, available_qty, reserved_qty,
