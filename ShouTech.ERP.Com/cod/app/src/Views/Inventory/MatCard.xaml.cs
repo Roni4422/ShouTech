@@ -1446,7 +1446,12 @@ public partial class MatCard : BaseWin, IInfoContextProvider
 
     private void IsStocked_Checked(object sender, RoutedEventArgs e)
     {
-        if (_syncingServiceState) return;
+        // XAML applies IsChecked="True" while InitializeComponent is still
+        // constructing controls in document order. ChkIsService and/or
+        // CmbItemType may not have been created when this handler first runs.
+        if (_syncingServiceState || ChkIsService is null || CmbItemType is null)
+            return;
+
         _syncingServiceState = true;
         try
         {
