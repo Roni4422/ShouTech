@@ -37,187 +37,51 @@ namespace ShouTech.App
     // ========================================================================
     internal static class SchemaBootstrapper
     {
-        private static readonly object _lock = new();
-        private static readonly HashSet<string> _appliedDbs
-            = new(StringComparer.OrdinalIgnoreCase);
-
-        private const string SqliteResource = "ShouTech.App.dba.lite.sql";
-        private const string PgResource     = "ShouTech.App.dba.pg.sql";
+        private static readonly object Gate = new();
+        private static readonly HashSet<string> AppliedDatabases = new(StringComparer.Ordinal);
 
         /// <summary>
+        /// Applies the canonical provider-specific migration chain to the active database.
+        /// The same migration engine is used by company creation and the administrative
+        /// migration tool, preventing a separate embedded-schema implementation.
         /// </summary>
         public static void EnsureSchema()
         {
-            try
+            var connectionString = DatabaseRuntime.GetConnectionString();
+            if (string.IsNullOrWhiteSpace(connectionString))
+                return;
+
+            var databaseKey = connectionString.Trim();
+            lock (Gate)
             {
-                var cs = DatabaseRuntime.GetConnectionString();
-                if (string.IsNullOrWhiteSpace(cs))
-                {
-                    SafeLogWarning("No connection string — skipping schema bootstrap.");
+                if (AppliedDatabases.Contains(databaseKey))
                     return;
-                }
 
-                var dbKey = BuildDbKey(cs);
+                var provider = DatabaseRuntime.GetProvider();
+                var result = SchemaMigrator.ApplyAllAsync(provider, connectionString)
+                    .GetAwaiter()
+                    .GetResult();
 
-                lock (_lock)
-                {
-                    if (_appliedDbs.Contains(dbKey))
-                        return;
+                if (!result.Success)
+                    throw new InvalidOperationException(result.Message);
 
-                    bool isPg = DatabaseRuntime.IsPostgreSql();
-                    var resName = isPg ? PgResource : SqliteResource;
-                    var sql = LoadSql(resName);
-
-                    if (string.IsNullOrWhiteSpace(sql))
-                    {
-                        SafeLogWarning($"Embedded resource not found or empty: {resName}");
-                        return;
-                    }
-
-                    if (isPg)
-                        ExecPg(cs, sql);
-                    else
-                        ExecSqlite(cs, sql);
-
-                    _appliedDbs.Add(dbKey);
-                    SafeLogInfo($"Schema applied: {(isPg ? "PostgreSQL" : "SQLite")} [{dbKey}]");
-                }
-            }
-            catch (Exception ex)
-            {
-                try
-                {
-                    AppHost.Logging?.LogError(
-                        "SchemaBootstrapper",
-                        "Schema bootstrap failed.",
-                        ex);
-                }
-                catch (Exception exL93)
-                {
-                    AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL93, "App.xaml.EnsureSchema");
-                }
-                throw;
+                AppliedDatabases.Add(databaseKey);
             }
         }
 
-        /// <summary>
-        /// </summary>
         public static void Reset()
         {
-            lock (_lock)
-            {
-                _appliedDbs.Clear();
-            }
+            lock (Gate)
+                AppliedDatabases.Clear();
         }
 
-        /// <summary>
-        /// </summary>
         public static void Reset(string connectionString)
         {
-            if (string.IsNullOrWhiteSpace(connectionString)) return;
+            if (string.IsNullOrWhiteSpace(connectionString))
+                return;
 
-            var dbKey = BuildDbKey(connectionString);
-            lock (_lock)
-            {
-                _appliedDbs.Remove(dbKey);
-            }
-        }
-
-        // --------------------------------------------------------------------
-        private static string BuildDbKey(string connectionString)
-        {
-            try
-            {
-                var m = Regex.Match(
-                    connectionString,
-                    @"(?:Data\s+Source|Filename)\s*=\s*([^;]+)",
-                    RegexOptions.IgnoreCase);
-
-                if (m.Success)
-                    return "sqlite:" + m.Groups[1].Value.Trim().ToLowerInvariant();
-
-                m = Regex.Match(
-                    connectionString,
-                    @"(?:Database|Initial\s+Catalog)\s*=\s*([^;]+)",
-                    RegexOptions.IgnoreCase);
-
-                if (m.Success)
-                    return "pg:" + m.Groups[1].Value.Trim().ToLowerInvariant();
-            }
-            catch (Exception exL142)
-            {
-                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL142, "App.xaml.BuildDbKey");
-            }
-
-            // Fallback
-            return "cs:" + connectionString.GetHashCode().ToString(
-                "X8",
-                System.Globalization.CultureInfo.InvariantCulture);
-        }
-
-        // --------------------------------------------------------------------
-        private static string LoadSql(string resourceName)
-        {
-            try
-            {
-                var asm = Assembly.GetExecutingAssembly();
-                using var stream = asm.GetManifestResourceStream(resourceName);
-                if (stream == null) return string.Empty;
-
-                using var reader = new StreamReader(stream);
-                return reader.ReadToEnd();
-            }
-            catch (Exception exL162)
-            {
-                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL162, "App.xaml.LoadSql");
-                return string.Empty;
-            }
-        }
-
-        // --------------------------------------------------------------------
-        private static void ExecSqlite(string connectionString, string sql)
-        {
-            using var conn = new SqliteConnection(connectionString);
-            conn.Open();
-
-            using (var pragma = conn.CreateCommand())
-            {
-                pragma.CommandText =
-                    "PRAGMA foreign_keys = ON;" +
-                    "PRAGMA journal_mode = WAL;" +
-                    "PRAGMA synchronous = NORMAL;";
-                pragma.ExecuteNonQuery();
-            }
-
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = sql;
-            cmd.CommandTimeout = 180;
-            cmd.ExecuteNonQuery();
-        }
-
-        // --------------------------------------------------------------------
-        private static void ExecPg(string connectionString, string sql)
-        {
-            using var conn = new NpgsqlConnection(connectionString);
-            conn.Open();
-
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = sql;
-            cmd.CommandTimeout = 300;
-            cmd.ExecuteNonQuery();
-        }
-
-        // --------------------------------------------------------------------
-        private static void SafeLogInfo(string msg)
-        {
-            try { AppHost.Logging?.LogInfo("SchemaBootstrapper", msg); } catch (Exception exL204) {
-                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL204, "App.xaml.SafeLogInfo"); }
-        }
-
-        private static void SafeLogWarning(string msg)
-        {
-            try { AppHost.Logging?.LogWarning("SchemaBootstrapper", msg); } catch (Exception exL209) {
-                AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exL209, "App.xaml.SafeLogWarning"); }
+            lock (Gate)
+                AppliedDatabases.Remove(connectionString.Trim());
         }
     }
 
