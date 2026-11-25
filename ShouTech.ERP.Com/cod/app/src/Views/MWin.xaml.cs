@@ -41,6 +41,7 @@ namespace ShouTech.App.Views
                 VisuId.ApplyWindow(this);
                 Win11Chrome.Apply(this);
                 ApplyUiDirection();
+                Loaded += (_, _) => InitializeRecycleBinPosition();
                 _ = RefreshRecycleBinBadgeAsync();
 
                 SourceInitialized += OnSourceInitialized;
@@ -305,13 +306,6 @@ namespace ShouTech.App.Views
             if (MainStatusBar != null)
                 MainStatusBar.FlowDirection = direction;
 
-            // Bin corner: Arabic → left, other languages → right (explicit product rule).
-            ApplyRecycleBinCorner(isArabic);
-        }
-
-        private void ApplyRecycleBinCorner(bool isArabic)
-        {
-            PositionRecycleBinCorner(isArabic);
         }
 
         private void RecycleBinLayer_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -328,7 +322,6 @@ namespace ShouTech.App.Views
                     ? Visibility.Visible
                     : Visibility.Collapsed;
 
-            PositionRecycleBinCorner(IsArabicUi());
         }
 
         private static bool IsArabicUi()
@@ -344,46 +337,80 @@ namespace ShouTech.App.Views
             return appLang.StartsWith("ar", StringComparison.OrdinalIgnoreCase);
         }
 
-        /// <summary>
-        /// Anchors the archive-bin icon above the status bar.
-        /// Arabic → left; other languages → right.
-        /// The LTR Canvas keeps physical sides stable in RTL layouts.
-        /// </summary>
-        private void PositionRecycleBinCorner(bool isArabic)
+        private void InitializeRecycleBinPosition()
+        {
+            if (RecycleBinLayer is null || RecycleBinCornerButton is null)
+                return;
+
+            var preferences = UsrPref.Load();
+            var width = RecycleBinLayer.ActualWidth;
+            var height = RecycleBinLayer.ActualHeight;
+            if (width <= 0 || height <= 0)
+                return;
+
+            var left = preferences.RecycleBinLeft;
+            var top = preferences.RecycleBinTop;
+            if (left < 0 || top < 0)
+            {
+                left = IsArabicUi() ? 24 : Math.Max(24, width - RecycleBinCornerButton.Width - 24);
+                top = Math.Max(8, height - RecycleBinCornerButton.Height - 8);
+            }
+
+            Canvas.SetLeft(RecycleBinCornerButton, left);
+            Canvas.SetTop(RecycleBinCornerButton, top);
+            RecycleBinCornerButton.FlowDirection = FlowDirection.LeftToRight;
+        }
+
+        private void RecycleBin_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             if (RecycleBinCornerButton is null || RecycleBinLayer is null)
                 return;
 
-            const double margin = 24;
-            const double iconWidth = 120;
+            _recycleBinDragOrigin = e.GetPosition(RecycleBinLayer);
+            _recycleBinStartLeft = Canvas.GetLeft(RecycleBinCornerButton);
+            _recycleBinStartTop = Canvas.GetTop(RecycleBinCornerButton);
+            _isDraggingRecycleBin = false;
+            RecycleBinCornerButton.CaptureMouse();
+        }
 
-            RecycleBinCornerButton.FlowDirection = isArabic
-                ? FlowDirection.RightToLeft
-                : FlowDirection.LeftToRight;
-            Canvas.SetBottom(RecycleBinCornerButton, 8);
+        private void RecycleBin_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (e.LeftButton != MouseButtonState.Pressed ||
+                RecycleBinCornerButton is null || RecycleBinLayer is null ||
+                !RecycleBinCornerButton.IsMouseCaptured)
+                return;
 
-            var layerWidth = RecycleBinLayer.ActualWidth;
-            if (layerWidth <= 0)
-                layerWidth = ActualWidth;
+            var current = e.GetPosition(RecycleBinLayer);
+            var dx = current.X - _recycleBinDragOrigin.X;
+            var dy = current.Y - _recycleBinDragOrigin.Y;
+            if (!_isDraggingRecycleBin &&
+                Math.Abs(dx) < SystemParameters.MinimumHorizontalDragDistance &&
+                Math.Abs(dy) < SystemParameters.MinimumVerticalDragDistance)
+                return;
 
-            if (isArabic)
-            {
-                Canvas.SetLeft(RecycleBinCornerButton, margin);
-            }
-            else
-            {
-                var left = Math.Max(margin, layerWidth - iconWidth - margin);
-                Canvas.SetLeft(RecycleBinCornerButton, left);
-            }
+            _isDraggingRecycleBin = true;
+            var maxLeft = Math.Max(0, RecycleBinLayer.ActualWidth - RecycleBinCornerButton.ActualWidth);
+            var maxTop = Math.Max(0, RecycleBinLayer.ActualHeight - RecycleBinCornerButton.ActualHeight);
+            Canvas.SetLeft(RecycleBinCornerButton, Math.Clamp(_recycleBinStartLeft + dx, 0, maxLeft));
+            Canvas.SetTop(RecycleBinCornerButton, Math.Clamp(_recycleBinStartTop + dy, 0, maxTop));
+        }
 
-            if (BinStatusItem != null)
-            {
-                // Status bar item: still subject to bar FlowDirection; keep explicit.
-                BinStatusItem.HorizontalAlignment = isArabic
-                    ? HorizontalAlignment.Left
-                    : HorizontalAlignment.Right;
-                BinStatusItem.HorizontalContentAlignment = BinStatusItem.HorizontalAlignment;
-            }
+        private void RecycleBin_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (RecycleBinCornerButton is null || !RecycleBinCornerButton.IsMouseCaptured)
+                return;
+
+            RecycleBinCornerButton.ReleaseMouseCapture();
+            if (!_isDraggingRecycleBin)
+                return;
+
+            _suppressRecycleBinClick = true;
+            var preferences = UsrPref.Load();
+            preferences.RecycleBinLeft = Canvas.GetLeft(RecycleBinCornerButton);
+            preferences.RecycleBinTop = Canvas.GetTop(RecycleBinCornerButton);
+            preferences.Save();
+            _isDraggingRecycleBin = false;
+            e.Handled = true;
         }
 
         // Quick Access Bar: each navigation button carries the same action key
@@ -450,9 +477,21 @@ namespace ShouTech.App.Views
         }
 
         private bool _recycleBinOpen;
+        private bool _isDraggingRecycleBin;
+        private bool _suppressRecycleBinClick;
+        private Point _recycleBinDragOrigin;
+        private double _recycleBinStartLeft;
+        private double _recycleBinStartTop;
 
         private async void OnRecycleBinClick(object sender, RoutedEventArgs e)
         {
+            if (_suppressRecycleBinClick)
+            {
+                _suppressRecycleBinClick = false;
+                e.Handled = true;
+                return;
+            }
+
             if (_recycleBinOpen)
                 return;
 
