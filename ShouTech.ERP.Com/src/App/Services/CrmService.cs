@@ -155,6 +155,9 @@ public sealed class CrmService
         var lead = await _repository.GetLeadAsync(company, leadId, cancellationToken).ConfigureAwait(false);
         if (lead is not null)
         {
+            if (lead.Status == CrmLeadStatuses.Converted || lead.ConvertedPartyId is not null)
+                throw new AppError(ErrorCodes.CrmLeadAlreadyConverted,
+                    $"Lead '{lead.LeadName}' has already been converted.", lead.LeadName);
             var duplicate = await _repository.FindLeadDuplicateAsync(company, lead, cancellationToken).ConfigureAwait(false);
             if (duplicate is not null)
                 throw DuplicateError(lead, duplicate);

@@ -1210,10 +1210,10 @@ namespace Kern.Tests
             try
             {
                 ExecSql(connectionString, """
-                    INSERT INTO materials (material_id, company_id, material_code, material_name, base_unit, is_active, quality_check_required)
-                    VALUES (44, 'ORDER-GL', 'MAT-44', 'Item 44', 'PCS', 1, 1);
-                    INSERT INTO material_stock_balances (company_id, warehouse_id, material_id, available_qty, reserved_qty, on_order_qty, avg_cost, stock_value)
-                    VALUES ('ORDER-GL', 1, 44, 0, 0, 0, 10, 0);
+                    INSERT INTO materials (material_id, company_id, code, name_ar, name_en, unit1, is_active, is_stocked, quality_check_required, is_deleted)
+                    VALUES (44, 'ORDER-GL', 'MAT-44', 'Item 44', 'Item 44', 'PCS', 1, 1, 1, 0);
+                    INSERT INTO material_stock_balances (company_id, warehouse_id, material_id, available_qty, reserved_qty, average_cost, last_cost, is_deleted)
+                    VALUES ('ORDER-GL', 1, 44, 0, 0, 10, 10, 0);
                     """);
                 var orderId = await service.CreateOrderAsync(
                     Order(companyId, CommercialDocKinds.PurchaseOrder, "PO-B1-QC",
@@ -1425,8 +1425,8 @@ namespace Kern.Tests
             try
             {
                 ExecSql(connectionString, """
-                    INSERT INTO chart_of_accounts (account_id, company_id, account_code, account_name_ar, account_name_en, account_type, is_active)
-                    VALUES (30, 'ORDER-GL', '1205', 'Input VAT', 'Input VAT', 'Asset', 1);
+                    INSERT INTO chart_of_accounts (account_id, company_id, account_code, account_name, account_type, is_postable, is_active, is_deleted)
+                    VALUES ('1205-ORDER-GL', '${companyId:D}', '1205', 'Input VAT', 'ASSET', 1, 1, 0);
                     INSERT INTO company_tax_settings (company_code, country_code, tax_enabled, tax_scheme)
                     VALUES ('ORDER-GL', 'SA', 1, 'VAT');
                     INSERT INTO company_tax_rules

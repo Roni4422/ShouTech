@@ -582,6 +582,10 @@ public static class TaxSvc
         {
             throw;
         }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
         catch (Exception exBlk)
         {
             AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, exBlk, "TaxSvc.ResolveParty.Blacklist");

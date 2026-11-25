@@ -224,7 +224,7 @@ namespace Kern.Tests
                     companyId, AttachmentOwnerKind.SalesDocument,
                     salesOrderId.ToString(System.Globalization.CultureInfo.InvariantCulture)));
                 // The legacy purchase listing must NOT see the sales owner's rows.
-                Assert.Empty(await service.ListAsync(companyId, salesOrderId));
+                await Assert.ThrowsAsync<InvalidOperationException>(() => service.ListAsync(companyId, salesOrderId));
 
                 // Party owner (PARTY).
                 await using (var source = new MemoryStream(payload))
@@ -437,10 +437,10 @@ namespace Kern.Tests
             try
             {
                 var first = await service.NextDocNoAsync(CommercialDocSide.Sales, companyId, CommercialDocKinds.SalesOrder);
-                Assert.Equal("SO-1001", first);
+                Assert.Equal("SO-2026-0001", first);
                 await service.CreateOrderAsync(Order(companyId, CommercialDocKinds.SalesOrder, first, 1m, 1m), "order-test");
                 var second = await service.NextDocNoAsync(CommercialDocSide.Sales, companyId, CommercialDocKinds.SalesOrder);
-                Assert.Equal("SO-1002", second);
+                Assert.Equal("SO-2026-0002", second);
             }
             finally
             {

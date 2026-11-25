@@ -2242,9 +2242,10 @@ public sealed class CommercialDocumentRepository : ICommercialDocumentRepository
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         var rows = new List<ApprovalHistoryEntry>();
         await using var command = connection.CreateCommand();
-        command.CommandText = """
+        var historyTieBreaker = _provider == "PostgreSQL" ? "history_id" : "rowid";
+        command.CommandText = $"""
             SELECT history_id, company_id, doc_id, doc_kind, action, from_state, to_state, actor, reason, created_at
-            FROM sau_approval_history WHERE doc_id = @doc ORDER BY created_at, history_id
+            FROM sau_approval_history WHERE doc_id = @doc ORDER BY created_at, {historyTieBreaker}
             """;
         Add(command, "@doc", docId);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);

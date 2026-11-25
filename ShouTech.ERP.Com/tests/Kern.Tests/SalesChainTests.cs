@@ -1086,11 +1086,11 @@ namespace Kern.Tests
 
                     INSERT INTO warehouses
                         (warehouse_id, company_id, warehouse_code, warehouse_name_ar, warehouse_name_en, is_active, is_deleted)
-                    VALUES (1, $companyId, 1, 'Main', 'Main', 1, 0);
+                    VALUES (1, 'SC-TEST', 1, 'Main', 'Main', 1, 0);
 
                     INSERT INTO materials
                         (material_id, company_id, code, name_ar, name_en, is_stocked, is_deleted)
-                    VALUES (42, $companyId, 'MAT-42', 'Chain test item', 'Chain test item', 1, 0);
+                    VALUES (42, 'SC-TEST', 'MAT-42', 'Chain test item', 'Chain test item', 1, 0);
 
                     INSERT INTO material_stock_balances
                         (company_id, warehouse_id, material_id, available_qty, average_cost, last_cost)
@@ -1098,6 +1098,62 @@ namespace Kern.Tests
                     """;
                 command.Parameters.AddWithValue("$companyId", companyId.ToString("D"));
                 command.ExecuteNonQuery();
+            }
+
+            using (var fiscal = new SqliteConnection(connectionString))
+            {
+                fiscal.Open();
+                long yearId;
+                using (var year = fiscal.CreateCommand())
+                {
+                    year.CommandText = """
+                        INSERT INTO fiscal_years (company_id, fiscal_year, database_name, start_date, end_date, is_current, is_closed)
+                        VALUES ($company, 2026, '', '2026-01-01', '2026-12-31', 1, 0);
+                        """;
+                    year.Parameters.AddWithValue("$company", companyId.ToString("D"));
+                    year.ExecuteNonQuery();
+                    year.CommandText = "SELECT last_insert_rowid();";
+                    yearId = Convert.ToInt64(year.ExecuteScalar());
+                }
+                for (var month = 1; month <= 12; month++)
+                {
+                    using var period = fiscal.CreateCommand();
+                    period.CommandText = """
+                        INSERT INTO fiscal_periods
+                            (fiscal_period_id, company_id, fiscal_year_id, period_number, period_name, start_date, end_date, status)
+                        VALUES ($id, $company, $year, $number, $name, $start, $end, 'OPEN');
+                        """;
+                    period.Parameters.AddWithValue("$id", Guid.NewGuid().ToString("D"));
+                    period.Parameters.AddWithValue("$company", companyId.ToString("D"));
+                    period.Parameters.AddWithValue("$year", yearId);
+                    period.Parameters.AddWithValue("$number", month);
+                    period.Parameters.AddWithValue("$name", $"2026-{month:D2}");
+                    period.Parameters.AddWithValue("$start", new DateTime(2026, month, 1).ToString("yyyy-MM-dd"));
+                    period.Parameters.AddWithValue("$end", new DateTime(2026, month, 1).AddMonths(1).AddDays(-1).ToString("yyyy-MM-dd"));
+                    period.ExecuteNonQuery();
+                }
+                foreach (var (code, name, type) in new[]
+                {
+                    ("1201", "Trade Receivables", "ASSET"), ("1203", "Inventory", "ASSET"),
+                    ("1215", "Delivered Not Billed", "ASSET"), ("2201", "Trade Payables", "LIABILITY"),
+                    ("2203", "Accrued Liabilities", "LIABILITY"), ("301", "Sales Revenue", "REVENUE"),
+                    ("401", "Cost of Goods Sold", "EXPENSE"), ("402", "Purchases", "EXPENSE"),
+                    ("131", "Cash", "ASSET")
+                })
+                {
+                    using var account = fiscal.CreateCommand();
+                    account.CommandText = """
+                        INSERT INTO chart_of_accounts
+                            (account_id, company_id, account_code, account_name, account_type, is_postable, is_active, is_deleted)
+                        VALUES ($id, $company, $code, $name, $type, 1, 1, 0);
+                        """;
+                    account.Parameters.AddWithValue("$id", Guid.NewGuid().ToString("D"));
+                    account.Parameters.AddWithValue("$company", companyId.ToString("D"));
+                    account.Parameters.AddWithValue("$code", code);
+                    account.Parameters.AddWithValue("$name", name);
+                    account.Parameters.AddWithValue("$type", type);
+                    account.ExecuteNonQuery();
+                }
             }
 
             var repository = new ShouTech.Infrastructure.CommercialDocumentRepository("SQLite", connectionString);

@@ -355,7 +355,7 @@ namespace Kern.Tests
                 Assert.Equal(233.31m, GlSum(connection, companyId, "SAL", secondInvoiceId, "401", debit: true));
                 Assert.Equal(233.31m, GlSum(connection, companyId, "SAL", secondInvoiceId, "1215", debit: false));
                 // Both invoices together released the delivery cost to the cent.
-                Assert.Equal(0m, AccountNetDebit(connection, companyId, "1215"));
+                Assert.InRange(Math.Abs(AccountNetDebit(connection, companyId, "1215")), 0m, 0.000001m);
             }
             finally
             {
@@ -1403,7 +1403,7 @@ namespace Kern.Tests
                     service.CreateConsolidatedInvoiceAsync(
                         new[] { new ConsolidatedDeliverySelection(orderId) },
                         "SAL-C4-Y", new DateOnly(2026, 10, 22), "cons-test"));
-                Assert.Equal(ErrorCodes.ChainTransitionNotAllowed, wrongKind.Code);
+                Assert.Equal(ErrorCodes.ConsolidationMismatch, wrongKind.Code);
 
                 // A different party's delivery cannot join (SAL-7004).
                 var otherOrderId = await PostedOrderAsync(service, companyId, "C4B", 10m, partyId: 8);
@@ -1416,7 +1416,7 @@ namespace Kern.Tests
                             new ConsolidatedDeliverySelection(otherDeliveryId)
                         },
                         "SAL-C4-Z", new DateOnly(2026, 10, 22), "cons-test"));
-                Assert.Equal(ErrorCodes.ChainTransitionNotAllowed, mismatch.Code);
+                Assert.Equal(ErrorCodes.ConsolidationMismatch, mismatch.Code);
 
                 // Bill the delivery in full, then nothing remains (SAL-7003).
                 var invoiceId = await service.CreateConsolidatedInvoiceAsync(

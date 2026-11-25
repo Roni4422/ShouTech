@@ -540,16 +540,30 @@ public sealed class ContractRepository : IContractRepository
         var keys = SalesPriceResolver.CompanyKeys(connection, transaction, _provider, companyKey);
         var inList = string.Join(", ", keys.Select((_, i) => $"@co{i}"));
         await using var command = CreateCommand(connection, transaction, $"""
+            WITH contract_orders AS (
+                SELECT o.company_id, o.doc_id
+                FROM sales_documents o
+                WHERE o.company_id IN ({inList}) AND o.doc_kind = 'SO'
+                  AND o.is_deleted = 0 AND o.contract_id = @contract
+            ),
+            source_documents AS (
+                SELECT company_id, doc_id FROM contract_orders
+                UNION
+                SELECT dl.company_id, dl.target_doc_id
+                FROM document_links dl
+                JOIN contract_orders o ON o.company_id = dl.company_id AND o.doc_id = dl.source_doc_id
+                WHERE dl.source_doc_kind = 'SO' AND dl.target_doc_kind = 'DLV'
+            )
             SELECT l.material_id, SUM(l.qty)
-            FROM sales_documents o
+            FROM source_documents source
             JOIN document_links dl
-              ON dl.company_id = o.company_id AND dl.source_doc_id = o.doc_id AND dl.target_doc_kind = @kind
+              ON dl.company_id = source.company_id AND dl.source_doc_id = source.doc_id
+             AND dl.target_doc_kind = @kind
             JOIN sales_documents t
               ON t.doc_id = dl.target_doc_id AND t.company_id = dl.company_id
              AND t.doc_kind = @kind AND t.status = 'Posted' AND t.is_deleted = 0
             JOIN sales_document_lines l ON l.doc_id = t.doc_id
-            WHERE o.company_id IN ({inList}) AND o.doc_kind = 'SO' AND o.is_deleted = 0
-              AND o.contract_id = @contract AND l.material_id IS NOT NULL
+            WHERE l.material_id IS NOT NULL
             GROUP BY l.material_id
             """);
         for (var i = 0; i < keys.Count; i++) Add(command, $"@co{i}", keys[i]);
@@ -585,15 +599,29 @@ public sealed class ContractRepository : IContractRepository
         var docNos = new List<string>();
         decimal revenue = 0m;
         await using (var invoices = CreateCommand(connection, null, $"""
+            WITH contract_orders AS (
+                SELECT o.company_id, o.doc_id
+                FROM sales_documents o
+                WHERE o.company_id IN ({inList}) AND o.doc_kind = 'SO'
+                  AND o.is_deleted = 0 AND o.contract_id = @contract
+            ),
+            source_documents AS (
+                SELECT company_id, doc_id FROM contract_orders
+                UNION
+                SELECT dl.company_id, dl.target_doc_id
+                FROM document_links dl
+                JOIN contract_orders o ON o.company_id = dl.company_id AND o.doc_id = dl.source_doc_id
+                WHERE dl.source_doc_kind = 'SO' AND dl.target_doc_kind = 'DLV'
+            )
             SELECT t.doc_no, SUM(l.line_total)
-            FROM sales_documents o
+            FROM source_documents source
             JOIN document_links dl
-              ON dl.company_id = o.company_id AND dl.source_doc_id = o.doc_id AND dl.target_doc_kind = 'SAL'
+              ON dl.company_id = source.company_id AND dl.source_doc_id = source.doc_id
+             AND dl.target_doc_kind = 'SAL'
             JOIN sales_documents t
               ON t.doc_id = dl.target_doc_id AND t.company_id = dl.company_id
              AND t.doc_kind = 'SAL' AND t.status = 'Posted' AND t.is_deleted = 0
             JOIN sales_document_lines l ON l.doc_id = t.doc_id
-            WHERE o.company_id IN ({inList}) AND o.doc_kind = 'SO' AND o.is_deleted = 0 AND o.contract_id = @contract
             GROUP BY t.doc_no
             """))
         {
@@ -607,13 +635,19 @@ public sealed class ContractRepository : IContractRepository
             }
         }
         await using (var deliveries = CreateCommand(connection, null, $"""
-            SELECT d.doc_no FROM document_links l1
-            JOIN sales_documents d ON d.doc_id = l1.source_doc_id AND d.doc_kind = 'DLV'
-            JOIN document_links l2 ON l2.target_doc_id = l1.target_doc_id AND l2.target_doc_kind = 'SAL'
-            JOIN sales_documents o ON o.doc_id = l2.source_doc_id AND o.doc_kind = 'SO'
-            WHERE o.contract_id = @contract AND o.is_deleted = 0
+            SELECT d.doc_no
+            FROM sales_documents o
+            JOIN document_links dl
+              ON dl.company_id = o.company_id AND dl.source_doc_id = o.doc_id
+             AND dl.source_doc_kind = 'SO' AND dl.target_doc_kind = 'DLV'
+            JOIN sales_documents d
+              ON d.company_id = dl.company_id AND d.doc_id = dl.target_doc_id
+             AND d.doc_kind = 'DLV' AND d.status = 'Posted' AND d.is_deleted = 0
+            WHERE o.company_id IN ({inList}) AND o.doc_kind = 'SO'
+              AND o.contract_id = @contract AND o.is_deleted = 0
             """))
         {
+            for (var i = 0; i < keys.Count; i++) Add(deliveries, $"@co{i}", keys[i]);
             Add(deliveries, "@contract", FormatGuid(contractId));
             await using var reader = await deliveries.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))

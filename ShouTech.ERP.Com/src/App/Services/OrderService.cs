@@ -50,7 +50,8 @@ public sealed class OrderService
 
     public static bool IsOrderKind(string docKind) =>
         docKind is CommercialDocKinds.SalesOrder or CommercialDocKinds.PurchaseOrder
-            or CommercialDocKinds.SalesQuotation or CommercialDocKinds.RequestForQuotation or CommercialDocKinds.SupplierQuotation;
+            or CommercialDocKinds.SalesQuotation or CommercialDocKinds.RequestForQuotation or CommercialDocKinds.SupplierQuotation
+            or CommercialDocKinds.PurchaseRequisition;
 
     public async Task<long> CreateOrderAsync(CommercialDocumentDraft draft, string userId, CancellationToken cancellationToken = default)
         => await CreateOrderAsync(draft, userId, null, cancellationToken).ConfigureAwait(false);

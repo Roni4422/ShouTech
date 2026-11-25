@@ -4649,8 +4649,7 @@ public static class InvRepo
                 line.DiscountPct != source.DiscountPct ||
                 !string.Equals(line.TaxCode ?? string.Empty, source.TaxCode, StringComparison.OrdinalIgnoreCase) ||
                 line.TaxRate != source.TaxRate ||
-                !string.Equals(line.TaxCalculationMode ?? "Exclusive", source.TaxMode, StringComparison.OrdinalIgnoreCase) ||
-                line.WarehouseId != source.WarehouseId)
+                !string.Equals(line.TaxCalculationMode ?? "Exclusive", source.TaxMode, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException($"Return line {line.LineNo} must retain the original material, unit, price, discount and tax settings.");
             if (line.Qty <= 0m ||
                 previouslyReturned.GetValueOrDefault(source.LineId) + line.Qty > source.Qty)
