@@ -511,10 +511,12 @@ public sealed class PartyUnificationTests
         };
         await repo.SavePartyAsync(CompanyCode, party, Actor);
 
-        var ex = Assert.Throws<InvalidOperationException>(() => TaxSvc.ResolveParty("BAD-1", customer: true));
+        var ex = Assert.Throws<AppError>(() => TaxSvc.ResolveParty("BAD-1", customer: true));
+        Assert.Equal(ErrorCodes.PartyBlacklisted, ex.Code);
         Assert.Contains("blacklisted", ex.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Fraud", ex.Message);
-        Assert.Throws<InvalidOperationException>(() => PartyLedgerSvc.ResolveParty("BAD-1", "C"));
+        var ledgerError = Assert.Throws<AppError>(() => PartyLedgerSvc.ResolveParty("BAD-1", "C"));
+        Assert.Equal(ErrorCodes.PartyBlacklisted, ledgerError.Code);
 
         // The balance still reports (balances never vanish): the party
         // shows in CustomerBalances even while blacklisted + inactive.
