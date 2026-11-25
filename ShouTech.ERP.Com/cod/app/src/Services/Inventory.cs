@@ -1110,36 +1110,6 @@ internal static class MatRepo
             throw new InvalidOperationException("The material was not found in the selected company or has already been deleted.");
     }
 
-    private static bool HasColumn(DbConnection connection, string table, string column)
-    {
-        using var command = connection.CreateCommand();
-        if (DatabaseRuntime.IsPostgreSql())
-        {
-            command.CommandText = "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $table AND column_name = $column";
-        }
-        else
-        {
-            if (!System.Text.RegularExpressions.Regex.IsMatch(table, "^[A-Za-z_][A-Za-z0-9_]*$"))
-                throw new ArgumentException("Invalid schema table name.", nameof(table));
-            command.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = $column";
-        }
-        if (DatabaseRuntime.IsPostgreSql())
-            Add(command, "$table", table);
-        Add(command, "$column", column);
-        return Convert.ToInt32(command.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture) > 0;
-    }
-
-    private static bool TableExists(DbConnection connection, DbTransaction transaction, bool isPg, string table)
-    {
-        using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = isPg
-            ? "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = $table"
-            : "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $table";
-        Add(command, "$table", table);
-        return Convert.ToInt32(command.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture) > 0;
-    }
-
     private static bool CodeExistsOn(DbConnection connection, DbTransaction tx, string code, long? excludeId)
     {
         using var command = connection.CreateCommand();
