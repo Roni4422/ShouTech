@@ -609,7 +609,7 @@ public static class StkPost
                 command.Transaction = tx;
                 command.CommandText = DatabaseRuntime.IsPostgreSql()
                     ? """
-                      SELECT material_id, code, name_ar, name_en, name_print_ar, name_print_en,
+                      SELECT material_id, code, name, name_en, name_print_ar, name_print_en,
                              COALESCE(NULLIF(TRIM(default_unit), ''),
                                       NULLIF(TRIM(sales_unit), ''),
                                       NULLIF(TRIM(purchase_unit), ''), '')
@@ -619,7 +619,7 @@ public static class StkPost
                       FOR UPDATE;
                       """
                     : """
-                      SELECT material_id, code, name_ar, name_en, name_print_ar, name_print_en,
+                      SELECT material_id, code, name, name_en, name_print_ar, name_print_en,
                              COALESCE(NULLIF(TRIM(default_unit), ''),
                                       NULLIF(TRIM(sales_unit), ''),
                                       NULLIF(TRIM(purchase_unit), ''), '')
