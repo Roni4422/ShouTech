@@ -94,3 +94,19 @@ Code commit tested: `8ed1c27fb9e4d38e748625aac34823f4a77216ac`
 - These failures are recorded as separate business-domain regression work items; they were not hidden or reclassified as successful by the structural/startup changes.
 
 The SQLite and PostgreSQL migration smoke workflow remains successful on commit `f6e494ef9cf653beb902717758499b7af75d2b18`, with clean install, same-database rerun, and migration-history checks for both providers. No migration files changed after that successful run.
+
+
+## Follow-up structural pass — 2026-11-25
+
+Branch: `reduce-2-upgrade`
+Snapshot commit before this audit update: `75c608f5d8d52d60f431cce509151566d7ecd75e`
+
+- Recursive Git tree: **839 tracked files** (complete tree; not truncated).
+- Removed the two stale workflow copies under `ShouTech.ERP.Com/.github/workflows/`. GitHub Actions discovers workflows only from the repository-root `.github/workflows/`; the active root workflows remain intact.
+- Root workflows retained: `.github/workflows/windows-ci.yml` and `.github/workflows/db-migrations-smoke.yml`.
+- Recomputed exact blob duplicates: **8 groups**, all SQL migration assets. Seven groups are cross-provider SQLite/PostgreSQL copies; one is two separately numbered PostgreSQL migrations (`003_modules.sql` and `004_modules.sql`). All are retained to protect migration identity, checksums, and replay history.
+- No exact duplicate C# source blobs were found.
+- Same-basename source files were not merged solely by name: `Localization/ErrorCatalog.cs` and `Services/ErrorCatalog.cs` expose different namespaces and responsibilities; `Services/Security.cs` and `cod/cor/Security.cs` are different security layers. The `cod/cor` inventory project is referenced by both the solution and desktop project, so it is not an orphan.
+- Windows CI for the structural deletion commit `75c608f5d8d52d60f431cce509151566d7ecd75e` was running when this addendum was prepared; its final result must be recorded after completion.
+
+The file-count reduction in this pass is **2 files**. No migration, source API, runtime resource, or executable entry point was changed.
