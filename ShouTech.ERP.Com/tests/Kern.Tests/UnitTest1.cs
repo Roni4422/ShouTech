@@ -368,14 +368,14 @@ namespace Kern.Tests
                 BindingFlags.Static | BindingFlags.NonPublic)!;
             var availableFields = new[]
             {
-                "material_id", "company_id", "code", "name_ar", "name_en", "units_json",
+                "material_id", "company_id", "code", "name", "units_json",
                 "prices_json", "attributes_json", "created_at", "created_by", "qty_on_hand"
             };
 
             var result = (IReadOnlyList<string>)getFields.Invoke(
                 null, new object[] { "materials", availableFields })!;
 
-            Assert.Equal(new[] { "material_id", "code", "name_ar", "name_en", "qty_on_hand" }, result);
+            Assert.Equal(new[] { "material_id", "code", "name", "qty_on_hand" }, result);
         }
 
         [Fact]
@@ -803,10 +803,10 @@ namespace Kern.Tests
                 {
                     connection.Open();
                     Execute(connection, """
-                        INSERT INTO materials (company_id, code, name_ar, name_en, default_unit)
+                        INSERT INTO materials (company_id, code, name, default_unit)
                         VALUES
-                          ('TEST-MERGE', 'SRC', 'Source name', 'Source name EN', 'kg'),
-                          ('TEST-MERGE', 'DST', 'Target name', 'Target name EN', 'kg');
+                          ('TEST-MERGE', 'SRC', 'Source name', 'kg'),
+                          ('TEST-MERGE', 'DST', 'Target name', 'kg');
                         INSERT INTO sales_documents (company_id, doc_kind, doc_no, doc_date)
                         VALUES ('TEST-MERGE', 'SAL', 'S-1', '2024-01-02');
                         INSERT INTO purchase_documents (company_id, doc_kind, doc_no, doc_date)
