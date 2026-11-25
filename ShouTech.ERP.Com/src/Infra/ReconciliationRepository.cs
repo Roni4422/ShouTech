@@ -446,6 +446,9 @@ public sealed class ReconciliationRepository : IReconciliationRepository
             // document currency. Same currency: the two must agree, so
             // single-currency behavior is byte-identical to before.
             var crossCurrency = !string.Equals(paymentCurrency.Trim(), documentCurrency.Trim(), StringComparison.OrdinalIgnoreCase);
+            if (crossCurrency && docAmount is null)
+                throw new InvalidOperationException(
+                    "A document-currency amount is required for cross-currency allocations.");
             var settledDoc = docAmount ?? amount;
             if (!crossCurrency && settledDoc != amount)
                 throw new InvalidOperationException(
