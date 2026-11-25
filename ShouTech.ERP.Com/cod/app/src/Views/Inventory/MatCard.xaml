@@ -775,24 +775,7 @@
                                      Margin="0,3,0,3"/>
 
 
-                            <!-- Latin name -->
 
-                            <TextBlock Grid.Row="3"
-                                       Grid.Column="0"
-                                       Text="Latin Name"
-                                       loc:LocProps.Key="MatCard.LatinName"
-                                       Style="{StaticResource VisuTextBlockLabelStyle}"/>
-
-                            <TextBox x:Name="TxtNameEn"
-                                     Grid.Row="3"
-                                     Grid.Column="1"
-                                     Grid.ColumnSpan="4"
-                                     Style="{StaticResource CodeBox}"
-                                     FlowDirection="LeftToRight"
-                                     TextAlignment="Left"
-                                     Language="en-US"
-                                     VerticalContentAlignment="Center"
-                                     Margin="0,3,0,3"/>
 
                         </Grid>
 
