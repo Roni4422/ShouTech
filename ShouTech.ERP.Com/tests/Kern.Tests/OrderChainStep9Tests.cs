@@ -1590,6 +1590,13 @@ namespace Kern.Tests
                         "SELECT COALESCE(SUM(matched_qty), 0) FROM purchase_receipt_invoice_matches;"));
                     Assert.Equal(100m, (await orders.FindByIdAsync(CommercialDocSide.Purchase, orderId))!.PerBilled);
 
+                    // The helper is invoked by the reversal workflow before
+                    // the original return is moved out of Posted. Simulate
+                    // that status transition here so later progress refreshes
+                    // no longer net this reversed return against billing.
+                    ExecSql(connectionString,
+                        $"UPDATE purchase_documents SET status = 'Cancelled' WHERE doc_id = {returnId};");
+
                     // Return again and re-invoice the returned qty: succeeds only because of the unwind.
                     PostReturn(2m, "CN-SUP-10");
                     await service.CreatePurchaseInvoiceAsync(companyId, orderId, new DateOnly(2026, 11, 7),
