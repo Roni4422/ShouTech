@@ -364,6 +364,7 @@ namespace ShouTech.App.Views
             if (RecycleBinCornerButton is null || RecycleBinLayer is null)
                 return;
 
+            _suppressRecycleBinClick = false;
             _recycleBinDragOrigin = e.GetPosition(RecycleBinLayer);
             _recycleBinStartLeft = Canvas.GetLeft(RecycleBinCornerButton);
             _recycleBinStartTop = Canvas.GetTop(RecycleBinCornerButton);
