@@ -311,15 +311,16 @@ namespace ShouTech.App.Views
             if (RecycleBinLayer == null || RecycleBinCornerButton == null)
                 return;
 
-            // The archive bin belongs to the content viewport. When the
-            // viewport becomes too short, the status/dock area takes over
-            // the available space and the bin is hidden until it returns.
+            // Keep the user-positioned bin inside a viewport large enough
+            // to display its full surface. Never relocate it automatically.
+            const double requiredWidth = 120;
             const double requiredHeight = 146;
-            RecycleBinCornerButton.Visibility =
-                RecycleBinLayer.ActualHeight >= requiredHeight
-                    ? Visibility.Visible
-                    : Visibility.Collapsed;
+            var hasRoom =
+                RecycleBinLayer.ActualWidth >= requiredWidth &&
+                RecycleBinLayer.ActualHeight >= requiredHeight;
 
+            RecycleBinCornerButton.Visibility =
+                hasRoom ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private static bool IsArabicUi()
