@@ -406,11 +406,11 @@ public class BatchSerialEngineTests
         using var cmd = db.Connection.CreateCommand();
         cmd.Transaction = db.Tx;
         cmd.CommandText = $"""
-            INSERT INTO materials (material_id, company_id, code, name_ar, name_en,
+            INSERT INTO materials (material_id, company_id, code, name,
                 is_stocked, is_service, cost_method, allow_negative, is_deleted,
                 has_batch, has_serial, has_expiry, shelf_life_days, alert_before_expiry_days,
                 removal_strategy)
-            VALUES ({id}, '{CompanyCode}', 'MAT-{id}', 'Item', 'Item',
+            VALUES ({id}, '{CompanyCode}', 'MAT-{id}', 'Item',
                 1, 0, 'WeightedAvg', 1, 0,
                 {(hasBatch ? 1 : 0)}, {(hasSerial ? 1 : 0)}, {(hasExpiry ? 1 : 0)},
                 {shelfLifeDays}, {alertDays}, 'FIFO');
