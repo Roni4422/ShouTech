@@ -14,8 +14,8 @@ CREATE TRIGGER IF NOT EXISTS trg_materials_name_sync_insert
 AFTER INSERT ON materials
 BEGIN
     UPDATE materials
-    SET name = CASE WHEN TRIM(COALESCE(NEW.name, '')) = '' THEN COALESCE(NEW.name_ar, NEW.name_en, NEW.code) ELSE NEW.name END,
-        name_ar = CASE WHEN TRIM(COALESCE(NEW.name_ar, '')) = '' THEN COALESCE(NEW.name, NEW.name_en, NEW.code) ELSE NEW.name_ar END
+    SET name = CASE WHEN TRIM(COALESCE(NEW.name, '')) = '' THEN COALESCE(NULLIF(NEW.name_ar, ''), NULLIF(NEW.name_en, ''), NEW.code) ELSE NEW.name END,
+        name_ar = CASE WHEN TRIM(COALESCE(NEW.name_ar, '')) = '' THEN COALESCE(NULLIF(NEW.name, ''), NULLIF(NEW.name_en, ''), NEW.code) ELSE NEW.name_ar END
     WHERE material_id = NEW.material_id AND company_id = NEW.company_id;
 END;
 
