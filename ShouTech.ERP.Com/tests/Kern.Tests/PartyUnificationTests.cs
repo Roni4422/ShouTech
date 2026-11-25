@@ -186,9 +186,11 @@ public sealed class PartyUnificationTests
                 new JournalLineRequest(wrongExpenseId, 600m, 0m),
                 new JournalLineRequest(cashId, 0m, 600m)
             },
-            documentNumber: "PAY-SUP-BAD");
-        Exec(db,
-            $"INSERT INTO voucher_party_links (journal_entry_id, company_id, party_kind, party_id, party_code, doc_kind, doc_no, amount, currency_code, created_by) VALUES ('{badPaymentId:D}', '{CompanyCode}', 'S', {supplier.LedgerId}, 'SUP-1', 'PAY', 'PAY-SUP-BAD', 600, 'SAR', '{Actor}');");
+            documentNumber: "PAY-SUP-BAD",
+            partyLink: new VoucherPartyLinkRequest(CompanyCode, "S", supplier.LedgerId, "SUP-1", "PAY", "PAY-SUP-BAD", 600m, "SAR"));
+        Assert.NotEqual(payableId, wrongExpenseId);
+        Assert.Equal(1m, ExecScalar(db,
+            $"SELECT COUNT(*) FROM voucher_party_links WHERE journal_entry_id = '{badPaymentId:D}'"));
         await Assert.ThrowsAsync<InvalidOperationException>(() => journal.PostAsync(badPaymentId, Actor));
         Assert.Equal(0m, ExecScalar(db,
             $"SELECT COUNT(*) FROM party_ledger WHERE company_id = '{CompanyCode}' AND journal_entry_id = '{badPaymentId:D}';"));
@@ -200,9 +202,8 @@ public sealed class PartyUnificationTests
                 new JournalLineRequest(payableId, 600m, 0m),
                 new JournalLineRequest(cashId, 0m, 600m)
             },
-            documentNumber: "PAY-SUP-1");
-        Exec(db,
-            $"INSERT INTO voucher_party_links (journal_entry_id, company_id, party_kind, party_id, party_code, doc_kind, doc_no, amount, currency_code, created_by) VALUES ('{paymentId:D}', '{CompanyCode}', 'S', {supplier.LedgerId}, 'SUP-1', 'PAY', 'PAY-SUP-1', 600, 'SAR', '{Actor}');");
+            documentNumber: "PAY-SUP-1",
+            partyLink: new VoucherPartyLinkRequest(CompanyCode, "S", supplier.LedgerId, "SUP-1", "PAY", "PAY-SUP-1", 600m, "SAR"));
         await journal.PostAsync(paymentId, Actor);
 
         var recon = new ReconciliationRepository("SQLite", db.ConnectionString);
@@ -796,7 +797,7 @@ public sealed class PartyUnificationTests
         {
             connection.Open();
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = "INSERT INTO companies (company_id, company_code, company_name_ar, company_name_en) VALUES ($id, $code, 'Party Test Co', 'Party Test Co');";
+            cmd.CommandText = "INSERT INTO companies (company_id, company_code, company_name_ar, company_name_en, currency_code) VALUES ($id, $code, 'Party Test Co', 'Party Test Co', 'SAR');";
             cmd.Parameters.AddWithValue("$id", companyId.ToString("D"));
             cmd.Parameters.AddWithValue("$code", CompanyCode);
             cmd.ExecuteNonQuery();

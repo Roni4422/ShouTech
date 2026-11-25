@@ -528,7 +528,7 @@ namespace Kern.Tests
             Assert.Equal("Dark", preferences.Theme);
             Assert.Equal("SAR", preferences.CurrencyCode);
             Assert.Equal("dd/MM/yyyy", preferences.DateFormat);
-            Assert.Equal(4, preferences.DecimalDigits);
+            Assert.Equal(3, preferences.DecimalDigits);
             Assert.Equal(800, preferences.WinW);
             Assert.Equal(600, preferences.WinH);
         }

@@ -1426,7 +1426,7 @@ namespace Kern.Tests
             {
                 ExecSql(connectionString, """
                     INSERT INTO chart_of_accounts (account_id, company_id, account_code, account_name, account_type, is_postable, is_active, is_deleted)
-                    VALUES ('1205-ORDER-GL', '${companyId:D}', '1205', 'Input VAT', 'ASSET', 1, 1, 0);
+                    VALUES ('1205-ORDER-GL', (SELECT company_id FROM companies WHERE company_code = 'ORDER-GL'), '1205', 'Input VAT', 'ASSET', 1, 1, 0);
                     INSERT INTO company_tax_settings (company_code, country_code, tax_enabled, tax_scheme)
                     VALUES ('ORDER-GL', 'SA', 1, 'VAT');
                     INSERT INTO company_tax_rules
@@ -2652,7 +2652,7 @@ namespace Kern.Tests
                 foreach (var (n, v) in ps) cmd.Parameters.AddWithValue(n, v);
                 cmd.ExecuteNonQuery();
             }
-            Exec("INSERT INTO companies (company_id, company_code, company_name_ar, company_name_en) VALUES ($id, $code, 'Step9 Test Co', 'Step9 Test Co');",
+            Exec("INSERT INTO companies (company_id, company_code, company_name_ar, company_name_en, currency_code) VALUES ($id, $code, 'Step9 Test Co', 'Step9 Test Co', 'SAR');",
                 ("$id", companyId.ToString("D")), ("$code", companyCode));
             Exec("INSERT INTO fiscal_years (company_id, fiscal_year, database_name, start_date, end_date, is_current, is_closed) VALUES ($c, 2026, '', '2026-01-01', '2026-12-31', 1, 0);",
                 ("$c", companyId.ToString("D")));
@@ -2670,7 +2670,7 @@ namespace Kern.Tests
             foreach (var (code, name, type) in new[]
             {
                 ("1201", "Trade Accounts Receivable", "ASSET"), ("1203", "Merchandise Inventory", "ASSET"),
-                ("2201", "Trade Accounts Payable", "LIABILITY"), ("2203", "Accrued Liabilities / GRNI", "LIABILITY"), ("301", "Goods Sales Revenue", "REVENUE"),
+                ("2201", "Trade Accounts Payable", "LIABILITY"), ("2203", "Accrued Liabilities / GRNI", "LIABILITY"), ("2205", "Output VAT", "LIABILITY"), ("301", "Goods Sales Revenue", "REVENUE"),
                 ("401", "Cost of Goods Sold", "EXPENSE"), ("402", "Merchandise Purchases", "EXPENSE"),
                 ("403", "Purchase Returns", "EXPENSE"), ("404", "Freight-in", "EXPENSE"),
                 ("415", "Purchase Price Variance", "EXPENSE"),

@@ -1081,8 +1081,8 @@ namespace Kern.Tests
                 using var command = seed.CreateCommand();
                 command.CommandText = """
                     INSERT INTO companies
-                        (company_id, company_code, company_name_ar, company_name_en)
-                    VALUES ($companyId, 'SC-TEST', 'Sales Chain Test', 'Sales Chain Test');
+                        (company_id, company_code, company_name_ar, company_name_en, currency_code)
+                    VALUES ($companyId, 'SC-TEST', 'Sales Chain Test', 'Sales Chain Test', 'SAR');
 
                     INSERT INTO warehouses
                         (warehouse_id, company_id, warehouse_code, warehouse_name_ar, warehouse_name_en, is_active, is_deleted)

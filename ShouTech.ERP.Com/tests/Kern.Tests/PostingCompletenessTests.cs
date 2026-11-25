@@ -211,10 +211,8 @@ namespace Kern.Tests
                     $"INSERT INTO parties (id, company_id, kind, code, name_en, credit_limit, ledger_id) VALUES ('{Guid.NewGuid():D}', '{companyId:D}', 'C', 'CUST-1', 'Test Party', 100, 7)");
 
                 var orderId = await service.CreateOrderAsync(OrderDraft(companyId, "SO-PC6", 10m, 25m), Actor);
-                await service.PostOrderAsync(CommercialDocSide.Sales, orderId, Actor);
-
                 var error = await Assert.ThrowsAsync<AppError>(() =>
-                    service.ConvertToInvoiceAsync(CommercialDocSide.Sales, orderId, new DateOnly(2026, 11, 2), Actor));
+                    service.PostOrderAsync(CommercialDocSide.Sales, orderId, Actor));
                 Assert.Equal(ErrorCodes.CreditLimitExceeded, error.Code);
 
                 await using var connection = new SqliteConnection(connectionString);
