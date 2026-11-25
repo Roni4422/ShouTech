@@ -264,7 +264,7 @@ public static class DataExportSvc
 
     private static readonly string[] MaterialCardExportFields =
     [
-        "material_id", "code", "name_ar", "name_en", "group_code", "item_type", "category",
+        "material_id", "code", "name", "name_en", "group_code", "item_type", "category",
         "brand", "model", "color", "size_spec", "manufacturer", "origin_country", "source",
         "alt_code", "gtin", "supplier_code", "abc_class", "status", "is_stocked", "is_purchased",
         "is_sold", "is_produced", "is_service", "notes", "unit1", "unit1_factor", "unit1_barcode",
@@ -805,7 +805,29 @@ public static class DataExportSvc
                 {
                     var cellIndex = columnIndexes[mapping.Key];
                     var cell = cellIndex < sourceRow.Count ? sourceRow[cellIndex] : null;
-                    values[mapping.Value.field] = ParseExcelValue(cell, mapping.Value.type);
+                    var parsed = ParseExcelValue(cell, mapping.Value.type);
+                    values[mapping.Value.field] =
+                        mapping.Value.field.Equals("name_en", StringComparison.OrdinalIgnoreCase)
+                            ? parsed ?? string.Empty
+                            : parsed;
+                }
+
+                // Canonical material name is language-neutral. Keep name_ar synchronized
+                // during the compatibility period so existing databases and older clients remain usable.
+                if (option.TableName.Equals("materials", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (values.TryGetValue("name", out var canonicalName))
+                    {
+                        values["name"] = canonicalName ?? string.Empty;
+                        values["name_ar"] = canonicalName ?? string.Empty;
+                    }
+                    else if (values.TryGetValue("name_ar", out var legacyName))
+                    {
+                        values["name"] = legacyName ?? string.Empty;
+                        values["name_ar"] = legacyName ?? string.Empty;
+                    }
+                    if (values.TryGetValue("name_en", out var englishName))
+                        values["name_en"] = englishName ?? string.Empty;
                 }
 
                 if (companyColumn != null)
