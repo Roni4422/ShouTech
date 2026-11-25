@@ -42,3 +42,16 @@ The failed PostgreSQL smoke run reached migration `104_pos_remainder.sql` and fa
 2. Compare embedded schema bootstrap resources with `dba/mig`; remove no bootstrap path until database creation, upgrade, baseline, and recovery flows are proven equivalent.
 3. Add a migration consistency test that validates provider-specific predicates against declared column types, and keep SQLite/PostgreSQL smoke tests as release gates.
 4. Only merge source files with cohesive ownership after checking all symbol references, XAML/resource names, reflection/dynamic loading, and project wildcard inclusion.
+
+## Additional startup-flow finding
+
+The desktop launch path is more complex than a single call into the composition root:
+
+1. WPF invokes `App.OnStartup` from `App.xaml`.
+2. Startup loads user preferences and language, builds a local `ServiceCollection`, and builds `_serviceProvider`.
+3. It calls `SchemaBootstrapper.EnsureSchema()` **before** `AppHost.Initialize()`.
+4. It initializes recycle-bin audit infrastructure, then calls `AppHost.Initialize()`.
+5. Login and main-window transitions call `SchemaBootstrapper.EnsureSchema()` again; the helper caches database keys within the process.
+6. `AppHost.Initialize()` is also exposed through a compatibility facade in `App.xaml.cs`, so call-site/reference analysis is required before changing its visibility or name.
+
+This is a confirmed dual bootstrap concern: desktop startup schema provisioning is implemented by an embedded-resource `SchemaBootstrapper`, while `SchemaMigrator` separately applies ordered `dba/mig` scripts. The next structural phase must compare the embedded `ShouTech.App.dba.lite.sql` / `ShouTech.App.dba.pg.sql` resources and their execution call sites against the migration/baseline flows. Do not simply replace one with the other until fresh install, existing database, upgrade, company switching, and recovery behavior are covered by tests.
