@@ -609,7 +609,7 @@ public static class StkPost
                 command.Transaction = tx;
                 command.CommandText = DatabaseRuntime.IsPostgreSql()
                     ? """
-                      SELECT material_id, code, name, name_en, name_print_ar, name_print_en,
+                      SELECT material_id, code, name,
                              COALESCE(NULLIF(TRIM(default_unit), ''),
                                       NULLIF(TRIM(sales_unit), ''),
                                       NULLIF(TRIM(purchase_unit), ''), '')
@@ -619,7 +619,7 @@ public static class StkPost
                       FOR UPDATE;
                       """
                     : """
-                      SELECT material_id, code, name, name_en, name_print_ar, name_print_en,
+                      SELECT material_id, code, name,
                              COALESCE(NULLIF(TRIM(default_unit), ''),
                                       NULLIF(TRIM(sales_unit), ''),
                                       NULLIF(TRIM(purchase_unit), ''), '')
@@ -636,10 +636,7 @@ public static class StkPost
                     var material = new MaterialIdentity(
                         Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? "",
                         Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture) ?? "",
-                        Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture) ?? "",
-                        Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture) ?? "",
-                        Convert.ToString(reader.GetValue(5), CultureInfo.InvariantCulture) ?? "",
-                        Convert.ToString(reader.GetValue(6), CultureInfo.InvariantCulture) ?? "");
+                        Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture) ?? "");
                     materials[Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture)] = material;
                 }
             }
@@ -660,10 +657,7 @@ public static class StkPost
                     UPDATE {lineTable}
                     SET material_id=$target, material_code=$targetCode,
                         description=CASE
-                            WHEN description=$sourceNameAr THEN $targetNameAr
-                            WHEN description=$sourceNameEn THEN $targetNameEn
-                            WHEN description=$sourcePrintNameAr THEN $targetPrintNameAr
-                            WHEN description=$sourcePrintNameEn THEN $targetPrintNameEn
+                            WHEN description=$sourceName THEN $targetName
                             WHEN description=$sourceCode THEN $targetCode
                             ELSE description
                         END
@@ -674,14 +668,8 @@ public static class StkPost
                     """;
                 Add(command, "$target", targetMaterialId);
                 Add(command, "$targetCode", target.Code);
-                Add(command, "$targetNameAr", target.Name);
-                Add(command, "$targetNameEn", target.NameEn);
-                Add(command, "$targetPrintNameAr", target.PrintNameAr);
-                Add(command, "$targetPrintNameEn", target.PrintNameEn);
-                Add(command, "$sourceNameAr", source.Name);
-                Add(command, "$sourceNameEn", source.NameEn);
-                Add(command, "$sourcePrintNameAr", source.PrintNameAr);
-                Add(command, "$sourcePrintNameEn", source.PrintNameEn);
+                Add(command, "$targetName", target.Name);
+                Add(command, "$sourceName", source.Name);
                 Add(command, "$sourceCode", source.Code);
                 Add(command, "$source", sourceMaterialId);
                 Add(command, "$c", company);
@@ -873,13 +861,7 @@ public static class StkPost
         public decimal StockValue { get; init; }
     }
 
-    private sealed record MaterialIdentity(
-        string Code,
-        string Name,
-        string NameEn,
-        string PrintNameAr,
-        string PrintNameEn,
-        string Unit);
+    private sealed record MaterialIdentity(string Code, string Name, string Unit);
 
     public static string PostTransfer(
         long sourceWarehouseId,
