@@ -309,7 +309,7 @@ public sealed class PosRepository : IPosRepository
         var activeStockBalance = _provider == "PostgreSQL" ? "sb.is_deleted = FALSE" : "COALESCE(sb.is_deleted, 0) = 0";
         var sql = $"""
             SELECT material_id, code,
-                   COALESCE(NULLIF(pos_name,''), NULLIF(name,''), NULLIF(name_en,''), code),
+                   COALESCE(NULLIF(pos_name,''), NULLIF(name,''), code),
                    COALESCE(price_retail, price_list, 0),
                    COALESCE(default_unit, unit1, ''),
                    COALESCE(tax_rate, 0), image_path,
