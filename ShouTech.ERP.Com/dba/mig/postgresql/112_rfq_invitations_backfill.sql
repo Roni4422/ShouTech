@@ -26,7 +26,7 @@ SET per_received = CASE
             (SELECT COALESCE(SUM(l.qty), 0)
                FROM document_links dl
                JOIN purchase_documents r ON r.doc_id = dl.target_doc_id
-                    AND r.doc_kind = 'RCV' AND r.status = 'Posted' AND r.is_deleted = FALSE
+                    AND r.doc_kind = 'RCV' AND r.status = 'Posted' AND r.is_deleted = 0
                JOIN purchase_document_lines l ON l.doc_id = r.doc_id
               WHERE dl.company_id = purchase_documents.company_id
                 AND dl.source_doc_kind = 'PO' AND dl.source_doc_id = purchase_documents.doc_id
@@ -35,7 +35,7 @@ SET per_received = CASE
             (SELECT COALESCE(SUM(a.returned_qty), 0)
                FROM purchase_receipt_return_line_allocations a
                JOIN purchase_documents rd ON rd.doc_id = a.return_doc_id
-                    AND rd.doc_kind = 'RCR' AND rd.status = 'Posted' AND rd.is_deleted = FALSE
+                    AND rd.doc_kind = 'RCR' AND rd.status = 'Posted' AND rd.is_deleted = 0
               WHERE a.company_id = purchase_documents.company_id
                 AND a.original_doc_id IN (
                     SELECT dl2.target_doc_id FROM document_links dl2
@@ -50,11 +50,11 @@ SET per_received = CASE
             (SELECT COALESCE(SUM(l.qty), 0)
                FROM document_links dl
                JOIN purchase_documents r ON r.doc_id = dl.target_doc_id
-                    AND r.doc_kind = 'PUR' AND r.status = 'Posted' AND r.is_deleted = FALSE
+                    AND r.doc_kind = 'PUR' AND r.status = 'Posted' AND r.is_deleted = 0
                JOIN purchase_document_lines l ON l.doc_id = r.doc_id
               WHERE dl.company_id = purchase_documents.company_id
                 AND dl.source_doc_kind = 'PO' AND dl.source_doc_id = purchase_documents.doc_id
                 AND dl.target_doc_kind = 'PUR')
             ) / (SELECT SUM(qty) FROM purchase_document_lines WHERE doc_id = purchase_documents.doc_id))::numeric, 2))
     END
-WHERE doc_kind = 'PO' AND is_deleted = FALSE;
+WHERE doc_kind = 'PO' AND is_deleted = 0;
