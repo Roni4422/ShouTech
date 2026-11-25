@@ -13,7 +13,7 @@
 
     <Window.Resources>
 
-        <Style x:Key="WizardTextBoxStyle" TargetType="TextBox">
+        <Style x:Key="WizardTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource AppTextBoxStyle}">
             <Setter Property="Height" Value="{StaticResource ControlHeight}"/>
             <Setter Property="FontSize" Value="{DynamicResource FontSize12}"/>
             <Setter Property="Padding" Value="6,0"/>
@@ -21,7 +21,7 @@
             <Setter Property="FlowDirection" Value="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType=Window}, FallbackValue=LeftToRight}"/>
         </Style>
 
-        <Style x:Key="WizardPasswordStyle" TargetType="PasswordBox">
+        <Style x:Key="WizardPasswordStyle" TargetType="PasswordBox" BasedOn="{StaticResource AppPasswordBoxStyle}">
             <Setter Property="Height" Value="{StaticResource ControlHeight}"/>
             <Setter Property="FontSize" Value="{DynamicResource FontSize12}"/>
             <Setter Property="Padding" Value="6,0"/>
@@ -29,7 +29,7 @@
             <Setter Property="FlowDirection" Value="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType=Window}, FallbackValue=LeftToRight}"/>
         </Style>
 
-        <Style x:Key="WizardComboStyle" TargetType="ComboBox">
+        <Style x:Key="WizardComboStyle" TargetType="ComboBox" BasedOn="{StaticResource AppComboBoxStyle}">
             <Setter Property="Height" Value="{StaticResource ControlHeight}"/>
             <Setter Property="FontSize" Value="{DynamicResource FontSize12}"/>
             <Setter Property="Padding" Value="4,0"/>
@@ -37,7 +37,7 @@
             <Setter Property="FlowDirection" Value="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType=Window}, FallbackValue=LeftToRight}"/>
         </Style>
 
-        <Style x:Key="WizardDateStyle" TargetType="DatePicker">
+        <Style x:Key="WizardDateStyle" TargetType="DatePicker" BasedOn="{StaticResource Win11DatePickerStyle}">
             <Setter Property="Height" Value="{StaticResource ControlHeight}"/>
             <Setter Property="FontSize" Value="{DynamicResource FontSize12}"/>
             <Setter Property="FlowDirection" Value="{Binding FlowDirection, RelativeSource={RelativeSource AncestorType=Window}, FallbackValue=LeftToRight}"/>
