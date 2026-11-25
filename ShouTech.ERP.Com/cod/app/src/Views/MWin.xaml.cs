@@ -835,7 +835,18 @@ namespace ShouTech.App.Views
                     "View.InfoWindow",
                     StringComparison.Ordinal))
             {
-                InfoWin.ShowLast(this);
+                try
+                {
+                    InfoWin.ShowLast(this);
+                }
+                catch (Exception ex)
+                {
+                    AppHost.Errors.Report(
+                        ErrorCodes.ShellOperationFailed,
+                        ex,
+                        "MWin.xaml.View.InfoWindow");
+                }
+
                 return;
             }
 
