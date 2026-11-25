@@ -315,7 +315,7 @@ public static class InfoSvc
         var props = new List<InfoProperty>
         {
             Text("Code", rec.Code),
-            Text("Name", DisplayName(rec.Name, rec.NameEn))
+            Text("Name", rec.Name)
         };
 
         var barcodes = new List<string>();
@@ -494,7 +494,7 @@ public static class InfoSvc
             props.Add(new InfoProperty("SalesThisMonthAmount", InfoFormat.Money, Dec(monthSales[0][1])));
         }
 
-        return Sheet(InfoKind.Material, props, rec.Code, DisplayName(rec.Name, rec.NameEn));
+        return Sheet(InfoKind.Material, props, rec.Code, rec.Name);
     }
 
     // ------------------------------------------------------------------
