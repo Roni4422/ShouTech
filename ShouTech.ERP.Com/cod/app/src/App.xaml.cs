@@ -36,8 +36,7 @@ namespace ShouTech.App
 
         /// <summary>
         /// Applies the canonical provider-specific migration chain to the active database.
-        /// The same migration engine is used by company creation and the administrative
-        /// migration tool, preventing a separate embedded-schema implementation.
+        /// The same in-process migration engine is used by company creation. The administrative CLI runner remains separate and uses the same migration files and history/checksum contract.
         /// </summary>
         public static void EnsureSchema()
         {
