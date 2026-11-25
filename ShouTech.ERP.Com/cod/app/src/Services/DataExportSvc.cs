@@ -815,9 +815,20 @@ public static class DataExportSvc
                 {
                     var cellIndex = columnIndexes[mapping.Key];
                     var cell = cellIndex < sourceRow.Count ? sourceRow[cellIndex] : null;
-                    var parsed = ParseExcelValue(cell, mapping.Value.type);
+                    object? parsed;
+                    try
+                    {
+                        parsed = ParseExcelValue(cell, mapping.Value.type);
+                    }
+                    catch (InvalidDataException ex)
+                    {
+                        throw new InvalidDataException(
+                            $"Column '{mapping.Value.field}' contains value '{cell}' but expects {mapping.Value.type}: {ex.Message}", ex);
+                    }
                     values[mapping.Value.field] =
-                        mapping.Value.field.Equals("name_en", StringComparison.OrdinalIgnoreCase)
+                        mapping.Value.field.Equals("name_en", StringComparison.OrdinalIgnoreCase) ||
+                        mapping.Value.field.Equals("name", StringComparison.OrdinalIgnoreCase) ||
+                        mapping.Value.field.Equals("name_ar", StringComparison.OrdinalIgnoreCase)
                             ? parsed ?? string.Empty
                             : parsed;
                 }
@@ -1279,9 +1290,7 @@ public static class DataExportSvc
             RptColType.WholeNumber => long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var whole)
                 ? whole
                 : throw new InvalidDataException($"'{value}' is not a valid whole number."),
-            RptColType.FractionalNumber or RptColType.Money => decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var number)
-                ? number
-                : throw new InvalidDataException($"'{value}' is not a valid number."),
+            RptColType.FractionalNumber or RptColType.Money => ParseDecimalValue(value),
             RptColType.Boolean => value.Equals("true", StringComparison.OrdinalIgnoreCase) || value == "1"
                 ? true
                 : value.Equals("false", StringComparison.OrdinalIgnoreCase) || value == "0"
@@ -1292,6 +1301,17 @@ public static class DataExportSvc
                 : value,
             _ => value
         };
+    }
+
+    private static decimal ParseDecimalValue(string value)
+    {
+        if (!decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var number))
+            throw new InvalidDataException($"'{value}' is not a valid invariant-culture number.");
+
+        var scale = (decimal.GetBits(number)[3] >> 16) & 0x7F;
+        if (scale > 6)
+            throw new InvalidDataException($"'{value}' has more than 6 decimal places; values are not rounded or truncated during import.");
+        return number;
     }
 
     /// <summary>
